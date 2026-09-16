@@ -4,7 +4,7 @@
     "rootDir": ".",
     "outDir": "./dist"
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "migrations/**/*.ts"],
+  "include": ["src/**/*.ts", "src/**/*.json", "test/**/*.ts"],
   "references": [
     {
       "path": "../schema"

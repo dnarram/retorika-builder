@@ -18,7 +18,7 @@ export function escalate(section: Section, preset: PresetShape): Section {
     source: "free",
     // The copy keeps the element ids, which is what lets every text and photo find its
     // exact slot again on the way back, with no guessing.
-    layout: structuredClone(preset.layoutFor(section.preset.variantId)),
+    layout: preset.layoutFor(section.preset.variantId, flattenElements(section.content)),
   };
 }
 

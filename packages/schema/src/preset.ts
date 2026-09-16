@@ -1,4 +1,4 @@
-import type { Section, SectionLayout } from "./document.ts";
+import type { ContentElement, Section, SectionLayout } from "./document.ts";
 import { flattenElements, type Violation } from "./invariants.ts";
 import type { Role } from "./roles.ts";
 
@@ -18,7 +18,16 @@ export interface PresetSlot {
 export interface PresetShape {
   catalogId: string;
   slots: readonly PresetSlot[];
-  layoutFor(variantId: string): SectionLayout;
+  /**
+   * The preset's layout for a variant, resolved against the section's own elements.
+   *
+   * It takes the elements because a placement references an element *id* (rule 1) and a
+   * preset cannot know the ids of a document it has never seen. So the catalog declares
+   * the geometry per slot, and this resolves each slot to the actual element filling it.
+   * That resolution is also what makes the return from a hand-designed layout lossless:
+   * the ids line up on the way back with no guessing.
+   */
+  layoutFor(variantId: string, elements: readonly ContentElement[]): SectionLayout;
 }
 
 /**

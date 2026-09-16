@@ -1,0 +1,12 @@
+{
+  "section.cover.name": "Portada",
+  "section.cover.description": "La promesa del negocio, una foto grande y el botón principal.",
+  "section.cover.variant.image-right": "Foto a la derecha",
+  "section.cover.variant.image-background": "Foto de fondo",
+  "section.cover.slot.headline": "Titular",
+  "section.cover.slot.subheadline": "Subtítulo",
+  "section.cover.slot.body": "Texto",
+  "section.cover.slot.image": "Foto",
+  "section.cover.slot.primaryAction": "Botón principal",
+  "section.cover.slot.secondaryAction": "Enlace secundario"
+}
