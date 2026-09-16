@@ -1,0 +1,38 @@
+# The local reviewer (protocol Part 9.1). Five hooks, and none of them is disabled to get
+# a commit through: the hook is the only party that cannot be complacent.
+#
+# Commit from the Terminal, not from an editor's source-control panel. macOS desktop apps
+# do not read the shell configuration, so the pinned Node would not be on PATH.
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
+  - repo: local
+    hooks:
+      - id: biome
+        name: biome check
+        entry: pnpm biome check --write
+        language: system
+        types_or: [ts, tsx, javascript, json]
+
+      - id: typecheck
+        name: tsc
+        entry: pnpm typecheck
+        language: system
+        pass_filenames: false
+
+      # Project-specific. Fails if packages/schema/src changed without its migration.
+      - id: schema-guard
+        name: schema migration guard
+        entry: pnpm schema:guard
+        language: system
+        pass_filenames: false
+
+      # Project-specific. Everything in packages/renderer ships to the client's site.
+      - id: renderer-deps
+        name: renderer dependency allowlist
+        entry: pnpm renderer:deps
+        language: system
+        pass_filenames: false

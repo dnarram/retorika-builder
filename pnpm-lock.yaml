@@ -165,6 +165,13 @@ settings:
 importers:
 
   .:
+    dependencies:
+      '@retorika/renderer':
+        specifier: workspace:*
+        version: link:packages/renderer
+      '@retorika/schema':
+        specifier: workspace:*
+        version: link:packages/schema
     devDependencies:
       '@biomejs/biome':
         specifier: 2.5.14

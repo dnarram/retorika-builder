@@ -72,7 +72,9 @@ export function checkAgainstPreset(section: Section, preset: PresetShape): Viola
       });
     }
 
-    for (const element of filling) {
+    // Role mismatch matters for what is on the page. A hidden element is parked, not
+    // placed, so it is judged only if and when it becomes visible again.
+    for (const element of visible) {
       if (element.role !== slot.role) {
         violations.push({
           rule: 2,
@@ -83,8 +85,12 @@ export function checkAgainstPreset(section: Section, preset: PresetShape): Viola
     }
   }
 
+  // Same reasoning for a slot the preset never declared: content that came back from a
+  // hand-designed layout and did not fit is kept hidden rather than deleted, and the
+  // dossier requires it to stay listed. Flagging it here would make the promise
+  // unkeepable — the only way to satisfy the check would be to destroy the content.
   const known = new Set(preset.slots.map((slot) => slot.slot));
-  for (const element of elements) {
+  for (const element of elements.filter((candidate) => !candidate.hidden)) {
     if (!known.has(element.slot)) {
       violations.push({
         rule: 2,

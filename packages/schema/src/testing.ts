@@ -30,21 +30,40 @@ export const arbitraryTheme: fc.Arbitrary<Theme> = fc
   .string({ minLength: 1, maxLength: 8 })
   .map((suffix) => Object.fromEntries(TOKEN_KEYS.map((key) => [key, `${key}-${suffix}`])) as Theme);
 
+/** A value whose kind suits the role, so generated documents render like real ones. */
+function arbitraryValue(slot: PresetSlot) {
+  switch (slot.role) {
+    case "image":
+      return arbitraryText.map((alt) => ({ kind: "image" as const, src: "assets/x.svg", alt }));
+    case "button":
+    case "link":
+      return arbitraryText.map((text) => ({ kind: "link" as const, text, href: "#" }));
+    default:
+      return arbitraryText.map((text) => ({ kind: "text" as const, text }));
+  }
+}
+
 function arbitraryElement(slot: PresetSlot, index: number): fc.Arbitrary<ContentElement> {
   return fc.record({
     id: identifier.map((base) => `${base}-${slot.slot}-${index}`),
     role: fc.constant(slot.role),
     hidden: fc.boolean(),
     slot: fc.constant(slot.slot),
-    value: arbitraryText.map((text) => ({ kind: "text" as const, text })),
+    value: arbitraryValue(slot),
   });
 }
 
 /**
  * A document whose sections match the given preset, so it is valid by construction.
  * Cardinality is respected: every slot gets at least `min` elements and at most `max`.
+ *
+ * The variant is a parameter because schema must not know which variants a catalog
+ * section has — that would reverse the dependency arrow. Callers pass a real one.
  */
-export function arbitraryDocument(preset: PresetShape): fc.Arbitrary<RetorikaDocument> {
+export function arbitraryDocument(
+  preset: PresetShape,
+  variantId: string,
+): fc.Arbitrary<RetorikaDocument> {
   const sectionContent = fc
     .tuple(
       ...preset.slots.map((slot) =>
@@ -59,7 +78,7 @@ export function arbitraryDocument(preset: PresetShape): fc.Arbitrary<RetorikaDoc
 
   const section = fc.record({
     id: identifier.map((base) => `section-${base}`),
-    preset: fc.constant({ catalogId: preset.catalogId, variantId: "default" }),
+    preset: fc.constant({ catalogId: preset.catalogId, variantId }),
     source: fc.constant("catalog" as const),
     content: sectionContent,
     layout: fc.constant(null),

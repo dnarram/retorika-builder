@@ -1,0 +1,110 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "doc-xss",
+  "siteName": "XSS <script>alert('site')</script>",
+  "theme": {
+    "color.primary": "#156FE7",
+    "color.secondary": "#105CB1",
+    "color.accent": "#FF3A72",
+    "color.surface": "#FFFFFF",
+    "color.ink": "#0F172A",
+    "color.muted": "#475569",
+    "font.heading": "Georgia, serif",
+    "font.body": "system-ui, sans-serif",
+    "size.heading": "2.5rem",
+    "size.subheading": "1.5rem",
+    "size.body": "1rem",
+    "space.xs": "4px",
+    "space.sm": "8px",
+    "space.md": "16px",
+    "space.lg": "24px",
+    "space.xl": "48px",
+    "radius.sm": "4px",
+    "radius.md": "8px",
+    "radius.lg": "16px"
+  },
+  "pages": [
+    {
+      "id": "home",
+      "slug": "index",
+      "title": "XSS <script>alert('site')</script>",
+      "sections": [
+        {
+          "id": "sec-cover",
+          "preset": {
+            "catalogId": "cover",
+            "variantId": "image-right"
+          },
+          "source": "catalog",
+          "content": [
+            {
+              "id": "el-headline",
+              "role": "heading",
+              "hidden": false,
+              "slot": "headline",
+              "value": {
+                "kind": "text",
+                "text": "\"><script>alert(1)</script>"
+              }
+            },
+            {
+              "id": "el-sub",
+              "role": "subheading",
+              "hidden": false,
+              "slot": "subheadline",
+              "value": {
+                "kind": "text",
+                "text": "\" onerror=alert(2) x=\""
+              }
+            },
+            {
+              "id": "el-body",
+              "role": "body",
+              "hidden": false,
+              "slot": "body",
+              "value": {
+                "kind": "text",
+                "text": "a \"double quote\" that ends up in an attribute"
+              }
+            },
+            {
+              "id": "el-image",
+              "role": "image",
+              "hidden": false,
+              "slot": "image",
+              "value": {
+                "kind": "image",
+                "src": "assets/xss.svg",
+                "alt": "\" onerror=alert(3) \""
+              }
+            },
+            {
+              "id": "el-cta",
+              "role": "button",
+              "hidden": false,
+              "slot": "primaryAction",
+              "value": {
+                "kind": "link",
+                "text": "Click me",
+                "href": "javascript:alert(4)"
+              }
+            },
+            {
+              "id": "el-link",
+              "role": "link",
+              "hidden": false,
+              "slot": "secondaryAction",
+              "value": {
+                "kind": "link",
+                "text": "Other",
+                "href": "JaVaScript:alert(5)"
+              }
+            }
+          ],
+          "layout": null
+        }
+      ]
+    }
+  ],
+  "collections": []
+}
