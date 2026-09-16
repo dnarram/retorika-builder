@@ -9,17 +9,18 @@
     "verbatimModuleSyntax": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,
     "exactOptionalPropertyTypes": true,
-
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
     "composite": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "emitDeclarationOnly": true,
+    "types": ["node"]
   }
 }

@@ -11,5 +11,8 @@
   "dependencies": {
     "@retorika/schema": "workspace:*",
     "@retorika/catalog": "workspace:*"
+  },
+  "devDependencies": {
+    "fast-check": "4.10.1"
   }
 }

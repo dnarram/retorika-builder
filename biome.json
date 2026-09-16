@@ -2,7 +2,7 @@
   "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
   "files": {
-    "includes": ["**", "!**/fixtures/golden/**", "!**/pnpm-lock.yaml"]
+    "includes": ["**", "!**/fixtures/golden", "!**/pnpm-lock.yaml"]
   },
   "formatter": {
     "enabled": true,

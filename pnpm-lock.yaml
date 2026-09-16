@@ -190,6 +190,10 @@ importers:
       '@retorika/schema':
         specifier: workspace:*
         version: link:../schema
+    devDependencies:
+      fast-check:
+        specifier: 4.10.1
+        version: 4.10.1
 
   packages/renderer:
     dependencies:
@@ -199,12 +203,20 @@ importers:
       '@retorika/schema':
         specifier: workspace:*
         version: link:../schema
+    devDependencies:
+      fast-check:
+        specifier: 4.10.1
+        version: 4.10.1
 
   packages/schema:
     dependencies:
       zod:
         specifier: 4.6.5
         version: 4.6.5
+    devDependencies:
+      fast-check:
+        specifier: 4.10.1
+        version: 4.10.1
 
 packages:
 
