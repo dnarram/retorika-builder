@@ -1,0 +1,34 @@
+# Dependencies and build output
+node_modules/
+dist/
+build/
+.next/
+coverage/
+*.tsbuildinfo
+
+# Lockfile: large, generated, never read by hand
+pnpm-lock.yaml
+
+# Throwaway artefacts
+.scratch/
+
+# Secrets
+.env
+.env.*
+
+# Binary assets
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.avif
+*.ico
+*.woff
+*.woff2
+*.docx
+
+# NOTE: fixtures/golden/ is deliberately NOT ignored. Those files are the one
+# artefact whose diff has to be read on every change, because they are what
+# reveals that a style tweak has altered two hundred published sites. They are
+# kept small rather than invisible.

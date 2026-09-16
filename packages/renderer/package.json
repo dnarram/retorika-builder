@@ -1,0 +1,15 @@
+{
+  "name": "@retorika/renderer",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "document -> DOM | document -> HTML+CSS",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "comment": "Runtime dependencies are restricted to the workspace allowlist enforced by scripts/renderer-deps.ts. Everything that lands here travels to the client's published site.",
+  "dependencies": {
+    "@retorika/schema": "workspace:*",
+    "@retorika/catalog": "workspace:*"
+  }
+}

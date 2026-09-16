@@ -1,0 +1,14 @@
+{
+  "name": "@retorika/catalog",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Section presets: slots, roles, cardinality, variants",
+  "exports": {
+    ".": "./src/index.ts",
+    "./locales/es": "./src/locales/es.json"
+  },
+  "dependencies": {
+    "@retorika/schema": "workspace:*"
+  }
+}

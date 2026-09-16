@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+.next/
+*.tsbuildinfo
+
+# Test output
+coverage/
+playwright-report/
+test-results/
+
+# Throwaway artefacts. Anything a verification step produces lands here,
+# never loose in the repository root.
+.scratch/
+
+# Secrets. Never committed, not even "temporarily" (protocol Part 15).
+.env
+.env.*
+!.env.example
+
+# macOS
+.DS_Store
