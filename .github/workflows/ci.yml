@@ -1,0 +1,170 @@
+name: CI
+
+# Protocol Part 9.2. The jobs are separate so a failure says at a glance what broke, and
+# every job runs a named repository script — never a command written only here. A command
+# that exists only in this file is one the laptop cannot run, and then CI and local
+# development are two things maintained separately.
+
+on:
+  # pull_request already covers every push to a branch that has one open, so a push
+  # trigger on branches would only double the bill. Until a PR exists, a push to a branch
+  # deliberately runs nothing.
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# None of these jobs writes anything. The default token grants more than any of them needs.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Superseded runs are cancelled on branches. On main they are left to finish, because
+  # main's history is what rollbacks and release notes get read from.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: pnpm lint
+
+  types:
+    name: types
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: pnpm typecheck
+
+  unit:
+    name: unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      # A floor against regressions, not a target: the quality guarantee of this project
+      # is the invariants. See docs/decisions/0006-coverage-is-a-ratcheted-floor.md.
+      - run: pnpm test:coverage
+
+  invariants:
+    name: invariants
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      # The five of Part 8.2. INV_4 is provisional in phase 0 and says so in its own name
+      # and in docs/document-rules.md.
+      - run: pnpm test:invariants
+
+  golden:
+    name: golden
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      # Never with -u here. Regenerating in CI would mean the build approving its own
+      # output, which is the one thing the golden corpus exists to prevent.
+      - run: pnpm test:golden
+
+  a11y-size:
+    name: a11y-size
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      # WEIGHT BUDGET ONLY for now. axe-core, the contrast check and the 320/768/1280
+      # overflow checks arrive with the publish task — so read this job's green tick as
+      # "under 60 KB gzipped with zero JavaScript", and nothing more than that.
+      - run: pnpm size
+
+  security:
+    name: security
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+
+      # Before the audit, so that an exception cannot be added without its date and
+      # reason. An undocumented ignore is how a blocking audit stops blocking.
+      - run: pnpm audit:exceptions
+
+      - run: pnpm security:audit
+
+      # gitleaks runs through pre-commit so the pinned rev in .pre-commit-config.yaml
+      # stays the only place that version is written — the same rule as Node and pnpm.
+      # It also avoids gitleaks-action, which wants a licence key for org-owned repos.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install pre-commit
+      - run: pnpm security:secrets
+
+  guards:
+    name: guards
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The guards compare against a base commit, and a shallow clone has no merge
+          # base to resolve. Full history while the repository is young; narrow this to
+          # the base branch if it ever gets heavy.
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup
+
+      # The range is explicit in both directions and never inferred. If it cannot be
+      # computed, this step FAILS — a guard that does not know what to compare and answers
+      # "all fine" is worse than no guard, because it turns an unknown into a green tick.
+      - name: Resolve the diff range
+        id: range
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+            head="${{ github.event.pull_request.head.sha }}"
+          else
+            base="${{ github.event.before }}"
+            head="${{ github.sha }}"
+          fi
+
+          fail() { echo "guards: cannot determine what to compare — $1" >&2; exit 1; }
+
+          # A branch's first push reports an all-zero "before". That is an unknown, not
+          # an empty diff, and must not be waved through.
+          case "$base" in
+            ""|0000000000000000000000000000000000000000)
+              fail "no usable base commit (got '${base}')" ;;
+          esac
+          [ -n "$head" ] || fail "no head commit"
+
+          git cat-file -e "${base}^{commit}" 2>/dev/null || fail "base ${base} is not in this clone (shallow checkout?)"
+          git cat-file -e "${head}^{commit}" 2>/dev/null || fail "head ${head} is not in this clone"
+          git merge-base "$base" "$head" >/dev/null 2>&1 || fail "no merge base between ${base} and ${head}"
+
+          echo "range=${base}...${head}" >> "$GITHUB_OUTPUT"
+          echo "Comparing ${base}...${head}"
+
+      # A schema change without its migration (Part 8.4).
+      - run: pnpm schema:guard "${{ steps.range.outputs.range }}"
+
+      # A runtime dependency that would travel to the client's published site (ADR 0001).
+      - run: pnpm renderer:deps
+
+      # A coverage floor that went down (ADR 0006).
+      - run: pnpm coverage:ratchet "${{ steps.range.outputs.range }}"

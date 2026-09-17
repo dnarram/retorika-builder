@@ -1,4 +1,4 @@
-# The local reviewer (protocol Part 9.1). Five hooks, and none of them is disabled to get
+# The local reviewer (protocol Part 9.1). Six hooks, and none of them is disabled to get
 # a commit through: the hook is the only party that cannot be complacent.
 #
 # Commit from the Terminal, not from an editor's source-control panel. macOS desktop apps
@@ -34,5 +34,15 @@ repos:
       - id: renderer-deps
         name: renderer dependency allowlist
         entry: pnpm renderer:deps
+        language: system
+        pass_filenames: false
+
+      # Project-specific. The coverage floor only goes up (ADR 0006). With no diff range
+      # it compares against HEAD, and when there is nothing to compare it says so and
+      # passes — the blocking case lives in CI, where a real range exists. A hook that
+      # always fails is a hook that gets bypassed.
+      - id: coverage-ratchet
+        name: coverage floor ratchet
+        entry: pnpm coverage:ratchet
         language: system
         pass_filenames: false

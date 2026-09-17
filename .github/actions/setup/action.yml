@@ -1,0 +1,26 @@
+name: Setup
+description: Node, pnpm and the installed workspace, with every version read from the repository.
+
+# Nothing here restates a version. Node comes from .nvmrc, pnpm from the packageManager
+# field, and both are already the single source of truth for the laptop — so if a pin
+# moves, CI moves with it on its own and the two cannot drift.
+
+runs:
+  using: composite
+  steps:
+    # No `version:` input: the action reads packageManager from package.json.
+    # Pinned to a full commit SHA rather than a tag. actions/* are GitHub's own and can
+    # stay on tags; a third-party action that runs in every job with access to the
+    # repository is exactly the kind of dependency this project already polices in
+    # packages/renderer, and a tag can be moved by its owner.
+    - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      name: Install pnpm
+
+    - uses: actions/setup-node@v4
+      name: Install Node
+      with:
+        node-version-file: .nvmrc
+        cache: pnpm
+
+    - run: pnpm install --frozen-lockfile
+      shell: bash

@@ -80,14 +80,80 @@ October.
 | `pnpm test` | Everything |
 | `pnpm test:invariants` | The five invariants: the document rules hold under generated input |
 | `pnpm test:golden` | Generated HTML against the stored corpus — the diff that reveals a style change altering every published site. `-u` regenerates, and the diff must be read |
+| `pnpm test:coverage` | The same suite with the coverage floor applied |
 | `pnpm typecheck` | Types across the workspace |
 | `pnpm lint` / `pnpm format` | Biome |
 | `pnpm size` | Published page under 60 KB gzipped, zero JavaScript |
 | `pnpm schema:guard` | A schema change carries its migration. Takes a diff range: `pnpm schema:guard origin/main...HEAD` |
 | `pnpm renderer:deps` | No runtime dependency reaches the client's site |
+| `pnpm coverage:ratchet` | The coverage floor has not been lowered. Takes the same diff range |
+| `pnpm audit:exceptions` | Every ignored advisory carries a date and a reason |
+| `pnpm security:audit` | `pnpm audit`, blocking at moderate |
+| `pnpm security:secrets` | gitleaks, at the version pinned in `.pre-commit-config.yaml` |
 
 `INV_4` is **provisional**: the design-tools switch does not exist yet, so only the schema's
 refusal to store it is verified. See `docs/document-rules.md`.
+
+### Coverage is a floor, not a target
+
+The thresholds in `coverage-thresholds.json` exist to catch regressions, and nothing more.
+**The quality guarantee of this project is the invariants** — a hundred per cent coverage with
+an invariant broken would be worth nothing, and chasing the last few points buys tests written
+to satisfy a counter.
+
+The floor only ever goes up. Raising it needs no ceremony; **lowering it requires an ADR**, and
+`pnpm coverage:ratchet` fails the commit and the build if a number goes down. See
+[ADR 0006](docs/decisions/0006-coverage-is-a-ratcheted-floor.md).
+
+### Security advisories and their exceptions
+
+`pnpm security:audit` blocks. The escape hatch is `pnpm.auditConfig.ignoreCves` in
+`package.json`, and every entry must carry a note in `exceptionNotes` with the date it was added
+and one line of why — `pnpm audit:exceptions` fails otherwise.
+
+**An exception is temporary by definition.** There is no expiry automation on purpose: a job
+that turns red on a date is just another automatic blockage. The way to review them is to look
+at their dates.
+
+Static analysis in the `security` job of Part 9.2 is Biome, which already runs as `lint`. CodeQL
+is not enabled: it needs GitHub Advanced Security on a private repository.
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on **pull requests to `main` and pushes to `main`**. Node, pnpm
+and gitleaks versions are read from `.nvmrc`, `packageManager` and `.pre-commit-config.yaml`, so
+CI and your laptop cannot drift. Every job runs a named script from the table above — nothing is
+written only in the YAML.
+
+> **Until a pull request exists, a push to a branch runs nothing.** This is deliberate: with an
+> open PR, the `pull_request` trigger already covers every push to that branch, and adding a
+> branch `push` trigger would only double the bill.
+
+These are the eight check names, exactly as GitHub reports them. Branch protection matches the
+bare job name; the pull request page displays them as `CI / lint`.
+
+| Check | What it runs |
+|---|---|
+| `lint` | `pnpm lint` |
+| `types` | `pnpm typecheck` |
+| `unit` | `pnpm test:coverage` |
+| `invariants` | `pnpm test:invariants` |
+| `golden` | `pnpm test:golden` |
+| `a11y-size` | `pnpm size` |
+| `security` | `pnpm audit:exceptions`, `pnpm security:audit`, `pnpm security:secrets` |
+| `guards` | `pnpm schema:guard`, `pnpm renderer:deps`, `pnpm coverage:ratchet`, all on an explicit diff range |
+
+**`a11y-size` currently checks the weight budget only.** axe-core, the contrast check and the
+320/768/1280 overflow checks arrive with the publish task, so read its green tick as "under
+60 KB gzipped with zero JavaScript" and nothing more.
+
+**There is no `e2e` job.** Playwright arrives with the flows it is meant to test. A job that
+cannot run anything is worse than no job: it shows up in the branch-protection list as a check
+that will never report.
+
+Branch protection on `main` is switched on **after** these workflows have run at least once — a
+check does not appear in the protection list until it has reported. The order is: push the
+branch, open the pull request, wait for the eight jobs, then configure protection.
 
 ## Repository layout
 

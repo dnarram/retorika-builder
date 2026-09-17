@@ -636,12 +636,26 @@ repos:
         entry: pnpm renderer:deps
         language: system
         pass_filenames: false
+      - id: coverage-ratchet
+        name: coverage floor ratchet
+        entry: pnpm coverage:ratchet
+        language: system
+        pass_filenames: false
 ```
 
-Son **cinco** hooks. Los dos últimos son propios de este proyecto: `schema-guard` exige la
-migración cuando cambia el esquema, y `renderer:deps` falla si alguien añade una dependencia de
+Son **seis** hooks. Los tres últimos son propios de este proyecto: `schema-guard` exige la
+migración cuando cambia el esquema; `renderer:deps` falla si alguien añade una dependencia de
 tiempo de ejecución a `packages/renderer`, porque todo lo que entre ahí acaba viajando al sitio
-del cliente.
+del cliente; y `coverage-ratchet` falla si el suelo de cobertura baja.
+
+Ese último existe por un motivo que conviene entender: el ADR 0006 dice que el suelo solo puede
+subir, y **una regla que solo vive en prosa se incumple**. Sin el hook, bajar el umbral para
+poner el CI en verde es un momento de debilidad a las once de la noche; con él, hay que escribir
+un ADR y explicarse.
+
+En local no hay rama base, así que compara contra `HEAD`. Cuando no hay nada con qué comparar
+lo dice y pasa, y el bloqueo de verdad vive en CI, donde sí hay rango. Un hook que falla siempre
+es un hook que se acaba saltando con `--no-verify`, y así es como se pierde un guardián.
 
 Los commits se hacen **desde la Terminal**, no desde el panel de control de versiones del
 editor. Las aplicaciones de escritorio de macOS no leen los ficheros de configuración del shell,
@@ -649,19 +663,37 @@ así que ahí los hooks se ejecutarían sin el Node fijado en el PATH.
 
 ## 9.2 La máquina que no miente
 
-GitHub Actions en cada push y cada pull request, con jobs separados para poder ver de un
-vistazo qué ha fallado:
+GitHub Actions en **`pull_request` hacia `main` y `push` en `main`**, con jobs separados para
+poder ver de un vistazo qué ha fallado:
 
 | Job | Qué ejecuta | Cuándo |
 |---|---|---|
 | `lint` | Biome | Siempre |
 | `types` | `tsc --noEmit` en todos los paquetes | Siempre |
-| `unit` | Vitest con umbral de cobertura | Siempre |
+| `unit` | Vitest con suelo de cobertura sobre los paquetes del núcleo | Siempre |
 | `invariants` | Las cinco pruebas de la Parte 8.2 | Siempre |
 | `golden` | HTML generado contra el corpus | Siempre |
 | `a11y-size` | axe-core, desbordes y presupuesto de peso | Siempre |
 | `security` | `pnpm audit`, gitleaks, análisis estático | Siempre |
+| `guards` | `schema:guard` con el rango de diff, `renderer:deps` y `coverage:ratchet` | Siempre |
 | `e2e` | Playwright sobre los flujos críticos | Solo en pull request hacia `main` |
+
+El disparador **no es «en cada push y cada pull request»**, como decía antes esta parte. Con un
+pull request abierto, `pull_request` ya cubre cada push de esa rama, así que añadir `push` en
+ramas solo duplicaría unos minutos que esta misma parte llama finitos. La consecuencia, que
+conviene saber: **hasta que existe el pull request, un push a una rama no ejecuta nada.** Es
+deliberado.
+
+Los jobs corren en paralelo y ninguno depende de otro: un lint en rojo no debe esconder una
+invariante rota. Cada job ejecuta **un script con nombre del repositorio**, nunca un comando
+escrito solo en el YAML; si el comando vive únicamente ahí, en el portátil no se puede ejecutar
+lo mismo y acaban siendo dos cosas que se mantienen por separado.
+
+> **La protección de la rama se activa después de que estos workflows existan, no antes.**
+> Un check no aparece en la lista de la protección hasta que se ha ejecutado al menos una vez,
+> así que al revés te bloqueas a ti mismo: o la lista sale vacía, o exiges un nombre que no va a
+> reportar nunca. El orden es: empujar la rama, abrir el pull request, esperar a que los jobs
+> reporten, y entonces configurar la protección.
 
 Los flujos críticos de Playwright son cinco y no más: cuestionario hasta web generada,
 edición de un texto y recarga, cambio de paleta, pago de prueba y publicación, y descarga
