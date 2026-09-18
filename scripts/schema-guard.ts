@@ -20,7 +20,23 @@ function changedFiles(range: string | undefined): string[] {
   return execFileSync("git", args, { encoding: "utf8" }).split("\n").filter(Boolean);
 }
 
-const range = process.argv[2];
+/**
+ * An argument that is present but blank is an error, not the same as no argument.
+ *
+ * Without this, a caller that computed an empty range — a workflow step whose own
+ * failure was made non-fatal, say — would land in the git-index branch below. In CI the
+ * index is empty, so the guard would report "nothing to check" and exit 0: fail-open,
+ * one careless edit away. Absent means "use the index"; blank means someone's range
+ * calculation went wrong and we must not guess.
+ */
+const rawRange = process.argv[2];
+if (rawRange !== undefined && rawRange.trim() === "") {
+  console.error("schema-guard: a diff range was given but is blank — refusing to guess.");
+  console.error("Pass a real range, or no argument at all to use the git index.");
+  process.exit(1);
+}
+
+const range = rawRange;
 const changed = changedFiles(range);
 
 const schemaChanged = changed.filter((file) => file.startsWith("packages/schema/src/"));

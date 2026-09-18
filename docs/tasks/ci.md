@@ -83,6 +83,45 @@ than no guard.
 - [ ] Interface text: none in this task
 - [ ] No keys and no real data in the workflow
 
+## What the first run taught
+
+The workflow's first run — on the push that created `main` — went six green, two red. Both
+failures were **properties of the GitHub environment, not of the code**, which is why the local
+dry run of every job script could not have caught either. Worth recording, because the same
+class of thing will happen again.
+
+**`guards`: a push that creates a ref reports an all-zero `before`.**
+`cannot determine what to compare — no usable base commit (got '0000…')`. Failing closed was the
+right instinct and stays, but the repository's own first push is the one case where there
+genuinely is no earlier commit, and it must still *run* the guards rather than be skipped.
+`github.event.created` tells that case apart from every other all-zero base; the range becomes
+the empty tree (`git hash-object -t tree /dev/null`), with two dots rather than three, since the
+empty tree shares no merge base with anything. Any other zero base still fails closed.
+
+**`security`: `actions/setup-python` with `cache: pip` needs a file to hash.**
+`No file … matched to [**/requirements.txt or **/pyproject.toml]`. This project installs
+`pre-commit` directly and has neither. The cache came out, and was replaced by one on
+`~/.cache/pre-commit` keyed on `.pre-commit-config.yaml` — which exists, and which caches the
+part that is actually slow: pre-commit rebuilding gitleaks' Go environment every run.
+
+**And a third thing, found while reading the failure rather than from it.** The aborted steps
+printed as `Run pnpm schema:guard ""`. Nothing bad happened — the job had already stopped — but
+an empty range was *silently safe for the wrong reason*: both guard scripts branched on the
+truthiness of `process.argv[2]`, so a blank argument was indistinguishable from no argument and
+fell back to the git index, which in CI is empty. That reports "nothing to check" and exits 0.
+Fail-open, one careless edit away. Now a present-but-blank range is an explicit error in both
+scripts, distinct from no argument at all.
+
+The bootstrap fix also surfaced a latent bug it would have walked into: `coverage-ratchet.ts`
+took the base with `range.split("...")[0] ?? range.split("..")[0]`, which for a two-dot range
+returns the whole string — truthy, so `??` never falls through. `git show` then failed, the
+failure read as "no file at the base", and the ratchet passed silently. Two-dot ranges stopped
+being hypothetical the moment the bootstrap range needed one.
+
+The lesson worth carrying: **every one of these was a guard that would have passed rather than
+failed.** A guard is only worth having if its silent-success paths are as carefully considered
+as its failure messages.
+
 ## Out of scope
 
 `e2e` and Playwright — a job that cannot run anything is worse than no job, because it appears
