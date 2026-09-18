@@ -108,7 +108,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-          cache: pip
+          # Deliberately no `cache: pip`. It insists on hashing a requirements.txt or a
+          # pyproject.toml for its key, and this project has neither — pre-commit is
+          # installed directly. It failed the first run for exactly that reason.
+
+      # The cache worth having, keyed on a file that actually exists: pre-commit builds
+      # gitleaks' Go environment from scratch otherwise, on every run.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+
       - run: pip install pre-commit
       - run: pnpm security:secrets
 
@@ -135,7 +145,10 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
+          event="${{ github.event_name }}"
+          created="${{ github.event.created }}"
+
+          if [ "$event" = "pull_request" ]; then
             base="${{ github.event.pull_request.base.sha }}"
             head="${{ github.event.pull_request.head.sha }}"
           else
@@ -145,16 +158,38 @@ jobs:
 
           fail() { echo "guards: cannot determine what to compare — $1" >&2; exit 1; }
 
-          # A branch's first push reports an all-zero "before". That is an unknown, not
-          # an empty diff, and must not be waved through.
+          [ -n "$head" ] || fail "no head commit"
+          git cat-file -e "${head}^{commit}" 2>/dev/null || fail "head ${head} is not in this clone"
+
+          # An all-zero "before" means one of two very different things, and telling them
+          # apart is the whole point of this block.
+          #
+          #  * The push that CREATED the ref. For this repository's very first push to
+          #    main there is genuinely no earlier commit, so the base becomes the empty
+          #    tree and the guards run over EVERY file. Bootstrap is checked, not skipped.
+          #    github.event.created is true exactly in that case.
+          #
+          #  * Anything else. Then it is an unknown, not an empty diff, and it still
+          #    fails closed — a guard that does not know what to compare and answers
+          #    "all fine" turns an unknown into a green tick.
+          #
+          # This is the case that gets forgotten, which is why it is spelled out. It cost
+          # the first CI run; see "What the first run taught" in docs/tasks/ci.md.
           case "$base" in
             ""|0000000000000000000000000000000000000000)
-              fail "no usable base commit (got '${base}')" ;;
+              if [ "$event" = "push" ] && [ "$created" = "true" ]; then
+                # Two dots, not three: the empty tree shares no merge base with anything,
+                # so "..." is invalid against it.
+                empty="$(git hash-object -t tree /dev/null)"
+                echo "range=${empty}..${head}" >> "$GITHUB_OUTPUT"
+                echo "Repository bootstrap: comparing the whole tree against ${head}"
+                exit 0
+              fi
+              fail "no usable base commit (got '${base}')"
+              ;;
           esac
-          [ -n "$head" ] || fail "no head commit"
 
           git cat-file -e "${base}^{commit}" 2>/dev/null || fail "base ${base} is not in this clone (shallow checkout?)"
-          git cat-file -e "${head}^{commit}" 2>/dev/null || fail "head ${head} is not in this clone"
           git merge-base "$base" "$head" >/dev/null 2>&1 || fail "no merge base between ${base} and ${head}"
 
           echo "range=${base}...${head}" >> "$GITHUB_OUTPUT"

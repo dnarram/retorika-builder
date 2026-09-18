@@ -66,8 +66,35 @@ function onDisk(): Thresholds {
  * case to CI where a real range exists. A hook that fails every time is a hook that gets
  * bypassed with --no-verify, and that is how a guard is lost.
  */
-const range = process.argv[2];
-const baseRevision = range ? (range.split("...")[0] ?? range.split("..")[0] ?? "") : "HEAD";
+const rawRange = process.argv[2];
+
+// Present but blank is an error, not "use the default". See the same guard in
+// schema-guard.ts: a caller whose range calculation went wrong must not be silently
+// handed the local fallback, which in CI would compare nothing and pass.
+if (rawRange !== undefined && rawRange.trim() === "") {
+  console.error("coverage-ratchet: a diff range was given but is blank — refusing to guess.");
+  console.error("Pass a real range, or no argument at all to compare against HEAD.");
+  process.exit(1);
+}
+
+/**
+ * The base end of a range, for both `A...B` and `A..B`.
+ *
+ * Written as an ordered check rather than `split("...")[0] ?? split("..")[0]`, which
+ * looks equivalent and is not: for `A..B`, `split("...")` returns the single element
+ * `["A..B"]`, which is a truthy string, so `??` never falls through and the base became
+ * the entire range. `git show "A..B:file"` then failed, the failure was read as "the
+ * file does not exist at the base", and the ratchet passed silently. Two-dot ranges are
+ * not hypothetical: the repository-bootstrap range in CI is one.
+ */
+function baseOf(range: string): string {
+  const separator = range.includes("...") ? "..." : "..";
+  const [base] = range.split(separator);
+  return base ?? "";
+}
+
+const range = rawRange;
+const baseRevision = range ? baseOf(range) : "HEAD";
 
 if (range && !baseRevision) {
   console.error(`coverage-ratchet: could not read a base revision out of the range "${range}".`);
