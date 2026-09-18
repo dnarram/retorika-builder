@@ -182,3 +182,4 @@ as an empty placeholder.
 - `docs/decisions/` — ADRs. Where one amends a dossier, it says so.
 - `docs/tasks/` — task plans, written before implementing.
 - `docs/protocolo.md` — the development protocol (in Spanish).
+
