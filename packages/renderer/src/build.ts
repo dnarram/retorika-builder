@@ -222,9 +222,19 @@ export function buildCss(doc: RetorikaDocument): string {
     "",
     // Below 320px is where the dossier's pre-publish check looks for overflow, so the
     // grid collapses before it can happen rather than being patched afterwards.
+    //
+    // The automatic mobile derivation (document rule 7; PR #6, finding 1): one column, one
+    // element per row. Resetting only the column left each element's inline grid-row in
+    // place, so elements that sat side by side landed in the same cell — the photo over the
+    // headline, the link over the button. grid-row: auto lets the grid place each child on
+    // its own row. The photo goes first (order: -1; option A, approved). And the panel is
+    // hidden: with the photo on its own row nothing overlaps it, and the text sits on the
+    // page's background, which is color.surface like the panel.
     "@media (max-width: 720px) {",
     "  .rb-section { grid-template-columns: 1fr; padding: var(--space-lg); }",
-    "  .rb-section > * { grid-column: 1 / -1 !important; }",
+    "  .rb-section > * { grid-column: 1 / -1 !important; grid-row: auto !important; }",
+    "  .rb-section > img { order: -1; }",
+    "  .rb-panel { display: none; }",
     "}",
     "",
   ].join("\n");

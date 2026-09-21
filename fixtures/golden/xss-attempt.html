@@ -47,7 +47,9 @@ body { margin: 0; font-family: var(--font-body); color: var(--color-ink);
 
 @media (max-width: 720px) {
   .rb-section { grid-template-columns: 1fr; padding: var(--space-lg); }
-  .rb-section > * { grid-column: 1 / -1 !important; }
+  .rb-section > * { grid-column: 1 / -1 !important; grid-row: auto !important; }
+  .rb-section > img { order: -1; }
+  .rb-panel { display: none; }
 }
 </style>
 </head>
