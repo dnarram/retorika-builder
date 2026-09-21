@@ -19,7 +19,9 @@ import type { RenderOptions } from "./options.ts";
  * tell a real change from noise when reviewing a golden diff.
  */
 
-function placementStyle(placement: Placement): string {
+type GridArea = Pick<Placement, "column" | "columnSpan" | "row" | "rowSpan">;
+
+function placementStyle(placement: GridArea): string {
   return [
     `grid-column:${placement.column}/span ${placement.columnSpan}`,
     `grid-row:${placement.row}/span ${placement.rowSpan}`,
@@ -79,6 +81,51 @@ function elementNode(el: ContentElement, options: RenderOptions): RenderNode | u
   }
 }
 
+/** Half-open intervals: an area ending where another starts does not touch it. */
+function intersects(a: GridArea, b: GridArea): boolean {
+  return (
+    a.column < b.column + b.columnSpan &&
+    b.column < a.column + a.columnSpan &&
+    a.row < b.row + b.rowSpan &&
+    b.row < a.row + a.rowSpan
+  );
+}
+
+/**
+ * The area of the panel behind text that overlaps an image, or undefined if there is none.
+ *
+ * Text drawn over a photo has no contrast anyone can guarantee or measure (PR #6, finding 2).
+ * So wherever a visible element sits on a visible image, a panel of color.surface — the one
+ * background every palette guarantees its text colours against — goes under the text and
+ * over the photo, covering the bounding box of the overlapping elements.
+ *
+ * Placement-driven rather than tied to a variant name: a free section with text placed on a
+ * picture needs the same thing. The panel is render-only — no role, no slot, never in the
+ * document — and an empty sibling rather than a wrapper, so every document element keeps the
+ * grid area it was given (document rules 1 and 4).
+ */
+function panelArea(
+  emitted: readonly { el: ContentElement; placement: Placement | undefined }[],
+): GridArea | undefined {
+  const placed = emitted.filter(
+    (entry): entry is { el: ContentElement; placement: Placement } => entry.placement !== undefined,
+  );
+  const images = placed.filter(({ el }) => el.value?.kind === "image");
+  const over = placed.filter(
+    ({ el, placement }) =>
+      el.value?.kind !== "image" && images.some((image) => intersects(placement, image.placement)),
+  );
+  if (over.length === 0) return undefined;
+
+  const column = Math.min(...over.map(({ placement }) => placement.column));
+  const row = Math.min(...over.map(({ placement }) => placement.row));
+  const columnEnd = Math.max(
+    ...over.map(({ placement }) => placement.column + placement.columnSpan),
+  );
+  const rowEnd = Math.max(...over.map(({ placement }) => placement.row + placement.rowSpan));
+  return { column, columnSpan: columnEnd - column, row, rowSpan: rowEnd - row };
+}
+
 function sectionNode(section: Section, options: RenderOptions): RenderNode {
   const preset = presetFor(section.preset.catalogId);
   const elements = section.content;
@@ -88,15 +135,29 @@ function sectionNode(section: Section, options: RenderOptions): RenderNode {
   const layout = section.layout ?? preset.layoutFor(section.preset.variantId, elements);
   const placementById = new Map(layout.placements.map((p) => [p.elementId, p]));
 
-  const children: RenderNode[] = [];
+  const emitted: { el: ContentElement; node: RenderNode; placement: Placement | undefined }[] = [];
   for (const el of elements) {
     const node = elementNode(el, options);
     if (!node) continue;
 
     const placement = placementById.get(el.id);
     if (placement) node.attributes["style"] = placementStyle(placement);
-    children.push(node);
+    emitted.push({ el, node, placement });
   }
+
+  const panel = panelArea(emitted);
+  const children: RenderNode[] = [
+    ...(panel
+      ? [
+          element(
+            "div",
+            { "aria-hidden": "true", class: "rb-panel", style: placementStyle(panel) },
+            [],
+          ),
+        ]
+      : []),
+    ...emitted.map(({ node }) => node),
+  ];
 
   return element(
     "section",
@@ -150,6 +211,14 @@ export function buildCss(doc: RetorikaDocument): string {
     ".rb-section [role=button] { display: inline-block; padding: var(--space-sm) var(--space-md);",
     "  background: var(--color-primary); color: var(--color-surface);",
     "  border-radius: var(--radius-sm); text-decoration: none; }",
+    // The panel under text that overlaps an image (panelArea): the image keeps z-index auto
+    // and paints first, the panel over it, the text over the panel. Grid items honour
+    // z-index without position. align-self: stretch because .rb-section centres its items,
+    // which would leave an empty panel with no height. pointer-events: none so a click on
+    // the photo reaches the image, not a box nobody can select.
+    ".rb-panel { align-self: stretch; margin: calc(-1 * var(--space-md)); z-index: 1;",
+    "  background: var(--color-surface); border-radius: var(--radius-lg); pointer-events: none; }",
+    ".rb-panel ~ :not(img) { z-index: 2; }",
     "",
     // Below 320px is where the dossier's pre-publish check looks for overflow, so the
     // grid collapses before it can happen rather than being patched afterwards.
