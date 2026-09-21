@@ -1,0 +1,25 @@
+# Binding names and route patterns only. No account id, no token, and no bucket name
+# that is not already public: the deployment environment supplies those (protocol Part 15).
+#
+# The REPLACE_WITH_* values are deliberate placeholders. The real apex domain and bucket are a
+# product and DNS decision that has not been made yet (docs/tasks/serve.md, "stop and ask" 1),
+# and with these in place `wrangler deploy` fails loudly instead of attaching to a wrong zone.
+#
+# Before filling in the domain: the wildcard below captures EVERY subdomain of it, www and api
+# included, unless those have routes of their own.
+
+name = "retorika-serve"
+main = "src/index.ts"
+compatibility_date = "2026-09-21"
+workers_dev = false
+
+routes = [
+  { pattern = "*.REPLACE_WITH_DOMAIN/*", zone_name = "REPLACE_WITH_DOMAIN" },
+]
+
+[vars]
+SITES_DOMAIN = "REPLACE_WITH_DOMAIN"
+
+[[r2_buckets]]
+binding = "SITES"
+bucket_name = "REPLACE_WITH_BUCKET"

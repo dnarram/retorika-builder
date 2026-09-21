@@ -5,6 +5,7 @@
     { "path": "./packages/catalog" },
     { "path": "./packages/renderer" },
     { "path": "./packages/publisher" },
-    { "path": "./packages/tokens" }
+    { "path": "./packages/tokens" },
+    { "path": "./apps/serve" }
   ]
 }

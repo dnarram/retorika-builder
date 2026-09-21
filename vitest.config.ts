@@ -42,6 +42,14 @@ export default defineConfig({
           environment: "node",
         },
       },
+      {
+        test: {
+          name: "serve",
+          root: "./apps/serve",
+          // The Worker's globals (Request, Response, ReadableStream) are also Node's.
+          environment: "node",
+        },
+      },
     ],
     // Protocol Part 18: one thread per core chokes this machine.
     maxWorkers: 4,
