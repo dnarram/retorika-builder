@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 import thresholds from "./coverage-thresholds.json" with { type: "json" };
 
 // Vitest 5 removed vitest.workspace.ts; projects live here instead.
@@ -26,8 +26,29 @@ export default defineConfig({
           // The "dom" target needs a DOM. happy-dom is lighter than jsdom,
           // which matters on a 16 GB laptop (protocol Part 18).
           environment: "happy-dom",
+          // The browser suites belong to the "a11y" project below.
+          exclude: [...configDefaults.exclude, "**/*.browser.test.ts"],
         },
       },
+      // The accessibility harness: axe and overflow in a real Chromium. Declared only when
+      // RETORIKA_A11Y=1, which `pnpm test:a11y` sets. `vitest run` executes every declared
+      // project, so an unconditional one would make `pnpm test` and the coverage job need a
+      // browser — or, worse, tempt someone to make these suites skip when it is missing.
+      ...(process.env["RETORIKA_A11Y"] === "1"
+        ? [
+            {
+              test: {
+                name: "a11y",
+                root: "./packages/renderer",
+                include: ["test/**/*.browser.test.ts"],
+                environment: "node",
+                // A browser launch plus the matrix; page loads are slow compared to units.
+                testTimeout: 60_000,
+                hookTimeout: 60_000,
+              },
+            },
+          ]
+        : []),
       {
         test: {
           name: "publisher",

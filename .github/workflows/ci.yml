@@ -79,14 +79,36 @@ jobs:
   a11y-size:
     name: a11y-size
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # A Chromium download on a cold cache plus the combination matrix, not a ten-minute job.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
-      # WEIGHT BUDGET ONLY for now. axe-core, the contrast check and the 320/768/1280
-      # overflow checks arrive with the publish task — so read this job's green tick as
-      # "under 60 KB gzipped with zero JavaScript", and nothing more than that.
+
+      # Protocol Part 8.5: under 60 KB gzipped, zero JavaScript.
       - run: pnpm size
+
+      # The browser binary is cached on the exact Playwright version, which is what decides
+      # which Chromium build it expects. Chromium only: it is an implementation detail of two
+      # assertions, not a compatibility matrix.
+      - name: Read the Playwright version
+        id: playwright
+        run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      # On a cache hit the browser is there but the system libraries it links against are
+      # not, because the runner is new every time.
+      - if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install --with-deps chromium
+      - if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm exec playwright install-deps chromium
+
+      # axe (serious/critical, and every contrast finding, measured or not) and horizontal
+      # overflow at 320/768/1280, over every preset x variant x palette x type pair.
+      - run: pnpm test:a11y
 
   security:
     name: security

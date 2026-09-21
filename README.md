@@ -140,15 +140,18 @@ bare job name; the pull request page displays them as `CI / lint`.
 | `unit` | `pnpm test:coverage` |
 | `invariants` | `pnpm test:invariants` |
 | `golden` | `pnpm test:golden` |
-| `a11y-size` | `pnpm size` |
+| `a11y-size` | `pnpm size`, `pnpm test:a11y` |
 | `security` | `pnpm audit:exceptions`, `pnpm security:audit`, `pnpm security:secrets` |
 | `guards` | `pnpm schema:guard`, `pnpm renderer:deps`, `pnpm coverage:ratchet`, all on an explicit diff range |
 
-**`a11y-size` currently checks the weight budget only.** axe-core, the contrast check and the
-320/768/1280 overflow checks arrive with the publish task, so read its green tick as "under
-60 KB gzipped with zero JavaScript" and nothing more.
+**`a11y-size` checks the rendered page in a real Chromium**, for every preset × variant ×
+palette × type pair: the weight budget, axe with zero serious/critical violations and zero
+contrast findings (a contrast axe could not measure counts as a finding), and no horizontal
+overflow at 320, 768 or 1280 pixels. `pnpm test:a11y` runs the same thing locally; it needs
+`pnpm exec playwright install --with-deps chromium` once, and `pnpm test` never needs a browser.
 
-**There is no `e2e` job.** Playwright arrives with the flows it is meant to test. A job that
+**There is no `e2e` job.** Playwright is installed, but only for the two assertions of the
+accessibility harness; browser flow tests arrive with the flows they are meant to test. A job that
 cannot run anything is worse than no job: it shows up in the branch-protection list as a check
 that will never report.
 

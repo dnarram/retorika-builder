@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:invariants": "vitest run -t INV_",
     "test:golden": "vitest run golden",
+    "test:a11y": "RETORIKA_A11Y=1 vitest run --project a11y --maxWorkers 2",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --build --force",
     "lint": "biome check .",
@@ -27,9 +28,12 @@
     "security:secrets": "pre-commit run gitleaks --all-files"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
     "@biomejs/biome": "2.5.14",
+    "@playwright/test": "1.63.0",
     "@types/node": "24.13.5",
     "@vitest/coverage-v8": "5.0.1",
+    "axe-core": "4.13.0",
     "fast-check": "4.10.1",
     "happy-dom": "20.14.5",
     "typescript": "7.0.2",
