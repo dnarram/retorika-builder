@@ -1,0 +1,15 @@
+{
+  "name": "@retorika/publisher",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Packages the site: HTML, CSS, images, sitemap, ZIP",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "comment": "No third-party runtime dependency. The ZIP is handed to clients, so it is written by hand against node:zlib rather than pulled from a supply chain.",
+  "dependencies": {
+    "@retorika/schema": "workspace:*",
+    "@retorika/renderer": "workspace:*"
+  }
+}

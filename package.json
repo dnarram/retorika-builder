@@ -20,6 +20,7 @@
     "size": "node scripts/size-budget.ts",
     "schema:guard": "node scripts/schema-guard.ts",
     "renderer:deps": "node scripts/renderer-deps.ts",
+    "site:sample": "node scripts/build-sample-site.ts",
     "coverage:ratchet": "node scripts/coverage-ratchet.ts",
     "audit:exceptions": "node scripts/audit-exceptions.ts",
     "security:audit": "pnpm audit --audit-level=moderate",
@@ -35,6 +36,7 @@
     "vitest": "5.0.1"
   },
   "dependencies": {
+    "@retorika/publisher": "workspace:*",
     "@retorika/renderer": "workspace:*",
     "@retorika/schema": "workspace:*"
   },
