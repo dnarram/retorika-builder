@@ -208,6 +208,11 @@ export function buildCss(doc: RetorikaDocument): string {
     ".rb-section h2 { font-family: var(--font-heading); font-size: var(--size-subheading);",
     "  color: var(--color-secondary); margin: 0; }",
     ".rb-section p { font-size: var(--size-body); color: var(--color-muted); margin: 0; }",
+    // Plain links (PR #6, finding 3): color.primary, which every palette guarantees against
+    // color.surface, and underlined so they never rely on colour alone. The :not keeps this
+    // rule and the button rule from ever matching the same element. No outline, :focus,
+    // :hover or :visited: the browser's focus ring stays, and there is one link colour.
+    ".rb-section a:not([role=button]) { color: var(--color-primary); text-decoration: underline; }",
     ".rb-section [role=button] { display: inline-block; padding: var(--space-sm) var(--space-md);",
     "  background: var(--color-primary); color: var(--color-surface);",
     "  border-radius: var(--radius-sm); text-decoration: none; }",
