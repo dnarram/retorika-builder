@@ -86,6 +86,8 @@ del código**, que es más fácil de cumplir y no depende del juicio del momento
 | `packages/schema` | Es el contrato de todo el producto. Un cambio mal hecho corrompe documentos de clientes. |
 | `packages/renderer` | Su salida es la web del cliente y viaja en el ZIP. Un fallo aquí se publica. |
 | `packages/catalog` | Define los huecos y las cardinalidades de cada sección; de ahí depende que volver a la original no pierda contenido. |
+| `packages/publisher` | Es quien construye el ZIP. El motivo del renderizador se aplica palabra por palabra: su salida es la web del cliente y viaja en el ZIP. |
+| `apps/serve` | Asignar un subdominio a un sitio es multitenencia: un error sirve la web de un cliente bajo el dominio de otro. Es también donde se referencian las credenciales del almacenamiento. |
 | Migraciones de base de datos | Irreversibles en producción. |
 | Cualquier cosa que toque dinero | Stripe, precios, webhooks, facturación. |
 | Permisos y propiedad | Quién puede editar, desbloquear, transferir o borrar una web. |
@@ -588,8 +590,16 @@ Los dossiers prometen una revisión previa a publicar que avisa de contraste ins
 de desbordes por debajo de 320 píxeles. Eso es una función del producto, pero el
 renderizador tiene que cumplirlo de serie:
 
-- axe-core sobre el HTML de **cada preset del catálogo y cada variante**, en claro y en
-  oscuro. Contraste mínimo AA.
+- axe-core sobre el HTML de **cada preset del catálogo, cada variante y cada paleta de
+  `packages/tokens`**. Contraste mínimo AA.
+
+  > Antes esta línea decía «en claro y en oscuro», y no se podía cumplir tal cual: un documento
+  > lleva exactamente un tema y en el modelo no existe el concepto de oscuro. El contraste es una
+  > propiedad de la paleta, y una paleta oscura es sencillamente otra paleta de la lista. Además,
+  > el contraste entre dos colores declarados es aritmética sobre la luminancia relativa, así que
+  > se comprueba también en el origen, en `packages/tokens`, sin navegador: una paleta con mal
+  > contraste no se puede ni declarar, y axe confirma el resultado renderizado en lugar de
+  > descubrirlo.
 - Comprobación de desborde horizontal a 320, 768 y 1280 píxeles.
 - Presupuesto de peso por página publicada: **HTML y CSS por debajo de 60 KB comprimidos**,
   **cero JavaScript** si ninguna sección lo necesita, y **8 KB comprimidos como máximo**
