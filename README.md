@@ -86,6 +86,7 @@ October.
 | `pnpm size` | Published page under 60 KB gzipped, zero JavaScript |
 | `pnpm schema:guard` | A schema change carries its migration. Takes a diff range: `pnpm schema:guard origin/main...HEAD` |
 | `pnpm renderer:deps` | No runtime dependency reaches the client's site |
+| `pnpm site:sample <fixture> [out-dir]` | Builds a fixture as a real site plus its ZIP (default `.scratch/site` and `.scratch/site.zip`), so the double-click check is something you can actually do |
 | `pnpm coverage:ratchet` | The coverage floor has not been lowered. Takes the same diff range |
 | `pnpm audit:exceptions` | Every ignored advisory carries a date and a reason |
 | `pnpm security:audit` | `pnpm audit`, blocking at moderate |
@@ -168,7 +169,7 @@ as an empty placeholder.
 | `scripts/` | The guard scripts the hooks and CI run | **here** |
 | `fixtures/` | The golden corpus, its assets and stored output | **here** |
 | `packages/tokens` | Token system and Retorika's own theme | **here** |
-| `packages/publisher` | Packages the site: HTML, CSS, images, sitemap, ZIP | 0 |
+| `packages/publisher` | Packages the site: HTML, CSS, images, sitemap, ZIP | **here** |
 | `apps/serve` | Worker serving published sites from R2 | 0 |
 | `.github/workflows` | The CI jobs of Part 9.2 | 0 |
 | `apps/editor` | Next.js: public pages, editor, API, Stripe | 1 |

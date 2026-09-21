@@ -30,6 +30,13 @@ export default defineConfig({
       },
       {
         test: {
+          name: "publisher",
+          root: "./packages/publisher",
+          environment: "node",
+        },
+      },
+      {
+        test: {
           name: "tokens",
           root: "./packages/tokens",
           environment: "node",

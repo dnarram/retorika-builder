@@ -166,6 +166,9 @@ importers:
 
   .:
     dependencies:
+      '@retorika/publisher':
+        specifier: workspace:*
+        version: link:packages/publisher
       '@retorika/renderer':
         specifier: workspace:*
         version: link:packages/renderer
@@ -204,6 +207,15 @@ importers:
       fast-check:
         specifier: 4.10.1
         version: 4.10.1
+
+  packages/publisher:
+    dependencies:
+      '@retorika/renderer':
+        specifier: workspace:*
+        version: link:../renderer
+      '@retorika/schema':
+        specifier: workspace:*
+        version: link:../schema
 
   packages/renderer:
     dependencies:
