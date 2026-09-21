@@ -1,0 +1,13 @@
+{
+  "name": "@retorika/tokens",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Values for the style system: palettes, typography, scales, brand, themes",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@retorika/schema": "workspace:*"
+  }
+}

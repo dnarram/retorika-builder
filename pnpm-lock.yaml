@@ -228,6 +228,12 @@ importers:
         specifier: 4.10.1
         version: 4.10.1
 
+  packages/tokens:
+    dependencies:
+      '@retorika/schema':
+        specifier: workspace:*
+        version: link:../schema
+
 packages:
 
   '@babel/helper-string-parser@7.29.7':
