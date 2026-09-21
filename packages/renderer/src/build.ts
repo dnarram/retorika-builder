@@ -7,7 +7,7 @@ import {
   SORTED_TOKEN_KEYS,
   tokenToCssVariable,
 } from "@retorika/schema";
-import { escapeHtml, safeUrl } from "./escape.ts";
+import { cssThemeValue, safeUrl } from "./escape.ts";
 import { commentNode, element, type RenderNode } from "./nodes.ts";
 import type { RenderOptions } from "./options.ts";
 
@@ -128,7 +128,7 @@ export function buildTree(doc: RetorikaDocument, options: RenderOptions): Render
  */
 export function buildCss(doc: RetorikaDocument): string {
   const variables = SORTED_TOKEN_KEYS.map(
-    (key) => `  ${tokenToCssVariable(key)}: ${escapeHtml(doc.theme[key])};`,
+    (key) => `  ${tokenToCssVariable(key)}: ${cssThemeValue(key, doc.theme[key])};`,
   ).join("\n");
 
   return [
