@@ -167,7 +167,7 @@ as an empty placeholder.
 | `packages/catalog` | Section presets: slots, cardinality, variants | **here** |
 | `scripts/` | The guard scripts the hooks and CI run | **here** |
 | `fixtures/` | The golden corpus, its assets and stored output | **here** |
-| `packages/tokens` | Token system and Retorika's own theme | 0 |
+| `packages/tokens` | Token system and Retorika's own theme | **here** |
 | `packages/publisher` | Packages the site: HTML, CSS, images, sitemap, ZIP | 0 |
 | `apps/serve` | Worker serving published sites from R2 | 0 |
 | `.github/workflows` | The CI jobs of Part 9.2 | 0 |

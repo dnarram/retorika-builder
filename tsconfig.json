@@ -3,6 +3,7 @@
   "references": [
     { "path": "./packages/schema" },
     { "path": "./packages/catalog" },
-    { "path": "./packages/renderer" }
+    { "path": "./packages/renderer" },
+    { "path": "./packages/tokens" }
   ]
 }

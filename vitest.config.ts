@@ -28,6 +28,13 @@ export default defineConfig({
           environment: "happy-dom",
         },
       },
+      {
+        test: {
+          name: "tokens",
+          root: "./packages/tokens",
+          environment: "node",
+        },
+      },
     ],
     // Protocol Part 18: one thread per core chokes this machine.
     maxWorkers: 4,
