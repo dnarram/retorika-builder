@@ -198,6 +198,18 @@ importers:
         specifier: 5.0.1
         version: 5.0.1(@types/node@24.13.5)(@vitest/coverage-v8@5.0.1)(happy-dom@20.14.5)(vite@8.3.0(@types/node@24.13.5))
 
+  apps/serve:
+    devDependencies:
+      '@retorika/publisher':
+        specifier: workspace:*
+        version: link:../../packages/publisher
+      '@retorika/schema':
+        specifier: workspace:*
+        version: link:../../packages/schema
+      fast-check:
+        specifier: 4.10.1
+        version: 4.10.1
+
   packages/catalog:
     dependencies:
       '@retorika/schema':

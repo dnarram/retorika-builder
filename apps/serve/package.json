@@ -1,0 +1,13 @@
+{
+  "name": "@retorika/serve",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Worker serving published sites from R2",
+  "comment": "No runtime dependencies: the Worker imports nothing but its own modules and the R2 binding (protocol Part 16). wrangler is deliberately absent: it arrives with the first-deploy task, together with the allowBuilds decision for esbuild and workerd. @retorika/publisher and @retorika/schema are here only for the contract test.",
+  "devDependencies": {
+    "@retorika/publisher": "workspace:*",
+    "@retorika/schema": "workspace:*",
+    "fast-check": "4.10.1"
+  }
+}
