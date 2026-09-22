@@ -3,6 +3,7 @@ import {
   applyRevert,
   checkAgainstPreset,
   escalate,
+  flattenElements,
   invariantTestName,
   listEditableFields,
   parseDocument,
@@ -36,8 +37,9 @@ describe("invariants", () => {
     for (const { name, document } of corpus) {
       const fields = listEditableFields(document);
 
+      // Flattened: the elements inside a list's items are content fields too.
       const expected = document.pages.flatMap((page) =>
-        page.sections.flatMap((section) => section.content.map((el) => el.id)),
+        page.sections.flatMap((section) => flattenElements(section.content).map((el) => el.id)),
       );
       // Every content field, with no exceptions.
       expect(
@@ -50,7 +52,9 @@ describe("invariants", () => {
       // storage and false in practice.
       const hiddenIds = document.pages.flatMap((page) =>
         page.sections.flatMap((section) =>
-          section.content.filter((el) => el.hidden).map((el) => el.id),
+          flattenElements(section.content)
+            .filter((el) => el.hidden)
+            .map((el) => el.id),
         ),
       );
       const listedHidden = fields.filter((f) => f.hidden).map((f) => f.elementId);
@@ -58,7 +62,9 @@ describe("invariants", () => {
 
       for (const page of document.pages) {
         for (const section of catalogSections(page.sections)) {
-          expect(checkAgainstPreset(section, cover), `${name}/${section.id}`).toEqual([]);
+          // Each section against its own preset, not the cover's.
+          const preset = presetFor(section.preset.catalogId);
+          expect(checkAgainstPreset(section, preset), `${name}/${section.id}`).toEqual([]);
         }
       }
     }
@@ -85,7 +91,8 @@ describe("invariants", () => {
           expect(stripped.content, `${name}/${section.id}`).toEqual(section.content);
 
           if (section.source === "catalog") {
-            expect(checkAgainstPreset(stripped, cover), `${name}/${section.id}`).toEqual([]);
+            const preset = presetFor(section.preset.catalogId);
+            expect(checkAgainstPreset(stripped, preset), `${name}/${section.id}`).toEqual([]);
           }
         }
       }
@@ -161,6 +168,57 @@ describe("invariants", () => {
       ),
       { numRuns: 100 },
     );
+  });
+
+  /**
+   * The fast-check generator only knows the cover, so a section with a list is checked
+   * explicitly, over the corpus's "Qué hago" section. Teaching arbitraryDocument lists is a
+   * schema task of its own.
+   */
+  describe("a section with a list (cover-and-services)", () => {
+    const entry = corpus.find((candidate) => candidate.name === "cover-and-services");
+    const section = entry?.document.pages[0]?.sections.find((s) => s.id === "sec-services");
+    if (!section) throw new Error("cover-and-services has no sec-services section");
+    const services = presetFor("services");
+
+    it(invariantTestName("INV_3A"), () => {
+      expect(applyRevert(escalate(section, services), services)).toEqual(section);
+    });
+
+    it(invariantTestName("INV_3B"), () => {
+      const free = escalate(section, services);
+
+      // A content edit inside a card while the section is free.
+      const edited: Section = {
+        ...free,
+        content: free.content.map((el) =>
+          el.role === "list"
+            ? {
+                ...el,
+                items: el.items?.map((item) => ({
+                  ...item,
+                  elements: item.elements.map((child) =>
+                    child.id === "el-card-2-title"
+                      ? { ...child, value: { kind: "text" as const, text: "Barba y bigote" } }
+                      : child,
+                  ),
+                })),
+              }
+            : el,
+        ),
+      };
+
+      // The list travels whole: no card element is surplus, so no decision is needed.
+      expect(planRevert(edited, services).surplus).toEqual([]);
+      const back = applyRevert(edited, services);
+
+      const title = flattenElements(back.content).find((el) => el.id === "el-card-2-title");
+      expect(title?.value).toEqual({ kind: "text", text: "Barba y bigote" });
+      expect(flattenElements(back.content).map((el) => el.id)).toEqual(
+        flattenElements(section.content).map((el) => el.id),
+      );
+      expect(checkAgainstPreset(back, services)).toEqual([]);
+    });
   });
 
   it(invariantTestName("INV_4"), () => {

@@ -33,10 +33,18 @@ body { margin: 0; font-family: var(--font-body); color: var(--color-ink);
 .rb-section { display: grid; grid-template-columns: repeat(12, 1fr);
   gap: var(--space-md); padding: var(--space-xl); align-items: center; }
 .rb-section img { width: 100%; height: auto; border-radius: var(--radius-md); }
+.rb-section :is(h1, h2, h3, h4, h5, h6, p, a) { overflow-wrap: break-word; }
+.rb-section :is(h1, h2, h3, h4, h5, h6) { -webkit-hyphens: auto; hyphens: auto; }
 .rb-section h1 { font-family: var(--font-heading); font-size: var(--size-heading);
   color: var(--color-primary); margin: 0; }
 .rb-section h2 { font-family: var(--font-heading); font-size: var(--size-subheading);
   color: var(--color-secondary); margin: 0; }
+.rb-section h3 { font-family: var(--font-heading); font-size: var(--size-body);
+  color: var(--color-ink); margin: 0; }
+.rb-list { display: grid; gap: var(--space-md); margin: 0; padding: 0; list-style: none;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); }
+.rb-item { display: flex; flex-direction: column; gap: var(--space-xs);
+  padding-top: var(--space-sm); border-top: 1px solid var(--color-muted); }
 .rb-section p { font-size: var(--size-body); color: var(--color-muted); margin: 0; }
 .rb-section a:not([role=button]) { color: var(--color-primary); text-decoration: underline; }
 .rb-section [role=button] { display: inline-block; padding: var(--space-sm) var(--space-md);

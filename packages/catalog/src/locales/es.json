@@ -8,5 +8,15 @@
   "section.cover.slot.body": "Texto",
   "section.cover.slot.image": "Foto",
   "section.cover.slot.primaryAction": "Botón principal",
-  "section.cover.slot.secondaryAction": "Enlace secundario"
+  "section.cover.slot.secondaryAction": "Enlace secundario",
+  "section.services.name": "Qué hago",
+  "section.services.description": "Servicios o productos en tarjetas.",
+  "section.services.variant.stacked": "Tarjetas debajo",
+  "section.services.variant.side": "Título a un lado",
+  "section.services.variant.split": "Título e introducción en una fila",
+  "section.services.slot.headline": "Título",
+  "section.services.slot.intro": "Introducción",
+  "section.services.slot.services": "Tarjetas",
+  "section.services.item.title": "Nombre",
+  "section.services.item.description": "Descripción"
 }

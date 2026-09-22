@@ -2,10 +2,11 @@ import AxeBuilder from "@axe-core/playwright";
 import { type Browser, chromium } from "@playwright/test";
 import type { NodeResult, Result } from "axe-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { allCombinations, closeCombination, openCombination } from "./browser-fixtures.ts";
+import { closeCombination, openCombination, standardCombinations } from "./browser-fixtures.ts";
 
 /**
- * axe over the published HTML of every combination (protocol Part 8.5).
+ * axe over the published HTML of every standard combination (protocol Part 8.5). The long-text
+ * cases share the standard ones' colours, so they are measured for overflow only.
  *
  * It fails on:
  * - any serious or critical violation;
@@ -49,7 +50,7 @@ function describeNode(kind: string, rule: Result, node: NodeResult): string {
 }
 
 describe("axe", () => {
-  const combinations = allCombinations();
+  const combinations = standardCombinations();
 
   // A plain loop rather than it.each: it.each truncates interpolated values at about forty
   // characters, which made different combinations share a test name.

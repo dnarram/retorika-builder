@@ -1,13 +1,24 @@
 import type { PresetShape } from "@retorika/schema";
 import { COVER_ID, coverPreset } from "./cover.ts";
+import { SERVICES_ID, servicesPreset } from "./services.ts";
 
 export type { CoverVariant } from "./cover.ts";
 export { COVER_ID, COVER_SLOTS, COVER_VARIANTS, coverPreset } from "./cover.ts";
 export { SEARCH_ALIASES } from "./search.ts";
+export type { ServicesVariant } from "./services.ts";
+export {
+  SERVICES_ID,
+  SERVICES_ITEM_SLOTS,
+  SERVICES_ITEMS,
+  SERVICES_SLOTS,
+  SERVICES_VARIANTS,
+  servicesPreset,
+} from "./services.ts";
 
-/** Every section the catalog knows. Phase 0 ships exactly one. */
+/** Every section the catalog knows. */
 export const CATALOG: Readonly<Record<string, PresetShape>> = {
   [COVER_ID]: coverPreset,
+  [SERVICES_ID]: servicesPreset,
 };
 
 export function presetFor(catalogId: string): PresetShape {

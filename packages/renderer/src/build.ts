@@ -1,4 +1,4 @@
-import { presetFor } from "@retorika/catalog";
+import { COVER_ID, presetFor } from "@retorika/catalog";
 import {
   type ContentElement,
   type Placement,
@@ -28,21 +28,68 @@ function placementStyle(placement: GridArea): string {
   ].join(";");
 }
 
-function elementNode(el: ContentElement, options: RenderOptions): RenderNode | undefined {
+/**
+ * A heading tag for a level, or an explicit error: past h6 there is no tag, and quietly
+ * clamping would publish an outline that lies about the page's structure.
+ */
+function headingTag(level: number): string {
+  if (level < 1 || level > 6) throw new Error(`No heading tag for level ${level}`);
+  return `h${level}`;
+}
+
+/**
+ * A list, drawn the same way for every section that has one: a semantic <ul> whose items
+ * are <li>, each item's elements rendered one heading level below the section's.
+ *
+ * role="list" because WebKit drops list semantics from a <ul> with list-style: none, and
+ * VoiceOver users would lose "list, 4 items". An item with nothing visible is not emitted,
+ * and neither is a list with no item left: an empty <li> or <ul> would be published.
+ */
+function listNode(
+  el: ContentElement,
+  options: RenderOptions,
+  level: number,
+  base: Record<string, string>,
+): RenderNode | undefined {
+  const items: RenderNode[] = [];
+  for (const item of el.items ?? []) {
+    const children = item.elements
+      .map((child) => elementNode(child, options, level + 1))
+      .filter((node) => node !== undefined);
+    if (children.length === 0) continue;
+    items.push(element("li", { class: "rb-item", "data-item": item.id }, children));
+  }
+  if (items.length === 0) return undefined;
+  return element("ul", { ...base, class: "rb-list", role: "list" }, items);
+}
+
+/**
+ * `level` is the heading level of the section the element sits in: a `heading` is h{level}
+ * and a `subheading` h{level + 1}. Headings are levelled by section, not by role, so a page
+ * reads h1 (the cover), h2 (each other section), h3 (the cards inside a section's list).
+ */
+function elementNode(
+  el: ContentElement,
+  options: RenderOptions,
+  level: number,
+): RenderNode | undefined {
   if (el.hidden) return undefined;
+
+  const base = { "data-role": el.role, "data-slot": el.slot };
+
+  // A list holds items rather than a value, so it is handled before the value check.
+  if (el.role === "list") return listNode(el, options, level, base);
 
   const value = el.value;
   if (!value) return undefined;
-
-  const base = { "data-role": el.role, "data-slot": el.slot };
 
   switch (value.kind) {
     case "text":
       switch (el.role) {
         case "heading":
-          return element("h1", base, [value.text]);
+          return element(headingTag(level), base, [value.text]);
         case "subheading":
-          return element("h2", base, [value.text]);
+          return element(headingTag(level + 1), base, [value.text]);
         default:
           return element("p", base, [value.text]);
       }
@@ -135,9 +182,13 @@ function sectionNode(section: Section, options: RenderOptions): RenderNode {
   const layout = section.layout ?? preset.layoutFor(section.preset.variantId, elements);
   const placementById = new Map(layout.placements.map((p) => [p.elementId, p]));
 
+  // The cover carries the page's <h1>; every other section starts at <h2>. A free section
+  // built on the cover preset is still the cover.
+  const level = section.preset.catalogId === COVER_ID ? 1 : 2;
+
   const emitted: { el: ContentElement; node: RenderNode; placement: Placement | undefined }[] = [];
   for (const el of elements) {
-    const node = elementNode(el, options);
+    const node = elementNode(el, options, level);
     if (!node) continue;
 
     const placement = placementById.get(el.id);
@@ -203,10 +254,29 @@ export function buildCss(doc: RetorikaDocument): string {
     ".rb-section { display: grid; grid-template-columns: repeat(12, 1fr);",
     "  gap: var(--space-md); padding: var(--space-xl); align-items: center; }",
     ".rb-section img { width: 100%; height: auto; border-radius: var(--radius-md); }",
+    // No text overflows its own box. A word longer than its column ("Electrodomésticos" in a
+    // narrow title column) used to run past it into the next element. overflow-wrap:
+    // break-word is the guarantee: it acts only when a word cannot fit, and needs no
+    // dictionary. hyphens: auto on headings adds a hyphen where the browser has a Spanish
+    // dictionary (the page declares lang="es"); -webkit- because Safari needs the prefix.
+    ".rb-section :is(h1, h2, h3, h4, h5, h6, p, a) { overflow-wrap: break-word; }",
+    ".rb-section :is(h1, h2, h3, h4, h5, h6) { -webkit-hyphens: auto; hyphens: auto; }",
     ".rb-section h1 { font-family: var(--font-heading); font-size: var(--size-heading);",
     "  color: var(--color-primary); margin: 0; }",
     ".rb-section h2 { font-family: var(--font-heading); font-size: var(--size-subheading);",
     "  color: var(--color-secondary); margin: 0; }",
+    // Lists (the cards of "Qué hago", and every later list section). The card title is an
+    // h3 in ink and its description a p in muted: both pairs the tokens already guarantee
+    // against color.surface. The cards flow by auto-fit, so a composition only decides where
+    // the list sits; min(100%, 16rem) means a card never demands more than the list's width,
+    // which is one card per row at 320 and no overflow below it. The top border is
+    // decorative, so text contrast does not apply to it.
+    ".rb-section h3 { font-family: var(--font-heading); font-size: var(--size-body);",
+    "  color: var(--color-ink); margin: 0; }",
+    ".rb-list { display: grid; gap: var(--space-md); margin: 0; padding: 0; list-style: none;",
+    "  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); }",
+    ".rb-item { display: flex; flex-direction: column; gap: var(--space-xs);",
+    "  padding-top: var(--space-sm); border-top: 1px solid var(--color-muted); }",
     ".rb-section p { font-size: var(--size-body); color: var(--color-muted); margin: 0; }",
     // Plain links (PR #6, finding 3): color.primary, which every palette guarantees against
     // color.surface, and underlined so they never rely on colour alone. The :not keeps this
