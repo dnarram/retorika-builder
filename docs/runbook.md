@@ -12,6 +12,9 @@ not to touch.
 
 ## 1. A published site is not being served
 
+> **Applies once hosted publishing is reactivated ([ADR 0007](decisions/0007-hosted-publishing-on-hold.md)).**
+> Until then Retorika serves no client site: each site lives on its client's own hosting.
+
 ### First question: one site, or all of them?
 
 Load two sites that should be up: the one reported, and the sample site the external check

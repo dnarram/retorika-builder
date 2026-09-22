@@ -173,7 +173,7 @@ as an empty placeholder.
 | `fixtures/` | The golden corpus, its assets and stored output | **here** |
 | `packages/tokens` | Token system and Retorika's own theme | **here** |
 | `packages/publisher` | Packages the site: HTML, CSS, images, sitemap, ZIP | **here** |
-| `apps/serve` | Worker serving published sites from R2 | **here** |
+| `apps/serve` | Worker serving published sites from R2 — built and tested, not deployed | on hold ([ADR 0007](docs/decisions/0007-hosted-publishing-on-hold.md)) |
 | `.github/workflows` | The CI jobs of Part 9.2 | 0 |
 | `apps/editor` | Next.js: public pages, editor, API, Stripe | 1 |
 | `packages/templates` | Template extraction and application | 3 |
