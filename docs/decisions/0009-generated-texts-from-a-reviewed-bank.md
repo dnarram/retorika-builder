@@ -3,6 +3,9 @@
 **Status:** accepted (the decision); the technical proposal below is to be confirmed in the
 generator task · **Date:** 2026-09-22 · **Decided by:** the CEO
 
+> Updated 2026-09-22: the five questions and the closed placeholder list are ADR 0010, and the
+> sample photos are ADR 0011. The decision below is unchanged.
+
 ## Context
 
 The concept dossier leaves open "¿Generamos los textos automáticamente por sector?", and says why
@@ -45,19 +48,24 @@ person.
 ### The format of one entry, in JSON like the fixtures
 
     {
-      "id": "barberia.cover.headline.01",
-      "sector": "barberia",
+      "id": "peluqueria-barberia.cover.headline.01",
+      "sector": "peluqueria-barberia",
       "section": "cover",
       "slot": "headline",
-      "text": "Cortes y arreglos de barba en {barrio}",
-      "placeholders": ["barrio"],
+      "text": "Cortes y arreglos de barba en {ciudad}",
+      "placeholders": ["ciudad"],
       "origin": "ai-draft",
       "review": { "status": "approved", "date": "2026-10-03" }
     }
 
 - **`section` and `slot`** are the catalog's ids, so a text knows exactly where it goes.
-- **Placeholders** come from a closed list, filled from the questionnaire's answers. The list is
-  decided with the five questions, which are still pending.
+- **Placeholders** come from the closed list of [ADR 0010](0010-initial-questionnaire.md):
+  `{negocio}` and `{ciudad}`.
+  - `{negocio}` always exists, because question 1 is required.
+  - `{ciudad}` may not exist: question 4 is optional, and admits "solo online / a domicilio".
+  - **Every bank text that uses `{ciudad}` has an alternative without it.**
+  - **The generator never publishes an unfilled placeholder.** The generator task includes a test
+    that checks it.
 - **Texts are in Spanish (es-ES).** They are site content, not interface text, so they do not go
   in `locales/es.json`.
 
@@ -87,11 +95,10 @@ decision for a new ADR.
 
 ## Consequences
 
-- The generator task settles the proposal and fills at least the sectors the dossier names
-  (peluquerías caninas, fisioterapeutas, talleres, restaurantes, academias), plus the barbershop
-  of the fixtures.
+- The generator task settles the proposal and fills the launch sectors of ADR 0010, plus the
+  generic texts of "Otro".
 - Whatever package holds the bank goes into the repository tree of protocol 3.4 when it is
   created.
-- **Still open, and not decided here:**
-  - the photo bank ("fotos coherentes");
-  - the five questions, and with them the placeholder list.
+- **Settled since:**
+  - the photo bank: [ADR 0011](0011-sample-photos-per-sector.md);
+  - the five questions and the placeholder list: [ADR 0010](0010-initial-questionnaire.md).
