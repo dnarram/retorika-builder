@@ -225,8 +225,14 @@ and before the paragraph rule:
   - **every one of the seven existing goldens** gains exactly the six lines of step 4, as new
     lines 40–45, and nothing else: `git diff --numstat` shows **`6 0`** for each, **42
     insertions, 0 deletions**, and no line inside `<body>` changes;
-  - **one new golden,** `cover-and-services.html`, read in full: one `<h1>`, one `<h2>`, three
-    `<h3>` (the fully hidden item is absent), one `<ul role="list">` with three `<li>`.
+  - **one new golden,** `cover-and-services.html`, read in full: one `<h1>`, **two `<h2>`**,
+    three `<h3>` (the fully hidden item is absent), one `<ul role="list">` with three `<li>`.
+
+    > Corrected while executing: this line first said "one `<h2>`", which was a miscount. The
+    > fixture carries barbershop's cover whole, subheadline included, and step 2 keeps the
+    > cover's subheading an `<h2>`, so the page has two: the cover's subheadline and the
+    > services title. Approved by the product owner. Whether the cover's subheadline should be
+    > a heading at all is a separate issue, with its own task.
 
 ### 7. The invariant tests
 

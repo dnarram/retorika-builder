@@ -3,17 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Estudio Tipográfico</title>
+<title>Barbería El Corte</title>
 <style>
 :root {
-  --color-accent: #D97706;
+  --color-accent: #FF3A72;
   --color-ink: #0F172A;
   --color-muted: #475569;
-  --color-primary: #1D4ED8;
-  --color-secondary: #0F766E;
+  --color-primary: #156FE7;
+  --color-secondary: #105CB1;
   --color-surface: #FFFFFF;
-  --font-body: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --font-heading: Georgia, Cambria, 'Times New Roman', Times, serif;
+  --font-body: system-ui, sans-serif;
+  --font-heading: Georgia, serif;
   --radius-lg: 16px;
   --radius-md: 8px;
   --radius-sm: 4px;
@@ -62,20 +62,51 @@ body { margin: 0; font-family: var(--font-body); color: var(--color-ink);
 </head>
 <body>
 <main class="rb-page" data-page="home">
-  <section class="rb-section rb-cover rb-image-right" data-preset="cover" data-section="sec-quoted-fonts" data-variant="image-right">
+  <section class="rb-section rb-cover rb-image-right" data-preset="cover" data-section="sec-cover" data-variant="image-right">
     <h1 data-role="heading" data-slot="headline" style="grid-column:1/span 6;grid-row:1/span 1">
-      Letras que se leen como se pensaron
+      Tu corte de siempre, sin esperas
     </h1>
     <h2 data-role="subheading" data-slot="subheadline" style="grid-column:1/span 6;grid-row:2/span 1">
-      Georgia para titular, la del sistema para leer
+      Reserva en treinta segundos
     </h2>
     <p data-role="body" data-slot="body" style="grid-column:1/span 6;grid-row:3/span 1">
-      Una portada cuyo tema viene tal cual de packages/tokens.
+      Abierto de martes a sábado en el centro del barrio.
     </p>
-    <img alt="Muestra de tipografía del estudio" data-role="image" data-slot="image" src="assets/barbershop.svg" style="grid-column:7/span 6;grid-row:1/span 4">
-    <a data-role="button" data-slot="primaryAction" href="#estudio" role="button" style="grid-column:1/span 3;grid-row:4/span 1">
-      Ver el estudio
+    <img alt="Interior de la barbería" data-role="image" data-slot="image" src="assets/barbershop.svg" style="grid-column:7/span 6;grid-row:1/span 4">
+    <a data-role="button" data-slot="primaryAction" href="#reservas" role="button" style="grid-column:1/span 3;grid-row:4/span 1">
+      Pedir cita
     </a>
+  </section>
+  <section class="rb-section rb-services rb-stacked" data-preset="services" data-section="sec-services" data-variant="stacked">
+    <h2 data-role="heading" data-slot="headline" style="grid-column:1/span 12;grid-row:1/span 1">
+      Qué hacemos
+    </h2>
+    <p data-role="body" data-slot="intro" style="grid-column:1/span 8;grid-row:2/span 1">
+      Cortes, arreglos de barba y color.
+    </p>
+    <ul class="rb-list" data-role="list" data-slot="services" role="list" style="grid-column:1/span 12;grid-row:3/span 1">
+      <li class="rb-item" data-item="item-1">
+        <h3 data-role="heading" data-slot="title">
+          Corte
+        </h3>
+        <p data-role="body" data-slot="description">
+          Con tijera o con máquina, a tu gusto.
+        </p>
+      </li>
+      <li class="rb-item" data-item="item-2">
+        <h3 data-role="heading" data-slot="title">
+          Barba
+        </h3>
+        <p data-role="body" data-slot="description">
+          Arreglo y perfilado con navaja.
+        </p>
+      </li>
+      <li class="rb-item" data-item="item-3">
+        <h3 data-role="heading" data-slot="title">
+          Color
+        </h3>
+      </li>
+    </ul>
   </section>
 </main>
 </body>
