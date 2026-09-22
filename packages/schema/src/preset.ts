@@ -1,5 +1,5 @@
 import type { ContentElement, Section, SectionLayout } from "./document.ts";
-import { flattenElements, type Violation } from "./invariants.ts";
+import type { Violation } from "./invariants.ts";
 import type { Role } from "./roles.ts";
 
 /**
@@ -48,10 +48,14 @@ export interface PresetShape {
  *   parked hidden rather than deleted.
  *
  * Any other reading makes the two requirements unsatisfiable at once.
+ *
+ * Only the section's top-level elements are judged. A preset's slots are top-level slots:
+ * a list is one element in its slot, and the elements inside its items belong to the list,
+ * so judging them here would report every visible card as filling an undeclared slot.
  */
 export function checkAgainstPreset(section: Section, preset: PresetShape): Violation[] {
   const violations: Violation[] = [];
-  const elements = flattenElements(section.content);
+  const elements = section.content;
 
   for (const slot of preset.slots) {
     const filling = elements.filter((element) => element.slot === slot.slot);

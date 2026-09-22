@@ -106,6 +106,13 @@ C.**
   - `checkAgainstPreset` does not validate items today, and extending it is a schema change of
     its own (see "Out of scope"). So item shape is enforced by the catalog's tests and by the
     fixture.
+
+    > Found while executing steps 2–9: `checkAgainstPreset` *did* walk the items, through
+    > `flattenElements`, so every visible card title and description was reported as filling a
+    > slot the preset does not declare, and INV_1 and INV_2 would have failed over the new
+    > fixture. It is the defect step 1 fixed in `revert.ts`. With the product owner's approval
+    > it was fixed the same way, in its own commit, before anything else: the check judges the
+    > section's top-level elements only (`packages/schema/test/preset-lists.test.ts`).
 - **No images in the cards.** Images inside lists arrive with "Fotos de trabajos".
 
 ## Order and commits
@@ -284,6 +291,8 @@ Closed list. Anything not on it is a file this task must not create.
 
     packages/schema/src/revert.ts               (step 1: top-level only; own commit, first)
     packages/schema/test/revert-lists.test.ts   (step 1: create)
+    packages/schema/src/preset.ts               (checkAgainstPreset: top-level only; own commit, before step 2)
+    packages/schema/test/preset-lists.test.ts   (create, with it)
     packages/catalog/src/services.ts            (create)
     packages/catalog/src/index.ts               (register and export)
     packages/catalog/src/search.ts              (aliases)
