@@ -1,6 +1,9 @@
 # 0007 — Hosted publishing is on hold; at launch the client receives the files
 
-**Status:** accepted, temporary · **Date:** 2026-09-22 · **Decided by:** the CEO
+**Status:** superseded by [ADR 0008](0008-hosted-publishing-has-no-plan.md) (2026-09-22) · **Date:** 2026-09-22 · **Decided by:** the CEO
+
+> Superseded: hosted publishing no longer waits for a domain and an account; it has no plan and
+> no date (ADR 0008). The reactivation checklist below is kept as reference only.
 
 ## Context
 

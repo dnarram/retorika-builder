@@ -120,6 +120,10 @@ descargar sus archivos y subirlos a cualquier hosting, el mismo precio cubre las
 porque el coste por web es mínimo, y nadie se queda fuera de su propia web. Eso solo se
 cumple si lo que generamos es estático.
 
+> Desde el ADR 0008 solo hay una vía, la descarga, con un solo precio: la promesa de «el mismo
+> precio para las dos vías» queda retirada. Lo que se mantiene es la razón de fondo: lo que
+> generamos es estático, y nadie se queda fuera de su propia web.
+
 Consecuencias directas, y no son negociables:
 
 - El sitio publicado **no lleva React ni ningún framework en tiempo de ejecución**. Lleva
@@ -171,6 +175,12 @@ flotante), nunca la maquetación.
 | Peso | size-limit | El presupuesto del sitio publicado se vigila solo. |
 | Formato y linter | Biome | Un binario en Rust hace formato y linter; en este portátil se nota frente a ESLint más Prettier. |
 | Revisor local | pre-commit | Ya está instalado y funciona con cualquier lenguaje. |
+
+> La fila «Archivos de sitios publicados», y `apps/serve` en el árbol de 3.4, describen la
+> publicación en un subdominio de Retorika, que desde el ADR 0008 no tiene plan ni fecha.
+> `apps/serve` sigue en el repositorio, dormido y probado, y no se despliega: hoy no hay sitios
+> publicados por nosotros. La base de la decisión de precio no cambia: lo que generamos es
+> estático, y servirlo no nos cuesta nada porque lo sirve el alojamiento del cliente.
 
 ## 3.4 Estructura del repositorio
 
@@ -919,14 +929,14 @@ invariantes en verde en CI, no en local.
 
 > Antes el camino decía «empaquetado, publicado en un subdominio y descargable en ZIP», y el
 > criterio empezaba por «publicar un sitio de una sección en un subdominio real». La dirección
-> ha dejado en pausa la publicación en un dominio o subdominio de Retorika hasta elegir el
-> dominio y la cuenta de alojamiento (ADR 0007, 22 de septiembre de 2026): al lanzamiento, la
-> web se entrega al cliente para que la publique en su propio dominio. El servidor estático
-> cualquiera ocupa el lugar del subdominio en lo que importa para el lanzamiento —que los
-> archivos funcionan servidos por HTTP, no solo abiertos desde el disco— sin depender de una
+> dejó primero en pausa la publicación en un dominio o subdominio de Retorika (ADR 0007, 22 de
+> septiembre de 2026) y después la retiró del plan, sin fecha ni evento de reactivación (ADR
+> 0008): la web se entrega al cliente para que la publique en su propio dominio. El servidor
+> estático cualquiera ocupa el lugar del subdominio en lo que importa —que los archivos
+> funcionan servidos por HTTP, no solo abiertos desde el disco— sin depender de una
 > infraestructura nuestra. Lo que solo comprobaba el subdominio (el Worker, R2 y el DNS
-> comodín) queda pendiente para cuando se reactive. El Worker que sirve los subdominios
-> (`apps/serve`) sigue construido y probado, pero no se despliega.
+> comodín) deja de formar parte del criterio. El Worker que sirve los subdominios
+> (`apps/serve`) sigue construido y probado, dormido, y no se despliega.
 
 Si esto funciona, el resto del proyecto es trabajo. Si no, cualquier cosa que se construya
 encima habrá que rehacerla.
@@ -940,6 +950,11 @@ edición sobre el propio texto, reordenar, duplicar, borrar, guardado automátic
 ayuda, monta la web de un negocio real en menos de diez minutos. Se cronometra y se
 observa, no se pregunta.
 
+> Antes de crear `apps/editor` se harán las pantallas detalladas de la fase 1, con todos sus
+> estados y mensajes, y un prototipo navegable probado con dos negocios reales (decisión de
+> dirección, 22 de septiembre de 2026). Son los pasos que el dossier ya ponía antes del código
+> definitivo. Los textos de las webs generadas salen del banco revisado del ADR 0009.
+
 ## Fase 2 — El producto completo
 
 Estilo global, variantes de sección, fotos, lo mínimo de SEO, páginas orgánicas, publicar,
@@ -949,10 +964,10 @@ descargar y **el cobro por pago único con su factura**.
 Probado también el camino desagradable: pago que falla a mitad, webhook duplicado y tarjeta
 rechazada.
 
-> Mientras dure la pausa del ADR 0007, «publicar» significa entregar los archivos, también en
-> el criterio de aceptación: el cliente descarga su web y la sube a su propio alojamiento. La
-> publicación en un subdominio de Retorika vuelve a formar parte del alcance cuando se
-> reactive.
+> Desde el ADR 0008, «publicar» significa entregar los archivos, también en el criterio de
+> aceptación: el cliente descarga su web y la sube a su propio alojamiento. La publicación en
+> un subdominio de Retorika no tiene plan ni fecha; si algún día se retoma, lo decidirá un ADR
+> nuevo.
 
 ## Fase 3 — Lo que diferencia
 
@@ -1021,9 +1036,10 @@ clientes, que llegan por los formularios de sus webs. El segundo nivel es el del
   aplicación.
 - Cada publicación guarda una versión. Volver atrás es cambiar un puntero.
 
-> Las dos últimas viñetas, y la de «Sitios publicados» en Copias, se aplican cuando se
-> reactive la publicación en un dominio o subdominio de Retorika (ADR 0007). Mientras tanto no
-> hay sitios publicados por nosotros: cada web vive en el alojamiento de su cliente.
+> Las dos últimas viñetas, y la de «Sitios publicados» en Copias, solo se aplicarían si algún
+> día se decidiera publicar en un dominio o subdominio de Retorika, algo que hoy no tiene plan
+> ni fecha (ADR 0008). No hay sitios publicados por nosotros: cada web vive en el alojamiento
+> de su cliente.
 
 ## Copias
 
@@ -1052,7 +1068,7 @@ Si alguna vez una decisión técnica choca con una de estas tres, gana la regla.
 - Una comprobación externa cada cinco minutos sobre un sitio publicado de muestra. Es la
   única forma de enterarse de que los sitios de los clientes han dejado de servirse.
 
-  > Se aplica cuando se reactive la publicación alojada (ADR 0007). Mientras tanto no hay un
+  > No se aplica: la publicación alojada no tiene plan ni fecha (ADR 0008), así que no hay un
   > sitio publicado nuestro que vigilar.
 - Registro de las operaciones que importan: publicación, pago, transferencia de propiedad,
   desbloqueo. Quién, cuándo y sobre qué web.
@@ -1162,6 +1178,9 @@ Ha cambiado el esquema sin migración. No se desactiva el hook: se escribe la mi
 **Una web publicada no se ve**
 `docs/runbook.md`, primer caso. Lo primero es comprobar si es un sitio o todos: si es uno,
 es su último despliegue; si son todos, es el Worker o el almacenamiento.
+
+> Hoy no se aplica: no hay sitios publicados por nosotros (ADR 0008). Si la web de un cliente
+> no se ve, el problema está en su propio alojamiento, no en una infraestructura nuestra.
 
 **Se ha alcanzado el límite de uso de Claude**
 Se restablece en unas horas. Mientras tanto: OpenCode con un plan ya escrito, o revisar,
