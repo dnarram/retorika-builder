@@ -1,3 +1,7 @@
+# ON HOLD — docs/decisions/0007-hosted-publishing-on-hold.md. Hosted publishing is paused by a
+# CEO decision (2026-09-22): this Worker is built and tested, and is not deployed. Do not fill
+# in the placeholders below until the ADR's reactivation checklist is being worked through.
+#
 # Binding names and route patterns only. No account id, no token, and no bucket name
 # that is not already public: the deployment environment supplies those (protocol Part 15).
 #

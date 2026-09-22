@@ -909,12 +909,24 @@ punta, porque es donde está todo el riesgo técnico del producto.
 ## Fase 0 — Esqueleto andante
 
 Una sola sección, un solo tema, sin editor apenas. Pero el camino completo funcionando:
-documento validado, renderizado a HTML, empaquetado, publicado en un subdominio y
-descargable en ZIP, con las cinco invariantes en verde y el CI montado.
+documento validado, renderizado a HTML, empaquetado y descargable en ZIP, con las cinco
+invariantes en verde y el CI montado.
 
-**Criterio de aceptación:** publicar un sitio de una sección en un subdominio real,
-descargar su ZIP, abrirlo con doble clic y que se vea igual. Y las cinco invariantes en
-verde en CI, no en local.
+**Criterio de aceptación:** generar un sitio de una sección, descargar su ZIP, abrirlo con
+doble clic y que se vea igual; y servir esos mismos archivos desde un servidor estático
+cualquiera, como haría el alojamiento del cliente, sin cambiar un byte. Y las cinco
+invariantes en verde en CI, no en local.
+
+> Antes el camino decía «empaquetado, publicado en un subdominio y descargable en ZIP», y el
+> criterio empezaba por «publicar un sitio de una sección en un subdominio real». La dirección
+> ha dejado en pausa la publicación en un dominio o subdominio de Retorika hasta elegir el
+> dominio y la cuenta de alojamiento (ADR 0007, 22 de septiembre de 2026): al lanzamiento, la
+> web se entrega al cliente para que la publique en su propio dominio. El servidor estático
+> cualquiera ocupa el lugar del subdominio en lo que importa para el lanzamiento —que los
+> archivos funcionan servidos por HTTP, no solo abiertos desde el disco— sin depender de una
+> infraestructura nuestra. Lo que solo comprobaba el subdominio (el Worker, R2 y el DNS
+> comodín) queda pendiente para cuando se reactive. El Worker que sirve los subdominios
+> (`apps/serve`) sigue construido y probado, pero no se despliega.
 
 Si esto funciona, el resto del proyecto es trabajo. Si no, cualquier cosa que se construya
 encima habrá que rehacerla.
@@ -936,6 +948,11 @@ descargar y **el cobro por pago único con su factura**.
 **Criterio de aceptación:** un desconocido paga y publica sin ayuda, y la factura sale bien.
 Probado también el camino desagradable: pago que falla a mitad, webhook duplicado y tarjeta
 rechazada.
+
+> Mientras dure la pausa del ADR 0007, «publicar» significa entregar los archivos, también en
+> el criterio de aceptación: el cliente descarga su web y la sube a su propio alojamiento. La
+> publicación en un subdominio de Retorika vuelve a formar parte del alcance cuando se
+> reactive.
 
 ## Fase 3 — Lo que diferencia
 
@@ -1004,6 +1021,10 @@ clientes, que llegan por los formularios de sus webs. El segundo nivel es el del
   aplicación.
 - Cada publicación guarda una versión. Volver atrás es cambiar un puntero.
 
+> Las dos últimas viñetas, y la de «Sitios publicados» en Copias, se aplican cuando se
+> reactive la publicación en un dominio o subdominio de Retorika (ADR 0007). Mientras tanto no
+> hay sitios publicados por nosotros: cada web vive en el alojamiento de su cliente.
+
 ## Copias
 
 - Base de datos: copia diaria automática y **una restauración de prueba al mes**. Una copia
@@ -1030,6 +1051,9 @@ Si alguna vez una decisión técnica choca con una de estas tres, gana la regla.
   fallo en el editor de un cliente no se sabe nunca.
 - Una comprobación externa cada cinco minutos sobre un sitio publicado de muestra. Es la
   única forma de enterarse de que los sitios de los clientes han dejado de servirse.
+
+  > Se aplica cuando se reactive la publicación alojada (ADR 0007). Mientras tanto no hay un
+  > sitio publicado nuestro que vigilar.
 - Registro de las operaciones que importan: publicación, pago, transferencia de propiedad,
   desbloqueo. Quién, cuándo y sobre qué web.
 - `docs/runbook.md` con los cuatro casos previsibles y qué se hace en cada uno: un sitio

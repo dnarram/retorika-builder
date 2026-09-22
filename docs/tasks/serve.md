@@ -1,5 +1,10 @@
 # apps/serve — the Worker that serves published sites
 
+> **Status: on hold — [ADR 0007](../decisions/0007-hosted-publishing-on-hold.md).** Hosted publishing is
+> paused by a CEO decision (2026-09-22). The code below is built and tested and stays that way,
+> but nothing here is deployed, and the manual acceptance waits for the ADR's reactivation
+> checklist. The rest of this file is the record of the task as it was specified and executed.
+
 > **Claude-only. Exclusive zone.** Mapping a subdomain to a site is tenancy: one mistake serves a
 > client's site under another client's domain. It is the closest thing in this repository to
 > Part 2's *"permisos y propiedad"*, and it is also where the object-storage credentials are
