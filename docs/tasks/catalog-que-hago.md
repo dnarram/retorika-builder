@@ -258,6 +258,49 @@ In `packages/renderer/test/invariants.test.ts`:
 - **`packages/catalog/test/services.test.ts`:** slots and cardinality, the item shape, every
   approved composition resolving every slot, and compositions that differ in geometry.
 
+### 8b. No text overflows its own box (added while executing step 9)
+
+**Where it comes from.** Step 9's long-text case stopped the task:
+- in composition B at 768, "Electrodomésticos" is 229px wide in Georgia at `size.subheading`,
+  and B's title column is 213px;
+- the word ran through the 16px gap and touched the cards;
+- it happened in the four palettes with `editorial-serif` and `classic-display`, which both
+  render in Georgia here (issue #9);
+- `modern-sans` fitted with no margin at all, 213px in 213px.
+
+**The product owner's decision:** B's geometry, approved by the CEO, does not change. Instead, a
+general rule makes it impossible for any text to overflow its box.
+
+**The rule.** Two lines inserted verbatim into `buildCss`, immediately after the `img` rule and
+before the `h1` rule:
+
+    .rb-section :is(h1, h2, h3, h4, h5, h6, p, a) { overflow-wrap: break-word; }
+    .rb-section :is(h1, h2, h3, h4, h5, h6) { -webkit-hyphens: auto; hyphens: auto; }
+
+- **`overflow-wrap: break-word` is the guarantee.** It applies to headings, paragraphs and links,
+  and acts only when a word cannot fit its line. It needs no dictionary.
+- **`hyphens: auto` is only the visual improvement,** on headings only. It adds a hyphen where
+  the browser has a Spanish dictionary; the page already declares `lang="es"`. The Chromium in
+  CI may have none, and then the word still breaks, without the hyphen.
+- **`-webkit-hyphens`** is there because Safari applies hyphenation only with the prefix.
+- **A known side effect:** with a dictionary, a heading that wraps may break inside a word rather
+  than only at a space. Nothing overflows either way.
+- **Not used:** `word-break` and `overflow-wrap: anywhere`. Both would also break words that fit,
+  or change the min-content size the grid lays out by.
+
+**The goldens.** Regenerated with `UPDATE_GOLDEN=1 pnpm test:golden`, in its own commit, before
+step 9's. The diff must be exactly:
+- **`2 0` in each of the eight goldens,** the seven existing ones and `cover-and-services`;
+- the two lines above, as new lines 36–37, in all eight;
+- **nothing inside `<body>`.**
+
+**Tests, in `packages/renderer/test/wrapping.test.ts`:**
+- both lines are present verbatim, once, between the `img` rule and the `h1` rule;
+- there is no `word-break` and no `overflow-wrap: anywhere`;
+- the page declares `lang="es"`.
+
+**The prediction for step 9 changes: 0 failures, the long-text case included.**
+
 ### 9. The accessibility harness
 
 In `packages/renderer/test/browser-fixtures.ts`, `PRESET_CASES` gains a `services` entry.
@@ -291,6 +334,9 @@ Whether "Electrodomésticos" fits 210px at `size.subheading` depends on the font
 overflows in any composition, at any width, it is a stop**, not something to fix inside this
 task.
 
+> It did overflow, in B at 768. Step 8b adds the rule that makes it impossible, and **since
+> step 8b the prediction is 0 failures in the long-text case too.** An overflow is still a stop.
+
 ## Files that may be touched
 
 Closed list. Anything not on it is a file this task must not create.
@@ -304,14 +350,15 @@ Closed list. Anything not on it is a file this task must not create.
     packages/catalog/src/search.ts              (aliases)
     packages/catalog/src/locales/es.json        (names)
     packages/catalog/test/services.test.ts      (create)
-    packages/renderer/src/build.ts              (heading levels, lists, six CSS lines)
+    packages/renderer/src/build.ts              (heading levels, lists, six CSS lines; step 8b: two wrapping lines)
+    packages/renderer/test/wrapping.test.ts     (step 8b: create)
     packages/renderer/test/lists.test.ts        (create)
     packages/renderer/test/invariants.test.ts   (own preset, flattened hidden, INV_3 over the fixture)
     packages/renderer/test/browser-fixtures.ts  (the services cases: standard and long text)
     packages/renderer/test/overflow.browser.test.ts  (the per-element fit check, for the long-text case)
     fixtures/documents/cover-and-services.json  (create)
     fixtures/golden/cover-and-services.html     (create: UPDATE_GOLDEN=1, then read)
-    fixtures/golden/*.html                      (the seven existing: +6 lines each, step 6)
+    fixtures/golden/*.html                      (the seven existing: +6 lines each, step 6; all eight: +2 lines each, step 8b)
 
 ## Definition of done
 
@@ -325,8 +372,8 @@ Closed list. Anything not on it is a file this task must not create.
 | `pnpm test` | all suites pass, including the three new test files |
 | `pnpm test:invariants` | exit 0, all reported by canonical name |
 | `pnpm test:golden` | exit 0 |
-| `git diff --numstat fixtures/golden` | `6 0` for each of the seven existing goldens, and nothing else |
-| `pnpm test:a11y` | 0 failures, with the standard and long-text services cases included |
+| `git diff --numstat fixtures/golden` | against `main`: `8 0` for each of the seven existing goldens (6 from step 6, 2 from step 8b), and nothing else |
+| `pnpm test:a11y` | 409 tests, 0 failures, with the standard and long-text services cases included |
 | `pnpm size`, `pnpm renderer:deps`, `pnpm schema:guard` | exit 0 |
 | `pre-commit run --all-files` | six hooks, all Passed |
 
@@ -353,6 +400,9 @@ Manual:
 - **Fixing long words:** hyphenation (`hyphens: auto` with `lang="es"`), `overflow-wrap`, or a
   smaller title size in narrow columns. If step 9's long-text case overflows, choosing among
   these is a design decision, not part of this task.
+
+  > It overflowed, and the product owner decided: `overflow-wrap: break-word`, plus `hyphens:
+  > auto` on headings, with B's geometry unchanged. That is step 8b.
 - **Lists in the document's mobile patch** (rule 7), the generator, and the editor.
 
 ## If anything is unclear, stop and ask

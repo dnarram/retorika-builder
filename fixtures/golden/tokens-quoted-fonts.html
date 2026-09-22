@@ -33,6 +33,8 @@ body { margin: 0; font-family: var(--font-body); color: var(--color-ink);
 .rb-section { display: grid; grid-template-columns: repeat(12, 1fr);
   gap: var(--space-md); padding: var(--space-xl); align-items: center; }
 .rb-section img { width: 100%; height: auto; border-radius: var(--radius-md); }
+.rb-section :is(h1, h2, h3, h4, h5, h6, p, a) { overflow-wrap: break-word; }
+.rb-section :is(h1, h2, h3, h4, h5, h6) { -webkit-hyphens: auto; hyphens: auto; }
 .rb-section h1 { font-family: var(--font-heading); font-size: var(--size-heading);
   color: var(--color-primary); margin: 0; }
 .rb-section h2 { font-family: var(--font-heading); font-size: var(--size-subheading);

@@ -254,6 +254,13 @@ export function buildCss(doc: RetorikaDocument): string {
     ".rb-section { display: grid; grid-template-columns: repeat(12, 1fr);",
     "  gap: var(--space-md); padding: var(--space-xl); align-items: center; }",
     ".rb-section img { width: 100%; height: auto; border-radius: var(--radius-md); }",
+    // No text overflows its own box. A word longer than its column ("Electrodomésticos" in a
+    // narrow title column) used to run past it into the next element. overflow-wrap:
+    // break-word is the guarantee: it acts only when a word cannot fit, and needs no
+    // dictionary. hyphens: auto on headings adds a hyphen where the browser has a Spanish
+    // dictionary (the page declares lang="es"); -webkit- because Safari needs the prefix.
+    ".rb-section :is(h1, h2, h3, h4, h5, h6, p, a) { overflow-wrap: break-word; }",
+    ".rb-section :is(h1, h2, h3, h4, h5, h6) { -webkit-hyphens: auto; hyphens: auto; }",
     ".rb-section h1 { font-family: var(--font-heading); font-size: var(--size-heading);",
     "  color: var(--color-primary); margin: 0; }",
     ".rb-section h2 { font-family: var(--font-heading); font-size: var(--size-subheading);",
