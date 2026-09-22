@@ -1,8 +1,19 @@
 import { readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { Browser, Page } from "@playwright/test";
-import { CATALOG, COVER_ID, COVER_VARIANTS } from "@retorika/catalog";
-import { type ContentElement, parseDocument, type RetorikaDocument } from "@retorika/schema";
+import {
+  CATALOG,
+  COVER_ID,
+  COVER_VARIANTS,
+  SERVICES_ID,
+  SERVICES_VARIANTS,
+} from "@retorika/catalog";
+import {
+  type ContentElement,
+  parseDocument,
+  type RetorikaDocument,
+  type Section,
+} from "@retorika/schema";
 import { buildTheme, PALETTES, TYPE_PAIRS } from "@retorika/tokens";
 import { render } from "../src/index.ts";
 import { ASSETS_DIR, DOCUMENTS_DIR } from "./corpus.ts";
@@ -15,32 +26,107 @@ import { ASSETS_DIR, DOCUMENTS_DIR } from "./corpus.ts";
  * is exactly what pushes a heading past 320 pixels.
  */
 
+/**
+ * "standard" is the content a real page would carry. "long" puts the longest plausible Spanish
+ * words where a composition is narrowest, for the overflow suite only (docs/tasks/catalog-que-hago.md,
+ * step 9): at 768, composition B's title column is about 210px.
+ */
+export type TextCase = "standard" | "long";
+
 export interface Combination {
-  /** Stable, human-readable: "cover/image-right/dark-slate/modern-sans". */
+  /**
+   * Stable, human-readable: "cover/image-right/dark-slate/modern-sans", with "/long" appended
+   * for the long-text case.
+   */
   id: string;
   catalogId: string;
   variantId: string;
   paletteId: string;
   typePairId: string;
+  text: TextCase;
   document: RetorikaDocument;
 }
 
 /**
- * A preset's variants, and the content that exercises every slot it declares, built from the
- * base fixture's content.
+ * A preset's variants, its text cases, and the page's sections for each: the section under
+ * test with content that exercises every slot it declares, after whatever it needs above it
+ * for a realistic heading order. Built from the base fixture's cover.
  *
  * Keyed by catalog id and checked against CATALOG below: a new preset that is not listed here
  * makes allCombinations() throw, rather than quietly leaving the matrix one preset short.
  */
 const PRESET_CASES: Record<
   string,
-  { variants: readonly string[]; content: (base: readonly ContentElement[]) => ContentElement[] }
+  {
+    variants: readonly string[];
+    texts: readonly TextCase[];
+    sections: (cover: Section, variantId: string, text: TextCase) => Section[];
+  }
 > = {
   [COVER_ID]: {
     variants: COVER_VARIANTS,
-    content: (base) => [...base, ...secondaryActions()],
+    texts: ["standard"],
+    sections: (cover, variantId) => [
+      {
+        ...cover,
+        preset: { catalogId: COVER_ID, variantId },
+        source: "catalog",
+        layout: null,
+        content: [...cover.content, ...secondaryActions()],
+      },
+    ],
+  },
+  [SERVICES_ID]: {
+    variants: SERVICES_VARIANTS,
+    texts: ["standard", "long"],
+    // The cover first, so the page reads h1, h2, h3 as a real one does.
+    sections: (cover, variantId, text) => [cover, servicesSection(variantId, text)],
   },
 };
+
+/**
+ * "Qué hago" with four visible cards. The long case uses a single long word as the section
+ * title, "Electrodomésticos", which cannot wrap, and a long card title.
+ */
+function servicesSection(variantId: string, text: TextCase): Section {
+  const long = text === "long";
+  const textElement = (id: string, role: "heading" | "body", slot: string, value: string) =>
+    ({ id, role, hidden: false, slot, value: { kind: "text", text: value } }) as ContentElement;
+  const cards: [string, string][] = [
+    [long ? "Especialidades de temporada" : "Corte", "Con tijera o con máquina, a tu gusto."],
+    ["Barba", "Arreglo y perfilado con navaja."],
+    ["Color", "Tintes y mechas."],
+    ["Niños", "Cortes para los más pequeños."],
+  ];
+  return {
+    id: "sec-services",
+    preset: { catalogId: SERVICES_ID, variantId },
+    source: "catalog",
+    layout: null,
+    content: [
+      textElement(
+        "el-services-headline",
+        "heading",
+        "headline",
+        long ? "Electrodomésticos" : "Qué hacemos",
+      ),
+      textElement("el-services-intro", "body", "intro", "Cortes, arreglos de barba y color."),
+      {
+        id: "el-services",
+        role: "list",
+        hidden: false,
+        slot: "services",
+        items: cards.map(([title, description], i) => ({
+          id: `item-${i + 1}`,
+          elements: [
+            textElement(`el-card-${i + 1}-title`, "heading", "title", title),
+            textElement(`el-card-${i + 1}-description`, "body", "description", description),
+          ],
+        })),
+      },
+    ],
+  };
+}
 
 /**
  * The fixture fills every cover slot except secondaryAction, which admits two links. Added
@@ -85,42 +171,43 @@ export function allCombinations(): Combination[] {
       );
     }
     for (const variantId of preset.variants) {
-      for (const palette of PALETTES) {
-        for (const typePair of TYPE_PAIRS) {
-          const id = [catalogId, variantId, palette.id, typePair.id].join("/");
-          // Parsed, not cast: a combination that is not a valid document is a bug in this
-          // generator, and it must fail here rather than be reported as a finding.
-          const document = parseDocument({
-            ...base,
-            theme: buildTheme({ paletteId: palette.id, typePairId: typePair.id }),
-            pages: [
-              {
-                ...page,
-                sections: [
-                  {
-                    ...section,
-                    preset: { catalogId, variantId },
-                    source: "catalog",
-                    layout: null,
-                    content: preset.content(section.content),
-                  },
-                ],
-              },
-            ],
-          });
-          combinations.push({
-            id,
-            catalogId,
-            variantId,
-            paletteId: palette.id,
-            typePairId: typePair.id,
-            document,
-          });
+      for (const text of preset.texts) {
+        for (const palette of PALETTES) {
+          for (const typePair of TYPE_PAIRS) {
+            const id = [
+              catalogId,
+              variantId,
+              palette.id,
+              typePair.id,
+              ...(text === "long" ? ["long"] : []),
+            ].join("/");
+            // Parsed, not cast: a combination that is not a valid document is a bug in this
+            // generator, and it must fail here rather than be reported as a finding.
+            const document = parseDocument({
+              ...base,
+              theme: buildTheme({ paletteId: palette.id, typePairId: typePair.id }),
+              pages: [{ ...page, sections: preset.sections(section, variantId, text) }],
+            });
+            combinations.push({
+              id,
+              catalogId,
+              variantId,
+              paletteId: palette.id,
+              typePairId: typePair.id,
+              text,
+              document,
+            });
+          }
         }
       }
     }
   }
   return combinations;
+}
+
+/** The combinations axe runs over: the long-text case is for the overflow suite only. */
+export function standardCombinations(): Combination[] {
+  return allCombinations().filter((combination) => combination.text === "standard");
 }
 
 /** A made-up origin the page is served from; nothing ever resolves it over the network. */

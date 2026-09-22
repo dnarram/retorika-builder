@@ -57,6 +57,41 @@ async function measureOverflow(page: Page): Promise<Overflow> {
   });
 }
 
+interface TextOverflow {
+  selector: string;
+  text: string;
+  scrollWidth: number;
+  clientWidth: number;
+}
+
+/**
+ * Every heading and paragraph of the services section that does not fit its own box.
+ *
+ * The viewport check alone misses the risk the long-text case exists for: at 768, composition
+ * B's title column is about 210px, and a word wider than that overflows into the cards' column
+ * without ever reaching the viewport's edge (docs/tasks/catalog-que-hago.md, step 9).
+ */
+async function measureTextFit(page: Page): Promise<TextOverflow[]> {
+  return page.evaluate(() => {
+    const out: TextOverflow[] = [];
+    const nodes = document.querySelectorAll(
+      '[data-preset="services"] :is(h1, h2, h3, h4, h5, h6, p)',
+    );
+    for (const el of nodes) {
+      // Half a pixel of tolerance for sub-pixel rounding, as in measureOverflow.
+      if (el.scrollWidth > el.clientWidth + 0.5) {
+        out.push({
+          selector: `${el.tagName.toLowerCase()}[data-slot="${el.getAttribute("data-slot")}"]`,
+          text: (el.textContent ?? "").trim(),
+          scrollWidth: el.scrollWidth,
+          clientWidth: el.clientWidth,
+        });
+      }
+    }
+    return out;
+  });
+}
+
 describe("overflow", () => {
   const combinations = allCombinations();
 
@@ -77,6 +112,15 @@ describe("overflow", () => {
             scrollWidth,
             `${where}: page scrolls horizontally (${scrollWidth}px)`,
           ).toBeLessThanOrEqual(innerWidth);
+
+          if (c.text === "long") {
+            const unfit = await measureTextFit(page);
+            const lines = unfit.map(
+              (u) =>
+                `  ${u.selector} "${u.text}": content ${u.scrollWidth}px in a ${u.clientWidth}px box`,
+            );
+            expect(lines, `${where}: text wider than its own box\n${lines.join("\n")}`).toEqual([]);
+          }
         } finally {
           await closeCombination(page);
         }
