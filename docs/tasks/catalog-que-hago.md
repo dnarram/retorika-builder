@@ -39,16 +39,14 @@ hago, Fotos de trabajos, Opiniones, Precios, Equipo), not for this one.
     against `presetFor("cover")`, and INV_1 counts hidden elements at the top level only, while
     `listEditableFields` flattens.
 
-## Pending decision — the compositions
+## The compositions — approved by the CEO
 
-**The compositions will be decided with the CEO, from a mockup.** They are **not** approved yet.
-Until they are, **step 1 (revert) can go ahead**, because it does not depend on them. **Steps 2
-to 9 wait**, because they change the catalog, the new golden and the harness matrix.
+**The CEO approved all three compositions, A, B and C,** on 2026-09-22. Step 1 ran first on its
+own (#16). **Steps 2 to 9 can now go ahead.**
 
-The three below are **proposals** to feed the mockup, not decisions. All three are **pure
-placements**, the same mechanism as the cover. The cards inside the list flow by a generic rule
-(step 4), so a composition only decides where the title, the intro and the list sit on the
-section grid.
+All three are **pure placements**, the same mechanism as the cover. The cards inside the list
+flow by a generic rule (step 4), so a composition only decides where the title, the intro and the
+list sit on the section grid.
 
 **A — `stacked`, "Tarjetas debajo".** The title and intro on top, the cards in a full-width grid,
 about four per row at 1280.
@@ -85,13 +83,13 @@ right, both in row 1, and the cards full width underneath.
     │ └─────────┘ └─────────┘ └─────────┘ └─────────┘ │
     └────────────────────────────────────────────────┘
 
-**Something the mockup should show, for B:** at 768 (desktop layout, above the 720px breakpoint)
+**Still to watch, for B:** at 768 (desktop layout, above the 720px breakpoint)
 B's title column, 1/span 4, is about **210px** wide. A long Spanish word at the heading size
-("Electrodomésticos", "Especialidades") may not fit. Step 9 tests it, and an overflow is a stop.
-The mockup is the right place to see whether B survives real titles.
+("Electrodomésticos", "Especialidades") may not fit. Step 9 tests it with real titles, and an
+overflow is a stop.
 
-The decision may keep two or all three; the dossier asks for "dos o tres". **Wherever this task
-says "the approved compositions", it means the ones the CEO chooses.**
+**The CEO kept all three. Wherever this task says "the approved compositions", it means A, B and
+C.**
 
 ## The section — `packages/catalog`
 
@@ -118,7 +116,7 @@ says "the approved compositions", it means the ones the CEO chooses.**
    - It is the only schema change in this task, and it has to stand on its own: a reviewer can
      read it, and revert it, without the rest.
    - It does not depend on the compositions, so it may run while they are still pending.
-2. **Steps 2 to 9 follow,** only once the compositions have been decided.
+2. **Steps 2 to 9 follow,** now that the compositions are approved (A, B and C).
 
 ## Steps
 
@@ -306,7 +304,7 @@ Closed list. Anything not on it is a file this task must not create.
 |---|---|
 | `zsh -c 'node -v; pnpm -v'` | `v24.21.0` and `12.4.2`. If not, stop |
 | step 1's commit | on its own, first, with its tests failing before and passing after, and the whole suite green |
-| the compositions | decided with the CEO **before step 2 starts** |
+| the compositions | approved by the CEO: A, B and C (2026-09-22) |
 | `pnpm install` | completes, lockfile unchanged |
 | `pnpm typecheck`, `pnpm lint` | exit 0 |
 | `pnpm test` | all suites pass, including the three new test files |
