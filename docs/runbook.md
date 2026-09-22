@@ -12,8 +12,9 @@ not to touch.
 
 ## 1. A published site is not being served
 
-> **Applies once hosted publishing is reactivated ([ADR 0007](decisions/0007-hosted-publishing-on-hold.md)).**
-> Until then Retorika serves no client site: each site lives on its client's own hosting.
+> **Does not apply today ([ADR 0008](decisions/0008-hosted-publishing-has-no-plan.md)).** Retorika
+> serves no client site and has no plan to: each site lives on its client's own hosting. The case
+> is kept as reference.
 
 ### First question: one site, or all of them?
 

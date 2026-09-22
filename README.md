@@ -20,8 +20,9 @@ See [ADR 0001](docs/decisions/0001-static-published-sites.md).
 **Phase 0, the walking skeleton, is closed** (2026-09-22), under the criterion as amended by
 [ADR 0007](docs/decisions/0007-hosted-publishing-on-hold.md): a one-section site generated,
 downloaded as a ZIP that opens by double-clicking, and the same files served unchanged by a
-generic static server, with the invariants green in CI. Hosted publishing (`apps/serve`) is
-built and tested but on hold. **There is no editor and no interface yet** — that is phase 1.
+generic static server, with the invariants green in CI. Publishing on a Retorika domain has
+no plan ([ADR 0008](docs/decisions/0008-hosted-publishing-has-no-plan.md)): `apps/serve` stays
+built, tested and dormant. **There is no editor and no interface yet** — that is phase 1.
 
 ## Getting started
 
@@ -175,7 +176,7 @@ as an empty placeholder.
 | `fixtures/` | The golden corpus, its assets and stored output | **here** |
 | `packages/tokens` | Token system and Retorika's own theme | **here** |
 | `packages/publisher` | Packages the site: HTML, CSS, images, sitemap, ZIP | **here** |
-| `apps/serve` | Worker serving published sites from R2 — built and tested, not deployed | on hold ([ADR 0007](docs/decisions/0007-hosted-publishing-on-hold.md)) |
+| `apps/serve` | Worker serving published sites from R2 — built and tested, not deployed | dormant, no plan ([ADR 0008](docs/decisions/0008-hosted-publishing-has-no-plan.md)) |
 | `.github/workflows` | The CI jobs of Part 9.2 | **here** |
 | `apps/editor` | Next.js: public pages, editor, API, Stripe | 1 |
 | `packages/templates` | Template extraction and application | 3 |

@@ -1,0 +1,97 @@
+# 0009 — Generated sites take their texts from a reviewed, per-sector template bank
+
+**Status:** accepted (the decision); the technical proposal below is to be confirmed in the
+generator task · **Date:** 2026-09-22 · **Decided by:** the CEO
+
+## Context
+
+The concept dossier leaves open "¿Generamos los textos automáticamente por sector?", and says why
+it matters: "es lo que hace funcionar tanto las tres variantes como el relleno de las plantillas.
+Sin esto, las dos cosas llegan con texto de prueba." Phase 1's generator needs an answer before
+it can produce anything a client would keep.
+
+## Decision — decided by the CEO
+
+- **The texts of generated sites come from a bank of text templates, organised by sector.**
+- **Texts are drafted with the help of free generative AI,** and **reviewed by a person before
+  they enter the bank.**
+- **No text enters the bank without that review.**
+
+That is the whole of the decision. Everything below it is a proposal.
+
+## Proposal — to be confirmed in the generator task
+
+**Not decided.** This is how the decision could be carried out. The generator task confirms it or
+replaces it, and whatever it settles is recorded there. Changing this section does not need a new
+ADR; changing the decision above does.
+
+### The generator reads the bank only
+
+It never calls an AI while generating a site. So a site's texts cost nothing per site, depend on
+no provider being up, are the same every time for the same answers, and have all been read by a
+person.
+
+### Where the bank lives
+
+**A new package, `packages/copybank`, created with the generator task, not by this ADR:**
+
+    packages/copybank/
+      bank/<sector>.json      reviewed texts: the only files any code reads
+      drafts/<sector>.json    AI drafts awaiting review: no code reads them, ever
+      src/schema.ts           the Zod schema of an entry
+      src/index.ts            loading, and a deterministic, seeded choice for "volver a generar"
+      test/bank.test.ts       the checks below
+
+### The format of one entry, in JSON like the fixtures
+
+    {
+      "id": "barberia.cover.headline.01",
+      "sector": "barberia",
+      "section": "cover",
+      "slot": "headline",
+      "text": "Cortes y arreglos de barba en {barrio}",
+      "placeholders": ["barrio"],
+      "origin": "ai-draft",
+      "review": { "status": "approved", "date": "2026-10-03" }
+    }
+
+- **`section` and `slot`** are the catalog's ids, so a text knows exactly where it goes.
+- **Placeholders** come from a closed list, filled from the questionnaire's answers. The list is
+  decided with the five questions, which are still pending.
+- **Texts are in Spanish (es-ES).** They are site content, not interface text, so they do not go
+  in `locales/es.json`.
+
+### Making "no text enters without review" checkable
+
+- **Moving an entry from `drafts/` to `bank/` is the review.** It is done in a pull request, by a
+  person.
+- **The schema refuses a bank entry without `review.status: "approved"` and a date.** A test
+  proves no code path ever reads `drafts/`.
+- **What the reviewer checks,** written in `packages/copybank/README.md` when the package is
+  created:
+  - nothing invented or promised: no prices, no awards, no "el mejor", no waiting times, no
+    health claims (physiotherapists, for example);
+  - Spanish and tone;
+  - length fits its slot;
+  - no text copied from a third party;
+  - no real client data;
+  - the AI tool's terms allow commercial use of what it produced.
+
+### Why files in the repository and not a database
+
+- the bank is versioned and reviewed in pull requests like the rest of the code;
+- it works offline, and the generator stays deterministic.
+
+If the bank ever needs to be edited by people who do not work in the repository, that is a
+decision for a new ADR.
+
+## Consequences
+
+- The generator task settles the proposal and fills at least the sectors the dossier names
+  (peluquerías caninas, fisioterapeutas, talleres, restaurantes, academias), plus the barbershop
+  of the fixtures.
+- Whatever package holds the bank goes into the repository tree of protocol 3.4 when it is
+  created.
+- **Still open, and not decided here:**
+  - the photo bank ("fotos coherentes");
+  - the five questions, and with them the placeholder list.
