@@ -574,7 +574,7 @@ producción, **su documento entra en el corpus** antes de arreglarlo. Así el co
 solo hacia donde duele.
 
 Las pruebas doradas comparan el HTML generado con una salida guardada. Cuando cambia a
-propósito, se regenera con `pnpm test:golden -u` y **el diff se revisa en el pull request**:
+propósito, se regenera con `UPDATE_GOLDEN=1 pnpm test:golden` y **el diff se revisa en el pull request**:
 es la única forma de ver que un cambio de estilo no ha alterado doscientas webs publicadas.
 
 ## 8.4 El guardián de migraciones
@@ -1080,7 +1080,7 @@ gratis en la nube, y este portátil no tiene ventilador.
 | Todas las pruebas | `pnpm test` |
 | Solo las invariantes | `pnpm test:invariants` |
 | Pruebas doradas | `pnpm test:golden` |
-| Regenerar las doradas | `pnpm test:golden -u` |
+| Regenerar las doradas | `UPDATE_GOLDEN=1 pnpm test:golden` |
 | Tipos | `pnpm typecheck` |
 | Peso del sitio generado | `pnpm size` |
 | Flujos en navegador | `pnpm e2e` |
@@ -1129,7 +1129,7 @@ No es un fallo: el revisor ha corregido algo. Repetir `git add .` y el commit.
 faltaban.
 
 **Las pruebas doradas fallan y el cambio era a propósito**
-`pnpm test:golden -u` y **revisar el diff antes de hacer commit**. Si el diff toca secciones
+`UPDATE_GOLDEN=1 pnpm test:golden` y **revisar el diff antes de hacer commit**. Si el diff toca secciones
 que no se han tocado, no era a propósito.
 
 **El guardián de migraciones bloquea el commit**

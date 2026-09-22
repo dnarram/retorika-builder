@@ -72,7 +72,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
-      # Never with -u here. Regenerating in CI would mean the build approving its own
+      # Never with UPDATE_GOLDEN=1 here. Regenerating in CI would mean the build approving its own
       # output, which is the one thing the golden corpus exists to prevent.
       - run: pnpm test:golden
 
