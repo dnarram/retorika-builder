@@ -1,5 +1,4 @@
 import type { ContentElement, Section } from "./document.ts";
-import { flattenElements } from "./invariants.ts";
 import type { PresetShape } from "./preset.ts";
 
 /**
@@ -17,8 +16,9 @@ export function escalate(section: Section, preset: PresetShape): Section {
     ...structuredClone(section),
     source: "free",
     // The copy keeps the element ids, which is what lets every text and photo find its
-    // exact slot again on the way back, with no guessing.
-    layout: preset.layoutFor(section.preset.variantId, flattenElements(section.content)),
+    // exact slot again on the way back, with no guessing. Only top-level elements have a
+    // slot on the section grid: a list is placed as one element and its items flow inside it.
+    layout: preset.layoutFor(section.preset.variantId, section.content),
   };
 }
 
@@ -43,7 +43,10 @@ export interface RevertPlan {
  * and what does not fit *before* applying anything, which is the dossier's promise.
  */
 export function planRevert(section: Section, preset: PresetShape): RevertPlan {
-  const elements = flattenElements(section.content);
+  // Top-level elements only. A list is one element in its slot and its items travel inside
+  // it: walking into them would report every card as surplus, since the preset declares
+  // slots for the section, not for the inside of an item.
+  const elements = section.content;
   const assignments: RevertPlan["assignments"] = [];
   const surplus: RevertPlan["surplus"] = [];
 
