@@ -79,7 +79,7 @@ October.
 |---|---|
 | `pnpm test` | Everything |
 | `pnpm test:invariants` | The five invariants: the document rules hold under generated input |
-| `pnpm test:golden` | Generated HTML against the stored corpus — the diff that reveals a style change altering every published site. `-u` regenerates, and the diff must be read |
+| `pnpm test:golden` | Generated HTML against the stored corpus — the diff that reveals a style change altering every published site. `UPDATE_GOLDEN=1 pnpm test:golden` regenerates, and the diff must be read |
 | `pnpm test:coverage` | The same suite with the coverage floor applied |
 | `pnpm typecheck` | Types across the workspace |
 | `pnpm lint` / `pnpm format` | Biome |

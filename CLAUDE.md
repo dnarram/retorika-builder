@@ -50,7 +50,7 @@ regardless of how mechanical the change looks.
 |---|---|
 | `pnpm test` | Everything |
 | `pnpm test:invariants` | The five invariants of Part 8.2, by canonical name |
-| `pnpm test:golden` | Generated HTML against the stored corpus (`-u` regenerates) |
+| `pnpm test:golden` | Generated HTML against the stored corpus (`UPDATE_GOLDEN=1 pnpm test:golden` regenerates) |
 | `pnpm typecheck` | `tsc --build` across the workspace |
 | `pnpm lint` / `pnpm format` | Biome |
 | `pnpm size` | Published-page weight budget |
