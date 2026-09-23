@@ -1,0 +1,312 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "doc-taberna-v2",
+  "siteName": "Taberna Santo Domingo",
+  "theme": {
+    "color.primary": "#9A3412",
+    "color.secondary": "#78350F",
+    "color.accent": "#C2410C",
+    "color.surface": "#FAFAF9",
+    "color.ink": "#1C1917",
+    "color.muted": "#57534E",
+    "font.heading": "Georgia, Cambria, 'Times New Roman', Times, serif",
+    "font.body": "system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+    "size.heading": "2.5rem",
+    "size.subheading": "1.5rem",
+    "size.body": "1rem",
+    "space.xs": "4px",
+    "space.sm": "8px",
+    "space.md": "16px",
+    "space.lg": "24px",
+    "space.xl": "48px",
+    "radius.sm": "4px",
+    "radius.md": "8px",
+    "radius.lg": "16px"
+  },
+  "pages": [
+    {
+      "id": "home",
+      "slug": "index",
+      "title": "Taberna Santo Domingo",
+      "sections": [
+        {
+          "id": "sec-cover",
+          "preset": {
+            "catalogId": "cover",
+            "variantId": "image-background"
+          },
+          "source": "catalog",
+          "content": [
+            {
+              "id": "el-headline",
+              "role": "heading",
+              "hidden": false,
+              "slot": "headline",
+              "value": {
+                "kind": "text",
+                "text": "Taberna Santo Domingo"
+              }
+            },
+            {
+              "id": "el-subheadline",
+              "role": "subheading",
+              "hidden": false,
+              "slot": "subheadline",
+              "value": {
+                "kind": "text",
+                "text": "Cocina de siempre en Ronda"
+              }
+            },
+            {
+              "id": "el-body",
+              "role": "body",
+              "hidden": false,
+              "slot": "body",
+              "value": {
+                "kind": "text",
+                "text": "Platos de casa para comer o cenar, en la cuesta de Santo Domingo."
+              }
+            },
+            {
+              "id": "el-image",
+              "role": "image",
+              "hidden": false,
+              "slot": "image",
+              "value": {
+                "kind": "image",
+                "src": "assets/foto-muestra.svg",
+                "alt": "Foto de muestra: aquí irá una foto de la taberna"
+              }
+            },
+            {
+              "id": "el-cta",
+              "role": "button",
+              "hidden": false,
+              "slot": "primaryAction",
+              "value": {
+                "kind": "link",
+                "text": "Visítanos",
+                "href": "#contacto"
+              }
+            }
+          ],
+          "layout": null
+        },
+        {
+          "id": "sec-services",
+          "preset": {
+            "catalogId": "services",
+            "variantId": "side"
+          },
+          "source": "catalog",
+          "content": [
+            {
+              "id": "el-services-headline",
+              "role": "heading",
+              "hidden": false,
+              "slot": "headline",
+              "value": {
+                "kind": "text",
+                "text": "Qué ofrecemos"
+              }
+            },
+            {
+              "id": "el-services-intro",
+              "role": "body",
+              "hidden": false,
+              "slot": "intro",
+              "value": {
+                "kind": "text",
+                "text": "Lo que puedes encontrar en la taberna."
+              }
+            },
+            {
+              "id": "el-services",
+              "role": "list",
+              "hidden": false,
+              "slot": "services",
+              "items": [
+                {
+                  "id": "item-1",
+                  "elements": [
+                    {
+                      "id": "el-card-1-title",
+                      "role": "heading",
+                      "hidden": false,
+                      "slot": "title",
+                      "value": {
+                        "kind": "text",
+                        "text": "Comidas"
+                      }
+                    },
+                    {
+                      "id": "el-card-1-description",
+                      "role": "body",
+                      "hidden": false,
+                      "slot": "description",
+                      "value": {
+                        "kind": "text",
+                        "text": "Platos de casa para el mediodía."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "id": "item-2",
+                  "elements": [
+                    {
+                      "id": "el-card-2-title",
+                      "role": "heading",
+                      "hidden": false,
+                      "slot": "title",
+                      "value": {
+                        "kind": "text",
+                        "text": "Cenas"
+                      }
+                    },
+                    {
+                      "id": "el-card-2-description",
+                      "role": "body",
+                      "hidden": false,
+                      "slot": "description",
+                      "value": {
+                        "kind": "text",
+                        "text": "Cenas tranquilas, con la carta de siempre."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "id": "item-3",
+                  "elements": [
+                    {
+                      "id": "el-card-3-title",
+                      "role": "heading",
+                      "hidden": false,
+                      "slot": "title",
+                      "value": {
+                        "kind": "text",
+                        "text": "Tapas"
+                      }
+                    },
+                    {
+                      "id": "el-card-3-description",
+                      "role": "body",
+                      "hidden": false,
+                      "slot": "description",
+                      "value": {
+                        "kind": "text",
+                        "text": "Para picar algo en la barra o en la mesa."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "id": "item-4",
+                  "elements": [
+                    {
+                      "id": "el-card-4-title",
+                      "role": "heading",
+                      "hidden": false,
+                      "slot": "title",
+                      "value": {
+                        "kind": "text",
+                        "text": "Terraza"
+                      }
+                    },
+                    {
+                      "id": "el-card-4-description",
+                      "role": "body",
+                      "hidden": false,
+                      "slot": "description",
+                      "value": {
+                        "kind": "text",
+                        "text": "Mesas fuera cuando el tiempo acompaña."
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "layout": null
+        },
+        {
+          "id": "sec-contacto",
+          "preset": {
+            "catalogId": "services",
+            "variantId": "stacked"
+          },
+          "source": "free",
+          "content": [
+            {
+              "id": "el-contacto-headline",
+              "role": "heading",
+              "hidden": false,
+              "slot": "headline",
+              "value": {
+                "kind": "text",
+                "text": "Dónde estamos"
+              }
+            },
+            {
+              "id": "el-contacto-body",
+              "role": "body",
+              "hidden": false,
+              "slot": "body",
+              "value": {
+                "kind": "text",
+                "text": "Cta. de Santo Domingo, 2 — Ronda (Málaga)."
+              }
+            },
+            {
+              "id": "el-contacto-map",
+              "role": "map",
+              "hidden": false,
+              "slot": "map",
+              "value": {
+                "kind": "map",
+                "label": "Ver cómo llegar",
+                "latitude": 36.7419,
+                "longitude": -5.1673
+              }
+            }
+          ],
+          "layout": {
+            "grid": {
+              "columns": 12
+            },
+            "placements": [
+              {
+                "elementId": "el-contacto-headline",
+                "column": 1,
+                "columnSpan": 6,
+                "row": 1,
+                "rowSpan": 1
+              },
+              {
+                "elementId": "el-contacto-body",
+                "column": 1,
+                "columnSpan": 6,
+                "row": 2,
+                "rowSpan": 1
+              },
+              {
+                "elementId": "el-contacto-map",
+                "column": 1,
+                "columnSpan": 6,
+                "row": 3,
+                "rowSpan": 1
+              }
+            ],
+            "breakpoints": {
+              "tablet": [],
+              "mobile": []
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "collections": []
+}

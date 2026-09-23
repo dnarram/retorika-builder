@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 600" role="img" aria-label="Tu foto aquí">
+  <rect width="1600" height="600" rx="12" fill="#E7EDF6"/>
+  <g fill="none" stroke="#94A3B8" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="712" y="212" width="176" height="130" rx="12"/>
+    <circle cx="759" cy="252" r="15"/>
+    <path d="M719 330l54-49 46 41 30-26 32 27"/>
+  </g>
+  <text x="800" y="410" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="30" fill="#64748B">Tu foto aquí</text>
+  <text x="800" y="452" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="20" fill="#64748B">Cuando subas la tuya, ocupará este espacio</text>
+</svg>
