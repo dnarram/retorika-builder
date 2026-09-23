@@ -71,6 +71,22 @@ Nothing is said about the colours. If they bring the colour up by themselves, th
 writing down; asking about it would only measure our taste, since we chose the palette knowing
 whose business it is, which the generator will not.
 
+## One question at screen 07, before the closing ones
+
+The catalog is about to get its "Contacto y reservas" section, and the biggest open decision in
+it is whether a client's site needs a form at all. A published site is static: it cannot send a
+form anywhere without depending on something, and ADR 0001 forbids that something being ours. So
+the decision risks being taken by technical limitation. Two owners in front of us settle it
+better. Asked while they are looking at their own site:
+
+> «Cuando alguien quiere pediros cita o preguntar algo, ¿cómo te gusta que lo haga? ¿Te vale con
+> que te llamen o te escriban por WhatsApp, o esperas que te escriban desde la web y que te
+> llegue a ti?»
+
+It is not said that a form is hard, and no option is offered as the reasonable one. What is
+written down is which they name first, and whether the words "formulario" or "correo" come up
+without being prompted.
+
 ## The questions at the end
 
 In this order, and with silence after each one:
@@ -108,6 +124,7 @@ Write up the same day, before the memory tidies itself:
 - every hesitation, with the screen it happened on;
 - their exact words for their trade and their services;
 - what they said to the five closing questions, quoted;
+- how they expect people to get in touch, and whether a form came up by itself;
 - anything they tried to do that the screens did not allow.
 
 Findings that touch a decision already recorded — the sector list of ADR 0010, the text bank of
