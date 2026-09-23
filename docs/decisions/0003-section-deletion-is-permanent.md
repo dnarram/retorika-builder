@@ -1,6 +1,10 @@
 # 0003 — Deleting a section is permanent, and rule 3 is scoped to a section
 
-**Status:** accepted · **Date:** 2026-09-16
+**Status:** accepted · **Date:** 2026-09-16 · **Amended by:** [ADR 0014](0014-deleting-a-section-never-asks.md) (2026-09-23)
+
+> ADR 0014 replaces the confirmation rule below: confirmation is never asked, and the undo toast
+> offered afterwards stays instead of fading when the section held content the user wrote.
+> Everything else here stands.
 
 ## Context
 

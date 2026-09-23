@@ -83,8 +83,8 @@ which ADR 0009 forbids.
     reservas" is generated only if there is some contact data.
 - **Question 5:** one main action, and optionally a second one as a secondary link (the cover's
   `secondaryAction` is 0..2).
-- **Question 3, still to settle with the screens:** how many suggestions can be picked, and what
-  happens below the list's minimum of two cards.
+- **Question 3, settled since by [ADR 0013](0013-services-cardinality.md):** one to six cards,
+  and none means the section is not generated.
 
 ## Consequences
 

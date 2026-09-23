@@ -8,6 +8,9 @@ builds and who maintains.
 
 Source of truth: `docs/dossiers/` (approved, and they win over the code), `docs/document-rules.md`
 (the document model), `docs/decisions/` (ADRs, which win over the dossiers where they say so).
+For the interface, `docs/design/` is the phase 1 specification — the screens, their Spanish copy
+and their interaction patterns — read together with `docs/design/REVIEW.md`, which is where the
+ADRs overrule them.
 
 ## The architecture constraint — read this first
 

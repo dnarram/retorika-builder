@@ -22,7 +22,12 @@ See [ADR 0001](docs/decisions/0001-static-published-sites.md).
 downloaded as a ZIP that opens by double-clicking, and the same files served unchanged by a
 generic static server, with the invariants green in CI. Publishing on a Retorika domain has
 no plan ([ADR 0008](docs/decisions/0008-hosted-publishing-has-no-plan.md)): `apps/serve` stays
-built, tested and dormant. **There is no editor and no interface yet** — that is phase 1.
+built, tested and dormant.
+
+**Phase 1 is under way.** The catalog has two sections, "Portada" and "Qué hago", and the phase 1
+screens are drawn and reviewed ([`docs/design/`](docs/design/)): five questions, generation, the
+three variants, the editor and four error states. **There is no editor application yet** — before
+it is built, the protocol asks for a navigable prototype tested with two real businesses.
 
 ## Getting started
 
@@ -187,6 +192,7 @@ as an empty placeholder.
 - `docs/dossiers/` — the two approved dossiers. Source of truth for the product.
 - `docs/document-rules.md` — the document model: seven rules, roles, tokens, invariants.
 - `docs/decisions/` — ADRs. Where one amends a dossier, it says so.
+- `docs/design/` — the phase 1 screens, and the review that checks them against the ADRs.
 - `docs/tasks/` — task plans, written before implementing.
 - `docs/protocolo.md` — the development protocol (in Spanish).
 
