@@ -52,13 +52,20 @@ It changes the session either way, so it is asked first:
 
 ## What is said out loud at screen 07
 
-Three things are ours, not the product's, and staying quiet about them would buy a compliment we
-did not earn. They are said once, in this order, before the owner is asked anything:
+Four things are ours, not the product's, and staying quiet about them would buy a compliment we
+did not earn. They are said once, in this order, before the owner is asked anything and **before
+they touch the screen**:
 
-> «Tres cosas antes de que mires: las fotos son de muestra, las cambias tú después. Los servicios
-> que aparecen los hemos marcado nosotros, porque tú no has rellenado el cuestionario de verdad.
-> Y el botón grande dice "Visítanos" porque no hemos guardado tu teléfono: en la web real sería
-> el que tú eliges en la última pregunta.»
+> «Cuatro cosas antes de que mires. Las fotos son de muestra: las cambias tú después. Los
+> servicios que aparecen los hemos marcado nosotros, porque tú no has rellenado el cuestionario
+> de verdad. El botón grande dice "Visítanos" porque no hemos guardado tu teléfono: en la web
+> real sería el que tú elijas en la última pregunta. Y ese botón todavía no lleva a ningún sitio:
+> si lo pulsas no pasa nada, y no es que se haya roto.»
+
+**The fourth one is said before, not after.** The main button is the most visible thing on the
+page, so it will be pressed. A dead button discovered by pressing it turns the session into a
+conversation about a technical fault, and the answer to "¿publicarías esto?" is then about the
+fault instead of about the site. Said beforehand, it costs one sentence.
 
 Nothing is said about the colours. If they bring the colour up by themselves, that is worth
 writing down; asking about it would only measure our taste, since we chose the palette knowing
