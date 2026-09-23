@@ -139,6 +139,49 @@ part that must not move — the interface tokens and their separation from the p
 - The handoff's own open list stands: the price, who issues the invoice and how VAT is handled,
   and the photo bank's actual images.
 
+## What building the prototype surfaced
+
+The three variants shown in screen 07 are now generated from documents written by hand for the
+two businesses (`prototype/`). Filling those documents surfaced the following. None of it was
+improvised: each one is recorded here and left as it is.
+
+**Product decisions nobody has taken:**
+- **There is no third cover composition.** The catalog has two (`image-right`,
+  `image-background`); the mockup's "Tipográfica", everything centred with the name large, does
+  not exist. The three variants are therefore combinations: `image-right` + `stacked`,
+  `image-background` + `side`, `image-right` + `split`. **At thumbnail size the first and third
+  are hard to tell apart**, because they share the cover and differ only in the "Qué hago" block.
+  That weakens the dossier's promise that the three "cambian de composición", and a centred cover
+  would be a catalog task of its own.
+- **A free section's heading level follows the `catalogId` it declares:** `cover` gives `h1`,
+  anything else `h2`. The prototype's "Contacto" declares `services` so that its title is an
+  `h2`, which is right by accident rather than by design.
+- **The main button has nowhere to point.** The renderer emits no `id` on a section, so an
+  in-page anchor like `#contacto` does not resolve. In the prototype the button reads `Visítanos`
+  and goes nowhere, and that will have to be decided for real when the questionnaire's fifth
+  answer becomes a link.
+
+**What is ours rather than the product's, and is disclosed to the owner during the test:**
+- **The cards were chosen by us.** The owner never ticked anything in question 3.
+- **The palette was chosen by us, knowing which business it was** — terracotta for the
+  restaurant, blue for the shoe shop. In the product the palette comes from the logo, and neither
+  business gave one. This is exactly the knowledge the generator will not have, so a compliment
+  about the colours would measure our taste, not the product. The script does not ask about
+  colour.
+- **The photos are placeholders** labelled "Tu foto aquí". The bank of ADR 0011 does not exist,
+  so nothing about photos is being tested.
+- **The main action was set by us** to "come to the premises", because no phone number or email
+  enters the repository.
+
+**Smaller things, recorded so they are not rediscovered:**
+- The map's coordinates are approximate, and a map publishes as a link, not a map (ADR 0004).
+- Taberna Santo Domingo has four cards and Conchi three, which exercises the cardinality of
+  ADR 0013 with real content.
+- Chrome will not render a `file://` page inside an `iframe` of another `file://` page, so
+  screen 07 shows screenshots of the real sites and links to the sites themselves.
+- `scripts/build-sample-site.ts` now also takes a path to a document, so these stay out of the
+  golden corpus. It is the only code this work touched.
+
 ## The two businesses for the usability test
 
 D13 names them, and they are the next step after this review: **Restaurante Taberna Santo

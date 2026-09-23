@@ -1,14 +1,19 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { buildSite, bundleToZip } from "@retorika/publisher";
 import { parseDocument, type RetorikaDocument } from "@retorika/schema";
 
 /**
- * pnpm site:sample <fixture-name> [out-dir]
+ * pnpm site:sample <fixture-name | path/to/document.json> [out-dir]
  *
- * Renders a fixture from fixtures/documents/ into a real directory and writes the ZIP beside
- * it (<out-dir>.zip). This is what turns the phase-0 acceptance check — open it by
- * double-clicking, with no server and no network — into something a person can actually do.
+ * Renders a document into a real directory and writes the ZIP beside it (<out-dir>.zip). This
+ * is what turns the phase-0 acceptance check — open it by double-clicking, with no server and
+ * no network — into something a person can actually do.
+ *
+ * A bare name is a fixture from fixtures/documents/, and its images are read from
+ * fixtures/assets. A path is any document anywhere, and its images are read next to it: the
+ * prototype's documents live in docs/design/prototype/, deliberately outside the golden corpus,
+ * and each of its folders is self-contained.
  *
  * Built as a download: no baseUrl, so no sitemap, exactly what a client would receive.
  */
@@ -17,19 +22,31 @@ const REPO_ROOT = resolve(import.meta.dirname, "..");
 const FIXTURES_DIR = join(REPO_ROOT, "fixtures");
 const SCRATCH_DIR = join(REPO_ROOT, ".scratch");
 
-const [fixture, outArg = ".scratch/site"] = process.argv.slice(2);
-if (!fixture) {
+const [target, outArg = ".scratch/site"] = process.argv.slice(2);
+if (!target) {
   console.error(
-    "usage: pnpm site:sample <fixture-name> [out-dir]   (default out-dir: .scratch/site)",
+    "usage: pnpm site:sample <fixture-name | path/to/document.json> [out-dir]" +
+      "   (default out-dir: .scratch/site)",
   );
   process.exit(1);
 }
 
-const documentPath = join(FIXTURES_DIR, "documents", `${fixture}.json`);
+const givenAsPath = target.endsWith(".json") || target.includes("/") || target.includes(sep);
+const documentPath = givenAsPath
+  ? resolve(target)
+  : join(FIXTURES_DIR, "documents", `${target}.json`);
 if (!existsSync(documentPath)) {
-  console.error(`site:sample: no fixture named "${fixture}" in fixtures/documents/`);
+  console.error(
+    givenAsPath
+      ? `site:sample: no document at ${target}`
+      : `site:sample: no fixture named "${target}" in fixtures/documents/`,
+  );
   process.exit(1);
 }
+
+// Images are read from where the document itself lives, so a folder outside the fixtures is
+// self-contained; a fixture keeps reading fixtures/assets, exactly as before.
+const assetsRoot = givenAsPath ? dirname(documentPath) : FIXTURES_DIR;
 
 const out = resolve(outArg);
 const zipPath = `${out}.zip`;
@@ -60,13 +77,16 @@ for (const page of document.pages) {
   for (const section of page.sections) {
     for (const el of section.content) {
       if (el.value?.kind === "image") {
-        assets.set(el.value.src, new Uint8Array(readFileSync(join(FIXTURES_DIR, el.value.src))));
+        assets.set(el.value.src, new Uint8Array(readFileSync(join(assetsRoot, el.value.src))));
       }
     }
   }
 }
 
-const bundle = buildSite(document, { siteId: `sample-${fixture}`, assets });
+const bundle = buildSite(document, {
+  siteId: `sample-${basename(documentPath, ".json")}`,
+  assets,
+});
 
 for (const file of bundle.files) {
   const target = join(out, file.path);
