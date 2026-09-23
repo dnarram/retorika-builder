@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Estado — Otro sector</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>body { margin: 0; font-family: 'Inter', system-ui, sans-serif; background: #F5F7FA; }</style>
+</head>
+<body>
+
+<div style="width: 1280px; height: 860px; box-sizing: border-box; background: #F5F7FA; display: flex; flex-direction: column;">
+
+  <div style="box-sizing: border-box; padding: 26px 34px; display: flex; align-items: center; gap: 12px;">
+    <span style="display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; background: linear-gradient(135deg, #2B9BF4, #1554D8); border-radius: 10px; color: #FFFFFF; font-size: 18px; font-weight: 800; line-height: 1;">R</span>
+    <span style="font-size: 17px; font-weight: 700; color: #0F172A; letter-spacing: -0.01em;">Retorika Builder</span>
+  </div>
+
+  <div style="flex-grow: 1; box-sizing: border-box; padding: 0 60px 24px 60px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 26px;">
+
+    <div style="width: 920px; box-sizing: border-box; padding: 34px 52px 28px 52px; background: #FFFFFF; border-radius: 20px; box-shadow: 0 1px 3px rgba(15,23,42,0.06); display: flex; flex-direction: column; gap: 20px;">
+
+      <div style="display: flex; justify-content: center; gap: 7px;">
+        <span style="width: 22px; height: 5px; border-radius: 3px; background: #156FE7;"></span>
+        <span style="width: 30px; height: 5px; border-radius: 3px; background: #156FE7;"></span>
+        <span style="width: 22px; height: 5px; border-radius: 3px; background: #DCE3ED;"></span>
+        <span style="width: 22px; height: 5px; border-radius: 3px; background: #DCE3ED;"></span>
+        <span style="width: 22px; height: 5px; border-radius: 3px; background: #DCE3ED;"></span>
+      </div>
+
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+        <span style="font-size: 14px; font-weight: 500; color: #94A3B8;">Paso 2 de 5</span>
+        <h1 style="margin: 0; font-size: 36px; line-height: 1.15; font-weight: 700; letter-spacing: -0.03em; color: #0F172A; text-align: center;">¿A qué se dedica tu negocio?</h1>
+        <p style="margin: 0; font-size: 16px; color: #64748B; text-align: center;">Con esto elegimos las secciones, los textos y las fotos por ti.</p>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 12px; height: 54px; box-sizing: border-box; padding: 0 18px; background: #F6F8FB; border: 1px solid #E3E8F0; border-radius: 11px;">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.6-3.6"></path></svg>
+        <span style="flex-grow: 1; font-size: 16px; font-weight: 500; color: #0F172A;">cerrajería</span>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 11px; padding: 14px 16px; background: #FFF8EC; border: 1px solid #F4DDB4; border-radius: 11px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#B4740B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>
+        <span style="font-size: 14px; line-height: 1.45; color: #7A5008;">Todavía no tenemos textos ni fotos preparados para cerrajería. Podemos montarte la web igual, con contenido general que tú cambias después.</span>
+      </div>
+
+      <fieldset style="margin: 0; padding: 0; border: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 13px;">
+        <legend style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);">Sector del negocio</legend>
+        <label style="display: flex; align-items: center; gap: 10px; height: 56px; box-sizing: border-box; padding: 0 16px; grid-column: span 3; background: #F1F7FE; border: 2px solid #156FE7; border-radius: 11px; cursor: pointer;">
+          <input type="radio" name="sector" checked style="position: absolute; width: 1px; height: 1px; opacity: 0;">
+          <span style="flex-grow: 1; font-size: 15px; font-weight: 600; color: #156FE7;">Otro sector</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#156FE7" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"></path></svg>
+        </label>
+      </fieldset>
+
+      <div style="display: flex; flex-direction: column; gap: 9px;">
+        <label for="describe" style="font-size: 14px; font-weight: 600; color: #0F172A;">Cuéntanos a qué te dedicas, con tus palabras</label>
+        <input id="describe" type="text" value="Cerrajería y apertura de puertas 24 horas" style="height: 56px; box-sizing: border-box; padding: 0 18px; font-family: 'Inter', system-ui, sans-serif; font-size: 16px; font-weight: 500; color: #0F172A; background: #FFFFFF; border: 2px solid #156FE7; border-radius: 11px; outline: none;">
+        <span style="font-size: 13px; color: #94A3B8;">Lo usaremos para escribir los textos de tu web.</span>
+      </div>
+
+      <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 6px;">
+        <a href="Main.dc.html" style="font-size: 15px; font-weight: 500; color: #94A3B8; text-decoration: none;">Atrás</a>
+        <a href="P3-Servicios.dc.html" style="display: inline-flex; align-items: center; justify-content: center; height: 50px; padding: 0 34px; background: #156FE7; color: #FFFFFF; font-size: 15px; font-weight: 600; border-radius: 11px; text-decoration: none;">Siguiente</a>
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+</body>
+</html>
