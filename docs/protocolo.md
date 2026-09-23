@@ -153,8 +153,9 @@ flotante), nunca la maquetación.
 
 ## 3.3 Stack propuesto
 
-> Pendiente de aprobación formal, igual que figura en los dossiers. Cada línea lleva el
-> motivo, para poder discutirla sin rehacer el razonamiento.
+> **Aprobado el 23 de septiembre de 2026 (ADR 0012).** La dirección pidió probar antes las
+> capas gratuitas de Supabase y Render, y el resultado se aceptó. Cada línea lleva el motivo,
+> para poder discutirla sin rehacer el razonamiento.
 
 | Pieza | Elección | Por qué esta y no otra |
 |---|---|---|
@@ -165,7 +166,8 @@ flotante), nunca la maquetación.
 | Validación y esquema | Zod | El esquema del documento es código y test a la vez: valida en escritura, como exige la Parte 8. |
 | Base de datos | PostgreSQL | Ya se conoce y se maneja con DBeaver. El modelo es relacional de verdad: cuentas, webs, plantillas, pagos. |
 | Acceso a datos | Drizzle | SQL a la vista, sin binario que compilar, arranca rápido en Apple Silicon. |
-| Postgres gestionado | Supabase (Postgres + Auth + Storage) | Evita mantener base de datos, sesiones y almacenamiento a mano. Se usa como Postgres, con Drizzle encima, para no quedar atrapado. |
+| Postgres gestionado | Supabase (Postgres + Auth + Storage) | Evita mantener base de datos, sesiones y almacenamiento a mano. Se usa como Postgres, con Drizzle encima, para no quedar atrapado. Se entra por el *pooler* de transacciones (puerto 6543), no por la conexión directa: las instancias que hibernan agotan las directas (ADR 0012). |
+| Alojamiento de la aplicación | Render (Docker, desde GitHub, Fráncfort) | Despliegue automático al fusionar y la misma región que Supabase. En la capa gratuita el servicio se duerme tras unos 15 minutos sin uso: la primera llamada tarda alrededor de 1,2 s y una vez caliente 129 ms, así que cualquier demostración en directo necesita una llamada de calentamiento. Ninguna web de cliente depende de esto: son archivos estáticos en su propio alojamiento (ADR 0012). |
 | Pagos | Stripe en modo pago único | Lo aprobado es pago único, no suscripción. El precio vive en un objeto Price de Stripe, así que fijar el «XX €» será configuración y no código. |
 | Archivos de sitios publicados | Cloudflare R2 + Worker con subdominio comodín | Servir estáticos desde almacenamiento de objetos es lo que hace que el coste por web sea de céntimos, que es la base de la decisión de precio. |
 | Correo transaccional | Resend | Accesos de cliente, facturas y avisos. |
@@ -954,6 +956,14 @@ observa, no se pregunta.
 > estados y mensajes, y un prototipo navegable probado con dos negocios reales (decisión de
 > dirección, 22 de septiembre de 2026). Son los pasos que el dossier ya ponía antes del código
 > definitivo. Los textos de las webs generadas salen del banco revisado del ADR 0009.
+>
+> **Las pantallas están hechas** (23 de septiembre de 2026): quince maquetas en
+> `docs/design/mockups/`, con las cinco preguntas, la generación, las tres variantes, el editor
+> y cuatro estados de error. `docs/design/REVIEW.md` las contrasta con los ADR y recoge lo que
+> hubo que corregir. **Queda el prototipo navegable**, probado con los dos negocios de Ronda que
+> recoge esa revisión. Las maquetas son la especificación de la interfaz: la maquetación, los
+> textos en castellano, los colores y los gestos ya están decididos, y los textos van a su
+> archivo de traducción, nunca dentro de un `.ts`.
 
 ## Fase 2 — El producto completo
 
