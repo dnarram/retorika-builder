@@ -1,62 +1,10 @@
-import { render } from "@retorika/renderer";
-import { parseDocument } from "@retorika/schema";
-import fixture from "../../../../fixtures/documents/contacto-y-horario.json" with { type: "json" };
+import { Questionnaire } from "@/questionnaire/Questionnaire.tsx";
 
 /**
- * Day one of the sprint: proof that the engine runs inside the application.
- *
- * Everything below the header is produced by `packages/renderer` from a real document — the
- * same code path the golden corpus checks byte for byte. Nothing here is a mock-up or a
- * screenshot. The questionnaire that will feed it arrives on day two.
+ * Day two: the real five-question flow, transcribed from the approved mockups
+ * (docs/design/mockups/01–05, 09, 10). See apps/editor/src/questionnaire/ for the pieces, and
+ * /motor for day one's proof that the renderer runs inside this app.
  */
 export default function Home() {
-  const doc = parseDocument(fixture);
-  const { html } = render(doc, "html");
-
-  return (
-    <main style={{ padding: "24px", maxWidth: "1180px", margin: "0 auto" }}>
-      <header style={{ display: "flex", alignItems: "center", gap: "11px", marginBottom: "6px" }}>
-        <span
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: "32px",
-            height: "32px",
-            background: "linear-gradient(135deg, #2B9BF4, #1554D8)",
-            borderRadius: "9px",
-            color: "#FFFFFF",
-            fontSize: "17px",
-            fontWeight: 800,
-            lineHeight: 1,
-          }}
-        >
-          R
-        </span>
-        <span style={{ fontSize: "16px", fontWeight: 700, letterSpacing: "-0.01em" }}>
-          Retorika Builder
-        </span>
-      </header>
-
-      <p style={{ margin: "0 0 20px", color: "var(--ui-muted)", fontSize: "15px" }}>
-        Esto no es una maqueta: la web de abajo la ha dibujado el motor de Retorika a partir de un
-        documento real, con el mismo código que se descargará el cliente.
-      </p>
-
-      <div
-        style={{
-          background: "var(--ui-surface)",
-          border: "1px solid var(--ui-border)",
-          borderRadius: "var(--ui-radius)",
-          overflow: "hidden",
-        }}
-      >
-        <iframe
-          title={`Vista previa de ${doc.siteName}`}
-          srcDoc={html}
-          style={{ display: "block", width: "100%", height: "860px", border: 0 }}
-        />
-      </div>
-    </main>
-  );
+  return <Questionnaire />;
 }
