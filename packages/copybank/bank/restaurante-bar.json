@@ -1,0 +1,61 @@
+{
+  "sector": "restaurante-bar",
+  "review": { "status": "approved", "by": "dnr", "date": "2026-09-24" },
+  "entries": [
+    {
+      "id": "restaurante-bar.cover.subheadline.01",
+      "section": "cover",
+      "slot": "subheadline",
+      "text": "Comer y beber en {ciudad}",
+      "placeholders": ["ciudad"]
+    },
+    {
+      "id": "restaurante-bar.cover.subheadline.02",
+      "section": "cover",
+      "slot": "subheadline",
+      "text": "Comer, beber y quedarse un rato",
+      "placeholders": []
+    },
+    {
+      "id": "restaurante-bar.cover.body.01",
+      "section": "cover",
+      "slot": "body",
+      "text": "Pásate a comer o a tomar algo.",
+      "placeholders": []
+    },
+    {
+      "id": "restaurante-bar.contact.headline.01",
+      "section": "contact",
+      "slot": "headline",
+      "text": "Te esperamos",
+      "placeholders": []
+    }
+  ],
+  "suggestions": [
+    { "id": "comidas", "title": "Comidas" },
+    { "id": "cenas", "title": "Cenas" },
+    {
+      "id": "tapas",
+      "title": "Tapas",
+      "description": "Para picar algo en la barra o en la mesa."
+    },
+    {
+      "id": "terraza",
+      "title": "Terraza",
+      "description": "Mesas fuera cuando el tiempo acompaña."
+    },
+    {
+      "id": "menu-del-dia",
+      "title": "Menú del día",
+      "description": "Pregunta por el de hoy."
+    },
+    {
+      "id": "para-llevar",
+      "title": "Para llevar",
+      "description": "Pide y pásate a recogerlo."
+    }
+  ],
+  "actions": {
+    "book": "Reservar mesa"
+  }
+}

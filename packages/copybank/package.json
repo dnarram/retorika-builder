@@ -1,0 +1,14 @@
+{
+  "name": "@retorika/copybank",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The reviewed, per-sector bank of texts for generated sites (ADR 0009)",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "comment": "The texts here become content of a client's published site, so they are Spanish (es-ES) and never go in a locales/es.json, which is for interface text. Nothing enters bank/ without a person's approval recorded in the file.",
+  "dependencies": {
+    "zod": "4.6.5"
+  }
+}

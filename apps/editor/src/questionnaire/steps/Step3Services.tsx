@@ -1,8 +1,8 @@
 "use client";
 
+import { suggestionsFor } from "@retorika/copybank";
 import { useState } from "react";
 import es from "../../locales/es.json" with { type: "json" };
-import { SERVICE_SUGGESTIONS } from "../service-suggestions.ts";
 import type { Answers } from "../types.ts";
 import { Card, CheckboxCard, NavRow, ProgressDots, TextField, TitleBlock } from "../ui.tsx";
 
@@ -20,7 +20,10 @@ export function Step3Services({
   onBack: () => void;
 }) {
   const [ownService, setOwnService] = useState("");
-  const suggestions = (answers.sector && SERVICE_SUGGESTIONS[answers.sector]) ?? [];
+  // The words come from the bank, not from here: the same string is a tick box now and a
+  // card title on the published site, so it is content and lives in @retorika/copybank.
+  const suggestions = suggestionsFor(answers.sector ?? "");
+  const isSuggested = (label: string) => suggestions.some((s) => s.title === label);
 
   function toggle(label: string, checked: boolean) {
     update({
@@ -68,12 +71,12 @@ export function Step3Services({
           >
             {es["questionnaire.step3.fieldset.label"]}
           </legend>
-          {suggestions.map((label) => (
+          {suggestions.map((suggestion) => (
             <CheckboxCard
-              key={label}
-              label={label}
-              checked={answers.services.includes(label)}
-              onChange={(checked) => toggle(label, checked)}
+              key={suggestion.id}
+              label={suggestion.title}
+              checked={answers.services.includes(suggestion.title)}
+              onChange={(checked) => toggle(suggestion.title, checked)}
             />
           ))}
         </fieldset>
@@ -83,7 +86,7 @@ export function Step3Services({
         </p>
       )}
 
-      {answers.services.filter((s) => !suggestions.includes(s)).length > 0 ? (
+      {answers.services.filter((s) => !isSuggested(s)).length > 0 ? (
         <ul
           style={{
             margin: 0,
@@ -95,7 +98,7 @@ export function Step3Services({
           }}
         >
           {answers.services
-            .filter((s) => !suggestions.includes(s))
+            .filter((s) => !isSuggested(s))
             .map((label) => (
               <li
                 key={label}
