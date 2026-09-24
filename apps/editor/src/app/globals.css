@@ -1,0 +1,29 @@
+/**
+ * The interface's own tokens (ADR 0015).
+ *
+ * These are not `packages/tokens`. They never enter a document's theme, never travel in a
+ * client's ZIP, and no generated site is styled from them. A client's site gets its colours
+ * from its own palette, which is why they are kept apart by name as well as by file.
+ */
+:root {
+  --ui-bg: #f5f7fa;
+  --ui-surface: #ffffff;
+  --ui-border: #e8ecf2;
+  --ui-ink: #0f172a;
+  --ui-muted: #64748b;
+  --ui-brand: #156fe7;
+  --ui-brand-surface: #e8f1fe;
+  --ui-ok: #03d26e;
+  --ui-radius: 14px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--ui-bg);
+  color: var(--ui-ink);
+  font-family: var(--font-inter), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
