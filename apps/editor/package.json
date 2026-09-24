@@ -12,6 +12,7 @@
   "dependencies": {
     "@retorika/catalog": "workspace:*",
     "@retorika/copybank": "workspace:*",
+    "@retorika/generator": "workspace:*",
     "@retorika/publisher": "workspace:*",
     "@retorika/renderer": "workspace:*",
     "@retorika/schema": "workspace:*",

@@ -1,8 +1,8 @@
 "use client";
 
+import type { Answers, MainAction } from "@retorika/generator";
 import { useState } from "react";
 import es from "../../locales/es.json" with { type: "json" };
-import type { Answers, MainAction } from "../types.ts";
 import {
   Card,
   ChoiceCard,

@@ -1,7 +1,8 @@
 /**
- * The shape day 3's generator will consume. This is the contract, decided here rather than
- * there: the questionnaire is what decides what a "complete answer" looks like, because it is
- * the only thing that has to ask a real person for it.
+ * The five questions' answers — the generator's input contract.
+ *
+ * Lives here rather than in `apps/editor`, because a package must never depend on an app, and
+ * this is what actually processes the shape. The questionnaire imports it from here instead.
  */
 
 /** ADR 0010's ten launch sectors, in the order the screen shows them, plus "other". */
