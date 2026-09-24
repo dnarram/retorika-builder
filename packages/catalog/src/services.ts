@@ -1,10 +1,5 @@
-import {
-  type ContentElement,
-  GRID_COLUMNS,
-  type PresetShape,
-  type PresetSlot,
-  type SectionLayout,
-} from "@retorika/schema";
+import type { ContentElement, PresetShape, PresetSlot, SectionLayout } from "@retorika/schema";
+import { resolvePlacements, type SlotPlacement, unknownVariant } from "./layout.ts";
 
 /**
  * Qué hago — "Servicios o productos en tarjetas" (concept dossier §9).
@@ -31,21 +26,16 @@ export const SERVICES_ITEM_SLOTS: readonly PresetSlot[] = [
   { slot: "description", role: "body", min: 0, max: 1 },
 ];
 
-export const SERVICES_ITEMS = { min: 2, max: 6 } as const;
+/**
+ * One card is a legitimate answer and is drawn full width already; none means the section is
+ * not generated at all, which is the questionnaire's business rather than the catalog's
+ * (ADR 0013).
+ */
+export const SERVICES_ITEMS = { min: 1, max: 6 } as const;
 
 /** The three compositions approved by the CEO (docs/tasks/catalog-que-hago.md). */
 export const SERVICES_VARIANTS = ["stacked", "side", "split"] as const;
 export type ServicesVariant = (typeof SERVICES_VARIANTS)[number];
-
-/** Geometry per slot occurrence, resolved against the section's elements, as in cover.ts. */
-interface SlotPlacement {
-  slot: string;
-  occurrence: number;
-  column: number;
-  columnSpan: number;
-  row: number;
-  rowSpan: number;
-}
 
 /**
  * Pure placements: a composition only decides where the title, the intro and the list sit.
@@ -82,36 +72,8 @@ export const servicesPreset: PresetShape = {
 
   layoutFor(variantId: string, elements: readonly ContentElement[]): SectionLayout {
     if (!isServicesVariant(variantId)) {
-      throw new Error(
-        `Unknown variant "${variantId}" for section "${SERVICES_ID}". Known: ${SERVICES_VARIANTS.join(", ")}`,
-      );
+      throw unknownVariant(SERVICES_ID, variantId, SERVICES_VARIANTS);
     }
-
-    const bySlot = new Map<string, ContentElement[]>();
-    for (const element of elements) {
-      const list = bySlot.get(element.slot);
-      if (list) list.push(element);
-      else bySlot.set(element.slot, [element]);
-    }
-
-    const placements = TEMPLATES[variantId]
-      .map((entry) => {
-        const element = bySlot.get(entry.slot)?.[entry.occurrence];
-        if (!element) return undefined;
-        return {
-          elementId: element.id,
-          column: entry.column,
-          columnSpan: entry.columnSpan,
-          row: entry.row,
-          rowSpan: entry.rowSpan,
-        };
-      })
-      .filter((placement) => placement !== undefined);
-
-    return {
-      grid: { columns: GRID_COLUMNS },
-      placements,
-      breakpoints: { tablet: [], mobile: [] },
-    };
+    return resolvePlacements(TEMPLATES[variantId], elements);
   },
 };

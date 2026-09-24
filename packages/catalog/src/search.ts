@@ -9,4 +9,14 @@
 export const SEARCH_ALIASES: Readonly<Record<string, readonly string[]>> = {
   cover: ["portada", "hero", "cabecera", "inicio", "principal", "arriba", "banner"],
   services: ["qué hago", "servicios", "productos", "tarjetas", "lo que ofrezco", "carta"],
+  location: [
+    "horario",
+    "ubicación",
+    "dónde estamos",
+    "dirección",
+    "mapa",
+    "cómo llegar",
+    "abierto",
+  ],
+  contact: ["contacto", "reservas", "teléfono", "whatsapp", "pedir cita", "escribir", "llamar"],
 };

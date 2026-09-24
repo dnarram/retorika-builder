@@ -79,7 +79,15 @@ describe("the Qué hago preset", () => {
       { slot: "title", role: "heading", min: 1, max: 1 },
       { slot: "description", role: "body", min: 0, max: 1 },
     ]);
-    expect(SERVICES_ITEMS).toEqual({ min: 2, max: 6 });
+  });
+
+  it("holds one to six cards (ADR 0013): a single service is an answer, not an error", () => {
+    expect(SERVICES_ITEMS).toEqual({ min: 1, max: 6 });
+  });
+
+  it("accepts a section whose list holds a single card", () => {
+    const one: ContentElement = { ...list, items: [card(1)] };
+    expect(checkAgainstPreset(section([headline, intro, one]), servicesPreset)).toEqual([]);
   });
 
   it("is registered in the catalog", () => {

@@ -18,5 +18,21 @@
   "section.services.slot.intro": "Introducción",
   "section.services.slot.services": "Tarjetas",
   "section.services.item.title": "Nombre",
-  "section.services.item.description": "Descripción"
+  "section.services.item.description": "Descripción",
+  "section.location.name": "Horario y ubicación",
+  "section.location.description": "Dónde estás, cuándo abres y cómo llegar.",
+  "section.location.variant.stacked": "En una columna",
+  "section.location.variant.split": "En dos columnas",
+  "section.location.slot.headline": "Título",
+  "section.location.slot.address": "Dirección",
+  "section.location.slot.hours": "Horario",
+  "section.location.slot.map": "Mapa",
+  "section.contact.name": "Contacto y reservas",
+  "section.contact.description": "Teléfono, WhatsApp y correo, en un solo sitio.",
+  "section.contact.variant.stacked": "En una columna",
+  "section.contact.variant.side": "Botones a un lado",
+  "section.contact.slot.headline": "Título",
+  "section.contact.slot.body": "Texto",
+  "section.contact.slot.primaryAction": "Botón principal",
+  "section.contact.slot.secondaryAction": "Otras formas de contacto"
 }

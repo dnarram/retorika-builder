@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Barbería El Corte</title>
+<style>
+:root {
+  --color-accent: #FF3A72;
+  --color-ink: #0F172A;
+  --color-muted: #475569;
+  --color-primary: #156FE7;
+  --color-secondary: #105CB1;
+  --color-surface: #FFFFFF;
+  --font-body: system-ui, sans-serif;
+  --font-heading: Georgia, serif;
+  --radius-lg: 16px;
+  --radius-md: 8px;
+  --radius-sm: 4px;
+  --size-body: 1rem;
+  --size-heading: 2.5rem;
+  --size-subheading: 1.5rem;
+  --space-lg: 24px;
+  --space-md: 16px;
+  --space-sm: 8px;
+  --space-xl: 48px;
+  --space-xs: 4px;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; font-family: var(--font-body); color: var(--color-ink);
+  background: var(--color-surface); }
+.rb-section { display: grid; grid-template-columns: repeat(12, 1fr);
+  gap: var(--space-md); padding: var(--space-xl); align-items: center; }
+.rb-section img { width: 100%; height: auto; border-radius: var(--radius-md); }
+.rb-section :is(h1, h2, h3, h4, h5, h6, p, a) { overflow-wrap: break-word; }
+.rb-section :is(h1, h2, h3, h4, h5, h6) { -webkit-hyphens: auto; hyphens: auto; }
+.rb-section h1 { font-family: var(--font-heading); font-size: var(--size-heading);
+  color: var(--color-primary); margin: 0; }
+.rb-section h2 { font-family: var(--font-heading); font-size: var(--size-subheading);
+  color: var(--color-secondary); margin: 0; }
+.rb-section h3 { font-family: var(--font-heading); font-size: var(--size-body);
+  color: var(--color-ink); margin: 0; }
+.rb-list { display: grid; gap: var(--space-md); margin: 0; padding: 0; list-style: none;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); }
+.rb-item { display: flex; flex-direction: column; gap: var(--space-xs);
+  padding-top: var(--space-sm); border-top: 1px solid var(--color-muted); }
+.rb-section p { font-size: var(--size-body); color: var(--color-muted); margin: 0; }
+.rb-section a:not([role=button]) { color: var(--color-primary); text-decoration: underline; }
+.rb-section [role=button] { display: inline-block; padding: var(--space-sm) var(--space-md);
+  background: var(--color-primary); color: var(--color-surface);
+  border-radius: var(--radius-sm); text-decoration: none; }
+.rb-panel { align-self: stretch; margin: calc(-1 * var(--space-md)); z-index: 1;
+  background: var(--color-surface); border-radius: var(--radius-lg); pointer-events: none; }
+.rb-panel ~ :not(img) { z-index: 2; }
+
+@media (max-width: 720px) {
+  .rb-section { grid-template-columns: 1fr; padding: var(--space-lg); }
+  .rb-section > * { grid-column: 1 / -1 !important; grid-row: auto !important; }
+  .rb-section > img { order: -1; }
+  .rb-panel { display: none; }
+}
+</style>
+</head>
+<body>
+<main class="rb-page" data-page="home">
+  <section class="rb-section rb-cover rb-image-right" data-preset="cover" data-section="sec-cover" data-variant="image-right">
+    <h1 data-role="heading" data-slot="headline" style="grid-column:1/span 6;grid-row:1/span 1">
+      Barbería El Corte
+    </h1>
+    <h2 data-role="subheading" data-slot="subheadline" style="grid-column:1/span 6;grid-row:2/span 1">
+      Cortes y barbas en Ronda
+    </h2>
+    <p data-role="body" data-slot="body" style="grid-column:1/span 6;grid-row:3/span 1">
+      Calle Espinel 24, en el centro.
+    </p>
+    <img alt="Interior de la barbería" data-role="image" data-slot="image" src="assets/barbershop.svg" style="grid-column:7/span 6;grid-row:1/span 4">
+    <a data-role="button" data-slot="primaryAction" href="tel:+34000000000" role="button" style="grid-column:1/span 3;grid-row:4/span 1">
+      Pedir cita
+    </a>
+  </section>
+  <section class="rb-section rb-location rb-split" data-preset="location" data-section="sec-location" data-variant="split">
+    <h2 data-role="heading" data-slot="headline" style="grid-column:1/span 6;grid-row:1/span 1">
+      Dónde estamos
+    </h2>
+    <p data-role="body" data-slot="address" style="grid-column:1/span 6;grid-row:2/span 1">
+      Calle Espinel 24, Ronda (Málaga).
+    </p>
+    <a data-role="map" data-slot="map" href="https://www.openstreetmap.org/?mlat=36.7419&amp;mlon=-5.1673" style="grid-column:7/span 6;grid-row:3/span 1">
+      Ver en el mapa
+    </a>
+  </section>
+  <section class="rb-section rb-contact rb-stacked" data-preset="contact" data-section="sec-contact" data-variant="stacked">
+    <h2 data-role="heading" data-slot="headline" style="grid-column:1/span 12;grid-row:1/span 1">
+      Pide tu cita
+    </h2>
+    <p data-role="body" data-slot="body" style="grid-column:1/span 8;grid-row:2/span 1">
+      Llámanos o escríbenos por WhatsApp.
+    </p>
+    <a data-role="button" data-slot="primaryAction" href="tel:+34000000000" role="button" style="grid-column:1/span 3;grid-row:3/span 1">
+      Llamar
+    </a>
+    <a data-role="link" data-slot="secondaryAction" href="https://wa.me/34000000000" style="grid-column:4/span 3;grid-row:3/span 1">
+      WhatsApp
+    </a>
+    <a data-role="link" data-slot="secondaryAction" href="mailto:hola@example.com" style="grid-column:7/span 3;grid-row:3/span 1">
+      Escríbenos
+    </a>
+  </section>
+</main>
+</body>
+</html>

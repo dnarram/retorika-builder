@@ -1,10 +1,5 @@
-import {
-  type ContentElement,
-  GRID_COLUMNS,
-  type PresetShape,
-  type PresetSlot,
-  type SectionLayout,
-} from "@retorika/schema";
+import type { ContentElement, PresetShape, PresetSlot, SectionLayout } from "@retorika/schema";
+import { resolvePlacements, type SlotPlacement, unknownVariant } from "./layout.ts";
 
 /**
  * Portada — "La promesa del negocio, una foto grande y el botón principal."
@@ -32,21 +27,6 @@ export const COVER_SLOTS: readonly PresetSlot[] = [
 
 export const COVER_VARIANTS = ["image-right", "image-background"] as const;
 export type CoverVariant = (typeof COVER_VARIANTS)[number];
-
-/**
- * Geometry declared per slot occurrence, not per element id: a preset has never seen the
- * document it will be applied to. `layoutFor` resolves each entry to the element that
- * actually fills that slot.
- */
-interface SlotPlacement {
-  slot: string;
-  /** Which element within the slot, for slots that admit more than one. */
-  occurrence: number;
-  column: number;
-  columnSpan: number;
-  row: number;
-  rowSpan: number;
-}
 
 /**
  * Two compositions, not two colour schemes. The dossier's promise that the generated
@@ -85,41 +65,7 @@ export const coverPreset: PresetShape = {
   slots: COVER_SLOTS,
 
   layoutFor(variantId: string, elements: readonly ContentElement[]): SectionLayout {
-    if (!isCoverVariant(variantId)) {
-      // Explicit rather than silently falling back: a document naming a variant we do
-      // not have is a real problem, and a quiet default would publish the wrong layout.
-      throw new Error(
-        `Unknown variant "${variantId}" for section "${COVER_ID}". Known: ${COVER_VARIANTS.join(", ")}`,
-      );
-    }
-
-    const bySlot = new Map<string, ContentElement[]>();
-    for (const element of elements) {
-      const list = bySlot.get(element.slot);
-      if (list) list.push(element);
-      else bySlot.set(element.slot, [element]);
-    }
-
-    const placements = TEMPLATES[variantId]
-      .map((entry) => {
-        const element = bySlot.get(entry.slot)?.[entry.occurrence];
-        // A slot the document does not fill simply gets no placement. Optional slots are
-        // the common case, so this is ordinary rather than exceptional.
-        if (!element) return undefined;
-        return {
-          elementId: element.id,
-          column: entry.column,
-          columnSpan: entry.columnSpan,
-          row: entry.row,
-          rowSpan: entry.rowSpan,
-        };
-      })
-      .filter((placement) => placement !== undefined);
-
-    return {
-      grid: { columns: GRID_COLUMNS },
-      placements,
-      breakpoints: { tablet: [], mobile: [] },
-    };
+    if (!isCoverVariant(variantId)) throw unknownVariant(COVER_ID, variantId, COVER_VARIANTS);
+    return resolvePlacements(TEMPLATES[variantId], elements);
   },
 };

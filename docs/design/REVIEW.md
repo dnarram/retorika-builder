@@ -160,6 +160,13 @@ improvised: each one is recorded here and left as it is.
   in-page anchor like `#contacto` does not resolve. In the prototype the button reads `Visítanos`
   and goes nowhere, and that will have to be decided for real when the questionnaire's fifth
   answer becomes a link.
+- **`location`'s `split` composition leaves a hole when `hours` is absent.** The right-hand
+  column places `hours` at row 2 and `map` at row 3, so with no hours the map sits alone under an
+  empty row rather than moving up. Seen building `fixtures/documents/contacto-y-horario.json`
+  (`docs/tasks/catalog-horario-y-contacto.md`), which deliberately left `hours` out to exercise
+  the optional slot. Fixing it means deciding a composition rule — whether an absent optional
+  slot should collapse the row beneath it, generally or just here — which is a decision that task
+  did not have to take. Recorded, not resolved in passing.
 
 **What is ours rather than the product's, and is disclosed to the owner during the test:**
 - **The cards were chosen by us.** The owner never ticked anything in question 3.
