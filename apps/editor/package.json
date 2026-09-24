@@ -1,0 +1,26 @@
+{
+  "name": "@retorika/editor",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Next.js: the questionnaire, the generated site and the editor",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@retorika/catalog": "workspace:*",
+    "@retorika/publisher": "workspace:*",
+    "@retorika/renderer": "workspace:*",
+    "@retorika/schema": "workspace:*",
+    "@retorika/tokens": "workspace:*",
+    "next": "16.3.6",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0"
+  }
+}

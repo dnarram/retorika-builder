@@ -43,6 +43,19 @@ jobs:
       - uses: ./.github/actions/setup
       - run: pnpm typecheck
 
+  editor-build:
+    name: editor-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      # apps/editor cannot join tsc --build's project references (its tsconfig sets
+      # noEmit: true so Next.js does its own type-checking during the build), so `pnpm
+      # typecheck` never touches it. This is the same command render.yaml's buildCommand
+      # runs, so a broken deploy fails here first, not on Render.
+      - run: pnpm build:editor
+
   unit:
     name: unit
     runs-on: ubuntu-latest

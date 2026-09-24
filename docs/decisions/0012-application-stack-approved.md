@@ -2,6 +2,14 @@
 
 **Status:** accepted · **Date:** 2026-09-23 · **Decided by:** the CEO
 
+> **Nota (24 de septiembre de 2026): se usa el runtime nativo de Node, no Docker.** Render's Node
+> services now default to Node 24, so the Dockerfile bought nothing but a build step to maintain.
+> Everything else in this decision stands, and `render.yaml` pins `NODE_VERSION` to 24.21.0
+> because `engine-strict` plus `^24.21.0` in the root `package.json` rejects Render's own default
+> of 24.14.1. The measured cold start in this ADR (1266 ms) was the round trip with the service
+> already awake: on the free plan the service sleeps after ~15 minutes and takes about a minute
+> to wake.
+
 ## Context
 
 Protocol §3.3 listed the stack as "pendiente de aprobación formal, igual que figura en los

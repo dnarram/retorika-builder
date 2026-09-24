@@ -16,6 +16,7 @@
     "test:a11y": "RETORIKA_A11Y=1 vitest run --project a11y --maxWorkers 2",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --build --force",
+    "build:editor": "pnpm --filter @retorika/editor build",
     "lint": "biome check .",
     "format": "biome check --write .",
     "size": "node scripts/size-budget.ts",

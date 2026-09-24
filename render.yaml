@@ -1,0 +1,28 @@
+# Render Blueprint — the Retorika Builder application.
+#
+# The application, not the client sites: a published site is static files that live on the
+# client's own hosting and depend on no service of ours (ADR 0001, ADR 0008).
+#
+# ADR 0012 approved Render and said "Docker". The native Node runtime is used instead, because
+# Render's Node services now default to Node 24 and the Dockerfile bought nothing but a build
+# step to maintain. See the note in that ADR.
+#
+# The free plan sleeps after ~15 minutes without traffic and takes about a minute to wake, so
+# the URL is opened a minute before it is shown to anyone. Moving off the free plan is changing
+# `plan:` on this same service — no migration.
+services:
+  - type: web
+    name: retorika-builder
+    runtime: node
+    plan: free
+    region: frankfurt
+    branch: main
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @retorika/editor build
+    startCommand: pnpm --filter @retorika/editor start
+    envVars:
+      # engine-strict is on and the root package.json asks for ^24.21.0. Render's own default is
+      # 24.14.1, which does not satisfy it, so the install would fail without this line.
+      - key: NODE_VERSION
+        value: 24.21.0
+      - key: NODE_ENV
+        value: production

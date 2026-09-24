@@ -964,6 +964,12 @@ observa, no se pregunta.
 > recoge esa revisión. Las maquetas son la especificación de la interfaz: la maquetación, los
 > textos en castellano, los colores y los gestos ya están decididos, y los textos van a su
 > archivo de traducción, nunca dentro de un `.ts`.
+>
+> **Esa puerta se ha cruzado a propósito (ADR 0017, 24 de septiembre de 2026).** La dirección
+> pidió ver la herramienta real desplegada y en evolución antes del 30 de septiembre, en lugar de
+> seguir viendo maquetas. `apps/editor` empieza sin que las sesiones hayan concluido: la primera
+> se hace esta semana, antes de escribir el banco de textos, y la segunda después, ya con el
+> producto delante. El criterio de aceptación de la Fase 1 no cambia.
 
 ## Fase 2 — El producto completo
 
