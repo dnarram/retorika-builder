@@ -26,7 +26,12 @@ export const SERVICES_ITEM_SLOTS: readonly PresetSlot[] = [
   { slot: "description", role: "body", min: 0, max: 1 },
 ];
 
-export const SERVICES_ITEMS = { min: 2, max: 6 } as const;
+/**
+ * One card is a legitimate answer and is drawn full width already; none means the section is
+ * not generated at all, which is the questionnaire's business rather than the catalog's
+ * (ADR 0013).
+ */
+export const SERVICES_ITEMS = { min: 1, max: 6 } as const;
 
 /** The three compositions approved by the CEO (docs/tasks/catalog-que-hago.md). */
 export const SERVICES_VARIANTS = ["stacked", "side", "split"] as const;
