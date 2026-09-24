@@ -59,9 +59,19 @@ export function Review({ answers, onRestart }: { answers: Answers; onRestart: ()
       ? [answers.address, answers.hours].filter(Boolean).join(" · ")
       : es["review.location.empty"];
 
+  const destination: Record<MainAction, string> = {
+    call: answers.phone,
+    book: answers.bookingLink,
+    message: answers.whatsapp,
+    email: answers.email,
+    visit: "",
+  };
   const actionValue = answers.mainAction
     ? es[ACTION_LABEL[answers.mainAction]] +
-      (answers.mainAction === "book" && answers.bookingLink ? ` — ${answers.bookingLink}` : "")
+      (destination[answers.mainAction] ? ` — ${destination[answers.mainAction]}` : "") +
+      (answers.mainAction === "book" && answers.alsoPhone && answers.phone
+        ? ` (también: ${answers.phone})`
+        : "")
     : es["review.location.empty"];
 
   return (

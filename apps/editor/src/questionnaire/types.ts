@@ -33,7 +33,11 @@ export interface Answers {
   noPremises: boolean;
   mainAction: MainAction | null;
   bookingLink: string;
+  /** Shared with "call": one phone number, whichever screen asks for it. */
   alsoPhone: boolean;
+  phone: string;
+  whatsapp: string;
+  email: string;
 }
 
 export const EMPTY_ANSWERS: Answers = {
@@ -48,4 +52,7 @@ export const EMPTY_ANSWERS: Answers = {
   mainAction: null,
   bookingLink: "",
   alsoPhone: false,
+  phone: "",
+  whatsapp: "",
+  email: "",
 };

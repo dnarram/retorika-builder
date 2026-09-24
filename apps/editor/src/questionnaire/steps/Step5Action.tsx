@@ -41,10 +41,29 @@ export function Step5Action({
   onBack: () => void;
 }) {
   const [submitted, setSubmitted] = useState(false);
-  const invalid = submitted && answers.mainAction === null;
+  const noActionChosen = submitted && answers.mainAction === null;
+
+  // Each action needs somewhere to send the visitor, or the button the generator builds has
+  // nothing to point at. "Que vengan al local" is the one exception: it names no destination of
+  // its own (docs/tasks/generator.md records why), so nothing is required for it.
+  const destinationMissing =
+    submitted &&
+    ((answers.mainAction === "call" && answers.phone.trim() === "") ||
+      (answers.mainAction === "message" && answers.whatsapp.trim() === "") ||
+      (answers.mainAction === "email" && answers.email.trim() === "") ||
+      (answers.mainAction === "book" && answers.bookingLink.trim() === ""));
 
   function handleSubmit() {
     if (answers.mainAction === null) {
+      setSubmitted(true);
+      return;
+    }
+    const needsDestination =
+      (answers.mainAction === "call" && answers.phone.trim() === "") ||
+      (answers.mainAction === "message" && answers.whatsapp.trim() === "") ||
+      (answers.mainAction === "email" && answers.email.trim() === "") ||
+      (answers.mainAction === "book" && answers.bookingLink.trim() === "");
+    if (needsDestination) {
       setSubmitted(true);
       return;
     }
@@ -113,12 +132,13 @@ export function Step5Action({
             label={es["questionnaire.step5.booking.label"]}
             height={52}
             fontSize={15}
-            variant="muted"
+            variant={destinationMissing ? "error" : "muted"}
             placeholder={es["questionnaire.step5.booking.placeholder"]}
             value={answers.bookingLink}
             onChange={(event) => update({ bookingLink: event.target.value })}
             style={{ background: "#FFFFFF" }}
           />
+          {destinationMissing ? <FieldError>{es["questionnaire.step5.error"]}</FieldError> : null}
           <label style={{ display: "flex", alignItems: "center", gap: 11, cursor: "pointer" }}>
             <input
               type="checkbox"
@@ -130,17 +150,85 @@ export function Step5Action({
               {es["questionnaire.step5.booking.alsoPhone"]}
             </span>
           </label>
+          {answers.alsoPhone ? (
+            <TextField
+              id="telefono-reserva"
+              label={es["questionnaire.step5.phone.label"]}
+              height={52}
+              fontSize={15}
+              variant="muted"
+              placeholder={es["questionnaire.step5.phone.placeholder"]}
+              value={answers.phone}
+              onChange={(event) => update({ phone: event.target.value })}
+              style={{ background: "#FFFFFF" }}
+            />
+          ) : null}
         </div>
       ) : null}
 
-      {invalid ? <FieldError>{es["questionnaire.step5.error"]}</FieldError> : null}
+      {answers.mainAction === "call" ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+          <TextField
+            id="telefono"
+            label={es["questionnaire.step5.phone.label"]}
+            height={54}
+            fontSize={15}
+            variant={destinationMissing ? "error" : "primary"}
+            placeholder={es["questionnaire.step5.phone.placeholder"]}
+            value={answers.phone}
+            onChange={(event) => update({ phone: event.target.value })}
+          />
+          {destinationMissing ? (
+            <FieldError>{es["questionnaire.step5.phone.error"]}</FieldError>
+          ) : null}
+        </div>
+      ) : null}
+
+      {answers.mainAction === "message" ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+          <TextField
+            id="whatsapp"
+            label={es["questionnaire.step5.whatsapp.label"]}
+            height={54}
+            fontSize={15}
+            variant={destinationMissing ? "error" : "primary"}
+            placeholder={es["questionnaire.step5.whatsapp.placeholder"]}
+            value={answers.whatsapp}
+            onChange={(event) => update({ whatsapp: event.target.value })}
+          />
+          {destinationMissing ? (
+            <FieldError>{es["questionnaire.step5.whatsapp.error"]}</FieldError>
+          ) : null}
+        </div>
+      ) : null}
+
+      {answers.mainAction === "email" ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+          <TextField
+            id="correo"
+            type="email"
+            label={es["questionnaire.step5.email.label"]}
+            height={54}
+            fontSize={15}
+            variant={destinationMissing ? "error" : "primary"}
+            placeholder={es["questionnaire.step5.email.placeholder"]}
+            value={answers.email}
+            onChange={(event) => update({ email: event.target.value })}
+          />
+          {destinationMissing ? (
+            <FieldError>{es["questionnaire.step5.email.error"]}</FieldError>
+          ) : null}
+        </div>
+      ) : null}
+
+      {noActionChosen ? <FieldError>{es["questionnaire.step5.error"]}</FieldError> : null}
 
       <NavRow
         backLabel={es["questionnaire.nav.back"]}
         onBack={onBack}
         primaryLabel={es["questionnaire.nav.submit"]}
         onPrimary={handleSubmit}
-        primaryEnabled={!invalid}
+        primaryEnabled={!noActionChosen && !destinationMissing}
       />
     </Card>
   );
