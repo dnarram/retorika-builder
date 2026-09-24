@@ -9,6 +9,12 @@
 > of 24.14.1. The measured cold start in this ADR (1266 ms) was the round trip with the service
 > already awake: on the free plan the service sleeps after ~15 minutes and takes about a minute
 > to wake.
+>
+> **A second note, from the first real deploy attempt failing:** `corepack enable`, the obvious
+> way to get the pinned pnpm onto a fresh machine, fails on Render's Node image with `EROFS:
+> read-only file system, unlink '/usr/bin/pnpm'` — Render ships its own `pnpm` at that path,
+> pre-installed, on a filesystem corepack cannot write to. `render.yaml` uses `npx
+> pnpm@12.4.2` instead, which fetches the exact pinned release without touching `/usr/bin`.
 
 ## Context
 

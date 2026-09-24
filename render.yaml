@@ -10,6 +10,13 @@
 # The free plan sleeps after ~15 minutes without traffic and takes about a minute to wake, so
 # the URL is opened a minute before it is shown to anyone. Moving off the free plan is changing
 # `plan:` on this same service — no migration.
+#
+# No `corepack enable`, and none of pnpm/action-setup's approach either: Render's Node image
+# ships its own `pnpm` at /usr/bin/pnpm on a filesystem corepack cannot write to, so `corepack
+# enable` fails outright (`EROFS: read-only file system, unlink '/usr/bin/pnpm'`), and that
+# pre-installed pnpm's version is undocumented and not the 12.4.2 this repo is pinned to. `npx
+# pnpm@12.4.2` sidesteps both: it fetches the exact pinned release into npm's own cache rather
+# than touching /usr/bin, the same guarantee CI gets from reading `packageManager`.
 services:
   - type: web
     name: retorika-builder
@@ -17,8 +24,8 @@ services:
     plan: free
     region: frankfurt
     branch: main
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @retorika/editor build
-    startCommand: pnpm --filter @retorika/editor start
+    buildCommand: npx --yes pnpm@12.4.2 install --frozen-lockfile && npx --yes pnpm@12.4.2 --filter @retorika/editor build
+    startCommand: npx --yes pnpm@12.4.2 --filter @retorika/editor start
     envVars:
       # engine-strict is on and the root package.json asks for ^24.21.0. Render's own default is
       # 24.14.1, which does not satisfy it, so the install would fail without this line.
