@@ -28,6 +28,13 @@ export default defineConfig({
       },
       {
         test: {
+          name: "generator",
+          root: "./packages/generator",
+          environment: "node",
+        },
+      },
+      {
+        test: {
           name: "renderer",
           root: "./packages/renderer",
           // The "dom" target needs a DOM. happy-dom is lighter than jsdom,

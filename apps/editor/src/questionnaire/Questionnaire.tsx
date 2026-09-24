@@ -1,5 +1,6 @@
 "use client";
 
+import { type Answers, EMPTY_ANSWERS } from "@retorika/generator";
 import { useState } from "react";
 import es from "../locales/es.json" with { type: "json" };
 import { Review } from "./Review.tsx";
@@ -8,7 +9,6 @@ import { Step2Sector } from "./steps/Step2Sector.tsx";
 import { Step3Services } from "./steps/Step3Services.tsx";
 import { Step4Location } from "./steps/Step4Location.tsx";
 import { Step5Action } from "./steps/Step5Action.tsx";
-import { type Answers, EMPTY_ANSWERS } from "./types.ts";
 import { Shell } from "./ui.tsx";
 
 /**

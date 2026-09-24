@@ -1,9 +1,9 @@
 "use client";
 
 import { suggestionsFor } from "@retorika/copybank";
+import type { Answers } from "@retorika/generator";
 import { useState } from "react";
 import es from "../../locales/es.json" with { type: "json" };
-import type { Answers } from "../types.ts";
 import { Card, CheckboxCard, NavRow, ProgressDots, TextField, TitleBlock } from "../ui.tsx";
 
 export function Step3Services({

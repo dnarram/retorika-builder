@@ -1,0 +1,16 @@
+{
+  "name": "@retorika/generator",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The five questionnaire answers -> a valid RetorikaDocument",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@retorika/catalog": "workspace:*",
+    "@retorika/copybank": "workspace:*",
+    "@retorika/schema": "workspace:*",
+    "@retorika/tokens": "workspace:*"
+  }
+}

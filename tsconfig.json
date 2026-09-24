@@ -20,6 +20,9 @@
       "path": "./packages/copybank"
     },
     {
+      "path": "./packages/generator"
+    },
+    {
       "path": "./apps/serve"
     }
   ]

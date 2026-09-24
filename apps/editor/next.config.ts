@@ -15,6 +15,7 @@ const config: NextConfig = {
     "@retorika/renderer",
     "@retorika/catalog",
     "@retorika/copybank",
+    "@retorika/generator",
     "@retorika/publisher",
     "@retorika/tokens",
   ],

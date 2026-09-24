@@ -1,8 +1,8 @@
 "use client";
 
+import { type Answers, SECTOR_IDS, type SectorId } from "@retorika/generator";
 import { useMemo, useState } from "react";
 import es from "../../locales/es.json" with { type: "json" };
-import { type Answers, SECTOR_IDS, type SectorId } from "../types.ts";
 import {
   Card,
   ChoiceCard,

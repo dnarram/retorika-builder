@@ -215,6 +215,9 @@ importers:
       '@retorika/copybank':
         specifier: workspace:*
         version: link:../../packages/copybank
+      '@retorika/generator':
+        specifier: workspace:*
+        version: link:../../packages/generator
       '@retorika/publisher':
         specifier: workspace:*
         version: link:../../packages/publisher
@@ -271,6 +274,21 @@ importers:
       zod:
         specifier: 4.6.5
         version: 4.6.5
+
+  packages/generator:
+    dependencies:
+      '@retorika/catalog':
+        specifier: workspace:*
+        version: link:../catalog
+      '@retorika/copybank':
+        specifier: workspace:*
+        version: link:../copybank
+      '@retorika/schema':
+        specifier: workspace:*
+        version: link:../schema
+      '@retorika/tokens':
+        specifier: workspace:*
+        version: link:../tokens
 
   packages/publisher:
     dependencies:

@@ -1,7 +1,7 @@
 "use client";
 
+import type { Answers } from "@retorika/generator";
 import es from "../../locales/es.json" with { type: "json" };
-import type { Answers } from "../types.ts";
 import { Card, NavRow, ProgressDots, TextField, TitleBlock } from "../ui.tsx";
 
 export function Step4Location({
