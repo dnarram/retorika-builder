@@ -129,14 +129,29 @@ the optional slot, and `contact` in `stacked` with a `tel:` button and two secon
 **Predicted diff: one new golden file and nothing else.** The stylesheet does not change, so the
 seven existing goldens keep every byte.
 
+**The contact details are filler and cannot be anyone's.** `example.com` is reserved for exactly
+this, and the phone numbers start with a zero, which no Spanish number does — a plausible-looking
+number would be somebody's, and this is a public repository. Any fixture that needs a phone from
+now on uses the same shape.
+
 ### 5. The a11y harness
 
 `PRESET_CASES` gains both sections, or `allCombinations()` throws by design. 2 sections × 2
 compositions × 4 palettes × 3 type pairs = **48 combinations**, taking the suite from 409 tests
 to **649**.
 
-**The wall-clock time is measured before and after and written down here**, with an issue
-proposing representative sampling instead of the full cross product:
+**Measured, on this machine, with `--maxWorkers 2`:**
+
+| Sections | Tests | Wall clock |
+|---|---|---|
+| 2 (cover, services) | 409 | 31.3 s |
+| 4 (with location and contact) | 649 | **64.9 s** |
+
+Twice the sections, twice the time, and about 100 ms a test. The five sections still missing are
+roughly twelve more compositions, which is **around 1,400 tests and well over two minutes** — the
+point where nobody runs it before pushing and CI becomes the only place it happens.
+
+The issue proposes representative sampling instead of the full cross product:
 - **contrast is a property of a palette and a role**, not of a section;
 - **overflow is a property of a typeface, a width and a geometry**, not of a palette.
 

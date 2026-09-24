@@ -3,8 +3,12 @@ import { basename, join } from "node:path";
 import type { Browser, Page } from "@playwright/test";
 import {
   CATALOG,
+  CONTACT_ID,
+  CONTACT_VARIANTS,
   COVER_ID,
   COVER_VARIANTS,
+  LOCATION_ID,
+  LOCATION_VARIANTS,
   SERVICES_ID,
   SERVICES_VARIANTS,
 } from "@retorika/catalog";
@@ -82,7 +86,76 @@ const PRESET_CASES: Record<
     // The cover first, so the page reads h1, h2, h3 as a real one does.
     sections: (cover, variantId, text) => [cover, servicesSection(variantId, text)],
   },
+  [LOCATION_ID]: {
+    variants: LOCATION_VARIANTS,
+    texts: ["standard"],
+    sections: (cover, variantId) => [cover, locationSection(variantId)],
+  },
+  [CONTACT_ID]: {
+    variants: CONTACT_VARIANTS,
+    texts: ["standard"],
+    sections: (cover, variantId) => [cover, contactSection(variantId)],
+  },
 };
+
+/** Every slot "Horario y ubicación" declares, so the harness measures all of them. */
+function locationSection(variantId: string): Section {
+  const text = (id: string, role: "heading" | "body", slot: string, value: string) =>
+    ({ id, role, hidden: false, slot, value: { kind: "text", text: value } }) as ContentElement;
+  return {
+    id: "sec-location",
+    preset: { catalogId: LOCATION_ID, variantId },
+    source: "catalog",
+    layout: null,
+    content: [
+      text("el-location-headline", "heading", "headline", "Dónde estamos"),
+      text("el-address", "body", "address", "Calle Espinel 24, Ronda (Málaga)."),
+      text("el-hours", "body", "hours", "De martes a sábado, de 10:00 a 20:00."),
+      {
+        id: "el-map",
+        role: "map",
+        hidden: false,
+        slot: "map",
+        value: { kind: "map", label: "Ver en el mapa", latitude: 36.7419, longitude: -5.1673 },
+      },
+    ],
+  };
+}
+
+/**
+ * "Contacto y reservas" with its main action and the three links the questionnaire can collect.
+ * The numbers cannot be anyone's: no Spanish number starts with a zero.
+ */
+function contactSection(variantId: string): Section {
+  const link = (id: string, role: "button" | "link", slot: string, text: string, href: string) =>
+    ({ id, role, hidden: false, slot, value: { kind: "link", text, href } }) as ContentElement;
+  return {
+    id: "sec-contact",
+    preset: { catalogId: CONTACT_ID, variantId },
+    source: "catalog",
+    layout: null,
+    content: [
+      {
+        id: "el-contact-headline",
+        role: "heading",
+        hidden: false,
+        slot: "headline",
+        value: { kind: "text", text: "Pide tu cita" },
+      },
+      {
+        id: "el-contact-body",
+        role: "body",
+        hidden: false,
+        slot: "body",
+        value: { kind: "text", text: "Llámanos o escríbenos por WhatsApp." },
+      },
+      link("el-call", "button", "primaryAction", "Llamar", "tel:+34000000000"),
+      link("el-whatsapp", "link", "secondaryAction", "WhatsApp", "https://wa.me/34000000000"),
+      link("el-email", "link", "secondaryAction", "Escríbenos", "mailto:hola@example.com"),
+      link("el-map-link", "link", "secondaryAction", "Cómo llegar", "#"),
+    ],
+  };
+}
 
 /**
  * "Qué hago" with four visible cards. The long case uses a single long word as the section
