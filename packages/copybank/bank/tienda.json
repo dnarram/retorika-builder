@@ -1,0 +1,74 @@
+{
+  "sector": "tienda",
+  "review": { "status": "approved", "by": "dnr", "date": "2026-09-24" },
+  "entries": [
+    {
+      "id": "tienda.cover.subheadline.01",
+      "section": "cover",
+      "slot": "subheadline",
+      "text": "Tu tienda en {ciudad}",
+      "placeholders": ["ciudad"]
+    },
+    {
+      "id": "tienda.cover.subheadline.02",
+      "section": "cover",
+      "slot": "subheadline",
+      "text": "Ven a la tienda",
+      "placeholders": []
+    },
+    {
+      "id": "tienda.cover.body.01",
+      "section": "cover",
+      "slot": "body",
+      "text": "Pregunta por lo que buscas y te ayudamos.",
+      "placeholders": []
+    },
+    {
+      "id": "tienda.services.headline.01",
+      "section": "services",
+      "slot": "headline",
+      "text": "Qué encontrarás",
+      "placeholders": []
+    },
+    {
+      "id": "tienda.contact.headline.01",
+      "section": "contact",
+      "slot": "headline",
+      "text": "Te esperamos",
+      "placeholders": []
+    }
+  ],
+  "suggestions": [
+    {
+      "id": "venta-en-tienda",
+      "title": "Venta en tienda",
+      "description": "Ven a vernos."
+    },
+    {
+      "id": "asesoramiento",
+      "title": "Asesoramiento",
+      "description": "Te ayudamos a elegir."
+    },
+    {
+      "id": "encargos",
+      "title": "Encargos",
+      "description": "Si no lo tenemos, te lo pedimos."
+    },
+    {
+      "id": "arreglos",
+      "title": "Arreglos",
+      "description": "Pequeños ajustes y reparaciones."
+    },
+    {
+      "id": "envios",
+      "title": "Envíos",
+      "description": "Te lo mandamos a casa."
+    },
+    {
+      "id": "recogida-en-tienda",
+      "title": "Recogida en tienda",
+      "description": "Compra y pásate a recogerlo."
+    }
+  ],
+  "actions": {}
+}

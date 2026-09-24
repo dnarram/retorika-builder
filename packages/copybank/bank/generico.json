@@ -1,0 +1,84 @@
+{
+  "sector": "generico",
+  "review": { "status": "approved", "by": "dnr", "date": "2026-09-24" },
+  "entries": [
+    {
+      "id": "generico.cover.headline.01",
+      "section": "cover",
+      "slot": "headline",
+      "text": "{negocio}",
+      "placeholders": ["negocio"]
+    },
+    {
+      "id": "generico.cover.subheadline.01",
+      "section": "cover",
+      "slot": "subheadline",
+      "text": "Estamos en {ciudad}",
+      "placeholders": ["ciudad"]
+    },
+    {
+      "id": "generico.cover.subheadline.02",
+      "section": "cover",
+      "slot": "subheadline",
+      "text": "Aquí estamos",
+      "placeholders": []
+    },
+    {
+      "id": "generico.cover.body.01",
+      "section": "cover",
+      "slot": "body",
+      "text": "Te contamos todo lo que hacemos.",
+      "placeholders": []
+    },
+    {
+      "id": "generico.services.headline.01",
+      "section": "services",
+      "slot": "headline",
+      "text": "Qué hacemos",
+      "placeholders": []
+    },
+    {
+      "id": "generico.services.intro.01",
+      "section": "services",
+      "slot": "intro",
+      "text": "Esto es lo que ofrecemos en {negocio}.",
+      "placeholders": ["negocio"]
+    },
+    {
+      "id": "generico.location.headline.01",
+      "section": "location",
+      "slot": "headline",
+      "text": "Dónde estamos",
+      "placeholders": []
+    },
+    {
+      "id": "generico.location.map.01",
+      "section": "location",
+      "slot": "map",
+      "text": "Ver en el mapa",
+      "placeholders": []
+    },
+    {
+      "id": "generico.contact.headline.01",
+      "section": "contact",
+      "slot": "headline",
+      "text": "Hablamos",
+      "placeholders": []
+    },
+    {
+      "id": "generico.contact.body.01",
+      "section": "contact",
+      "slot": "body",
+      "text": "Dinos qué necesitas.",
+      "placeholders": []
+    }
+  ],
+  "suggestions": [],
+  "actions": {
+    "call": "Llamar",
+    "book": "Pedir cita",
+    "message": "Escríbenos por WhatsApp",
+    "email": "Escríbenos un correo",
+    "visit": "Visítanos"
+  }
+}

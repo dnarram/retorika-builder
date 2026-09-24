@@ -1,0 +1,67 @@
+{
+  "sector": "peluqueria-barberia",
+  "review": { "status": "approved", "by": "dnr", "date": "2026-09-24" },
+  "entries": [
+    {
+      "id": "peluqueria-barberia.cover.subheadline.01",
+      "section": "cover",
+      "slot": "subheadline",
+      "text": "Cortes y barbas en {ciudad}",
+      "placeholders": ["ciudad"]
+    },
+    {
+      "id": "peluqueria-barberia.cover.subheadline.02",
+      "section": "cover",
+      "slot": "subheadline",
+      "text": "Cortes y barbas",
+      "placeholders": []
+    },
+    {
+      "id": "peluqueria-barberia.cover.body.01",
+      "section": "cover",
+      "slot": "body",
+      "text": "Te lo hacemos como tú lo quieras.",
+      "placeholders": []
+    },
+    {
+      "id": "peluqueria-barberia.services.intro.01",
+      "section": "services",
+      "slot": "intro",
+      "text": "Esto es lo que puedes pedir en {negocio}.",
+      "placeholders": ["negocio"]
+    }
+  ],
+  "suggestions": [
+    {
+      "id": "corte-caballero",
+      "title": "Corte de caballero",
+      "description": "Corte a tu gusto."
+    },
+    {
+      "id": "arreglo-barba",
+      "title": "Arreglo de barba",
+      "description": "Perfilado y arreglo de la barba."
+    },
+    {
+      "id": "color-mechas",
+      "title": "Color y mechas",
+      "description": "Color completo o mechas."
+    },
+    {
+      "id": "corte-infantil",
+      "title": "Corte infantil",
+      "description": "Para los más pequeños de la casa."
+    },
+    {
+      "id": "peinado-recogido",
+      "title": "Peinado y recogido",
+      "description": "Para una boda, una fiesta o un día especial."
+    },
+    {
+      "id": "tratamientos-capilares",
+      "title": "Tratamientos capilares",
+      "description": "Para cuidar el pelo y el cuero cabelludo."
+    }
+  ],
+  "actions": {}
+}

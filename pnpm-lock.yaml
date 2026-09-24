@@ -212,6 +212,9 @@ importers:
       '@retorika/catalog':
         specifier: workspace:*
         version: link:../../packages/catalog
+      '@retorika/copybank':
+        specifier: workspace:*
+        version: link:../../packages/copybank
       '@retorika/publisher':
         specifier: workspace:*
         version: link:../../packages/publisher
@@ -262,6 +265,12 @@ importers:
       fast-check:
         specifier: 4.10.1
         version: 4.10.1
+
+  packages/copybank:
+    dependencies:
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
 
   packages/publisher:
     dependencies:
