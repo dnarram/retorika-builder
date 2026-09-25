@@ -152,17 +152,32 @@ export function Variants({
       <Editor
         title={es[caption.titleKey]}
         document={history.present.document}
-        onEditText={(address, text) =>
-          dispatch({ type: "editText", variant: openIndex, address, text })
-        }
+        onEditText={(address, text) => {
+          // Any of these makes "Deshacer" on a showing toast undo the wrong thing — the most
+          // recent action, not the delete the toast still names — so the toast stops being
+          // accurate the moment something else lands on top of it.
+          dismissToast();
+          dispatch({ type: "editText", variant: openIndex, address, text });
+        }}
         onDeleteSection={(sectionId) => handleDeleteSection(openIndex, history, sectionId)}
+        onDuplicateSection={(sectionId) => {
+          dismissToast();
+          dispatch({ type: "duplicateSection", variant: openIndex, sectionId });
+        }}
+        onMoveSection={(sectionId, toIndex) => {
+          dismissToast();
+          dispatch({ type: "moveSection", variant: openIndex, sectionId, toIndex });
+        }}
         canUndo={history.past.length > 0}
         canRedo={history.future.length > 0}
         onUndo={() => {
           dismissToast();
           dispatch({ type: "undo", variant: openIndex });
         }}
-        onRedo={() => dispatch({ type: "redo", variant: openIndex })}
+        onRedo={() => {
+          dismissToast();
+          dispatch({ type: "redo", variant: openIndex });
+        }}
         saveStatus={saveStatus}
         toast={toast}
         onDismissToast={dismissToast}

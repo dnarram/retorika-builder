@@ -58,16 +58,20 @@ function filenameFrom(response: Response, fallback: string): string {
  *
  * Section selection marks a section with a 2px outline and four corner handles injected into the
  * iframe's own DOM, mirroring mockup 08's per-element selection at section granularity — and,
- * since day 4, a small delete button drawn at the selected section's corner, the one action this
- * sprint gives the selection to trigger. There is no confirmation: ADR 0014 is explicit that a
- * delete runs immediately, with the undo it offers afterwards — reported up as
- * `onDeleteSection(sectionId)`, the same pattern as an edit — as the only safety net.
+ * since day 4, a small cluster of action buttons drawn at the selected section's corner: move up,
+ * move down, duplicate, delete. No floating toolbar this sprint — one action, one button, the
+ * same self-contained-in-the-iframe pattern click-to-edit already uses. None of the four ask for
+ * confirmation: ADR 0014 is explicit that a delete runs immediately, with the undo it offers
+ * afterwards as the only safety net, and the same directness applies to the other three, which
+ * are no more destructive than a delete and get the identical net.
  */
 export function Editor({
   title,
   document: doc,
   onEditText,
   onDeleteSection,
+  onDuplicateSection,
+  onMoveSection,
   canUndo,
   canRedo,
   onUndo,
@@ -81,6 +85,8 @@ export function Editor({
   document: RetorikaDocument;
   onEditText: (address: ElementAddress, text: string) => void;
   onDeleteSection: (sectionId: string) => void;
+  onDuplicateSection: (sectionId: string) => void;
+  onMoveSection: (sectionId: string, toIndex: number) => void;
   canUndo: boolean;
   canRedo: boolean;
   onUndo: () => void;
@@ -102,10 +108,32 @@ export function Editor({
   function wireSelection(iframeDoc: Document) {
     const sections = [...iframeDoc.querySelectorAll<HTMLElement>("[data-section]")];
 
+    function action(
+      label: string,
+      variant: "move" | "delete",
+      disabled: boolean,
+      svg: string,
+      onClick: () => void,
+    ): HTMLButtonElement {
+      const button = iframeDoc.createElement("button");
+      button.type = "button";
+      button.className = `rb-action rb-action-${variant}`;
+      button.setAttribute("aria-label", label);
+      button.disabled = disabled;
+      button.innerHTML = svg;
+      // Stopped here so the click does not also bubble to the section's own listener and
+      // re-run select() on a section a move or a delete is about to displace or remove.
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        if (!disabled) onClick();
+      });
+      return button;
+    }
+
     function select(target: HTMLElement) {
       for (const section of sections) {
         section.classList.remove("rb-selected");
-        for (const el of section.querySelectorAll(".rb-handle, .rb-delete")) el.remove();
+        for (const el of section.querySelectorAll(".rb-handle, .rb-actions")) el.remove();
       }
       target.classList.add("rb-selected");
       for (const corner of HANDLE_CORNERS) {
@@ -116,21 +144,47 @@ export function Editor({
 
       const sectionId = target.dataset.section;
       if (!sectionId) return;
-      const deleteButton = iframeDoc.createElement("button");
-      deleteButton.type = "button";
-      deleteButton.className = "rb-delete";
-      deleteButton.setAttribute("aria-label", es["editor.deleteSection"]);
-      deleteButton.innerHTML =
-        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" ' +
-        'stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-        '<path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6 7l1 13h10l1-13"/></svg>';
-      // Stopped here so the click does not also bubble to the section's own listener and
-      // re-run select() on a section that is about to be removed from the document entirely.
-      deleteButton.addEventListener("click", (event) => {
-        event.stopPropagation();
-        onDeleteSection(sectionId);
-      });
-      target.appendChild(deleteButton);
+      const index = sections.indexOf(target);
+
+      const actions = iframeDoc.createElement("div");
+      actions.className = "rb-actions";
+      actions.appendChild(
+        action(
+          es["editor.moveSectionUp"],
+          "move",
+          index <= 0,
+          '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg>',
+          () => onMoveSection(sectionId, index - 1),
+        ),
+      );
+      actions.appendChild(
+        action(
+          es["editor.moveSectionDown"],
+          "move",
+          index < 0 || index >= sections.length - 1,
+          '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M6 13l6 6 6-6"/></svg>',
+          () => onMoveSection(sectionId, index + 1),
+        ),
+      );
+      actions.appendChild(
+        action(
+          es["editor.duplicateSection"],
+          "move",
+          false,
+          '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>',
+          () => onDuplicateSection(sectionId),
+        ),
+      );
+      actions.appendChild(
+        action(
+          es["editor.deleteSection"],
+          "delete",
+          false,
+          '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6 7l1 13h10l1-13"/></svg>',
+          () => onDeleteSection(sectionId),
+        ),
+      );
+      target.appendChild(actions);
     }
 
     for (const section of sections) {
@@ -210,11 +264,13 @@ export function Editor({
       // the first section, with no room above it, and a button hanging above the top of the
       // page there would sit outside the iframe's own visible area — covered by whatever the
       // parent page draws above the iframe, and unclickable. Every section has room inside it.
-      ".rb-delete { position: absolute; top: 8px; right: 8px; width: 26px; height: 26px;",
-      "  display: flex; align-items: center; justify-content: center; background: #DC2626;",
-      "  border: 2px solid #FFFFFF; border-radius: 999px; cursor: pointer;",
-      "  box-shadow: 0 2px 6px rgba(15,23,42,0.28); }",
-      ".rb-delete:hover { background: #B91C1C; }",
+      ".rb-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; }",
+      ".rb-action { width: 26px; height: 26px; display: flex; align-items: center;",
+      "  justify-content: center; border: 2px solid #FFFFFF; border-radius: 999px;",
+      "  cursor: pointer; box-shadow: 0 2px 6px rgba(15,23,42,0.28); }",
+      ".rb-action-move { background: #156FE7; } .rb-action-move:hover { background: #0E5BC4; }",
+      ".rb-action-delete { background: #DC2626; } .rb-action-delete:hover { background: #B91C1C; }",
+      ".rb-action:disabled { background: #B9CDEA; cursor: not-allowed; }",
     ].join("\n");
     iframeDoc.head.appendChild(style);
 

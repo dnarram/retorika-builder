@@ -1,5 +1,11 @@
 import type { ElementAddress, RetorikaDocument } from "@retorika/schema";
-import { deleteSection as deleteSectionFromDoc, setElementText } from "@retorika/schema";
+import {
+  deleteSection as deleteSectionFromDoc,
+  duplicateSection as duplicateSectionFromDoc,
+  mintSectionId,
+  moveSection as moveSectionFromDoc,
+  setElementText,
+} from "@retorika/schema";
 
 /**
  * Undo and redo, as a stack of whole documents rather than a log of commands with inverses.
@@ -21,6 +27,8 @@ import { deleteSection as deleteSectionFromDoc, setElementText } from "@retorika
 export type SnapshotCause =
   | { type: "editText"; address: ElementAddress }
   | { type: "deleteSection"; sectionId: string }
+  | { type: "duplicateSection"; sectionId: string; newSectionId: string }
+  | { type: "moveSection"; sectionId: string }
   | null;
 
 export interface Snapshot {
@@ -39,6 +47,8 @@ export type Histories = readonly History[];
 export type HistoryAction =
   | { type: "editText"; variant: number; address: ElementAddress; text: string }
   | { type: "deleteSection"; variant: number; sectionId: string }
+  | { type: "duplicateSection"; variant: number; sectionId: string }
+  | { type: "moveSection"; variant: number; sectionId: string; toIndex: number }
   | { type: "undo"; variant: number }
   | { type: "redo"; variant: number };
 
@@ -78,6 +88,25 @@ function deleteSection(history: History, sectionId: string): History {
   return { past: [...history.past, history.present].slice(-LIMIT), present, future: [] };
 }
 
+function duplicateSection(history: History, sectionId: string): History {
+  // Minted separately from the call that actually duplicates, but from the same document with
+  // the same deterministic rule (mintSectionId), so the two agree without needing the section
+  // package to hand its choice back out of band.
+  const newSectionId = mintSectionId(history.present.document, sectionId);
+  const document = duplicateSectionFromDoc(history.present.document, sectionId);
+  const present: Snapshot = {
+    document,
+    cause: { type: "duplicateSection", sectionId, newSectionId },
+  };
+  return { past: [...history.past, history.present].slice(-LIMIT), present, future: [] };
+}
+
+function moveSection(history: History, sectionId: string, toIndex: number): History {
+  const document = moveSectionFromDoc(history.present.document, sectionId, toIndex);
+  const present: Snapshot = { document, cause: { type: "moveSection", sectionId } };
+  return { past: [...history.past, history.present].slice(-LIMIT), present, future: [] };
+}
+
 function undo(history: History): History {
   const previous = history.past.at(-1);
   if (!previous) return history;
@@ -109,9 +138,13 @@ export function historiesReducer(state: Histories, action: HistoryAction): Histo
       ? editText(history, action.address, action.text)
       : action.type === "deleteSection"
         ? deleteSection(history, action.sectionId)
-        : action.type === "undo"
-          ? undo(history)
-          : redo(history);
+        : action.type === "duplicateSection"
+          ? duplicateSection(history, action.sectionId)
+          : action.type === "moveSection"
+            ? moveSection(history, action.sectionId, action.toIndex)
+            : action.type === "undo"
+              ? undo(history)
+              : redo(history);
 
   // Undo with nothing to undo changes nothing, and must not make React re-render the preview.
   if (next === history) return state;
@@ -128,13 +161,17 @@ export function historiesReducer(state: Histories, action: HistoryAction): Histo
  * more than fifty steps after its last edit reports as untouched — the same horizon the
  * fifty-step cap already draws for everything else — and so does one whose only edit was undone
  * and then overwritten by a later action, which clears `future` the same way it always has.
+ *
+ * Only `editText` counts — deliberately narrower than "any cause naming this section". ADR 0014
+ * asks about content the user *wrote*, not any structural action the section was ever subject
+ * to: being deleted-and-undone, moved, or the original side of a duplicate does not write
+ * anything. That distinction stopped being academic the moment duplicateSection arrived — its
+ * cause names the *original* section's id too, and that original's own content never changed
+ * just because it was copied, so a looser check would have marked it edited for no reason.
  */
 export function wasSectionEverEdited(history: History, sectionId: string): boolean {
   const steps = [...history.past, history.present, ...history.future];
-  return steps.some((step) => {
-    const cause = step.cause;
-    if (!cause) return false;
-    if (cause.type === "editText") return cause.address.sectionId === sectionId;
-    return cause.sectionId === sectionId;
-  });
+  return steps.some(
+    (step) => step.cause?.type === "editText" && step.cause.address.sectionId === sectionId,
+  );
 }

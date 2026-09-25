@@ -241,9 +241,100 @@ describe("wasSectionEverEdited", () => {
     expect(wasSectionEverEdited(undone[0] as Histories[number], "sec-cover")).toBe(true);
   });
 
-  it("is true for a section a prior deletion touched, even after undoing the deletion", () => {
+  it("is false for a section only ever deleted and restored, never edited", () => {
+    // Narrower on purpose: ADR 0014 asks about content the user *wrote*. Being deleted and
+    // undone is a structural action, not a write, so it must not make the next delete's toast
+    // persist on its own — only actual text edits do that.
     const deleted = run(start(), del("sec-services"));
     const undone = historiesReducer(deleted, { type: "undo", variant: 0 });
-    expect(wasSectionEverEdited(undone[0] as Histories[number], "sec-services")).toBe(true);
+    expect(wasSectionEverEdited(undone[0] as Histories[number], "sec-services")).toBe(false);
+  });
+
+  it("is false for the original side of a duplicate: copying it does not edit it", () => {
+    const duplicated = historiesReducer(start(), {
+      type: "duplicateSection",
+      variant: 0,
+      sectionId: "sec-services",
+    });
+    expect(wasSectionEverEdited(duplicated[0] as Histories[number], "sec-services")).toBe(false);
+  });
+});
+
+describe("duplicateSection", () => {
+  it("inserts a copy right after the original", () => {
+    const before = sectionIds(start());
+    const state = historiesReducer(start(), {
+      type: "duplicateSection",
+      variant: 0,
+      sectionId: "sec-cover",
+    });
+    const at = before?.indexOf("sec-cover") ?? -1;
+    expect(sectionIds(state)).toEqual([
+      ...(before?.slice(0, at + 1) ?? []),
+      "sec-cover-2",
+      ...(before?.slice(at + 1) ?? []),
+    ]);
+  });
+
+  it("can be undone back to the original count", () => {
+    const before = sectionIds(start());
+    const duplicated = historiesReducer(start(), {
+      type: "duplicateSection",
+      variant: 0,
+      sectionId: "sec-cover",
+    });
+    const undone = historiesReducer(duplicated, { type: "undo", variant: 0 });
+    expect(sectionIds(undone)).toEqual(before);
+  });
+
+  it("touches only the variant it names", () => {
+    const state = historiesReducer(start(), {
+      type: "duplicateSection",
+      variant: 0,
+      sectionId: "sec-cover",
+    });
+    expect(sectionIds(state, 1)).toEqual(sectionIds(start(), 1));
+  });
+
+  it("throws on a section id the document does not have", () => {
+    expect(() =>
+      historiesReducer(start(), { type: "duplicateSection", variant: 0, sectionId: "no-such" }),
+    ).toThrow(/no section/);
+  });
+});
+
+describe("moveSection", () => {
+  it("moves a section to the given index", () => {
+    const state = historiesReducer(start(), {
+      type: "moveSection",
+      variant: 0,
+      sectionId: "sec-cover",
+      toIndex: 3,
+    });
+    expect(sectionIds(state)?.[0]).not.toBe("sec-cover");
+    expect(sectionIds(state)).toContain("sec-cover");
+  });
+
+  it("can be undone back to the original order", () => {
+    const before = sectionIds(start());
+    const moved = historiesReducer(start(), {
+      type: "moveSection",
+      variant: 0,
+      sectionId: "sec-cover",
+      toIndex: 3,
+    });
+    const undone = historiesReducer(moved, { type: "undo", variant: 0 });
+    expect(sectionIds(undone)).toEqual(before);
+  });
+
+  it("throws on a section id the document does not have", () => {
+    expect(() =>
+      historiesReducer(start(), {
+        type: "moveSection",
+        variant: 0,
+        sectionId: "no-such",
+        toIndex: 0,
+      }),
+    ).toThrow(/no section/);
   });
 });
