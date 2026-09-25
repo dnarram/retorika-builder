@@ -25,7 +25,7 @@ export {
   sectionSchema,
 } from "./document.ts";
 export type { EditableField } from "./fields.ts";
-export { listEditableFields } from "./fields.ts";
+export { applyTextEdits, listEditableFields } from "./fields.ts";
 export type { Violation } from "./invariants.ts";
 export { checkInvariants, flattenElements } from "./invariants.ts";
 export type { InvariantId } from "./invariants-catalog.ts";

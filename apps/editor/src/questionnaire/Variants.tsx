@@ -2,6 +2,7 @@
 
 import { type Answers, type GeneratedSite, generateVariants } from "@retorika/generator";
 import { render } from "@retorika/renderer";
+import { applyTextEdits } from "@retorika/schema";
 import { useState } from "react";
 import es from "../locales/es.json" with { type: "json" };
 import { FullPreview } from "./FullPreview.tsx";
@@ -17,6 +18,11 @@ import { Brand } from "./ui.tsx";
  * No "volver a generar otras tres": the generator is deterministic (no clock, no randomness),
  * so clicking it would produce the exact same three sites again. Offering it would be a button
  * that lies about what it does.
+ *
+ * `sites` itself (generateVariants' output) never changes after day 6: `edits` is a pure
+ * overlay applied on top of it via applyTextEdits, kept here rather than in `sites` state so
+ * the base stays exactly what the generator produced and the edits stay exactly what the user
+ * typed — two different things, not one merged into the other.
  */
 const CAPTIONS: readonly { titleKey: keyof typeof es; captionKey: keyof typeof es }[] = [
   { titleKey: "variants.v1.title", captionKey: "variants.v1.caption" },
@@ -56,6 +62,14 @@ function ThumbnailFrame({ html, title }: { html: string; title: string }) {
 export function Variants({ answers, onRestart }: { answers: Answers; onRestart: () => void }) {
   const [sites] = useState<GeneratedSite[]>(() => generateVariants(answers));
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  // Keyed by variant index, then element id: day 6's edits, kept here rather than inside
+  // FullPreview so they survive "Volver" and reopening the same card — the one piece of
+  // continuity this in-memory-only slice owes the user within a single session.
+  const [edits, setEdits] = useState<Record<number, Record<string, string>>>({});
+
+  function editedHtml(index: number, site: GeneratedSite): string {
+    return render(applyTextEdits(site.document, edits[index] ?? {}), "html").html;
+  }
 
   if (openIndex !== null) {
     const site = sites[openIndex];
@@ -64,9 +78,15 @@ export function Variants({ answers, onRestart }: { answers: Answers; onRestart: 
     return (
       <FullPreview
         title={es[caption.titleKey]}
-        html={render(site.document, "html").html}
+        html={editedHtml(openIndex, site)}
         answers={answers}
         variantIndex={openIndex}
+        onEdit={(elementId, text) =>
+          setEdits((current) => ({
+            ...current,
+            [openIndex]: { ...current[openIndex], [elementId]: text },
+          }))
+        }
         onBack={() => setOpenIndex(null)}
       />
     );
@@ -134,7 +154,7 @@ export function Variants({ answers, onRestart }: { answers: Answers; onRestart: 
             const caption = CAPTIONS[index];
             if (!caption) return null;
             const highlighted = index === 1;
-            const html = render(site.document, "html").html;
+            const html = editedHtml(index, site);
             return (
               <div
                 key={site.document.id}

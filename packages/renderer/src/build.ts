@@ -75,7 +75,10 @@ function elementNode(
 ): RenderNode | undefined {
   if (el.hidden) return undefined;
 
-  const base = { "data-role": el.role, "data-slot": el.slot };
+  // data-id, alongside the section's own data-section and a list item's data-item: the
+  // same document id, carried into both targets, is what lets the editor address exactly
+  // this element later (day 6's click-to-edit) without inventing a second identity scheme.
+  const base = { "data-id": el.id, "data-role": el.role, "data-slot": el.slot };
 
   // A list holds items rather than a value, so it is handled before the value check.
   if (el.role === "list") return listNode(el, options, level, base);
