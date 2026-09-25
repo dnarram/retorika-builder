@@ -43,3 +43,76 @@ export function deleteSection(doc: RetorikaDocument, sectionId: string): Retorik
     ),
   });
 }
+
+/**
+ * A section id not already used anywhere in the document, deterministic and derived from
+ * `base` — no clock, no random suffix, so two builds of the same sequence of edits produce the
+ * same ids and the golden corpus stays meaningful. `base` is normally the id being duplicated
+ * from, already taken by definition, so this always looks past it: `sec-cover` first tries
+ * `sec-cover-2`, and duplicating that tries `sec-cover-3` rather than `sec-cover-2-2` — the
+ * existing `-2` is stripped before counting up, so duplicating a duplicate does not nest.
+ */
+export function mintSectionId(doc: RetorikaDocument, base: string): string {
+  const used = new Set(doc.pages.flatMap((page) => page.sections.map((section) => section.id)));
+  const root = base.replace(/-\d+$/, "");
+  if (!used.has(root)) return root;
+  let suffix = 2;
+  while (used.has(`${root}-${suffix}`)) suffix += 1;
+  return `${root}-${suffix}`;
+}
+
+/**
+ * A copy of a section, right after the original on the same page, with a freshly minted id.
+ *
+ * Everything else about the clone — every element id, every layout placement, every
+ * breakpoint patch — is copied verbatim, deliberately. Element ids are unique only *within* a
+ * section (`checkSection` in invariants.ts), so keeping them means the clone's own layout
+ * (which references those same ids in its placements) stays valid without rewriting a single
+ * one; re-minting them would mean rebuilding the layout too, for no benefit the user would ever
+ * see. What must not collide is the one id that is unique document-wide: the section's own.
+ */
+export function duplicateSection(doc: RetorikaDocument, sectionId: string): RetorikaDocument {
+  const found = findSection(doc, sectionId);
+  if (!found) throw new Error(`duplicateSection: no section "${sectionId}"`);
+  const clone: Section = { ...found.section, id: mintSectionId(doc, sectionId) };
+
+  return parseDocument({
+    ...doc,
+    pages: doc.pages.map((page) => {
+      if (page.id !== found.page.id) return page;
+      const index = page.sections.findIndex((section) => section.id === sectionId);
+      const sections = [...page.sections];
+      sections.splice(index + 1, 0, clone);
+      return { ...page, sections };
+    }),
+  });
+}
+
+/**
+ * A section moved to `toIndex` on its own page, the rest kept in their relative order.
+ * `toIndex` is clamped to the page's bounds rather than rejected: a caller building this from
+ * "move up" / "move down" on the section nearest an edge can just decrement or increment past
+ * the end without special-casing it, and clamping is exactly what should happen there.
+ */
+export function moveSection(
+  doc: RetorikaDocument,
+  sectionId: string,
+  toIndex: number,
+): RetorikaDocument {
+  const found = findSection(doc, sectionId);
+  if (!found) throw new Error(`moveSection: no section "${sectionId}"`);
+
+  return parseDocument({
+    ...doc,
+    pages: doc.pages.map((page) => {
+      if (page.id !== found.page.id) return page;
+      const sections = [...page.sections];
+      const fromIndex = sections.findIndex((section) => section.id === sectionId);
+      const [moved] = sections.splice(fromIndex, 1);
+      if (!moved) throw new Error(`moveSection: no section "${sectionId}"`);
+      const clamped = Math.max(0, Math.min(toIndex, sections.length));
+      sections.splice(clamped, 0, moved);
+      return { ...page, sections };
+    }),
+  });
+}

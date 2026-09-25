@@ -123,6 +123,9 @@
   "editor.saved": "Guardado en este navegador",
   "editor.unsaved": "No guardado",
   "editor.deleteSection": "Borrar esta sección",
+  "editor.duplicateSection": "Duplicar esta sección",
+  "editor.moveSectionUp": "Subir esta sección",
+  "editor.moveSectionDown": "Bajar esta sección",
   "editor.toast.deleted": "Has borrado la sección «{name}»",
   "editor.toast.undo": "Deshacer",
   "editor.toast.dismiss": "Cerrar aviso"
