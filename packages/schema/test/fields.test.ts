@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RetorikaDocument, Section } from "../src/document.ts";
-import { applyTextEdits, listEditableFields } from "../src/fields.ts";
+import { applyTextEdits, listEditableFields, setElementText } from "../src/fields.ts";
 import { parseDocument } from "../src/parse.ts";
 import { type Theme, TOKEN_KEYS } from "../src/tokens.ts";
 
@@ -133,6 +133,113 @@ describe("applyTextEdits", () => {
       "el-headline": "",
       "el-cta": 'Nuevo texto con <angle> brackets and "quotes"',
     });
+    expect(() => parseDocument(edited)).not.toThrow();
+  });
+});
+
+describe("setElementText", () => {
+  /** Two sections carrying the same element id — legal, since uniqueness is per section. */
+  const twinned: RetorikaDocument = {
+    ...doc,
+    pages: [
+      {
+        id: "home",
+        slug: "index",
+        title: "Inicio",
+        sections: [
+          section,
+          {
+            ...section,
+            id: "sec-cover-2",
+            content: [
+              {
+                id: "el-headline",
+                role: "heading",
+                hidden: false,
+                slot: "headline",
+                value: { kind: "text", text: "La segunda portada" },
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+
+  function headlineOf(document: RetorikaDocument, sectionId: string): string | undefined {
+    const found = document.pages[0]?.sections.find((s) => s.id === sectionId);
+    const headline = found?.content.find((el) => el.id === "el-headline");
+    return headline?.value?.kind === "text" ? headline.value.text : undefined;
+  }
+
+  it("changes only the element in the named section when two sections share an id", () => {
+    const edited = setElementText(
+      twinned,
+      { sectionId: "sec-cover-2", elementId: "el-headline" },
+      "Cambiada",
+    );
+    expect(headlineOf(edited, "sec-cover-2")).toBe("Cambiada");
+    expect(headlineOf(edited, "sec-cover")).toBe("Barbería El Corte");
+  });
+
+  it("is what applyTextEdits cannot do: by bare id, both twins change", () => {
+    const edited = applyTextEdits(twinned, { "el-headline": "Cambiada" });
+    expect(headlineOf(edited, "sec-cover")).toBe("Cambiada");
+    expect(headlineOf(edited, "sec-cover-2")).toBe("Cambiada");
+  });
+
+  it("reaches an element nested inside a list item", () => {
+    const edited = setElementText(
+      doc,
+      { sectionId: "sec-cover", elementId: "el-card-1-title" },
+      "Corte a máquina",
+    );
+    const list = edited.pages[0]?.sections[0]?.content.find((el) => el.id === "el-services");
+    const title = list?.items?.[0]?.elements.find((el) => el.id === "el-card-1-title");
+    expect(title?.value).toEqual({ kind: "text", text: "Corte a máquina" });
+  });
+
+  it("replaces a link's label without touching its href", () => {
+    const edited = setElementText(doc, { sectionId: "sec-cover", elementId: "el-cta" }, "Llámanos");
+    const cta = edited.pages[0]?.sections[0]?.content.find((el) => el.id === "el-cta");
+    expect(cta?.value).toEqual({ kind: "link", text: "Llámanos", href: "tel:+34600000000" });
+  });
+
+  it("leaves every other section untouched, by reference", () => {
+    const edited = setElementText(
+      twinned,
+      { sectionId: "sec-cover-2", elementId: "el-headline" },
+      "Cambiada",
+    );
+    expect(edited.pages[0]?.sections[0]).toBe(twinned.pages[0]?.sections[0]);
+  });
+
+  it("throws when the section exists but the element does not", () => {
+    expect(() =>
+      setElementText(doc, { sectionId: "sec-cover", elementId: "no-such-element" }, "x"),
+    ).toThrow(/no element "no-such-element" in section "sec-cover"/);
+  });
+
+  it("throws when the section does not exist", () => {
+    expect(() =>
+      setElementText(doc, { sectionId: "no-such-section", elementId: "el-headline" }, "x"),
+    ).toThrow(/no element/);
+  });
+
+  it("never changes the element's id, role or slot", () => {
+    const edited = setElementText(doc, { sectionId: "sec-cover", elementId: "el-headline" }, "x");
+    const headline = edited.pages[0]?.sections[0]?.content[0];
+    expect(headline?.id).toBe("el-headline");
+    expect(headline?.role).toBe("heading");
+    expect(headline?.slot).toBe("headline");
+  });
+
+  it("produces a document that still parses", () => {
+    const edited = setElementText(
+      doc,
+      { sectionId: "sec-cover", elementId: "el-headline" },
+      'Con <angle> brackets y "comillas"',
+    );
     expect(() => parseDocument(edited)).not.toThrow();
   });
 });

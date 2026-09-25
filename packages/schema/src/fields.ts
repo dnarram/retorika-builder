@@ -109,6 +109,12 @@ function mapElements(
  * An id with no matching field is left untouched rather than rejected: the caller (day 6's
  * download route) already treats an unknown id as harmless, and this is the one place both
  * the live preview and the ZIP apply the same edits, so it stays permissive here too.
+ *
+ * **Addresses an element by id alone, which is only unambiguous while no two sections share
+ * one.** `checkSection` scopes element-id uniqueness to a section, so the moment a section can
+ * be duplicated there can be two `el-headline`s and this function would change both. Editing
+ * inside the app goes through `setElementText` below for that reason; this one survives only
+ * for the download route, which still speaks in bare ids, and goes away with it.
  */
 export function applyTextEdits(
   doc: RetorikaDocument,
@@ -125,4 +131,72 @@ export function applyTextEdits(
       })),
     })),
   };
+}
+
+/** Which element, unambiguously: section ids are unique document-wide, element ids within one. */
+export interface ElementAddress {
+  sectionId: string;
+  elementId: string;
+}
+
+/** The element with this id inside these, replaced; `undefined` when it is not among them. */
+function replaceById(
+  elements: readonly ContentElement[],
+  elementId: string,
+  text: string,
+): ContentElement[] | undefined {
+  let found = false;
+  const next = elements.map((element) => {
+    if (element.id === elementId) {
+      found = true;
+      return withText(element, text);
+    }
+    if (!element.items) return element;
+    let changedItems = false;
+    const items = element.items.map((item) => {
+      const replaced = replaceById(item.elements, elementId, text);
+      if (!replaced) return item;
+      changedItems = true;
+      return { ...item, elements: replaced };
+    });
+    if (!changedItems) return element;
+    found = true;
+    return { ...element, items };
+  });
+  return found ? next : undefined;
+}
+
+/**
+ * One field, addressed by the section it lives in as well as its own id.
+ *
+ * This is what the editor commits a text edit through. It replaces exactly one value and, like
+ * `applyTextEdits`, never touches structure — so the invariants, which are all structural, hold
+ * by construction and the document is not re-parsed on every keystroke's blur.
+ *
+ * An address that matches nothing throws rather than passing quietly: every address the editor
+ * sends was read off the very document it is editing, so a miss is a bug in that round trip, and
+ * a silent no-op would show up as an edit that simply did not happen.
+ */
+export function setElementText(
+  doc: RetorikaDocument,
+  address: ElementAddress,
+  text: string,
+): RetorikaDocument {
+  let found = false;
+  const pages = doc.pages.map((page) => ({
+    ...page,
+    sections: page.sections.map((section) => {
+      if (section.id !== address.sectionId) return section;
+      const content = replaceById(section.content, address.elementId, text);
+      if (!content) return section;
+      found = true;
+      return { ...section, content };
+    }),
+  }));
+  if (!found) {
+    throw new Error(
+      `setElementText: no element "${address.elementId}" in section "${address.sectionId}"`,
+    );
+  }
+  return { ...doc, pages };
 }

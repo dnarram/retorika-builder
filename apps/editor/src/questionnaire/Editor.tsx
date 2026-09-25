@@ -1,7 +1,9 @@
 "use client";
 
 import type { Answers } from "@retorika/generator";
-import { useRef, useState } from "react";
+import { render } from "@retorika/renderer";
+import type { ElementAddress, RetorikaDocument } from "@retorika/schema";
+import { useMemo, useRef, useState } from "react";
 import { EditorShell } from "../editor/EditorShell.tsx";
 import es from "../locales/es.json" with { type: "json" };
 import { FieldError } from "./ui.tsx";
@@ -25,41 +27,54 @@ function filenameFrom(response: Response, fallback: string): string {
 }
 
 /**
- * The chosen variant, editable inside the real editor chrome (day 1's `EditorShell`, day 6's
- * click-to-edit text): every heading, paragraph and button/link label the renderer marks with
- * `data-id` becomes a native `contentEditable` region directly inside the same-origin iframe —
- * reached through `iframe.contentDocument`, no postMessage needed. An edit commits on blur,
- * reported up as `onEdit(elementId, text)` so `Variants` can remember it across "Volver" and
- * re-render the iframe's `srcDoc` with it applied; the iframe then reloads fresh, which is why
- * nothing is written mid-keystroke — only once the user leaves the field.
+ * The chosen variant, editable inside the real editor chrome: every heading, paragraph and
+ * button/link label the renderer marks with `data-id` becomes a native `contentEditable` region
+ * directly inside the same-origin iframe — reached through `iframe.contentDocument`, no
+ * postMessage needed. An edit commits on blur, reported up as `onEditText(address, text)`, which
+ * `Variants` applies to the document it holds; the iframe then reloads from that new document,
+ * which is why nothing is written mid-keystroke — only once the user leaves the field.
  *
- * "Descargar" does not trust that state round-trip for its own snapshot: React's state update
- * from a blur fired moments earlier is not guaranteed visible yet in this closure, so download
- * re-reads every editable element's current text straight from the live DOM instead.
+ * **An edit names the section as well as the element** (day 2). Element ids are unique only
+ * within a section, so a bare id stops identifying anything the moment a section can be
+ * duplicated — which is this sprint's day 5. Fixing the addressing before that arrives is why
+ * the document became state today rather than then.
  *
- * Section selection (day 1's other addition) is purely cosmetic today — a 2px outline and four
- * corner handles injected into the iframe's own DOM, mirroring mockup 08's per-element selection
- * at section granularity. Nothing downstream reads which section is selected yet; that arrives
- * with delete, duplicate and reorder, later this sprint.
+ * Section selection is purely cosmetic so far — a 2px outline and four corner handles injected
+ * into the iframe's own DOM, mirroring mockup 08's per-element selection at section granularity.
+ * Nothing downstream reads which section is selected yet; that arrives with delete, duplicate
+ * and reorder, later this sprint.
  */
 export function Editor({
   title,
-  html,
+  document: doc,
   answers,
   variantIndex,
-  onEdit,
+  onEditText,
+  canUndo,
+  canRedo,
+  onUndo,
+  onRedo,
   onBack,
 }: {
   title: string;
-  html: string;
+  document: RetorikaDocument;
   answers: Answers;
   variantIndex: number;
-  onEdit: (elementId: string, text: string) => void;
+  onEditText: (address: ElementAddress, text: string) => void;
+  canUndo: boolean;
+  canRedo: boolean;
+  onUndo: () => void;
+  onRedo: () => void;
   onBack: () => void;
 }) {
   const [state, setState] = useState<DownloadState>("idle");
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  // `render` is deterministic, so an unchanged document yields the identical string and the
+  // iframe's `srcDoc` does not change — which is what keeps a device toggle or a download from
+  // reloading the preview and throwing away the current selection.
+  const html = useMemo(() => render(doc, "html").html, [doc]);
 
   function wireSelection(iframeDoc: Document) {
     const sections = [...iframeDoc.querySelectorAll<HTMLElement>("[data-section]")];
@@ -86,7 +101,11 @@ export function Editor({
     for (const el of iframeDoc.querySelectorAll<HTMLElement>("[data-id]")) {
       if (!EDITABLE_TAGS.has(el.tagName)) continue;
       const elementId = el.dataset.id;
-      if (!elementId) continue;
+      // The section this field lives in, read off the same markup: `data-section` is what makes
+      // the address unambiguous once two sections can carry the same element id.
+      const sectionId = el.closest<HTMLElement>("[data-section]")?.dataset.section;
+      if (!elementId || !sectionId) continue;
+      const address: ElementAddress = { sectionId, elementId };
 
       el.contentEditable = "true";
       const original = (el.textContent ?? "").trim();
@@ -126,7 +145,7 @@ export function Editor({
           el.textContent = original;
           return;
         }
-        if (next !== original) onEdit(elementId, next);
+        if (next !== original) onEditText(address, next);
       });
     }
   }
@@ -153,6 +172,13 @@ export function Editor({
     wireEditing(iframeDoc);
   }
 
+  /**
+   * The download still speaks in bare element ids, because `/api/download` still regenerates
+   * from the answers and layers `applyTextEdits` over the result. Day 3 sends the document
+   * itself, and both this function and `applyTextEdits` go away with that change — until then
+   * this is the last place addressing an element by an id alone, and it is safe only because
+   * nothing can duplicate a section yet.
+   */
   function currentEdits(): Record<string, string> {
     const iframeDoc = iframeRef.current?.contentDocument;
     if (!iframeDoc) return {};
@@ -196,6 +222,10 @@ export function Editor({
       onDownload={download}
       device={device}
       onDeviceChange={setDevice}
+      canUndo={canUndo}
+      canRedo={canRedo}
+      onUndo={onUndo}
+      onRedo={onRedo}
     >
       <div className="flex flex-col gap-3 border-b border-ui-border px-4 py-3">
         {state === "error" ? <FieldError>{es["editor.downloadError"]}</FieldError> : null}
