@@ -2,7 +2,9 @@
 
 import { type Answers, generateVariants } from "@retorika/generator";
 import { render } from "@retorika/renderer";
-import { useReducer, useState } from "react";
+import type { RetorikaDocument } from "@retorika/schema";
+import { useEffect, useReducer, useRef, useState } from "react";
+import { saveSession } from "../editor/autosave.ts";
 import { historiesReducer, initHistories } from "../editor/documentHistory.ts";
 import es from "../locales/es.json" with { type: "json" };
 import { Editor } from "./Editor.tsx";
@@ -23,7 +25,10 @@ import { Brand } from "./ui.tsx";
  * of text edits kept beside an unchanging `generateVariants` output, which could not survive
  * what the rest of this sprint adds: two sources of truth cannot be undone in one order, and
  * the overlay's bare-element-id key stops identifying anything once a section can be duplicated.
- * `generateVariants` is now only the starting value.
+ * `generateVariants` is now only the starting value — or, when `Questionnaire` found a saved
+ * session, `initialDocuments` is (day 3's `localStorage` autosave, debounced 500ms after every
+ * change to any variant's document or to which one is open, so a reload can put the whole grid
+ * back, not just the card that happened to be open).
  */
 const CAPTIONS: readonly { titleKey: keyof typeof es; captionKey: keyof typeof es }[] = [
   { titleKey: "variants.v1.title", captionKey: "variants.v1.caption" },
@@ -60,14 +65,45 @@ function ThumbnailFrame({ html, title }: { html: string; title: string }) {
   );
 }
 
-export function Variants({ answers, onRestart }: { answers: Answers; onRestart: () => void }) {
+/** Autosaves 500ms after the last change, not on every keystroke's underlying document update. */
+const SAVE_DEBOUNCE_MS = 500;
+
+export function Variants({
+  answers,
+  initialDocuments,
+  initialOpenIndex = null,
+  onRestart,
+}: {
+  answers: Answers;
+  /** Present when `Questionnaire` restored a session; absent for a freshly generated one. */
+  initialDocuments?: RetorikaDocument[];
+  initialOpenIndex?: number | null;
+  onRestart: () => void;
+}) {
   // The histories outlive "Volver": edits and what can be undone survive going back to the grid
   // and reopening the same card, which is the one piece of continuity this in-memory-only slice
   // owes the user within a single session.
   const [histories, dispatch] = useReducer(historiesReducer, answers, (initial) =>
-    initHistories(generateVariants(initial).map((site) => site.document)),
+    initHistories(initialDocuments ?? generateVariants(initial).map((site) => site.document)),
   );
-  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const [openIndex, setOpenIndex] = useState<number | null>(initialOpenIndex);
+
+  // `null` until the first save attempt resolves: showing "Guardado" before anything has
+  // actually been written would be exactly the false claim ADR 0012's note warns against.
+  const [saveStatus, setSaveStatus] = useState<"saved" | "unsaved" | null>(null);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  useEffect(() => {
+    saveTimer.current = setTimeout(() => {
+      const ok = saveSession({
+        answers,
+        documents: histories.map((history) => history.present.document),
+        openIndex,
+      });
+      setSaveStatus(ok ? "saved" : "unsaved");
+    }, SAVE_DEBOUNCE_MS);
+    return () => clearTimeout(saveTimer.current);
+  }, [answers, histories, openIndex]);
 
   if (openIndex !== null) {
     const history = histories[openIndex];
@@ -77,8 +113,6 @@ export function Variants({ answers, onRestart }: { answers: Answers; onRestart: 
       <Editor
         title={es[caption.titleKey]}
         document={history.present.document}
-        answers={answers}
-        variantIndex={openIndex}
         onEditText={(address, text) =>
           dispatch({ type: "editText", variant: openIndex, address, text })
         }
@@ -86,6 +120,7 @@ export function Variants({ answers, onRestart }: { answers: Answers; onRestart: 
         canRedo={history.future.length > 0}
         onUndo={() => dispatch({ type: "undo", variant: openIndex })}
         onRedo={() => dispatch({ type: "redo", variant: openIndex })}
+        saveStatus={saveStatus}
         onBack={() => setOpenIndex(null)}
       />
     );

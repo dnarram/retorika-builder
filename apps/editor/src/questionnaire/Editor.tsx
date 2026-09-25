@@ -1,10 +1,9 @@
 "use client";
 
-import type { Answers } from "@retorika/generator";
 import { render } from "@retorika/renderer";
 import type { ElementAddress, RetorikaDocument } from "@retorika/schema";
 import { useMemo, useRef, useState } from "react";
-import { EditorShell } from "../editor/EditorShell.tsx";
+import { EditorShell, type SaveStatus } from "../editor/EditorShell.tsx";
 import es from "../locales/es.json" with { type: "json" };
 import { FieldError } from "./ui.tsx";
 
@@ -39,6 +38,13 @@ function filenameFrom(response: Response, fallback: string): string {
  * duplicated — which is this sprint's day 5. Fixing the addressing before that arrives is why
  * the document became state today rather than then.
  *
+ * "Descargar" sends `document` exactly as this component holds it (day 3): now that the document
+ * is the state a blur already commits to, there is no round trip left to distrust — the prop is
+ * always the current one, not something read back out of the DOM to work around a stale closure.
+ * `/api/download` re-validates it independently; see that route for why sending the whole
+ * document, not answers plus a diff, is also what a section that can be added, deleted or
+ * reordered requires.
+ *
  * Section selection is purely cosmetic so far — a 2px outline and four corner handles injected
  * into the iframe's own DOM, mirroring mockup 08's per-element selection at section granularity.
  * Nothing downstream reads which section is selected yet; that arrives with delete, duplicate
@@ -47,24 +53,22 @@ function filenameFrom(response: Response, fallback: string): string {
 export function Editor({
   title,
   document: doc,
-  answers,
-  variantIndex,
   onEditText,
   canUndo,
   canRedo,
   onUndo,
   onRedo,
+  saveStatus,
   onBack,
 }: {
   title: string;
   document: RetorikaDocument;
-  answers: Answers;
-  variantIndex: number;
   onEditText: (address: ElementAddress, text: string) => void;
   canUndo: boolean;
   canRedo: boolean;
   onUndo: () => void;
   onRedo: () => void;
+  saveStatus: SaveStatus;
   onBack: () => void;
 }) {
   const [state, setState] = useState<DownloadState>("idle");
@@ -172,33 +176,13 @@ export function Editor({
     wireEditing(iframeDoc);
   }
 
-  /**
-   * The download still speaks in bare element ids, because `/api/download` still regenerates
-   * from the answers and layers `applyTextEdits` over the result. Day 3 sends the document
-   * itself, and both this function and `applyTextEdits` go away with that change — until then
-   * this is the last place addressing an element by an id alone, and it is safe only because
-   * nothing can duplicate a section yet.
-   */
-  function currentEdits(): Record<string, string> {
-    const iframeDoc = iframeRef.current?.contentDocument;
-    if (!iframeDoc) return {};
-    const edits: Record<string, string> = {};
-    for (const el of iframeDoc.querySelectorAll<HTMLElement>("[data-id]")) {
-      if (!EDITABLE_TAGS.has(el.tagName)) continue;
-      const elementId = el.dataset.id;
-      const text = (el.textContent ?? "").trim();
-      if (elementId && text !== "") edits[elementId] = text;
-    }
-    return edits;
-  }
-
   async function download() {
     setState("downloading");
     try {
       const response = await fetch("/api/download", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ answers, variantIndex, edits: currentEdits() }),
+        body: JSON.stringify({ document: doc }),
       });
       if (!response.ok) throw new Error(`download failed: ${response.status}`);
       const blob = await response.blob();
@@ -226,6 +210,7 @@ export function Editor({
       canRedo={canRedo}
       onUndo={onUndo}
       onRedo={onRedo}
+      saveStatus={saveStatus}
     >
       <div className="flex flex-col gap-3 border-b border-ui-border px-4 py-3">
         {state === "error" ? <FieldError>{es["editor.downloadError"]}</FieldError> : null}

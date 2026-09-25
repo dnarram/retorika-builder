@@ -21,10 +21,16 @@ import es from "../locales/es.json" with { type: "json" };
  *   does not generate one, so drawing it would be furniture advertising links that go nowhere.
  *
  * Undo and redo are live from day 2; they grey out when there is nothing to go back or forward
- * to, which is the honest state and not a placeholder. The `Guardado` tick is still not drawn at
- * all rather than shown lying: nothing is saved until day 3's `localStorage` lands, and a green
- * checkmark today would claim otherwise.
+ * to, which is the honest state and not a placeholder. The `Guardado` tick is live from day 3
+ * too, and says `Guardado en este navegador` rather than the mockup's bare `Guardado` — a name
+ * this specific, so nobody reads a guarantee across devices or accounts into a `localStorage`
+ * autosave that has neither (the trade-off, and why it is acceptable for this phase, is written
+ * up in ADR 0012). Before the first save attempt resolves the slot is empty, never a claim not
+ * yet earned; if a save fails — a full or disabled store — it says `No guardado` instead of
+ * continuing to show green.
  */
+
+export type SaveStatus = "saved" | "unsaved" | null;
 
 const RAIL_ICONS = {
   sections: (
@@ -210,6 +216,7 @@ export function EditorShell({
   canRedo,
   onUndo,
   onRedo,
+  saveStatus,
   children,
 }: {
   siteName: string;
@@ -222,6 +229,7 @@ export function EditorShell({
   canRedo: boolean;
   onUndo: () => void;
   onRedo: () => void;
+  saveStatus: SaveStatus;
   children: React.ReactNode;
 }) {
   return (
@@ -231,7 +239,7 @@ export function EditorShell({
           type="button"
           onClick={onBack}
           aria-label={es["editor.backToVariants"]}
-          className="flex w-[300px] items-center gap-2.5 rounded-lg py-1 text-left"
+          className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg py-1 text-left"
         >
           <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[9px] bg-linear-to-br from-[#2B9BF4] to-[#1554D8] text-[16px] font-extrabold leading-none text-white">
             R
@@ -254,13 +262,13 @@ export function EditorShell({
           </svg>
         </button>
 
-        <div className="flex flex-grow items-center justify-center gap-1.5">
+        <div className="flex shrink-0 items-center justify-center gap-1.5">
           <span className="flex h-9 items-center rounded-[9px] bg-ui-brand-surface px-5 text-sm font-semibold text-ui-brand">
             {es["editor.page.home"]}
           </span>
         </div>
 
-        <div className="flex w-[300px] items-center justify-end gap-2.5">
+        <div className="flex min-w-0 flex-1 items-center justify-end gap-2.5">
           <DeviceToggle device={device} onChange={onDeviceChange} />
 
           <button
@@ -313,6 +321,32 @@ export function EditorShell({
               <path d="M17 4l4 4-4 4" />
             </svg>
           </button>
+
+          {saveStatus ? (
+            <span
+              className={
+                "inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] font-medium " +
+                (saveStatus === "saved" ? "text-ui-muted" : "text-[#BE123C]")
+              }
+            >
+              {saveStatus === "saved" ? (
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#03D26E"
+                  strokeWidth={3}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M20 6L9 17l-5-5" />
+                </svg>
+              ) : null}
+              {saveStatus === "saved" ? es["editor.saved"] : es["editor.unsaved"]}
+            </span>
+          ) : null}
 
           <button
             type="button"
