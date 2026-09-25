@@ -176,13 +176,26 @@ describe("buildSite", () => {
     ["an unsafe asset name", "photos/..", /unsafe asset name/],
     ["a hidden asset name", "photos/.htaccess", /unsafe asset name/],
     ["a query string", "photo.svg?v=2", /unsafe asset name/],
-    ["a data: URI", "data:image/svg+xml;base64,PHN2Zz4=", /unsafe asset name/],
     ["an unknown extension", "assets/notes.pdf", /unsupported asset type/],
   ])("throws on %s", (_label, src, message) => {
     const doc = withImageSrc(barbershop, src);
     expect(() =>
       buildSite(doc, { siteId: "s", assets: new Map([[src, new Uint8Array([1])]]) }),
     ).toThrow(message);
+  });
+
+  it("leaves a data: URI image inline, needing no asset file at all", () => {
+    // The generator's placeholder photo (ADR 0011 has no photobank yet) is a data: URI
+    // precisely so no publisher wiring is needed to carry it into the ZIP.
+    const src = "data:image/svg+xml,%3Csvg%3E%3C%2Fsvg%3E";
+    const doc = withImageSrc(barbershop, src);
+    const bundle = buildSite(doc, { siteId: "s", assets: new Map() });
+    const index = new TextDecoder().decode(
+      bundle.files.find((f) => f.path === "index.html")?.contents,
+    );
+    expect(index).toContain(src);
+    expect(bundle.manifest.assets).toEqual([]);
+    expect(bundle.files.some((f) => f.path.startsWith("assets/"))).toBe(false);
   });
 
   it("never places the manifest in files", () => {

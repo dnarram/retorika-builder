@@ -105,5 +105,8 @@
   "variants.use": "Usar esta",
   "variants.restart": "Volver a empezar",
   "variants.back": "Volver",
-  "variants.downloadNote": "Has elegido esta versión. La descarga se conecta mañana — hoy puedes verla a tamaño real."
+  "variants.download": "Descargar",
+  "variants.downloading": "Descargando…",
+  "variants.downloadHint": "Se descarga un archivo .zip con tu web. Ábrelo haciendo doble clic en index.html: no necesita internet.",
+  "variants.downloadError": "No se ha podido descargar. Vuelve a intentarlo."
 }

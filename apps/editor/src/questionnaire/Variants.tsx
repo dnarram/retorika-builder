@@ -65,6 +65,8 @@ export function Variants({ answers, onRestart }: { answers: Answers; onRestart: 
       <FullPreview
         title={es[caption.titleKey]}
         html={render(site.document, "html").html}
+        answers={answers}
+        variantIndex={openIndex}
         onBack={() => setOpenIndex(null)}
       />
     );

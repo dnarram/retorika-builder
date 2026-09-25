@@ -85,6 +85,14 @@ export default defineConfig({
           environment: "node",
         },
       },
+      {
+        test: {
+          name: "editor",
+          root: "./apps/editor",
+          // Route handlers only: Request, Response, Blob are Node's, no DOM needed.
+          environment: "node",
+        },
+      },
     ],
     // Protocol Part 18: one thread per core chokes this machine.
     maxWorkers: 4,
