@@ -10,7 +10,7 @@ import { actionLabel, type Facts, suggestionsFor, textFor } from "@retorika/copy
 import type { ContentElement, Section } from "@retorika/schema";
 import type { Answers, SectorId } from "./answers.ts";
 import { resolveDestination, secondaryPhoneDestination } from "./destination.ts";
-import { PLACEHOLDER_IMAGE_ALT, PLACEHOLDER_IMAGE_PATH } from "./placeholder-image.ts";
+import { PLACEHOLDER_IMAGE_ALT, placeholderImageSrc } from "./placeholder-image.ts";
 
 /**
  * `{ciudad}` has no source today. Question 4 collects one free-text address
@@ -70,7 +70,7 @@ export function buildCover(answers: Answers, sector: SectorId, variant: CoverVar
     role: "image",
     hidden: false,
     slot: "image",
-    value: { kind: "image", src: PLACEHOLDER_IMAGE_PATH, alt: PLACEHOLDER_IMAGE_ALT },
+    value: { kind: "image", src: placeholderImageSrc(), alt: PLACEHOLDER_IMAGE_ALT },
   });
   if (destination && actionText) {
     content.push(link("el-cta", "button", "primaryAction", actionText, destination));

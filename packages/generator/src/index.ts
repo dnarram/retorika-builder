@@ -1,6 +1,5 @@
 import { parseDocument, type RetorikaDocument, SCHEMA_VERSION } from "@retorika/schema";
 import type { Answers, SectorId } from "./answers.ts";
-import { PLACEHOLDER_IMAGE_PATH, placeholderImageBytes } from "./placeholder-image.ts";
 import { buildContact, buildCover, buildLocation, buildServices } from "./sections.ts";
 import { themeFor } from "./theme.ts";
 import { VARIANTS, type VariantChoice } from "./variants.ts";
@@ -54,7 +53,9 @@ export function generate(answers: Answers, variant: VariantChoice = VARIANTS[0])
     collections: [],
   };
 
-  const assets = new Map<string, Uint8Array>([[PLACEHOLDER_IMAGE_PATH, placeholderImageBytes()]]);
+  // Nothing to add: the placeholder image is a data: URI, self-contained in the document
+  // itself, needing no separate asset entry — see placeholder-image.ts.
+  const assets = new Map<string, Uint8Array>();
 
   return { document: parseDocument(document), assets };
 }

@@ -68,12 +68,17 @@ describe("every generated document", () => {
     }
   });
 
-  it("carries the placeholder image as an asset the document's cover actually references", () => {
+  it("gives the cover a self-contained placeholder image, no separate asset needed", () => {
+    // A relative "assets/placeholder.svg" only resolves where something serves it there — not
+    // in a live preview, not in a ZIP without the publisher copying it in. A data: URI needs
+    // neither, so there is nothing to also find in `assets`.
     const { document, assets } = generate(MINIMAL);
     const cover = findSection(document, "cover");
     const image = flattenElements(cover.content).find((el) => el.role === "image");
-    expect(image?.value?.kind).toBe("image");
-    if (image?.value?.kind === "image") expect(assets.has(image.value.src)).toBe(true);
+    expect(
+      image?.value?.kind === "image" && image.value.src.startsWith("data:image/svg+xml,"),
+    ).toBe(true);
+    expect(assets.size).toBe(0);
   });
 });
 
