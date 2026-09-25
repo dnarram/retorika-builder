@@ -25,7 +25,11 @@ services:
     region: frankfurt
     branch: main
     buildCommand: npx --yes pnpm@12.4.2 install --frozen-lockfile && npx --yes pnpm@12.4.2 --filter @retorika/editor build
-    startCommand: npx --yes pnpm@12.4.2 --filter @retorika/editor start
+    # `next start` binds to port 3000 unless told otherwise — it does not read $PORT itself
+    # (checked in next/dist/server/lib/start-server.js: the port is whatever -p/--port
+    # resolved to, default 3000, full stop). Render assigns its own $PORT and times out the
+    # deploy scanning for it, so it has to be passed through explicitly.
+    startCommand: npx --yes pnpm@12.4.2 --filter @retorika/editor start -p $PORT
     envVars:
       # engine-strict is on and the root package.json asks for ^24.21.0. Render's own default is
       # 24.14.1, which does not satisfy it, so the install would fail without this line.
