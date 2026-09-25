@@ -104,9 +104,20 @@
   "variants.viewFull": "Ver a tamaño real",
   "variants.use": "Usar esta",
   "variants.restart": "Volver a empezar",
-  "variants.back": "Volver",
-  "variants.download": "Descargar",
-  "variants.downloading": "Descargando…",
-  "variants.editHint": "Haz clic en cualquier texto para cambiarlo. Se descarga un archivo .zip con tus cambios — ábrelo haciendo doble clic en index.html: no necesita internet.",
-  "variants.downloadError": "No se ha podido descargar. Vuelve a intentarlo."
+
+  "editor.backToVariants": "Volver a las tres variantes",
+  "editor.page.home": "Inicio",
+  "editor.device.desktop": "Ver en ordenador",
+  "editor.device.mobile": "Ver en móvil",
+  "editor.undo": "Deshacer",
+  "editor.redo": "Rehacer",
+  "editor.rail.sections": "Secciones",
+  "editor.rail.style": "Estilo",
+  "editor.rail.pages": "Páginas",
+  "editor.rail.photos": "Fotos",
+  "editor.rail.phase2": "Fase 2",
+  "editor.download": "Descargar",
+  "editor.downloading": "Descargando…",
+  "editor.downloadError": "No se ha podido descargar. Vuelve a intentarlo.",
+  "editor.editHint": "Haz clic en cualquier texto para cambiarlo. Se descarga un archivo .zip con tus cambios — ábrelo haciendo doble clic en index.html: no necesita internet."
 }

@@ -2,6 +2,7 @@
 
 import type { Answers } from "@retorika/generator";
 import { useRef, useState } from "react";
+import { EditorShell } from "../editor/EditorShell.tsx";
 import es from "../locales/es.json" with { type: "json" };
 import { FieldError } from "./ui.tsx";
 
@@ -15,6 +16,8 @@ type DownloadState = "idle" | "downloading" | "error";
  */
 const EDITABLE_TAGS = new Set(["H1", "H2", "H3", "H4", "H5", "H6", "P", "A"]);
 
+const HANDLE_CORNERS = ["tl", "tr", "bl", "br"] as const;
+
 /** From `Content-Disposition: attachment; filename="doc-taberna.zip"`. */
 function filenameFrom(response: Response, fallback: string): string {
   const match = /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") ?? "");
@@ -22,22 +25,24 @@ function filenameFrom(response: Response, fallback: string): string {
 }
 
 /**
- * The chosen variant at real size, editable in place (day 6): every heading, paragraph and
- * button/link label the renderer marks with `data-id` becomes a native `contentEditable`
- * region directly inside the same-origin iframe — reached through `iframe.contentDocument`,
- * no postMessage needed. An edit commits on blur, reported up as `onEdit(elementId, text)` so
- * `Variants` can remember it across "Volver" and re-render the iframe's `srcDoc` with it
- * applied; the iframe then reloads fresh, which is why nothing is written mid-keystroke — only
- * once the user leaves the field, exactly when losing focus is expected anyway.
+ * The chosen variant, editable inside the real editor chrome (day 1's `EditorShell`, day 6's
+ * click-to-edit text): every heading, paragraph and button/link label the renderer marks with
+ * `data-id` becomes a native `contentEditable` region directly inside the same-origin iframe —
+ * reached through `iframe.contentDocument`, no postMessage needed. An edit commits on blur,
+ * reported up as `onEdit(elementId, text)` so `Variants` can remember it across "Volver" and
+ * re-render the iframe's `srcDoc` with it applied; the iframe then reloads fresh, which is why
+ * nothing is written mid-keystroke — only once the user leaves the field.
  *
  * "Descargar" does not trust that state round-trip for its own snapshot: React's state update
  * from a blur fired moments earlier is not guaranteed visible yet in this closure, so download
- * re-reads every editable element's current text straight from the live DOM instead. Sending
- * the full set of current values rather than a diff costs nothing — applyTextEdits treats an
- * unchanged value exactly like a changed one — and it means what downloads is always exactly
- * what is on screen, with no timing window where the two could disagree.
+ * re-reads every editable element's current text straight from the live DOM instead.
+ *
+ * Section selection (day 1's other addition) is purely cosmetic today — a 2px outline and four
+ * corner handles injected into the iframe's own DOM, mirroring mockup 08's per-element selection
+ * at section granularity. Nothing downstream reads which section is selected yet; that arrives
+ * with delete, duplicate and reorder, later this sprint.
  */
-export function FullPreview({
+export function Editor({
   title,
   html,
   answers,
@@ -53,20 +58,31 @@ export function FullPreview({
   onBack: () => void;
 }) {
   const [state, setState] = useState<DownloadState>("idle");
+  const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  function wireEditing() {
-    const iframeDoc = iframeRef.current?.contentDocument;
-    if (!iframeDoc) return;
+  function wireSelection(iframeDoc: Document) {
+    const sections = [...iframeDoc.querySelectorAll<HTMLElement>("[data-section]")];
 
-    const style = iframeDoc.createElement("style");
-    style.textContent = [
-      '[contenteditable="true"] { cursor: text; border-radius: 3px;',
-      "  outline: 2px dashed transparent; outline-offset: 3px; }",
-      '[contenteditable="true"]:hover, [contenteditable="true"]:focus { outline-color: #156FE7; }',
-    ].join("\n");
-    iframeDoc.head.appendChild(style);
+    function select(target: HTMLElement) {
+      for (const section of sections) {
+        section.classList.remove("rb-selected");
+        for (const handle of section.querySelectorAll(".rb-handle")) handle.remove();
+      }
+      target.classList.add("rb-selected");
+      for (const corner of HANDLE_CORNERS) {
+        const handle = iframeDoc.createElement("span");
+        handle.className = `rb-handle rb-handle-${corner}`;
+        target.appendChild(handle);
+      }
+    }
 
+    for (const section of sections) {
+      section.addEventListener("click", () => select(section));
+    }
+  }
+
+  function wireEditing(iframeDoc: Document) {
     for (const el of iframeDoc.querySelectorAll<HTMLElement>("[data-id]")) {
       if (!EDITABLE_TAGS.has(el.tagName)) continue;
       const elementId = el.dataset.id;
@@ -115,6 +131,28 @@ export function FullPreview({
     }
   }
 
+  function wireInteractions() {
+    const iframeDoc = iframeRef.current?.contentDocument;
+    if (!iframeDoc) return;
+
+    const style = iframeDoc.createElement("style");
+    style.textContent = [
+      '[contenteditable="true"] { cursor: text; border-radius: 3px;',
+      "  outline: 2px dashed transparent; outline-offset: 3px; }",
+      '[contenteditable="true"]:hover, [contenteditable="true"]:focus { outline-color: #156FE7; }',
+      "[data-section] { position: relative; cursor: pointer; }",
+      "[data-section].rb-selected { outline: 2px solid #156FE7; outline-offset: -2px; }",
+      ".rb-handle { position: absolute; width: 7px; height: 7px; background: #FFFFFF;",
+      "  border: 2px solid #156FE7; border-radius: 2px; pointer-events: none; }",
+      ".rb-handle-tl { top: -4px; left: -4px; } .rb-handle-tr { top: -4px; right: -4px; }",
+      ".rb-handle-bl { bottom: -4px; left: -4px; } .rb-handle-br { bottom: -4px; right: -4px; }",
+    ].join("\n");
+    iframeDoc.head.appendChild(style);
+
+    wireSelection(iframeDoc);
+    wireEditing(iframeDoc);
+  }
+
   function currentEdits(): Record<string, string> {
     const iframeDoc = iframeRef.current?.contentDocument;
     if (!iframeDoc) return {};
@@ -151,82 +189,26 @@ export function FullPreview({
   }
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        flexDirection: "column",
-        background: "#F5F7FA",
-      }}
+    <EditorShell
+      siteName={title}
+      onBack={onBack}
+      downloadState={state}
+      onDownload={download}
+      device={device}
+      onDeviceChange={setDevice}
     >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "16px 24px",
-          background: "#FFFFFF",
-          borderBottom: "1px solid #E3E8F0",
-        }}
-      >
-        <button
-          type="button"
-          onClick={onBack}
-          style={{
-            font: "inherit",
-            fontSize: 15,
-            fontWeight: 600,
-            color: "#156FE7",
-            background: "none",
-            border: 0,
-            padding: 0,
-            cursor: "pointer",
-          }}
-        >
-          ← {es["variants.back"]}
-        </button>
-        <span style={{ fontSize: 15, fontWeight: 600, color: "#0F172A" }}>{title}</span>
-        <button
-          type="button"
-          onClick={download}
-          disabled={state === "downloading"}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            height: 38,
-            padding: "0 20px",
-            background: state === "downloading" ? "#8FB4E9" : "#156FE7",
-            color: "#FFFFFF",
-            fontSize: 14,
-            fontWeight: 600,
-            border: 0,
-            borderRadius: 9,
-            cursor: state === "downloading" ? "not-allowed" : "pointer",
-          }}
-        >
-          {state === "downloading" ? es["variants.downloading"] : es["variants.download"]}
-        </button>
+      <div className="flex flex-col gap-3 border-b border-ui-border px-4 py-3">
+        {state === "error" ? <FieldError>{es["editor.downloadError"]}</FieldError> : null}
+        <p className="m-0 text-[13px] text-ui-muted">{es["editor.editHint"]}</p>
       </div>
-
-      <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14, flexGrow: 1 }}>
-        {state === "error" ? <FieldError>{es["variants.downloadError"]}</FieldError> : null}
-        <p style={{ margin: 0, fontSize: 13, color: "#5B6B82" }}>{es["variants.editHint"]}</p>
-        <iframe
-          ref={iframeRef}
-          title={title}
-          srcDoc={html}
-          onLoad={wireEditing}
-          style={{
-            width: "100%",
-            flexGrow: 1,
-            minHeight: "70vh",
-            border: "1px solid #E3E8F0",
-            borderRadius: 12,
-            background: "#FFFFFF",
-          }}
-        />
-      </div>
-    </div>
+      <iframe
+        ref={iframeRef}
+        title={title}
+        srcDoc={html}
+        onLoad={wireInteractions}
+        className="w-full flex-grow border-0 bg-ui-surface"
+        style={{ minHeight: "60vh" }}
+      />
+    </EditorShell>
   );
 }
