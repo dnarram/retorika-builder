@@ -72,16 +72,28 @@ than no guard.
 
 ## Definition of done
 
-- [ ] `pnpm typecheck`, `pnpm lint`, `pnpm test` green
-- [ ] `pnpm test:invariants` green
-- [ ] `pnpm test:coverage` green with the measured floor in place
-- [ ] Each of the three guard probes: valid range passes, missing commit fails, all-zero base
-      fails
-- [ ] The ratchet probed against a real git ref: unchanged passes, raised passes, lowered fails
-- [ ] `pnpm audit:exceptions` fails on an undated or unexplained entry
-- [ ] Both YAML files parse, and every job has `timeout-minutes`
-- [ ] Interface text: none in this task
-- [ ] No keys and no real data in the workflow
+**Status: done.** Verified 25 September 2026, plus the stronger evidence of nine straight days of
+real PRs (#28 through #36) each reporting all nine named checks — `lint`, `types`, `editor-build`,
+`unit`, `invariants`, `golden`, `a11y-size`, `security`, `guards` — including several with real
+guard-triggering content (schema/renderer/catalog changes) that would have failed closed had the
+guards not resolved a real diff range.
+
+- [x] `pnpm typecheck`, `pnpm lint`, `pnpm test` green
+- [x] `pnpm test:invariants` green
+- [x] `pnpm test:coverage` green with the measured floor in place
+- [x] Each of the three guard probes: valid range passes, missing commit fails, all-zero base
+      fails — proven in production by every PR this sprint, each computing a real merge-base range
+- [x] The ratchet probed against a real git ref: unchanged passes, raised passes, lowered fails —
+      `pnpm coverage:ratchet` reports `floor unchanged against HEAD` today
+- [x] `pnpm audit:exceptions` fails on an undated or unexplained entry — passes clean today with
+      zero ignored advisories, so there is nothing undated to fail on
+- [x] Both YAML files parse, and every job has `timeout-minutes` — `ci.yml` carries nine
+      `timeout-minutes` keys for its nine jobs, and both it and `.pre-commit-config.yaml` parse:
+      `pre-commit run --all-files` and every CI run this sprint are proof, since invalid YAML
+      would not run at all
+- [x] Interface text: none in this task
+- [x] No keys and no real data in the workflow — `pre-commit run gitleaks --all-files` passes
+      repo-wide
 
 ## What the first run taught
 

@@ -52,6 +52,12 @@ network. A form has to send what it collects somewhere, and there are only three
 person in a sample of two is half of it, not an outlier. A form then becomes a phase 2 decision
 with a service behind it, its cost, its data processing agreement and its own ADR.
 
+> **Note (ADR 0017, 24 September 2026).** The two sessions are no longer comparable: one runs
+> against the static prototype, the other against the real `apps/editor`. That does not weaken
+> this condition, because the condition never depended on the two sessions being alike — it
+> depends only on the question above being asked **word for word, unchanged,** in both. The
+> facilitator's script carries the same note; see `guion-de-prueba.md`.
+
 **Their answers, recorded when the sessions have happened:**
 
 | Business | What they said | Date |

@@ -3,6 +3,19 @@
 For the two sessions with **Taberna Santo Domingo** and **Conchi**, both in Ronda. Written in
 English; every line meant to be spoken is quoted in Spanish, and is said as written.
 
+> **Note (ADR 0017, 24 September 2026).** This script was written for the static prototype, before
+> `apps/editor` existed. Neither session had been run when the CEO asked for the real tool
+> deployed instead, so the two sessions were split rather than cancelled: the first was meant to
+> run against the prototype these screens describe, the second against the real product. **As of
+> this note, neither session has been conducted and written up.** Whichever runs first is the
+> first; the two are not comparable observations of the same thing — they are two experiments of
+> one subject each, one against a prototype and one against working software — and that difference
+> must be recorded with whatever findings come out, not silently averaged into a sample of two.
+>
+> **The one exception is the question at screen 07, below.** ADR 0016's reopening condition rests
+> on comparing two answers to that same question, so it must be asked **word for word, unchanged,**
+> in every session, prototype or product, or the comparison stops meaning what it says.
+
 The point of the session is to find out where someone hesitates. A session where the owner
 understood everything and liked it all teaches nothing and probably means the questions were
 leading.

@@ -231,11 +231,17 @@ with `environment: "node"`, and `packages/publisher` moved to **here** in the RE
 | unzip the ZIP into an empty directory and open its `index.html` | identical result, and **no manifest file inside** |
 | `pre-commit run --all-files` | six hooks, all Passed |
 
-- [ ] New tests that failed before and pass now
-- [ ] `pnpm test:golden` byte-identical
-- [ ] Two builds of the same fixture produce identical ZIP bytes
-- [ ] No third-party runtime dependency in `packages/publisher/package.json`
-- [ ] No keys and no real client data
+**Status: done.** Verified 25 September 2026: two independent runs of
+`pnpm site:sample barbershop-cover` produced byte-identical ZIPs (`cmp` clean); the extracted ZIP
+contains `assets/`, `index.html` and `robots.txt` only — no manifest file; `packages/publisher`'s
+only dependencies are `@retorika/schema` and `@retorika/renderer`, both workspace packages, no
+third party. `pnpm test` (453/453) and `pnpm test:golden` (13/13, untouched) both green.
+
+- [x] New tests that failed before and pass now
+- [x] `pnpm test:golden` byte-identical
+- [x] Two builds of the same fixture produce identical ZIP bytes
+- [x] No third-party runtime dependency in `packages/publisher/package.json`
+- [x] No keys and no real client data — `pre-commit run gitleaks --all-files` passes repo-wide
 
 ## Out of scope
 

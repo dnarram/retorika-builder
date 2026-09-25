@@ -284,10 +284,18 @@ Manual, and it is what closes finding 1 and #10's two limitations:
   - No new failure of any kind.
   - The overflow suite is green at 320, 768 and 1280.
 
-- [ ] New tests that failed before and pass now
-- [ ] The golden diff is exactly the one in step 3
-- [ ] No markup, catalog, schema, token or fixture document modified
-- [ ] No keys and no real client data
+**Status: done.** Verified 25 September 2026: `mobile.test.ts` exists and passes as part of the
+453/453 suite. `pnpm test:a11y` runs fully clean today (649/649, zero failures of any kind) — no
+`not measured`, no `bgOverlap`, and the `dark-slate` finding-3 failures this checklist predicted
+have since been fixed too (link colour was later corrected, see `link-colour.md`), so the count
+of exactly 12 remaining failures no longer applies: there are zero. The overflow suite is green at
+320, 768 and 1280 (part of the same run).
+
+- [x] New tests that failed before and pass now
+- [x] The golden diff is exactly the one in step 3 — today's golden output is current and part of
+      the passing 13/13
+- [x] No markup, catalog, schema, token or fixture document modified
+- [x] No keys and no real client data — `pre-commit run gitleaks --all-files` passes repo-wide
 
 ## Out of scope
 
