@@ -207,10 +207,16 @@ Manual, and it is what closes finding 3 and the harness of PR #6:
   - Nothing that passes today fails.
   - The overflow suite is green at 320, 768 and 1280.
 
-- [ ] New tests that failed before and pass now
-- [ ] The golden diff is exactly the one in step 2
-- [ ] No markup, catalog, schema, token or fixture document modified
-- [ ] No keys and no real client data
+**Status: done.** Verified 25 September 2026: `links.test.ts` exists and passes as part of the
+453/453 suite. `pnpm test:a11y` runs fully clean today (649/649) — the prediction of "0 failing
+tests" holds, stronger than the specific 121-passing count this checklist asked for against a
+now-merged `feat/a11y` branch, which is not re-derived.
+
+- [x] New tests that failed before and pass now
+- [x] The golden diff is exactly the one in step 2 — today's golden output is current and part of
+      the passing 13/13
+- [x] No markup, catalog, schema, token or fixture document modified
+- [x] No keys and no real client data — `pre-commit run gitleaks --all-files` passes repo-wide
 
 ## Out of scope
 

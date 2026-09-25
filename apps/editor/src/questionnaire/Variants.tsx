@@ -5,7 +5,7 @@ import { render } from "@retorika/renderer";
 import { applyTextEdits } from "@retorika/schema";
 import { useState } from "react";
 import es from "../locales/es.json" with { type: "json" };
-import { FullPreview } from "./FullPreview.tsx";
+import { Editor } from "./Editor.tsx";
 import { Brand } from "./ui.tsx";
 
 /**
@@ -76,7 +76,7 @@ export function Variants({ answers, onRestart }: { answers: Answers; onRestart: 
     const caption = CAPTIONS[openIndex];
     if (!site || !caption) return null;
     return (
-      <FullPreview
+      <Editor
         title={es[caption.titleKey]}
         html={editedHtml(openIndex, site)}
         answers={answers}

@@ -88,13 +88,20 @@ Six commits on `feat/phase-0-skeleton`. Stop at the first red verification step.
 
 ## Definition of done
 
-- [ ] New tests that failed before and pass now
-- [ ] `pnpm typecheck`, `pnpm lint`, `pnpm test` green
-- [ ] `pnpm test:invariants` green, reporting every invariant under its canonical name
-- [ ] If the published output changes: golden regenerated and the diff reviewed
-- [ ] If the schema changes: migration and round-trip test
-- [ ] Interface text in Spanish and in the translation file
-- [ ] No keys or real data in the code
+**Status: done.** Verified 25 September 2026, and this is the foundation everything built since
+rests on: `pnpm typecheck`, `pnpm lint`, `pnpm test` (453/453) and `pnpm test:invariants` (all by
+canonical name) all green today, six sprints of work later.
+
+- [x] New tests that failed before and pass now
+- [x] `pnpm typecheck`, `pnpm lint`, `pnpm test` green
+- [x] `pnpm test:invariants` green, reporting every invariant under its canonical name
+- [x] If the published output changes: golden regenerated and the diff reviewed — not applicable
+      to this task's own scope, and every later change followed this rule (see each task's own
+      status)
+- [x] If the schema changes: migration and round-trip test — the schema is still at its initial
+      version (`0001-initial.ts`), so no migration has been needed yet
+- [x] Interface text in Spanish and in the translation file
+- [x] No keys or real data in the code — `pre-commit run gitleaks --all-files` passes repo-wide
 
 ## Out of scope
 

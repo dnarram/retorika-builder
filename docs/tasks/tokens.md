@@ -240,11 +240,16 @@ Run each of these and check the stated answer.
 | `pnpm coverage:ratchet` | `floor unchanged` or `floor raised` |
 | `pre-commit run --all-files` | six hooks, all Passed |
 
-- [ ] New tests that failed before and pass now
-- [ ] Interface text in Spanish and in a translation file — `nameKey` holds a key, never a
+**Status: done.** Verified 25 September 2026: `pnpm vitest run --project tokens` passes 27/27, all
+four palettes reported by name in the contrast test. Every `Palette` carries `nameKey` (e.g.
+`palette.classicBlue`), never a Spanish string inline. `pnpm test:coverage`, `pnpm test:golden`
+(13/13, unchanged) and `pnpm coverage:ratchet` (`floor unchanged against HEAD`) all green.
+
+- [x] New tests that failed before and pass now
+- [x] Interface text in Spanish and in a translation file — `nameKey` holds a key, never a
       Spanish string in a `.ts` file
-- [ ] No keys and no real client data
-- [ ] `pnpm test:golden` unchanged: no rendered byte moved
+- [x] No keys and no real client data — `pre-commit run gitleaks --all-files` passes repo-wide
+- [x] `pnpm test:golden` unchanged: no rendered byte moved
 
 ## Out of scope
 

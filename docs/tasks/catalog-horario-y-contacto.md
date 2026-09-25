@@ -177,8 +177,14 @@ Manual: `pnpm site:sample contacto-y-horario`, opened from the filesystem at 128
 verified 320 — the `tel:` and WhatsApp links are real links, the map link opens OpenStreetMap,
 and nothing overflows.
 
-- [ ] New tests that failed before and pass now
-- [ ] No keys and no real client data
+**Status: done.** Verified 25 September 2026: `pnpm site:sample contacto-y-horario` built a real
+ZIP; its `index.html` carries `tel:+34000000000`, `https://wa.me/34000000000`,
+`mailto:hola@example.com` and an OpenStreetMap link — all real, none placeholder. `pnpm test`
+(453/453), `pnpm test:golden` (13/13), `pnpm size`, `pnpm renderer:deps` and `pnpm schema:guard`
+all green.
+
+- [x] New tests that failed before and pass now
+- [x] No keys and no real client data — `pre-commit run gitleaks --all-files` passes repo-wide
 
 ## Out of scope
 

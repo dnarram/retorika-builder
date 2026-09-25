@@ -1,20 +1,47 @@
+@import "tailwindcss";
+
 /**
  * The interface's own tokens (ADR 0015).
  *
  * These are not `packages/tokens`. They never enter a document's theme, never travel in a
  * client's ZIP, and no generated site is styled from them. A client's site gets its colours
  * from its own palette, which is why they are kept apart by name as well as by file.
+ *
+ * --ui-muted was #64748B, the mockups' own value, until day 2 of the first sprint found it fails
+ * WCAG AA (2.56:1 on white, needs 4.5:1) and replaced it with #5B6B82 everywhere the interface
+ * was hand-styled. That fix never reached this file, so it still declared the failing value even
+ * though nothing read it yet. Fixed here, before Tailwind gives it a `text-ui-muted` utility that
+ * would otherwise carry the same defect into every new screen that reaches for it.
  */
 :root {
   --ui-bg: #f5f7fa;
   --ui-surface: #ffffff;
   --ui-border: #e8ecf2;
   --ui-ink: #0f172a;
-  --ui-muted: #64748b;
+  --ui-muted: #5b6b82;
   --ui-brand: #156fe7;
   --ui-brand-surface: #e8f1fe;
   --ui-ok: #03d26e;
   --ui-radius: 14px;
+}
+
+/**
+ * Tailwind utilities for the tokens above — `bg-ui-brand`, `text-ui-muted`, `border-ui-border`,
+ * `rounded-ui` — generated from the same `--ui-*` variables, never a palette of Tailwind's own.
+ * `inline` keeps each entry a live `var(--ui-*)` reference rather than a value Tailwind copies in
+ * at build time, so a token changed above changes every utility that uses it, with one source of
+ * truth (protocol §3.3: "Tailwind... no interfiere con los estilos del sitio generado").
+ */
+@theme inline {
+  --color-ui-bg: var(--ui-bg);
+  --color-ui-surface: var(--ui-surface);
+  --color-ui-border: var(--ui-border);
+  --color-ui-ink: var(--ui-ink);
+  --color-ui-muted: var(--ui-muted);
+  --color-ui-brand: var(--ui-brand);
+  --color-ui-brand-surface: var(--ui-brand-surface);
+  --color-ui-ok: var(--ui-ok);
+  --radius-ui: var(--ui-radius);
 }
 
 * {

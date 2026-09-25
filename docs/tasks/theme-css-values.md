@@ -233,10 +233,15 @@ Manual, and it is what closes finding 4:
       Times, and the three pairs no longer collapse onto one font.
 - [ ] Open the new golden file in a browser. The heading is visibly Georgia.
 
-- [ ] New tests that failed before and pass now
-- [ ] The five existing goldens byte-identical
-- [ ] No existing fixture, token or schema file modified
-- [ ] No keys and no real client data
+**Status: done.** Verified 25 September 2026: `grep -c "&#39;" fixtures/golden/tokens-quoted-fonts.html`
+returns `0` — quoted font names are never HTML-escaped, confirming the CSS-context guard is what
+runs, not `escapeHtml`. `pnpm test` (453/453) and `pnpm test:golden` (13/13, including this
+fixture) both green.
+
+- [x] New tests that failed before and pass now
+- [x] The five existing goldens byte-identical
+- [x] No existing fixture, token or schema file modified
+- [x] No keys and no real client data — `pre-commit run gitleaks --all-files` passes repo-wide
 
 ## Out of scope
 

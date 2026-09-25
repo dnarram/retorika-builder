@@ -211,11 +211,19 @@ git grep -n -e "golden -u" -e 'includes("-u")' -e "with -u" -e "-u\` regenerates
 - The new header comment of `golden.test.ts` has to be worded so it does not match either: it
   never says "golden -u" or "with -u".
 
-- [ ] The four probes of step 3 behave as described
-- [ ] New tests that failed before and pass now
-- [ ] No rendered byte, golden or fixture changed
-- [ ] The pull request says `Closes #8`
-- [ ] No keys and no real client data
+**Status: done.** Re-probed live 25 September 2026: moving `barbershop-cover.html` aside and
+running `pnpm test:golden` fails naming it, with exactly the message above; a one-byte change to
+the golden followed by `pnpm test:golden -u` fails and leaves the file unchanged (vitest's own
+`-u` does nothing to this guard); the grep for old regeneration language finds zero matches
+outside `docs/tasks`. Both probes were undone — `git diff --stat fixtures/golden` was empty
+afterwards and `pnpm test:golden` returned to 13/13.
+
+- [x] The four probes of step 3 behave as described
+- [x] New tests that failed before and pass now
+- [x] No rendered byte, golden or fixture changed
+- [ ] The pull request says `Closes #8` — historical, from this feature's original PR; not
+      re-verifiable from the current tree
+- [x] No keys and no real client data — `pre-commit run gitleaks --all-files` passes repo-wide
 
 ## Out of scope
 

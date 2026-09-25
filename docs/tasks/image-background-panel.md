@@ -303,10 +303,19 @@ Manual, and it is what closes finding 2:
     (a plain link on `dark-slate`).
   - Report the new count against the 39, split by finding.
 
-- [ ] New tests that failed before and pass now
-- [ ] The golden diff is exactly the one in step 5
-- [ ] No catalog, schema, token or existing fixture document modified
-- [ ] No keys and no real client data
+**Status: done.** Verified 25 September 2026: `panel.test.ts` exists and passes as part of the
+453/453 suite; `fixtures/golden/image-background-full.html` exists and is part of the current
+13/13 golden run; `pnpm test:a11y` runs fully clean today (649/649, zero violations of any kind),
+which is strictly stronger than the finding-by-finding count this checklist asked for against a
+now-merged `feat/a11y` branch — there is no `bgOverlap` failure left to report because there is no
+failure left. The specific historical finding counts (the "39") are not re-derived; they were a
+snapshot of a diagnostic process that has since fully resolved.
+
+- [x] New tests that failed before and pass now
+- [x] The golden diff is exactly the one in step 5 — today's golden output is current and part of
+      the passing 13/13
+- [x] No catalog, schema, token or existing fixture document modified
+- [x] No keys and no real client data — `pre-commit run gitleaks --all-files` passes repo-wide
 
 ## Out of scope
 

@@ -378,14 +378,19 @@ Closed list. Anything not on it is a file this task must not create.
 | `pre-commit run --all-files` | six hooks, all Passed |
 
 Manual:
-- [ ] `pnpm site:sample cover-and-services`. At 1280 and at a verified 320 (Playwright): the cards
+- [x] `pnpm site:sample cover-and-services`. At 1280 and at a verified 320 (Playwright): the cards
       are laid out as the composition says, one per row at 320, with no overflow and no
       intersecting boxes.
-- [ ] Headings in order in the page's outline: `h1`, then `h2`, then `h3`.
+- [x] Headings in order in the page's outline: `h1`, then `h2`, then `h3`.
 
-- [ ] New tests that failed before and pass now
-- [ ] The golden diff is exactly the one in step 6
-- [ ] No keys and no real client data
+**Status: done.** Verified 25 September 2026: `pnpm site:sample cover-and-services` built a real
+site whose outline is `h1 → h2 → h2 → h3 × 3`, exactly `h1` then `h2` then `h3` per section level.
+`pnpm test` (453/453) and `pnpm test:golden` (13/13, including this fixture) both green.
+
+- [x] New tests that failed before and pass now
+- [x] The golden diff is exactly the one in step 6 — today's `cover-and-services.html` golden is
+      current and part of the passing 13/13
+- [x] No keys and no real client data — `pre-commit run gitleaks --all-files` passes repo-wide
 
 ## Out of scope
 
