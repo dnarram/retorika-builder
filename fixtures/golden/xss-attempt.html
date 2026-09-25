@@ -65,20 +65,20 @@ body { margin: 0; font-family: var(--font-body); color: var(--color-ink);
 <body>
 <main class="rb-page" data-page="home">
   <section class="rb-section rb-cover rb-image-right" data-preset="cover" data-section="sec-cover" data-variant="image-right">
-    <h1 data-role="heading" data-slot="headline" style="grid-column:1/span 6;grid-row:1/span 1">
+    <h1 data-id="el-headline" data-role="heading" data-slot="headline" style="grid-column:1/span 6;grid-row:1/span 1">
       &quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;
     </h1>
-    <h2 data-role="subheading" data-slot="subheadline" style="grid-column:1/span 6;grid-row:2/span 1">
+    <h2 data-id="el-sub" data-role="subheading" data-slot="subheadline" style="grid-column:1/span 6;grid-row:2/span 1">
       &quot; onerror=alert(2) x=&quot;
     </h2>
-    <p data-role="body" data-slot="body" style="grid-column:1/span 6;grid-row:3/span 1">
+    <p data-id="el-body" data-role="body" data-slot="body" style="grid-column:1/span 6;grid-row:3/span 1">
       a &quot;double quote&quot; that ends up in an attribute
     </p>
-    <img alt="&quot; onerror=alert(3) &quot;" data-role="image" data-slot="image" src="assets/xss.svg" style="grid-column:7/span 6;grid-row:1/span 4">
-    <a data-role="button" data-slot="primaryAction" href="#" role="button" style="grid-column:1/span 3;grid-row:4/span 1">
+    <img alt="&quot; onerror=alert(3) &quot;" data-id="el-image" data-role="image" data-slot="image" src="assets/xss.svg" style="grid-column:7/span 6;grid-row:1/span 4">
+    <a data-id="el-cta" data-role="button" data-slot="primaryAction" href="#" role="button" style="grid-column:1/span 3;grid-row:4/span 1">
       Click me
     </a>
-    <a data-role="link" data-slot="secondaryAction" href="#" style="grid-column:4/span 3;grid-row:4/span 1">
+    <a data-id="el-link" data-role="link" data-slot="secondaryAction" href="#" style="grid-column:4/span 3;grid-row:4/span 1">
       Other
     </a>
   </section>

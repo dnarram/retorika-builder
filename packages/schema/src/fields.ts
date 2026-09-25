@@ -65,3 +65,64 @@ export function listEditableFields(doc: RetorikaDocument): EditableField[] {
   }
   return fields;
 }
+
+/** The write side of textOf: the same field each value kind carries, replaced. */
+function withText(element: ContentElement, text: string): ContentElement {
+  const value = element.value;
+  if (!value) return element;
+  switch (value.kind) {
+    case "text":
+    case "link":
+      return { ...element, value: { ...value, text } };
+    case "image":
+      return { ...element, value: { ...value, alt: text } };
+    case "map":
+    case "embed":
+    case "field":
+      return { ...element, value: { ...value, label: text } };
+  }
+}
+
+function mapElements(
+  elements: readonly ContentElement[],
+  edits: Readonly<Record<string, string>>,
+): ContentElement[] {
+  return elements.map((element) => {
+    const replacement = edits[element.id];
+    const edited = replacement === undefined ? element : withText(element, replacement);
+    if (!edited.items) return edited;
+    return {
+      ...edited,
+      items: edited.items.map((item) => ({
+        ...item,
+        elements: mapElements(item.elements, edits),
+      })),
+    };
+  });
+}
+
+/**
+ * The write side of listEditableFields: the same elementId addressing, applied back onto
+ * the document. Only ever replaces a value already there — never adds, removes or moves an
+ * element — so it cannot break rules 1-5, which are all about structure, never content.
+ *
+ * An id with no matching field is left untouched rather than rejected: the caller (day 6's
+ * download route) already treats an unknown id as harmless, and this is the one place both
+ * the live preview and the ZIP apply the same edits, so it stays permissive here too.
+ */
+export function applyTextEdits(
+  doc: RetorikaDocument,
+  edits: Readonly<Record<string, string>>,
+): RetorikaDocument {
+  if (Object.keys(edits).length === 0) return doc;
+  return {
+    ...doc,
+    pages: doc.pages.map((page) => ({
+      ...page,
+      sections: page.sections.map((section) => ({
+        ...section,
+        content: mapElements(section.content, edits),
+      })),
+    })),
+  };
+}
