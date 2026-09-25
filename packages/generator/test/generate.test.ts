@@ -6,7 +6,14 @@ import {
   type Section,
 } from "@retorika/schema";
 import { describe, expect, it } from "vitest";
-import { type Answers, EMPTY_ANSWERS, generate, generateVariants, VARIANTS } from "../src/index.ts";
+import {
+  type Answers,
+  contactSectionFor,
+  EMPTY_ANSWERS,
+  generate,
+  generateVariants,
+  VARIANTS,
+} from "../src/index.ts";
 
 function answers(overrides: Partial<Answers>): Answers {
   return { ...EMPTY_ANSWERS, ...overrides };
@@ -192,6 +199,54 @@ describe("contact (question 5)", () => {
     const contact = findSection(document, "contact");
     const secondary = contact.content.find((el) => el.slot === "secondaryAction");
     expect(secondary?.value?.kind === "link" && secondary.value.href).toBe("tel:+34600000000");
+  });
+});
+
+describe("contactSectionFor", () => {
+  /** What the editor's "Añadir sección aquí" menu asks before offering "Contacto y reservas":
+   * this is the one catalog section that cannot be born blank, because its button is a
+   * destination and no marker text can stand in for one. */
+  it("builds a section carrying question 5's own destination", () => {
+    const section = contactSectionFor(
+      answers({
+        businessName: "X",
+        sector: "tienda",
+        mainAction: "call",
+        phone: "+34600000000",
+      }),
+    );
+    const primary = section?.content.find((el) => el.slot === "primaryAction");
+    expect(primary?.value?.kind === "link" && primary.value.href).toBe("tel:+34600000000");
+  });
+
+  it("returns nothing for 'visit', so the menu leaves the section out and says why", () => {
+    expect(
+      contactSectionFor(answers({ businessName: "X", sector: "tienda", mainAction: "visit" })),
+    ).toBeUndefined();
+  });
+
+  it("returns nothing when the chosen action's own field was left empty", () => {
+    expect(
+      contactSectionFor(
+        answers({ businessName: "X", sector: "tienda", mainAction: "message", whatsapp: "" }),
+      ),
+    ).toBeUndefined();
+  });
+
+  it("returns nothing at all before question 5 has been answered", () => {
+    expect(contactSectionFor(MINIMAL)).toBeUndefined();
+  });
+
+  it("agrees with what generate() put in the document, rather than building a second opinion", () => {
+    const filled = answers({
+      businessName: "X",
+      sector: "tienda",
+      mainAction: "email",
+      email: "hola@example.com",
+    });
+    const fromDocument = findSection(generate(filled).document, "contact");
+    const offered = contactSectionFor(filled);
+    expect(offered?.content).toEqual(fromDocument.content);
   });
 });
 

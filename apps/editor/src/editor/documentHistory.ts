@@ -1,7 +1,8 @@
-import type { ElementAddress, RetorikaDocument } from "@retorika/schema";
+import type { ElementAddress, RetorikaDocument, Section } from "@retorika/schema";
 import {
   deleteSection as deleteSectionFromDoc,
   duplicateSection as duplicateSectionFromDoc,
+  insertSection as insertSectionIntoDoc,
   mintSectionId,
   moveSection as moveSectionFromDoc,
   setElementText,
@@ -29,6 +30,7 @@ export type SnapshotCause =
   | { type: "deleteSection"; sectionId: string }
   | { type: "duplicateSection"; sectionId: string; newSectionId: string }
   | { type: "moveSection"; sectionId: string }
+  | { type: "insertSection"; sectionId: string }
   | null;
 
 export interface Snapshot {
@@ -49,6 +51,7 @@ export type HistoryAction =
   | { type: "deleteSection"; variant: number; sectionId: string }
   | { type: "duplicateSection"; variant: number; sectionId: string }
   | { type: "moveSection"; variant: number; sectionId: string; toIndex: number }
+  | { type: "insertSection"; variant: number; section: Section; index: number }
   | { type: "undo"; variant: number }
   | { type: "redo"; variant: number };
 
@@ -107,6 +110,32 @@ function moveSection(history: History, sectionId: string, toIndex: number): Hist
   return { past: [...history.past, history.present].slice(-LIMIT), present, future: [] };
 }
 
+/**
+ * A section built elsewhere, dropped into the page at `index`.
+ *
+ * The section arrives fully formed because what a valid one looks like belongs to the catalog
+ * (`blankSection`) or to the questionnaire's answers (`contactSectionFor`), neither of which this
+ * module should know about. What it does own is the id: the caller's is a template's, so it is
+ * re-minted here against the very document being written, which is the only place that knows
+ * what is free — and which keeps inserting two of the same section in a row from colliding.
+ *
+ * The page is the first one, the same page the preview renders (`packages/renderer` draws
+ * `doc.pages[0]`). Phase 1 has exactly one; when `Páginas` arrives in phase 2 this is where the
+ * choice of which one has to come from.
+ */
+function insertSection(history: History, section: Section, index: number): History {
+  const page = history.present.document.pages[0];
+  if (!page) throw new Error("insertSection: the document has no page to insert into");
+
+  const sectionId = mintSectionId(history.present.document, section.id);
+  const document = insertSectionIntoDoc(history.present.document, page.id, index, {
+    ...section,
+    id: sectionId,
+  });
+  const present: Snapshot = { document, cause: { type: "insertSection", sectionId } };
+  return { past: [...history.past, history.present].slice(-LIMIT), present, future: [] };
+}
+
 function undo(history: History): History {
   const previous = history.past.at(-1);
   if (!previous) return history;
@@ -142,9 +171,11 @@ export function historiesReducer(state: Histories, action: HistoryAction): Histo
           ? duplicateSection(history, action.sectionId)
           : action.type === "moveSection"
             ? moveSection(history, action.sectionId, action.toIndex)
-            : action.type === "undo"
-              ? undo(history)
-              : redo(history);
+            : action.type === "insertSection"
+              ? insertSection(history, action.section, action.index)
+              : action.type === "undo"
+                ? undo(history)
+                : redo(history);
 
   // Undo with nothing to undo changes nothing, and must not make React re-render the preview.
   if (next === history) return state;

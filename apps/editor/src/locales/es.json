@@ -126,6 +126,12 @@
   "editor.duplicateSection": "Duplicar esta sección",
   "editor.moveSectionUp": "Subir esta sección",
   "editor.moveSectionDown": "Bajar esta sección",
+  "editor.addSectionHere": "Añadir sección aquí",
+  "editor.addSection.title": "¿Qué sección añades?",
+  "editor.addSection.close": "Cerrar",
+  "editor.addSection.contactUnavailable": "«Contacto y reservas» no está en la lista: en la pregunta 5 no diste un teléfono, un WhatsApp, un enlace de reservas ni un correo al que pueda llevar su botón.",
+  "editor.placeholder.one": "Queda 1 texto de ejemplo sin cambiar. Puedes descargar igualmente, pero saldrá tal cual en tu web.",
+  "editor.placeholder.many": "Quedan {count} textos de ejemplo sin cambiar. Puedes descargar igualmente, pero saldrán tal cual en tu web.",
   "editor.toast.deleted": "Has borrado la sección «{name}»",
   "editor.toast.undo": "Deshacer",
   "editor.toast.dismiss": "Cerrar aviso"

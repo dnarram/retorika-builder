@@ -242,4 +242,98 @@ describe("POST /api/download", () => {
       expect(response.status).toBe(413);
     });
   });
+  describe("a button that points nowhere", () => {
+    /** The contact section's main action, with whatever href the test wants to try. */
+    function withContactHref(href: string): RetorikaDocument {
+      const page = REAL_DOCUMENT.pages[0];
+      if (!page) throw new Error("no page in the fixture");
+      return {
+        ...REAL_DOCUMENT,
+        pages: [
+          {
+            ...page,
+            sections: page.sections.map((section) =>
+              section.preset.catalogId !== "contact"
+                ? section
+                : {
+                    ...section,
+                    content: section.content.map((element) =>
+                      element.value?.kind === "link" && element.slot === "primaryAction"
+                        ? { ...element, value: { ...element.value, href } }
+                        : element,
+                    ),
+                  },
+            ),
+          },
+        ],
+      };
+    }
+
+    it("lets a contact section with a real destination through", async () => {
+      // The one the questionnaire actually produced, and the one inserting "Contacto y
+      // reservas" from the editor re-uses: it carries question 5's own answer.
+      const response = await POST(request({ document: REAL_DOCUMENT }));
+      expect(response.status).toBe(200);
+    });
+
+    it("refuses a document whose main action has an empty destination", async () => {
+      const response = await POST(request({ document: withContactHref("") }));
+      expect(response.status).toBe(400);
+    });
+
+    it("refuses a bare # too, which navigates nowhere just the same", async () => {
+      const response = await POST(request({ document: withContactHref("#") }));
+      expect(response.status).toBe(400);
+    });
+
+    it("names the section and the label, so the refusal can be acted on", async () => {
+      const response = await POST(request({ document: withContactHref("") }));
+      const message = await response.text();
+      expect(message).toContain("sec-contact");
+      expect(message).toContain("primaryAction");
+    });
+
+    it("says how many more there are when several point nowhere", async () => {
+      const dead = withContactHref("");
+      const page = dead.pages[0];
+      if (!page) throw new Error("no page in the fixture");
+      const contact = page.sections.find((section) => section.preset.catalogId === "contact");
+      if (!contact) throw new Error("no contact section in the fixture");
+      const twice: RetorikaDocument = {
+        ...dead,
+        pages: [{ ...page, sections: [...page.sections, { ...contact, id: "sec-contact-2" }] }],
+      };
+      const message = await (await POST(request({ document: twice }))).text();
+      expect(message).toContain("1 more");
+    });
+
+    it("says nothing about a dead link nobody can see", async () => {
+      // Rule 3 parks a hidden element rather than deleting it; the renderer drops it, so it
+      // never reaches the published page and cannot break anything there.
+      const dead = withContactHref("");
+      const page = dead.pages[0];
+      if (!page) throw new Error("no page in the fixture");
+      const hidden: RetorikaDocument = {
+        ...dead,
+        pages: [
+          {
+            ...page,
+            sections: page.sections.map((section) =>
+              section.preset.catalogId !== "contact"
+                ? section
+                : {
+                    ...section,
+                    content: section.content.map((element) =>
+                      element.slot === "primaryAction" ? { ...element, hidden: true } : element,
+                    ),
+                  },
+            ),
+          },
+        ],
+      };
+      // Hiding a 1..1 slot is legal (checkAgainstPreset counts hidden towards the minimum),
+      // so what is left to judge is only the dead link, and it is not on the page.
+      expect((await POST(request({ document: hidden }))).status).toBe(200);
+    });
+  });
 });

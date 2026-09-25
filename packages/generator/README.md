@@ -21,7 +21,7 @@ content, three real layouts.
 Each is a real gap, decided with the product owner, not silently worked around:
 
 - **No image the owner uploaded is ever used.** The cover's `image` slot always gets the same
-  inline placeholder (`placeholder-image.ts`), the same one
+  inline placeholder (`@retorika/catalog`'s `placeholder-image.ts`), the same one
   `docs/design/prototype/*/assets/foto-muestra.svg` used, because `packages/photobank` does not
   exist — ADR 0011 needs real photos, generated and reviewed like the text bank.
 - **The logo is captured, never analysed.** ADR 0010 says "sin logo, la paleta por defecto del

@@ -4,6 +4,7 @@ import {
   checkAgainstPreset,
   DocumentValidationError,
   flattenElements,
+  listDeadDestinations,
   listEditableFields,
   parseDocument,
   type RetorikaDocument,
@@ -104,6 +105,32 @@ function assertPresetsMatch(doc: RetorikaDocument): void {
   }
 }
 
+/**
+ * A button that points nowhere never travels inside a ZIP.
+ *
+ * The published site is a file with no server behind it, so a dead `href` does not fail softly:
+ * the visitor presses "Reserva tu cita" and the page reloads itself. Refused here rather than
+ * only in the button that starts the download, because this route is the guarantee and the
+ * button is the convenience — this is a public, unauthenticated endpoint, and the filter is the
+ * validation, not the trust.
+ *
+ * Nothing this app produces can reach here: a section added from the editor is either built
+ * blank by the catalog, which refuses to invent a destination and so never carries a link slot
+ * it cannot fill, or built from the questionnaire's own answer to question 5, which has a real
+ * one. Filling a destination in by hand does not exist yet; when it does, this is the rule it
+ * has to satisfy.
+ */
+function assertNoDeadDestinations(doc: RetorikaDocument): void {
+  const dead = listDeadDestinations(doc);
+  const first = dead[0];
+  if (!first) return;
+  throw new RequestError(
+    `section "${first.sectionId}": "${first.text}" (slot "${first.slot}") points nowhere` +
+      (dead.length > 1 ? `, and ${dead.length - 1} more link(s) like it` : ""),
+    400,
+  );
+}
+
 export async function POST(request: Request): Promise<Response> {
   const contentLength = Number(request.headers.get("content-length") ?? 0);
   if (contentLength > MAX_BODY_BYTES) {
@@ -126,6 +153,7 @@ export async function POST(request: Request): Promise<Response> {
     document = parseDocument(rawDocument);
     assertBounds(document);
     assertPresetsMatch(document);
+    assertNoDeadDestinations(document);
   } catch (error) {
     if (error instanceof RequestError) {
       return new Response(error.message, { status: error.status });
@@ -139,7 +167,7 @@ export async function POST(request: Request): Promise<Response> {
   // Copied into a fresh, concrete ArrayBuffer: bundleToZip's Uint8Array is backed by whatever
   // Buffer.concat handed it, typed as the generic ArrayBufferLike that Response's BodyInit does
   // not accept. `assets` is always empty: every image this app produces is a self-contained
-  // data: URI (see packages/generator/src/placeholder-image.ts), which buildSite leaves inline
+  // data: URI (see packages/catalog/src/placeholder-image.ts), which buildSite leaves inline
   // and needs no bundled file for.
   const zip = new Uint8Array(
     bundleToZip(buildSite(document, { siteId: document.id, assets: new Map() })),

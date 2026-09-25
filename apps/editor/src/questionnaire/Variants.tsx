@@ -1,10 +1,11 @@
 "use client";
 
+import { blankSection, CATALOG, CONTACT_ID, canBeBlank, variantsFor } from "@retorika/catalog";
 import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
-import { type Answers, generateVariants } from "@retorika/generator";
+import { type Answers, contactSectionFor, generateVariants } from "@retorika/generator";
 import { render } from "@retorika/renderer";
-import { findSection, type RetorikaDocument } from "@retorika/schema";
-import { useEffect, useReducer, useRef, useState } from "react";
+import { findSection, type RetorikaDocument, type Section } from "@retorika/schema";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { saveSession } from "../editor/autosave.ts";
 import {
   type History,
@@ -13,7 +14,7 @@ import {
   wasSectionEverEdited,
 } from "../editor/documentHistory.ts";
 import es from "../locales/es.json" with { type: "json" };
-import { type DeleteToast, Editor } from "./Editor.tsx";
+import { type DeleteToast, Editor, type SectionOffer } from "./Editor.tsx";
 import { Brand } from "./ui.tsx";
 
 /** The catalog's own Spanish name for a section, e.g. `section.cover.name` → "Portada" —
@@ -22,6 +23,33 @@ import { Brand } from "./ui.tsx";
 function catalogSectionName(catalogId: string): string {
   const key = `section.${catalogId}.name` as keyof typeof catalogEs;
   return catalogEs[key] ?? catalogId;
+}
+
+/** The catalog's one-line description, e.g. `section.services.description` — what the
+ * "Añadir sección aquí" menu shows under each name so the choice is made by what the section
+ * does, not by its catalog id. */
+function catalogSectionDescription(catalogId: string): string {
+  const key = `section.${catalogId}.description` as keyof typeof catalogEs;
+  return catalogEs[key] ?? "";
+}
+
+/**
+ * The composition an inserted section is born with: the one the sections of that kind already
+ * in this document use, and the catalog's first otherwise.
+ *
+ * Matching matters because the three variant cards are three compositions, not three colour
+ * schemes — adding a second cover drawn "foto a la derecha" into the card whose covers are all
+ * "foto de fondo" would look like a rendering fault rather than a choice.
+ */
+function variantForInsertion(doc: RetorikaDocument, catalogId: string): string {
+  for (const page of doc.pages) {
+    for (const section of page.sections) {
+      if (section.preset.catalogId === catalogId) return section.preset.variantId;
+    }
+  }
+  const first = variantsFor(catalogId)[0];
+  if (!first) throw new Error(`variantForInsertion: "${catalogId}" declares no variant`);
+  return first;
 }
 
 /** How long a delete's undo toast stays for a section the user never touched (ADR 0014). A
@@ -131,6 +159,47 @@ export function Variants({
     setToast(null);
   }
 
+  /**
+   * The contact section these answers justify, if any — the one section that cannot be born
+   * blank, because its `primaryAction` is required and is a destination, and no marker text can
+   * honestly stand in for one. Built from question 5 instead, exactly as the generator built the
+   * original. When question 5 named no destination ("que vengan al local", or a field left
+   * empty) there is nothing to build, and the menu says so rather than offering a section that
+   * would arrive with a dead button in it.
+   */
+  const contactSection = useMemo(() => contactSectionFor(answers), [answers]);
+
+  const offers = useMemo<SectionOffer[]>(
+    () =>
+      Object.keys(CATALOG)
+        .filter((catalogId) =>
+          canBeBlank(catalogId) ? true : catalogId === CONTACT_ID && contactSection !== undefined,
+        )
+        .map((catalogId) => ({
+          catalogId,
+          name: catalogSectionName(catalogId),
+          description: catalogSectionDescription(catalogId),
+        })),
+    [contactSection],
+  );
+
+  function handleInsertSection(
+    variant: number,
+    history: History,
+    catalogId: string,
+    index: number,
+  ) {
+    dismissToast();
+    const doc = history.present.document;
+    const section: Section | undefined =
+      catalogId === CONTACT_ID
+        ? contactSection
+        : blankSection(catalogId, variantForInsertion(doc, catalogId), `sec-${catalogId}`);
+    // Only reachable for a contact section the menu would not have offered in the first place.
+    if (!section) throw new Error(`handleInsertSection: nothing to build for "${catalogId}"`);
+    dispatch({ type: "insertSection", variant, section, index });
+  }
+
   function handleDeleteSection(variant: number, history: History, sectionId: string) {
     const found = findSection(history.present.document, sectionId);
     const persistent = wasSectionEverEdited(history, sectionId);
@@ -168,6 +237,11 @@ export function Variants({
           dismissToast();
           dispatch({ type: "moveSection", variant: openIndex, sectionId, toIndex });
         }}
+        onInsertSection={(catalogId, index) =>
+          handleInsertSection(openIndex, history, catalogId, index)
+        }
+        offers={offers}
+        contactUnavailable={contactSection === undefined}
         canUndo={history.past.length > 0}
         canRedo={history.future.length > 0}
         onUndo={() => {

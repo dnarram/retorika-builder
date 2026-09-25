@@ -116,3 +116,38 @@ export function moveSection(
     }),
   });
 }
+
+/**
+ * A section placed at `toIndex` on a given page, the rest shifted down.
+ *
+ * The section arrives fully built — the catalog's `blankSection` or the generator's own
+ * `contactSectionFor` makes it — because what a valid empty section of a given kind looks like
+ * is the catalog's business, and this package must not depend on it (the dependency arrow runs
+ * catalog → schema, never back). All that is enforced here is what only the document can know:
+ * that the page exists and that the id is free. `mintSectionId` is how a caller gets a free one.
+ *
+ * `toIndex` is clamped, like `moveSection`: a caller inserting "after the last section" can pass
+ * `sections.length` or anything beyond it without special-casing the end.
+ */
+export function insertSection(
+  doc: RetorikaDocument,
+  pageId: string,
+  toIndex: number,
+  section: Section,
+): RetorikaDocument {
+  const page = doc.pages.find((candidate) => candidate.id === pageId);
+  if (!page) throw new Error(`insertSection: no page "${pageId}"`);
+  if (findSection(doc, section.id)) {
+    throw new Error(`insertSection: section id "${section.id}" is already taken`);
+  }
+
+  return parseDocument({
+    ...doc,
+    pages: doc.pages.map((candidate) => {
+      if (candidate.id !== pageId) return candidate;
+      const sections = [...candidate.sections];
+      sections.splice(Math.max(0, Math.min(toIndex, sections.length)), 0, section);
+      return { ...candidate, sections };
+    }),
+  });
+}
