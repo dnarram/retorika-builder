@@ -10,6 +10,17 @@ import { FieldError } from "./ui.tsx";
 type DownloadState = "idle" | "downloading" | "error";
 
 /**
+ * What the delete toast (ADR 0014) shows: a name and whether it stays until dismissed. `Variants`
+ * decides `persistent` — it is the one holding the undo history `wasSectionEverEdited` reads —
+ * and owns the timer that clears a non-persistent toast, since that has to survive this
+ * component unmounting if the user leaves the editor mid-toast.
+ */
+export interface DeleteToast {
+  sectionName: string;
+  persistent: boolean;
+}
+
+/**
  * The tags `packages/renderer/src/build.ts` emits for a `text` or `link` value: headings,
  * body copy, and a button or link's label. Everything else in the tree (`img`, the `<ul>`
  * a list renders as) carries `data-id` too but is not click-to-edit — there is no text on an
@@ -45,30 +56,38 @@ function filenameFrom(response: Response, fallback: string): string {
  * document, not answers plus a diff, is also what a section that can be added, deleted or
  * reordered requires.
  *
- * Section selection is purely cosmetic so far — a 2px outline and four corner handles injected
- * into the iframe's own DOM, mirroring mockup 08's per-element selection at section granularity.
- * Nothing downstream reads which section is selected yet; that arrives with delete, duplicate
- * and reorder, later this sprint.
+ * Section selection marks a section with a 2px outline and four corner handles injected into the
+ * iframe's own DOM, mirroring mockup 08's per-element selection at section granularity — and,
+ * since day 4, a small delete button drawn at the selected section's corner, the one action this
+ * sprint gives the selection to trigger. There is no confirmation: ADR 0014 is explicit that a
+ * delete runs immediately, with the undo it offers afterwards — reported up as
+ * `onDeleteSection(sectionId)`, the same pattern as an edit — as the only safety net.
  */
 export function Editor({
   title,
   document: doc,
   onEditText,
+  onDeleteSection,
   canUndo,
   canRedo,
   onUndo,
   onRedo,
   saveStatus,
+  toast,
+  onDismissToast,
   onBack,
 }: {
   title: string;
   document: RetorikaDocument;
   onEditText: (address: ElementAddress, text: string) => void;
+  onDeleteSection: (sectionId: string) => void;
   canUndo: boolean;
   canRedo: boolean;
   onUndo: () => void;
   onRedo: () => void;
   saveStatus: SaveStatus;
+  toast: DeleteToast | null;
+  onDismissToast: () => void;
   onBack: () => void;
 }) {
   const [state, setState] = useState<DownloadState>("idle");
@@ -86,7 +105,7 @@ export function Editor({
     function select(target: HTMLElement) {
       for (const section of sections) {
         section.classList.remove("rb-selected");
-        for (const handle of section.querySelectorAll(".rb-handle")) handle.remove();
+        for (const el of section.querySelectorAll(".rb-handle, .rb-delete")) el.remove();
       }
       target.classList.add("rb-selected");
       for (const corner of HANDLE_CORNERS) {
@@ -94,6 +113,24 @@ export function Editor({
         handle.className = `rb-handle rb-handle-${corner}`;
         target.appendChild(handle);
       }
+
+      const sectionId = target.dataset.section;
+      if (!sectionId) return;
+      const deleteButton = iframeDoc.createElement("button");
+      deleteButton.type = "button";
+      deleteButton.className = "rb-delete";
+      deleteButton.setAttribute("aria-label", es["editor.deleteSection"]);
+      deleteButton.innerHTML =
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" ' +
+        'stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6 7l1 13h10l1-13"/></svg>';
+      // Stopped here so the click does not also bubble to the section's own listener and
+      // re-run select() on a section that is about to be removed from the document entirely.
+      deleteButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        onDeleteSection(sectionId);
+      });
+      target.appendChild(deleteButton);
     }
 
     for (const section of sections) {
@@ -169,6 +206,15 @@ export function Editor({
       "  border: 2px solid #156FE7; border-radius: 2px; pointer-events: none; }",
       ".rb-handle-tl { top: -4px; left: -4px; } .rb-handle-tr { top: -4px; right: -4px; }",
       ".rb-handle-bl { bottom: -4px; left: -4px; } .rb-handle-br { bottom: -4px; right: -4px; }",
+      // Inset within the section, not hung outside it like the corner handles: the cover is
+      // the first section, with no room above it, and a button hanging above the top of the
+      // page there would sit outside the iframe's own visible area — covered by whatever the
+      // parent page draws above the iframe, and unclickable. Every section has room inside it.
+      ".rb-delete { position: absolute; top: 8px; right: 8px; width: 26px; height: 26px;",
+      "  display: flex; align-items: center; justify-content: center; background: #DC2626;",
+      "  border: 2px solid #FFFFFF; border-radius: 999px; cursor: pointer;",
+      "  box-shadow: 0 2px 6px rgba(15,23,42,0.28); }",
+      ".rb-delete:hover { background: #B91C1C; }",
     ].join("\n");
     iframeDoc.head.appendChild(style);
 
@@ -224,6 +270,56 @@ export function Editor({
         className="w-full flex-grow border-0 bg-ui-surface"
         style={{ minHeight: "60vh" }}
       />
+      {toast ? (
+        <div className="fixed bottom-[34px] left-1/2 z-10 flex -translate-x-1/2 items-center gap-5 rounded-[13px] bg-[#0F172A] py-3.5 pr-3.5 pl-5 shadow-[0_10px_30px_rgba(15,23,42,0.28)]">
+          <span className="inline-flex items-center gap-2.5 text-[15px] font-medium text-white">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#94A3B8"
+              strokeWidth={1.9}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M4 7h16" />
+              <path d="M9 7V5h6v2" />
+              <path d="M6 7l1 13h10l1-13" />
+            </svg>
+            {es["editor.toast.deleted"].replace("{name}", toast.sectionName)}
+          </span>
+          <button
+            type="button"
+            onClick={onUndo}
+            className="h-9 cursor-pointer rounded-[9px] border-0 bg-white px-[18px] text-sm font-semibold text-ui-ink"
+          >
+            {es["editor.toast.undo"]}
+          </button>
+          {toast.persistent ? (
+            <button
+              type="button"
+              onClick={onDismissToast}
+              aria-label={es["editor.toast.dismiss"]}
+              className="cursor-pointer border-0 bg-transparent text-[#94A3B8]"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                aria-hidden="true"
+              >
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </EditorShell>
   );
 }
