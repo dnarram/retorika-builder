@@ -1,5 +1,6 @@
 import { inflateRawSync } from "node:zlib";
-import type { Answers } from "@retorika/generator";
+import { EMPTY_ANSWERS, generate, VARIANTS } from "@retorika/generator";
+import type { RetorikaDocument, Section } from "@retorika/schema";
 import { describe, expect, it } from "vitest";
 import { POST } from "../src/app/api/download/route.ts";
 
@@ -34,26 +35,17 @@ function extractFile(bytes: Uint8Array, path: string): string {
   throw new Error(`"${path}" not found in the ZIP`);
 }
 
-/**
- * The exact shape a real walk through the questionnaire produces (mirrors the Playwright walk
- * used to verify day 4). This is the path that used to throw: the cover's placeholder image is
- * a data: URI, which buildSite rejected as an unsafe asset name until this day's fix.
- */
-const ANSWERS: Omit<Answers, "logo"> = {
+/** The exact shape a real walk through the questionnaire produces. */
+const REAL_DOCUMENT: RetorikaDocument = generate({
+  ...EMPTY_ANSWERS,
   businessName: "Taberna Santo Domingo",
   sector: "restaurante-bar",
-  otherSectorDescription: "",
   services: ["Comidas", "Cenas", "Tapas", "Terraza"],
   address: "Cta. de Santo Domingo, 2, Ronda",
   hours: "De martes a domingo, de 13:00 a 16:00 y de 20:00 a 23:30",
-  noPremises: false,
   mainAction: "book",
   bookingLink: "https://reservas.example.com/taberna",
-  alsoPhone: false,
-  phone: "",
-  whatsapp: "",
-  email: "",
-};
+}).document;
 
 function request(body: unknown): Request {
   return new Request("http://localhost/api/download", {
@@ -63,10 +55,27 @@ function request(body: unknown): Request {
   });
 }
 
+function findSection(doc: RetorikaDocument, catalogId: string): Section {
+  const section = doc.pages[0]?.sections.find((s) => s.preset.catalogId === catalogId);
+  if (!section) throw new Error(`no "${catalogId}" section in the fixture`);
+  return section;
+}
+
 describe("POST /api/download", () => {
-  it("builds a real ZIP in memory, for each of the three variants", async () => {
-    for (const variantIndex of [0, 1, 2]) {
-      const response = await POST(request({ answers: ANSWERS, variantIndex }));
+  it("builds a real ZIP in memory from a real document, for every variant composition", async () => {
+    for (const variant of VARIANTS) {
+      const { document } = generate(
+        {
+          ...EMPTY_ANSWERS,
+          businessName: "Taberna Santo Domingo",
+          sector: "restaurante-bar",
+          services: ["Comidas"],
+          mainAction: "book",
+          bookingLink: "https://reservas.example.com",
+        },
+        variant,
+      );
+      const response = await POST(request({ document }));
       expect(response.status).toBe(200);
       expect(response.headers.get("Content-Type")).toBe("application/zip");
       expect(response.headers.get("Content-Disposition")).toMatch(
@@ -79,9 +88,38 @@ describe("POST /api/download", () => {
     }
   });
 
-  it("is deterministic: the same answers and variant produce byte-identical ZIPs", async () => {
-    const first = await POST(request({ answers: ANSWERS, variantIndex: 0 }));
-    const second = await POST(request({ answers: ANSWERS, variantIndex: 0 }));
+  it("carries the document's real content, including an edit made client-side", async () => {
+    const cover = findSection(REAL_DOCUMENT, "cover");
+    const edited: RetorikaDocument = {
+      ...REAL_DOCUMENT,
+      pages: [
+        {
+          ...(REAL_DOCUMENT.pages[0] as RetorikaDocument["pages"][number]),
+          sections:
+            REAL_DOCUMENT.pages[0]?.sections.map((section) =>
+              section.id === cover.id
+                ? {
+                    ...section,
+                    content: section.content.map((el) =>
+                      el.id === "el-headline" && el.value?.kind === "text"
+                        ? { ...el, value: { ...el.value, text: "Edición Especial" } }
+                        : el,
+                    ),
+                  }
+                : section,
+            ) ?? [],
+        },
+      ],
+    };
+    const response = await POST(request({ document: edited }));
+    expect(response.status).toBe(200);
+    const html = extractFile(new Uint8Array(await response.arrayBuffer()), "index.html");
+    expect(html).toContain("Edición Especial");
+  });
+
+  it("is deterministic: the same document produces byte-identical ZIPs", async () => {
+    const first = await POST(request({ document: REAL_DOCUMENT }));
+    const second = await POST(request({ document: REAL_DOCUMENT }));
     expect(new Uint8Array(await first.arrayBuffer())).toEqual(
       new Uint8Array(await second.arrayBuffer()),
     );
@@ -94,81 +132,114 @@ describe("POST /api/download", () => {
     expect(response.status).toBe(400);
   });
 
-  it("rejects an out-of-range variantIndex", async () => {
-    const response = await POST(request({ answers: ANSWERS, variantIndex: 3 }));
+  it("rejects a missing document", async () => {
+    const response = await POST(request({}));
     expect(response.status).toBe(400);
   });
 
-  it("rejects an unknown sector rather than passing it through silently", async () => {
+  it("rejects a document that fails schema validation", async () => {
+    const response = await POST(request({ document: { nonsense: true } }));
+    expect(response.status).toBe(400);
+  });
+
+  it("rejects a request whose declared Content-Length is over the cap", async () => {
     const response = await POST(
-      request({ answers: { ...ANSWERS, sector: "not-a-real-sector" }, variantIndex: 0 }),
+      new Request("http://localhost/api/download", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Content-Length": String(1024 * 1024) },
+        body: JSON.stringify({ document: REAL_DOCUMENT }),
+      }),
     );
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(413);
   });
 
-  it("rejects an unknown mainAction rather than passing it through silently", async () => {
-    const response = await POST(
-      request({ answers: { ...ANSWERS, mainAction: "not-a-real-action" }, variantIndex: 0 }),
-    );
-    expect(response.status).toBe(400);
-  });
-
-  describe("edits (day 6)", () => {
-    it("bakes a click-to-edit change into the downloaded index.html", async () => {
-      const response = await POST(
-        request({
-          answers: ANSWERS,
-          variantIndex: 0,
-          edits: { "el-headline": "Taberna Santo Domingo — Edición Especial" },
-        }),
-      );
-      expect(response.status).toBe(200);
-      const html = extractFile(new Uint8Array(await response.arrayBuffer()), "index.html");
-      expect(html).toContain("Taberna Santo Domingo — Edición Especial");
-      expect(html).not.toContain(">\n      Taberna Santo Domingo\n    <");
-    });
-
-    it("ignores an edit whose id matches nothing in the generated document", async () => {
-      const response = await POST(
-        request({ answers: ANSWERS, variantIndex: 0, edits: { "no-such-id": "x" } }),
-      );
-      expect(response.status).toBe(200);
-    });
-
-    it("with no edits field at all, behaves exactly like day 5", async () => {
-      const response = await POST(request({ answers: ANSWERS, variantIndex: 0 }));
-      expect(response.status).toBe(200);
-    });
-
-    it("rejects edits that are not an object", async () => {
-      const response = await POST(
-        request({ answers: ANSWERS, variantIndex: 0, edits: ["not", "an", "object"] }),
-      );
+  describe("a document a real client would never produce", () => {
+    it("rejects an unknown catalog section id", async () => {
+      const withBadSection: RetorikaDocument = {
+        ...REAL_DOCUMENT,
+        pages: [
+          {
+            ...(REAL_DOCUMENT.pages[0] as RetorikaDocument["pages"][number]),
+            sections: [
+              {
+                ...findSection(REAL_DOCUMENT, "cover"),
+                preset: { catalogId: "not-a-real-section", variantId: "x" },
+              },
+            ],
+          },
+        ],
+      };
+      const response = await POST(request({ document: withBadSection }));
       expect(response.status).toBe(400);
     });
 
-    it("rejects a non-string edit value", async () => {
-      const response = await POST(
-        request({ answers: ANSWERS, variantIndex: 0, edits: { "el-headline": 12345 } }),
-      );
+    it("rejects a cover missing its required headline, which fails its own preset", async () => {
+      // checkAgainstPreset judges top-level slots, not a list's item count (that guard lives in
+      // the generator instead, per ADR 0013) — so this has to be a slot a preset actually
+      // declares cardinality for. The cover's headline is required, 1..1.
+      const cover = findSection(REAL_DOCUMENT, "cover");
+      const stripped: Section = {
+        ...cover,
+        content: cover.content.filter((el) => el.slot !== "headline"),
+      };
+      const withoutHeadline: RetorikaDocument = {
+        ...REAL_DOCUMENT,
+        pages: [
+          {
+            ...(REAL_DOCUMENT.pages[0] as RetorikaDocument["pages"][number]),
+            sections:
+              REAL_DOCUMENT.pages[0]?.sections.map((s) => (s.id === cover.id ? stripped : s)) ?? [],
+          },
+        ],
+      };
+      const response = await POST(request({ document: withoutHeadline }));
       expect(response.status).toBe(400);
     });
 
-    it("rejects an edit value over the length cap", async () => {
-      const response = await POST(
-        request({
-          answers: ANSWERS,
-          variantIndex: 0,
-          edits: { "el-headline": "x".repeat(2001) },
-        }),
-      );
-      expect(response.status).toBe(400);
+    it("rejects a field exceeding the length cap", async () => {
+      const cover = findSection(REAL_DOCUMENT, "cover");
+      const overlong: RetorikaDocument = {
+        ...REAL_DOCUMENT,
+        pages: [
+          {
+            ...(REAL_DOCUMENT.pages[0] as RetorikaDocument["pages"][number]),
+            sections:
+              REAL_DOCUMENT.pages[0]?.sections.map((s) =>
+                s.id === cover.id
+                  ? {
+                      ...s,
+                      content: s.content.map((el) =>
+                        el.id === "el-headline" && el.value?.kind === "text"
+                          ? { ...el, value: { ...el.value, text: "x".repeat(5000) } }
+                          : el,
+                      ),
+                    }
+                  : s,
+              ) ?? [],
+          },
+        ],
+      };
+      const response = await POST(request({ document: overlong }));
+      expect(response.status).toBe(413);
     });
 
-    it("rejects more edits than any real document has fields", async () => {
-      const edits = Object.fromEntries(Array.from({ length: 65 }, (_, i) => [`el-${i}`, "text"]));
-      const response = await POST(request({ answers: ANSWERS, variantIndex: 0, edits }));
-      expect(response.status).toBe(400);
+    it("rejects a document with far more sections than any real one has", async () => {
+      const cover = findSection(REAL_DOCUMENT, "cover");
+      const manySections = Array.from({ length: 41 }, (_, i) => ({
+        ...cover,
+        id: `${cover.id}-${i}`,
+      }));
+      const withTooMany: RetorikaDocument = {
+        ...REAL_DOCUMENT,
+        pages: [
+          {
+            ...(REAL_DOCUMENT.pages[0] as RetorikaDocument["pages"][number]),
+            sections: manySections,
+          },
+        ],
+      };
+      const response = await POST(request({ document: withTooMany }));
+      expect(response.status).toBe(413);
     });
   });
 });

@@ -15,6 +15,15 @@
 > read-only file system, unlink '/usr/bin/pnpm'` — Render ships its own `pnpm` at that path,
 > pre-installed, on a filesystem corepack cannot write to. `render.yaml` uses `npx
 > pnpm@12.4.2` instead, which fetches the exact pinned release without touching `/usr/bin`.
+>
+> **A third note (25 September 2026): protocol Part 14's "guardado automático" is met in its
+> minimal version, `localStorage`, not this ADR's Supabase.** Accounts and server-side persistence
+> are deliberately out of the second sprint's scope — they cost two to three days of work the CEO
+> would not see, on a slice the protocol never actually requires an account for. `localStorage`
+> satisfies "automatic save" honestly on its own terms: an edit survives a reload of the same
+> browser, and the editor's `Guardado` tick says `Guardado en este navegador` rather than a bare
+> `Guardado`, precisely so nobody reads a cross-device guarantee into it. Supabase and accounts
+> remain this ADR's eventual destination, opened once the editor itself is finished.
 
 ## Context
 

@@ -119,5 +119,7 @@
   "editor.download": "Descargar",
   "editor.downloading": "Descargando…",
   "editor.downloadError": "No se ha podido descargar. Vuelve a intentarlo.",
-  "editor.editHint": "Haz clic en cualquier texto para cambiarlo. Se descarga un archivo .zip con tus cambios — ábrelo haciendo doble clic en index.html: no necesita internet."
+  "editor.editHint": "Haz clic en cualquier texto para cambiarlo. Se descarga un archivo .zip con tus cambios — ábrelo haciendo doble clic en index.html: no necesita internet.",
+  "editor.saved": "Guardado en este navegador",
+  "editor.unsaved": "No guardado"
 }
