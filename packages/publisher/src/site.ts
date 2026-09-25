@@ -127,8 +127,9 @@ function rewriteImages(
  * A validated document becomes the exact set of files that constitute its website.
  *
  * Layout, decided rather than improvised: the first page is index.html, every other page is
- * <slug>.html at the root, every image is assets/<basename>. Pages keep the renderer's
- * inlined CSS, so each one is self-contained and opens by double-clicking it (ADR 0001).
+ * <slug>.html at the root, every file-backed image is assets/<basename> — a data: URI image
+ * needs no file and is left inline. Pages keep the renderer's inlined CSS, so each one is
+ * self-contained and opens by double-clicking it (ADR 0001).
  *
  * Throws on a missing asset, an unknown page slug collision, or an unsafe path.
  */
@@ -139,6 +140,10 @@ export function buildSite(doc: RetorikaDocument, options: BuildSiteOptions): Sit
   const assetFiles = new Map<string, SiteFile>();
   const srcByPath = new Map<string, string>();
   const toBundle = (src: string): string => {
+    // A data: URI is already a complete image inline in the HTML text, not a file that
+    // needs a path in the bundle — safeUrl already restricted it to data:image/* at render
+    // time. Left exactly as the document has it, the same as buildSite already does for links.
+    if (src.startsWith("data:")) return src;
     const { path, contentType } = assetPathFor(src);
     const previous = srcByPath.get(path);
     if (previous !== undefined) {
@@ -166,7 +171,7 @@ export function buildSite(doc: RetorikaDocument, options: BuildSiteOptions): Sit
     // The renderer draws the first page of whatever document it is given.
     const { html, assets } = render({ ...doc, pages: [rewritten] }, "html");
     for (const ref of assets) {
-      if (!assetFiles.has(ref.src)) {
+      if (!ref.src.startsWith("data:") && !assetFiles.has(ref.src)) {
         throw new Error(`buildSite: the page references "${ref.src}", which is not in the bundle`);
       }
     }
