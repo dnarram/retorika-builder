@@ -1,5 +1,5 @@
 import type { ElementAddress, RetorikaDocument } from "@retorika/schema";
-import { setElementText } from "@retorika/schema";
+import { deleteSection as deleteSectionFromDoc, setElementText } from "@retorika/schema";
 
 /**
  * Undo and redo, as a stack of whole documents rather than a log of commands with inverses.
@@ -14,19 +14,18 @@ import { setElementText } from "@retorika/schema";
  *
  * One history per variant. They never merge: the three variants are three different documents,
  * and undoing in one has no business touching another.
- *
- * Day 4 will want a label on each snapshot for the toast ADR 0014 asks for ("Has borrado la
- * sección «Portada»", with `Deshacer`), and the ids of the sections an action touched so the
- * toast knows whether to stay. Neither is here yet, because nothing reads them yet.
  */
+
+/** What produced a snapshot, and which section it touched — day 4 reads this to decide whether
+ * a delete's undo toast fades: ADR 0014 keeps it on screen only for a section the user edited. */
+export type SnapshotCause =
+  | { type: "editText"; address: ElementAddress }
+  | { type: "deleteSection"; sectionId: string }
+  | null;
 
 export interface Snapshot {
   document: RetorikaDocument;
-  /**
-   * The field a text edit changed, when that is what produced this state. Retyping the same
-   * field collapses into this snapshot instead of stacking one undo step per blur.
-   */
-  address: ElementAddress | null;
+  cause: SnapshotCause;
 }
 
 export interface History {
@@ -39,6 +38,7 @@ export type Histories = readonly History[];
 
 export type HistoryAction =
   | { type: "editText"; variant: number; address: ElementAddress; text: string }
+  | { type: "deleteSection"; variant: number; sectionId: string }
   | { type: "undo"; variant: number }
   | { type: "redo"; variant: number };
 
@@ -51,20 +51,30 @@ const LIMIT = 50;
 export function initHistories(documents: readonly RetorikaDocument[]): History[] {
   return documents.map((document) => ({
     past: [],
-    present: { document, address: null },
+    present: { document, cause: null },
     future: [],
   }));
 }
 
-function sameField(a: ElementAddress | null, b: ElementAddress): boolean {
-  return a !== null && a.sectionId === b.sectionId && a.elementId === b.elementId;
+function sameField(cause: SnapshotCause, address: ElementAddress): boolean {
+  return (
+    cause?.type === "editText" &&
+    cause.address.sectionId === address.sectionId &&
+    cause.address.elementId === address.elementId
+  );
 }
 
 function editText(history: History, address: ElementAddress, text: string): History {
   const document = setElementText(history.present.document, address, text);
-  const present: Snapshot = { document, address };
+  const present: Snapshot = { document, cause: { type: "editText", address } };
   // Still typing into the field the last edit touched: amend that step rather than adding one.
-  if (sameField(history.present.address, address)) return { ...history, present, future: [] };
+  if (sameField(history.present.cause, address)) return { ...history, present, future: [] };
+  return { past: [...history.past, history.present].slice(-LIMIT), present, future: [] };
+}
+
+function deleteSection(history: History, sectionId: string): History {
+  const document = deleteSectionFromDoc(history.present.document, sectionId);
+  const present: Snapshot = { document, cause: { type: "deleteSection", sectionId } };
   return { past: [...history.past, history.present].slice(-LIMIT), present, future: [] };
 }
 
@@ -73,9 +83,9 @@ function undo(history: History): History {
   if (!previous) return history;
   return {
     past: history.past.slice(0, -1),
-    // The restored state's own address is dropped on the way in: an undo is an action between
+    // The restored state's own cause is dropped on the way in: an undo is an action between
     // edits, so the next edit opens a new step instead of merging into the one just undone.
-    present: { document: previous.document, address: null },
+    present: { document: previous.document, cause: null },
     future: [history.present, ...history.future],
   };
 }
@@ -85,7 +95,7 @@ function redo(history: History): History {
   if (!next) return history;
   return {
     past: [...history.past, history.present],
-    present: { document: next.document, address: null },
+    present: { document: next.document, cause: null },
     future: rest,
   };
 }
@@ -97,11 +107,34 @@ export function historiesReducer(state: Histories, action: HistoryAction): Histo
   const next =
     action.type === "editText"
       ? editText(history, action.address, action.text)
-      : action.type === "undo"
-        ? undo(history)
-        : redo(history);
+      : action.type === "deleteSection"
+        ? deleteSection(history, action.sectionId)
+        : action.type === "undo"
+          ? undo(history)
+          : redo(history);
 
   // Undo with nothing to undo changes nothing, and must not make React re-render the preview.
   if (next === history) return state;
   return state.map((entry, index) => (index === action.variant ? next : entry));
+}
+
+/**
+ * Whether a section's content was ever edited by the user in this session — ADR 0014's own
+ * condition for a delete's undo toast to stay put instead of fading, moved unchanged from the
+ * confirmation dialog it used to gate. Not a new field: it is exactly what the history already
+ * tracks, walked through every step still reachable by undo or redo. `future` is included on
+ * purpose: undoing an edit moves its cause there, not out of existence, and the edit still
+ * happened this session even while its step is the one a redo would restore. A section deleted
+ * more than fifty steps after its last edit reports as untouched — the same horizon the
+ * fifty-step cap already draws for everything else — and so does one whose only edit was undone
+ * and then overwritten by a later action, which clears `future` the same way it always has.
+ */
+export function wasSectionEverEdited(history: History, sectionId: string): boolean {
+  const steps = [...history.past, history.present, ...history.future];
+  return steps.some((step) => {
+    const cause = step.cause;
+    if (!cause) return false;
+    if (cause.type === "editText") return cause.address.sectionId === sectionId;
+    return cause.sectionId === sectionId;
+  });
 }

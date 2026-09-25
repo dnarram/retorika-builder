@@ -1,14 +1,32 @@
 "use client";
 
+import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
 import { type Answers, generateVariants } from "@retorika/generator";
 import { render } from "@retorika/renderer";
-import type { RetorikaDocument } from "@retorika/schema";
+import { findSection, type RetorikaDocument } from "@retorika/schema";
 import { useEffect, useReducer, useRef, useState } from "react";
 import { saveSession } from "../editor/autosave.ts";
-import { historiesReducer, initHistories } from "../editor/documentHistory.ts";
+import {
+  type History,
+  historiesReducer,
+  initHistories,
+  wasSectionEverEdited,
+} from "../editor/documentHistory.ts";
 import es from "../locales/es.json" with { type: "json" };
-import { Editor } from "./Editor.tsx";
+import { type DeleteToast, Editor } from "./Editor.tsx";
 import { Brand } from "./ui.tsx";
+
+/** The catalog's own Spanish name for a section, e.g. `section.cover.name` → "Portada" —
+ * what the delete toast (ADR 0014) names, since "Has borrado la sección «sec-cover»" would not
+ * mean anything to the person reading it. */
+function catalogSectionName(catalogId: string): string {
+  const key = `section.${catalogId}.name` as keyof typeof catalogEs;
+  return catalogEs[key] ?? catalogId;
+}
+
+/** How long a delete's undo toast stays for a section the user never touched (ADR 0014). A
+ * section they had edited does not get a timer at all — it waits until dismissed or undone. */
+const TOAST_DURATION_MS = 6000;
 
 /**
  * "Elige por dónde empezar" (mockup 07), with real sites instead of drawings: each card is a
@@ -105,6 +123,27 @@ export function Variants({
     return () => clearTimeout(saveTimer.current);
   }, [answers, histories, openIndex]);
 
+  const [toast, setToast] = useState<DeleteToast | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  function dismissToast() {
+    clearTimeout(toastTimer.current);
+    setToast(null);
+  }
+
+  function handleDeleteSection(variant: number, history: History, sectionId: string) {
+    const found = findSection(history.present.document, sectionId);
+    const persistent = wasSectionEverEdited(history, sectionId);
+    dispatch({ type: "deleteSection", variant, sectionId });
+
+    clearTimeout(toastTimer.current);
+    setToast({
+      sectionName: found ? catalogSectionName(found.section.preset.catalogId) : sectionId,
+      persistent,
+    });
+    if (!persistent) toastTimer.current = setTimeout(dismissToast, TOAST_DURATION_MS);
+  }
+
   if (openIndex !== null) {
     const history = histories[openIndex];
     const caption = CAPTIONS[openIndex];
@@ -116,12 +155,21 @@ export function Variants({
         onEditText={(address, text) =>
           dispatch({ type: "editText", variant: openIndex, address, text })
         }
+        onDeleteSection={(sectionId) => handleDeleteSection(openIndex, history, sectionId)}
         canUndo={history.past.length > 0}
         canRedo={history.future.length > 0}
-        onUndo={() => dispatch({ type: "undo", variant: openIndex })}
+        onUndo={() => {
+          dismissToast();
+          dispatch({ type: "undo", variant: openIndex });
+        }}
         onRedo={() => dispatch({ type: "redo", variant: openIndex })}
         saveStatus={saveStatus}
-        onBack={() => setOpenIndex(null)}
+        toast={toast}
+        onDismissToast={dismissToast}
+        onBack={() => {
+          dismissToast();
+          setOpenIndex(null);
+        }}
       />
     );
   }

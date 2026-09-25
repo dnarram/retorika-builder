@@ -37,6 +37,7 @@ export type { RevertPlan, SurplusDecision } from "./revert.ts";
 export { applyRevert, escalate, planRevert, RevertDecisionRequiredError } from "./revert.ts";
 export type { Role } from "./roles.ts";
 export { CONTAINER_ROLE, isContainerRole, OPAQUE_ROLE, ROLES, roleSchema } from "./roles.ts";
+export { deleteSection, findSection } from "./sections.ts";
 export type { StyleValue, Theme, TokenKey } from "./tokens.ts";
 export {
   SORTED_TOKEN_KEYS,

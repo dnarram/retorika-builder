@@ -6,6 +6,7 @@ import {
   type HistoryAction,
   historiesReducer,
   initHistories,
+  wasSectionEverEdited,
 } from "../src/editor/documentHistory.ts";
 
 const ANSWERS = {
@@ -33,6 +34,10 @@ function headline(state: Histories, variant = 0): string | undefined {
   return element?.value?.kind === "text" ? element.value.text : undefined;
 }
 
+function sectionIds(state: Histories, variant = 0): (string | undefined)[] | undefined {
+  return state[variant]?.present.document.pages[0]?.sections.map((s) => s.id);
+}
+
 function run(state: Histories, ...actions: HistoryAction[]): Histories {
   return actions.reduce(historiesReducer, state);
 }
@@ -44,6 +49,12 @@ const edit = (text: string, address: ElementAddress = HEADLINE): HistoryAction =
   text,
 });
 
+const del = (sectionId: string, variant = 0): HistoryAction => ({
+  type: "deleteSection",
+  variant,
+  sectionId,
+});
+
 describe("initHistories", () => {
   it("starts one history per variant, with nothing to undo", () => {
     const state = start();
@@ -51,7 +62,7 @@ describe("initHistories", () => {
     for (const history of state) {
       expect(history.past).toEqual([]);
       expect(history.future).toEqual([]);
-      expect(history.present.address).toBeNull();
+      expect(history.present.cause).toBeNull();
     }
   });
 });
@@ -179,5 +190,60 @@ describe("the documents themselves", () => {
     const snapshot = JSON.stringify(before);
     run(state, edit("Cambiada"), edit("Otra vez", SUBHEADLINE));
     expect(JSON.stringify(before)).toBe(snapshot);
+  });
+});
+
+describe("deleteSection", () => {
+  it("removes the named section from the document, and can be undone", () => {
+    const before = sectionIds(start());
+    const state = run(start(), del("sec-services"));
+    expect(sectionIds(state)).toEqual(before?.filter((id) => id !== "sec-services"));
+    const undone = historiesReducer(state, { type: "undo", variant: 0 });
+    expect(sectionIds(undone)).toEqual(before);
+  });
+
+  it("touches only the variant it names", () => {
+    const state = run(start(), del("sec-services"));
+    expect(sectionIds(state, 1)).toEqual(sectionIds(start(), 1));
+  });
+
+  it("is always its own step, never collapsed with an adjacent edit", () => {
+    const state = run(start(), edit("Nuevo titular"), del("sec-services"));
+    expect(state[0]?.past).toHaveLength(2);
+  });
+
+  it("throws on a section id the document does not have", () => {
+    expect(() => historiesReducer(start(), del("no-such-section"))).toThrow(/no section/);
+  });
+});
+
+describe("wasSectionEverEdited", () => {
+  it("is false for a section fresh from the generator", () => {
+    const state = start();
+    expect(wasSectionEverEdited(state[0] as Histories[number], "sec-cover")).toBe(false);
+  });
+
+  it("is true once a field inside the section has been edited", () => {
+    const state = run(start(), edit("Nuevo titular"));
+    expect(wasSectionEverEdited(state[0] as Histories[number], "sec-cover")).toBe(true);
+  });
+
+  it("is false for a section other than the one edited", () => {
+    const state = run(start(), edit("Nuevo titular")); // el-headline lives in sec-cover
+    expect(wasSectionEverEdited(state[0] as Histories[number], "sec-services")).toBe(false);
+  });
+
+  it("stays true even after the edit that caused it is undone", () => {
+    // The section was, at some point in this session, written by the user — undoing that one
+    // edit does not retroactively make it untouched.
+    const edited = run(start(), edit("Nuevo titular"));
+    const undone = historiesReducer(edited, { type: "undo", variant: 0 });
+    expect(wasSectionEverEdited(undone[0] as Histories[number], "sec-cover")).toBe(true);
+  });
+
+  it("is true for a section a prior deletion touched, even after undoing the deletion", () => {
+    const deleted = run(start(), del("sec-services"));
+    const undone = historiesReducer(deleted, { type: "undo", variant: 0 });
+    expect(wasSectionEverEdited(undone[0] as Histories[number], "sec-services")).toBe(true);
   });
 });
