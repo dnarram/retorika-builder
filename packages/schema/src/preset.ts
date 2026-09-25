@@ -19,6 +19,16 @@ export interface PresetShape {
   catalogId: string;
   slots: readonly PresetSlot[];
   /**
+   * The shape of one item inside this preset's `list` slot, when it has one.
+   *
+   * `checkAgainstPreset` still judges top-level slots only — an item is not in a slot of the
+   * section, it is in a slot of the list — so this is a declaration, not a second thing that
+   * validates. It exists because code that has to *build* a section rather than judge one
+   * (`blankSection` in the catalog) cannot invent an item out of nothing: it needs to be told
+   * which slots one is made of, the same way `slots` tells it about the section.
+   */
+  itemSlots?: readonly PresetSlot[];
+  /**
    * The preset's layout for a variant, resolved against the section's own elements.
    *
    * It takes the elements because a placement references an element *id* (rule 1) and a

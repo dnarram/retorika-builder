@@ -1,3 +1,4 @@
+import { blankSection } from "@retorika/catalog";
 import { EMPTY_ANSWERS, generateVariants } from "@retorika/generator";
 import type { ElementAddress, RetorikaDocument } from "@retorika/schema";
 import { describe, expect, it } from "vitest";
@@ -336,5 +337,84 @@ describe("moveSection", () => {
         toIndex: 0,
       }),
     ).toThrow(/no section/);
+  });
+});
+
+describe("insertSection", () => {
+  const blank = () => blankSection("location", "stacked", "sec-location");
+
+  it("puts the section where the pill was clicked", () => {
+    const state = run(start(), { type: "insertSection", variant: 0, section: blank(), index: 1 });
+    expect(sectionIds(state)?.[1]).toBe("sec-location-2");
+  });
+
+  it("re-mints an id the document already uses, rather than colliding with it", () => {
+    // The generated site already has a "sec-location": what the caller hands over is a
+    // template's id, and only the document knows which ones are free.
+    const state = run(start(), { type: "insertSection", variant: 0, section: blank(), index: 0 });
+    expect(sectionIds(state)?.[0]).toBe("sec-location-2");
+  });
+
+  it("keeps re-minting when the same section is added twice in a row", () => {
+    const state = run(
+      start(),
+      { type: "insertSection", variant: 0, section: blank(), index: 0 },
+      { type: "insertSection", variant: 0, section: blank(), index: 0 },
+    );
+    const ids = sectionIds(state) ?? [];
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids.slice(0, 2)).toEqual(["sec-location-3", "sec-location-2"]);
+  });
+
+  it("uses an unused id verbatim when nothing is in the way", () => {
+    const state = run(start(), {
+      type: "insertSection",
+      variant: 0,
+      section: blankSection("cover", "image-right", "sec-portada"),
+      index: 0,
+    });
+    expect(sectionIds(state)?.[0]).toBe("sec-portada");
+  });
+
+  it("is undone as one step, putting the page back exactly as it was", () => {
+    const before = sectionIds(start());
+    const state = run(
+      start(),
+      { type: "insertSection", variant: 0, section: blank(), index: 1 },
+      { type: "undo", variant: 0 },
+    );
+    expect(sectionIds(state)).toEqual(before);
+  });
+
+  it("is redone after an undo", () => {
+    const state = run(
+      start(),
+      { type: "insertSection", variant: 0, section: blank(), index: 1 },
+      { type: "undo", variant: 0 },
+      { type: "redo", variant: 0 },
+    );
+    expect(sectionIds(state)?.[1]).toBe("sec-location-2");
+  });
+
+  it("names the section it added, under the id it actually minted", () => {
+    const state = run(start(), { type: "insertSection", variant: 0, section: blank(), index: 1 });
+    expect(state[0]?.present.cause).toEqual({
+      type: "insertSection",
+      sectionId: "sec-location-2",
+    });
+  });
+
+  it("touches only the variant it names", () => {
+    const state = run(start(), { type: "insertSection", variant: 0, section: blank(), index: 0 });
+    expect(sectionIds(state, 1)).toEqual(sectionIds(start(), 1));
+  });
+
+  it("does not count as having edited the new section: nothing was written into it", () => {
+    // Marker text is what the catalog put there, not what the user typed, so a delete's undo
+    // toast should fade for it like any untouched section (ADR 0014).
+    const state = run(start(), { type: "insertSection", variant: 0, section: blank(), index: 1 });
+    const history = state[0];
+    if (!history) throw new Error("no history");
+    expect(wasSectionEverEdited(history, "sec-location-2")).toBe(false);
   });
 });

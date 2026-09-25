@@ -18,8 +18,10 @@ export const SERVICES_SLOTS: readonly PresetSlot[] = [
 ];
 
 /**
- * The shape of one card. checkAgainstPreset judges top-level slots only (PresetShape has no
- * way to declare item slots yet), so this is enforced by the catalog's tests and the fixture.
+ * The shape of one card, and since day 6 the preset's own `itemSlots`. checkAgainstPreset still
+ * judges top-level slots only — a card is in a slot of the list, not of the section — so this
+ * remains enforced by the catalog's tests and the fixture. Declaring it on the preset is what
+ * lets `blankSection` build a card without knowing that this particular section has cards.
  */
 export const SERVICES_ITEM_SLOTS: readonly PresetSlot[] = [
   { slot: "title", role: "heading", min: 1, max: 1 },
@@ -69,6 +71,7 @@ function isServicesVariant(variantId: string): variantId is ServicesVariant {
 export const servicesPreset: PresetShape = {
   catalogId: SERVICES_ID,
   slots: SERVICES_SLOTS,
+  itemSlots: SERVICES_ITEM_SLOTS,
 
   layoutFor(variantId: string, elements: readonly ContentElement[]): SectionLayout {
     if (!isServicesVariant(variantId)) {

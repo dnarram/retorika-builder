@@ -1,3 +1,5 @@
+export type { DeadDestination } from "./destinations.ts";
+export { listDeadDestinations } from "./destinations.ts";
 export type {
   BreakpointPatch,
   Collection,
@@ -41,6 +43,7 @@ export {
   deleteSection,
   duplicateSection,
   findSection,
+  insertSection,
   mintSectionId,
   moveSection,
 } from "./sections.ts";

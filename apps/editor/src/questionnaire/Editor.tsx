@@ -1,7 +1,8 @@
 "use client";
 
+import { isPlaceholderText } from "@retorika/catalog";
 import { render } from "@retorika/renderer";
-import type { ElementAddress, RetorikaDocument } from "@retorika/schema";
+import { type ElementAddress, listEditableFields, type RetorikaDocument } from "@retorika/schema";
 import { useMemo, useRef, useState } from "react";
 import { EditorShell, type SaveStatus } from "../editor/EditorShell.tsx";
 import es from "../locales/es.json" with { type: "json" };
@@ -29,6 +30,21 @@ export interface DeleteToast {
 const EDITABLE_TAGS = new Set(["H1", "H2", "H3", "H4", "H5", "H6", "P", "A"]);
 
 const HANDLE_CORNERS = ["tl", "tr", "bl", "br"] as const;
+
+/** The interface's typeface, for chrome injected into the preview frame. Spelled out rather
+ * than inherited: inside that frame, "inherit" means the client's own site font. */
+const UI_FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+
+/**
+ * One entry of the "Añadir sección aquí" menu: a catalog section the editor may offer at this
+ * moment, already named in Spanish by the caller — `Variants` holds the catalog's locale, and
+ * which sections are offerable at all is the application's decision, not this component's.
+ */
+export interface SectionOffer {
+  catalogId: string;
+  name: string;
+  description: string;
+}
 
 /** From `Content-Disposition: attachment; filename="doc-taberna.zip"`. */
 function filenameFrom(response: Response, fallback: string): string {
@@ -64,6 +80,13 @@ function filenameFrom(response: Response, fallback: string): string {
  * confirmation: ADR 0014 is explicit that a delete runs immediately, with the undo it offers
  * afterwards as the only safety net, and the same directness applies to the other three, which
  * are no more destructive than a delete and get the identical net.
+ *
+ * Adding a section (day 6) is the same pattern once more: a dashed rule broken by an "Añadir
+ * sección aquí" pill in each gap between sections, injected into the frame because only the
+ * frame knows where the gaps fall. What the pill may offer is decided outside this component and
+ * arrives as `offers` — "Contacto y reservas" is the one section that cannot be born blank, its
+ * button being a destination rather than text, so it is offered only when question 5 gave one,
+ * and its absence is explained rather than left as a hole in the list.
  */
 export function Editor({
   title,
@@ -72,6 +95,9 @@ export function Editor({
   onDeleteSection,
   onDuplicateSection,
   onMoveSection,
+  onInsertSection,
+  offers,
+  contactUnavailable,
   canUndo,
   canRedo,
   onUndo,
@@ -87,6 +113,10 @@ export function Editor({
   onDeleteSection: (sectionId: string) => void;
   onDuplicateSection: (sectionId: string) => void;
   onMoveSection: (sectionId: string, toIndex: number) => void;
+  onInsertSection: (catalogId: string, index: number) => void;
+  offers: readonly SectionOffer[];
+  /** Whether to explain the absence of "Contacto y reservas" from `offers`. */
+  contactUnavailable: boolean;
   canUndo: boolean;
   canRedo: boolean;
   onUndo: () => void;
@@ -104,6 +134,19 @@ export function Editor({
   // iframe's `srcDoc` does not change — which is what keeps a device toggle or a download from
   // reloading the preview and throwing away the current selection.
   const html = useMemo(() => render(doc, "html").html, [doc]);
+
+  // Marker text warns, it never blocks: what an added section says is a matter of taste the
+  // owner can see and fix in a second, unlike a button pointing nowhere, which the download
+  // route refuses outright. Counted by value against the catalog's own markers — the document
+  // has no flag saying "still a placeholder", and adding one would be a schema change to record
+  // something the text already says.
+  const placeholders = useMemo(
+    () =>
+      listEditableFields(doc).filter(
+        (field) => field.text !== undefined && isPlaceholderText(field.text),
+      ).length,
+    [doc],
+  );
 
   function wireSelection(iframeDoc: Document) {
     const sections = [...iframeDoc.querySelectorAll<HTMLElement>("[data-section]")];
@@ -192,6 +235,96 @@ export function Editor({
     }
   }
 
+  /**
+   * The insertion pill, in the gap between sections: a dashed rule broken by "Añadir sección
+   * aquí", which is where `docs/design/HANDOFF.md` puts it — "never from a list in a side panel",
+   * because a list in a panel makes you choose a position after choosing a section, and the gap
+   * you clicked already said the position.
+   *
+   * Injected into the iframe like the selection chrome, for the same reason: the gaps only exist
+   * between the real rendered sections, and nothing outside the frame knows where those fall.
+   * None of it reaches the published HTML — this runs against the live DOM only, never the
+   * document.
+   */
+  function wireInsertion(iframeDoc: Document) {
+    const sections = [...iframeDoc.querySelectorAll<HTMLElement>("[data-section]")];
+    if (sections.length === 0) return;
+
+    function closeMenus() {
+      for (const menu of iframeDoc.querySelectorAll(".rb-menu")) menu.remove();
+    }
+
+    function menu(index: number): HTMLElement {
+      const panel = iframeDoc.createElement("div");
+      panel.className = "rb-menu";
+
+      const title = iframeDoc.createElement("p");
+      title.className = "rb-menu-title";
+      title.textContent = es["editor.addSection.title"];
+      panel.appendChild(title);
+
+      for (const offer of offers) {
+        const choice = iframeDoc.createElement("button");
+        choice.type = "button";
+        choice.className = "rb-menu-choice";
+        const name = iframeDoc.createElement("span");
+        name.className = "rb-menu-name";
+        name.textContent = offer.name;
+        const description = iframeDoc.createElement("span");
+        description.className = "rb-menu-description";
+        description.textContent = offer.description;
+        choice.append(name, description);
+        choice.addEventListener("click", (event) => {
+          event.stopPropagation();
+          closeMenus();
+          onInsertSection(offer.catalogId, index);
+        });
+        panel.appendChild(choice);
+      }
+
+      if (contactUnavailable) {
+        const note = iframeDoc.createElement("p");
+        note.className = "rb-menu-note";
+        note.textContent = es["editor.addSection.contactUnavailable"];
+        panel.appendChild(note);
+      }
+
+      return panel;
+    }
+
+    function gap(index: number): HTMLElement {
+      const row = iframeDoc.createElement("div");
+      row.className = "rb-gap";
+
+      const pill = iframeDoc.createElement("button");
+      pill.type = "button";
+      pill.className = "rb-pill";
+      pill.innerHTML =
+        '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#156FE7" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>';
+      pill.appendChild(iframeDoc.createTextNode(es["editor.addSectionHere"]));
+      pill.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const open = row.querySelector(".rb-menu");
+        closeMenus();
+        if (!open) row.appendChild(menu(index));
+      });
+
+      const before = iframeDoc.createElement("span");
+      before.className = "rb-rule";
+      const after = iframeDoc.createElement("span");
+      after.className = "rb-rule";
+      row.append(before, pill, after);
+      return row;
+    }
+
+    for (const [index, section] of sections.entries()) section.before(gap(index));
+    sections[sections.length - 1]?.after(gap(sections.length));
+
+    // Anywhere else closes an open menu, the same as any menu on the web. Not `capture`, so a
+    // choice's own handler runs first and its `stopPropagation` keeps this from firing twice.
+    iframeDoc.addEventListener("click", closeMenus);
+  }
+
   function wireEditing(iframeDoc: Document) {
     for (const el of iframeDoc.querySelectorAll<HTMLElement>("[data-id]")) {
       if (!EDITABLE_TAGS.has(el.tagName)) continue;
@@ -271,10 +404,37 @@ export function Editor({
       ".rb-action-move { background: #156FE7; } .rb-action-move:hover { background: #0E5BC4; }",
       ".rb-action-delete { background: #DC2626; } .rb-action-delete:hover { background: #B91C1C; }",
       ".rb-action:disabled { background: #B9CDEA; cursor: not-allowed; }",
+      // The gap between sections, drawn as mockup 08 draws it: a dashed rule broken by a pill.
+      ".rb-gap { position: relative; box-sizing: border-box; height: 76px; padding: 0 40px;",
+      "  display: flex; align-items: center; gap: 0; background: #FFFFFF; }",
+      ".rb-rule { flex-grow: 1; height: 0; border-top: 2px dashed #B9CDEA; }",
+      // The interface's own typeface, never the site's. Everything else injected here is an
+      // icon, so this is the first piece of chrome with words in it, and `font: inherit` would
+      // have drawn them in whatever face the client picked for their own headings — ADR 0015's
+      // separation, showing up as a menu set in a display serif.
+      `.rb-pill, .rb-menu, .rb-menu button { font-family: ${UI_FONT}; }`,
+      ".rb-pill { display: inline-flex; align-items: center; gap: 8px; height: 40px;",
+      "  padding: 0 20px; font-size: 14px; font-weight: 600; color: #156FE7;",
+      "  background: #FFFFFF; border: 1px solid #A9C9F4; border-radius: 999px; cursor: pointer; }",
+      ".rb-pill:hover { background: #F2F7FE; border-color: #156FE7; }",
+      ".rb-menu { position: absolute; top: 60px; left: 50%; transform: translateX(-50%);",
+      "  z-index: 20; width: 340px; max-width: calc(100% - 80px); box-sizing: border-box;",
+      "  padding: 14px; background: #FFFFFF; border: 1px solid #E5E9F0; border-radius: 13px;",
+      "  box-shadow: 0 14px 38px rgba(15,23,42,0.18); display: flex; flex-direction: column;",
+      "  gap: 4px; text-align: left; }",
+      ".rb-menu-title { margin: 0 0 6px 0; font-size: 13px; font-weight: 700; color: #0F172A; }",
+      ".rb-menu-choice { display: flex; flex-direction: column; gap: 2px; padding: 9px 10px;",
+      "  text-align: left; background: none; border: 0; border-radius: 9px; cursor: pointer; }",
+      ".rb-menu-choice:hover { background: #F2F7FE; }",
+      ".rb-menu-name { font-size: 14px; font-weight: 600; color: #0F172A; }",
+      ".rb-menu-description { font-size: 12px; line-height: 1.35; color: #5B6B82; }",
+      ".rb-menu-note { margin: 8px 0 0 0; padding-top: 10px; border-top: 1px solid #EDF1F6;",
+      "  font-size: 12px; line-height: 1.4; color: #5B6B82; }",
     ].join("\n");
     iframeDoc.head.appendChild(style);
 
     wireSelection(iframeDoc);
+    wireInsertion(iframeDoc);
     wireEditing(iframeDoc);
   }
 
@@ -316,6 +476,13 @@ export function Editor({
     >
       <div className="flex flex-col gap-3 border-b border-ui-border px-4 py-3">
         {state === "error" ? <FieldError>{es["editor.downloadError"]}</FieldError> : null}
+        {placeholders > 0 ? (
+          <p className="m-0 text-[13px] font-medium text-[#92400E]">
+            {placeholders === 1
+              ? es["editor.placeholder.one"]
+              : es["editor.placeholder.many"].replace("{count}", String(placeholders))}
+          </p>
+        ) : null}
         <p className="m-0 text-[13px] text-ui-muted">{es["editor.editHint"]}</p>
       </div>
       <iframe

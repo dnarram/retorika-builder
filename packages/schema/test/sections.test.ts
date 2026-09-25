@@ -5,6 +5,7 @@ import {
   deleteSection,
   duplicateSection,
   findSection,
+  insertSection,
   mintSectionId,
   moveSection,
 } from "../src/sections.ts";
@@ -290,5 +291,90 @@ describe("moveSection", () => {
 
   it("produces a document that still parses", () => {
     expect(() => parseDocument(moveSection(doc3, "sec-cover", 2))).not.toThrow();
+  });
+});
+
+describe("insertSection", () => {
+  const fresh: Section = {
+    id: "sec-new",
+    preset: { catalogId: "location", variantId: "stacked" },
+    source: "catalog",
+    layout: null,
+    content: [
+      {
+        id: "el-headline",
+        role: "heading",
+        hidden: false,
+        slot: "headline",
+        value: { kind: "text", text: "Escribe aquí el título de esta sección" },
+      },
+      {
+        id: "el-address",
+        role: "body",
+        hidden: false,
+        slot: "address",
+        value: { kind: "text", text: "Escribe aquí tu dirección" },
+      },
+    ],
+  };
+
+  it("puts the section exactly where it was asked to, shifting the rest down", () => {
+    const next = insertSection(doc, "home", 1, fresh);
+    expect(next.pages[0]?.sections.map((section) => section.id)).toEqual([
+      "sec-cover",
+      "sec-new",
+      "sec-location",
+    ]);
+  });
+
+  it("inserts at the very top when the index is 0", () => {
+    const next = insertSection(doc, "home", 0, fresh);
+    expect(next.pages[0]?.sections[0]?.id).toBe("sec-new");
+  });
+
+  it("clamps an index past the end rather than rejecting it", () => {
+    // What "add below the last section" sends, with no special case at the caller.
+    const next = insertSection(doc, "home", 99, fresh);
+    expect(next.pages[0]?.sections.map((section) => section.id)).toEqual([
+      "sec-cover",
+      "sec-location",
+      "sec-new",
+    ]);
+  });
+
+  it("leaves the document it was given untouched", () => {
+    insertSection(doc, "home", 1, fresh);
+    expect(doc.pages[0]?.sections).toHaveLength(2);
+  });
+
+  it("leaves every other section's content as it was", () => {
+    const next = insertSection(doc, "home", 0, fresh);
+    expect(next.pages[0]?.sections[1]?.content).toEqual(cover.content);
+  });
+
+  it("refuses an id another section already holds", () => {
+    // Section ids are unique document-wide, so a collision would break rule 5 — and the editor
+    // would then have two sections answering to the same click.
+    expect(() => insertSection(doc, "home", 0, { ...fresh, id: "sec-cover" })).toThrow(
+      /already taken/,
+    );
+  });
+
+  it("refuses a page that does not exist", () => {
+    expect(() => insertSection(doc, "no-such-page", 0, fresh)).toThrow(/no page/);
+  });
+
+  it("refuses a section that would not survive parseDocument", () => {
+    const broken = { ...fresh, content: [] } as unknown as Section;
+    // Empty content is structurally fine; a layout referencing a missing element is not.
+    const withBadLayout: Section = {
+      ...broken,
+      layout: {
+        grid: { columns: 12 },
+        placements: [{ elementId: "el-nowhere", column: 1, columnSpan: 12, row: 1, rowSpan: 1 }],
+        breakpoints: {},
+      },
+    };
+    expect(() => insertSection(doc, "home", 0, withBadLayout)).toThrow();
   });
 });
