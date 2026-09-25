@@ -24,10 +24,22 @@ generic static server, with the invariants green in CI. Publishing on a Retorika
 no plan ([ADR 0008](docs/decisions/0008-hosted-publishing-has-no-plan.md)): `apps/serve` stays
 built, tested and dormant.
 
-**Phase 1 is under way.** The catalog has two sections, "Portada" and "Qué hago", and the phase 1
-screens are drawn and reviewed ([`docs/design/`](docs/design/)): five questions, generation, the
-three variants, the editor and four error states. **There is no editor application yet** — before
-it is built, the protocol asks for a navigable prototype tested with two real businesses.
+**Phase 1 is under way, and the generation path works end to end.** The catalog has four
+sections — Portada, Qué hago, Horario y ubicación, Contacto y reservas — and `apps/editor` is a
+real Next.js application, deployed and growing daily: the five questions with their error states,
+three real generated variants with a live preview of each, click-to-edit text that carries into
+the ZIP, and the download itself, built in memory and never written to Render's ephemeral disk.
+`packages/generator` turns the five answers into a valid `RetorikaDocument`, drawing its text from
+`packages/copybank`'s reviewed per-sector bank
+([ADR 0009](docs/decisions/0009-generated-texts-from-a-reviewed-bank.md)).
+
+Building the editor before the protocol's usability-prototype gate concluded was a deliberate,
+CEO-directed exception, not an oversight —
+[ADR 0017](docs/decisions/0017-editor-starts-before-the-sessions-conclude.md) records why, and
+what it costs. **Not yet built:** the full editor chrome (floating toolbar, undo, reorder,
+duplicate, a properties panel), accounts and persistence (the browser tab is the only copy until
+it downloads), payment, the remaining sectors' text and the photo bank
+([ADR 0011](docs/decisions/0011-sample-photos-per-sector.md)).
 
 ## Getting started
 
@@ -138,13 +150,14 @@ written only in the YAML.
 > open PR, the `pull_request` trigger already covers every push to that branch, and adding a
 > branch `push` trigger would only double the bill.
 
-These are the eight check names, exactly as GitHub reports them. Branch protection matches the
+These are the nine check names, exactly as GitHub reports them. Branch protection matches the
 bare job name; the pull request page displays them as `CI / lint`.
 
 | Check | What it runs |
 |---|---|
 | `lint` | `pnpm lint` |
 | `types` | `pnpm typecheck` |
+| `editor-build` | `pnpm build:editor` — `apps/editor`'s own build and its Next.js type check, which `types` does not reach |
 | `unit` | `pnpm test:coverage` |
 | `invariants` | `pnpm test:invariants` |
 | `golden` | `pnpm test:golden` |
@@ -165,7 +178,7 @@ that will never report.
 
 Branch protection on `main` is switched on **after** these workflows have run at least once — a
 check does not appear in the protection list until it has reported. The order is: push the
-branch, open the pull request, wait for the eight jobs, then configure protection.
+branch, open the pull request, wait for the nine jobs, then configure protection.
 
 ## Repository layout
 
@@ -183,7 +196,9 @@ as an empty placeholder.
 | `packages/publisher` | Packages the site: HTML, CSS, images, sitemap, ZIP | **here** |
 | `apps/serve` | Worker serving published sites from R2 — built and tested, not deployed | dormant, no plan ([ADR 0008](docs/decisions/0008-hosted-publishing-has-no-plan.md)) |
 | `.github/workflows` | The CI jobs of Part 9.2 | **here** |
-| `apps/editor` | Next.js: public pages, editor, API, Stripe | 1 |
+| `apps/editor` | Next.js: the five-question flow, three generated variants, click-to-edit text, the ZIP download | **here** |
+| `packages/generator` | The five answers → a valid `RetorikaDocument`. Not in the protocol's Part 3.4 tree — a deliberate addition, product logic that needs invariant tests, so it lives in a package rather than inside the app | **here** |
+| `packages/copybank` | The reviewed, per-sector text bank the generator draws from ([ADR 0009](docs/decisions/0009-generated-texts-from-a-reviewed-bank.md)) | **here** |
 | `packages/templates` | Template extraction and application | 3 |
 | `.claude/skills`, `.claude/commands` | Specialist checklists and project commands | as needed |
 
