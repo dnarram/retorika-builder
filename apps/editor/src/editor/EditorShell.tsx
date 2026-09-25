@@ -20,9 +20,10 @@ import es from "../locales/es.json" with { type: "json" };
  *   Contacto Reserva` strip is what a real multi-page site's own navigation would show — ours
  *   does not generate one, so drawing it would be furniture advertising links that go nowhere.
  *
- * Undo/redo are real buttons, visibly disabled (day 2 wires them). The `Guardado` tick is not
- * drawn at all yet rather than shown lying: nothing is saved until day 3's `localStorage` lands,
- * and a green checkmark today would claim otherwise.
+ * Undo and redo are live from day 2; they grey out when there is nothing to go back or forward
+ * to, which is the honest state and not a placeholder. The `Guardado` tick is still not drawn at
+ * all rather than shown lying: nothing is saved until day 3's `localStorage` lands, and a green
+ * checkmark today would claim otherwise.
  */
 
 const RAIL_ICONS = {
@@ -205,6 +206,10 @@ export function EditorShell({
   onDownload,
   device,
   onDeviceChange,
+  canUndo,
+  canRedo,
+  onUndo,
+  onRedo,
   children,
 }: {
   siteName: string;
@@ -213,6 +218,10 @@ export function EditorShell({
   onDownload: () => void;
   device: "desktop" | "mobile";
   onDeviceChange: (device: "desktop" | "mobile") => void;
+  canUndo: boolean;
+  canRedo: boolean;
+  onUndo: () => void;
+  onRedo: () => void;
   children: React.ReactNode;
 }) {
   return (
@@ -257,8 +266,12 @@ export function EditorShell({
           <button
             type="button"
             aria-label={es["editor.undo"]}
-            disabled
-            className="flex h-[30px] w-[30px] items-center justify-center text-ui-muted opacity-40"
+            disabled={!canUndo}
+            onClick={onUndo}
+            className={
+              "flex h-[30px] w-[30px] items-center justify-center " +
+              (canUndo ? "cursor-pointer text-ui-ink" : "text-ui-muted opacity-40")
+            }
           >
             <svg
               width="18"
@@ -278,8 +291,12 @@ export function EditorShell({
           <button
             type="button"
             aria-label={es["editor.redo"]}
-            disabled
-            className="flex h-[30px] w-[30px] items-center justify-center text-ui-muted opacity-40"
+            disabled={!canRedo}
+            onClick={onRedo}
+            className={
+              "flex h-[30px] w-[30px] items-center justify-center " +
+              (canRedo ? "cursor-pointer text-ui-ink" : "text-ui-muted opacity-40")
+            }
           >
             <svg
               width="18"

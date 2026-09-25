@@ -1,9 +1,9 @@
 "use client";
 
-import { type Answers, type GeneratedSite, generateVariants } from "@retorika/generator";
+import { type Answers, generateVariants } from "@retorika/generator";
 import { render } from "@retorika/renderer";
-import { applyTextEdits } from "@retorika/schema";
-import { useState } from "react";
+import { useReducer, useState } from "react";
+import { historiesReducer, initHistories } from "../editor/documentHistory.ts";
 import es from "../locales/es.json" with { type: "json" };
 import { Editor } from "./Editor.tsx";
 import { Brand } from "./ui.tsx";
@@ -19,10 +19,11 @@ import { Brand } from "./ui.tsx";
  * so clicking it would produce the exact same three sites again. Offering it would be a button
  * that lies about what it does.
  *
- * `sites` itself (generateVariants' output) never changes after day 6: `edits` is a pure
- * overlay applied on top of it via applyTextEdits, kept here rather than in `sites` state so
- * the base stays exactly what the generator produced and the edits stay exactly what the user
- * typed — two different things, not one merged into the other.
+ * Each variant is a document in state with its own undo history (day 2). It replaced an overlay
+ * of text edits kept beside an unchanging `generateVariants` output, which could not survive
+ * what the rest of this sprint adds: two sources of truth cannot be undone in one order, and
+ * the overlay's bare-element-id key stops identifying anything once a section can be duplicated.
+ * `generateVariants` is now only the starting value.
  */
 const CAPTIONS: readonly { titleKey: keyof typeof es; captionKey: keyof typeof es }[] = [
   { titleKey: "variants.v1.title", captionKey: "variants.v1.caption" },
@@ -60,33 +61,31 @@ function ThumbnailFrame({ html, title }: { html: string; title: string }) {
 }
 
 export function Variants({ answers, onRestart }: { answers: Answers; onRestart: () => void }) {
-  const [sites] = useState<GeneratedSite[]>(() => generateVariants(answers));
+  // The histories outlive "Volver": edits and what can be undone survive going back to the grid
+  // and reopening the same card, which is the one piece of continuity this in-memory-only slice
+  // owes the user within a single session.
+  const [histories, dispatch] = useReducer(historiesReducer, answers, (initial) =>
+    initHistories(generateVariants(initial).map((site) => site.document)),
+  );
   const [openIndex, setOpenIndex] = useState<number | null>(null);
-  // Keyed by variant index, then element id: day 6's edits, kept here rather than inside
-  // FullPreview so they survive "Volver" and reopening the same card — the one piece of
-  // continuity this in-memory-only slice owes the user within a single session.
-  const [edits, setEdits] = useState<Record<number, Record<string, string>>>({});
-
-  function editedHtml(index: number, site: GeneratedSite): string {
-    return render(applyTextEdits(site.document, edits[index] ?? {}), "html").html;
-  }
 
   if (openIndex !== null) {
-    const site = sites[openIndex];
+    const history = histories[openIndex];
     const caption = CAPTIONS[openIndex];
-    if (!site || !caption) return null;
+    if (!history || !caption) return null;
     return (
       <Editor
         title={es[caption.titleKey]}
-        html={editedHtml(openIndex, site)}
+        document={history.present.document}
         answers={answers}
         variantIndex={openIndex}
-        onEdit={(elementId, text) =>
-          setEdits((current) => ({
-            ...current,
-            [openIndex]: { ...current[openIndex], [elementId]: text },
-          }))
+        onEditText={(address, text) =>
+          dispatch({ type: "editText", variant: openIndex, address, text })
         }
+        canUndo={history.past.length > 0}
+        canRedo={history.future.length > 0}
+        onUndo={() => dispatch({ type: "undo", variant: openIndex })}
+        onRedo={() => dispatch({ type: "redo", variant: openIndex })}
         onBack={() => setOpenIndex(null)}
       />
     );
@@ -150,14 +149,17 @@ export function Variants({ answers, onRestart }: { answers: Answers; onRestart: 
             gap: 20,
           }}
         >
-          {sites.map((site, index) => {
+          {histories.map((history, index) => {
             const caption = CAPTIONS[index];
             if (!caption) return null;
             const highlighted = index === 1;
-            const html = editedHtml(index, site);
+            const html = render(history.present.document, "html").html;
             return (
               <div
-                key={site.document.id}
+                // By position: the three variants are a fixed list that never reorders, and
+                // all three carry the same document id, so that would not distinguish them.
+                // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length, never reordered
+                key={index}
                 style={{
                   display: "flex",
                   flexDirection: "column",

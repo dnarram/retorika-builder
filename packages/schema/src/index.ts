@@ -24,8 +24,8 @@ export {
   sectionLayoutSchema,
   sectionSchema,
 } from "./document.ts";
-export type { EditableField } from "./fields.ts";
-export { applyTextEdits, listEditableFields } from "./fields.ts";
+export type { EditableField, ElementAddress } from "./fields.ts";
+export { applyTextEdits, listEditableFields, setElementText } from "./fields.ts";
 export type { Violation } from "./invariants.ts";
 export { checkInvariants, flattenElements } from "./invariants.ts";
 export type { InvariantId } from "./invariants-catalog.ts";
