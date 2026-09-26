@@ -18,3 +18,11 @@ export {
   SERVICES_VARIANTS,
   servicesPreset,
 } from "./services.ts";
+export type { TestimonialsVariant } from "./testimonials.ts";
+export {
+  TESTIMONIALS_ID,
+  TESTIMONIALS_ITEM_SLOTS,
+  TESTIMONIALS_SLOTS,
+  TESTIMONIALS_VARIANTS,
+  testimonialsPreset,
+} from "./testimonials.ts";

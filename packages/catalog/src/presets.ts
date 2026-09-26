@@ -3,6 +3,7 @@ import { CONTACT_ID, CONTACT_VARIANTS, contactPreset } from "./contact.ts";
 import { COVER_ID, COVER_VARIANTS, coverPreset } from "./cover.ts";
 import { LOCATION_ID, LOCATION_VARIANTS, locationPreset } from "./location.ts";
 import { SERVICES_ID, SERVICES_VARIANTS, servicesPreset } from "./services.ts";
+import { TESTIMONIALS_ID, TESTIMONIALS_VARIANTS, testimonialsPreset } from "./testimonials.ts";
 
 /**
  * The registry, in its own module rather than in `index.ts`, so that `blank.ts` can read it
@@ -14,6 +15,7 @@ export const CATALOG: Readonly<Record<string, PresetShape>> = {
   [COVER_ID]: coverPreset,
   [SERVICES_ID]: servicesPreset,
   [LOCATION_ID]: locationPreset,
+  [TESTIMONIALS_ID]: testimonialsPreset,
   [CONTACT_ID]: contactPreset,
 };
 
@@ -23,6 +25,7 @@ const VARIANTS: Readonly<Record<string, readonly string[]>> = {
   [COVER_ID]: COVER_VARIANTS,
   [SERVICES_ID]: SERVICES_VARIANTS,
   [LOCATION_ID]: LOCATION_VARIANTS,
+  [TESTIMONIALS_ID]: TESTIMONIALS_VARIANTS,
   [CONTACT_ID]: CONTACT_VARIANTS,
 };
 
