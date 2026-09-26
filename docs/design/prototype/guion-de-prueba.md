@@ -84,6 +84,49 @@ Nothing is said about the colours. If they bring the colour up by themselves, th
 writing down; asking about it would only measure our taste, since we chose the palette knowing
 whose business it is, which the generator will not.
 
+## If the session runs against the real product
+
+Everything above was written for the static prototype. Against the deployed `apps/editor` most of
+it still holds — the screens are the same five questions and the same three variants — but **three
+of the four disclosures above stop being true**, and saying them anyway would be apologising for
+faults the product no longer has.
+
+**What is said at screen 07 instead**, and it is the whole of it:
+
+> «Una cosa antes de que mires: las fotos son de muestra. Las cambias tú después.»
+
+The other three are gone because the real product does what they were excusing: the services shown
+are the ones the owner ticked, the main button is the action they chose in the last question, and
+it leads where they said. **The photo disclosure survives** because `packages/photobank` does not
+exist yet (ADR 0011), so the sample photo is still ours and not theirs.
+
+**The session does not end at screen 07.** The prototype stopped there; the real tool continues
+into the editor, which is where the dossier's promise is actually kept or broken — the owner does
+not build a site, they correct one. So after they have chosen a variant, they are handed the
+screen with nothing but:
+
+> «Ahora es tuya. Haz lo que harías si fuese a salir publicada mañana.»
+
+| Screen | What is watched |
+|---|---|
+| 8 — the editor, first look | Do they know it is editable? Do they click a text, or do they look for a button that says "editar"? How long before they touch anything? |
+| 8 — changing a text | Do they find click-to-edit by themselves? Do they expect a save button, and go looking for one? Does the tick reading `Guardado en este navegador` get read at all, and does anyone ask where it is saved? |
+| 8 — a section they do not want | Do they look for a way to remove it? Do they find the buttons on the selected section? **Does the absence of a "¿seguro?" alarm them** (ADR 0014), and do they find `Deshacer` when it does? |
+| 8 — order | Does anyone try to move a section, and do they reach for the arrows or try to drag it? Dragging is not implemented: if they try, that is the finding. |
+| 8 — adding | Do they see the dashed rule with `Añadir sección aquí`, or do they look for a side panel? Which section do they add first, and do the names in the menu mean anything to them? |
+| 8 — marker text | An added section arrives saying `Escribe aquí…`. Do they replace it, or leave it and move on? Is the warning above the canvas read? |
+| 9 — the download | Do they press `Descargar` expecting a published website? **The ZIP is the single hardest thing to explain and nothing explains it.** Whatever they say on opening it is the most valuable minute of the session. |
+
+**Where the ten minutes is measured to.** The dossier promises a finished site in under ten
+minutes. Against the prototype that could only be timed to screen 07, which measured half a
+promise. Against the real product it is timed **to the download**, and the two numbers are written
+down separately: to the end of the questionnaire, and to the ZIP. A questionnaire that takes three
+minutes and an editor that takes twenty is not a nine-minute product.
+
+**Do not demonstrate anything.** The temptation is strongest here, because the editor is the part
+worth showing off. An owner who was shown where to click has told us nothing about whether they
+would have found it.
+
 ## One question at screen 07, before the closing ones
 
 The catalog is about to get its "Contacto y reservas" section, and the biggest open decision in
@@ -102,7 +145,9 @@ without being prompted.
 
 ## The questions at the end
 
-In this order, and with silence after each one:
+In this order, and with silence after each one. **Against the real product they are asked after
+the download, not after screen 07** — «¿Publicarías esto?» means something different once the
+owner has corrected the site themselves and holds the file.
 
 1. > «¿Publicarías esto tal y como está?»
 
@@ -139,6 +184,12 @@ Write up the same day, before the memory tidies itself:
 - what they said to the five closing questions, quoted;
 - how they expect people to get in touch, and whether a form came up by itself;
 - anything they tried to do that the screens did not allow.
+
+Against the real product, also:
+- the second time: from the first question to the ZIP downloaded, alongside the first;
+- every edit they made, in order, and every one they looked for and did not find;
+- whether a delete alarmed them, and whether they found `Deshacer` without being told;
+- what they said when the ZIP arrived — verbatim, because nothing in the product explains it.
 
 Findings that touch a decision already recorded — the sector list of ADR 0010, the text bank of
 ADR 0009, the photo criteria of ADR 0011, the cardinality of ADR 0013 — go to those ADRs as

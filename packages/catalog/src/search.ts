@@ -18,5 +18,14 @@ export const SEARCH_ALIASES: Readonly<Record<string, readonly string[]>> = {
     "cómo llegar",
     "abierto",
   ],
+  testimonials: [
+    "opiniones",
+    "reseñas",
+    "testimonios",
+    "valoraciones",
+    "qué dicen",
+    "clientes",
+    "estrellas",
+  ],
   contact: ["contacto", "reservas", "teléfono", "whatsapp", "pedir cita", "escribir", "llamar"],
 };

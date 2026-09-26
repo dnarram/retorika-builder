@@ -11,6 +11,8 @@ import {
   LOCATION_VARIANTS,
   SERVICES_ID,
   SERVICES_VARIANTS,
+  TESTIMONIALS_ID,
+  TESTIMONIALS_VARIANTS,
 } from "@retorika/catalog";
 import {
   type ContentElement,
@@ -91,12 +93,82 @@ const PRESET_CASES: Record<
     texts: ["standard"],
     sections: (cover, variantId) => [cover, locationSection(variantId)],
   },
+  [TESTIMONIALS_ID]: {
+    variants: TESTIMONIALS_VARIANTS,
+    texts: ["standard", "long"],
+    // "long" matters more here than anywhere: a quote is the one field whose length the owner
+    // does not choose from a list — they paste what a customer actually wrote.
+    sections: (cover, variantId, text) => [cover, testimonialsSection(variantId, text)],
+  },
   [CONTACT_ID]: {
     variants: CONTACT_VARIANTS,
     texts: ["standard"],
     sections: (cover, variantId) => [cover, contactSection(variantId)],
   },
 };
+
+/**
+ * "Opiniones" with two quotes, the second of them anonymous — an author hidden rather than
+ * removed (document rule 3), which is how a quote whose customer does not want to be named
+ * stays valid against a preset that requires one.
+ */
+function testimonialsSection(variantId: string, text: TextCase): Section {
+  const long = text === "long";
+  const textElement = (id: string, role: "heading" | "body", slot: string, value: string) =>
+    ({ id, role, hidden: false, slot, value: { kind: "text", text: value } }) as ContentElement;
+  return {
+    id: "sec-testimonials",
+    preset: { catalogId: TESTIMONIALS_ID, variantId },
+    source: "catalog",
+    layout: null,
+    content: [
+      textElement("el-op-headline", "heading", "headline", "Lo que dicen de nosotros"),
+      textElement("el-op-intro", "body", "intro", "Opiniones que nos han dejado en Google."),
+      {
+        id: "el-opinions",
+        role: "list",
+        hidden: false,
+        slot: "opinions",
+        items: [
+          {
+            id: "item-1",
+            elements: [
+              textElement(
+                "el-opinion-1-author",
+                "heading",
+                "author",
+                long ? "Rosario Mendoza Villanueva" : "Rosario M.",
+              ),
+              textElement(
+                "el-opinion-1-quote",
+                "body",
+                "quote",
+                long
+                  ? "Llevo yendo dos años y nunca he salido descontenta; te explican lo que te van a hacer antes de tocarte el pelo y respetan la hora que te dan."
+                  : "Llevo yendo dos años y nunca he salido descontenta.",
+              ),
+            ],
+          },
+          {
+            id: "item-2",
+            elements: [
+              {
+                ...textElement("el-opinion-2-author", "heading", "author", "Un cliente"),
+                hidden: true,
+              },
+              textElement(
+                "el-opinion-2-quote",
+                "body",
+                "quote",
+                "Se agradece que te cojan a la hora que te dan.",
+              ),
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
 
 /** Every slot "Horario y ubicación" declares, so the harness measures all of them. */
 function locationSection(variantId: string): Section {

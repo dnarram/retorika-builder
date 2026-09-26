@@ -13,6 +13,7 @@ import es from "../src/locales/es.json" with { type: "json" };
 import { LOCATION_ID } from "../src/location.ts";
 import { CATALOG, presetFor, variantsFor } from "../src/presets.ts";
 import { SERVICES_ID, SERVICES_ITEM_SLOTS } from "../src/services.ts";
+import { TESTIMONIALS_ID } from "../src/testimonials.ts";
 
 const theme = Object.fromEntries(TOKEN_KEYS.map((key) => [key, `value-${key}`]));
 
@@ -36,7 +37,7 @@ const EVERY_PAIR = BLANKABLE.flatMap((catalogId) =>
 
 describe("canBeBlank", () => {
   it("is true for every section whose required slots are text, an image or a list", () => {
-    expect(BLANKABLE).toEqual([COVER_ID, SERVICES_ID, LOCATION_ID]);
+    expect(BLANKABLE).toEqual([COVER_ID, SERVICES_ID, LOCATION_ID, TESTIMONIALS_ID]);
   });
 
   it("is false for Contacto y reservas, whose required button is a destination", () => {
@@ -46,7 +47,7 @@ describe("canBeBlank", () => {
   it("throws for a section the catalog does not have, rather than answering false", () => {
     // False would read as "this section cannot be blank", when the truth is that nobody knows
     // what this section is — the same distinction presetFor already refuses to blur.
-    expect(() => canBeBlank("opiniones")).toThrow(/Unknown catalog section/);
+    expect(() => canBeBlank("seccion-inventada")).toThrow(/Unknown catalog section/);
   });
 });
 
@@ -135,7 +136,7 @@ describe("blankSection", () => {
   });
 
   it("refuses a section the catalog does not have", () => {
-    expect(() => blankSection("opiniones", "stacked", "sec-new")).toThrow(
+    expect(() => blankSection("seccion-inventada", "stacked", "sec-new")).toThrow(
       /Unknown catalog section/,
     );
   });

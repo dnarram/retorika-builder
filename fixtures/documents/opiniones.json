@@ -1,0 +1,157 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "doc-opiniones",
+  "siteName": "Barbería El Corte",
+  "theme": {
+    "color.primary": "#156FE7",
+    "color.secondary": "#105CB1",
+    "color.accent": "#FF3A72",
+    "color.surface": "#FFFFFF",
+    "color.ink": "#0F172A",
+    "color.muted": "#475569",
+    "font.heading": "Georgia, serif",
+    "font.body": "system-ui, sans-serif",
+    "size.heading": "2.5rem",
+    "size.subheading": "1.5rem",
+    "size.body": "1rem",
+    "space.xs": "4px",
+    "space.sm": "8px",
+    "space.md": "16px",
+    "space.lg": "24px",
+    "space.xl": "48px",
+    "radius.sm": "4px",
+    "radius.md": "8px",
+    "radius.lg": "16px"
+  },
+  "pages": [
+    {
+      "id": "home",
+      "slug": "index",
+      "title": "Barbería El Corte",
+      "sections": [
+        {
+          "id": "sec-cover",
+          "preset": {
+            "catalogId": "cover",
+            "variantId": "image-right"
+          },
+          "source": "catalog",
+          "layout": null,
+          "content": [
+            {
+              "id": "el-headline",
+              "role": "heading",
+              "hidden": false,
+              "slot": "headline",
+              "value": {
+                "kind": "text",
+                "text": "Barbería El Corte"
+              }
+            },
+            {
+              "id": "el-image",
+              "role": "image",
+              "hidden": false,
+              "slot": "image",
+              "value": {
+                "kind": "image",
+                "src": "assets/barbershop.svg",
+                "alt": "El local de la barbería por dentro"
+              }
+            }
+          ]
+        },
+        {
+          "id": "sec-testimonials",
+          "preset": {
+            "catalogId": "testimonials",
+            "variantId": "stacked"
+          },
+          "source": "catalog",
+          "layout": null,
+          "content": [
+            {
+              "id": "el-op-headline",
+              "role": "heading",
+              "hidden": false,
+              "slot": "headline",
+              "value": {
+                "kind": "text",
+                "text": "Lo que dicen de nosotros"
+              }
+            },
+            {
+              "id": "el-op-intro",
+              "role": "body",
+              "hidden": false,
+              "slot": "intro",
+              "value": {
+                "kind": "text",
+                "text": "Opiniones que nos han dejado en Google."
+              }
+            },
+            {
+              "id": "el-opinions",
+              "role": "list",
+              "hidden": false,
+              "slot": "opinions",
+              "items": [
+                {
+                  "id": "item-1",
+                  "elements": [
+                    {
+                      "id": "el-opinion-1-author",
+                      "role": "heading",
+                      "hidden": false,
+                      "slot": "author",
+                      "value": {
+                        "kind": "text",
+                        "text": "Rosario M."
+                      }
+                    },
+                    {
+                      "id": "el-opinion-1-quote",
+                      "role": "body",
+                      "hidden": false,
+                      "slot": "quote",
+                      "value": {
+                        "kind": "text",
+                        "text": "Llevo yendo dos años y nunca he salido descontenta."
+                      }
+                    }
+                  ]
+                },
+                {
+                  "id": "item-2",
+                  "elements": [
+                    {
+                      "id": "el-opinion-2-author",
+                      "role": "heading",
+                      "hidden": true,
+                      "slot": "author",
+                      "value": {
+                        "kind": "text",
+                        "text": "Un cliente"
+                      }
+                    },
+                    {
+                      "id": "el-opinion-2-quote",
+                      "role": "body",
+                      "hidden": false,
+                      "slot": "quote",
+                      "value": {
+                        "kind": "text",
+                        "text": "Se agradece que te cojan a la hora que te dan."
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "collections": []
+}
