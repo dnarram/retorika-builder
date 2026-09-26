@@ -21,5 +21,14 @@ test-results/
 .env.*
 !.env.example
 
+# Agent instructions that `next dev` writes into apps/editor on every run. They are tool
+# output, not source, and the file itself asks to be committed — which is a dependency asking
+# for its own instructions to be adopted. The root CLAUDE.md is a document this team wrote and
+# maintains; a second one under apps/editor saying only "@AGENTS.md" would redirect silently to
+# text nobody here authored, and the next reader would assume we did. Ignored rather than
+# deleted: it regenerates, and ignoring it keeps the tree clean without signing for it.
+apps/editor/AGENTS.md
+apps/editor/CLAUDE.md
+
 # macOS
 .DS_Store

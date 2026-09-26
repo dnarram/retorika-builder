@@ -102,3 +102,33 @@ decision for a new ADR.
 - **Settled since:**
   - the photo bank: [ADR 0011](0011-sample-photos-per-sector.md);
   - the five questions and the placeholder list: [ADR 0010](0010-initial-questionnaire.md).
+
+## Evidence from session 1 (26 September 2026)
+
+> One business, run against the deployed editor. ADR 0017 calls the two sessions «two
+> experiments of one subject each»; one of them is not a tendency, and nothing below is
+> written as one.
+> Source: `docs/sessions/2026-09-25-taberna-santo-domingo.md`.
+
+Asked «¿Estos textos suenan a los tuyos?», the owner of Taberna Santo Domingo answered:
+
+> «Los míos serían más explicativos, un poco más extensos tal vez pero dependerían del contenido
+> visual e imágenes. En el prototipo mostrado la página me parece algo vacía y fría.»
+
+**This is a finding about the bank, not a failure of the session** — the script says so in
+advance. Three things in it are worth separating, because they are not the same complaint:
+
+- **«Más explicativos», «más extensos».** The bank's texts are short by design: ADR 0009's own
+  reasoning is that a short true sentence beats a long invented one, and that nothing may claim
+  what the owner did not say. Length is the one thing a template bank cannot add without
+  inventing. **Not actioned, and the reason is the decision itself** — if the second session says
+  the same, what changes is not the length but whether the owner is asked for more in the first
+  place, which is a questionnaire change (ADR 0010), not a bank change.
+- **«Dependerían del contenido visual e imágenes».** He did not treat text and photo as separate
+  problems. That connects this to ADR 0011 rather than to this ADR.
+- **«Vacía y fría».** Aimed at the whole page, not at a sentence. See ADR 0011.
+
+**His own vocabulary, which is what the script asks to collect for the bank:** «negocio familiar»,
+«bar de toda la vida», «comida con sabor», «comida tradicional». None of the four appears in
+`packages/copybank/bank/restaurante-bar.json` today. They are recorded here, not added: a bank
+entry written from one owner's words would be that owner's site, not a sector's.

@@ -93,6 +93,27 @@ Lower-stakes, each with a safe default and a comment where it lives in the code:
   with the real renderer, screenshotted in three variants — real composition differences, correct
   sector palette and type pair, the bank's texts, the secondary phone link under "book".
 
+## Definition of done
+
+Absent when this file was written — it was drafted as an after-the-fact record of a sprint day
+rather than as a task asked for in advance, and the protocol's own template (Part 11.1) requires
+the section regardless. Filled in 26 September 2026 from the Verification section above, which is
+the evidence; nothing here is ticked on the strength of memory.
+
+- [x] New tests that failed before and pass now — `packages/generator/test/generate.test.ts`,
+      including `checkAgainstPreset` on every generated section and the two "no destination" cases
+- [x] `pnpm typecheck`, `pnpm lint`, `pnpm test` green
+- [x] `pnpm test:invariants` green — re-confirmed on `main` on the date above
+- [x] If the published output changed: golden regenerated and the diff reviewed — **it did not
+      change.** The generator writes documents, not markup; the corpus stayed at 13/13 untouched,
+      which is the outcome this task wanted rather than an exemption from the rule
+- [x] If the schema changed: migration and round-trip test — **the schema did not change.**
+      `packages/schema` was not touched by this task
+- [x] Interface text in Spanish and in the translation file — the new question 5 fields are in
+      `apps/editor/src/locales/es.json`, none inline in a `.tsx`
+- [x] No keys and no real client data in the code — `pre-commit run gitleaks --all-files` passes
+      repo-wide
+
 ## Not in this task
 
 - Wiring `generate()` into the questionnaire's UI — the "elige por dónde empezar" screen with

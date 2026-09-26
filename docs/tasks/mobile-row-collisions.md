@@ -263,11 +263,15 @@ at 320:
 
 Manual, and it is what closes finding 1 and #10's two limitations:
 
-- [ ] Step 5's checks pass at 320, with screenshots of the three sections.
-- [ ] **The photo is visible on mobile** in `image-background-full`: on top (option A) and
-      uncovered.
+- [x] Step 5's checks pass at 320, with screenshots of the three sections. — re-performed
+      26 September 2026 in headless Chromium over the current goldens: one column, one row per element, no
+      collisions, and measured horizontal overflow of 0 at 320.
+- [x] **The photo is visible on mobile** in `image-background-full`: on top (option A) and
+      uncovered. — re-performed 26 September 2026: at 320 the photo is the first thing on the page, whole
+      and with no panel over it.
 - [ ] On `feat/a11y` with this merged in, `pnpm test:a11y` compared test by test against today's
-      30 failures, with these four results:
+      30 failures, with these four results: — **not performable as written, and superseded**:
+      `feat/a11y` is merged and the suite runs on every pull request. Left unticked (26 September 2026).
   - **No `not measured` of any kind remains, at any width.** That includes the `h1`'s
     `elmPartiallyObscuring` at 320 in `image-background`, and every `bgOverlap`.
   - **The only failures left are finding 3:** a plain link, `#0000ee` on `#0f172a`, on

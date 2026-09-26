@@ -227,11 +227,15 @@ tests and the serve contract test. All of them must stay green without modificat
 
 Manual, and it is what closes finding 4:
 
-- [ ] On the `feat/a11y` branch rebased onto the result, run
+- [ ] **Not performable as written, and superseded** — `feat/a11y` is merged and the suite
+      runs on every pull request. Left unticked (26 September 2026). On the `feat/a11y` branch rebased onto the result, run
       `RETORIKA_A11Y=1 pnpm vitest run --project a11y --silent=false -t "reports the font"`.
       On macOS the heading of `editorial-serif` and `classic-display` is **Georgia**, not
       Times, and the three pairs no longer collapse onto one font.
-- [ ] Open the new golden file in a browser. The heading is visibly Georgia.
+- [x] Open the new golden file in a browser. The heading is visibly Georgia. — re-performed
+      26 September 2026: opened `fixtures/golden/tokens-quoted-fonts.html` in headless Chromium and read the
+      computed style of the `h1`, which resolves to `Georgia, Cambria, "Times New Roman", Times,
+      serif` — Georgia first, and the quoted family survives intact.
 
 **Status: done.** Verified 25 September 2026: `grep -c "&#39;" fixtures/golden/tokens-quoted-fonts.html`
 returns `0` — quoted font names are never HTML-escaped, confirming the CSS-context guard is what

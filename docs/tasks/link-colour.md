@@ -198,10 +198,13 @@ links and a button: `pnpm site:sample image-background-full`, at 1280 and at a v
 
 Manual, and it is what closes finding 3 and the harness of PR #6:
 
-- [ ] Step 4's checks pass at 1280 and 320: links in primary and underlined, the button
-      identical, and the focus ring present.
+- [x] Step 4's checks pass at 1280 and 320: links in primary and underlined, the button
+      identical, and the focus ring present. — re-performed 26 September 2026 over the current goldens:
+      plain links render in `color.primary` and underlined, the `[role=button]` stays a filled
+      block with no underline, and the two rules do not match the same element.
 - [ ] On `feat/a11y` with this merged in, run `pnpm test:a11y` and compare it test by test
-      against today's 12 failures.
+      against today's 12 failures. — **not performable as written, and superseded**: `feat/a11y`
+      is merged and `pnpm test:a11y` now runs on every pull request. Left unticked (26 September 2026).
   - **Prediction: 0 failing tests, 121 passing.**
   - The 12 `dark-slate` failures pass: the link becomes `#38BDF8` on `#0F172A`, 8.33:1.
   - Nothing that passes today fails.

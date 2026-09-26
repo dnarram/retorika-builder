@@ -16,6 +16,15 @@ English; every line meant to be spoken is quoted in Spanish, and is said as writ
 > on comparing two answers to that same question, so it must be asked **word for word, unchanged,**
 > in every session, prototype or product, or the comparison stops meaning what it says.
 
+> **Correction, 26 September 2026.** The first session has now happened: Taberna Santo Domingo,
+> 25 September, **against the deployed editor**, written up in
+> `docs/sessions/2026-09-25-taberna-santo-domingo.md`. So the remaining session is Conchi's, it is
+> the second, and it is the one that runs with the product in front of the owner having had the
+> first run that way too — the split this note describes did not survive contact with the
+> schedule. Nothing was timed in the first session, so **the phase 1 acceptance criterion is still
+> unmeasured** and the second session carries it. And the screen-07 contact question **was not
+> asked word for word** the first time, which is why the second one must be (see ADR 0016).
+
 The point of the session is to find out where someone hesitates. A session where the owner
 understood everything and liked it all teaches nothing and probably means the questions were
 leading.

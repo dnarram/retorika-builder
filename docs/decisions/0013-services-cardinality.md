@@ -52,3 +52,21 @@ document must not lay itself out differently as the user ticks a box.
   cardinality are two different acts.
 - The questionnaire's screen for question 3 needs no maximum of its own: the limit is the
   section's, which is where a reader would look for it.
+
+## Evidence from session 1 (26 September 2026)
+
+> One business, run against the deployed editor. ADR 0017 calls the two sessions «two
+> experiments of one subject each»; one of them is not a tendency, and nothing below is
+> written as one.
+> Source: `docs/sessions/2026-09-25-taberna-santo-domingo.md`.
+
+The design review's D9 asked one question that only an owner could answer, and this session
+answered it:
+
+- **He did not believe the suggestions came pre-ticked.** They start unticked on purpose, and the
+  worry recorded in `docs/design/REVIEW.md` was that someone would scroll past thinking the work
+  was done. He did not.
+- **He ticked four, and added none of his own.** Four is comfortably inside the 1..6 this ADR
+  decided, so the session exercised neither bound: not the single-card floor, and not the six-card
+  ceiling. **Nothing here confirms or challenges the cardinality** — it confirms the default state
+  is read correctly, which is the part D9 was actually unsure about.

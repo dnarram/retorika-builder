@@ -285,16 +285,23 @@ That applies to `barbershop-cover`, `edge-long-text-unicode`, `physio-free-cover
 
 Manual, and it is what closes finding 2:
 
-- [ ] Render `image-background-full` in a real browser at 1280 and at 320. The headline,
+- [x] Render `image-background-full` in a real browser at 1280 and at 320. The headline,
       subheadline, body, button and both links are visible on the panel, and the photo shows
-      around it.
-- [ ] **At 320, look at how much of the photo is left.** On a phone the panel spans the full
+      around it. — re-performed 26 September 2026 in headless Chromium over the current golden: all five
+      elements sit on the panel and the photo shows around it at both widths; measured
+      horizontal overflow is 0 at each.
+- [x] **At 320, look at how much of the photo is left.** On a phone the panel spans the full
       width of the rows it covers. If the photo barely shows — a thin strip above or below the
       panel, or nothing — **report it with a screenshot.** It is a design question about the
       variant on mobile, not something to fix in this task: do not shrink the panel, move rows
-      or change the template to make room.
+      or change the template to make room. — re-performed 26 September 2026: nothing to report. At 320 the
+      mobile rule moves the photo to its own row on top (`order: -1`), so it is shown whole
+      rather than reduced to a strip, and the panel no longer covers it at all.
 - [ ] On the `feat/a11y` branch with this merged in, run `pnpm test:a11y`, then check the
-      three points below.
+      three points below. — **not performable as written, and superseded.** `feat/a11y` was
+      merged long ago; `pnpm test:a11y` runs on `main` and in the `a11y-size` job of every pull
+      request, which is a permanent version of this one-off comparison. Left unticked because
+      the check named here is not the check that now happens (26 September 2026).
   - **No** `image-background` combination reports `not measured … [bgOverlap]` on `h1`, `h2` or
     `p`, at any width.
   - The overflow suite is still green at 320, 768 and 1280.
