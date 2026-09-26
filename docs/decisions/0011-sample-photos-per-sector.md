@@ -128,3 +128,34 @@ The wording above is a draft. It goes to `locales/es.json` when the screens are 
   around 18 MB. Replacing an image keeps the old one in the history, so replacements should be
   rare.
 - The package goes into the repository tree of protocol 3.4 when it is created.
+
+## Evidence from session 1 (26 September 2026)
+
+> One business, run against the deployed editor. ADR 0017 calls the two sessions «two
+> experiments of one subject each»; one of them is not a tendency, and nothing below is
+> written as one.
+> Source: `docs/sessions/2026-09-25-taberna-santo-domingo.md`.
+
+**Unprompted** — the facilitator's script keeps the sample photo as the one disclosure still made
+at screen 07, but he raised it himself:
+
+> «La foto de muestra es pobre pero entiendo que debo añadir mi propia foto para que luzca
+> profesional»
+
+Both halves matter, and they say different things:
+
+- **«Es pobre»** is a verdict on the placeholder this ADR chose to ship (`placeholder-image.ts`, a
+  grey inline SVG reading "Tu foto aquí"). It is doing its job — it reads as a placeholder — and he
+  disliked it, which is what a placeholder that reads as a placeholder earns.
+- **«Entiendo que debo añadir mi propia foto»** is the more useful half: the affordance was
+  understood without being explained. He knew the photo was his to replace. That is the assumption
+  this ADR rests on, and it had never been checked with anyone.
+
+Asked separately what the site lacked, he led with «potencia visual, muchos mas elementos gráficos
+e imágenes», and when asked about the texts he said they «dependerían del contenido visual e
+imágenes» and that the page felt «vacía y fría». **He did not separate the photo problem from the
+text problem.**
+
+**This does not close the photo bank.** He said he would add his own photo; a sector bank is for
+the owner who will not, and for the site that has to look finished before anyone uploads anything.
+Both remain needed, and they are different features.

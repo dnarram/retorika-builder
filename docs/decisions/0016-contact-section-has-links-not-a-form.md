@@ -3,8 +3,9 @@
 **Status:** **proposed** · **Date:** 2026-09-24 · **Proposed by:** development · **Amends, if accepted:** concept dossier §9
 
 > **Why this is not accepted yet.** The argument below is technical and the decision is a product
-> one. It is being checked with the two owners of the usability sessions, which have not happened
-> yet, and it is explicitly reopened if either of them answers a certain way. A decision that
+> one. It is being checked with the two owners of the usability sessions — **the first of which has
+> now happened (25 September 2026) without settling this: see the note under the evidence table** —
+> and it is explicitly reopened if either of them answers a certain way. A decision that
 > depends on evidence nobody has gathered is proposed, not accepted — and the CEO has not seen
 > this. It becomes **accepted** when the two answers are recorded below, naming who accepted it.
 >
@@ -62,8 +63,34 @@ with a service behind it, its cost, its data processing agreement and its own AD
 
 | Business | What they said | Date |
 |---|---|---|
-| Taberna Santo Domingo | _pending_ | |
+| Taberna Santo Domingo | **Not admissible — the question was paraphrased.** See the note below. | 2026-09-25 |
 | Conchi | _pending_ | |
+
+> **Note, 26 September 2026 — session 1 happened, and it does not close this.**
+>
+> Taberna Santo Domingo was run on 25 September against the deployed editor
+> (`docs/sessions/2026-09-25-taberna-santo-domingo.md`). **The question above was not asked word
+> for word**, and the wording actually used was not recorded.
+>
+> That is why the row says "not admissible" rather than carrying his answer as data. The reopening
+> condition compares two answers to *one* question asked unchanged; counting a paraphrase against
+> a verbatim one would make this ADR describe a comparison that never took place. Half a
+> comparison is not half an answer — it is a different question.
+>
+> **What he said anyway, because it is signal and burying it would be its own dishonesty:**
+>
+> > «Quiero que el cliente me contacte por teléfono, whatssap, correo, formulario o alguna red
+> > social en el futuro»
+>
+> He named **«formulario» and «correo» spontaneously**, with nobody offering them. That points
+> towards the reopening condition rather than away from it. Two things keep it from settling
+> anything on its own: the question that produced it is not this one, and «en el futuro» is not
+> the same as expecting messages from the web today.
+>
+> **Consequence for the second session:** it must ask the question above **word for word**, and it
+> is then the only admissible answer on record. A condition written for two answers, met by one,
+> is a condition that has to be re-read before it is applied — not applied as if the second answer
+> existed.
 
 ## An open case this decision leaves
 

@@ -123,6 +123,20 @@ part that must not move — the interface tokens and their separation from the p
   photos only. The mockup now draws both dimmed and marked `Fase 2`, so nobody implements them by
   reading the screen. What, if anything, they do in phase 1 — swapping one sample photo for
   another, say — is decided when the editor task is written.
+
+  **Answered by the shipped editor, 26 September 2026.** No editor task file was ever written;
+  `apps/editor` was built directly (ADR 0017). `EditorShell.tsx` therefore holds three decisions
+  that diverge from mockup 08, recorded here because a source comment is not where a deviation
+  from an approved screen belongs:
+  - **`Estilo` is dimmed too**, though the mockup dims only `Fotos` and `Páginas`. Protocol Part
+    14 puts "Estilo global" in phase 2 alongside the other two; the mockup predates that being
+    pinned down, and the written phase boundary wins over the pixel reference.
+  - **No second page tab and no `+`.** The mockup shows `Inicio`, `Servicios` and an add-page
+    control. The document has exactly one page, and a button that adds a page nothing can hold is
+    the dead-button mistake sprint 1 kept refusing. `Inicio` is drawn alone.
+  - **No site-preview nav bar inside the canvas card.** The mockup's `Inicio Servicios Galería
+    Contacto Reserva` strip is a real multi-page site's own navigation. The generator produces no
+    such navigation, so drawing it would advertise links that go nowhere.
 - **Mockup 13's palettes and typefaces are not the ones in the code.** The screen offers `Azul
   confianza`, `Verde natural`, `Coral cercano` and `Neutro elegante`, plus Inter, Poppins and
   Source Serif. `packages/tokens` ships four palettes (`classic-blue`, `warm-terracotta`,
@@ -132,10 +146,13 @@ part that must not move — the interface tokens and their separation from the p
   cannot ship.
 - **The mockups load Inter from Google Fonts.** Fine for a prototype opened on a laptop. It must
   never happen in a published site (ADR 0001): a client's site has no network dependency.
-- **The Spanish interface strings** in these screens are the source for
-  `apps/editor/src/locales/es.json` when that app exists. They are not copied into `.ts` files.
-- **`SERVICES_ITEMS` still says 2..6** in `packages/catalog/src/services.ts`. ADR 0013 decides
-  1..6; the code change belongs to the questionnaire and generator task, and has its own issue.
+- **Resolved, 26 September 2026 — the Spanish interface strings.** They were the source for
+  `apps/editor/src/locales/es.json` when that app existed; that file now exists and every visible
+  string is read from it. No Spanish user-facing literal lives in a `.ts` or `.tsx` file.
+- **Resolved, 26 September 2026 — `SERVICES_ITEMS`.** It said 2..6 when this review was written;
+  `packages/catalog/src/services.ts` now declares `{ min: 1, max: 6 }`, which is what ADR 0013
+  decided. The claim above had outlived the code and is corrected here rather than deleted, so the
+  record of what was once open survives.
 - The handoff's own open list stands: the price, who issues the invoice and how VAT is handled,
   and the photo bank's actual images.
 

@@ -95,3 +95,31 @@ which ADR 0009 forbids.
 - **The sample photos per sector are [ADR 0011](0011-sample-photos-per-sector.md).**
 - The dossier v1.2 takes this in with the phase 1 screens
   ([ADR 0008](0008-hosted-publishing-has-no-plan.md)).
+
+## Evidence from session 1 (26 September 2026)
+
+> One business, run against the deployed editor. ADR 0017 calls the two sessions «two
+> experiments of one subject each»; one of them is not a tendency, and nothing below is
+> written as one.
+> Source: `docs/sessions/2026-09-25-taberna-santo-domingo.md`.
+
+**The questionnaire was not misunderstood.** No doubts were recorded on any of the seven screens —
+the name and logo, the sector, what you offer, where you are, the main action, the generation wait,
+or the three variants.
+
+That negative finding is the one this ADR most needed, and it is also what keeps **ADR 0017**
+closed: that ADR crossed a gate on the promise that if the first session showed the questionnaire
+itself was misunderstood, the screens would change before anything else was built on them. It did
+not, so they do not.
+
+Two specifics for the sector list:
+
+- **He found his trade among the ten** and did not go looking for his exact case. «Restaurante»
+  was enough; he never reached for «Otro sector».
+- **He read the grid; he did not use the search field.** The search aliases of
+  `packages/catalog/src/search.ts` were therefore not exercised at all. Not evidence that they are
+  unnecessary — evidence that nothing here tested them.
+
+**How he named his own trade, unprompted:** «Restaurante», «negocio familiar», «bar de toda la
+vida». The list's label for it is "Restaurante y bar", which contains the first and the last of
+those.
