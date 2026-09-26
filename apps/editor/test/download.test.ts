@@ -47,12 +47,31 @@ const REAL_DOCUMENT: RetorikaDocument = generate({
   bookingLink: "https://reservas.example.com/taberna",
 }).document;
 
-function request(body: unknown): Request {
-  return new Request("http://localhost/api/download", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+/**
+ * The route takes multipart since ADR 0018: the document as a field, the owner's photos as
+ * files whose name is the `src` the document carries. One shape rather than two, so there is no
+ * "with photos" path that only the photo tests exercise.
+ */
+function request(body: unknown, photos: { src: string; bytes: Uint8Array }[] = []): Request {
+  const form = new FormData();
+  const document = (body as { document?: unknown } | null)?.document;
+  if (document !== undefined) form.set("document", JSON.stringify(document));
+  for (const photo of photos) {
+    // A concrete ArrayBuffer: a Uint8Array is typed over ArrayBufferLike, which BlobPart does
+    // not accept, and the route copies the ZIP the same way for the same reason.
+    const buffer = new ArrayBuffer(photo.bytes.byteLength);
+    new Uint8Array(buffer).set(photo.bytes);
+    form.append("photo", new File([buffer], photo.src, { type: "image/jpeg" }));
+  }
+  return new Request("http://localhost/api/download", { method: "POST", body: form });
+}
+
+/** A JPEG as far as every check in this codebase is concerned: the first three bytes are the
+ * signature, and nothing decodes it after that. */
+function jpegBytes(size = 64): Uint8Array {
+  const bytes = new Uint8Array(size);
+  bytes.set([0xff, 0xd8, 0xff], 0);
+  return bytes;
 }
 
 function findSection(doc: RetorikaDocument, catalogId: string): Section {
@@ -143,10 +162,12 @@ describe("POST /api/download", () => {
   });
 
   it("rejects a request whose declared Content-Length is over the cap", async () => {
+    // The cap rose from 256 KB to 12 MB when photos started travelling with the document
+    // (ADR 0018). It is still a cap: the header is read before a byte of the body is.
     const response = await POST(
       new Request("http://localhost/api/download", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Content-Length": String(1024 * 1024) },
+        headers: { "Content-Length": String(13 * 1024 * 1024) },
         body: JSON.stringify({ document: REAL_DOCUMENT }),
       }),
     );
@@ -394,6 +415,128 @@ describe("POST /api/download", () => {
         ],
       };
       expect((await POST(request({ document: readded }))).status).toBe(400);
+    });
+  });
+  describe("the owner's own photo", () => {
+    /** The cover of a real document, pointed at a file rather than the inline placeholder. */
+    function withPhoto(src: string): RetorikaDocument {
+      const page = REAL_DOCUMENT.pages[0];
+      if (!page) throw new Error("no page in the fixture");
+      return {
+        ...REAL_DOCUMENT,
+        pages: [
+          {
+            ...page,
+            sections: page.sections.map((section) =>
+              section.preset.catalogId !== "cover"
+                ? section
+                : {
+                    ...section,
+                    content: section.content.map((element) =>
+                      element.value?.kind === "image"
+                        ? { ...element, value: { ...element.value, src } }
+                        : element,
+                    ),
+                  },
+            ),
+          },
+        ],
+      };
+    }
+
+    it("bundles the photo and points the page at it", async () => {
+      const response = await POST(
+        request({ document: withPhoto("foto-sec-cover.jpg") }, [
+          { src: "foto-sec-cover.jpg", bytes: jpegBytes() },
+        ]),
+      );
+      expect(response.status).toBe(200);
+      const zip = new Uint8Array(await response.arrayBuffer());
+      expect(extractFile(zip, "index.html")).toContain('src="assets/foto-sec-cover.jpg"');
+    });
+
+    it("still works with no photos at all, which is every untouched site", async () => {
+      // The placeholder is a data: URI, inline, needing no file — so a document nobody has
+      // uploaded to sends no photo part and must not be asked for one.
+      expect((await POST(request({ document: REAL_DOCUMENT }))).status).toBe(200);
+    });
+
+    it("refuses a document that names a photo the request did not send", async () => {
+      const response = await POST(request({ document: withPhoto("foto-sec-cover.jpg") }));
+      expect(response.status).toBe(400);
+      expect(await response.text()).toContain("foto-sec-cover.jpg");
+    });
+
+    it("refuses a photo the document does not reference", async () => {
+      // A malformed request answered with a ZIP would hide the difference between "you sent
+      // something odd" and "your site is missing an image".
+      const response = await POST(
+        request({ document: REAL_DOCUMENT }, [{ src: "sorpresa.jpg", bytes: jpegBytes() }]),
+      );
+      expect(response.status).toBe(400);
+      expect(await response.text()).toContain("sorpresa.jpg");
+    });
+
+    it("refuses an SVG renamed to .jpg, by its bytes rather than its name", async () => {
+      // The whole point of sniffing: an SVG is a document that can carry script, and this one
+      // would land in a stranger's ZIP opened by double-clicking.
+      const svg = new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"></svg>');
+      const response = await POST(
+        request({ document: withPhoto("foto-sec-cover.jpg") }, [
+          { src: "foto-sec-cover.jpg", bytes: svg },
+        ]),
+      );
+      expect(response.status).toBe(400);
+      expect(await response.text()).toContain("not a JPEG");
+    });
+
+    it("refuses a photo whose declared type lies about its bytes", async () => {
+      const response = await POST(
+        request({ document: withPhoto("foto-sec-cover.jpg") }, [
+          { src: "foto-sec-cover.jpg", bytes: new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7]) },
+        ]),
+      );
+      expect(response.status).toBe(400);
+    });
+
+    it("refuses a photo over the per-photo cap", async () => {
+      const response = await POST(
+        request({ document: withPhoto("foto-sec-cover.jpg") }, [
+          { src: "foto-sec-cover.jpg", bytes: jpegBytes(2 * 1024 * 1024 + 1) },
+        ]),
+      );
+      expect(response.status).toBe(413);
+    });
+
+    it("accepts a PNG and a WebP, which are the other two the browser lets through", async () => {
+      const png = new Uint8Array(64);
+      png.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
+      const webp = new Uint8Array(64);
+      webp.set([0x52, 0x49, 0x46, 0x46], 0);
+      webp.set([0x57, 0x45, 0x42, 0x50], 8);
+      for (const [name, bytes] of [
+        ["foto-sec-cover.png", png],
+        ["foto-sec-cover.webp", webp],
+      ] as const) {
+        const response = await POST(request({ document: withPhoto(name) }, [{ src: name, bytes }]));
+        expect(response.status, name).toBe(200);
+      }
+    });
+
+    it("neutralises a photo name that tries to climb out of the assets directory", async () => {
+      // It is not refused, and it does not need to be: `buildSite` takes the basename and
+      // rebuilds the path itself, so "../../etc/passwd.jpg" publishes as "assets/passwd.jpg" and
+      // there is nowhere for it to go. Asserted as the property rather than as a rejection,
+      // because the property is what matters — a later change that started refusing instead
+      // would also pass this test, and a change that started honouring the path would not.
+      const src = "../../etc/passwd.jpg";
+      const response = await POST(
+        request({ document: withPhoto(src) }, [{ src, bytes: jpegBytes() }]),
+      );
+      expect(response.status).toBe(200);
+      const zip = new Uint8Array(await response.arrayBuffer());
+      expect(extractFile(zip, "index.html")).toContain('src="assets/passwd.jpg"');
+      expect(() => extractFile(zip, "../../etc/passwd.jpg")).toThrow();
     });
   });
 });

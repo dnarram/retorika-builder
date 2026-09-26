@@ -418,3 +418,158 @@ describe("insertSection", () => {
     expect(wasSectionEverEdited(history, "sec-location-2")).toBe(false);
   });
 });
+
+describe("setImage", () => {
+  const COVER_IMAGE: ElementAddress = { sectionId: "sec-cover", elementId: "el-image" };
+  // Narrowed rather than typed as the whole union: the throw case below spreads it and replaces
+  // one field, which on a union widens to a member that has no `address` at all.
+  const upload = (): Extract<HistoryAction, { type: "setImage" }> => ({
+    type: "setImage",
+    variant: 0,
+    address: COVER_IMAGE,
+    src: "foto-sec-cover.jpg",
+    alt: "Foto de Taberna Santo Domingo",
+  });
+
+  function image(state: Histories, variant = 0) {
+    const section = state[variant]?.present.document.pages[0]?.sections.find(
+      (s) => s.id === "sec-cover",
+    );
+    const element = section?.content.find((el) => el.id === "el-image");
+    return element?.value?.kind === "image" ? element.value : undefined;
+  }
+
+  it("points the cover at the uploaded file", () => {
+    expect(image(run(start(), upload()))?.src).toBe("foto-sec-cover.jpg");
+  });
+
+  it("replaces the placeholder's alt, which stops being true the moment a photo arrives", () => {
+    expect(image(start())?.alt).toBe("Marcador de foto: aquí irá tu foto");
+    expect(image(run(start(), upload()))?.alt).toBe("Foto de Taberna Santo Domingo");
+  });
+
+  it("is one step: undo restores both the src and the alt", () => {
+    const before = image(start());
+    const state = run(start(), upload(), { type: "undo", variant: 0 });
+    expect(image(state)).toEqual(before);
+  });
+
+  it("is redone after an undo", () => {
+    const state = run(
+      start(),
+      upload(),
+      { type: "undo", variant: 0 },
+      { type: "redo", variant: 0 },
+    );
+    expect(image(state)?.src).toBe("foto-sec-cover.jpg");
+  });
+
+  it("does not merge with a text edit on its way in", () => {
+    // Different fields, different steps — the coalescing rule is about typing into one field.
+    const state = run(start(), edit("Otro nombre"), upload());
+    expect(state[0]?.past).toHaveLength(2);
+  });
+
+  it("touches only the variant it names", () => {
+    const state = run(start(), upload());
+    expect(image(state, 1)?.src).toBe(image(start(), 1)?.src);
+  });
+
+  it("counts as having touched the section, so a delete's toast stays put", () => {
+    // ADR 0014 keeps the toast on screen for a section the owner put something into. Uploading
+    // a photo is the most deliberate thing anyone does here; losing one to a six-second fade
+    // would be worse than losing a sentence.
+    const state = run(start(), upload());
+    const history = state[0];
+    if (!history) throw new Error("no history");
+    expect(wasSectionEverEdited(history, "sec-cover")).toBe(true);
+  });
+
+  it("throws for an element that is not an image", () => {
+    expect(() =>
+      run(start(), { ...upload(), address: { sectionId: "sec-cover", elementId: "el-headline" } }),
+    ).toThrow(/no image element/);
+  });
+});
+
+describe("what the history remembers across undo and redo", () => {
+  /**
+   * The defect these pin: `undo` and `redo` used to rebuild the snapshot they restored with a
+   * null cause, so going back and forward again left the edit in the document and no record that
+   * anyone had made it. `wasSectionEverEdited` then reported the section untouched, and ADR
+   * 0014's delete toast faded on a section the owner had written into.
+   */
+  it("still knows a text edit happened after undoing and redoing it", () => {
+    const state = run(
+      start(),
+      edit("Otro nombre"),
+      { type: "undo", variant: 0 },
+      {
+        type: "redo",
+        variant: 0,
+      },
+    );
+    const history = state[0];
+    if (!history) throw new Error("no history");
+    expect(headline(state)).toBe("Otro nombre");
+    expect(wasSectionEverEdited(history, "sec-cover")).toBe(true);
+  });
+
+  it("still knows an uploaded photo happened after undoing and redoing it", () => {
+    const state = run(
+      start(),
+      {
+        type: "setImage",
+        variant: 0,
+        address: { sectionId: "sec-cover", elementId: "el-image" },
+        src: "foto-sec-cover.jpg",
+        alt: "Foto de Taberna Santo Domingo",
+      },
+      { type: "undo", variant: 0 },
+      { type: "redo", variant: 0 },
+    );
+    const history = state[0];
+    if (!history) throw new Error("no history");
+    expect(wasSectionEverEdited(history, "sec-cover")).toBe(true);
+  });
+
+  it("still knows an earlier edit happened after undoing a later one", () => {
+    // Two edits to different fields, then one undo: the first edit is still in the document and
+    // the history has to say so.
+    const state = run(start(), edit("Otro nombre"), edit("Otro lema", SUBHEADLINE), {
+      type: "undo",
+      variant: 0,
+    });
+    const history = state[0];
+    if (!history) throw new Error("no history");
+    expect(headline(state)).toBe("Otro nombre");
+    expect(wasSectionEverEdited(history, "sec-cover")).toBe(true);
+  });
+
+  it("does not merge a keystroke into the very step an undo just restored", () => {
+    // The reason the cause used to be cleared, and what `amendable` now guards instead. The
+    // restored snapshot carries an editText cause for this very field, so without the flag the
+    // next keystroke would amend it — the undo would silently have become an edit, with nothing
+    // left to go back to.
+    const state = run(
+      start(),
+      edit("Uno"),
+      edit("Dos"),
+      { type: "undo", variant: 0 },
+      edit("Tres"),
+    );
+    expect(headline(state)).toBe("Tres");
+    // Undoing again lands exactly where the first undo had left it. ("Uno" and "Dos" were
+    // consecutive keystrokes in one field, so they were one step, and that step is what the
+    // first undo removed.)
+    expect(headline(run(state, { type: "undo", variant: 0 }))).toBe("Taberna Santo Domingo");
+    // And the step "Tres" opened is still there to redo from.
+    expect(state[0]?.past).toHaveLength(1);
+  });
+
+  it("still coalesces consecutive typing into one field", () => {
+    const state = run(start(), edit("U"), edit("Un"), edit("Uno"));
+    expect(state[0]?.past).toHaveLength(1);
+    expect(headline(run(state, { type: "undo", variant: 0 }))).toBe("Taberna Santo Domingo");
+  });
+});

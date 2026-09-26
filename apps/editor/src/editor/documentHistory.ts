@@ -5,6 +5,7 @@ import {
   insertSection as insertSectionIntoDoc,
   mintSectionId,
   moveSection as moveSectionFromDoc,
+  setElementImageSrc,
   setElementText,
 } from "@retorika/schema";
 
@@ -31,6 +32,7 @@ export type SnapshotCause =
   | { type: "duplicateSection"; sectionId: string; newSectionId: string }
   | { type: "moveSection"; sectionId: string }
   | { type: "insertSection"; sectionId: string }
+  | { type: "setImage"; address: ElementAddress }
   | null;
 
 export interface Snapshot {
@@ -42,6 +44,19 @@ export interface History {
   past: Snapshot[];
   present: Snapshot;
   future: Snapshot[];
+  /**
+   * Whether the present snapshot is still open to being amended — true only while the last thing
+   * that happened was a text edit, so that further typing into the same field joins that step
+   * instead of opening a new one.
+   *
+   * It exists because two different questions were riding on `present.cause` and pulling it in
+   * opposite directions. "Should the next keystroke merge?" wants the cause cleared after an
+   * undo; "did the user ever put content in this section?" wants every cause kept. Clearing won,
+   * silently, and `wasSectionEverEdited` went blind: edit, undo, redo, and the edit is back in
+   * the document with no record that anyone made it — so a delete's toast faded on a section the
+   * owner had written into, or uploaded a photo to. Splitting the flag out lets both be true.
+   */
+  amendable: boolean;
 }
 
 export type Histories = readonly History[];
@@ -52,6 +67,7 @@ export type HistoryAction =
   | { type: "duplicateSection"; variant: number; sectionId: string }
   | { type: "moveSection"; variant: number; sectionId: string; toIndex: number }
   | { type: "insertSection"; variant: number; section: Section; index: number }
+  | { type: "setImage"; variant: number; address: ElementAddress; src: string; alt: string }
   | { type: "undo"; variant: number }
   | { type: "redo"; variant: number };
 
@@ -66,6 +82,7 @@ export function initHistories(documents: readonly RetorikaDocument[]): History[]
     past: [],
     present: { document, cause: null },
     future: [],
+    amendable: false,
   }));
 }
 
@@ -81,14 +98,28 @@ function editText(history: History, address: ElementAddress, text: string): Hist
   const document = setElementText(history.present.document, address, text);
   const present: Snapshot = { document, cause: { type: "editText", address } };
   // Still typing into the field the last edit touched: amend that step rather than adding one.
-  if (sameField(history.present.cause, address)) return { ...history, present, future: [] };
-  return { past: [...history.past, history.present].slice(-LIMIT), present, future: [] };
+  // `amendable` is what an undo or a redo turns off — a restored snapshot may well carry an
+  // editText cause for this very field, and typing after going back should open a new step.
+  if (history.amendable && sameField(history.present.cause, address)) {
+    return { ...history, present, future: [], amendable: true };
+  }
+  return {
+    past: [...history.past, history.present].slice(-LIMIT),
+    present,
+    future: [],
+    amendable: true,
+  };
 }
 
 function deleteSection(history: History, sectionId: string): History {
   const document = deleteSectionFromDoc(history.present.document, sectionId);
   const present: Snapshot = { document, cause: { type: "deleteSection", sectionId } };
-  return { past: [...history.past, history.present].slice(-LIMIT), present, future: [] };
+  return {
+    past: [...history.past, history.present].slice(-LIMIT),
+    present,
+    future: [],
+    amendable: false,
+  };
 }
 
 function duplicateSection(history: History, sectionId: string): History {
@@ -101,13 +132,23 @@ function duplicateSection(history: History, sectionId: string): History {
     document,
     cause: { type: "duplicateSection", sectionId, newSectionId },
   };
-  return { past: [...history.past, history.present].slice(-LIMIT), present, future: [] };
+  return {
+    past: [...history.past, history.present].slice(-LIMIT),
+    present,
+    future: [],
+    amendable: false,
+  };
 }
 
 function moveSection(history: History, sectionId: string, toIndex: number): History {
   const document = moveSectionFromDoc(history.present.document, sectionId, toIndex);
   const present: Snapshot = { document, cause: { type: "moveSection", sectionId } };
-  return { past: [...history.past, history.present].slice(-LIMIT), present, future: [] };
+  return {
+    past: [...history.past, history.present].slice(-LIMIT),
+    present,
+    future: [],
+    amendable: false,
+  };
 }
 
 /**
@@ -133,7 +174,38 @@ function insertSection(history: History, section: Section, index: number): Histo
     id: sectionId,
   });
   const present: Snapshot = { document, cause: { type: "insertSection", sectionId } };
-  return { past: [...history.past, history.present].slice(-LIMIT), present, future: [] };
+  return {
+    past: [...history.past, history.present].slice(-LIMIT),
+    present,
+    future: [],
+    amendable: false,
+  };
+}
+
+/**
+ * The owner's own photo in place of the placeholder (ADR 0018).
+ *
+ * Two fields of one element move together and make one step: the src, and the alt text, which
+ * would otherwise still read "Marcador de foto: aquí irá tu foto" about a real photograph. Undone
+ * as one, because to the person it was one action.
+ *
+ * The bytes are not here. They live in IndexedDB, keyed by variant and src, and this stack holds
+ * only what the document says — which means undoing an upload restores the placeholder without
+ * throwing anything away, and redoing it finds the file still there.
+ */
+function setImage(history: History, address: ElementAddress, src: string, alt: string): History {
+  const document = setElementText(
+    setElementImageSrc(history.present.document, address, src),
+    address,
+    alt,
+  );
+  const present: Snapshot = { document, cause: { type: "setImage", address } };
+  return {
+    past: [...history.past, history.present].slice(-LIMIT),
+    present,
+    future: [],
+    amendable: false,
+  };
 }
 
 function undo(history: History): History {
@@ -141,10 +213,14 @@ function undo(history: History): History {
   if (!previous) return history;
   return {
     past: history.past.slice(0, -1),
-    // The restored state's own cause is dropped on the way in: an undo is an action between
-    // edits, so the next edit opens a new step instead of merging into the one just undone.
-    present: { document: previous.document, cause: null },
+    // The snapshot goes back exactly as it was, cause included. It used to be restored with a
+    // null cause to stop the next keystroke merging into the step just undone; `amendable` does
+    // that now, and keeping the cause is what lets `wasSectionEverEdited` still see that someone
+    // wrote here — which it could not, once the only record of an edit was a step undone and
+    // redone.
+    present: previous,
     future: [history.present, ...history.future],
+    amendable: false,
   };
 }
 
@@ -153,8 +229,9 @@ function redo(history: History): History {
   if (!next) return history;
   return {
     past: [...history.past, history.present],
-    present: { document: next.document, cause: null },
+    present: next,
     future: rest,
+    amendable: false,
   };
 }
 
@@ -173,9 +250,11 @@ export function historiesReducer(state: Histories, action: HistoryAction): Histo
             ? moveSection(history, action.sectionId, action.toIndex)
             : action.type === "insertSection"
               ? insertSection(history, action.section, action.index)
-              : action.type === "undo"
-                ? undo(history)
-                : redo(history);
+              : action.type === "setImage"
+                ? setImage(history, action.address, action.src, action.alt)
+                : action.type === "undo"
+                  ? undo(history)
+                  : redo(history);
 
   // Undo with nothing to undo changes nothing, and must not make React re-render the preview.
   if (next === history) return state;
@@ -193,16 +272,23 @@ export function historiesReducer(state: Histories, action: HistoryAction): Histo
  * fifty-step cap already draws for everything else — and so does one whose only edit was undone
  * and then overwritten by a later action, which clears `future` the same way it always has.
  *
- * Only `editText` counts — deliberately narrower than "any cause naming this section". ADR 0014
- * asks about content the user *wrote*, not any structural action the section was ever subject
- * to: being deleted-and-undone, moved, or the original side of a duplicate does not write
- * anything. That distinction stopped being academic the moment duplicateSection arrived — its
- * cause names the *original* section's id too, and that original's own content never changed
- * just because it was copied, so a looser check would have marked it edited for no reason.
+ * Only the causes that put *content* there count — deliberately narrower than "any cause naming
+ * this section". ADR 0014 asks about what the user contributed, not any structural action the
+ * section was ever subject to: being deleted-and-undone, moved, or the original side of a
+ * duplicate does not write anything. That distinction stopped being academic the moment
+ * duplicateSection arrived — its cause names the *original* section's id too, and that original's
+ * own content never changed just because it was copied, so a looser check would have marked it
+ * edited for no reason.
+ *
+ * `setImage` counts alongside `editText`: uploading a photo is the most deliberate thing anyone
+ * does in this editor, and losing one to a toast that faded after six seconds would be worse
+ * than losing a sentence.
  */
 export function wasSectionEverEdited(history: History, sectionId: string): boolean {
   const steps = [...history.past, history.present, ...history.future];
   return steps.some(
-    (step) => step.cause?.type === "editText" && step.cause.address.sectionId === sectionId,
+    (step) =>
+      (step.cause?.type === "editText" || step.cause?.type === "setImage") &&
+      step.cause.address.sectionId === sectionId,
   );
 }

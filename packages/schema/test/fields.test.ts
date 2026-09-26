@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { RetorikaDocument, Section } from "../src/document.ts";
-import { applyTextEdits, listEditableFields, setElementText } from "../src/fields.ts";
+import {
+  applyTextEdits,
+  listEditableFields,
+  setElementImageSrc,
+  setElementText,
+} from "../src/fields.ts";
 import { parseDocument } from "../src/parse.ts";
 import { type Theme, TOKEN_KEYS } from "../src/tokens.ts";
 
@@ -241,5 +246,106 @@ describe("setElementText", () => {
       'Con <angle> brackets y "comillas"',
     );
     expect(() => parseDocument(edited)).not.toThrow();
+  });
+});
+
+describe("setElementImageSrc", () => {
+  const withImage: RetorikaDocument = parseDocument({
+    schemaVersion: "1.0.0",
+    id: "doc-1",
+    siteName: "Barbería El Corte",
+    theme,
+    pages: [
+      {
+        id: "home",
+        slug: "index",
+        title: "Inicio",
+        sections: [
+          {
+            id: "sec-cover",
+            preset: { catalogId: "cover", variantId: "image-right" },
+            source: "catalog",
+            layout: null,
+            content: [
+              {
+                id: "el-headline",
+                role: "heading",
+                hidden: false,
+                slot: "headline",
+                value: { kind: "text", text: "Barbería El Corte" },
+              },
+              {
+                id: "el-image",
+                role: "image",
+                hidden: false,
+                slot: "image",
+                value: { kind: "image", src: "data:image/svg+xml,placeholder", alt: "Marcador" },
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    collections: [],
+  });
+
+  function srcOf(doc: RetorikaDocument): string | undefined {
+    const element = doc.pages[0]?.sections[0]?.content.find((el) => el.id === "el-image");
+    return element?.value?.kind === "image" ? element.value.src : undefined;
+  }
+
+  it("replaces the src and nothing else", () => {
+    const next = setElementImageSrc(
+      withImage,
+      { sectionId: "sec-cover", elementId: "el-image" },
+      "foto-sec-cover.jpg",
+    );
+    expect(srcOf(next)).toBe("foto-sec-cover.jpg");
+  });
+
+  it("leaves the alt alone, which setElementText owns", () => {
+    // Two halves of one element, edited through two functions on purpose: an upload changes both
+    // and the editor sends both, but nothing here guesses what an alt should say.
+    const next = setElementImageSrc(
+      withImage,
+      { sectionId: "sec-cover", elementId: "el-image" },
+      "foto-sec-cover.jpg",
+    );
+    const element = next.pages[0]?.sections[0]?.content.find((el) => el.id === "el-image");
+    expect(element?.value?.kind === "image" && element.value.alt).toBe("Marcador");
+  });
+
+  it("leaves the document it was given untouched", () => {
+    setElementImageSrc(withImage, { sectionId: "sec-cover", elementId: "el-image" }, "otra.jpg");
+    expect(srcOf(withImage)).toBe("data:image/svg+xml,placeholder");
+  });
+
+  it("leaves every other element as it was", () => {
+    const next = setElementImageSrc(
+      withImage,
+      { sectionId: "sec-cover", elementId: "el-image" },
+      "foto-sec-cover.jpg",
+    );
+    expect(next.pages[0]?.sections[0]?.content[0]).toEqual(
+      withImage.pages[0]?.sections[0]?.content[0],
+    );
+  });
+
+  it("throws for an element that is not an image, rather than inventing a value", () => {
+    expect(() =>
+      setElementImageSrc(withImage, { sectionId: "sec-cover", elementId: "el-headline" }, "a.jpg"),
+    ).toThrow(/no image element/);
+  });
+
+  it("throws for an element that does not exist", () => {
+    expect(() =>
+      setElementImageSrc(withImage, { sectionId: "sec-cover", elementId: "el-nope" }, "a.jpg"),
+    ).toThrow(/no image element/);
+  });
+
+  it("throws for a section that does not exist", () => {
+    expect(() =>
+      setElementImageSrc(withImage, { sectionId: "sec-nope", elementId: "el-image" }, "a.jpg"),
+    ).toThrow(/sec-nope/);
   });
 });

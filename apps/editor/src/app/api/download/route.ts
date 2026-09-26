@@ -9,6 +9,7 @@ import {
   parseDocument,
   type RetorikaDocument,
 } from "@retorika/schema";
+import { isAcceptedImage, sniffImage } from "../../../editor/imageBytes.ts";
 
 /**
  * The ZIP, built in memory and sent straight in the response — Render's disk is ephemeral, so
@@ -29,7 +30,13 @@ import {
  */
 export const runtime = "nodejs";
 
-const MAX_BODY_BYTES = 256 * 1024;
+// Room for the document and a handful of photos. The document itself is kilobytes; almost all
+// of this is the photos, which the browser has already resized and re-encoded (ADR 0018) — a
+// 1600px JPEG lands in the low hundreds of kilobytes, so the caps below are headroom rather
+// than a target.
+const MAX_BODY_BYTES = 12 * 1024 * 1024;
+const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
+const MAX_PHOTOS = 10;
 const MAX_PAGES = 5;
 const MAX_SECTIONS = 40;
 const MAX_ELEMENTS = 400;
@@ -131,29 +138,100 @@ function assertNoDeadDestinations(doc: RetorikaDocument): void {
   );
 }
 
+/** Every image src the document actually references, data: URIs excluded — those are inline and
+ * need no file. This is the set a request is allowed to send bytes for, and must send them all. */
+function referencedPhotoSrcs(doc: RetorikaDocument): Set<string> {
+  const srcs = new Set<string>();
+  for (const page of doc.pages) {
+    for (const section of page.sections) {
+      for (const element of flattenElements(section.content)) {
+        const value = element.value;
+        if (value?.kind !== "image") continue;
+        if (value.src.startsWith("data:")) continue;
+        srcs.add(value.src);
+      }
+    }
+  }
+  return srcs;
+}
+
+/**
+ * The uploaded photos, checked as strictly as the document is.
+ *
+ * The browser already refused anything that is not a JPEG, a PNG or a WebP by its own first
+ * bytes (ADR 0018), and the bytes are re-read here for the same reason the dead-destination rule
+ * lives here: this is a public, unauthenticated endpoint, and the filter is the validation, not
+ * the trust. `file.type` and the filename are whatever the caller chose; only the bytes are
+ * evidence.
+ *
+ * A photo the document does not reference is refused rather than dropped. Dropping it would be a
+ * malformed request answered with a ZIP, and the difference between "you sent something odd" and
+ * "your site is missing an image" is worth keeping.
+ */
+async function readPhotos(form: FormData, doc: RetorikaDocument): Promise<Map<string, Uint8Array>> {
+  const wanted = referencedPhotoSrcs(doc);
+  const uploads = form.getAll("photo").filter((entry): entry is File => entry instanceof File);
+  if (uploads.length > MAX_PHOTOS) {
+    throw new RequestError(`too many photos (${uploads.length})`, 413);
+  }
+
+  const assets = new Map<string, Uint8Array>();
+  for (const upload of uploads) {
+    const src = upload.name;
+    if (!wanted.has(src)) {
+      throw new RequestError(`photo "${src}" is not referenced by the document`, 400);
+    }
+    if (upload.size > MAX_PHOTO_BYTES) {
+      throw new RequestError(`photo "${src}" exceeds ${MAX_PHOTO_BYTES} bytes`, 413);
+    }
+    const bytes = new Uint8Array(await upload.arrayBuffer());
+    const kind = sniffImage(bytes);
+    if (!isAcceptedImage(kind)) {
+      throw new RequestError(`photo "${src}" is not a JPEG, a PNG or a WebP`, 400);
+    }
+    assets.set(src, bytes);
+  }
+
+  for (const src of wanted) {
+    if (!assets.has(src)) {
+      throw new RequestError(`the document references "${src}", which was not sent`, 400);
+    }
+  }
+  return assets;
+}
+
 export async function POST(request: Request): Promise<Response> {
   const contentLength = Number(request.headers.get("content-length") ?? 0);
   if (contentLength > MAX_BODY_BYTES) {
     return new Response("request too large", { status: 413 });
   }
 
-  let payload: unknown;
+  let form: FormData;
   try {
-    payload = await request.json();
+    form = await request.formData();
   } catch {
-    return new Response("invalid JSON body", { status: 400 });
+    return new Response("invalid multipart body", { status: 400 });
   }
-  if (typeof payload !== "object" || payload === null) {
-    return new Response("invalid request body", { status: 400 });
+
+  const rawDocumentText = form.get("document");
+  if (typeof rawDocumentText !== "string") {
+    return new Response("invalid request body: no document", { status: 400 });
   }
-  const { document: rawDocument } = payload as Record<string, unknown>;
+  let rawDocument: unknown;
+  try {
+    rawDocument = JSON.parse(rawDocumentText);
+  } catch {
+    return new Response("invalid JSON document", { status: 400 });
+  }
 
   let document: RetorikaDocument;
+  let assets: Map<string, Uint8Array>;
   try {
     document = parseDocument(rawDocument);
     assertBounds(document);
     assertPresetsMatch(document);
     assertNoDeadDestinations(document);
+    assets = await readPhotos(form, document);
   } catch (error) {
     if (error instanceof RequestError) {
       return new Response(error.message, { status: error.status });
@@ -166,12 +244,10 @@ export async function POST(request: Request): Promise<Response> {
 
   // Copied into a fresh, concrete ArrayBuffer: bundleToZip's Uint8Array is backed by whatever
   // Buffer.concat handed it, typed as the generic ArrayBufferLike that Response's BodyInit does
-  // not accept. `assets` is always empty: every image this app produces is a self-contained
-  // data: URI (see packages/catalog/src/placeholder-image.ts), which buildSite leaves inline
-  // and needs no bundled file for.
-  const zip = new Uint8Array(
-    bundleToZip(buildSite(document, { siteId: document.id, assets: new Map() })),
-  );
+  // not accept. `assets` carries the owner's uploaded photos and nothing else — the placeholder
+  // is a self-contained data: URI (packages/catalog/src/placeholder-image.ts) which buildSite
+  // leaves inline and needs no bundled file for.
+  const zip = new Uint8Array(bundleToZip(buildSite(document, { siteId: document.id, assets })));
 
   return new Response(zip, {
     status: 200,
