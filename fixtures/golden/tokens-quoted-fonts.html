@@ -34,11 +34,14 @@ body { margin: 0; font-family: var(--font-body); color: var(--color-ink);
   gap: var(--space-md); padding: var(--space-xl); align-items: center; }
 .rb-section img { width: 100%; height: auto; border-radius: var(--radius-md); }
 .rb-section :is(h1, h2, h3, h4, h5, h6, p, a) { overflow-wrap: break-word; }
-.rb-section :is(h1, h2, h3, h4, h5, h6) { -webkit-hyphens: auto; hyphens: auto; }
+.rb-section :is(h1, h2, h3, h4, h5, h6, p.rb-subtitle) { -webkit-hyphens: auto;
+  hyphens: auto; }
 .rb-section h1 { font-family: var(--font-heading); font-size: var(--size-heading);
   color: var(--color-primary); margin: 0; }
 .rb-section h2 { font-family: var(--font-heading); font-size: var(--size-subheading);
   color: var(--color-secondary); margin: 0; }
+.rb-section p.rb-subtitle { font-family: var(--font-heading);
+  font-size: var(--size-subheading); color: var(--color-secondary); margin: 0; }
 .rb-section h3 { font-family: var(--font-heading); font-size: var(--size-body);
   color: var(--color-ink); margin: 0; }
 .rb-list { display: grid; gap: var(--space-md); margin: 0; padding: 0; list-style: none;
@@ -64,13 +67,13 @@ body { margin: 0; font-family: var(--font-body); color: var(--color-ink);
 </head>
 <body>
 <main class="rb-page" data-page="home">
-  <section class="rb-section rb-cover rb-image-right" data-preset="cover" data-section="sec-quoted-fonts" data-variant="image-right">
+  <section class="rb-section rb-cover rb-image-right" data-preset="cover" data-section="sec-quoted-fonts" data-variant="image-right" id="sec-quoted-fonts">
     <h1 data-id="el-qf-headline" data-role="heading" data-slot="headline" style="grid-column:1/span 6;grid-row:1/span 1">
       Letras que se leen como se pensaron
     </h1>
-    <h2 data-id="el-qf-sub" data-role="subheading" data-slot="subheadline" style="grid-column:1/span 6;grid-row:2/span 1">
+    <p class="rb-subtitle" data-id="el-qf-sub" data-role="subheading" data-slot="subheadline" style="grid-column:1/span 6;grid-row:2/span 1">
       Georgia para titular, la del sistema para leer
-    </h2>
+    </p>
     <p data-id="el-qf-body" data-role="body" data-slot="body" style="grid-column:1/span 6;grid-row:3/span 1">
       Una portada cuyo tema viene tal cual de packages/tokens.
     </p>

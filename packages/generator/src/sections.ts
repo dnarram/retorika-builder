@@ -11,7 +11,13 @@ import {
 import { actionLabel, type Facts, suggestionsFor, textFor } from "@retorika/copybank";
 import type { ContentElement, Section } from "@retorika/schema";
 import type { Answers, SectorId } from "./answers.ts";
-import { resolveDestination, secondaryPhoneDestination } from "./destination.ts";
+import {
+  hasLocationSection,
+  LOCATION_SECTION_ID,
+  resolveDestination,
+  secondaryPhoneDestination,
+  visitAnchor,
+} from "./destination.ts";
 
 /**
  * `{ciudad}` has no source today. Question 4 collects one free-text address
@@ -52,7 +58,10 @@ export function buildCover(answers: Answers, sector: SectorId, variant: CoverVar
   const facts = factsFor(answers);
   const subheadline = textFor(sector, "cover", "subheadline", facts);
   const bodyText = textFor(sector, "cover", "body", facts);
-  const destination = resolveDestination(answers);
+  // An external destination if question 5 named one; otherwise the in-page anchor that "que
+  // vengan al local" now has (#19's sibling change — sections carry ids since this sprint's
+  // day 2). Still nothing for an answer that names neither.
+  const destination = resolveDestination(answers) ?? visitAnchor(answers);
   const actionText = answers.mainAction ? actionLabel(sector, answers.mainAction) : undefined;
 
   const content: ContentElement[] = [heading("el-headline", "headline", answers.businessName)];
@@ -135,7 +144,7 @@ export function buildServices(
 
 /** Question 4 is skippable; "no tengo local" and an empty address both mean no section. */
 export function buildLocation(answers: Answers, sector: SectorId): Section | undefined {
-  if (answers.noPremises || answers.address.trim() === "") return undefined;
+  if (!hasLocationSection(answers)) return undefined;
   const facts = factsFor(answers);
   const headline = textFor(sector, "location", "headline", facts) ?? "Dónde estamos";
 
@@ -149,7 +158,7 @@ export function buildLocation(answers: Answers, sector: SectorId): Section | und
   // other half, still pending a tile provider.
 
   return {
-    id: "sec-location",
+    id: LOCATION_SECTION_ID,
     preset: { catalogId: LOCATION_ID, variantId: "stacked" },
     source: "catalog",
     layout: null,

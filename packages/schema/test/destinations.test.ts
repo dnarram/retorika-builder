@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { listDeadDestinations } from "../src/destinations.ts";
+import { listAnchorsTo, listDeadDestinations } from "../src/destinations.ts";
 import type { ContentElement, RetorikaDocument, Section } from "../src/document.ts";
 import { type Theme, TOKEN_KEYS } from "../src/tokens.ts";
 
@@ -13,6 +13,23 @@ function action(id: string, href: string, hidden = false): ContentElement {
     slot: "primaryAction",
     value: { kind: "link", text: "Reserva tu cita", href },
   };
+}
+
+/** A document whose contact section holds `content`, plus a cover an anchor can resolve to. */
+function documentWithCover(content: ContentElement[]): RetorikaDocument {
+  const doc = documentWith(content);
+  const page = doc.pages[0];
+  if (!page) throw new Error("no page");
+  const contact = page.sections[0];
+  if (!contact) throw new Error("no section");
+  const cover: Section = {
+    id: "sec-cover",
+    preset: { catalogId: "cover", variantId: "image-right" },
+    source: "catalog",
+    layout: null,
+    content: [],
+  };
+  return { ...doc, pages: [{ ...page, sections: [cover, contact] }] };
 }
 
 function documentWith(content: ContentElement[]): RetorikaDocument {
@@ -116,5 +133,68 @@ describe("listDeadDestinations", () => {
       { ...action("el-second", "#"), role: "link", slot: "secondaryAction" },
     ]);
     expect(listDeadDestinations(doc)).toHaveLength(2);
+  });
+});
+
+describe("listDeadDestinations, in-page anchors", () => {
+  it("lets through an anchor that names a section of the document", () => {
+    const doc = documentWithCover([action("el-cta", "#sec-cover")]);
+    expect(listDeadDestinations(doc)).toEqual([]);
+  });
+
+  it("finds an anchor that names no section — the case deleting a section creates", () => {
+    // The href is neither empty nor "#", so the two original checks waved it through. A browser
+    // given an unresolvable fragment does nothing at all, which on a page with no error state is
+    // indistinguishable from a broken site.
+    const doc = documentWithCover([action("el-cta", "#sec-opiniones")]);
+    expect(listDeadDestinations(doc).map((entry) => entry.elementId)).toEqual(["el-cta"]);
+  });
+
+  it("finds an anchor to the very section that was holding it", () => {
+    const doc = documentWith([action("el-cta", "#sec-contact")]);
+    expect(listDeadDestinations(doc)).toEqual([]);
+  });
+
+  it("does not try to resolve a link to somewhere else entirely", () => {
+    // Not ours to resolve: an external URL with a fragment is the other site's business.
+    const doc = documentWithCover([action("el-cta", "https://example.com/#sec-nope")]);
+    expect(listDeadDestinations(doc)).toEqual([]);
+  });
+
+  it("ignores whitespace around an anchor, as it does around every other href", () => {
+    expect(listDeadDestinations(documentWithCover([action("el-cta", "  #sec-cover  ")]))).toEqual(
+      [],
+    );
+  });
+
+  it("still treats a bare # as dead, which names no section at all", () => {
+    expect(listDeadDestinations(documentWithCover([action("el-cta", "#")]))).toHaveLength(1);
+  });
+});
+
+describe("listAnchorsTo", () => {
+  it("finds the buttons pointing at a section, before it is deleted", () => {
+    const doc = documentWithCover([action("el-cta", "#sec-cover")]);
+    const pointing = listAnchorsTo(doc, "sec-cover");
+    expect(pointing).toHaveLength(1);
+    expect(pointing[0]).toMatchObject({ elementId: "el-cta", text: "Reserva tu cita" });
+  });
+
+  it("is empty for a section nothing links to", () => {
+    const doc = documentWithCover([action("el-cta", "tel:+34600112233")]);
+    expect(listAnchorsTo(doc, "sec-cover")).toEqual([]);
+  });
+
+  it("does not count a hidden link, which is not on the page to be broken", () => {
+    const doc = documentWithCover([action("el-cta", "#sec-cover", true)]);
+    expect(listAnchorsTo(doc, "sec-cover")).toEqual([]);
+  });
+
+  it("counts every button pointing there, not just the first", () => {
+    const doc = documentWithCover([
+      action("el-cta", "#sec-cover"),
+      { ...action("el-second", "#sec-cover"), role: "link", slot: "secondaryAction" },
+    ]);
+    expect(listAnchorsTo(doc, "sec-cover")).toHaveLength(2);
   });
 });

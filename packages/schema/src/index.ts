@@ -1,5 +1,5 @@
 export type { DeadDestination } from "./destinations.ts";
-export { listDeadDestinations } from "./destinations.ts";
+export { listAnchorsTo, listDeadDestinations } from "./destinations.ts";
 export type {
   BreakpointPatch,
   Collection,
