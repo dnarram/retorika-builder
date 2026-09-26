@@ -1,5 +1,7 @@
-import type { Page, RetorikaDocument, Section } from "./document.ts";
+import type { ContentValue, Page, RetorikaDocument, Section } from "./document.ts";
+import { flattenElements } from "./invariants.ts";
 import { parseDocument } from "./parse.ts";
+import type { Role } from "./roles.ts";
 
 /**
  * Structural mutations on a document — add, remove, move, duplicate a section — as opposed to
@@ -149,5 +151,151 @@ export function insertSection(
       sections.splice(Math.max(0, Math.min(toIndex, sections.length)), 0, section);
       return { ...candidate, sections };
     }),
+  });
+}
+
+/** Which occurrence of which slot, in which section. Occurrences are counted in `content` order,
+ * the same way `resolvePlacements` counts them, so the two never disagree about which element a
+ * preset's geometry belongs to. */
+export interface SlotAddress {
+  sectionId: string;
+  slot: string;
+  /** Default 0. Only a slot the preset lets hold more than one ever needs another. */
+  occurrence?: number;
+}
+
+export interface SlotFill extends SlotAddress {
+  role: Role;
+  value: ContentValue;
+  /**
+   * The preset's slots, in the order it declares them.
+   *
+   * Passed in rather than looked up, because the dependency arrow runs catalog → schema and this
+   * package must not learn what a catalog is. It is what lets a created element land where the
+   * section's own shape says it belongs instead of at the end — which matters for reading order,
+   * the one thing a grid layout does not decide.
+   */
+  slotOrder: readonly string[];
+}
+
+/** An element id free within this section. Uniqueness is scoped to the section, items included
+ * (`checkSection`), so this looks at every level rather than only the top. */
+export function mintElementId(section: Section, slot: string): string {
+  const used = new Set(flattenElements(section.content).map((element) => element.id));
+  const root = `el-${slot}`;
+  if (!used.has(root)) return root;
+  let suffix = 2;
+  while (used.has(`${root}-${suffix}`)) suffix += 1;
+  return `${root}-${suffix}`;
+}
+
+function indexOfOccurrence(section: Section, slot: string, occurrence: number): number {
+  let seen = 0;
+  for (const [index, element] of section.content.entries()) {
+    if (element.slot !== slot) continue;
+    if (seen === occurrence) return index;
+    seen += 1;
+  }
+  return -1;
+}
+
+/**
+ * A slot given a value — created if it was not there, and shown again if it was hidden.
+ *
+ * This is the verb the editor's field panel commits through, and it is here rather than in
+ * `fields.ts` for one reason: **it can add an element**, and that file's comment promises it
+ * never adds, removes or moves one. An optional slot nobody filled does not exist in the
+ * document, so it renders as nothing, so there is nowhere to click — which is exactly the case
+ * the panel exists for.
+ *
+ * Filling always unhides. An empty field and a hidden element are the same thing to the person
+ * looking at the page, so typing into one is what brings it back.
+ */
+export function fillSlot(doc: RetorikaDocument, fill: SlotFill): RetorikaDocument {
+  const found = findSection(doc, fill.sectionId);
+  if (!found) throw new Error(`fillSlot: no section "${fill.sectionId}"`);
+  const occurrence = fill.occurrence ?? 0;
+  const at = indexOfOccurrence(found.section, fill.slot, occurrence);
+
+  const content = [...found.section.content];
+  if (at >= 0) {
+    const element = content[at];
+    if (!element) throw new Error(`fillSlot: no element at ${at}`);
+    content[at] = { ...element, hidden: false, value: fill.value };
+  } else {
+    // Occurrences are positions in a sequence, not names, so the only one that can be created is
+    // the next one. Creating the third of something when there is no second would silently make
+    // it the second — and the preset's geometry, which counts occurrences the same way, would
+    // then place it where the second belongs.
+    const existing = found.section.content.filter((element) => element.slot === fill.slot).length;
+    if (occurrence !== existing) {
+      throw new Error(
+        `fillSlot: cannot create occurrence ${occurrence} of "${fill.slot}", which has ${existing}`,
+      );
+    }
+    const created: Section["content"][number] = {
+      id: mintElementId(found.section, fill.slot),
+      role: fill.role,
+      hidden: false,
+      slot: fill.slot,
+      value: fill.value,
+    };
+    // Placed by the preset's own slot order, so the document reads the way the section is
+    // declared rather than the order someone happened to fill it in.
+    const rank = (slot: string) => {
+      const index = fill.slotOrder.indexOf(slot);
+      return index === -1 ? fill.slotOrder.length : index;
+    };
+    const mine = rank(fill.slot);
+    const before = content.findIndex((element) => rank(element.slot) > mine);
+    content.splice(before === -1 ? content.length : before, 0, created);
+  }
+
+  return parseDocument({
+    ...doc,
+    pages: doc.pages.map((page) =>
+      page.id !== found.page.id
+        ? page
+        : {
+            ...page,
+            sections: page.sections.map((section) =>
+              section.id === fill.sectionId ? { ...section, content } : section,
+            ),
+          },
+    ),
+  });
+}
+
+/**
+ * A slot emptied — which means **hidden, never removed** (document rule 3, and ADR 0003's
+ * scoping of it). The place to put it back has to survive, or the owner who clears their phone
+ * number by accident has no way to find where it was.
+ *
+ * Doing nothing when the slot is already empty is right rather than lenient: there is no element
+ * to hide, and the person sees the same empty field either way.
+ */
+export function clearSlot(doc: RetorikaDocument, address: SlotAddress): RetorikaDocument {
+  const found = findSection(doc, address.sectionId);
+  if (!found) throw new Error(`clearSlot: no section "${address.sectionId}"`);
+  const at = indexOfOccurrence(found.section, address.slot, address.occurrence ?? 0);
+  if (at < 0) return doc;
+
+  const content = [...found.section.content];
+  const element = content[at];
+  if (!element) throw new Error(`clearSlot: no element at ${at}`);
+  content[at] = { ...element, hidden: true };
+
+  return parseDocument({
+    ...doc,
+    pages: doc.pages.map((page) =>
+      page.id !== found.page.id
+        ? page
+        : {
+            ...page,
+            sections: page.sections.map((section) =>
+              section.id === address.sectionId ? { ...section, content } : section,
+            ),
+          },
+    ),
   });
 }

@@ -1,7 +1,15 @@
-import type { ElementAddress, RetorikaDocument, Section } from "@retorika/schema";
+import type {
+  ElementAddress,
+  RetorikaDocument,
+  Section,
+  SlotAddress,
+  SlotFill,
+} from "@retorika/schema";
 import {
+  clearSlot as clearSlotInDoc,
   deleteSection as deleteSectionFromDoc,
   duplicateSection as duplicateSectionFromDoc,
+  fillSlot as fillSlotInDoc,
   insertSection as insertSectionIntoDoc,
   mintSectionId,
   moveSection as moveSectionFromDoc,
@@ -33,6 +41,8 @@ export type SnapshotCause =
   | { type: "moveSection"; sectionId: string }
   | { type: "insertSection"; sectionId: string }
   | { type: "setImage"; address: ElementAddress }
+  | { type: "fillSlot"; sectionId: string }
+  | { type: "clearSlot"; sectionId: string }
   | null;
 
 export interface Snapshot {
@@ -68,6 +78,8 @@ export type HistoryAction =
   | { type: "moveSection"; variant: number; sectionId: string; toIndex: number }
   | { type: "insertSection"; variant: number; section: Section; index: number }
   | { type: "setImage"; variant: number; address: ElementAddress; src: string; alt: string }
+  | { type: "fillSlot"; variant: number; fill: SlotFill }
+  | { type: "clearSlot"; variant: number; address: SlotAddress }
   | { type: "undo"; variant: number }
   | { type: "redo"; variant: number };
 
@@ -208,6 +220,41 @@ function setImage(history: History, address: ElementAddress, src: string, alt: s
   };
 }
 
+/**
+ * One field of the selected section, given a value or emptied.
+ *
+ * Both go through the schema's own verbs, which is where the interesting half lives: filling a
+ * slot the document does not have **creates an element**, and emptying one **hides it rather
+ * than removing it** (document rule 3). This module only decides that each is one step.
+ */
+function fillSlot(history: History, fill: SlotFill): History {
+  const document = fillSlotInDoc(history.present.document, fill);
+  const present: Snapshot = { document, cause: { type: "fillSlot", sectionId: fill.sectionId } };
+  return {
+    past: [...history.past, history.present].slice(-LIMIT),
+    present,
+    future: [],
+    amendable: false,
+  };
+}
+
+function clearSlot(history: History, address: SlotAddress): History {
+  const document = clearSlotInDoc(history.present.document, address);
+  // Clearing a slot that was never filled changes nothing, and a step that undoes to itself is
+  // worse than no step: the arrow lights up and pressing it appears to do nothing.
+  if (document === history.present.document) return history;
+  const present: Snapshot = {
+    document,
+    cause: { type: "clearSlot", sectionId: address.sectionId },
+  };
+  return {
+    past: [...history.past, history.present].slice(-LIMIT),
+    present,
+    future: [],
+    amendable: false,
+  };
+}
+
 function undo(history: History): History {
   const previous = history.past.at(-1);
   if (!previous) return history;
@@ -252,9 +299,13 @@ export function historiesReducer(state: Histories, action: HistoryAction): Histo
               ? insertSection(history, action.section, action.index)
               : action.type === "setImage"
                 ? setImage(history, action.address, action.src, action.alt)
-                : action.type === "undo"
-                  ? undo(history)
-                  : redo(history);
+                : action.type === "fillSlot"
+                  ? fillSlot(history, action.fill)
+                  : action.type === "clearSlot"
+                    ? clearSlot(history, action.address)
+                    : action.type === "undo"
+                      ? undo(history)
+                      : redo(history);
 
   // Undo with nothing to undo changes nothing, and must not make React re-render the preview.
   if (next === history) return state;
@@ -282,13 +333,23 @@ export function historiesReducer(state: Histories, action: HistoryAction): Histo
  *
  * `setImage` counts alongside `editText`: uploading a photo is the most deliberate thing anyone
  * does in this editor, and losing one to a toast that faded after six seconds would be worse
- * than losing a sentence.
+ * than losing a sentence. `fillSlot` and `clearSlot` count for the same reason — both are the
+ * owner deciding what this section says, one by writing and one by taking something off the
+ * page, and the writing they took off is still in the document behind it.
  */
+/** The causes that mean the owner worked on a section's content, as opposed to moving, copying
+ * or removing the section itself. Kept as a list rather than a growing chain of `||`, so adding
+ * a verb is a decision about which side of that line it falls on. */
+const CONTENT_CAUSES = ["editText", "setImage", "fillSlot", "clearSlot"] as const;
+
 export function wasSectionEverEdited(history: History, sectionId: string): boolean {
   const steps = [...history.past, history.present, ...history.future];
-  return steps.some(
-    (step) =>
-      (step.cause?.type === "editText" || step.cause?.type === "setImage") &&
-      step.cause.address.sectionId === sectionId,
-  );
+  return steps.some((step) => {
+    const cause = step.cause;
+    if (!cause) return false;
+    if (!(CONTENT_CAUSES as readonly string[]).includes(cause.type)) return false;
+    return "address" in cause
+      ? cause.address.sectionId === sectionId
+      : cause.sectionId === sectionId;
+  });
 }

@@ -44,11 +44,15 @@ export type { RevertPlan, SurplusDecision } from "./revert.ts";
 export { applyRevert, escalate, planRevert, RevertDecisionRequiredError } from "./revert.ts";
 export type { Role } from "./roles.ts";
 export { CONTAINER_ROLE, isContainerRole, OPAQUE_ROLE, ROLES, roleSchema } from "./roles.ts";
+export type { SlotAddress, SlotFill } from "./sections.ts";
 export {
+  clearSlot,
   deleteSection,
   duplicateSection,
+  fillSlot,
   findSection,
   insertSection,
+  mintElementId,
   mintSectionId,
   moveSection,
 } from "./sections.ts";
