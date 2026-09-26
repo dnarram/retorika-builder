@@ -19,6 +19,9 @@ type DownloadState = "idle" | "downloading" | "error";
 export interface DeleteToast {
   sectionName: string;
   persistent: boolean;
+  /** How many visible buttons pointed at the deleted section by its anchor, counted before the
+   * delete. Zero for a section nothing linked to, which is every section until this sprint. */
+  brokenAnchors: number;
 }
 
 /**
@@ -513,6 +516,16 @@ export function Editor({
             </svg>
             {es["editor.toast.deleted"].replace("{name}", toast.sectionName)}
           </span>
+          {toast.brokenAnchors > 0 ? (
+            <span className="max-w-[26ch] text-[13px] leading-snug text-[#FCA5A5]">
+              {toast.brokenAnchors === 1
+                ? es["editor.toast.deletedAnchors.one"]
+                : es["editor.toast.deletedAnchors.many"].replace(
+                    "{count}",
+                    String(toast.brokenAnchors),
+                  )}
+            </span>
+          ) : null}
           <button
             type="button"
             onClick={onUndo}

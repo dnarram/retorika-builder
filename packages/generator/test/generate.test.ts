@@ -250,6 +250,67 @@ describe("contactSectionFor", () => {
   });
 });
 
+describe("'que vengan al local' (question 5, the fifth answer)", () => {
+  const visiting = answers({
+    businessName: "X",
+    sector: "tienda",
+    mainAction: "visit",
+    address: "Calle Espinel 24, Ronda",
+  });
+
+  it("gives the cover a button pointing at the address, now that sections carry anchors", () => {
+    // ADR 0016 recorded the hole this closes: answer question 4, skip question 5, and the site
+    // showed an address and opening hours with no call to action anywhere on it.
+    const cover = findSection(generate(visiting).document, "cover");
+    const primary = cover.content.find((el) => el.slot === "primaryAction");
+    expect(primary?.value?.kind === "link" && primary.value.href).toBe("#sec-location");
+  });
+
+  it("points at a section that actually exists in the document it produced", () => {
+    const ids = sectionsOf(generate(visiting).document).map((section) => section.id);
+    expect(ids).toContain("sec-location");
+  });
+
+  it("still generates no contact section: there is nothing to contact", () => {
+    expect(
+      sectionsOf(generate(visiting).document).some((s) => s.preset.catalogId === "contact"),
+    ).toBe(false);
+  });
+
+  it("emits no button at all when there is no address to point at", () => {
+    // No location section, so the anchor would name nothing — which is the dead link the
+    // download route refuses. Better no button than a broken one.
+    const noPremises = answers({ businessName: "X", sector: "tienda", mainAction: "visit" });
+    const cover = findSection(generate(noPremises).document, "cover");
+    expect(cover.content.some((el) => el.slot === "primaryAction")).toBe(false);
+  });
+
+  it("emits no button when the owner said they have no premises", () => {
+    const online = answers({
+      businessName: "X",
+      sector: "tienda",
+      mainAction: "visit",
+      address: "Calle Espinel 24, Ronda",
+      noPremises: true,
+    });
+    const cover = findSection(generate(online).document, "cover");
+    expect(cover.content.some((el) => el.slot === "primaryAction")).toBe(false);
+  });
+
+  it("leaves every other action pointing outwards, not down the page", () => {
+    const calling = answers({
+      businessName: "X",
+      sector: "tienda",
+      mainAction: "call",
+      phone: "+34600000000",
+      address: "Calle Espinel 24, Ronda",
+    });
+    const cover = findSection(generate(calling).document, "cover");
+    const primary = cover.content.find((el) => el.slot === "primaryAction");
+    expect(primary?.value?.kind === "link" && primary.value.href).toBe("tel:+34600000000");
+  });
+});
+
 describe("sector fallback", () => {
   it("'otro' and a sector with no bank file both read the generic texts without crashing", () => {
     expect(() => generate(answers({ businessName: "X", sector: "otro" }))).not.toThrow();

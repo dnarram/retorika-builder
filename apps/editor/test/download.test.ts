@@ -336,4 +336,64 @@ describe("POST /api/download", () => {
       expect((await POST(request({ document: hidden }))).status).toBe(200);
     });
   });
+  describe("a button pointing at a section that was deleted", () => {
+    /** Exactly what the editor produces for "que vengan al local": a cover whose main button
+     * anchors down the page to the address. Sprint 2 lets the owner delete that section. */
+    const VISITING: RetorikaDocument = generate({
+      ...EMPTY_ANSWERS,
+      businessName: "Taberna Santo Domingo",
+      sector: "restaurante-bar",
+      services: ["Comidas"],
+      address: "Cta. de Santo Domingo, 2, Ronda",
+      mainAction: "visit",
+    }).document;
+
+    function without(doc: RetorikaDocument, catalogId: string): RetorikaDocument {
+      const page = doc.pages[0];
+      if (!page) throw new Error("no page in the fixture");
+      return {
+        ...doc,
+        pages: [
+          { ...page, sections: page.sections.filter((s) => s.preset.catalogId !== catalogId) },
+        ],
+      };
+    }
+
+    it("downloads fine while the section is still there", async () => {
+      const response = await POST(request({ document: VISITING }));
+      expect(response.status).toBe(200);
+    });
+
+    it("refuses once that section is deleted, though the href is neither empty nor #", async () => {
+      // The whole point of widening the rule: `#sec-location` looks like a real destination to
+      // every check that existed before anchors did.
+      const response = await POST(request({ document: without(VISITING, "location") }));
+      expect(response.status).toBe(400);
+    });
+
+    it("names the button, so the refusal can be acted on", async () => {
+      const message = await (
+        await POST(request({ document: without(VISITING, "location") }))
+      ).text();
+      expect(message).toContain("sec-cover");
+      expect(message).toContain("Visítanos");
+    });
+
+    it("still refuses when the section is deleted and re-added under a different id", async () => {
+      // Duplicating or re-inserting mints a fresh id (sprint 2, day 5 and day 6), so a section
+      // that looks the same to a person does not resurrect the anchor.
+      const gone = without(VISITING, "location");
+      const page = VISITING.pages[0];
+      const location = page?.sections.find((s) => s.preset.catalogId === "location");
+      const gonePage = gone.pages[0];
+      if (!page || !location || !gonePage) throw new Error("no fixture");
+      const readded: RetorikaDocument = {
+        ...gone,
+        pages: [
+          { ...gonePage, sections: [...gonePage.sections, { ...location, id: "sec-location-2" }] },
+        ],
+      };
+      expect((await POST(request({ document: readded }))).status).toBe(400);
+    });
+  });
 });

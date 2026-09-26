@@ -16,9 +16,13 @@ import { loadCorpus } from "./corpus.ts";
  */
 
 const IMG_RULE = ".rb-section img { width: 100%; height: auto; border-radius: var(--radius-md); }";
+// The hyphens rule names `p.rb-subtitle` since #19: the cover's tagline stopped being an h2 and
+// would otherwise have lost hyphenation along with the tag, which is a visual change that issue
+// explicitly did not want. `overflow-wrap` already covered it, since it lists `p`.
 const WRAP_RULES = [
   ".rb-section :is(h1, h2, h3, h4, h5, h6, p, a) { overflow-wrap: break-word; }",
-  ".rb-section :is(h1, h2, h3, h4, h5, h6) { -webkit-hyphens: auto; hyphens: auto; }",
+  ".rb-section :is(h1, h2, h3, h4, h5, h6, p.rb-subtitle) { -webkit-hyphens: auto;",
+  "  hyphens: auto; }",
 ].join("\n");
 const H1_RULE_START = ".rb-section h1 {";
 

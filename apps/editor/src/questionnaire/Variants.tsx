@@ -4,7 +4,7 @@ import { blankSection, CATALOG, CONTACT_ID, canBeBlank, variantsFor } from "@ret
 import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
 import { type Answers, contactSectionFor, generateVariants } from "@retorika/generator";
 import { render } from "@retorika/renderer";
-import { findSection, type RetorikaDocument, type Section } from "@retorika/schema";
+import { findSection, listAnchorsTo, type RetorikaDocument, type Section } from "@retorika/schema";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { saveSession } from "../editor/autosave.ts";
 import {
@@ -203,12 +203,17 @@ export function Variants({
   function handleDeleteSection(variant: number, history: History, sectionId: string) {
     const found = findSection(history.present.document, sectionId);
     const persistent = wasSectionEverEdited(history, sectionId);
+    // Counted before the delete, because afterwards the section is gone and the buttons that
+    // named it are simply dead — `/api/download` would say so, but only once the person tried to
+    // download. The moment worth telling them about is this one, while "Deshacer" is on screen.
+    const brokenAnchors = listAnchorsTo(history.present.document, sectionId).length;
     dispatch({ type: "deleteSection", variant, sectionId });
 
     clearTimeout(toastTimer.current);
     setToast({
       sectionName: found ? catalogSectionName(found.section.preset.catalogId) : sectionId,
       persistent,
+      brokenAnchors,
     });
     if (!persistent) toastTimer.current = setTimeout(dismissToast, TOAST_DURATION_MS);
   }

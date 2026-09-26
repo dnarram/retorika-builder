@@ -11,6 +11,7 @@ import { VARIANTS, type VariantChoice } from "./variants.ts";
 
 export type { Answers, MainAction, SectorId } from "./answers.ts";
 export { EMPTY_ANSWERS, SECTOR_IDS } from "./answers.ts";
+export { hasLocationSection, LOCATION_SECTION_ID, visitAnchor } from "./destination.ts";
 export type { VariantChoice } from "./variants.ts";
 export { VARIANTS } from "./variants.ts";
 

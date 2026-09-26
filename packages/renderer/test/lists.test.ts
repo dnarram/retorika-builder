@@ -119,9 +119,11 @@ describe("heading levels, by section", () => {
     const headings = [...main.querySelectorAll("h1, h2, h3, h4, h5, h6")].map(
       (h) => `${h.tagName.toLowerCase()} ${h.closest("section")?.getAttribute("data-preset")}`,
     );
+    // The second entry used to be "h2 cover": the cover's tagline, which heads nothing, sitting
+    // in the outline as if a section began there. Issue #19 took it out of the headings
+    // altogether, so the page now claims exactly the sections it has.
     expect(headings).toEqual([
       "h1 cover",
-      "h2 cover",
       "h2 services",
       "h3 services",
       "h3 services",
@@ -136,10 +138,20 @@ describe("heading levels, by section", () => {
 
 describe("the stylesheet", () => {
   it("carries the list rules verbatim, once, between the h2 rule and the paragraph rule", () => {
+    // Ordered, not adjacent. It used to assert the three were touching, which made any new rule
+    // between them a failure — and one arrived with #19's `.rb-subtitle`, which belongs next to
+    // the h2 rule it copies. What the order actually has to guarantee is that a list's own rules
+    // come after the heading rules and before `.rb-section p`, whose muted body colour would
+    // otherwise win over a card's description.
     for (const { name, document } of corpus) {
       const { css } = render(document, "html");
       expect(css.split(LIST_CSS).length - 1, name).toBe(1);
-      expect(css, name).toContain(`${H2_RULE_END}\n${LIST_CSS}\n${PARAGRAPH_RULE_START}`);
+      const h2 = css.indexOf(H2_RULE_END);
+      const list = css.indexOf(LIST_CSS);
+      const paragraph = css.indexOf(PARAGRAPH_RULE_START);
+      expect(h2, name).toBeGreaterThan(-1);
+      expect(list, name).toBeGreaterThan(h2);
+      expect(paragraph, name).toBeGreaterThan(list);
     }
   });
 });

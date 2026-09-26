@@ -92,7 +92,12 @@ function elementNode(
         case "heading":
           return element(headingTag(level), base, [value.text]);
         case "subheading":
-          return element(headingTag(level + 1), base, [value.text]);
+          // A paragraph, not a heading (#19). A subheadline is a tagline — "Reserva en treinta
+          // segundos" — and it heads nothing: marked up as h{level+1} it appears in a screen
+          // reader's heading list and rotor as if a section of the page started there, so the
+          // outline claims more sections than the page has (WCAG 1.3.1). The role in the document
+          // is unchanged and so is the look; only the tag the renderer picks for it changes.
+          return element("p", { ...base, class: "rb-subtitle" }, [value.text]);
         default:
           return element("p", base, [value.text]);
       }
@@ -216,6 +221,12 @@ function sectionNode(section: Section, options: RenderOptions): RenderNode {
   return element(
     "section",
     {
+      // The anchor, and deliberately the section's own id rather than a slug of its Spanish
+      // name: a slug would have to come from the catalog's locale, and this package may not
+      // import the catalog (`pnpm renderer:deps` allows two dependencies, and everything in
+      // here travels to the client's site). The section id is already unique document-wide and
+      // already deterministic, which is what the golden corpus needs.
+      id: section.id,
       "data-section": section.id,
       "data-preset": section.preset.catalogId,
       "data-variant": section.preset.variantId,
@@ -263,11 +274,18 @@ export function buildCss(doc: RetorikaDocument): string {
     // dictionary. hyphens: auto on headings adds a hyphen where the browser has a Spanish
     // dictionary (the page declares lang="es"); -webkit- because Safari needs the prefix.
     ".rb-section :is(h1, h2, h3, h4, h5, h6, p, a) { overflow-wrap: break-word; }",
-    ".rb-section :is(h1, h2, h3, h4, h5, h6) { -webkit-hyphens: auto; hyphens: auto; }",
+    ".rb-section :is(h1, h2, h3, h4, h5, h6, p.rb-subtitle) { -webkit-hyphens: auto;",
+    "  hyphens: auto; }",
     ".rb-section h1 { font-family: var(--font-heading); font-size: var(--size-heading);",
     "  color: var(--color-primary); margin: 0; }",
     ".rb-section h2 { font-family: var(--font-heading); font-size: var(--size-subheading);",
     "  color: var(--color-secondary); margin: 0; }",
+    // The cover's tagline, which stopped being an h2 (#19) and must not start looking like body
+    // copy for it. Same four declarations the h2 rule gives, and qualified with the tag so it
+    // outranks `.rb-section p` below — a bare `.rb-subtitle` would lose to it on specificity and
+    // the tagline would quietly render at body size in muted grey.
+    ".rb-section p.rb-subtitle { font-family: var(--font-heading);",
+    "  font-size: var(--size-subheading); color: var(--color-secondary); margin: 0; }",
     // Lists (the cards of "Qué hago", and every later list section). The card title is an
     // h3 in ink and its description a p in muted: both pairs the tokens already guarantee
     // against color.surface. The cards flow by auto-fit, so a composition only decides where

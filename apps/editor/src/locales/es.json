@@ -133,6 +133,8 @@
   "editor.placeholder.one": "Queda 1 texto de ejemplo sin cambiar. Puedes descargar igualmente, pero saldrá tal cual en tu web.",
   "editor.placeholder.many": "Quedan {count} textos de ejemplo sin cambiar. Puedes descargar igualmente, pero saldrán tal cual en tu web.",
   "editor.toast.deleted": "Has borrado la sección «{name}»",
+  "editor.toast.deletedAnchors.one": "Un botón de tu web llevaba aquí y ahora no lleva a ningún sitio.",
+  "editor.toast.deletedAnchors.many": "{count} botones de tu web llevaban aquí y ahora no llevan a ningún sitio.",
   "editor.toast.undo": "Deshacer",
   "editor.toast.dismiss": "Cerrar aviso"
 }
