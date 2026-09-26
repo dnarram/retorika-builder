@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import type { RetorikaDocument, Section } from "../src/document.ts";
 import { parseDocument } from "../src/parse.ts";
 import {
+  clearSlot,
   deleteSection,
   duplicateSection,
+  fillSlot,
   findSection,
   insertSection,
+  mintElementId,
   mintSectionId,
   moveSection,
 } from "../src/sections.ts";
@@ -376,5 +379,230 @@ describe("insertSection", () => {
       },
     };
     expect(() => insertSection(doc, "home", 0, withBadLayout)).toThrow();
+  });
+});
+
+describe("fillSlot and clearSlot", () => {
+  const COVER_SLOTS = [
+    "headline",
+    "subheadline",
+    "body",
+    "image",
+    "primaryAction",
+    "secondaryAction",
+  ];
+  const text = (value: string) => ({ kind: "text" as const, text: value });
+
+  function coverOf(next: RetorikaDocument) {
+    const section = next.pages[0]?.sections.find((s) => s.id === "sec-cover");
+    if (!section) throw new Error("no cover");
+    return section;
+  }
+  function slots(next: RetorikaDocument): string[] {
+    return coverOf(next).content.map((element) => element.slot);
+  }
+
+  it("creates an element for a slot the document does not have", () => {
+    // The whole reason this exists: an optional slot nobody filled is absent, so it renders as
+    // nothing, so there is nowhere on the page to click.
+    const next = fillSlot(doc, {
+      sectionId: "sec-cover",
+      slot: "body",
+      role: "body",
+      value: text("Pásate a comer algo"),
+      slotOrder: COVER_SLOTS,
+    });
+    const created = coverOf(next).content.find((element) => element.slot === "body");
+    expect(created?.value).toEqual(text("Pásate a comer algo"));
+    expect(created?.hidden).toBe(false);
+    expect(created?.role).toBe("body");
+  });
+
+  it("puts the created element where the preset's slot order says, not at the end", () => {
+    // Reading order is the one thing a grid layout does not decide.
+    const next = fillSlot(doc, {
+      sectionId: "sec-cover",
+      slot: "subheadline",
+      role: "subheading",
+      value: text("Comer y beber"),
+      slotOrder: COVER_SLOTS,
+    });
+    expect(slots(next)).toEqual(["headline", "subheadline", "image"]);
+  });
+
+  it("replaces the value when the slot is already there, keeping the element's id", () => {
+    const before = coverOf(doc).content.find((element) => element.slot === "headline")?.id;
+    const next = fillSlot(doc, {
+      sectionId: "sec-cover",
+      slot: "headline",
+      role: "heading",
+      value: text("Otro nombre"),
+      slotOrder: COVER_SLOTS,
+    });
+    const headline = coverOf(next).content.find((element) => element.slot === "headline");
+    expect(headline?.id).toBe(before);
+    expect(headline?.value).toEqual(text("Otro nombre"));
+  });
+
+  it("mints an element id that is free inside the section", () => {
+    const next = fillSlot(doc, {
+      sectionId: "sec-cover",
+      slot: "body",
+      role: "body",
+      value: text("Texto"),
+      slotOrder: COVER_SLOTS,
+    });
+    const ids = coverOf(next).content.map((element) => element.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toContain("el-body");
+  });
+
+  it("hides rather than removes when a field is emptied (rule 3)", () => {
+    // The place to put it back has to survive, or someone who clears their phone number by
+    // accident has no way to find where it was.
+    const next = clearSlot(doc, { sectionId: "sec-cover", slot: "headline" });
+    const headline = coverOf(next).content.find((element) => element.slot === "headline");
+    expect(headline).toBeDefined();
+    expect(headline?.hidden).toBe(true);
+    expect(headline?.value).toEqual(text("Barbería El Corte"));
+  });
+
+  it("brings a hidden element back rather than creating a second one", () => {
+    const hidden = clearSlot(doc, { sectionId: "sec-cover", slot: "headline" });
+    const back = fillSlot(hidden, {
+      sectionId: "sec-cover",
+      slot: "headline",
+      role: "heading",
+      value: text("De vuelta"),
+      slotOrder: COVER_SLOTS,
+    });
+    const matching = coverOf(back).content.filter((element) => element.slot === "headline");
+    expect(matching).toHaveLength(1);
+    expect(matching[0]?.hidden).toBe(false);
+  });
+
+  it("does nothing when clearing a slot that was never filled", () => {
+    expect(clearSlot(doc, { sectionId: "sec-cover", slot: "body" })).toBe(doc);
+  });
+
+  it("refuses to create an occurrence out of order", () => {
+    // Occurrences are positions in a sequence, not names: creating the second when there is no
+    // first would silently make it the first, and the preset's geometry — which counts them the
+    // same way — would place it where the first belongs.
+    expect(() =>
+      fillSlot(doc, {
+        sectionId: "sec-cover",
+        slot: "secondaryAction",
+        occurrence: 1,
+        role: "link",
+        value: { kind: "link", text: "Cómo llegar", href: "#sec-location" },
+        slotOrder: COVER_SLOTS,
+      }),
+    ).toThrow(/which has 0/);
+  });
+
+  it("creates the next occurrence of a slot that already has one", () => {
+    const one = fillSlot(doc, {
+      sectionId: "sec-cover",
+      slot: "secondaryAction",
+      role: "link",
+      value: { kind: "link", text: "Primero", href: "#sec-location" },
+      slotOrder: COVER_SLOTS,
+    });
+    const two = fillSlot(one, {
+      sectionId: "sec-cover",
+      slot: "secondaryAction",
+      occurrence: 1,
+      role: "link",
+      value: { kind: "link", text: "Segundo", href: "#sec-location" },
+      slotOrder: COVER_SLOTS,
+    });
+    const links = coverOf(two).content.filter((element) => element.slot === "secondaryAction");
+    expect(links.map((element) => element.value?.kind === "link" && element.value.text)).toEqual([
+      "Primero",
+      "Segundo",
+    ]);
+    // And their ids do not collide.
+    expect(new Set(links.map((element) => element.id)).size).toBe(2);
+  });
+
+  it("addresses the right occurrence when a slot holds several", () => {
+    const one = fillSlot(doc, {
+      sectionId: "sec-cover",
+      slot: "secondaryAction",
+      role: "link",
+      value: { kind: "link", text: "Primero", href: "#sec-location" },
+      slotOrder: COVER_SLOTS,
+    });
+    const twoIds = coverOf(one).content.filter((e) => e.slot === "secondaryAction");
+    expect(twoIds).toHaveLength(1);
+    const hiddenSecond = clearSlot(one, { sectionId: "sec-cover", slot: "secondaryAction" });
+    expect(coverOf(hiddenSecond).content.find((e) => e.slot === "secondaryAction")?.hidden).toBe(
+      true,
+    );
+  });
+
+  it("leaves the document it was given untouched", () => {
+    fillSlot(doc, {
+      sectionId: "sec-cover",
+      slot: "body",
+      role: "body",
+      value: text("Texto"),
+      slotOrder: COVER_SLOTS,
+    });
+    expect(coverOf(doc).content.some((element) => element.slot === "body")).toBe(false);
+  });
+
+  it("refuses a section that does not exist", () => {
+    expect(() =>
+      fillSlot(doc, {
+        sectionId: "sec-nope",
+        slot: "body",
+        role: "body",
+        value: text("Texto"),
+        slotOrder: COVER_SLOTS,
+      }),
+    ).toThrow(/no section/);
+    expect(() => clearSlot(doc, { sectionId: "sec-nope", slot: "body" })).toThrow(/no section/);
+  });
+});
+
+describe("mintElementId", () => {
+  it("uses the plain name when it is free", () => {
+    expect(mintElementId(cover, "body")).toBe("el-body");
+  });
+
+  it("counts up when it is not", () => {
+    expect(mintElementId(cover, "headline")).toBe("el-headline-2");
+  });
+
+  it("looks inside list items too, where ids also have to be unique", () => {
+    const withList: Section = {
+      ...cover,
+      content: [
+        ...cover.content,
+        {
+          id: "el-list",
+          role: "list",
+          hidden: false,
+          slot: "services",
+          items: [
+            {
+              id: "item-1",
+              elements: [
+                {
+                  id: "el-body",
+                  role: "body",
+                  hidden: false,
+                  slot: "description",
+                  value: { kind: "text", text: "Dentro de una tarjeta" },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    expect(mintElementId(withList, "body")).toBe("el-body-2");
   });
 });

@@ -1,12 +1,22 @@
 "use client";
 
-import { isPlaceholderText } from "@retorika/catalog";
+import { isPlaceholderText, presetFor } from "@retorika/catalog";
+import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
 import { render } from "@retorika/renderer";
-import { type ElementAddress, listEditableFields, type RetorikaDocument } from "@retorika/schema";
+import {
+  type ElementAddress,
+  findSection,
+  listEditableFields,
+  type RetorikaDocument,
+  type SlotAddress,
+  type SlotFill,
+} from "@retorika/schema";
 import { useMemo, useRef, useState } from "react";
 import { EditorShell, type SaveStatus } from "../editor/EditorShell.tsx";
 import { ACCEPTED_IMAGE_ACCEPT } from "../editor/imageBytes.ts";
+import { sectionFields } from "../editor/sectionFields.ts";
 import es from "../locales/es.json" with { type: "json" };
+import { FieldsPanel } from "./FieldsPanel.tsx";
 import { FieldError } from "./ui.tsx";
 
 type DownloadState = "idle" | "downloading" | "error";
@@ -48,6 +58,27 @@ export interface SectionOffer {
   catalogId: string;
   name: string;
   description: string;
+}
+
+/** The catalog's Spanish name for the section the panel is showing, e.g. "Portada". */
+function sectionDisplayName(doc: RetorikaDocument, sectionId: string): string {
+  const found = findSection(doc, sectionId);
+  if (!found) return sectionId;
+  const key = `section.${found.section.preset.catalogId}.name` as keyof typeof catalogEs;
+  return catalogEs[key] ?? sectionId;
+}
+
+/** The preset's slots in the order it declares them, which is where a newly created element
+ * gets placed. Empty for a section the catalog does not recognise, which the panel treats as
+ * having no fields at all. */
+function slotOrderOf(doc: RetorikaDocument, sectionId: string): string[] {
+  const found = findSection(doc, sectionId);
+  if (!found) return [];
+  try {
+    return presetFor(found.section.preset.catalogId).slots.map((slot) => slot.slot);
+  } catch {
+    return [];
+  }
 }
 
 /** From `Content-Disposition: attachment; filename="doc-taberna.zip"`. */
@@ -101,6 +132,8 @@ export function Editor({
   onMoveSection,
   onInsertSection,
   onPickPhoto,
+  onFillSlot,
+  onClearSlot,
   photoUrls,
   photoError,
   offers,
@@ -124,6 +157,8 @@ export function Editor({
   /** The owner chose a file for this image element. Preparing and storing it is `Variants`'
    * business; this component only reports which element was clicked. */
   onPickPhoto: (address: ElementAddress, file: File) => void;
+  onFillSlot: (fill: SlotFill) => void;
+  onClearSlot: (address: SlotAddress) => void;
   /** Object URLs for photos already uploaded, keyed by the `src` the document carries. The
    * preview needs them because a bundle-relative path resolves against the parent page inside a
    * `srcDoc` iframe and 404s — the same trap `placeholder-image.ts` documents. */
@@ -148,6 +183,10 @@ export function Editor({
   // for it is remembered here until a file comes back.
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingImage = useRef<ElementAddress | null>(null);
+  // Which section's fields are open, if any. Not tied to selection: clicking a word to edit it
+  // selects the section too, and a form sliding in every time someone touches a sentence would
+  // be in the way rather than at hand.
+  const [fieldsFor, setFieldsFor] = useState<string | null>(null);
 
   // `render` is deterministic, so an unchanged document yields the identical string and the
   // iframe's `srcDoc` does not change — which is what keeps a device toggle or a download from
@@ -256,6 +295,15 @@ export function Editor({
           false,
           '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>',
           () => onDuplicateSection(sectionId),
+        ),
+      );
+      actions.appendChild(
+        action(
+          es["editor.fields.open"],
+          "move",
+          false,
+          '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10"/><path d="M4 12h16"/><path d="M4 17h7"/><circle cx="18" cy="7" r="2"/><circle cx="15" cy="17" r="2"/></svg>',
+          () => setFieldsFor(sectionId),
         ),
       );
       actions.appendChild(
@@ -603,6 +651,17 @@ export function Editor({
         className="w-full flex-grow border-0 bg-ui-surface"
         style={{ minHeight: "60vh" }}
       />
+      {fieldsFor && findSection(doc, fieldsFor) ? (
+        <FieldsPanel
+          sectionId={fieldsFor}
+          sectionName={sectionDisplayName(doc, fieldsFor)}
+          rows={sectionFields(doc, fieldsFor)}
+          slotOrder={slotOrderOf(doc, fieldsFor)}
+          onFill={onFillSlot}
+          onClear={onClearSlot}
+          onClose={() => setFieldsFor(null)}
+        />
+      ) : null}
       {toast ? (
         <div className="fixed bottom-[34px] left-1/2 z-10 flex -translate-x-1/2 items-center gap-5 rounded-[13px] bg-[#0F172A] py-3.5 pr-3.5 pl-5 shadow-[0_10px_30px_rgba(15,23,42,0.28)]">
           <span className="inline-flex items-center gap-2.5 text-[15px] font-medium text-white">

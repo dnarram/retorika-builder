@@ -331,6 +331,14 @@ export function Variants({
           dismissToast();
           void handlePickPhoto(openIndex, address, file);
         }}
+        onFillSlot={(fill) => {
+          dismissToast();
+          dispatch({ type: "fillSlot", variant: openIndex, fill });
+        }}
+        onClearSlot={(address) => {
+          dismissToast();
+          dispatch({ type: "clearSlot", variant: openIndex, address });
+        }}
         photoUrls={photoUrls.get(openIndex) ?? EMPTY_PHOTOS}
         photoError={photoError}
         offers={offers}
