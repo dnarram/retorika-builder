@@ -4,7 +4,13 @@ import { blankSection, CATALOG, CONTACT_ID, canBeBlank, variantsFor } from "@ret
 import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
 import { type Answers, contactSectionFor, generateVariants } from "@retorika/generator";
 import { render } from "@retorika/renderer";
-import { findSection, listAnchorsTo, type RetorikaDocument, type Section } from "@retorika/schema";
+import {
+  type ElementAddress,
+  findSection,
+  listAnchorsTo,
+  type RetorikaDocument,
+  type Section,
+} from "@retorika/schema";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { saveSession } from "../editor/autosave.ts";
 import {
@@ -13,6 +19,14 @@ import {
   initHistories,
   wasSectionEverEdited,
 } from "../editor/documentHistory.ts";
+import {
+  clearPhotos,
+  loadPhotos,
+  photoBlob,
+  photoSrcFor,
+  preparePhoto,
+  savePhoto,
+} from "../editor/photos.ts";
 import es from "../locales/es.json" with { type: "json" };
 import { type DeleteToast, Editor, type SectionOffer } from "./Editor.tsx";
 import { Brand } from "./ui.tsx";
@@ -114,6 +128,10 @@ function ThumbnailFrame({ html, title }: { html: string; title: string }) {
 /** Autosaves 500ms after the last change, not on every keystroke's underlying document update. */
 const SAVE_DEBOUNCE_MS = 500;
 
+/** One shared empty map, so a variant with no photos does not hand the editor a new object on
+ * every render and re-run the preview's `useMemo` for nothing. */
+const EMPTY_PHOTOS: ReadonlyMap<string, string> = new Map();
+
 export function Variants({
   answers,
   initialDocuments,
@@ -150,6 +168,70 @@ export function Variants({
     }, SAVE_DEBOUNCE_MS);
     return () => clearTimeout(saveTimer.current);
   }, [answers, histories, openIndex]);
+
+  /**
+   * The owner's uploaded photos, as object URLs the preview and the download can both use, keyed
+   * by the src the document carries. Held per variant because the three cards are three
+   * documents and all three have a section called `sec-cover`.
+   */
+  const [photoUrls, setPhotoUrls] = useState<Map<number, Map<string, string>>>(new Map());
+  const [photoError, setPhotoError] = useState<string | null>(null);
+
+  // What survived the last reload. Put back once, on mount: the documents came from
+  // `localStorage`, the bytes from IndexedDB, and only together do they show the site the owner
+  // left behind. A store that will not open yields nothing and the covers show the placeholder
+  // again, which is the honest fallback — the document still says what it says.
+  useEffect(() => {
+    let cancelled = false;
+    const created: string[] = [];
+    void loadPhotos().then((stored) => {
+      if (cancelled || stored.length === 0) return;
+      const next = new Map<number, Map<string, string>>();
+      for (const photo of stored) {
+        const url = URL.createObjectURL(photoBlob(photo.bytes));
+        created.push(url);
+        const forVariant = next.get(photo.variant) ?? new Map<string, string>();
+        forVariant.set(photo.src, url);
+        next.set(photo.variant, forVariant);
+      }
+      setPhotoUrls(next);
+    });
+    return () => {
+      cancelled = true;
+      for (const url of created) URL.revokeObjectURL(url);
+    };
+  }, []);
+
+  async function handlePickPhoto(variant: number, address: ElementAddress, file: File) {
+    setPhotoError(null);
+    const result = await preparePhoto(file);
+    if (!result.ok) {
+      setPhotoError(es[`editor.photo.${result.error.reason}` as keyof typeof es]);
+      return;
+    }
+
+    const src = photoSrcFor(address.sectionId);
+    const url = URL.createObjectURL(photoBlob(result.photo.bytes, result.photo.type));
+    setPhotoUrls((current) => {
+      const next = new Map(current);
+      const forVariant = new Map(next.get(variant) ?? []);
+      const previous = forVariant.get(src);
+      if (previous) URL.revokeObjectURL(previous);
+      forVariant.set(src, url);
+      next.set(variant, forVariant);
+      return next;
+    });
+
+    // The alt the placeholder carried says "aquí irá tu foto", which stops being true the moment
+    // one arrives. Replaced with something true and unhelpful rather than something invented:
+    // nothing here knows what is in the photograph, and a guess in an alt attribute is a lie
+    // read aloud to the one person who cannot check it.
+    const alt = `Foto de ${histories[variant]?.present.document.siteName ?? answers.businessName}`;
+    dispatch({ type: "setImage", variant, address, src, alt });
+
+    // A photo that was not stored must never show a tick. Same rule as a full `localStorage`.
+    if (!(await savePhoto(variant, src, result.photo.bytes))) setSaveStatus("unsaved");
+  }
 
   const [toast, setToast] = useState<DeleteToast | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -245,6 +327,12 @@ export function Variants({
         onInsertSection={(catalogId, index) =>
           handleInsertSection(openIndex, history, catalogId, index)
         }
+        onPickPhoto={(address, file) => {
+          dismissToast();
+          void handlePickPhoto(openIndex, address, file);
+        }}
+        photoUrls={photoUrls.get(openIndex) ?? EMPTY_PHOTOS}
+        photoError={photoError}
         offers={offers}
         contactUnavailable={contactSection === undefined}
         canUndo={history.past.length > 0}
@@ -432,7 +520,12 @@ export function Variants({
 
         <button
           type="button"
-          onClick={onRestart}
+          onClick={() => {
+            // Day 3 of sprint 2 settled that starting over really starts over. The bytes live
+            // somewhere `clearSession` cannot reach, so they are cleared here as well.
+            void clearPhotos();
+            onRestart();
+          }}
           style={{
             font: "inherit",
             fontSize: 14,

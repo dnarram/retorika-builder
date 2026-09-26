@@ -5,6 +5,7 @@ import { render } from "@retorika/renderer";
 import { type ElementAddress, listEditableFields, type RetorikaDocument } from "@retorika/schema";
 import { useMemo, useRef, useState } from "react";
 import { EditorShell, type SaveStatus } from "../editor/EditorShell.tsx";
+import { ACCEPTED_IMAGE_ACCEPT } from "../editor/imageBytes.ts";
 import es from "../locales/es.json" with { type: "json" };
 import { FieldError } from "./ui.tsx";
 
@@ -99,6 +100,9 @@ export function Editor({
   onDuplicateSection,
   onMoveSection,
   onInsertSection,
+  onPickPhoto,
+  photoUrls,
+  photoError,
   offers,
   contactUnavailable,
   canUndo,
@@ -117,6 +121,14 @@ export function Editor({
   onDuplicateSection: (sectionId: string) => void;
   onMoveSection: (sectionId: string, toIndex: number) => void;
   onInsertSection: (catalogId: string, index: number) => void;
+  /** The owner chose a file for this image element. Preparing and storing it is `Variants`'
+   * business; this component only reports which element was clicked. */
+  onPickPhoto: (address: ElementAddress, file: File) => void;
+  /** Object URLs for photos already uploaded, keyed by the `src` the document carries. The
+   * preview needs them because a bundle-relative path resolves against the parent page inside a
+   * `srcDoc` iframe and 404s — the same trap `placeholder-image.ts` documents. */
+  photoUrls: ReadonlyMap<string, string>;
+  photoError: string | null;
   offers: readonly SectionOffer[];
   /** Whether to explain the absence of "Contacto y reservas" from `offers`. */
   contactUnavailable: boolean;
@@ -132,11 +144,36 @@ export function Editor({
   const [state, setState] = useState<DownloadState>("idle");
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  // One input, reused: the picker is opened from inside the frame, and the element that asked
+  // for it is remembered here until a file comes back.
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const pendingImage = useRef<ElementAddress | null>(null);
 
   // `render` is deterministic, so an unchanged document yields the identical string and the
   // iframe's `srcDoc` does not change — which is what keeps a device toggle or a download from
   // reloading the preview and throwing away the current selection.
-  const html = useMemo(() => render(doc, "html").html, [doc]);
+  // Rendered from a display copy: every image whose src names an uploaded file gets the object
+  // URL for its bytes instead. The document itself keeps the bundle-relative name, which is what
+  // the ZIP needs — a relative path inside a `srcDoc` iframe resolves against the parent page's
+  // URL and 404s, which is exactly why the placeholder is a data: URI and not a file.
+  const html = useMemo(() => {
+    if (photoUrls.size === 0) return render(doc, "html").html;
+    const forPreview: RetorikaDocument = {
+      ...doc,
+      pages: doc.pages.map((page) => ({
+        ...page,
+        sections: page.sections.map((section) => ({
+          ...section,
+          content: section.content.map((element) => {
+            if (element.value?.kind !== "image") return element;
+            const url = photoUrls.get(element.value.src);
+            return url ? { ...element, value: { ...element.value, src: url } } : element;
+          }),
+        })),
+      })),
+    };
+    return render(forPreview, "html").html;
+  }, [doc, photoUrls]);
 
   // Marker text warns, it never blocks: what an added section says is a matter of taste the
   // owner can see and fix in a second, unlike a button pointing nowhere, which the download
@@ -328,6 +365,35 @@ export function Editor({
     iframeDoc.addEventListener("click", closeMenus);
   }
 
+  /**
+   * Clicking a photo replaces it.
+   *
+   * The placeholder already says "Tu foto aquí", so the affordance the page needs is the one it
+   * already promises — no fifth button in the action cluster, no panel. `EDITABLE_TAGS` leaves
+   * `img` out because there is no text on an image to click into; this is the other half of that
+   * sentence, which had been missing.
+   */
+  function wirePhotos(iframeDoc: Document) {
+    for (const image of iframeDoc.querySelectorAll<HTMLImageElement>('img[data-role="image"]')) {
+      const elementId = image.dataset.id;
+      const sectionId = image.closest<HTMLElement>("[data-section]")?.dataset.section;
+      if (!elementId || !sectionId) continue;
+
+      image.classList.add("rb-photo");
+      image.setAttribute("title", es["editor.changePhoto"]);
+      image.addEventListener("click", (event) => {
+        // Not the section's click too: choosing a photo is not choosing a section.
+        event.stopPropagation();
+        pendingImage.current = { sectionId, elementId };
+        const input = fileInputRef.current;
+        if (!input) return;
+        // Cleared first, so picking the same file twice in a row still fires a change.
+        input.value = "";
+        input.click();
+      });
+    }
+  }
+
   function wireEditing(iframeDoc: Document) {
     for (const el of iframeDoc.querySelectorAll<HTMLElement>("[data-id]")) {
       if (!EDITABLE_TAGS.has(el.tagName)) continue;
@@ -433,22 +499,50 @@ export function Editor({
       ".rb-menu-description { font-size: 12px; line-height: 1.35; color: #5B6B82; }",
       ".rb-menu-note { margin: 8px 0 0 0; padding-top: 10px; border-top: 1px solid #EDF1F6;",
       "  font-size: 12px; line-height: 1.4; color: #5B6B82; }",
+      // A photo reads as replaceable the same way an editable text does: the dashed outline on
+      // hover, and nothing until then.
+      ".rb-photo { cursor: pointer; outline: 2px dashed transparent; outline-offset: 3px; }",
+      ".rb-photo:hover { outline-color: #156FE7; }",
     ].join("\n");
     iframeDoc.head.appendChild(style);
 
     wireSelection(iframeDoc);
     wireInsertion(iframeDoc);
+    wirePhotos(iframeDoc);
     wireEditing(iframeDoc);
+  }
+
+  /** The photo srcs this document actually names. An upload that has since been undone still has
+   * its bytes in memory, and the route refuses a photo the document does not reference. */
+  function referencedPhotos(): string[] {
+    const srcs = new Set<string>();
+    for (const page of doc.pages) {
+      for (const section of page.sections) {
+        for (const element of section.content) {
+          if (element.value?.kind === "image" && photoUrls.has(element.value.src)) {
+            srcs.add(element.value.src);
+          }
+        }
+      }
+    }
+    return [...srcs];
   }
 
   async function download() {
     setState("downloading");
     try {
-      const response = await fetch("/api/download", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ document: doc }),
-      });
+      // Multipart since ADR 0018: the document as a field, each photo as a file named by the
+      // src the document carries. The object URL is the handle to the bytes already in memory,
+      // so nothing is re-read from storage to build this.
+      const form = new FormData();
+      form.set("document", JSON.stringify(doc));
+      for (const src of referencedPhotos()) {
+        const url = photoUrls.get(src);
+        if (!url) continue;
+        const blob = await (await fetch(url)).blob();
+        form.append("photo", new File([blob], src, { type: blob.type }));
+      }
+      const response = await fetch("/api/download", { method: "POST", body: form });
       if (!response.ok) throw new Error(`download failed: ${response.status}`);
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
@@ -479,6 +573,7 @@ export function Editor({
     >
       <div className="flex flex-col gap-3 border-b border-ui-border px-4 py-3">
         {state === "error" ? <FieldError>{es["editor.downloadError"]}</FieldError> : null}
+        {photoError ? <FieldError>{photoError}</FieldError> : null}
         {placeholders > 0 ? (
           <p className="m-0 text-[13px] font-medium text-[#92400E]">
             {placeholders === 1
@@ -488,6 +583,18 @@ export function Editor({
         ) : null}
         <p className="m-0 text-[13px] text-ui-muted">{es["editor.editHint"]}</p>
       </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={ACCEPTED_IMAGE_ACCEPT}
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          const address = pendingImage.current;
+          pendingImage.current = null;
+          if (file && address) onPickPhoto(address, file);
+        }}
+      />
       <iframe
         ref={iframeRef}
         title={title}

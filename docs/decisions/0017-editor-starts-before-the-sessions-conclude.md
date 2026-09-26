@@ -68,3 +68,20 @@ built on top of them.
 - Protocol Part 14's Fase 1 note gains a line pointing here.
 - `apps/editor` exists from 24 September, on Render's free plan, with `noindex` while it is half
   built.
+
+## The other door this sprint crossed, recorded late (26 September 2026)
+
+This ADR is the record of the gates sprint 1 walked through, and one of them was never written
+down: **protocol Part 14 lists «descargar» under phase 2, and the ZIP download shipped in phase 1**
+— on day 5 of that sprint, and it has been the only way anyone gets a site out ever since.
+
+It is recorded here rather than argued afresh, because the reasoning is the one already in this
+ADR: the CEO asked to see the real tool, and a tool nobody can take anything out of is a
+demonstration. It is also the half of phase 2's «publicar, descargar» that costs nothing to
+give — a file the owner already owns, with no hosting, no domain and no invoice behind it.
+«Publicar» stays where it is, and ADR 0008 has it on hold with no plan.
+
+Noted now because [ADR 0018](0018-own-cover-photo-before-phase-2.md) moves another line of the
+same list, and an undocumented precedent is worth less than a documented one when the next person
+asks whether these boundaries mean anything.
+

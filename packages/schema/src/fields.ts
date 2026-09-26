@@ -200,3 +200,67 @@ export function setElementText(
   }
   return { ...doc, pages };
 }
+
+/** The one element with this id inside these, given a new image src. */
+function replaceImageSrc(
+  elements: readonly ContentElement[],
+  elementId: string,
+  src: string,
+): ContentElement[] | undefined {
+  let found = false;
+  const next = elements.map((element) => {
+    if (element.id === elementId) {
+      if (element.value?.kind !== "image") return element;
+      found = true;
+      return { ...element, value: { ...element.value, src } };
+    }
+    if (!element.items) return element;
+    let changedItems = false;
+    const items = element.items.map((item) => {
+      const replaced = replaceImageSrc(item.elements, elementId, src);
+      if (!replaced) return item;
+      changedItems = true;
+      return { ...item, elements: replaced };
+    });
+    if (!changedItems) return element;
+    found = true;
+    return { ...element, items };
+  });
+  return found ? next : undefined;
+}
+
+/**
+ * One image's source, replaced. The alt text goes through `setElementText`, which already treats
+ * an image's alt as its text — so this is the other half of the same element, not a second way
+ * to edit the same thing.
+ *
+ * Structure is untouched, exactly as in `setElementText`: an image element that exists keeps
+ * existing, in the same slot, in the same place. What changes is which file it names.
+ *
+ * Throws on a miss, including when the address names an element that is not an image at all.
+ * Every address the editor sends was read off the markup it just rendered, so a miss is a bug in
+ * that round trip and a silent no-op would look like an upload that simply did not happen.
+ */
+export function setElementImageSrc(
+  doc: RetorikaDocument,
+  address: ElementAddress,
+  src: string,
+): RetorikaDocument {
+  let found = false;
+  const pages = doc.pages.map((page) => ({
+    ...page,
+    sections: page.sections.map((section) => {
+      if (section.id !== address.sectionId) return section;
+      const content = replaceImageSrc(section.content, address.elementId, src);
+      if (!content) return section;
+      found = true;
+      return { ...section, content };
+    }),
+  }));
+  if (!found) {
+    throw new Error(
+      `setElementImageSrc: no image element "${address.elementId}" in section "${address.sectionId}"`,
+    );
+  }
+  return { ...doc, pages };
+}
