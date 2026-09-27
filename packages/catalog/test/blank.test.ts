@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import { blankSection, canBeBlank, isPlaceholderText } from "../src/blank.ts";
 import { CONTACT_ID } from "../src/contact.ts";
 import { COVER_ID } from "../src/cover.ts";
+import { FOOTER_ID } from "../src/footer.ts";
 import es from "../src/locales/es.json" with { type: "json" };
 import { LOCATION_ID } from "../src/location.ts";
 import { CATALOG, presetFor, variantsFor } from "../src/presets.ts";
@@ -37,7 +38,7 @@ const EVERY_PAIR = BLANKABLE.flatMap((catalogId) =>
 
 describe("canBeBlank", () => {
   it("is true for every section whose required slots are text, an image or a list", () => {
-    expect(BLANKABLE).toEqual([COVER_ID, SERVICES_ID, LOCATION_ID, TESTIMONIALS_ID]);
+    expect(BLANKABLE).toEqual([COVER_ID, SERVICES_ID, LOCATION_ID, TESTIMONIALS_ID, FOOTER_ID]);
   });
 
   it("is false for Contacto y reservas, whose required button is a destination", () => {
@@ -160,5 +161,27 @@ describe("isPlaceholderText", () => {
     // Counting it would make a freshly generated document warn about marker text before the
     // user has added anything at all — the warning is about text they are expected to replace.
     expect(isPlaceholderText("Marcador de foto: aquí irá tu foto")).toBe(false);
+  });
+});
+
+describe("the footer, which is blankable but is never born that way", () => {
+  it("can be built blank, since its one required slot is plain text", () => {
+    expect(canBeBlank(FOOTER_ID)).toBe(true);
+  });
+
+  it("puts a marker on the business name and on nothing else", () => {
+    // ADR 0019: the titular, the NIF, the domicilio and the correo are offered, never required,
+    // so they are optional and blankSection leaves them out — which is what stops a published
+    // page from ever reading "Escribe aquí tu NIF".
+    const blank = blankSection(FOOTER_ID, "stacked", "sec-new");
+    expect(blank.content.map((element) => element.slot)).toEqual(["businessName"]);
+  });
+
+  it("is nevertheless offered from the generator, not from here", () => {
+    // The editor builds it with `footerSectionFor`, which fills the business name from question
+    // 1. This path exists only so the catalog stays consistent, not because anything uses it.
+    const blank = blankSection(FOOTER_ID, "stacked", "sec-new");
+    const value = blank.content[0]?.value;
+    expect(value?.kind === "text" && isPlaceholderText(value.text)).toBe(true);
   });
 });

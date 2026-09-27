@@ -1,8 +1,13 @@
 "use client";
 
-import { blankSection, CATALOG, CONTACT_ID, canBeBlank, variantsFor } from "@retorika/catalog";
+import { blankSection, CATALOG, CONTACT_ID, FOOTER_ID, variantsFor } from "@retorika/catalog";
 import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
-import { type Answers, contactSectionFor, generateVariants } from "@retorika/generator";
+import {
+  type Answers,
+  contactSectionFor,
+  footerSectionFor,
+  generateVariants,
+} from "@retorika/generator";
 import { render } from "@retorika/renderer";
 import {
   type ElementAddress,
@@ -251,12 +256,28 @@ export function Variants({
    */
   const contactSection = useMemo(() => contactSectionFor(answers), [answers]);
 
+  /**
+   * How a section of this kind gets built when the pill inserts one.
+   *
+   * Two of the six are not born blank, for two different reasons, and both come from the
+   * questionnaire instead. "Contacto y reservas" needs a destination and there is no honest
+   * marker for one. "Pie de página" needs the business name, and a page reading «Escribe aquí tu
+   * NIF» in its footer is exactly what ADR 0019 refuses. Everything else the catalog can make on
+   * its own.
+   *
+   * `undefined` means the section cannot be offered at all right now, which is how «que vengan
+   * al local» ends up with no contact section to add.
+   */
+  function sectionToInsert(catalogId: string, doc: RetorikaDocument): Section | undefined {
+    if (catalogId === CONTACT_ID) return contactSection;
+    if (catalogId === FOOTER_ID) return footerSectionFor(answers);
+    return blankSection(catalogId, variantForInsertion(doc, catalogId), `sec-${catalogId}`);
+  }
+
   const offers = useMemo<SectionOffer[]>(
     () =>
       Object.keys(CATALOG)
-        .filter((catalogId) =>
-          canBeBlank(catalogId) ? true : catalogId === CONTACT_ID && contactSection !== undefined,
-        )
+        .filter((catalogId) => catalogId !== CONTACT_ID || contactSection !== undefined)
         .map((catalogId) => ({
           catalogId,
           name: catalogSectionName(catalogId),
@@ -272,11 +293,7 @@ export function Variants({
     index: number,
   ) {
     dismissToast();
-    const doc = history.present.document;
-    const section: Section | undefined =
-      catalogId === CONTACT_ID
-        ? contactSection
-        : blankSection(catalogId, variantForInsertion(doc, catalogId), `sec-${catalogId}`);
+    const section = sectionToInsert(catalogId, history.present.document);
     // Only reachable for a contact section the menu would not have offered in the first place.
     if (!section) throw new Error(`handleInsertSection: nothing to build for "${catalogId}"`);
     dispatch({ type: "insertSection", variant, section, index });

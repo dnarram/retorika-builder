@@ -1,6 +1,7 @@
 import type { PresetShape } from "@retorika/schema";
 import { CONTACT_ID, CONTACT_VARIANTS, contactPreset } from "./contact.ts";
 import { COVER_ID, COVER_VARIANTS, coverPreset } from "./cover.ts";
+import { FOOTER_ID, FOOTER_VARIANTS, footerPreset } from "./footer.ts";
 import { LOCATION_ID, LOCATION_VARIANTS, locationPreset } from "./location.ts";
 import { SERVICES_ID, SERVICES_VARIANTS, servicesPreset } from "./services.ts";
 import { TESTIMONIALS_ID, TESTIMONIALS_VARIANTS, testimonialsPreset } from "./testimonials.ts";
@@ -17,6 +18,7 @@ export const CATALOG: Readonly<Record<string, PresetShape>> = {
   [LOCATION_ID]: locationPreset,
   [TESTIMONIALS_ID]: testimonialsPreset,
   [CONTACT_ID]: contactPreset,
+  [FOOTER_ID]: footerPreset,
 };
 
 /** Each section's compositions, in the order the catalog considers them: the first is the one
@@ -27,6 +29,7 @@ const VARIANTS: Readonly<Record<string, readonly string[]>> = {
   [LOCATION_ID]: LOCATION_VARIANTS,
   [TESTIMONIALS_ID]: TESTIMONIALS_VARIANTS,
   [CONTACT_ID]: CONTACT_VARIANTS,
+  [FOOTER_ID]: FOOTER_VARIANTS,
 };
 
 export function presetFor(catalogId: string): PresetShape {

@@ -28,4 +28,14 @@ export const SEARCH_ALIASES: Readonly<Record<string, readonly string[]>> = {
     "estrellas",
   ],
   contact: ["contacto", "reservas", "teléfono", "whatsapp", "pedir cita", "escribir", "llamar"],
+  footer: [
+    "pie de página",
+    "pie",
+    "aviso legal",
+    "datos del titular",
+    "nif",
+    "cif",
+    "abajo",
+    "copyright",
+  ],
 };

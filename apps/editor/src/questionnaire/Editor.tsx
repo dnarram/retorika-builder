@@ -1,6 +1,6 @@
 "use client";
 
-import { isPlaceholderText, presetFor } from "@retorika/catalog";
+import { FOOTER_ID, FOOTER_IDENTITY_SLOTS, isPlaceholderText, presetFor } from "@retorika/catalog";
 import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
 import { render } from "@retorika/renderer";
 import {
@@ -219,6 +219,28 @@ export function Editor({
   // route refuses outright. Counted by value against the catalog's own markers — the document
   // has no flag saying "still a placeholder", and adding one would be a schema change to record
   // something the text already says.
+  /**
+   * Whether the footer is on the page with none of the owner's details filled in.
+   *
+   * ADR 0019: this warns and never blocks, and it warns **once**, only when every one of them is
+   * empty. Somebody who filled two and left two made a decision; nagging about the rest would be
+   * exactly the ruling on what is enough that the decision refuses to make. A hidden element
+   * counts as empty, because on the page it is.
+   */
+  const footerNeedsIdentity = useMemo(() => {
+    const footer = doc.pages
+      .flatMap((page) => page.sections)
+      .find((section) => section.preset.catalogId === FOOTER_ID);
+    if (!footer) return false;
+    return !footer.content.some(
+      (element) =>
+        FOOTER_IDENTITY_SLOTS.includes(element.slot) &&
+        !element.hidden &&
+        element.value?.kind === "text" &&
+        element.value.text.trim() !== "",
+    );
+  }, [doc]);
+
   const placeholders = useMemo(
     () =>
       listEditableFields(doc).filter(
@@ -622,6 +644,9 @@ export function Editor({
       <div className="flex flex-col gap-3 border-b border-ui-border px-4 py-3">
         {state === "error" ? <FieldError>{es["editor.downloadError"]}</FieldError> : null}
         {photoError ? <FieldError>{photoError}</FieldError> : null}
+        {footerNeedsIdentity ? (
+          <p className="m-0 text-[13px] text-ui-muted">{es["editor.footerIdentity"]}</p>
+        ) : null}
         {placeholders > 0 ? (
           <p className="m-0 text-[13px] font-medium text-[#92400E]">
             {placeholders === 1
