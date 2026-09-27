@@ -30,6 +30,22 @@ left implicit.
 4. **Positions are relative to the section's grid, never absolute on the page.** There is a
    deterministic reading order, which is what the simple view and the mobile derivation need.
 
+   > *Tested against a real owner, 27 September 2026 — and it held.* Asked what the site lacked,
+   > Conchi wanted «la posibilidad de mover libremente las imágenes […] por donde quiera»
+   > (`docs/sessions/2026-09-27-conchi.md`). That is this rule, refused in as many words, by the
+   > first person outside the team to use the tool unaided.
+   >
+   > **The rule is not amended and nothing here proposes amending it.** One owner asking is not a
+   > case for moving a foundation, and rule 5 below already names exactly what she asked for —
+   > "the hole free placement would otherwise open" — so this was foreseen rather than
+   > discovered. What free positioning would cost is still what it always was: the deterministic
+   > reading order, the mobile derivation of rule 7, and the promise that a site cannot be
+   > arranged into something unpublishable.
+   >
+   > It is recorded because the cost of this rule now has a face, and because the next person to
+   > hear the request should hear it as the second time rather than the first. Acting on it would
+   > need an ADR before any code, which `CLAUDE.md` already requires.
+
 5. **There are no orphan elements: every element belongs to a section, every section to a
    page.** This closes the hole free placement would otherwise open — there is no floating layer
    above the site.

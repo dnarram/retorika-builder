@@ -90,6 +90,9 @@ documents; do not translate them.
 - [ ] If the schema changed: migration and round-trip test
 - [ ] Interface text in Spanish and in the translation file
 - [ ] No keys and no real client data in the code
+- [ ] **If it resolves an issue: the pull request body says `Closes #N`.** Not a mention, the
+      keyword — it is what closes the issue on merge. #19 and #25 were both finished and merged
+      and still sat open, because no pull request said so.
 
 Commit from the Terminal, not from an editor's source-control panel: macOS desktop apps do not
 read the shell configuration, so the hooks would run without the pinned Node.
