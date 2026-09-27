@@ -4,6 +4,7 @@ import type {
   Section,
   SlotAddress,
   SlotFill,
+  Theme,
 } from "@retorika/schema";
 import {
   clearSlot as clearSlotInDoc,
@@ -15,6 +16,7 @@ import {
   moveSection as moveSectionFromDoc,
   setElementImageSrc,
   setElementText,
+  setTheme as setThemeInDoc,
 } from "@retorika/schema";
 
 /**
@@ -32,8 +34,9 @@ import {
  * and undoing in one has no business touching another.
  */
 
-/** What produced a snapshot, and which section it touched — day 4 reads this to decide whether
- * a delete's undo toast fades: ADR 0014 keeps it on screen only for a section the user edited. */
+/** What produced a snapshot, and which section it touched if it touched one — day 4 reads this to
+ * decide whether a delete's undo toast fades: ADR 0014 keeps it on screen only for a section the
+ * user edited. Not every cause is about a section; see `sectionOf`. */
 export type SnapshotCause =
   | { type: "editText"; address: ElementAddress }
   | { type: "deleteSection"; sectionId: string }
@@ -43,6 +46,9 @@ export type SnapshotCause =
   | { type: "setImage"; address: ElementAddress }
   | { type: "fillSlot"; sectionId: string }
   | { type: "clearSlot"; sectionId: string }
+  /** The first cause that names no section, because a theme belongs to none of them: it restyles
+   * every section at once, hand-designed ones included. `sectionOf` is what keeps that honest. */
+  | { type: "setTheme" }
   | null;
 
 export interface Snapshot {
@@ -80,6 +86,7 @@ export type HistoryAction =
   | { type: "setImage"; variant: number; address: ElementAddress; src: string; alt: string }
   | { type: "fillSlot"; variant: number; fill: SlotFill }
   | { type: "clearSlot"; variant: number; address: SlotAddress }
+  | { type: "setTheme"; variant: number; theme: Theme }
   | { type: "undo"; variant: number }
   | { type: "redo"; variant: number };
 
@@ -255,6 +262,29 @@ function clearSlot(history: History, address: SlotAddress): History {
   };
 }
 
+/**
+ * A different palette, or a different pair of typefaces — one step, for the whole site.
+ *
+ * The widest-reaching step in this stack and the cheapest to store: nineteen strings, replacing
+ * nineteen strings. Nothing about the page changes, which is the point of rule 6 — style is
+ * references to the system, so restyling everything touches no section, no element and no
+ * placement, and a section somebody hand-designed is restyled along with the rest.
+ *
+ * `setTheme` in the schema hands back the very same document when the theme is already the one
+ * asked for, so pressing the palette this site already uses is caught here and adds no step. The
+ * undo arrow does not light up for a step that would undo to itself.
+ */
+function setTheme(history: History, theme: Theme): History {
+  const document = setThemeInDoc(history.present.document, theme);
+  if (document === history.present.document) return history;
+  return {
+    past: [...history.past, history.present].slice(-LIMIT),
+    present: { document, cause: { type: "setTheme" } },
+    future: [],
+    amendable: false,
+  };
+}
+
 function undo(history: History): History {
   const previous = history.past.at(-1);
   if (!previous) return history;
@@ -282,30 +312,50 @@ function redo(history: History): History {
   };
 }
 
+/**
+ * One action against one variant's history.
+ *
+ * A `switch` that returns from every arm, and not the chain of ternaries this replaced. That chain
+ * ended in `: redo(history)`, which made it the default: a verb added to `HistoryAction` without
+ * its own branch type-checked perfectly and **performed a redo** — silently, on an action that
+ * looks nothing like one. The `never` below is what turns that into a compile error naming the
+ * type that was forgotten, which is the only place this can be caught for free. Two verbs arrive
+ * this sprint, which is what made a latent trap worth defusing rather than testing around.
+ */
+function apply(history: History, action: HistoryAction): History {
+  switch (action.type) {
+    case "editText":
+      return editText(history, action.address, action.text);
+    case "deleteSection":
+      return deleteSection(history, action.sectionId);
+    case "duplicateSection":
+      return duplicateSection(history, action.sectionId);
+    case "moveSection":
+      return moveSection(history, action.sectionId, action.toIndex);
+    case "insertSection":
+      return insertSection(history, action.section, action.index);
+    case "setImage":
+      return setImage(history, action.address, action.src, action.alt);
+    case "fillSlot":
+      return fillSlot(history, action.fill);
+    case "clearSlot":
+      return clearSlot(history, action.address);
+    case "setTheme":
+      return setTheme(history, action.theme);
+    case "undo":
+      return undo(history);
+    case "redo":
+      return redo(history);
+  }
+  const unhandled: never = action;
+  throw new Error(`documentHistory: unhandled action ${JSON.stringify(unhandled)}`);
+}
+
 export function historiesReducer(state: Histories, action: HistoryAction): Histories {
   const history = state[action.variant];
   if (!history) throw new Error(`documentHistory: no variant ${action.variant}`);
 
-  const next =
-    action.type === "editText"
-      ? editText(history, action.address, action.text)
-      : action.type === "deleteSection"
-        ? deleteSection(history, action.sectionId)
-        : action.type === "duplicateSection"
-          ? duplicateSection(history, action.sectionId)
-          : action.type === "moveSection"
-            ? moveSection(history, action.sectionId, action.toIndex)
-            : action.type === "insertSection"
-              ? insertSection(history, action.section, action.index)
-              : action.type === "setImage"
-                ? setImage(history, action.address, action.src, action.alt)
-                : action.type === "fillSlot"
-                  ? fillSlot(history, action.fill)
-                  : action.type === "clearSlot"
-                    ? clearSlot(history, action.address)
-                    : action.type === "undo"
-                      ? undo(history)
-                      : redo(history);
+  const next = apply(history, action);
 
   // Undo with nothing to undo changes nothing, and must not make React re-render the preview.
   if (next === history) return state;
@@ -342,14 +392,28 @@ export function historiesReducer(state: Histories, action: HistoryAction): Histo
  * a verb is a decision about which side of that line it falls on. */
 const CONTENT_CAUSES = ["editText", "setImage", "fillSlot", "clearSlot"] as const;
 
+/**
+ * Which section a cause is about, or `undefined` when it is about none.
+ *
+ * Every cause used to name a section one of two ways — an `address` or a bare `sectionId` — and
+ * the check below read that as an either/or. `setTheme` is the first that names neither, because
+ * it is about the document, so the either/or had to become a three-way answer rather than a
+ * narrowing that happens to still compile. Written as one function so the next document-level
+ * verb needs no change here at all: it lands in the third case by default, and the default is
+ * "belongs to no section", which is the safe answer for a question about one section's content.
+ */
+function sectionOf(cause: NonNullable<SnapshotCause>): string | undefined {
+  if ("address" in cause) return cause.address.sectionId;
+  if ("sectionId" in cause) return cause.sectionId;
+  return undefined;
+}
+
 export function wasSectionEverEdited(history: History, sectionId: string): boolean {
   const steps = [...history.past, history.present, ...history.future];
   return steps.some((step) => {
     const cause = step.cause;
     if (!cause) return false;
     if (!(CONTENT_CAUSES as readonly string[]).includes(cause.type)) return false;
-    return "address" in cause
-      ? cause.address.sectionId === sectionId
-      : cause.sectionId === sectionId;
+    return sectionOf(cause) === sectionId;
   });
 }

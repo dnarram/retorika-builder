@@ -1,6 +1,7 @@
 import { blankSection } from "@retorika/catalog";
 import { EMPTY_ANSWERS, generateVariants } from "@retorika/generator";
-import type { ElementAddress, RetorikaDocument } from "@retorika/schema";
+import type { ElementAddress, RetorikaDocument, Theme } from "@retorika/schema";
+import { buildTheme } from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
 import {
   type Histories,
@@ -489,6 +490,111 @@ describe("setImage", () => {
     expect(() =>
       run(start(), { ...upload(), address: { sectionId: "sec-cover", elementId: "el-headline" } }),
     ).toThrow(/no image element/);
+  });
+});
+
+describe("setTheme", () => {
+  /**
+   * The verb behind Estilo. Built from real palette ids rather than a synthetic map, because that
+   * is what the panel will do — and because `restaurante-bar` generates `warm-terracotta` with
+   * `classic-display`, so "the palette this site already uses" is a case these can actually reach.
+   */
+  const OWN = { paletteId: "warm-terracotta", typePairId: "classic-display" };
+  const OTHER = { paletteId: "classic-blue", typePairId: "modern-sans" };
+
+  const restyle = (input: typeof OWN, variant = 0): HistoryAction => ({
+    type: "setTheme",
+    variant,
+    theme: buildTheme(input),
+  });
+
+  const theme = (state: Histories, variant = 0) => state[variant]?.present.document.theme;
+
+  it("restyles the whole site in one step", () => {
+    const state = run(start(), restyle(OTHER));
+    expect(theme(state)?.["color.primary"]).toBe("#1D4ED8");
+    expect(theme(state)?.["font.heading"]).toMatch(/^Inter/);
+    expect(state[0]?.past).toHaveLength(1);
+  });
+
+  it("is undone back to the theme the sector chose", () => {
+    const before = theme(start());
+    const state = run(start(), restyle(OTHER), { type: "undo", variant: 0 });
+    expect(theme(state)).toEqual(before);
+  });
+
+  it("is redone after an undo", () => {
+    const state = run(
+      start(),
+      restyle(OTHER),
+      { type: "undo", variant: 0 },
+      { type: "redo", variant: 0 },
+    );
+    expect(theme(state)?.["color.primary"]).toBe("#1D4ED8");
+  });
+
+  it("adds no step for the palette the site is already using", () => {
+    // Otherwise the undo arrow lights up for a step that undoes to itself: press it and nothing
+    // appears to happen. That the generator's own theme is reachable from two catalog ids is also
+    // what will let the panel say which palette is the current one.
+    const initial = start();
+    const state = run(initial, restyle(OWN));
+    // The reducer hands the very same state array back when a history did not move, which is what
+    // stops React re-rendering the preview iframe for a click that changed nothing.
+    expect(state).toBe(initial);
+    expect(state[0]?.past).toHaveLength(0);
+  });
+
+  it("does not perform a redo, which is what a missing reducer branch used to do", () => {
+    // The trap this pins: the reducer was a chain of ternaries ending in `: redo(history)`, so a
+    // verb without its own branch type-checked and silently redid the future instead. Here the
+    // future holds an undone edit; if `setTheme` fell through, that edit would come back and the
+    // theme would not change. Both halves are asserted, because either alone could pass by luck.
+    const state = run(
+      start(),
+      edit("Nombre editado"),
+      { type: "undo", variant: 0 },
+      restyle(OTHER),
+    );
+    expect(theme(state)?.["color.primary"]).toBe("#1D4ED8");
+    expect(headline(state)).not.toBe("Nombre editado");
+    expect(state[0]?.future).toHaveLength(0);
+  });
+
+  it("touches only the variant it names", () => {
+    const state = run(start(), restyle(OTHER));
+    expect(theme(state, 1)).toEqual(theme(start(), 1));
+    expect(state[1]?.past).toHaveLength(0);
+  });
+
+  it("does not count as having edited any section, because it belongs to none", () => {
+    // A theme change restyles every section at once, hand-designed ones included, so it is not
+    // content the owner put into any one of them. ADR 0014's toast asks about content.
+    const state = run(start(), restyle(OTHER));
+    const history = state[0];
+    if (!history) throw new Error("no history");
+    for (const id of sectionIds(state) ?? []) {
+      if (id) expect(wasSectionEverEdited(history, id), id).toBe(false);
+    }
+  });
+
+  it("does not erase the record of an edit made before it", () => {
+    const state = run(start(), edit("Nombre editado"), restyle(OTHER));
+    const history = state[0];
+    if (!history) throw new Error("no history");
+    expect(wasSectionEverEdited(history, "sec-cover")).toBe(true);
+  });
+
+  it("does not merge with the typing around it", () => {
+    const state = run(start(), edit("Uno"), restyle(OTHER), edit("Dos"));
+    expect(state[0]?.past).toHaveLength(3);
+  });
+
+  it("throws on an incomplete theme rather than writing a hole into the document", () => {
+    const { "color.ink": _dropped, ...partial } = buildTheme(OTHER);
+    expect(() => run(start(), { type: "setTheme", variant: 0, theme: partial as Theme })).toThrow(
+      /not a complete theme/,
+    );
   });
 });
 
