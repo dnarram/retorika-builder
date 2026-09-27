@@ -2,6 +2,7 @@ import {
   CONTACT_ID,
   COVER_ID,
   type CoverVariant,
+  FOOTER_ID,
   LOCATION_ID,
   PLACEHOLDER_IMAGE_ALT,
   placeholderImageSrc,
@@ -195,5 +196,24 @@ export function buildContact(answers: Answers, sector: SectorId): Section | unde
     source: "catalog",
     layout: null,
     content,
+  };
+}
+
+/**
+ * Pie de página — always, because the one thing it needs is the one answer the questionnaire
+ * insists on.
+ *
+ * Only the business name is filled. The titular, the NIF, the domicilio and the correo are the
+ * owner's to add through the editor's field panel, and ADR 0019 is explicit that they are
+ * offered rather than required: nothing here invents them, and nothing here leaves a marker
+ * reading "Escribe aquí tu NIF" on a published page.
+ */
+export function buildFooter(answers: Answers): Section {
+  return {
+    id: "sec-footer",
+    preset: { catalogId: FOOTER_ID, variantId: "stacked" },
+    source: "catalog",
+    layout: null,
+    content: [body("el-businessName", "businessName", `© ${answers.businessName}`)],
   };
 }

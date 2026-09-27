@@ -7,6 +7,8 @@ import {
   CONTACT_VARIANTS,
   COVER_ID,
   COVER_VARIANTS,
+  FOOTER_ID,
+  FOOTER_VARIANTS,
   LOCATION_ID,
   LOCATION_VARIANTS,
   SERVICES_ID,
@@ -105,7 +107,46 @@ const PRESET_CASES: Record<
     texts: ["standard"],
     sections: (cover, variantId) => [cover, contactSection(variantId)],
   },
+  [FOOTER_ID]: {
+    variants: FOOTER_VARIANTS,
+    texts: ["standard", "long"],
+    // "long" earns its place here: a registered address is the field nobody shortens, and the
+    // inline composition gives it seven columns to overflow out of.
+    sections: (cover, variantId, text) => [cover, footerSection(variantId, text)],
+  },
 };
+
+/** "Pie de página" with every detail ADR 0019 offers, which is the widest it ever gets. */
+function footerSection(variantId: string, text: TextCase): Section {
+  const long = text === "long";
+  const line = (id: string, slot: string, value: string) =>
+    ({
+      id,
+      role: "body",
+      hidden: false,
+      slot,
+      value: { kind: "text", text: value },
+    }) as ContentElement;
+  return {
+    id: "sec-footer",
+    preset: { catalogId: FOOTER_ID, variantId },
+    source: "catalog",
+    layout: null,
+    content: [
+      line("el-businessName", "businessName", "© Barbería El Corte"),
+      line("el-owner", "owner", long ? "Rosario Mendoza Villanueva" : "Rosario M."),
+      line("el-taxId", "taxId", "12345678Z"),
+      line(
+        "el-address",
+        "address",
+        long
+          ? "Calle Virgen de los Remedios 24, 3.º izquierda, 29400 Ronda (Málaga), España"
+          : "Calle Espinel 24, Ronda",
+      ),
+      line("el-email", "email", "hola@barberiaelcorte.example"),
+    ],
+  };
+}
 
 /**
  * "Opiniones" with two quotes, the second of them anonymous — an author hidden rather than

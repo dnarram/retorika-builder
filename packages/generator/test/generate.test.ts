@@ -10,6 +10,7 @@ import {
   type Answers,
   contactSectionFor,
   EMPTY_ANSWERS,
+  footerSectionFor,
   generate,
   generateVariants,
   VARIANTS,
@@ -308,6 +309,47 @@ describe("'que vengan al local' (question 5, the fifth answer)", () => {
     const cover = findSection(generate(calling).document, "cover");
     const primary = cover.content.find((el) => el.slot === "primaryAction");
     expect(primary?.value?.kind === "link" && primary.value.href).toBe("tel:+34600000000");
+  });
+});
+
+describe("the footer (ADR 0019)", () => {
+  it("is generated for every site, because it needs only question 1", () => {
+    // Question 1 is the one the questionnaire insists on, so there is never a site whose footer
+    // cannot be built — unlike the contact section, which needs a destination.
+    const minimal = generate(MINIMAL).document;
+    expect(sectionsOf(minimal).some((s) => s.preset.catalogId === "footer")).toBe(true);
+  });
+
+  it("is the last section on the page", () => {
+    const sections = sectionsOf(generate(MINIMAL).document);
+    expect(sections[sections.length - 1]?.preset.catalogId).toBe("footer");
+  });
+
+  it("carries the business name and nothing else", () => {
+    // The titular, the NIF, the domicilio and the correo are the owner's to add. Nothing here
+    // invents them, and nothing leaves a marker reading «Escribe aquí tu NIF» on a real page.
+    const footer = findSection(generate(MINIMAL).document, "footer");
+    expect(footer.content.map((element) => element.slot)).toEqual(["businessName"]);
+  });
+
+  it("writes the business name the way a footer does", () => {
+    const footer = findSection(
+      generate(answers({ businessName: "Taberna Santo Domingo", sector: "restaurante-bar" }))
+        .document,
+      "footer",
+    );
+    const value = footer.content[0]?.value;
+    expect(value?.kind === "text" && value.text).toBe("© Taberna Santo Domingo");
+  });
+
+  it("holds no destination, so it can never be what blocks a download", () => {
+    const footer = findSection(generate(MINIMAL).document, "footer");
+    expect(footer.content.every((element) => element.value?.kind === "text")).toBe(true);
+  });
+
+  it("is offered back by footerSectionFor after someone deletes it", () => {
+    const rebuilt = footerSectionFor(MINIMAL);
+    expect(rebuilt.content).toEqual(findSection(generate(MINIMAL).document, "footer").content);
   });
 });
 

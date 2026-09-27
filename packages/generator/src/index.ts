@@ -5,7 +5,7 @@ import {
   type Section,
 } from "@retorika/schema";
 import type { Answers, SectorId } from "./answers.ts";
-import { buildContact, buildCover, buildLocation, buildServices } from "./sections.ts";
+import { buildContact, buildCover, buildFooter, buildLocation, buildServices } from "./sections.ts";
 import { themeFor } from "./theme.ts";
 import { VARIANTS, type VariantChoice } from "./variants.ts";
 
@@ -40,8 +40,9 @@ export function generate(answers: Answers, variant: VariantChoice = VARIANTS[0])
   const services = buildServices(answers, sector, variant.services);
   const location = buildLocation(answers, sector);
   const contact = buildContact(answers, sector);
+  const footer = buildFooter(answers);
 
-  const sections = [cover, services, location, contact].filter((s) => s !== undefined);
+  const sections = [cover, services, location, contact, footer].filter((s) => s !== undefined);
 
   const document: RetorikaDocument = {
     schemaVersion: SCHEMA_VERSION,
@@ -80,6 +81,16 @@ export function generate(answers: Answers, variant: VariantChoice = VARIANTS[0])
  */
 export function contactSectionFor(answers: Answers): Section | undefined {
   return buildContact(answers, effectiveSector(answers));
+}
+
+/**
+ * The footer these answers produce — always one, since it needs only the business name, which
+ * question 1 requires. Exposed beside `contactSectionFor` so the editor can offer it back from
+ * the "Añadir sección aquí" pill after someone deletes it, without reaching for `blankSection`
+ * and getting marker text where ADR 0019 says there must be none.
+ */
+export function footerSectionFor(answers: Answers): Section {
+  return buildFooter(answers);
 }
 
 /** The three real compositions, for the "elige por dónde empezar" screen. */

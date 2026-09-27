@@ -144,6 +144,7 @@
   "editor.addSection.title": "¿Qué sección añades?",
   "editor.addSection.close": "Cerrar",
   "editor.addSection.contactUnavailable": "«Contacto y reservas» no está en la lista: en la pregunta 5 no diste un teléfono, un WhatsApp, un enlace de reservas ni un correo al que pueda llevar su botón.",
+  "editor.footerIdentity": "Las webs de negocios suelen identificar a su titular. Si tienes dudas, consúltalo con tu gestoría.",
   "editor.placeholder.one": "Queda 1 texto de ejemplo sin cambiar. Puedes descargar igualmente, pero saldrá tal cual en tu web.",
   "editor.placeholder.many": "Quedan {count} textos de ejemplo sin cambiar. Puedes descargar igualmente, pero saldrán tal cual en tu web.",
   "editor.toast.deleted": "Has borrado la sección «{name}»",

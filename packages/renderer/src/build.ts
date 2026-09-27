@@ -1,4 +1,4 @@
-import { COVER_ID, presetFor } from "@retorika/catalog";
+import { COVER_ID, FOOTER_ID, presetFor } from "@retorika/catalog";
 import {
   type ContentElement,
   type Placement,
@@ -218,8 +218,17 @@ function sectionNode(section: Section, options: RenderOptions): RenderNode {
     ...emitted.map(({ node }) => node),
   ];
 
+  // `<footer>` for the footer, `<section>` for everything else. The same shape of correction
+  // issue #19 made for the cover's tagline: markup that says what the thing is rather than what
+  // the renderer happens to emit for everything. The class stays `.rb-section`, so every rule
+  // and every `[data-section]` query is untouched.
+  //
+  // It is not the page's `contentinfo` landmark, and that is worth saying plainly: a `<footer>`
+  // only becomes one as a direct child of `<body>`, and this sits inside `<main>` like every
+  // other section. Moving it out is a change to how a page is assembled rather than to how a
+  // section is drawn, and it has not been made.
   return element(
-    "section",
+    section.preset.catalogId === FOOTER_ID ? "footer" : "section",
     {
       // The anchor, and deliberately the section's own id rather than a slug of its Spanish
       // name: a slug would have to come from the catalog's locale, and this package may not
