@@ -123,3 +123,27 @@ Two specifics for the sector list:
 **How he named his own trade, unprompted:** «Restaurante», «negocio familiar», «bar de toda la
 vida». The list's label for it is "Restaurante y bar", which contains the first and the last of
 those.
+
+## Evidence from session 2 (27 September 2026)
+
+> Source: `docs/sessions/2026-09-27-conchi.md`.
+
+**The questionnaire was not misunderstood, for the second time in two sessions.** «El cliente no
+hizo preguntas y usó correctamente la app.» Five screens, **two minutes**, no hesitation recorded
+and nothing explained or demonstrated.
+
+Two sessions is not a sample, but it is both of the ones this project planned, and neither found
+the thing ADR 0017 was most afraid of.
+
+**What the second session leaves open about this ADR, rather than closing:**
+
+- **Whether the sector list works was not observed this time.** Whether she found her trade among
+  the ten, and whether she read the grid or used the search field, is not on record. The first
+  session answered it once («lo encontró», «leyó la rejilla»); this one adds nothing to it, and
+  `packages/catalog/src/search.ts`'s aliases have now gone two sessions without being exercised by
+  anybody.
+- **Two minutes may be the finding, not the reassurance.** Asked what the site lacked, Conchi
+  wanted texts that «hacen soñar con el plato» — and the questionnaire asks nothing that could
+  produce one. Five questions that take two minutes cannot collect what hostelería copy needs to
+  be written from. That is the other half of ADR 0009's finding, and it lands here: the bank can
+  only be as specific as the answers it is given.

@@ -85,3 +85,30 @@ Noted now because [ADR 0018](0018-own-cover-photo-before-phase-2.md) moves anoth
 same list, and an undocumented precedent is worth less than a documented one when the next person
 asks whether these boundaries mean anything.
 
+## Both sessions have now happened (27 September 2026)
+
+This ADR crossed a gate on one promise, and it is the one worth checking first:
+
+> «If the first session shows the **questionnaire itself** is misunderstood — that people look for
+> their exact trade rather than their sector, or believe question 3's suggestions are already
+> ticked — that is a finding about the screens, and the screens change before anything else is
+> built on top of them.»
+
+**Neither session showed it.** Taberna (25 September) recorded no doubts on any of the seven
+screens. Conchi (27 September) asked no questions at all and finished the five in two minutes
+(`docs/sessions/2026-09-27-conchi.md`). The screens stand, and everything built on top of them in
+sprint 3 was built on ground this ADR gambled on and did not lose.
+
+**What the gamble cost, recorded now that the bill is in.** This ADR named it: the sessions were
+split rather than run first, and the two are «two experiments of one subject each» rather than a
+comparable pair. Two prices were actually paid:
+
+- **The first session was not timed**, so the phase 1 acceptance criterion went unmeasured for two
+  days longer than planned and rested entirely on the second.
+- **The first session's contact question was paraphrased**, which cost ADR 0016 an admissible
+  answer from a real owner — one that pointed the same way the admissible one later did. That ADR
+  needed two and got one.
+
+Neither is fatal and both were avoidable. The gate was worth crossing; the discipline inside the
+sessions is what the crossing depended on, and that is the part that slipped.
+

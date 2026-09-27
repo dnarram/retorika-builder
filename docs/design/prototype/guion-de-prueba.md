@@ -25,6 +25,17 @@ English; every line meant to be spoken is quoted in Spanish, and is said as writ
 > unmeasured** and the second session carries it. And the screen-07 contact question **was not
 > asked word for word** the first time, which is why the second one must be (see ADR 0016).
 
+> **Both sessions are done (27 September 2026).** Conchi ran on 27 September against the deployed
+> editor, written up in `docs/sessions/2026-09-27-conchi.md`. She was asked the screen-07 contact
+> question **word for word**, which is what made it admissible and what fired ADR 0016's reopening
+> condition. She was also timed to the download — two minutes to the end of the questionnaire,
+> eight to the ZIP — which is the phase 1 acceptance criterion, measured for the first time.
+>
+> This script has no session left to run. What it is now is the record of how these two were
+> asked, and the template for however the next ones are: **the paraphrase in the first session
+> cost a real answer**, which is the one lesson in here worth carrying forward more than any
+> wording it contains.
+
 The point of the session is to find out where someone hesitates. A session where the owner
 understood everything and liked it all teaches nothing and probably means the questions were
 leading.
