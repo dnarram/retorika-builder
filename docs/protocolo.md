@@ -970,6 +970,23 @@ observa, no se pregunta.
 > seguir viendo maquetas. `apps/editor` empieza sin que las sesiones hayan concluido: la primera
 > se hace esta semana, antes de escribir el banco de textos, y la segunda después, ya con el
 > producto delante. El criterio de aceptación de la Fase 1 no cambia.
+>
+> **El criterio se ha medido (27 de septiembre de 2026).** Segunda sesión, con Conchi, contra el
+> editor desplegado: **dos minutos** hasta terminar el cuestionario y **ocho minutos** hasta el ZIP
+> descargado, sin explicación previa, sin ayuda y sin una sola pregunta por su parte. Acta en
+> `docs/sessions/2026-09-27-conchi.md`.
+>
+> Se anota entero, porque la misma sesión dice dos cosas y quedarse con una sería elegir mitad:
+> **monta la web en ocho minutos, y no la publicaría tal cual.** Lo que le falta —color, varias
+> páginas navegables, negritas, mover imágenes— es Fase 2 en su mayor parte, salvo dos cosas que
+> no están planificadas: el formato dentro de un texto, que necesitaría cambiar el esquema y su
+> propio ADR, y mover imágenes libremente, que choca de frente con la regla 4 del modelo de
+> documento.
+>
+> El criterio, tal y como está escrito, pregunta si alguien de fuera **monta** la web sin ayuda en
+> menos de diez minutos. No pregunta si le convence. Lo primero está medido; lo segundo, no. **Dar
+> la Fase 1 por aceptada es decisión de dirección, no de desarrollo**, y esto es la medición, no
+> la aceptación.
 
 ## Fase 2 — El producto completo
 

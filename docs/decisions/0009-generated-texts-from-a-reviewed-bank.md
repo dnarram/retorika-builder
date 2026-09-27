@@ -132,3 +132,39 @@ advance. Three things in it are worth separating, because they are not the same 
 «bar de toda la vida», «comida con sabor», «comida tradicional». None of the four appears in
 `packages/copybank/bank/restaurante-bar.json` today. They are recorded here, not added: a bank
 entry written from one owner's words would be that owner's site, not a sector's.
+
+## Evidence from session 2 — and what the two together say (27 September 2026)
+
+> Source: `docs/sessions/2026-09-27-conchi.md`. Two owners, both hostelería, which is what this finding is about: it is
+> evidence about that sector's bank, not about every sector's.
+
+Asked «¿Estos textos suenan a los tuyos?», Conchi answered:
+
+> «Creo que no, me gustarían textos más enfocados a la hostelería. En hostelería es muy importante
+> convencer y hacer soñar con comidas y servicio. Hacer un poco soñar con el plato.»
+
+**Two out of two said the texts do not sound like theirs.** That is the clearest finding either
+session produced about this ADR, and it is the one thing here that no longer rests on a single
+person.
+
+But they said it **differently**, and merging them would lose the useful half:
+
+- **Taberna** wanted them longer and more explanatory — «los míos serían más explicativos, un poco
+  más extensos» — and found the page «vacía y fría».
+- **Conchi** wants them more evocative. The bank *describes a service*; hostelería needs to *sell
+  an experience*.
+
+What they share is that the register is wrong for hostelería. What they do not share is the
+direction of the fix, and a bank rewritten to satisfy one would not satisfy the other.
+
+**This still does not license inventing.** This ADR's own reasoning stands: a short true sentence
+beats a long invented one, and nothing may claim what the owner did not say. «Hacer soñar con el
+plato» is a register, not a licence to describe food nobody mentioned — the bank does not know
+what is on her carta. The honest reading of both answers together is that the *questionnaire* asks
+for too little to write hostelería copy from, which makes this a finding about ADR 0010 as much as
+about this one.
+
+**Her vocabulary, recorded and not added to the bank** (same rule as the first session — a bank
+entry written from one owner's words would be that owner's site, not a sector's): «hostelería»,
+«convencer», «hacer soñar con comidas y servicio», «hacer soñar con el plato», «platos», «la
+carta».

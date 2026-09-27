@@ -159,3 +159,19 @@ text problem.**
 **This does not close the photo bank.** He said he would add his own photo; a sector bank is for
 the owner who will not, and for the site that has to look finished before anyone uploads anything.
 Both remain needed, and they are different features.
+
+## Session 2 recorded nothing about this (27 September 2026)
+
+> Source: `docs/sessions/2026-09-27-conchi.md`.
+
+Stated rather than passed over, because the absence is the finding.
+
+The cover photo upload shipped on 23 September (ADR 0018), four days before this session, and
+**whether Conchi used it is not on record.** She asked for «la posibilidad de mover libremente las
+imágenes» — which is about *moving* an image, not about replacing one, and is not the same as
+having tried the upload and found it.
+
+So the question this ADR most wants answered by a real owner — does someone reach for their own
+photo unprompted — has one answer, from the first session («entiendo que debo añadir mi propia
+foto para que luzca profesional»), and still only one. The photo bank stays needed and stays
+unbuilt.
