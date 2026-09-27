@@ -120,8 +120,41 @@ jobs:
         run: pnpm exec playwright install-deps chromium
 
       # axe (serious/critical, and every contrast finding, measured or not) and horizontal
-      # overflow at 320/768/1280, over every preset x variant x palette x type pair.
+      # overflow at 320/768/1280, over the three sets issue #25 split this into: geometry,
+      # contrast/fonts, and long text.
       - run: pnpm test:a11y
+
+  e2e:
+    name: e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Protocol Part 9.2: "El job `e2e` se limita a los pull request porque los minutos de
+    # Actions son finitos y Playwright es lo más lento de todo." A push straight to main skips
+    # it — every push that matters had a pull request first, which already ran this.
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+
+      # The same cache block as a11y-size, verbatim: same browser, same version, same reason
+      # to keep it — a Chromium download on every run would make this the slowest job here by
+      # a wide margin instead of a comparable one.
+      - name: Read the Playwright version
+        id: playwright
+        run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      - if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install --with-deps chromium
+      - if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm exec playwright install-deps chromium
+
+      # Three of the five critical flows the protocol names — see the doc comment at the top
+      # of apps/editor/e2e/critical-flows.e2e.test.ts for which two are missing and why.
+      - run: pnpm e2e
 
   security:
     name: security
