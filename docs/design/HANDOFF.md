@@ -241,7 +241,7 @@ Google listing can simply be incomplete.
 |---|---|---|
 | The price | Direction | Placeholder `XX €` everywhere; blocks nothing in the design. **Both sessions now answered it, and they overlap at 50 €.** 25 Sep: Taberna — «Ahora mismo no pagaría nada. Pero por una página web profesional podría pagar 50 euros (pago a un extra esta cantidad por un día de trabajo)», anchored on a day of somebody's labour rather than on other websites. 27 Sep: Conchi — «50-100 euros». Two owners, same sector, both starting at 50 and neither asked what it cost to build. Two people are still not a price |
 | Sector text and photo bank per sector | Direction | ADR 0009 defines the reviewed text bank; the photo bank is still needed for the automatic fill |
-| Who issues the invoice and how VAT is handled | Direction | Needed before the first euro is charged |
+| Who issues the invoice and how VAT is handled | Direction | Needed before the first euro is charged. **Written out as six separate questions in [`billing-questions.md`](billing-questions.md)**, each with what it blocks — this one line turned out to hide six decisions that change different code, which is why charging is not in sprint 4 |
 | D9 as a written ADR | Development | **Resolved:** recorded as ADR 0013 (accepted, 23 Sep 2026), which also rejected D9's premise |
 
 ---

@@ -44,8 +44,13 @@ Last reviewed: 28 September 2026, at the close of sprint 3.
 
 ## No home but this one
 
-- **Accounts and persistence with Supabase, and charging** — the invoice and how VAT is handled.
-  The largest remaining piece of phase 2, and the one the price question above is waiting on.
+- **Accounts and persistence with Supabase, and charging.** The largest remaining piece of phase 2.
+  The mechanism is decided — Stripe, single payment, Checkout, idempotent webhook, three stored
+  states (protocol Part 15) — and what is not is now written out as six questions for direction in
+  [`docs/design/billing-questions.md`](../design/billing-questions.md), which is why charging is
+  not in sprint 4. One of the six is ours to raise rather than theirs to remember: **once the ZIP
+  is handed over there is nothing to switch off** (ADR 0001), so what a refund can even mean has to
+  be decided before the terms of use are written, not after.
 - **The three catalog sections still missing** of the dossier's nine: Fotos de trabajos, Precios
   (see #51) and Equipo. Six are built.
 - **Two of the five critical Playwright flows cannot exist yet** — *cambio de paleta* has no

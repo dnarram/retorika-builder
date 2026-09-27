@@ -56,6 +56,7 @@ export {
   mintSectionId,
   moveSection,
 } from "./sections.ts";
+export { setTheme } from "./theme.ts";
 export type { StyleValue, Theme, TokenKey } from "./tokens.ts";
 export {
   SORTED_TOKEN_KEYS,
