@@ -341,8 +341,32 @@ function baseDocument(): RetorikaDocument {
   return parseDocument(raw);
 }
 
-/** Every preset x every variant x every palette (x every type pair). This is Part 8.5, as code. */
-export function allCombinations(): Combination[] {
+/**
+ * The full product — every preset x every variant x every text case x every palette x every
+ * type pair — kept as a private builder rather than exported. Issue #25 measured it: two
+ * sections gave 409 tests, four gave 649, and the ninth section the concept dossier promises
+ * would have landed "around 1,400 tests and well over two minutes" — the point where the suite
+ * stops being run before pushing and CI becomes the only place it happens, which is how a
+ * harness rots. Landing the sixth section (`footer`, sprint 3 day 5) put the count at 1,033 and
+ * closed the "before the sixth section" window that issue named as the moment to act.
+ *
+ * The product is redundant in a specific way the issue names: contrast is a property of a
+ * palette and a role, not of a section — `color.primary` on `color.surface` has the same ratio
+ * in the cover as in the contact section, and `packages/tokens/test/contrast.test.ts` already
+ * asserts every pair arithmetically. Overflow is a property of a typeface, a width and a
+ * geometry, not of a palette — the long-text case that found composition B's 213px column would
+ * have found it in any palette. Multiplying the two together re-tests the same fact from every
+ * angle instead of testing two different facts once each.
+ *
+ * `allWithFilters` stays private and does the counting; `geometryCombinations`,
+ * `contrastCombinations` and `longTextCombinations` below are three smaller draws from it, each
+ * built to answer one question rather than all of them at once.
+ */
+function allWithFilters(
+  select: (catalogId: string) => boolean,
+  palettes: typeof PALETTES,
+  typePairs: typeof TYPE_PAIRS,
+): Combination[] {
   const base = baseDocument();
   const [page] = base.pages;
   const [section] = page?.sections ?? [];
@@ -356,10 +380,11 @@ export function allCombinations(): Combination[] {
         `Catalog preset "${catalogId}" has no entry in browser-fixtures.ts, so no browser check covers it`,
       );
     }
+    if (!select(catalogId)) continue;
     for (const variantId of preset.variants) {
       for (const text of preset.texts) {
-        for (const palette of PALETTES) {
-          for (const typePair of TYPE_PAIRS) {
+        for (const palette of palettes) {
+          for (const typePair of typePairs) {
             const id = [
               catalogId,
               variantId,
@@ -391,9 +416,65 @@ export function allCombinations(): Combination[] {
   return combinations;
 }
 
-/** The combinations axe runs over: the long-text case is for the overflow suite only. */
-export function standardCombinations(): Combination[] {
-  return allCombinations().filter((combination) => combination.text === "standard");
+/** The palette and type pair every set below holds fixed when it is not the thing under test:
+ * the first of each, which is what a real "elige por dónde empezar" card starts on. Read once,
+ * not indexed at each call site, so a catalog shipped with an empty list fails here — loudly,
+ * at import time — rather than quietly running every "fixed" set with zero combinations. */
+function first<T>(items: readonly T[], name: string): readonly [T] {
+  const item = items[0];
+  if (!item) throw new Error(`browser-fixtures.ts: ${name} is empty`);
+  return [item];
+}
+const FIXED_PALETTE = first(PALETTES, "PALETTES");
+const FIXED_TYPE_PAIR = first(TYPE_PAIRS, "TYPE_PAIRS");
+
+/**
+ * Set 1 of 3 (issue #25) — geometry: every section, every variant, one palette, one type pair,
+ * standard text only. This is what varies per section — a composition's columns, a card grid's
+ * wrapping, a list's item count — so this is the set both the overflow suite and axe's
+ * structural rules (heading order, landmark roles, missing alt text) run over.
+ *
+ * Rough size: 6 sections x ~2.2 variants average x 1 palette x 1 type pair ≈ 13 documents.
+ */
+export function geometryCombinations(): Combination[] {
+  return allWithFilters(() => true, FIXED_PALETTE, FIXED_TYPE_PAIR).filter(
+    (combination) => combination.text === "standard",
+  );
+}
+
+/**
+ * Set 2 of 3 (issue #25) — contrast and fonts: every palette, every type pair, on one
+ * composition, standard text only. Colour does not depend on which section is drawn, so the
+ * section here is fixed instead of varied.
+ *
+ * The issue's own wording is "one section that uses every text role"; no single preset covers
+ * all of them — `cover` reaches heading, subheading, body, button and link but not list, and
+ * `services` is the one that adds list without duplicating the rest. So this set fixes on
+ * `cover/image-right` (`COVER_ID`'s first variant), which is the widest single-section role
+ * coverage the catalog has, and accepts the small gap: a list item's heading and body reuse the
+ * same CSS rules (`.rb-section h3`, `.rb-section p`) as this section's own heading and body, so
+ * the colour pair those rules resolve to is exercised here even though `role: "list"` itself is
+ * not drawn.
+ *
+ * Rough size: 4 palettes x 3 type pairs x 1 section/variant ≈ 12 documents.
+ */
+export function contrastCombinations(): Combination[] {
+  return allWithFilters((catalogId) => catalogId === COVER_ID, PALETTES, TYPE_PAIRS)
+    .filter((combination) => combination.text === "standard")
+    .filter((combination) => combination.variantId === "image-right");
+}
+
+/**
+ * Set 3 of 3 (issue #25) — long text: unchanged from what the harness already measured, since
+ * the issue's own case for it — "every composition that has a narrow column, in every type
+ * pair, since that is where a word overflows" — was never redundant with the other two. A wide
+ * font is what pushes a word past its box, which is why type pairs vary here and palettes do
+ * not: colour plays no part in whether text fits.
+ */
+export function longTextCombinations(): Combination[] {
+  return allWithFilters(() => true, FIXED_PALETTE, TYPE_PAIRS).filter(
+    (combination) => combination.text === "long",
+  );
 }
 
 /** A made-up origin the page is served from; nothing ever resolves it over the network. */

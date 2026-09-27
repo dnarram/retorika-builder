@@ -15,6 +15,7 @@
     "test:golden": "vitest run golden",
     "test:a11y": "RETORIKA_A11Y=1 vitest run --project a11y --maxWorkers 2",
     "test:coverage": "vitest run --coverage",
+    "e2e": "RETORIKA_E2E=1 vitest run --project e2e --maxWorkers 1",
     "typecheck": "tsc --build --force",
     "build:editor": "pnpm --filter @retorika/editor build",
     "lint": "biome check .",

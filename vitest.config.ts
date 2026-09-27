@@ -91,8 +91,33 @@ export default defineConfig({
           root: "./apps/editor",
           // Route handlers only: Request, Response, Blob are Node's, no DOM needed.
           environment: "node",
+          // The critical flows belong to the "e2e" project below — same reason the renderer
+          // project excludes its own browser suites: the default include glob for "*.test.ts"
+          // would otherwise also pick up "*.e2e.test.ts" and try to launch a browser and a real
+          // `next dev` server on every plain `pnpm test`.
+          exclude: [...configDefaults.exclude, "e2e/**/*.e2e.test.ts"],
         },
       },
+      // The critical flows against a real, running app (docs/protocolo.md Part 9.2). Declared
+      // only when RETORIKA_E2E=1, which `pnpm e2e` sets — the same reason the "a11y" project
+      // above is conditional: an unconditional one would make every plain `pnpm test` spawn a
+      // Next server and a Chromium instance.
+      ...(process.env["RETORIKA_E2E"] === "1"
+        ? [
+            {
+              test: {
+                name: "e2e",
+                root: "./apps/editor",
+                include: ["e2e/**/*.e2e.test.ts"],
+                environment: "node",
+                // A real next dev boot plus five questionnaire screens plus a download; slow
+                // compared to a unit, and the whole file shares one beforeAll/afterAll.
+                testTimeout: 60_000,
+                hookTimeout: 90_000,
+              },
+            },
+          ]
+        : []),
     ],
     // Protocol Part 18: one thread per core chokes this machine.
     maxWorkers: 4,
