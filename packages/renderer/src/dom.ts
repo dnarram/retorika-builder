@@ -20,8 +20,10 @@ export function nodeToDom(node: RenderNode, doc: Document): Node {
   return el;
 }
 
-export function treeToFragment(node: RenderNode, doc: Document): DocumentFragment {
+/** A fragment holding every root the page has — since sprint 5 day 5 that is the menu and
+ * `<main>`, rather than `<main>` alone. */
+export function treeToFragment(nodes: readonly RenderNode[], doc: Document): DocumentFragment {
   const fragment = doc.createDocumentFragment();
-  fragment.appendChild(nodeToDom(node, doc));
+  for (const node of nodes) fragment.appendChild(nodeToDom(node, doc));
   return fragment;
 }

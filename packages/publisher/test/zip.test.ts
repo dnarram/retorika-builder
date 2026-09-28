@@ -1,7 +1,12 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { crc32, inflateRawSync } from "node:zlib";
-import { invariantTestName, parseDocument, type RetorikaDocument } from "@retorika/schema";
+import {
+  flattenElements,
+  invariantTestName,
+  parseDocument,
+  type RetorikaDocument,
+} from "@retorika/schema";
 import { describe, expect, it } from "vitest";
 import { buildSite, bundleToZip, type SiteBundle } from "../src/index.ts";
 
@@ -22,10 +27,12 @@ function bundleFor(name: string, document: RetorikaDocument): SiteBundle {
   const assets = new Map<string, Uint8Array>();
   for (const page of document.pages) {
     for (const section of page.sections) {
-      for (const el of section.content) {
-        if (el.value?.kind === "image") {
-          assets.set(el.value.src, new Uint8Array(readFileSync(join(FIXTURES_DIR, el.value.src))));
-        }
+      // A `data:` URI is a complete image inline in the HTML, not a file the bundle needs — the
+      // same skip `buildSite`'s own `toBundle` makes. Reached the day a fixture arrived carrying
+      // the catalog's placeholder photograph.
+      for (const el of flattenElements(section.content)) {
+        if (el.value?.kind !== "image" || el.value.src.startsWith("data:")) continue;
+        assets.set(el.value.src, new Uint8Array(readFileSync(join(FIXTURES_DIR, el.value.src))));
       }
     }
   }

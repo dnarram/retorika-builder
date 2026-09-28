@@ -34,7 +34,7 @@ export function nodeToHtml(node: RenderNode, indent = 0): string {
  * ADR 0001: the CSS is inlined and there is no script tag, so the file works when opened
  * by double-clicking it, with no server and no network.
  */
-export function pageToHtml(body: RenderNode, css: string, title: string): string {
+export function pageToHtml(body: readonly RenderNode[], css: string, title: string): string {
   return [
     "<!doctype html>",
     '<html lang="es">',
@@ -47,7 +47,7 @@ export function pageToHtml(body: RenderNode, css: string, title: string): string
     "</style>",
     "</head>",
     "<body>",
-    nodeToHtml(body),
+    ...body.map((node) => nodeToHtml(node)),
     "</body>",
     "</html>",
     "",

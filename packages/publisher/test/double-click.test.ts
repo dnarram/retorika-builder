@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   type ContentElement,
+  flattenElements,
   type Page,
   parseDocument,
   type RetorikaDocument,
@@ -37,10 +38,12 @@ function bundleFor(name: string, document: RetorikaDocument): SiteBundle {
   const assets = new Map<string, Uint8Array>();
   for (const page of document.pages) {
     for (const section of page.sections) {
-      for (const el of section.content) {
-        if (el.value?.kind === "image") {
-          assets.set(el.value.src, new Uint8Array(readFileSync(join(FIXTURES_DIR, el.value.src))));
-        }
+      // A `data:` URI is a complete image inline in the HTML, not a file the bundle needs — the
+      // same skip `buildSite`'s own `toBundle` makes. Reached the day a fixture arrived carrying
+      // the catalog's placeholder photograph.
+      for (const el of flattenElements(section.content)) {
+        if (el.value?.kind !== "image" || el.value.src.startsWith("data:")) continue;
+        assets.set(el.value.src, new Uint8Array(readFileSync(join(FIXTURES_DIR, el.value.src))));
       }
     }
   }
@@ -79,6 +82,9 @@ function doubleClickProblems(bundle: SiteBundle): string[] {
       const where = `${page.path}: ${name}="${value}"`;
 
       if (name === "src") {
+        // A `data:` image carries its own bytes and resolves against nothing, so it is safe from
+        // `file://` by construction — `safeUrl` has already restricted it to `data:image/…`.
+        if (value.startsWith("data:image/")) continue;
         if (value.startsWith("/") || SCHEME.test(value) || value.includes("..")) {
           problems.push(`${where} is not a relative bundle path`);
         } else if (!paths.has(value)) {

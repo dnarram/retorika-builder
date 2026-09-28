@@ -242,6 +242,20 @@ part that must not move — the interface tokens and their separation from the p
   three entries upwards. The strip in the mockup is drawn inside the canvas card as part of the
   *preview*, which is exactly what it now is.
 
+  **Two divergences from that strip, built on sprint 5 day 5 and recorded here rather than only in
+  a source comment:**
+
+  - **«Inicio» appears on every page except the home page**, where the mockup draws it always. On
+    the home page a link to the page you are already reading does nothing, and a link that does
+    nothing is the thing this product refuses everywhere else. Off the home page it is not
+    decoration: a site whose every home section has been converted would otherwise offer, from one
+    of those pages, a strip of other pages and no way back. ADR 0023 settles what the menu
+    *contains* and says nothing about what it looks like from another page; this is that gap filled.
+  - **No `Reserva` entry.** The mockup's last item is the main call to action repeated in the
+    strip. The menu is derived from sections and pages, and the booking button is neither — it is a
+    slot inside the contact section. Putting it in the menu would mean the menu knowing about one
+    particular slot of one particular preset, which is the opposite of deriving.
+
 - **Not implemented, and not planned: mockup 13's «Avanzado: colores exactos y tamaños».** The row
   at the foot of the style panel opens a free colour picker and size controls. There is no such
   control in the shipped panel and there is not meant to be. This review already said "a palette

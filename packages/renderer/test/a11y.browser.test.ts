@@ -107,3 +107,65 @@ describe("axe — geometry (every section, one palette, structural rules)", () =
 describe("axe — contrast (every palette, every type pair, one composition)", () => {
   checkAxe(contrastCombinations());
 });
+
+/**
+ * Exactly one navigation landmark at each width — the check ADR 0023 asks for by name, and the one
+ * that separates "two menus alternated" from "two menus announced".
+ *
+ * The menu is emitted twice, a wide `<nav>` and a narrow `<details>`, because keeping a single
+ * `<details>` open on desktop depends on `::details-content`, which is far newer than the browsers
+ * a published site has to survive. Alternating them with `display: none` is only correct if the one
+ * that does not apply is genuinely gone from the accessibility tree, and that is not something the
+ * markup can promise — a real browser has to say so.
+ *
+ * Read from Playwright's accessibility snapshot rather than by counting `<nav>` elements or
+ * inspecting CSS: the snapshot is the tree a screen reader is handed, which is the thing the claim
+ * is actually about.
+ */
+describe("the menu is announced once, whatever the width", () => {
+  const withMenu = geometryCombinations().filter((c) => c.catalogId === "teaser");
+
+  for (const c of withMenu) {
+    for (const width of WIDTHS) {
+      it(`${c.id} @ ${width}px has one navigation landmark`, async () => {
+        const page = await openCombination(browser, c, width);
+        try {
+          // The disclosure is opened first at the narrow width: a closed `<details>` hides its own
+          // contents, so the landmark inside it is correctly absent until somebody opens it. What
+          // is being checked here is that opening it reveals *one* menu and not a second copy of
+          // the one the wide layout was already showing.
+          await page.evaluate(() => {
+            for (const d of document.querySelectorAll("details.rb-nav-narrow")) {
+              (d as HTMLDetailsElement).open = true;
+            }
+          });
+
+          // `checkVisibility()` is the browser's own answer to "is this rendered", and a subtree
+          // under `display: none` is exactly what it says no to — which is also what keeps that
+          // subtree out of the accessibility tree.
+          const announced = await page.evaluate(() =>
+            [...document.querySelectorAll("nav")]
+              .filter((el) => el.checkVisibility())
+              .map((el) => el.getAttribute("aria-label") ?? ""),
+          );
+          expect(announced, `${c.id} @ ${width}px announced ${announced.length}`).toEqual([
+            "Secciones",
+          ]);
+
+          // And the one announced is the one the width calls for.
+          const visible = await page.evaluate(() => ({
+            wide: [...document.querySelectorAll(".rb-nav-wide")].filter((el) =>
+              el.checkVisibility(),
+            ).length,
+            narrow: [...document.querySelectorAll(".rb-nav-narrow")].filter((el) =>
+              el.checkVisibility(),
+            ).length,
+          }));
+          expect(visible).toEqual(width <= 720 ? { wide: 0, narrow: 1 } : { wide: 1, narrow: 0 });
+        } finally {
+          await closeCombination(page);
+        }
+      });
+    }
+  }
+});

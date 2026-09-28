@@ -3,17 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Barbería El Corte</title>
+<title>Taberna Santo Domingo</title>
 <style>
 :root {
-  --color-accent: #FF3A72;
-  --color-ink: #0F172A;
-  --color-muted: #475569;
-  --color-primary: #156FE7;
-  --color-secondary: #105CB1;
-  --color-surface: #FFFFFF;
-  --font-body: system-ui, sans-serif;
-  --font-heading: Georgia, serif;
+  --color-accent: #C2410C;
+  --color-ink: #1C1917;
+  --color-muted: #57534E;
+  --color-primary: #9A3412;
+  --color-secondary: #78350F;
+  --color-surface: #FAFAF9;
+  --font-body: Georgia, Cambria, 'Times New Roman', Times, serif;
+  --font-heading: 'Playfair Display', Georgia, 'Times New Roman', serif;
   --radius-lg: 16px;
   --radius-md: 8px;
   --radius-sm: 4px;
@@ -88,50 +88,87 @@ body { margin: 0; font-family: var(--font-body); color: var(--color-ink);
 </style>
 </head>
 <body>
+<nav aria-label="Secciones" class="rb-nav rb-nav-wide">
+  <a href="./que-ponemos.html">
+    Qué ponemos
+  </a>
+  <a href="./donde-estamos.html">
+    Dónde estamos
+  </a>
+  <a href="#sec-contact">
+    Te esperamos
+  </a>
+</nav>
+<details class="rb-nav-narrow">
+  <summary>
+    Menú
+  </summary>
+  <nav aria-label="Secciones" class="rb-nav">
+    <a href="./que-ponemos.html">
+      Qué ponemos
+    </a>
+    <a href="./donde-estamos.html">
+      Dónde estamos
+    </a>
+    <a href="#sec-contact">
+      Te esperamos
+    </a>
+  </nav>
+</details>
 <main class="rb-page" data-page="home">
   <section class="rb-section rb-cover rb-image-right" data-preset="cover" data-section="sec-cover" data-variant="image-right" id="sec-cover">
     <h1 data-id="el-headline" data-role="heading" data-slot="headline" style="grid-column:1/span 6;grid-row:1/span 1">
-      Barbería El Corte
+      Taberna Santo Domingo
     </h1>
     <p class="rb-subtitle" data-id="el-subheadline" data-role="subheading" data-slot="subheadline" style="grid-column:1/span 6;grid-row:2/span 1">
-      Cortes y barbas en Ronda
+      Comer, beber y quedarse un rato
     </p>
     <p data-id="el-body" data-role="body" data-slot="body" style="grid-column:1/span 6;grid-row:3/span 1">
-      Calle Espinel 24, en el centro.
+      Pásate a comer o a tomar algo, con tiempo o de paso.
     </p>
-    <img alt="Interior de la barbería" data-id="el-image" data-role="image" data-slot="image" src="assets/barbershop.svg" style="grid-column:7/span 6;grid-row:1/span 4">
-    <a data-id="el-cta" data-role="button" data-slot="primaryAction" href="tel:+34000000000" role="button" style="grid-column:1/span 3;grid-row:4/span 1">
-      Pedir cita
+    <img alt="Marcador de foto: aquí irá tu foto" data-id="el-image" data-role="image" data-slot="image" src="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201600%20600%22%20role%3D%22img%22%20aria-label%3D%22Tu%20foto%20aqu%C3%AD%22%3E%0A%20%20%3Crect%20width%3D%221600%22%20height%3D%22600%22%20rx%3D%2212%22%20fill%3D%22%23E7EDF6%22%2F%3E%0A%20%20%3Cg%20fill%3D%22none%22%20stroke%3D%22%2394A3B8%22%20stroke-width%3D%226%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%0A%20%20%20%20%3Crect%20x%3D%22712%22%20y%3D%22212%22%20width%3D%22176%22%20height%3D%22130%22%20rx%3D%2212%22%2F%3E%0A%20%20%20%20%3Ccircle%20cx%3D%22759%22%20cy%3D%22252%22%20r%3D%2215%22%2F%3E%0A%20%20%20%20%3Cpath%20d%3D%22M719%20330l54-49%2046%2041%2030-26%2032%2027%22%2F%3E%0A%20%20%3C%2Fg%3E%0A%20%20%3Ctext%20x%3D%22800%22%20y%3D%22410%22%20text-anchor%3D%22middle%22%20font-family%3D%22system-ui%2C%20sans-serif%22%20font-size%3D%2230%22%20fill%3D%22%2364748B%22%3ETu%20foto%20aqu%C3%AD%3C%2Ftext%3E%0A%20%20%3Ctext%20x%3D%22800%22%20y%3D%22452%22%20text-anchor%3D%22middle%22%20font-family%3D%22system-ui%2C%20sans-serif%22%20font-size%3D%2220%22%20fill%3D%22%2364748B%22%3ECuando%20subas%20la%20tuya%2C%20ocupar%C3%A1%20este%20espacio%3C%2Ftext%3E%0A%3C%2Fsvg%3E%0A" style="grid-column:7/span 6;grid-row:1/span 4">
+    <a data-id="el-cta" data-role="button" data-slot="primaryAction" href="https://reservas.example.com/taberna" role="button" style="grid-column:1/span 3;grid-row:4/span 1">
+      Reservar mesa
     </a>
   </section>
-  <section class="rb-section rb-location rb-split" data-preset="location" data-section="sec-location" data-variant="split" id="sec-location">
-    <h2 data-id="el-location-headline" data-role="heading" data-slot="headline" style="grid-column:1/span 6;grid-row:1/span 1">
+  <section class="rb-section rb-teaser rb-stacked" data-preset="teaser" data-section="sec-avance" data-variant="stacked" id="sec-avance">
+    <h2 style="grid-column:1/span 12;grid-row:1/span 1">
+      Qué ponemos
+    </h2>
+    <p style="grid-column:1/span 12;grid-row:2/span 1">
+      Esto es lo que ponemos en Taberna Santo Domingo.
+    </p>
+    <a aria-label="Ver más: Qué ponemos" data-id="el-link" data-role="link" data-slot="link" href="./que-ponemos.html" style="grid-column:1/span 12;grid-row:3/span 1">
+      Ver más
+    </a>
+  </section>
+  <section class="rb-section rb-teaser rb-stacked" data-preset="teaser" data-section="sec-avance-2" data-variant="stacked" id="sec-avance-2">
+    <h2 style="grid-column:1/span 12;grid-row:1/span 1">
       Dónde estamos
     </h2>
-    <p data-id="el-address" data-role="body" data-slot="address" style="grid-column:1/span 6;grid-row:2/span 1">
-      Calle Espinel 24, Ronda (Málaga).
+    <p style="grid-column:1/span 12;grid-row:2/span 1">
+      Cta. de Santo Domingo, 2, Ronda
     </p>
-    <a data-id="el-map" data-role="map" data-slot="map" href="https://www.openstreetmap.org/?mlat=36.7419&amp;mlon=-5.1673" style="grid-column:7/span 6;grid-row:3/span 1">
-      Ver en el mapa
+    <a aria-label="Ver más: Dónde estamos" data-id="el-link" data-role="link" data-slot="link" href="./donde-estamos.html" style="grid-column:1/span 12;grid-row:3/span 1">
+      Ver más
     </a>
   </section>
   <section class="rb-section rb-contact rb-stacked" data-preset="contact" data-section="sec-contact" data-variant="stacked" id="sec-contact">
     <h2 data-id="el-contact-headline" data-role="heading" data-slot="headline" style="grid-column:1/span 12;grid-row:1/span 1">
-      Pide tu cita
+      Te esperamos
     </h2>
     <p data-id="el-contact-body" data-role="body" data-slot="body" style="grid-column:1/span 8;grid-row:2/span 1">
-      Llámanos o escríbenos por WhatsApp.
+      Pásate cuando quieras. Y si prefieres avisar antes, aquí nos tienes.
     </p>
-    <a data-id="el-call" data-role="button" data-slot="primaryAction" href="tel:+34000000000" role="button" style="grid-column:1/span 3;grid-row:3/span 1">
-      Llamar
-    </a>
-    <a data-id="el-whatsapp" data-role="link" data-slot="secondaryAction" href="https://wa.me/34000000000" style="grid-column:4/span 3;grid-row:3/span 1">
-      WhatsApp
-    </a>
-    <a data-id="el-email" data-role="link" data-slot="secondaryAction" href="mailto:hola@example.com" style="grid-column:7/span 3;grid-row:3/span 1">
-      Escríbenos
+    <a data-id="el-primary-action" data-role="button" data-slot="primaryAction" href="https://reservas.example.com/taberna" role="button" style="grid-column:1/span 3;grid-row:3/span 1">
+      Reservar mesa
     </a>
   </section>
+  <footer class="rb-section rb-footer rb-stacked" data-preset="footer" data-section="sec-footer" data-variant="stacked" id="sec-footer">
+    <p data-id="el-businessName" data-role="body" data-slot="businessName" style="grid-column:1/span 12;grid-row:1/span 1">
+      © Taberna Santo Domingo
+    </p>
+  </footer>
 </main>
 </body>
 </html>
