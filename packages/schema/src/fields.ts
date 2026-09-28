@@ -212,7 +212,15 @@ function replaceImageSrc(
     if (element.id === elementId) {
       if (element.value?.kind !== "image") return element;
       found = true;
-      return { ...element, value: { ...element.value, src } };
+      // **Replacing the photo removes `sample`** — ADR 0011 states it in one line, and this is the
+      // only place that can keep it true. A new src is by definition the owner's own photo, and a
+      // document still claiming it is a sample would make the editor label it «Foto de ejemplo»,
+      // count it as missing and warn about it before a download, all of them wrong and all of them
+      // in the direction that makes the warning untrustworthy. Destructured out rather than set to
+      // undefined: the strict schema and `exactOptionalPropertyTypes` both treat an absent key and
+      // a present-but-undefined one as different things.
+      const { sample: _replaced, ...value } = element.value;
+      return { ...element, value: { ...value, src } };
     }
     if (!element.items) return element;
     let changedItems = false;

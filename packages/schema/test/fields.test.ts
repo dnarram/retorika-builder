@@ -349,3 +349,75 @@ describe("setElementImageSrc", () => {
     ).toThrow(/sec-nope/);
   });
 });
+
+describe("replacing a photo stops it being a sample", () => {
+  /**
+   * ADR 0011 states this in one line — «Replacing the photo removes the field» — and prose is not
+   * a mechanism. A document that still claimed a replaced photo was a sample would make the editor
+   * label it «Foto de ejemplo», count it among what is missing, and warn about it before a
+   * download: three wrong things, all in the direction that teaches an owner to ignore the warning.
+   */
+  function documentWithSample(): RetorikaDocument {
+    return parseDocument({
+      schemaVersion: "1.1.0",
+      id: "doc-1",
+      siteName: "Taberna",
+      theme: Object.fromEntries(TOKEN_KEYS.map((key) => [key, `value-${key}`])),
+      collections: [],
+      pages: [
+        {
+          id: "home",
+          slug: "index",
+          title: "Taberna",
+          sections: [
+            {
+              id: "sec-cover",
+              preset: { catalogId: "cover", variantId: "image-right" },
+              source: "catalog",
+              layout: null,
+              content: [
+                {
+                  id: "el-image",
+                  role: "image",
+                  hidden: false,
+                  slot: "image",
+                  value: { kind: "image", src: "muestra.webp", alt: "Muestra", sample: "marcador" },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+  }
+
+  it("removes the field when the owner's own photo arrives", () => {
+    const after = setElementImageSrc(
+      documentWithSample(),
+      {
+        sectionId: "sec-cover",
+        elementId: "el-image",
+      },
+      "foto-sec-cover-el-image.jpg",
+    );
+    const value = after.pages[0]?.sections[0]?.content[0]?.value;
+    expect(value).toEqual({
+      kind: "image",
+      src: "foto-sec-cover-el-image.jpg",
+      alt: "Muestra",
+    });
+    expect(value && "sample" in value).toBe(false);
+  });
+
+  it("leaves the alt alone, which is the other half of the same element", () => {
+    const after = setElementImageSrc(
+      documentWithSample(),
+      {
+        sectionId: "sec-cover",
+        elementId: "el-image",
+      },
+      "otra.jpg",
+    );
+    expect(after.pages[0]?.sections[0]?.content[0]?.value).toMatchObject({ alt: "Muestra" });
+  });
+});

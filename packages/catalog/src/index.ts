@@ -23,7 +23,11 @@ export {
 export type { SlotPlacement } from "./layout.ts";
 export type { LocationVariant } from "./location.ts";
 export { LOCATION_ID, LOCATION_SLOTS, LOCATION_VARIANTS, locationPreset } from "./location.ts";
-export { PLACEHOLDER_IMAGE_ALT, placeholderImageSrc } from "./placeholder-image.ts";
+export {
+  PLACEHOLDER_IMAGE_ALT,
+  PLACEHOLDER_SAMPLE_ID,
+  placeholderImageSrc,
+} from "./placeholder-image.ts";
 export { CATALOG, presetFor, variantsFor } from "./presets.ts";
 export type { PricesVariant } from "./prices.ts";
 export {

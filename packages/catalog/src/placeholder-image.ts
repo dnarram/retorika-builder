@@ -26,6 +26,20 @@ const PLACEHOLDER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16
 export const PLACEHOLDER_IMAGE_ALT = "Marcador de foto: aquí irá tu foto";
 
 /**
+ * What an image element's `sample` field says when the image is this marker (ADR 0011, and the
+ * schema's own note on the field).
+ *
+ * The ADR wrote `sample` as «the bank id», which was complete for a bank with images in it and
+ * reaches nothing while the bank is empty — and today the marker is the *only* sample that exists.
+ * So the field holds the id of whichever sample it is, and the marker declares itself as one:
+ * `marcador` collides with no bank id, because a bank id always carries its sector and a number.
+ *
+ * One field answers «is this photo the owner's?» for every image in the document, which is what
+ * the Fotos panel, the «Foto de ejemplo» label and the warning before a download all ask.
+ */
+export const PLACEHOLDER_SAMPLE_ID = "marcador";
+
+/**
  * `encodeURIComponent` rather than base64: it is built into both Node and the browser and
  * handles the UTF-8 accented characters in the SVG's own text correctly, with no `Buffer` and
  * no `btoa` — either of which behaves differently, or is absent, depending on which of those two
