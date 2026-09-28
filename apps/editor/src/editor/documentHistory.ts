@@ -1,3 +1,5 @@
+import { teaserSection } from "@retorika/catalog";
+import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
 import type {
   ElementAddress,
   ListItem,
@@ -20,6 +22,7 @@ import {
   moveSection as moveSectionFromDoc,
   removeItem as removeItemFromDoc,
   renamePage as renamePageInDoc,
+  sectionToPage as sectionToPageInDoc,
   setElementImageSrc,
   setElementText,
   setTheme as setThemeInDoc,
@@ -58,6 +61,10 @@ export type SnapshotCause =
   | { type: "removeItem"; sectionId: string }
   /** The three page causes name a page rather than a section, so `sectionOf` answers
    * `undefined` for them and no delete toast is kept alive by renaming a page. */
+  /** The conversion (ADR 0022) is **one** cause, not three: the page, the move and the avance
+   * happen together, so one «Deshacer» takes back all three. `sectionId` is the section that
+   * left, which is what the toast names. */
+  | { type: "sectionToPage"; sectionId: string; pageId: string }
   | { type: "renamePage"; pageId: string }
   | { type: "movePage"; pageId: string }
   | { type: "deletePage"; pageId: string }
@@ -105,6 +112,7 @@ export type HistoryAction =
   | { type: "setVariant"; variant: number; sectionId: string; variantId: string }
   | { type: "addItem"; variant: number; sectionId: string; slot: string; item: ListItem }
   | { type: "removeItem"; variant: number; sectionId: string; slot: string; itemId: string }
+  | { type: "sectionToPage"; variant: number; sectionId: string }
   | { type: "renamePage"; variant: number; pageId: string; title: string }
   | { type: "movePage"; variant: number; pageId: string; toIndex: number }
   | { type: "deletePage"; variant: number; pageId: string }
@@ -372,6 +380,27 @@ function removeItem(history: History, sectionId: string, slot: string, itemId: s
  * `renamePage` and `movePage` hand back the same document when nothing would change, so pressing
  * a name that is already the name opens no step.
  */
+/**
+ * A section becomes a page, in one step.
+ *
+ * The avance is built here rather than in `@retorika/schema`, which may not import the catalog —
+ * the same division `insertSection` makes. Its label comes from the catalog's own locale file,
+ * because it is interface text that ends up on the published page.
+ *
+ * The new page's id is read back off the result rather than predicted: only `sectionToPage` knows
+ * what it minted, and the cause needs it so the editor can open the page it just made.
+ */
+function convertSection(history: History, sectionId: string): History {
+  const document = sectionToPageInDoc(
+    history.present.document,
+    sectionId,
+    ({ sectionId: id, href }) => teaserSection(id, href, catalogEs["section.teaser.label"]),
+  );
+  const pageId = document.pages.at(-1)?.id;
+  if (!pageId) throw new Error("sectionToPage: the conversion produced no page");
+  return step(history, document, { type: "sectionToPage", sectionId, pageId });
+}
+
 function renamePage(history: History, pageId: string, title: string): History {
   const document = renamePageInDoc(history.present.document, pageId, title);
   if (document === history.present.document) return history;
@@ -464,6 +493,8 @@ function apply(history: History, action: HistoryAction): History {
       return addItem(history, action.sectionId, action.slot, action.item);
     case "removeItem":
       return removeItem(history, action.sectionId, action.slot, action.itemId);
+    case "sectionToPage":
+      return convertSection(history, action.sectionId);
     case "renamePage":
       return renamePage(history, action.pageId, action.title);
     case "movePage":

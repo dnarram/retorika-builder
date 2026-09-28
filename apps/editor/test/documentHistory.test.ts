@@ -950,3 +950,63 @@ describe("what the history remembers across undo and redo", () => {
     expect(headline(run(state, { type: "undo", variant: 0 }))).toBe("Taberna Santo Domingo");
   });
 });
+
+describe("sectionToPage, as one history step", () => {
+  const convert = (sectionId: string): HistoryAction => ({
+    type: "sectionToPage",
+    variant: 0,
+    sectionId,
+  });
+
+  it("makes the page, moves the section and leaves an avance, all at once", () => {
+    const after = run(start(), convert("sec-services"));
+    const doc = after[0]?.present.document;
+    expect(doc?.pages).toHaveLength(2);
+    expect(doc?.pages[1]?.title).toBe("Qué ponemos");
+    expect(doc?.pages[0]?.sections.map((s) => s.preset.catalogId)).toEqual([
+      "cover",
+      "teaser",
+      "location",
+      "contact",
+      "footer",
+    ]);
+  });
+
+  it("is one step, so one «Deshacer» takes back the page *and* the avance", () => {
+    // The dossier's «y se puede deshacer», as the property that matters. Three separate verbs could
+    // never give this: the owner would press undo three times and see two broken half-states.
+    const before = start();
+    const converted = run(before, convert("sec-services"));
+    const undone = run(converted, { type: "undo", variant: 0 });
+
+    expect(undone[0]?.present.document).toEqual(before[0]?.present.document);
+    expect(converted[0]?.past).toHaveLength(1);
+  });
+
+  it("redoes the whole conversion just as completely", () => {
+    const converted = run(start(), convert("sec-services"));
+    const again = run(converted, { type: "undo", variant: 0 }, { type: "redo", variant: 0 });
+    expect(again[0]?.present.document).toEqual(converted[0]?.present.document);
+  });
+
+  it("records which section left and which page it became", () => {
+    // The cause carries the page id because only `sectionToPage` knows what it minted, and the
+    // editor needs it to be able to open the page it just made.
+    const cause = run(start(), convert("sec-services"))[0]?.present.cause;
+    expect(cause).toMatchObject({ type: "sectionToPage", sectionId: "sec-services" });
+    expect(cause && "pageId" in cause ? cause.pageId : undefined).toBe("page-que-ponemos");
+  });
+
+  it("gives the avance the catalog's own label rather than inventing one", () => {
+    const doc = run(start(), convert("sec-services"))[0]?.present.document;
+    const teaser = doc?.pages[0]?.sections.find((s) => s.preset.catalogId === "teaser");
+    expect(teaser?.content[0]?.value).toMatchObject({
+      text: "Ver más",
+      href: "./que-ponemos.html",
+    });
+  });
+
+  it("refuses a section that may not become a page, rather than half-doing it", () => {
+    expect(() => run(start(), convert("sec-cover"))).toThrow(/cannot become a page/);
+  });
+});

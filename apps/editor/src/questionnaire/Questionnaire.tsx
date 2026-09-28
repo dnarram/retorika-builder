@@ -17,6 +17,9 @@ interface Restored {
   answers: Answers;
   documents: RetorikaDocument[];
   openIndex: number | null;
+  /** Which page of the open variant was showing. Absent for every session written before the
+   * editor could show more than one. */
+  pageId?: string;
 }
 
 /**
@@ -49,6 +52,7 @@ export function Questionnaire() {
         answers: { ...EMPTY_ANSWERS, ...session.answers },
         documents: session.documents,
         openIndex: session.openIndex,
+        ...(session.pageId === undefined ? {} : { pageId: session.pageId }),
       });
       setDone(true);
     }
@@ -77,6 +81,7 @@ export function Questionnaire() {
         answers={restored.answers}
         initialDocuments={restored.documents}
         initialOpenIndex={restored.openIndex}
+        {...(restored.pageId === undefined ? {} : { initialPageId: restored.pageId })}
         onRestart={restart}
       />
     ) : (

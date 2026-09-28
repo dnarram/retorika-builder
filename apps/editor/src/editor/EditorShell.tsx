@@ -114,7 +114,7 @@ const RAIL_ICONS = {
 
 /** What the rail can select. `Páginas` and `Fotos` are not here: a value the rail cannot take is
  * not a state the app has to handle. */
-export type RailItemId = "sections" | "style";
+export type RailItemId = "sections" | "style" | "pages";
 
 function RailIcon({ icon, active }: { icon: keyof typeof RAIL_ICONS; active: boolean }) {
   return (
@@ -263,6 +263,9 @@ function DeviceToggle({
 
 export function EditorShell({
   siteName,
+  pages,
+  currentPageId,
+  onSelectPage,
   onBack,
   downloadState,
   onDownload,
@@ -279,6 +282,10 @@ export function EditorShell({
   children,
 }: {
   siteName: string;
+  /** Every page of the open document, in document order, for the tabs. */
+  pages: readonly { id: string; title: string }[];
+  currentPageId: string | undefined;
+  onSelectPage: (pageId: string) => void;
   onBack: () => void;
   downloadState: "idle" | "downloading" | "error";
   onDownload: () => void;
@@ -327,10 +334,34 @@ export function EditorShell({
           </svg>
         </button>
 
-        <div className="flex shrink-0 items-center justify-center gap-1.5">
-          <span className="flex h-9 items-center rounded-[9px] bg-ui-brand-surface px-5 text-sm font-semibold text-ui-brand">
-            {es["editor.page.home"]}
-          </span>
+        {/* The page tabs of mockup 08, reading from the document instead of naming «Inicio» in the
+            markup, which is what stood here while a site could only have one page. A single tab is
+            still drawn: it is the mockup's shape, it says which page the canvas is showing, and it
+            is where a second one appears the moment a section is converted — which is exactly the
+            feedback that the conversion worked. `aria-current="page"` rather than a pressed toggle:
+            these name places, not states. */}
+        <div className="flex min-w-0 shrink items-center justify-center gap-1.5 overflow-x-auto">
+          {pages.map((page) => {
+            const current = page.id === currentPageId;
+            return (
+              <button
+                key={page.id}
+                type="button"
+                onClick={() => onSelectPage(page.id)}
+                {...(current ? { "aria-current": "page" as const } : {})}
+                className={`flex h-9 max-w-[180px] shrink items-center rounded-[9px] px-5 text-sm font-semibold ${
+                  current
+                    ? "bg-ui-brand-surface text-ui-brand"
+                    : "text-ui-muted hover:bg-ui-brand-surface/60"
+                }`}
+              >
+                {/* The label truncates, not the button: `truncate` on a flex container does
+                    nothing to its text child, which cut «Taberna Santo Domingo» mid-letter with no
+                    ellipsis. A page title is the owner's own words and can be any length. */}
+                <span className="truncate">{page.title}</span>
+              </button>
+            );
+          })}
         </div>
 
         <div className="flex min-w-0 flex-1 items-center justify-end gap-2.5">
@@ -441,7 +472,12 @@ export function EditorShell({
             active={rail === "style"}
             onSelect={() => onRailChange("style")}
           />
-          <RailPhase2 icon="pages" label={es["editor.rail.pages"]} />
+          <RailButton
+            icon="pages"
+            label={es["editor.rail.pages"]}
+            active={rail === "pages"}
+            onSelect={() => onRailChange("pages")}
+          />
           <RailPhase2 icon="photos" label={es["editor.rail.photos"]} />
         </div>
 

@@ -141,3 +141,39 @@ describe("clearSession", () => {
     expect(storage.getItem("retorika.session.v1.rejected")).toBeNull();
   });
 });
+
+describe("the page the editor had open", () => {
+  it("survives a save and a load", () => {
+    expect(
+      saveSession({
+        answers: ANSWERS,
+        documents: documents(),
+        openIndex: 0,
+        pageId: "page-que-ponemos",
+      }),
+    ).toBe(true);
+    expect(loadSession()?.pageId).toBe("page-que-ponemos");
+  });
+
+  it("is simply absent for a session that never had one", () => {
+    // Every session written before sprint 5 day 6, and every site with one page. Absent means the
+    // document's first page, which is what `render` already means by an absent `pageId`.
+    expect(saveSession({ answers: ANSWERS, documents: documents(), openIndex: 0 })).toBe(true);
+    expect(loadSession()?.pageId).toBeUndefined();
+  });
+
+  it("does not throw the whole session away when it is nonsense", () => {
+    // The judgement this encodes: a bad `pageId` costs the owner the page they had open; rejecting
+    // the session costs them everything they had written. It is also not checked against the
+    // document — a page can be deleted between one visit and the next, and `Variants` already falls
+    // back to the first page for an id the document does not have.
+    saveSession({ answers: ANSWERS, documents: documents(), openIndex: 0 });
+    const stored = JSON.parse(storage.getItem("retorika.session.v1") ?? "{}");
+    storage.setItem("retorika.session.v1", JSON.stringify({ ...stored, pageId: 42 }));
+
+    const restored = loadSession();
+    expect(restored, "the session was discarded over one bad field").not.toBeNull();
+    expect(restored?.pageId).toBeUndefined();
+    expect(restored?.documents).toHaveLength(3);
+  });
+});
