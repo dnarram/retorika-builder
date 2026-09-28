@@ -9,6 +9,7 @@ import {
   tokenToCssVariable,
 } from "@retorika/schema";
 import { cssThemeValue, safeUrl } from "./escape.ts";
+import { menuNodes } from "./menu.ts";
 import { commentNode, element, type RenderNode } from "./nodes.ts";
 import type { ResolvedRenderOptions } from "./options.ts";
 
@@ -369,7 +370,7 @@ export function resolvePage(doc: RetorikaDocument, pageId: string | undefined): 
   return page;
 }
 
-export function buildTree(doc: RetorikaDocument, options: ResolvedRenderOptions): RenderNode {
+export function buildTree(doc: RetorikaDocument, options: ResolvedRenderOptions): RenderNode[] {
   const page = resolvePage(doc, options.pageId);
 
   // Which section(s) get the h1. Unchanged for a page that has a cover: every section built on
@@ -388,16 +389,31 @@ export function buildTree(doc: RetorikaDocument, options: ResolvedRenderOptions)
     : (page.sections.find((section) => section.preset.catalogId !== TEASER_ID)?.id ??
       page.sections[0]?.id);
 
-  return element("main", { class: "rb-page", "data-page": page.id }, [
-    ...page.sections.map((section) =>
-      sectionNode(
-        section,
-        options,
-        section.preset.catalogId === COVER_ID || section.id === fallbackH1Id,
-        section.preset.catalogId === TEASER_ID ? teaserTarget(doc, hrefOf(section)) : undefined,
+  // The footer, drawn on every page from the home page's own (ADR 0023). A converted page with no
+  // footer looks unfinished, and repeating it is not duplicating it: there is still exactly one
+  // footer in the document, belonging to one page, as rule 5 requires. Derived like the menu, so it
+  // is never something the owner has to remember to add to a page they just made.
+  const hasFooter = page.sections.some((section) => section.preset.catalogId === FOOTER_ID);
+  const borrowedFooter = hasFooter
+    ? []
+    : (doc.pages[0]?.sections.filter((section) => section.preset.catalogId === FOOTER_ID) ?? []);
+
+  return [
+    // Before `<main>`, so a keyboard or screen-reader user reaches the navigation first, which is
+    // where every page's structure is announced.
+    ...menuNodes(doc, page),
+    element("main", { class: "rb-page", "data-page": page.id }, [
+      ...page.sections.map((section) =>
+        sectionNode(
+          section,
+          options,
+          section.preset.catalogId === COVER_ID || section.id === fallbackH1Id,
+          section.preset.catalogId === TEASER_ID ? teaserTarget(doc, hrefOf(section)) : undefined,
+        ),
       ),
-    ),
-  ]);
+      ...borrowedFooter.map((section) => sectionNode(section, options, false)),
+    ]),
+  ];
 }
 
 /**
@@ -487,6 +503,33 @@ export function buildCss(doc: RetorikaDocument): string {
     "  background: var(--color-surface); border-radius: var(--radius-lg); pointer-events: none; }",
     ".rb-panel ~ :not(img) { z-index: 2; }",
     "",
+    // The menu that writes itself (ADR 0023). Two versions alternated by the media query at the
+    // bottom of this stylesheet, so that at any width exactly one is in the accessibility tree.
+    //
+    // `color.primary` on `color.surface` is the one pair every palette is proved against
+    // (`packages/tokens/test/contrast.test.ts`), which is why the strip uses the page's own
+    // background rather than a tinted bar of its own. Underlined on hover only would leave the
+    // entries relying on colour alone, so they are not styled as links at all: they are a strip of
+    // navigation, and the current one is marked by weight and a rule under it rather than by hue.
+    ".rb-nav { display: flex; flex-wrap: wrap; gap: var(--space-md);",
+    "  padding: var(--space-md) var(--space-xl); background: var(--color-surface); }",
+    // A hairline under the strip, so it reads as a bar rather than as the page's top padding —
+    // the same `color.muted` rule `.rb-item` already separates cards with, which keeps one visual
+    // idiom instead of two. Decorative, so the contrast minimum for text does not apply to it.
+    ".rb-nav-wide, .rb-nav-narrow { border-bottom: 1px solid var(--color-muted); }",
+    ".rb-nav a { color: var(--color-primary); font-family: var(--font-heading);",
+    "  font-size: var(--size-body); text-decoration: none; }",
+    // Not colour alone: the entry for the page you are on carries a rule under it as well.
+    ".rb-nav a[aria-current=page] { text-decoration: underline; text-underline-offset: 6px;",
+    "  text-decoration-thickness: 2px; }",
+    ".rb-nav-narrow { padding: var(--space-md) var(--space-lg);",
+    "  background: var(--color-surface); }",
+    ".rb-nav-narrow > summary { color: var(--color-primary); font-family: var(--font-heading);",
+    "  font-size: var(--size-body); cursor: pointer; }",
+    // Inside the disclosure the strip stacks, and its own padding would double the summary's.
+    ".rb-nav-narrow .rb-nav { flex-direction: column; gap: var(--space-sm);",
+    "  padding: var(--space-md) 0 0; }",
+    "",
     // Below 320px is where the dossier's pre-publish check looks for overflow, so the
     // grid collapses before it can happen rather than being patched afterwards.
     //
@@ -502,6 +545,20 @@ export function buildCss(doc: RetorikaDocument): string {
     "  .rb-section > * { grid-column: 1 / -1 !important; grid-row: auto !important; }",
     "  .rb-section > img { order: -1; }",
     "  .rb-panel { display: none; }",
+    "}",
+    "",
+    // The two menus, alternated. `display: none` and not `visibility` or a clip: only `display:
+    // none` takes an element out of the accessibility tree, and the whole point of emitting two is
+    // that a screen reader is never told about a navigation landmark it cannot reach. The a11y
+    // matrix asserts exactly one `<nav>` at each width, which is what makes this a guarantee
+    // rather than an intention.
+    //
+    // Wide first and narrow in the query, matching how every other rule in this stylesheet is
+    // written: the desktop shape is the default and 720px patches it (document rule 7).
+    ".rb-nav-narrow { display: none; }",
+    "@media (max-width: 720px) {",
+    "  .rb-nav-wide { display: none; }",
+    "  .rb-nav-narrow { display: block; }",
     "}",
     "",
   ].join("\n");

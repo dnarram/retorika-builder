@@ -3,6 +3,7 @@ import { basename, join } from "node:path";
 import { render } from "@retorika/renderer";
 import {
   type ContentElement,
+  flattenElements,
   invariantTestName,
   parseDocument,
   type RetorikaDocument,
@@ -23,15 +24,22 @@ function loadCorpus(): { name: string; document: RetorikaDocument }[] {
     }));
 }
 
-/** Resolves every image src against fixtures/, the way scripts/build-sample-site.ts does. */
+/**
+ * Resolves every image src against fixtures/, the way scripts/build-sample-site.ts does.
+ *
+ * A `data:` URI is skipped, exactly as `buildSite`'s own `toBundle` skips it: it is a complete
+ * image inline in the HTML, not a file that needs a path in the bundle. This helper read every src
+ * as a path until `menu-y-paginas` arrived — the first fixture produced by the generator rather
+ * than written by hand, and so the first one carrying the catalog's placeholder photograph — and
+ * then tried to open a two-kilobyte SVG as a file name.
+ */
 function assetsFor(doc: RetorikaDocument): Map<string, Uint8Array> {
   const assets = new Map<string, Uint8Array>();
   for (const page of doc.pages) {
     for (const section of page.sections) {
-      for (const el of section.content) {
-        if (el.value?.kind === "image") {
-          assets.set(el.value.src, new Uint8Array(readFileSync(join(FIXTURES_DIR, el.value.src))));
-        }
+      for (const el of flattenElements(section.content)) {
+        if (el.value?.kind !== "image" || el.value.src.startsWith("data:")) continue;
+        assets.set(el.value.src, new Uint8Array(readFileSync(join(FIXTURES_DIR, el.value.src))));
       }
     }
   }
@@ -110,6 +118,8 @@ describe("buildSite", () => {
       const bundle = buildSite(document, { siteId: name, assets: assetsFor(document) });
       const paths = new Set(bundle.files.map((f) => f.path));
       for (const ref of render(document, "html").assets) {
+        // A `data:` URI needs no file: it is already the whole image, inline in the HTML.
+        if (ref.src.startsWith("data:")) continue;
         expect(paths.has(`assets/${basename(ref.src)}`), `${name}: ${ref.src}`).toBe(true);
       }
       for (const asset of bundle.manifest.assets) {

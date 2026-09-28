@@ -59,11 +59,31 @@ body { margin: 0; font-family: var(--font-body); color: var(--color-ink);
   background: var(--color-surface); border-radius: var(--radius-lg); pointer-events: none; }
 .rb-panel ~ :not(img) { z-index: 2; }
 
+.rb-nav { display: flex; flex-wrap: wrap; gap: var(--space-md);
+  padding: var(--space-md) var(--space-xl); background: var(--color-surface); }
+.rb-nav-wide, .rb-nav-narrow { border-bottom: 1px solid var(--color-muted); }
+.rb-nav a { color: var(--color-primary); font-family: var(--font-heading);
+  font-size: var(--size-body); text-decoration: none; }
+.rb-nav a[aria-current=page] { text-decoration: underline; text-underline-offset: 6px;
+  text-decoration-thickness: 2px; }
+.rb-nav-narrow { padding: var(--space-md) var(--space-lg);
+  background: var(--color-surface); }
+.rb-nav-narrow > summary { color: var(--color-primary); font-family: var(--font-heading);
+  font-size: var(--size-body); cursor: pointer; }
+.rb-nav-narrow .rb-nav { flex-direction: column; gap: var(--space-sm);
+  padding: var(--space-md) 0 0; }
+
 @media (max-width: 720px) {
   .rb-section { grid-template-columns: 1fr; padding: var(--space-lg); }
   .rb-section > * { grid-column: 1 / -1 !important; grid-row: auto !important; }
   .rb-section > img { order: -1; }
   .rb-panel { display: none; }
+}
+
+.rb-nav-narrow { display: none; }
+@media (max-width: 720px) {
+  .rb-nav-wide { display: none; }
+  .rb-nav-narrow { display: block; }
 }
 </style>
 </head>

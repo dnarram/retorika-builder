@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { buildSite } from "@retorika/publisher";
-import { parseDocument } from "@retorika/schema";
+import { flattenElements, parseDocument } from "@retorika/schema";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { objectKeyFor, siteIdFromHost } from "../src/routing.ts";
@@ -166,10 +166,10 @@ describe("the publisher -> serve contract", () => {
       const assets = new Map<string, Uint8Array>();
       for (const page of document.pages) {
         for (const section of page.sections) {
-          for (const el of section.content) {
-            if (el.value?.kind === "image") {
-              assets.set(el.value.src, new Uint8Array(readFileSync(join(fixtures, el.value.src))));
-            }
+          // A `data:` URI is the whole image, inline: no file, nothing to serve.
+          for (const el of flattenElements(section.content)) {
+            if (el.value?.kind !== "image" || el.value.src.startsWith("data:")) continue;
+            assets.set(el.value.src, new Uint8Array(readFileSync(join(fixtures, el.value.src))));
           }
         }
       }
