@@ -59,8 +59,13 @@ regardless of how mechanical the change looks.
 | `pnpm size` | Published-page weight budget |
 | `pnpm schema:guard` | Migration guard; takes an optional diff range |
 | `pnpm renderer:deps` | Renderer dependency allowlist |
+| `pnpm test:a11y` | axe + overflow in real Chromium (`RETORIKA_A11Y=1`, gated because it launches a browser) |
+| `pnpm e2e` | The critical flows against the real running app (`RETORIKA_E2E=1`, gated for the same reason) |
+| `pnpm --filter @retorika/editor dev` | The editor's own dev server. No bare `pnpm dev` at the root — the editor is the only app that has one |
 
-`pnpm dev` and `pnpm e2e` do not exist yet — they arrive with the editor and the publish task.
+Both `test:a11y` and `e2e` exist since sprint 2/3; this note used to say they did not, which stopped
+being true and stayed in the file regardless. If a claim like that starts sounding stale, check it
+before repeating it in the next PR — the gap here was a comment nobody had reason to re-read.
 
 ## Language
 
