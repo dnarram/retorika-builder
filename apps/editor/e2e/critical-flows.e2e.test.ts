@@ -123,6 +123,30 @@ describe("critical flow 2 — edición de un texto y recarga", () => {
     // with the edited text is the localStorage round trip actually working, not assumed.
     await expect(page.frameLocator("iframe").first().getByText(HEADLINE_EDIT)).toBeVisible();
   });
+
+  it("takes a text off the page when it is emptied, and undo puts it back", async () => {
+    // Emptying used to be silently undone by the blur handler, which meant an optional slot could
+    // never be made empty again once it had marker text in it — a carta line published «Escribe
+    // aquí el precio» on a real page because the price could not be cleared. Pinned here because
+    // it is browser behaviour: a contentEditable region, blurred, committing "".
+    //
+    // The cover's subheadline rather than its headline, and undone immediately, so the flows that
+    // share this page afterwards see exactly the state flow 2 left.
+    const frame = page.frameLocator("iframe").first();
+    const subheadline = frame.locator('[data-section="sec-cover"] [data-slot="subheadline"]');
+    await expect(subheadline).toBeVisible();
+
+    await subheadline.click();
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.press("Delete");
+    await page.getByText("Haz clic en cualquier texto para cambiarlo").click();
+
+    // Gone from the page rather than left as an empty paragraph taking its own gap.
+    await expect(subheadline).toHaveCount(0);
+
+    await page.locator('button[aria-label="Deshacer"]').click();
+    await expect(subheadline).toBeVisible();
+  });
 });
 
 describe("critical flow 3 — cambio de paleta", () => {
