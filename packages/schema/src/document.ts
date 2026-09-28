@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { roleSchema } from "./roles.ts";
+import { SLUG_PATTERN } from "./slug.ts";
 import { styleValueSchema, themeSchema } from "./tokens.ts";
 
 /**
@@ -159,7 +160,15 @@ export type Section = z.infer<typeof sectionSchema>;
 
 export const pageSchema = z.strictObject({
   id: idSchema,
-  slug: z.string().min(1),
+  /**
+   * What this page's file is called, and the one thing about a page the owner never sees
+   * (ADR 0022). Checked here rather than in the publisher, which is where these rules used to
+   * live: a slug becomes a file name at the very end, so a bad one surfaced as a 500 at the
+   * moment of download instead of as a validation error where it was written.
+   */
+  slug: z
+    .string()
+    .regex(SLUG_PATTERN, "a slug is lowercase letters, digits and hyphens, and starts with one"),
   title: z.string(),
   sections: z.array(sectionSchema),
 });

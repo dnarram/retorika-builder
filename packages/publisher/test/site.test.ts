@@ -269,14 +269,42 @@ describe("buildSite", () => {
     expect(bundle.files.map((f) => f.path)).toEqual([...bundle.files.map((f) => f.path)].sort());
   });
 
+  it("throws on a later page named index, which no earlier layer can catch", () => {
+    // The only slug problem that is still this package's to find. `index.html` is the entry
+    // whatever the first page is slugged, so a *later* page slugged `index` would take the file
+    // from it — and nothing upstream knows that, because "index" is a perfectly good slug and
+    // there is only one of it in the document. Every other case moved to the schema with ADR
+    // 0022; see the block below.
+    const doc = withPages(barbershop, ["inicio", "index"]);
+    expect(() => buildSite(doc, { siteId: "s", assets: assetsFor(doc) })).toThrow(/slug collision/);
+  });
+
   it.each([
-    ["a duplicate slug", ["inicio", "servicios", "servicios"], /slug collision/],
-    ["a later page named index", ["inicio", "index"], /slug collision/],
-    ["an unsafe slug", ["inicio", "../fuera"], /unsafe slug/],
-    ["an uppercase slug", ["inicio", "Servicios"], /unsafe slug/],
-  ])("throws on %s", (_label, slugs, message) => {
-    const doc = withPages(barbershop, slugs);
-    expect(() => buildSite(doc, { siteId: "s", assets: assetsFor(doc) })).toThrow(message);
+    ["a duplicate slug", ["inicio", "servicios", "servicios"], /appears more than once/],
+    ["an unsafe slug", ["inicio", "../fuera"], /slug is lowercase/],
+    ["an uppercase slug", ["inicio", "Servicios"], /slug is lowercase/],
+  ])(
+    "no longer reaches this package with %s: the schema refuses it first",
+    (_l, slugs, message) => {
+      // These used to be asserted against `buildSite`, which is the last thing that runs before a
+      // ZIP is written — so a bad slug surfaced as a 500 at the moment of download. ADR 0022 moved
+      // the rules to `packages/schema`, and what this now pins is that the document cannot even be
+      // built. `withPages` parses, so the throw happens there.
+      expect(() => withPages(barbershop, slugs)).toThrow(message);
+    },
+  );
+
+  it("still refuses an unsafe slug that never went through parseDocument", () => {
+    // The backstop, and why it stays. `buildSite` takes a `RetorikaDocument`, and a type is not a
+    // runtime guarantee: a caller that built the object by hand, or cast one, reaches the line
+    // where a slug becomes a file name. Same reasoning as `/api/download` re-sniffing photo bytes
+    // the browser already checked — the earlier check is convenience, this one is the guarantee.
+    const doc = withPages(barbershop, ["inicio", "servicios"]);
+    const forged = {
+      ...doc,
+      pages: doc.pages.map((page, i) => (i === 1 ? { ...page, slug: "../fuera" } : page)),
+    } as RetorikaDocument;
+    expect(() => buildSite(forged, { siteId: "s", assets: assetsFor(doc) })).toThrow(/unsafe slug/);
   });
 
   it("records the source schemaVersion and the siteId in the manifest", () => {
