@@ -1,5 +1,5 @@
 import { flattenElements, type RetorikaDocument } from "@retorika/schema";
-import { buildCss, buildTree } from "./build.ts";
+import { buildCss, buildTree, resolvePage } from "./build.ts";
 import { treeToFragment } from "./dom.ts";
 import { pageToHtml } from "./html.ts";
 import { type RenderOptions, withDefaults } from "./options.ts";
@@ -50,11 +50,30 @@ export function render(
   }
 
   const css = buildCss(doc);
+  const page = resolvePage(doc, resolved.pageId);
   return {
-    html: pageToHtml(tree, css, doc.siteName),
+    html: pageToHtml(tree, css, titleFor(page, doc.siteName)),
     css,
     assets: collectAssets(doc),
   };
+}
+
+/**
+ * The `<title>` for one page: the business name alone, or the page's own title in front of it
+ * when the page says something the business name does not already say.
+ *
+ * Every document the generator has ever produced has exactly one page, whose title is the
+ * business name (`packages/generator/src/index.ts` sets both from `answers.businessName`), so
+ * this is a no-op for every fixture the golden corpus holds today — verified by the corpus not
+ * moving. It stops being a no-op the day a converted page exists, whose title is the heading the
+ * owner gave the section it came from.
+ *
+ * The page's own words go first: a browser tab or a history entry shows the start of a long
+ * title first, and "Nuestra carta" is what tells two tabs of the same site apart — the business
+ * name is what both tabs already share.
+ */
+function titleFor(page: { title: string }, siteName: string): string {
+  return page.title === siteName ? siteName : `${page.title} — ${siteName}`;
 }
 
 /**
