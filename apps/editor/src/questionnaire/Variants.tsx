@@ -150,12 +150,15 @@ export function Variants({
   answers,
   initialDocuments,
   initialOpenIndex = null,
+  initialPageId,
   onRestart,
 }: {
   answers: Answers;
   /** Present when `Questionnaire` restored a session; absent for a freshly generated one. */
   initialDocuments?: RetorikaDocument[];
   initialOpenIndex?: number | null;
+  /** Which page of the open variant was showing, restored from the saved session. */
+  initialPageId?: string;
   onRestart: () => void;
 }) {
   // The histories outlive "Volver": edits and what can be undone survive going back to the grid
@@ -165,6 +168,25 @@ export function Variants({
     initHistories(initialDocuments ?? generateVariants(initial).map((site) => site.document)),
   );
   const [openIndex, setOpenIndex] = useState<number | null>(initialOpenIndex);
+
+  /**
+   * Which page of the open variant the canvas is showing.
+   *
+   * Kept here beside `openIndex` rather than inside `Editor`, for the same two reasons: it has to
+   * survive «Volver» and reopening the card, and the saved session stores it. `undefined` means the
+   * document's first page, which is what `render` already means by an absent `pageId` — so a
+   * document with one page needs no value at all and nothing had to change for it.
+   */
+  const [pageId, setPageId] = useState<string | undefined>(initialPageId);
+
+  // A page can stop existing under the editor's feet — undoing a conversion removes the page it
+  // made, and so does deleting one — and rendering a `pageId` the document no longer has throws.
+  // Falling back to the first page is the only answer that keeps the canvas showing something.
+  const openDocument = openIndex === null ? undefined : histories[openIndex]?.present.document;
+  const currentPageId =
+    pageId !== undefined && openDocument?.pages.some((page) => page.id === pageId)
+      ? pageId
+      : undefined;
 
   // `null` until the first save attempt resolves: showing "Guardado" before anything has
   // actually been written would be exactly the false claim ADR 0012's note warns against.
@@ -177,11 +199,12 @@ export function Variants({
         answers,
         documents: histories.map((history) => history.present.document),
         openIndex,
+        ...(currentPageId === undefined ? {} : { pageId: currentPageId }),
       });
       setSaveStatus(ok ? "saved" : "unsaved");
     }, SAVE_DEBOUNCE_MS);
     return () => clearTimeout(saveTimer.current);
-  }, [answers, histories, openIndex]);
+  }, [answers, histories, openIndex, currentPageId]);
 
   /**
    * The owner's uploaded photos, as object URLs the preview and the download can both use, keyed
@@ -442,6 +465,33 @@ export function Variants({
             variant: openIndex,
             theme: withTypePair(history.present.document.theme, typePairId),
           });
+        }}
+        pageId={currentPageId}
+        onSelectPage={(next) => {
+          dismissToast();
+          setPageId(next);
+        }}
+        // Converting leaves the canvas where it is: the section it was just showing has become an
+        // avance in that same place, which is the visible proof that it worked, and a new tab has
+        // appeared. Jumping to the page would take the owner away from the thing they just changed.
+        onSectionToPage={(sectionId) => {
+          dismissToast();
+          dispatch({ type: "sectionToPage", variant: openIndex, sectionId });
+        }}
+        onRenamePage={(id, title) => {
+          dismissToast();
+          dispatch({ type: "renamePage", variant: openIndex, pageId: id, title });
+        }}
+        onMovePage={(id, toIndex) => {
+          dismissToast();
+          dispatch({ type: "movePage", variant: openIndex, pageId: id, toIndex });
+        }}
+        // The canvas may be showing the page that is about to go. `currentPageId` already falls
+        // back to the first page for an id the document no longer has, so nothing has to be reset
+        // here — and undo puts both the page and the canvas back together.
+        onDeletePage={(id) => {
+          dismissToast();
+          dispatch({ type: "deletePage", variant: openIndex, pageId: id });
         }}
         photoUrls={photoUrls.get(openIndex) ?? EMPTY_PHOTOS}
         photoError={photoError}

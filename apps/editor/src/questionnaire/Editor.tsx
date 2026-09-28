@@ -2,10 +2,12 @@
 
 import {
   blankItem,
+  COVER_ID,
   FOOTER_ID,
   FOOTER_IDENTITY_SLOTS,
   isPlaceholderText,
   presetFor,
+  TEASER_ID,
   variantsFor,
 } from "@retorika/catalog";
 import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
@@ -17,6 +19,8 @@ import {
   flattenElements,
   type ListItem,
   listEditableFields,
+  listLinksTo,
+  MAX_PAGES,
   type PresetShape,
   type RetorikaDocument,
   type SlotAddress,
@@ -28,6 +32,7 @@ import { ACCEPTED_IMAGE_ACCEPT } from "../editor/imageBytes.ts";
 import { sectionFields } from "../editor/sectionFields.ts";
 import es from "../locales/es.json" with { type: "json" };
 import { FieldsPanel } from "./FieldsPanel.tsx";
+import { PagesPanel } from "./PagesPanel.tsx";
 import { StylePanel } from "./StylePanel.tsx";
 import { FieldError } from "./ui.tsx";
 
@@ -138,6 +143,24 @@ function compositionsFor(doc: RetorikaDocument, sectionId: string): Composition[
     };
   });
 }
+
+/**
+ * Whether «Convertir esta sección en página» should be offered for this section.
+ *
+ * The three kinds `sectionToPage` refuses outright (ADR 0022), plus the page cap the download route
+ * has always enforced and `sectionToPage` now enforces too. Asking the same questions the verb asks
+ * is duplication of a kind worth having: the verb throwing is the guarantee, and this is what keeps
+ * anybody from reaching it — a button that lights up and refuses is worse than no button, which is
+ * the rule `compositionsFor` already follows.
+ */
+function canConvert(doc: RetorikaDocument, sectionId: string): boolean {
+  if (doc.pages.length >= MAX_PAGES) return false;
+  const found = findSection(doc, sectionId);
+  if (!found) return false;
+  return !UNCONVERTIBLE.has(found.section.preset.catalogId);
+}
+
+const UNCONVERTIBLE: ReadonlySet<string> = new Set([COVER_ID, FOOTER_ID, TEASER_ID]);
 
 /**
  * The list a section holds, if it holds one: which slot it is in, the lines in it, and whether
@@ -252,6 +275,12 @@ export function Editor({
   onFillSlot,
   onClearSlot,
   onSetVariant,
+  pageId,
+  onSelectPage,
+  onSectionToPage,
+  onRenamePage,
+  onMovePage,
+  onDeletePage,
   onAddItem,
   onRemoveItem,
   onPickPalette,
@@ -283,6 +312,16 @@ export function Editor({
   onClearSlot: (address: SlotAddress) => void;
   /** A different composition for one section, chosen from its own menu. */
   onSetVariant: (sectionId: string, variantId: string) => void;
+  /** Which page the canvas is showing. Undefined means the document's first, which is what
+   * `render` already means by an absent `pageId`. */
+  pageId: string | undefined;
+  onSelectPage: (pageId: string | undefined) => void;
+  /** This section becomes a page of its own (ADR 0022). One history step, so one «Deshacer»
+   * takes back the page, the move and the avance together. */
+  onSectionToPage: (sectionId: string) => void;
+  onRenamePage: (pageId: string, title: string) => void;
+  onMovePage: (pageId: string, toIndex: number) => void;
+  onDeletePage: (pageId: string) => void;
   /** One more line in a section's list, or one gone. The line is built by the catalog here and
    * re-minted by the schema, so neither end has to know what a valid one is made of. */
   onAddItem: (sectionId: string, slot: string, item: ListItem) => void;
@@ -364,7 +403,8 @@ export function Editor({
   // the ZIP needs — a relative path inside a `srcDoc` iframe resolves against the parent page's
   // URL and 404s, which is exactly why the placeholder is a data: URI and not a file.
   const html = useMemo(() => {
-    if (photoUrls.size === 0) return render(doc, "html").html;
+    const options = pageId === undefined ? {} : { pageId };
+    if (photoUrls.size === 0) return render(doc, "html", options).html;
     // Recursive since sprint 5 day 3. This used to map `section.content` and stop there, which
     // was complete while every image sat directly in a section; a gallery puts one inside each
     // list item, and those kept their bundle-relative name and 404'd in the preview — the owner
@@ -394,8 +434,8 @@ export function Editor({
         })),
       })),
     };
-    return render(forPreview, "html").html;
-  }, [doc, photoUrls]);
+    return render(forPreview, "html", options).html;
+  }, [doc, photoUrls, pageId]);
 
   // Marker text warns, it never blocks: what an added section says is a matter of taste the
   // owner can see and fix in a second, unlike a button pointing nowhere, which the download
@@ -462,7 +502,23 @@ export function Editor({
         // Duck-typed rather than `instanceof Element`: the node belongs to the frame's realm, and
         // an `instanceof` against this document's `Element` is false for every one of them.
         const target = event.target as { closest?: (selector: string) => unknown } | null;
-        if (typeof target?.closest === "function" && target.closest("a")) event.preventDefault();
+        if (typeof target?.closest !== "function") return;
+        const anchor = target.closest("a") as {
+          getAttribute?: (n: string) => string | null;
+        } | null;
+        if (!anchor) return;
+        event.preventDefault();
+
+        // A menu entry moves the editor to that page, which is the one thing in the preview that
+        // now *does* something. It is navigation the owner means, and the tabs do the same job;
+        // what it must never be is a real navigation of the frame, which is what nested an editor
+        // inside the editor. `./<slug>.html` is the published form, and the slug is the only part
+        // of it anybody here needs.
+        const href = anchor.getAttribute?.("href") ?? "";
+        const slug = /^\.\/([^#]+)\.html(?:#.*)?$/.exec(href.trim())?.[1];
+        if (slug === undefined) return;
+        const page = doc.pages.find((candidate) => candidate.slug === slug);
+        if (page) onSelectPage(doc.pages[0]?.id === page.id ? undefined : page.id);
       },
       true,
     );
@@ -613,6 +669,24 @@ export function Editor({
           () => onDuplicateSection(sectionId),
         ),
       );
+      // Seventh button, and the one this sprint exists for: «Convertir esta sección en página»
+      // (ADR 0022). Drawn only when the conversion would actually work, which is the same rule the
+      // composition button follows — a button that lights up and refuses is worse than no button.
+      // Three kinds of section are never offered it (the cover is the page's h1 and its promise,
+      // the footer is chrome, an avance is already a reference to a page), and neither is anything
+      // once the site has the five pages the download route accepts.
+      if (canConvert(doc, sectionId)) {
+        actions.appendChild(
+          action(
+            es["editor.sectionToPage"],
+            "move",
+            false,
+            '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8"/><path d="M14 3v6h6"/><path d="M14 3l6 6"/><path d="M11 13h9"/><path d="M17 10l3 3-3 3"/></svg>',
+            () => onSectionToPage(sectionId),
+          ),
+        );
+      }
+
       actions.appendChild(
         action(
           es["editor.fields.open"],
@@ -1076,6 +1150,9 @@ export function Editor({
       // `docs/design/REVIEW.md` as direction's to settle, which it did. `title` still names the
       // preview frame, where "which of the three am I in" is exactly the useful thing to say.
       siteName={doc.siteName}
+      pages={doc.pages.map((page) => ({ id: page.id, title: page.title }))}
+      currentPageId={pageId ?? doc.pages[0]?.id}
+      onSelectPage={(id) => onSelectPage(doc.pages[0]?.id === id ? undefined : id)}
       onBack={onBack}
       downloadState={state}
       onDownload={download}
@@ -1089,7 +1166,17 @@ export function Editor({
       rail={rail}
       onRailChange={showRail}
       panel={
-        rail === "style" ? (
+        rail === "pages" ? (
+          <PagesPanel
+            document={doc}
+            currentPageId={pageId}
+            onSelectPage={(id) => onSelectPage(doc.pages[0]?.id === id ? undefined : id)}
+            onRenamePage={onRenamePage}
+            onMovePage={onMovePage}
+            onDeletePage={onDeletePage}
+            linksTo={(id) => listLinksTo(doc, id).length}
+          />
+        ) : rail === "style" ? (
           <StylePanel
             theme={doc.theme}
             onPickPalette={onPickPalette}

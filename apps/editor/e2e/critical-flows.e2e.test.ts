@@ -334,3 +334,61 @@ describe("regression — the preview is a canvas, not a browsable site", () => {
     await expect(frame.getByText("Reserva tu mesa")).toBeVisible();
   });
 });
+
+/**
+ * Also not one of the five flows: the day-6 verbs, driven end to end in the real application.
+ *
+ * Here because two of the three things it checks are only true in a browser. The rename in
+ * particular guards a defect the walk found and no unit test could: the field's «select what is
+ * there» ran as a callback ref with a fresh identity, so it re-ran on every render and every
+ * keystroke re-selected the whole field — typing «Nuestra carta» left the page called «a».
+ */
+describe("regression — converting a section, and renaming the page it made", () => {
+  it("adds a tab, leaves an avance, and lets the new page be renamed", async () => {
+    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    const frame = page.frameLocator("iframe").first();
+    await frame.locator('[data-section="sec-cover"]').waitFor();
+
+    const tabs = page.locator(".overflow-x-auto button");
+    await expect(tabs).toHaveCount(1);
+
+    await frame.locator('[data-section="sec-services"]').click();
+    await frame
+      .locator(
+        '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+      )
+      .click();
+
+    // The page exists, and where the section was there is now an avance showing the destination's
+    // own title — read at render time, not copied.
+    await expect(tabs).toHaveCount(2);
+    await expect(frame.locator('[data-preset="teaser"]')).toContainText("Qué ponemos");
+
+    await page.getByRole("button", { name: "Páginas", exact: true }).click();
+    await page.getByRole("button", { name: "Cambiar el nombre" }).nth(1).click();
+    await page.keyboard.type("Nuestra carta");
+    await page.keyboard.press("Enter");
+
+    // Every character survived. The tab and the derived menu both follow, which is the proof that
+    // the menu really is derived rather than written down somewhere.
+    await expect(tabs.nth(1)).toHaveText("Nuestra carta");
+    await expect(frame.locator(".rb-nav-wide")).toContainText("Nuestra carta");
+  });
+
+  it("takes the editor to that page when its menu entry is clicked", async () => {
+    // Approved after the nesting fix: the one link in the preview that now does something. It must
+    // still never navigate the frame — that is what nested an editor inside the editor.
+    const frame = page.frameLocator("iframe").first();
+    const framesBefore = page.frames().length;
+
+    await frame.locator(".rb-nav-wide a", { hasText: "Nuestra carta" }).click();
+
+    await expect(frame.locator("[data-page]")).toHaveAttribute("data-page", "page-que-ponemos");
+    await expect(page.locator('.overflow-x-auto button[aria-current="page"]')).toHaveText(
+      "Nuestra carta",
+    );
+    expect(page.frames().length, "the preview navigated instead of switching page").toBe(
+      framesBefore,
+    );
+  });
+});

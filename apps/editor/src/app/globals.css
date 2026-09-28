@@ -22,6 +22,9 @@
   --ui-brand: #156fe7;
   --ui-brand-surface: #e8f1fe;
   --ui-ok: #03d26e;
+  /* The red the canvas already deletes with (`.rb-action-delete`), promoted to a token so the
+     Páginas panel and the section buttons cannot drift apart. 4.8:1 on --ui-surface. */
+  --ui-danger: #dc2626;
   --ui-radius: 14px;
 }
 
@@ -41,6 +44,7 @@
   --color-ui-brand: var(--ui-brand);
   --color-ui-brand-surface: var(--ui-brand-surface);
   --color-ui-ok: var(--ui-ok);
+  --color-ui-danger: var(--ui-danger);
   --radius-ui: var(--ui-radius);
 }
 

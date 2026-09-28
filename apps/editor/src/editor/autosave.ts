@@ -25,12 +25,18 @@ export interface StoredSession {
   answers: Omit<Answers, "logo">;
   documents: RetorikaDocument[];
   openIndex: number | null;
+  /** Which page of the open variant was showing. **Optional**, and read back leniently: every
+   * session written before sprint 5 day 6 has no such field, and a site with one page never needs
+   * one. Absent means the document's first page, which is what `render` already means by an
+   * absent `pageId`. */
+  pageId?: string;
 }
 
 export interface RestoredSession {
   answers: Omit<Answers, "logo">;
   documents: RetorikaDocument[];
   openIndex: number | null;
+  pageId?: string;
 }
 
 /** `false` on a full or disabled storage: the caller's `Guardado` tick has to know. */
@@ -86,6 +92,11 @@ export function loadSession(): RestoredSession | null | undefined {
   if (typeof candidate.answers !== "object" || candidate.answers === null) return reject();
   const openIndex = candidate.openIndex;
   if (openIndex !== null && typeof openIndex !== "number") return reject();
+  // Not a reason to throw the whole session away: a bad `pageId` costs the owner the page they had
+  // open, where rejecting costs them everything they had written. It is also not checked against
+  // the document here — a page can be deleted between one session and the next, and `Variants`
+  // already falls back to the first page for an id the document does not have.
+  const pageId = typeof candidate.pageId === "string" ? candidate.pageId : undefined;
 
   const documents: RetorikaDocument[] = [];
   for (const rawDocument of candidate.documents) {
@@ -105,6 +116,7 @@ export function loadSession(): RestoredSession | null | undefined {
     answers: candidate.answers as Omit<Answers, "logo">,
     documents,
     openIndex: openIndex as number | null,
+    ...(pageId === undefined ? {} : { pageId }),
   };
 }
 
