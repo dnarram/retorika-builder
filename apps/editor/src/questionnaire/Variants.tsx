@@ -16,6 +16,7 @@ import {
   type RetorikaDocument,
   type Section,
 } from "@retorika/schema";
+import { withPalette, withTypePair } from "@retorika/tokens";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { saveSession } from "../editor/autosave.ts";
 import {
@@ -355,6 +356,27 @@ export function Variants({
         onClearSlot={(address) => {
           dismissToast();
           dispatch({ type: "clearSlot", variant: openIndex, address });
+        }}
+        // The new theme is assembled here, from the theme the open document is carrying — never
+        // from scratch. `withPalette` replaces the six colours and leaves the scale alone, which
+        // is what keeps a palette change from quietly resetting sizes and spacing to the default.
+        // And it is the open document only: the three variants are three documents, and
+        // recolouring one has no more business touching the others than editing its text does.
+        onPickPalette={(paletteId) => {
+          dismissToast();
+          dispatch({
+            type: "setTheme",
+            variant: openIndex,
+            theme: withPalette(history.present.document.theme, paletteId),
+          });
+        }}
+        onPickTypePair={(typePairId) => {
+          dismissToast();
+          dispatch({
+            type: "setTheme",
+            variant: openIndex,
+            theme: withTypePair(history.present.document.theme, typePairId),
+          });
         }}
         photoUrls={photoUrls.get(openIndex) ?? EMPTY_PHOTOS}
         photoError={photoError}

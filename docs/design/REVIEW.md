@@ -137,13 +137,62 @@ part that must not move — the interface tokens and their separation from the p
   - **No site-preview nav bar inside the canvas card.** The mockup's `Inicio Servicios Galería
     Contacto Reserva` strip is a real multi-page site's own navigation. The generator produces no
     such navigation, so drawing it would advertise links that go nowhere.
-- **Mockup 13's palettes and typefaces are not the ones in the code.** The screen offers `Azul
-  confianza`, `Verde natural`, `Coral cercano` and `Neutro elegante`, plus Inter, Poppins and
-  Source Serif. `packages/tokens` ships four palettes (`classic-blue`, `warm-terracotta`,
-  `forest-emerald`, `dark-slate`) and three type pairs (`modern-sans`, `editorial-serif`,
-  `classic-display`), all with their contrast asserted for every text pair. Phase 2 work, and the
-  reconciliation is naming and ordering, not re-inventing: a palette that is not contrast-tested
-  cannot ship.
+- **Resolved, 28 September 2026 — mockup 13's palettes and typefaces are not the ones in the
+  code.** The claim was that the screen offers `Azul confianza`, `Verde natural`, `Coral cercano`
+  and `Neutro elegante`, plus Inter, Poppins and Source Serif, while `packages/tokens` ships
+  `classic-blue`, `warm-terracotta`, `forest-emerald`, `dark-slate` and the three type pairs — and
+  that the reconciliation would be naming and ordering, not re-inventing. It was, and the Estilo
+  panel now ships with these names, in `packages/tokens/src/locales/es.json`, which until then had
+  no locale file at all: the `nameKey` every palette and pair declared resolved to nothing,
+  unnoticed because nothing had ever displayed them.
+
+  | Code | Shown as | Where the name comes from |
+  |---|---|---|
+  | `classic-blue` | **Azul confianza** | Mockup 13, unchanged |
+  | `forest-emerald` | **Verde natural** | Mockup 13, unchanged |
+  | `warm-terracotta` | **Terracota cálida** | The mockup's warm palette is `Coral cercano`, drawn around `#F2704B`. Ours is `#9A3412`, a deep brick. "Coral" would name a colour this palette does not contain |
+  | `dark-slate` | **Pizarra oscura** | The mockup calls it `Neutro elegante`. It is white text on near-black, and the one thing an owner needs to know before clicking is that it is dark. A name that hides that is not a translation of it |
+  | `modern-sans` | **Moderna y neutra** | Mockup 13's own words for Inter |
+  | `classic-display` | **Clásica y seria** | Mockup 13's own words for Source Serif |
+  | `editorial-serif` | **Sobria y legible** | No mockup counterpart: serif headings over a plain sans body, which is neither of the other two |
+
+  **Typefaces are named by character, never by font**, which is the mockup's other divergence and
+  the deliberate one. Issue #9: Inter and Playfair Display fall back to something else on a machine
+  without them, and ADR 0001 forbids downloading either — so "Inter" as a label promises a font
+  that may never arrive, while "Moderna y neutra" is true whichever one resolves. The `Aa` specimen
+  beside each name is rendered in that pair's real stack, so what it shows *is* what this machine
+  will give, fallback included.
+
+  **Order follows `PALETTES`, not the mockup**, which differs only in swapping the second and third.
+  Both put the safe blue first and the dark one last, and the accessibility matrix iterates
+  `PALETTES` — reordering the catalog to match a mockup exactly would churn that output for nothing
+  an owner could see.
+
+- **Not implemented, and not planned: mockup 13's «Avanzado: colores exactos y tamaños».** The row
+  at the foot of the style panel opens a free colour picker and size controls. There is no such
+  control in the shipped panel and there is not meant to be. This review already said "a palette
+  that is not contrast-tested cannot ship"; the protocol says it more strongly still, that a palette
+  with bad contrast cannot even be declared. A picker is a machine for producing exactly that, and
+  a site built with one is a site that gets published. It is the same warn-or-block line the rest of
+  the product draws — marker text warns, a dead destination blocks — applied to colour, where the
+  damage is invisible to the person causing it.
+
+- **Five swatches per palette, but not the mockup's five.** The mockup draws five circles; our
+  palettes hold six colours. The one left out is `color.accent`, and that is a fact about the code
+  rather than a preference: **no rule the renderer emits reads `var(--color-accent)`**, and it is
+  the only colour whose contrast is asserted nowhere — in `classic-blue` it is 3.19:1 on surface,
+  under AA. Showing it would advertise a colour that appears nowhere on the page and carries no
+  guarantee. Pinned by `packages/renderer/test/theme-css.test.ts`, which fails if a rule ever starts
+  reading it; the fix then is a contrast pair first, not a relaxed test.
+
+- **The editor's top bar names the variant, where mockup 08 names the business.** Found by walking
+  the editor on 28 September 2026, and **not caused by that day's work** — it has been true since
+  the editor existed. The mockup shows `Barbería El Corte`; the running editor shows `Clásica`,
+  because `Editor`'s `title` prop is the variant caption and the shell renders it as `siteName`.
+  The button around it does go back to the three variants, so the current text is not meaningless —
+  but which of the two belongs there is a product decision, not a rendering detail, and it is
+  recorded rather than changed. The business name is already in the document as `siteName`, so
+  either is one line.
 - **The mockups load Inter from Google Fonts.** Fine for a prototype opened on a laptop. It must
   never happen in a published site (ADR 0001): a client's site has no network dependency.
 - **Resolved, 26 September 2026 — the Spanish interface strings.** They were the source for

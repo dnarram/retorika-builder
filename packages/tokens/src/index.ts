@@ -3,6 +3,13 @@ export { contrastRatio, relativeLuminance } from "./contrast.ts";
 export type { ColorKey, Palette } from "./palettes.ts";
 export { PALETTES } from "./palettes.ts";
 
+export {
+  identifyPalette,
+  identifyTypePair,
+  RENDERED_COLOR_KEYS,
+  withPalette,
+  withTypePair,
+} from "./restyle.ts";
 export type { RadiusKey, Scale, SizeKey, SpaceKey } from "./scales.ts";
 export { DEFAULT_SCALE_ID, SCALES } from "./scales.ts";
 export type { BuildThemeInput } from "./theme.ts";

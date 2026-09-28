@@ -32,7 +32,7 @@ Last reviewed: 28 September 2026, at the close of sprint 3.
 |---|---|
 | **«La carta».** Both restaurant owners asked for it unprompted; the planned «Precios» may already be that section under a name neither would recognise. | [#51](https://github.com/dnarram/retorika-builder/issues/51) |
 | **Formatting inside a text.** Bold and underline, asked for once, at the cost of a schema change — and possibly a symptom of the text bank rather than a request of its own. | [#52](https://github.com/dnarram/retorika-builder/issues/52) |
-| **Type pairs falling back** on machines without Inter / Playfair Display. | [#9](https://github.com/dnarram/retorika-builder/issues/9) |
+| **Type pairs falling back** on machines without Inter / Playfair Display. Still open — the fallback itself is unchanged — but the interface half is now handled: the Estilo panel names typefaces by character («Moderna y neutra») and never by font, and its `Aa` specimen renders in the real stack, so what it shows is what that machine will give. | [#9](https://github.com/dnarram/retorika-builder/issues/9) |
 
 ## Recorded against the thing it challenges
 
@@ -53,10 +53,12 @@ Last reviewed: 28 September 2026, at the close of sprint 3.
   be decided before the terms of use are written, not after.
 - **The three catalog sections still missing** of the dossier's nine: Fotos de trabajos, Precios
   (see #51) and Equipo. Six are built.
-- **Two of the five critical Playwright flows cannot exist yet** — *cambio de paleta* has no
-  interface to drive while `Estilo` is phase 2, and *pago de prueba y publicación* is on hold
-  (ADR 0008). Named in the doc comment at the top of
-  `apps/editor/e2e/critical-flows.e2e.test.ts`, which is where they belong when they arrive.
+- **Two of the five critical Playwright flows are not written yet.** *Cambio de paleta* had no
+  interface to drive until sprint 4 day 2 gave `Estilo` a live panel; the flow lands on day 3.
+  *Pago de prueba y publicación* is on hold with no plan (ADR 0008) — there is no payment flow and
+  no publish target, so writing it would test code that does not exist. Both are named in the doc
+  comment at the top of `apps/editor/e2e/critical-flows.e2e.test.ts`, which is where they belong
+  when they arrive.
 - **Filling a destination by hand is done** (sprint 3, day 4) — listed here only so that the
   entry which sat in the old planning file as "pending" is visibly closed rather than lost.
 
