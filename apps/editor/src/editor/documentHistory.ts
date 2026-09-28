@@ -104,7 +104,7 @@ export type HistoryAction =
   | { type: "deleteSection"; variant: number; sectionId: string }
   | { type: "duplicateSection"; variant: number; sectionId: string }
   | { type: "moveSection"; variant: number; sectionId: string; toIndex: number }
-  | { type: "insertSection"; variant: number; section: Section; index: number }
+  | { type: "insertSection"; variant: number; section: Section; index: number; pageId: string }
   | { type: "setImage"; variant: number; address: ElementAddress; src: string; alt: string }
   | { type: "fillSlot"; variant: number; fill: SlotFill }
   | { type: "clearSlot"; variant: number; address: SlotAddress }
@@ -208,13 +208,25 @@ function moveSection(history: History, sectionId: string, toIndex: number): Hist
  * re-minted here against the very document being written, which is the only place that knows
  * what is free — and which keeps inserting two of the same section in a row from colliding.
  *
- * The page is the first one, the same page the preview renders (`packages/renderer` draws
- * `doc.pages[0]`). Phase 1 has exactly one; when `Páginas` arrives in phase 2 this is where the
- * choice of which one has to come from.
+ * **The page is the one the canvas is drawing, and it arrives in the action.** It used to be
+ * `doc.pages[0]` with a comment saying that was a placeholder until `Páginas` arrived; `Páginas`
+ * arrived in sprint 5 and this did not come back, so from a converted page every «Añadir sección
+ * aquí» put its section on the home page instead.
+ *
+ * It was worse than the wrong page. `wireInsertion` computes `index` from the sections it can see —
+ * the ones on the *rendered* page — so clicking the third gap of a converted page sent `index: 2`
+ * to be applied against the home page's own list: the wrong page *and* a meaningless position in
+ * it. Both are cured by getting the page right, because the index was always page-local.
+ *
+ * `pageId` is required rather than optional, and that is the fix rather than a detail of it. The
+ * `never` check at the bottom of `apply` catches an action *type* nobody handled; it cannot catch a
+ * field nobody passed. A required field is the only thing that makes the compiler ask every caller
+ * which page it means — an optional one falling back to `pages[0]` would rebuild this bug the next
+ * time somebody adds a call site.
  */
-function insertSection(history: History, section: Section, index: number): History {
-  const page = history.present.document.pages[0];
-  if (!page) throw new Error("insertSection: the document has no page to insert into");
+function insertSection(history: History, section: Section, index: number, pageId: string): History {
+  const page = history.present.document.pages.find((candidate) => candidate.id === pageId);
+  if (!page) throw new Error(`insertSection: no page "${pageId}"`);
 
   const sectionId = mintSectionId(history.present.document, section.id);
   const document = insertSectionIntoDoc(history.present.document, page.id, index, {
@@ -478,7 +490,7 @@ function apply(history: History, action: HistoryAction): History {
     case "moveSection":
       return moveSection(history, action.sectionId, action.toIndex);
     case "insertSection":
-      return insertSection(history, action.section, action.index);
+      return insertSection(history, action.section, action.index, action.pageId);
     case "setImage":
       return setImage(history, action.address, action.src, action.alt);
     case "fillSlot":
