@@ -10,6 +10,16 @@ export const SEARCH_ALIASES: Readonly<Record<string, readonly string[]>> = {
   cover: ["portada", "hero", "cabecera", "inicio", "principal", "arriba", "banner"],
   services: ["qué hago", "servicios", "productos", "tarjetas", "lo que ofrezco", "carta"],
   prices: ["precios", "tarifas", "carta", "menú", "platos", "lista de precios", "cuánto cuesta"],
+  gallery: [
+    "fotos de trabajos",
+    "galería",
+    "fotos",
+    "imágenes",
+    "antes y después",
+    "platos",
+    "platos estrella",
+    "escaparate",
+  ],
   location: [
     "horario",
     "ubicación",
@@ -44,7 +54,7 @@ export const SEARCH_ALIASES: Readonly<Record<string, readonly string[]>> = {
 /**
  * Words more than one section answers to, and which of them answers first.
  *
- * One entry today, and it is the reason this table exists: **«carta»**. `services` has claimed it
+ * The first entry is the reason this table exists: **«carta»**. `services` has claimed it
  * since sprint 1, because a restaurant listing its dishes without prices really is a "Qué hago" —
  * and from sprint 4 a carta is also, and more precisely, a `prices`. Both are right, so the
  * question is not which keeps the word but which comes first.
@@ -55,11 +65,23 @@ export const SEARCH_ALIASES: Readonly<Record<string, readonly string[]>> = {
  * find the section that does that, and dropping the alias would make «carta» stop finding the
  * only section that has served it until today.
  *
- * Declared rather than derived, because there is nothing in the data to derive it from — both
- * sections match the word exactly, and which one an owner meant is a product judgement.
+ * **«platos»** is the second, and it comes from one sentence: «le falta una sección para mostrar los
+ * platos estrella **o** poner la carta del restaurante» (Taberna, 25 Sep). The «o» is doing real
+ * work — those are two sections, `gallery` and `prices`, and an owner typing «platos» might want
+ * either. `prices` comes first because the other owner's phrasing pairs the word with a list: «una
+ * sección para mostrar mis platos, **la carta**, etc.» (Conchi, 27 Sep). Someone who means the
+ * photographs is more likely to type «platos estrella», which only `gallery` claims exactly.
+ *
+ * Declared rather than derived, because there is nothing in the data to derive it from — every
+ * section here matches its word exactly, and which one an owner meant is a product judgement. For
+ * «platos» that is true even though the catalog's own order happens to give the same answer today:
+ * that coincidence is what this table exists to stop depending on, since `CATALOG`'s order is the
+ * order the "Añadir sección aquí" menu reads in, and reordering a menu must not silently reorder
+ * search results.
  */
-const SHARED_ALIASES: Readonly<Record<string, readonly string[]>> = {
+export const SHARED_ALIASES: Readonly<Record<string, readonly string[]>> = {
   carta: ["prices", "services"],
+  platos: ["prices", "gallery"],
 };
 
 /** Lower case, unaccented, trimmed — so «Menú» and «menu» are the same query. */

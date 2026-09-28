@@ -10,6 +10,7 @@ import { blankSection, canBeBlank, isPlaceholderText } from "../src/blank.ts";
 import { CONTACT_ID } from "../src/contact.ts";
 import { COVER_ID } from "../src/cover.ts";
 import { FOOTER_ID } from "../src/footer.ts";
+import { GALLERY_ID } from "../src/gallery.ts";
 import es from "../src/locales/es.json" with { type: "json" };
 import { LOCATION_ID } from "../src/location.ts";
 import { CATALOG, presetFor, variantsFor } from "../src/presets.ts";
@@ -45,6 +46,7 @@ describe("canBeBlank", () => {
       LOCATION_ID,
       TESTIMONIALS_ID,
       PRICES_ID,
+      GALLERY_ID,
       FOOTER_ID,
     ]);
   });

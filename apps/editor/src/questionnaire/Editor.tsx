@@ -11,8 +11,10 @@ import {
 import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
 import { render } from "@retorika/renderer";
 import {
+  type ContentElement,
   type ElementAddress,
   findSection,
+  flattenElements,
   type ListItem,
   listEditableFields,
   type PresetShape,
@@ -147,9 +149,27 @@ function compositionsFor(doc: RetorikaDocument, sectionId: string): Composition[
  */
 interface ListLines {
   slot: string;
+  /** Which section this is, so the controls can call its items by their own name. */
+  catalogId: string;
   itemIds: string[];
   canAdd: boolean;
   canRemove: boolean;
+}
+
+/**
+ * The words on the two list controls, which depend on what a section's items actually are.
+ *
+ * One generic label served every list until sprint 5 day 3, and «Añadir línea» read acceptably
+ * under a carta and passably under cards. Under a grid of photographs it does not: a photograph is
+ * not a line, and the browser walk that day is where that became obvious rather than arguable.
+ *
+ * A section only needs a key here when the generic word is wrong for it, so «Qué hago» and
+ * «Opiniones» keep the shared label — both have shipped through two usability sessions with it,
+ * and changing words those sessions saw is a product decision rather than a tidy-up.
+ */
+function lineLabel(action: "add" | "remove", catalogId: string): string {
+  const table = es as Record<string, string | undefined>;
+  return table[`editor.line.${action}.${catalogId}`] ?? es[`editor.line.${action}`];
 }
 
 function linesFor(doc: RetorikaDocument, sectionId: string): ListLines | undefined {
@@ -168,6 +188,7 @@ function linesFor(doc: RetorikaDocument, sectionId: string): ListLines | undefin
   const itemIds = (list.items ?? []).map((item) => item.id);
   return {
     slot: list.slot,
+    catalogId: found.section.preset.catalogId,
     itemIds,
     canAdd: itemIds.length < range.max,
     canRemove: itemIds.length > range.min,
@@ -344,17 +365,32 @@ export function Editor({
   // URL and 404s, which is exactly why the placeholder is a data: URI and not a file.
   const html = useMemo(() => {
     if (photoUrls.size === 0) return render(doc, "html").html;
+    // Recursive since sprint 5 day 3. This used to map `section.content` and stop there, which
+    // was complete while every image sat directly in a section; a gallery puts one inside each
+    // list item, and those kept their bundle-relative name and 404'd in the preview — the owner
+    // uploaded a photograph and watched a broken image appear. The renderer's `collectAssets` had
+    // exactly this bug and was fixed the same way.
+    const swap = (element: ContentElement): ContentElement => {
+      if (element.items) {
+        return {
+          ...element,
+          items: element.items.map((item) => ({
+            ...item,
+            elements: item.elements.map(swap),
+          })),
+        };
+      }
+      if (element.value?.kind !== "image") return element;
+      const url = photoUrls.get(element.value.src);
+      return url ? { ...element, value: { ...element.value, src: url } } : element;
+    };
     const forPreview: RetorikaDocument = {
       ...doc,
       pages: doc.pages.map((page) => ({
         ...page,
         sections: page.sections.map((section) => ({
           ...section,
-          content: section.content.map((element) => {
-            if (element.value?.kind !== "image") return element;
-            const url = photoUrls.get(element.value.src);
-            return url ? { ...element, value: { ...element.value, src: url } } : element;
-          }),
+          content: section.content.map(swap),
         })),
       })),
     };
@@ -732,7 +768,7 @@ export function Editor({
           const remove = iframeDoc.createElement("button");
           remove.type = "button";
           remove.className = "rb-line-remove";
-          remove.setAttribute("aria-label", es["editor.line.remove"]);
+          remove.setAttribute("aria-label", lineLabel("remove", lines.catalogId));
           remove.innerHTML =
             '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
           remove.addEventListener("click", (event) => {
@@ -747,7 +783,7 @@ export function Editor({
       const add = iframeDoc.createElement("button");
       add.type = "button";
       add.className = "rb-line-add";
-      add.textContent = `+ ${es["editor.line.add"]}`;
+      add.textContent = `+ ${lineLabel("add", lines.catalogId)}`;
       add.addEventListener("click", (event) => {
         event.stopPropagation();
         // Built here from the catalog, because what a valid line is made of is the catalog's
@@ -942,13 +978,21 @@ export function Editor({
     wireEditing(iframeDoc);
   }
 
-  /** The photo srcs this document actually names. An upload that has since been undone still has
-   * its bytes in memory, and the route refuses a photo the document does not reference. */
+  /**
+   * The photo srcs this document actually names. An upload that has since been undone still has
+   * its bytes in memory, and the route refuses a photo the document does not reference.
+   *
+   * `flattenElements` since sprint 5 day 3, for the reason `collectAssets` in the renderer already
+   * uses it: a gallery's photographs live inside list items, and walking `section.content` alone
+   * left every one of them out of the multipart body. The page would then be published referencing
+   * files the route never received — the worst shape of this bug, because it only shows up in the
+   * downloaded ZIP, after the owner has gone.
+   */
   function referencedPhotos(): string[] {
     const srcs = new Set<string>();
     for (const page of doc.pages) {
       for (const section of page.sections) {
-        for (const element of section.content) {
+        for (const element of flattenElements(section.content)) {
           if (element.value?.kind === "image" && photoUrls.has(element.value.src)) {
             srcs.add(element.value.src);
           }

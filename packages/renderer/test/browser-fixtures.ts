@@ -9,6 +9,8 @@ import {
   COVER_VARIANTS,
   FOOTER_ID,
   FOOTER_VARIANTS,
+  GALLERY_ID,
+  GALLERY_VARIANTS,
   LOCATION_ID,
   LOCATION_VARIANTS,
   PRICES_ID,
@@ -127,6 +129,81 @@ function pricesSection(variantId: string, text: TextCase): Section {
   };
 }
 
+/**
+ * "Fotos de trabajos" with four photographs, deliberately of three different shapes.
+ *
+ * That is the whole point of the fixture. The stylesheet's new `.rb-gallery .rb-item img` rule
+ * exists because four photographs an owner took on a phone are not all the same shape, and without
+ * a declared ratio the four cards come out at four heights with the captions at four levels. Every
+ * other fixture asset is 320x200, so a gallery built from those alone would pass whether the rule
+ * were there or not — `gallery-tall.svg` (200x320) and `gallery-square.svg` (300x300) are here to
+ * make the overflow suite measure something that can actually go wrong.
+ *
+ * The long case is a caption, which is the field whose length the owner does not choose from a
+ * list: the same argument `testimonialsSection` makes for a quote.
+ */
+function gallerySection(variantId: string, text: TextCase): Section {
+  const long = text === "long";
+  const photos: readonly [string, string, string][] = [
+    ["barbershop.svg", "Interior de la barbería", "Nuestro local"],
+    ["gallery-tall.svg", "Corte de pelo terminado, de cuerpo entero", "Corte clásico"],
+    ["gallery-square.svg", "Detalle del arreglo de barba", "Barba a navaja"],
+    ["academy.svg", "El equipo en un curso de formación", "Nos seguimos formando"],
+  ];
+  return {
+    id: "sec-gallery",
+    preset: { catalogId: GALLERY_ID, variantId },
+    source: "catalog",
+    layout: null,
+    content: [
+      {
+        id: "el-ga-headline",
+        role: "heading",
+        hidden: false,
+        slot: "headline",
+        value: { kind: "text", text: "Nuestros trabajos" },
+      },
+      {
+        id: "el-ga-intro",
+        role: "body",
+        hidden: false,
+        slot: "intro",
+        value: { kind: "text", text: "Algunos de los últimos, tal cual salieron." },
+      },
+      {
+        id: "el-photos",
+        role: "list",
+        hidden: false,
+        slot: "photos",
+        items: photos.map(([file, alt, caption], index) => ({
+          id: `item-${index + 1}`,
+          elements: [
+            {
+              id: `el-photo-${index + 1}`,
+              role: "image",
+              hidden: false,
+              slot: "photo",
+              value: { kind: "image", src: `assets/${file}`, alt },
+            } as ContentElement,
+            {
+              id: `el-caption-${index + 1}`,
+              role: "body",
+              hidden: false,
+              slot: "caption",
+              value: {
+                kind: "text",
+                text: long
+                  ? `${caption}, con degradado bajo y perfilado de contorno hecho a navaja en la misma sesión`
+                  : caption,
+              },
+            } as ContentElement,
+          ],
+        })),
+      },
+    ],
+  };
+}
+
 const PRESET_CASES: Record<
   string,
   {
@@ -170,6 +247,11 @@ const PRESET_CASES: Record<
     variants: PRICES_VARIANTS,
     texts: ["standard", "long"],
     sections: (cover, variantId, text) => [cover, pricesSection(variantId, text)],
+  },
+  [GALLERY_ID]: {
+    variants: GALLERY_VARIANTS,
+    texts: ["standard", "long"],
+    sections: (cover, variantId, text) => [cover, gallerySection(variantId, text)],
   },
   [CONTACT_ID]: {
     variants: CONTACT_VARIANTS,

@@ -123,6 +123,8 @@
   "editor.changePhoto": "Cambiar esta foto",
   "editor.line.add": "Añadir línea",
   "editor.line.remove": "Quitar esta línea",
+  "editor.line.add.gallery": "Añadir foto",
+  "editor.line.remove.gallery": "Quitar esta foto",
   "editor.line.full": "Esta sección ya tiene todas las líneas que caben.",
   "editor.composition.open": "Cambiar cómo se ve esta sección",
   "editor.composition.title": "Cómo se ve esta sección",

@@ -58,11 +58,26 @@ export function photoBlob(bytes: Uint8Array, type = "image/jpeg"): Blob {
   return new Blob([buffer], { type });
 }
 
-/** The file name this photo takes inside the ZIP, which is also the `src` the document carries.
- * Derived from the section so two sections cannot collide, and stable so re-uploading replaces
- * rather than accumulates. */
-export function photoSrcFor(sectionId: string): string {
-  return `foto-${sectionId}.${extensionFor(OUTPUT_TYPE)}`;
+/**
+ * The file name this photo takes inside the ZIP, which is also the `src` the document carries.
+ *
+ * Derived from the section **and the element**, and stable so that re-uploading over the same
+ * image replaces it rather than accumulating a second file.
+ *
+ * The element id joined sprint 5 day 3, when "Fotos de trabajos" made a section able to hold more
+ * than one photograph. Until then every section had at most one image slot, so the section alone
+ * was unique and the name was shorter for it. In a gallery it was actively wrong: eight cards all
+ * resolved to `foto-sec-gallery.jpg`, so each upload silently overwrote the last one's bytes and
+ * the published page showed the same photograph eight times. Found in the browser — nothing failed,
+ * which is what made it worth finding there.
+ *
+ * `(sectionId, elementId)` is unique across the whole document: section ids are minted unique by
+ * `mintSectionId`, and document rule 5 scopes element-id uniqueness to the whole section, items
+ * included. Older sessions are unaffected — a document carries its srcs as data and IndexedDB is
+ * keyed by them, so a photo uploaded under the old name keeps resolving under the old name.
+ */
+export function photoSrcFor(sectionId: string, elementId: string): string {
+  return `foto-${sectionId}-${elementId}.${extensionFor(OUTPUT_TYPE)}`;
 }
 
 function scaled(width: number, height: number): { width: number; height: number } {

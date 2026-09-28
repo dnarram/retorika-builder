@@ -360,6 +360,15 @@ export function buildCss(doc: RetorikaDocument): string {
     // One rule rather than a second list drawing, because the only thing that differs is how many
     // across.
     ".rb-prices .rb-list { grid-template-columns: 1fr; gap: var(--space-sm); }",
+    // A gallery is the one list whose items are pictures, and `.rb-section img` alone —
+    // width 100%, height auto — gives every card the height of whatever photo it holds. Four
+    // photographs an owner took on a phone, some upright and some sideways, then come out as four
+    // cards of four different heights with the captions at four different levels, which reads as a
+    // broken page rather than as a gallery. A declared ratio with `object-fit: cover` makes the row
+    // even and crops rather than squashes; 4/3 because it is the ratio a phone camera shoots in, so
+    // the common photo is cropped least. One rule, like `.rb-prices` above, because the generic card
+    // grid is right about everything else.
+    ".rb-gallery .rb-item img { aspect-ratio: 4 / 3; object-fit: cover; }",
     ".rb-section p { font-size: var(--size-body); color: var(--color-muted); margin: 0; }",
     // Plain links (PR #6, finding 3): color.primary, which every palette guarantees against
     // color.surface, and underlined so they never rely on colour alone. The :not keeps this
