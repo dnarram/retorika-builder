@@ -14,6 +14,12 @@ does carry is **what is blocked until it is answered**, so the cost of leaving i
 Written 28 September 2026, at the close of sprint 3, when charging was moved out of sprint 4
 because of it.
 
+> **Deferred, 28 September 2026 — [ADR 0021](../decisions/0021-charging-waits-for-a-sellable-product.md).**
+> These six questions are not going to direction or to the gestoría with a deadline. Charging waits
+> until the product is judged professionally sellable, which the two usability sessions say it is
+> not yet: both owners built a site in the time measured and neither said they would publish it.
+> Nothing below is withdrawn — the questions stand, unanswered, for whenever that changes.
+
 ---
 
 ## What is already decided, and is not being reopened

@@ -1,20 +1,14 @@
 # 0016 — The contact section has links, not a form
 
-**Status:** **proposed — and its reopening condition fired on 2026-09-27.** It cannot become
-accepted: the evidence it named as its own test came back the other way. See "What the two
-sessions settled" below. · **Date:** 2026-09-24 · **Proposed by:** development · **Amends, if
-accepted:** concept dossier §9
+**Status:** **resolved by [ADR 0020](0020-contact-stays-links-only-for-phase-1.md), 2026-09-28.**
+Its reopening condition fired on 2026-09-27 — see "What the two sessions settled" below — and the
+CEO accepted this ADR's phase 1 scope while splitting the web form off as its own, unscheduled
+phase 2 item. · **Date:** 2026-09-24 · **Proposed by:** development · **Amends:** concept dossier
+§9
 
-> **Why this is not accepted yet.** The argument below is technical and the decision is a product
-> one. It is being checked with the two owners of the usability sessions — **the first of which has
-> now happened (25 September 2026) without settling this: see the note under the evidence table** —
-> and it is explicitly reopened if either of them answers a certain way. A decision that
-> depends on evidence nobody has gathered is proposed, not accepted — and the CEO has not seen
-> this. It becomes **accepted** when the two answers are recorded below, naming who accepted it.
->
-> The code for the section ships with this ADR at `proposed` on purpose: the links work whether
-> or not a form is ever added, so if the sessions reopen this, a form is an addition in phase 2
-> rather than a rewrite.
+> **This record is not rewritten.** Everything below — the argument, the evidence, the reopening
+> condition and what it caught — stands exactly as it was written while the decision was still
+> open. What changed is recorded in ADR 0020, not here.
 
 ## Context
 
