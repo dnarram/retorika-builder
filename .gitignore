@@ -32,3 +32,6 @@ apps/editor/CLAUDE.md
 
 # macOS
 .DS_Store
+
+# Scratch for browser-walk screenshots and throwaway scripts. Never committed.
+.tmp/

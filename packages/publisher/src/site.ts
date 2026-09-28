@@ -159,17 +159,31 @@ export function buildSite(doc: RetorikaDocument, options: BuildSiteOptions): Sit
     return path;
   };
 
-  const encoder = new TextEncoder();
-  const pageFiles = pages.map(({ page, path }): SiteFile => {
-    const rewritten = {
+  // Every page rewritten once, and then drawn by id from that one document.
+  //
+  // This used to hand the renderer `{ ...doc, pages: [thisPage] }` — a way of saying "draw this
+  // one" that predates `render`'s own `pageId` option (sprint 5 day 2). It stopped being harmless
+  // on day 4: an «Avance» reads its title and its line from the page it points at, and a document
+  // sliced down to one page has no such page in it, so every teaser published as a bare link with
+  // no heading, no summary and no accessible name. Every unit test passed, because they all hand
+  // the renderer a whole document; the browser walk is what found it.
+  const rewrittenDoc: RetorikaDocument = {
+    ...doc,
+    pages: doc.pages.map((page) => ({
       ...page,
       sections: page.sections.map((section) => ({
         ...section,
         content: rewriteImages(section.content, toBundle),
       })),
-    };
-    // The renderer draws the first page of whatever document it is given.
-    const { html, assets } = render({ ...doc, pages: [rewritten] }, "html");
+    })),
+  };
+
+  const encoder = new TextEncoder();
+  const pageFiles = pages.map(({ page, path }): SiteFile => {
+    const { html, assets } = render(rewrittenDoc, "html", { pageId: page.id });
+    // `collectAssets` walks the whole document, so this now checks the bundle holds every image
+    // the *site* names rather than every image this page names. That is the stronger claim and the
+    // one the promise is about: a ZIP is complete or it is not.
     for (const ref of assets) {
       if (!ref.src.startsWith("data:") && !assetFiles.has(ref.src)) {
         throw new Error(`buildSite: the page references "${ref.src}", which is not in the bundle`);

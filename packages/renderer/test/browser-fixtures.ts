@@ -17,11 +17,15 @@ import {
   PRICES_VARIANTS,
   SERVICES_ID,
   SERVICES_VARIANTS,
+  TEASER_ID,
+  TEASER_VARIANTS,
   TESTIMONIALS_ID,
   TESTIMONIALS_VARIANTS,
+  teaserSection,
 } from "@retorika/catalog";
 import {
   type ContentElement,
+  type Page as DocumentPage,
   parseDocument,
   type RetorikaDocument,
   type Section,
@@ -204,12 +208,105 @@ function gallerySection(variantId: string, text: TextCase): Section {
   };
 }
 
+/**
+ * The pages an «Avance» needs in order to show anything at all.
+ *
+ * Every other section is drawn from a one-page document, because until sprint 5 every document had
+ * one page. A teaser holds only a link and reads its title and its line from the page it points at,
+ * so measuring one on a page with nowhere to point would measure a dead link instead of a teaser.
+ *
+ * The long case is the destination's own title, which is what the owner typed as the heading of the
+ * section they converted — the one piece of a teaser nobody chooses from a list.
+ */
+function teaserPages(text: TextCase): DocumentPage[] {
+  const long = text === "long";
+  const page = (id: string, slug: string, title: string, intro: string): DocumentPage => ({
+    id,
+    slug,
+    title,
+    sections: [
+      {
+        id: `sec-${slug}`,
+        preset: { catalogId: PRICES_ID, variantId: "stacked" },
+        source: "catalog",
+        layout: null,
+        content: [
+          {
+            id: `el-${slug}-h`,
+            role: "heading",
+            hidden: false,
+            slot: "headline",
+            value: { kind: "text", text: title },
+          },
+          {
+            id: `el-${slug}-i`,
+            role: "body",
+            hidden: false,
+            slot: "intro",
+            value: { kind: "text", text: intro },
+          },
+          {
+            id: `el-${slug}-lines`,
+            role: "list",
+            hidden: false,
+            slot: "lines",
+            items: [
+              {
+                id: "item-1",
+                elements: [
+                  {
+                    id: `el-${slug}-n`,
+                    role: "heading",
+                    hidden: false,
+                    slot: "name",
+                    value: { kind: "text", text: "Ensaladilla" },
+                  },
+                  {
+                    id: `el-${slug}-p`,
+                    role: "body",
+                    hidden: false,
+                    slot: "price",
+                    value: { kind: "text", text: "6,50 €" },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+  return [
+    page(
+      "page-carta",
+      "nuestra-carta",
+      long ? "Nuestra carta de temporada y sugerencias del día" : "Nuestra carta",
+      "Pregunta por lo que haya hoy fuera de carta.",
+    ),
+    page("page-fotos", "fotos", "Fotos de la casa", "Algunas de las últimas."),
+    page("page-donde", "donde-estamos", "Dónde estamos", "En pleno centro de Ronda."),
+  ];
+}
+
+/** Three avances, which is the case worth measuring: three links that read the same and go to
+ * three different places (WCAG 2.4.4), plus the contrast and the box of each. */
+function teaserSections(): Section[] {
+  return [
+    teaserSection("sec-avance-1", "./nuestra-carta.html", "Ver más"),
+    teaserSection("sec-avance-2", "./fotos.html", "Ver más"),
+    teaserSection("sec-avance-3", "./donde-estamos.html", "Ver más"),
+  ];
+}
+
 const PRESET_CASES: Record<
   string,
   {
     variants: readonly string[];
     texts: readonly TextCase[];
     sections: (cover: Section, variantId: string, text: TextCase) => Section[];
+    /** Pages beyond the one under test. Only «Avance» needs any: it is the only section that
+     * reads from somewhere else in the document. */
+    extraPages?: (text: TextCase) => DocumentPage[];
   }
 > = {
   [COVER_ID]: {
@@ -252,6 +349,12 @@ const PRESET_CASES: Record<
     variants: GALLERY_VARIANTS,
     texts: ["standard", "long"],
     sections: (cover, variantId, text) => [cover, gallerySection(variantId, text)],
+  },
+  [TEASER_ID]: {
+    variants: TEASER_VARIANTS,
+    texts: ["standard", "long"],
+    sections: (cover) => [cover, ...teaserSections()],
+    extraPages: teaserPages,
   },
   [CONTACT_ID]: {
     variants: CONTACT_VARIANTS,
@@ -548,7 +651,10 @@ function allWithFilters(
             const document = parseDocument({
               ...base,
               theme: buildTheme({ paletteId: palette.id, typePairId: typePair.id }),
-              pages: [{ ...page, sections: preset.sections(section, variantId, text) }],
+              pages: [
+                { ...page, sections: preset.sections(section, variantId, text) },
+                ...(preset.extraPages?.(text) ?? []),
+              ],
             });
             combinations.push({
               id,

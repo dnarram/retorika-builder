@@ -1,6 +1,6 @@
 import type { ContentElement, PresetSlot } from "@retorika/schema";
 import { describe, expect, it } from "vitest";
-import { CATALOG, presetFor, variantsFor } from "../src/index.ts";
+import { CATALOG, presetFor, TEASER_ID, variantsFor } from "../src/index.ts";
 import es from "../src/locales/es.json" with { type: "json" };
 
 /**
@@ -97,12 +97,18 @@ describe("every composition can draw everything its section holds", () => {
 });
 
 describe("what the editor needs in order to offer the choice", () => {
-  it("gives every section at least two compositions, or the button would have nothing to do", () => {
+  it("gives every section the owner composes at least two compositions", () => {
     // Not a law of the catalog — a section with one composition is legal — but it is why the
     // editor asks `variantsFor(...).length > 1` before drawing the button rather than assuming.
-    for (const catalogId of catalogIds) {
+    //
+    // «Avance» is the exception that rule was written against, and it arrived in sprint 5 day 4.
+    // It is derived chrome standing in for a page rather than something the owner composes, and
+    // three of them on one home page should look like three of the same thing. `compositionsFor`
+    // returns nothing for it, so no dead button is drawn.
+    for (const catalogId of catalogIds.filter((id) => id !== TEASER_ID)) {
       expect(variantsFor(catalogId).length, catalogId).toBeGreaterThanOrEqual(2);
     }
+    expect(variantsFor(TEASER_ID)).toHaveLength(1);
   });
 
   it("names every composition in Spanish, since the menu shows names and not ids", () => {
