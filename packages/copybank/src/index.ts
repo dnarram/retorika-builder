@@ -12,7 +12,8 @@ import { type SectorFile, type Suggestion, sectorFileSchema } from "./schema.ts"
  * module load, so a file that has not been reviewed brings the application down at start rather
  * than publishing an unreviewed text at three in the morning.
  *
- * Only `bank/` is read. There is no `drafts/` directory today — see the README for why.
+ * Only `bank/` is read. A `drafts/` directory exists as of 28 September 2026 and nothing in this
+ * file may ever import from it — `test/drafts.test.ts` asserts that by reading this source.
  */
 
 export const GENERIC_SECTOR = "generico";
