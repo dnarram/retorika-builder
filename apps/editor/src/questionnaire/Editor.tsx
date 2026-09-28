@@ -1,6 +1,12 @@
 "use client";
 
-import { FOOTER_ID, FOOTER_IDENTITY_SLOTS, isPlaceholderText, presetFor } from "@retorika/catalog";
+import {
+  FOOTER_ID,
+  FOOTER_IDENTITY_SLOTS,
+  isPlaceholderText,
+  presetFor,
+  variantsFor,
+} from "@retorika/catalog";
 import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
 import { render } from "@retorika/renderer";
 import {
@@ -82,6 +88,52 @@ function slotOrderOf(doc: RetorikaDocument, sectionId: string): string[] {
   }
 }
 
+/**
+ * One composition this section could be drawn with — its id, its Spanish name, and whether it is
+ * the one in use.
+ */
+interface Composition {
+  variantId: string;
+  name: string;
+  current: boolean;
+}
+
+/**
+ * The compositions to offer for a section, **or an empty list when the choice does not exist**, in
+ * which case no button is drawn for it at all.
+ *
+ * Three reasons a section gets none, and each is a case where a button would light up and do
+ * nothing — the dead-button mistake `EditorShell` has refused since sprint 1:
+ *
+ * - **It carries its own layout.** `build.ts` reads `section.layout ?? preset.layoutFor(variantId,
+ *   …)`, so for a hand-designed section the variant id decides nothing; `setVariant` in the schema
+ *   refuses outright, and this is what stops anyone reaching that refusal.
+ * - **The catalog gives it only one composition.** Every section ships two or three today (asserted
+ *   in `packages/catalog/test/variants.test.ts`), so this is a guard against a future section
+ *   rather than a live case — cheap, and it fails to a missing button rather than a useless one.
+ * - **It is not a catalog section at all**, so there is no preset to ask.
+ */
+function compositionsFor(doc: RetorikaDocument, sectionId: string): Composition[] {
+  const found = findSection(doc, sectionId);
+  if (!found || found.section.layout !== null) return [];
+  let variantIds: readonly string[];
+  try {
+    variantIds = variantsFor(found.section.preset.catalogId);
+  } catch {
+    return [];
+  }
+  if (variantIds.length < 2) return [];
+  return variantIds.map((variantId) => {
+    const key =
+      `section.${found.section.preset.catalogId}.variant.${variantId}` as keyof typeof catalogEs;
+    return {
+      variantId,
+      name: catalogEs[key] ?? variantId,
+      current: variantId === found.section.preset.variantId,
+    };
+  });
+}
+
 /** From `Content-Disposition: attachment; filename="doc-taberna.zip"`. */
 function filenameFrom(response: Response, fallback: string): string {
   const match = /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") ?? "");
@@ -111,7 +163,10 @@ function filenameFrom(response: Response, fallback: string): string {
  * Section selection marks a section with a 2px outline and four corner handles injected into the
  * iframe's own DOM, mirroring mockup 08's per-element selection at section granularity — and,
  * since sprint 2 day 4, a small cluster of action buttons drawn at the selected section's corner:
- * move up, move down, duplicate, the section's fields, delete. No floating toolbar — one action,
+ * move up, move down, its composition, duplicate, the section's fields, delete. Six as of sprint 4
+ * day 4, and the composition one is the first that is drawn conditionally: a section whose layout
+ * is its own, or one the catalog gives a single composition, gets no button rather than a dead one.
+ * No floating toolbar — one action,
  * one button, the same self-contained-in-the-iframe pattern click-to-edit already uses. None of
  * them asks for confirmation: ADR 0014 is explicit that a delete runs immediately, with the undo
  * it offers afterwards as the only safety net, and the same directness applies to the rest, which
@@ -135,6 +190,7 @@ export function Editor({
   onPickPhoto,
   onFillSlot,
   onClearSlot,
+  onSetVariant,
   onPickPalette,
   onPickTypePair,
   photoUrls,
@@ -162,6 +218,8 @@ export function Editor({
   onPickPhoto: (address: ElementAddress, file: File) => void;
   onFillSlot: (fill: SlotFill) => void;
   onClearSlot: (address: SlotAddress) => void;
+  /** A different composition for one section, chosen from its own menu. */
+  onSetVariant: (sectionId: string, variantId: string) => void;
   /** A palette or a pair of typefaces chosen in the Estilo panel. This component says which
    * one was picked; assembling the new theme and putting it in the document is `Variants`'
    * business, the same division as every other verb here. */
@@ -196,6 +254,21 @@ export function Editor({
   // be in the way rather than at hand.
   const [fieldsFor, setFieldsFor] = useState<string | null>(null);
   const [rail, setRail] = useState<RailItemId>("sections");
+  /**
+   * Which section is selected, and whether its composition menu is open — remembered across the
+   * preview's re-renders, which is what makes trying compositions usable at all.
+   *
+   * Every action in this editor replaces the iframe's whole `srcDoc`, so the selection outline, the
+   * handles and the action cluster are all destroyed and rebuilt on each one. Until now that cost
+   * one click to get back, which nobody noticed because you rarely delete the same section twice.
+   * Composition is the first action anyone will repeat deliberately — the whole point is to look at
+   * two and keep one — and re-selecting between each try would be a click and a hunt every time.
+   *
+   * Refs, not state: nothing React renders depends on them. They are read by `wireSelection` when
+   * the frame finishes loading, which is outside React's render pass entirely.
+   */
+  const selectedSection = useRef<string | null>(null);
+  const compositionMenuOpen = useRef(false);
 
   /**
    * At most one side surface at a time.
@@ -302,10 +375,57 @@ export function Editor({
       return button;
     }
 
+    /**
+     * The list of compositions, hung under the action cluster.
+     *
+     * Same visual language as the "Añadir sección aquí" menu and built the same way — inside the
+     * frame, because it is anchored to a section only the frame knows the position of. The choices
+     * are a toggle group rather than a list of commands: one of them is always the one in use, so
+     * each carries `aria-pressed` and the current one is marked rather than hidden.
+     */
+    function compositionMenu(sectionId: string, compositions: readonly Composition[]): HTMLElement {
+      const panel = iframeDoc.createElement("div");
+      panel.className = "rb-compositions";
+
+      const title = iframeDoc.createElement("p");
+      title.className = "rb-menu-title";
+      title.textContent = es["editor.composition.title"];
+      panel.appendChild(title);
+
+      for (const composition of compositions) {
+        const choice = iframeDoc.createElement("button");
+        choice.type = "button";
+        choice.className = "rb-menu-choice rb-composition-choice";
+        choice.setAttribute("aria-pressed", String(composition.current));
+        const name = iframeDoc.createElement("span");
+        name.className = "rb-menu-name";
+        name.textContent = composition.name;
+        choice.appendChild(name);
+        choice.addEventListener("click", (event) => {
+          event.stopPropagation();
+          // Left open on purpose. Picking the composition already in use is a no-op all the way
+          // down (`setVariant` hands back the same document), so the frame does not reload and
+          // the menu would otherwise vanish for nothing; picking a different one reloads it, and
+          // `compositionMenuOpen` is what brings the menu back so the next try is one click.
+          onSetVariant(sectionId, composition.variantId);
+        });
+        panel.appendChild(choice);
+      }
+
+      const note = iframeDoc.createElement("p");
+      note.className = "rb-menu-note";
+      note.textContent = es["editor.composition.note"];
+      panel.appendChild(note);
+
+      return panel;
+    }
+
     function select(target: HTMLElement) {
       for (const section of sections) {
         section.classList.remove("rb-selected");
-        for (const el of section.querySelectorAll(".rb-handle, .rb-actions")) el.remove();
+        for (const el of section.querySelectorAll(".rb-handle, .rb-actions, .rb-compositions")) {
+          el.remove();
+        }
       }
       target.classList.add("rb-selected");
       for (const corner of HANDLE_CORNERS) {
@@ -316,6 +436,7 @@ export function Editor({
 
       const sectionId = target.dataset.section;
       if (!sectionId) return;
+      selectedSection.current = sectionId;
       const index = sections.indexOf(target);
 
       const actions = iframeDoc.createElement("div");
@@ -338,6 +459,33 @@ export function Editor({
           () => onMoveSection(sectionId, index + 1),
         ),
       );
+      // Sixth button, and it only appears when there is a choice to make: a section carrying its
+      // own layout, or one the catalog gives a single composition, gets no button rather than a
+      // dead one. Placed after the two moves because it answers the same kind of question — where
+      // this section's parts sit — and before duplicate, fields and delete, which are about the
+      // section as a thing.
+      const compositions = compositionsFor(doc, sectionId);
+      if (compositions.length > 0) {
+        actions.appendChild(
+          action(
+            es["editor.composition.open"],
+            "move",
+            false,
+            '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M10 4v16"/></svg>',
+            () => {
+              const open = target.querySelector(".rb-compositions");
+              if (open) {
+                open.remove();
+                compositionMenuOpen.current = false;
+                return;
+              }
+              target.appendChild(compositionMenu(sectionId, compositions));
+              compositionMenuOpen.current = true;
+            },
+          ),
+        );
+      }
+
       actions.appendChild(
         action(
           es["editor.duplicateSection"],
@@ -370,6 +518,38 @@ export function Editor({
 
     for (const section of sections) {
       section.addEventListener("click", () => select(section));
+    }
+
+    // Anywhere else in the page closes the composition menu, the same way the insertion menu
+    // closes. Registered on the frame's document rather than the body so a click on the padding
+    // around the sections counts too.
+    iframeDoc.addEventListener("click", (event) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest(".rb-compositions, .rb-actions")) return;
+      for (const menu of iframeDoc.querySelectorAll(".rb-compositions")) menu.remove();
+      compositionMenuOpen.current = false;
+    });
+
+    // Put the selection back where it was before this render replaced the whole frame. A section
+    // that is gone — deleted, and this is the render that removed it — simply does not come back,
+    // which is the right answer without a special case for it.
+    const remembered = selectedSection.current;
+    if (remembered) {
+      const target = sections.find((section) => section.dataset.section === remembered);
+      if (target) {
+        select(target);
+        if (compositionMenuOpen.current) {
+          const compositions = compositionsFor(doc, remembered);
+          if (compositions.length > 0) {
+            target.appendChild(compositionMenu(remembered, compositions));
+          } else {
+            compositionMenuOpen.current = false;
+          }
+        }
+      } else {
+        selectedSection.current = null;
+        compositionMenuOpen.current = false;
+      }
     }
   }
 
@@ -597,6 +777,18 @@ export function Editor({
       ".rb-menu-description { font-size: 12px; line-height: 1.35; color: #5B6B82; }",
       ".rb-menu-note { margin: 8px 0 0 0; padding-top: 10px; border-top: 1px solid #EDF1F6;",
       "  font-size: 12px; line-height: 1.4; color: #5B6B82; }",
+      // The composition menu: the insertion menu's card, anchored under the action cluster
+      // instead of centred in a gap, because this one belongs to a section rather than to a
+      // space between two. Narrower, since every choice is a short name with no description.
+      `.rb-compositions { font-family: ${UI_FONT}; position: absolute; top: 40px; right: 8px;`,
+      "  z-index: 20; width: 240px; max-width: calc(100% - 16px); box-sizing: border-box;",
+      "  padding: 12px; text-align: left; background: #FFFFFF; border: 1px solid #E5E9F0;",
+      "  border-radius: 13px; box-shadow: 0 14px 38px rgba(15,23,42,0.18); display: flex;",
+      "  flex-direction: column; gap: 2px; }",
+      ".rb-composition-choice { font-family: inherit; }",
+      // The one in use is marked, not hidden: a toggle group where something is always chosen.
+      '.rb-composition-choice[aria-pressed="true"] { background: #EAF2FE; }',
+      '.rb-composition-choice[aria-pressed="true"] .rb-menu-name { color: #156FE7; }',
       // A photo reads as replaceable the same way an editable text does: the dashed outline on
       // hover, and nothing until then.
       ".rb-photo { cursor: pointer; outline: 2px dashed transparent; outline-offset: 3px; }",

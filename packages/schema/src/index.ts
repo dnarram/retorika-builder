@@ -55,6 +55,7 @@ export {
   mintElementId,
   mintSectionId,
   moveSection,
+  setVariant,
 } from "./sections.ts";
 export { setTheme } from "./theme.ts";
 export type { StyleValue, Theme, TokenKey } from "./tokens.ts";
