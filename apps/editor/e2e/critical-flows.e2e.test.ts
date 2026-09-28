@@ -1,6 +1,6 @@
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { inflateRawSync } from "node:zlib";
 import { type Browser, chromium, expect, type Page } from "@playwright/test";
 import { afterAll, beforeAll, describe, it } from "vitest";
@@ -233,6 +233,30 @@ function extractFileBytes(bytes: Uint8Array, path: string): Uint8Array {
   throw new Error(`"${path}" not found in the ZIP`);
 }
 
+/**
+ * Every path the ZIP's central directory names, so a multi-page test can assert the whole bundle
+ * — `index.html`, every converted page's own file, `robots.txt` and nothing else — rather than
+ * only the one file it happens to open. Walks the same directory `extractFileBytes` does, kept
+ * separate rather than shared: one reads a name, this one lists them, and tying the two together
+ * would make either harder to read for no line saved.
+ */
+function listZipEntries(bytes: Uint8Array): string[] {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const eocd = bytes.length - 22;
+  const count = view.getUint16(eocd + 10, true);
+  const decoder = new TextDecoder();
+  let at = view.getUint32(eocd + 16, true);
+  const names: string[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const nameLength = view.getUint16(at + 28, true);
+    const extraLength = view.getUint16(at + 30, true);
+    const commentLength = view.getUint16(at + 32, true);
+    names.push(decoder.decode(bytes.subarray(at + 46, at + 46 + nameLength)));
+    at += 46 + nameLength + extraLength + commentLength;
+  }
+  return names;
+}
+
 describe("critical flow 5 — descarga del ZIP y el HTML abre sin servidor", () => {
   it("downloads a real ZIP and its index.html opens from disk with no server", async () => {
     // Two different things happen when this button is clicked, and each needs its own capture.
@@ -390,5 +414,136 @@ describe("regression — converting a section, and renaming the page it made", (
     expect(page.frames().length, "the preview navigated instead of switching page").toBe(
       framesBefore,
     );
+  });
+});
+
+/**
+ * Sprint 5 day 7. Not one of the protocol's five flows, and not a regression either — this is the
+ * sprint's own verification line, named in the plan: «el recorrido con dos o tres conversiones
+ * hechas desde el editor», and «el ZIP de varias páginas abierto sin servidor con los enlaces
+ * funcionando».
+ *
+ * Everything the ZIP needs to be correct has been asserted separately, in Node, against documents
+ * built by hand or by the schema's own verbs: `packages/publisher/test/site.test.ts` proves the
+ * bundle layout, `packages/schema/test/conversion.test.ts` proves `sectionToPage` is one step, and
+ * `packages/schema/test/destinations.test.ts` proves a rewritten anchor resolves. None of that
+ * proves the button in the actual editor produces the same document — day 6's `sectionToPage`
+ * verb was driven by a real click for the first time only in that day's own tests, and only once.
+ * This is the second conversion, reaching the three pages the plan asks to see, built entirely
+ * through the rail and the canvas the way an owner would, continuing the same document flow 2
+ * through flow 6 already edited — so the ZIP this downloads is not a fresh fixture but the actual
+ * accumulated state of a real editing session.
+ */
+describe("día 7 — dos conversiones desde el editor, y el ZIP resultante abierto sin servidor", () => {
+  it("converts a second section, downloads, and every page's own navigation works from file://", async () => {
+    // The previous test left the canvas on the page the menu click switched to. Back to the first
+    // tab — home — because «Dónde estamos» is a section of the home page, not of that one.
+    const frame = page.frameLocator("iframe").first();
+    await page.locator(".overflow-x-auto button").first().click();
+    await expect(frame.locator('[data-section="sec-cover"]')).toBeVisible();
+
+    const tabs = page.locator(".overflow-x-auto button");
+    await expect(tabs).toHaveCount(2);
+
+    await frame.locator('[data-section="sec-location"]').click();
+    await frame
+      .locator(
+        '[data-section="sec-location"] .rb-action[aria-label="Convertir esta sección en página"]',
+      )
+      .click();
+
+    await expect(tabs).toHaveCount(3);
+    await expect(tabs.nth(2)).toHaveText("Dónde estamos");
+    // The second avance gets its own id — `mintSectionId` tried "sec-avance" first and found it
+    // taken by day 6's conversion — and it shows the destination's own words, read at render time
+    // exactly as the first one does.
+    await expect(frame.locator('[data-section="sec-avance-2"]')).toContainText("Dónde estamos");
+
+    const [download, response] = await Promise.all([
+      page.waitForEvent("download"),
+      page.waitForResponse((candidate) => candidate.url().includes("/api/download")),
+      page.getByRole("button", { name: "Descargar" }).click(),
+    ]);
+    expect(response.status()).toBe(200);
+
+    const dir = mkdtempSync(join(tmpdir(), "retorika-e2e-multipage-"));
+    const zipPath = join(dir, download.suggestedFilename());
+    await download.saveAs(zipPath);
+    const bytes = new Uint8Array(readFileSync(zipPath));
+
+    const entries = listZipEntries(bytes);
+    // Exactly the four files this document should produce: no sitemap.xml (a download has no
+    // baseUrl, ADR-settled since sprint 3), no stray page, nothing from an earlier fixture.
+    expect([...entries].sort()).toEqual(
+      ["donde-estamos.html", "index.html", "que-ponemos.html", "robots.txt"].sort(),
+    );
+
+    for (const entry of entries) {
+      const filePath = join(dir, entry);
+      mkdirSync(dirname(filePath), { recursive: true });
+      writeFileSync(filePath, extractFileBytes(bytes, entry));
+    }
+
+    const offlinePage = await (await browser.newContext()).newPage();
+    const failed: string[] = [];
+    offlinePage.on("requestfailed", (request) => failed.push(request.url()));
+    try {
+      await offlinePage.goto(`file://${join(dir, "index.html")}`, { waitUntil: "load" });
+      await expect(offlinePage).toHaveTitle("Taberna Santo Domingo");
+      await expect(offlinePage.locator("h1")).toHaveText(HEADLINE_EDIT);
+      // The rule ADR 0023 exists for: converting moved nothing in the strip. «Nuestra carta»
+      // (the renamed page) and «Dónde estamos» sit exactly where «Qué ponemos» and «Dónde
+      // estamos» the sections used to be, ahead of the untouched «Te esperamos» anchor.
+      await expect(offlinePage.locator(".rb-nav-wide a")).toHaveText([
+        "Nuestra carta",
+        "Dónde estamos",
+        "Te esperamos",
+      ]);
+      // No «Inicio» on the page it would link to — a link that reloads the page you are on.
+      await expect(offlinePage.locator(".rb-nav-wide a", { hasText: "Inicio" })).toHaveCount(0);
+
+      await Promise.all([
+        offlinePage.waitForURL(/que-ponemos\.html$/),
+        offlinePage.locator(".rb-nav-wide a", { hasText: "Nuestra carta" }).click(),
+      ]);
+      await expect(offlinePage).toHaveTitle("Nuestra carta — Taberna Santo Domingo");
+      // The page's own heading is the owner's real content — the services section's headline —
+      // and it is untouched by the rename: renaming a page changes the chrome that names it
+      // (the tab, the menu, the <title>), never the words the owner wrote on the page itself.
+      await expect(offlinePage.locator("h1")).toHaveText("Qué ponemos");
+      await expect(offlinePage.locator('.rb-nav-wide a[aria-current="page"]')).toHaveText(
+        "Nuestra carta",
+      );
+
+      await Promise.all([
+        offlinePage.waitForURL(/index\.html$/),
+        offlinePage.locator(".rb-nav-wide a", { hasText: "Inicio" }).click(),
+      ]);
+      await expect(offlinePage.locator("h1")).toHaveText(HEADLINE_EDIT);
+
+      await Promise.all([
+        offlinePage.waitForURL(/donde-estamos\.html$/),
+        offlinePage.locator(".rb-nav-wide a", { hasText: "Dónde estamos" }).click(),
+      ]);
+      await expect(offlinePage).toHaveTitle("Dónde estamos — Taberna Santo Domingo");
+      await expect(offlinePage.locator("h1")).toHaveText("Dónde estamos");
+      await expect(offlinePage.getByText("Cta. de Santo Domingo, 2, Ronda")).toBeVisible();
+      await expect(offlinePage.locator('.rb-nav-wide a[aria-current="page"]')).toHaveText(
+        "Dónde estamos",
+      );
+
+      await Promise.all([
+        offlinePage.waitForURL(/index\.html$/),
+        offlinePage.locator(".rb-nav-wide a", { hasText: "Inicio" }).click(),
+      ]);
+      await expect(offlinePage.locator("h1")).toHaveText(HEADLINE_EDIT);
+
+      // The whole round trip — three pages, five navigations, zero requests to anything but the
+      // files sitting on disk next to each other. This is ADR 0001's promise, extended by this
+      // sprint from "one page opens" to "every page's own links actually go somewhere real".
+      expect(failed).toEqual([]);
+    } finally {
+      await offlinePage.context().close();
+    }
   });
 });
