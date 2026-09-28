@@ -1,13 +1,11 @@
 # 0019 — The footer offers the owner's details, and never requires them
 
-**Status:** **proposed** · **Date:** 2026-09-27 · **Proposed by:** development · **Amends, if accepted:** protocol Part 15
+**Status:** **accepted** · **Date:** 2026-09-27 · **Proposed by:** development · **Accepted by:** the CEO, 2026-09-28 · **Amends:** protocol Part 15
 
-> **Why this is not accepted yet.** It puts a new kind of data on the open internet with
-> Retorika's name behind the tool that put it there, and it declines a responsibility the CEO
-> may want to take instead. Both are decisions for the CEO, not for development. The code ships
-> at `proposed` on purpose, the same pattern as ADR 0016 and ADR 0018: every field it adds is
-> optional and empty by default, so a different decision changes text and a warning, not a
-> migration.
+> **What was decided.** Retorika takes no position on compliance and declines the responsibility
+> the warning's wording already declined: the footer offers the owner's details and never
+> requires them, and the warning says what is usual and where to ask, nothing more. Every field
+> it adds stays optional and empty by default.
 
 ## Context
 

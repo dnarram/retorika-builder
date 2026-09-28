@@ -20,10 +20,9 @@ Last reviewed: 28 September 2026, at the close of sprint 4.
 
 | What | Where it is written | Waiting on |
 |---|---|---|
-| **A contact form.** ADR 0016's reopening condition fired: asked word for word, Conchi named «un formulario muy simple desde la web con la información justa». | [ADR 0016](../decisions/0016-contact-section-has-links-not-a-form.md) — its status line says so | A phase 2 ADR naming the service, its cost, what happens to a client's site the day that service stops, and the data processing agreement protocol Part 15 requires |
+| **A contact form.** Scoped, 28 September 2026: [ADR 0020](../decisions/0020-contact-stays-links-only-for-phase-1.md) accepted ADR 0016's phase 1 links-only scope and split the form off as its own, unscheduled phase 2 item. | [ADR 0020](../decisions/0020-contact-stays-links-only-for-phase-1.md), resolving [ADR 0016](../decisions/0016-contact-section-has-links-not-a-form.md) | A phase 2 ADR naming the service, its cost, what happens to a client's site the day that service stops, and the data processing agreement protocol Part 15 requires |
 | **How a carta of several courses reads.** Three «Precios» sections one after another are three separate blocks: each has 48px of its own padding and the page puts 76px between them, so **172px of air separates the last dish of one course from the heading of the next**, and nothing frames them as one menu. Measured by building one on 28 September 2026. The cheap lever is a renderer rule making two adjacent sections of the same preset close up; whether that should happen at all is a general design decision, since it would apply to two «Opiniones» just as much. | [`docs/design/REVIEW.md`](../design/REVIEW.md) | Direction, on whether adjacent sections of one kind should read as one |
-| **The hostelería text bank.** Two owners out of two said the texts do not sound like theirs, for opposite reasons — one wanted them longer, the other more evocative. **Written on 28 September 2026 and waiting to be read**, in `packages/copybank/drafts/restaurante-bar.json`: ADR 0009's binding half is that a person reads a text before it ships, and development cannot sign that. Approving it is one word; nothing reaches a site until then. | [ADR 0009](../decisions/0009-generated-texts-from-a-reviewed-bank.md), and the package README | **Direction, to read seven texts.** What the draft could not write, and the one question that would change that, is in [ADR 0010](../decisions/0010-initial-questionnaire.md) |
-| **CEO signatures.** Three ADRs shipped `proposed` on purpose, with code merged, because every one of them is optional and claims nothing. | [0018](../decisions/0018-own-cover-photo-before-phase-2.md) (photo, phase boundary), [0019](../decisions/0019-the-footer-offers-the-owners-details.md) (footer, owner's details), and what to do about [0016](../decisions/0016-contact-section-has-links-not-a-form.md), which cannot become accepted | Direction |
+| **The hostelería text bank — resolved, 28 September 2026.** Both `packages/copybank/drafts/*.json` files were read and signed; the hostelería rewrite and the per-sector «Precios» headings are in `bank/` now. What the draft could not write — a sixth question, direction's to add — is still open. | [ADR 0009](../decisions/0009-generated-texts-from-a-reviewed-bank.md), and [ADR 0010](../decisions/0010-initial-questionnaire.md) | Nothing, for the bank itself. The sixth-question option in ADR 0010 is direction's whenever it wants it |
 | **`packages/photobank`.** The owner's own photo (ADR 0018) does not replace it: a site has to look finished before the first upload, and two sessions produced exactly one observation about it. | [ADR 0011](../decisions/0011-sample-photos-per-sector.md) | Licensed images, which is content production rather than code |
 | **Hosted publishing.** | [ADR 0008](../decisions/0008-hosted-publishing-has-no-plan.md), and `serve.md` in this directory, which is dormant by that decision | Nothing. It is on hold with no plan, and that is the decision |
 
@@ -31,7 +30,6 @@ Last reviewed: 28 September 2026, at the close of sprint 4.
 
 | What | Where |
 |---|---|
-| **«La carta».** Both restaurant owners asked for it unprompted; the planned «Precios» may already be that section under a name neither would recognise. | [#51](https://github.com/dnarram/retorika-builder/issues/51) |
 | **Formatting inside a text.** Bold and underline, asked for once, at the cost of a schema change — and possibly a symptom of the text bank rather than a request of its own. | [#52](https://github.com/dnarram/retorika-builder/issues/52) |
 | **Type pairs falling back** on machines without Inter / Playfair Display. Still open — the fallback itself is unchanged — but the interface half is now handled: the Estilo panel names typefaces by character («Moderna y neutra») and never by font, and its `Aa` specimen renders in the real stack, so what it shows is what that machine will give. | [#9](https://github.com/dnarram/retorika-builder/issues/9) |
 
@@ -45,13 +43,15 @@ Last reviewed: 28 September 2026, at the close of sprint 4.
 
 ## No home but this one
 
-- **Accounts and persistence with Supabase, and charging.** The largest remaining piece of phase 2.
-  The mechanism is decided — Stripe, single payment, Checkout, idempotent webhook, three stored
-  states (protocol Part 15) — and what is not is now written out as six questions for direction in
-  [`docs/design/billing-questions.md`](../design/billing-questions.md), which is why charging is
-  not in sprint 4. One of the six is ours to raise rather than theirs to remember: **once the ZIP
-  is handed over there is nothing to switch off** (ADR 0001), so what a refund can even mean has to
-  be decided before the terms of use are written, not after.
+- **Accounts and persistence with Supabase, and charging — deferred, not scheduled.**
+  [ADR 0021](../decisions/0021-charging-waits-for-a-sellable-product.md), 28 September 2026: it
+  waits until the product is judged professionally sellable, the same status ADR 0008 gives hosted
+  publishing. The mechanism is decided — Stripe, single payment, Checkout, idempotent webhook,
+  three stored states (protocol Part 15) — and the six open questions in
+  [`docs/design/billing-questions.md`](../design/billing-questions.md) are not going to direction
+  with a deadline; they wait for the same moment. One of the six is ours to raise when that moment
+  comes: **once the ZIP is handed over there is nothing to switch off** (ADR 0001), so what a
+  refund can even mean has to be decided before the terms of use are written, not after.
 - **The two catalog sections still missing** of the dossier's nine: Fotos de trabajos and Equipo.
   Seven are built; «Precios» landed on 28 September 2026 (#51). **Fotos de trabajos is the one
   with evidence behind it**: Taberna asked for «los platos estrella o la carta», and only the

@@ -1,12 +1,11 @@
 # 0018 — The owner's own photo arrives before phase 2
 
-**Status:** **proposed** · **Date:** 2026-09-26 · **Proposed by:** development · **Amends, if accepted:** protocol Part 14 (phase boundary)
+**Status:** **accepted** · **Date:** 2026-09-26 · **Proposed by:** development · **Accepted by:** the CEO, 2026-09-28 · **Amends:** protocol Part 14 (phase boundary)
 
-> **Why this is not accepted yet.** It moves a line the CEO drew: the protocol lists **fotos**
-> under phase 2, and this puts one half of them in phase 1. The argument below is a product
-> argument and the decision is the CEO's. The code ships with this at `proposed` on purpose — the
-> same pattern as ADR 0016 — because what it adds is one optional affordance on one slot, and
-> removing it later costs a deletion, not a rewrite.
+> **What was decided.** The line the protocol drew — **fotos** as a whole under phase 2 — moves
+> for this one affordance: the owner's own cover photo arrives in phase 1, and the rest of phase
+> 2's photo work (`packages/photobank`, licensed sample images per sector) stays where the
+> protocol put it. The argument below is the product argument that was accepted.
 
 ## Context
 
