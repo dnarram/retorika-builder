@@ -12,11 +12,12 @@ import {
   type SlotFill,
 } from "@retorika/schema";
 import { useMemo, useRef, useState } from "react";
-import { EditorShell, type SaveStatus } from "../editor/EditorShell.tsx";
+import { EditorShell, type RailItemId, type SaveStatus } from "../editor/EditorShell.tsx";
 import { ACCEPTED_IMAGE_ACCEPT } from "../editor/imageBytes.ts";
 import { sectionFields } from "../editor/sectionFields.ts";
 import es from "../locales/es.json" with { type: "json" };
 import { FieldsPanel } from "./FieldsPanel.tsx";
+import { StylePanel } from "./StylePanel.tsx";
 import { FieldError } from "./ui.tsx";
 
 type DownloadState = "idle" | "downloading" | "error";
@@ -109,11 +110,11 @@ function filenameFrom(response: Response, fallback: string): string {
  *
  * Section selection marks a section with a 2px outline and four corner handles injected into the
  * iframe's own DOM, mirroring mockup 08's per-element selection at section granularity — and,
- * since day 4, a small cluster of action buttons drawn at the selected section's corner: move up,
- * move down, duplicate, delete. No floating toolbar this sprint — one action, one button, the
- * same self-contained-in-the-iframe pattern click-to-edit already uses. None of the four ask for
- * confirmation: ADR 0014 is explicit that a delete runs immediately, with the undo it offers
- * afterwards as the only safety net, and the same directness applies to the other three, which
+ * since sprint 2 day 4, a small cluster of action buttons drawn at the selected section's corner:
+ * move up, move down, duplicate, the section's fields, delete. No floating toolbar — one action,
+ * one button, the same self-contained-in-the-iframe pattern click-to-edit already uses. None of
+ * them asks for confirmation: ADR 0014 is explicit that a delete runs immediately, with the undo
+ * it offers afterwards as the only safety net, and the same directness applies to the rest, which
  * are no more destructive than a delete and get the identical net.
  *
  * Adding a section (day 6) is the same pattern once more: a dashed rule broken by an "Añadir
@@ -134,6 +135,8 @@ export function Editor({
   onPickPhoto,
   onFillSlot,
   onClearSlot,
+  onPickPalette,
+  onPickTypePair,
   photoUrls,
   photoError,
   offers,
@@ -159,6 +162,11 @@ export function Editor({
   onPickPhoto: (address: ElementAddress, file: File) => void;
   onFillSlot: (fill: SlotFill) => void;
   onClearSlot: (address: SlotAddress) => void;
+  /** A palette or a pair of typefaces chosen in the Estilo panel. This component says which
+   * one was picked; assembling the new theme and putting it in the document is `Variants`'
+   * business, the same division as every other verb here. */
+  onPickPalette: (paletteId: string) => void;
+  onPickTypePair: (typePairId: string) => void;
   /** Object URLs for photos already uploaded, keyed by the `src` the document carries. The
    * preview needs them because a bundle-relative path resolves against the parent page inside a
    * `srcDoc` iframe and 404s — the same trap `placeholder-image.ts` documents. */
@@ -187,6 +195,26 @@ export function Editor({
   // selects the section too, and a form sliding in every time someone touches a sentence would
   // be in the way rather than at hand.
   const [fieldsFor, setFieldsFor] = useState<string | null>(null);
+  const [rail, setRail] = useState<RailItemId>("sections");
+
+  /**
+   * At most one side surface at a time.
+   *
+   * The two are not variations of each other — the fields panel is fixed over the right edge and
+   * the style panel sits beside the canvas — so with both open the fixed one covers the other. The
+   * rule is enforced in both directions here rather than by stacking them, because there is no
+   * reading in which having both open is what the person asked for: opening one is a statement
+   * about what they are doing now.
+   */
+  function showRail(item: RailItemId) {
+    setRail(item);
+    if (item === "style") setFieldsFor(null);
+  }
+
+  function showFields(sectionId: string | null) {
+    setFieldsFor(sectionId);
+    if (sectionId !== null) setRail("sections");
+  }
 
   // `render` is deterministic, so an unchanged document yields the identical string and the
   // iframe's `srcDoc` does not change — which is what keeps a device toggle or a download from
@@ -325,7 +353,7 @@ export function Editor({
           "move",
           false,
           '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10"/><path d="M4 12h16"/><path d="M4 17h7"/><circle cx="18" cy="7" r="2"/><circle cx="15" cy="17" r="2"/></svg>',
-          () => setFieldsFor(sectionId),
+          () => showFields(sectionId),
         ),
       );
       actions.appendChild(
@@ -439,9 +467,9 @@ export function Editor({
    * Clicking a photo replaces it.
    *
    * The placeholder already says "Tu foto aquí", so the affordance the page needs is the one it
-   * already promises — no fifth button in the action cluster, no panel. `EDITABLE_TAGS` leaves
-   * `img` out because there is no text on an image to click into; this is the other half of that
-   * sentence, which had been missing.
+   * already promises — no button of its own in the action cluster, no panel. `EDITABLE_TAGS`
+   * leaves `img` out because there is no text on an image to click into; this is the other half
+   * of that sentence, which had been missing.
    */
   function wirePhotos(iframeDoc: Document) {
     for (const image of iframeDoc.querySelectorAll<HTMLImageElement>('img[data-role="image"]')) {
@@ -640,6 +668,18 @@ export function Editor({
       onUndo={onUndo}
       onRedo={onRedo}
       saveStatus={saveStatus}
+      rail={rail}
+      onRailChange={showRail}
+      panel={
+        rail === "style" ? (
+          <StylePanel
+            theme={doc.theme}
+            onPickPalette={onPickPalette}
+            onPickTypePair={onPickTypePair}
+            onClose={() => showRail("sections")}
+          />
+        ) : undefined
+      }
     >
       <div className="flex flex-col gap-3 border-b border-ui-border px-4 py-3">
         {state === "error" ? <FieldError>{es["editor.downloadError"]}</FieldError> : null}
@@ -684,7 +724,7 @@ export function Editor({
           slotOrder={slotOrderOf(doc, fieldsFor)}
           onFill={onFillSlot}
           onClear={onClearSlot}
-          onClose={() => setFieldsFor(null)}
+          onClose={() => showFields(null)}
         />
       ) : null}
       {toast ? (

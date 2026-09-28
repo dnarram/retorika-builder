@@ -8,17 +8,27 @@ import es from "../locales/es.json" with { type: "json" };
  * `@theme inline` block), not a palette of Tailwind's own — the same rule the rest of this
  * app's inline styles already followed, now expressed as utility classes instead.
  *
- * Three things the mockup draws that this does not, and why:
+ * Two things the mockup draws that this does not, and why:
  * - **No second page tab, no "+" button.** The mockup shows `Inicio`, `Servicios` and an add-page
  *   control next to a `PÁGINAS: FASE 2` badge — but this document has exactly one page, and a
  *   button that adds a page nothing can hold yet is the same dead-button mistake sprint 1 kept
  *   refusing. `Inicio` is drawn alone, as the one real tab.
- * - **`Estilo` is dimmed too**, though the mockup only dims `Fotos` and `Páginas`. Protocol Part
- *   14 puts "Estilo global" in phase 2 same as the other two; the mockup predates that being
- *   pinned down. Consistency with the written phase boundary wins over the pixel reference.
  * - **No site-preview nav bar inside the canvas card.** The mockup's `Inicio Servicios Galería
  *   Contacto Reserva` strip is what a real multi-page site's own navigation would show — ours
  *   does not generate one, so drawing it would be furniture advertising links that go nowhere.
+ *
+ * **`Estilo` is live as of sprint 4, and the rail is interactive for the first time.** It was
+ * dimmed here through phase 1 on purpose — protocol Part 14 puts "Estilo global" in phase 2, and
+ * the badge existed so nobody implemented it early by reading the screen. What changed is that
+ * phase 1's acceptance criterion has been measured (`docs/sessions/2026-09-27-conchi.md`: eight
+ * minutes to the ZIP, unaided) and the same session named the gap: «necesita trabajo visual…
+ * colores». This is phase 2's own list in its own order, so it needs no phase-boundary ADR the way
+ * the cover photo did (ADR 0018) — that one overtook phase 1 while phase 1 was unfinished.
+ *
+ * `Páginas` and `Fotos` stay as they were, and stay **non-interactive elements rather than disabled
+ * buttons**. A disabled button says "not right now"; these are not buttons at all yet, and the
+ * `Fase 2` badge under them is what says so. Drawing them as buttons would be the dead-button
+ * mistake with an attribute over it.
  *
  * Undo and redo are live from day 2; they grey out when there is nothing to go back or forward
  * to, which is the honest state and not a placeholder. The `Guardado` tick is live from day 3
@@ -102,42 +112,88 @@ const RAIL_ICONS = {
   ),
 } as const;
 
-function RailItem({
-  icon,
+/** What the rail can select. `Páginas` and `Fotos` are not here: a value the rail cannot take is
+ * not a state the app has to handle. */
+export type RailItemId = "sections" | "style";
+
+function RailIcon({ icon, active }: { icon: keyof typeof RAIL_ICONS; active: boolean }) {
+  return (
+    <span
+      className={
+        "flex h-[46px] w-[46px] items-center justify-center rounded-[13px] border " +
+        (active
+          ? "border-ui-brand bg-ui-brand-surface text-ui-brand"
+          : "border-ui-border bg-ui-surface text-ui-muted")
+      }
+    >
+      {RAIL_ICONS[icon]}
+    </span>
+  );
+}
+
+function RailLabel({
   label,
-  active = false,
+  active,
   phase2 = false,
 }: {
-  icon: keyof typeof RAIL_ICONS;
   label: string;
-  active?: boolean;
+  active: boolean;
   phase2?: boolean;
 }) {
   return (
+    <span
+      className={
+        "text-[11px] font-medium " +
+        (active ? "font-semibold text-ui-brand" : phase2 ? "text-[#A3AEC0]" : "text-ui-muted")
+      }
+    >
+      {label}
+    </span>
+  );
+}
+
+/**
+ * One of the two rail items that does something.
+ *
+ * `aria-pressed` rather than a tab role: these two are mutually exclusive modes, and the toggle
+ * pattern is already what `DeviceToggle` below uses for exactly the same shape of choice. A real
+ * `tablist` would need `tabpanel` ids and roving tabindex to be correct, and `Secciones` has no
+ * panel of its own to point at — it is the canvas.
+ */
+function RailButton({
+  icon,
+  label,
+  active,
+  onSelect,
+}: {
+  icon: keyof typeof RAIL_ICONS;
+  label: string;
+  active: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onSelect}
+      className="flex cursor-pointer flex-col items-center gap-[5px] border-0 bg-transparent p-0"
+    >
+      <RailIcon icon={icon} active={active} />
+      <RailLabel label={label} active={active} />
+    </button>
+  );
+}
+
+/** A rail item for a feature that does not exist yet: not a button, and not a disabled one
+ * either. The badge is the whole message. */
+function RailPhase2({ icon, label }: { icon: keyof typeof RAIL_ICONS; label: string }) {
+  return (
     <div className="flex flex-col items-center gap-[5px]">
-      <span
-        className={
-          "flex h-[46px] w-[46px] items-center justify-center rounded-[13px] border " +
-          (active
-            ? "border-ui-brand bg-ui-brand-surface text-ui-brand"
-            : "border-ui-border bg-ui-surface text-ui-muted")
-        }
-      >
-        {RAIL_ICONS[icon]}
+      <RailIcon icon={icon} active={false} />
+      <RailLabel label={label} active={false} phase2 />
+      <span className="text-[9px] font-bold tracking-[0.04em] text-[#A3AEC0]">
+        {es["editor.rail.phase2"].toUpperCase()}
       </span>
-      <span
-        className={
-          "text-[11px] font-medium " +
-          (active ? "font-semibold text-ui-brand" : phase2 ? "text-[#A3AEC0]" : "text-ui-muted")
-        }
-      >
-        {label}
-      </span>
-      {phase2 ? (
-        <span className="text-[9px] font-bold tracking-[0.04em] text-[#A3AEC0]">
-          {es["editor.rail.phase2"].toUpperCase()}
-        </span>
-      ) : null}
     </div>
   );
 }
@@ -217,6 +273,9 @@ export function EditorShell({
   onUndo,
   onRedo,
   saveStatus,
+  rail,
+  onRailChange,
+  panel,
   children,
 }: {
   siteName: string;
@@ -230,6 +289,12 @@ export function EditorShell({
   onUndo: () => void;
   onRedo: () => void;
   saveStatus: SaveStatus;
+  rail: RailItemId;
+  onRailChange: (item: RailItemId) => void;
+  /** The side panel the current rail item opens, if it has one. Rendered beside the canvas rather
+   * than over it, which is how mockup 13 draws the style panel: the preview narrows and stays
+   * visible while a choice is being made about how it looks. */
+  panel?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -364,19 +429,38 @@ export function EditorShell({
 
       <div className="flex flex-grow overflow-hidden">
         <div className="flex w-20 shrink-0 flex-col items-center gap-3.5 border-r border-ui-border bg-ui-surface py-3.5">
-          <RailItem icon="sections" label={es["editor.rail.sections"]} active />
-          <RailItem icon="style" label={es["editor.rail.style"]} phase2 />
-          <RailItem icon="pages" label={es["editor.rail.pages"]} phase2 />
-          <RailItem icon="photos" label={es["editor.rail.photos"]} phase2 />
+          <RailButton
+            icon="sections"
+            label={es["editor.rail.sections"]}
+            active={rail === "sections"}
+            onSelect={() => onRailChange("sections")}
+          />
+          <RailButton
+            icon="style"
+            label={es["editor.rail.style"]}
+            active={rail === "style"}
+            onSelect={() => onRailChange("style")}
+          />
+          <RailPhase2 icon="pages" label={es["editor.rail.pages"]} />
+          <RailPhase2 icon="photos" label={es["editor.rail.photos"]} />
         </div>
 
-        <div className="flex flex-grow justify-center overflow-hidden px-6 pt-6 sm:px-24">
-          <div
-            className="flex flex-col overflow-hidden rounded-[10px] bg-ui-surface shadow-[0_1px_4px_rgba(15,23,42,0.1)] transition-[max-width] duration-200"
-            style={{ width: "100%", maxWidth: device === "mobile" ? 400 : "100%" }}
-          >
-            {children}
+        {/* The wide side gutters centre the canvas when it is alone; with a panel open they would
+            only squeeze the preview, so they go. */}
+        <div
+          className={
+            "flex flex-grow gap-6 overflow-hidden pt-6 " + (panel ? "px-6" : "px-6 sm:px-24")
+          }
+        >
+          <div className="flex flex-grow justify-center overflow-hidden">
+            <div
+              className="flex flex-col overflow-hidden rounded-[10px] bg-ui-surface shadow-[0_1px_4px_rgba(15,23,42,0.1)] transition-[max-width] duration-200"
+              style={{ width: "100%", maxWidth: device === "mobile" ? 400 : "100%" }}
+            >
+              {children}
+            </div>
           </div>
+          {panel}
         </div>
       </div>
     </div>

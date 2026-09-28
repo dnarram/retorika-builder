@@ -21,18 +21,19 @@ import { BASE_URL, startEditorServer, stopEditorServer } from "./server.ts";
  * > edición de un texto y recarga, cambio de paleta, pago de prueba y publicación, y descarga
  * > del ZIP con comprobación de que el HTML abre sin servidor.»
  *
- * **Three exist here.** The other two cannot, today, and saying so is more honest than a job
- * that silently covers three fifths of what it is named for:
+ * **Three exist here.** Where the other two stand is written out rather than left implied, because
+ * a job that silently covers three fifths of what it is named for is the failure this note exists
+ * to prevent:
  *
- * - **Cambio de paleta** has no interface to drive. "Estilo" is phase 2 (protocol Part 14) and
- *   its rail item is drawn dimmed with a `Fase 2` badge (`EditorShell.tsx`) precisely so nobody
- *   implements it early by reading the screen — there is deliberately no palette switch for a
- *   flow test to press.
+ * - **Cambio de paleta** has an interface to drive as of sprint 4 day 2: the rail's `Estilo` item
+ *   is live and the panel behind it replaces the document's theme. The flow itself lands on day 3.
+ *   This line is corrected the day the claim stopped being true rather than the day the test
+ *   appears — a comment saying something does not exist is worse than no comment once it does.
  * - **Pago de prueba y publicación** is on hold with no plan (ADR 0008, superseding ADR 0007).
  *   There is no payment flow and no publish target to test against; writing one now would test
  *   code that does not exist.
  *
- * Both return when the features they exercise do — this file, or the one that grows from it, is
+ * Each arrives when the feature it exercises does — this file, or the one that grows from it, is
  * where they belong.
  *
  * One shared `page`, walked through in order by three `it`s rather than one long test: each
