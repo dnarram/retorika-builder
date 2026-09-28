@@ -1,4 +1,4 @@
-import { blankSection } from "@retorika/catalog";
+import { blankItem, blankSection } from "@retorika/catalog";
 import { EMPTY_ANSWERS, generateVariants } from "@retorika/generator";
 import type { ElementAddress, RetorikaDocument, Theme } from "@retorika/schema";
 import { buildTheme } from "@retorika/tokens";
@@ -699,6 +699,75 @@ describe("setVariant", () => {
 
   it("throws on a section the document does not have", () => {
     expect(() => run(start(), compose("stacked", "no-such-section"))).toThrow(/no section/);
+  });
+});
+
+describe("addItem and removeItem", () => {
+  /** The services list of variant 0, which the questionnaire filled with two cards. */
+  const linesOf = (state: Histories, variant = 0) =>
+    state[variant]?.present.document.pages[0]?.sections
+      .find((s) => s.id === "sec-services")
+      ?.content.find((el) => el.role === "list")?.items;
+
+  const add = (variant = 0): HistoryAction => ({
+    type: "addItem",
+    variant,
+    sectionId: "sec-services",
+    slot: "services",
+    item: blankItem("services"),
+  });
+
+  it("appends a line in one step", () => {
+    const before = linesOf(start())?.length ?? 0;
+    const state = run(start(), add());
+    expect(linesOf(state)).toHaveLength(before + 1);
+    expect(state[0]?.past).toHaveLength(1);
+  });
+
+  it("is undone back to the lines the questionnaire produced", () => {
+    const before = linesOf(start());
+    const state = run(start(), add(), { type: "undo", variant: 0 });
+    expect(linesOf(state)).toEqual(before);
+  });
+
+  it("is redone after an undo", () => {
+    const before = linesOf(start())?.length ?? 0;
+    const state = run(start(), add(), { type: "undo", variant: 0 }, { type: "redo", variant: 0 });
+    expect(linesOf(state)).toHaveLength(before + 1);
+  });
+
+  it("removes a named line and can be undone", () => {
+    const added = run(start(), add());
+    const last = linesOf(added)?.at(-1)?.id;
+    if (!last) throw new Error("no line");
+    const removed = run(added, {
+      type: "removeItem",
+      variant: 0,
+      sectionId: "sec-services",
+      slot: "services",
+      itemId: last,
+    });
+    expect(linesOf(removed)?.some((item) => item.id === last)).toBe(false);
+    const undone = run(removed, { type: "undo", variant: 0 });
+    expect(linesOf(undone)?.some((item) => item.id === last)).toBe(true);
+  });
+
+  it("does not perform a redo, which is what a missing reducer branch used to do", () => {
+    const state = run(start(), edit("Nombre editado"), { type: "undo", variant: 0 }, add());
+    expect(headline(state)).not.toBe("Nombre editado");
+    expect(state[0]?.future).toHaveLength(0);
+  });
+
+  it("touches only the variant it names", () => {
+    const state = run(start(), add());
+    expect(linesOf(state, 1)).toEqual(linesOf(start(), 1));
+  });
+
+  it("does not count as having edited the section: the line carries markers, not words", () => {
+    const state = run(start(), add());
+    const history = state[0];
+    if (!history) throw new Error("no history");
+    expect(wasSectionEverEdited(history, "sec-services")).toBe(false);
   });
 });
 

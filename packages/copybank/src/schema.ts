@@ -16,12 +16,17 @@ export type Placeholder = (typeof PLACEHOLDERS)[number];
 /**
  * The sections a bank text can be written for. A text knows exactly where it goes.
  *
- * Four, where the catalog now has six. The two it leaves out are not an oversight: `testimonials`
+ * Five, where the catalog now has seven. The two it leaves out are not an oversight: `testimonials`
  * is born carrying instructions to the owner rather than copy (a plausible-looking invented review
  * is the one thing that section must never ship), and `footer` is built from question 1 and the
  * owner's own details, so there is nothing for a sector to say differently.
+ *
+ * `prices` joined on 28 September 2026. It is never generated either, but its heading is the one
+ * thing about it that is sector-specific — «Nuestra carta» for hostelería, «Tarifas» elsewhere —
+ * and a heading on a published page is exactly what this bank is for. The name in the editor's
+ * menu stays «Precios» for everyone; the two are different things.
  */
-export const SECTIONS = ["cover", "services", "location", "contact"] as const;
+export const SECTIONS = ["cover", "services", "location", "contact", "prices"] as const;
 
 const reviewSchema = z.object({
   status: z.literal("approved"),

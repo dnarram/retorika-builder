@@ -1,6 +1,9 @@
 {
   "sector": "restaurante-bar",
-  "review": { "status": "draft", "drafted": "2026-09-28" },
+  "review": {
+    "status": "draft",
+    "drafted": "2026-09-28"
+  },
   "entries": [
     {
       "id": "restaurante-bar.cover.subheadline.01",
@@ -50,11 +53,24 @@
       "slot": "body",
       "text": "Pásate cuando quieras. Y si prefieres avisar antes, aquí nos tienes.",
       "placeholders": []
+    },
+    {
+      "id": "restaurante-bar.prices.headline.01",
+      "section": "prices",
+      "slot": "headline",
+      "text": "Nuestra carta",
+      "placeholders": []
     }
   ],
   "suggestions": [
-    { "id": "comidas", "title": "Comidas" },
-    { "id": "cenas", "title": "Cenas" },
+    {
+      "id": "comidas",
+      "title": "Comidas"
+    },
+    {
+      "id": "cenas",
+      "title": "Cenas"
+    },
     {
       "id": "tapas",
       "title": "Tapas",

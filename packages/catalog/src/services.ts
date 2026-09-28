@@ -71,6 +71,7 @@ function isServicesVariant(variantId: string): variantId is ServicesVariant {
 export const servicesPreset: PresetShape = {
   catalogId: SERVICES_ID,
   slots: SERVICES_SLOTS,
+  itemRange: SERVICES_ITEMS,
   itemSlots: SERVICES_ITEM_SLOTS,
 
   layoutFor(variantId: string, elements: readonly ContentElement[]): SectionLayout {

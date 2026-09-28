@@ -200,3 +200,39 @@ export function canBeBlank(catalogId: string): boolean {
   const preset = presetFor(catalogId);
   return preset.slots.every((slot) => slot.min === 0 || canFill(slot.role, preset));
 }
+
+/**
+ * One more line for a section's list, with marker text in every slot the preset insists on.
+ *
+ * The counterpart of `blankSection` for what lives *inside* a section. `@retorika/schema`'s
+ * `addItem` takes a line already built, because what a valid one looks like is the catalog's
+ * business and schema may not import this package — the same division `insertSection` makes.
+ *
+ * The ids here are templates. Element ids are unique within a *section*, so a second line cannot
+ * reuse the first line's; `addItem` re-mints them against the document it is writing into, which
+ * is the only place that knows what is taken.
+ *
+ * Optional item slots are left out, exactly as `blankSection` leaves optional section slots out
+ * and for the same reason. What that costs for a given section is the preset's own decision: a
+ * price list makes its price `1..1` so a new line has somewhere to type one, because nothing in
+ * this editor can reach a list item's optional slot.
+ */
+export function blankItem(catalogId: string): { id: string; elements: ContentElement[] } {
+  const preset = presetFor(catalogId);
+  const itemSlots = preset.itemSlots;
+  if (!itemSlots || itemSlots.length === 0) {
+    throw new Error(`blankItem: "${catalogId}" declares no itemSlots, so it holds no lines`);
+  }
+  const unfillable = itemSlots.find((slot) => slot.min > 0 && !canFill(slot.role, {}));
+  if (unfillable) {
+    throw new Error(
+      `blankItem: "${catalogId}" requires item slot "${unfillable.slot}" with role "${unfillable.role}", which no marker can fill honestly`,
+    );
+  }
+  return {
+    id: "item",
+    elements: itemSlots.flatMap((slot) =>
+      elementsForSlot(catalogId, slot, undefined, "el-item-", "item."),
+    ),
+  };
+}

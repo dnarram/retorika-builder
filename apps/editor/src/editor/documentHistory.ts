@@ -1,5 +1,6 @@
 import type {
   ElementAddress,
+  ListItem,
   RetorikaDocument,
   Section,
   SlotAddress,
@@ -7,6 +8,7 @@ import type {
   Theme,
 } from "@retorika/schema";
 import {
+  addItem as addItemToDoc,
   clearSlot as clearSlotInDoc,
   deleteSection as deleteSectionFromDoc,
   duplicateSection as duplicateSectionFromDoc,
@@ -14,6 +16,7 @@ import {
   insertSection as insertSectionIntoDoc,
   mintSectionId,
   moveSection as moveSectionFromDoc,
+  removeItem as removeItemFromDoc,
   setElementImageSrc,
   setElementText,
   setTheme as setThemeInDoc,
@@ -48,6 +51,8 @@ export type SnapshotCause =
   | { type: "fillSlot"; sectionId: string }
   | { type: "clearSlot"; sectionId: string }
   | { type: "setVariant"; sectionId: string }
+  | { type: "addItem"; sectionId: string }
+  | { type: "removeItem"; sectionId: string }
   /** The first cause that names no section, because a theme belongs to none of them: it restyles
    * every section at once, hand-designed ones included. `sectionOf` is what keeps that honest. */
   | { type: "setTheme" }
@@ -90,6 +95,8 @@ export type HistoryAction =
   | { type: "clearSlot"; variant: number; address: SlotAddress }
   | { type: "setTheme"; variant: number; theme: Theme }
   | { type: "setVariant"; variant: number; sectionId: string; variantId: string }
+  | { type: "addItem"; variant: number; sectionId: string; slot: string; item: ListItem }
+  | { type: "removeItem"; variant: number; sectionId: string; slot: string; itemId: string }
   | { type: "undo"; variant: number }
   | { type: "redo"; variant: number };
 
@@ -311,6 +318,38 @@ function setVariant(history: History, sectionId: string, variantId: string): His
   };
 }
 
+/**
+ * One more line in a list, or one line gone.
+ *
+ * Two verbs rather than one, and a pair rather than a toggle: adding appends a line of markers at
+ * the end, removing takes a named one away for good. Neither is a content cause below — a new
+ * line carries the catalog's markers and not a word the owner wrote, and taking a line away is
+ * not writing either. Whatever the owner did type into it is already recorded by the `editText`
+ * that put it there, which is what keeps a delete's toast honest.
+ *
+ * The line itself is built by the catalog and re-minted by the schema, so neither this module nor
+ * the component that draws the control has to know what a valid line is made of.
+ */
+function addItem(history: History, sectionId: string, slot: string, item: ListItem): History {
+  const document = addItemToDoc(history.present.document, sectionId, slot, item);
+  return {
+    past: [...history.past, history.present].slice(-LIMIT),
+    present: { document, cause: { type: "addItem", sectionId } },
+    future: [],
+    amendable: false,
+  };
+}
+
+function removeItem(history: History, sectionId: string, slot: string, itemId: string): History {
+  const document = removeItemFromDoc(history.present.document, sectionId, slot, itemId);
+  return {
+    past: [...history.past, history.present].slice(-LIMIT),
+    present: { document, cause: { type: "removeItem", sectionId } },
+    future: [],
+    amendable: false,
+  };
+}
+
 function undo(history: History): History {
   const previous = history.past.at(-1);
   if (!previous) return history;
@@ -370,6 +409,10 @@ function apply(history: History, action: HistoryAction): History {
       return setTheme(history, action.theme);
     case "setVariant":
       return setVariant(history, action.sectionId, action.variantId);
+    case "addItem":
+      return addItem(history, action.sectionId, action.slot, action.item);
+    case "removeItem":
+      return removeItem(history, action.sectionId, action.slot, action.itemId);
     case "undo":
       return undo(history);
     case "redo":

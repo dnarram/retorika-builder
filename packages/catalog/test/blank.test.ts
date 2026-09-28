@@ -13,6 +13,7 @@ import { FOOTER_ID } from "../src/footer.ts";
 import es from "../src/locales/es.json" with { type: "json" };
 import { LOCATION_ID } from "../src/location.ts";
 import { CATALOG, presetFor, variantsFor } from "../src/presets.ts";
+import { PRICES_ID } from "../src/prices.ts";
 import { SERVICES_ID, SERVICES_ITEM_SLOTS } from "../src/services.ts";
 import { TESTIMONIALS_ID } from "../src/testimonials.ts";
 
@@ -38,7 +39,14 @@ const EVERY_PAIR = BLANKABLE.flatMap((catalogId) =>
 
 describe("canBeBlank", () => {
   it("is true for every section whose required slots are text, an image or a list", () => {
-    expect(BLANKABLE).toEqual([COVER_ID, SERVICES_ID, LOCATION_ID, TESTIMONIALS_ID, FOOTER_ID]);
+    expect(BLANKABLE).toEqual([
+      COVER_ID,
+      SERVICES_ID,
+      LOCATION_ID,
+      TESTIMONIALS_ID,
+      PRICES_ID,
+      FOOTER_ID,
+    ]);
   });
 
   it("is false for Contacto y reservas, whose required button is a destination", () => {
