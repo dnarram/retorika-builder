@@ -989,7 +989,12 @@ export function Editor({
 
   return (
     <EditorShell
-      siteName={title}
+      // The business name, not the variant's. The bar said «Clásica» — the caption of whichever of
+      // the three cards was opened — where mockup 08 shows «Barbería El Corte», and it had said so
+      // since the editor existed. Found by walking the editor on sprint 4 day 2 and recorded in
+      // `docs/design/REVIEW.md` as direction's to settle, which it did. `title` still names the
+      // preview frame, where "which of the three am I in" is exactly the useful thing to say.
+      siteName={doc.siteName}
       onBack={onBack}
       downloadState={state}
       onDownload={download}

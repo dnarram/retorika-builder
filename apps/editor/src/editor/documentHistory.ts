@@ -10,13 +10,16 @@ import type {
 import {
   addItem as addItemToDoc,
   clearSlot as clearSlotInDoc,
+  deletePage as deletePageFromDoc,
   deleteSection as deleteSectionFromDoc,
   duplicateSection as duplicateSectionFromDoc,
   fillSlot as fillSlotInDoc,
   insertSection as insertSectionIntoDoc,
   mintSectionId,
+  movePage as movePageInDoc,
   moveSection as moveSectionFromDoc,
   removeItem as removeItemFromDoc,
+  renamePage as renamePageInDoc,
   setElementImageSrc,
   setElementText,
   setTheme as setThemeInDoc,
@@ -53,6 +56,11 @@ export type SnapshotCause =
   | { type: "setVariant"; sectionId: string }
   | { type: "addItem"; sectionId: string }
   | { type: "removeItem"; sectionId: string }
+  /** The three page causes name a page rather than a section, so `sectionOf` answers
+   * `undefined` for them and no delete toast is kept alive by renaming a page. */
+  | { type: "renamePage"; pageId: string }
+  | { type: "movePage"; pageId: string }
+  | { type: "deletePage"; pageId: string }
   /** The first cause that names no section, because a theme belongs to none of them: it restyles
    * every section at once, hand-designed ones included. `sectionOf` is what keeps that honest. */
   | { type: "setTheme" }
@@ -97,6 +105,9 @@ export type HistoryAction =
   | { type: "setVariant"; variant: number; sectionId: string; variantId: string }
   | { type: "addItem"; variant: number; sectionId: string; slot: string; item: ListItem }
   | { type: "removeItem"; variant: number; sectionId: string; slot: string; itemId: string }
+  | { type: "renamePage"; variant: number; pageId: string; title: string }
+  | { type: "movePage"; variant: number; pageId: string; toIndex: number }
+  | { type: "deletePage"; variant: number; pageId: string }
   | { type: "undo"; variant: number }
   | { type: "redo"; variant: number };
 
@@ -350,6 +361,46 @@ function removeItem(history: History, sectionId: string, slot: string, itemId: s
   };
 }
 
+/**
+ * The pages of a site — renamed, reordered, removed.
+ *
+ * None of the three is a content cause: renaming a page writes no word into any section, and the
+ * words a deleted page took with it were recorded by the `editText` that put them there. What a
+ * delete owes the person is the count of what pointed at that page, and that is the editor's to
+ * ask before dispatching, while «Deshacer» is still on screen.
+ *
+ * `renamePage` and `movePage` hand back the same document when nothing would change, so pressing
+ * a name that is already the name opens no step.
+ */
+function renamePage(history: History, pageId: string, title: string): History {
+  const document = renamePageInDoc(history.present.document, pageId, title);
+  if (document === history.present.document) return history;
+  return step(history, document, { type: "renamePage", pageId });
+}
+
+function movePage(history: History, pageId: string, toIndex: number): History {
+  const document = movePageInDoc(history.present.document, pageId, toIndex);
+  if (document === history.present.document) return history;
+  return step(history, document, { type: "movePage", pageId });
+}
+
+function deletePage(history: History, pageId: string): History {
+  return step(history, deletePageFromDoc(history.present.document, pageId), {
+    type: "deletePage",
+    pageId,
+  });
+}
+
+/** One snapshot pushed onto the stack, which every verb above does identically. */
+function step(history: History, document: RetorikaDocument, cause: SnapshotCause): History {
+  return {
+    past: [...history.past, history.present].slice(-LIMIT),
+    present: { document, cause },
+    future: [],
+    amendable: false,
+  };
+}
+
 function undo(history: History): History {
   const previous = history.past.at(-1);
   if (!previous) return history;
@@ -413,6 +464,12 @@ function apply(history: History, action: HistoryAction): History {
       return addItem(history, action.sectionId, action.slot, action.item);
     case "removeItem":
       return removeItem(history, action.sectionId, action.slot, action.itemId);
+    case "renamePage":
+      return renamePage(history, action.pageId, action.title);
+    case "movePage":
+      return movePage(history, action.pageId, action.toIndex);
+    case "deletePage":
+      return deletePage(history, action.pageId);
     case "undo":
       return undo(history);
     case "redo":

@@ -220,6 +220,28 @@ part that must not move — the interface tokens and their separation from the p
   and re-selecting between tries would have been the whole friction of the feature. It improves the
   other five buttons as a side effect.
 
+- **No «+ Añadir página», and mockup 08 draws one.** The mockup's top bar has two page tabs, a
+  `PÁGINAS: FASE 2` badge and a `+` labelled `Añadir página`. The shipped editor has the tabs and
+  **not** the `+`, because the concept dossier §6 says a page is born by converting a section —
+  «Cualquier sección puede convertirse en página» — and that «pedir al usuario que elija entre "una
+  página" y "varias páginas" es pedirle una decisión técnica antes de que sepa qué va a contar».
+  Where the concept exists to avoid asking a question, a screen that asks it is the screen that is
+  wrong, and `CLAUDE.md` puts the dossiers above the code. Decided in
+  [ADR 0022](../decisions/0022-a-page-is-born-by-converting-a-section.md), which also carries what
+  would reopen it: an owner who looks for a way to make a page and does not find one.
+
+  A second consequence worth having here rather than only in the ADR: **there is no empty page.**
+  The insertion pill is drawn *between* sections (`Editor.tsx`, `wireInsertion`), so a page with
+  none would have nowhere to click — the dead end the `+` would have led to.
+
+- **The site's own menu, which this review previously ruled out, now exists.** The entry above says
+  the mockup's `Inicio Servicios Galería Contacto Reserva` strip was not drawn because «the
+  generator produces no such navigation, so drawing it would advertise links that go nowhere». That
+  stopped being true with [ADR 0023](../decisions/0023-the-menu-and-the-footer-are-derived-chrome.md):
+  the menu is derived from the home page's sections and the document's pages, and it is emitted from
+  three entries upwards. The strip in the mockup is drawn inside the canvas card as part of the
+  *preview*, which is exactly what it now is.
+
 - **Not implemented, and not planned: mockup 13's «Avanzado: colores exactos y tamaños».** The row
   at the foot of the style panel opens a free colour picker and size controls. There is no such
   control in the shipped panel and there is not meant to be. This review already said "a palette
@@ -237,14 +259,12 @@ part that must not move — the interface tokens and their separation from the p
   guarantee. Pinned by `packages/renderer/test/theme-css.test.ts`, which fails if a rule ever starts
   reading it; the fix then is a contrast pair first, not a relaxed test.
 
-- **The editor's top bar names the variant, where mockup 08 names the business.** Found by walking
-  the editor on 28 September 2026, and **not caused by that day's work** — it has been true since
-  the editor existed. The mockup shows `Barbería El Corte`; the running editor shows `Clásica`,
-  because `Editor`'s `title` prop is the variant caption and the shell renders it as `siteName`.
-  The button around it does go back to the three variants, so the current text is not meaningless —
-  but which of the two belongs there is a product decision, not a rendering detail, and it is
-  recorded rather than changed. The business name is already in the document as `siteName`, so
-  either is one line.
+- **Resolved, 28 September 2026 — the editor's top bar names the variant, where mockup 08 names the
+  business.** Found by walking the editor, and not caused by that day's work: it had been true
+  since the editor existed, because `Editor`'s `title` prop is the variant caption and the shell
+  rendered it as `siteName`. Direction settled it for the mockup: **the bar shows the business
+  name.** The button around it still goes back to the three variants, and the variant's own caption
+  still names the preview frame, where "which of the three am I in" is the useful thing to say.
 - **The mockups load Inter from Google Fonts.** Fine for a prototype opened on a laptop. It must
   never happen in a published site (ADR 0001): a client's site has no network dependency.
 - **Resolved, 26 September 2026 — the Spanish interface strings.** They were the source for

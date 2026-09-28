@@ -1,6 +1,11 @@
 import { blankItem, blankSection } from "@retorika/catalog";
 import { EMPTY_ANSWERS, generateVariants } from "@retorika/generator";
-import type { ElementAddress, RetorikaDocument, Theme } from "@retorika/schema";
+import {
+  type ElementAddress,
+  parseDocument,
+  type RetorikaDocument,
+  type Theme,
+} from "@retorika/schema";
 import { buildTheme } from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
 import {
@@ -768,6 +773,99 @@ describe("addItem and removeItem", () => {
     const history = state[0];
     if (!history) throw new Error("no history");
     expect(wasSectionEverEdited(history, "sec-services")).toBe(false);
+  });
+});
+
+describe("the page verbs", () => {
+  /**
+   * A document with three pages, built here rather than generated: the generator makes exactly one
+   * page (`packages/generator/src/index.ts`), and a page is born by converting a section (ADR
+   * 0022), which is a later day's verb. What these pin is the history's half of it.
+   */
+  function threePages(): Histories {
+    const one = start()[0]?.present.document;
+    if (!one) throw new Error("no document");
+    const home = one.pages[0];
+    if (!home) throw new Error("no page");
+    return initHistories([
+      parseDocument({
+        ...one,
+        pages: [
+          home,
+          { ...home, id: "p2", slug: "precios", title: "Precios", sections: [] },
+          { ...home, id: "p3", slug: "carta", title: "Nuestra carta", sections: [] },
+        ],
+      }),
+    ]);
+  }
+
+  const pagesOf = (state: Histories) =>
+    state[0]?.present.document.pages.map((page) => `${page.slug}:${page.title}`);
+
+  it("renames a page in one step, and undoes it", () => {
+    const state = run(threePages(), {
+      type: "renamePage",
+      variant: 0,
+      pageId: "p2",
+      title: "Tarifas",
+    });
+    expect(pagesOf(state)?.[1]).toBe("precios:Tarifas");
+    expect(state[0]?.past).toHaveLength(1);
+    expect(pagesOf(run(state, { type: "undo", variant: 0 }))?.[1]).toBe("precios:Precios");
+  });
+
+  it("adds no step for a name that is already the name", () => {
+    const initial = threePages();
+    const state = run(initial, { type: "renamePage", variant: 0, pageId: "p2", title: "Precios" });
+    expect(state).toBe(initial);
+  });
+
+  it("reorders, and undoes the reorder", () => {
+    const state = run(threePages(), { type: "movePage", variant: 0, pageId: "p3", toIndex: 1 });
+    expect(pagesOf(state)?.map((p) => p.split(":")[0])).toEqual(["index", "carta", "precios"]);
+    expect(pagesOf(run(state, { type: "undo", variant: 0 }))?.map((p) => p.split(":")[0])).toEqual([
+      "index",
+      "precios",
+      "carta",
+    ]);
+  });
+
+  it("deletes a page, and undo brings it and its sections back", () => {
+    const state = run(threePages(), { type: "deletePage", variant: 0, pageId: "p2" });
+    expect(pagesOf(state)).toHaveLength(2);
+    expect(pagesOf(run(state, { type: "undo", variant: 0 }))).toHaveLength(3);
+  });
+
+  it("refuses to delete or move the entry, and the refusal reaches the caller", () => {
+    expect(() => run(threePages(), { type: "deletePage", variant: 0, pageId: "home" })).toThrow(
+      /site's entry/,
+    );
+    expect(() =>
+      run(threePages(), { type: "movePage", variant: 0, pageId: "home", toIndex: 1 }),
+    ).toThrow(/cannot move/);
+  });
+
+  it("does not perform a redo, which is what a missing reducer branch used to do", () => {
+    const state = run(
+      threePages(),
+      edit("Nombre editado"),
+      { type: "undo", variant: 0 },
+      { type: "renamePage", variant: 0, pageId: "p2", title: "Tarifas" },
+    );
+    expect(pagesOf(state)?.[1]).toBe("precios:Tarifas");
+    expect(headline(state)).not.toBe("Nombre editado");
+    expect(state[0]?.future).toHaveLength(0);
+  });
+
+  it("counts as having edited no section at all, because a page is not one", () => {
+    // `sectionOf` answers `undefined` for a cause that names a page, so renaming one cannot keep a
+    // delete toast alive on a section nobody touched.
+    const state = run(threePages(), { type: "renamePage", variant: 0, pageId: "p2", title: "T" });
+    const history = state[0];
+    if (!history) throw new Error("no history");
+    for (const id of sectionIds(state) ?? []) {
+      if (id) expect(wasSectionEverEdited(history, id), id).toBe(false);
+    }
   });
 });
 

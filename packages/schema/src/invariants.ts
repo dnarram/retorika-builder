@@ -95,8 +95,31 @@ function checkSection(section: Section, path: string, violations: Violation[]): 
 export function checkInvariants(doc: RetorikaDocument): Violation[] {
   const violations: Violation[] = [];
   const sectionIds = new Set<string>();
+  const pageIds = new Set<string>();
+  const slugs = new Set<string>();
 
   for (const [pageIndex, page] of doc.pages.entries()) {
+    // Rule 5 again, one level up. Two pages sharing an id make `insertSection(doc, pageId, …)`
+    // ambiguous about which one it wrote to; two sharing a slug make one of them unreachable,
+    // because the publisher names a file after it. Neither was checked anywhere until pages could
+    // be created (ADR 0022) — with exactly one page, neither could happen.
+    if (pageIds.has(page.id)) {
+      violations.push({
+        rule: 5,
+        path: `pages[${pageIndex}]`,
+        message: `page id "${page.id}" appears more than once in the document`,
+      });
+    }
+    pageIds.add(page.id);
+    if (slugs.has(page.slug)) {
+      violations.push({
+        rule: 5,
+        path: `pages[${pageIndex}]`,
+        message: `page slug "${page.slug}" appears more than once in the document`,
+      });
+    }
+    slugs.add(page.slug);
+
     for (const [sectionIndex, section] of page.sections.entries()) {
       const path = `pages[${pageIndex}].sections[${sectionIndex}]`;
 
