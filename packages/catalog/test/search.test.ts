@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { CATALOG, SEARCH_ALIASES, SHARED_ALIASES, sectionsMatching } from "../src/index.ts";
+import {
+  CATALOG,
+  SEARCH_ALIASES,
+  SHARED_ALIASES,
+  sectionsMatching,
+  TEASER_ID,
+} from "../src/index.ts";
 
 /**
  * The catalog search, as a whole rather than section by section.
@@ -76,12 +82,21 @@ describe("what the search may point at", () => {
     }
   });
 
-  it("gives every section in the catalog something to be found by", () => {
+  it("gives every section the menu can offer something to be found by", () => {
     // The eighth section was added to the registry and the locale file before it was added here;
     // between those two commits it existed in the menu and answered to nothing anybody would type.
-    for (const catalogId of Object.keys(CATALOG)) {
+    for (const catalogId of Object.keys(CATALOG).filter((id) => id !== TEASER_ID)) {
       expect(SEARCH_ALIASES[catalogId], catalogId).toBeDefined();
       expect(SEARCH_ALIASES[catalogId]?.length ?? 0, catalogId).toBeGreaterThan(0);
     }
+  });
+
+  it("gives «Avance» nothing, because the menu it feeds cannot offer one", () => {
+    // The search exists to fill the "Añadir sección aquí" menu, and an avance is never added by
+    // hand — `sectionToPage` is the only thing that makes one, because it is the only thing that
+    // knows where the link should point. An alias here would surface a section in a menu that
+    // would then throw on being asked to build it.
+    expect(SEARCH_ALIASES[TEASER_ID]).toBeUndefined();
+    expect(sectionsMatching("avance")).not.toContain(TEASER_ID);
   });
 });

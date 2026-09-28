@@ -1,4 +1,4 @@
-import { COVER_ID, FOOTER_ID, presetFor } from "@retorika/catalog";
+import { COVER_ID, FOOTER_ID, presetFor, TEASER_ID } from "@retorika/catalog";
 import {
   type ContentElement,
   type Page,
@@ -195,7 +195,70 @@ function panelArea(
   return { column, columnSpan: columnEnd - column, row, rowSpan: rowEnd - row };
 }
 
-function sectionNode(section: Section, options: ResolvedRenderOptions, isH1: boolean): RenderNode {
+/**
+ * What an «Avance» shows, read from the page it points at rather than stored in the document.
+ *
+ * The dossier §6 asks for «un resumen con un enlace», and the decision behind this function is
+ * that the summary is never written down: the teaser holds a link and nothing else, and the title
+ * and the line under it are read from the destination every time the page is drawn. A teaser that
+ * copied the words would be two copies of one text with nothing to keep them together, drifting
+ * apart the first time the owner edited the page it came from.
+ *
+ * The line is the first visible body or tagline text **at the top level of the destination's first
+ * section** — deliberately not `flattenElements`, which would reach inside a list and could offer a
+ * carta line's price as the summary of a page. A section whose introduction the owner deleted
+ * simply has no line, and the teaser then shows a title and a link, which is honest.
+ *
+ * `undefined` when the destination does not exist. The renderer does not throw here, against its
+ * usual rule, and the reason is that the alternative is worse in the one place it would happen:
+ * deleting a page would blank the whole editor preview rather than show one broken teaser. The
+ * link is then simply dead, `listDeadDestinations` catches it, and the download is refused — which
+ * is the rule that already governs every other button pointing nowhere.
+ */
+interface TeaserTarget {
+  title: string;
+  line: string | undefined;
+}
+
+const TEASER_LINE_ROLES: ReadonlySet<string> = new Set(["body", "subheading"]);
+
+function teaserTarget(doc: RetorikaDocument, href: string): TeaserTarget | undefined {
+  const match = /^\.\/([^#]+)\.html(?:#.*)?$/.exec(href.trim());
+  if (!match) return undefined;
+  const page = doc.pages.find((candidate) => candidate.slug === match[1]);
+  if (!page) return undefined;
+
+  const first = page.sections[0];
+  const line = first?.content.find(
+    (el) =>
+      !el.hidden &&
+      TEASER_LINE_ROLES.has(el.role) &&
+      el.value?.kind === "text" &&
+      el.value.text.trim() !== "",
+  );
+  return {
+    title: page.title,
+    line: line?.value?.kind === "text" ? line.value.text : undefined,
+  };
+}
+
+/** The same inline grid style every placed element gets, for the two nodes a teaser derives. */
+function derivedArea(row: number): string {
+  return placementStyle({ column: 1, columnSpan: 12, row, rowSpan: 1 });
+}
+
+/** A teaser's destination: the href of its one visible link, or "" if it has none to read. */
+function hrefOf(section: Section): string {
+  const link = section.content.find((el) => !el.hidden && el.value?.kind === "link");
+  return link?.value?.kind === "link" ? link.value.href : "";
+}
+
+function sectionNode(
+  section: Section,
+  options: ResolvedRenderOptions,
+  isH1: boolean,
+  target?: TeaserTarget,
+): RenderNode {
   const preset = presetFor(section.preset.catalogId);
   const elements = section.content;
 
@@ -216,10 +279,38 @@ function sectionNode(section: Section, options: ResolvedRenderOptions, isH1: boo
     const node = elementNode(el, options, level);
     if (!node) continue;
 
+    // **The accessible name of a teaser's link**, and the one thing on it that is not the owner's
+    // words. Three teasers on a home page all read «Ver más» — which is correct, because a Spanish
+    // template with a heading dropped into it breaks on gender («Ver Nuestra carta completo») — but
+    // a screen reader's list of links would then be three identical entries going to three
+    // different places, which is WCAG 2.4.4. The colon sidesteps agreement entirely: there is no
+    // sentence left to agree with.
+    //
+    // `aria-label` rather than the visually-hidden `<span>` the sprint plan named, and the reason
+    // is the editor rather than the page: click-to-edit makes this `<a>` `contentEditable` and
+    // commits `el.textContent` on blur, so a hidden child would be swallowed into the stored label
+    // on the very first click — and then re-suffixed on the next render, compounding. It also
+    // needs no new CSS, which is what keeps the golden corpus still today. WCAG 2.5.3 is satisfied
+    // because the accessible name still begins with the visible words.
+    if (target && el.role === "link" && el.value?.kind === "link") {
+      node.attributes["aria-label"] = `${el.value.text}: ${target.title}`;
+    }
+
     const placement = placementById.get(el.id);
     if (placement) node.attributes["style"] = placementStyle(placement);
     emitted.push({ el, node, placement });
   }
+
+  // The two nodes an «Avance» derives from the page it points at, ahead of the link the document
+  // does hold. No class and no new stylesheet rule: an h{level} and a p inside `.rb-section` are
+  // already drawn, and adding a rule would move all eleven golden files on a day whose whole point
+  // is that nothing published changes.
+  const derived: RenderNode[] = target
+    ? [
+        element(headingTag(level), { style: derivedArea(1) }, [target.title]),
+        ...(target.line ? [element("p", { style: derivedArea(2) }, [target.line])] : []),
+      ]
+    : [];
 
   const panel = panelArea(emitted);
   const children: RenderNode[] = [
@@ -232,6 +323,7 @@ function sectionNode(section: Section, options: ResolvedRenderOptions, isH1: boo
           ),
         ]
       : []),
+    ...derived,
     ...emitted.map(({ node }) => node),
   ];
 
@@ -287,7 +379,14 @@ export function buildTree(doc: RetorikaDocument, options: ResolvedRenderOptions)
   // forbids converting the cover — used to publish with no h1, which axe marks. Its first section
   // is promoted instead.
   const hasCover = page.sections.some((section) => section.preset.catalogId === COVER_ID);
-  const fallbackH1Id = hasCover ? undefined : page.sections[0]?.id;
+  // A teaser is skipped when choosing the fallback: its heading is borrowed from another page, and
+  // promoting it to h1 would make this page claim to be about somewhere else. The first section
+  // that is not a teaser takes it instead — falling back to the very first section for a page that
+  // is nothing but teasers, because one borrowed h1 still beats the none that axe marks.
+  const fallbackH1Id = hasCover
+    ? undefined
+    : (page.sections.find((section) => section.preset.catalogId !== TEASER_ID)?.id ??
+      page.sections[0]?.id);
 
   return element("main", { class: "rb-page", "data-page": page.id }, [
     ...page.sections.map((section) =>
@@ -295,6 +394,7 @@ export function buildTree(doc: RetorikaDocument, options: ResolvedRenderOptions)
         section,
         options,
         section.preset.catalogId === COVER_ID || section.id === fallbackH1Id,
+        section.preset.catalogId === TEASER_ID ? teaserTarget(doc, hrefOf(section)) : undefined,
       ),
     ),
   ]);

@@ -44,6 +44,14 @@ export {
   SERVICES_VARIANTS,
   servicesPreset,
 } from "./services.ts";
+export type { TeaserVariant } from "./teaser.ts";
+export {
+  TEASER_ID,
+  TEASER_SLOTS,
+  TEASER_VARIANTS,
+  teaserPreset,
+  teaserSection,
+} from "./teaser.ts";
 export type { TestimonialsVariant } from "./testimonials.ts";
 export {
   TESTIMONIALS_ID,

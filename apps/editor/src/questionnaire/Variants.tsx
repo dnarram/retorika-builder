@@ -1,6 +1,13 @@
 "use client";
 
-import { blankSection, CATALOG, CONTACT_ID, FOOTER_ID, variantsFor } from "@retorika/catalog";
+import {
+  blankSection,
+  CATALOG,
+  CONTACT_ID,
+  FOOTER_ID,
+  TEASER_ID,
+  variantsFor,
+} from "@retorika/catalog";
 import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
 import { GENERIC_SECTOR, textFor } from "@retorika/copybank";
 import {
@@ -320,6 +327,10 @@ export function Variants({
   const offers = useMemo<SectionOffer[]>(
     () =>
       Object.keys(CATALOG)
+        // «Avance» is never added by hand: `blankSection` refuses it, because its one slot is a
+        // destination and no marker fills a destination honestly. One is made by converting a
+        // section into a page, which is the only moment anything knows where it should point.
+        .filter((catalogId) => catalogId !== TEASER_ID)
         .filter((catalogId) => catalogId !== CONTACT_ID || contactSection !== undefined)
         .map((catalogId) => ({
           catalogId,

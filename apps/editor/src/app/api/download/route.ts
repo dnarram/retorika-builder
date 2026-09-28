@@ -6,6 +6,7 @@ import {
   flattenElements,
   listDeadDestinations,
   listEditableFields,
+  MAX_PAGES,
   parseDocument,
   type RetorikaDocument,
 } from "@retorika/schema";
@@ -37,7 +38,9 @@ export const runtime = "nodejs";
 const MAX_BODY_BYTES = 12 * 1024 * 1024;
 const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
 const MAX_PHOTOS = 10;
-const MAX_PAGES = 5;
+// `MAX_PAGES` comes from `@retorika/schema` since sprint 5 day 4: `sectionToPage` refuses to build
+// a sixth page, and the two numbers must be one number — a page that can be created and then not
+// downloaded is exactly the failure this bound was meant to be the last line of defence against.
 const MAX_SECTIONS = 40;
 const MAX_ELEMENTS = 400;
 const MAX_FIELD_LENGTH = 4000;

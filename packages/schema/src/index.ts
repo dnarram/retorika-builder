@@ -1,5 +1,12 @@
+export type { TeaserFactory } from "./conversion.ts";
+export { MAX_PAGES, pageToSection, sectionToPage } from "./conversion.ts";
 export type { DeadDestination } from "./destinations.ts";
-export { listAnchorsTo, listDeadDestinations } from "./destinations.ts";
+export {
+  hrefForPage,
+  listAnchorsTo,
+  listDeadDestinations,
+  listLinksTo,
+} from "./destinations.ts";
 export type {
   BreakpointPatch,
   Collection,

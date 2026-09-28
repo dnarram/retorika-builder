@@ -6,6 +6,7 @@ import { GALLERY_ID, GALLERY_VARIANTS, galleryPreset } from "./gallery.ts";
 import { LOCATION_ID, LOCATION_VARIANTS, locationPreset } from "./location.ts";
 import { PRICES_ID, PRICES_VARIANTS, pricesPreset } from "./prices.ts";
 import { SERVICES_ID, SERVICES_VARIANTS, servicesPreset } from "./services.ts";
+import { TEASER_ID, TEASER_VARIANTS, teaserPreset } from "./teaser.ts";
 import { TESTIMONIALS_ID, TESTIMONIALS_VARIANTS, testimonialsPreset } from "./testimonials.ts";
 
 /**
@@ -26,6 +27,10 @@ export const CATALOG: Readonly<Record<string, PresetShape>> = {
   [GALLERY_ID]: galleryPreset,
   [CONTACT_ID]: contactPreset,
   [FOOTER_ID]: footerPreset,
+  // Last, and never offered by the "Añadir sección aquí" menu (`Variants.tsx` leaves it out):
+  // an avance exists only because `sectionToPage` made one. Registered all the same, because the
+  // renderer resolves every section through `presetFor` and rule 5 admits no section without one.
+  [TEASER_ID]: teaserPreset,
 };
 
 /** Each section's compositions, in the order the catalog considers them: the first is the one
@@ -39,6 +44,7 @@ const VARIANTS: Readonly<Record<string, readonly string[]>> = {
   [GALLERY_ID]: GALLERY_VARIANTS,
   [CONTACT_ID]: CONTACT_VARIANTS,
   [FOOTER_ID]: FOOTER_VARIANTS,
+  [TEASER_ID]: TEASER_VARIANTS,
 };
 
 export function presetFor(catalogId: string): PresetShape {

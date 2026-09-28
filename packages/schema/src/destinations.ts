@@ -1,6 +1,7 @@
-import type { RetorikaDocument } from "./document.ts";
+import type { Page, RetorikaDocument } from "./document.ts";
 import { flattenElements } from "./invariants.ts";
 import type { Role } from "./roles.ts";
+import { SLUG_PATTERN } from "./slug.ts";
 
 /**
  * Buttons and links that point nowhere.
@@ -21,28 +22,79 @@ import type { Role } from "./roles.ts";
  * href usually is. Either way it navigates nowhere. An empty href re-loads the current page. */
 const DEAD_HREFS: ReadonlySet<string> = new Set(["", "#"]);
 
-/** Every section id in the document: what an in-page anchor has to name to resolve. */
-function sectionIds(doc: RetorikaDocument): ReadonlySet<string> {
-  return new Set(doc.pages.flatMap((page) => page.sections.map((section) => section.id)));
+/**
+ * A link from one published page to another: `./precios.html`, optionally with a fragment.
+ *
+ * The shape is not ours to widen — `docs/tasks/publisher.md` calls the bundle layout "decided — do
+ * not improvise", because a link has to resolve identically from `file://` and from a server, and
+ * `./precios.html` does where `/precios` and `/precios/` do not. Written here as the same rule
+ * `packages/publisher` writes files by; the slug half defers to `SLUG_PATTERN` so there is one
+ * answer to "what may a page be called" rather than two that can drift.
+ *
+ * Deliberately loose about what sits between `./` and `.html`, and strict afterwards: anything
+ * shaped like a link into this bundle is *judged*, and `SLUG_PATTERN` then decides whether it names
+ * something a page could ever be called. `./../fuera.html` matches the shape, fails the pattern and
+ * is dead — where a narrower expression would not have matched at all and would have waved a walk
+ * out of the bundle straight through the gate.
+ */
+const INTERNAL_PAGE = /^\.\/([^#]+)\.html(?:#(.*))?$/;
+
+/** What a link can resolve to: which sections each page holds, and which page each slug names. */
+interface Reachable {
+  sectionsByPage: ReadonlyMap<string, ReadonlySet<string>>;
+  pageBySlug: ReadonlyMap<string, string>;
+}
+
+function reachable(doc: RetorikaDocument): Reachable {
+  const sectionsByPage = new Map<string, ReadonlySet<string>>();
+  const pageBySlug = new Map<string, string>();
+  for (const page of doc.pages) {
+    sectionsByPage.set(page.id, new Set(page.sections.map((section) => section.id)));
+    pageBySlug.set(page.slug, page.id);
+  }
+  return { sectionsByPage, pageBySlug };
 }
 
 /**
- * Whether this href goes nowhere.
+ * Whether this href goes nowhere, judged from the page the link is written on.
  *
- * The anchor case is the one that is not obvious, and it arrived with anchors themselves: once a
- * button can point at `#sec-contact`, deleting that section leaves the button pointing at nothing
- * — and the href is neither empty nor `#`, so the two checks above would wave it through. A
- * browser given an unresolvable fragment simply does nothing, which on a static page with no
- * error state is indistinguishable from a broken site.
+ * Two of the three cases arrived with pages (sprint 5 day 4), and both were live defects that
+ * could not fire while every document had exactly one page:
  *
- * Only same-page anchors are judged. An `href` to another site is not ours to resolve, and a
- * `tel:`/`mailto:` has no fragment.
+ * - **An anchor resolves only within its own page.** This used to ask whether the section existed
+ *   *anywhere* in the document, which is the same question while there is one page and the wrong
+ *   one afterwards: a button on the home page pointing at `#sec-carta`, whose section now lives on
+ *   a converted page, is a link that does nothing — and it passed.
+ * - **A link to another page is judged at all.** Anything not starting with `#` used to return
+ *   `false` unconditionally, so `./precios.html` pointing at a page that does not exist sailed
+ *   through the download gate. That is the exact shape this sprint creates by the dozen: a teaser
+ *   whose page was deleted. `./precios.html#sec-x` is judged twice over — the page must exist and
+ *   the section must be *on that page*.
+ *
+ * Everything else is still not ours to resolve: an `https:` to another site, a `tel:` or a
+ * `mailto:` has no fragment and no bundle path to check. Deliberately not extended to bare
+ * relative paths like `precios.html`: nothing in this repository emits one, and refusing them here
+ * would block a download over a shape no test has ever produced.
  */
-function isDead(href: string, sections: ReadonlySet<string>): boolean {
+function isDead(href: string, pageId: string, links: Reachable): boolean {
   const trimmed = href.trim();
   if (DEAD_HREFS.has(trimmed)) return true;
-  if (!trimmed.startsWith("#")) return false;
-  return !sections.has(trimmed.slice(1));
+
+  if (trimmed.startsWith("#")) {
+    return !links.sectionsByPage.get(pageId)?.has(trimmed.slice(1));
+  }
+
+  const internal = INTERNAL_PAGE.exec(trimmed);
+  if (!internal) return false;
+
+  const slug = internal[1] ?? "";
+  if (!SLUG_PATTERN.test(slug)) return true;
+  const target = links.pageBySlug.get(slug);
+  if (target === undefined) return true;
+
+  const fragment = internal[2];
+  if (fragment === undefined) return false;
+  return !links.sectionsByPage.get(target)?.has(fragment);
 }
 
 export interface DeadDestination {
@@ -56,7 +108,7 @@ export interface DeadDestination {
 }
 
 export function listDeadDestinations(doc: RetorikaDocument): DeadDestination[] {
-  const sections = sectionIds(doc);
+  const links = reachable(doc);
   const dead: DeadDestination[] = [];
   for (const page of doc.pages) {
     for (const section of page.sections) {
@@ -64,7 +116,7 @@ export function listDeadDestinations(doc: RetorikaDocument): DeadDestination[] {
         if (element.hidden) continue;
         const value = element.value;
         if (value?.kind !== "link") continue;
-        if (!isDead(value.href, sections)) continue;
+        if (!isDead(value.href, page.id, links)) continue;
         dead.push({
           pageId: page.id,
           sectionId: section.id,
@@ -89,13 +141,40 @@ export function listDeadDestinations(doc: RetorikaDocument): DeadDestination[] {
  */
 export function listAnchorsTo(doc: RetorikaDocument, sectionId: string): DeadDestination[] {
   const target = `#${sectionId}`;
+  return linksMatching(doc, (href) => href === target);
+}
+
+/**
+ * The visible links pointing at this page, whether or not they aim at a section inside it.
+ *
+ * The page counterpart of `listAnchorsTo`, and the one `pages.ts` has been promising in a comment
+ * since day 1: "what the editor owes the person is the count of what pointed here, said *before*
+ * the delete while «Deshacer» is still on screen". Deleting a page that three teasers point at has
+ * to be able to say "three", and it has to say it while undo is on screen — afterwards the links
+ * are merely dead, which `listDeadDestinations` will report at download time, far too late to be
+ * the thing that changes anyone's mind.
+ *
+ * Matches `./<slug>.html` and `./<slug>.html#anything`: a link into a section of the page still
+ * points at the page, and dies with it just the same.
+ */
+export function listLinksTo(doc: RetorikaDocument, pageId: string): DeadDestination[] {
+  const page = doc.pages.find((candidate) => candidate.id === pageId);
+  if (!page) throw new Error(`listLinksTo: no page "${pageId}"`);
+  return linksMatching(doc, (href) => INTERNAL_PAGE.exec(href)?.[1] === page.slug);
+}
+
+/** Every visible link whose trimmed href the predicate accepts. */
+function linksMatching(
+  doc: RetorikaDocument,
+  accepts: (href: string) => boolean,
+): DeadDestination[] {
   const pointing: DeadDestination[] = [];
   for (const page of doc.pages) {
     for (const section of page.sections) {
       for (const element of flattenElements(section.content)) {
         if (element.hidden) continue;
         const value = element.value;
-        if (value?.kind !== "link" || value.href.trim() !== target) continue;
+        if (value?.kind !== "link" || !accepts(value.href.trim())) continue;
         pointing.push({
           pageId: page.id,
           sectionId: section.id,
@@ -108,4 +187,9 @@ export function listAnchorsTo(doc: RetorikaDocument, sectionId: string): DeadDes
     }
   }
   return pointing;
+}
+
+/** The href a link must carry to reach this page from any other. */
+export function hrefForPage(page: Pick<Page, "slug">): string {
+  return `./${page.slug}.html`;
 }
