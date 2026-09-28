@@ -147,3 +147,22 @@ the thing ADR 0017 was most afraid of.
   produce one. Five questions that take two minutes cannot collect what hostelería copy needs to
   be written from. That is the other half of ADR 0009's finding, and it lands here: the bank can
   only be as specific as the answers it is given.
+
+  **Made concrete by trying, 28 September 2026.** The hostelería rewrite was drafted
+  (`packages/copybank/drafts/restaurante-bar.json`), and what it could not write is a sharper
+  statement of the gap than the observation was. Each item is a sentence the draft wanted and had
+  to drop, with the question that would have allowed it:
+
+  | What a hostelería text cannot say | Why | What would have to be asked |
+  |---|---|---|
+  | Anything about the food | The bank does not know what is on the menu. Question 3 collects categories — «Comidas», «Tapas», «Terraza» — never a dish | Something that collects two or three real dishes, in the owner's words |
+  | «nuestra cocina», «en la barra» | **The sector conflates a restaurant with a bar.** `restaurante-bar` is one id, so a text about a kitchen is wrong for a place that only pours, and one about the bar is wrong for a dining room. Every text has to work for both, which rules out most of the register that would «hacer soñar» | Either a split of the sector, or one question distinguishing them |
+  | Anything about the room, the terrace, the feel of a service | Question 4 collects an address and hours as data, never as atmosphere | Nothing short of a free-text question, which is the thing the five-question design exists to avoid |
+  | A contact line naming a channel — «Reserva», «Llámanos» | Question 5 gives one main action, and the text has no way to know which | Nothing: this one is better solved by the buttons saying it, which they already do |
+  | Anything the owner would say about themselves — how long they have been open, who cooks, what they are known for | No question asks | A sixth question, which is a decision about the two minutes, not about the bank |
+
+  **The last row is the one that matters**, because it is the only gap a single extra question
+  would close, and closing it would trade the measured two minutes for copy that sounds like the
+  owner. That trade is direction's to make, not development's — and nothing in it is blocked
+  meanwhile: the draft ships the register change both owners asked for, without the specifics
+  neither was ever asked to give.
