@@ -280,3 +280,57 @@ describe("critical flow 5 — descarga del ZIP y el HTML abre sin servidor", () 
     }
   });
 });
+
+/**
+ * Not one of the protocol's five flows, and deliberately named so: a regression, kept here because
+ * this is the only suite that drives the real application, and the defect it guards exists **only**
+ * in the real application.
+ *
+ * Reported from the deployed site after sprint 5 day 5. The preview is fed through `srcDoc`, so the
+ * frame has no URL of its own and every relative href resolves against the parent's — the editor.
+ * A menu entry written `href="#sec-services"`, correct in the published file and proven to work
+ * from `file://`, resolved inside the frame to the editor's own address: clicking it loaded the
+ * editor into its own preview, that copy restored the same session and drew its own preview, and
+ * clicking again nested further, without end.
+ *
+ * Nothing caught it. The golden corpus compares HTML, the a11y matrix serves that HTML as a real
+ * document where the anchors resolve correctly, and the published ZIP genuinely works. The bug
+ * lived in the one place none of them look: the editor's own canvas.
+ */
+describe("regression — the preview is a canvas, not a browsable site", () => {
+  it("does not navigate, or nest a second editor, when a menu entry is clicked", async () => {
+    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    const frame = page.frameLocator("iframe").first();
+    await frame.locator('[data-section="sec-cover"]').waitFor();
+
+    const entries = frame.locator(".rb-nav-wide a");
+    // The generated site reaches three menu entries on its own — «Qué ponemos», «Dónde estamos»
+    // and «Te esperamos» — so the menu is in the preview from the first render.
+    await expect(entries.first()).toBeVisible();
+
+    const framesBefore = page.frames().length;
+    await entries.first().click();
+    await page.waitForTimeout(1500);
+
+    // The preview still shows the site rather than a copy of the editor.
+    expect(page.frames().length, "a frame appeared: the editor nested inside its own preview").toBe(
+      framesBefore,
+    );
+    const previewUrl = page.frames()[1]?.url();
+    expect(previewUrl, `the preview navigated to ${previewUrl}`).toBe("about:srcdoc");
+    await expect(frame.locator('[data-section="sec-cover"]')).toBeVisible();
+  });
+
+  it("still lets a link's own label be edited, which is what the guard must not break", async () => {
+    // The default action is cancelled; focus is not. `mousedown` is what puts the cursor in a
+    // contentEditable region, so click-to-edit on a button label works exactly as it did.
+    const frame = page.frameLocator("iframe").first();
+    const action = frame
+      .locator('[data-section="sec-contact"] [data-slot="primaryAction"]')
+      .first();
+    await action.click();
+    await page.keyboard.type("Reserva tu mesa");
+    await page.getByText("Haz clic en cualquier texto para cambiarlo").click();
+    await expect(frame.getByText("Reserva tu mesa")).toBeVisible();
+  });
+});

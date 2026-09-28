@@ -432,6 +432,42 @@ export function Editor({
     [doc],
   );
 
+  /**
+   * **No link inside the preview ever navigates.** The canvas is a picture of the site, not a copy
+   * of it that can be browsed.
+   *
+   * The bug this fixes was reported from the deployed app and is worth writing down in full,
+   * because the cause is not where anybody would look. The preview is fed through `srcDoc`, so the
+   * frame has no URL of its own and **every relative href resolves against the parent's URL — the
+   * editor**. A menu entry written `href="#sec-services"`, which is correct in the published file
+   * and works from `file://`, resolves inside this frame to `http://…/#sec-services`: the editor's
+   * own address. Clicking it loaded the editor into its own preview, that copy restored the same
+   * session from `localStorage` and drew its own preview, and a second click nested again —
+   * an editor inside an editor, without end.
+   *
+   * One delegated listener in the capture phase rather than a handler per anchor: it covers the
+   * links the renderer *derives* — the menu (ADR 0023) has no `data-id`, so `wireEditing` never
+   * saw it — as well as every link in the document and anything added later. Only the default
+   * action is cancelled; focus happens on `mousedown`, so click-to-edit on a button's label still
+   * places the cursor exactly as before.
+   *
+   * Doing nothing is deliberate for now, and it is what every other control in the preview already
+   * does: «Reservar mesa» does not dial a telephone either. Making a menu entry move the editor to
+   * that page belongs with the page tabs, which is the next day's work.
+   */
+  function wireLinks(iframeDoc: Document) {
+    iframeDoc.addEventListener(
+      "click",
+      (event) => {
+        // Duck-typed rather than `instanceof Element`: the node belongs to the frame's realm, and
+        // an `instanceof` against this document's `Element` is false for every one of them.
+        const target = event.target as { closest?: (selector: string) => unknown } | null;
+        if (typeof target?.closest === "function" && target.closest("a")) event.preventDefault();
+      },
+      true,
+    );
+  }
+
   function wireSelection(iframeDoc: Document) {
     const sections = [...iframeDoc.querySelectorAll<HTMLElement>("[data-section]")];
 
@@ -971,6 +1007,7 @@ export function Editor({
     ].join("\n");
     iframeDoc.head.appendChild(style);
 
+    wireLinks(iframeDoc);
     wireSelection(iframeDoc);
     wireInsertion(iframeDoc);
     wireLines(iframeDoc);
