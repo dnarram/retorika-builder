@@ -53,12 +53,12 @@ Last reviewed: 28 September 2026, at the close of sprint 3.
   be decided before the terms of use are written, not after.
 - **The three catalog sections still missing** of the dossier's nine: Fotos de trabajos, Precios
   (see #51) and Equipo. Six are built.
-- **Two of the five critical Playwright flows are not written yet.** *Cambio de paleta* had no
-  interface to drive until sprint 4 day 2 gave `Estilo` a live panel; the flow lands on day 3.
-  *Pago de prueba y publicación* is on hold with no plan (ADR 0008) — there is no payment flow and
-  no publish target, so writing it would test code that does not exist. Both are named in the doc
-  comment at the top of `apps/editor/e2e/critical-flows.e2e.test.ts`, which is where they belong
-  when they arrive.
+- **One of the five critical Playwright flows is not written yet.** *Cambio de paleta* joined on
+  sprint 4 day 3, once day 2 gave `Estilo` a live panel to drive it — CI now covers four of the
+  five. *Pago de prueba y publicación* is on hold with no plan (ADR 0008) — there is no payment
+  flow and no publish target, so writing it would test code that does not exist. Named in the doc
+  comment at the top of `apps/editor/e2e/critical-flows.e2e.test.ts`, which is where it belongs
+  when it arrives.
 - **Filling a destination by hand is done** (sprint 3, day 4) — listed here only so that the
   entry which sat in the old planning file as "pending" is visibly closed rather than lost.
 

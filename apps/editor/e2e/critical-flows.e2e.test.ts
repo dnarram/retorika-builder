@@ -21,28 +21,28 @@ import { BASE_URL, startEditorServer, stopEditorServer } from "./server.ts";
  * > edición de un texto y recarga, cambio de paleta, pago de prueba y publicación, y descarga
  * > del ZIP con comprobación de que el HTML abre sin servidor.»
  *
- * **Three exist here.** Where the other two stand is written out rather than left implied, because
- * a job that silently covers three fifths of what it is named for is the failure this note exists
- * to prevent:
+ * **Four exist here.** Where the fifth stands is written out rather than left implied, because a
+ * job that silently covers four fifths of what it is named for is the failure this note exists to
+ * prevent:
  *
- * - **Cambio de paleta** has an interface to drive as of sprint 4 day 2: the rail's `Estilo` item
- *   is live and the panel behind it replaces the document's theme. The flow itself lands on day 3.
- *   This line is corrected the day the claim stopped being true rather than the day the test
- *   appears — a comment saying something does not exist is worse than no comment once it does.
  * - **Pago de prueba y publicación** is on hold with no plan (ADR 0008, superseding ADR 0007).
  *   There is no payment flow and no publish target to test against; writing one now would test
  *   code that does not exist.
  *
- * Each arrives when the feature it exercises does — this file, or the one that grows from it, is
- * where they belong.
+ * It arrives when the feature it exercises does — this file, or the one that grows from it, is
+ * where it belongs. **Cambio de paleta** was the last to join, on sprint 4 day 3, once the rail's
+ * `Estilo` item existed to drive it (day 2). Every `describe` below is numbered by the protocol's
+ * own ordinal position in the quote above, not by the order it was written in this file — which is
+ * why "descarga" is flow 5 rather than 3, the number it carried before this one existed, and why
+ * the gap at 4 is left visibly empty rather than closed by renumbering around it.
  *
- * One shared `page`, walked through in order by three `it`s rather than one long test: each
- * flow gets its own name and its own pass/fail in the report, which is what "three of five
- * flows" means as a CI result rather than as a sentence. The cost is coupling — a failure in the
- * first turns the other two into cascading failures rather than independent ones — accepted
- * because the real user journey is exactly this sequential: nobody downloads a ZIP without first
- * generating and opening a site, so three independent journeys would only re-run the same first
- * four questions three times for a `next dev` job already paying that cost once.
+ * One shared `page`, walked through in order by `it`s rather than one long test: each flow gets
+ * its own name and its own pass/fail in the report, which is what "four of five flows" means as a
+ * CI result rather than as a sentence. The cost is coupling — a failure in an earlier one turns
+ * the later ones into cascading failures rather than independent ones — accepted because the real
+ * user journey is exactly this sequential: nobody changes a palette or downloads a ZIP without
+ * first generating and opening a site, so independent journeys would only re-run the same first
+ * four questions repeatedly for a `next dev` job already paying that cost once.
  */
 
 let browser: Browser;
@@ -125,6 +125,56 @@ describe("critical flow 2 — edición de un texto y recarga", () => {
   });
 });
 
+describe("critical flow 3 — cambio de paleta", () => {
+  it("recolours the whole preview from the Estilo panel, and undo reverts it", async () => {
+    const frame = page.frameLocator("iframe").first();
+    // `--color-primary` is what a click actually has to move for "recolours" to mean anything —
+    // read off the iframe's own document, the same custom property `packages/renderer` emits and
+    // the same one `theme-css.test.ts` pins as one of the five the panel's swatches show.
+    const primaryColor = async () =>
+      (
+        await frame
+          .locator("body")
+          .evaluate((el) =>
+            getComputedStyle(el.ownerDocument.documentElement).getPropertyValue("--color-primary"),
+          )
+      )
+        .trim()
+        .toUpperCase();
+
+    // Taberna Santo Domingo is `restaurante-bar`, whose generated theme is `warm-terracotta` +
+    // `classic-display` (packages/generator/src/theme.ts) — so the panel opening with that
+    // palette already ticked is `identifyPalette` working end to end, not a fixture that happens
+    // to agree with itself.
+    const before = await primaryColor();
+    expect(before).toBe("#9A3412");
+
+    await page.getByRole("button", { name: "Estilo", exact: true }).click();
+    const terracotta = page.getByRole("radio", { name: "Terracota cálida" });
+    const azul = page.getByRole("radio", { name: "Azul confianza" });
+    await expect(terracotta).toBeChecked();
+
+    await azul.click();
+    await expect(azul).toBeChecked();
+    await expect
+      .poll(primaryColor, "the preview should recolour after picking a different palette")
+      .toBe("#1D4ED8");
+
+    // What the theme is not allowed to touch: the text this session edited in flow 2. Rule 6 in
+    // one assertion — style is references to the system, content is not one of them.
+    await expect(frame.getByText(HEADLINE_EDIT)).toBeVisible();
+
+    // Undo restyles the whole site back in one step, same as any other action in this history.
+    await page.locator('button[aria-label="Deshacer"]').click();
+    await expect(terracotta).toBeChecked();
+    await expect.poll(primaryColor, "undo should restore the generated palette").toBe(before);
+
+    // Closing the panel by the rail leaves editing exactly where the next flow needs it.
+    await page.getByRole("button", { name: "Secciones", exact: true }).click();
+    await expect(page.getByText("El estilo de toda la web")).toHaveCount(0);
+  });
+});
+
 /**
  * Just enough of a ZIP reader to pull one file's raw bytes back out by name. Mirrors
  * `apps/editor/test/download.test.ts`'s `extractFile` (which decodes straight to a string,
@@ -159,7 +209,7 @@ function extractFileBytes(bytes: Uint8Array, path: string): Uint8Array {
   throw new Error(`"${path}" not found in the ZIP`);
 }
 
-describe("critical flow 3 — descarga del ZIP y el HTML abre sin servidor", () => {
+describe("critical flow 5 — descarga del ZIP y el HTML abre sin servidor", () => {
   it("downloads a real ZIP and its index.html opens from disk with no server", async () => {
     // Two different things happen when this button is clicked, and each needs its own capture.
     // `Editor.tsx`'s download() does `fetch("/api/download")`, reads the response as a blob,
