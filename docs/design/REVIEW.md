@@ -125,18 +125,22 @@ part that must not move — the interface tokens and their separation from the p
   another, say — is decided when the editor task is written.
 
   **Answered by the shipped editor, 26 September 2026.** No editor task file was ever written;
-  `apps/editor` was built directly (ADR 0017). `EditorShell.tsx` therefore holds three decisions
-  that diverge from mockup 08, recorded here because a source comment is not where a deviation
-  from an approved screen belongs:
-  - **`Estilo` is dimmed too**, though the mockup dims only `Fotos` and `Páginas`. Protocol Part
-    14 puts "Estilo global" in phase 2 alongside the other two; the mockup predates that being
-    pinned down, and the written phase boundary wins over the pixel reference.
+  `apps/editor` was built directly (ADR 0017). `EditorShell.tsx` therefore holds decisions that
+  diverge from mockup 08, recorded here because a source comment is not where a deviation from an
+  approved screen belongs:
   - **No second page tab and no `+`.** The mockup shows `Inicio`, `Servicios` and an add-page
     control. The document has exactly one page, and a button that adds a page nothing can hold is
     the dead-button mistake sprint 1 kept refusing. `Inicio` is drawn alone.
   - **No site-preview nav bar inside the canvas card.** The mockup's `Inicio Servicios Galería
     Contacto Reserva` strip is a real multi-page site's own navigation. The generator produces no
     such navigation, so drawing it would advertise links that go nowhere.
+
+  **`Estilo` was dimmed too, from 26 September to 28 September 2026** — the mockup dims only
+  `Fotos` and `Páginas`, but protocol Part 14 put "Estilo global" in phase 2 alongside them, and
+  the mockup predates that being pinned down. **No longer true**: sprint 4 day 2 gave the rail a
+  live `Estilo` item and the panel behind it, once phase 1's acceptance criterion was measured
+  and the same usability session named the gap. `Páginas` and `Fotos` stay dimmed — organic pages
+  and a real photo upload are both still unbuilt, not merely undecided.
 - **Resolved, 28 September 2026 — mockup 13's palettes and typefaces are not the ones in the
   code.** The claim was that the screen offers `Azul confianza`, `Verde natural`, `Coral cercano`
   and `Neutro elegante`, plus Inter, Poppins and Source Serif, while `packages/tokens` ships
