@@ -5,6 +5,7 @@ import {
   FOOTER_ID,
   LOCATION_ID,
   PLACEHOLDER_IMAGE_ALT,
+  PLACEHOLDER_SAMPLE_ID,
   placeholderImageSrc,
   SERVICES_ID,
   type ServicesVariant,
@@ -81,7 +82,13 @@ export function buildCover(answers: Answers, sector: SectorId, variant: CoverVar
     role: "image",
     hidden: false,
     slot: "image",
-    value: { kind: "image", src: placeholderImageSrc(), alt: PLACEHOLDER_IMAGE_ALT },
+    // Sampled, and the document says so: a generated site's one photograph is nobody's yet.
+    value: {
+      kind: "image",
+      src: placeholderImageSrc(),
+      alt: PLACEHOLDER_IMAGE_ALT,
+      sample: PLACEHOLDER_SAMPLE_ID,
+    },
   });
   if (destination && actionText) {
     content.push(link("el-cta", "button", "primaryAction", actionText, destination));

@@ -1,6 +1,10 @@
 import type { ContentElement, ContentValue, PresetSlot, Section } from "@retorika/schema";
 import es from "./locales/es.json" with { type: "json" };
-import { PLACEHOLDER_IMAGE_ALT, placeholderImageSrc } from "./placeholder-image.ts";
+import {
+  PLACEHOLDER_IMAGE_ALT,
+  PLACEHOLDER_SAMPLE_ID,
+  placeholderImageSrc,
+} from "./placeholder-image.ts";
 import { presetFor, variantsFor } from "./presets.ts";
 
 /**
@@ -79,7 +83,14 @@ function valueForRole(role: PresetSlot["role"], marker: () => string): ContentVa
     case "body":
       return { kind: "text", text: marker() };
     case "image":
-      return { kind: "image", src: placeholderImageSrc(), alt: PLACEHOLDER_IMAGE_ALT };
+      // `sample` says what this is: nobody put it here, and the editor needs to know that to
+      // count it, label it and warn about it before a download (ADR 0011).
+      return {
+        kind: "image",
+        src: placeholderImageSrc(),
+        alt: PLACEHOLDER_IMAGE_ALT,
+        sample: PLACEHOLDER_SAMPLE_ID,
+      };
     default:
       return undefined;
   }

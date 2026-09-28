@@ -12,7 +12,8 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 28 September 2026, at the close of sprint 4.
+Last reviewed: 29 September 2026, sprint 6 day 1. Sprint 5 closed between the previous review
+and this one, and two rows below had gone stale in the meantime — noted where they were corrected.
 
 ---
 
@@ -23,7 +24,7 @@ Last reviewed: 28 September 2026, at the close of sprint 4.
 | **A contact form.** Scoped, 28 September 2026: [ADR 0020](../decisions/0020-contact-stays-links-only-for-phase-1.md) accepted ADR 0016's phase 1 links-only scope and split the form off as its own, unscheduled phase 2 item. | [ADR 0020](../decisions/0020-contact-stays-links-only-for-phase-1.md), resolving [ADR 0016](../decisions/0016-contact-section-has-links-not-a-form.md) | A phase 2 ADR naming the service, its cost, what happens to a client's site the day that service stops, and the data processing agreement protocol Part 15 requires |
 | **How a carta of several courses reads.** Three «Precios» sections one after another are three separate blocks: each has 48px of its own padding and the page puts 76px between them, so **172px of air separates the last dish of one course from the heading of the next**, and nothing frames them as one menu. Measured by building one on 28 September 2026. The cheap lever is a renderer rule making two adjacent sections of the same preset close up; whether that should happen at all is a general design decision, since it would apply to two «Opiniones» just as much. | [`docs/design/REVIEW.md`](../design/REVIEW.md) | Direction, on whether adjacent sections of one kind should read as one |
 | **The hostelería text bank — resolved, 28 September 2026.** Both `packages/copybank/drafts/*.json` files were read and signed; the hostelería rewrite and the per-sector «Precios» headings are in `bank/` now. What the draft could not write — a sixth question, direction's to add — is still open. | [ADR 0009](../decisions/0009-generated-texts-from-a-reviewed-bank.md), and [ADR 0010](../decisions/0010-initial-questionnaire.md) | Nothing, for the bank itself. The sixth-question option in ADR 0010 is direction's whenever it wants it |
-| **`packages/photobank`.** The owner's own photo (ADR 0018) does not replace it: a site has to look finished before the first upload, and two sessions produced exactly one observation about it. | [ADR 0011](../decisions/0011-sample-photos-per-sector.md) | Licensed images, which is content production rather than code |
+| **`packages/photobank`.** The owner's own photo (ADR 0018) does not replace it: a site has to look finished before the first upload, and two sessions produced exactly one observation about it. **Sprint 6 builds the machinery; the images are still content production.** The conditions each one has to meet are written out below, so the licences can be checked before any image is sourced. | [ADR 0011](../decisions/0011-sample-photos-per-sector.md), and "What an image has to satisfy" below | Licensed images, which is content production rather than code |
 | **Hosted publishing.** | [ADR 0008](../decisions/0008-hosted-publishing-has-no-plan.md), and `serve.md` in this directory, which is dormant by that decision | Nothing. It is on hold with no plan, and that is the decision |
 
 ## Open questions, filed
@@ -52,11 +53,11 @@ Last reviewed: 28 September 2026, at the close of sprint 4.
   with a deadline; they wait for the same moment. One of the six is ours to raise when that moment
   comes: **once the ZIP is handed over there is nothing to switch off** (ADR 0001), so what a
   refund can even mean has to be decided before the terms of use are written, not after.
-- **The two catalog sections still missing** of the dossier's nine: Fotos de trabajos and Equipo.
-  Seven are built; «Precios» landed on 28 September 2026 (#51). **Fotos de trabajos is the one
-  with evidence behind it**: Taberna asked for «los platos estrella o la carta», and only the
-  second of those is a price list — a showcase of three or four dishes with photographs is a
-  gallery, and nothing serves it.
+- **One catalog section still missing** of the dossier's nine: **«Quién soy / El equipo»**. Eight
+  are built; «Precios» landed on 28 September 2026 (#51) and **«Fotos de trabajos» on sprint 5
+  day 3** (`packages/catalog/src/gallery.ts`), which is what this row said was still missing until
+  29 September. Equipo is the one with **no** evidence behind it: no session asked for it, and it
+  is scheduled for sprint 7 because it closes the catalogue rather than because anybody wanted it.
 - **A list item's optional slots cannot be reached.** The fields panel is explicit that "a list
   holds items rather than a value", so its rows are the section's slots and never an item's. A
   card's `description` in «Qué hago» has been `0..1` and unreachable since sprint 1, and a price
@@ -89,3 +90,58 @@ questionnaire, eight to the ZIP, unaided and unexplained
 **Declaring phase 1 accepted is direction's, not development's.** The same session that produced
 the number also said she would not publish the result as it stands, and both facts are in the
 write-up. What is recorded is the measurement.
+
+---
+
+## What an image has to satisfy before it can enter the photo bank
+
+Written on 29 September 2026, sprint 6 day 1, **before** the schema that enforces it, so that
+licences can be checked with direction before any image is sourced. Every line comes from
+[ADR 0011](../decisions/0011-sample-photos-per-sector.md); nothing here is new policy. The Zod
+schema in `packages/photobank/src/schema.ts` refuses a file that breaks any of the checkable ones,
+so these are not a checklist someone has to remember — they are a build failure.
+
+**The licence is the part that cannot be fixed later.**
+
+- **Commercial use allowed, *and* our clients may publish it.** A sample photo travels inside the
+  client's ZIP and they put it on their own domain. A licence that covers only Retorika's own use
+  fails the test, however generous it looks.
+- **Never from a bank whose terms forbid compiling its photos into a similar service, or using
+  them in digital templates.** ADR 0011 names two by name for exactly this: **Unsplash and
+  Unsplash+ are both excluded.**
+- **Preferably generated with a free generative-AI tool whose terms allow commercial use** — and
+  the terms re-read for **the exact tool and the exact plan**. Free tiers routinely carry different
+  terms from paid ones, and the plan is part of the answer.
+- **The date the terms were read is recorded.** Terms change; the record keeps the version we
+  relied on.
+
+**What may not be in the picture.**
+
+- **No recognisable person.** No face, and no tattoo or other feature that identifies somebody.
+- **No brand, logo or lettering** — including the garbled pseudo-text generative tools draw on
+  signs, labels and menus, which is the one people miss.
+- **No visible artefacts:** extra fingers, warped tools, impossible objects.
+- **Plausible for a small business in Spain.**
+
+**The file.**
+
+- **WebP**, longest side **1600 px**, quality around **75**, with EXIF and XMP removed — the origin
+  belongs in the record, not in the file.
+- **At most 200 KB.** Two separate checks, and worth stating separately because the first version of
+  this note fused them: the file must weigh **exactly what its record declares**, and it must
+  **not exceed 200 KB**. A record that misstates its own size is wrong even when it is small.
+
+**What is recorded with each one** (`packages/photobank/bank/<sector>.json`):
+
+- `id`, `sector`, `file`, `width`, `height`, `bytes`.
+- **`alt`, in Spanish, describing what is really in the photograph** — it is a text that reaches a
+  published page, so it is reviewed like any bank text.
+- `origin`: the tool and model, the date, and **the prompt**.
+- `licence`: name, URL, the date the terms were read, `commercialUse`, `clientsMayPublish`.
+- `review`: who approved it and when. **A person, never the tool that made it.**
+
+**How many.** ADR 0011 asks for **at least eight per sector**, so the three variants do not repeat
+themselves. Sprint 6 takes **three to five for `restaurante-bar`** as the first real test of the
+path — it is the sector of both usability sessions. A sector holds either none or at least eight;
+a half-filled one would make two of the three variant cards show the same photograph, and the
+bank's tests say so.

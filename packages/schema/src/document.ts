@@ -8,7 +8,7 @@ import { styleValueSchema, themeSchema } from "./tokens.ts";
  * role or a token is additive and bumps the minor; removing or renaming one breaks and
  * bumps the major.
  */
-export const SCHEMA_VERSION = "1.0.0";
+export const SCHEMA_VERSION = "1.1.0";
 
 const idSchema = z.string().min(1).max(128);
 
@@ -36,6 +36,21 @@ const contentValueSchema = z.union([
     /** Relative path or URL. The publisher rewrites it; the renderer escapes it. */
     src: z.string(),
     alt: z.string(),
+    /**
+     * Which sample this photograph is, when it is not the owner's own (ADR 0011).
+     *
+     * Absent means the owner put it there. Present means nobody did: it is the catalog's grey
+     * marker (`"marcador"`) or, once `packages/photobank` has images, that image's bank id. The
+     * editor reads it to label the photo, to count what is still missing and to warn before a
+     * download; **the renderer never emits it**, so a published page is byte for byte the same
+     * with it or without it, and nothing marks a sample photo inside the downloaded site.
+     *
+     * A field rather than a thing deduced from `src`, because the document saying what it carries
+     * is what survives a src convention changing underneath it — and because the obligation is
+     * one line and enforceable: replacing the photo removes the field (`setElementImageSrc`,
+     * with its own test). ADR 0011 asked for exactly this, and for the migration it costs.
+     */
+    sample: z.string().min(1).optional(),
   }),
   z.strictObject({
     kind: z.literal("link"),
