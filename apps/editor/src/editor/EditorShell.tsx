@@ -448,9 +448,7 @@ export function EditorShell({
         {/* The wide side gutters centre the canvas when it is alone; with a panel open they would
             only squeeze the preview, so they go. */}
         <div
-          className={
-            "flex flex-grow gap-6 overflow-hidden pt-6 " + (panel ? "px-6" : "px-6 sm:px-24")
-          }
+          className={`flex flex-grow gap-6 overflow-hidden pt-6 ${panel ? "px-6" : "px-6 sm:px-24"}`}
         >
           <div className="flex flex-grow justify-center overflow-hidden">
             <div

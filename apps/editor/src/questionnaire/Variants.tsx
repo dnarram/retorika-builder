@@ -2,6 +2,7 @@
 
 import { blankSection, CATALOG, CONTACT_ID, FOOTER_ID, variantsFor } from "@retorika/catalog";
 import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
+import { GENERIC_SECTOR, textFor } from "@retorika/copybank";
 import {
   type Answers,
   contactSectionFor,
@@ -272,7 +273,48 @@ export function Variants({
   function sectionToInsert(catalogId: string, doc: RetorikaDocument): Section | undefined {
     if (catalogId === CONTACT_ID) return contactSection;
     if (catalogId === FOOTER_ID) return footerSectionFor(answers);
-    return blankSection(catalogId, variantForInsertion(doc, catalogId), `sec-${catalogId}`);
+    const section = blankSection(
+      catalogId,
+      variantForInsertion(doc, catalogId),
+      `sec-${catalogId}`,
+    );
+    return withBankHeadline(catalogId, section);
+  }
+
+  /**
+   * The heading a newly added section arrives with, taken from the text bank when the bank has
+   * one for this sector.
+   *
+   * **The name in the menu and the heading on the page are two different things**, and this is
+   * where they part. The menu says «Precios» to everyone, because that is what the section is;
+   * the page says «Nuestra carta» to a restaurant and «Tarifas» to a gym, because that is what
+   * the owner would have written. Only the bank knows the second, and it knows it per sector.
+   *
+   * Falls back to the marker `blankSection` already put there, which is what happens for every
+   * section the bank has no heading for — and, until those entries are read and approved, for
+   * this one too (`packages/copybank/drafts/`). ADR 0009's binding half is that a person reads a
+   * text before it ships, so an unapproved heading is simply not served and the marker stands.
+   */
+  function withBankHeadline(catalogId: string, section: Section): Section {
+    // `ciudad` is left undefined, exactly as the generator leaves it: question 4 collects one
+    // free-text address, not a municipality, and `packages/generator/src/sections.ts` says so —
+    // "`ciudad` stays undefined until a real source exists". Passing the address here would put a
+    // street where a city belongs. Every bank text using {ciudad} has a sibling that does not.
+    // `sector` is null until question 2 is answered, which cannot be the case by the time a
+    // section is being inserted — but the type is right to insist, and the generic file is what
+    // the cascade would fall through to anyway.
+    const text = textFor(answers.sector ?? GENERIC_SECTOR, catalogId, "headline", {
+      negocio: answers.businessName,
+    });
+    if (!text) return section;
+    return {
+      ...section,
+      content: section.content.map((element) =>
+        element.slot === "headline" && element.value?.kind === "text"
+          ? { ...element, value: { ...element.value, text } }
+          : element,
+      ),
+    };
   }
 
   const offers = useMemo<SectionOffer[]>(
@@ -360,6 +402,14 @@ export function Variants({
         onSetVariant={(sectionId, variantId) => {
           dismissToast();
           dispatch({ type: "setVariant", variant: openIndex, sectionId, variantId });
+        }}
+        onAddItem={(sectionId, slot, item) => {
+          dismissToast();
+          dispatch({ type: "addItem", variant: openIndex, sectionId, slot, item });
+        }}
+        onRemoveItem={(sectionId, slot, itemId) => {
+          dismissToast();
+          dispatch({ type: "removeItem", variant: openIndex, sectionId, slot, itemId });
         }}
         // The new theme is assembled here, from the theme the open document is carrying — never
         // from scratch. `withPalette` replaces the six colours and leaves the scale alone, which

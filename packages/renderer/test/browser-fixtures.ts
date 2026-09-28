@@ -11,6 +11,8 @@ import {
   FOOTER_VARIANTS,
   LOCATION_ID,
   LOCATION_VARIANTS,
+  PRICES_ID,
+  PRICES_VARIANTS,
   SERVICES_ID,
   SERVICES_VARIANTS,
   TESTIMONIALS_ID,
@@ -63,6 +65,68 @@ export interface Combination {
  * Keyed by catalog id and checked against CATALOG below: a new preset that is not listed here
  * makes allCombinations() throw, rather than quietly leaving the matrix one preset short.
  */
+/**
+ * A price list, at the size a real one reaches.
+ *
+ * Twelve lines rather than the two the other list sections use, because twelve is the cap and a
+ * carta is the one list anybody actually fills to it — and because the thing most likely to go
+ * wrong at this size is not colour but a long dish name and its price landing on top of each
+ * other in a narrow card. That is the overflow suite's business, which is why "long" is one of
+ * the text cases here.
+ */
+function pricesSection(variantId: string, text: TextCase): Section {
+  const long = text === "long";
+  const textElement = (id: string, role: "heading" | "body", slot: string, value: string) =>
+    ({ id, role, hidden: false, slot, value: { kind: "text", text: value } }) as ContentElement;
+  const dishes: readonly [string, string][] = [
+    ["Ensaladilla de la casa", "6,50 €"],
+    ["Croquetas caseras", "7,00 €"],
+    ["Salmorejo", "5,50 €"],
+    ["Tabla de ibéricos", "14,00 €"],
+    ["Queso payoyo curado", "9,00 €"],
+    ["Solomillo al whisky", "16,50 €"],
+    ["Carrillada al vino tinto", "15,00 €"],
+    ["Bacalao confitado", "17,00 €"],
+    ["Verduras de temporada", "11,00 €"],
+    ["Postre del día", "4,50 €"],
+    ["Café solo", "1,40 €"],
+    ["Copa de vino de la tierra", "2,80 €"],
+  ];
+  return {
+    id: "sec-prices",
+    preset: { catalogId: PRICES_ID, variantId },
+    source: "catalog",
+    layout: null,
+    content: [
+      textElement("el-pr-headline", "heading", "headline", "Nuestra carta"),
+      textElement("el-pr-intro", "body", "intro", "Pregunta por lo que haya hoy fuera de carta."),
+      {
+        id: "el-lines",
+        role: "list",
+        hidden: false,
+        slot: "lines",
+        items: dishes.map(([name, price], index) => ({
+          id: `item-${index + 1}`,
+          elements: [
+            textElement(
+              `el-line-${index + 1}-name`,
+              "heading",
+              "name",
+              long ? `${name} con guarnición de temporada y pan de masa madre` : name,
+            ),
+            textElement(
+              `el-line-${index + 1}-price`,
+              "body",
+              "price",
+              long ? `${price} (media ración disponible)` : price,
+            ),
+          ],
+        })),
+      },
+    ],
+  };
+}
+
 const PRESET_CASES: Record<
   string,
   {
@@ -101,6 +165,11 @@ const PRESET_CASES: Record<
     // "long" matters more here than anywhere: a quote is the one field whose length the owner
     // does not choose from a list — they paste what a customer actually wrote.
     sections: (cover, variantId, text) => [cover, testimonialsSection(variantId, text)],
+  },
+  [PRICES_ID]: {
+    variants: PRICES_VARIANTS,
+    texts: ["standard", "long"],
+    sections: (cover, variantId, text) => [cover, pricesSection(variantId, text)],
   },
   [CONTACT_ID]: {
     variants: CONTACT_VARIANTS,

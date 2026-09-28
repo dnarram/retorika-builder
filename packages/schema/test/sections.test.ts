@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { RetorikaDocument, Section } from "../src/document.ts";
 import { parseDocument } from "../src/parse.ts";
 import {
+  addItem,
   clearSlot,
   deleteSection,
   duplicateSection,
@@ -11,6 +12,7 @@ import {
   mintElementId,
   mintSectionId,
   moveSection,
+  removeItem,
   setVariant,
 } from "../src/sections.ts";
 import { type Theme, TOKEN_KEYS } from "../src/tokens.ts";
@@ -664,5 +666,135 @@ describe("setVariant", () => {
 
   it("produces a document that still parses", () => {
     expect(() => parseDocument(setVariant(doc, "sec-location", "split"))).not.toThrow();
+  });
+});
+
+describe("addItem and removeItem", () => {
+  const listed: Section = {
+    id: "sec-prices",
+    preset: { catalogId: "prices", variantId: "stacked" },
+    source: "catalog",
+    layout: null,
+    content: [
+      {
+        id: "el-headline",
+        role: "heading",
+        hidden: false,
+        slot: "headline",
+        value: { kind: "text", text: "Nuestra carta" },
+      },
+      {
+        id: "el-lines",
+        role: "list",
+        hidden: false,
+        slot: "lines",
+        items: [
+          {
+            id: "item-1",
+            elements: [
+              {
+                id: "el-item-1-name",
+                role: "heading",
+                hidden: false,
+                slot: "name",
+                value: { kind: "text", text: "Ensaladilla" },
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+
+  const withList = documentWith([listed]);
+  /** What the catalog hands over: ids that are templates, not yet checked against a document. */
+  const template = {
+    id: "item",
+    elements: [
+      {
+        id: "el-item-name",
+        role: "heading" as const,
+        hidden: false,
+        slot: "name",
+        value: { kind: "text" as const, text: "Escribe aquí el nombre" },
+      },
+    ],
+  };
+
+  const linesOf = (doc: RetorikaDocument) =>
+    doc.pages[0]?.sections[0]?.content.find((element) => element.role === "list")?.items;
+
+  it("appends a line at the end", () => {
+    const edited = addItem(withList, "sec-prices", "lines", template);
+    expect(linesOf(edited)).toHaveLength(2);
+    expect(linesOf(edited)?.[0]?.id).toBe("item-1");
+  });
+
+  it("leaves the lines that were already there byte-for-byte alone", () => {
+    const edited = addItem(withList, "sec-prices", "lines", template);
+    expect(linesOf(edited)?.[0]).toEqual(linesOf(withList)?.[0]);
+  });
+
+  it("re-mints an element id the section already uses", () => {
+    // Element ids are unique within a *section*, and a list item's elements are part of it — so
+    // two lines built from the same catalog template would collide without this.
+    const once = addItem(withList, "sec-prices", "lines", template);
+    const twice = addItem(once, "sec-prices", "lines", template);
+    const ids = twice.pages[0]?.sections[0]?.content
+      .find((element) => element.role === "list")
+      ?.items?.flatMap((item) => item.elements.map((element) => element.id));
+    expect(new Set(ids).size).toBe(ids?.length);
+  });
+
+  it("re-mints an item id too", () => {
+    const twice = addItem(
+      addItem(withList, "sec-prices", "lines", { ...template, id: "item-1" }),
+      "sec-prices",
+      "lines",
+      { ...template, id: "item-1" },
+    );
+    const itemIds = linesOf(twice)?.map((item) => item.id);
+    expect(new Set(itemIds).size).toBe(3);
+  });
+
+  it("takes a named line away for good", () => {
+    const two = addItem(withList, "sec-prices", "lines", template);
+    const second = linesOf(two)?.[1]?.id;
+    if (!second) throw new Error("no second line");
+    const back = removeItem(two, "sec-prices", "lines", second);
+    expect(linesOf(back)).toHaveLength(1);
+    expect(linesOf(back)?.[0]?.id).toBe("item-1");
+  });
+
+  it("removes rather than hides, which is deliberate against rule 3", () => {
+    // Rule 3 is about roles: a role hides so the place to put it back never disappears. A list
+    // item is a repetition, not a slot, and a hidden line would sit in the document with nothing
+    // able to show it again. ADR 0003 settled the same question for a whole section.
+    const two = addItem(withList, "sec-prices", "lines", template);
+    const second = linesOf(two)?.[1]?.id;
+    if (!second) throw new Error("no second line");
+    const back = removeItem(two, "sec-prices", "lines", second);
+    expect(linesOf(back)?.some((item) => item.id === second)).toBe(false);
+  });
+
+  it("throws for a section that has no list in that slot", () => {
+    expect(() => addItem(doc, "sec-cover", "lines", template)).toThrow(/no list in slot/);
+  });
+
+  it("throws for a section the document does not have", () => {
+    expect(() => addItem(withList, "no-such", "lines", template)).toThrow(/no section/);
+    expect(() => removeItem(withList, "no-such", "lines", "item-1")).toThrow(/no section/);
+  });
+
+  it("throws for a line that is not in the list", () => {
+    expect(() => removeItem(withList, "sec-prices", "lines", "item-9")).toThrow(/no item/);
+  });
+
+  it("produces a document that still parses, both ways", () => {
+    const two = addItem(withList, "sec-prices", "lines", template);
+    expect(() => parseDocument(two)).not.toThrow();
+    const second = linesOf(two)?.[1]?.id;
+    if (!second) throw new Error("no second line");
+    expect(() => parseDocument(removeItem(two, "sec-prices", "lines", second))).not.toThrow();
   });
 });

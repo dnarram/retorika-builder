@@ -42,6 +42,15 @@ export const TESTIMONIALS_ITEM_SLOTS: readonly PresetSlot[] = [
   { slot: "quote", role: "body", min: 1, max: 1 },
 ];
 
+/**
+ * Six, the same as "Qué hago" (ADR 0013).
+ *
+ * There was no cap at all until a line could be added from the editor, because nothing could add
+ * one: this section is never generated, so it had exactly the one line `blankSection` gives it.
+ * Six is what the card grid draws without a page turning into a wall of quotes.
+ */
+export const TESTIMONIALS_ITEMS = { min: 1, max: 6 } as const;
+
 export const TESTIMONIALS_VARIANTS = ["stacked", "side"] as const;
 export type TestimonialsVariant = (typeof TESTIMONIALS_VARIANTS)[number];
 
@@ -72,6 +81,7 @@ function isTestimonialsVariant(variantId: string): variantId is TestimonialsVari
 export const testimonialsPreset: PresetShape = {
   catalogId: TESTIMONIALS_ID,
   slots: TESTIMONIALS_SLOTS,
+  itemRange: TESTIMONIALS_ITEMS,
   itemSlots: TESTIMONIALS_ITEM_SLOTS,
 
   layoutFor(variantId: string, elements: readonly ContentElement[]): SectionLayout {

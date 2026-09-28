@@ -3,6 +3,7 @@ import { CONTACT_ID, CONTACT_VARIANTS, contactPreset } from "./contact.ts";
 import { COVER_ID, COVER_VARIANTS, coverPreset } from "./cover.ts";
 import { FOOTER_ID, FOOTER_VARIANTS, footerPreset } from "./footer.ts";
 import { LOCATION_ID, LOCATION_VARIANTS, locationPreset } from "./location.ts";
+import { PRICES_ID, PRICES_VARIANTS, pricesPreset } from "./prices.ts";
 import { SERVICES_ID, SERVICES_VARIANTS, servicesPreset } from "./services.ts";
 import { TESTIMONIALS_ID, TESTIMONIALS_VARIANTS, testimonialsPreset } from "./testimonials.ts";
 
@@ -17,6 +18,7 @@ export const CATALOG: Readonly<Record<string, PresetShape>> = {
   [SERVICES_ID]: servicesPreset,
   [LOCATION_ID]: locationPreset,
   [TESTIMONIALS_ID]: testimonialsPreset,
+  [PRICES_ID]: pricesPreset,
   [CONTACT_ID]: contactPreset,
   [FOOTER_ID]: footerPreset,
 };
@@ -28,6 +30,7 @@ const VARIANTS: Readonly<Record<string, readonly string[]>> = {
   [SERVICES_ID]: SERVICES_VARIANTS,
   [LOCATION_ID]: LOCATION_VARIANTS,
   [TESTIMONIALS_ID]: TESTIMONIALS_VARIANTS,
+  [PRICES_ID]: PRICES_VARIANTS,
   [CONTACT_ID]: CONTACT_VARIANTS,
   [FOOTER_ID]: FOOTER_VARIANTS,
 };

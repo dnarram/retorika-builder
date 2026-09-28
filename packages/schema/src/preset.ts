@@ -29,6 +29,19 @@ export interface PresetShape {
    */
   itemSlots?: readonly PresetSlot[];
   /**
+   * How many items this preset's list admits, when it has one.
+   *
+   * Here for the same reason as `itemSlots`, and it arrived for the same reason too: code that
+   * *builds* needs to be told. Until a line could be added from the editor, how many a list held
+   * was whatever produced the section decided, so the cap lived wherever each section felt like
+   * declaring it — `SERVICES_ITEMS` beside its preset, and nothing at all for `testimonials`.
+   * A control that offers "one more line" has to ask one place when to stop offering.
+   *
+   * `checkAgainstPreset` does not enforce it, exactly as it does not enforce `itemSlots`: an item
+   * is in a slot of the list, not of the section.
+   */
+  itemRange?: { min: number; max: number };
+  /**
    * The preset's layout for a variant, resolved against the section's own elements.
    *
    * It takes the elements because a placement references an element *id* (rule 1) and a

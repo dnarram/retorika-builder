@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  blankItem,
   FOOTER_ID,
   FOOTER_IDENTITY_SLOTS,
   isPlaceholderText,
@@ -12,7 +13,9 @@ import { render } from "@retorika/renderer";
 import {
   type ElementAddress,
   findSection,
+  type ListItem,
   listEditableFields,
+  type PresetShape,
   type RetorikaDocument,
   type SlotAddress,
   type SlotFill,
@@ -134,6 +137,43 @@ function compositionsFor(doc: RetorikaDocument, sectionId: string): Composition[
   });
 }
 
+/**
+ * The list a section holds, if it holds one: which slot it is in, the lines in it, and whether
+ * another would fit.
+ *
+ * Empty for a section with no list, which is most of them. The cap comes from the preset
+ * (`itemRange`) rather than from this component, so "Qué hago" stops at six and a price list at
+ * twelve without the editor knowing either number.
+ */
+interface ListLines {
+  slot: string;
+  itemIds: string[];
+  canAdd: boolean;
+  canRemove: boolean;
+}
+
+function linesFor(doc: RetorikaDocument, sectionId: string): ListLines | undefined {
+  const found = findSection(doc, sectionId);
+  if (!found) return undefined;
+  let preset: PresetShape;
+  try {
+    preset = presetFor(found.section.preset.catalogId);
+  } catch {
+    return undefined;
+  }
+  const range = preset.itemRange;
+  if (!preset.itemSlots || !range) return undefined;
+  const list = found.section.content.find((element) => element.role === "list");
+  if (!list) return undefined;
+  const itemIds = (list.items ?? []).map((item) => item.id);
+  return {
+    slot: list.slot,
+    itemIds,
+    canAdd: itemIds.length < range.max,
+    canRemove: itemIds.length > range.min,
+  };
+}
+
 /** From `Content-Disposition: attachment; filename="doc-taberna.zip"`. */
 function filenameFrom(response: Response, fallback: string): string {
   const match = /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") ?? "");
@@ -191,6 +231,8 @@ export function Editor({
   onFillSlot,
   onClearSlot,
   onSetVariant,
+  onAddItem,
+  onRemoveItem,
   onPickPalette,
   onPickTypePair,
   photoUrls,
@@ -220,6 +262,10 @@ export function Editor({
   onClearSlot: (address: SlotAddress) => void;
   /** A different composition for one section, chosen from its own menu. */
   onSetVariant: (sectionId: string, variantId: string) => void;
+  /** One more line in a section's list, or one gone. The line is built by the catalog here and
+   * re-minted by the schema, so neither end has to know what a valid one is made of. */
+  onAddItem: (sectionId: string, slot: string, item: ListItem) => void;
+  onRemoveItem: (sectionId: string, slot: string, itemId: string) => void;
   /** A palette or a pair of typefaces chosen in the Estilo panel. This component says which
    * one was picked; assembling the new theme and putting it in the document is `Variants`'
    * business, the same division as every other verb here. */
@@ -651,6 +697,69 @@ export function Editor({
    * leaves `img` out because there is no text on an image to click into; this is the other half
    * of that sentence, which had been missing.
    */
+  /**
+   * The line controls, on any section whose preset holds a list.
+   *
+   * **The gap this closes is older than the section that revealed it.** Until now nothing
+   * anywhere could add a line to a list: the questionnaire's answers decided how many cards "Qué
+   * hago" had, and a section added from the pill got exactly the one line `blankSection` gives
+   * it, for ever. That was invisible while the only list sections were generated ones; a price
+   * list that can hold twelve lines and can only ever show one is the same bug with the lid off.
+   *
+   * Injected into the frame like every other piece of section chrome, and for the same reason —
+   * the lines only exist in the rendered page. `data-item` is already on each `li` (the renderer
+   * puts it there beside `data-id`), so a line needs no new identity scheme to be addressed.
+   *
+   * Both controls are drawn only where they would do something: no "add" once the preset's
+   * maximum is reached, and no "remove" on the last line, since a list with nothing in it renders
+   * as nothing and would leave a heading with a hole under it.
+   */
+  function wireLines(iframeDoc: Document) {
+    for (const section of iframeDoc.querySelectorAll<HTMLElement>("[data-section]")) {
+      const sectionId = section.dataset.section;
+      if (!sectionId) continue;
+      const lines = linesFor(doc, sectionId);
+      if (!lines) continue;
+
+      const list = section.querySelector<HTMLElement>(".rb-list");
+      if (!list) continue;
+
+      if (lines.canRemove) {
+        for (const li of list.querySelectorAll<HTMLElement>("[data-item]")) {
+          const itemId = li.dataset.item;
+          if (!itemId) continue;
+          li.classList.add("rb-line");
+          const remove = iframeDoc.createElement("button");
+          remove.type = "button";
+          remove.className = "rb-line-remove";
+          remove.setAttribute("aria-label", es["editor.line.remove"]);
+          remove.innerHTML =
+            '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+          remove.addEventListener("click", (event) => {
+            event.stopPropagation();
+            onRemoveItem(sectionId, lines.slot, itemId);
+          });
+          li.appendChild(remove);
+        }
+      }
+
+      if (!lines.canAdd) continue;
+      const add = iframeDoc.createElement("button");
+      add.type = "button";
+      add.className = "rb-line-add";
+      add.textContent = `+ ${es["editor.line.add"]}`;
+      add.addEventListener("click", (event) => {
+        event.stopPropagation();
+        // Built here from the catalog, because what a valid line is made of is the catalog's
+        // business; the schema re-mints its ids against the document it lands in.
+        const found = findSection(doc, sectionId);
+        if (!found) return;
+        onAddItem(sectionId, lines.slot, blankItem(found.section.preset.catalogId));
+      });
+      list.insertAdjacentElement("afterend", add);
+    }
+  }
+
   function wirePhotos(iframeDoc: Document) {
     for (const image of iframeDoc.querySelectorAll<HTMLImageElement>('img[data-role="image"]')) {
       const elementId = image.dataset.id;
@@ -793,11 +902,28 @@ export function Editor({
       // hover, and nothing until then.
       ".rb-photo { cursor: pointer; outline: 2px dashed transparent; outline-offset: 3px; }",
       ".rb-photo:hover { outline-color: #156FE7; }",
+      // The line controls. The pill echoes the section one, smaller and left-aligned under the
+      // list it belongs to rather than centred in a gap, because it adds to a thing rather than
+      // between two things.
+      `.rb-line-add { font-family: ${UI_FONT}; margin-top: 10px; display: inline-flex;`,
+      "  align-items: center; height: 30px; padding: 0 14px; font-size: 13px; font-weight: 600;",
+      "  color: #156FE7; background: #FFFFFF; border: 1px solid #A9C9F4; border-radius: 999px;",
+      "  cursor: pointer; }",
+      ".rb-line-add:hover { background: #F2F7FE; border-color: #156FE7; }",
+      // On the line itself, and only visible while the pointer is over it: a cross on every row
+      // at all times would draw the eye away from the words, which are the thing being written.
+      ".rb-line { position: relative; }",
+      ".rb-line-remove { position: absolute; top: 2px; right: 0; width: 20px; height: 20px;",
+      "  display: flex; align-items: center; justify-content: center; background: #DC2626;",
+      "  border: 2px solid #FFFFFF; border-radius: 999px; cursor: pointer; opacity: 0;",
+      "  box-shadow: 0 2px 6px rgba(15,23,42,0.28); }",
+      ".rb-line:hover .rb-line-remove, .rb-line-remove:focus { opacity: 1; }",
     ].join("\n");
     iframeDoc.head.appendChild(style);
 
     wireSelection(iframeDoc);
     wireInsertion(iframeDoc);
+    wireLines(iframeDoc);
     wirePhotos(iframeDoc);
     wireEditing(iframeDoc);
   }

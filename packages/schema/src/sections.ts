@@ -1,4 +1,4 @@
-import type { ContentValue, Page, RetorikaDocument, Section } from "./document.ts";
+import type { ContentElement, ContentValue, Page, RetorikaDocument, Section } from "./document.ts";
 import { flattenElements } from "./invariants.ts";
 import { parseDocument } from "./parse.ts";
 import type { Role } from "./roles.ts";
@@ -354,6 +354,156 @@ export function setVariant(
               section.id === sectionId
                 ? { ...section, preset: { ...section.preset, variantId } }
                 : section,
+            ),
+          },
+    ),
+  });
+}
+
+/** One line of a list, as `contentElementSchema` declares it: an id and the elements inside. */
+export interface ListItem {
+  id: string;
+  elements: ContentElement[];
+}
+
+/**
+ * A free item id for a list, and free element ids for what goes inside it.
+ *
+ * Element ids are unique **within a section** (`mintElementId`), and a list item's elements are
+ * part of that section, so a second line cannot simply reuse the first line's ids. The catalog
+ * builds a line without knowing what is already there — it has never seen the document — so the
+ * ids it produces are templates, and this is what makes them free, exactly as `insertSection`
+ * re-mints a section id for the same reason.
+ *
+ * Free across the whole section rather than within one list: element ids are unique per section
+ * (`mintElementId` says so), and the editor addresses a line by its `data-item` inside a section
+ * that may hold more than one list. Which list a line is going into therefore does not come into
+ * it, which is why no slot is named here.
+ */
+function mintItem(section: Section, item: ListItem): ListItem {
+  const usedItems = new Set(
+    section.content.flatMap((element) => (element.items ?? []).map((existing) => existing.id)),
+  );
+  let itemId = item.id;
+  let suffix = 2;
+  while (usedItems.has(itemId)) {
+    itemId = `${item.id}-${suffix}`;
+    suffix += 1;
+  }
+
+  const used = new Set(flattenElements(section.content).map((element) => element.id));
+  const elements = item.elements.map((element) => {
+    let id = element.id;
+    let n = 2;
+    while (used.has(id)) {
+      id = `${element.id}-${n}`;
+      n += 1;
+    }
+    used.add(id);
+    return { ...element, id };
+  });
+
+  return { id: itemId, elements };
+}
+
+/**
+ * One more line at the end of a list — a dish on a carta, a row on a tariff.
+ *
+ * **The first verb in this file that reaches inside a list.** Until it existed, a list had
+ * exactly as many items as whatever produced the section gave it: the questionnaire's answers for
+ * "Qué hago", and a single marker line for anything added from the pill. Nothing in the editor
+ * could reach the second line, which made a twelve-line price list a twelve-line price list in
+ * name only.
+ *
+ * The line arrives fully formed, because what a valid one looks like belongs to the catalog
+ * (`blankItem`), which this package must not import — the same division `insertSection` makes and
+ * for the same reason. What this owns is the ids: the catalog's are templates, and they are
+ * re-minted here against the very section being written, which is the only place that knows what
+ * is free.
+ *
+ * **It cannot enforce the maximum**, because how many lines a section admits is the catalog's
+ * (`PRICES_LINES`), and schema may not ask. The editor stops offering the control at the cap, the
+ * same way it stops offering a composition to a section that has only one.
+ */
+export function addItem(
+  doc: RetorikaDocument,
+  sectionId: string,
+  slot: string,
+  item: ListItem,
+): RetorikaDocument {
+  const found = findSection(doc, sectionId);
+  if (!found) throw new Error(`addItem: no section "${sectionId}"`);
+  const list = found.section.content.find(
+    (element) => element.slot === slot && element.role === "list",
+  );
+  if (!list) throw new Error(`addItem: section "${sectionId}" has no list in slot "${slot}"`);
+
+  const minted = mintItem(found.section, item);
+  const content = found.section.content.map((element) =>
+    element === list ? { ...element, items: [...(element.items ?? []), minted] } : element,
+  );
+
+  return parseDocument({
+    ...doc,
+    pages: doc.pages.map((page) =>
+      page.id !== found.page.id
+        ? page
+        : {
+            ...page,
+            sections: page.sections.map((section) =>
+              section.id === sectionId ? { ...section, content } : section,
+            ),
+          },
+    ),
+  });
+}
+
+/**
+ * One line gone, and gone for real.
+ *
+ * **This removes rather than hides, and that is deliberate against rule 3.** The rule is about
+ * *roles*: a role hides so the place to put it back never disappears, and the fields panel is
+ * what shows an owner an empty slot they can fill again. A list item is not a role — it is a
+ * repetition, closer to a section than to a slot — and a hidden line would sit in the document
+ * with nothing anywhere able to show it again. ADR 0003 settled the same question for a section
+ * ("there is no trash inside the document") and ADR 0014 settled the net: the undo history, not a
+ * dialog.
+ *
+ * **It cannot enforce the minimum** either. The editor is what stops offering the control on the
+ * last line; a list with no items renders as nothing at all (`build.ts` drops a `ul` with no
+ * `li`), which would be a section with a heading and an invisible hole under it.
+ */
+export function removeItem(
+  doc: RetorikaDocument,
+  sectionId: string,
+  slot: string,
+  itemId: string,
+): RetorikaDocument {
+  const found = findSection(doc, sectionId);
+  if (!found) throw new Error(`removeItem: no section "${sectionId}"`);
+  const list = found.section.content.find(
+    (element) => element.slot === slot && element.role === "list",
+  );
+  if (!list) throw new Error(`removeItem: section "${sectionId}" has no list in slot "${slot}"`);
+  if (!(list.items ?? []).some((item) => item.id === itemId)) {
+    throw new Error(`removeItem: list "${slot}" has no item "${itemId}"`);
+  }
+
+  const content = found.section.content.map((element) =>
+    element === list
+      ? { ...element, items: (element.items ?? []).filter((item) => item.id !== itemId) }
+      : element,
+  );
+
+  return parseDocument({
+    ...doc,
+    pages: doc.pages.map((page) =>
+      page.id !== found.page.id
+        ? page
+        : {
+            ...page,
+            sections: page.sections.map((section) =>
+              section.id === sectionId ? { ...section, content } : section,
             ),
           },
     ),

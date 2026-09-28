@@ -88,6 +88,19 @@ function elementNode(
 
   switch (value.kind) {
     case "text":
+      // Nothing to say is drawn as nothing, not as an empty tag. A text element whose value is
+      // blank used to publish `<h2></h2>` or `<p></p>` into the client's ZIP — invisible, but a
+      // real node that still takes the flex gap between its siblings, and exactly the thing
+      // `blank.ts` refuses to create when it says a required slot "cannot be filled with an empty
+      // string". The editor is where they come from: click-to-edit commits whatever is in the
+      // field on blur, and deleting a sentence commits "".
+      //
+      // This is also what makes an optional slot genuinely optional once it exists. A price on a
+      // carta line is 0..1 and gets created with a marker, because there is no other way to reach
+      // it; a line that has no price is one whose price the owner emptied, and it has to leave no
+      // trace. Hiding stays the document-level answer (rule 3) — this is the render-level one,
+      // and neither removes anything.
+      if (value.text.trim() === "") return undefined;
       switch (el.role) {
         case "heading":
           return element(headingTag(level), base, [value.text]);
@@ -307,6 +320,13 @@ export function buildCss(doc: RetorikaDocument): string {
     "  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); }",
     ".rb-item { display: flex; flex-direction: column; gap: var(--space-xs);",
     "  padding-top: var(--space-sm); border-top: 1px solid var(--color-muted); }",
+    // A price list is a list, and the card grid above is not one. Everything else that holds a
+    // list holds cards — services, opinions — and reads correctly three abreast; a carta read
+    // three abreast is a pricing table for a software plan, not a menu. Found by building a real
+    // one: twelve dishes came out in four rows of three, which nobody would read top to bottom.
+    // One rule rather than a second list drawing, because the only thing that differs is how many
+    // across.
+    ".rb-prices .rb-list { grid-template-columns: 1fr; gap: var(--space-sm); }",
     ".rb-section p { font-size: var(--size-body); color: var(--color-muted); margin: 0; }",
     // Plain links (PR #6, finding 3): color.primary, which every palette guarantees against
     // color.surface, and underlined so they never rely on colour alone. The :not keeps this

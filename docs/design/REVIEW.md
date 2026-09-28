@@ -172,6 +172,27 @@ part that must not move — the interface tokens and their separation from the p
   `PALETTES` — reordering the catalog to match a mockup exactly would churn that output for nothing
   an owner could see.
 
+- **No mockup draws «Precios» either, and a carta of several courses reads as several sections.**
+  The dossier's nine include it («Tarifas o planes») and it shipped on sprint 4 day 6, but no
+  screen shows one. Two decisions are recorded here because they are about how a page reads:
+
+  **A price list is drawn as a list, not as a card grid.** Every other section that holds a list
+  holds cards, and the generic `.rb-list` rule flows them three abreast, which is right for
+  services and opinions. A twelve-dish carta drawn that way came out as four rows of three, which
+  nobody reads top to bottom. One rule — `.rb-prices .rb-list { grid-template-columns: 1fr }` —
+  rather than a second list drawing, since the only thing that differs is how many across.
+
+  **Three courses still read as three sections, and that is measured rather than asserted.**
+  Building «Entrantes», «Carnes» and «Postres» by duplicating gives each 48px of its own padding
+  with 76px of page between them: **172px of empty space between the last dish of one course and
+  the heading of the next**, with transparent backgrounds and nothing framing them as one menu. It
+  is usable — a small restaurant's carta often is one section — but it is not a carta.
+
+  The cheap lever, not taken: a rule closing up two adjacent sections of the same preset. It is
+  left open because it is a general question rather than a price-list one — it would apply to two
+  «Opiniones» in a row just as much, and whether adjacent sections of one kind should read as one
+  thing is a design decision rather than a rendering detail.
+
 - **No mockup draws «variantes de sección», and it shipped on sprint 4 day 4.** Protocol Part 14
   names it as a phase 2 item and the catalog has carried the compositions since sprint 2 — thirteen
   of them, two or three per section, built and tested and unreachable — but no screen in
