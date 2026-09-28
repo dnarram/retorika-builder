@@ -350,22 +350,34 @@ describe("insertSection", () => {
   const blank = () => blankSection("location", "stacked", "sec-location");
 
   it("puts the section where the pill was clicked", () => {
-    const state = run(start(), { type: "insertSection", variant: 0, section: blank(), index: 1 });
+    const state = run(start(), {
+      type: "insertSection",
+      variant: 0,
+      section: blank(),
+      index: 1,
+      pageId: "home",
+    });
     expect(sectionIds(state)?.[1]).toBe("sec-location-2");
   });
 
   it("re-mints an id the document already uses, rather than colliding with it", () => {
     // The generated site already has a "sec-location": what the caller hands over is a
     // template's id, and only the document knows which ones are free.
-    const state = run(start(), { type: "insertSection", variant: 0, section: blank(), index: 0 });
+    const state = run(start(), {
+      type: "insertSection",
+      variant: 0,
+      section: blank(),
+      index: 0,
+      pageId: "home",
+    });
     expect(sectionIds(state)?.[0]).toBe("sec-location-2");
   });
 
   it("keeps re-minting when the same section is added twice in a row", () => {
     const state = run(
       start(),
-      { type: "insertSection", variant: 0, section: blank(), index: 0 },
-      { type: "insertSection", variant: 0, section: blank(), index: 0 },
+      { type: "insertSection", variant: 0, section: blank(), index: 0, pageId: "home" },
+      { type: "insertSection", variant: 0, section: blank(), index: 0, pageId: "home" },
     );
     const ids = sectionIds(state) ?? [];
     expect(new Set(ids).size).toBe(ids.length);
@@ -378,6 +390,7 @@ describe("insertSection", () => {
       variant: 0,
       section: blankSection("cover", "image-right", "sec-portada"),
       index: 0,
+      pageId: "home",
     });
     expect(sectionIds(state)?.[0]).toBe("sec-portada");
   });
@@ -386,7 +399,7 @@ describe("insertSection", () => {
     const before = sectionIds(start());
     const state = run(
       start(),
-      { type: "insertSection", variant: 0, section: blank(), index: 1 },
+      { type: "insertSection", variant: 0, section: blank(), index: 1, pageId: "home" },
       { type: "undo", variant: 0 },
     );
     expect(sectionIds(state)).toEqual(before);
@@ -395,7 +408,7 @@ describe("insertSection", () => {
   it("is redone after an undo", () => {
     const state = run(
       start(),
-      { type: "insertSection", variant: 0, section: blank(), index: 1 },
+      { type: "insertSection", variant: 0, section: blank(), index: 1, pageId: "home" },
       { type: "undo", variant: 0 },
       { type: "redo", variant: 0 },
     );
@@ -403,7 +416,13 @@ describe("insertSection", () => {
   });
 
   it("names the section it added, under the id it actually minted", () => {
-    const state = run(start(), { type: "insertSection", variant: 0, section: blank(), index: 1 });
+    const state = run(start(), {
+      type: "insertSection",
+      variant: 0,
+      section: blank(),
+      index: 1,
+      pageId: "home",
+    });
     expect(state[0]?.present.cause).toEqual({
       type: "insertSection",
       sectionId: "sec-location-2",
@@ -411,14 +430,26 @@ describe("insertSection", () => {
   });
 
   it("touches only the variant it names", () => {
-    const state = run(start(), { type: "insertSection", variant: 0, section: blank(), index: 0 });
+    const state = run(start(), {
+      type: "insertSection",
+      variant: 0,
+      section: blank(),
+      index: 0,
+      pageId: "home",
+    });
     expect(sectionIds(state, 1)).toEqual(sectionIds(start(), 1));
   });
 
   it("does not count as having edited the new section: nothing was written into it", () => {
     // Marker text is what the catalog put there, not what the user typed, so a delete's undo
     // toast should fade for it like any untouched section (ADR 0014).
-    const state = run(start(), { type: "insertSection", variant: 0, section: blank(), index: 1 });
+    const state = run(start(), {
+      type: "insertSection",
+      variant: 0,
+      section: blank(),
+      index: 1,
+      pageId: "home",
+    });
     const history = state[0];
     if (!history) throw new Error("no history");
     expect(wasSectionEverEdited(history, "sec-location-2")).toBe(false);
@@ -1008,5 +1039,99 @@ describe("sectionToPage, as one history step", () => {
 
   it("refuses a section that may not become a page, rather than half-doing it", () => {
     expect(() => run(start(), convert("sec-cover"))).toThrow(/cannot become a page/);
+  });
+});
+
+describe("insertSection lands on the page the canvas is drawing", () => {
+  /**
+   * The regression sprint 5 left behind. `insertSection` resolved its page as `doc.pages[0]` under
+   * a comment that said so — "Phase 1 has exactly one; when `Páginas` arrives in phase 2 this is
+   * where the choice of which one has to come from" — and `Páginas` arrived without anyone coming
+   * back. From a converted page, every «Añadir sección aquí» put its section on the home page.
+   *
+   * It was worse than the wrong page, and the second half is what a page-only test would miss:
+   * `wireInsertion` computes the index from the sections it can *see*, which are the rendered
+   * page's. So the third gap of a converted page sent `index: 2` to be applied against the home
+   * page's own list — the wrong page *and* a meaningless position in it.
+   */
+  const convert = (sectionId: string): HistoryAction => ({
+    type: "sectionToPage",
+    variant: 0,
+    sectionId,
+  });
+
+  /** A two-page document, made the way the editor makes one: by converting a section. */
+  function converted(): { state: Histories; pageId: string } {
+    const state = run(start(), convert("sec-services"));
+    const pageId = state[0]?.present.document.pages[1]?.id;
+    if (!pageId) throw new Error("the conversion produced no page");
+    return { state, pageId };
+  }
+
+  it("puts the section on that page, not on the home page", () => {
+    const { state, pageId } = converted();
+    const after = run(state, {
+      type: "insertSection",
+      variant: 0,
+      section: blankSection("gallery", "stacked", "sec-gallery"),
+      index: 1,
+      pageId,
+    });
+
+    const doc = after[0]?.present.document;
+    expect(doc?.pages[1]?.sections.map((s) => s.preset.catalogId)).toEqual(["services", "gallery"]);
+    // And the home page is untouched: this is the half that used to fail, silently, by gaining a
+    // section the owner never saw arrive.
+    expect(doc?.pages[0]?.sections.map((s) => s.preset.catalogId)).toEqual(
+      state[0]?.present.document.pages[0]?.sections.map((s) => s.preset.catalogId),
+    );
+  });
+
+  it("reads the index against that page's own sections", () => {
+    // `index: 0` means "before everything on the page I am looking at". Applied to the home page it
+    // would have meant "before the cover", which is a different place entirely.
+    const { state, pageId } = converted();
+    const after = run(state, {
+      type: "insertSection",
+      variant: 0,
+      section: blankSection("gallery", "stacked", "sec-gallery"),
+      index: 0,
+      pageId,
+    });
+    expect(after[0]?.present.document.pages[1]?.sections.map((s) => s.preset.catalogId)).toEqual([
+      "gallery",
+      "services",
+    ]);
+  });
+
+  it("throws naming the page when asked for one the document does not have", () => {
+    // Rather than the silent `pages[0]` that caused this. An id the editor sends came from a tab it
+    // just drew, so a miss is a bug and has to sound like one.
+    const { state } = converted();
+    expect(() =>
+      run(state, {
+        type: "insertSection",
+        variant: 0,
+        section: blankSection("gallery", "stacked", "sec-gallery"),
+        index: 0,
+        pageId: "no-such-page",
+      }),
+    ).toThrow(/no page "no-such-page"/);
+  });
+
+  it("takes the section back off that page on undo", () => {
+    const { state, pageId } = converted();
+    const after = run(
+      state,
+      {
+        type: "insertSection",
+        variant: 0,
+        section: blankSection("gallery", "stacked", "sec-gallery"),
+        index: 1,
+        pageId,
+      },
+      { type: "undo", variant: 0 },
+    );
+    expect(after[0]?.present.document).toEqual(state[0]?.present.document);
   });
 });

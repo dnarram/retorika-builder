@@ -373,7 +373,18 @@ export function Variants({
     const section = sectionToInsert(catalogId, history.present.document);
     // Only reachable for a contact section the menu would not have offered in the first place.
     if (!section) throw new Error(`handleInsertSection: nothing to build for "${catalogId}"`);
-    dispatch({ type: "insertSection", variant, section, index });
+
+    // **The page the canvas is drawing**, which is this component's business: it is where
+    // `openIndex` and `currentPageId` already live, and keeping it here is what lets the component
+    // that draws the pill stay ignorant of pages entirely. `currentPageId` is `undefined` while the
+    // canvas shows the first page — the same "unset means the first one" the renderer uses — so it
+    // resolves to that page's id here rather than letting the reducer guess, which is the guess
+    // that put a converted page's sections on the home page for a whole sprint.
+    const pageId = currentPageId ?? history.present.document.pages[0]?.id;
+    // Unreachable: `documentSchema` requires at least one page. Named rather than silently
+    // defaulted, because the alternative to a throw here is inserting into nowhere.
+    if (!pageId) throw new Error("handleInsertSection: the document has no page to insert into");
+    dispatch({ type: "insertSection", variant, section, index, pageId });
   }
 
   function handleDeleteSection(variant: number, history: History, sectionId: string) {

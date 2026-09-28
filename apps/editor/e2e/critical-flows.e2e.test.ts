@@ -547,3 +547,58 @@ describe("día 7 — dos conversiones desde el editor, y el ZIP resultante abier
     }
   });
 });
+
+/**
+ * Sprint 6 day 1. A regression, and one only a browser can state: the defect is the distance
+ * between the page the owner is *looking at* and the page the reducer wrote to.
+ *
+ * Sprint 5 shipped pages and left `insertSection` resolving `doc.pages[0]` under a comment saying
+ * that was a placeholder until `Páginas` arrived. So from a converted page, «Añadir sección aquí»
+ * added the section to the home page — and because the pill computes its index from the sections it
+ * can see, at a position that meant nothing there either. To the owner the section simply did not
+ * appear.
+ */
+describe("regression — a section is added to the page you are looking at", () => {
+  it("adds it to the converted page, and leaves the home page alone", async () => {
+    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    const frame = page.frameLocator("iframe").first();
+    await frame.locator('[data-section="sec-cover"]').waitFor();
+
+    // Counted rather than assumed: this suite shares one page and one browser session, so what a
+    // fresh `goto` restores depends on whether an earlier test's autosave had landed. The claim
+    // here is about the *change* a conversion and an insertion make, which is true from any start.
+    const tabs = page.locator(".overflow-x-auto button");
+    const tabsBefore = await tabs.count();
+    const homeSectionsBefore = await frame.locator("[data-section]").count();
+
+    await frame.locator('[data-section="sec-services"]').click();
+    await frame
+      .locator(
+        '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+      )
+      .click();
+    await expect(tabs).toHaveCount(tabsBefore + 1);
+
+    // Onto the page the conversion just made, and add a section from its own pill.
+    await tabs.nth(tabsBefore).click();
+    await expect(frame.locator("[data-page]")).toHaveAttribute("data-page", "page-que-ponemos");
+    await frame.getByRole("button", { name: "Añadir sección aquí" }).last().click();
+    await frame
+      .locator(".rb-menu")
+      .first()
+      .getByRole("button", { name: /Opiniones/ })
+      .click();
+
+    // It is here, on this page, where the owner asked for it.
+    await expect(frame.locator('[data-preset="testimonials"]')).toBeVisible();
+
+    // And the home page did not quietly gain one. This is the assertion the bug failed: the
+    // section went there instead, and nothing on screen said so.
+    await tabs.first().click();
+    await expect(frame.locator("[data-page]")).toHaveAttribute("data-page", "home");
+    await expect(frame.locator('[data-preset="testimonials"]')).toHaveCount(0);
+    // The converted section left the home page and an avance took its place, so the count is
+    // unchanged — and nothing else arrived, which is the thing that used to happen invisibly.
+    await expect(frame.locator("[data-section]")).toHaveCount(homeSectionsBefore);
+  });
+});
