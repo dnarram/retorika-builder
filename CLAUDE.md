@@ -54,7 +54,7 @@ regardless of how mechanical the change looks.
 | `pnpm test` | Everything |
 | `pnpm test:invariants` | The five invariants of Part 8.2, by canonical name |
 | `pnpm test:golden` | Generated HTML against the stored corpus (`UPDATE_GOLDEN=1 pnpm test:golden` regenerates) |
-| `pnpm typecheck` | `tsc --build` across the workspace |
+| `pnpm typecheck` | `tsc --build` across the packages, then `apps/editor` on its own — Next's tsconfig is not a project reference, so the workspace build does not see it |
 | `pnpm lint` / `pnpm format` | Biome |
 | `pnpm size` | Published-page weight budget |
 | `pnpm schema:guard` | Migration guard; takes an optional diff range |

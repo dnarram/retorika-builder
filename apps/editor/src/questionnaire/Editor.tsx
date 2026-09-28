@@ -822,10 +822,24 @@ export function Editor({
 
       el.addEventListener("blur", () => {
         const next = (el.textContent ?? "").trim();
-        if (next === "") {
-          // Never save a heading or a button empty: nothing here offers a real way to
-          // hide the element instead (document rule 3 needs a real editor action for
-          // that), so an empty save would just be a broken word missing from the page.
+        // **Emptying a text is a real edit**, and used to be silently undone here. The comment
+        // that guarded it said "nothing here offers a real way to hide the element instead", and
+        // that stopped being true twice: the fields panel clears a section's slot (sprint 3
+        // day 4), and an empty text now renders as nothing rather than as an empty tag (day 6).
+        // Nothing is lost either way — a section slot comes back through that panel, a list line
+        // through remove-and-add, and both through undo, which is the same net ADR 0014 gives a
+        // deleted section.
+        //
+        // Found by building a carta: a dish with no price could not be given one, so the line
+        // published «Escribe aquí el precio» — a marker on a real restaurant's page — and made
+        // "the price is optional per line" false in practice.
+        //
+        // **A link or a button is the exception, and the original reasoning holds for it word for
+        // word.** Its value is a destination, so emptying the label leaves an anchor that still
+        // points somewhere with no words in it: invisible on the page and nameless to a screen
+        // reader. The download refuses a button that goes nowhere; this refuses one that says
+        // nothing.
+        if (next === "" && (el.dataset["role"] === "link" || el.dataset["role"] === "button")) {
           el.textContent = original;
           return;
         }

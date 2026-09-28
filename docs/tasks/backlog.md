@@ -12,7 +12,7 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 28 September 2026, at the close of sprint 3.
+Last reviewed: 28 September 2026, at the close of sprint 4.
 
 ---
 
@@ -63,6 +63,12 @@ Last reviewed: 28 September 2026, at the close of sprint 3.
   line's is the same. It has not bitten because the questionnaire fills the cards it generates,
   and because a carta line reads perfectly as a name and a price. The fix is either extending
   `SlotAddress` to name an item, or a second panel; neither is small.
+- **The three findings of sprint 4 that nobody has acted on**, all of them measured rather than
+  supposed, and each one already written up where it belongs:
+  - Whether a hostelería owner recognises «Precios» in the menu ([#51](https://github.com/dnarram/retorika-builder/issues/51), a hypothesis for the next session).
+  - Whether two adjacent sections of the same preset should read as one (the 172px row above).
+  - The editor's top bar naming the variant where mockup 08 names the business
+    ([`REVIEW.md`](../design/REVIEW.md), found on day 2 and older than the sprint).
 - **One of the five critical Playwright flows is not written yet.** *Cambio de paleta* joined on
   sprint 4 day 3, once day 2 gave `Estilo` a live panel to drive it — CI now covers four of the
   five. *Pago de prueba y publicación* is on hold with no plan (ADR 0008) — there is no payment
