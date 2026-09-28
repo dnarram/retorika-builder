@@ -1,6 +1,7 @@
 import { COVER_ID, FOOTER_ID, presetFor } from "@retorika/catalog";
 import {
   type ContentElement,
+  type Page,
   type Placement,
   type RetorikaDocument,
   type Section,
@@ -9,7 +10,7 @@ import {
 } from "@retorika/schema";
 import { cssThemeValue, safeUrl } from "./escape.ts";
 import { commentNode, element, type RenderNode } from "./nodes.ts";
-import type { RenderOptions } from "./options.ts";
+import type { ResolvedRenderOptions } from "./options.ts";
 
 /**
  * Document -> node tree. Layout, grid and tokens live here and nowhere else (Part 3.2).
@@ -47,7 +48,7 @@ function headingTag(level: number): string {
  */
 function listNode(
   el: ContentElement,
-  options: RenderOptions,
+  options: ResolvedRenderOptions,
   level: number,
   base: Record<string, string>,
 ): RenderNode | undefined {
@@ -70,7 +71,7 @@ function listNode(
  */
 function elementNode(
   el: ContentElement,
-  options: RenderOptions,
+  options: ResolvedRenderOptions,
   level: number,
 ): RenderNode | undefined {
   if (el.hidden) return undefined;
@@ -194,7 +195,7 @@ function panelArea(
   return { column, columnSpan: columnEnd - column, row, rowSpan: rowEnd - row };
 }
 
-function sectionNode(section: Section, options: RenderOptions): RenderNode {
+function sectionNode(section: Section, options: ResolvedRenderOptions, isH1: boolean): RenderNode {
   const preset = presetFor(section.preset.catalogId);
   const elements = section.content;
 
@@ -203,9 +204,12 @@ function sectionNode(section: Section, options: RenderOptions): RenderNode {
   const layout = section.layout ?? preset.layoutFor(section.preset.variantId, elements);
   const placementById = new Map(layout.placements.map((p) => [p.elementId, p]));
 
-  // The cover carries the page's <h1>; every other section starts at <h2>. A free section
-  // built on the cover preset is still the cover.
-  const level = section.preset.catalogId === COVER_ID ? 1 : 2;
+  // The page's <h1> is the cover when there is one, and the page's first section when there is
+  // not (sprint 5): a converted page carries no cover — the cover is one of the three sections
+  // ADR 0022 refuses to convert — and would otherwise publish with no h1 at all, which axe marks.
+  // `isH1` is resolved once per page in `buildTree`, not per section, because "is there a cover
+  // on this page" is a fact about the page and not about any one section in it.
+  const level = isH1 ? 1 : 2;
 
   const emitted: { el: ContentElement; node: RenderNode; placement: Placement | undefined }[] = [];
   for (const el of elements) {
@@ -258,12 +262,41 @@ function sectionNode(section: Section, options: RenderOptions): RenderNode {
   );
 }
 
-export function buildTree(doc: RetorikaDocument, options: RenderOptions): RenderNode {
-  const page = doc.pages[0];
-  if (!page) throw new Error("Document has no pages");
+/**
+ * The page a render call is drawing: the one named by `options.pageId`, or the document's first
+ * when it names none. Shared with `index.ts`, which needs the same page to pick its `<title>`.
+ */
+export function resolvePage(doc: RetorikaDocument, pageId: string | undefined): Page {
+  if (pageId === undefined) {
+    const first = doc.pages[0];
+    if (!first) throw new Error("Document has no pages");
+    return first;
+  }
+  const page = doc.pages.find((candidate) => candidate.id === pageId);
+  if (!page) throw new Error(`render: no page "${pageId}"`);
+  return page;
+}
+
+export function buildTree(doc: RetorikaDocument, options: ResolvedRenderOptions): RenderNode {
+  const page = resolvePage(doc, options.pageId);
+
+  // Which section(s) get the h1. Unchanged for a page that has a cover: every section built on
+  // the cover preset is h1, exactly as before — including a free section on that preset, which
+  // `hidden-and-embed` in the golden corpus tests deliberately (see the comment in `sectionNode`).
+  // New for sprint 5: a page with *no* cover section at all — a converted page, since ADR 0022
+  // forbids converting the cover — used to publish with no h1, which axe marks. Its first section
+  // is promoted instead.
+  const hasCover = page.sections.some((section) => section.preset.catalogId === COVER_ID);
+  const fallbackH1Id = hasCover ? undefined : page.sections[0]?.id;
 
   return element("main", { class: "rb-page", "data-page": page.id }, [
-    ...page.sections.map((section) => sectionNode(section, options)),
+    ...page.sections.map((section) =>
+      sectionNode(
+        section,
+        options,
+        section.preset.catalogId === COVER_ID || section.id === fallbackH1Id,
+      ),
+    ),
   ]);
 }
 
