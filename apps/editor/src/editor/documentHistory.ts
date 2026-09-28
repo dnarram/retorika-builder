@@ -17,6 +17,7 @@ import {
   setElementImageSrc,
   setElementText,
   setTheme as setThemeInDoc,
+  setVariant as setVariantInDoc,
 } from "@retorika/schema";
 
 /**
@@ -46,6 +47,7 @@ export type SnapshotCause =
   | { type: "setImage"; address: ElementAddress }
   | { type: "fillSlot"; sectionId: string }
   | { type: "clearSlot"; sectionId: string }
+  | { type: "setVariant"; sectionId: string }
   /** The first cause that names no section, because a theme belongs to none of them: it restyles
    * every section at once, hand-designed ones included. `sectionOf` is what keeps that honest. */
   | { type: "setTheme" }
@@ -87,6 +89,7 @@ export type HistoryAction =
   | { type: "fillSlot"; variant: number; fill: SlotFill }
   | { type: "clearSlot"; variant: number; address: SlotAddress }
   | { type: "setTheme"; variant: number; theme: Theme }
+  | { type: "setVariant"; variant: number; sectionId: string; variantId: string }
   | { type: "undo"; variant: number }
   | { type: "redo"; variant: number };
 
@@ -285,6 +288,29 @@ function setTheme(history: History, theme: Theme): History {
   };
 }
 
+/**
+ * One section drawn a different way — same content, different composition.
+ *
+ * The narrowest step in this stack: it replaces one string, `section.preset.variantId`, and the
+ * renderer resolves the preset's other geometry table against the very same elements. No content
+ * moves, which is why this is not a content cause below even though it names a section.
+ *
+ * `setVariant` in the schema hands back the same document when the composition is already the one
+ * asked for, and refuses outright for a section carrying its own layout — for which a variant id
+ * decides nothing. The editor does not offer the button in that case, so the refusal is a
+ * backstop rather than a path anyone walks.
+ */
+function setVariant(history: History, sectionId: string, variantId: string): History {
+  const document = setVariantInDoc(history.present.document, sectionId, variantId);
+  if (document === history.present.document) return history;
+  return {
+    past: [...history.past, history.present].slice(-LIMIT),
+    present: { document, cause: { type: "setVariant", sectionId } },
+    future: [],
+    amendable: false,
+  };
+}
+
 function undo(history: History): History {
   const previous = history.past.at(-1);
   if (!previous) return history;
@@ -342,6 +368,8 @@ function apply(history: History, action: HistoryAction): History {
       return clearSlot(history, action.address);
     case "setTheme":
       return setTheme(history, action.theme);
+    case "setVariant":
+      return setVariant(history, action.sectionId, action.variantId);
     case "undo":
       return undo(history);
     case "redo":
@@ -386,6 +414,12 @@ export function historiesReducer(state: Histories, action: HistoryAction): Histo
  * than losing a sentence. `fillSlot` and `clearSlot` count for the same reason — both are the
  * owner deciding what this section says, one by writing and one by taking something off the
  * page, and the writing they took off is still in the document behind it.
+ *
+ * **`setVariant` does not count**, and it is the first cause that names a section without being
+ * about its content. Choosing a different composition rewrites one string, `preset.variantId`, and
+ * moves no element — it is the same kind of act as moving the section up the page, which has never
+ * counted either. A delete toast should not stop fading because someone tried two layouts on a
+ * section they never wrote a word into.
  */
 /** The causes that mean the owner worked on a section's content, as opposed to moving, copying
  * or removing the section itself. Kept as a list rather than a growing chain of `||`, so adding

@@ -357,6 +357,10 @@ export function Variants({
           dismissToast();
           dispatch({ type: "clearSlot", variant: openIndex, address });
         }}
+        onSetVariant={(sectionId, variantId) => {
+          dismissToast();
+          dispatch({ type: "setVariant", variant: openIndex, sectionId, variantId });
+        }}
         // The new theme is assembled here, from the theme the open document is carrying — never
         // from scratch. `withPalette` replaces the six colours and leaves the scale alone, which
         // is what keeps a palette change from quietly resetting sizes and spacing to the default.

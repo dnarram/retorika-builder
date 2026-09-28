@@ -172,6 +172,33 @@ part that must not move — the interface tokens and their separation from the p
   `PALETTES` — reordering the catalog to match a mockup exactly would churn that output for nothing
   an owner could see.
 
+- **No mockup draws «variantes de sección», and it shipped on sprint 4 day 4.** Protocol Part 14
+  names it as a phase 2 item and the catalog has carried the compositions since sprint 2 — thirteen
+  of them, two or three per section, built and tested and unreachable — but no screen in
+  `docs/design/mockups/` shows a control for choosing one. Mockup 13 is global style; mockup 08's
+  floating toolbar is about a selected *element*. So the placement was development's to decide, and
+  it is recorded here rather than in a source comment:
+
+  The control is a **sixth button in the per-section action cluster**, opening a small menu of the
+  compositions by their Spanish name («Foto a la derecha», «En dos columnas»), with the one in use
+  marked. It follows the pattern the insertion pill established — chrome injected into the preview
+  frame, anchored to the thing it acts on — for the same reason: only the frame knows where a
+  section sits. The menu names what does not change, «El texto y las fotos no cambian», because
+  that is rule 1 and it is the first question anyone would have.
+
+  **The button is drawn conditionally**, which is new for this cluster: a section carrying its own
+  layout gets none, because for a hand-designed section the variant id decides nothing
+  (`build.ts` reads `section.layout ?? preset.layoutFor(…)`), and a button that lights up and moves
+  no pixel is the dead-button mistake in a new costume. `setVariant` in the schema refuses that case
+  outright as a backstop.
+
+  **Selection and the open menu now survive the preview's re-render**, which they never did before.
+  Every action replaces the iframe's whole `srcDoc`, so the outline, the handles and the cluster
+  were destroyed and rebuilt each time — one click to get back, which nobody noticed because you
+  rarely delete the same section twice. Composition is the first action anyone repeats on purpose,
+  and re-selecting between tries would have been the whole friction of the feature. It improves the
+  other five buttons as a side effect.
+
 - **Not implemented, and not planned: mockup 13's «Avanzado: colores exactos y tamaños».** The row
   at the foot of the style panel opens a free colour picker and size controls. There is no such
   control in the shipped panel and there is not meant to be. This review already said "a palette

@@ -598,6 +598,110 @@ describe("setTheme", () => {
   });
 });
 
+describe("setVariant", () => {
+  /** The cover ships `image-right`; `image-background` is the other composition the catalog has. */
+  const compose = (variantId: string, sectionId = "sec-cover", variant = 0): HistoryAction => ({
+    type: "setVariant",
+    variant,
+    sectionId,
+    variantId,
+  });
+
+  const variantOf = (state: Histories, sectionId = "sec-cover", variant = 0) =>
+    state[variant]?.present.document.pages[0]?.sections.find((s) => s.id === sectionId)?.preset
+      .variantId;
+
+  it("swaps the composition in one step", () => {
+    const state = run(start(), compose("image-background"));
+    expect(variantOf(state)).toBe("image-background");
+    expect(state[0]?.past).toHaveLength(1);
+  });
+
+  it("moves no content, which is the whole reason it is cheap", () => {
+    const before = start()[0]?.present.document.pages[0]?.sections.find(
+      (s) => s.id === "sec-cover",
+    )?.content;
+    const state = run(start(), compose("image-background"));
+    const after = state[0]?.present.document.pages[0]?.sections.find(
+      (s) => s.id === "sec-cover",
+    )?.content;
+    expect(after).toEqual(before);
+  });
+
+  it("is undone back to the composition the generator chose", () => {
+    const before = variantOf(start());
+    const state = run(start(), compose("image-background"), { type: "undo", variant: 0 });
+    expect(variantOf(state)).toBe(before);
+  });
+
+  it("is redone after an undo", () => {
+    const state = run(
+      start(),
+      compose("image-background"),
+      { type: "undo", variant: 0 },
+      { type: "redo", variant: 0 },
+    );
+    expect(variantOf(state)).toBe("image-background");
+  });
+
+  it("adds no step for the composition the section is already drawn with", () => {
+    const initial = start();
+    const current = variantOf(initial);
+    if (!current) throw new Error("the cover has no variant");
+    const state = run(initial, compose(current));
+    // Down to the same state object, so React does not re-render the preview for a click that
+    // changed nothing.
+    expect(state).toBe(initial);
+    expect(state[0]?.past).toHaveLength(0);
+  });
+
+  it("does not perform a redo, which is what a missing reducer branch used to do", () => {
+    // The trap day 1 defused, checked again for the second verb that arrived after it: the future
+    // holds an undone edit, and if `setVariant` fell through to `redo` that edit would come back
+    // and the composition would not change.
+    const state = run(
+      start(),
+      edit("Nombre editado"),
+      { type: "undo", variant: 0 },
+      compose("image-background"),
+    );
+    expect(variantOf(state)).toBe("image-background");
+    expect(headline(state)).not.toBe("Nombre editado");
+    expect(state[0]?.future).toHaveLength(0);
+  });
+
+  it("touches only the variant it names", () => {
+    const state = run(start(), compose("image-background"));
+    expect(variantOf(state, "sec-cover", 1)).toBe(variantOf(start(), "sec-cover", 1));
+    expect(state[1]?.past).toHaveLength(0);
+  });
+
+  it("does not count as having edited the section, because it writes nothing into it", () => {
+    // ADR 0014's toast asks what the owner contributed. Trying two compositions on a section you
+    // never wrote a word into must not keep a delete's toast on screen.
+    const state = run(start(), compose("image-background"));
+    const history = state[0];
+    if (!history) throw new Error("no history");
+    expect(wasSectionEverEdited(history, "sec-cover")).toBe(false);
+  });
+
+  it("does not erase the record of an edit made before it", () => {
+    const state = run(start(), edit("Nombre editado"), compose("image-background"));
+    const history = state[0];
+    if (!history) throw new Error("no history");
+    expect(wasSectionEverEdited(history, "sec-cover")).toBe(true);
+  });
+
+  it("does not merge with the typing around it", () => {
+    const state = run(start(), edit("Uno"), compose("image-background"), edit("Dos"));
+    expect(state[0]?.past).toHaveLength(3);
+  });
+
+  it("throws on a section the document does not have", () => {
+    expect(() => run(start(), compose("stacked", "no-such-section"))).toThrow(/no section/);
+  });
+});
+
 describe("what the history remembers across undo and redo", () => {
   /**
    * The defect these pin: `undo` and `redo` used to rebuild the snapshot they restored with a

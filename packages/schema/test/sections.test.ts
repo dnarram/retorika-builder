@@ -11,6 +11,7 @@ import {
   mintElementId,
   mintSectionId,
   moveSection,
+  setVariant,
 } from "../src/sections.ts";
 import { type Theme, TOKEN_KEYS } from "../src/tokens.ts";
 
@@ -604,5 +605,64 @@ describe("mintElementId", () => {
       ],
     };
     expect(mintElementId(withList, "body")).toBe("el-body-2");
+  });
+});
+
+describe("setVariant", () => {
+  it("swaps the composition and touches nothing else", () => {
+    const edited = setVariant(doc, "sec-cover", "image-background");
+    const section = edited.pages[0]?.sections.find((s) => s.id === "sec-cover");
+    expect(section?.preset.variantId).toBe("image-background");
+    expect(section?.preset.catalogId).toBe("cover");
+    // The whole point of rule 1: geometry is declared per slot, so no element moves, none is
+    // added and none is removed. Deep equality on the content array, not a spot check.
+    expect(section?.content).toEqual(cover.content);
+    expect(section?.source).toBe("catalog");
+    expect(section?.layout).toBeNull();
+  });
+
+  it("leaves every other section alone", () => {
+    const edited = setVariant(doc, "sec-cover", "image-background");
+    expect(edited.pages[0]?.sections.find((s) => s.id === "sec-location")).toEqual(location);
+  });
+
+  it("hands back the very same document when the composition is already that one", () => {
+    // What stops the undo arrow lighting up for a step that undoes to itself. Reference
+    // equality, because that is what the editor's history checks.
+    expect(setVariant(doc, "sec-cover", "image-right")).toBe(doc);
+  });
+
+  it("throws on a section id the document does not have", () => {
+    expect(() => setVariant(doc, "no-such-section", "stacked")).toThrow(/no section/);
+  });
+
+  it("refuses a section carrying its own layout, rather than appearing to work", () => {
+    // `build.ts` reads `section.layout ?? preset.layoutFor(variantId, …)`, so for a hand-designed
+    // section the variant id decides nothing. Changing it would be a button that lights up and
+    // moves not a pixel — and the error says what to do instead.
+    const escalated: Section = {
+      ...cover,
+      source: "free",
+      layout: {
+        grid: { columns: 12 },
+        placements: [{ elementId: "el-headline", column: 1, columnSpan: 12, row: 1, rowSpan: 1 }],
+        breakpoints: { tablet: [], mobile: [] },
+      },
+    };
+    expect(() => setVariant(documentWith([escalated]), "sec-cover", "image-background")).toThrow(
+      /carries its own layout.*Revert it/s,
+    );
+  });
+
+  it("accepts a variant id the catalog would reject, because schema cannot know the catalog", () => {
+    // Deliberate, and the dependency arrow is why: schema must not import @retorika/catalog. The
+    // editor only ever offers ids from `variantsFor`, and the catalog's own `unknownVariant`
+    // throws at render if one ever slips through — loudly, rather than drawing a wrong layout.
+    const edited = setVariant(doc, "sec-cover", "no-such-variant");
+    expect(edited.pages[0]?.sections[0]?.preset.variantId).toBe("no-such-variant");
+  });
+
+  it("produces a document that still parses", () => {
+    expect(() => parseDocument(setVariant(doc, "sec-location", "split"))).not.toThrow();
   });
 });

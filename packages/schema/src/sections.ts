@@ -299,3 +299,63 @@ export function clearSlot(doc: RetorikaDocument, address: SlotAddress): Retorika
     ),
   });
 }
+
+/**
+ * A different composition for one section: same content, drawn differently.
+ *
+ * The cheapest real change in this editor, and the reason is `resolvePlacements`. A preset's
+ * geometry is declared per slot occurrence, never per element id (rule 1), so a variant is nothing
+ * but a different table of where each slot sits on the twelve-column grid. Swapping the id the
+ * section names is the whole operation: no element moves, none is added or removed, and
+ * `packages/renderer` resolves the new table against the same content on its next render. Thirteen
+ * compositions were built, tested and unreachable until this verb existed.
+ *
+ * **This cannot validate the variant, and that is deliberate.** Which variants a section has
+ * belongs to `@retorika/catalog`, and schema must not import it — that would reverse the
+ * dependency arrow the whole package rests on (`testing.ts` says the same thing about why
+ * `arbitraryDocument` takes a variant as a parameter). The editor offers only ids that came out of
+ * `variantsFor`, and `unknownVariant` in the catalog is the loud backstop if one ever does not:
+ * a wrong id throws at render rather than quietly drawing the wrong layout.
+ *
+ * **It refuses a section carrying its own layout**, which is the one case where it would look like
+ * it worked and change nothing. `build.ts` reads `section.layout ?? preset.layoutFor(variantId,
+ * …)`, so for a hand-designed section the variant id decides nothing at all — it would only decide
+ * what the section becomes if someone later reverted it (`applyRevert` sets `layout: null` and
+ * keeps the variant). Changing a setting with no effect now, to alter the outcome of an action
+ * nobody has taken yet, is not something a caller can have meant. The error names the order
+ * instead: revert first, then choose a composition.
+ */
+export function setVariant(
+  doc: RetorikaDocument,
+  sectionId: string,
+  variantId: string,
+): RetorikaDocument {
+  const found = findSection(doc, sectionId);
+  if (!found) throw new Error(`setVariant: no section "${sectionId}"`);
+  if (found.section.layout !== null) {
+    throw new Error(
+      `setVariant: section "${sectionId}" carries its own layout, so a variant id would change ` +
+        "nothing. Revert it to the catalog layout first.",
+    );
+  }
+  // The same composition back is not a change, and the caller gets the very same document so a
+  // history built on reference equality opens no step. Pressing the composition a section already
+  // uses should leave the undo arrow exactly as it was.
+  if (found.section.preset.variantId === variantId) return doc;
+
+  return parseDocument({
+    ...doc,
+    pages: doc.pages.map((page) =>
+      page.id !== found.page.id
+        ? page
+        : {
+            ...page,
+            sections: page.sections.map((section) =>
+              section.id === sectionId
+                ? { ...section, preset: { ...section.preset, variantId } }
+                : section,
+            ),
+          },
+    ),
+  });
+}
