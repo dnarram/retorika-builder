@@ -11,6 +11,15 @@ export {
   FOOTER_VARIANTS,
   footerPreset,
 } from "./footer.ts";
+export type { GalleryVariant } from "./gallery.ts";
+export {
+  GALLERY_ID,
+  GALLERY_ITEM_SLOTS,
+  GALLERY_PHOTOS,
+  GALLERY_SLOTS,
+  GALLERY_VARIANTS,
+  galleryPreset,
+} from "./gallery.ts";
 export type { SlotPlacement } from "./layout.ts";
 export type { LocationVariant } from "./location.ts";
 export { LOCATION_ID, LOCATION_SLOTS, LOCATION_VARIANTS, locationPreset } from "./location.ts";
@@ -25,7 +34,7 @@ export {
   PRICES_VARIANTS,
   pricesPreset,
 } from "./prices.ts";
-export { SEARCH_ALIASES, sectionsMatching } from "./search.ts";
+export { SEARCH_ALIASES, SHARED_ALIASES, sectionsMatching } from "./search.ts";
 export type { ServicesVariant } from "./services.ts";
 export {
   SERVICES_ID,

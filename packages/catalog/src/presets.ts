@@ -2,6 +2,7 @@ import type { PresetShape } from "@retorika/schema";
 import { CONTACT_ID, CONTACT_VARIANTS, contactPreset } from "./contact.ts";
 import { COVER_ID, COVER_VARIANTS, coverPreset } from "./cover.ts";
 import { FOOTER_ID, FOOTER_VARIANTS, footerPreset } from "./footer.ts";
+import { GALLERY_ID, GALLERY_VARIANTS, galleryPreset } from "./gallery.ts";
 import { LOCATION_ID, LOCATION_VARIANTS, locationPreset } from "./location.ts";
 import { PRICES_ID, PRICES_VARIANTS, pricesPreset } from "./prices.ts";
 import { SERVICES_ID, SERVICES_VARIANTS, servicesPreset } from "./services.ts";
@@ -19,6 +20,10 @@ export const CATALOG: Readonly<Record<string, PresetShape>> = {
   [LOCATION_ID]: locationPreset,
   [TESTIMONIALS_ID]: testimonialsPreset,
   [PRICES_ID]: pricesPreset,
+  // Next to the section it was asked for alongside — «los platos estrella o poner la carta» — and
+  // before the two that end a page. This order is what the "Añadir sección aquí" menu offers, so
+  // it reads as a page reads; the tests sort it, so nothing rests on it.
+  [GALLERY_ID]: galleryPreset,
   [CONTACT_ID]: contactPreset,
   [FOOTER_ID]: footerPreset,
 };
@@ -31,6 +36,7 @@ const VARIANTS: Readonly<Record<string, readonly string[]>> = {
   [LOCATION_ID]: LOCATION_VARIANTS,
   [TESTIMONIALS_ID]: TESTIMONIALS_VARIANTS,
   [PRICES_ID]: PRICES_VARIANTS,
+  [GALLERY_ID]: GALLERY_VARIANTS,
   [CONTACT_ID]: CONTACT_VARIANTS,
   [FOOTER_ID]: FOOTER_VARIANTS,
 };

@@ -217,7 +217,7 @@ export function Variants({
       return;
     }
 
-    const src = photoSrcFor(address.sectionId);
+    const src = photoSrcFor(address.sectionId, address.elementId);
     const url = URL.createObjectURL(photoBlob(result.photo.bytes, result.photo.type));
     setPhotoUrls((current) => {
       const next = new Map(current);

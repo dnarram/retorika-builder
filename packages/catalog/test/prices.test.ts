@@ -169,9 +169,22 @@ describe("search", () => {
     expect(sectionsMatching("carta")).toEqual(["prices", "services"]);
   });
 
-  it("sends «menú» and «platos» to Precios and nowhere else", () => {
+  it("sends «menú» to Precios and nowhere else", () => {
     expect(sectionsMatching("menú")).toEqual(["prices"]);
-    expect(sectionsMatching("platos")).toEqual(["prices"]);
+  });
+
+  it("still sends «platos» to Precios first, now with the gallery behind it", () => {
+    // Amended when the eighth section landed (sprint 5 day 3). This used to read "and nowhere
+    // else", which was true only because there was nowhere else for it to go: the condition this
+    // section shipped under is that «carta», «menú» and «platos» lead **first** to Precios, and
+    // that is what is asserted here.
+    //
+    // «Fotos de trabajos» earns a place behind it out of the same sentence that asked for both:
+    // «le falta una sección para mostrar los platos estrella **o** poner la carta del restaurante»
+    // (Taberna, 25 Sep). The «o» separates two sections, and an owner typing the shorter word
+    // might mean either. Precios stays first because the other owner's phrasing pairs it with a
+    // list — «mis platos, la carta, etc.» (Conchi, 27 Sep).
+    expect(sectionsMatching("platos")).toEqual(["prices", "gallery"]);
   });
 
   it("ignores accents and case, because nobody types «Menú» the same way twice", () => {
