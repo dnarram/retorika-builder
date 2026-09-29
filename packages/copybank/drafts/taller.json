@@ -1,0 +1,82 @@
+{
+  "sector": "taller",
+  "review": {
+    "status": "draft",
+    "drafted": "2026-09-29"
+  },
+  "entries": [
+    {
+      "id": "taller.cover.subheadline.01",
+      "section": "cover",
+      "slot": "subheadline",
+      "text": "Taller mecánico en {ciudad}",
+      "placeholders": ["ciudad"]
+    },
+    {
+      "id": "taller.cover.subheadline.02",
+      "section": "cover",
+      "slot": "subheadline",
+      "text": "Taller mecánico",
+      "placeholders": []
+    },
+    {
+      "id": "taller.cover.body.01",
+      "section": "cover",
+      "slot": "body",
+      "text": "Pásate por el taller y lo vemos.",
+      "placeholders": []
+    },
+    {
+      "id": "taller.services.intro.01",
+      "section": "services",
+      "slot": "intro",
+      "text": "Esto es lo que hacemos en {negocio}.",
+      "placeholders": ["negocio"]
+    },
+    {
+      "id": "taller.contact.headline.01",
+      "section": "contact",
+      "slot": "headline",
+      "text": "Pide cita",
+      "placeholders": []
+    },
+    {
+      "id": "taller.contact.body.01",
+      "section": "contact",
+      "slot": "body",
+      "text": "Dinos qué le pasa y cuándo puedes traerlo.",
+      "placeholders": []
+    }
+  ],
+  "suggestions": [
+    {
+      "id": "mecanica-general",
+      "title": "Mecánica general",
+      "description": "Averías y reparaciones."
+    },
+    {
+      "id": "mantenimiento",
+      "title": "Mantenimiento",
+      "description": "Revisiones y cambio de aceite."
+    },
+    {
+      "id": "neumaticos",
+      "title": "Neumáticos",
+      "description": "Cambio y equilibrado."
+    },
+    {
+      "id": "frenos",
+      "title": "Frenos",
+      "description": "Pastillas y discos."
+    },
+    {
+      "id": "pre-itv",
+      "title": "Preparación para la ITV"
+    },
+    {
+      "id": "chapa-pintura",
+      "title": "Chapa y pintura"
+    }
+  ],
+  "actions": {}
+}
