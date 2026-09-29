@@ -10,6 +10,7 @@ import {
   type RetorikaDocument,
   type Section,
 } from "@retorika/schema";
+import { PALETTES } from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
 import {
   type Answers,
@@ -436,5 +437,49 @@ describe("the cover's photograph comes from the bank (ADR 0011)", () => {
     const ids = VARIANTS.map((v) => v.id);
     expect(new Set(ids).size).toBe(3);
     expect(new Set(VARIANTS.map((v) => v.cover)).size).toBeLessThan(3);
+  });
+});
+
+describe("the logo's palette (sprint 6 day 6)", () => {
+  /** A Theme is a flat map of resolved token values, with no palette id in it — so the palette is
+   * identified the way anything else would identify it: by the colour it actually produced. */
+  function paletteOf(document: RetorikaDocument): string | undefined {
+    return PALETTES.find(
+      (palette) => palette.colors["color.primary"] === document.theme["color.primary"],
+    )?.id;
+  }
+
+  it("uses the sector's palette when no logo chose one", () => {
+    // ADR 0010's «sin logo, la paleta por defecto del sector» — still the answer, and still the
+    // answer for every generated site that came before today.
+    expect(paletteOf(generate(MINIMAL).document)).toBe("dark-slate");
+  });
+
+  it("uses the logo's palette instead, when the logo chose one", () => {
+    const { document } = generate(answers({ ...MINIMAL, logoPaletteId: "forest-emerald" }));
+    expect(paletteOf(document)).toBe("forest-emerald");
+  });
+
+  it("falls back to the sector when the logo chose nothing", () => {
+    // `null` is what `paletteForLogo` answers for a logo with no colour in it, and for one whose
+    // colour no palette is near. Both arrive here as the same thing, on purpose.
+    const { document } = generate(answers({ ...MINIMAL, logoPaletteId: null }));
+    expect(paletteOf(document)).toBe("dark-slate");
+  });
+
+  it("leaves the typography to the sector even when the logo chose the palette", () => {
+    // A logo's colours say nothing about whether a business reads as editorial or as modern.
+    const withLogo = generate(answers({ ...MINIMAL, logoPaletteId: "forest-emerald" }));
+    const without = generate(MINIMAL);
+    expect(withLogo.document.theme["font.heading"]).toBe(without.document.theme["font.heading"]);
+    expect(withLogo.document.theme["font.body"]).toBe(without.document.theme["font.body"]);
+  });
+
+  it("stays a pure function of its answers — same answers, same theme, twice", () => {
+    // The whole reason the analysis happens in the browser and only a string travels: `INV_5`,
+    // the golden corpus and «mismas respuestas, misma web» all rest on this staying true.
+    const once = generate(answers({ ...MINIMAL, logoPaletteId: "warm-terracotta" }));
+    const twice = generate(answers({ ...MINIMAL, logoPaletteId: "warm-terracotta" }));
+    expect(once.document.theme).toEqual(twice.document.theme);
   });
 });

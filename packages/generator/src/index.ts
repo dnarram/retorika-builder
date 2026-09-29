@@ -48,7 +48,7 @@ export function generate(answers: Answers, variant: VariantChoice = VARIANTS[0])
     schemaVersion: SCHEMA_VERSION,
     id: `doc-${slugify(answers.businessName)}`,
     siteName: answers.businessName,
-    theme: themeFor(sector),
+    theme: themeFor(sector, answers.logoPaletteId),
     pages: [
       {
         id: "home",
