@@ -12,8 +12,11 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 29 September 2026, sprint 6 day 1. Sprint 5 closed between the previous review
-and this one, and two rows below had gone stale in the meantime — noted where they were corrected.
+Last reviewed: 29 September 2026, **sprint 7 day 1**. Sprint 6 closed between the previous review
+and this one. Three rows had gone stale — the photo bank's future tense, mockup 13's palettes and
+the editor's top bar — and are corrected in place rather than deleted, so the record of what was
+once open survives. One row is new and nobody had written it down anywhere: **seven of the ten
+launch sectors have no text bank.**
 
 ---
 
@@ -24,14 +27,15 @@ and this one, and two rows below had gone stale in the meantime — noted where 
 | **A contact form.** Scoped, 28 September 2026: [ADR 0020](../decisions/0020-contact-stays-links-only-for-phase-1.md) accepted ADR 0016's phase 1 links-only scope and split the form off as its own, unscheduled phase 2 item. | [ADR 0020](../decisions/0020-contact-stays-links-only-for-phase-1.md), resolving [ADR 0016](../decisions/0016-contact-section-has-links-not-a-form.md) | A phase 2 ADR naming the service, its cost, what happens to a client's site the day that service stops, and the data processing agreement protocol Part 15 requires |
 | **How a carta of several courses reads.** Three «Precios» sections one after another are three separate blocks: each has 48px of its own padding and the page puts 76px between them, so **172px of air separates the last dish of one course from the heading of the next**, and nothing frames them as one menu. Measured by building one on 28 September 2026. The cheap lever is a renderer rule making two adjacent sections of the same preset close up; whether that should happen at all is a general design decision, since it would apply to two «Opiniones» just as much. | [`docs/design/REVIEW.md`](../design/REVIEW.md) | Direction, on whether adjacent sections of one kind should read as one |
 | **The hostelería text bank — resolved, 28 September 2026.** Both `packages/copybank/drafts/*.json` files were read and signed; the hostelería rewrite and the per-sector «Precios» headings are in `bank/` now. What the draft could not write — a sixth question, direction's to add — is still open. | [ADR 0009](../decisions/0009-generated-texts-from-a-reviewed-bank.md), and [ADR 0010](../decisions/0010-initial-questionnaire.md) | Nothing, for the bank itself. The sixth-question option in ADR 0010 is direction's whenever it wants it |
-| **`packages/photobank`.** The owner's own photo (ADR 0018) does not replace it: a site has to look finished before the first upload, and two sessions produced exactly one observation about it. **Sprint 6 builds the machinery; the images are still content production.** The conditions each one has to meet are written out below, so the licences can be checked before any image is sourced. | [ADR 0011](../decisions/0011-sample-photos-per-sector.md), and "What an image has to satisfy" below | Licensed images, which is content production rather than code |
+| **`packages/photobank` — the machinery shipped on sprint 6 and the bank is still empty.** Eleven sector files, zero images. Until the first one is approved, every generated site opens on the grey marker, and three sentences in the editor had to stop saying otherwise (sprint 7 day 1; the list of which, and that they come back with the first image, is in `packages/photobank/README.md`). | [ADR 0011](../decisions/0011-sample-photos-per-sector.md), and "What an image has to satisfy" below | Licensed images, which is content production rather than code |
+| **The text bank covers three of the ten launch sectors.** `estetica`, `fisioterapia`, `taller`, `reformas`, `academia`, `fotografia` and `asesoria` fall through to `generico`, whose `suggestions` array is **empty** — so question 3 offers nothing to tick, and by ADR 0013 ticking nothing means **no services section at all**. Sprint 7 writes the seven as drafts. | [ADR 0009](../decisions/0009-generated-texts-from-a-reviewed-bank.md), and `packages/copybank/drafts/` once they are written | A person reading and signing each one — the `git mv` ADR 0009 calls the review |
 | **Hosted publishing.** | [ADR 0008](../decisions/0008-hosted-publishing-has-no-plan.md), and `serve.md` in this directory, which is dormant by that decision | Nothing. It is on hold with no plan, and that is the decision |
 
 ## Open questions, filed
 
 | What | Where |
 |---|---|
-| **Formatting inside a text.** Bold and underline, asked for once, at the cost of a schema change — and possibly a symptom of the text bank rather than a request of its own. | [#52](https://github.com/dnarram/retorika-builder/issues/52) |
+| **Formatting inside a text — designed on 29 September 2026, and waiting.** [ADR 0024](../decisions/0024-formatting-inside-a-text-is-designed-and-waiting.md) settles the shape (bold and italic over a run of characters; **underline refused**, because on the web it means a link) and decides that the code waits for the third session, which asks whether the request survives the text bank being fixed. #52 stays open and points at the ADR. | [#52](https://github.com/dnarram/retorika-builder/issues/52), [ADR 0024](../decisions/0024-formatting-inside-a-text-is-designed-and-waiting.md) |
 | **Type pairs falling back** on machines without Inter / Playfair Display. Still open — the fallback itself is unchanged — but the interface half is now handled: the Estilo panel names typefaces by character («Moderna y neutra») and never by font, and its `Aa` specimen renders in the real stack, so what it shows is what that machine will give. | [#9](https://github.com/dnarram/retorika-builder/issues/9) |
 
 ## Recorded against the thing it challenges
@@ -39,7 +43,7 @@ and this one, and two rows below had gone stale in the meantime — noted where 
 | What | Where |
 |---|---|
 | **Moving images freely.** Conchi asked for it; it collides with document rule 4, and rule 5 already named the hole it would open. The rule stands, and the request is on the record so the next person hears it as the second time. | [`docs/document-rules.md`](../document-rules.md), the note under rule 4 |
-| **The design review's own open list** — mockup 13's palettes, the third cover composition, `location`'s `split` gap, and the rest. | [`docs/design/REVIEW.md`](../design/REVIEW.md), "Still open" |
+| **The design review's own open list** — the third cover composition, `location`'s `split` gap, and the rest. *(Mockup 13's palettes were named here until sprint 7 day 1 and had been resolved since 28 September: the Estilo panel ships their names from `packages/tokens/src/locales/es.json`.)* | [`docs/design/REVIEW.md`](../design/REVIEW.md), "Still open" |
 | **The price.** Two sessions answered it and they overlap at 50 €. | [`docs/design/HANDOFF.md`](../design/HANDOFF.md), the open-questions table |
 
 ## No home but this one
@@ -66,10 +70,12 @@ and this one, and two rows below had gone stale in the meantime — noted where 
   `SlotAddress` to name an item, or a second panel; neither is small.
 - **The three findings of sprint 4 that nobody has acted on**, all of them measured rather than
   supposed, and each one already written up where it belongs:
-  - Whether a hostelería owner recognises «Precios» in the menu ([#51](https://github.com/dnarram/retorika-builder/issues/51), a hypothesis for the next session).
+  - Whether a hostelería owner recognises «Precios» in the menu ([#51](https://github.com/dnarram/retorika-builder/issues/51), a hypothesis for the next session). **The question is now written out, word for word, in [`docs/sessions/guion-tercera-sesion.md`](../sessions/guion-tercera-sesion.md).**
   - Whether two adjacent sections of the same preset should read as one (the 172px row above).
-  - The editor's top bar naming the variant where mockup 08 names the business
-    ([`REVIEW.md`](../design/REVIEW.md), found on day 2 and older than the sprint).
+  - ~~The editor's top bar naming the variant where mockup 08 names the business.~~ **Done**,
+    28 September 2026: direction settled it and the bar shows the business name
+    ([`REVIEW.md`](../design/REVIEW.md), "Resolved"). Struck on sprint 7 day 1, having outlived the
+    code by a sprint and a half.
 - **One of the five critical Playwright flows is not written yet.** *Cambio de paleta* joined on
   sprint 4 day 3, once day 2 gave `Estilo` a live panel to drive it — CI now covers four of the
   five. *Pago de prueba y publicación* is on hold with no plan (ADR 0008) — there is no payment

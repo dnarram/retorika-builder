@@ -203,7 +203,7 @@ interface ListLines {
  * «Opiniones» keep the shared label — both have shipped through two usability sessions with it,
  * and changing words those sessions saw is a product decision rather than a tidy-up.
  */
-function lineLabel(action: "add" | "remove", catalogId: string): string {
+function lineLabel(action: "add" | "remove" | "full", catalogId: string): string {
   const table = es as Record<string, string | undefined>;
   return table[`editor.line.${action}.${catalogId}`] ?? es[`editor.line.${action}`];
 }
@@ -805,10 +805,40 @@ export function Editor({
       // keystroke. The choices below stop their own propagation already, before this ever sees it.
       panel.addEventListener("click", (event) => event.stopPropagation());
 
+      // Escape closes it, and the listener is on the panel rather than on the document so it dies
+      // with the menu. Without this the only way out was a click somewhere else, which is no way
+      // out at all for someone who arrived here with the keyboard: Tab walks into the menu and
+      // then there is nowhere to go but through it.
+      panel.addEventListener("keydown", (event) => {
+        if ((event as KeyboardEvent).key !== "Escape") return;
+        event.stopPropagation();
+        closeMenus();
+      });
+
+      const header = iframeDoc.createElement("div");
+      header.className = "rb-menu-header";
+
       const title = iframeDoc.createElement("p");
       title.className = "rb-menu-title";
       title.textContent = es["editor.addSection.title"];
-      panel.appendChild(title);
+
+      // Visible, not only Escape: the sentence has been in `es.json` since the menu shipped with
+      // nothing drawing it, and a keyboard user needs a target as well as a shortcut — Escape is
+      // the one nobody has to be told about *if they already know it*. Top right, where a card's
+      // close control lives everywhere else, which also makes it the first thing Tab reaches
+      // inside the menu: the way out before the way in, which is the right order for a control
+      // whose absence is what stranded someone in the first place.
+      const close = iframeDoc.createElement("button");
+      close.type = "button";
+      close.className = "rb-menu-close";
+      close.textContent = es["editor.addSection.close"];
+      close.addEventListener("click", (event) => {
+        event.stopPropagation();
+        closeMenus();
+      });
+
+      header.append(title, close);
+      panel.appendChild(header);
 
       const search = iframeDoc.createElement("input");
       search.type = "search";
@@ -959,7 +989,21 @@ export function Editor({
         }
       }
 
-      if (!lines.canAdd) continue;
+      if (!lines.canAdd) {
+        // Said rather than left as a control that vanished — the shape `PagesPanel` already uses
+        // for the same situation, and the sentence has been in `es.json` since the verbs shipped
+        // without anything ever drawing it. An owner who fills a gallery to its eighth photograph
+        // watched «Añadir foto» disappear with no explanation, which reads like a bug rather than
+        // a limit.
+        const full = iframeDoc.createElement("p");
+        full.className = "rb-line-full";
+        // Through `lineLabel`, so it says «fotos» in a gallery where the button beside it says
+        // «Añadir foto». The generic sentence talks about «líneas», which is the editor's word and
+        // not the owner's, and it would be the only place in this section that used it.
+        full.textContent = lineLabel("full", lines.catalogId);
+        list.insertAdjacentElement("afterend", full);
+        continue;
+      }
       const add = iframeDoc.createElement("button");
       add.type = "button";
       add.className = "rb-line-add";
@@ -1159,7 +1203,15 @@ export function Editor({
       "  padding: 14px; background: #FFFFFF; border: 1px solid #E5E9F0; border-radius: 13px;",
       "  box-shadow: 0 14px 38px rgba(15,23,42,0.18); display: flex; flex-direction: column;",
       "  gap: 4px; text-align: left; }",
-      ".rb-menu-title { margin: 0 0 6px 0; font-size: 13px; font-weight: 700; color: #0F172A; }",
+      ".rb-menu-header { display: flex; align-items: baseline; justify-content: space-between;",
+      "  gap: 12px; margin-bottom: 6px; }",
+      ".rb-menu-title { margin: 0; font-size: 13px; font-weight: 700; color: #0F172A; }",
+      // A quiet word rather than a cross: it sits beside a title, not over a photograph, and the
+      // menu is small enough that an icon would need a label anyway.
+      `.rb-menu-close { font-family: ${UI_FONT}; flex-shrink: 0; padding: 2px 6px; font-size: 12px;`,
+      "  font-weight: 600; color: #5B6B82; background: none; border: 0; border-radius: 7px;",
+      "  cursor: pointer; }",
+      ".rb-menu-close:hover { background: #F2F7FE; color: #156FE7; }",
       // The catalog's search, finally on a screen. Quiet until it is used: a plain field with no
       // icon and no button, because there is nothing to submit — it filters as you type.
       `.rb-menu-search { font-family: ${UI_FONT}; box-sizing: border-box; width: 100%;`,
@@ -1208,6 +1260,15 @@ export function Editor({
       "  color: #156FE7; background: #FFFFFF; border: 1px solid #A9C9F4; border-radius: 999px;",
       "  cursor: pointer; }",
       ".rb-line-add:hover { background: #F2F7FE; border-color: #156FE7; }",
+      // The same slot the add button occupies, in the muted voice a limit deserves: it is not an
+      // action and must not look like one.
+      //
+      // `grid-column: 1 / -1` because a section is a 12-column grid and this `<p>` is a direct
+      // child of it, so without the span it is auto-placed into a single narrow track and the
+      // sentence comes out one word per line. The add button gets away with it by being an
+      // `inline-flex` pill narrow enough not to notice; a paragraph does not.
+      `.rb-line-full { font-family: ${UI_FONT}; grid-column: 1 / -1; margin: 10px 0 0 0;`,
+      "  font-size: 13px; line-height: 1.4; color: #5B6B82; }",
       // On the line itself, and only visible while the pointer is over it: a cross on every row
       // at all times would draw the eye away from the words, which are the thing being written.
       ".rb-line { position: relative; }",

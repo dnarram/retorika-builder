@@ -31,6 +31,24 @@ That move is the review, the same act ADR 0009 names for a bank text. `draftImag
 checks everything the approved schema does except the signature, so this step cannot fail on a
 rule nobody had already checked.
 
+### The first approved image changes what the editor says
+
+**Three sentences in `apps/editor/src/locales/es.json` were made true on 29 September 2026 by
+removing photographs from them**, because the bank was empty and they promised something the
+product could not do. Approving the first image makes them false in the other direction, so they
+come back with it — in the same pull request, not afterwards:
+
+| Key | Says today | Because |
+|---|---|---|
+| `questionnaire.step2.subtitle` | «elegimos las secciones y **los textos** por ti» | Nothing chooses a photograph by sector yet |
+| `variants.subtitle` | «Las fotos **las pones tú**: donde va cada una hay un hueco esperando» | There is no sample photograph, only an empty marker |
+| `questionnaire.step2.other.warning` | «Todavía no tenemos **textos** preparados para {sector}» | It used to say «textos ni fotos», which implied the other ten sectors had photographs. None did |
+
+`apps/editor/src/editor/photoInventory.ts` already tells the two states apart — `"sample"` is a
+bank photograph and `"empty"` is the marker — and the whole «Foto de ejemplo» half of the editor
+(the canvas badge, the chip in «Fotos», the ADR 0011 wording in the pre-download warning) is
+written and waiting for a state the product cannot currently produce.
+
 ## What the reviewer checks
 
 Copied from `docs/tasks/backlog.md`'s "What an image has to satisfy" (29 September 2026), which is
