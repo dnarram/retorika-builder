@@ -7,9 +7,12 @@ import type { SectorId } from "./answers.ts";
  * first pass, not a decision with its own ADR — it is a lookup table, changeable by editing a
  * row, not a schema change.
  *
- * The logo a business uploads is captured by the questionnaire but never analysed: extracting a
- * palette from an image needs real image-processing work this sprint does not include. Every
- * generation uses the sector default today, whether or not a logo was uploaded.
+ * Until sprint 6 day 6 this comment ended by saying the logo «is captured by the questionnaire but
+ * never analysed», and that every generation used the sector default whether or not a logo had
+ * been uploaded — which made the questionnaire's own promise, «De sus colores sacamos los de toda
+ * la web», untrue for five sprints. It is analysed now, and this table is what still answers when
+ * there is no logo, or when its colour is not close enough to any of the four palettes to say so
+ * honestly.
  */
 const SECTOR_THEME: Record<SectorId, { paletteId: string; typePairId: string }> = {
   "peluqueria-barberia": { paletteId: "warm-terracotta", typePairId: "editorial-serif" },
@@ -25,7 +28,21 @@ const SECTOR_THEME: Record<SectorId, { paletteId: string; typePairId: string }> 
   otro: { paletteId: "classic-blue", typePairId: "modern-sans" },
 };
 
-export function themeFor(sector: SectorId): Theme {
+/**
+ * The theme a site is generated with: the sector's, with the logo's palette in place of the
+ * sector's when the logo chose one.
+ *
+ * **Only the palette.** The typography stays the sector's in every case — a logo's colours say
+ * nothing about whether a business reads as editorial or as modern, and inventing that from an
+ * image would be a guess wearing the costume of data.
+ *
+ * `logoPaletteId` arrives as a plain string decided in the browser, so this stays a pure lookup:
+ * same arguments, same theme, no image anywhere near it.
+ */
+export function themeFor(sector: SectorId, logoPaletteId?: string | null): Theme {
   const choice = SECTOR_THEME[sector];
-  return buildTheme({ paletteId: choice.paletteId, typePairId: choice.typePairId });
+  return buildTheme({
+    paletteId: logoPaletteId ?? choice.paletteId,
+    typePairId: choice.typePairId,
+  });
 }

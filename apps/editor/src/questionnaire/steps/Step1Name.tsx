@@ -1,7 +1,10 @@
 "use client";
 
 import type { Answers } from "@retorika/generator";
+import { PALETTES } from "@retorika/tokens";
+import tokensEs from "@retorika/tokens/locales/es" with { type: "json" };
 import { useState } from "react";
+import { paletteFromLogoFile } from "../../editor/logoImage.ts";
 import es from "../../locales/es.json" with { type: "json" };
 import {
   Card,
@@ -24,6 +27,10 @@ export function Step1Name({
 }) {
   const [submitted, setSubmitted] = useState(false);
   const invalid = submitted && answers.businessName.trim() === "";
+  // While the logo is being read. Short — a 64×64 draw of an already-decoded bitmap — but a logo
+  // is the one thing on this screen that does not answer instantly, and a line that changes from
+  // «Leyendo los colores…» to what was found is how the promise above it stops being a claim.
+  const [reading, setReading] = useState(false);
 
   function handleNext() {
     if (answers.businessName.trim() === "") {
@@ -31,6 +38,42 @@ export function Step1Name({
       return;
     }
     onNext();
+  }
+
+  /**
+   * The logo is read the moment it is chosen, and what is kept is the palette it chose.
+   *
+   * Here rather than at generation time because the generator must stay a pure function of its
+   * answers — no canvas, no image decoding, no clock (`INV_5` and the golden corpus both rest on
+   * it). The file itself goes no further than this screen: `autosave.ts` has always dropped it,
+   * and now there is nothing else that wants it.
+   */
+  async function chooseLogo(file: File | null) {
+    if (!file) {
+      update({ logo: null, logoPaletteId: null });
+      return;
+    }
+    update({ logo: file, logoPaletteId: null });
+    setReading(true);
+    try {
+      update({ logoPaletteId: await paletteFromLogoFile(file) });
+    } finally {
+      setReading(false);
+    }
+  }
+
+  /** What actually happened, in the owner's own terms — and never a claim the logo chose the
+   * colours when it did not. A logo with no colour the palettes share leaves the sector deciding,
+   * exactly as no logo at all does, and says so. */
+  function logoHelp(): string {
+    if (!answers.logo) return es["questionnaire.step1.logo.help"];
+    if (reading) return es["questionnaire.step1.logo.help.reading"];
+    const chosen = PALETTES.find((palette) => palette.id === answers.logoPaletteId);
+    if (!chosen) return es["questionnaire.step1.logo.help.noPalette"];
+    return es["questionnaire.step1.logo.help.palette"].replace(
+      "{palette}",
+      tokensEs[chosen.nameKey as keyof typeof tokensEs] ?? chosen.id,
+    );
   }
 
   return (
@@ -100,14 +143,7 @@ export function Step1Name({
             <span style={{ fontSize: 15, fontWeight: 600, color: "#0F172A" }}>
               {es["questionnaire.step1.logo.title"]}
             </span>
-            <span style={{ fontSize: 13, lineHeight: 1.45, color: "#64748B" }}>
-              {answers.logo
-                ? es["questionnaire.step1.logo.help.chosen"].replace(
-                    "{filename}",
-                    answers.logo.name,
-                  )
-                : es["questionnaire.step1.logo.help"]}
-            </span>
+            <span style={{ fontSize: 13, lineHeight: 1.45, color: "#64748B" }}>{logoHelp()}</span>
           </div>
           <label
             htmlFor="logo"
@@ -132,7 +168,7 @@ export function Step1Name({
             id="logo"
             type="file"
             accept="image/*"
-            onChange={(event) => update({ logo: event.target.files?.[0] ?? null })}
+            onChange={(event) => void chooseLogo(event.target.files?.[0] ?? null)}
             style={{ position: "absolute", width: 1, height: 1, opacity: 0 }}
           />
           <VisuallyHiddenLabel htmlFor="logo">

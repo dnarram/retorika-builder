@@ -33,6 +33,7 @@ import { ACCEPTED_IMAGE_ACCEPT } from "../editor/imageBytes.ts";
 import { countPhotos, listPhotos, type PhotoState } from "../editor/photoInventory.ts";
 import { withPhotoUrls } from "../editor/previewDocument.ts";
 import { sectionFields } from "../editor/sectionFields.ts";
+import { offersMatching } from "../editor/sectionSearch.ts";
 import es from "../locales/es.json" with { type: "json" };
 import { DownloadWarningDialog, TooManyPhotosDialog } from "./DownloadGateDialogs.tsx";
 import { FieldsPanel } from "./FieldsPanel.tsx";
@@ -799,38 +800,75 @@ export function Editor({
     function menu(index: number): HTMLElement {
       const panel = iframeDoc.createElement("div");
       panel.className = "rb-menu";
+      // Everything inside the menu is a click that must not reach the document-level handler that
+      // closes it — typing in the search field would otherwise shut the menu on the first
+      // keystroke. The choices below stop their own propagation already, before this ever sees it.
+      panel.addEventListener("click", (event) => event.stopPropagation());
 
       const title = iframeDoc.createElement("p");
       title.className = "rb-menu-title";
       title.textContent = es["editor.addSection.title"];
       panel.appendChild(title);
 
-      for (const offer of offers) {
-        const choice = iframeDoc.createElement("button");
-        choice.type = "button";
-        choice.className = "rb-menu-choice";
+      const search = iframeDoc.createElement("input");
+      search.type = "search";
+      search.className = "rb-menu-search";
+      search.placeholder = es["editor.addSection.searchPlaceholder"];
+      search.setAttribute("aria-label", es["editor.addSection.searchLabel"]);
+      panel.appendChild(search);
+
+      const list = iframeDoc.createElement("div");
+      list.className = "rb-menu-list";
+      panel.appendChild(list);
+
+      const note = iframeDoc.createElement("p");
+      note.className = "rb-menu-note";
+      note.textContent = es["editor.addSection.contactUnavailable"];
+
+      function choice(offer: SectionOffer): HTMLElement {
+        const button = iframeDoc.createElement("button");
+        button.type = "button";
+        button.className = "rb-menu-choice";
         const name = iframeDoc.createElement("span");
         name.className = "rb-menu-name";
         name.textContent = offer.name;
         const description = iframeDoc.createElement("span");
         description.className = "rb-menu-description";
         description.textContent = offer.description;
-        choice.append(name, description);
-        choice.addEventListener("click", (event) => {
+        button.append(name, description);
+        button.addEventListener("click", (event) => {
           event.stopPropagation();
           closeMenus();
           onInsertSection(offer.catalogId, index);
         });
-        panel.appendChild(choice);
+        return button;
       }
 
-      if (contactUnavailable) {
-        const note = iframeDoc.createElement("p");
-        note.className = "rb-menu-note";
-        note.textContent = es["editor.addSection.contactUnavailable"];
-        panel.appendChild(note);
+      /**
+       * Redrawn on every keystroke, in place — the menu's own DOM, never React's. A `setState`
+       * here would rebuild the iframe's whole `srcDoc` and take the open menu with it.
+       */
+      function draw(query: string) {
+        list.replaceChildren();
+        const matches = offersMatching(offers, query);
+
+        if (matches.length === 0) {
+          const empty = iframeDoc.createElement("p");
+          empty.className = "rb-menu-empty";
+          empty.textContent = es["editor.addSection.noMatch"].replace("{query}", query.trim());
+          list.appendChild(empty);
+        }
+        for (const offer of matches) list.appendChild(choice(offer));
+
+        // The note explains an absence, so it belongs with the full list — while a search is
+        // narrowing things down, «Contacto y reservas» is one of many sections not on screen and
+        // singling it out would answer a question nobody asked.
+        if (contactUnavailable && query.trim() === "") panel.appendChild(note);
+        else note.remove();
       }
 
+      search.addEventListener("input", () => draw(search.value));
+      draw("");
       return panel;
     }
 
@@ -1122,6 +1160,14 @@ export function Editor({
       "  box-shadow: 0 14px 38px rgba(15,23,42,0.18); display: flex; flex-direction: column;",
       "  gap: 4px; text-align: left; }",
       ".rb-menu-title { margin: 0 0 6px 0; font-size: 13px; font-weight: 700; color: #0F172A; }",
+      // The catalog's search, finally on a screen. Quiet until it is used: a plain field with no
+      // icon and no button, because there is nothing to submit — it filters as you type.
+      `.rb-menu-search { font-family: ${UI_FONT}; box-sizing: border-box; width: 100%;`,
+      "  margin: 0 0 6px 0; height: 34px; padding: 0 10px; font-size: 13px; color: #0F172A;",
+      "  background: #F6F8FB; border: 1px solid #E3E8F0; border-radius: 9px; outline: none; }",
+      ".rb-menu-search:focus { border-color: #156FE7; background: #FFFFFF; }",
+      ".rb-menu-list { display: flex; flex-direction: column; gap: 4px; }",
+      ".rb-menu-empty { margin: 4px 0; font-size: 12px; line-height: 1.4; color: #5B6B82; }",
       ".rb-menu-choice { display: flex; flex-direction: column; gap: 2px; padding: 9px 10px;",
       "  text-align: left; background: none; border: 0; border-radius: 9px; cursor: pointer; }",
       ".rb-menu-choice:hover { background: #F2F7FE; }",
