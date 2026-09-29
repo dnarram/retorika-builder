@@ -144,7 +144,7 @@ the owner never did:
     bank/<sector>.json     the reviewed texts: the only files any code reads
     drafts/<sector>.json   written, unread: no code path reaches these
     src/schema.ts          the rules of ADR 0009, as something that can fail
-    src/index.ts           the cascade, the placeholder filling, and nothing else
+    src/index.ts           the cascade, the placeholder filling, and what is actually served
 
 A sector file holds three things:
 
@@ -161,6 +161,13 @@ A sector file holds three things:
 A lookup tries the sector, then `generico`. So a sector's file carries only what differs, and
 "Dónde estamos" is written once. A sector with no file of its own — seven of the ten launch
 sectors today, and every "Otro sector" — gets the generic texts and no suggestions.
+
+**And the questionnaire says so**, since 29 September 2026. `servesSector` is the question it asks
+before warning somebody that their sector has no texts prepared, and it is asked of the loaded
+bank rather than of the repository: a sector whose file sits in `drafts/` is written, not served,
+and still warns. That is not a detail — it is the difference between a screen that tells an owner
+what they will get and one that reports our own intentions back to them. `test/drafts.test.ts`
+pins it, one assertion per file in `drafts/`.
 
 ### `{ciudad}` may not exist
 

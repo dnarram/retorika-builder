@@ -7,6 +7,7 @@ import {
   actionLabel,
   GENERIC_SECTOR,
   sectorsInBank,
+  servesSector,
   suggestionsFor,
   textFor,
 } from "../src/index.ts";
@@ -135,6 +136,46 @@ describe("suggestions", () => {
     const comidas = suggestionsFor("restaurante-bar").find((s) => s.id === "comidas");
     expect(comidas?.title).toBe("Comidas");
     expect(comidas?.description).toBeUndefined();
+  });
+});
+
+/**
+ * What the questionnaire asks before it warns somebody their sector has no texts prepared.
+ *
+ * The screen used to say it for «Otro sector» alone, which left the other nine looking covered
+ * when seven of them are not. This is the question that replaced that hard-coded case, and its
+ * whole value is that it answers about the bank the product **serves** rather than about what is
+ * written in the repository — `test/drafts.test.ts` is where that half is pinned.
+ */
+describe("servesSector", () => {
+  it("is true for a sector the bank has words of its own for", () => {
+    expect(servesSector("restaurante-bar")).toBe(true);
+    expect(servesSector("peluqueria-barberia")).toBe(true);
+    expect(servesSector("tienda")).toBe(true);
+  });
+
+  it("is false for a launch sector that falls through to the generic file", () => {
+    // What its owner would actually get: generic words and an empty question 3.
+    expect(servesSector("fisioterapia")).toBe(false);
+    expect(suggestionsFor("fisioterapia")).toEqual([]);
+  });
+
+  it("is false for the generic file itself, which is the fallback and not a trade", () => {
+    // «Otro sector» lands here, and it is the case the warning was written for.
+    expect(servesSector(GENERIC_SECTOR)).toBe(false);
+  });
+
+  it("is false for an id the questionnaire cannot produce", () => {
+    expect(servesSector("otro")).toBe(false);
+    expect(servesSector("")).toBe(false);
+  });
+
+  it("agrees with the loaded bank, for every sector in it", () => {
+    // Not a second list to keep in step with the first: the answer is derived from the same map
+    // the loader serves from, so a file added to `bank/` changes both at once.
+    for (const sector of sectorsInBank()) {
+      expect(servesSector(sector), sector).toBe(sector !== GENERIC_SECTOR);
+    }
   });
 });
 

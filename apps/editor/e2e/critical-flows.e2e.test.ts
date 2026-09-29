@@ -845,3 +845,52 @@ describe("sprint 7 día 3 — deshacer una conversión desde «Páginas»", () =
     }
   });
 });
+
+/**
+ * Sprint 7 day 5 — the sector without a bank says so.
+ *
+ * Until today question 2 warned about «Otro sector» alone, which left the other nine looking
+ * covered. Seven of them are not: they fall through to `generico`, whose `suggestions` array is
+ * empty, so question 3 offers nothing to tick and by ADR 0013 ticking nothing means no services
+ * section at all. The sentence was true and shown in one of the eight places it applied.
+ *
+ * Both directions in one test, because either alone is half a claim: a warning that never appears
+ * passes a test that only checks it is absent, and one that always appears passes a test that only
+ * checks it is present. `packages/copybank/test/` proves `servesSector` answers correctly, and
+ * `drafts.test.ts` proves a drafted-but-unsigned sector still answers no; this proves the screen
+ * asks that question at all.
+ */
+describe("sprint 7 día 5 — el aviso de «sector sin banco»", () => {
+  it("warns for a sector with no bank, and not for one that has one", async () => {
+    const walkPage = await (await browser.newContext()).newPage();
+    try {
+      await walkPage.goto(BASE_URL, { waitUntil: "networkidle" });
+      await walkPage.fill("#nombre", "Fisio Ribera");
+      await walkPage.getByRole("button", { name: "Siguiente" }).click();
+
+      const warning = walkPage.getByText(/Todavía no tenemos textos preparados/);
+      // Nothing chosen yet: nothing to warn about.
+      await expect(warning).toHaveCount(0);
+
+      // Fisioterapia is one of the seven. Its texts may be drafted by now; drafted is not served,
+      // which is exactly what this has to keep saying.
+      await walkPage.getByText("Fisioterapia", { exact: true }).click();
+      await expect(warning).toBeVisible();
+
+      // And a sector the bank really does cover says nothing, which is the half that proves the
+      // warning is answering a question rather than always being on.
+      await walkPage.getByText("Restaurante y bar", { exact: true }).click();
+      await expect(warning).toHaveCount(0);
+
+      // «Otro sector» keeps its own wording, in the owner's words once they have written them.
+      await walkPage.getByText("Otro sector", { exact: true }).click();
+      await expect(warning).toBeVisible();
+      await walkPage.fill("#describe", "cerrajería y apertura de puertas");
+      await expect(
+        walkPage.getByText(/preparados para cerrajería y apertura de puertas/),
+      ).toBeVisible();
+    } finally {
+      await walkPage.context().close();
+    }
+  });
+});

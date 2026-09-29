@@ -1,5 +1,6 @@
 "use client";
 
+import { servesSector } from "@retorika/copybank";
 import { type Answers, SECTOR_IDS, type SectorId } from "@retorika/generator";
 import { useMemo, useState } from "react";
 import es from "../../locales/es.json" with { type: "json" };
@@ -42,6 +43,21 @@ export function Step2Sector({
   const otherDescriptionInvalid =
     submitted && answers.sector === "otro" && answers.otherSectorDescription.trim() === "";
   const noSectorChosen = submitted && answers.sector === null;
+
+  /**
+   * Whether to say that this sector has no texts prepared.
+   *
+   * **Asked of the bank the product actually serves, not of the repository.** `servesSector` reads
+   * the loaded bank, which is `bank/` and never `drafts/`, so a sector whose texts are written but
+   * unsigned still warns — and it should, because what its owner would get is the generic file and
+   * an empty question 3.
+   *
+   * Until today this box only appeared for «Otro sector», which left the other nine looking
+   * covered. Seven of them are not: they fall through to `generico`, whose `suggestions` array is
+   * empty, so question 3 offers nothing to tick and ADR 0013 then gives the site no services
+   * section at all. The warning was true and shown in one of the eight places it applied.
+   */
+  const noBank = answers.sector !== null && !servesSector(answers.sector);
 
   function handleNext() {
     if (answers.sector === null) {
@@ -102,7 +118,7 @@ export function Step2Sector({
         />
       </div>
 
-      {answers.sector === "otro" ? (
+      {noBank ? (
         <div
           style={{
             display: "flex",
@@ -131,12 +147,16 @@ export function Step2Sector({
             <path d="M12 8h.01" />
           </svg>
           <span style={{ fontSize: 14, lineHeight: 1.45, color: "#7A5008" }}>
-            {answers.otherSectorDescription.trim() !== ""
+            {/* The owner's own words are used only where they exist, which is «Otro sector». For
+                a named sector the message says «tu sector» rather than repeating the label they
+                just clicked — the sentence is the same promise either way: a site gets built, out
+                of the generic texts, and they change them afterwards. */}
+            {answers.sector === "otro" && answers.otherSectorDescription.trim() !== ""
               ? es["questionnaire.step2.other.warning"].replace(
                   "{sector}",
                   answers.otherSectorDescription,
                 )
-              : es["questionnaire.step2.other.warning.generic"]}
+              : es["questionnaire.step2.noBank"]}
           </span>
         </div>
       ) : null}
