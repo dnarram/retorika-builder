@@ -5,6 +5,7 @@
     "includes": [
       "**",
       "!**/fixtures/golden",
+      "!**/packages/schema/schema-snapshot.json",
       "!**/docs/design/prototype/*/sitio-*",
       "!**/pnpm-lock.yaml"
     ]

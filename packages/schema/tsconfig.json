@@ -4,6 +4,6 @@
     "rootDir": ".",
     "outDir": "./dist"
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "migrations/**/*.ts"],
+  "include": ["src/**/*.ts", "test/**/*.ts", "migrations/**/*.ts", "snapshot.ts", "guard.ts"],
   "references": []
 }

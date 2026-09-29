@@ -22,6 +22,7 @@
     "format": "biome check --write .",
     "size": "node scripts/size-budget.ts",
     "schema:guard": "node scripts/schema-guard.ts",
+    "schema:snapshot": "node scripts/schema-snapshot.ts",
     "renderer:deps": "node scripts/renderer-deps.ts",
     "site:sample": "node scripts/build-sample-site.ts",
     "coverage:ratchet": "node scripts/coverage-ratchet.ts",
