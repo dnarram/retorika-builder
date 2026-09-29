@@ -222,16 +222,19 @@ describe("invariants", () => {
   });
 
   it(invariantTestName("INV_4"), () => {
-    // Provisional in phase 0: the switch does not exist yet, so what is genuinely
-    // verified is that the document has nowhere to store it. See PROVISIONAL_INVARIANTS.
+    // One of the invariant's two halves: no document in the corpus has anywhere to store the
+    // switch, so nothing can write it there even by mistake. This is the half that belongs beside
+    // the corpus, and a package may not import an app — so the other half, a hundred flips of the
+    // real switch against a real stored session, registers under this same name in
+    // `apps/editor/test/designTools.test.ts`. Both run under `pnpm test:invariants`.
+    //
+    // Until the editor had a switch, this test was all there was, and it said so in
+    // PROVISIONAL_INVARIANTS. It is no longer provisional and that entry is gone.
     for (const { name, document } of corpus) {
       const before = JSON.stringify(document);
-
-      let designTools = false;
-      for (let i = 0; i < 100; i += 1) designTools = !designTools;
-
+      expect(() => parseDocument({ ...document, designTools: true }), name).toThrow();
+      expect(() => parseDocument({ ...document, designTools: false }), name).toThrow();
       expect(JSON.stringify(document), name).toBe(before);
-      expect(() => parseDocument({ ...document, designTools }), name).toThrow();
     }
   });
 

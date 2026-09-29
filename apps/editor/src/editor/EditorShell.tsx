@@ -178,6 +178,103 @@ function RailButton({
   );
 }
 
+/**
+ * The design-tools switch, at the foot of the rail (ADR 0025 §4, mockup 16 band 1).
+ *
+ * **Turning them on asks the trade, not the level.** The dossier §4 is blunt about why: «ante
+ * "básico o avanzado" mucha gente miente hacia arriba», so the question is «¿Montas webs para
+ * otros?» and it is asked by the switch itself rather than sprung on anyone. An owner who never
+ * presses it is never asked anything — ADR 0025 §1 promises they meet no control they did not ask
+ * for, and a first-run dialog would break that promise on the way to keeping another one.
+ *
+ * Turning them **off** asks nothing. Nobody needs talking out of a setting.
+ *
+ * The rail is not where this belongs by aesthetics: `EditorShell`'s top bar is the row sprint 7 day
+ * 7 measured overflowing, and a labelled switch would add about 110px to it.
+ */
+function DesignToolsSwitch({
+  on,
+  asking,
+  onAsk,
+  onDismiss,
+  onChange,
+}: {
+  on: boolean;
+  /** Whether the trade question is open. Held by the caller so that pressing a rail item, or
+   * anything else that moves the person along, can close it. */
+  asking: boolean;
+  onAsk: () => void;
+  onDismiss: () => void;
+  onChange: (on: boolean) => void;
+}) {
+  return (
+    <div className="relative flex flex-col items-center gap-[5px] pt-1.5">
+      {/* Directly under the four items, divided from them — not pushed to the bottom of the rail
+          with `mt-auto`, which is what «al pie del raíl» first suggested and what walking it in a
+          browser ruled out. The rail is full height, so the bottom is 842px down at 1440×900: the
+          switch ended up alone in a corner 600px from anything else, which is not separation but
+          concealment. It is also the corner the dev overlay occupies, which is only a nuisance for
+          a test — but browser chrome tends to gather there too, and that is not. The mockup draws
+          it here, and the mockup's rail card is content-height, so this is the reading its picture
+          actually shows. */}
+      <span className="mb-1 h-px w-[52px] bg-ui-border" />
+      <button
+        type="button"
+        role="switch"
+        aria-checked={on}
+        aria-label={es["editor.designTools.label"]}
+        onClick={() => (on ? onChange(false) : onAsk())}
+        className={
+          "flex h-[19px] w-[34px] shrink-0 cursor-pointer items-center rounded-[10px] border-0 px-0.5 " +
+          (on ? "justify-end bg-ui-brand" : "justify-start bg-ui-border")
+        }
+      >
+        <span className="h-[15px] w-[15px] rounded-full bg-white shadow-[0_1px_2px_rgba(15,23,42,0.2)]" />
+      </button>
+      <span
+        className={
+          "text-center text-[9px] leading-[1.25] " +
+          (on ? "font-semibold text-ui-brand" : "font-medium text-ui-muted")
+        }
+      >
+        {es["editor.designTools.label"]}
+      </span>
+
+      {asking ? (
+        <div className="absolute bottom-full left-full z-20 mb-1 ml-1 flex w-[300px] flex-col gap-3 rounded-xl border border-ui-border bg-ui-surface p-4 text-left shadow-[0_8px_24px_rgba(15,23,42,0.15)]">
+          <span className="text-[15px] font-bold text-ui-ink">
+            {es["editor.designTools.ask.title"]}
+          </span>
+          <span className="text-[13px] leading-snug text-ui-muted">
+            {es["editor.designTools.ask.body"]}
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => onChange(true)}
+              className="h-[38px] flex-grow rounded-[9px] bg-ui-brand text-[13px] font-semibold text-white"
+            >
+              {es["editor.designTools.ask.yes"]}
+            </button>
+            <button
+              type="button"
+              onClick={onDismiss}
+              className="h-[38px] flex-grow rounded-[9px] border border-ui-border bg-ui-surface text-[13px] font-medium text-ui-ink"
+            >
+              {es["editor.designTools.ask.no"]}
+            </button>
+          </div>
+          {/* The same honesty as «Guardado en este navegador», and for the same reason: there are no
+              accounts, so saying «tu cuenta» would claim a guarantee this does not have. */}
+          <span className="border-t border-ui-border pt-2.5 text-xs leading-normal text-ui-muted">
+            {es["editor.designTools.ask.note"]}
+          </span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function DeviceToggle({
   device,
   onChange,
@@ -258,6 +355,11 @@ export function EditorShell({
   saveStatus,
   rail,
   onRailChange,
+  designTools,
+  askingDesignTools,
+  onAskDesignTools,
+  onDismissDesignTools,
+  onDesignToolsChange,
   panel,
   children,
 }: {
@@ -278,6 +380,17 @@ export function EditorShell({
   saveStatus: SaveStatus;
   rail: RailItemId;
   onRailChange: (item: RailItemId) => void;
+  /**
+   * Whether the design tools are on **for this viewport** — the stored preference already narrowed
+   * by `effectiveDesignTools`. `undefined` means the window is too narrow to offer them at all, and
+   * then no switch is drawn: ADR 0025 §5 chose "absent" over "disabled", because a disabled control
+   * invites someone to work out how to enable it and the honest answer is «use a bigger screen».
+   */
+  designTools: boolean | undefined;
+  askingDesignTools: boolean;
+  onAskDesignTools: () => void;
+  onDismissDesignTools: () => void;
+  onDesignToolsChange: (on: boolean) => void;
   /** The side panel the current rail item opens, if it has one. Rendered beside the canvas rather
    * than over it, which is how mockup 13 draws the style panel: the preview narrows and stays
    * visible while a choice is being made about how it looks. */
@@ -473,6 +586,18 @@ export function EditorShell({
             active={rail === "photos"}
             onSelect={() => onRailChange("photos")}
           />
+          {/* `Diseño` is not here yet, and that is deliberate: its panel arrives on day 3, and a
+              rail item that opens nothing is the dead button this editor has refused since sprint 1.
+              What the switch unlocks today is the offer in each section's header. */}
+          {designTools === undefined ? null : (
+            <DesignToolsSwitch
+              on={designTools}
+              asking={askingDesignTools}
+              onAsk={onAskDesignTools}
+              onDismiss={onDismissDesignTools}
+              onChange={onDesignToolsChange}
+            />
+          )}
         </div>
 
         {/* The wide side gutters centre the canvas when it is alone; with a panel open they would

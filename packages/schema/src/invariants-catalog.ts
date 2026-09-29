@@ -25,14 +25,20 @@ export function invariantTestName(id: InvariantId): string {
 }
 
 /**
- * Invariants that Phase 0 cannot fully prove yet, with what would complete them.
+ * Invariants that cannot be fully proven yet, with what would complete them.
  *
  * An invariant that looks covered and is not is worse than one that admits the gap,
  * so the gap is data rather than a comment someone has to remember to read.
+ *
+ * **Empty since sprint 8, and that is the point of it being empty.** Its only entry was
+ * `INV_4`, which could not be proven because the design-tools switch did not exist:
+ * flipping a local boolean a hundred times proves nothing about a document. The switch
+ * exists now (ADR 0025), and the invariant is proven in the two places its two halves
+ * live — the corpus's refusal of a `designTools` key in
+ * `packages/renderer/test/invariants.test.ts`, and a hundred flips of the real switch
+ * against a real stored session in `apps/editor/test/designTools.test.ts`.
+ *
+ * Adding an entry back is allowed and sometimes right. What is not allowed is leaving one
+ * here after the gap closes, which is how this became a phase-0 note that outlived phase 0.
  */
-export const PROVISIONAL_INVARIANTS: Partial<Record<InvariantId, string>> = {
-  INV_4:
-    "The design-tools switch does not exist in phase 0. Only the schema's rejection of a " +
-    "designTools key is verified; toggling the real switch a hundred times over a real " +
-    "document arrives with the editor in phase 1.",
-};
+export const PROVISIONAL_INVARIANTS: Partial<Record<InvariantId, string>> = {};

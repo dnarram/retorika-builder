@@ -1243,3 +1243,84 @@ describe("insertSection lands on the page the canvas is drawing", () => {
     expect(after[0]?.present.document).toEqual(state[0]?.present.document);
   });
 });
+
+describe("designing a section by hand, and taking it back", () => {
+  /**
+   * The escalation as the history sees it (ADR 0025, advanced dossier §5).
+   *
+   * The verbs themselves are tested in `packages/schema/test/layout.test.ts`. What is being checked
+   * here is the thing the dossier leans on for the first minutes — «el deshacer normal cubre la
+   * escalada como cualquier otro cambio» — which is only true if it pushes a snapshot like every
+   * other verb in this stack.
+   */
+  const escalate = (sectionId = "sec-cover", variant = 0): HistoryAction => ({
+    type: "escalateSection",
+    variant,
+    sectionId,
+  });
+
+  const revert = (sectionId = "sec-cover", variant = 0): HistoryAction => ({
+    type: "revertSection",
+    variant,
+    sectionId,
+  });
+
+  const sourceOf = (state: Histories, sectionId = "sec-cover") =>
+    state[0]?.present.document.pages[0]?.sections.find((s) => s.id === sectionId)?.source;
+
+  it("makes the section free and gives it a layout of its own", () => {
+    const after = run(start(), escalate());
+    const section = after[0]?.present.document.pages[0]?.sections.find((s) => s.id === "sec-cover");
+    expect(section?.source).toBe("free");
+    expect(section?.layout).not.toBeNull();
+  });
+
+  it("is one step, and Ctrl+Z is the whole return for the first minutes", () => {
+    const state = start();
+    const undone = run(state, escalate(), { type: "undo", variant: 0 });
+    expect(undone[0]?.present.document).toEqual(state[0]?.present.document);
+    expect(sourceOf(undone)).toBe("catalog");
+  });
+
+  it("keeps the words the owner wrote before escalating, and they survive the return", () => {
+    // The offer promises nothing moves. The strongest way to say that here is to write something
+    // first, then escalate and come back, and find the sentence still in place.
+    const written = run(start(), edit("Cocina de Ronda"));
+    const back = run(written, escalate(), revert());
+    expect(headline(back)).toBe("Cocina de Ronda");
+    expect(back[0]?.present.document).toEqual(written[0]?.present.document);
+  });
+
+  it("is not amendable, so the next keystroke opens its own step", () => {
+    expect(run(start(), escalate())[0]?.amendable).toBe(false);
+  });
+
+  it("opens no step for a section that is already designed by hand", () => {
+    const free = run(start(), escalate());
+    const again = run(free, escalate());
+    expect(again).toBe(free);
+    expect(again[0]?.past.length).toBe(free[0]?.past.length);
+  });
+
+  it("opens no step for reverting a section that is already the catalog's", () => {
+    const state = start();
+    expect(run(state, revert())).toBe(state);
+  });
+
+  it("does not count as having worked on the section's content", () => {
+    // The same line `setVariant` falls on. A delete's undo toast must not stop fading because
+    // somebody tried designing a section by hand and changed their mind about one they never wrote
+    // a word into (ADR 0014).
+    const after = run(start(), escalate(), revert());
+    expect(wasSectionEverEdited(after[0] as Histories[number], "sec-cover")).toBe(false);
+  });
+
+  it("leaves the other variants alone", () => {
+    const after = run(start(), escalate());
+    expect(after[1]?.present.document).toEqual(start()[1]?.present.document);
+  });
+
+  it("throws naming the section when asked for one the document does not have", () => {
+    expect(() => run(start(), escalate("sec-nope"))).toThrow(/no section "sec-nope"/);
+  });
+});

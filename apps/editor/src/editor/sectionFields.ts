@@ -20,6 +20,20 @@ import {
  * at the page there is no difference between "this field has no value" and "this field is not
  * shown", so the panel offers one idea instead of two: type to put it on the page, clear it to
  * take it off. Document rule 3 is honoured underneath — clearing hides, it never removes.
+ *
+ * **A section designed by hand lists the same rows as one drawn by the catalog.** This function used
+ * to answer nothing at all unless `source === "catalog"`, which cost nothing while no section could
+ * be anything else, and would have emptied the panel the instant somebody accepted «Diseñar a mano»
+ * (ADR 0025). `INV_1` says the simple view exposes every content field, and the advanced dossier §2
+ * says «es el mismo documento en las dos vistas»; escalating a section changes where its layout
+ * lives and nothing about which fields it has. A free section keeps its preset reference, so the
+ * rows come out identical.
+ *
+ * The limit worth naming: an element whose slot the preset does not declare would not be listed. No
+ * verb in the product can produce one — a free section's content is whatever the catalog section
+ * had — so there is nothing to show yet, and inventing a row labelled with a raw slot id would put
+ * an English identifier on a Spanish screen. When the studio can add elements, this is where it is
+ * paid for.
  */
 
 /** The roles the panel can honestly edit with a text box. An image has its own affordance (click
@@ -53,7 +67,6 @@ function slotLabel(catalogId: string, slot: string): string {
 export function sectionFields(doc: RetorikaDocument, sectionId: string): FieldRow[] {
   const found = findSection(doc, sectionId);
   if (!found) return [];
-  if (found.section.source !== "catalog") return [];
 
   let preset: ReturnType<typeof presetFor>;
   try {

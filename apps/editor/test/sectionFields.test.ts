@@ -1,5 +1,6 @@
+import { presetFor } from "@retorika/catalog";
 import { EMPTY_ANSWERS, generate } from "@retorika/generator";
-import { clearSlot, fillSlot, type RetorikaDocument } from "@retorika/schema";
+import { clearSlot, escalateSection, fillSlot, type RetorikaDocument } from "@retorika/schema";
 import { describe, expect, it } from "vitest";
 import { sectionFields } from "../src/editor/sectionFields.ts";
 
@@ -139,5 +140,60 @@ describe("sectionFields", () => {
 
   it("is empty for a section that is not there", () => {
     expect(sectionFields(doc, "sec-nope")).toEqual([]);
+  });
+});
+
+describe("a section that is designed by hand", () => {
+  /**
+   * `INV_1` — «Simple view opens every document and exposes every content field» — reached from the
+   * one state that has never existed until this sprint.
+   *
+   * The panel used to answer nothing at all for a section whose `source` was not `catalog`. Nobody
+   * noticed because nothing could produce such a section outside the schema's own tests; the day
+   * the switch offers «Diseñar a mano», it becomes a section whose fields vanish the instant it is
+   * accepted. That is the opposite of what the advanced dossier §2 promises — «es el mismo
+   * documento en las dos vistas» — and the reason it is fixed on the same day as the button.
+   */
+  const free = escalateSection(doc, "sec-cover", presetFor("cover"));
+
+  it("is free, so the old guard would have had something to refuse", () => {
+    expect(free.pages[0]?.sections[0]?.source).toBe("free");
+  });
+
+  it("lists exactly the rows it listed under the catalog", () => {
+    // Not "lists some rows": the identical list. Designing a section by hand changes where its
+    // layout lives, and nothing at all about which fields it has.
+    expect(sectionFields(free, "sec-cover")).toEqual(sectionFields(doc, "sec-cover"));
+  });
+
+  it("still offers the slot the document does not have", () => {
+    // The rows come from the preset, and a free section keeps its preset reference — that is what
+    // makes the return of day 4 possible, and it is what keeps this row here.
+    expect(labels(free, "sec-cover")).toContain("Enlace secundario");
+  });
+
+  it("still carries the values that are on the page, so they can still be corrected", () => {
+    const rows = sectionFields(free, "sec-cover");
+    expect(rows.find((row) => row.slot === "headline")?.text).toBe("Taberna Santo Domingo");
+    expect(rows.find((row) => row.slot === "primaryAction")?.href).toBe(
+      "https://reservas.example.com/taberna",
+    );
+  });
+
+  it("goes back to listing nothing when the catalog id is the one thing it cannot resolve", () => {
+    // The `presetFor` guard is a different refusal from the one being deleted, and it stays: a
+    // section whose catalog id nothing recognises has no shape to list, free or not.
+    const unknown: RetorikaDocument = {
+      ...free,
+      pages: free.pages.map((page) => ({
+        ...page,
+        sections: page.sections.map((section) =>
+          section.id === "sec-cover"
+            ? { ...section, preset: { ...section.preset, catalogId: "no-such-preset" } }
+            : section,
+        ),
+      })),
+    };
+    expect(sectionFields(unknown, "sec-cover")).toEqual([]);
   });
 });
