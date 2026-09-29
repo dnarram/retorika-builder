@@ -622,3 +622,147 @@ describe("regression — a section is added to the page you are looking at", () 
     await expect(frame.locator("[data-section]")).toHaveCount(homeSectionsBefore);
   });
 });
+
+/**
+ * Sprint 6 day 7 — the sprint's own verification line, named in the plan: «el recorrido completo
+ * con fotos de verdad subidas desde el panel, el ZIP abierto sin servidor, y el aviso comprobado
+ * en navegador.»
+ *
+ * Not a regression — nothing here was broken and then fixed — and not one of the protocol's five
+ * flows either, the same standing sprint 5 day 7's own verification test has above. It exists
+ * because three pieces this sprint built each have exactly one way to reach them that a browser
+ * click can take, and none of those three had ever been driven end to end: the «Fotos» panel's own
+ * «Cambiar» (days 2 and 4), the pre-download warning's «Cambiar» (day 5), and the catalog search
+ * (day 6). All three end up in the same `replacePhoto` — `wirePhotos`, the panel and the warning
+ * dialog are, in the code's own words, "the same three lines" reached from three doors — so this
+ * does not re-test that function three times; it proves the three doors actually open it.
+ *
+ * Its own browser context rather than the shared `page`: this needs a document with none of the
+ * earlier tests' pages or conversions in it, and the shared session by this point in the file has
+ * several. Isolation here is free and avoids depending on exactly what state the tests above it
+ * happened to leave behind — the coupling this file's own docstring accepts for the five ordered
+ * flows was never meant to extend to a test that does not need it.
+ */
+describe("sprint 6 día 7 — fotos subidas desde el panel y desde el aviso, logo incluido", () => {
+  it("uploads through the panel and the warning, and the ZIP that results opens with no server", async () => {
+    const walkPage = await (await browser.newContext()).newPage();
+    try {
+      await walkPage.goto(BASE_URL, { waitUntil: "networkidle" });
+      await walkPage.fill("#nombre", "Taberna Santo Domingo");
+      // The logo (day 6): a blue disc, close enough to classic-blue's own primary to choose it.
+      await walkPage.locator("#logo").setInputFiles(join(import.meta.dirname, "fixtures/logo.png"));
+      await expect(walkPage.getByText(/Hemos sacado los colores de tu logo/)).toBeVisible();
+      await walkPage.getByRole("button", { name: "Siguiente" }).click();
+      await walkPage.getByText("Restaurante y bar", { exact: true }).click();
+      await walkPage.getByRole("button", { name: "Siguiente" }).click();
+      await walkPage.getByText("Comidas", { exact: true }).click();
+      await walkPage.getByRole("button", { name: "Siguiente" }).click();
+      await walkPage.fill("#direccion", "Cta. de Santo Domingo, 2, Ronda");
+      await walkPage.getByRole("button", { name: "Siguiente" }).click();
+      await walkPage.getByText("Que reserven", { exact: true }).click();
+      await walkPage.fill("#enlace", "https://reservas.example.com/taberna");
+      await walkPage.getByRole("button", { name: "Crear mi web" }).click();
+      await walkPage.getByText("Ver a tamaño real →").first().click();
+
+      const frame = walkPage.frameLocator("iframe").first();
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+      const fileInput = walkPage.locator('input[type="file"]:not(#logo)');
+
+      // The search (day 6): "fotos" finds «Fotos de trabajos» among the offers and inserts it.
+      await frame.getByRole("button", { name: "Añadir sección aquí" }).first().click();
+      await frame.locator(".rb-menu-search").fill("fotos");
+      const galleryChoice = frame.locator(".rb-menu-list .rb-menu-choice", {
+        hasText: "Fotos de trabajos",
+      });
+      await expect(galleryChoice).toBeVisible();
+      await galleryChoice.click();
+      await expect(frame.locator('[data-preset="gallery"]')).toBeVisible();
+
+      // The «Fotos» panel's own «Cambiar» (days 2 and 4) — never driven end to end before today.
+      await walkPage.getByRole("button", { name: "Fotos", exact: true }).click();
+      await expect(walkPage.getByText(/fotos todavía no son tuyas/)).toBeVisible();
+      const panelRows = walkPage.locator('ul li:has(button:has-text("Cambiar"))');
+      await expect(panelRows).toHaveCount(2);
+      await panelRows.first().getByRole("button", { name: "Cambiar" }).click();
+      await fileInput.setInputFiles(join(import.meta.dirname, "fixtures/gallery-photo.jpg"));
+      // Written into IndexedDB and re-encoded before the chip updates; waited for rather than
+      // asserted immediately, the same margin sprint 6 day 5's own walk needed to measure.
+      await expect(walkPage.getByText("1 de 2 fotos todavía no son tuyas.")).toBeVisible();
+
+      // The warning's own «Cambiar» (day 5) — one photograph still unfilled, so pressing
+      // «Descargar» opens it rather than downloading, and this is the other door onto the same
+      // `replacePhoto` the panel just used.
+      await walkPage.getByRole("button", { name: "Descargar" }).click();
+      const dialog = walkPage.locator('[role="dialog"]', { hasText: "Antes de descargar" });
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByText(/hueco de foto sin rellenar/)).toBeVisible();
+      const dialogRows = dialog.locator('li:has(button:has-text("Cambiar"))');
+      await expect(dialogRows).toHaveCount(1);
+      await dialogRows.first().getByRole("button", { name: "Cambiar" }).click();
+      await fileInput.setInputFiles(join(import.meta.dirname, "fixtures/cover-photo.jpg"));
+      await expect(dialog).toHaveCount(0);
+
+      // Every photograph is the owner's now, which is the one state the warning never opens for.
+      await expect(walkPage.getByText("Todas las fotos de tu web son tuyas.")).toBeVisible();
+
+      const [download, response] = await Promise.all([
+        walkPage.waitForEvent("download"),
+        walkPage.waitForResponse((candidate) => candidate.url().includes("/api/download")),
+        walkPage.getByRole("button", { name: "Descargar" }).click(),
+      ]);
+      await expect(
+        walkPage.getByText("Antes de descargar"),
+        "every photograph was already the owner's — nothing to warn about",
+      ).toHaveCount(0);
+      expect(response.status()).toBe(200);
+
+      const dir = mkdtempSync(join(tmpdir(), "retorika-e2e-dia7-"));
+      const zipPath = join(dir, download.suggestedFilename());
+      await download.saveAs(zipPath);
+      const zip = new Uint8Array(readFileSync(zipPath));
+      const entries = listZipEntries(zip);
+      // Two real photographs, no placeholder — the ZIP's own proof that every "Sin foto" from the
+      // panel became a real file, not just a document field that says so.
+      expect(entries.filter((entry) => entry.startsWith("assets/")).sort()).toEqual(
+        [
+          "assets/foto-sec-cover-el-image.jpg",
+          "assets/foto-sec-gallery-el-item-1-photo.jpg",
+        ].sort(),
+      );
+
+      const html = extractFileBytes(zip, "index.html");
+      const filePath = join(dir, "index.html");
+      writeFileSync(filePath, html);
+      for (const entry of entries) {
+        if (entry === "index.html") continue;
+        mkdirSync(dirname(join(dir, entry)), { recursive: true });
+        writeFileSync(join(dir, entry), extractFileBytes(zip, entry));
+      }
+
+      const offlinePage = await (await browser.newContext()).newPage();
+      const failed: string[] = [];
+      offlinePage.on("requestfailed", (request) => failed.push(request.url()));
+      try {
+        await offlinePage.goto(`file://${filePath}`, { waitUntil: "load" });
+        await expect(offlinePage.getByText("Taberna Santo Domingo").first()).toBeVisible();
+        // The logo's palette (day 6): classic-blue's own primary, `#1D4ED8`, applied to the
+        // headline — not the terracotta `restaurante-bar`'s own sector default would have used.
+        await expect(offlinePage.locator("h1")).toHaveCSS("color", "rgb(29, 78, 216)");
+        const images = offlinePage.locator("img");
+        await expect(images).toHaveCount(2);
+        for (const src of await images.evaluateAll((els) =>
+          els.map((el) => el.getAttribute("src")),
+        )) {
+          expect(src, "a relative asset name — ADR 0001, no server behind this page").not.toMatch(
+            /^([a-z]+:|\/)/,
+          );
+        }
+        expect(failed, "every byte the page needed was actually inside the ZIP").toEqual([]);
+      } finally {
+        await offlinePage.context().close();
+      }
+    } finally {
+      await walkPage.context().close();
+    }
+  });
+});
