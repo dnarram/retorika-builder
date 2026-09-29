@@ -21,6 +21,7 @@ import {
   moveItem as moveItemInDoc,
   movePage as movePageInDoc,
   moveSection as moveSectionFromDoc,
+  pageToSection as pageToSectionInDoc,
   removeItem as removeItemFromDoc,
   renamePage as renamePageInDoc,
   sectionToPage as sectionToPageInDoc,
@@ -67,6 +68,10 @@ export type SnapshotCause =
    * happen together, so one «Deshacer» takes back all three. `sectionId` is the section that
    * left, which is what the toast names. */
   | { type: "sectionToPage"; sectionId: string; pageId: string }
+  /** Undoing the conversion, from the «Páginas» panel. It names the page that folded away rather
+   * than the sections that came back: there may be several of them, and the page is what the
+   * person pressed. */
+  | { type: "pageToSection"; pageId: string }
   | { type: "renamePage"; pageId: string }
   | { type: "movePage"; pageId: string }
   | { type: "deletePage"; pageId: string }
@@ -123,6 +128,7 @@ export type HistoryAction =
       toIndex: number;
     }
   | { type: "sectionToPage"; variant: number; sectionId: string }
+  | { type: "pageToSection"; variant: number; pageId: string }
   | { type: "renamePage"; variant: number; pageId: string; title: string }
   | { type: "movePage"; variant: number; pageId: string; toIndex: number }
   | { type: "deletePage"; variant: number; pageId: string }
@@ -446,6 +452,24 @@ function convertSection(history: History, sectionId: string): History {
   return step(history, document, { type: "sectionToPage", sectionId, pageId });
 }
 
+/**
+ * The conversion folded away, in one step — the other half of ADR 0022's «se puede deshacer».
+ *
+ * Symmetrical with `convertSection` and deliberately so: the sections come back, the avance goes,
+ * the page goes, and one «Deshacer» puts all three back. No catalog factory is needed on the way
+ * in, because folding builds nothing — it only puts back what the conversion moved.
+ *
+ * It does not check whether the page is foldable. `canFoldPage` is what the panel asks before it
+ * draws the button, and it is the same code this verb refuses on, so a throw here means something
+ * dispatched an action the interface never offered.
+ */
+function foldPage(history: History, pageId: string): History {
+  return step(history, pageToSectionInDoc(history.present.document, pageId), {
+    type: "pageToSection",
+    pageId,
+  });
+}
+
 function renamePage(history: History, pageId: string, title: string): History {
   const document = renamePageInDoc(history.present.document, pageId, title);
   if (document === history.present.document) return history;
@@ -542,6 +566,8 @@ function apply(history: History, action: HistoryAction): History {
       return moveItem(history, action.sectionId, action.slot, action.itemId, action.toIndex);
     case "sectionToPage":
       return convertSection(history, action.sectionId);
+    case "pageToSection":
+      return foldPage(history, action.pageId);
     case "renamePage":
       return renamePage(history, action.pageId, action.title);
     case "movePage":

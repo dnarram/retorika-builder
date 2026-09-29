@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { MAX_PAGES, pageToSection, sectionToPage, type TeaserFactory } from "../src/conversion.ts";
+import {
+  canFoldPage,
+  foldsInto,
+  MAX_PAGES,
+  pageToSection,
+  sectionToPage,
+  type TeaserFactory,
+} from "../src/conversion.ts";
 import { listDeadDestinations } from "../src/destinations.ts";
 import type { ContentElement, RetorikaDocument, Section } from "../src/document.ts";
 
@@ -344,5 +351,167 @@ describe("pageToSection", () => {
     const snapshot = JSON.stringify(converted);
     pageToSection(converted, converted.pages[1]?.id ?? "");
     expect(JSON.stringify(converted)).toBe(snapshot);
+  });
+});
+
+/**
+ * The question the «Páginas» panel asks before it draws the button, which has to be the same
+ * question the verb answers.
+ *
+ * Every one of these is written as an agreement rather than as an expected boolean: `canFoldPage`
+ * is true exactly where `pageToSection` does not throw. A separate list of conditions in the editor
+ * would pass its own tests on the day it was written and drift the first time one of them moved —
+ * which is the shape of the `canBeBlank` duplication this sprint is about to go and fix elsewhere.
+ */
+describe("canFoldPage agrees with pageToSection", () => {
+  /** True when the verb works, established by running it. */
+  function verbAccepts(doc: RetorikaDocument, pageId: string): boolean {
+    try {
+      pageToSection(doc, pageId);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function agree(doc: RetorikaDocument, pageId: string) {
+    expect(canFoldPage(doc, pageId)).toBe(verbAccepts(doc, pageId));
+  }
+
+  it("agrees on a page a conversion made", () => {
+    const converted = sectionToPage(base(), "sec-prices", makeTeaser);
+    expect(canFoldPage(converted, converted.pages[1]?.id ?? "")).toBe(true);
+    agree(converted, converted.pages[1]?.id ?? "");
+  });
+
+  it("agrees on the first page even when an avance points at it", () => {
+    /**
+     * Built by hand, because the verbs cannot produce it: `sectionToPage` never aims an avance at
+     * the entry. Without it the first-page rule looks tested and is not — nothing points at `home`
+     * in any document these tests build, so the teaser check alone would answer `false` and the
+     * agreement would hold for the wrong reason. Deleting the rule from `foldsInto` turns this red
+     * and nothing else, which is how it was checked.
+     */
+    const converted = sectionToPage(base(), "sec-prices", makeTeaser);
+    const aimedAtHome = {
+      ...converted,
+      pages: converted.pages.map((page, index) =>
+        index === 1
+          ? {
+              ...page,
+              sections: [
+                ...page.sections,
+                section("sec-back", "teaser", [
+                  {
+                    id: "el-back",
+                    role: "link",
+                    hidden: false,
+                    slot: "link",
+                    value: { kind: "link", text: "Ver más", href: "./index.html" },
+                  },
+                ]),
+              ],
+            }
+          : page,
+      ),
+    } as RetorikaDocument;
+
+    expect(canFoldPage(aimedAtHome, "home")).toBe(false);
+    agree(aimedAtHome, "home");
+  });
+
+  it("agrees on a page no avance points at", () => {
+    // The state ADR 0022 explicitly allows: the owner deleted the avance and kept the page. The
+    // button has to be gone, because the verb would refuse.
+    const converted = sectionToPage(base(), "sec-prices", makeTeaser);
+    const orphaned = {
+      ...converted,
+      pages: converted.pages.map((page, index) =>
+        index === 0
+          ? { ...page, sections: page.sections.filter((s) => s.preset.catalogId !== "teaser") }
+          : page,
+      ),
+    } as RetorikaDocument;
+    expect(canFoldPage(orphaned, converted.pages[1]?.id ?? "")).toBe(false);
+    agree(orphaned, converted.pages[1]?.id ?? "");
+  });
+
+  it("answers false for a page the document does not have, where the verb throws", () => {
+    // The one place the two do not have the same *shape* of answer: a predicate a panel calls
+    // while rendering may not throw, so an unknown id is simply not foldable.
+    expect(canFoldPage(base(), "nope")).toBe(false);
+    expect(() => pageToSection(base(), "nope")).toThrow();
+  });
+
+  it("agrees on every page of a document with two conversions in it", () => {
+    const first = sectionToPage(base(), "sec-prices", makeTeaser);
+    const withSecond = {
+      ...first,
+      pages: first.pages.map((page, index) =>
+        index === 0
+          ? {
+              ...page,
+              sections: [
+                ...page.sections,
+                section("sec-team", "team", [heading("el-t", "Equipo")]),
+              ],
+            }
+          : page,
+      ),
+    } as RetorikaDocument;
+    const both = sectionToPage(withSecond, "sec-team", makeTeaser);
+    for (const page of both.pages) agree(both, page.id);
+    expect(both.pages.map((page) => canFoldPage(both, page.id))).toEqual([false, true, true]);
+  });
+});
+
+/**
+ * Where a folded page's sections come back to — which the editor needs in order to show them.
+ *
+ * The answer is not always the first page, and the case where it is not is reachable in three
+ * presses: convert a section, open the page that made, convert a section of that.
+ */
+describe("foldsInto", () => {
+  it("names the page holding the avance", () => {
+    const converted = sectionToPage(base(), "sec-prices", makeTeaser);
+    expect(foldsInto(converted, converted.pages[1]?.id ?? "")).toBe("home");
+  });
+
+  it("names the converted page, not the first, when the conversion happened on it", () => {
+    // A page converted out of a page. Its avance sits on the first converted page, so that is
+    // where its sections return — and a canvas that fell back to the first page would be showing
+    // the owner somewhere their sections are not.
+    const first = sectionToPage(base(), "sec-prices", makeTeaser);
+    const firstPageId = first.pages[1]?.id ?? "";
+    const withNested = {
+      ...first,
+      pages: first.pages.map((page, index) =>
+        index === 1
+          ? {
+              ...page,
+              sections: [
+                ...page.sections,
+                section("sec-wines", "prices", [heading("el-w", "Vinos")]),
+              ],
+            }
+          : page,
+      ),
+    } as RetorikaDocument;
+    const nested = sectionToPage(withNested, "sec-wines", makeTeaser);
+    const nestedPageId = nested.pages.at(-1)?.id ?? "";
+
+    expect(foldsInto(nested, nestedPageId)).toBe(firstPageId);
+    expect(nested.pages[0]?.id).not.toBe(firstPageId);
+
+    // And the verb agrees: the sections really do land there.
+    const folded = pageToSection(nested, nestedPageId);
+    expect(folded.pages.find((page) => page.id === firstPageId)?.sections.map((s) => s.id)).toEqual(
+      ["sec-prices", "sec-wines"],
+    );
+  });
+
+  it("is undefined exactly where the page cannot be folded", () => {
+    expect(foldsInto(base(), "home")).toBeUndefined();
+    expect(foldsInto(base(), "nope")).toBeUndefined();
   });
 });

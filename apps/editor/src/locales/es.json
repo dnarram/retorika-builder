@@ -125,6 +125,7 @@
   "editor.pages.rename": "Cambiar el nombre",
   "editor.pages.moveUp": "Subir",
   "editor.pages.moveDown": "Bajar",
+  "editor.pages.fold": "Deshacer la conversión",
   "editor.pages.delete": "Borrar",
   "editor.pages.deleteConfirm": "Se borrará con todo lo que hay en ella. Puedes deshacerlo.",
   "editor.pages.deleteWithLink": "Se borrará con todo lo que hay en ella, y 1 enlace de tu web dejará de llevar a ningún sitio. Puedes deshacerlo.",

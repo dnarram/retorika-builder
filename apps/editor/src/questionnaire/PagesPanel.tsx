@@ -7,11 +7,19 @@ import es from "../locales/es.json" with { type: "json" };
 /**
  * «Páginas» — the rail's third item, and the advanced module's «Páginas y conversión de secciones».
  *
- * It renames, reorders and deletes. **It does not create**, and that is the decision rather than an
- * omission: ADR 0022 says a page is born by converting a section, so the verb that makes one lives
- * on the section, in the canvas, where the owner can see what is about to move. A `+` here would be
- * the «+ Añadir página» the dossier rules out, and it would make the one thing this product has no
- * answer for — an empty page.
+ * It renames, reorders, deletes, and undoes a conversion. **It does not create**, and that is the
+ * decision rather than an omission: ADR 0022 says a page is born by converting a section, so the
+ * verb that makes one lives on the section, in the canvas, where the owner can see what is about to
+ * move. A `+` here would be the «+ Añadir página» the dossier rules out, and it would make the one
+ * thing this product has no answer for — an empty page.
+ *
+ * **Undoing that conversion belongs here rather than in the canvas**, which is the asymmetry the
+ * two directions genuinely have. Converting starts from a section you are looking at; folding
+ * starts from a page, and the page's own sections are the thing that disappears — there is nothing
+ * in the canvas to press. Until this existed, `pageToSection` had been written and tested since
+ * sprint 5 with nothing importing it, so converting was a one-way trip: a mistake could only be
+ * deleted, losing whatever had been added to the page, or caught by Ctrl+Z before anything else
+ * happened.
  *
  * **The first page is not the same kind of thing as the others.** It is the site's entry, published
  * as `index.html` whatever it is slugged, and the menu is derived from its sections; moving or
@@ -28,6 +36,8 @@ export function PagesPanel({
   onRenamePage,
   onMovePage,
   onDeletePage,
+  onPageToSection,
+  canFold,
   linksTo,
 }: {
   document: RetorikaDocument;
@@ -36,6 +46,11 @@ export function PagesPanel({
   onRenamePage: (pageId: string, title: string) => void;
   onMovePage: (pageId: string, toIndex: number) => void;
   onDeletePage: (pageId: string) => void;
+  /** Fold the page back into the section it came from — ADR 0022's conversion, undone. */
+  onPageToSection: (pageId: string) => void;
+  /** Whether that page can be folded at all, answered by the schema's own `canFoldPage` so the
+   * button and the verb cannot drift apart. */
+  canFold: (pageId: string) => boolean;
   /** How many visible links point at a page, counted from the document. Read *before* a delete,
    * which is the only moment it is worth saying — afterwards those links are merely dead. */
   linksTo: (pageId: string) => number;
@@ -134,6 +149,25 @@ export function PagesPanel({
                       disabled={index >= doc.pages.length - 1}
                       onClick={() => onMovePage(page.id, index + 1)}
                     />
+                    {/* Offered only where it would work, and the question is asked by the verb's
+                        own `canFoldPage` rather than by conditions re-listed here. A page whose
+                        avance the owner deleted is a state ADR 0022 allows and `pageToSection`
+                        refuses, so the button is simply absent — «Borrar» is what that page has.
+
+                        No confirmation, unlike the delete beside it: folding loses nothing. The
+                        sections come back where the avance is and one «Deshacer» puts the page
+                        back. A page the owner had added sections to brings all of them, which is
+                        the only reading that loses none of their work — visible in the canvas the
+                        moment it happens, and undone in one press if it was not what they meant. */}
+                    {canFold(page.id) && (
+                      <SmallButton
+                        label={es["editor.pages.fold"]}
+                        onClick={() => {
+                          setConfirming(null);
+                          onPageToSection(page.id);
+                        }}
+                      />
+                    )}
                     <SmallButton
                       label={es["editor.pages.delete"]}
                       danger
