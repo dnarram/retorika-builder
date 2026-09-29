@@ -94,5 +94,27 @@ export function sectorsInBank(): readonly string[] {
   return [...BANK.keys()];
 }
 
+/**
+ * Whether the product has this sector's own words, rather than the generic ones it falls back to.
+ *
+ * **The question the questionnaire asks before it tells somebody their sector has no texts
+ * prepared**, and it is asked of the bank that is *loaded* rather than of the repository. That
+ * distinction is the whole point of it existing: `drafts/` holds sectors that are written and
+ * unread, and a written sector is not a served one. Until a person signs one and moves it, the
+ * honest answer here is still no — which is the answer the screen has to give, because what the
+ * owner would get is the generic file and an empty question 3.
+ *
+ * It follows from `BANK` being built from `bank/` imports alone, so this cannot drift from what is
+ * served without the loader drifting too. `test/drafts.test.ts` pins it: every file sitting in
+ * `drafts/` is a sector this answers `false` for.
+ *
+ * `generico` answers `false` as well. It is the fallback, not a trade, so asking whether it has a
+ * sector's own words has the same answer as asking about a sector with no file — and «Otro sector»,
+ * which is what lands on it, is the case the warning was written for in the first place.
+ */
+export function servesSector(sector: string): boolean {
+  return sector !== GENERIC_SECTOR && BANK.has(sector);
+}
+
 export type { Entry, SectorFile, Suggestion } from "./schema.ts";
 export { PLACEHOLDERS, SECTIONS } from "./schema.ts";

@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { type Facts, textFor } from "../src/index.ts";
+import { type Facts, servesSector, textFor } from "../src/index.ts";
 import { draftFileSchema, sectorFileSchema } from "../src/schema.ts";
 
 /**
@@ -96,6 +96,21 @@ perDraft("no draft's words can reach a published page", () => {
     // And the draft is not a copy of what already ships: a file that changed nothing would be a
     // review request with no decision in it.
     expect(changed, `${name} changes nothing the bank does not already say`).toBeGreaterThan(0);
+  });
+
+  it.each(NAMES)("%s is still a sector the product does not serve", (name) => {
+    /**
+     * The warning on question 2 fires on this, so this is where "written is not served" has to be
+     * true or the screen starts lying in the other direction — telling somebody their sector is
+     * covered because a draft of it exists in a directory no code reads.
+     *
+     * It is the one assertion here that would survive `servesSector` being rewritten badly: the
+     * two above prove the *loader* cannot reach a draft, and this proves the *question the
+     * interface asks* cannot either. Checked by making `servesSector` count the repository
+     * instead of the bank, which turns exactly this red.
+     */
+    const draft = draftFileSchema.parse(readJson(DRAFTS_DIR, name));
+    expect(servesSector(draft.sector), `${draft.sector} is drafted, not signed`).toBe(false);
   });
 
   it.each(NAMES)("%s was not copied into bank/ instead of moved", (name) => {

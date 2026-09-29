@@ -24,7 +24,7 @@
   "questionnaire.step2.fieldset.label": "Sector del negocio",
   "questionnaire.step2.error": "Elige un sector para continuar.",
   "questionnaire.step2.other.warning": "Todavía no tenemos textos preparados para {sector}. Podemos montarte la web igual, con textos generales que tú cambias después.",
-  "questionnaire.step2.other.warning.generic": "Todavía no tenemos textos preparados para tu sector. Podemos montarte la web igual, con textos generales que tú cambias después.",
+  "questionnaire.step2.noBank": "Todavía no tenemos textos preparados para tu sector. Podemos montarte la web igual, con textos generales que tú cambias después.",
   "questionnaire.step2.other.label": "Cuéntanos a qué te dedicas, con tus palabras",
   "questionnaire.step2.other.placeholder": "Por ejemplo: cerrajería y apertura de puertas 24 horas",
   "questionnaire.step2.other.help": "Lo usaremos para escribir los textos de tu web.",

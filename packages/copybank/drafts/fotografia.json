@@ -1,0 +1,81 @@
+{
+  "sector": "fotografia",
+  "review": {
+    "status": "draft",
+    "drafted": "2026-09-29"
+  },
+  "entries": [
+    {
+      "id": "fotografia.cover.subheadline.01",
+      "section": "cover",
+      "slot": "subheadline",
+      "text": "Fotografía en {ciudad}",
+      "placeholders": ["ciudad"]
+    },
+    {
+      "id": "fotografia.cover.subheadline.02",
+      "section": "cover",
+      "slot": "subheadline",
+      "text": "Cuéntanos qué quieres fotografiar",
+      "placeholders": []
+    },
+    {
+      "id": "fotografia.cover.body.01",
+      "section": "cover",
+      "slot": "body",
+      "text": "Cada trabajo es distinto: cuéntanos el tuyo.",
+      "placeholders": []
+    },
+    {
+      "id": "fotografia.services.headline.01",
+      "section": "services",
+      "slot": "headline",
+      "text": "Qué fotografiamos",
+      "placeholders": []
+    },
+    {
+      "id": "fotografia.contact.headline.01",
+      "section": "contact",
+      "slot": "headline",
+      "text": "Cuéntanos tu idea",
+      "placeholders": []
+    },
+    {
+      "id": "fotografia.contact.body.01",
+      "section": "contact",
+      "slot": "body",
+      "text": "Dinos qué necesitas y para cuándo.",
+      "placeholders": []
+    }
+  ],
+  "suggestions": [
+    {
+      "id": "bodas",
+      "title": "Bodas"
+    },
+    {
+      "id": "retratos",
+      "title": "Retratos"
+    },
+    {
+      "id": "eventos",
+      "title": "Eventos",
+      "description": "Celebraciones y actos."
+    },
+    {
+      "id": "producto",
+      "title": "Fotos de producto",
+      "description": "Para catálogo o tienda online."
+    },
+    {
+      "id": "inmuebles",
+      "title": "Fotos de inmuebles",
+      "description": "Pisos, casas y locales."
+    },
+    {
+      "id": "book",
+      "title": "Book de fotos"
+    }
+  ],
+  "actions": {}
+}
