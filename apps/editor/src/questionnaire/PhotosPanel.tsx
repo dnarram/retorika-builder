@@ -125,9 +125,15 @@ export function PhotosPanel({
   );
 }
 
-/** Three states, three sentences. «Foto de ejemplo» over the grey marker that already reads «Tu
- * foto aquí» would be a label on a label, so the marker gets its own word. */
-function StateChip({ state }: { state: PhotoState }) {
+/**
+ * Three states, three sentences. «Foto de ejemplo» over the grey marker that already reads «Tu
+ * foto aquí» would be a label on a label, so the marker gets its own word.
+ *
+ * Exported since sprint 6 day 5: the pre-download warning lists the same non-`"own"` photographs
+ * this panel does, and disambiguating a bank photograph from an unfilled marker in that list is
+ * this same chip's job — not a second one built to look like it.
+ */
+export function StateChip({ state }: { state: PhotoState }) {
   const label = es[`editor.photos.state.${state}` as keyof typeof es];
   const tone =
     state === "own" ? "bg-ui-bg text-ui-muted" : "bg-[#FEF3C7] text-[#92400E] font-semibold";

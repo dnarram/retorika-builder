@@ -270,10 +270,18 @@ describe("critical flow 5 — descarga del ZIP y el HTML abre sin servidor", () 
     // network cache CDP's `Network.getResponseBody` reads from. `page.waitForEvent("download")`
     // is what Playwright gives for exactly this: the actual saved file, not a best-effort replay
     // of a response body the browser already claimed.
+    // The cover still carries the placeholder the generator gave it — nothing in flows 1 through 4
+    // uploads a photograph — so this press opens the pre-download warning (sprint 6 day 5) rather
+    // than downloading directly. Pressing «Descargar igualmente» is the flow doing on purpose what
+    // an owner who has not yet added their own photo would also do.
+    await page.getByRole("button", { name: "Descargar" }).click();
+    const downloadAnyway = page.getByRole("button", { name: "Descargar igualmente" });
+    await downloadAnyway.waitFor();
+
     const [download, response] = await Promise.all([
       page.waitForEvent("download"),
       page.waitForResponse((candidate) => candidate.url().includes("/api/download")),
-      page.getByRole("button", { name: "Descargar" }).click(),
+      downloadAnyway.click(),
     ]);
     expect(response.status()).toBe(200);
     expect(response.headers()["content-type"]).toBe("application/zip");
@@ -459,10 +467,15 @@ describe("día 7 — dos conversiones desde el editor, y el ZIP resultante abier
     // exactly as the first one does.
     await expect(frame.locator('[data-section="sec-avance-2"]')).toContainText("Dónde estamos");
 
+    // Same reason as flow 5: the cover is still the placeholder, so the warning opens first.
+    await page.getByRole("button", { name: "Descargar" }).click();
+    const downloadAnyway = page.getByRole("button", { name: "Descargar igualmente" });
+    await downloadAnyway.waitFor();
+
     const [download, response] = await Promise.all([
       page.waitForEvent("download"),
       page.waitForResponse((candidate) => candidate.url().includes("/api/download")),
-      page.getByRole("button", { name: "Descargar" }).click(),
+      downloadAnyway.click(),
     ]);
     expect(response.status()).toBe(200);
 
