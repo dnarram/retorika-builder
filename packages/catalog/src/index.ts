@@ -48,6 +48,15 @@ export {
   SERVICES_VARIANTS,
   servicesPreset,
 } from "./services.ts";
+export type { TeamVariant } from "./team.ts";
+export {
+  TEAM_ID,
+  TEAM_ITEM_SLOTS,
+  TEAM_MEMBERS,
+  TEAM_SLOTS,
+  TEAM_VARIANTS,
+  teamPreset,
+} from "./team.ts";
 export type { TeaserVariant } from "./teaser.ts";
 export {
   TEASER_ID,

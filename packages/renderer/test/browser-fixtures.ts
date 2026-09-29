@@ -17,6 +17,8 @@ import {
   PRICES_VARIANTS,
   SERVICES_ID,
   SERVICES_VARIANTS,
+  TEAM_ID,
+  TEAM_VARIANTS,
   TEASER_ID,
   TEASER_VARIANTS,
   TESTIMONIALS_ID,
@@ -350,6 +352,13 @@ const PRESET_CASES: Record<
     texts: ["standard", "long"],
     sections: (cover, variantId, text) => [cover, gallerySection(variantId, text)],
   },
+  [TEAM_ID]: {
+    variants: TEAM_VARIANTS,
+    texts: ["standard", "long"],
+    // "long" matters for the same reason it does on "Opiniones": a job title is a sentence the
+    // owner writes for themselves, not a name picked from a list.
+    sections: (cover, variantId, text) => [cover, teamSection(variantId, text)],
+  },
   [TEASER_ID]: {
     variants: TEASER_VARIANTS,
     texts: ["standard", "long"],
@@ -398,6 +407,79 @@ function footerSection(variantId: string, text: TextCase): Section {
           : "Calle Espinel 24, Ronda",
       ),
       line("el-email", "email", "hola@barberiaelcorte.example"),
+    ],
+  };
+}
+
+/** "Equipo" with three people, the third's job title hidden rather than removed — the same
+ * rule-3 case "Opiniones" below exercises for an anonymous quote, here for a card with no job
+ * shown. */
+function teamSection(variantId: string, text: TextCase): Section {
+  const long = text === "long";
+  const members: readonly [file: string, alt: string, name: string, job: string][] = [
+    ["rosario.svg", "Rosario, en la consulta", "Rosario Martín", "Fisioterapeuta y dueña"],
+    [
+      "pedro.svg",
+      "Pedro, en recepción",
+      "Pedro Salas",
+      long
+        ? "Recepción, atención al paciente y coordinación de citas con las tres consultas"
+        : "Recepción",
+    ],
+    ["clinica.svg", "Ana, en la sala de rehabilitación", "Ana Vega", "Fisioterapeuta"],
+  ];
+  return {
+    id: "sec-team",
+    preset: { catalogId: TEAM_ID, variantId },
+    source: "catalog",
+    layout: null,
+    content: [
+      {
+        id: "el-team-headline",
+        role: "heading",
+        hidden: false,
+        slot: "headline",
+        value: { kind: "text", text: "Quién te atiende" },
+      },
+      {
+        id: "el-team-intro",
+        role: "body",
+        hidden: false,
+        slot: "intro",
+        value: { kind: "text", text: "El equipo de la clínica." },
+      },
+      {
+        id: "el-members",
+        role: "list",
+        hidden: false,
+        slot: "members",
+        items: members.map(([file, alt, name, job], index) => ({
+          id: `item-${index + 1}`,
+          elements: [
+            {
+              id: `el-member-${index + 1}-photo`,
+              role: "image",
+              hidden: false,
+              slot: "photo",
+              value: { kind: "image", src: `assets/${file}`, alt },
+            } as ContentElement,
+            {
+              id: `el-member-${index + 1}-name`,
+              role: "heading",
+              hidden: false,
+              slot: "name",
+              value: { kind: "text", text: name },
+            } as ContentElement,
+            {
+              id: `el-member-${index + 1}-job`,
+              role: "body",
+              hidden: index === 2,
+              slot: "job",
+              value: { kind: "text", text: job },
+            } as ContentElement,
+          ],
+        })),
+      },
     ],
   };
 }

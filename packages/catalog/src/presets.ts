@@ -6,6 +6,7 @@ import { GALLERY_ID, GALLERY_VARIANTS, galleryPreset } from "./gallery.ts";
 import { LOCATION_ID, LOCATION_VARIANTS, locationPreset } from "./location.ts";
 import { PRICES_ID, PRICES_VARIANTS, pricesPreset } from "./prices.ts";
 import { SERVICES_ID, SERVICES_VARIANTS, servicesPreset } from "./services.ts";
+import { TEAM_ID, TEAM_VARIANTS, teamPreset } from "./team.ts";
 import { TEASER_ID, TEASER_VARIANTS, teaserPreset } from "./teaser.ts";
 import { TESTIMONIALS_ID, TESTIMONIALS_VARIANTS, testimonialsPreset } from "./testimonials.ts";
 
@@ -25,6 +26,9 @@ export const CATALOG: Readonly<Record<string, PresetShape>> = {
   // before the two that end a page. This order is what the "Añadir sección aquí" menu offers, so
   // it reads as a page reads; the tests sort it, so nothing rests on it.
   [GALLERY_ID]: galleryPreset,
+  // The ninth and last section a page can hold, placed the same way gallery was: right before the
+  // two that always close a page, so adding it disturbs nothing else's position in the menu.
+  [TEAM_ID]: teamPreset,
   [CONTACT_ID]: contactPreset,
   [FOOTER_ID]: footerPreset,
   // Last, and never offered by the "Añadir sección aquí" menu (`Variants.tsx` leaves it out):
@@ -42,6 +46,7 @@ const VARIANTS: Readonly<Record<string, readonly string[]>> = {
   [TESTIMONIALS_ID]: TESTIMONIALS_VARIANTS,
   [PRICES_ID]: PRICES_VARIANTS,
   [GALLERY_ID]: GALLERY_VARIANTS,
+  [TEAM_ID]: TEAM_VARIANTS,
   [CONTACT_ID]: CONTACT_VARIANTS,
   [FOOTER_ID]: FOOTER_VARIANTS,
   [TEASER_ID]: TEASER_VARIANTS,

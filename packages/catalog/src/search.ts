@@ -38,6 +38,15 @@ export const SEARCH_ALIASES: Readonly<Record<string, readonly string[]>> = {
     "clientes",
     "estrellas",
   ],
+  team: [
+    "equipo",
+    "quién soy",
+    "quiénes somos",
+    "sobre nosotros",
+    "nuestro equipo",
+    "el personal",
+    "trabajadores",
+  ],
   contact: ["contacto", "reservas", "teléfono", "whatsapp", "pedir cita", "escribir", "llamar"],
   footer: [
     "pie de página",

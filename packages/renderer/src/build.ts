@@ -485,6 +485,12 @@ export function buildCss(doc: RetorikaDocument): string {
     // the common photo is cropped least. One rule, like `.rb-prices` above, because the generic card
     // grid is right about everything else.
     ".rb-gallery .rb-item img { aspect-ratio: 4 / 3; object-fit: cover; }",
+    // Equipo's photographs are faces, not work — a phone photo of a person taken upright and one
+    // taken across a counter should not sit in the same row at two different heights the way an
+    // uncropped gallery would leave them. A square crop is the one ratio that treats a portrait
+    // shot and a landscape shot the same, which is the point for a row of headshots in a way it
+    // is not for `.rb-gallery` above, where 4/3 was chosen to match what a phone shoots in.
+    ".rb-team .rb-item img { aspect-ratio: 1 / 1; object-fit: cover; }",
     ".rb-section p { font-size: var(--size-body); color: var(--color-muted); margin: 0; }",
     // Plain links (PR #6, finding 3): color.primary, which every palette guarantees against
     // color.surface, and underlined so they never rely on colour alone. The :not keeps this

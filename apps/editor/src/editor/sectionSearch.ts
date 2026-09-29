@@ -25,7 +25,7 @@ export interface Offerable {
  * The offers a query finds, best first; the whole list, in the catalog's own order, for an empty
  * query.
  *
- * **Filtering rather than reordering.** With eight sections a reorder is a change the owner has to
+ * **Filtering rather than reordering.** With nine sections a reorder is a change the owner has to
  * notice and then trust; a filter answers the question they asked. An empty query is exactly what
  * this menu showed before the search existed, which is what keeps the search from being something
  * you have to use.

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" role="img" aria-label="pedro">
+  <rect width="300" height="300" fill="#7C3AED"/>
+  <circle cx="150" cy="150" r="84" fill="#22C55E"/>
+  <text x="150" y="284" font-family="system-ui" font-size="16" fill="#FFFFFF" text-anchor="middle">pedro</text>
+</svg>
