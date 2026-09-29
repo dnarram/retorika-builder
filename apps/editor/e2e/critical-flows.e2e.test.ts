@@ -869,8 +869,10 @@ describe("sprint 7 día 5 — el aviso de «sector sin banco»", () => {
       await walkPage.getByRole("button", { name: "Siguiente" }).click();
 
       const warning = walkPage.getByText(/Todavía no tenemos textos preparados/);
-      // Nothing chosen yet: nothing to warn about.
-      await expect(warning).toHaveCount(0);
+      // Nothing chosen yet: nothing to warn about. Always in the layout since sprint 7 day 7
+      // (`visibility: hidden` reserves its space so picking a sector never moves the grid), so
+      // this checks it is hidden rather than absent.
+      await expect(warning).toBeHidden();
 
       // Fisioterapia is one of the seven. Its texts may be drafted by now; drafted is not served,
       // which is exactly what this has to keep saying.
@@ -880,7 +882,7 @@ describe("sprint 7 día 5 — el aviso de «sector sin banco»", () => {
       // And a sector the bank really does cover says nothing, which is the half that proves the
       // warning is answering a question rather than always being on.
       await walkPage.getByText("Restaurante y bar", { exact: true }).click();
-      await expect(warning).toHaveCount(0);
+      await expect(warning).toBeHidden();
 
       // «Otro sector» keeps its own wording, in the owner's words once they have written them.
       await walkPage.getByText("Otro sector", { exact: true }).click();
@@ -947,6 +949,260 @@ describe("sprint 7 día 6 — «Equipo» en el menú, y «Avance» nunca ofrecid
       await expect(
         frame.locator(".rb-menu-list .rb-menu-choice", { hasText: "Equipo" }),
       ).toBeVisible();
+    } finally {
+      await walkPage.context().close();
+    }
+  });
+});
+
+/**
+ * Sprint 7 day 7 — two findings from this sprint's own walks, fixed rather than carried into
+ * the buffer as debt. Both are layout bugs `apps/editor`'s own test project cannot see:
+ * `vitest.config.ts` gives it a node project with no DOM, so a shift measured in real pixels is
+ * only ever provable here, against the real, running application.
+ */
+describe("sprint 7 día 7 — dos hallazgos de esta semana, cerrados", () => {
+  it("day 3: the page tab strip never overlaps the device toggle, at three pages", async () => {
+    // The finding, precisely: `EditorShell`'s header splits into three flex zones, and the two
+    // outer ones used to share the leftover space evenly with each other rather than yielding to
+    // the middle one — which is the only zone built to give way (`overflow-x-auto`, since sprint
+    // 5). At three pages the right zone lost that split by exactly the width `.rb-panel`'s own
+    // "Guardado en este navegador" needs, and undo/redo visibly compressed to two thirds their
+    // size on top of the overlap itself.
+    const walkPage = await (
+      await browser.newContext({ viewport: { width: 1280, height: 900 } })
+    ).newPage();
+    try {
+      await walkPage.goto(BASE_URL, { waitUntil: "networkidle" });
+      await walkPage.fill("#nombre", "Taberna Santo Domingo");
+      await walkPage.getByRole("button", { name: "Siguiente" }).click();
+      await walkPage.getByText("Restaurante y bar", { exact: true }).click();
+      await walkPage.getByRole("button", { name: "Siguiente" }).click();
+      await walkPage.getByText("Comidas", { exact: true }).click();
+      await walkPage.getByRole("button", { name: "Siguiente" }).click();
+      await walkPage.fill("#direccion", "Cta. de Santo Domingo, 2, Ronda");
+      await walkPage.getByRole("button", { name: "Siguiente" }).click();
+      await walkPage.getByText("Que reserven", { exact: true }).click();
+      await walkPage.fill("#enlace", "https://reservas.example.com/taberna");
+      await walkPage.getByRole("button", { name: "Crear mi web" }).click();
+      await walkPage.getByText("Ver a tamaño real →").first().click();
+
+      const frame = walkPage.frameLocator("iframe").first();
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+      for (const id of ["sec-services", "sec-location"]) {
+        await frame.locator(`[data-section="${id}"]`).click();
+        await frame
+          .locator(
+            `[data-section="${id}"] .rb-action[aria-label="Convertir esta sección en página"]`,
+          )
+          .click();
+      }
+      await expect(walkPage.locator(".overflow-x-auto button")).toHaveCount(3);
+      // Autosave is what actually grows the right zone — its "Guardado" tick is what was
+      // missing from the header at the instant of the last click, and the overlap only exists
+      // once it lands.
+      await expect(walkPage.getByText("Guardado en este navegador")).toBeVisible({
+        timeout: 5_000,
+      });
+
+      const strip = await walkPage.locator(".overflow-x-auto").first().boundingBox();
+      const toggle = await walkPage.locator('button[aria-label*="óvil"]').boundingBox();
+      expect(strip, "tab strip").not.toBeNull();
+      expect(toggle, "device toggle").not.toBeNull();
+      if (strip && toggle) {
+        expect(
+          strip.x + strip.width,
+          "strip's right edge vs toggle's left edge",
+        ).toBeLessThanOrEqual(toggle.x);
+      }
+
+      // And the buttons that were visibly compressed are back to their declared 30×30 size.
+      const undo = await walkPage
+        .getByRole("button", { name: "Deshacer", exact: true })
+        .boundingBox();
+      expect(undo?.width, "undo button width").toBeCloseTo(30, 0);
+    } finally {
+      await walkPage.context().close();
+    }
+  });
+
+  it("day 5: picking a sector never moves the grid, whether or not it has a bank", async () => {
+    // The finding: the warning box used to be conditionally mounted, and `Shell` centers every
+    // step's card vertically in the viewport (`ui.tsx`) — so mounting or unmounting anything
+    // inside the card recentres the whole thing, moving the card the owner just pressed out from
+    // under the pointer. Proved to be about presence rather than position: moving the box below
+    // the grid first only flipped which direction the shift went. The fix keeps the box always
+    // in the layout and toggles `visibility`, so the card's own height — and everything's
+    // position inside it — never depends on which sector is picked.
+    const walkPage = await (
+      await browser.newContext({ viewport: { width: 1280, height: 950 } })
+    ).newPage();
+    try {
+      await walkPage.goto(BASE_URL, { waitUntil: "networkidle" });
+      await walkPage.fill("#nombre", "Fisio Ribera");
+      await walkPage.getByRole("button", { name: "Siguiente" }).click();
+
+      const grid = walkPage.locator("fieldset").first();
+      const before = await grid.boundingBox();
+
+      // Fisioterapia has no bank of its own (drafted, unsigned) — the warning appears.
+      await walkPage.getByText("Fisioterapia", { exact: true }).click();
+      await expect(walkPage.getByText(/Todavía no tenemos textos preparados/)).toBeVisible();
+      const withWarning = await grid.boundingBox();
+      expect(withWarning?.y).toBe(before?.y);
+
+      // Restaurante y bar has a signed bank — the warning disappears, and the grid still does
+      // not move: the space it reserves does not depend on which state is showing.
+      await walkPage.getByText("Restaurante y bar", { exact: true }).click();
+      await expect(walkPage.getByText(/Todavía no tenemos textos preparados/)).toBeHidden();
+      const withoutWarning = await grid.boundingBox();
+      expect(withoutWarning?.y).toBe(before?.y);
+    } finally {
+      await walkPage.context().close();
+    }
+  });
+});
+
+/**
+ * Sprint 7 day 7 — the sprint's own verification line, named in the plan: «el recorrido completo
+ * con una galería reordenada, una conversión deshecha, "Equipo" en la página, un sector nuevo
+ * elegido en el cuestionario y el ZIP abierto sin servidor.»
+ *
+ * Every piece has its own unit test elsewhere — `moveItem` (day 2), `pageToSection` (day 3), the
+ * seven text banks and the honest warning (days 4-5), `canBeBlank` in the menu (day 6) — and this
+ * is not a second proof of any of them. What only this file can show is that five days of work,
+ * done by five different hands of the same session, compose: reordering a gallery does not
+ * disturb a conversion done after it, undoing that conversion does not disturb Equipo added after
+ * that, and the document all five actions built together is still a ZIP that opens with no
+ * server. `taller` is the sector — one of the four unsigned drafts, chosen on purpose so the
+ * walk also confirms day 5's warning fires in the full journey, not only in isolation.
+ */
+describe("sprint 7 día 7 — el recorrido completo del sprint", () => {
+  it("reorders a gallery, undoes a conversion, adds Equipo, and downloads a ZIP that opens offline", async () => {
+    const walkPage = await (await browser.newContext()).newPage();
+    try {
+      await walkPage.goto(BASE_URL, { waitUntil: "networkidle" });
+      await walkPage.fill("#nombre", "Taller Ribera");
+      await walkPage.getByRole("button", { name: "Siguiente" }).click();
+
+      // Taller: one of the seven sectors day 4-5 drafted, still unsigned. The warning has to
+      // fire here exactly as it does in isolation (day 5's own test) — this is the same claim,
+      // reached by the full questionnaire instead of a script that jumps straight to step 2.
+      await walkPage.getByText("Taller", { exact: true }).click();
+      await expect(walkPage.getByText(/Todavía no tenemos textos preparados/)).toBeVisible();
+      await walkPage.getByRole("button", { name: "Siguiente" }).click();
+      // Step 3 offers nothing to tick — taller has no bank, so no suggestions — confirming the
+      // honest emptiness day 5 wrote about, then moving on without picking anything.
+      await expect(walkPage.getByText(/Todavía no tenemos sugerencias/)).toBeVisible();
+      await walkPage.getByRole("button", { name: "Siguiente" }).click();
+      await walkPage.fill("#direccion", "Cta. de Santo Domingo, 2, Ronda");
+      await walkPage.getByRole("button", { name: "Siguiente" }).click();
+      await walkPage.getByText("Que me llamen", { exact: true }).click();
+      await walkPage.fill("#telefono", "600111222");
+      await walkPage.getByRole("button", { name: "Crear mi web" }).click();
+      await walkPage.getByText("Ver a tamaño real →").first().click();
+
+      const frame = walkPage.frameLocator("iframe").first();
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+
+      // A gallery, reordered (day 2). Two photographs, captioned so the order is legible in the
+      // assertions below rather than only in the item ids nobody reading this test would
+      // recognise.
+      await frame.getByRole("button", { name: "Añadir sección aquí" }).first().click();
+      await frame.locator(".rb-menu-search").fill("fotos");
+      await frame
+        .locator(".rb-menu-list .rb-menu-choice", { hasText: "Fotos de trabajos" })
+        .click();
+      await frame.locator('[data-preset="gallery"]').waitFor();
+
+      const captions = frame.locator('[data-preset="gallery"] [data-slot="caption"]');
+      const blur = () => walkPage.getByText("Haz clic en cualquier texto para cambiarlo").click();
+      await captions.first().click();
+      await walkPage.keyboard.type("Primera foto");
+      await blur();
+      await frame.locator('[data-preset="gallery"] .rb-line-add').click();
+      await expect(captions).toHaveCount(2);
+      await captions.nth(1).click();
+      await walkPage.keyboard.type("Segunda foto");
+      await blur();
+
+      // «Poner esta foto antes» on the second card puts it first.
+      const items = frame.locator('[data-preset="gallery"] [data-item]');
+      await items.nth(1).locator('[aria-label="Poner esta foto antes"]').click();
+      await expect(captions).toHaveText(["Segunda foto", "Primera foto"]);
+
+      // A conversion, undone (day 3). «Dónde estamos» becomes a page, then folds back.
+      const tabs = walkPage.locator(".overflow-x-auto button");
+      await expect(tabs).toHaveCount(1);
+      await frame.locator('[data-section="sec-location"]').click();
+      await frame
+        .locator(
+          '[data-section="sec-location"] .rb-action[aria-label="Convertir esta sección en página"]',
+        )
+        .click();
+      await expect(tabs).toHaveCount(2);
+
+      await walkPage.getByRole("button", { name: "Páginas", exact: true }).click();
+      await walkPage.getByRole("button", { name: "Deshacer la conversión" }).click();
+      await expect(tabs).toHaveCount(1);
+      await expect(frame.locator('[data-section="sec-location"]')).toBeVisible();
+
+      // «Equipo» (day 6), reached through the same search the gallery was.
+      await walkPage.getByRole("button", { name: "Secciones", exact: true }).click();
+      await frame.getByRole("button", { name: "Añadir sección aquí" }).last().click();
+      await frame.locator(".rb-menu-search").fill("equipo");
+      await frame.locator(".rb-menu-list .rb-menu-choice", { hasText: "Equipo" }).click();
+      await expect(frame.locator('[data-preset="team"]')).toBeVisible();
+
+      // The cover still carries a placeholder, so «Descargar» opens the warning first, same as
+      // every other day-7 walk this repository has (sprint 5, sprint 6).
+      await walkPage.getByRole("button", { name: "Descargar" }).click();
+      const downloadAnyway = walkPage.getByRole("button", { name: "Descargar igualmente" });
+      await downloadAnyway.waitFor();
+      const [download, response] = await Promise.all([
+        walkPage.waitForEvent("download"),
+        walkPage.waitForResponse((candidate) => candidate.url().includes("/api/download")),
+        downloadAnyway.click(),
+      ]);
+      expect(response.status()).toBe(200);
+
+      const dir = mkdtempSync(join(tmpdir(), "retorika-e2e-dia7-"));
+      const zipPath = join(dir, download.suggestedFilename());
+      await download.saveAs(zipPath);
+      const zip = new Uint8Array(readFileSync(zipPath));
+      const html = extractFileBytes(zip, "index.html");
+      const filePath = join(dir, "index.html");
+      writeFileSync(filePath, html);
+
+      const offlinePage = await (await browser.newContext()).newPage();
+      const failed: string[] = [];
+      offlinePage.on("requestfailed", (request) => failed.push(request.url()));
+      try {
+        await offlinePage.goto(`file://${filePath}`, { waitUntil: "load" });
+        await expect(offlinePage).toHaveTitle("Taller Ribera");
+
+        // The reorder survived the download: the published order is the canvas order.
+        await expect(offlinePage.locator('[data-slot="caption"]')).toHaveText([
+          "Segunda foto",
+          "Primera foto",
+        ]);
+        // The undone conversion survived: one page, and «Dónde estamos» is a section of it
+        // rather than a link to a file that does not exist.
+        await expect(offlinePage.locator('[data-section="sec-location"]')).toBeVisible();
+        await expect(offlinePage.locator(".rb-nav-wide a", { hasText: "Inicio" })).toHaveCount(0);
+        // Equipo survived, with the marker text an owner who never touched it would see —
+        // honest, not invented, exactly as `packages/catalog/test/team.test.ts` asserts in
+        // isolation.
+        await expect(offlinePage.locator('[data-preset="team"]')).toBeVisible();
+        await expect(
+          offlinePage.locator('[data-preset="team"] [data-slot="name"]').first(),
+        ).toContainText("Escribe aquí");
+
+        // And the whole promise ADR 0001 makes: every byte the page needed was inside the ZIP.
+        expect(failed).toEqual([]);
+      } finally {
+        await offlinePage.context().close();
+      }
     } finally {
       await walkPage.context().close();
     }

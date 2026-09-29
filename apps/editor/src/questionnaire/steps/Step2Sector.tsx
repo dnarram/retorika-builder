@@ -118,48 +118,64 @@ export function Step2Sector({
         />
       </div>
 
-      {noBank ? (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 11,
-            padding: "14px 16px",
-            background: "#FFF8EC",
-            border: "1px solid #F4DDB4",
-            borderRadius: 11,
-          }}
+      {/* Always rendered, never conditionally mounted — that used to be `{noBank ? <div>…</div> :
+          null}`, and the walk found what it costs: `Shell` centers the whole card vertically in
+          the viewport (`ui.tsx`), so mounting or unmounting anything inside it changes the card's
+          total height and every step's own recentering shifts *everything* by roughly half of
+          that, up or down depending which side of the change a given element sits on. The card
+          the owner just pressed moved out from under the pointer whichever way the box was
+          placed — proved by moving it below the grid first: the shift did not shrink, it only
+          flipped direction, because the cause was never the box's position.
+          `Shell`'s own centering is shared by all five steps and is not this step's to redesign
+          for one box. What is this step's to fix is that the box's *presence* changes height at
+          all: it is now always in the layout, and `visibility: hidden` (not `display: none`,
+          which would still remove its space) takes it out of the accessibility tree and off the
+          screen without changing what the card measures — so picking a sector never moves the
+          grid, or anything else on the card, regardless of which sector or which direction. */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 11,
+          padding: "14px 16px",
+          background: "#FFF8EC",
+          border: "1px solid #F4DDB4",
+          borderRadius: 11,
+          visibility: noBank ? "visible" : "hidden",
+        }}
+        {...(noBank ? {} : { "aria-hidden": true })}
+      >
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#B4740B"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{ flexShrink: 0 }}
+          aria-hidden="true"
         >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#B4740B"
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={{ flexShrink: 0 }}
-            aria-hidden="true"
-          >
-            <circle cx="12" cy="12" r="9" />
-            <path d="M12 16v-4" />
-            <path d="M12 8h.01" />
-          </svg>
-          <span style={{ fontSize: 14, lineHeight: 1.45, color: "#7A5008" }}>
-            {/* The owner's own words are used only where they exist, which is «Otro sector». For
-                a named sector the message says «tu sector» rather than repeating the label they
-                just clicked — the sentence is the same promise either way: a site gets built, out
-                of the generic texts, and they change them afterwards. */}
-            {answers.sector === "otro" && answers.otherSectorDescription.trim() !== ""
-              ? es["questionnaire.step2.other.warning"].replace(
-                  "{sector}",
-                  answers.otherSectorDescription,
-                )
-              : es["questionnaire.step2.noBank"]}
-          </span>
-        </div>
-      ) : null}
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 16v-4" />
+          <path d="M12 8h.01" />
+        </svg>
+        <span style={{ fontSize: 14, lineHeight: 1.45, color: "#7A5008" }}>
+          {/* The owner's own words are used only where they exist, which is «Otro sector». For a
+              named sector the message says «tu sector» rather than repeating the label they just
+              clicked — the sentence is the same promise either way: a site gets built, out of the
+              generic texts, and they change them afterwards. The fixed sentence stands even while
+              hidden, rather than an empty string, so this box's own height never depends on which
+              of the two texts it would show if it were showing one — one stable height, always. */}
+          {noBank && answers.sector === "otro" && answers.otherSectorDescription.trim() !== ""
+            ? es["questionnaire.step2.other.warning"].replace(
+                "{sector}",
+                answers.otherSectorDescription,
+              )
+            : es["questionnaire.step2.noBank"]}
+        </span>
+      </div>
 
       <fieldset
         style={{

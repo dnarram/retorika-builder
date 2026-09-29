@@ -344,7 +344,16 @@ export function EditorShell({
           })}
         </div>
 
-        <div className="flex min-w-0 flex-1 items-center justify-end gap-2.5">
+        {/* `shrink-0`, not `min-w-0`: this row has nothing in it that can honestly get smaller.
+            ADR 0012 chose "Guardado en este navegador" over a bare "Guardado" so nobody reads a
+            cross-device guarantee into it, and hiding or truncating that sentence to save room
+            would be exactly the promise the ADR refused to make. So it is the tab strip's own
+            `overflow-x-auto` that has to give first (sprint 7 day 7's own walk), the way it
+            already does for a gallery of eight photographs pushed into two columns — flex-shrink
+            was splitting the leftover space evenly between this row and the tabs instead of
+            letting the tabs give way to it, which at three pages left it 30px short of its own
+            content and the undo/redo buttons visibly compressed to two thirds their size. */}
+        <div className="flex shrink-0 items-center justify-end gap-2.5">
           <DeviceToggle device={device} onChange={onDeviceChange} />
 
           <button
