@@ -114,7 +114,7 @@ const RAIL_ICONS = {
 
 /** What the rail can select. `Páginas` and `Fotos` are not here: a value the rail cannot take is
  * not a state the app has to handle. */
-export type RailItemId = "sections" | "style" | "pages";
+export type RailItemId = "sections" | "style" | "pages" | "photos";
 
 function RailIcon({ icon, active }: { icon: keyof typeof RAIL_ICONS; active: boolean }) {
   return (
@@ -131,20 +131,14 @@ function RailIcon({ icon, active }: { icon: keyof typeof RAIL_ICONS; active: boo
   );
 }
 
-function RailLabel({
-  label,
-  active,
-  phase2 = false,
-}: {
-  label: string;
-  active: boolean;
-  phase2?: boolean;
-}) {
+/** `phase2` went with `RailPhase2` on sprint 6 day 2. It was the dimmed grey a rail item wore
+ * while its feature did not exist, and every one of the four now does — so the shade had no
+ * caller left, and a prop nothing passes is the dead-button mistake wearing a different costume. */
+function RailLabel({ label, active }: { label: string; active: boolean }) {
   return (
     <span
       className={
-        "text-[11px] font-medium " +
-        (active ? "font-semibold text-ui-brand" : phase2 ? "text-[#A3AEC0]" : "text-ui-muted")
+        "text-[11px] font-medium " + (active ? "font-semibold text-ui-brand" : "text-ui-muted")
       }
     >
       {label}
@@ -181,20 +175,6 @@ function RailButton({
       <RailIcon icon={icon} active={active} />
       <RailLabel label={label} active={active} />
     </button>
-  );
-}
-
-/** A rail item for a feature that does not exist yet: not a button, and not a disabled one
- * either. The badge is the whole message. */
-function RailPhase2({ icon, label }: { icon: keyof typeof RAIL_ICONS; label: string }) {
-  return (
-    <div className="flex flex-col items-center gap-[5px]">
-      <RailIcon icon={icon} active={false} />
-      <RailLabel label={label} active={false} phase2 />
-      <span className="text-[9px] font-bold tracking-[0.04em] text-[#A3AEC0]">
-        {es["editor.rail.phase2"].toUpperCase()}
-      </span>
-    </div>
   );
 }
 
@@ -478,7 +458,12 @@ export function EditorShell({
             active={rail === "pages"}
             onSelect={() => onRailChange("pages")}
           />
-          <RailPhase2 icon="photos" label={es["editor.rail.photos"]} />
+          <RailButton
+            icon="photos"
+            label={es["editor.rail.photos"]}
+            active={rail === "photos"}
+            onSelect={() => onRailChange("photos")}
+          />
         </div>
 
         {/* The wide side gutters centre the canvas when it is alone; with a panel open they would

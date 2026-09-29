@@ -33,6 +33,7 @@ import { sectionFields } from "../editor/sectionFields.ts";
 import es from "../locales/es.json" with { type: "json" };
 import { FieldsPanel } from "./FieldsPanel.tsx";
 import { PagesPanel } from "./PagesPanel.tsx";
+import { PhotosPanel } from "./PhotosPanel.tsx";
 import { StylePanel } from "./StylePanel.tsx";
 import { FieldError } from "./ui.tsx";
 
@@ -387,7 +388,30 @@ export function Editor({
    */
   function showRail(item: RailItemId) {
     setRail(item);
-    if (item === "style") setFieldsFor(null);
+    // Any rail item that opens a panel closes the fields panel: both are fixed over the right edge
+    // and the second would cover the first. It used to name `style` alone, which was complete when
+    // `style` was the only panel — `pages` arrived in sprint 5 and could already be covered, and
+    // `photos` would have made three. `sections` is the one that does not, because the fields panel
+    // *is* its panel.
+    if (item !== "sections") setFieldsFor(null);
+  }
+
+  /**
+   * Open the file picker for one image, from outside the canvas.
+   *
+   * The same three lines `wirePhotos` runs when the owner clicks the photograph itself, so the
+   * «Fotos» panel is a second *way in* and not a second uploader: `preparePhoto`'s sniff, the
+   * resize, the EXIF-stripping re-encode, the IndexedDB write and the `setImage` history step are
+   * all the ones that already existed. Sprint 5 day 3 found three separate defects in that path;
+   * a parallel one would be three more waiting.
+   */
+  function replacePhoto(address: ElementAddress) {
+    pendingImage.current = address;
+    const input = fileInputRef.current;
+    if (!input) return;
+    // Cleared first, so picking the same file twice in a row still fires a change.
+    input.value = "";
+    input.click();
   }
 
   function showFields(sectionId: string | null) {
@@ -917,12 +941,7 @@ export function Editor({
       image.addEventListener("click", (event) => {
         // Not the section's click too: choosing a photo is not choosing a section.
         event.stopPropagation();
-        pendingImage.current = { sectionId, elementId };
-        const input = fileInputRef.current;
-        if (!input) return;
-        // Cleared first, so picking the same file twice in a row still fires a change.
-        input.value = "";
-        input.click();
+        replacePhoto({ sectionId, elementId });
       });
     }
   }
@@ -1166,7 +1185,19 @@ export function Editor({
       rail={rail}
       onRailChange={showRail}
       panel={
-        rail === "pages" ? (
+        rail === "photos" ? (
+          <PhotosPanel
+            document={doc}
+            photoUrls={photoUrls}
+            onReplacePhoto={replacePhoto}
+            onGoToPhoto={(photo) => {
+              // The panel is also a way of finding a photograph: show the page it is on and select
+              // its section, which scrolls the canvas to it.
+              onSelectPage(doc.pages[0]?.id === photo.pageId ? undefined : photo.pageId);
+              selectedSection.current = photo.sectionId;
+            }}
+          />
+        ) : rail === "pages" ? (
           <PagesPanel
             document={doc}
             currentPageId={pageId}
