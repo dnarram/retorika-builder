@@ -1,0 +1,83 @@
+{
+  "sector": "asesoria",
+  "review": {
+    "status": "draft",
+    "drafted": "2026-09-29"
+  },
+  "entries": [
+    {
+      "id": "asesoria.cover.subheadline.01",
+      "section": "cover",
+      "slot": "subheadline",
+      "text": "Tu asesoría en {ciudad}",
+      "placeholders": ["ciudad"]
+    },
+    {
+      "id": "asesoria.cover.subheadline.02",
+      "section": "cover",
+      "slot": "subheadline",
+      "text": "Tu asesoría",
+      "placeholders": []
+    },
+    {
+      "id": "asesoria.cover.body.01",
+      "section": "cover",
+      "slot": "body",
+      "text": "Cuéntanos tu caso y lo vemos juntos.",
+      "placeholders": []
+    },
+    {
+      "id": "asesoria.services.headline.01",
+      "section": "services",
+      "slot": "headline",
+      "text": "En qué te ayudamos",
+      "placeholders": []
+    },
+    {
+      "id": "asesoria.services.intro.01",
+      "section": "services",
+      "slot": "intro",
+      "text": "Esto es de lo que nos encargamos en {negocio}.",
+      "placeholders": ["negocio"]
+    },
+    {
+      "id": "asesoria.contact.body.01",
+      "section": "contact",
+      "slot": "body",
+      "text": "Dinos qué necesitas y te lo explicamos.",
+      "placeholders": []
+    }
+  ],
+  "suggestions": [
+    {
+      "id": "declaracion-renta",
+      "title": "Declaración de la renta"
+    },
+    {
+      "id": "contabilidad",
+      "title": "Contabilidad",
+      "description": "Llevamos las cuentas de tu negocio."
+    },
+    {
+      "id": "nominas",
+      "title": "Nóminas y seguros sociales",
+      "description": "Altas, bajas y contratos."
+    },
+    {
+      "id": "impuestos",
+      "title": "Impuestos",
+      "description": "Declaraciones trimestrales y anuales."
+    },
+    {
+      "id": "autonomos",
+      "title": "Autónomos",
+      "description": "El alta y el día a día."
+    },
+    {
+      "id": "sociedades",
+      "title": "Sociedades",
+      "description": "Constitución y cuentas anuales."
+    }
+  ],
+  "actions": {}
+}
