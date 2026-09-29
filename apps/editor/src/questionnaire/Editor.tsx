@@ -203,7 +203,7 @@ interface ListLines {
  * «Opiniones» keep the shared label — both have shipped through two usability sessions with it,
  * and changing words those sessions saw is a product decision rather than a tidy-up.
  */
-function lineLabel(action: "add" | "remove" | "full", catalogId: string): string {
+function lineLabel(action: "add" | "remove" | "full" | "up" | "down", catalogId: string): string {
   const table = es as Record<string, string | undefined>;
   return table[`editor.line.${action}.${catalogId}`] ?? es[`editor.line.${action}`];
 }
@@ -296,6 +296,7 @@ export function Editor({
   onDeletePage,
   onAddItem,
   onRemoveItem,
+  onMoveItem,
   onPickPalette,
   onPickTypePair,
   photoUrls,
@@ -339,6 +340,7 @@ export function Editor({
    * re-minted by the schema, so neither end has to know what a valid one is made of. */
   onAddItem: (sectionId: string, slot: string, item: ListItem) => void;
   onRemoveItem: (sectionId: string, slot: string, itemId: string) => void;
+  onMoveItem: (sectionId: string, slot: string, itemId: string, toIndex: number) => void;
   /** A palette or a pair of typefaces chosen in the Estilo panel. This component says which
    * one was picked; assembling the new theme and putting it in the document is `Variants`'
    * business, the same division as every other verb here. */
@@ -970,11 +972,49 @@ export function Editor({
       const list = section.querySelector<HTMLElement>(".rb-list");
       if (!list) continue;
 
-      if (lines.canRemove) {
-        for (const li of list.querySelectorAll<HTMLElement>("[data-item]")) {
-          const itemId = li.dataset.item;
-          if (!itemId) continue;
-          li.classList.add("rb-line");
+      const items = [...list.querySelectorAll<HTMLElement>("[data-item]")];
+      for (const [index, li] of items.entries()) {
+        const itemId = li.dataset.item;
+        if (!itemId) continue;
+        li.classList.add("rb-line");
+
+        // The two arrows (sprint 7 day 2), and the reason they are here rather than in a panel:
+        // «mover libremente las imágenes» is what the second usability session asked for, document
+        // rule 4 refuses free positioning, and this is the half of the want the rule leaves open —
+        // the order of a list. Drawn on the line itself, where «Quitar esta foto» already lives,
+        // because the line is the thing being moved.
+        //
+        // Each arrow is drawn only where it would do something: none before on the first line,
+        // none after on the last. A button that lights up and moves nothing is the dead-button
+        // mistake this editor has refused since sprint 1, and on a gallery of eight it would be
+        // sixteen controls of which two do nothing.
+        //
+        // **«Antes» and «después», not «subir» and «bajar»**, which is what the walk corrected.
+        // A section stacks vertically and its own controls rightly say «Subir esta sección»; a
+        // list does not. A carta's lines run down the page (`.rb-prices .rb-list` is one column)
+        // and a gallery's photographs run across it (`repeat(auto-fit, …)`), so the same arrow
+        // moves a line up in one section and to the left in another. Order is the thing that is
+        // true in both, and it is also what the owner means: the best photograph goes first.
+        if (items.length > 1) {
+          const move = (direction: "up" | "down") => {
+            const button = iframeDoc.createElement("button");
+            button.type = "button";
+            button.className = `rb-line-move rb-line-${direction}`;
+            button.setAttribute("aria-label", lineLabel(direction, lines.catalogId));
+            button.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#0F172A" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${
+              direction === "up" ? "M12 19V5M5 12l7-7 7 7" : "M12 5v14M19 12l-7 7-7-7"
+            }"/></svg>`;
+            button.addEventListener("click", (event) => {
+              event.stopPropagation();
+              onMoveItem(sectionId, lines.slot, itemId, direction === "up" ? index - 1 : index + 1);
+            });
+            return button;
+          };
+          if (index > 0) li.appendChild(move("up"));
+          if (index < items.length - 1) li.appendChild(move("down"));
+        }
+
+        if (lines.canRemove) {
           const remove = iframeDoc.createElement("button");
           remove.type = "button";
           remove.className = "rb-line-remove";
@@ -1277,6 +1317,20 @@ export function Editor({
       "  border: 2px solid #FFFFFF; border-radius: 999px; cursor: pointer; opacity: 0;",
       "  box-shadow: 0 2px 6px rgba(15,23,42,0.28); }",
       ".rb-line:hover .rb-line-remove, .rb-line-remove:focus { opacity: 1; }",
+      // The two arrows, in the same corner and on the same hover as the cross, to the left of it:
+      // one cluster on a line rather than controls scattered around it. White on a light grey so
+      // they read as chrome and not as part of the photograph underneath.
+      ".rb-line-move { position: absolute; top: 2px; width: 20px; height: 20px; display: flex;",
+      "  align-items: center; justify-content: center; background: #FFFFFF;",
+      "  border: 1px solid #D5DEE9; border-radius: 999px; cursor: pointer; opacity: 0;",
+      "  box-shadow: 0 2px 6px rgba(15,23,42,0.18); }",
+      // 20px wide each, 5px apart: the cross at 0, the second arrow at 25, the first at 50.
+      // Measured rather than eyeballed — the first spacing put them 3px and 5px apart, which looks
+      // like a mistake at this size even though nothing overlapped.
+      ".rb-line-up { right: 50px; }",
+      ".rb-line-down { right: 25px; }",
+      ".rb-line:hover .rb-line-move, .rb-line-move:focus { opacity: 1; }",
+      ".rb-line-move:hover { border-color: #156FE7; background: #F2F7FE; }",
     ].join("\n");
     iframeDoc.head.appendChild(style);
 
