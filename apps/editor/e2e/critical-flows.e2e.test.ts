@@ -766,3 +766,82 @@ describe("sprint 6 día 7 — fotos subidas desde el panel y desde el aviso, log
     }
   });
 });
+
+/**
+ * Sprint 7 day 3 — the conversion undone, from the «Páginas» panel.
+ *
+ * `pageToSection` has been written and tested since sprint 5 with **nothing importing it**, so
+ * until today converting a section was a one-way trip: an owner who converted the wrong one could
+ * delete the page — taking whatever they had put on it — or catch it with Ctrl+Z before doing
+ * anything else. The unit tests prove the verb; this proves the panel reaches it, and that the
+ * button is offered on exactly the pages where it works.
+ *
+ * Its own context, for the reason the test above gives: this needs a document with none of the
+ * earlier tests' conversions in it, and the shared session by here has several.
+ */
+describe("sprint 7 día 3 — deshacer una conversión desde «Páginas»", () => {
+  it("folds the page back into the section it came from, and offers that on no other page", async () => {
+    const walkPage = await (await browser.newContext()).newPage();
+    try {
+      await walkPage.goto(BASE_URL, { waitUntil: "networkidle" });
+      await walkPage.fill("#nombre", "Taberna Santo Domingo");
+      await walkPage.getByRole("button", { name: "Siguiente" }).click();
+      await walkPage.getByText("Restaurante y bar", { exact: true }).click();
+      await walkPage.getByRole("button", { name: "Siguiente" }).click();
+      await walkPage.getByText("Comidas", { exact: true }).click();
+      await walkPage.getByRole("button", { name: "Siguiente" }).click();
+      await walkPage.fill("#direccion", "Cta. de Santo Domingo, 2, Ronda");
+      await walkPage.getByRole("button", { name: "Siguiente" }).click();
+      await walkPage.getByText("Que reserven", { exact: true }).click();
+      await walkPage.fill("#enlace", "https://reservas.example.com/taberna");
+      await walkPage.getByRole("button", { name: "Crear mi web" }).click();
+      await walkPage.getByText("Ver a tamaño real →").first().click();
+
+      const frame = walkPage.frameLocator("iframe").first();
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+      const tabs = walkPage.locator(".overflow-x-auto button");
+      await expect(tabs).toHaveCount(1);
+
+      await frame.locator('[data-section="sec-services"]').click();
+      await frame
+        .locator(
+          '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+        )
+        .click();
+      await expect(tabs).toHaveCount(2);
+      await expect(frame.locator('[data-preset="teaser"]')).toBeVisible();
+
+      await walkPage.getByRole("button", { name: "Páginas", exact: true }).click();
+      const fold = walkPage.getByRole("button", { name: "Deshacer la conversión" });
+      // One button, on the converted page. The entry page is listed and does not offer it —
+      // `pageToSection` refuses the first page, so a button there would be a dead one.
+      await expect(fold).toHaveCount(1);
+      await fold.click();
+
+      // The page is gone, the avance with it, and the section is back where it was — between the
+      // cover and «Dónde estamos», not appended at the end.
+      await expect(tabs).toHaveCount(1);
+      await expect(frame.locator('[data-preset="teaser"]')).toHaveCount(0);
+      await expect(frame.locator('[data-section="sec-services"]')).toBeVisible();
+      expect(
+        await frame
+          .locator("[data-section]")
+          .evaluateAll((els) => els.map((el) => el.getAttribute("data-section"))),
+      ).toEqual(["sec-cover", "sec-services", "sec-location", "sec-contact", "sec-footer"]);
+
+      // And the derived menu followed: «Qué ponemos» is an anchor on this page again rather than
+      // an entry pointing at a file that no longer exists.
+      await expect(frame.locator(".rb-nav-wide a", { hasText: "Qué ponemos" })).toHaveAttribute(
+        "href",
+        "#sec-services",
+      );
+
+      // Undone in one step: «Deshacer» brings back the page *and* the avance together.
+      await walkPage.getByRole("button", { name: "Deshacer", exact: true }).click();
+      await expect(tabs).toHaveCount(2);
+      await expect(frame.locator('[data-preset="teaser"]')).toBeVisible();
+    } finally {
+      await walkPage.context().close();
+    }
+  });
+});

@@ -181,6 +181,47 @@ function retarget(page: Page, from: string, to: string): Page {
 }
 
 /**
+ * The avance that points at this page, or `undefined` when none does.
+ *
+ * A page is only foldable because something is standing where it used to be. This is the question
+ * `pageToSection` refuses on, and — since it is also the question the «Páginas» panel has to ask
+ * before it draws a button — it is written once here rather than twice.
+ */
+function conversionTeaser(doc: RetorikaDocument, pageId: string) {
+  return listLinksTo(doc, pageId).find(
+    (link) => findSection(doc, link.sectionId)?.section.preset.catalogId === "teaser",
+  );
+}
+
+/**
+ * Whether this page can be folded back into the section it came from.
+ *
+ * **Exactly the questions `pageToSection` asks**, and that is the whole point of it existing. The
+ * editor needs to know whether to offer the action before anybody presses anything, and the one
+ * way to be sure the offer and the answer agree is for them to be the same code. A control that
+ * appears and then throws is the dead-button failure this editor avoids everywhere; a control that
+ * is missing where the verb would have worked is the same mistake wearing the other face.
+ */
+export function canFoldPage(doc: RetorikaDocument, pageId: string): boolean {
+  return foldsInto(doc, pageId) !== undefined;
+}
+
+/**
+ * The page this one's sections would come back to — the page its avance is on — or `undefined`
+ * when it cannot be folded at all.
+ *
+ * Usually the first page, and not always: convert a section, open the page that made, and convert
+ * a section of *that*, and the second page's avance is on the first page's page. The editor moves
+ * the canvas here after folding, so the owner is looking at the sections that just came back
+ * instead of at wherever they happened to be.
+ */
+export function foldsInto(doc: RetorikaDocument, pageId: string): string | undefined {
+  if (!doc.pages.some((candidate) => candidate.id === pageId)) return undefined;
+  if (doc.pages[0]?.id === pageId) return undefined;
+  return conversionTeaser(doc, pageId)?.pageId;
+}
+
+/**
  * A page folded back into the section it came from — the dossier's «se puede deshacer» as a verb
  * rather than only as Ctrl+Z.
  *
@@ -201,10 +242,7 @@ export function pageToSection(doc: RetorikaDocument, pageId: string): RetorikaDo
     throw new Error(`pageToSection: "${pageId}" is the first page, which is the site's entry`);
   }
 
-  const teasers = listLinksTo(doc, pageId).filter(
-    (link) => findSection(doc, link.sectionId)?.section.preset.catalogId === "teaser",
-  );
-  const teaser = teasers[0];
+  const teaser = conversionTeaser(doc, pageId);
   if (!teaser) {
     throw new Error(
       `pageToSection: nothing points at "${pageId}", so there is no conversion to undo — use deletePage`,

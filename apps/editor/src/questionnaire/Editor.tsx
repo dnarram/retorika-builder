@@ -14,6 +14,7 @@ import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
 import { render } from "@retorika/renderer";
 import {
   type ContentElement,
+  canFoldPage,
   type ElementAddress,
   findSection,
   flattenElements,
@@ -294,6 +295,7 @@ export function Editor({
   onRenamePage,
   onMovePage,
   onDeletePage,
+  onPageToSection,
   onAddItem,
   onRemoveItem,
   onMoveItem,
@@ -336,6 +338,9 @@ export function Editor({
   onRenamePage: (pageId: string, title: string) => void;
   onMovePage: (pageId: string, toIndex: number) => void;
   onDeletePage: (pageId: string) => void;
+  /** That conversion, undone: the page's sections go back where its avance is, and both the
+   * avance and the page are gone. One history step, like the conversion itself. */
+  onPageToSection: (pageId: string) => void;
   /** One more line in a section's list, or one gone. The line is built by the catalog here and
    * re-minted by the schema, so neither end has to know what a valid one is made of. */
   onAddItem: (sectionId: string, slot: string, item: ListItem) => void;
@@ -1458,6 +1463,8 @@ export function Editor({
             onRenamePage={onRenamePage}
             onMovePage={onMovePage}
             onDeletePage={onDeletePage}
+            onPageToSection={onPageToSection}
+            canFold={(id) => canFoldPage(doc, id)}
             linksTo={(id) => listLinksTo(doc, id).length}
           />
         ) : rail === "style" ? (

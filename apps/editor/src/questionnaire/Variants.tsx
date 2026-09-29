@@ -20,6 +20,7 @@ import { render } from "@retorika/renderer";
 import {
   type ElementAddress,
   findSection,
+  foldsInto,
   listAnchorsTo,
   type RetorikaDocument,
   type Section,
@@ -598,6 +599,17 @@ export function Variants({
         onDeletePage={(id) => {
           dismissToast();
           dispatch({ type: "deletePage", variant: openIndex, pageId: id });
+        }}
+        // The canvas follows the sections. Converting deliberately stays put — the avance appears
+        // where the section was, which is the proof it worked — but folding removes the page the
+        // canvas may be showing, and `currentPageId`'s fallback to the first page is only the
+        // right destination when the avance was on the first page. `foldsInto` says where they
+        // actually land, which for a page converted out of another page is not the first one.
+        onPageToSection={(id) => {
+          dismissToast();
+          const into = foldsInto(history.present.document, id);
+          dispatch({ type: "pageToSection", variant: openIndex, pageId: id });
+          setPageId(into === history.present.document.pages[0]?.id ? undefined : into);
         }}
         photoUrls={photoUrls.get(openIndex) ?? EMPTY_PHOTOS}
         photoError={photoError}

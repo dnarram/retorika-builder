@@ -1042,6 +1042,114 @@ describe("sectionToPage, as one history step", () => {
   });
 });
 
+/**
+ * And the conversion undone from the «Páginas» panel — the other half of ADR 0022's «se puede
+ * deshacer», which until today was written, tested and imported by nobody.
+ *
+ * Ctrl+Z already did this, for as long as nothing else had happened since. What it could not do is
+ * undo a conversion the owner made yesterday, or one they made before writing a paragraph they want
+ * to keep. That is the gap: `deletePage` was the only other way out, and it takes the page's
+ * contents with it.
+ */
+describe("pageToSection, as one history step", () => {
+  const convert = (sectionId: string): HistoryAction => ({
+    type: "sectionToPage",
+    variant: 0,
+    sectionId,
+  });
+  const fold = (pageId: string): HistoryAction => ({ type: "pageToSection", variant: 0, pageId });
+
+  /** A converted document and the page it made, which is what the panel would be listing. */
+  function converted(): { state: Histories; pageId: string } {
+    const state = run(start(), convert("sec-services"));
+    const pageId = state[0]?.present.document.pages[1]?.id;
+    if (!pageId) throw new Error("the conversion produced no page");
+    return { state, pageId };
+  }
+
+  it("puts the section back where the avance was, and removes both", () => {
+    const { state, pageId } = converted();
+    const doc = run(state, fold(pageId))[0]?.present.document;
+
+    expect(doc?.pages).toHaveLength(1);
+    expect(doc?.pages[0]?.sections.map((s) => s.preset.catalogId)).toEqual([
+      "cover",
+      "services",
+      "location",
+      "contact",
+      "footer",
+    ]);
+  });
+
+  it("returns the document to exactly what it was before the conversion", () => {
+    // Not "equivalent-looking": equal. Which also proves the link rewriting is undone — a button
+    // that `sectionToPage` turned into `./que-ponemos.html` is an anchor again.
+    const before = start();
+    const { state, pageId } = converted();
+    expect(run(state, fold(pageId))[0]?.present.document).toEqual(before[0]?.present.document);
+  });
+
+  it("keeps whatever the owner added to the page while it was a page", () => {
+    // The reason this is not just `deletePage`. A section written on the converted page comes back
+    // with the one that went out, in order, rather than being thrown away with the page.
+    const { state, pageId } = converted();
+    const grown = run(state, {
+      type: "insertSection",
+      variant: 0,
+      section: blankSection("gallery", "stacked", "sec-extra"),
+      index: 1,
+      pageId,
+    });
+    const doc = run(grown, fold(pageId))[0]?.present.document;
+
+    expect(doc?.pages).toHaveLength(1);
+    expect(doc?.pages[0]?.sections.map((s) => s.id)).toContain("sec-extra");
+  });
+
+  it("is one step, so one «Deshacer» puts the page and the avance back together", () => {
+    const { state, pageId } = converted();
+    const folded = run(state, fold(pageId));
+    const undone = run(folded, { type: "undo", variant: 0 });
+
+    expect(undone[0]?.present.document).toEqual(state[0]?.present.document);
+    expect(folded[0]?.past).toHaveLength(2);
+  });
+
+  it("redoes just as completely", () => {
+    const { state, pageId } = converted();
+    const folded = run(state, fold(pageId));
+    const again = run(folded, { type: "undo", variant: 0 }, { type: "redo", variant: 0 });
+    expect(again[0]?.present.document).toEqual(folded[0]?.present.document);
+  });
+
+  it("names the page, and names no section", () => {
+    // A page cause. `sectionOf` has to answer `undefined` for it, or folding a page would keep a
+    // delete toast alive on a section nobody edited (ADR 0014).
+    const { state, pageId } = converted();
+    const cause = run(state, fold(pageId))[0]?.present.cause;
+    expect(cause).toEqual({ type: "pageToSection", pageId });
+  });
+
+  it("refuses the first page, rather than folding the site's entry away", () => {
+    expect(() => run(start(), fold("home"))).toThrow(/first page/);
+  });
+
+  it("refuses a page no avance points at", () => {
+    // Reachable: ADR 0022 lets the owner delete an avance and keep the page. The panel does not
+    // offer the button there — `canFoldPage` says so — and the verb refuses if anything else tries.
+    const { state, pageId } = converted();
+    const teaser = state[0]?.present.document.pages[0]?.sections.find(
+      (s) => s.preset.catalogId === "teaser",
+    );
+    const orphaned = run(state, {
+      type: "deleteSection",
+      variant: 0,
+      sectionId: teaser?.id ?? "",
+    });
+    expect(() => run(orphaned, fold(pageId))).toThrow(/nothing points at/);
+  });
+});
+
 describe("insertSection lands on the page the canvas is drawing", () => {
   /**
    * The regression sprint 5 left behind. `insertSection` resolved its page as `doc.pages[0]` under
