@@ -29,6 +29,12 @@ import { withPalette, withTypePair } from "@retorika/tokens";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { saveSession } from "../editor/autosave.ts";
 import {
+  designToolsFor,
+  loadDesignTools,
+  MIN_STUDIO_WIDTH,
+  saveDesignTools,
+} from "../editor/designTools.ts";
+import {
   type History,
   historiesReducer,
   initHistories,
@@ -208,6 +214,29 @@ export function Variants({
     }, SAVE_DEBOUNCE_MS);
     return () => clearTimeout(saveTimer.current);
   }, [answers, histories, openIndex, currentPageId]);
+
+  /**
+   * The design-tools switch (ADR 0025), and the window it is narrowed by.
+   *
+   * **It is deliberately outside the autosave effect above.** That effect depends on the answers,
+   * the histories, the open variant and the page; the switch is none of those, so flipping it does
+   * not even reach a save — which is what makes `INV_4` true by construction rather than by
+   * vigilance. See `designTools.ts` for the whole argument.
+   *
+   * Read on mount rather than during render: `localStorage` does not exist while Next renders this
+   * on the server, and starting from `false` and correcting on mount is the same shape the restored
+   * session already uses. One flash of the switch being off is not a claim about anything.
+   */
+  const [designTools, setDesignTools] = useState(false);
+  const [viewportWidth, setViewportWidth] = useState(MIN_STUDIO_WIDTH);
+
+  useEffect(() => {
+    setDesignTools(loadDesignTools());
+    const measure = () => setViewportWidth(window.innerWidth);
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
 
   /**
    * The owner's uploaded photos, as object URLs the preview and the download can both use, keyed
@@ -546,6 +575,21 @@ export function Variants({
         onSetVariant={(sectionId, variantId) => {
           dismissToast();
           dispatch({ type: "setVariant", variant: openIndex, sectionId, variantId });
+        }}
+        designTools={designToolsFor(designTools, viewportWidth)}
+        onDesignToolsChange={(on) => {
+          // The stored value and the state, and nothing else. No `dismissToast`: turning the tools
+          // on is not an edit, and a delete's toast has six seconds that belong to the delete.
+          setDesignTools(on);
+          saveDesignTools(on);
+        }}
+        onEscalateSection={(sectionId) => {
+          dismissToast();
+          dispatch({ type: "escalateSection", variant: openIndex, sectionId });
+        }}
+        onRevertSection={(sectionId) => {
+          dismissToast();
+          dispatch({ type: "revertSection", variant: openIndex, sectionId });
         }}
         onAddItem={(sectionId, slot, item) => {
           dismissToast();

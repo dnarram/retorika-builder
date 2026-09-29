@@ -1,4 +1,4 @@
-import { teaserSection } from "@retorika/catalog";
+import { presetFor, teaserSection } from "@retorika/catalog";
 import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
 import type {
   ElementAddress,
@@ -7,6 +7,7 @@ import type {
   Section,
   SlotAddress,
   SlotFill,
+  SurplusDecision,
   Theme,
 } from "@retorika/schema";
 import {
@@ -15,7 +16,9 @@ import {
   deletePage as deletePageFromDoc,
   deleteSection as deleteSectionFromDoc,
   duplicateSection as duplicateSectionFromDoc,
+  escalateSection as escalateSectionInDoc,
   fillSlot as fillSlotInDoc,
+  findSection,
   insertSection as insertSectionIntoDoc,
   mintSectionId,
   moveItem as moveItemInDoc,
@@ -24,6 +27,7 @@ import {
   pageToSection as pageToSectionInDoc,
   removeItem as removeItemFromDoc,
   renamePage as renamePageInDoc,
+  revertSection as revertSectionInDoc,
   sectionToPage as sectionToPageInDoc,
   setElementImageSrc,
   setElementText,
@@ -59,6 +63,11 @@ export type SnapshotCause =
   | { type: "fillSlot"; sectionId: string }
   | { type: "clearSlot"; sectionId: string }
   | { type: "setVariant"; sectionId: string }
+  /** The two halves of the escalation (ADR 0025). Both name a section and neither is a content
+   * cause: the first copies the catalog's layout into it, the second puts it back, and no element
+   * moves either way. */
+  | { type: "escalateSection"; sectionId: string }
+  | { type: "revertSection"; sectionId: string }
   | { type: "addItem"; sectionId: string }
   | { type: "removeItem"; sectionId: string }
   | { type: "moveItem"; sectionId: string }
@@ -117,6 +126,15 @@ export type HistoryAction =
   | { type: "clearSlot"; variant: number; address: SlotAddress }
   | { type: "setTheme"; variant: number; theme: Theme }
   | { type: "setVariant"; variant: number; sectionId: string; variantId: string }
+  | { type: "escalateSection"; variant: number; sectionId: string }
+  | {
+      type: "revertSection";
+      variant: number;
+      sectionId: string;
+      /** One decision per element the preset cannot place. Day 4's dialog fills it; left out,
+       * every surplus element is hidden rather than deleted. */
+      decisions?: Readonly<Record<string, SurplusDecision>>;
+    }
   | { type: "addItem"; variant: number; sectionId: string; slot: string; item: ListItem }
   | { type: "removeItem"; variant: number; sectionId: string; slot: string; itemId: string }
   | {
@@ -366,6 +384,69 @@ function setVariant(history: History, sectionId: string, variantId: string): His
 }
 
 /**
+ * The preset a layout verb needs, resolved from the section itself.
+ *
+ * `packages/schema` cannot ask what a `cover` is — the dependency arrow runs catalog → schema — so
+ * `escalateSection` and `revertSection` take the preset as an argument. This module is the layer
+ * that may look it up, which is the same division `convertSection` makes for the avance.
+ */
+function presetOf(document: RetorikaDocument, sectionId: string) {
+  const found = findSection(document, sectionId);
+  if (!found) throw new Error(`documentHistory: no section "${sectionId}"`);
+  return presetFor(found.section.preset.catalogId);
+}
+
+/**
+ * A section starts being designed by hand, and goes back — the advanced dossier §5, ADR 0025.
+ *
+ * **One step each, and the step is the whole point.** The dossier's own answer for the first
+ * minutes is the ordinary undo — «Deshacer, si acaba de pasar. Los primeros minutos no necesitan
+ * nada especial: el deshacer normal cubre la escalada como cualquier otro cambio» — and it only
+ * works if escalating pushes a snapshot like everything else here. The durable return is day 4's
+ * dialog, not a second mechanism for the same minute.
+ *
+ * **Neither is a content cause below.** Escalating copies the catalog's layout into the section and
+ * moves no element; reverting puts every element back in the slot it was already in. Same line
+ * `setVariant` falls on: a delete's toast should not stop fading because somebody tried designing a
+ * section by hand and changed their mind about a section they never wrote a word into.
+ *
+ * Both hand back the same document when the section is already in the state asked for, so pressing
+ * an action that decides nothing opens no step.
+ */
+function escalateSection(history: History, sectionId: string): History {
+  const document = escalateSectionInDoc(
+    history.present.document,
+    sectionId,
+    presetOf(history.present.document, sectionId),
+  );
+  if (document === history.present.document) return history;
+  return step(history, document, { type: "escalateSection", sectionId });
+}
+
+/**
+ * `decisions` is what the day-4 dialog will fill in, one entry per element the preset cannot place.
+ * Left out, `revertSection` hides every surplus element rather than throwing — rule 3, and the
+ * default the interface is committed to either way. Today nothing in the product can produce a
+ * surplus element, so the argument has no caller yet; it is on the signature because the verb it
+ * wraps refuses without it, and hiding that refusal behind a silent default *inside the schema*
+ * would be the wrong place to keep the honesty.
+ */
+function revertSection(
+  history: History,
+  sectionId: string,
+  decisions?: Readonly<Record<string, SurplusDecision>>,
+): History {
+  const document = revertSectionInDoc(
+    history.present.document,
+    sectionId,
+    presetOf(history.present.document, sectionId),
+    decisions,
+  );
+  if (document === history.present.document) return history;
+  return step(history, document, { type: "revertSection", sectionId });
+}
+
+/**
  * One more line in a list, or one line gone.
  *
  * Two verbs rather than one, and a pair rather than a toggle: adding appends a line of markers at
@@ -558,6 +639,10 @@ function apply(history: History, action: HistoryAction): History {
       return setTheme(history, action.theme);
     case "setVariant":
       return setVariant(history, action.sectionId, action.variantId);
+    case "escalateSection":
+      return escalateSection(history, action.sectionId);
+    case "revertSection":
+      return revertSection(history, action.sectionId, action.decisions);
     case "addItem":
       return addItem(history, action.sectionId, action.slot, action.item);
     case "removeItem":

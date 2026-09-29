@@ -18,6 +18,7 @@ import {
   type ElementAddress,
   findSection,
   flattenElements,
+  isHandDesigned,
   type ListItem,
   listEditableFields,
   listLinksTo,
@@ -289,6 +290,10 @@ export function Editor({
   onFillSlot,
   onClearSlot,
   onSetVariant,
+  designTools,
+  onDesignToolsChange,
+  onEscalateSection,
+  onRevertSection,
   pageId,
   onSelectPage,
   onSectionToPage,
@@ -328,6 +333,22 @@ export function Editor({
   onClearSlot: (address: SlotAddress) => void;
   /** A different composition for one section, chosen from its own menu. */
   onSetVariant: (sectionId: string, variantId: string) => void;
+  /**
+   * Whether the design tools are on for this viewport (ADR 0025). What it controls here is narrow
+   * and worth stating: it decides whether a section offers «Diseñar a mano» and whether a free one
+   * wears its bar. It changes **nothing** about the document, the preview or the published page —
+   * turning the tools off leaves every hand-designed section exactly as it is, because the depth
+   * belongs to the person looking and not to the site.
+   *
+   * `undefined` means the editor's own window is too narrow to offer them at all.
+   */
+  designTools: boolean | undefined;
+  onDesignToolsChange: (on: boolean) => void;
+  /** This section starts being designed by hand, and goes back to the catalog's layout. One
+   * history step each, so Ctrl+Z covers the first minutes — which is what the advanced dossier §5
+   * asks for and the reason day 4's dialog is about the durable case rather than this one. */
+  onEscalateSection: (sectionId: string) => void;
+  onRevertSection: (sectionId: string) => void;
   /** Which page the canvas is showing. Undefined means the document's first, which is what
    * `render` already means by an absent `pageId`. */
   pageId: string | undefined;
@@ -385,6 +406,9 @@ export function Editor({
   // be in the way rather than at hand.
   const [fieldsFor, setFieldsFor] = useState<string | null>(null);
   const [rail, setRail] = useState<RailItemId>("sections");
+  /** Whether the switch's own question — «¿Montas webs para otros?» — is open. State rather than a
+   * ref because the popover is React's to draw, unlike everything inside the canvas. */
+  const [askingDesignTools, setAskingDesignTools] = useState(false);
   /**
    * Which section is selected, and whether its composition menu is open — remembered across the
    * preview's re-renders, which is what makes trying compositions usable at all.
@@ -418,6 +442,9 @@ export function Editor({
     // `photos` would have made three. `sections` is the one that does not, because the fields panel
     // *is* its panel.
     if (item !== "sections") setFieldsFor(null);
+    // Going anywhere answers the question by walking away from it, which is an answer. Leaving it
+    // hanging over a panel that just opened would be the only modal thing in this editor.
+    setAskingDesignTools(false);
   }
 
   /**
@@ -458,6 +485,20 @@ export function Editor({
     // broken image on all three cards the moment the generator started asking the bank.
     return render(withPhotoUrls(doc, photoUrls), "html", options).html;
   }, [doc, photoUrls, pageId]);
+
+  /**
+   * What the canvas's chrome depends on but the rendered page does not — see the long note at the
+   * `<iframe>`. Kept as a string so React's own `key` comparison does the work, and derived rather
+   * than tracked, so no new action has to remember to bump it.
+   */
+  const chromeKey = useMemo(
+    () =>
+      `${designTools}|${doc.pages
+        .flatMap((page) => page.sections)
+        .map((section) => (section.source === "free" ? "1" : "0"))
+        .join("")}`,
+    [designTools, doc],
+  );
 
   /**
    * Where each photograph stands, by address, so the canvas can label the ones that came from the
@@ -634,6 +675,59 @@ export function Editor({
       return panel;
     }
 
+    /**
+     * The offer to design this section by hand — mockup 16 band 2, and the promise it has to make
+     * before anybody accepts: «No se mueve nada al empezar, y puedes volver a la original cuando
+     * quieras.» Both halves are true and neither is a figure of speech: `escalate` copies the layout
+     * the catalog was already drawing, and the return is one press of the bar this puts there.
+     *
+     * The dossier §5's first entry point is «intenta algo que los controles simples no permiten… el
+     * editor no dice que no: ofrece diseñar esa sección a mano». There is nothing to attempt yet —
+     * the placement controls arrive on day 3 — so for now the offer hangs off the section's own
+     * action cluster, where the other questions about where a section's parts sit already live.
+     */
+    function escalateOffer(sectionId: string): HTMLElement {
+      const panel = iframeDoc.createElement("div");
+      panel.className = "rb-compositions rb-escalate";
+
+      const title = iframeDoc.createElement("p");
+      title.className = "rb-menu-title";
+      title.textContent = es["editor.section.escalate.title"];
+      panel.appendChild(title);
+
+      const body = iframeDoc.createElement("p");
+      body.className = "rb-menu-description";
+      body.textContent = es["editor.section.escalate.body"];
+      panel.appendChild(body);
+
+      const row = iframeDoc.createElement("div");
+      row.className = "rb-escalate-row";
+
+      const yes = iframeDoc.createElement("button");
+      yes.type = "button";
+      yes.className = "rb-escalate-yes";
+      yes.textContent = es["editor.section.escalate.yes"];
+      yes.addEventListener("click", (event) => {
+        event.stopPropagation();
+        onEscalateSection(sectionId);
+      });
+      row.appendChild(yes);
+
+      const no = iframeDoc.createElement("button");
+      no.type = "button";
+      no.className = "rb-escalate-no";
+      no.textContent = es["editor.section.escalate.no"];
+      no.addEventListener("click", (event) => {
+        event.stopPropagation();
+        panel.remove();
+        compositionMenuOpen.current = false;
+      });
+      row.appendChild(no);
+
+      panel.appendChild(row);
+      return panel;
+    }
+
     function select(target: HTMLElement) {
       for (const section of sections) {
         section.classList.remove("rb-selected");
@@ -694,6 +788,30 @@ export function Editor({
                 return;
               }
               target.appendChild(compositionMenu(sectionId, compositions));
+              compositionMenuOpen.current = true;
+            },
+          ),
+        );
+      }
+
+      // The offer, and only while the tools are on and the catalog is still placing this section.
+      // A free section has the bar instead, which is where its way back lives — two controls for
+      // the same pair of states would be one too many, and the bar is visible without selecting.
+      if (designTools && !isHandDesigned(doc, sectionId)) {
+        actions.appendChild(
+          action(
+            es["editor.section.escalate.yes"],
+            "move",
+            false,
+            '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M3 9h18"/></svg>',
+            () => {
+              const open = target.querySelector(".rb-escalate");
+              if (open) {
+                open.remove();
+                compositionMenuOpen.current = false;
+                return;
+              }
+              target.appendChild(escalateOffer(sectionId));
               compositionMenuOpen.current = true;
             },
           ),
@@ -1204,6 +1322,58 @@ export function Editor({
     }
   }
 
+  /**
+   * The bar a hand-designed section wears, and the way back from it (ADR 0025 §7, mockup 16 band 2).
+   *
+   * Not part of `wireSelection`: the badge answers «which of these did I design myself» for the
+   * whole page at once, and having to click each section to find out would make the answer useless.
+   * The advanced dossier §5 asks for that marking in a sections panel; ADR 0025 recorded that there
+   * is no sections panel, so it goes on the section, where the thing being marked actually is.
+   *
+   * Drawn only while the tools are on. An owner who never turned them on has no free sections to
+   * mark, and someone who turns them off is asking for the simple editor back — the sections stay
+   * exactly as they are, which is the point of the depth belonging to the person and not the site.
+   */
+  function wireHandmade(iframeDoc: Document) {
+    if (!designTools) return;
+
+    for (const element of iframeDoc.querySelectorAll<HTMLElement>("[data-section]")) {
+      const sectionId = element.dataset.section;
+      if (!sectionId || !isHandDesigned(doc, sectionId)) continue;
+
+      const bar = iframeDoc.createElement("div");
+      bar.className = "rb-handmade";
+
+      const badge = iframeDoc.createElement("span");
+      badge.className = "rb-handmade-badge";
+      badge.innerHTML =
+        '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#B4740B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21l4-1 11-11-3-3L4 17l-1 4z"/></svg>';
+      badge.appendChild(iframeDoc.createTextNode(es["editor.section.handmade"]));
+      bar.appendChild(badge);
+
+      const name = iframeDoc.createElement("span");
+      name.className = "rb-handmade-name";
+      name.textContent = sectionDisplayName(doc, sectionId);
+      bar.appendChild(name);
+
+      const back = iframeDoc.createElement("button");
+      back.type = "button";
+      back.className = "rb-handmade-back";
+      back.textContent = es["editor.section.revert"];
+      back.addEventListener("click", (event) => {
+        event.stopPropagation();
+        // Day 4 replaces this with the dialog that shows both versions and what stays behind. Today
+        // the return is lossless in every state the product can reach — nothing can add an element a
+        // preset cannot place — so going straight there loses nothing, and Ctrl+Z takes it back.
+        onRevertSection(sectionId);
+      });
+      bar.appendChild(back);
+
+      element.classList.add("rb-free");
+      element.prepend(bar);
+    }
+  }
+
   function wireInteractions() {
     const iframeDoc = iframeRef.current?.contentDocument;
     if (!iframeDoc) return;
@@ -1281,6 +1451,52 @@ export function Editor({
       "  border-radius: 13px; box-shadow: 0 14px 38px rgba(15,23,42,0.18); display: flex;",
       "  flex-direction: column; gap: 2px; }",
       ".rb-composition-choice { font-family: inherit; }",
+      // The offer: the composition card, wider because it has a sentence to say and two decisions
+      // to offer rather than a list of short names.
+      ".rb-escalate { width: 320px; gap: 10px; }",
+      ".rb-escalate .rb-menu-description { line-height: 1.5; }",
+      ".rb-escalate-row { display: flex; gap: 8px; }",
+      `.rb-escalate-yes, .rb-escalate-no { font-family: ${UI_FONT}; flex-grow: 1; height: 36px;`,
+      "  font-size: 13px; border-radius: 9px; cursor: pointer; }",
+      ".rb-escalate-yes { font-weight: 600; color: #FFFFFF; background: #156FE7; border: 0; }",
+      ".rb-escalate-yes:hover { background: #0E5BC4; }",
+      ".rb-escalate-no { font-weight: 500; color: #334155; background: #FFFFFF;",
+      "  border: 1px solid #E3E8F0; }",
+      ".rb-escalate-no:hover { background: #F2F7FE; border-color: #156FE7; }",
+      // The bar a hand-designed section wears — chrome floating over the section, like the action
+      // cluster above and `.rb-sample` below, and **not** a child in the section's flow.
+      //
+      // It was in flow first, with `grid-column: 1 / -1` and `order: -2`, and walking it in a
+      // browser showed two things wrong with that. A section is a twelve-column grid whose elements
+      // are *explicitly* placed by row, so a child with no row of its own is auto-placed into the
+      // first free one — which is after all of them. The bar came out near the bottom, overlapping
+      // the content, 210px below the top of a section it was supposed to label; `order` does nothing
+      // to an explicitly placed grid, so that had no effect either. And it made the section 44px
+      // taller, which pushed every section after it down the page — a hand-designed section is
+      // supposed to change nothing about how the site looks, and that changed the whole page.
+      //
+      // Absolute, over the top of the section, changes no layout at all. `[data-section]` is already
+      // `position: relative` for the corner handles.
+      // `z-index: 5` puts it under `.rb-sample`'s 6 on purpose. The two can only meet on a section
+      // whose photograph is flush with its top edge, and there the badge belongs on top: «Foto de
+      // ejemplo» is a statement about the picture, and chrome hiding it would be how an owner ships
+      // a stock photograph without noticing.
+      `.rb-handmade { font-family: ${UI_FONT}; position: absolute; top: 0; left: 0; right: 0;`,
+      "  z-index: 5; box-sizing: border-box; display: flex; align-items: center; gap: 8px;",
+      "  padding: 9px 13px; background: rgba(248,250,253,0.96); backdrop-filter: blur(2px);",
+      "  border-bottom: 1px solid #E3E8F0; }",
+      // And the action cluster steps below it, rather than the two drawing over each other. The
+      // cluster's own `top: 8px` is measured from the section, so this is the bar's height plus the
+      // same 8px of air.
+      ".rb-free .rb-actions { top: 52px; }",
+      ".rb-handmade-badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px;",
+      "  font-size: 11px; font-weight: 600; color: #8A5A08; background: #FFF4E5;",
+      "  border: 1px solid #F4DDB4; border-radius: 7px; }",
+      ".rb-handmade-name { flex-grow: 1; font-size: 12px; color: #5B6B82; }",
+      `.rb-handmade-back { font-family: ${UI_FONT}; flex-shrink: 0; padding: 5px 10px;`,
+      "  font-size: 11px; font-weight: 600; color: #156FE7; background: #FFFFFF;",
+      "  border: 1px solid #C6D9F3; border-radius: 7px; cursor: pointer; }",
+      ".rb-handmade-back:hover { background: #F2F7FE; border-color: #156FE7; }",
       // The one in use is marked, not hidden: a toggle group where something is always chosen.
       '.rb-composition-choice[aria-pressed="true"] { background: #EAF2FE; }',
       '.rb-composition-choice[aria-pressed="true"] .rb-menu-name { color: #156FE7; }',
@@ -1345,6 +1561,7 @@ export function Editor({
     wireLines(iframeDoc);
     wirePhotos(iframeDoc);
     wireEditing(iframeDoc);
+    wireHandmade(iframeDoc);
   }
 
   /**
@@ -1442,6 +1659,14 @@ export function Editor({
       saveStatus={saveStatus}
       rail={rail}
       onRailChange={showRail}
+      designTools={designTools}
+      askingDesignTools={askingDesignTools}
+      onAskDesignTools={() => setAskingDesignTools(true)}
+      onDismissDesignTools={() => setAskingDesignTools(false)}
+      onDesignToolsChange={(on) => {
+        setAskingDesignTools(false);
+        onDesignToolsChange(on);
+      }}
       panel={
         rail === "photos" ? (
           <PhotosPanel
@@ -1504,7 +1729,30 @@ export function Editor({
           if (file && address) onPickPhoto(address, file);
         }}
       />
+      {/*
+        `key` on the chrome's own state, and it is the fix for two defects the browser walk found
+        that no test in this repository could have.
+
+        Every piece of chrome inside the canvas is attached by `wireInteractions` on the frame's
+        `load`, and the comment above `html` explains why that is normally enough: an unchanged
+        document renders to the identical string, the frame does not reload, and the selection
+        survives. Two things this sprint break that assumption, both by being invisible in the
+        rendered page — which is exactly what they promise to be:
+
+        1. **The switch changes no document at all** (`INV_4`). So nothing reloaded, and
+           `wireSelection`'s closure kept the old value: turning the tools on did nothing until the
+           next unrelated edit.
+        2. **Escalating changes the document and renders byte for byte the same.** Measured, not
+           assumed: `escalationChrome.test.ts` asserts the HTML and the CSS are identical before and
+           after. That is «no se mueve ni un píxel» at the only level where it can be checked, and
+           the reason accepting the offer left no bar behind.
+
+        Remounting re-runs the wiring against the current state. It costs the selection, which is the
+        right trade for two acts that are deliberate and rare — and re-attaching every listener in
+        place would be this remount with more ways to go wrong.
+      */}
       <iframe
+        key={chromeKey}
         ref={iframeRef}
         title={title}
         srcDoc={html}

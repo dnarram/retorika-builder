@@ -193,14 +193,44 @@ list of elements that do not fit, and `applyRevert` **rejects the operation** if
 that list arrives without an explicit decision. The interface's default for that decision is
 "hide".
 
-### `INV_4` is provisional in Phase 0
+### On `INV_4`, and where its two halves are proven
 
-The design-tools switch does not exist yet. The only thing genuinely verified today is that the
-schema rejects a `designTools` key. What completes this invariant — toggling the real switch a
-hundred times over a real document and comparing bytes — arrives with the editor in Phase 1.
+*Completed in sprint 8. This section said the opposite for seven sprints, and the reason it could is
+worth keeping: the sync test below checks that the identifiers and names match the catalog, never
+that the prose around them is still true.*
 
-It is listed as incomplete on purpose. An invariant that looks covered and is not is worse than
-one that admits what it does not yet prove.
+The design-tools switch exists (ADR 0025). It lives in the browser's `localStorage` under a key of
+its own, `retorika.designTools.v1`, separate from the autosaved session — not in an account, because
+there are no accounts (ADR 0012 approved `localStorage` alone; ADR 0021 deferred the database). The
+row above still reads "the account" because that is where it belongs once accounts exist, and
+`apps/editor/src/editor/designTools.ts` is the single file that moves when they do.
+
+The invariant has two halves and they are proven in two places, because no one place can reach both:
+
+- **The document has nowhere to store it.** Every fixture in the golden corpus is offered a
+  `designTools` key and the schema refuses it — `packages/renderer/test/invariants.test.ts`. This is
+  the half that belongs beside the corpus.
+- **A hundred flips write nothing.** The real switch is flipped a hundred times over a real saved
+  session and the stored bytes are compared — `apps/editor/test/designTools.test.ts`. A package may
+  not import an app, so this half cannot live with the other one.
+
+Both register under the canonical name, so `pnpm test:invariants` runs both and neither can be
+dropped without the count changing.
+
+What makes this hold by construction rather than by vigilance: the switch is deliberately **not** a
+field of `StoredSession`. Autosave runs when the answers, the histories, the open variant or the page
+change; the switch is none of those, so flipping it does not even reach a save. Were it a session
+field, every flip would rewrite the document's serialisation — which is exactly the failure the
+advanced dossier §4 names: «Si encender las herramientas escribe algo en el proyecto, hemos
+reconstruido el problema de Wix.»
+
+It also means `clearSession()` — «Volver a empezar» — throws away the draft and keeps the
+preference. Restarting a site is a decision about the site; being someone who lays out pages by hand
+is not.
+
+`PROVISIONAL_INVARIANTS` in `packages/schema/src/invariants-catalog.ts` is consequently **empty**.
+Adding an entry back is allowed and sometimes right; leaving one there after its gap closes is what
+went wrong here.
 
 ---
 
