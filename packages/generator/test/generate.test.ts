@@ -360,9 +360,12 @@ describe("the footer (ADR 0019)", () => {
 });
 
 describe("sector fallback", () => {
-  it("'otro' and a sector with no bank file both read the generic texts without crashing", () => {
+  it("'otro' and an unanswered sector both read the generic texts without crashing", () => {
+    // `fisioterapia` stood here for "a launch sector with no bank file", which it was until the
+    // seven drafts of sprint 7 could be signed. The two cases that stay true whatever the bank
+    // covers are the two below: «Otro sector», which lands on `generico` by design, and no answer
+    // at all. A third that named a trade would only be naming this week's coverage.
     expect(() => generate(answers({ businessName: "X", sector: "otro" }))).not.toThrow();
-    expect(() => generate(answers({ businessName: "X", sector: "fisioterapia" }))).not.toThrow();
     expect(() => generate(answers({ businessName: "X", sector: null }))).not.toThrow();
   });
 });

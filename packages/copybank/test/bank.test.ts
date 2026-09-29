@@ -20,6 +20,23 @@ const FILES = [
   ["tienda", tiendaJson],
 ] as const;
 
+/**
+ * A sector the bank will never have a file for, used by every test that needs «one the bank does
+ * not cover».
+ *
+ * It used to be `fisioterapia`, and before that the choice cost nothing: seven of the ten launch
+ * sectors had no bank, so any of them stood for the idea. That stops being true the moment
+ * somebody signs the drafts sprint 7 wrote — and a test whose subject can be signed away is a test
+ * that goes red for a reason that has nothing to do with what it checks.
+ *
+ * So the subject is an id no questionnaire can produce and no file will ever be named after. It is
+ * not in `SECTOR_IDS`, so it cannot be picked on screen; `textFor` and `servesSector` take a plain
+ * string, so it exercises exactly the same path a real uncovered sector would. The claim these
+ * tests make — «a sector with no file of its own reads the generic words, and says so» — is about
+ * the cascade, not about which trades happen to be covered this week.
+ */
+const NO_BANK_SECTOR = "sector-de-prueba";
+
 describe("every file in the bank", () => {
   it.each(FILES.map(([name]) => name))("%s parses against the schema", (name) => {
     const file = FILES.find(([candidate]) => candidate === name)?.[1];
@@ -100,7 +117,7 @@ describe("the cascade", () => {
   });
 
   it("falls back for a sector with no file at all", () => {
-    expect(textFor("fisioterapia", "contact", "headline", { negocio: "Fisio Ribera" })).toBe(
+    expect(textFor(NO_BANK_SECTOR, "contact", "headline", { negocio: "Fisio Ribera" })).toBe(
       "Hablamos",
     );
   });
@@ -128,7 +145,7 @@ describe("suggestions", () => {
   });
 
   it("are empty for a sector the bank does not cover, rather than borrowed", () => {
-    expect(suggestionsFor("fisioterapia")).toEqual([]);
+    expect(suggestionsFor(NO_BANK_SECTOR)).toEqual([]);
     expect(suggestionsFor(GENERIC_SECTOR)).toEqual([]);
   });
 
@@ -154,10 +171,10 @@ describe("servesSector", () => {
     expect(servesSector("tienda")).toBe(true);
   });
 
-  it("is false for a launch sector that falls through to the generic file", () => {
+  it("is false for a sector that falls through to the generic file", () => {
     // What its owner would actually get: generic words and an empty question 3.
-    expect(servesSector("fisioterapia")).toBe(false);
-    expect(suggestionsFor("fisioterapia")).toEqual([]);
+    expect(servesSector(NO_BANK_SECTOR)).toBe(false);
+    expect(suggestionsFor(NO_BANK_SECTOR)).toEqual([]);
   });
 
   it("is false for the generic file itself, which is the fallback and not a trade", () => {

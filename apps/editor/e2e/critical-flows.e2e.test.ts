@@ -874,17 +874,16 @@ describe("sprint 7 día 5 — el aviso de «sector sin banco»", () => {
       // this checks it is hidden rather than absent.
       await expect(warning).toBeHidden();
 
-      // Fisioterapia is one of the seven. Its texts may be drafted by now; drafted is not served,
-      // which is exactly what this has to keep saying.
-      await walkPage.getByText("Fisioterapia", { exact: true }).click();
-      await expect(warning).toBeVisible();
-
-      // And a sector the bank really does cover says nothing, which is the half that proves the
+      // A sector the bank really does cover says nothing, which is the half that proves the
       // warning is answering a question rather than always being on.
       await walkPage.getByText("Restaurante y bar", { exact: true }).click();
       await expect(warning).toBeHidden();
 
-      // «Otro sector» keeps its own wording, in the owner's words once they have written them.
+      // And the case that warns. It used to be «Fisioterapia», one of the seven sectors sprint 7
+      // drafted, and that was only safe while nobody had signed them: the subject of the test
+      // could be taken away by an act that has nothing to do with the warning. «Otro sector» is
+      // the one choice on this screen that can never have a bank of its own — it lands on
+      // `generico` by design — so it is the permanent subject.
       await walkPage.getByText("Otro sector", { exact: true }).click();
       await expect(warning).toBeVisible();
       await walkPage.fill("#describe", "cerrajería y apertura de puertas");
@@ -1026,7 +1025,7 @@ describe("sprint 7 día 7 — dos hallazgos de esta semana, cerrados", () => {
     }
   });
 
-  it("day 5: picking a sector never moves the grid, whether or not it has a bank", async () => {
+  it("day 5: the warning reserves its space, so picking a sector never moves the grid", async () => {
     // The finding: the warning box used to be conditionally mounted, and `Shell` centers every
     // step's card vertically in the viewport (`ui.tsx`) — so mounting or unmounting anything
     // inside the card recentres the whole thing, moving the card the owner just pressed out from
@@ -1043,20 +1042,34 @@ describe("sprint 7 día 7 — dos hallazgos de esta semana, cerrados", () => {
       await walkPage.getByRole("button", { name: "Siguiente" }).click();
 
       const grid = walkPage.locator("fieldset").first();
+      const warning = walkPage.getByText(/Todavía no tenemos textos preparados/);
       const before = await grid.boundingBox();
 
-      // Fisioterapia has no bank of its own (drafted, unsigned) — the warning appears.
-      await walkPage.getByText("Fisioterapia", { exact: true }).click();
-      await expect(walkPage.getByText(/Todavía no tenemos textos preparados/)).toBeVisible();
-      const withWarning = await grid.boundingBox();
-      expect(withWarning?.y).toBe(before?.y);
-
-      // Restaurante y bar has a signed bank — the warning disappears, and the grid still does
-      // not move: the space it reserves does not depend on which state is showing.
+      // A covered sector: the warning stays hidden and the grid does not move.
       await walkPage.getByText("Restaurante y bar", { exact: true }).click();
-      await expect(walkPage.getByText(/Todavía no tenemos textos preparados/)).toBeHidden();
-      const withoutWarning = await grid.boundingBox();
-      expect(withoutWarning?.y).toBe(before?.y);
+      await expect(warning).toBeHidden();
+      expect((await grid.boundingBox())?.y).toBe(before?.y);
+      const hiddenBox = await warning.boundingBox();
+
+      // And the mechanism itself, measured rather than inferred: the box occupies **the same
+      // height whether it is showing or not**, which is what `visibility: hidden` buys and what
+      // `display: none` would not.
+      //
+      // This used to be phrased as "pick an uncovered sector, watch the grid not move", with
+      // «Fisioterapia» as the uncovered one. That subject can be signed away — and when the
+      // seven drafts are signed there is no *named* sector left without a bank, so the claim
+      // would have had no way to be made at all. «Otro sector» is the permanent uncovered case,
+      // but selecting it also reveals its own description field, which legitimately does change
+      // the card's height; so the comparison is between the warning box's own two states, not
+      // between two grid positions.
+      await walkPage.getByText("Otro sector", { exact: true }).click();
+      await expect(warning).toBeVisible();
+      const visibleBox = await warning.boundingBox();
+
+      expect(hiddenBox?.height, "the hidden box still reserves its space").toBeGreaterThan(0);
+      expect(visibleBox?.height, "showing it changes nothing about the space it takes").toBe(
+        hiddenBox?.height,
+      );
     } finally {
       await walkPage.context().close();
     }
@@ -1085,15 +1098,15 @@ describe("sprint 7 día 7 — el recorrido completo del sprint", () => {
       await walkPage.fill("#nombre", "Taller Ribera");
       await walkPage.getByRole("button", { name: "Siguiente" }).click();
 
-      // Taller: one of the seven sectors day 4-5 drafted, still unsigned. The warning has to
-      // fire here exactly as it does in isolation (day 5's own test) — this is the same claim,
-      // reached by the full questionnaire instead of a script that jumps straight to step 2.
+      // Taller, and this walk says nothing about its bank. It used to assert the "no texts
+      // prepared" warning and the empty question 3 here, which was true while the seven drafts
+      // were unsigned and stops being true the day they are — and neither claim is this test's
+      // job. What this walk exists to prove is that five days of separate work compose; the
+      // warning has its own test above, with a subject that cannot be signed away.
       await walkPage.getByText("Taller", { exact: true }).click();
-      await expect(walkPage.getByText(/Todavía no tenemos textos preparados/)).toBeVisible();
       await walkPage.getByRole("button", { name: "Siguiente" }).click();
-      // Step 3 offers nothing to tick — taller has no bank, so no suggestions — confirming the
-      // honest emptiness day 5 wrote about, then moving on without picking anything.
-      await expect(walkPage.getByText(/Todavía no tenemos sugerencias/)).toBeVisible();
+      // Nothing ticked on question 3, whatever it happens to offer: no services section either
+      // way (ADR 0013), which is the state the rest of the walk is written against.
       await walkPage.getByRole("button", { name: "Siguiente" }).click();
       await walkPage.fill("#direccion", "Cta. de Santo Domingo, 2, Ronda");
       await walkPage.getByRole("button", { name: "Siguiente" }).click();
