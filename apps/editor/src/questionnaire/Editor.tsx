@@ -27,12 +27,14 @@ import {
   type SlotFill,
 } from "@retorika/schema";
 import { useMemo, useRef, useState } from "react";
+import { type DownloadGate, downloadGateFor } from "../editor/downloadGate.ts";
 import { EditorShell, type RailItemId, type SaveStatus } from "../editor/EditorShell.tsx";
 import { ACCEPTED_IMAGE_ACCEPT } from "../editor/imageBytes.ts";
-import { listPhotos, type PhotoState } from "../editor/photoInventory.ts";
+import { countPhotos, listPhotos, type PhotoState } from "../editor/photoInventory.ts";
 import { withPhotoUrls } from "../editor/previewDocument.ts";
 import { sectionFields } from "../editor/sectionFields.ts";
 import es from "../locales/es.json" with { type: "json" };
+import { DownloadWarningDialog, TooManyPhotosDialog } from "./DownloadGateDialogs.tsx";
 import { FieldsPanel } from "./FieldsPanel.tsx";
 import { PagesPanel } from "./PagesPanel.tsx";
 import { PhotosPanel } from "./PhotosPanel.tsx";
@@ -359,6 +361,11 @@ export function Editor({
   onBack: () => void;
 }) {
   const [state, setState] = useState<DownloadState>("idle");
+  // What `requestDownload` found the last time «Descargar» was pressed — `null` means neither
+  // dialog is open. Recomputed fresh on every press rather than kept in sync with `doc`, because
+  // a dialog open while the owner keeps editing behind it would go stale the moment they change
+  // the one photograph it is about.
+  const [downloadDialog, setDownloadDialog] = useState<DownloadGate | null>(null);
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const iframeRef = useRef<HTMLIFrameElement>(null);
   // One input, reused: the picker is opened from inside the frame, and the element that asked
@@ -1227,6 +1234,25 @@ export function Editor({
     }
   }
 
+  /**
+   * What «Descargar» actually does — `downloadGateFor` decides, from the same counts the «Fotos»
+   * panel reads, whether that is downloading immediately, stopping to ask, or refusing outright.
+   *
+   * Recomputed on every press rather than kept as derived state watching `doc`: the two dialogs
+   * this can open are meant to reflect the document *as it stood the moment «Descargar» was
+   * pressed*, and computing fresh here is what makes closing one and pressing «Descargar» again
+   * — after fixing the one photograph the dialog was about — re-evaluate rather than reopen the
+   * same stale verdict.
+   */
+  function requestDownload() {
+    const gate = downloadGateFor(countPhotos(doc));
+    if (gate.kind === "ready") {
+      void download();
+      return;
+    }
+    setDownloadDialog(gate);
+  }
+
   return (
     <EditorShell
       // The business name, not the variant's. The bar said «Clásica» — the caption of whichever of
@@ -1240,7 +1266,7 @@ export function Editor({
       onSelectPage={(id) => onSelectPage(doc.pages[0]?.id === id ? undefined : id)}
       onBack={onBack}
       downloadState={state}
-      onDownload={download}
+      onDownload={requestDownload}
       device={device}
       onDeviceChange={setDevice}
       canUndo={canUndo}
@@ -1388,6 +1414,28 @@ export function Editor({
             </button>
           ) : null}
         </div>
+      ) : null}
+      {downloadDialog?.kind === "tooManyPhotos" ? (
+        <TooManyPhotosDialog
+          count={downloadDialog.count}
+          max={downloadDialog.max}
+          onClose={() => setDownloadDialog(null)}
+        />
+      ) : null}
+      {downloadDialog?.kind === "warn" ? (
+        <DownloadWarningDialog
+          document={doc}
+          photoUrls={photoUrls}
+          onReplacePhoto={(address) => {
+            setDownloadDialog(null);
+            replacePhoto(address);
+          }}
+          onDownloadAnyway={() => {
+            setDownloadDialog(null);
+            void download();
+          }}
+          onCancel={() => setDownloadDialog(null)}
+        />
       ) : null}
     </EditorShell>
   );

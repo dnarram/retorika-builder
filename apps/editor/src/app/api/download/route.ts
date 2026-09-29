@@ -10,6 +10,7 @@ import {
   parseDocument,
   type RetorikaDocument,
 } from "@retorika/schema";
+import { MAX_PHOTOS } from "../../../editor/downloadGate.ts";
 import { isAcceptedImage, sniffImage } from "../../../editor/imageBytes.ts";
 
 /**
@@ -37,7 +38,10 @@ export const runtime = "nodejs";
 // than a target.
 const MAX_BODY_BYTES = 12 * 1024 * 1024;
 const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
-const MAX_PHOTOS = 10;
+// MAX_PHOTOS lives in `../../../editor/downloadGate.ts`, shared with the editor's own pre-flight
+// check (sprint 6 day 5) so both sides of the request agree about the same number for the same
+// reason — a client that thinks it can send 45 and a server that only accepts 10 is exactly the
+// bare-413 failure this sprint's plan named and asked to stop happening.
 // `MAX_PAGES` comes from `@retorika/schema` since sprint 5 day 4: `sectionToPage` refuses to build
 // a sixth page, and the two numbers must be one number — a page that can be created and then not
 // downloaded is exactly the failure this bound was meant to be the last line of defence against.
