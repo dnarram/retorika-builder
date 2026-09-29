@@ -143,6 +143,9 @@ therefore:
 - **Left rail**, 80 px: four icon buttons with labels — `Secciones`, `Estilo`,
   `Páginas`, `Fotos`. This rail is not a contradiction: the advanced-module
   dossier describes exactly these four with the design tools switched off.
+  *(From 30 September 2026 that is half the story: with the tools on it gains
+  `Diseño`, and the switch itself sits at the rail's foot. Mockup 16 and
+  ADR 0025.)*
 - **Canvas**: takes the rest of the screen. Editing happens on the element
   itself.
 - **Floating toolbar**, above the selected element, with four to seven actions
