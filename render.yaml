@@ -29,7 +29,24 @@ services:
     # (checked in next/dist/server/lib/start-server.js: the port is whatever -p/--port
     # resolved to, default 3000, full stop). Render assigns its own $PORT and times out the
     # deploy scanning for it, so it has to be passed through explicitly.
-    startCommand: npx --yes pnpm@12.4.2 --filter @retorika/editor start -p $PORT
+    #
+    # **Started straight from the local binary, with no npx and no pnpm.** It used to be
+    # `npx --yes pnpm@12.4.2 --filter @retorika/editor start -p $PORT`, and on 29 September 2026 a
+    # deploy built successfully and then timed out with no open port and — the part worth writing
+    # down — **no output at all** between "Running" and the timeout.
+    #
+    # What that incident ruled out, so nobody re-derives it: the same command binds the right port
+    # locally and pnpm does forward `-p` (it is pnpm's own shorthand for `--parallel`, so that was
+    # the first suspicion and it was wrong); and an empty `$PORT` fails loudly with
+    # "option '-p, --port <port>' argument missing", so silence is not that either. The cause was
+    # not identified from the log.
+    #
+    # What is certain is that the old command did three things before the server could boot —
+    # fetch a package manager over the network, resolve a workspace filter, and forward a flag
+    # through it — and a start path that needs the network is fragile by construction whether or
+    # not it caused this. `next` is a production dependency of `apps/editor`, so pnpm writes this
+    # binary during the build install and it survives `NODE_ENV=production`.
+    startCommand: ./apps/editor/node_modules/.bin/next start apps/editor -p $PORT
     envVars:
       # engine-strict is on and the root package.json asks for ^24.21.0. Render's own default is
       # 24.14.1, which does not satisfy it, so the install would fail without this line.
