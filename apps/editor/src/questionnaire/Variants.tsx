@@ -4,8 +4,8 @@ import {
   blankSection,
   CATALOG,
   CONTACT_ID,
+  canBeBlank,
   FOOTER_ID,
-  TEASER_ID,
   variantsFor,
 } from "@retorika/catalog";
 import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
@@ -442,10 +442,17 @@ export function Variants({
   const offers = useMemo<SectionOffer[]>(
     () =>
       Object.keys(CATALOG)
-        // «Avance» is never added by hand: `blankSection` refuses it, because its one slot is a
-        // destination and no marker fills a destination honestly. One is made by converting a
-        // section into a page, which is the only moment anything knows where it should point.
-        .filter((catalogId) => catalogId !== TEASER_ID)
+        // The rule this used to encode by hand as `catalogId !== TEASER_ID`: whether the pill can
+        // build one *at all*. `canBeBlank` is the catalog's own answer — it already refuses
+        // «Avance», whose one slot is a destination no marker fills honestly, and it would refuse
+        // any future section shaped the same way without this file needing to learn its id. The
+        // ninth section, «Equipo», is offered because it asks nothing of `canBeBlank` this file
+        // does not already grant to «Opiniones» and «Fotos de trabajos».
+        //
+        // «Contacto y reservas» is the one exception, in the other direction: `canBeBlank` is
+        // correctly false for it — its button is a destination — but it is still offered whenever
+        // question 5 gave it one to build with, from `contactSectionFor` rather than a marker.
+        .filter((catalogId) => canBeBlank(catalogId) || catalogId === CONTACT_ID)
         .filter((catalogId) => catalogId !== CONTACT_ID || contactSection !== undefined)
         .map((catalogId) => ({
           catalogId,

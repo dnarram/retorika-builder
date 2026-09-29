@@ -16,6 +16,7 @@ import { LOCATION_ID } from "../src/location.ts";
 import { CATALOG, presetFor, variantsFor } from "../src/presets.ts";
 import { PRICES_ID } from "../src/prices.ts";
 import { SERVICES_ID, SERVICES_ITEM_SLOTS } from "../src/services.ts";
+import { TEAM_ID } from "../src/team.ts";
 import { TESTIMONIALS_ID } from "../src/testimonials.ts";
 
 const theme = Object.fromEntries(TOKEN_KEYS.map((key) => [key, `value-${key}`]));
@@ -47,6 +48,7 @@ describe("canBeBlank", () => {
       TESTIMONIALS_ID,
       PRICES_ID,
       GALLERY_ID,
+      TEAM_ID,
       FOOTER_ID,
     ]);
   });

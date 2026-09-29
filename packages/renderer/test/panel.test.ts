@@ -185,12 +185,23 @@ describe("the panel behind text over an image", () => {
     expect(html.split(PANEL_CSS).length - 1).toBe(1);
   });
 
-  it("relies on every image being a bare <img> child of its section", () => {
+  it("relies on every section-level image being a bare <img> child of its section", () => {
     // `.rb-panel ~ :not(img)` keeps the image under the panel only because the image is a
     // bare <img> sibling. A wrapper would match :not(img), rise above the panel and, coming
     // after the text in the markup, cover it again (task, "Stop and ask" 7).
+    //
+    // **Scoped to images outside a list, and that scoping is itself the finding.** The claim
+    // used to read "every image in the corpus", which held only because nothing in the corpus
+    // had ever put a photograph inside a list item — `panelArea` reads its candidates from the
+    // section's own top-level placements (`build.ts`), and a list is one placement regardless of
+    // how many items or images live inside it, so an image nested in `.rb-item` can never be
+    // compared against a panel and never needs this guarantee. Equipo's own fixture is the first
+    // to have one, and the blanket version of this test failed on it — correctly reporting a
+    // claim that was never quite true, not a regression in what it actually guards.
     for (const { name, document } of corpus) {
-      for (const img of parse(render(document, "html").html).querySelectorAll("img")) {
+      const page = parse(render(document, "html").html);
+      for (const img of page.querySelectorAll("img")) {
+        if (img.closest(".rb-item")) continue;
         expect(img.parentElement?.tagName, `${name}: ${img.getAttribute("alt")}`).toBe("SECTION");
       }
     }

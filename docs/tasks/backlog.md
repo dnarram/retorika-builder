@@ -57,11 +57,11 @@ launch sectors have no text bank.**
   with a deadline; they wait for the same moment. One of the six is ours to raise when that moment
   comes: **once the ZIP is handed over there is nothing to switch off** (ADR 0001), so what a
   refund can even mean has to be decided before the terms of use are written, not after.
-- **One catalog section still missing** of the dossier's nine: **«Quién soy / El equipo»**. Eight
-  are built; «Precios» landed on 28 September 2026 (#51) and **«Fotos de trabajos» on sprint 5
-  day 3** (`packages/catalog/src/gallery.ts`), which is what this row said was still missing until
-  29 September. Equipo is the one with **no** evidence behind it: no session asked for it, and it
-  is scheduled for sprint 7 because it closes the catalogue rather than because anybody wanted it.
+- ~~One catalog section still missing of the dossier's nine: «Quién soy / El equipo».~~ **Done**,
+  29 September 2026: sprint 7 day 6 built `packages/catalog/src/team.ts`. The catalogue is 9 of 9.
+  This was the one section with no evidence behind it — no session asked for it, it closed the
+  catalogue rather than answering anybody's own words — and that stays true of it going forward:
+  nothing here claims a usability finding it does not have.
 - **A list item's optional slots cannot be reached.** The fields panel is explicit that "a list
   holds items rather than a value", so its rows are the section's slots and never an item's. A
   card's `description` in «Qué hago» has been `0..1` and unreachable since sprint 1, and a price

@@ -894,3 +894,61 @@ describe("sprint 7 día 5 — el aviso de «sector sin banco»", () => {
     }
   });
 });
+
+/**
+ * Sprint 7 day 6 — «Equipo», the catalogue's ninth and last section, reached through
+ * `canBeBlank` connected to the menu rather than a hand-coded list of exceptions.
+ *
+ * The unit tests prove the wiring in isolation: `packages/catalog/test/blank.test.ts` names
+ * `canBeBlank`'s exact result, and `Variants.tsx` now derives its offer list from it instead of
+ * a hardcoded `catalogId !== TEASER_ID`. This proves the real menu actually offers the section
+ * that predicate says it should, and still refuses the one it always refused.
+ */
+describe("sprint 7 día 6 — «Equipo» en el menú, y «Avance» nunca ofrecida", () => {
+  it("finds Equipo by search, inserts it with a placeholder card, and never offers Avance", async () => {
+    const walkPage = await (await browser.newContext()).newPage();
+    try {
+      await walkPage.goto(BASE_URL, { waitUntil: "networkidle" });
+      await walkPage.fill("#nombre", "Fisio Ribera");
+      await walkPage.getByRole("button", { name: "Siguiente" }).click();
+      await walkPage.getByText("Fisioterapia", { exact: true }).click();
+      await walkPage.getByRole("button", { name: "Siguiente" }).click();
+      await walkPage.getByRole("button", { name: "Siguiente" }).click();
+      await walkPage.fill("#direccion", "Cta. de Santo Domingo, 2, Ronda");
+      await walkPage.getByRole("button", { name: "Siguiente" }).click();
+      await walkPage.getByText("Que me llamen", { exact: true }).click();
+      await walkPage.fill("#telefono", "600111222");
+      await walkPage.getByRole("button", { name: "Crear mi web" }).click();
+      await walkPage.getByText("Ver a tamaño real →").first().click();
+
+      const frame = walkPage.frameLocator("iframe").first();
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+
+      await frame.getByRole("button", { name: "Añadir sección aquí" }).first().click();
+      await frame.locator(".rb-menu-search").fill("equipo");
+      const teamChoice = frame.locator(".rb-menu-list .rb-menu-choice", { hasText: "Equipo" });
+      await expect(teamChoice).toBeVisible();
+      // What `canBeBlank` refuses is absent from the search results too, not merely unlisted at
+      // the top: «Avance» answers to nothing typed, because the menu it feeds cannot offer one.
+      await expect(
+        frame.locator(".rb-menu-list .rb-menu-choice", { hasText: "Avance" }),
+      ).toHaveCount(0);
+      await teamChoice.click();
+
+      const section = frame.locator('[data-preset="team"]');
+      await expect(section).toBeVisible();
+      await expect(section.locator('[data-slot="photo"]')).toBeVisible();
+      await expect(section.locator('[data-slot="name"]')).toContainText("Escribe aquí");
+      await expect(section.locator('[data-slot="job"]')).toContainText("Escribe aquí");
+
+      // And with no search filter at all, «Equipo» is in the unfiltered list — the direct
+      // consequence of `canBeBlank` rather than a name this file had to be taught.
+      await frame.getByRole("button", { name: "Añadir sección aquí" }).last().click();
+      await expect(
+        frame.locator(".rb-menu-list .rb-menu-choice", { hasText: "Equipo" }),
+      ).toBeVisible();
+    } finally {
+      await walkPage.context().close();
+    }
+  });
+});
