@@ -52,14 +52,6 @@ beforeAll(async () => {
   await startEditorServer();
   browser = await chromium.launch();
   page = await (await browser.newContext()).newPage();
-  // Playwright's own default action/assertion timeout is 30s, well under the 60s `testTimeout`
-  // below — a mismatch that mattered only once this suite grew long enough for it to. Found on a
-  // GitHub-hosted runner: the last test's `page.goto` restores a three-page session and only then
-  // clicks, and on a CI machine measurably slower than a laptop that click missed its 30s budget
-  // by 682ms, having spent nothing on retries — just on a slower render of exactly the same steps
-  // that pass locally in a fraction of the time. Raised, not the vitest timeout that already had
-  // headroom for this, because the thing actually running out of time was Playwright's own clock.
-  page.setDefaultTimeout(50_000);
 }, 90_000);
 
 afterAll(async () => {
@@ -578,30 +570,36 @@ describe("día 7 — dos conversiones desde el editor, y el ZIP resultante abier
  * added the section to the home page — and because the pill computes its index from the sections it
  * can see, at a position that meant nothing there either. To the owner the section simply did not
  * appear.
+ *
+ * **Rewritten on sprint 6 day 6, because the first version passed for an accidental reason.** It
+ * reloaded the app and then converted `sec-services` — which the test two blocks above had already
+ * converted into a page. On a restored session that section is not on the home page at all, so the
+ * click could only ever find it when the *earlier test's autosave had not landed yet*: a debounced
+ * 500ms write racing a page load. It won that race on a laptop and lost it on CI, which is the
+ * whole of the intermittent failure.
+ *
+ * That is the second time this suite has been caught resting on the same coincidence — sprint 5
+ * day 7 found an assertion that passed only because an autosave was still pending. The lesson
+ * taken this time is in the shape of the test rather than in a comment: **it no longer reloads.**
+ * The reload was the only thing that made a saved session matter, and it bought nothing — the
+ * claim is about what an insertion does, not about what survives a restart, and the flow above
+ * already leaves the editor holding exactly the state this one needs.
  */
 describe("regression — a section is added to the page you are looking at", () => {
   it("adds it to the converted page, and leaves the home page alone", async () => {
-    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    // Continues from the live editor the previous flow left behind — the sequential model this
+    // file's own docstring describes — rather than reloading. Two pages have been made by
+    // converting a section, and the canvas is on the home page.
     const frame = page.frameLocator("iframe").first();
-    await frame.locator('[data-section="sec-cover"]').waitFor();
-
-    // Counted rather than assumed: this suite shares one page and one browser session, so what a
-    // fresh `goto` restores depends on whether an earlier test's autosave had landed. The claim
-    // here is about the *change* a conversion and an insertion make, which is true from any start.
     const tabs = page.locator(".overflow-x-auto button");
-    const tabsBefore = await tabs.count();
+    await expect(tabs).toHaveCount(3);
+    await tabs.first().click();
+    await expect(frame.locator("[data-page]")).toHaveAttribute("data-page", "home");
     const homeSectionsBefore = await frame.locator("[data-section]").count();
 
-    await frame.locator('[data-section="sec-services"]').click();
-    await frame
-      .locator(
-        '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
-      )
-      .click();
-    await expect(tabs).toHaveCount(tabsBefore + 1);
-
-    // Onto the page the conversion just made, and add a section from its own pill.
-    await tabs.nth(tabsBefore).click();
+    // Onto a page a conversion made, and add a section from its own pill. Converting again here
+    // would prove nothing this file has not proved twice already, two blocks above.
+    await tabs.nth(1).click();
     await expect(frame.locator("[data-page]")).toHaveAttribute("data-page", "page-que-ponemos");
     await frame.getByRole("button", { name: "Añadir sección aquí" }).last().click();
     await frame
@@ -618,8 +616,9 @@ describe("regression — a section is added to the page you are looking at", () 
     await tabs.first().click();
     await expect(frame.locator("[data-page]")).toHaveAttribute("data-page", "home");
     await expect(frame.locator('[data-preset="testimonials"]')).toHaveCount(0);
-    // The converted section left the home page and an avance took its place, so the count is
-    // unchanged — and nothing else arrived, which is the thing that used to happen invisibly.
+    // Not one section more than before the insertion. Counting rather than naming, because the
+    // failure this guards was never "the wrong section arrived" but "a section arrived here at
+    // all, and nothing on screen said so".
     await expect(frame.locator("[data-section]")).toHaveCount(homeSectionsBefore);
   });
 });
