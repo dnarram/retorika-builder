@@ -8,6 +8,7 @@
   "references": [
     { "path": "../catalog" },
     { "path": "../copybank" },
+    { "path": "../photobank" },
     { "path": "../schema" },
     { "path": "../tokens" }
   ]

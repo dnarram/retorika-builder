@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { recordById } from "./index.ts";
 import type { ImageRecord } from "./schema.ts";
 
@@ -23,7 +24,21 @@ import type { ImageRecord } from "./schema.ts";
  * stand-in, the one case that matters most, a known id resolving to real bytes, could never be
  * exercised until the bank had a real photograph in it.
  */
-const BANK_PHOTOS_DIR = join(import.meta.dirname, "..", "bank", "photos");
+/**
+ * `fileURLToPath(import.meta.url)` and not `import.meta.dirname`, and the difference is the whole
+ * reason this line has a comment.
+ *
+ * This module is imported by a Next route handler, which means Next bundles it — and in that
+ * bundle **`import.meta.dirname` is `undefined`** while `import.meta.url` still resolves to this
+ * file's real path on disk. The first version used `dirname` and `pnpm build:editor` failed with
+ * `The "path" argument must be of type string. Received undefined`, at module evaluation, so the
+ * route could not even be collected. Measured rather than guessed: a throwaway probe route built
+ * and served in production mode printed both, and only one of them was there.
+ *
+ * It is the same lesson `packages/copybank` recorded for the browser — "a filesystem path would
+ * work on a laptop and fail once deployed" — arriving from the other side.
+ */
+const BANK_PHOTOS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "bank", "photos");
 
 export function readSampleBytes(
   id: string,

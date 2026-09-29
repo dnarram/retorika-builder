@@ -4,13 +4,11 @@ import {
   type CoverVariant,
   FOOTER_ID,
   LOCATION_ID,
-  PLACEHOLDER_IMAGE_ALT,
-  PLACEHOLDER_SAMPLE_ID,
-  placeholderImageSrc,
   SERVICES_ID,
   type ServicesVariant,
 } from "@retorika/catalog";
 import { actionLabel, type Facts, suggestionsFor, textFor } from "@retorika/copybank";
+import { sampleImageFor } from "@retorika/photobank";
 import type { ContentElement, Section } from "@retorika/schema";
 import type { Answers, SectorId } from "./answers.ts";
 import {
@@ -51,12 +49,21 @@ function link(
 
 /**
  * The cover always exists: headline and image are the only required slots, and both always
- * resolve — the business name is required by question 1, the image is the placeholder.
+ * resolve — the business name is required by question 1, the image comes from the bank.
  * The main action's button is added only when it resolves to a real destination
  * (`resolveDestination`); the cover's `primaryAction` is optional (0..1), so it is simply absent
  * otherwise, most notably for "visit", which names no destination of its own.
+ *
+ * `variantId` — `"v1"`/`"v2"`/`"v3"` — rather than the `CoverVariant` composition, because **v1 and
+ * v3 are both `image-right`**: seeded on the composition, two of the three cards would offer the
+ * identical photograph and the screen that exists to show three real choices would show two.
  */
-export function buildCover(answers: Answers, sector: SectorId, variant: CoverVariant): Section {
+export function buildCover(
+  answers: Answers,
+  sector: SectorId,
+  variant: CoverVariant,
+  variantId: string,
+): Section {
   const facts = factsFor(answers);
   const subheadline = textFor(sector, "cover", "subheadline", facts);
   const bodyText = textFor(sector, "cover", "body", facts);
@@ -83,12 +90,20 @@ export function buildCover(answers: Answers, sector: SectorId, variant: CoverVar
     hidden: false,
     slot: "image",
     // Sampled, and the document says so: a generated site's one photograph is nobody's yet.
-    value: {
-      kind: "image",
-      src: placeholderImageSrc(),
-      alt: PLACEHOLDER_IMAGE_ALT,
-      sample: PLACEHOLDER_SAMPLE_ID,
-    },
+    //
+    // The bank answers this, and it answers it even when it holds nothing — an empty sector falls
+    // back to the catalog's placeholder *inside* `sampleImageFor`, which is why this call site
+    // has no fallback of its own and needs none. That is the whole design: the day photographs
+    // land in `bank/<sector>.json`, not one line here changes.
+    //
+    // The seed is everything that already has to be a pure input, and nothing that is not: the
+    // business, the sector, which of the three cards, and which element. No clock and no
+    // randomness, because `INV_5`, the golden corpus and "same answers, same site" all depend on
+    // this function being a pure function of its arguments.
+    value: sampleImageFor(
+      sector,
+      `${answers.businessName}:${sector}:${variantId}:sec-cover:el-image`,
+    ),
   });
   if (destination && actionText) {
     content.push(link("el-cta", "button", "primaryAction", actionText, destination));

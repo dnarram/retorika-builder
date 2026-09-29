@@ -100,10 +100,24 @@ export interface SampleImage {
   sample: string;
 }
 
-/** Where a bank photograph is served from once uploaded — the editor's own route, which resolves
- * the id against the loaded bank rather than reading the caller's string as a path (day 4). */
-function srcFor(record: ImageRecord): string {
-  return `/muestras/${record.file}`;
+/**
+ * The name a bank photograph takes **inside the published bundle**, which is what the document
+ * carries as its `src`.
+ *
+ * **Relative, with no leading slash, and that is not a detail.** ADR 0001: a downloaded site has to
+ * work when opened by double-clicking, with no server. Under `file://` an absolute `/muestras/x.webp`
+ * resolves against the filesystem root and the photograph is simply missing — on the owner's
+ * machine, after the download, where nothing of ours is watching. The first version of this file
+ * wrote exactly that, and it was harmless only because the bank was empty; the first approved
+ * photograph would have shipped broken sites.
+ *
+ * Same shape as an uploaded photo's name (`photoSrcFor` in `apps/editor`), for the same reasons: a
+ * flat file beside the HTML, stable so the same photograph used twice is one file and not two, and
+ * prefixed so the two kinds can never collide. The bank's id is already unique across every sector,
+ * and the record's own `file` is `<id>.webp`, so this is unique by construction.
+ */
+export function sampleSrcFor(record: ImageRecord): string {
+  return `muestra-${record.file}`;
 }
 
 /**
@@ -134,7 +148,7 @@ export function sampleImageFor(sector: string, seed: string): SampleImage {
   }
   const record = images[pickIndex(seed, images.length)];
   if (!record) throw new Error(`sampleImageFor: index out of range for sector "${sector}"`);
-  return { kind: "image", src: srcFor(record), alt: record.alt, sample: record.id };
+  return { kind: "image", src: sampleSrcFor(record), alt: record.alt, sample: record.id };
 }
 
 /** Every sector the bank has a file for, mostly for tests. */

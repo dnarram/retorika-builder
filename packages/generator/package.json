@@ -10,6 +10,7 @@
   "dependencies": {
     "@retorika/catalog": "workspace:*",
     "@retorika/copybank": "workspace:*",
+    "@retorika/photobank": "workspace:*",
     "@retorika/schema": "workspace:*",
     "@retorika/tokens": "workspace:*"
   }

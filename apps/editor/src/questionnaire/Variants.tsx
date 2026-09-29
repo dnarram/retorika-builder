@@ -41,6 +41,8 @@ import {
   preparePhoto,
   savePhoto,
 } from "../editor/photos.ts";
+import { withPhotoUrls } from "../editor/previewDocument.ts";
+import { listSampleRefs } from "../editor/samplePhotos.ts";
 import es from "../locales/es.json" with { type: "json" };
 import { type DeleteToast, Editor, type SectionOffer } from "./Editor.tsx";
 import { Brand } from "./ui.tsx";
@@ -223,21 +225,110 @@ export function Variants({
     const created: string[] = [];
     void loadPhotos().then((stored) => {
       if (cancelled || stored.length === 0) return;
-      const next = new Map<number, Map<string, string>>();
-      for (const photo of stored) {
-        const url = URL.createObjectURL(photoBlob(photo.bytes));
-        created.push(url);
-        const forVariant = next.get(photo.variant) ?? new Map<string, string>();
-        forVariant.set(photo.src, url);
-        next.set(photo.variant, forVariant);
-      }
-      setPhotoUrls(next);
+      // Merged into whatever is already there rather than replacing it. The bank fetch below runs
+      // on the same mount and writes into this same map, and two effects that each assumed they
+      // were the only writer would race: whichever resolved second would erase the other's URLs.
+      setPhotoUrls((current) => {
+        const next = new Map(current);
+        for (const photo of stored) {
+          const forVariant = new Map(next.get(photo.variant) ?? []);
+          if (forVariant.has(photo.src)) continue;
+          const url = URL.createObjectURL(photoBlob(photo.bytes));
+          created.push(url);
+          forVariant.set(photo.src, url);
+          next.set(photo.variant, forVariant);
+        }
+        return next;
+      });
     });
     return () => {
       cancelled = true;
       for (const url of created) URL.revokeObjectURL(url);
     };
   }, []);
+
+  /**
+   * The bank's own photographs, fetched once each and then indistinguishable from an upload.
+   *
+   * A generated document names the photograph the bank chose but cannot carry its bytes —
+   * `generateVariants` runs in the browser and cannot read a file. So the bytes are fetched from
+   * `/api/muestras/<id>` and written into the same IndexedDB store, the same object URL map and
+   * therefore the same multipart form the download already builds. Nothing downstream learns that
+   * bank photographs exist.
+   *
+   * `fetched` is a ref, not state, and it is what keeps this from looping: the effect writes
+   * `photoUrls`, so reading `photoUrls` to decide what is missing would re-run it on its own
+   * output. Keyed by `variant:src` for the same reason the store is — the three cards are three
+   * documents and all three have a `sec-cover`.
+   *
+   * A failed fetch is left alone rather than retried or reported. The cover falls back to the grey
+   * marker the document would have carried anyway, which is the honest outcome and not one the
+   * owner needs a message about; and the ref keeps the failure from being asked again every render.
+   * What must never happen is a photograph appearing in the preview that is not in the ZIP, and
+   * that cannot happen here: both read this one map.
+   *
+   * **No cleanup revokes what this creates**, unlike the mount effect above, and the difference is
+   * the dependency list. That one runs once, so revoking on unmount is right; this one re-runs on
+   * every edit, and a cleanup would revoke object URLs that are still the src of a photograph on
+   * screen — the images would go blank on the next keystroke. These URLs live as long as the page,
+   * which is exactly what `handlePickPhoto` already does with an upload's.
+   */
+  const fetched = useRef(new Set<string>());
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      for (const [variant, history] of histories.entries()) {
+        for (const ref of listSampleRefs(history.present.document)) {
+          // Checked here and nowhere else: `cancelled` stops this run from *starting* more work,
+          // and never stops it from finishing what it already started. See the note below.
+          if (cancelled) return;
+
+          const key = `${variant}:${ref.src}`;
+          if (fetched.current.has(key)) continue;
+          // Marked before the await, so two overlapping runs cannot both fetch the same photograph.
+          fetched.current.add(key);
+
+          try {
+            const response = await fetch(`/api/muestras/${encodeURIComponent(ref.id)}`);
+            // A failure stays marked: the route answered and said no, and asking again on every
+            // render would be a request loop over a photograph that is not coming.
+            if (!response.ok) continue;
+            const bytes = new Uint8Array(await response.arrayBuffer());
+
+            // **An in-flight fetch always writes its result, even after this run was cancelled**,
+            // and that is the fix for the defect the browser walk found. The first version dropped
+            // the result on cancellation; combined with the ref, that permanently stranded the
+            // photograph — the second run skipped it as already fetched, and the first run threw
+            // its bytes away. React's development double-mount is exactly such a cancellation, and
+            // the first variant is the one fetched first, so it was the one in flight when the
+            // cleanup ran: two cards loaded, the first stayed broken, every single time.
+            //
+            // Writing anyway is safe because "cancelled" here does not mean unmounted — in the
+            // double-mount it is the same live component — and a `setState` on a genuinely
+            // unmounted one is a no-op in React 19, not a warning.
+            const url = URL.createObjectURL(photoBlob(bytes, "image/webp"));
+            setPhotoUrls((current) => {
+              const next = new Map(current);
+              const forVariant = new Map(next.get(variant) ?? []);
+              forVariant.set(ref.src, url);
+              next.set(variant, forVariant);
+              return next;
+            });
+            // Stored so a reload puts it back without asking the server again — and so that a
+            // session that goes offline still downloads a complete site.
+            if (!(await savePhoto(variant, ref.src, bytes))) setSaveStatus("unsaved");
+          } catch {
+            // Offline, or the route is not there. The marker stands in; see the note above.
+          }
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [histories]);
 
   async function handlePickPhoto(variant: number, address: ElementAddress, file: File) {
     setPhotoError(null);
@@ -591,7 +682,15 @@ export function Variants({
             const caption = CAPTIONS[index];
             if (!caption) return null;
             const highlighted = index === 1;
-            const html = render(history.present.document, "html").html;
+            // Through `withPhotoUrls`, like the editor's own preview. Without it the bank's
+            // photographs keep their bundle-relative name here, which an `iframe srcDoc` resolves
+            // against this page's URL — so the one screen whose entire job is to show three
+            // attractive compositions showed three broken images. Found in the browser on the day
+            // the generator first asked the bank; nothing before then had a photograph to break.
+            const html = render(
+              withPhotoUrls(history.present.document, photoUrls.get(index) ?? EMPTY_PHOTOS),
+              "html",
+            ).html;
             return (
               <div
                 // By position: the three variants are a fixed list that never reorders, and
