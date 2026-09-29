@@ -18,6 +18,7 @@ import {
   fillSlot as fillSlotInDoc,
   insertSection as insertSectionIntoDoc,
   mintSectionId,
+  moveItem as moveItemInDoc,
   movePage as movePageInDoc,
   moveSection as moveSectionFromDoc,
   removeItem as removeItemFromDoc,
@@ -59,6 +60,7 @@ export type SnapshotCause =
   | { type: "setVariant"; sectionId: string }
   | { type: "addItem"; sectionId: string }
   | { type: "removeItem"; sectionId: string }
+  | { type: "moveItem"; sectionId: string }
   /** The three page causes name a page rather than a section, so `sectionOf` answers
    * `undefined` for them and no delete toast is kept alive by renaming a page. */
   /** The conversion (ADR 0022) is **one** cause, not three: the page, the move and the avance
@@ -112,6 +114,14 @@ export type HistoryAction =
   | { type: "setVariant"; variant: number; sectionId: string; variantId: string }
   | { type: "addItem"; variant: number; sectionId: string; slot: string; item: ListItem }
   | { type: "removeItem"; variant: number; sectionId: string; slot: string; itemId: string }
+  | {
+      type: "moveItem";
+      variant: number;
+      sectionId: string;
+      slot: string;
+      itemId: string;
+      toIndex: number;
+    }
   | { type: "sectionToPage"; variant: number; sectionId: string }
   | { type: "renamePage"; variant: number; pageId: string; title: string }
   | { type: "movePage"; variant: number; pageId: string; toIndex: number }
@@ -382,6 +392,29 @@ function removeItem(history: History, sectionId: string, slot: string, itemId: s
 }
 
 /**
+ * One line moved within its list, as one history entry.
+ *
+ * **Not amendable**, like every other structural verb here and unlike typing: two presses of the
+ * same arrow are two moves an owner would expect to take back one at a time, not one amalgamated
+ * step that jumps a photograph three places back.
+ */
+function moveItem(
+  history: History,
+  sectionId: string,
+  slot: string,
+  itemId: string,
+  toIndex: number,
+): History {
+  const document = moveItemInDoc(history.present.document, sectionId, slot, itemId, toIndex);
+  return {
+    past: [...history.past, history.present].slice(-LIMIT),
+    present: { document, cause: { type: "moveItem", sectionId } },
+    future: [],
+    amendable: false,
+  };
+}
+
+/**
  * The pages of a site — renamed, reordered, removed.
  *
  * None of the three is a content cause: renaming a page writes no word into any section, and the
@@ -505,6 +538,8 @@ function apply(history: History, action: HistoryAction): History {
       return addItem(history, action.sectionId, action.slot, action.item);
     case "removeItem":
       return removeItem(history, action.sectionId, action.slot, action.itemId);
+    case "moveItem":
+      return moveItem(history, action.sectionId, action.slot, action.itemId, action.toIndex);
     case "sectionToPage":
       return convertSection(history, action.sectionId);
     case "renamePage":

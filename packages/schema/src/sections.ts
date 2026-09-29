@@ -509,3 +509,63 @@ export function removeItem(
     ),
   });
 }
+
+/**
+ * One line moved within its own list — the third photograph made first.
+ *
+ * **The verb an owner asked for, arrived by the only road document rule 4 leaves open.** The
+ * second usability session asked for «mover libremente las imágenes» and rule 4 refuses free
+ * positioning; the rule stands and `docs/document-rules.md` carries the request on the record. But
+ * «mover una imagen» and «colocar una imagen en píxeles» are not the same want, and this is the
+ * half of it the rules allow: somebody who has uploaded eight photographs of their dishes wants
+ * the best one first, not the fourth one nudged eleven pixels left.
+ *
+ * Nothing about the section's geometry changes. A list occupies one placement whatever it holds,
+ * and its items render in array order inside it — so reordering them is a change of content, not
+ * of layout, and `layoutFor` recomputes the same placements it did before.
+ *
+ * `toIndex` is clamped exactly as `moveSection` clamps it: a caller saying "to the end" can pass
+ * the length or anything past it and does not have to special-case either edge. Moving an item to
+ * where it already is produces an equal document rather than an error, which is what lets the
+ * editor draw both arrows on every line and disable neither.
+ */
+export function moveItem(
+  doc: RetorikaDocument,
+  sectionId: string,
+  slot: string,
+  itemId: string,
+  toIndex: number,
+): RetorikaDocument {
+  const found = findSection(doc, sectionId);
+  if (!found) throw new Error(`moveItem: no section "${sectionId}"`);
+  const list = found.section.content.find(
+    (element) => element.slot === slot && element.role === "list",
+  );
+  if (!list) throw new Error(`moveItem: section "${sectionId}" has no list in slot "${slot}"`);
+
+  const items = [...(list.items ?? [])];
+  const fromIndex = items.findIndex((item) => item.id === itemId);
+  if (fromIndex < 0) throw new Error(`moveItem: list "${slot}" has no item "${itemId}"`);
+
+  const [moved] = items.splice(fromIndex, 1);
+  if (!moved) throw new Error(`moveItem: list "${slot}" has no item "${itemId}"`);
+  items.splice(Math.max(0, Math.min(toIndex, items.length)), 0, moved);
+
+  const content = found.section.content.map((element) =>
+    element === list ? { ...element, items } : element,
+  );
+
+  return parseDocument({
+    ...doc,
+    pages: doc.pages.map((page) =>
+      page.id !== found.page.id
+        ? page
+        : {
+            ...page,
+            sections: page.sections.map((section) =>
+              section.id === sectionId ? { ...section, content } : section,
+            ),
+          },
+    ),
+  });
+}

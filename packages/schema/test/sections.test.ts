@@ -11,6 +11,7 @@ import {
   insertSection,
   mintElementId,
   mintSectionId,
+  moveItem,
   moveSection,
   removeItem,
   setVariant,
@@ -796,5 +797,136 @@ describe("addItem and removeItem", () => {
     const second = linesOf(two)?.[1]?.id;
     if (!second) throw new Error("no second line");
     expect(() => parseDocument(removeItem(two, "sec-prices", "lines", second))).not.toThrow();
+  });
+});
+
+describe("moveItem", () => {
+  /**
+   * A gallery of four photographs, which is the shape this verb exists for: the owner in the
+   * second usability session asked to move images, and this is the half of that want document
+   * rule 4 leaves open — the order of a list, never a position in pixels.
+   */
+  const gallery: Section = {
+    id: "sec-gallery",
+    preset: { catalogId: "gallery", variantId: "stacked" },
+    source: "catalog",
+    layout: null,
+    content: [
+      {
+        id: "el-headline",
+        role: "heading",
+        hidden: false,
+        slot: "headline",
+        value: { kind: "text", text: "Nuestros platos" },
+      },
+      {
+        id: "el-photos",
+        role: "list",
+        hidden: false,
+        slot: "photos",
+        items: ["a", "b", "c", "d"].map((key) => ({
+          id: `item-${key}`,
+          elements: [
+            {
+              id: `el-item-${key}-photo`,
+              role: "image" as const,
+              hidden: false,
+              slot: "photo",
+              value: { kind: "image" as const, src: `foto-${key}.jpg`, alt: `Foto ${key}` },
+            },
+          ],
+        })),
+      },
+    ],
+  };
+
+  const withGallery = documentWith([gallery]);
+  const order = (doc: RetorikaDocument) =>
+    doc.pages[0]?.sections[0]?.content
+      .find((element) => element.role === "list")
+      ?.items?.map((item) => item.id);
+
+  it("moves a photograph to the front, which is the whole point", () => {
+    expect(order(moveItem(withGallery, "sec-gallery", "photos", "item-c", 0))).toEqual([
+      "item-c",
+      "item-a",
+      "item-b",
+      "item-d",
+    ]);
+  });
+
+  it("moves one backwards by one, which is what an arrow on a line does", () => {
+    expect(order(moveItem(withGallery, "sec-gallery", "photos", "item-b", 2))).toEqual([
+      "item-a",
+      "item-c",
+      "item-b",
+      "item-d",
+    ]);
+  });
+
+  it("clamps past the end rather than refusing, exactly as moveSection does", () => {
+    // A caller saying "to the end" passes the length or anything beyond it and does not have to
+    // know which. The same courtesy `moveSection` already extends.
+    expect(order(moveItem(withGallery, "sec-gallery", "photos", "item-a", 99))).toEqual([
+      "item-b",
+      "item-c",
+      "item-d",
+      "item-a",
+    ]);
+  });
+
+  it("clamps below zero to the front, rather than counting back from the end", () => {
+    // `-1` is the one input that tells the clamp apart from `splice`'s own behaviour, and it is
+    // why the clamp is written rather than left to the array: `splice(-1, …)` inserts
+    // second-to-last, which is not what anyone passing a negative index could possibly mean here.
+    // Found by deleting the clamp and watching a `-5` case pass anyway — `splice` clamps that one
+    // to zero by itself, so the test proved nothing.
+    expect(order(moveItem(withGallery, "sec-gallery", "photos", "item-d", -1))).toEqual([
+      "item-d",
+      "item-a",
+      "item-b",
+      "item-c",
+    ]);
+  });
+
+  it("moving a line to where it already is changes nothing, and does not throw", () => {
+    // What lets the editor draw both arrows on every line without deciding, per line, whether
+    // each one would do anything.
+    expect(moveItem(withGallery, "sec-gallery", "photos", "item-b", 1)).toEqual(withGallery);
+  });
+
+  it("keeps every item whole — this reorders, it never rebuilds", () => {
+    const moved = moveItem(withGallery, "sec-gallery", "photos", "item-c", 0);
+    const first = moved.pages[0]?.sections[0]?.content.find((el) => el.role === "list")?.items?.[0];
+    expect(first?.elements[0]?.value).toEqual({
+      kind: "image",
+      src: "foto-c.jpg",
+      alt: "Foto c",
+    });
+  });
+
+  it("leaves the section's own geometry alone", () => {
+    // A list holds one placement whatever is inside it, so this is a change of content and not of
+    // layout — which is the reason rule 4 has nothing to say about it.
+    const moved = moveItem(withGallery, "sec-gallery", "photos", "item-d", 0);
+    expect(moved.pages[0]?.sections[0]?.layout).toBeNull();
+    expect(moved.pages[0]?.sections[0]?.content.map((el) => el.id)).toEqual([
+      "el-headline",
+      "el-photos",
+    ]);
+  });
+
+  it("produces a document that still parses", () => {
+    expect(() =>
+      parseDocument(moveItem(withGallery, "sec-gallery", "photos", "item-c", 0)),
+    ).not.toThrow();
+  });
+
+  it("refuses an unknown section, list or item, each by name", () => {
+    expect(() => moveItem(withGallery, "no-such", "photos", "item-a", 0)).toThrow(/no section/);
+    expect(() => moveItem(withGallery, "sec-gallery", "nope", "item-a", 0)).toThrow(
+      /no list in slot/,
+    );
+    expect(() => moveItem(withGallery, "sec-gallery", "photos", "item-z", 0)).toThrow(/no item/);
   });
 });

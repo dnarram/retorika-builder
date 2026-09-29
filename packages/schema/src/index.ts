@@ -63,6 +63,7 @@ export {
   insertSection,
   mintElementId,
   mintSectionId,
+  moveItem,
   moveSection,
   removeItem,
   setVariant,
