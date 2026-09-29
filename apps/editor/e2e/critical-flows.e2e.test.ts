@@ -52,6 +52,14 @@ beforeAll(async () => {
   await startEditorServer();
   browser = await chromium.launch();
   page = await (await browser.newContext()).newPage();
+  // Playwright's own default action/assertion timeout is 30s, well under the 60s `testTimeout`
+  // below — a mismatch that mattered only once this suite grew long enough for it to. Found on a
+  // GitHub-hosted runner: the last test's `page.goto` restores a three-page session and only then
+  // clicks, and on a CI machine measurably slower than a laptop that click missed its 30s budget
+  // by 682ms, having spent nothing on retries — just on a slower render of exactly the same steps
+  // that pass locally in a fraction of the time. Raised, not the vitest timeout that already had
+  // headroom for this, because the thing actually running out of time was Playwright's own clock.
+  page.setDefaultTimeout(50_000);
 }, 90_000);
 
 afterAll(async () => {
