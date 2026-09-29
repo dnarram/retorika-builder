@@ -35,6 +35,13 @@ export default defineConfig({
       },
       {
         test: {
+          name: "photobank",
+          root: "./packages/photobank",
+          environment: "node",
+        },
+      },
+      {
+        test: {
           name: "renderer",
           root: "./packages/renderer",
           // The "dom" target needs a DOM. happy-dom is lighter than jsdom,

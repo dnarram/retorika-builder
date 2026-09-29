@@ -1,0 +1,57 @@
+{
+  "sector": "prueba",
+  "images": [
+    {
+      "id": "prueba.01",
+      "sector": "prueba",
+      "alt": "Rectángulo naranja con un cuadro amarillo claro en el centro",
+      "file": "prueba.01.webp",
+      "width": 1600,
+      "height": 1067,
+      "bytes": 4112,
+      "origin": {
+        "tool": "test fixture, not a real generation",
+        "generated": "2026-09-29",
+        "prompt": "n/a — authored by a canvas fill for the test suite"
+      },
+      "licence": {
+        "name": "self-authored, no third-party content",
+        "url": "n/a",
+        "checked": "2026-09-29",
+        "commercialUse": true,
+        "clientsMayPublish": true
+      },
+      "review": {
+        "status": "approved",
+        "by": "test fixture",
+        "date": "2026-09-29"
+      }
+    },
+    {
+      "id": "prueba.02",
+      "sector": "prueba",
+      "alt": "Rectángulo verde con un cuadro verde claro en el centro",
+      "file": "prueba.02.webp",
+      "width": 1600,
+      "height": 1067,
+      "bytes": 3944,
+      "origin": {
+        "tool": "test fixture, not a real generation",
+        "generated": "2026-09-29",
+        "prompt": "n/a — authored by a canvas fill for the test suite"
+      },
+      "licence": {
+        "name": "self-authored, no third-party content",
+        "url": "n/a",
+        "checked": "2026-09-29",
+        "commercialUse": true,
+        "clientsMayPublish": true
+      },
+      "review": {
+        "status": "approved",
+        "by": "test fixture",
+        "date": "2026-09-29"
+      }
+    }
+  ]
+}
