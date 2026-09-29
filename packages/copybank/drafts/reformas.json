@@ -1,0 +1,82 @@
+{
+  "sector": "reformas",
+  "review": {
+    "status": "draft",
+    "drafted": "2026-09-29"
+  },
+  "entries": [
+    {
+      "id": "reformas.cover.subheadline.01",
+      "section": "cover",
+      "slot": "subheadline",
+      "text": "Reformas en {ciudad}",
+      "placeholders": ["ciudad"]
+    },
+    {
+      "id": "reformas.cover.subheadline.02",
+      "section": "cover",
+      "slot": "subheadline",
+      "text": "Reformas",
+      "placeholders": []
+    },
+    {
+      "id": "reformas.cover.body.01",
+      "section": "cover",
+      "slot": "body",
+      "text": "Cuéntanos qué quieres reformar y lo hablamos.",
+      "placeholders": []
+    },
+    {
+      "id": "reformas.services.intro.01",
+      "section": "services",
+      "slot": "intro",
+      "text": "Esto es lo que hacemos en {negocio}.",
+      "placeholders": ["negocio"]
+    },
+    {
+      "id": "reformas.contact.headline.01",
+      "section": "contact",
+      "slot": "headline",
+      "text": "Hablamos de tu reforma",
+      "placeholders": []
+    },
+    {
+      "id": "reformas.prices.headline.01",
+      "section": "prices",
+      "slot": "headline",
+      "text": "Precios",
+      "placeholders": []
+    }
+  ],
+  "suggestions": [
+    {
+      "id": "reforma-bano",
+      "title": "Reformas de baños"
+    },
+    {
+      "id": "reforma-cocina",
+      "title": "Reformas de cocinas"
+    },
+    {
+      "id": "albanileria",
+      "title": "Albañilería",
+      "description": "Obra, tabiques y solados."
+    },
+    {
+      "id": "fontaneria",
+      "title": "Fontanería",
+      "description": "Agua, desagües y grifería."
+    },
+    {
+      "id": "electricidad",
+      "title": "Electricidad",
+      "description": "Instalaciones y averías."
+    },
+    {
+      "id": "pintura",
+      "title": "Pintura",
+      "description": "Pintura de paredes y techos."
+    }
+  ],
+  "actions": {}
+}

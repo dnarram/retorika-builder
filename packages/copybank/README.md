@@ -30,8 +30,17 @@ drafting ever outpaces review, `drafts/` is created then, along with the test pr
 reads it."
 
 **That is what happened.** The two usability sessions both found the tone wrong for hostelería
-(see below), the rewrite of `restaurante-bar` was drafted on 28 September 2026, and nobody has
-read it yet. So it sits in `drafts/`, and `test/drafts.test.ts` is the promised test.
+(see below), the rewrite of `restaurante-bar` was drafted on 28 September 2026, and nobody had
+read it yet. So it sat in `drafts/`, and `test/drafts.test.ts` is the promised test.
+
+**It was read and signed on 28 September 2026**, along with `generico`, and both moved into
+`bank/` — the `git mv` ADR 0009 calls the review. This paragraph said they were still waiting
+until 29 September, which is the kind of claim that stays true for three days and then quietly
+is not; it is corrected here rather than repeated.
+
+`drafts/` is in use again from **29 September 2026** (sprint 7 days 4 and 5): the seven launch
+sectors that have no bank file of their own, written as drafts for one person to read. See "How
+the texts were drafted" below.
 
 A draft file carries `"review": { "status": "draft", "drafted": "YYYY-MM-DD" }` — **no `by`
 field**, because nobody has approved it and there is nobody to name. It is validated by
@@ -82,13 +91,53 @@ tuyos?», two owners out of two said no, for opposite reasons that must not be a
 
 What they share is the register: the generic file's «Qué hacemos», «Esto es lo que ofrecemos en
 {negocio}» and «Dinos qué necesitas» are the words of a trade that takes appointments, not of a
-place where people sit down. The rewrite is drafted in `drafts/restaurante-bar.json` and is
-waiting to be read.
+place where people sit down. That rewrite was drafted, read and signed on 28 September 2026, and
+is what `bank/restaurante-bar.json` says today.
 
 **«Hacer soñar con el plato» is a register, not permission.** The bank does not know what is on the
 menu, and the rule above — nothing the owner has not already said — holds. What the questionnaire
 would have to ask before a text could do more is written up in
 [ADR 0010](../../docs/decisions/0010-initial-questionnaire.md).
+
+### The seven remaining sectors, drafted 29 September 2026
+
+**Drafted by Claude (Opus). Unread, unsigned, and serving nothing** until somebody moves each file
+out of `drafts/`. Sprint 7 days 4 and 5, in the order of the likely number of small businesses in
+Spain that would want a simple website — `reformas`, `estetica`, `taller`, `asesoria`,
+`fisioterapia`, `academia`, `fotografia`. That order is a judgement, not a figure anybody can
+cite, and it only decides which get read first.
+
+**Why this was worth a sprint at all:** these seven fall through to `generico`, whose
+`suggestions` array is empty. So question 3 offers them nothing to tick — and by
+[ADR 0013](../../docs/decisions/0013-services-cardinality.md) ticking nothing means **no services
+section at all**. For seven of the ten launch sectors the site comes out shorter as well as
+blander, which is what Taberna described as «vacía y fría».
+
+**Each file carries only what differs from `generico`,** which is the cascade's own rule and not a
+shortcut: a sector file that repeated «Dónde estamos» would be a line to re-read on every review
+for no decision. So the files run to six or seven entries rather than to a fixed count, and a slot
+is absent exactly where the generic words are already the trade's own — `reformas` keeps
+«Qué hacemos» over its services for that reason.
+
+**What was deliberately not written,** because each would have been the text asserting something
+the owner never did:
+
+- **No cover text lists services.** Question 3 decides those, and a cover that named them would
+  promise an owner's site services they never ticked.
+- **No claim of scope inside a suggestion.** `reformas` ships «Reformas de baños» and «Reformas de
+  cocinas» with no description at all, because every description tried — «baños completos», «del
+  alicatado a la grifería» — narrowed or widened what the owner does. A card with nothing true to
+  add is better than a line somebody invented for it, and two of the six exist to show that.
+- **No result, and no health claim.** `estetica` names its treatments and says nothing about what
+  they achieve: «Tratamientos faciales» carries «Limpieza y cuidado del cutis», which is what the
+  treatment *is*, and nothing about skin it will improve. `fisioterapia` is the sector this rule
+  was written for and arrives on day 5.
+- **No commercial promise.** «Sin compromiso» and «presupuesto gratuito» were both written for
+  `reformas` and both removed: they are a price the owner never quoted.
+- **No `book` label that renames the link.** «Pedir presupuesto» reads far better than the generic
+  «Pedir cita» on a `reformas` site, and it says where the link leads only if the link leads
+  there — which the questionnaire does not ask. So `actions` is empty in these files and the
+  generic words stand.
 
 ## The shape
 

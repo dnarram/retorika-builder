@@ -1,0 +1,88 @@
+{
+  "sector": "estetica",
+  "review": {
+    "status": "draft",
+    "drafted": "2026-09-29"
+  },
+  "entries": [
+    {
+      "id": "estetica.cover.subheadline.01",
+      "section": "cover",
+      "slot": "subheadline",
+      "text": "Estética y belleza en {ciudad}",
+      "placeholders": ["ciudad"]
+    },
+    {
+      "id": "estetica.cover.subheadline.02",
+      "section": "cover",
+      "slot": "subheadline",
+      "text": "Estética y belleza",
+      "placeholders": []
+    },
+    {
+      "id": "estetica.cover.body.01",
+      "section": "cover",
+      "slot": "body",
+      "text": "Cuéntanos qué te apetece hacerte y lo vemos.",
+      "placeholders": []
+    },
+    {
+      "id": "estetica.services.headline.01",
+      "section": "services",
+      "slot": "headline",
+      "text": "Qué te hacemos",
+      "placeholders": []
+    },
+    {
+      "id": "estetica.services.intro.01",
+      "section": "services",
+      "slot": "intro",
+      "text": "Esto es lo que puedes pedir en {negocio}.",
+      "placeholders": ["negocio"]
+    },
+    {
+      "id": "estetica.contact.headline.01",
+      "section": "contact",
+      "slot": "headline",
+      "text": "Pide tu cita",
+      "placeholders": []
+    },
+    {
+      "id": "estetica.contact.body.01",
+      "section": "contact",
+      "slot": "body",
+      "text": "Dinos qué día te viene bien.",
+      "placeholders": []
+    }
+  ],
+  "suggestions": [
+    {
+      "id": "depilacion",
+      "title": "Depilación"
+    },
+    {
+      "id": "manicura-pedicura",
+      "title": "Manicura y pedicura",
+      "description": "Uñas de manos y pies."
+    },
+    {
+      "id": "tratamientos-faciales",
+      "title": "Tratamientos faciales",
+      "description": "Limpieza y cuidado del cutis."
+    },
+    {
+      "id": "tratamientos-corporales",
+      "title": "Tratamientos corporales"
+    },
+    {
+      "id": "maquillaje",
+      "title": "Maquillaje",
+      "description": "Para una boda, una fiesta o un día especial."
+    },
+    {
+      "id": "cejas-pestanas",
+      "title": "Cejas y pestañas"
+    }
+  ],
+  "actions": {}
+}
