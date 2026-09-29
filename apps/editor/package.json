@@ -13,6 +13,7 @@
     "@retorika/catalog": "workspace:*",
     "@retorika/copybank": "workspace:*",
     "@retorika/generator": "workspace:*",
+    "@retorika/photobank": "workspace:*",
     "@retorika/publisher": "workspace:*",
     "@retorika/renderer": "workspace:*",
     "@retorika/schema": "workspace:*",

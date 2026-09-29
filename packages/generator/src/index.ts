@@ -36,7 +36,7 @@ function effectiveSector(answers: Answers): SectorId {
  */
 export function generate(answers: Answers, variant: VariantChoice = VARIANTS[0]): GeneratedSite {
   const sector = effectiveSector(answers);
-  const cover = buildCover(answers, sector, variant.cover);
+  const cover = buildCover(answers, sector, variant.cover, variant.id);
   const services = buildServices(answers, sector, variant.services);
   const location = buildLocation(answers, sector);
   const contact = buildContact(answers, sector);
@@ -60,8 +60,17 @@ export function generate(answers: Answers, variant: VariantChoice = VARIANTS[0])
     collections: [],
   };
 
-  // Nothing to add: the placeholder image is a data: URI, self-contained in the document
-  // itself, needing no separate asset entry — see @retorika/catalog’s placeholder-image.ts.
+  // Still nothing to add here, for two different reasons now.
+  //
+  // The placeholder is a data: URI, self-contained in the document and needing no file at all
+  // (@retorika/catalog's placeholder-image.ts). A bank photograph *does* need one — but its bytes
+  // are not this function's to fetch: `generateVariants` runs in the browser, and reading them
+  // would mean a filesystem in a bundle or an `await` in a function every caller treats as pure.
+  // So the document names the file and `apps/editor` puts the bytes beside it, through exactly
+  // the path an uploaded photo already travels: IndexedDB, the preview's object URL, and the
+  // multipart form the download route reads. A bank photograph is an upload the app made on the
+  // owner's behalf, and being literally that — rather than merely similar to it — is what keeps
+  // the preview, the ZIP and the size bounds from each needing a second case.
   const assets = new Map<string, Uint8Array>();
 
   return { document: parseDocument(document), assets };

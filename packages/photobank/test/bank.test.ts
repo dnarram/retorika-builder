@@ -11,6 +11,7 @@ import {
   pickIndex,
   recordById,
   sampleImageFor,
+  sampleSrcFor,
   sectorsInBank,
 } from "../src/index.ts";
 import { bankFileSchema, imageRecordSchema, MAX_IMAGE_BYTES } from "../src/schema.ts";
@@ -220,6 +221,43 @@ describe("the whole seam, against a fixture bank", () => {
     }
   });
 });
+
+describe("the name a bank photograph takes in the bundle", () => {
+  const fixtureBank = bankFileSchema.parse(
+    JSON.parse(readFileSync(join(FIXTURES_DIR, "bank.json"), "utf8")),
+  );
+
+  it("is relative, with no leading slash and no scheme — ADR 0001, the ZIP opens with no server", () => {
+    // The defect this catches shipped on day 3 and was harmless only because the bank was empty:
+    // `/muestras/<file>` resolves against the filesystem root under `file://`, so every downloaded
+    // site would have been missing its photograph — on the owner's machine, after the download,
+    // where nothing of ours would ever have seen it.
+    for (const record of fixtureBank.images) {
+      const src = sampleSrcFor(record);
+      expect(src.startsWith("/"), src).toBe(false);
+      expect(src, src).not.toMatch(/^[a-z]+:\/\//);
+      expect(src, src).not.toContain("/");
+    }
+  });
+
+  it("cannot collide with an uploaded photo's name, which the editor prefixes `foto-`", () => {
+    for (const record of fixtureBank.images) {
+      expect(sampleSrcFor(record).startsWith("muestra-")).toBe(true);
+    }
+  });
+
+  it("is one name per photograph, so the same one used twice is one file", () => {
+    const names = fixtureBank.images.map(sampleSrcFor);
+    expect(new Set(names).size).toBe(names.length);
+    expect(sampleSrcFor(fixtureBank.images[0] ?? never())).toBe(
+      sampleSrcFor(fixtureBank.images[0] ?? never()),
+    );
+  });
+});
+
+function never(): never {
+  throw new Error("the fixture bank is empty");
+}
 
 describe("recordById", () => {
   it("finds nothing while the real bank is empty", () => {

@@ -1,4 +1,9 @@
-import { presetFor } from "@retorika/catalog";
+import {
+  PLACEHOLDER_IMAGE_ALT,
+  PLACEHOLDER_SAMPLE_ID,
+  placeholderImageSrc,
+  presetFor,
+} from "@retorika/catalog";
 import {
   checkAgainstPreset,
   flattenElements,
@@ -382,5 +387,54 @@ describe("the three variants", () => {
     expect(sites.map((s) => sectionsOf(s.document)[0]?.preset.variantId)).toEqual(
       VARIANTS.map((v) => v.cover),
     );
+  });
+});
+
+describe("the cover's photograph comes from the bank (ADR 0011)", () => {
+  function coverImage(document: RetorikaDocument) {
+    const image = findSection(document, "cover").content.find((el) => el.role === "image");
+    if (!image || image.value?.kind !== "image") throw new Error("the cover has no image");
+    return image.value;
+  }
+
+  it("is the catalog's placeholder while the bank is empty — byte for byte what this generator produced before the bank existed", () => {
+    // The claim the whole day rests on: asking the bank changed nothing for a sector with no
+    // photographs in it. If this ever fails with an empty bank, the fallback stopped being the
+    // catalog's own marker and every generated site quietly changed.
+    const image = coverImage(generate(MINIMAL).document);
+    expect(image.src).toBe(placeholderImageSrc());
+    expect(image.alt).toBe(PLACEHOLDER_IMAGE_ALT);
+    expect(image.sample).toBe(PLACEHOLDER_SAMPLE_ID);
+  });
+
+  it("says where it came from, so nothing downstream has to guess", () => {
+    expect(coverImage(generate(MINIMAL).document).sample).toBeDefined();
+  });
+
+  it("is identical across repeated generations — no clock, no randomness (INV_5)", () => {
+    expect(coverImage(generate(MINIMAL).document)).toEqual(coverImage(generate(MINIMAL).document));
+  });
+
+  it("references a relative file, never an absolute path (ADR 0001: the ZIP opens with no server)", () => {
+    // Vacuous while the bank is empty — the placeholder is a data: URI — and it stops being
+    // vacuous the day a photograph lands. An absolute `/muestras/x.webp` resolves against the
+    // filesystem root under file://, so the photograph would simply be missing from a downloaded
+    // site, on the owner's machine, where nothing of ours would ever see it.
+    for (const site of generateVariants(MINIMAL)) {
+      const { src } = coverImage(site.document);
+      if (src.startsWith("data:")) continue;
+      expect(src.startsWith("/")).toBe(false);
+      expect(src).not.toMatch(/^[a-z]+:\/\//);
+    }
+  });
+
+  it("seeds on the variant's id and not its composition, so v1 and v3 can differ", () => {
+    // v1 and v3 are both `image-right`. Seeded on the composition they would be handed the
+    // identical photograph, and the screen that exists to offer three real choices would offer
+    // two. Asserted on the seed's inputs rather than on the outcome, because with an empty bank
+    // all three legitimately return the same marker.
+    const ids = VARIANTS.map((v) => v.id);
+    expect(new Set(ids).size).toBe(3);
+    expect(new Set(VARIANTS.map((v) => v.cover)).size).toBeLessThan(3);
   });
 });
