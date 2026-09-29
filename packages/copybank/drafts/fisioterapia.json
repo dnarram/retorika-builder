@@ -1,0 +1,81 @@
+{
+  "sector": "fisioterapia",
+  "review": {
+    "status": "draft",
+    "drafted": "2026-09-29"
+  },
+  "entries": [
+    {
+      "id": "fisioterapia.cover.subheadline.01",
+      "section": "cover",
+      "slot": "subheadline",
+      "text": "Fisioterapia en {ciudad}",
+      "placeholders": ["ciudad"]
+    },
+    {
+      "id": "fisioterapia.cover.subheadline.02",
+      "section": "cover",
+      "slot": "subheadline",
+      "text": "Fisioterapia",
+      "placeholders": []
+    },
+    {
+      "id": "fisioterapia.cover.body.01",
+      "section": "cover",
+      "slot": "body",
+      "text": "Pide cita y nos lo cuentas con calma.",
+      "placeholders": []
+    },
+    {
+      "id": "fisioterapia.services.intro.01",
+      "section": "services",
+      "slot": "intro",
+      "text": "Esto es lo que hacemos en {negocio}.",
+      "placeholders": ["negocio"]
+    },
+    {
+      "id": "fisioterapia.contact.headline.01",
+      "section": "contact",
+      "slot": "headline",
+      "text": "Pide tu cita",
+      "placeholders": []
+    },
+    {
+      "id": "fisioterapia.contact.body.01",
+      "section": "contact",
+      "slot": "body",
+      "text": "Cuéntanos qué necesitas y buscamos cita.",
+      "placeholders": []
+    }
+  ],
+  "suggestions": [
+    {
+      "id": "terapia-manual",
+      "title": "Terapia manual",
+      "description": "Tratamiento con las manos."
+    },
+    {
+      "id": "fisioterapia-deportiva",
+      "title": "Fisioterapia deportiva",
+      "description": "Para quien entrena o compite."
+    },
+    {
+      "id": "rehabilitacion",
+      "title": "Rehabilitación"
+    },
+    {
+      "id": "puncion-seca",
+      "title": "Punción seca"
+    },
+    {
+      "id": "suelo-pelvico",
+      "title": "Suelo pélvico"
+    },
+    {
+      "id": "ejercicio-terapeutico",
+      "title": "Ejercicio terapéutico",
+      "description": "Ejercicios pautados para consulta o para casa."
+    }
+  ],
+  "actions": {}
+}

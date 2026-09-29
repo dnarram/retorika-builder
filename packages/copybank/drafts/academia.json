@@ -1,0 +1,81 @@
+{
+  "sector": "academia",
+  "review": {
+    "status": "draft",
+    "drafted": "2026-09-29"
+  },
+  "entries": [
+    {
+      "id": "academia.cover.subheadline.01",
+      "section": "cover",
+      "slot": "subheadline",
+      "text": "Clases en {ciudad}",
+      "placeholders": ["ciudad"]
+    },
+    {
+      "id": "academia.cover.subheadline.02",
+      "section": "cover",
+      "slot": "subheadline",
+      "text": "Pregúntanos por las clases",
+      "placeholders": []
+    },
+    {
+      "id": "academia.cover.body.01",
+      "section": "cover",
+      "slot": "body",
+      "text": "Cuéntanos qué necesitas y te contamos cómo trabajamos.",
+      "placeholders": []
+    },
+    {
+      "id": "academia.services.headline.01",
+      "section": "services",
+      "slot": "headline",
+      "text": "Nuestras clases",
+      "placeholders": []
+    },
+    {
+      "id": "academia.services.intro.01",
+      "section": "services",
+      "slot": "intro",
+      "text": "Esto es lo que damos en {negocio}.",
+      "placeholders": ["negocio"]
+    },
+    {
+      "id": "academia.contact.body.01",
+      "section": "contact",
+      "slot": "body",
+      "text": "Dinos qué necesitas y te informamos.",
+      "placeholders": []
+    }
+  ],
+  "suggestions": [
+    {
+      "id": "refuerzo-escolar",
+      "title": "Refuerzo escolar",
+      "description": "Apoyo con las asignaturas del curso."
+    },
+    {
+      "id": "clases-particulares",
+      "title": "Clases particulares",
+      "description": "Clases de uno a uno."
+    },
+    {
+      "id": "clases-en-grupo",
+      "title": "Clases en grupo",
+      "description": "Con más alumnos en el aula."
+    },
+    {
+      "id": "idiomas",
+      "title": "Idiomas"
+    },
+    {
+      "id": "preparacion-examenes",
+      "title": "Preparación de exámenes"
+    },
+    {
+      "id": "oposiciones",
+      "title": "Oposiciones"
+    }
+  ],
+  "actions": {}
+}
