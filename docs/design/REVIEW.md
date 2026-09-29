@@ -118,6 +118,24 @@ part that must not move — the interface tokens and their separation from the p
 
 ## Still open
 
+- **Two things the advanced-module dossier §5 describes that this product cannot do.** Recorded
+  here on 30 September 2026, with mockup 16 and [ADR 0025](../decisions/0025-studio-mode-starts-now-and-its-switch-is-not-in-the-document.md),
+  because a source comment is not where a deviation from an approved artefact belongs:
+  - **«Al escalar se guarda una versión.»** There is no named version history. `autosave.ts` keeps
+    one session and no history, so within a session the undo stack is the version and across a
+    reload there is none. **Mockup 16 does not promise a saved version**, and neither may the
+    interface: what it promises instead is true — the return puts every text and photo back in its
+    exact slot, because `escalate` keeps the element ids.
+  - **«El panel de secciones marca las diseñadas a mano.»** There is no sections panel: `Secciones`
+    *is* the canvas (`EditorShell.tsx` says so). The mark is a pill drawn on the section itself, as
+    injected chrome, so it can never reach a published page.
+
+- **The left rail is five items with the design tools on.** `HANDOFF.md` and this file both justify
+  the four-item rail as the advanced dossier's «Apagado» column, which was right and is now only
+  half the story: with the tools on it gains `Diseño`. The switch itself is **not** a rail item — it
+  sits at the rail's foot, separated — and ADR 0025 records why it is not in the top bar, which is
+  the measurement sprint 7 day 7 took of that row overflowing.
+
 - **`Páginas` and `Fotos` are phase 2, and mockup 08 draws them.** Organic pages and photo
   upload both belong to phase 2 in the protocol, and ADR 0011 says a phase 1 site carries sample
   photos only. The mockup now draws both dimmed and marked `Fase 2`, so nobody implements them by
