@@ -20,6 +20,9 @@
       "path": "./packages/copybank"
     },
     {
+      "path": "./packages/photobank"
+    },
+    {
       "path": "./packages/generator"
     },
     {

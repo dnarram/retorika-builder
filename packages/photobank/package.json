@@ -1,0 +1,16 @@
+{
+  "name": "@retorika/photobank",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The reviewed, per-sector bank of sample photographs for generated sites (ADR 0011)",
+  "exports": {
+    ".": "./src/index.ts",
+    "./server": "./src/server.ts"
+  },
+  "comment": "\"./server\" is a separate export path on purpose: it is the only module here that touches node:fs, and the generator this package feeds is bundled into a browser. src/index.ts must never import it — test/browser-safe.test.ts guards that.",
+  "dependencies": {
+    "@retorika/catalog": "workspace:*",
+    "zod": "4.6.5"
+  }
+}
