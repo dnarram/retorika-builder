@@ -23,6 +23,7 @@ import {
   listEditableFields,
   listLinksTo,
   MAX_PAGES,
+  type MobilePatchEdit,
   type PlacementEdit,
   type PresetShape,
   type RetorikaDocument,
@@ -302,6 +303,8 @@ export function Editor({
   onEscalateSection,
   onRevertSection,
   onSetPlacement,
+  onSetMobilePatch,
+  onMoveUpOnMobile,
   pageId,
   onSelectPage,
   onSectionToPage,
@@ -367,6 +370,19 @@ export function Editor({
    * because one press of a stepper is one number; the panel never sends a value `setPlacement`
    * would refuse, which is what keeps that refusal a backstop rather than a path. */
   onSetPlacement: (sectionId: string, elementId: string, edit: PlacementEdit) => void;
+  /**
+   * Rule 7's three adjustments, and no fourth: `breakpointPatchSchema` is a strict object of exactly
+   * `hidden`, `order` and `columnSpan`, so the mobile view cannot quietly grow into the second design
+   * the rule exists to prevent.
+   *
+   * Both refuse a section the catalog still draws, and that refusal is the honest one rather than a
+   * backstop: patches live inside `layout`, and a catalog section has `layout: null` — there is
+   * nowhere to put them. So adjusting the mobile of a catalog section goes through designing it by
+   * hand first, which is the dossier §5's own first entry point. The panel only offers these once the
+   * section is free, so nobody meets the refusal.
+   */
+  onSetMobilePatch: (sectionId: string, elementId: string, edit: MobilePatchEdit) => void;
+  onMoveUpOnMobile: (sectionId: string, elementId: string) => void;
   /** Which page the canvas is showing. Undefined means the document's first, which is what
    * `render` already means by an absent `pageId`. */
   pageId: string | undefined;
@@ -877,10 +893,19 @@ export function Editor({
       const sectionId = target.dataset.section;
       if (!sectionId) return;
       selectedSection.current = sectionId;
-      // The «Diseño» panel follows the canvas: clicking a section is how you choose what to lay
-      // out. The element resets, because the elements of the section just left are not this one's.
-      setDesignSectionId(sectionId);
-      setDesignElementId(null);
+      /**
+       * The «Diseño» panel follows the canvas: clicking a section is how you choose what to lay out.
+       *
+       * **The element only resets when the section actually changes**, and getting that wrong cost a
+       * real defect the day-6 walk found. `select()` runs on a genuine click *and* on the restore at
+       * the end of `wireSelection`, which puts the selection back after every edit reloads the frame.
+       * Clearing unconditionally meant every press of a mobile control threw the person back to the
+       * first element in the tree — so «Subir» went dead and the next press acted on the wrong thing.
+       */
+      setDesignSectionId((current) => {
+        if (current !== sectionId) setDesignElementId(null);
+        return sectionId;
+      });
       const index = sections.indexOf(target);
 
       const actions = iframeDoc.createElement("div");
@@ -1862,6 +1887,13 @@ export function Editor({
             onSetPlacement={(elementId, edit) => {
               if (designSectionId) onSetPlacement(designSectionId, elementId, edit);
             }}
+            onSetMobilePatch={(elementId, edit) => {
+              if (designSectionId) onSetMobilePatch(designSectionId, elementId, edit);
+            }}
+            onMoveUpOnMobile={(elementId) => {
+              if (designSectionId) onMoveUpOnMobile(designSectionId, elementId);
+            }}
+            onPreviewMobile={() => setDevice("mobile")}
             onClose={() => showRail("sections")}
           />
         ) : undefined

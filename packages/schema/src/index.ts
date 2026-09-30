@@ -44,13 +44,17 @@ export type { Violation } from "./invariants.ts";
 export { checkInvariants, flattenElements } from "./invariants.ts";
 export type { InvariantId } from "./invariants-catalog.ts";
 export { INVARIANTS, invariantTestName, PROVISIONAL_INVARIANTS } from "./invariants-catalog.ts";
-export type { PlacementEdit, RevertImpact } from "./layout.ts";
+export type { MobilePatchEdit, MobileSlot, PlacementEdit, RevertImpact } from "./layout.ts";
 export {
   escalateSection,
   isHandDesigned,
+  mobilePatchFor,
+  mobileSequence,
+  moveUpOnMobile,
   revertImpact,
   revertPlanFor,
   revertSection,
+  setMobilePatch,
   setPlacement,
 } from "./layout.ts";
 export { deletePage, movePage, renamePage } from "./pages.ts";

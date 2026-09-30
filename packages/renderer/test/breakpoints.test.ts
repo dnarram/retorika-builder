@@ -60,7 +60,7 @@ describe("the patches the renderer now reads", () => {
     // which is ahead of a headline patched to `1`. The document said headline first and the page
     // said body first.
     const css = styleOf(render(physio.document, "html").html);
-    expect(css).toContain('[data-section="sec-cover"] [data-id="el-body"] { order: 2; }');
+    expect(css).toContain(String.raw`[data-section="sec-cover"] [data-id="el-body"] { order: 3; }`);
   });
 
   it("puts them in their own media block, after the shared one", () => {
@@ -93,6 +93,41 @@ describe("the patches the renderer now reads", () => {
         "[data-section=",
       );
     }
+  });
+});
+
+describe("a patch changes only what it patches", () => {
+  /**
+   * The defect the day-6 walk found by pressing a button.
+   *
+   * Base positions used to come from **content order**, and the automatic derivation does not: the
+   * shared block puts the photograph first (`.rb-section > img { order: -1 }`, option A). So adding a
+   * width patch — nothing to do with sequence — emitted numbers for every element and **moved the
+   * photograph from first to fourth**. Somebody asked for a smaller photo and the section reordered
+   * itself.
+   *
+   * Rule 7 says mobile is a patch over the automatic derivation, so the base has to *be* the
+   * derivation. `mobileSequence` in `packages/schema` is that rule, shared with the editor.
+   */
+  it("a width-only patch leaves the photograph where the derivation put it: first", () => {
+    const css = styleOf(
+      render(documentWith([{ elementId: "el-image", columnSpan: 6 }]), "html").html,
+    );
+    const orders = css
+      .split("\n")
+      .filter((line) => line.includes("order:"))
+      .map((line) => line.trim());
+    expect(orders).toContain('[data-section="sec-cover"] [data-id="el-image"] { order: 1; }');
+    expect(orders).toContain('[data-section="sec-cover"] [data-id="el-headline"] { order: 2; }');
+    expect(orders).toContain('[data-section="sec-cover"] [data-id="el-body"] { order: 3; }');
+  });
+
+  it("a hide-only patch does not reorder anything either", () => {
+    const css = styleOf(
+      render(documentWith([{ elementId: "el-body", hidden: true }]), "html").html,
+    );
+    expect(css).toContain('[data-id="el-image"] { order: 1; }');
+    expect(css).toContain('[data-id="el-body"] { order: 3; }');
   });
 });
 
