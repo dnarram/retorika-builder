@@ -1,15 +1,16 @@
 "use client";
 
-import type { ElementAddress, RetorikaDocument } from "@retorika/schema";
+import type { ElementAddress, RetorikaDocument, StyleException } from "@retorika/schema";
 import { useId } from "react";
 import { listPhotos } from "../editor/photoInventory.ts";
+import { type ContrastFinding, formatRatio } from "../editor/styleReview.ts";
 import es from "../locales/es.json" with { type: "json" };
 import { StateChip } from "./PhotosPanel.tsx";
 
 /**
- * The two dialogs `downloadGate.ts` can call for — `apps/editor/src/editor/downloadGate.ts` decides
- * *which*, entirely from the same counts the «Fotos» panel reads; these two only draw what it
- * decided.
+ * The dialogs `downloadGate.ts` can call for. That module decides *which* — from the same counts
+ * the «Fotos» panel reads, and since sprint 9 day 6 from the contrast review as well; these only
+ * draw what it decided.
  */
 
 const closeIcon = (
@@ -196,6 +197,121 @@ export function DownloadWarningDialog({
           >
             {es["editor.download.warning.downloadAnyway"]}
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The contrast review's two dialogs, which are one component because they differ in exactly two
+ * things: whether there is a way past, and what the foot of the dialog says.
+ *
+ * Writing them separately would have duplicated the list — and the list is the part that matters,
+ * because «arreglo en un clic» means each row carries its own fix. The two families they belong to
+ * are already in this file: the block reads like `TooManyPhotosDialog` (no way past, because there
+ * is nothing to decide) and the warning like `DownloadWarningDialog` (a way past, because there is).
+ *
+ * **The fix is to drop the exception**, not to pick a colour that would pass. Dropping it returns
+ * the element to the reference it overwrote, which is rule 6's own default state rather than a
+ * colour this dialog guessed at — so the button says what it does, and it calls the same verb the
+ * `Diseño` panel's audit calls.
+ */
+export function ContrastDialog({
+  findings,
+  level,
+  onFix,
+  onDownloadAnyway,
+  onCancel,
+}: {
+  findings: readonly ContrastFinding[];
+  level: "block" | "warn";
+  onFix: (exception: StyleException) => void;
+  /** Absent for the block, which is what makes it a block. */
+  onDownloadAnyway?: () => void;
+  onCancel: () => void;
+}) {
+  const titleId = useId();
+  const blocking = level === "block";
+  const prefix = blocking ? "editor.download.unreadable" : "editor.download.lowContrast";
+  const body =
+    findings.length === 1
+      ? es[`${prefix}.body.one` as keyof typeof es]
+      : es[`${prefix}.body.many` as keyof typeof es].replace("{n}", String(findings.length));
+
+  return (
+    <div className="fixed inset-0 z-20 flex items-center justify-center bg-[#0F172A]/45 p-5">
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="flex max-h-full w-full max-w-[520px] flex-col rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.28)]"
+      >
+        <h2 id={titleId} className="m-0 text-[17px] font-bold text-ui-ink">
+          {es[`${prefix}.title` as keyof typeof es]}
+        </h2>
+        <p className="mt-2 mb-0 text-[14px] leading-snug text-ui-muted">{body}</p>
+
+        <div className="mt-4 flex min-h-0 flex-col gap-2 overflow-y-auto">
+          {findings.map((finding) => (
+            <div
+              key={`${finding.exception.sectionId}/${finding.exception.elementId}`}
+              className="flex items-center justify-between gap-3 rounded-[9px] border border-ui-border px-3 py-2.5"
+            >
+              <span className="flex min-w-0 items-center gap-2.5">
+                {/* The colour itself, beside its words. A ratio alone is a number nobody can match
+                    to something on their own screen. */}
+                <span
+                  aria-hidden="true"
+                  className="h-5 w-5 shrink-0 rounded-full border border-black/10"
+                  style={{ background: finding.exception.exact }}
+                />
+                <span className="flex min-w-0 flex-col">
+                  <span className="truncate text-[13px] text-ui-ink">
+                    {finding.exception.label ?? finding.exception.slot}
+                  </span>
+                  <span className="text-[12px] text-ui-muted">
+                    {es["editor.download.contrast.ratio"].replace(
+                      "{ratio}",
+                      formatRatio(finding.ratio),
+                    )}
+                  </span>
+                </span>
+              </span>
+              <button
+                type="button"
+                onClick={() => onFix(finding.exception)}
+                className="shrink-0 cursor-pointer rounded-[8px] border-0 bg-ui-brand px-3 py-2 text-[13px] font-semibold text-white"
+              >
+                {es["editor.download.contrast.fix"]}
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <p className="mt-4 mb-0 text-[12px] leading-snug text-ui-muted">
+          {es[`${prefix}.foot` as keyof typeof es]}
+        </p>
+
+        <div className="mt-5 flex justify-end gap-2.5">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="h-10 cursor-pointer rounded-[10px] border border-ui-border bg-white px-4 text-[14px] font-medium text-ui-ink"
+          >
+            {es["editor.download.contrast.cancel"]}
+          </button>
+          {/* No way past the block, for the reason `TooManyPhotosDialog` gives: there is nothing
+              to warn about, only something to fix first. */}
+          {!blocking && onDownloadAnyway ? (
+            <button
+              type="button"
+              onClick={onDownloadAnyway}
+              className="h-10 cursor-pointer rounded-[10px] border-0 bg-ui-brand px-5 text-[14px] font-semibold text-white"
+            >
+              {es["editor.download.warning.downloadAnyway"]}
+            </button>
+          ) : null}
         </div>
       </div>
     </div>

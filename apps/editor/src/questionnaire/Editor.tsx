@@ -39,7 +39,11 @@ import {
 } from "@retorika/schema";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { designRows, elementLabels, selectedRowId } from "../editor/designTree.ts";
-import { type DownloadGate, downloadGateFor } from "../editor/downloadGate.ts";
+import {
+  type AcceptedWarning,
+  type DownloadGate,
+  downloadGateFor,
+} from "../editor/downloadGate.ts";
 import { EditorShell, type RailItemId, type SaveStatus } from "../editor/EditorShell.tsx";
 import { ACCEPTED_IMAGE_ACCEPT } from "../editor/imageBytes.ts";
 import { countPhotos, listPhotos, type PhotoState } from "../editor/photoInventory.ts";
@@ -49,7 +53,11 @@ import { offersMatching } from "../editor/sectionSearch.ts";
 import { hasAnyControl, toolbarFor } from "../editor/textToolbar.ts";
 import es from "../locales/es.json" with { type: "json" };
 import { DesignPanel } from "./DesignPanel.tsx";
-import { DownloadWarningDialog, TooManyPhotosDialog } from "./DownloadGateDialogs.tsx";
+import {
+  ContrastDialog,
+  DownloadWarningDialog,
+  TooManyPhotosDialog,
+} from "./DownloadGateDialogs.tsx";
 import { FieldsPanel } from "./FieldsPanel.tsx";
 import { PagesPanel } from "./PagesPanel.tsx";
 import { PhotosPanel } from "./PhotosPanel.tsx";
@@ -445,6 +453,15 @@ export function Editor({
   // a dialog open while the owner keeps editing behind it would go stale the moment they change
   // the one photograph it is about.
   const [downloadDialog, setDownloadDialog] = useState<DownloadGate | null>(null);
+  /**
+   * Which warnings this download attempt has already been taken past.
+   *
+   * It exists because a site can be two kinds of not-quite-ready at once — an unfilled photo
+   * marker and a hard-to-read colour — and each deserves its own sentence. Cleared by starting a
+   * fresh attempt, never carried across presses: `requestDownload` sets it from its own argument,
+   * so closing a dialog and pressing «Descargar» again asks every question over.
+   */
+  const [acceptedWarnings, setAcceptedWarnings] = useState<ReadonlySet<AcceptedWarning>>(new Set());
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const iframeRef = useRef<HTMLIFrameElement>(null);
   /**
@@ -1553,6 +1570,47 @@ export function Editor({
           button.addEventListener("click", () => write("color", chosen ? undefined : { ref }));
           colors.appendChild(button);
         }
+
+        /**
+         * The exact colour — rule 6's marked exception, and the one control in this bar that only
+         * exists because the download gate learned to refuse what it can produce (ADR 0026 §2).
+         *
+         * A native `<input type="color">` and not a picker of our own: it is the platform's, it is
+         * keyboard-accessible, and it can only ever produce `#rrggbb`, which is exactly what the
+         * schema admits and what `cssThemeValue` will emit. A hand-rolled picker would be a second
+         * place to get hex parsing wrong.
+         *
+         * `REVIEW.md` refused «a machine for producing» untested contrast. This is that machine
+         * with the net in front of it: what it writes is marked as an exception, listed in the
+         * audit, and measured before the ZIP leaves.
+         */
+        if (controls.measures?.exact.includes("color")) {
+          const exact = iframeDoc.createElement("input");
+          exact.type = "color";
+          exact.className = "rb-toolbar-color";
+          exact.title = es["editor.toolbar.exactColor"];
+          exact.setAttribute("aria-label", es["editor.toolbar.exactColor"]);
+          const exactColor =
+            current?.color !== undefined && "exact" in current.color ? current.color.exact : "";
+          if (exactColor !== "") exact.value = exactColor;
+          if (exactColor !== "") exact.classList.add("rb-toolbar-on");
+          // `change` rather than `input`: dragging across a colour wheel fires `input` continuously
+          // and would open a history step per pixel.
+          exact.addEventListener("change", () => {
+            write("color", { exact: exact.value, exception: true });
+          });
+          colors.appendChild(exact);
+
+          if (exactColor !== "") {
+            const off = iframeDoc.createElement("button");
+            off.type = "button";
+            off.className = "rb-toolbar-step";
+            off.textContent = es["editor.toolbar.reset"];
+            off.addEventListener("click", () => write("color", undefined));
+            colors.appendChild(off);
+          }
+        }
+
         bar.appendChild(colors);
       }
 
@@ -2115,6 +2173,9 @@ export function Editor({
       "  font-size: 12px; color: #334155; background: #FFFFFF; border: 1px solid #E3E8F0;",
       "  border-radius: 7px; }",
       ".rb-toolbar-select { padding: 0 4px; }",
+      ".rb-toolbar-color { width: 26px; height: 22px; padding: 0; border: 1px solid #E3E8F0;",
+      "  border-radius: 6px; background: #FFFFFF; cursor: pointer; }",
+      ".rb-toolbar-color.rb-toolbar-on { box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px #156FE7; }",
       ".rb-toolbar-exact { width: 52px; padding: 0 6px; }",
       ".rb-toolbar-select:focus, .rb-toolbar-exact:focus { outline: 2px solid #156FE7;",
       "  outline-offset: 1px; }",
@@ -2195,13 +2256,21 @@ export function Editor({
    * — after fixing the one photograph the dialog was about — re-evaluate rather than reopen the
    * same stale verdict.
    */
-  function requestDownload() {
-    const gate = downloadGateFor(countPhotos(doc));
+  function requestDownload(accepted: ReadonlySet<AcceptedWarning> = new Set()) {
+    const gate = downloadGateFor(countPhotos(doc), doc, accepted);
     if (gate.kind === "ready") {
       void download();
       return;
     }
+    setAcceptedWarnings(accepted);
     setDownloadDialog(gate);
+  }
+
+  /** Going past one warning asks the gate again rather than downloading, so a site with two things
+   * worth saying says both. See `downloadGateFor`'s `accepted`. */
+  function acceptAndContinue(warning: AcceptedWarning) {
+    setDownloadDialog(null);
+    requestDownload(new Set([...acceptedWarnings, warning]));
   }
 
   return (
@@ -2217,7 +2286,13 @@ export function Editor({
       onSelectPage={(id) => onSelectPage(doc.pages[0]?.id === id ? undefined : id)}
       onBack={onBack}
       downloadState={state}
-      onDownload={requestDownload}
+      // Wrapped, not passed by reference: React hands a click handler the event, and
+      // `requestDownload`'s optional parameter would have received it as the set of accepted
+      // warnings. `() => void` accepts `(accepted?: …) => void`, so the compiler could not see it,
+      // and the failure was precise enough to look like something else — `accepted.has` threw only
+      // on the warning path, because the blocking check runs before it, so the block dialog worked
+      // perfectly and the warning silently did nothing.
+      onDownload={() => requestDownload()}
       device={device}
       onDeviceChange={setDevice}
       canUndo={canUndo}
@@ -2443,6 +2518,32 @@ export function Editor({
           onClose={() => setDownloadDialog(null)}
         />
       ) : null}
+      {downloadDialog?.kind === "unreadable" || downloadDialog?.kind === "lowContrast" ? (
+        <ContrastDialog
+          findings={downloadDialog.findings}
+          level={downloadDialog.kind === "unreadable" ? "block" : "warn"}
+          // The «arreglo en un clic», through the same verb the `Diseño` panel's audit calls:
+          // dropping the exception returns the element to the reference it overwrote, which is
+          // rule 6's own default rather than a colour this dialog picked.
+          //
+          // The dialog closes on the fix rather than staying open over a document that has just
+          // changed underneath it. `requestDownload` recomputes from scratch on the next press,
+          // which is what lets fixing one finding and pressing «Descargar» again re-evaluate
+          // instead of reopening a stale verdict — the same reason the gate is not derived state.
+          onFix={(exception) => {
+            setDownloadDialog(null);
+            onSetElementStyle(
+              { sectionId: exception.sectionId, elementId: exception.elementId },
+              exception.property,
+              undefined,
+            );
+          }}
+          {...(downloadDialog.kind === "lowContrast"
+            ? { onDownloadAnyway: () => acceptAndContinue("contrast") }
+            : {})}
+          onCancel={() => setDownloadDialog(null)}
+        />
+      ) : null}
       {downloadDialog?.kind === "warn" ? (
         <DownloadWarningDialog
           document={doc}
@@ -2451,10 +2552,7 @@ export function Editor({
             setDownloadDialog(null);
             replacePhoto(address);
           }}
-          onDownloadAnyway={() => {
-            setDownloadDialog(null);
-            void download();
-          }}
+          onDownloadAnyway={() => acceptAndContinue("photos")}
           onCancel={() => setDownloadDialog(null)}
         />
       ) : null}

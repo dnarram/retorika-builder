@@ -1,6 +1,7 @@
 import { GALLERY_PHOTOS } from "@retorika/catalog";
-import { MAX_PAGES } from "@retorika/schema";
+import { MAX_PAGES, type RetorikaDocument } from "@retorika/schema";
 import type { PhotoCounts } from "./photoInventory.ts";
+import { type ContrastFinding, reviewStyle } from "./styleReview.ts";
 
 /**
  * What pressing «Descargar» does, decided before the request is ever made.
@@ -34,29 +35,64 @@ export const MAX_PHOTOS = MAX_PAGES * (GALLERY_PHOTOS.max + 1);
  * «Fotos» panel already shows — so the gate and the panel can never disagree about how many
  * photographs are still not the owner's, or how many files the site is carrying in total.
  *
- * Checked in this order because a document that fails the first is not fit to download at all,
- * regardless of what its sample photos say:
+ * Checked in this order because a document that fails an earlier one is not fit to download at
+ * all, regardless of what the later ones say:
  *
  * 1. **`"tooManyPhotos"`** — more real files than `/api/download` will accept. A hard block, the
  *    same kind ADR 0019's dead-destination rule is: the request is going to fail on the server
  *    regardless of what the owner decides, so there is nothing to warn about and nothing to
  *    download past. Discovering this as a bare `413` after the browser has already spent the time
  *    reading every photo off disk is worse than saying so before that starts.
- * 2. **`"warn"`** — the site would download successfully, but some of what is in it is not the
- *    owner's yet: a bank photograph, an unfilled marker, or both. ADR 0011's warning, and the one
- *    outcome here the owner can go past on purpose.
- * 3. **`"ready"`** — nothing to say; `download()` runs immediately.
+ * 2. **`"unreadable"`** — an exact colour under 3:1 against its own background (sprint 9 day 6,
+ *    ADR 0026). The third member of the blocking family, and it joins for the same reason as the
+ *    first two: there is nothing to warn about, only something to fix before publishing. **Before
+ *    the photo warning**, because a site with text nobody can read is not in a state where "some
+ *    of your photographs are still ours" is the useful thing to say.
+ * 3. **`"warn"`** — the site would download successfully, but some of what is in it is not the
+ *    owner's yet: a bank photograph, an unfilled marker, or both. ADR 0011's warning, and an
+ *    outcome the owner can go past on purpose.
+ * 4. **`"lowContrast"`** — an exact colour between 3:1 and 4.5:1: legible at a large size, hard at
+ *    a normal one. The same warn-or-block line the rest of the product draws, and the same "you
+ *    decide" the marker-text warning gives. **After** the photo warning, because that one is about
+ *    the whole site and this one about one element somebody deliberately painted.
+ * 5. **`"ready"`** — nothing to say; `download()` runs immediately.
+ *
+ * Two of the five now need the document rather than the counts, which is why this takes it. The
+ * counts stay a separate argument rather than being recomputed here, so the gate and the «Fotos»
+ * panel go on reading the same numbers.
+ *
+ * **`accepted` is what makes two warnings two warnings rather than one.** Found by walking the
+ * download on day 6: a site can have both an unfilled photo marker and a hard-to-read colour, and
+ * pressing «Descargar igualmente» on the first dialog used to call `download()` — so the second
+ * warning was never shown at all, and the owner downloaded a site carrying something nobody had
+ * told them about. Going past a warning now means going past **that** warning: the gate is asked
+ * again, and answers with whatever is still true. A block is never in this set, which is what a
+ * block means.
  */
+export type AcceptedWarning = "photos" | "contrast";
 export type DownloadGate =
   | { kind: "ready" }
   | { kind: "tooManyPhotos"; count: number; max: number }
-  | { kind: "warn"; sample: number; empty: number };
+  | { kind: "unreadable"; findings: ContrastFinding[] }
+  | { kind: "warn"; sample: number; empty: number }
+  | { kind: "lowContrast"; findings: ContrastFinding[] };
 
-export function downloadGateFor(counts: PhotoCounts): DownloadGate {
+export function downloadGateFor(
+  counts: PhotoCounts,
+  doc: RetorikaDocument,
+  accepted: ReadonlySet<AcceptedWarning> = new Set(),
+): DownloadGate {
   const real = counts.own + counts.sample;
   if (real > MAX_PHOTOS) return { kind: "tooManyPhotos", count: real, max: MAX_PHOTOS };
-  if (counts.sample + counts.empty > 0) {
+
+  const review = reviewStyle(doc);
+  if (review.blocking.length > 0) return { kind: "unreadable", findings: review.blocking };
+
+  if (!accepted.has("photos") && counts.sample + counts.empty > 0) {
     return { kind: "warn", sample: counts.sample, empty: counts.empty };
+  }
+  if (!accepted.has("contrast") && review.warning.length > 0) {
+    return { kind: "lowContrast", findings: review.warning };
   }
   return { kind: "ready" };
 }

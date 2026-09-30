@@ -1,6 +1,6 @@
 # 0026 — The switch is the line between a reference and an exact value
 
-**Status:** **proposed** · **Date:** 2026-09-30 · **Proposed by:** development · **Accepted by:** —
+**Status:** **proposed** · **Date:** 2026-09-30 · **Amended:** 2026-09-30 (sprint 9 days 5 and 6, §2) · **Proposed by:** development · **Accepted by:** —
 · **Amends:** `docs/design/REVIEW.md` ("Not implemented, and not planned: mockup 13's «Avanzado:
 colores exactos y tamaños»") · **Touches:** document rule 6, the advanced-module dossier §§1, 4, 6, 9
 and 11, the concept dossier §§3 and 5, ADR 0025 (the switch), `docs/tasks/a11y.md`,
@@ -90,9 +90,16 @@ the colour half waits and the sprint ships references only.
 > |---|---|
 > | `padding`, `borderRadius` | Day 5, alone. Pure geometry — no contrast, no legibility |
 > | `color` | Day 6 only, with the two-level contrast review |
-> | `fontSize` | Day 6 only. Not for contrast — every proved pair clears 4.5:1 at any size — but because the dossier §4 promises the same pre-publish check covers «desbordes por debajo de 320 píxeles», and an exact size is the one value in this vocabulary that can cause one |
+> | `fontSize` | **Not this sprint.** Not for contrast — every proved pair clears 4.5:1 at any size — but because the dossier §4 promises the same pre-publish check covers «desbordes por debajo de 320 píxeles», and an exact size is the one value in this vocabulary that can cause one. Nothing measures that yet |
 >
 > The record is changed rather than the reading, which is the point of writing it down.
+>
+> **Closed on day 6 for colour, and left open for size.** The review landed and the exact-colour
+> control landed with it, in the same merge, which is what this section asks. `fontSize` moved from
+> «day 6» to «not this sprint» when it became clear that the overflow half of the §4 sentence is its
+> own piece of work — a measurement at 320px that nothing in the editor makes today — rather than
+> something to bolt onto a contrast gate. Offering an exact size behind a gate that cannot see the
+> thing it would cause is the shape of promise this ADR exists to refuse.
 
 ### 3. Two levels, and who decided them
 

@@ -97,12 +97,14 @@ export interface ToolbarControls {
     padding: readonly PaddingRef[];
     borderRadius: readonly RadiusRef[];
     /**
-     * Which of the four properties accept an exact value **today**.
+     * Which of the four properties accept an exact value, and the list is a decision rather than a
+     * capability — the schema has accepted all four since day 2.
      *
-     * `padding` and `borderRadius` only, and ADR 0026 §2 says why in the record rather than here:
-     * an exact colour is coupled to the contrast review and an exact size to the overflow half of
-     * the same review, and both of those land on day 6. A 20px gap carries no legibility claim, so
-     * there is nothing for a review to say about it and nothing to wait for.
+     * `color` joined on day 6, **with its review and not before it** (ADR 0026 §2): the day the
+     * download gate learned to refuse a colour under 3:1 is the day the control that can write one
+     * became safe to offer. `fontSize` is still out, and for a different reason — the same §4
+     * sentence promises the check also covers «desbordes por debajo de 320 píxeles», and nothing
+     * measures that yet. An exact size is the one value in this vocabulary that can cause one.
      */
     exact: readonly StyleProperty[];
   };
@@ -119,8 +121,9 @@ const TOOLBARED_ROLES: ReadonlySet<Role> = new Set([
   "link",
 ]);
 
-/** The exact values this sprint day offers, by property. See `ToolbarControls["measures"]`. */
-export const EXACT_TODAY: readonly StyleProperty[] = ["padding", "borderRadius"];
+/** The exact values offered, by property. See `ToolbarControls["measures"]` for why each is in or
+ * out, and ADR 0026 §2 for the record. */
+export const EXACT_TODAY: readonly StyleProperty[] = ["color", "padding", "borderRadius"];
 
 export function toolbarFor(
   element: Pick<ContentElement, "role">,
