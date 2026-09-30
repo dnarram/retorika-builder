@@ -1456,8 +1456,11 @@ describe("sprint 8 día 7 — el recorrido completo del sprint", () => {
 
       await studio.getByRole("button", { name: "Foto", exact: true }).click();
       await studio.getByRole("button", { name: "Foto menor" }).click();
-      const widthLabel = await studio.locator("aside p").nth(-2).textContent();
-      expect(widthLabel).toBe("Ancho en móvil: 9 de 12");
+      // Addressed by what it says rather than by where it sits. `aside p` at `nth(-2)` meant this
+      // paragraph until sprint 9 day 5 added a family below it, and then it meant the panel's
+      // closing note — a positional locator into a panel changes subject every time the panel
+      // grows, which is a test quietly asking a different question.
+      await expect(studio.getByText("Ancho en móvil: 9 de 12")).toBeVisible();
 
       await studio.getByRole("button", { name: "Texto", exact: true }).click();
       await studio.getByRole("button", { name: "Ocultar aquí" }).click();
@@ -1729,6 +1732,125 @@ describe("sprint 9 día 4 — la barra flotante", () => {
         await expect(frame.locator('.rb-toolbar-swatch[data-ref="color.surface"]')).toHaveCount(1);
         await expect(frame.locator(".rb-toolbar-link")).toHaveCount(1);
       }
+    } finally {
+      await studio.context().close();
+    }
+  }, 120_000);
+});
+
+/**
+ * Sprint 9 day 5 — measures, spacing, and the first marked exception.
+ *
+ * The narrow-window case is the one worth an e2e rather than a unit test. With the design tools on
+ * the bar reaches 904px, and `MIN_STUDIO_WIDTH` lets the switch be turned on at 1024 — so at an
+ * editor 1100px wide the section is 828px and the bar ran past its right edge, behind the frame's
+ * own `overflow-x: clip`. The last group was on the screen and could not be pressed. Nothing but a
+ * real browser at a real width can see that.
+ */
+describe("sprint 9 día 5 — medidas, espaciado y la excepción marcada", () => {
+  it("writes a reference and an exact value, and the audit takes the exception back off", async () => {
+    // Deliberately the width the defect appeared at, not a comfortable one.
+    const studio = await (
+      await browser.newContext({ viewport: { width: 1100, height: 1000 } })
+    ).newPage();
+    try {
+      await studio.goto(BASE_URL, { waitUntil: "networkidle" });
+      await studio.fill("#nombre", "Reformas Vega");
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByText("Peluquería y barbería", { exact: true }).click();
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.fill("#direccion", "Calle Espinel 12, Ronda");
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByText("Que me llamen", { exact: true }).click();
+      await studio.fill("#telefono", "600111222");
+      await studio.getByRole("button", { name: "Crear mi web" }).click();
+      await studio.getByText("Ver a tamaño real →").first().click();
+
+      const frame = studio.frameLocator("iframe").first();
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+
+      // Off: no measurements at all. The "Apagado" row of the §4 table is text, size, colour, link.
+      await headline.click();
+      await expect(frame.locator(".rb-toolbar-select")).toHaveCount(0);
+      await expect(frame.locator(".rb-toolbar-exact")).toHaveCount(0);
+
+      await studio.getByRole("switch", { name: "Herramientas de diseño" }).click();
+      await studio.getByRole("button", { name: "Sí, enciéndelas" }).click();
+      await headline.click();
+      await expect(frame.locator(".rb-toolbar-select")).toHaveCount(2);
+      await expect(frame.locator(".rb-toolbar-exact")).toHaveCount(2);
+
+      // Every control reachable inside the frame, at the width where it was not.
+      const reach = await frame.locator(".rb-toolbar").evaluate((bar) => {
+        const section = bar.parentElement as HTMLElement;
+        const last = bar.querySelector(".rb-toolbar-group:last-child") as HTMLElement;
+        return {
+          barWider: bar.getBoundingClientRect().width > section.clientWidth,
+          lastVisible:
+            last.getBoundingClientRect().right <= document.documentElement.clientWidth &&
+            last.getBoundingClientRect().left >= 0,
+        };
+      });
+      expect(reach.barWider, "the bar is wider than its section").toBe(false);
+      expect(reach.lastVisible, "the last group is off the frame").toBe(true);
+
+      // A reference: the spacing follows the system.
+      await frame.locator(".rb-toolbar-select").first().selectOption("space.lg");
+      await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
+      expect(
+        await frame
+          .locator('[data-id="el-headline"]')
+          .evaluate((el) => getComputedStyle(el).padding),
+      ).toBe("24px");
+
+      // An exact value: rule 6's second arm, arriving for the first time in the product.
+      await headline.click();
+      await frame.locator(".rb-toolbar-exact").first().fill("37");
+      await frame.locator(".rb-toolbar-exact").first().dispatchEvent("change");
+      await expect(frame.locator('[data-id="el-headline"]')).toHaveCSS("padding", "37px");
+
+      // Marked, in the document, rather than merely applied.
+      // Polled rather than read once: autosave is debounced, so the stylesheet shows the new
+      // padding before localStorage has it, and a single read answers with the *previous* write.
+      // That is what this assertion caught on its first run — `{ref: "space.lg"}`, which was true a
+      // moment earlier and is exactly the kind of near-miss a fixed wait hides.
+      await expect
+        .poll(
+          () =>
+            studio.evaluate(() => {
+              const raw = localStorage.getItem("retorika.session.v1");
+              if (!raw) return null;
+              const session = JSON.parse(raw) as {
+                openIndex: number;
+                documents: {
+                  pages: { sections: { content: { id: string; style?: unknown }[] }[] }[];
+                }[];
+              };
+              return (
+                session.documents[session.openIndex]?.pages[0]?.sections[0]?.content.find(
+                  (c) => c.id === "el-headline",
+                )?.style ?? null
+              );
+            }),
+          { timeout: 10_000 },
+        )
+        .toEqual({ padding: { exact: "37px", exception: true } });
+
+      // The audit finds it, names it in the owner's own words, and gives it back to the system.
+      await studio.getByRole("button", { name: "Diseño" }).click();
+      const panel = studio.locator("aside").first();
+      await panel.getByRole("button", { name: /Fuera del sistema \(1\)/ }).click();
+      await expect(panel.getByText("Reformas Vega")).toBeVisible();
+      await expect(panel.getByText("37px")).toBeVisible();
+
+      await panel.getByRole("button", { name: "Volver al sistema" }).click();
+      await expect(frame.locator('[data-id="el-headline"]')).toHaveCSS("padding", "0px");
+      // And the audit says what being empty means, rather than showing an empty box.
+      await expect(
+        panel.getByText("Toda tu web usa los colores y las medidas del sistema.", { exact: false }),
+      ).toBeVisible();
     } finally {
       await studio.context().close();
     }

@@ -13,6 +13,8 @@ import { type ColorKey, provedOn } from "@retorika/tokens";
  */
 type ColorRef = (typeof STYLE_REFS)["color"][number];
 type SizeRef = (typeof STYLE_REFS)["fontSize"][number];
+type PaddingRef = (typeof STYLE_REFS)["padding"][number];
+type RadiusRef = (typeof STYLE_REFS)["borderRadius"][number];
 
 /**
  * What the floating toolbar offers for a given element, decided here rather than in the DOM code
@@ -82,6 +84,28 @@ export interface ToolbarControls {
   color: ColorRef[];
   size: readonly SizeRef[];
   link: boolean;
+  /**
+   * The "Encendido" half of the §4 row: «Añade **posición, medidas y espaciado**». Position is the
+   * `Diseño` panel's grid, from sprint 8; these are the other two, and they appear only with the
+   * design tools on.
+   *
+   * `undefined` when they are off — not an empty list, because "there is no such control here" and
+   * "this control has nothing to offer" are different states and only the second is a row drawn
+   * empty.
+   */
+  measures?: {
+    padding: readonly PaddingRef[];
+    borderRadius: readonly RadiusRef[];
+    /**
+     * Which of the four properties accept an exact value **today**.
+     *
+     * `padding` and `borderRadius` only, and ADR 0026 §2 says why in the record rather than here:
+     * an exact colour is coupled to the contrast review and an exact size to the overflow half of
+     * the same review, and both of those land on day 6. A 20px gap carries no legibility claim, so
+     * there is nothing for a review to say about it and nothing to wait for.
+     */
+    exact: readonly StyleProperty[];
+  };
 }
 
 /** Roles the toolbar appears for: the ones whose text a person can click into. `image` is out for
@@ -95,19 +119,39 @@ const TOOLBARED_ROLES: ReadonlySet<Role> = new Set([
   "link",
 ]);
 
-export function toolbarFor(element: Pick<ContentElement, "role">): ToolbarControls | undefined {
+/** The exact values this sprint day offers, by property. See `ToolbarControls["measures"]`. */
+export const EXACT_TODAY: readonly StyleProperty[] = ["padding", "borderRadius"];
+
+export function toolbarFor(
+  element: Pick<ContentElement, "role">,
+  designTools = false,
+): ToolbarControls | undefined {
   if (!TOOLBARED_ROLES.has(element.role)) return undefined;
   return {
     color: colorRolesFor(element.role),
     size: sizeRefsFor(),
     link: element.role === "button" || element.role === "link",
+    ...(designTools
+      ? {
+          measures: {
+            padding: STYLE_REFS.padding,
+            borderRadius: STYLE_REFS.borderRadius,
+            exact: EXACT_TODAY,
+          },
+        }
+      : {}),
   };
 }
 
 /** Whether the toolbar would draw anything at all. A toolbar with no control in it is not drawn,
  * which is the same rule applied one level up. */
 export function hasAnyControl(controls: ToolbarControls): boolean {
-  return controls.color.length > 0 || controls.size.length > 0 || controls.link;
+  return (
+    controls.color.length > 0 ||
+    controls.size.length > 0 ||
+    controls.link ||
+    controls.measures !== undefined
+  );
 }
 
 /** The style property each control writes, so the DOM code and the tests name it once. */

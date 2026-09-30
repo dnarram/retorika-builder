@@ -1482,7 +1482,7 @@ export function Editor({
       const role = el.dataset["role"] as Role | undefined;
       if (!section || !sectionId || !elementId || !role) return;
 
-      const controls = toolbarFor({ role });
+      const controls = toolbarFor({ role }, designTools === true);
       if (!controls || !hasAnyControl(controls)) return;
 
       const address: ElementAddress = { sectionId, elementId };
@@ -1556,6 +1556,88 @@ export function Editor({
         bar.appendChild(colors);
       }
 
+      /**
+       * The "Encendido" half — «Añade posición, medidas y espaciado» — drawn as a select per
+       * property rather than a row of buttons.
+       *
+       * Five spacing steps and three corner steps beside three sizes, four colours and a link is
+       * fifteen controls in one bar, which is a bar nobody can read at the width a section gives
+       * it. A `<select>` is a real control: keyboard, grouping and the current value announced, all
+       * without a custom menu inside an iframe.
+       */
+      const measure = (
+        property: "padding" | "borderRadius",
+        refs: readonly string[],
+        caption: string,
+      ) => {
+        const wrapper = group(caption);
+        const value = current?.[property];
+        const chosenRef = value !== undefined && "ref" in value ? value.ref : "";
+        const exactValue = value !== undefined && "exact" in value ? value.exact : "";
+
+        const select = iframeDoc.createElement("select");
+        select.className = "rb-toolbar-select";
+        select.setAttribute("aria-label", caption);
+        const none = iframeDoc.createElement("option");
+        none.value = "";
+        none.textContent = es["editor.toolbar.default"];
+        select.appendChild(none);
+        for (const ref of refs) {
+          const option = iframeDoc.createElement("option");
+          option.value = ref;
+          option.textContent = es[`editor.toolbar.${property}Of.${ref}` as keyof typeof es];
+          select.appendChild(option);
+        }
+        if (exactValue !== "") {
+          // Shown only while an exception exists, so the select never claims «Por defecto» for an
+          // element that is visibly not on the default. Selecting it does nothing; the number
+          // beside it is what changes an exact value.
+          const marked = iframeDoc.createElement("option");
+          marked.value = "exact";
+          marked.textContent = `${es["editor.toolbar.exact"]}: ${exactValue}`;
+          select.appendChild(marked);
+        }
+        select.value = exactValue !== "" ? "exact" : chosenRef;
+        select.addEventListener("change", () => {
+          if (select.value === "exact") return;
+          write(property, select.value === "" ? undefined : { ref: select.value as never });
+        });
+        wrapper.appendChild(select);
+
+        if (controls.measures?.exact.includes(property)) {
+          const exact = iframeDoc.createElement("input");
+          exact.type = "number";
+          exact.min = "0";
+          exact.max = "999";
+          exact.className = "rb-toolbar-exact";
+          exact.placeholder = "px";
+          exact.title = es["editor.toolbar.exactHelp"];
+          exact.setAttribute("aria-label", `${caption} — ${es["editor.toolbar.exactHelp"]}`);
+          exact.value = exactValue === "" ? "" : exactValue.replace("px", "");
+          // `change` and not `input`: a number typed digit by digit would open a history step per
+          // keystroke, and `setElementStyle` would refuse the intermediate «2» as readily as it
+          // accepts «20». One commit when the field is left, like every other text edit here.
+          exact.addEventListener("change", () => {
+            const raw = exact.value.trim();
+            if (raw === "") {
+              write(property, undefined);
+              return;
+            }
+            const number = Number(raw);
+            if (!Number.isFinite(number) || number < 0) return;
+            write(property, { exact: `${Math.round(number)}px`, exception: true });
+          });
+          wrapper.appendChild(exact);
+        }
+
+        bar.appendChild(wrapper);
+      };
+
+      if (controls.measures) {
+        measure("padding", controls.measures.padding, es["editor.toolbar.padding"]);
+        measure("borderRadius", controls.measures.borderRadius, es["editor.toolbar.borderRadius"]);
+      }
+
       if (controls.link) {
         const linkGroup = group(es["editor.toolbar.link"]);
         const button = iframeDoc.createElement("button");
@@ -1610,7 +1692,12 @@ export function Editor({
       // unconditionally, which for the first element of the page lands outside the iframe's visible
       // area and cannot be clicked; mockup 17 draws this flip instead.
       bar.style.top = above < 0 ? `${top + el.offsetHeight + 8}px` : `${above}px`;
-      bar.style.left = `${Math.max(left, 0)}px`;
+      // Clamped at both ends: `0` keeps it from starting left of the section, and the right clamp
+      // keeps a bar anchored to an element far across the grid from running off the other side.
+      // The `max-width` above is what handles a bar wider than the section; this is what handles a
+      // bar that merely starts too far right.
+      const rightmost = Math.max(section.clientWidth - bar.offsetWidth - 8, 0);
+      bar.style.left = `${Math.min(Math.max(left, 0), rightmost)}px`;
     };
 
     for (const el of iframeDoc.querySelectorAll<HTMLElement>("[data-id]")) {
@@ -1993,7 +2080,17 @@ export function Editor({
       // `position: relative` — never inside the element, whose `textContent` is what `wireEditing`
       // saves on blur.
       `.rb-toolbar { font-family: ${UI_FONT}; position: absolute; z-index: 30;`,
-      "  display: flex; align-items: center; gap: 2px; padding: 5px;",
+      // **`wrap` is what keeps every control reachable, and it was found by walking a narrow
+      // window.** With the design tools on the bar reaches 904px, and `MIN_STUDIO_WIDTH` lets the
+      // switch be turned on at 1024 — so at an editor 1100px wide the section is 828px and the bar
+      // ran 124px past its right edge, behind this frame's own `overflow-x: clip`. The last group,
+      // «Esquinas», was on the screen and could not be pressed: the dead button in its worst form.
+      //
+      // The bar is absolutely positioned inside the section, so its shrink-to-fit width is already
+      // capped by the section's box — it simply could not *use* that cap while the flex row refused
+      // to break. A `max-width` was tried alongside this and proved redundant: removing it changes
+      // nothing, removing `wrap` puts the e2e back in red. It is not kept as insurance.
+      "  display: flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 5px;",
       "  background: #FFFFFF; border: 1px solid #E3E8F0; border-radius: 11px;",
       "  box-shadow: 0 6px 18px rgba(15,23,42,0.14); }",
       ".rb-toolbar-group { display: flex; align-items: center; gap: 4px; padding: 0 7px;",
@@ -2014,6 +2111,13 @@ export function Editor({
       ".rb-toolbar-link { height: 26px; padding: 0 11px; font-size: 12px; font-weight: 500;",
       "  color: #334155; background: #FFFFFF; border: 1px solid #E3E8F0; border-radius: 7px; }",
       ".rb-toolbar-link:hover { background: #F2F7FE; border-color: #156FE7; }",
+      `.rb-toolbar-select, .rb-toolbar-exact { font-family: ${UI_FONT}; height: 26px;`,
+      "  font-size: 12px; color: #334155; background: #FFFFFF; border: 1px solid #E3E8F0;",
+      "  border-radius: 7px; }",
+      ".rb-toolbar-select { padding: 0 4px; }",
+      ".rb-toolbar-exact { width: 52px; padding: 0 6px; }",
+      ".rb-toolbar-select:focus, .rb-toolbar-exact:focus { outline: 2px solid #156FE7;",
+      "  outline-offset: 1px; }",
     ].join("\n");
     iframeDoc.head.appendChild(style);
 
@@ -2177,6 +2281,17 @@ export function Editor({
             sectionName={designSectionId ? sectionDisplayName(doc, designSectionId) : null}
             selectedElementId={designElementId}
             onSelectElement={setDesignElementId}
+            // The «arreglo en un clic»: drop the exception and the reference underneath shows
+            // through again. It is the default state of rule 6 rather than a colour somebody's
+            // code guessed at, which is what makes it the honest repair — and it is the same act
+            // day 6's contrast review offers from its own dialog, through this same verb.
+            onClearException={(exception) =>
+              onSetElementStyle(
+                { sectionId: exception.sectionId, elementId: exception.elementId },
+                exception.property,
+                undefined,
+              )
+            }
             onSetPlacement={(elementId, edit) => {
               if (designSectionId) onSetPlacement(designSectionId, elementId, edit);
             }}

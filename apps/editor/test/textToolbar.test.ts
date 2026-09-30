@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   backgroundOf,
   colorRolesFor,
+  EXACT_TODAY,
   hasAnyControl,
   sizeRefsFor,
   toolbarFor,
@@ -148,5 +149,67 @@ describe("which elements get a bar at all", () => {
     expect(hasAnyControl({ color: [], size: [], link: false })).toBe(false);
     const heading = toolbarFor({ role: "heading" });
     expect(heading && hasAnyControl(heading)).toBe(true);
+  });
+});
+
+/**
+ * The "Encendido" half of the §4 row — «Añade posición, medidas y espaciado» — and the one thing
+ * about it that is a decision rather than a feature: **which exact values ship today.**
+ */
+describe("what the design tools add", () => {
+  it("adds nothing at all when they are off", () => {
+    // Not an empty list: `undefined`, because "there is no such control here" and "this control has
+    // nothing to offer" are different states and only the second draws an empty row.
+    expect(toolbarFor({ role: "heading" })?.measures).toBeUndefined();
+    expect(toolbarFor({ role: "heading" }, false)?.measures).toBeUndefined();
+  });
+
+  it("adds spacing and corners when they are on, by reference", () => {
+    const measures = toolbarFor({ role: "heading" }, true)?.measures;
+    expect(measures?.padding).toEqual(["space.xs", "space.sm", "space.md", "space.lg", "space.xl"]);
+    expect(measures?.borderRadius).toEqual(["radius.sm", "radius.md", "radius.lg"]);
+  });
+
+  it("offers an exact value for padding and corners, and for nothing else today", () => {
+    // ADR 0026 §2, made precise on this day: an exact colour is coupled to the contrast review and
+    // an exact size to the overflow half of it, and both land on day 6. A 20px gap carries no
+    // legibility claim, so there is nothing for a review to say about it.
+    expect([...EXACT_TODAY]).toEqual(["padding", "borderRadius"]);
+    expect(EXACT_TODAY).not.toContain("color");
+    expect(EXACT_TODAY).not.toContain("fontSize");
+  });
+
+  it("keeps the colour list computed even with the tools on", () => {
+    // Turning the tools on adds measurements; it does not relax the contrast rule. Somebody who
+    // builds sites for a living gets the same four proved roles on a surface, and the same one on
+    // a button — the exception arm is what the switch buys, not an unproved reference.
+    expect(colorRolesFor("body")).toEqual(toolbarFor({ role: "body" }, true)?.color);
+    expect(toolbarFor({ role: "body" }, true)?.color).not.toContain("color.surface");
+    expect(toolbarFor({ role: "button" }, true)?.color).toEqual(["color.surface"]);
+  });
+
+  it("every exact value it offers is one the schema accepts", () => {
+    for (const property of EXACT_TODAY) {
+      expect(
+        () => elementStyleSchema.parse({ [property]: { exact: "20px", exception: true } }),
+        property,
+      ).not.toThrow();
+      // And an unmarked one is still refused, which is rule 6's second arm.
+      expect(() => elementStyleSchema.parse({ [property]: { exact: "20px" } }), property).toThrow();
+    }
+  });
+
+  it("draws a bar with the tools on even where every other control is empty", () => {
+    // A hypothetical element whose background has no proved pair: no colours, but measurements
+    // still apply, so there is still a bar. `hasAnyControl` has to know that.
+    expect(hasAnyControl({ color: [], size: [], link: false })).toBe(false);
+    expect(
+      hasAnyControl({
+        color: [],
+        size: [],
+        link: false,
+        measures: { padding: [], borderRadius: [], exact: [] },
+      }),
+    ).toBe(true);
   });
 });
