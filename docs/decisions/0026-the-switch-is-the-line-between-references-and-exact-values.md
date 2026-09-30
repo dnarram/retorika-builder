@@ -71,11 +71,28 @@ measurements and spacing. So:
 This is not a new rule. It is where the two halves of rule 6 were always going to divide, written
 down so the code cannot drift from it.
 
-### 2. Exact values and the contrast review ship together, or neither ships
+### 2. An exact **colour** and the contrast review ship together, or neither ships
 
 An exact colour without the review is precisely what `REVIEW.md` refused in writing. They are one
 deliverable in two files, and the cut line runs around both of them: if the review does not land,
-the exact-value arm waits and the sprint ships references only.
+the colour half waits and the sprint ships references only.
+
+> **Made precise on sprint 9 day 5, because acting on it required it.** This first said «exact
+> values», which is broader than the argument underneath it and broader than what has to be coupled.
+> Each day of this sprint is merged and redeployed on its own, so shipping the exact-colour control a
+> day before its review would put a deployed editor in exactly the state this ADR refuses — for a
+> day. Shipping an exact **padding** would not: a 20px gap carries no legibility claim, nothing
+> measures it, and there is nothing for a review to say about it.
+>
+> So the coupling is named by property:
+>
+> | Exact value | Ships with |
+> |---|---|
+> | `padding`, `borderRadius` | Day 5, alone. Pure geometry — no contrast, no legibility |
+> | `color` | Day 6 only, with the two-level contrast review |
+> | `fontSize` | Day 6 only. Not for contrast — every proved pair clears 4.5:1 at any size — but because the dossier §4 promises the same pre-publish check covers «desbordes por debajo de 320 píxeles», and an exact size is the one value in this vocabulary that can cause one |
+>
+> The record is changed rather than the reading, which is the point of writing it down.
 
 ### 3. Two levels, and who decided them
 

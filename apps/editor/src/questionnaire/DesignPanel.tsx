@@ -1,6 +1,13 @@
 "use client";
 
-import type { MobilePatchEdit, Placement, PlacementEdit, RetorikaDocument } from "@retorika/schema";
+import type {
+  MobilePatchEdit,
+  Placement,
+  PlacementEdit,
+  RetorikaDocument,
+  StyleException,
+} from "@retorika/schema";
+import { listStyleExceptions } from "@retorika/schema";
 import { useId, useState } from "react";
 import {
   boundsFor,
@@ -193,6 +200,7 @@ export function DesignPanel({
   onSetMobilePatch,
   onMoveUpOnMobile,
   onPreviewMobile,
+  onClearException,
   onClose,
 }: {
   document: RetorikaDocument;
@@ -210,6 +218,9 @@ export function DesignPanel({
   onMoveUpOnMobile: (elementId: string) => void;
   /** Show the mobile preview, so the three adjustments are made while looking at what they change. */
   onPreviewMobile: () => void;
+  /** Drop one exception and let the system show through again — the whole of the «arreglo en un
+   * clic», and the same act day 6's contrast review will offer from its own dialog. */
+  onClearException: (exception: StyleException) => void;
   onClose: () => void;
 }) {
   const headingId = useId();
@@ -217,6 +228,26 @@ export function DesignPanel({
    * about what encountering the tools feels like, which is a thing that happens on opening. */
   const [placementOpen, setPlacementOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [exceptionsOpen, setExceptionsOpen] = useState(false);
+
+  /**
+   * Every exact value in the whole site — the audit `packages/schema/src/tokens.ts` promised in
+   * phase 0 and nothing had ever built: «what lets a **future** audit list every place that opted
+   * out of the system».
+   *
+   * **Asked of the document and not of the section**, which is why it sits outside the
+   * section-dependent branches below. The question is «what in this web no longer follows the
+   * system», and an answer that changed depending on which section happened to be selected would
+   * not be an audit. It is also why the panel now shows something useful with no section chosen at
+   * all, where before it showed only a sentence telling you to choose one.
+   *
+   * Hidden elements included, deliberately. `listStyleExceptions` marks them and day 6's download
+   * gate is the reader that skips them — the renderer drops a hidden element, so blocking a
+   * download over a colour nobody can see would be wrong. Here the opposite is true: rule 3 keeps a
+   * hidden element precisely so the place to fill it in still exists, and an exception that
+   * vanished from this list when somebody hid its element is one that comes back unannounced.
+   */
+  const exceptions = listStyleExceptions(doc);
 
   const rows = sectionId === null ? [] : designRows(doc, sectionId);
   // The same resolution the canvas uses for its outline, from the same function — see
@@ -396,6 +427,60 @@ export function DesignPanel({
           <p className="m-0 text-[11px] leading-normal text-ui-muted">{es["editor.design.note"]}</p>
         </>
       )}
+
+      {/*
+        Outside the branches above, because it is about the site and not about the selected
+        section — and because it is the one thing this panel can say when nothing is selected.
+      */}
+      <Family
+        title={`${es["editor.design.exceptions"]}${exceptions.length > 0 ? ` (${exceptions.length})` : ""}`}
+        open={exceptionsOpen}
+        onToggle={() => setExceptionsOpen((value) => !value)}
+      >
+        {exceptions.length === 0 ? (
+          // Not an empty box. The sentence says what being empty *means*, which is the promise
+          // rule 6 makes and the reason somebody would want it to stay empty.
+          <p className="m-0 text-[12px] leading-snug text-ui-muted">
+            {es["editor.design.exceptionsEmpty"]}
+          </p>
+        ) : (
+          <>
+            <p className="m-0 text-[12px] leading-snug text-ui-muted">
+              {es["editor.design.exceptionsHelp"]}
+            </p>
+            {exceptions.map((exception) => (
+              <div
+                key={`${exception.sectionId}/${exception.elementId}/${exception.property}`}
+                className="flex items-center justify-between gap-2 rounded-[7px] border border-ui-border px-2.5 py-2"
+              >
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="truncate text-[12px] text-ui-ink">
+                    {/* The words a person recognises, never the element id. An audit nobody can
+                        match to something on the screen is an audit nobody can act on. */}
+                    {exception.label ?? exception.slot}
+                    {exception.hidden ? (
+                      <span className="ml-1.5 text-[10px] font-medium text-ui-muted">
+                        {es["editor.design.exceptionHidden"]}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="text-[11px] text-ui-muted">
+                    {es[`editor.design.exceptionOf.${exception.property}` as keyof typeof es]}:{" "}
+                    <code className="font-mono">{exception.exact}</code>
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onClearException(exception)}
+                  className="shrink-0 cursor-pointer rounded-[6px] border border-ui-border bg-white px-2 py-1 text-[11px] font-medium text-ui-ink hover:border-ui-brand hover:bg-ui-brand-surface"
+                >
+                  {es["editor.design.exceptionBack"]}
+                </button>
+              </div>
+            ))}
+          </>
+        )}
+      </Family>
     </aside>
   );
 }
