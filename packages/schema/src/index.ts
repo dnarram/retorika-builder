@@ -82,11 +82,15 @@ export {
   setVariant,
 } from "./sections.ts";
 export { mintSlug, SLUG_PATTERN, slugFrom } from "./slug.ts";
+export type { StyleException } from "./style.ts";
+export { listStyleExceptions, setElementStyle, styleFor } from "./style.ts";
 export { setTheme } from "./theme.ts";
-export type { StyleValue, Theme, TokenKey } from "./tokens.ts";
+export type { ElementStyle, StyleProperty, StyleValue, Theme, TokenKey } from "./tokens.ts";
 export {
+  elementStyleSchema,
   SORTED_TOKEN_KEYS,
-  styleValueSchema,
+  STYLE_PROPERTIES,
+  STYLE_REFS,
   TOKEN_KEYS,
   themeSchema,
   tokenKeySchema,

@@ -112,6 +112,43 @@ The Retorika brand palette does not live here. A document's theme is the client'
 
 ---
 
+## The four style properties
+
+Sprint 9, schema 1.2.0. The namespace above says which *values* exist; this says which
+**properties an element may set**, and it is the other half of making rule 6 checkable.
+
+An element's `style` used to be an open map: `{"wobble": {ref: "color.primary"}}` parsed. Closing
+the key to a flat list of property names would not have been enough either, because
+`{color: {ref: "space.md"}}` publishes `color: 16px` — a dead reference of a different kind, and one
+nobody discovers until it is on a client's site. So each property is bound to its own family:
+
+| Property | References it admits |
+|---|---|
+| `color` | `color.primary`, `color.secondary`, `color.surface`, `color.ink`, `color.muted` |
+| `fontSize` | `size.heading`, `size.subheading`, `size.body` |
+| `padding` | `space.xs` … `space.xl` |
+| `borderRadius` | `radius.sm`, `radius.md`, `radius.lg` |
+
+There is no fifth, and three deliberate absences are worth naming:
+
+- **`color.accent` is admitted nowhere.** No rule the renderer emits reads `var(--color-accent)`, a
+  test asserts that no document in the corpus does either, and it is the one colour whose contrast is
+  asserted in no palette — 3.19:1 on surface in `classic-blue`, under AA.
+- **`font.heading` and `font.body` are not here at all**, so there is no per-element typeface. Issue
+  #9: those stacks fall back to the system font on a machine without the fonts, and ADR 0001 forbids
+  downloading them, so offering one would promise a letterform the visitor may never receive.
+- **The list is disjoint from `display`, `order`, `width` and the grid columns**, and that is rule 7
+  rather than tidiness. **A media query adds no specificity**, so a per-element rule outranks a
+  mobile patch: if `display` were here, an element hidden by its own patch would reappear on the
+  phone and rule 7 would lose in silence. Those properties belong to rules 4 and 7, and stay there.
+
+An exact value is narrower still: **a colour is a hex triple and a measurement is a plain length.**
+The schema is the gate a *stored* document passes, so admitting `rgb(0 0 0)` would let somebody save
+a site the renderer cannot publish — an invalid state whose only repair would be an interface for it.
+See ADR 0026.
+
+---
+
 ## The three breakpoint adjustments
 
 A breakpoint patch may do exactly three things, and the type says so rather than accepting a
