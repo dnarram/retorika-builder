@@ -653,6 +653,13 @@ export function Variants({
             theme: withScale(history.present.document.theme, scaleId),
           });
         }}
+        // Rule 6, from the floating toolbar. Unlike the three above it writes one element rather
+        // than the whole theme, so it goes through its own action — and it needs no design tools:
+        // a reference is what everybody gets (advanced dossier §4, "Apagado").
+        onSetElementStyle={(address, property, value) => {
+          dismissToast();
+          dispatch({ type: "setElementStyle", variant: openIndex, address, property, value });
+        }}
         pageId={currentPageId}
         onSelectPage={(next) => {
           dismissToast();

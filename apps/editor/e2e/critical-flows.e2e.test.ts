@@ -1606,3 +1606,131 @@ describe("sprint 8 día 7 — colchón: los tiradores no desplazan el lienzo", (
     }
   });
 });
+
+/**
+ * Sprint 9 day 4 — the floating toolbar.
+ *
+ * **Both defects this pins were invisible to every other suite**, and both were found by walking
+ * the editor rather than by a failing assertion:
+ *
+ * 1. The bar appeared on the cover and on **no other section**. Clicking from one text straight to
+ *    another fires the new element's `focus` before the old one's deferred `blur`, so the blur tore
+ *    down the bar it had never opened.
+ * 2. It was positioned with `el.offsetTop - section.offsetTop`, and `offsetTop` is already measured
+ *    against the section — the nearest positioned ancestor. The subtraction skewed it by however
+ *    far down the page the section sat, and it *read* as correct only because the error pushed the
+ *    calculation into the flip branch, which pushed the bar back up by about the same amount.
+ *
+ * A unit test could not have seen either: one is an event ordering in a real document, the other is
+ * layout geometry.
+ */
+describe("sprint 9 día 4 — la barra flotante", () => {
+  it("appears on every section, writes a reference, and never saves its own words into the text", async () => {
+    const studio = await (await browser.newContext()).newPage();
+    try {
+      await studio.goto(BASE_URL, { waitUntil: "networkidle" });
+      await studio.fill("#nombre", "Barbería El Corte");
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByText("Peluquería y barbería", { exact: true }).click();
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.fill("#direccion", "Calle Espinel 12, Ronda");
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByText("Que me llamen", { exact: true }).click();
+      await studio.fill("#telefono", "600111222");
+      await studio.getByRole("button", { name: "Crear mi web" }).click();
+      await studio.getByText("Ver a tamaño real →").first().click();
+
+      const frame = studio.frameLocator("iframe").first();
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+
+      // The design tools are **off**, and the bar is still there: the advanced dossier §4 gives
+      // «color del tema» to everybody, and this is that sentence as a test.
+      await expect(studio.getByRole("button", { name: "Diseño" })).toHaveCount(0);
+
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      const wordsBefore = await headline.textContent();
+      await headline.click();
+      const bar = frame.locator(".rb-toolbar");
+      await expect(bar).toHaveCount(1);
+
+      // Defect 1's other half: the bar is a child of the **section**, never of the element.
+      // `wireEditing` commits `el.textContent` on blur, so a bar inside the `<h1>` would be saved
+      // into the heading on the first click.
+      expect(await bar.evaluate((el) => el.parentElement?.getAttribute("data-section"))).toBe(
+        "sec-cover",
+      );
+
+      // Four swatches on a heading: the four foregrounds proved against `color.surface`. Not five
+      // — `color.surface` on `color.surface` is 1:1 and is never offered.
+      await expect(bar.locator(".rb-toolbar-swatch")).toHaveCount(4);
+      await expect(bar.locator('.rb-toolbar-swatch[data-ref="color.surface"]')).toHaveCount(0);
+
+      await bar.locator('.rb-toolbar-swatch[data-ref="color.muted"]').click();
+      await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
+
+      // The words are untouched, in the document rather than on the screen.
+      expect(await frame.locator('[data-id="el-headline"]').textContent()).toBe(wordsBefore);
+      const stored = await studio.evaluate(() => {
+        const raw = localStorage.getItem("retorika.session.v1");
+        if (!raw) return null;
+        const session = JSON.parse(raw) as {
+          openIndex: number;
+          documents: {
+            pages: {
+              sections: { content: { id: string; style?: unknown; value?: unknown }[] }[];
+            }[];
+          }[];
+        };
+        const element = session.documents[session.openIndex]?.pages[0]?.sections[0]?.content.find(
+          (c) => c.id === "el-headline",
+        );
+        return { style: element?.style ?? null, value: element?.value ?? null };
+      });
+      expect(stored?.style).toEqual({ color: { ref: "color.muted" } });
+      expect(stored?.value).toEqual({ kind: "text", text: "Barbería El Corte" });
+
+      // The bar survives the edit. Writing a style rebuilds `srcDoc`, and before this it vanished
+      // the moment it was used — one press per click into the text.
+      await expect(frame.locator(".rb-toolbar")).toHaveCount(1);
+
+      // Defect 1: every section, not only the first. Each bar belongs to its own section and sits
+      // inside it, which the old arithmetic could not have managed for a section 446px down.
+      const sections = await frame
+        .locator("[data-section]")
+        .evaluateAll((els) => els.map((el) => (el as HTMLElement).dataset["section"]));
+      expect(sections.length).toBeGreaterThan(2);
+      for (const id of sections) {
+        const target = frame.locator(`[data-section="${id}"] :is(h1,h2,h3,p,a)[data-id]`).first();
+        if ((await target.count()) === 0) continue;
+        await target.click();
+        const open = frame.locator(".rb-toolbar");
+        await expect(open, `no toolbar in ${id}`).toHaveCount(1);
+        const placement = await open.evaluate((el) => {
+          const section = el.parentElement as HTMLElement;
+          const bar = el.getBoundingClientRect();
+          const box = section.getBoundingClientRect();
+          return {
+            parent: section.dataset["section"],
+            // Generous bounds: what is being checked is that it is near its own section rather
+            // than hundreds of pixels adrift, which is what the old subtraction produced.
+            near: bar.top > box.top - 80 && bar.bottom < box.bottom + 80,
+          };
+        });
+        expect(placement.parent, `toolbar parented wrongly for ${id}`).toBe(id);
+        expect(placement.near, `toolbar adrift from ${id}`).toBe(true);
+      }
+
+      // A button's list is computed from its own background, so it is one swatch and not four.
+      const button = frame.locator('[data-role="button"]').first();
+      if ((await button.count()) > 0) {
+        await button.click();
+        await expect(frame.locator(".rb-toolbar-swatch")).toHaveCount(1);
+        await expect(frame.locator('.rb-toolbar-swatch[data-ref="color.surface"]')).toHaveCount(1);
+        await expect(frame.locator(".rb-toolbar-link")).toHaveCount(1);
+      }
+    } finally {
+      await studio.context().close();
+    }
+  }, 120_000);
+});
