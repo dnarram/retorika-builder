@@ -1,8 +1,9 @@
 {
   "sector": "academia",
   "review": {
-    "status": "draft",
-    "drafted": "2026-09-29"
+    "status": "approved",
+    "by": "dnr",
+    "date": "2026-09-30"
   },
   "entries": [
     {
