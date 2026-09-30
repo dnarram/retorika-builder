@@ -8,9 +8,11 @@ import {
   type RetorikaDocument,
   type Section,
   SORTED_TOKEN_KEYS,
+  STYLE_PROPERTIES,
+  type StyleProperty,
   tokenToCssVariable,
 } from "@retorika/schema";
-import { cssThemeValue, safeUrl } from "./escape.ts";
+import { cssAttributeValue, cssThemeValue, safeUrl } from "./escape.ts";
 import { menuNodes } from "./menu.ts";
 import { commentNode, element, type RenderNode } from "./nodes.ts";
 import type { ResolvedRenderOptions } from "./options.ts";
@@ -494,7 +496,8 @@ function breakpointCss(doc: RetorikaDocument): string[] {
       for (const slot of mobileSequence(section)) {
         if (slot.patched) continue;
         rules.push(
-          `  [data-section="${section.id}"] [data-id="${slot.elementId}"] { order: ${slot.order}; }`,
+          `  [data-section="${cssAttributeValue(section.id)}"] ` +
+            `[data-id="${cssAttributeValue(slot.elementId)}"] { order: ${slot.order}; }`,
         );
       }
 
@@ -525,7 +528,8 @@ function breakpointCss(doc: RetorikaDocument): string[] {
 
         if (declarations.length === 0) continue;
         rules.push(
-          `  [data-section="${section.id}"] [data-id="${patch.elementId}"] { ${declarations.join("; ")}; }`,
+          `  [data-section="${cssAttributeValue(section.id)}"] ` +
+            `[data-id="${cssAttributeValue(patch.elementId)}"] { ${declarations.join("; ")}; }`,
         );
       }
     }
@@ -535,6 +539,91 @@ function breakpointCss(doc: RetorikaDocument): string[] {
   // the selectors already win — but placing it second means a future rule of equal specificity
   // behaves the way somebody reading the file would expect.
   return rules.length === 0 ? [] : ["@media (max-width: 720px) {", ...rules, "}", ""];
+}
+
+/** The CSS property each of rule 6's four properties writes. Written out rather than derived by
+ * camel-to-kebab, so adding a fifth is a decision somebody makes here rather than a transformation
+ * that happens to produce something. */
+const CSS_PROPERTY: Record<StyleProperty, string> = {
+  color: "color",
+  fontSize: "font-size",
+  padding: "padding",
+  borderRadius: "border-radius",
+};
+
+/**
+ * Document rule 6, finally emitted: an element's own style.
+ *
+ * `ContentElement.style` has been in the schema since phase 0 and **this is the first code that
+ * reads it**. Sprint 9 day 2 closed its vocabulary; this is the half that reaches a published page,
+ * and it is the obligation `docs/tasks/theme-css-values.md` left by name for «the task that starts
+ * emitting them».
+ *
+ * **A reference becomes `var(--token)`, and that is not an implementation detail — it is what makes
+ * rule 6 true.** «Cambiar la paleta sigue funcionando en toda la web, incluidas las secciones
+ * diseñadas a mano»: the custom property does that work, so an element that references
+ * `color.primary` follows the palette forever. An exact value is emitted literally and does not,
+ * which is precisely what «excepción» means.
+ *
+ * **A rule block in the stylesheet, never an inline `style` attribute**, for three reasons that are
+ * all visible in this file:
+ *
+ * - The `grid-column: 1 / -1 !important` in the shared mobile block exists *because*
+ *   `placementStyle` writes the grid inline. Inline style beats every selector, so each future
+ *   override would have to answer with another `!important`, and `breakpointCss` earned the right
+ *   to say it carries none.
+ * - `attributesToString` sorts attributes, so a new `style` attribute rewrites the middle of an
+ *   existing golden line. A rule block adds contiguous lines at the end. One diff is read, the
+ *   other is skimmed.
+ * - `build.ts:303` is then not touched at all, and the placement path stays exactly as the golden
+ *   corpus recorded it.
+ *
+ * **The selector carries three attributes, and the third is load-bearing.**
+ * `[data-section=…] [data-id=…][data-role]` is (0,3,0). With two it would be (0,2,0), and this
+ * stylesheet has rules at **(0,2,1)** — `.rb-section p.rb-subtitle` and
+ * `.rb-section a:not([role=button])`, where `:not()` takes its argument's specificity. A colour set
+ * on the cover's tagline or on any plain link would have lost to them and **done nothing, in
+ * silence**. `data-role` is already emitted on every element (`elementNode`), so the third
+ * attribute costs nothing and lifts the rule above everything in the file without one `!important`.
+ */
+function elementStyleCss(doc: RetorikaDocument): string[] {
+  const rules: string[] = [];
+
+  const walk = (sectionId: string, elements: readonly ContentElement[]): void => {
+    for (const el of elements) {
+      // A hidden element is not rendered at all, so a rule for it would match nothing and only
+      // weigh the page down — the same reason `listDeadDestinations` ignores one.
+      if (!el.hidden && el.style) {
+        const declarations: string[] = [];
+        for (const property of STYLE_PROPERTIES) {
+          const value = el.style[property];
+          if (value === undefined) continue;
+          const css =
+            "ref" in value
+              ? `var(${tokenToCssVariable(value.ref)})`
+              : // The boundary check `theme-css-values.md` reserved for this day. Since day 2 the
+                // schema admits only a hex triple or a plain length, so it can no longer fire for a
+                // document that parsed — which is the right relationship between a gate and a
+                // guard, not a reason to drop the guard.
+                cssThemeValue(`${el.id}.${property}`, value.exact);
+          declarations.push(`${CSS_PROPERTY[property]}: ${css}`);
+        }
+        if (declarations.length > 0) {
+          rules.push(
+            `  [data-section="${cssAttributeValue(sectionId)}"] ` +
+              `[data-id="${cssAttributeValue(el.id)}"][data-role] { ${declarations.join("; ")}; }`,
+          );
+        }
+      }
+      for (const item of el.items ?? []) walk(sectionId, item.elements);
+    }
+  };
+
+  for (const page of doc.pages) {
+    for (const section of page.sections) walk(section.id, section.content);
+  }
+
+  return rules.length === 0 ? [] : ["/* rule 6: an element's own style */", ...rules, ""];
 }
 
 export function buildCss(doc: RetorikaDocument): string {
@@ -681,7 +770,12 @@ export function buildCss(doc: RetorikaDocument): string {
     "  .rb-nav-narrow { display: block; }",
     "}",
     "",
-    // Rule 7's per-element patches, last, and only for the sections that carry any.
+    // Rule 6's per-element style, and then rule 7's per-element patches — both only for the
+    // documents that carry any, so a site that uses neither publishes exactly the bytes it always
+    // did. Style before patches because it applies at every width and the patches are the mobile
+    // override; source order settles nothing here, since the selectors already decide, but a
+    // stylesheet should read in the order somebody would explain it.
+    ...elementStyleCss(doc),
     ...breakpointCss(doc),
   ].join("\n");
 }

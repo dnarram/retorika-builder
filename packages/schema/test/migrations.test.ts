@@ -279,16 +279,30 @@ describe("0003 — an element's style is a closed vocabulary", () => {
     expect(roundTripped).toEqual(input);
   });
 
-  it("is the claim it rests on: no document in the corpus carries a style", () => {
+  it("is the claim it rests on: no document written before 1.2.0 carries a style", () => {
     // If this ever goes red, `up` is no longer allowed to be a version stamp — somebody's stored
     // style would have to be read, checked against the new vocabulary, and either kept or refused
     // out loud. The migration's own header says so; this is the test that would say it first.
+    //
+    // **The version is the whole point of the filter, and day 3 is what taught it.** This test was
+    // written the day before over every fixture, and `estilo-por-elemento` — authored against 1.2.0
+    // to give the renderer's new branch a golden file — turned it red. It was right to fire and
+    // wrong about what it meant: the migration's claim is about documents written against *1.1.0*,
+    // which is the only set `up` can be asked to convert. A 1.2.0 fixture was never one of them, so
+    // it cannot be a counterexample. Written loosely, this would have been relaxed into uselessness
+    // the first time somebody added a styled fixture; written this way it still fires for the case
+    // it exists for, and only for that one.
     const corpus = readdirSync(DOCUMENTS_DIR).filter((file) => file.endsWith(".json"));
     expect(corpus.length).toBeGreaterThan(0);
+    let older = 0;
     for (const file of corpus) {
       const raw = readFileSync(join(DOCUMENTS_DIR, file), "utf8");
-      expect(JSON.parse(raw), file).not.toHaveProperty("style");
+      const parsed = JSON.parse(raw) as { schemaVersion?: string };
+      if (parsed.schemaVersion === "1.2.0") continue;
+      older += 1;
       expect(raw, file).not.toContain('"style"');
     }
+    // And the filter has not quietly excluded everything, which would make this pass by vacuum.
+    expect(older).toBeGreaterThan(0);
   });
 });

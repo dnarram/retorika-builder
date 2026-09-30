@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reformas Vega</title>
+<style>
+:root {
+  --color-accent: #D97706;
+  --color-ink: #0F172A;
+  --color-muted: #475569;
+  --color-primary: #1D4ED8;
+  --color-secondary: #0F766E;
+  --color-surface: #FFFFFF;
+  --font-body: system-ui, sans-serif;
+  --font-heading: Georgia, serif;
+  --radius-lg: 16px;
+  --radius-md: 8px;
+  --radius-sm: 4px;
+  --size-body: 1rem;
+  --size-heading: 2.5rem;
+  --size-subheading: 1.5rem;
+  --space-lg: 24px;
+  --space-md: 16px;
+  --space-sm: 8px;
+  --space-xl: 48px;
+  --space-xs: 4px;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; font-family: var(--font-body); color: var(--color-ink);
+  background: var(--color-surface); }
+.rb-section { display: grid; grid-template-columns: repeat(12, 1fr);
+  gap: var(--space-md); padding: var(--space-xl); align-items: center; }
+.rb-section img { width: 100%; height: auto; border-radius: var(--radius-md); }
+.rb-section :is(h1, h2, h3, h4, h5, h6, p, a) { overflow-wrap: break-word; }
+.rb-section :is(h1, h2, h3, h4, h5, h6, p.rb-subtitle) { -webkit-hyphens: auto;
+  hyphens: auto; }
+.rb-section h1 { font-family: var(--font-heading); font-size: var(--size-heading);
+  color: var(--color-primary); margin: 0; }
+.rb-section h2 { font-family: var(--font-heading); font-size: var(--size-subheading);
+  color: var(--color-secondary); margin: 0; }
+.rb-section p.rb-subtitle { font-family: var(--font-heading);
+  font-size: var(--size-subheading); color: var(--color-secondary); margin: 0; }
+.rb-section h3 { font-family: var(--font-heading); font-size: var(--size-body);
+  color: var(--color-ink); margin: 0; }
+.rb-list { display: grid; gap: var(--space-md); margin: 0; padding: 0; list-style: none;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); }
+.rb-item { display: flex; flex-direction: column; gap: var(--space-xs);
+  padding-top: var(--space-sm); border-top: 1px solid var(--color-muted); }
+.rb-prices .rb-list { grid-template-columns: 1fr; gap: var(--space-sm); }
+.rb-gallery .rb-item img { aspect-ratio: 4 / 3; object-fit: cover; }
+.rb-team .rb-item img { aspect-ratio: 1 / 1; object-fit: cover; }
+.rb-section p { font-size: var(--size-body); color: var(--color-muted); margin: 0; }
+.rb-section a:not([role=button]) { color: var(--color-primary); text-decoration: underline; }
+.rb-section [role=button] { display: inline-block; padding: var(--space-sm) var(--space-md);
+  background: var(--color-primary); color: var(--color-surface);
+  border-radius: var(--radius-sm); text-decoration: none; }
+.rb-panel { align-self: stretch; margin: calc(-1 * var(--space-md)); z-index: 1;
+  background: var(--color-surface); border-radius: var(--radius-lg); pointer-events: none; }
+.rb-panel ~ :not(img) { z-index: 2; }
+
+.rb-nav { display: flex; flex-wrap: wrap; gap: var(--space-md);
+  padding: var(--space-md) var(--space-xl); background: var(--color-surface); }
+.rb-nav-wide, .rb-nav-narrow { border-bottom: 1px solid var(--color-muted); }
+.rb-nav a { color: var(--color-primary); font-family: var(--font-heading);
+  font-size: var(--size-body); text-decoration: none; }
+.rb-nav a[aria-current=page] { text-decoration: underline; text-underline-offset: 6px;
+  text-decoration-thickness: 2px; }
+.rb-nav-narrow { padding: var(--space-md) var(--space-lg);
+  background: var(--color-surface); }
+.rb-nav-narrow > summary { color: var(--color-primary); font-family: var(--font-heading);
+  font-size: var(--size-body); cursor: pointer; }
+.rb-nav-narrow .rb-nav { flex-direction: column; gap: var(--space-sm);
+  padding: var(--space-md) 0 0; }
+
+@media (max-width: 720px) {
+  .rb-section { grid-template-columns: 1fr; padding: var(--space-lg); }
+  .rb-section > * { grid-column: 1 / -1 !important; grid-row: auto !important; }
+  .rb-section > img { order: -1; }
+  .rb-panel { display: none; }
+}
+
+.rb-nav-narrow { display: none; }
+@media (max-width: 720px) {
+  .rb-nav-wide { display: none; }
+  .rb-nav-narrow { display: block; }
+}
+
+/* rule 6: an element's own style */
+  [data-section="sec-cover"] [data-id="el-headline"][data-role] { color: var(--color-ink); font-size: var(--size-subheading); }
+  [data-section="sec-cover"] [data-id="el-subheadline"][data-role] { color: var(--color-muted); }
+  [data-section="sec-cover"] [data-id="el-image"][data-role] { border-radius: 28px; }
+  [data-section="sec-cover"] [data-id="el-secondary"][data-role] { color: var(--color-secondary); }
+  [data-section="sec-services"] [data-id="el-card-1-title"][data-role] { color: #7A1F1F; padding: var(--space-sm); }
+</style>
+</head>
+<body>
+<main class="rb-page" data-page="home">
+  <section class="rb-section rb-cover rb-image-right" data-preset="cover" data-section="sec-cover" data-variant="image-right" id="sec-cover">
+    <h1 data-id="el-headline" data-role="heading" data-slot="headline" style="grid-column:1/span 6;grid-row:1/span 1">
+      Reformamos tu casa sin sorpresas
+    </h1>
+    <p class="rb-subtitle" data-id="el-subheadline" data-role="subheading" data-slot="subheadline" style="grid-column:1/span 6;grid-row:2/span 1">
+      Presupuesto cerrado y fecha de entrega por escrito
+    </p>
+    <p data-id="el-body" data-role="body" data-slot="body" style="grid-column:1/span 6;grid-row:3/span 1">
+      Cocinas, baños y viviendas completas en Ronda y alrededores.
+    </p>
+    <img alt="Una cocina recién reformada" data-id="el-image" data-role="image" data-slot="image" src="assets/physio.svg" style="grid-column:7/span 6;grid-row:1/span 4">
+    <a data-id="el-secondary" data-role="link" data-slot="secondaryAction" href="#trabajos" style="grid-column:4/span 3;grid-row:4/span 1">
+      Ver trabajos
+    </a>
+  </section>
+  <section class="rb-section rb-services rb-stacked" data-preset="services" data-section="sec-services" data-variant="stacked" id="sec-services">
+    <h2 data-id="el-services-headline" data-role="heading" data-slot="headline" style="grid-column:1/span 12;grid-row:1/span 1">
+      Qué hacemos
+    </h2>
+    <ul class="rb-list" data-id="el-services" data-role="list" data-slot="services" role="list" style="grid-column:1/span 12;grid-row:3/span 1">
+      <li class="rb-item" data-item="item-1">
+        <h3 data-id="el-card-1-title" data-role="heading" data-slot="title">
+          Cocinas
+        </h3>
+        <p data-id="el-card-1-description" data-role="body" data-slot="description">
+          De la demolición al último tirador.
+        </p>
+      </li>
+      <li class="rb-item" data-item="item-2">
+        <h3 data-id="el-card-2-title" data-role="heading" data-slot="title">
+          Baños
+        </h3>
+        <p data-id="el-card-2-description" data-role="body" data-slot="description">
+          Platos de ducha, alicatado y fontanería.
+        </p>
+      </li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>
