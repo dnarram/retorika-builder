@@ -587,9 +587,14 @@ export function Variants({
           dismissToast();
           dispatch({ type: "escalateSection", variant: openIndex, sectionId });
         }}
-        onRevertSection={(sectionId) => {
+        onRevertSection={(sectionId, decisions) => {
           dismissToast();
-          dispatch({ type: "revertSection", variant: openIndex, sectionId });
+          dispatch({
+            type: "revertSection",
+            variant: openIndex,
+            sectionId,
+            ...(decisions === undefined ? {} : { decisions }),
+          });
         }}
         onSetPlacement={(sectionId, elementId, edit) => {
           dismissToast();

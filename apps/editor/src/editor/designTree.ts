@@ -24,6 +24,30 @@ function slotLabel(catalogId: string, slot: string): string {
   return catalogEs[key] ?? slot;
 }
 
+/**
+ * Every element of a section, named — one name per element id, numbered within its slot.
+ *
+ * **Every element, not every placed element.** The tree below lists placements, and the return dialog
+ * has to name elements that may have none: a surplus element created after the section was escalated
+ * never got one, because `escalate` drew the layout from the elements that existed at the time. Two
+ * panels naming the same element differently is the thing this exists to prevent, and the third
+ * caller is what made it worth a function rather than a copy.
+ */
+export function elementLabels(doc: RetorikaDocument, sectionId: string): Map<string, string> {
+  const section = findSection(doc, sectionId)?.section;
+  if (!section) return new Map();
+
+  const seen = new Map<string, number>();
+  const labels = new Map<string, string>();
+  for (const element of section.content) {
+    const occurrence = seen.get(element.slot) ?? 0;
+    seen.set(element.slot, occurrence + 1);
+    const base = slotLabel(section.preset.catalogId, element.slot);
+    labels.set(element.id, occurrence === 0 ? base : `${base} ${occurrence + 1}`);
+  }
+  return labels;
+}
+
 export interface DesignRow {
   elementId: string;
   /** The catalog's Spanish name for the slot, numbered when a slot holds more than one. */
@@ -52,25 +76,16 @@ export function designRows(doc: RetorikaDocument, sectionId: string): DesignRow[
   if (!section || !layout) return [];
 
   const byId = new Map(section.content.map((element) => [element.id, element]));
-  const seen = new Map<string, number>();
+  const labels = elementLabels(doc, sectionId);
 
   return layout.placements.flatMap((placement) => {
     const element = byId.get(placement.elementId);
+    const label = labels.get(placement.elementId);
     // A placement whose element is not a direct child of the section has no slot of its own to
     // label. `checkInvariants` rejects a placement pointing at nothing at all, so this is the
     // nested case — left out rather than shown as a raw id on a Spanish screen.
-    if (!element) return [];
-    const occurrence = seen.get(element.slot) ?? 0;
-    seen.set(element.slot, occurrence + 1);
-    const base = slotLabel(section.preset.catalogId, element.slot);
-    return [
-      {
-        elementId: placement.elementId,
-        label: occurrence === 0 ? base : `${base} ${occurrence + 1}`,
-        placement,
-        hidden: element.hidden,
-      },
-    ];
+    if (!element || label === undefined) return [];
+    return [{ elementId: placement.elementId, label, placement, hidden: element.hidden }];
   });
 }
 

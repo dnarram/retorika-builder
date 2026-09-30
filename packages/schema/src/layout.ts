@@ -1,7 +1,13 @@
 import { GRID_COLUMNS, type Placement, type RetorikaDocument } from "./document.ts";
 import { parseDocument } from "./parse.ts";
 import type { PresetShape } from "./preset.ts";
-import { applyRevert, escalate, planRevert, type SurplusDecision } from "./revert.ts";
+import {
+  applyRevert,
+  escalate,
+  planRevert,
+  type RevertPlan,
+  type SurplusDecision,
+} from "./revert.ts";
 import { findSection } from "./sections.ts";
 
 /**
@@ -111,6 +117,58 @@ export function revertPlanFor(doc: RetorikaDocument, sectionId: string, preset: 
  * what decides which of the two actions the section header offers. */
 export function isHandDesigned(doc: RetorikaDocument, sectionId: string): boolean {
   return findSection(doc, sectionId)?.section.source === "free";
+}
+
+/** What the return would cost, which is what the dialog of day 4 has to say before doing it. */
+export interface RevertImpact extends RevertPlan {
+  /**
+   * Whether the layout being dropped is one somebody actually changed.
+   *
+   * `escalate` copies the preset's own layout in, so a section escalated and left alone has a layout
+   * identical to the one the catalog would draw: dropping it costs nothing and is invisible. Once an
+   * element has been moved, dropping it throws away work. **Losing the layout is correct either way**
+   * — rule 1 puts it in the layout object and `document-rules.md` says so — but only one of the two
+   * is worth stopping a person to mention.
+   */
+  dropsPlacements: boolean;
+  /** True when the return would take away nothing anybody would miss. The interface uses this to
+   * decide whether to ask at all: «Volver es un clic, no destruye nada» is the promise, and a
+   * confirmation over nothing destroyed would be friction defending against itself. */
+  lossless: boolean;
+}
+
+/**
+ * Everything the return dialog needs, in one answer.
+ *
+ * One function rather than three the component composes, because "is there anything worth saying"
+ * is a decision about the document model and not about layout of a panel — and a component that
+ * re-derived it would be free to derive it differently.
+ *
+ * `undefined` for a section of the catalog: there is no return to plan. The same distinction
+ * `revertPlanFor` makes, for the same reason.
+ */
+export function revertImpact(
+  doc: RetorikaDocument,
+  sectionId: string,
+  preset: PresetShape,
+): RevertImpact | undefined {
+  const found = sectionOrThrow(doc, sectionId, "revertImpact");
+  const { section } = found;
+  if (section.source !== "free") return undefined;
+
+  const plan = planRevert(section, preset);
+  // Compared against the layout the catalog would draw for this variant *and these elements*, not
+  // against the one `escalate` copied in at the time: an element hidden or filled since then changes
+  // what the preset draws, and a placement that still matches the new drawing has not been moved.
+  const drawn = preset.layoutFor(section.preset.variantId, section.content);
+  const dropsPlacements =
+    JSON.stringify(section.layout?.placements) !== JSON.stringify(drawn.placements);
+
+  return {
+    ...plan,
+    dropsPlacements,
+    lossless: plan.surplus.length === 0 && !plan.dropsBreakpointAdjustments && !dropsPlacements,
+  };
 }
 
 /** The part of a placement a caller may change. `elementId` is which placement, not what it says. */
