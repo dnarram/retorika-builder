@@ -1,5 +1,6 @@
 import asesoriaJson from "../bank/asesoria.json" with { type: "json" };
 import esteticaJson from "../bank/estetica.json" with { type: "json" };
+import fisioterapiaJson from "../bank/fisioterapia.json" with { type: "json" };
 import genericoJson from "../bank/generico.json" with { type: "json" };
 import peluqueriaJson from "../bank/peluqueria-barberia.json" with { type: "json" };
 import reformasJson from "../bank/reformas.json" with { type: "json" };
@@ -25,6 +26,7 @@ export const GENERIC_SECTOR = "generico";
 const FILES: readonly unknown[] = [
   asesoriaJson,
   esteticaJson,
+  fisioterapiaJson,
   genericoJson,
   peluqueriaJson,
   reformasJson,
