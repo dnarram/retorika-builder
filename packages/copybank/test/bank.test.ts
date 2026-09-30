@@ -4,6 +4,7 @@ import genericoJson from "../bank/generico.json" with { type: "json" };
 import peluqueriaJson from "../bank/peluqueria-barberia.json" with { type: "json" };
 import reformasJson from "../bank/reformas.json" with { type: "json" };
 import restauranteJson from "../bank/restaurante-bar.json" with { type: "json" };
+import tallerJson from "../bank/taller.json" with { type: "json" };
 import tiendaJson from "../bank/tienda.json" with { type: "json" };
 import {
   actionLabel,
@@ -21,6 +22,7 @@ const FILES = [
   ["peluqueria-barberia", peluqueriaJson],
   ["reformas", reformasJson],
   ["restaurante-bar", restauranteJson],
+  ["taller", tallerJson],
   ["tienda", tiendaJson],
 ] as const;
 
