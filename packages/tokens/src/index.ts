@@ -5,9 +5,11 @@ export { PALETTES } from "./palettes.ts";
 
 export {
   identifyPalette,
+  identifyScale,
   identifyTypePair,
   RENDERED_COLOR_KEYS,
   withPalette,
+  withScale,
   withTypePair,
 } from "./restyle.ts";
 export type { RadiusKey, Scale, SizeKey, SpaceKey } from "./scales.ts";

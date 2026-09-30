@@ -3,12 +3,16 @@ import { describe, expect, it } from "vitest";
 import {
   buildTheme,
   contrastRatio,
+  DEFAULT_SCALE_ID,
   identifyPalette,
+  identifyScale,
   identifyTypePair,
   PALETTES,
   RENDERED_COLOR_KEYS,
+  SCALES,
   TYPE_PAIRS,
   withPalette,
+  withScale,
   withTypePair,
 } from "../src/index.ts";
 import es from "../src/locales/es.json" with { type: "json" };
@@ -78,6 +82,82 @@ describe("withTypePair", () => {
 
   it("refuses an unknown pair", () => {
     expect(() => withTypePair(start, "poppins")).toThrow(/Unknown typePairId/);
+  });
+});
+
+describe("withScale", () => {
+  it("replaces the eleven sizes, spaces and radii and nothing else", () => {
+    const next = withScale(start, "generous");
+    const generous = SCALES.find((s) => s.id === "generous");
+    if (!generous) throw new Error("no generous scale");
+    for (const key of TOKEN_KEYS) {
+      if (key.startsWith("size.")) {
+        expect(next[key], key).toBe(generous.sizes[key as keyof typeof generous.sizes]);
+      } else if (key.startsWith("space.")) {
+        expect(next[key], key).toBe(generous.spaces[key as keyof typeof generous.spaces]);
+      } else if (key.startsWith("radius.")) {
+        expect(next[key], key).toBe(generous.radii[key as keyof typeof generous.radii]);
+      } else {
+        expect(next[key], key).toBe(start[key]);
+      }
+    }
+  });
+
+  it("composes with both other choices, so all three survive", () => {
+    // The property the panel's three groups rest on: pick a palette, a typeface and a scale in any
+    // order and none of them undoes another. `buildTheme` cannot promise this — it assembles from
+    // ids, so whichever choice is not passed snaps back to a default.
+    const next = withScale(
+      withTypePair(withPalette(start, "warm-terracotta"), "classic-display"),
+      "compact",
+    );
+    expect(next["color.primary"]).toBe("#9A3412");
+    expect(next["font.heading"]).toMatch(/^'Playfair Display'/);
+    expect(next["size.heading"]).toBe("2rem");
+  });
+
+  it("is a complete theme, still, whichever scale is asked for", () => {
+    for (const scale of SCALES) {
+      const next = withScale(start, scale.id);
+      expect(Object.keys(next).sort(), scale.id).toEqual([...TOKEN_KEYS].sort());
+    }
+  });
+
+  it("refuses an unknown scale rather than leaving the theme as it was", () => {
+    expect(() => withScale(start, "enorme")).toThrow(/Unknown scaleId/);
+  });
+});
+
+describe("identifyScale", () => {
+  it("names the scale a theme was built from", () => {
+    for (const scale of SCALES) {
+      const theme = buildTheme({
+        paletteId: "classic-blue",
+        typePairId: "modern-sans",
+        scaleId: scale.id,
+      });
+      expect(identifyScale(theme)?.id).toBe(scale.id);
+    }
+  });
+
+  it("says default for a theme built without asking for a scale", () => {
+    // Which is every document the generator has ever produced, and the whole golden corpus.
+    expect(identifyScale(start)?.id).toBe(DEFAULT_SCALE_ID);
+  });
+
+  it("follows withScale, which is what makes the panel's tick honest after a click", () => {
+    expect(identifyScale(withScale(start, "generous"))?.id).toBe("generous");
+  });
+
+  it("answers undefined when a single one of the eleven has been edited by hand", () => {
+    // Ten of eleven is not "this scale wrote these values". The panel shows nothing ticked, which
+    // is the honest answer for a theme somebody has been editing outside the system — and it is
+    // the state rule 6's «excepción marcada» will produce on purpose later in this sprint.
+    expect(identifyScale({ ...start, "radius.sm": "3px" })).toBeUndefined();
+  });
+
+  it("is not fooled by a theme that mixes two scales", () => {
+    expect(identifyScale({ ...withScale(start, "compact"), "space.xl": "72px" })).toBeUndefined();
   });
 });
 
@@ -155,7 +235,7 @@ describe("RENDERED_COLOR_KEYS", () => {
 });
 
 describe("the Spanish names", () => {
-  it("exist for every palette and every type pair", () => {
+  it("exist for every palette, every type pair and every scale", () => {
     // They are declared as `nameKey` on each entry and, until today, resolved to nothing at all:
     // this package had no locale file, and nothing had ever shown them.
     for (const palette of PALETTES) {
@@ -166,14 +246,32 @@ describe("the Spanish names", () => {
       expect(es, pair.id).toHaveProperty([pair.nameKey]);
       expect(es[pair.nameKey as keyof typeof es]).toBeTruthy();
     }
+    for (const scale of SCALES) {
+      expect(es, scale.id).toHaveProperty([scale.nameKey]);
+      expect(es[scale.nameKey as keyof typeof es]).toBeTruthy();
+    }
   });
 
   it("has no key that names nothing", () => {
     const declared = new Set([
       ...PALETTES.map((p) => p.nameKey),
       ...TYPE_PAIRS.map((t) => t.nameKey),
+      ...SCALES.map((s) => s.nameKey),
     ]);
     for (const key of Object.keys(es)) expect(declared, key).toContain(key);
+  });
+
+  it("names a scale by its character and never by a number", () => {
+    // Same rule the typefaces follow, for the same reason. "Compacta" says what the owner will
+    // see; "0,875x" or "Pequeña" says what a developer chose — and "pequeña / mediana / grande"
+    // reads as a quality ladder when none of the three is better than the others.
+    for (const scale of SCALES) {
+      const name = es[scale.nameKey as keyof typeof es];
+      expect(name, scale.id).not.toMatch(/\d/);
+      for (const forbidden of ["Pequeña", "Mediana", "Grande", "rem", "px"]) {
+        expect(name, `${scale.id} / ${forbidden}`).not.toContain(forbidden);
+      }
+    }
   });
 
   it("names a typeface by its character and never by a font that may not arrive", () => {

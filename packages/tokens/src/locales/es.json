@@ -5,5 +5,8 @@
   "palette.darkSlate": "Pizarra oscura",
   "typography.modernSans": "Moderna y neutra",
   "typography.editorialSerif": "Sobria y legible",
-  "typography.classicDisplay": "Clásica y seria"
+  "typography.classicDisplay": "Clásica y seria",
+  "scale.compact": "Compacta y nítida",
+  "scale.default": "Equilibrada y suave",
+  "scale.generous": "Amplia y redondeada"
 }

@@ -1,5 +1,5 @@
 import { type Browser, chromium, type Page } from "@playwright/test";
-import { TYPE_PAIRS } from "@retorika/tokens";
+import { DEFAULT_SCALE_ID, TYPE_PAIRS } from "@retorika/tokens";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   type Combination,
@@ -8,6 +8,7 @@ import {
   geometryCombinations,
   longTextCombinations,
   openCombination,
+  scaleCombinations,
 } from "./browser-fixtures.ts";
 
 /**
@@ -111,64 +112,75 @@ async function measureTextFit(page: Page, catalogId: string): Promise<TextOverfl
   }, catalogId);
 }
 
-describe("overflow — geometry (every section, one palette, one type pair)", () => {
-  const combinations = geometryCombinations();
+/**
+ * One combination at one width: nothing past the viewport's right edge, no horizontal scroll, and
+ * — for the long-text cases — no text wider than its own box.
+ *
+ * Extracted at the third caller and not before, which is the rule in `CLAUDE.md`. The two that
+ * existed differed only in whether they measured text fit, and `measureTextFit` is addressed by
+ * the combination's own `catalogId` anyway, so the difference was already carried by the data.
+ * It is keyed off `text === "long"` rather than a flag, because the long case is exactly the one
+ * that puts an unbreakable word in a narrow column.
+ */
+function checkFits(c: Combination, width: number) {
+  it(`${c.id} @ ${width}px`, async () => {
+    const page = await openCombination(browser, c, width);
+    try {
+      const { scrollWidth, innerWidth, offender } = await measureOverflow(page);
+      const where = `${c.id} @ ${width}px`;
+      expect(
+        offender,
+        `${where}: ${offender?.selector} ends at ${offender?.right}px, past the ${innerWidth}px viewport`,
+      ).toBeNull();
+      expect(
+        scrollWidth,
+        `${where}: page scrolls horizontally (${scrollWidth}px)`,
+      ).toBeLessThanOrEqual(innerWidth);
 
+      if (c.text === "long") {
+        const unfit = await measureTextFit(page, c.catalogId);
+        const lines = unfit.map(
+          (u) =>
+            `  ${u.selector} "${u.text}": content ${u.scrollWidth}px in a ${u.clientWidth}px box`,
+        );
+        expect(lines, `${where}: text wider than its own box\n${lines.join("\n")}`).toEqual([]);
+      }
+    } finally {
+      await closeCombination(page);
+    }
+  });
+}
+
+describe("overflow — geometry (every section, one palette, one type pair)", () => {
   // A plain loop rather than it.each: it.each truncates interpolated values at about forty
   // characters, which made different combinations share a test name.
-  for (const c of combinations) {
-    for (const width of WIDTHS) {
-      it(`${c.id} @ ${width}px`, async () => {
-        const page = await openCombination(browser, c, width);
-        try {
-          const { scrollWidth, innerWidth, offender } = await measureOverflow(page);
-          const where = `${c.id} @ ${width}px`;
-          expect(
-            offender,
-            `${where}: ${offender?.selector} ends at ${offender?.right}px, past the ${innerWidth}px viewport`,
-          ).toBeNull();
-          expect(
-            scrollWidth,
-            `${where}: page scrolls horizontally (${scrollWidth}px)`,
-          ).toBeLessThanOrEqual(innerWidth);
-        } finally {
-          await closeCombination(page);
-        }
-      });
-    }
+  for (const c of geometryCombinations()) {
+    for (const width of WIDTHS) checkFits(c, width);
+  }
+});
+
+/**
+ * The widest scale over the same two matrices, because a scale is the fourth thing that can push a
+ * word past 320 pixels — see `scaleCombinations` for why "compact" is answered by arithmetic
+ * instead.
+ *
+ * Measured before it was written: at `size.heading: 3rem` all 372 combinations of both new scales
+ * came back clean, and the probe was proved to bite by taking the heading to 12rem, which produced
+ * 124 findings — an `h1` ending at 579.8px in a 320px viewport. The margin is wide, and it is wide
+ * for a reason worth knowing: `.rb-section :is(h1..h6, p, a)` already carries
+ * `overflow-wrap: break-word` and the headings carry `hyphens: auto`, so a heading that does not
+ * fit breaks rather than sticking out. That protection is what this suite is standing on, which is
+ * exactly why it has to be measured in a browser and not reasoned about.
+ */
+describe("overflow — the scale (every section, the widest scale)", () => {
+  for (const c of scaleCombinations()) {
+    for (const width of WIDTHS) checkFits(c, width);
   }
 });
 
 describe("overflow — long text (every composition that declares it, every type pair)", () => {
-  const combinations = longTextCombinations();
-
-  for (const c of combinations) {
-    for (const width of WIDTHS) {
-      it(`${c.id} @ ${width}px`, async () => {
-        const page = await openCombination(browser, c, width);
-        try {
-          const { scrollWidth, innerWidth, offender } = await measureOverflow(page);
-          const where = `${c.id} @ ${width}px`;
-          expect(
-            offender,
-            `${where}: ${offender?.selector} ends at ${offender?.right}px, past the ${innerWidth}px viewport`,
-          ).toBeNull();
-          expect(
-            scrollWidth,
-            `${where}: page scrolls horizontally (${scrollWidth}px)`,
-          ).toBeLessThanOrEqual(innerWidth);
-
-          const unfit = await measureTextFit(page, c.catalogId);
-          const lines = unfit.map(
-            (u) =>
-              `  ${u.selector} "${u.text}": content ${u.scrollWidth}px in a ${u.clientWidth}px box`,
-          );
-          expect(lines, `${where}: text wider than its own box\n${lines.join("\n")}`).toEqual([]);
-        } finally {
-          await closeCombination(page);
-        }
-      });
-    }
+  for (const c of longTextCombinations()) {
+    for (const width of WIDTHS) checkFits(c, width);
   }
 
   /**
@@ -184,8 +196,15 @@ describe("overflow — long text (every composition that declares it, every type
     const report: string[] = [];
     const withEveryTypePair = contrastCombinations();
     for (const typePair of TYPE_PAIRS) {
+      // Pinned to the default scale as well as the variant: since sprint 9 that set carries three
+      // scales, and a `find` without this would report the font for whichever one happens to sort
+      // first. The font a stack resolves to does not depend on the scale, but a report that does
+      // not say which document it read is a report nobody can check.
       const c = withEveryTypePair.find(
-        (x: Combination) => x.typePairId === typePair.id && x.variantId === "image-right",
+        (x: Combination) =>
+          x.typePairId === typePair.id &&
+          x.variantId === "image-right" &&
+          x.scaleId === DEFAULT_SCALE_ID,
       );
       if (!c) throw new Error(`no combination for type pair ${typePair.id}`);
       const page = await openCombination(browser, c, 1280);

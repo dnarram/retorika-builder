@@ -32,7 +32,14 @@ import {
   type RetorikaDocument,
   type Section,
 } from "@retorika/schema";
-import { buildTheme, PALETTES, TYPE_PAIRS } from "@retorika/tokens";
+import {
+  buildTheme,
+  DEFAULT_SCALE_ID,
+  PALETTES,
+  SCALES,
+  type Scale,
+  TYPE_PAIRS,
+} from "@retorika/tokens";
 import { render } from "../src/index.ts";
 import { ASSETS_DIR, DOCUMENTS_DIR } from "./corpus.ts";
 
@@ -42,6 +49,10 @@ import { ASSETS_DIR, DOCUMENTS_DIR } from "./corpus.ts";
  * Part 8.5, as amended: every preset, every variant and every palette. Type pairs are in the
  * matrix too, because contrast does not depend on the font but overflow does — a wider face
  * is exactly what pushes a heading past 320 pixels.
+ *
+ * Scales joined the matrix in sprint 9, when «el sistema» stopped having a single setting. They
+ * are not a fourth blanket dimension: see `scaleCombinations` and `contrastCombinations` for
+ * which sets take them and why each one does.
  */
 
 /**
@@ -54,13 +65,18 @@ export type TextCase = "standard" | "long";
 export interface Combination {
   /**
    * Stable, human-readable: "cover/image-right/dark-slate/modern-sans", with "/long" appended
-   * for the long-text case.
+   * for the long-text case and the scale's id appended when it is not the default one.
+   *
+   * The default scale is left out of the name on purpose: every combination that existed before
+   * sprint 9 keeps the name it had, so a failure logged against an older run still points at the
+   * same case.
    */
   id: string;
   catalogId: string;
   variantId: string;
   paletteId: string;
   typePairId: string;
+  scaleId: string;
   text: TextCase;
   document: RetorikaDocument;
 }
@@ -702,6 +718,7 @@ function allWithFilters(
   select: (catalogId: string) => boolean,
   palettes: typeof PALETTES,
   typePairs: typeof TYPE_PAIRS,
+  scales: readonly Scale[],
 ): Combination[] {
   const base = baseDocument();
   const [page] = base.pages;
@@ -721,32 +738,40 @@ function allWithFilters(
       for (const text of preset.texts) {
         for (const palette of palettes) {
           for (const typePair of typePairs) {
-            const id = [
-              catalogId,
-              variantId,
-              palette.id,
-              typePair.id,
-              ...(text === "long" ? ["long"] : []),
-            ].join("/");
-            // Parsed, not cast: a combination that is not a valid document is a bug in this
-            // generator, and it must fail here rather than be reported as a finding.
-            const document = parseDocument({
-              ...base,
-              theme: buildTheme({ paletteId: palette.id, typePairId: typePair.id }),
-              pages: [
-                { ...page, sections: preset.sections(section, variantId, text) },
-                ...(preset.extraPages?.(text) ?? []),
-              ],
-            });
-            combinations.push({
-              id,
-              catalogId,
-              variantId,
-              paletteId: palette.id,
-              typePairId: typePair.id,
-              text,
-              document,
-            });
+            for (const scale of scales) {
+              const id = [
+                catalogId,
+                variantId,
+                palette.id,
+                typePair.id,
+                ...(text === "long" ? ["long"] : []),
+                ...(scale.id === DEFAULT_SCALE_ID ? [] : [scale.id]),
+              ].join("/");
+              // Parsed, not cast: a combination that is not a valid document is a bug in this
+              // generator, and it must fail here rather than be reported as a finding.
+              const document = parseDocument({
+                ...base,
+                theme: buildTheme({
+                  paletteId: palette.id,
+                  typePairId: typePair.id,
+                  scaleId: scale.id,
+                }),
+                pages: [
+                  { ...page, sections: preset.sections(section, variantId, text) },
+                  ...(preset.extraPages?.(text) ?? []),
+                ],
+              });
+              combinations.push({
+                id,
+                catalogId,
+                variantId,
+                paletteId: palette.id,
+                typePairId: typePair.id,
+                scaleId: scale.id,
+                text,
+                document,
+              });
+            }
           }
         }
       }
@@ -767,6 +792,17 @@ function first<T>(items: readonly T[], name: string): readonly [T] {
 const FIXED_PALETTE = first(PALETTES, "PALETTES");
 const FIXED_TYPE_PAIR = first(TYPE_PAIRS, "TYPE_PAIRS");
 
+/** The scale every set holds fixed when the scale is not the thing under test — the one every
+ * document ever generated carries, and the one the whole golden corpus is rendered with. Found by
+ * id rather than taken as `SCALES[0]`, so reordering the list cannot silently change what "fixed"
+ * means. */
+function scaleOrThrow(id: string): Scale {
+  const scale = SCALES.find((s) => s.id === id);
+  if (!scale) throw new Error(`browser-fixtures.ts: no scale "${id}" in SCALES`);
+  return scale;
+}
+const FIXED_SCALE: readonly [Scale] = [scaleOrThrow(DEFAULT_SCALE_ID)];
+
 /**
  * Set 1 of 3 (issue #25) — geometry: every section, every variant, one palette, one type pair,
  * standard text only. This is what varies per section — a composition's columns, a card grid's
@@ -776,7 +812,7 @@ const FIXED_TYPE_PAIR = first(TYPE_PAIRS, "TYPE_PAIRS");
  * Rough size: 6 sections x ~2.2 variants average x 1 palette x 1 type pair ≈ 13 documents.
  */
 export function geometryCombinations(): Combination[] {
-  return allWithFilters(() => true, FIXED_PALETTE, FIXED_TYPE_PAIR).filter(
+  return allWithFilters(() => true, FIXED_PALETTE, FIXED_TYPE_PAIR, FIXED_SCALE).filter(
     (combination) => combination.text === "standard",
   );
 }
@@ -795,12 +831,54 @@ export function geometryCombinations(): Combination[] {
  * the colour pair those rules resolve to is exercised here even though `role: "list"` itself is
  * not drawn.
  *
- * Rough size: 4 palettes x 3 type pairs x 1 section/variant ≈ 12 documents.
+ * **Scales vary here, and that is not the same kind of redundancy as the rest.** Colour does not
+ * depend on the scale, but the *threshold* does: WCAG asks 3:1 of large text (24px, or 18.66px
+ * bold) and 4.5:1 of everything else, and `.rb-section h2` and `p.rb-subtitle` are drawn at
+ * `var(--size-subheading)` — 24px in the default scale, exactly on the line, and **20px in
+ * "compact"**, which is on the other side of it. So the compact scale asks a stricter question of
+ * the same colours than any run before sprint 9 ever asked. `contrast.test.ts` already answers it
+ * arithmetically — all five pairs are asserted at >= 4.5:1, the strict threshold, in every palette
+ * — but that is an argument, and this is a browser: axe measures what Chromium actually composited,
+ * including text over a photograph, which no arithmetic covers.
+ *
+ * Rough size: 4 palettes x 3 type pairs x 3 scales x 1 section/variant ≈ 36 documents.
  */
 export function contrastCombinations(): Combination[] {
-  return allWithFilters((catalogId) => catalogId === COVER_ID, PALETTES, TYPE_PAIRS)
+  return allWithFilters((catalogId) => catalogId === COVER_ID, PALETTES, TYPE_PAIRS, SCALES)
     .filter((combination) => combination.text === "standard")
     .filter((combination) => combination.variantId === "image-right");
+}
+
+/**
+ * Set 4 of 4 (sprint 9) — the scale: every section, every variant, one palette, standard and long
+ * text, **on the widest scale only**.
+ *
+ * The scale is the fourth thing that can push a word past 320 pixels, alongside a geometry, a
+ * typeface and a long word: "generous" draws a heading at 3rem where the default draws 2.5rem.
+ *
+ * **"compact" is deliberately absent, and by an argument rather than by omission.** Every one of
+ * its eleven values is smaller than the default's — `scales.test.ts` asserts exactly that, key by
+ * key — so nothing it renders can be wider than what the default set already measures green. A
+ * suite that ran it anyway would be paying for 156 more page loads to re-prove a monotonicity.
+ * The day somebody edits that scale upward, the arithmetic test goes red and says so, which is
+ * where the claim belongs.
+ *
+ * Type pairs vary in the long-text half for the reason `longTextCombinations` gives: a wider face
+ * is what pushes a word past its box, and a bigger scale is precisely what makes that margin
+ * thinner.
+ *
+ * Rough size: 13 standard + 39 long ≈ 52 documents.
+ */
+export function scaleCombinations(): Combination[] {
+  const widest = [scaleOrThrow("generous")] as const;
+  return [
+    ...allWithFilters(() => true, FIXED_PALETTE, FIXED_TYPE_PAIR, widest).filter(
+      (combination) => combination.text === "standard",
+    ),
+    ...allWithFilters(() => true, FIXED_PALETTE, TYPE_PAIRS, widest).filter(
+      (combination) => combination.text === "long",
+    ),
+  ];
 }
 
 /**
@@ -811,7 +889,7 @@ export function contrastCombinations(): Combination[] {
  * not: colour plays no part in whether text fits.
  */
 export function longTextCombinations(): Combination[] {
-  return allWithFilters(() => true, FIXED_PALETTE, TYPE_PAIRS).filter(
+  return allWithFilters(() => true, FIXED_PALETTE, TYPE_PAIRS, FIXED_SCALE).filter(
     (combination) => combination.text === "long",
   );
 }

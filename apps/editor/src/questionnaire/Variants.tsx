@@ -25,7 +25,7 @@ import {
   type RetorikaDocument,
   type Section,
 } from "@retorika/schema";
-import { withPalette, withTypePair } from "@retorika/tokens";
+import { withPalette, withScale, withTypePair } from "@retorika/tokens";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { saveSession } from "../editor/autosave.ts";
 import {
@@ -639,6 +639,18 @@ export function Variants({
             type: "setTheme",
             variant: openIndex,
             theme: withTypePair(history.present.document.theme, typePairId),
+          });
+        }}
+        // The third choice of the Estilo panel, and the only one the panel hides until the design
+        // tools are on — the "Encendido" column of the advanced dossier §4 begins «Añade **el
+        // sistema**». It travels through `setTheme` like the other two, so it gets undo, redo and
+        // autosave for nothing, and it writes to the open document only.
+        onPickScale={(scaleId) => {
+          dismissToast();
+          dispatch({
+            type: "setTheme",
+            variant: openIndex,
+            theme: withScale(history.present.document.theme, scaleId),
           });
         }}
         pageId={currentPageId}
