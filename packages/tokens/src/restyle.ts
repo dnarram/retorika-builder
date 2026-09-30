@@ -1,5 +1,7 @@
 import { type Theme, TOKEN_KEYS } from "@retorika/schema";
 import { type ColorKey, PALETTES, type Palette } from "./palettes.ts";
+import type { RadiusKey, Scale, SizeKey, SpaceKey } from "./scales.ts";
+import { SCALES } from "./scales.ts";
 import { type FontKey, TYPE_PAIRS, type TypePair } from "./typography.ts";
 
 /**
@@ -8,13 +10,15 @@ import { type FontKey, TYPE_PAIRS, type TypePair } from "./typography.ts";
  *
  * The difference matters more than it looks. `buildTheme({paletteId, typePairId})` would work
  * for a palette change too, and it would **silently reset the scale**: sizes, spaces and radii
- * would snap back to `DEFAULT_SCALE_ID` whatever the document was carrying. Nothing ships a
- * different scale today, so the bug would be invisible until something did. Replacing only the
- * keys the choice is about cannot have that problem, and it composes — change the palette, then
- * the typeface, and both survive.
+ * would snap back to `DEFAULT_SCALE_ID` whatever the document was carrying. **Sprint 9 is when
+ * that stopped being a hypothetical** — until it there was one scale, so the reset could only ever
+ * write back the values it overwrote. There are three now, and `withScale` joins the other two
+ * verbs here for the same reason they exist: replacing only the keys the choice is about cannot
+ * have that problem, and it composes — change the palette, then the typeface, then the scale, and
+ * all three survive.
  *
- * Both return a complete theme by construction: nineteen keys in, the same nineteen out, with a
- * subset given new values.
+ * All three return a complete theme by construction: nineteen keys in, the same nineteen out, with
+ * a subset given new values.
  */
 
 /** The colour keys of the namespace, derived rather than listed again. */
@@ -24,6 +28,18 @@ const COLOR_KEYS: readonly ColorKey[] = TOKEN_KEYS.filter((key): key is ColorKey
 
 const FONT_KEYS: readonly FontKey[] = TOKEN_KEYS.filter((key): key is FontKey =>
   key.startsWith("font."),
+);
+
+const SIZE_KEYS: readonly SizeKey[] = TOKEN_KEYS.filter((key): key is SizeKey =>
+  key.startsWith("size."),
+);
+
+const SPACE_KEYS: readonly SpaceKey[] = TOKEN_KEYS.filter((key): key is SpaceKey =>
+  key.startsWith("space."),
+);
+
+const RADIUS_KEYS: readonly RadiusKey[] = TOKEN_KEYS.filter((key): key is RadiusKey =>
+  key.startsWith("radius."),
 );
 
 /**
@@ -69,6 +85,14 @@ function typePairById(typePairId: string): TypePair {
   return typePair;
 }
 
+function scaleById(scaleId: string): Scale {
+  const scale = SCALES.find((s) => s.id === scaleId);
+  if (!scale) {
+    throw new Error(`Unknown scaleId "${scaleId}". Known: ${SCALES.map((s) => s.id).join(", ")}`);
+  }
+  return scale;
+}
+
 /** The same theme with this palette's six colours in place of its own. */
 export function withPalette(theme: Theme, paletteId: string): Theme {
   return { ...theme, ...paletteById(paletteId).colors };
@@ -77,6 +101,18 @@ export function withPalette(theme: Theme, paletteId: string): Theme {
 /** The same theme with this pair's two typefaces in place of its own. */
 export function withTypePair(theme: Theme, typePairId: string): Theme {
   return { ...theme, ...typePairById(typePairId).fonts };
+}
+
+/**
+ * The same theme with this scale's eleven sizes, spaces and radii in place of its own.
+ *
+ * Eleven and not three: «el sistema» is the whole set, which is the point of the dossier §6's
+ * «Escala tipográfica, espaciados, radios y sombras **como sistema**». Changing the type sizes
+ * without the spacing that surrounds them is how a page ends up with big headings in small boxes.
+ */
+export function withScale(theme: Theme, scaleId: string): Theme {
+  const scale = scaleById(scaleId);
+  return { ...theme, ...scale.sizes, ...scale.spaces, ...scale.radii };
 }
 
 /**
@@ -104,4 +140,22 @@ export function identifyPalette(theme: Theme): Palette | undefined {
 /** Which type pair produced this theme's two font stacks, or `undefined` if none did. */
 export function identifyTypePair(theme: Theme): TypePair | undefined {
   return TYPE_PAIRS.find((pair) => FONT_KEYS.every((key) => theme[key] === pair.fonts[key]));
+}
+
+/**
+ * Which scale produced this theme's eleven sizes, spaces and radii, or `undefined` if none did.
+ *
+ * All eleven are compared, for the reason `identifyPalette` gives about its sixth colour: the
+ * question is "did this scale write these values", and a match on ten of eleven answers yes about
+ * a scale this theme did not come from. It matters more here than there, because the three scales
+ * differ in every one of the eleven — a partial match means somebody has been editing values by
+ * hand, which is exactly the state the panel must show as "ninguna" rather than guess at.
+ */
+export function identifyScale(theme: Theme): Scale | undefined {
+  return SCALES.find(
+    (scale) =>
+      SIZE_KEYS.every((key) => theme[key] === scale.sizes[key]) &&
+      SPACE_KEYS.every((key) => theme[key] === scale.spaces[key]) &&
+      RADIUS_KEYS.every((key) => theme[key] === scale.radii[key]),
+  );
 }

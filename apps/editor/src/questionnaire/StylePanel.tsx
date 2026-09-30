@@ -3,9 +3,11 @@
 import type { Theme } from "@retorika/schema";
 import {
   identifyPalette,
+  identifyScale,
   identifyTypePair,
   PALETTES,
   RENDERED_COLOR_KEYS,
+  SCALES,
   TYPE_PAIRS,
 } from "@retorika/tokens";
 import tokensEs from "@retorika/tokens/locales/es" with { type: "json" };
@@ -37,6 +39,13 @@ import es from "../locales/es.json" with { type: "json" };
  *   actually paints with; `color.accent` is left out because no rule reads it and its contrast is
  *   asserted nowhere. See `RENDERED_COLOR_KEYS`.
  *
+ * **A third group, `SISTEMA`, appears only with the design tools on** (sprint 9). That is the
+ * advanced dossier §4's own line: apagado the panel offers «Paletas y parejas tipográficas»,
+ * encendido it «Añade el sistema y tipografías propias». This delivers the first half of that
+ * sentence and not the second — «tipografías propias» waits for issue #9, because a font the
+ * visitor may never receive is a promise this product does not make, and ADR 0026 says so by name
+ * rather than leaving the omission to be noticed later.
+ *
  * Nothing here holds state. Which palette is ticked is *deduced* from the document's own theme,
  * because a theme keeps values and not identities — see `identifyPalette`. That is why the tick
  * cannot go stale: there is no second copy of the answer to drift.
@@ -46,6 +55,16 @@ export interface StylePanelProps {
   theme: Theme;
   onPickPalette: (paletteId: string) => void;
   onPickTypePair: (typePairId: string) => void;
+  onPickScale: (scaleId: string) => void;
+  /**
+   * Whether the design tools are on for the person looking — nothing about the site.
+   *
+   * It gates the `SISTEMA` group and nothing else, and it gates it by **not rendering it**: a
+   * disabled fieldset would tell somebody who is not a professional that there is a door they
+   * cannot open, which is the opposite of what the switch is for (ADR 0025). The same rule the
+   * `Diseño` rail item already follows.
+   */
+  designTools: boolean;
   onClose: () => void;
 }
 
@@ -53,12 +72,21 @@ function nameOf(nameKey: string): string {
   return tokensEs[nameKey as keyof typeof tokensEs] ?? nameKey;
 }
 
-export function StylePanel({ theme, onPickPalette, onPickTypePair, onClose }: StylePanelProps) {
+export function StylePanel({
+  theme,
+  onPickPalette,
+  onPickTypePair,
+  onPickScale,
+  designTools,
+  onClose,
+}: StylePanelProps) {
   const headingId = useId();
   const paletteGroup = useId();
   const typeGroup = useId();
+  const scaleGroup = useId();
   const current = identifyPalette(theme);
   const currentType = identifyTypePair(theme);
+  const currentScale = identifyScale(theme);
 
   return (
     <aside
@@ -202,6 +230,78 @@ export function StylePanel({ theme, onPickPalette, onPickTypePair, onClose }: St
           );
         })}
       </fieldset>
+
+      {designTools ? (
+        <fieldset className="m-0 flex flex-col gap-[9px] border-0 p-0">
+          <legend className="p-0 text-[11px] font-bold tracking-[0.09em] text-ui-muted">
+            {es["editor.style.system"]}
+          </legend>
+          {/* The one group of the three that needs saying out loud what it changes: a palette and a
+              typeface announce themselves in their own swatches, and "medidas" does not. */}
+          <p className="m-0 mb-1 text-[12px] leading-snug text-ui-muted">
+            {es["editor.style.systemHelp"]}
+          </p>
+          {currentScale === undefined ? (
+            <p className="m-0 text-[12px] leading-snug text-ui-muted">
+              {es["editor.style.noScale"]}
+            </p>
+          ) : null}
+          {SCALES.map((scale) => {
+            const selected = currentScale?.id === scale.id;
+            return (
+              <label
+                key={scale.id}
+                className={
+                  "relative flex h-14 cursor-pointer items-center gap-3.5 rounded-[11px] px-4 " +
+                  (selected
+                    ? "border-2 border-ui-brand bg-ui-brand-surface"
+                    : "border border-ui-border bg-white")
+                }
+              >
+                <input
+                  type="radio"
+                  name={scaleGroup}
+                  checked={selected}
+                  onChange={() => onPickScale(scale.id)}
+                  className="absolute h-px w-px opacity-0"
+                />
+                {/* Drawn from the scale's own eleven values, for the same reason the `Aa` above is
+                    drawn in the pair's own font stack: what the specimen shows *is* what the site
+                    will get. The corner is this scale's `radius.md` and the gap its `space.xs`,
+                    both used literally; only the bar's height is scaled, and by `calc()` rather
+                    than by parsing the string, so a value in `rem` and one in `px` both work
+                    without this file knowing which it was given. */}
+                <span
+                  aria-hidden="true"
+                  className="flex w-10 shrink-0 flex-col justify-center border border-ui-border bg-white px-1.5"
+                  style={{
+                    height: 38,
+                    borderRadius: scale.radii["radius.md"],
+                    gap: scale.spaces["space.xs"],
+                  }}
+                >
+                  <span
+                    style={{
+                      height: `calc(${scale.sizes["size.heading"]} * 0.28)`,
+                      borderRadius: 1,
+                      background: "#334155",
+                    }}
+                  />
+                  <span style={{ height: 2, borderRadius: 1, background: "#CBD5E1" }} />
+                </span>
+                <span
+                  className={
+                    "text-[15px] " +
+                    (selected ? "font-semibold text-ui-brand" : "font-medium text-[#334155]")
+                  }
+                >
+                  {nameOf(scale.nameKey)}
+                </span>
+              </label>
+            );
+          })}
+        </fieldset>
+      ) : null}
     </aside>
   );
 }

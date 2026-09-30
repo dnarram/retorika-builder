@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>La barra flotante y el sistema de estilo</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>body { margin: 0; font-family: 'Inter', system-ui, sans-serif; background: #F5F7FA; }</style>
+</head>
+<body>
+<div style="width: 1280px; box-sizing: border-box; padding: 9px 16px; background: #0F172A; color: #FFFFFF; font-family: 'Inter', system-ui, sans-serif; font-size: 13px; font-weight: 600; letter-spacing: 0.01em;">MÓDULO AVANZADO — el sistema de estilo. La regla 6 tiene dos brazos: referencias para todo el mundo, valor exacto solo con las herramientas encendidas. El interruptor es la línea.</div>
+
+<div style="width: 1280px; box-sizing: border-box; background: #F5F7FA; padding: 30px 60px 44px 60px; display: flex; flex-direction: column; gap: 34px;">
+
+  <!-- ============ 1. LA BARRA QUE VA A EXISTIR ============ -->
+  <div style="display: flex; gap: 34px; align-items: flex-start;">
+
+    <div style="width: 272px; flex-shrink: 0; display: flex; flex-direction: column; gap: 9px; padding-top: 6px;">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: #156FE7;">1 — LA BARRA QUE VA A EXISTIR</span>
+      <span style="font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: #0F172A;">La maqueta 08 dibuja nueve controles; estos son los que quedan</span>
+      <span style="font-size: 14px; line-height: 1.5; color: #64748B;">De los nueve, tres viven ya en el grupo de acciones de la sección, uno en el panel de campos, uno solo en el panel global y uno está congelado por el ADR 0024. Esta es la barra de verdad.</span>
+      <span style="font-size: 13px; line-height: 1.5; color: #94A3B8;">Apagada ofrece la fila «Apagado» del §4 del dossier avanzado, palabra por palabra: texto, tamaño, color del tema, enlace.</span>
+    </div>
+
+    <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 22px;">
+
+      <!-- barra, apagada -->
+      <div style="display: flex; flex-direction: column; gap: 7px;">
+        <span style="font-size: 13px; font-weight: 600; color: #64748B; padding-left: 2px;">Apagado — todo el mundo</span>
+        <div style="display: inline-flex; align-self: flex-start; align-items: center; gap: 2px; padding: 5px; background: #FFFFFF; border: 1px solid #E3E8F0; border-radius: 11px; box-shadow: 0 6px 18px rgba(15,23,42,0.12);">
+          <span style="display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 7px; background: #F6F8FB;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7V5h16v2"></path><path d="M12 5v14"></path><path d="M9 19h6"></path></svg><span style="font-size: 12px; font-weight: 600; color: #334155;">Tamaño</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></span>
+          <span style="width: 1px; height: 20px; background: #EDF1F6; margin: 0 3px;"></span>
+          <span style="display: flex; align-items: center; gap: 5px; height: 30px; padding: 0 9px; border-radius: 7px;"><span style="width: 15px; height: 15px; border-radius: 50%; background: #1D4ED8; border: 1px solid rgba(15,23,42,0.12);"></span><span style="font-size: 12px; font-weight: 500; color: #334155;">Color</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></span>
+          <span style="width: 1px; height: 20px; background: #EDF1F6; margin: 0 3px;"></span>
+          <span style="display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 7px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 13a5 5 0 007 0l2-2a5 5 0 00-7-7l-1 1"></path><path d="M14 11a5 5 0 00-7 0l-2 2a5 5 0 007 7l1-1"></path></svg><span style="font-size: 12px; font-weight: 500; color: #334155;">Enlace</span></span>
+        </div>
+      </div>
+
+      <!-- barra, encendida -->
+      <div style="display: flex; flex-direction: column; gap: 7px;">
+        <span style="font-size: 13px; font-weight: 600; color: #156FE7; padding-left: 2px;">Encendido — «Añade posición, medidas y espaciado»</span>
+        <div style="display: inline-flex; align-self: flex-start; align-items: center; gap: 2px; padding: 5px; background: #FFFFFF; border: 1px solid #E3E8F0; border-radius: 11px; box-shadow: 0 6px 18px rgba(15,23,42,0.12);">
+          <span style="display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 7px; background: #F6F8FB;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7V5h16v2"></path><path d="M12 5v14"></path><path d="M9 19h6"></path></svg><span style="font-size: 12px; font-weight: 600; color: #334155;">Tamaño</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></span>
+          <span style="width: 1px; height: 20px; background: #EDF1F6; margin: 0 3px;"></span>
+          <span style="display: flex; align-items: center; gap: 5px; height: 30px; padding: 0 9px; border-radius: 7px;"><span style="width: 15px; height: 15px; border-radius: 50%; background: #1D4ED8; border: 1px solid rgba(15,23,42,0.12);"></span><span style="font-size: 12px; font-weight: 500; color: #334155;">Color</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></span>
+          <span style="width: 1px; height: 20px; background: #EDF1F6; margin: 0 3px;"></span>
+          <span style="display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 7px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 13a5 5 0 007 0l2-2a5 5 0 00-7-7l-1 1"></path><path d="M14 11a5 5 0 00-7 0l-2 2a5 5 0 007 7l1-1"></path></svg><span style="font-size: 12px; font-weight: 500; color: #334155;">Enlace</span></span>
+          <span style="width: 1px; height: 20px; background: #DCE6F6; margin: 0 3px;"></span>
+          <span style="display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 7px; background: #E8F1FE;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#156FE7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M4 10h16"></path><path d="M10 4v16"></path></svg><span style="font-size: 12px; font-weight: 600; color: #156FE7;">Medidas</span></span>
+          <span style="display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 7px; background: #E8F1FE;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#156FE7" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 12h4"></path><path d="M17 12h4"></path><path d="M9 7v10"></path><path d="M15 7v10"></path></svg><span style="font-size: 12px; font-weight: 600; color: #156FE7;">Espaciado</span></span>
+        </div>
+        <span style="font-size: 12px; line-height: 1.5; color: #94A3B8; padding-left: 2px;">Los dos añadidos son azules en esta maqueta solo para señalar qué es nuevo. En la app son iguales que los demás: encender las herramientas no pinta la barra de otro color.</span>
+      </div>
+
+    </div>
+  </div>
+
+  <div style="height: 1px; background: #E8ECF2;"></div>
+
+  <!-- ============ 2. POR QUÉ DEBAJO ============ -->
+  <div style="display: flex; gap: 34px; align-items: flex-start;">
+
+    <div style="width: 272px; flex-shrink: 0; display: flex; flex-direction: column; gap: 9px; padding-top: 6px;">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: #156FE7;">2 — POR QUÉ SE VOLTEA</span>
+      <span style="font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: #0F172A;">El titular de la portada es el primer elemento de la página</span>
+      <span style="font-size: 14px; line-height: 1.5; color: #64748B;">La maqueta 08 pone la barra en <code style="font-family: ui-monospace, monospace; font-size: 12px; background: #EEF2F7; padding: 1px 4px; border-radius: 4px;">top: -52px</code>. Ahí cae fuera del área visible del <code style="font-family: ui-monospace, monospace; font-size: 12px; background: #EEF2F7; padding: 1px 4px; border-radius: 4px;">iframe</code> y no se puede pulsar.</span>
+      <span style="font-size: 13px; line-height: 1.5; color: #94A3B8;">Es la misma trampa que el grupo de acciones de la sección ya documenta y resolvió metiéndose dentro. Cuando no cabe arriba, la barra se dibuja debajo.</span>
+    </div>
+
+    <div style="flex-grow: 1; display: flex; gap: 22px; align-items: flex-start;">
+
+      <!-- mal -->
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 7px;">
+        <span style="font-size: 13px; font-weight: 600; color: #B4740B; padding-left: 2px;">Como la dibuja la 08</span>
+        <div style="border: 1px dashed #F4DDB4; border-radius: 12px; padding: 10px; background: #FFF8EC;">
+          <span style="display: block; font-size: 11px; color: #B4740B; padding-bottom: 6px;">↑ la barra cae aquí arriba, fuera del marco</span>
+          <div style="background: #FFFFFF; border: 1px solid #E8ECF2; border-radius: 9px; overflow: hidden;">
+            <div style="padding: 20px 18px 22px 18px; background: #F8FAFC;">
+              <span style="display: block; font-size: 22px; font-weight: 700; color: #0F172A; outline: 2px solid #156FE7; outline-offset: 4px; border-radius: 2px;">Barbería El Corte</span>
+              <span style="display: block; font-size: 13px; color: #64748B; padding-top: 10px;">Cortes y barbas en Ronda</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- bien -->
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 7px;">
+        <span style="font-size: 13px; font-weight: 600; color: #156FE7; padding-left: 2px;">Como la dibuja la 17</span>
+        <div style="border: 1px solid #E3E8F0; border-radius: 12px; padding: 10px; background: #FFFFFF;">
+          <span style="display: block; font-size: 11px; color: #94A3B8; padding-bottom: 6px;">el borde de arriba del marco</span>
+          <div style="background: #FFFFFF; border: 1px solid #E8ECF2; border-radius: 9px; overflow: hidden;">
+            <div style="padding: 20px 18px 22px 18px; background: #F8FAFC; position: relative;">
+              <span style="display: block; font-size: 22px; font-weight: 700; color: #0F172A; outline: 2px solid #156FE7; outline-offset: 4px; border-radius: 2px;">Barbería El Corte</span>
+              <div style="display: inline-flex; align-items: center; gap: 2px; margin-top: 14px; padding: 4px; background: #FFFFFF; border: 1px solid #E3E8F0; border-radius: 10px; box-shadow: 0 6px 18px rgba(15,23,42,0.14);">
+                <span style="display: flex; align-items: center; gap: 5px; height: 26px; padding: 0 8px; border-radius: 6px; background: #F6F8FB;"><span style="font-size: 11px; font-weight: 600; color: #334155;">Tamaño</span></span>
+                <span style="display: flex; align-items: center; gap: 5px; height: 26px; padding: 0 8px; border-radius: 6px;"><span style="width: 12px; height: 12px; border-radius: 50%; background: #1D4ED8;"></span><span style="font-size: 11px; color: #334155;">Color</span></span>
+                <span style="display: flex; align-items: center; gap: 5px; height: 26px; padding: 0 8px; border-radius: 6px;"><span style="font-size: 11px; color: #334155;">Enlace</span></span>
+              </div>
+              <span style="display: block; font-size: 13px; color: #64748B; padding-top: 12px;">Cortes y barbas en Ronda</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div style="height: 1px; background: #E8ECF2;"></div>
+
+  <!-- ============ 3. EL COLOR SE OFRECE POR ELEMENTO ============ -->
+  <div style="display: flex; gap: 34px; align-items: flex-start;">
+
+    <div style="width: 272px; flex-shrink: 0; display: flex; flex-direction: column; gap: 9px; padding-top: 6px;">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: #156FE7;">3 — EL COLOR, POR ELEMENTO</span>
+      <span style="font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: #0F172A;">Una referencia tampoco es segura por ser referencia</span>
+      <span style="font-size: 14px; line-height: 1.5; color: #64748B;">Texto <code style="font-family: ui-monospace, monospace; font-size: 12px; background: #EEF2F7; padding: 1px 4px; border-radius: 4px;">color.surface</code> sobre fondo <code style="font-family: ui-monospace, monospace; font-size: 12px; background: #EEF2F7; padding: 1px 4px; border-radius: 4px;">color.surface</code> da 1:1 y es texto invisible — y es un valor perfectamente legal del esquema.</span>
+      <span style="font-size: 13px; line-height: 1.5; color: #94A3B8;">Así que la lista se calcula: el fondo del elemento se deriva, y solo se dibuja el papel cuya pareja contra ese fondo está probada. El que no la tiene no se dibuja apagado: no se dibuja.</span>
+    </div>
+
+    <div style="flex-grow: 1; display: flex; gap: 22px; align-items: flex-start;">
+
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 9px;">
+        <span style="font-size: 13px; font-weight: 600; color: #64748B;">Un titular, sobre <code style="font-family: ui-monospace, monospace; font-size: 12px;">color.surface</code></span>
+        <div style="padding: 13px 14px; background: #FFFFFF; border: 1px solid #E3E8F0; border-radius: 11px; display: flex; flex-direction: column; gap: 10px;">
+          <div style="display: flex; gap: 9px;">
+            <span style="display: flex; flex-direction: column; align-items: center; gap: 5px;"><span style="width: 30px; height: 30px; border-radius: 50%; background: #0F172A; border: 2px solid #156FE7;"></span><span style="font-size: 10px; font-weight: 600; color: #156FE7;">ink</span><span style="font-size: 9px; color: #94A3B8;">17,85:1</span></span>
+            <span style="display: flex; flex-direction: column; align-items: center; gap: 5px;"><span style="width: 30px; height: 30px; border-radius: 50%; background: #475569; border: 1px solid rgba(15,23,42,0.12);"></span><span style="font-size: 10px; color: #64748B;">muted</span><span style="font-size: 9px; color: #94A3B8;">7,58:1</span></span>
+            <span style="display: flex; flex-direction: column; align-items: center; gap: 5px;"><span style="width: 30px; height: 30px; border-radius: 50%; background: #1D4ED8; border: 1px solid rgba(15,23,42,0.12);"></span><span style="font-size: 10px; color: #64748B;">primary</span><span style="font-size: 9px; color: #94A3B8;">6,70:1</span></span>
+            <span style="display: flex; flex-direction: column; align-items: center; gap: 5px;"><span style="width: 30px; height: 30px; border-radius: 50%; background: #0F766E; border: 1px solid rgba(15,23,42,0.12);"></span><span style="font-size: 10px; color: #64748B;">secondary</span><span style="font-size: 9px; color: #94A3B8;">5,47:1</span></span>
+          </div>
+          <span style="font-size: 12px; line-height: 1.5; color: #94A3B8; border-top: 1px solid #F1F4F8; padding-top: 9px;">Cuatro papeles, que son las cuatro parejas que <code style="font-family: ui-monospace, monospace; font-size: 11px;">contrast.test.ts</code> afirma contra <code style="font-family: ui-monospace, monospace; font-size: 11px;">surface</code>. Cifras medidas en <code style="font-family: ui-monospace, monospace; font-size: 11px;">classic-blue</code>. <strong style="font-weight: 600; color: #64748B;">No hay quinto círculo:</strong> <code style="font-family: ui-monospace, monospace; font-size: 11px;">accent</code> da 3,19:1 y <code style="font-family: ui-monospace, monospace; font-size: 11px;">surface</code> sobre <code style="font-family: ui-monospace, monospace; font-size: 11px;">surface</code> da 1,00:1.</span>
+        </div>
+      </div>
+
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 9px;">
+        <span style="font-size: 13px; font-weight: 600; color: #64748B;">Un botón, sobre <code style="font-family: ui-monospace, monospace; font-size: 12px;">color.primary</code></span>
+        <div style="padding: 13px 14px; background: #FFFFFF; border: 1px solid #E3E8F0; border-radius: 11px; display: flex; flex-direction: column; gap: 10px;">
+          <div style="display: flex; gap: 9px;">
+            <span style="display: flex; flex-direction: column; align-items: center; gap: 5px;"><span style="width: 30px; height: 30px; border-radius: 50%; background: #FFFFFF; border: 2px solid #156FE7;"></span><span style="font-size: 10px; font-weight: 600; color: #156FE7;">surface</span><span style="font-size: 9px; color: #94A3B8;">6,70:1</span></span>
+          </div>
+          <span style="font-size: 12px; line-height: 1.5; color: #94A3B8; border-top: 1px solid #F1F4F8; padding-top: 9px;">El fondo cambió, así que la lista cambió. Aquí solo hay una pareja probada, y es la única que se ofrece. <strong style="font-weight: 600; color: #64748B;">Un control con una sola opción es honesto; uno con cinco de las que cuatro no se han medido, no.</strong></span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div style="height: 1px; background: #E8ECF2;"></div>
+
+  <!-- ============ 4. EL PANEL GANA «MEDIDAS» ============ -->
+  <div style="display: flex; gap: 34px; align-items: flex-start;">
+
+    <div style="width: 272px; flex-shrink: 0; display: flex; flex-direction: column; gap: 9px; padding-top: 6px;">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: #156FE7;">4 — EL PANEL DE ESTILO</span>
+      <span style="font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: #0F172A;">«El sistema» tenía un solo ajuste; ahora tiene tres</span>
+      <span style="font-size: 14px; line-height: 1.5; color: #64748B;">El §6 promete «escala tipográfica, espaciados, radios y sombras <strong style="font-weight: 600;">como sistema</strong>», y <code style="font-family: ui-monospace, monospace; font-size: 12px; background: #EEF2F7; padding: 1px 4px; border-radius: 4px;">scales.ts</code> tenía exactamente una escala.</span>
+      <span style="font-size: 13px; line-height: 1.5; color: #94A3B8;">El grupo aparece <strong style="font-weight: 600; color: #64748B;">solo con las herramientas encendidas</strong>, que es la mitad de la columna «Encendido» del §4. La otra mitad, «tipografías propias», no entra en este sprint: la incidencia #9 sigue abierta.</span>
+    </div>
+
+    <div style="flex-grow: 1; display: flex; gap: 22px; align-items: flex-start;">
+
+      <div style="width: 300px; box-sizing: border-box; padding: 16px 18px; background: #FFFFFF; border: 1px solid #E8ECF2; border-radius: 13px; display: flex; flex-direction: column; gap: 14px;">
+        <span style="font-size: 10px; font-weight: 700; letter-spacing: 0.09em; color: #94A3B8;">MEDIDAS</span>
+        <span style="font-size: 12px; line-height: 1.45; color: #94A3B8; margin-top: -8px;">El tamaño del texto, el aire entre las cosas y las esquinas, en toda la web.</span>
+
+        <span style="display: flex; align-items: center; gap: 13px; height: 52px; padding: 0 15px; border: 1px solid #E3E8F0; border-radius: 11px;">
+          <span style="width: 38px; height: 36px; box-sizing: border-box; flex-shrink: 0; background: #FFFFFF; border: 1px solid #E3E8F0; border-radius: 4px; display: flex; flex-direction: column; justify-content: center; gap: 3px; padding: 0 6px;"><span style="height: 9px; background: #334155; border-radius: 1px;"></span><span style="height: 2px; background: #CBD5E1; border-radius: 1px;"></span></span>
+          <span style="font-size: 14px; font-weight: 500; color: #334155;">Compacta y nítida</span>
+        </span>
+
+        <span style="display: flex; align-items: center; gap: 13px; height: 52px; padding: 0 15px; border: 2px solid #156FE7; border-radius: 11px; background: #E8F1FE;">
+          <span style="width: 38px; height: 36px; box-sizing: border-box; flex-shrink: 0; background: #FFFFFF; border: 1px solid #E3E8F0; border-radius: 8px; display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 0 6px;"><span style="height: 11px; background: #334155; border-radius: 1px;"></span><span style="height: 2px; background: #CBD5E1; border-radius: 1px;"></span></span>
+          <span style="font-size: 14px; font-weight: 600; color: #156FE7;">Equilibrada y suave</span>
+        </span>
+
+        <span style="display: flex; align-items: center; gap: 13px; height: 52px; padding: 0 15px; border: 1px solid #E3E8F0; border-radius: 11px;">
+          <span style="width: 38px; height: 36px; box-sizing: border-box; flex-shrink: 0; background: #FFFFFF; border: 1px solid #E3E8F0; border-radius: 14px; display: flex; flex-direction: column; justify-content: center; gap: 6px; padding: 0 6px;"><span style="height: 13px; background: #334155; border-radius: 1px;"></span><span style="height: 2px; background: #CBD5E1; border-radius: 1px;"></span></span>
+          <span style="font-size: 14px; font-weight: 500; color: #334155;">Amplia y redondeada</span>
+        </span>
+      </div>
+
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 11px; padding-top: 4px;">
+        <span style="font-size: 13px; font-weight: 600; color: #64748B;">Lo que cambia, medido en el navegador</span>
+        <div style="background: #FFFFFF; border: 1px solid #E3E8F0; border-radius: 11px; overflow: hidden;">
+          <div style="display: flex; padding: 9px 14px; background: #F8FAFC; border-bottom: 1px solid #EDF1F6;"><span style="flex: 1.3; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; color: #94A3B8;">ESCALA</span><span style="flex: 1; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; color: #94A3B8;">TITULAR</span><span style="flex: 1; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; color: #94A3B8;">ESQUINA (FOTO)</span><span style="flex: 1.4; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; color: #94A3B8;">BOTÓN</span></div>
+          <div style="display: flex; padding: 11px 14px; border-bottom: 1px solid #F1F4F8;"><span style="flex: 1.3; font-size: 13px; color: #334155;">Compacta</span><span style="flex: 1; font-size: 13px; color: #64748B;">32 px</span><span style="flex: 1; font-size: 13px; color: #64748B;">4 px</span><span style="flex: 1.4; font-size: 13px; color: #64748B;">6 / 12 px</span></div>
+          <div style="display: flex; padding: 11px 14px; border-bottom: 1px solid #F1F4F8; background: #F8FBFF;"><span style="flex: 1.3; font-size: 13px; font-weight: 600; color: #156FE7;">Equilibrada</span><span style="flex: 1; font-size: 13px; color: #334155;">40 px</span><span style="flex: 1; font-size: 13px; color: #334155;">8 px</span><span style="flex: 1.4; font-size: 13px; color: #334155;">8 / 16 px</span></div>
+          <div style="display: flex; padding: 11px 14px;"><span style="flex: 1.3; font-size: 13px; color: #334155;">Amplia</span><span style="flex: 1; font-size: 13px; color: #64748B;">48 px</span><span style="flex: 1; font-size: 13px; color: #64748B;">14 px</span><span style="flex: 1.4; font-size: 13px; color: #64748B;">12 / 24 px</span></div>
+        </div>
+        <span style="font-size: 12px; line-height: 1.5; color: #94A3B8;">Las once claves se mueven juntas — tamaños, espaciados y radios —, porque cambiar los tamaños de letra sin el aire que los rodea es como se llega a titulares grandes en cajas pequeñas. «Equilibrada» es exactamente lo que hoy lleva cualquier web generada: no se mueve un solo byte del corpus dorado.</span>
+      </div>
+
+    </div>
+  </div>
+
+  <div style="height: 1px; background: #E8ECF2;"></div>
+
+  <!-- ============ 5. LA REVISIÓN DE CONTRASTE ============ -->
+  <div style="display: flex; gap: 34px; align-items: flex-start;">
+
+    <div style="width: 272px; flex-shrink: 0; display: flex; flex-direction: column; gap: 9px; padding-top: 6px;">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: #156FE7;">5 — ANTES DE DESCARGAR</span>
+      <span style="font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: #0F172A;">El valor exacto y esta revisión entran juntos, o no entra ninguno</span>
+      <span style="font-size: 14px; line-height: 1.5; color: #64748B;">Un color exacto sin la red es literalmente lo que <code style="font-family: ui-monospace, monospace; font-size: 12px; background: #EEF2F7; padding: 1px 4px; border-radius: 4px;">REVIEW.md</code> rechazó por escrito. El §4 del dossier ya prometía la revisión, con arreglo en un clic.</span>
+      <span style="font-size: 13px; line-height: 1.5; color: #94A3B8;">Se une a una familia que ya tiene dos miembros en <code style="font-family: ui-monospace, monospace; font-size: 12px; background: #EEF2F7; padding: 1px 4px; border-radius: 4px;">downloadGate.ts</code>: el destino muerto bloquea, las pocas fotos avisan.</span>
+      <span style="font-size: 12px; line-height: 1.5; color: #B4740B; background: #FFF8EC; border: 1px solid #F4DDB4; border-radius: 9px; padding: 9px 11px;">Los dos niveles los decidió <strong style="font-weight: 700;">David en la planificación del sprint 9</strong>, no dirección. Esta maqueta y el ADR 0026 pasan por el CEO antes de fusionar la PR del día 1.</span>
+    </div>
+
+    <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 16px;">
+
+      <!-- bloquea -->
+      <div style="display: flex; gap: 13px; align-items: flex-start; padding: 16px 18px; background: #FFFFFF; border: 1px solid #F3C8C8; border-left: 4px solid #C0392B; border-radius: 11px;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#C0392B" stroke-width="2" stroke-linecap="round" style="flex-shrink: 0; margin-top: 1px;" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M8 8l8 8"></path></svg>
+        <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 5px;">
+          <span style="font-size: 15px; font-weight: 700; color: #0F172A;">Hay un texto que no se puede leer</span>
+          <span style="font-size: 13px; line-height: 1.5; color: #64748B;">El titular de «Dónde estamos» tiene un color puesto a mano que casi no se distingue del fondo: <strong style="font-weight: 600; color: #334155;">2,1 de contraste</strong>. Hace falta al menos 3 para que se lea en pantallas normales.</span>
+          <span style="font-size: 12px; color: #94A3B8;">Por debajo de 3:1 no se descarga. No es un aviso que puedas saltarte: es algo que arreglar antes.</span>
+        </div>
+        <span style="display: flex; align-items: center; height: 36px; padding: 0 14px; background: #156FE7; border-radius: 9px; flex-shrink: 0;"><span style="font-size: 13px; font-weight: 600; color: #FFFFFF;">Volver al color del tema</span></span>
+      </div>
+
+      <!-- avisa -->
+      <div style="display: flex; gap: 13px; align-items: flex-start; padding: 16px 18px; background: #FFFFFF; border: 1px solid #F4DDB4; border-left: 4px solid #B4740B; border-radius: 11px;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B4740B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 1px;" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>
+        <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 5px;">
+          <span style="font-size: 15px; font-weight: 700; color: #0F172A;">Un texto se lee justo</span>
+          <span style="font-size: 13px; line-height: 1.5; color: #64748B;">El cuerpo de «Qué hacemos» está en <strong style="font-weight: 600; color: #334155;">3,4 de contraste</strong>: se lee bien de cerca y cuesta en un móvil a plena luz. Tú decides.</span>
+          <span style="font-size: 12px; color: #94A3B8;">Entre 3 y 4,5 se avisa y se descarga igual. Es la misma línea que el texto de marcador.</span>
+        </div>
+        <span style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+          <span style="display: flex; align-items: center; height: 36px; padding: 0 14px; background: #FFFFFF; border: 1px solid #E3E8F0; border-radius: 9px;"><span style="font-size: 13px; font-weight: 500; color: #334155;">Descargar igualmente</span></span>
+          <span style="display: flex; align-items: center; height: 36px; padding: 0 14px; background: #156FE7; border-radius: 9px;"><span style="font-size: 13px; font-weight: 600; color: #FFFFFF;">Volver al color del tema</span></span>
+        </span>
+      </div>
+
+      <span style="font-size: 12px; line-height: 1.55; color: #94A3B8;"><strong style="font-weight: 600; color: #64748B;">El arreglo en un clic es quitar la excepción</strong>, no inventar un color parecido que sí pase: volver a la referencia que el valor exacto pisó, que es el estado por defecto de la regla 6. Por eso el botón dice lo que hace.</span>
+
+    </div>
+  </div>
+
+  <div style="height: 1px; background: #E8ECF2;"></div>
+
+  <!-- ============ 6. LO QUE NO LLEVA ============ -->
+  <div style="display: flex; gap: 34px; align-items: flex-start;">
+
+    <div style="width: 272px; flex-shrink: 0; display: flex; flex-direction: column; gap: 9px; padding-top: 6px;">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: #156FE7;">6 — LO QUE NO LLEVA</span>
+      <span style="font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: #0F172A;">Dibujado también, porque lo que no se dice se rediseña dentro de tres sprints</span>
+      <span style="font-size: 14px; line-height: 1.5; color: #64748B;">Cuatro controles que una barra de texto suele llevar y esta no. Cada uno con su motivo, y ninguno es «no dio tiempo».</span>
+    </div>
+
+    <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 9px;">
+
+      <div style="display: flex; gap: 13px; align-items: center; padding: 13px 16px; background: #FFFFFF; border: 1px solid #E8ECF2; border-radius: 11px;">
+        <span style="width: 62px; flex-shrink: 0; text-align: center; font-size: 17px; font-weight: 700; color: #CBD5E1; text-decoration: line-through;">Aa</span>
+        <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px;">
+          <span style="font-size: 14px; font-weight: 600; color: #334155;">La tipografía, entera — ni el <code style="font-family: ui-monospace, monospace; font-size: 12px;">Aa</code> por elemento ni «tipografías propias»</span>
+          <span style="font-size: 12px; line-height: 1.5; color: #94A3B8;">Incidencia #9: <code style="font-family: ui-monospace, monospace; font-size: 11px;">modern-sans</code> y <code style="font-family: ui-monospace, monospace; font-size: 11px;">classic-display</code> caen a la fuente del sistema en máquinas sin Inter ni Playfair, y el ADR 0001 prohíbe descargarlas. Ofrecerla sería prometer una letra que el visitante puede no ver nunca.</span>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 13px; align-items: center; padding: 13px 16px; background: #FFFFFF; border: 1px solid #E8ECF2; border-radius: 11px;">
+        <span style="width: 62px; flex-shrink: 0; display: flex; justify-content: center;"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#CBD5E1" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16"></path><path d="M7 12h10"></path><path d="M4 18h16"></path><path d="M3 3l18 18"></path></svg></span>
+        <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px;">
+          <span style="font-size: 14px; font-weight: 600; color: #334155;">La alineación</span>
+          <span style="font-size: 12px; line-height: 1.5; color: #94A3B8;">El control peor fundamentado de todos: <strong style="font-weight: 600; color: #64748B;">el dossier avanzado no la menciona ni una vez</strong>. No tiene token, no tiene campo, y sería lo único de la barra que no es ni referencia ni excepción marcada.</span>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 13px; align-items: center; padding: 13px 16px; background: #FFFFFF; border: 1px solid #E8ECF2; border-radius: 11px;">
+        <span style="width: 62px; flex-shrink: 0; text-align: center; font-size: 17px; font-weight: 800; color: #CBD5E1; text-decoration: line-through;">B <span style="font-weight: 500; font-style: italic;">I</span></span>
+        <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px;">
+          <span style="font-size: 14px; font-weight: 600; color: #334155;">Negritas y cursivas</span>
+          <span style="font-size: 12px; line-height: 1.5; color: #94A3B8;">El ADR 0024 aguanta: ninguna de sus dos condiciones de despertar se ha cumplido, y su granularidad es «un tramo de caracteres, no el elemento entero», que es otro sprint. El subrayado está rechazado para siempre: en la web significa enlace.</span>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 13px; align-items: center; padding: 13px 16px; background: #FFFFFF; border: 1px solid #E8ECF2; border-radius: 11px;">
+        <span style="width: 62px; flex-shrink: 0; display: flex; justify-content: center;"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#CBD5E1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"></path><path d="M9 7V5h6v2"></path><path d="M6 7l1 13h10l1-13"></path></svg></span>
+        <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px;">
+          <span style="font-size: 14px; font-weight: 600; color: #334155;">Mover, duplicar y borrar el elemento</span>
+          <span style="font-size: 12px; line-height: 1.5; color: #94A3B8;">Mover ya vive en el panel «Diseño»; <strong style="font-weight: 600; color: #64748B;">borrar choca con la regla 3</strong> — dentro de una sección un papel se oculta, nunca se borra — y el panel de campos ya consigue lo mismo vaciándolo; duplicar no tiene precedente ni lo pide nadie.</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

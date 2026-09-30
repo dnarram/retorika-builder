@@ -283,6 +283,17 @@ part that must not move — the interface tokens and their separation from the p
   the product draws — marker text warns, a dead destination blocks — applied to colour, where the
   damage is invisible to the person causing it.
 
+  **Amended by [ADR 0026](../decisions/0026-the-switch-is-the-line-between-references-and-exact-values.md)
+  (proposed, sprint 9 day 1) — and the picker stays refused.** What that ADR admits is not this row's
+  free picker: it is document rule 6's own second arm, `{exact, exception: true}`, offered **only with
+  the design tools on**, and only behind the pre-publish contrast review the advanced dossier §4
+  promised and nobody built — blocking below 3:1, warning between 3:1 and 4.5:1, with the one-click
+  fix being to drop the exception and go back to the reference. The sentence this row rests on stays
+  true, and the ADR quotes it: an exact colour with no net is exactly what was refused here.
+  **The exact value and that review ship together or neither ships.** The half this paragraph is
+  wrong about from sprint 9 day 1 onward is «tamaños»: the style panel now offers three scales, by
+  reference and named by character, which is the system the dossier §6 always described.
+
 - **Five swatches per palette, but not the mockup's five.** The mockup draws five circles; our
   palettes hold six colours. The one left out is `color.accent`, and that is a fact about the code
   rather than a preference: **no rule the renderer emits reads `var(--color-accent)`**, and it is

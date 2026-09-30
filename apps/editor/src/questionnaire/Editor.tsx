@@ -317,6 +317,7 @@ export function Editor({
   onMoveItem,
   onPickPalette,
   onPickTypePair,
+  onPickScale,
   photoUrls,
   photoError,
   offers,
@@ -406,6 +407,7 @@ export function Editor({
    * business, the same division as every other verb here. */
   onPickPalette: (paletteId: string) => void;
   onPickTypePair: (typePairId: string) => void;
+  onPickScale: (scaleId: string) => void;
   /** Object URLs for photos already uploaded, keyed by the `src` the document carries. The
    * preview needs them because a bundle-relative path resolves against the parent page inside a
    * `srcDoc` iframe and 404s — the same trap `placeholder-image.ts` documents. */
@@ -1886,6 +1888,13 @@ export function Editor({
             theme={doc.theme}
             onPickPalette={onPickPalette}
             onPickTypePair={onPickTypePair}
+            onPickScale={onPickScale}
+            // `=== true` rather than truthiness, and the panel's prop is a plain boolean: the
+            // three states of `designTools` matter to the rail, which has to keep the «Diseño»
+            // item out of a window too narrow to offer it. They do not matter here — a group the
+            // panel is not showing is not showing for either reason — so the third state is
+            // collapsed at this one boundary and nowhere else.
+            designTools={designTools === true}
             onClose={() => showRail("sections")}
           />
         ) : effectiveRail === "design" ? (
