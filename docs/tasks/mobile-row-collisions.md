@@ -310,6 +310,12 @@ Things someone could reasonably add unasked, and must not:
 - **Reading the document's breakpoint patches** (`layout.breakpoints.mobile`: hide, reorder,
   resize — rule 7). The renderer ignores them today. This task only fixes the automatic
   derivation they will patch over, and implementing them is its own task.
+
+  *That task was sprint 8 day 5.* The patches are read now, in their own `@media` block after the
+  shared one, winning by specificity where they exist and nowhere else — the block this task wrote
+  is untouched, which `mobile.test.ts` still enforces verbatim across the whole corpus. Only
+  `physio-free-cover.html` moved, which was the condition the day was accepted on. See
+  `packages/renderer/test/breakpoints.test.ts`.
 - **Reordering the markup** so that the DOM order matches the visual order.
 - **Changing the 720px breakpoint**, the tablet layout or the section padding.
 - **Changing the catalog templates** in `packages/catalog`.

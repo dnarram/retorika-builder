@@ -1,6 +1,7 @@
 import { COVER_ID, FOOTER_ID, presetFor, TEASER_ID } from "@retorika/catalog";
 import {
   type ContentElement,
+  GRID_COLUMNS,
   type Page,
   type Placement,
   type RetorikaDocument,
@@ -423,6 +424,119 @@ export function buildTree(doc: RetorikaDocument, options: ResolvedRenderOptions)
  * and the golden tests check. It also means a golden diff shows real changes rather
  * than reshuffled lines.
  */
+/**
+ * Document rule 7, finally honoured: the per-element mobile patches, as CSS.
+ *
+ * The rule has been in `docs/document-rules.md` since phase 0 and this is the renderer's first
+ * reading of `layout.breakpoints`. The proof it was never read is in the corpus: `physio-free-cover`
+ * asks for its photograph at `order: 2` and its headline at `order: 1`, and the golden file has
+ * published `img { order: -1 }` — the exact opposite — with every test green.
+ *
+ * **The shared `@media` block above is not touched, and that is a condition rather than a
+ * preference.** That block is the mobile layout of *every* site this product has ever published,
+ * including those of owners who will never turn the design tools on. Loosening it so a patch could
+ * win would charge all of them for a feature one person uses. So the patches win where they exist
+ * and nowhere else, by specificity:
+ *
+ * | | shared rule | patch rule | why the patch wins |
+ * |---|---|---|---|
+ * | order | `.rb-section > img` — (0,1,1) | `[data-section=…] [data-id=…]` — (0,2,0) | two attributes outrank one class and one type |
+ * | hidden | nothing sets `display` | same | nothing to beat |
+ * | width | nothing sets `width` on a child | same | nothing to beat |
+ *
+ * **No `!important` anywhere here**, which is worth stating because the obvious way to beat
+ * `grid-column: 1 / -1 !important` would have been to match it. That was not needed: width on mobile
+ * is not a grid span (see below), so the one declaration carrying `!important` is never contested.
+ */
+function breakpointCss(doc: RetorikaDocument): string[] {
+  const rules: string[] = [];
+
+  for (const page of doc.pages) {
+    for (const section of page.sections) {
+      const breakpoints = section.layout?.breakpoints;
+      if (!breakpoints) continue;
+
+      // A tablet patch is a valid document and this renderer has nowhere to put it: no stylesheet,
+      // mockup or ADR names a tablet width. Emitting nothing would publish a page that quietly
+      // disobeys the document, which is the failure an explicit error exists to prevent — the same
+      // reason an unknown section throws rather than rendering an empty box.
+      if ((breakpoints.tablet?.length ?? 0) > 0) {
+        throw new Error(
+          `buildCss: section "${section.id}" carries tablet breakpoint patches, and no tablet ` +
+            "width is defined. Only mobile patches can be published today.",
+        );
+      }
+
+      const mobile = breakpoints.mobile ?? [];
+      if (mobile.length === 0) continue;
+
+      /**
+       * Every element's position, not only the patched ones — and this is the correction a real
+       * browser had to make to a rule that looked right on paper.
+       *
+       * Emitting `order` only where a patch named one was measured at 390px and put the **body
+       * first**: it carries no patch, so it kept CSS's default `order: 0`, which is ahead of a
+       * headline patched to `1`. The document said "headline first" and the page said "body first".
+       *
+       * So the numbers in a patch are **positions among the section's elements**, and an element
+       * nobody numbered keeps the place the document already gives it — its own position in content
+       * order, one-based. Two elements can land on the same number, which CSS settles by document
+       * order; that is deterministic, and `INV_5` still holds.
+       *
+       * This is still a patch over the automatic derivation and not a parallel layout (rule 7): the
+       * derivation decides everything about mobile except these three adjustments, and one of the
+       * three is where a thing sits in the sequence.
+       */
+      const patched = new Map(mobile.map((patch) => [patch.elementId, patch]));
+      // Content order, not placement order: it is the order the elements appear in the markup, which
+      // is what a reader meets on a one-column page and what CSS falls back to for a tie.
+      const positions = new Map(section.content.map((element, index) => [element.id, index + 1]));
+      for (const [elementId, position] of positions) {
+        if (patched.get(elementId)?.order !== undefined) continue;
+        rules.push(
+          `  [data-section="${section.id}"] [data-id="${elementId}"] { order: ${position}; }`,
+        );
+      }
+
+      for (const patch of mobile) {
+        const declarations: string[] = [];
+
+        // Rule 7's first adjustment: «Ocultar aquí». Nothing in the shared block sets `display` on a
+        // section's child, so there is nothing to outrank.
+        if (patch.hidden === true) declarations.push("display: none");
+
+        // The second: «Subir». This is the one the shared block contests, with `img { order: -1 }`.
+        if (patch.order !== undefined) declarations.push(`order: ${patch.order}`);
+
+        // The third: «Foto menor» — and **a width, not a grid span**. On mobile the section is one
+        // column wide (`grid-template-columns: 1fr`), so `grid-column: span 6` would not narrow
+        // anything: it would ask for six columns that do not exist and the grid would invent them,
+        // pushing the page sideways. A span of the *document's* twelve read as a fraction is what
+        // the adjustment means on a one-column page, and it is what the control in mockup 14 says
+        // it does.
+        //
+        // A span of twelve is the derivation's own width, so it emits nothing at all: rule 7 says
+        // mobile is a patch, and a patch that changes nothing should not be published. That is why
+        // `physio-free-cover`'s `columnSpan: 12` on its photograph produces no declaration.
+        if (patch.columnSpan !== undefined && patch.columnSpan < GRID_COLUMNS) {
+          const percent = Math.round((patch.columnSpan / GRID_COLUMNS) * 1e4) / 100;
+          declarations.push(`width: ${percent}%`);
+        }
+
+        if (declarations.length === 0) continue;
+        rules.push(
+          `  [data-section="${section.id}"] [data-id="${patch.elementId}"] { ${declarations.join("; ")}; }`,
+        );
+      }
+    }
+  }
+
+  // Its own `@media` block, after the shared one. Source order is a tiebreaker this does not need —
+  // the selectors already win — but placing it second means a future rule of equal specificity
+  // behaves the way somebody reading the file would expect.
+  return rules.length === 0 ? [] : ["@media (max-width: 720px) {", ...rules, "}", ""];
+}
+
 export function buildCss(doc: RetorikaDocument): string {
   const variables = SORTED_TOKEN_KEYS.map(
     (key) => `  ${tokenToCssVariable(key)}: ${cssThemeValue(key, doc.theme[key])};`,
@@ -567,5 +681,7 @@ export function buildCss(doc: RetorikaDocument): string {
     "  .rb-nav-narrow { display: block; }",
     "}",
     "",
+    // Rule 7's per-element patches, last, and only for the sections that carry any.
+    ...breakpointCss(doc),
   ].join("\n");
 }

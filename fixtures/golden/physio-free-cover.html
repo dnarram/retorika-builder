@@ -86,6 +86,12 @@ body { margin: 0; font-family: var(--font-body); color: var(--color-ink);
   .rb-nav-wide { display: none; }
   .rb-nav-narrow { display: block; }
 }
+
+@media (max-width: 720px) {
+  [data-section="sec-cover"] [data-id="el-body"] { order: 2; }
+  [data-section="sec-cover"] [data-id="el-image"] { order: 2; }
+  [data-section="sec-cover"] [data-id="el-headline"] { order: 1; }
+}
 </style>
 </head>
 <body>
