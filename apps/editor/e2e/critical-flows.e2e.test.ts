@@ -1363,3 +1363,246 @@ describe("sprint 8 — el modo estudio: encender, diseñar a mano, colocar, y vo
     }
   }, 120_000);
 });
+
+describe("sprint 8 día 7 — el recorrido completo del sprint", () => {
+  /**
+   * Every day of the studio mode, in one session, ending in the same promise every day-7 walk since
+   * sprint 5 has closed on: a ZIP that opens by double-clicking, with nothing missing.
+   *
+   * Days 2–4 already have their own e2e (day 4's flow above walks the switch, the offer, the grid and
+   * the return in isolation). What none of them prove is **composition through a download** — that a
+   * section moved in the grid and patched for mobile survives `render(doc, "html")` and comes back
+   * out of the ZIP exactly as the editor left it. That is the one property no unit test can stand in
+   * for, because it is a property of the whole pipeline rather than of any one verb.
+   *
+   * «Volver a la plantilla» happens **twice** on purpose: once to prove the return really does undo
+   * everything with nothing left over (the promise this sprint was not allowed to ship broken), and
+   * once left in its escalated state, because only a hand-designed section has mobile patches to
+   * publish — reverting drops them by rule 1, so a walk that reverted and then downloaded would prove
+   * nothing about whether patches reach the ZIP at all.
+   */
+  it("designs a section by hand, moves it, patches its mobile view, returns once, does it again, and downloads a ZIP that opens offline with the change intact", async () => {
+    const studio = await (await browser.newContext()).newPage();
+    try {
+      await studio.goto(BASE_URL, { waitUntil: "networkidle" });
+      await studio.fill("#nombre", "Barbería El Corte");
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByText("Peluquería y barbería", { exact: true }).click();
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.fill("#direccion", "Calle Espinel 12, Ronda");
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByText("Que me llamen", { exact: true }).click();
+      await studio.fill("#telefono", "600111222");
+      await studio.getByRole("button", { name: "Crear mi web" }).click();
+      await studio.getByText("Ver a tamaño real →").first().click();
+
+      const frame = studio.frameLocator("iframe").first();
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+
+      await studio.getByRole("switch", { name: "Herramientas de diseño" }).click();
+      await studio.getByRole("button", { name: "Sí, enciéndelas" }).click();
+      await expect(studio.getByRole("button", { name: "Diseño" })).toHaveCount(1);
+
+      // ---- round one: escalate, move, patch — then revert, and prove nothing is left over ----
+      await frame.locator('[data-section="sec-cover"]').click();
+      await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
+      await frame.locator(".rb-escalate-yes").click();
+      await expect(frame.locator(".rb-handmade-badge")).toHaveText("Diseñada a mano");
+
+      await studio.getByRole("button", { name: "Diseño" }).click();
+      await studio.getByRole("button", { name: "Titular", exact: true }).click();
+      const placement = studio.getByRole("button", { name: "Colocación" });
+      if ((await placement.getAttribute("aria-expanded")) === "false") await placement.click();
+      const columnRight = studio.getByRole("button", { name: "Columna: uno más" });
+      await columnRight.click();
+      await columnRight.click();
+
+      await studio.getByRole("button", { name: "Texto", exact: true }).click();
+      const mobileFamily = studio.getByRole("button", { name: "Ajustar solo en móvil" });
+      if ((await mobileFamily.getAttribute("aria-expanded")) === "false")
+        await mobileFamily.click();
+      await studio.getByRole("button", { name: "Ocultar aquí" }).click();
+      await expect(studio.getByRole("button", { name: "Mostrar aquí" })).toBeVisible();
+
+      // The return warns first — a placement moved and a mobile patch was written, so it is not
+      // lossless (`revertImpact`, day 4).
+      await frame.locator(".rb-handmade-back").click();
+      const dialog = studio.getByRole("alertdialog");
+      await expect(dialog.getByRole("heading")).toHaveText("Volver a la original");
+      await dialog.getByRole("button", { name: "Volver a la original" }).click();
+      await expect(frame.locator(".rb-handmade")).toHaveCount(0);
+
+      // Nothing left over: a fresh escalation starts from the catalog's own layout again, not from
+      // whatever round one moved it to.
+      await studio.getByRole("button", { name: "Ver en ordenador" }).click();
+      await frame.locator('[data-section="sec-cover"]').click();
+      await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
+      await frame.locator(".rb-escalate-yes").click();
+      await expect(frame.locator(".rb-handmade-badge")).toHaveText("Diseñada a mano");
+
+      const headlineStyleAfterFreshEscalate = await frame
+        .locator('[data-section="sec-cover"] [data-id="el-headline"]')
+        .getAttribute("style");
+      expect(headlineStyleAfterFreshEscalate).toContain("grid-column:1/span 6");
+
+      // ---- round two: this is the state that goes into the ZIP ----
+      await studio.getByRole("button", { name: "Titular", exact: true }).click();
+      await columnRight.click();
+      await columnRight.click();
+      await columnRight.click();
+      const columnNow = await studio.locator("aside output").first().textContent();
+      expect(columnNow).toBe("4");
+
+      await studio.getByRole("button", { name: "Foto", exact: true }).click();
+      await studio.getByRole("button", { name: "Foto menor" }).click();
+      const widthLabel = await studio.locator("aside p").nth(-2).textContent();
+      expect(widthLabel).toBe("Ancho en móvil: 9 de 12");
+
+      await studio.getByRole("button", { name: "Texto", exact: true }).click();
+      await studio.getByRole("button", { name: "Ocultar aquí" }).click();
+      await expect(studio.getByRole("button", { name: "Mostrar aquí" })).toBeVisible();
+
+      // Left hand-designed, deliberately: reverting here would drop the placement and the mobile
+      // patches by rule 1, and then the download below would prove nothing about whether either
+      // survives publishing.
+      await studio.getByRole("button", { name: "Cerrar el diseño" }).click();
+
+      // ---- the download, and the ZIP opened with no server (ADR 0001) ----
+      await studio.getByRole("button", { name: "Descargar" }).click();
+      const downloadAnyway = studio.getByRole("button", { name: "Descargar igualmente" });
+      await downloadAnyway.waitFor();
+      const [download, response] = await Promise.all([
+        studio.waitForEvent("download"),
+        studio.waitForResponse((candidate) => candidate.url().includes("/api/download")),
+        downloadAnyway.click(),
+      ]);
+      expect(response.status()).toBe(200);
+
+      const dir = mkdtempSync(join(tmpdir(), "retorika-e2e-sprint8-dia7-"));
+      const zipPath = join(dir, download.suggestedFilename());
+      await download.saveAs(zipPath);
+      const zip = new Uint8Array(readFileSync(zipPath));
+      const html = extractFileBytes(zip, "index.html");
+      const filePath = join(dir, "index.html");
+      writeFileSync(filePath, html);
+
+      const offlinePage = await (await browser.newContext()).newPage();
+      const failed: string[] = [];
+      offlinePage.on("requestfailed", (request) => failed.push(request.url()));
+      try {
+        await offlinePage.goto(`file://${filePath}`, { waitUntil: "load" });
+        await expect(offlinePage).toHaveTitle("Barbería El Corte");
+
+        // The placement round two made survived render(doc, "html") and the ZIP: the headline's own
+        // grid-column is the one the panel showed, not the catalog's original 1/span 6.
+        const headline = offlinePage.locator('[data-id="el-headline"]');
+        await expect(headline).toHaveAttribute("style", /grid-column:4\/span 6/);
+
+        // The mobile patches published in their own @media block, and take effect at mobile width —
+        // measured with real CSS in a real browser, not read off the stylesheet's text.
+        await offlinePage.setViewportSize({ width: 390, height: 800 });
+        const mobileState = await offlinePage.evaluate(() => {
+          const body = document.querySelector('[data-id="el-body"]') as HTMLElement | null;
+          const image = document.querySelector('[data-id="el-image"]') as HTMLElement | null;
+          // The headline carries no mobile patch, so it is the automatic derivation's own full
+          // width — the baseline the narrowed photo is compared against, rather than against a
+          // padding constant this test would have to know by heart.
+          const headline = document.querySelector('[data-id="el-headline"]') as HTMLElement | null;
+          return {
+            bodyDisplay: body ? getComputedStyle(body).display : null,
+            imageWidth: image ? image.getBoundingClientRect().width : null,
+            headlineWidth: headline ? headline.getBoundingClientRect().width : null,
+            scrolls: document.body.scrollWidth > document.body.clientWidth,
+          };
+        });
+        expect(mobileState.bodyDisplay).toBe("none");
+        // Nine twelfths, against the unpatched headline's own width as the whole.
+        expect(mobileState.imageWidth).not.toBeNull();
+        expect(mobileState.headlineWidth).not.toBeNull();
+        const ratio = (mobileState.imageWidth as number) / (mobileState.headlineWidth as number);
+        expect(ratio).toBeGreaterThan(0.7);
+        expect(ratio).toBeLessThan(0.8);
+        expect(mobileState.scrolls).toBe(false);
+
+        // And the desktop shape the mobile patches must never touch (rule 7): the photo back to its
+        // full desktop placement, wider than at mobile, and the hidden body visible again.
+        await offlinePage.setViewportSize({ width: 1280, height: 900 });
+        const desktopWidths = await offlinePage.evaluate(() => {
+          const image = document.querySelector('[data-id="el-image"]') as HTMLElement | null;
+          return { image: image ? image.getBoundingClientRect().width : null };
+        });
+        expect(desktopWidths.image).not.toBeNull();
+        expect(desktopWidths.image as number).toBeGreaterThan(mobileState.imageWidth as number);
+        await expect(offlinePage.locator('[data-id="el-body"]')).toBeVisible();
+
+        // The whole promise ADR 0001 makes: every byte the page needed was inside the ZIP.
+        expect(failed).toEqual([]);
+      } finally {
+        await offlinePage.context().close();
+      }
+    } finally {
+      await studio.context().close();
+    }
+  }, 120_000);
+});
+
+describe("sprint 8 día 7 — colchón: los tiradores no desplazan el lienzo", () => {
+  /**
+   * The finding day 3 deferred to this day's buffer and day 5 mentioned again: selecting *any*
+   * section made the preview canvas scroll 4px sideways.
+   *
+   * Measured to the actual cause rather than guessed: `.rb-handle-tr` and `.rb-handle-br` sit at
+   * `right: -4px` on a full-bleed section — a deliberate touch, a resize handle straddling its
+   * outline rather than hugging it — and the section has no margin to absorb that 4px of bleed.
+   * Predates this sprint, and is editor chrome that never reaches a published page: `.rb-handle`
+   * appears nowhere in `packages/renderer`.
+   *
+   * The right measurement is not `scrollWidth > clientWidth` — `scrollWidth` reports an element's
+   * content extent regardless of whether `overflow` lets anything scroll to see it, so that
+   * comparison stays true after the fix even though nothing can actually be scrolled. The real
+   * question is whether the page **can be scrolled**, which is what this test asks directly.
+   */
+  it("cannot be scrolled sideways after selecting a section, though it could be", async () => {
+    const page = await (await browser.newContext()).newPage();
+    try {
+      await page.goto(BASE_URL, { waitUntil: "networkidle" });
+      await page.fill("#nombre", "Taberna Santo Domingo");
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.getByText("Restaurante y bar", { exact: true }).click();
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.getByText("Comidas", { exact: true }).click();
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.fill("#direccion", "Cta. de Santo Domingo, 2, Ronda");
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.getByText("Que reserven", { exact: true }).click();
+      await page.fill("#enlace", "https://reservas.example.com/taberna");
+      await page.getByRole("button", { name: "Crear mi web" }).click();
+      await page.getByText("Ver a tamaño real →").first().click();
+
+      const frame = page.frameLocator("iframe").first();
+      await frame.locator('[data-section="sec-cover"]').click();
+
+      const scrollable = await frame.locator("body").evaluate(() => {
+        const before = window.scrollX;
+        window.scrollTo({ left: 9999, behavior: "instant" });
+        const after = window.scrollX;
+        window.scrollTo({ left: before, behavior: "instant" });
+        return after > 0;
+      });
+      expect(scrollable).toBe(false);
+
+      // The handle keeps its own design — still 4px past the section's right edge, not moved
+      // inward to make this pass. `overflow-x: clip` hides the bleed; it does not relocate it.
+      const handleBox = await frame.locator(".rb-handle-tr").boundingBox();
+      const sectionBox = await frame.locator('[data-section="sec-cover"]').boundingBox();
+      expect(handleBox).not.toBeNull();
+      expect(sectionBox).not.toBeNull();
+      if (handleBox && sectionBox) {
+        expect(handleBox.x + handleBox.width).toBeGreaterThan(sectionBox.x + sectionBox.width);
+      }
+    } finally {
+      await page.context().close();
+    }
+  });
+});

@@ -1542,6 +1542,17 @@ export function Editor({
 
     const style = iframeDoc.createElement("style");
     style.textContent = [
+      // The buffer fix noted on day 3 and again on day 5: selecting *any* section made the
+      // preview scroll 4px sideways. Measured to the culprit rather than guessed — `.rb-handle-tr`
+      // and `.rb-handle-br` sit at `right: -4px` on a full-bleed section, which is a deliberate
+      // touch (a resize handle straddling its selection outline, not hugging it) that only becomes
+      // a problem because the section itself has no margin to absorb 4px of bleed.
+      //
+      // Editor-only chrome, this stylesheet only: `wireInteractions` runs on the live iframe and
+      // never on `render(doc, "html")`, so `overflow-x: clip` here cannot reach a published page.
+      // `clip` rather than `hidden`, because `hidden` on one axis makes the other compute to
+      // `auto` by spec — this iframe's own vertical scroll must stay exactly what it already is.
+      "html, body { overflow-x: clip; }",
       '[contenteditable="true"] { cursor: text; border-radius: 3px;',
       "  outline: 2px dashed transparent; outline-offset: 3px; }",
       '[contenteditable="true"]:hover, [contenteditable="true"]:focus { outline-color: #156FE7; }',
