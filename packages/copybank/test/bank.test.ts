@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import asesoriaJson from "../bank/asesoria.json" with { type: "json" };
 import esteticaJson from "../bank/estetica.json" with { type: "json" };
 import genericoJson from "../bank/generico.json" with { type: "json" };
 import peluqueriaJson from "../bank/peluqueria-barberia.json" with { type: "json" };
@@ -17,6 +18,7 @@ import {
 import { sectorFileSchema } from "../src/schema.ts";
 
 const FILES = [
+  ["asesoria", asesoriaJson],
   ["estetica", esteticaJson],
   ["generico", genericoJson],
   ["peluqueria-barberia", peluqueriaJson],

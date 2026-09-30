@@ -1,3 +1,4 @@
+import asesoriaJson from "../bank/asesoria.json" with { type: "json" };
 import esteticaJson from "../bank/estetica.json" with { type: "json" };
 import genericoJson from "../bank/generico.json" with { type: "json" };
 import peluqueriaJson from "../bank/peluqueria-barberia.json" with { type: "json" };
@@ -22,6 +23,7 @@ import { type SectorFile, type Suggestion, sectorFileSchema } from "./schema.ts"
 export const GENERIC_SECTOR = "generico";
 
 const FILES: readonly unknown[] = [
+  asesoriaJson,
   esteticaJson,
   genericoJson,
   peluqueriaJson,
