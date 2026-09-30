@@ -1,4 +1,10 @@
-import { GRID_COLUMNS, type Placement, type RetorikaDocument } from "./document.ts";
+import {
+  type BreakpointPatch,
+  GRID_COLUMNS,
+  type Placement,
+  type RetorikaDocument,
+  type Section,
+} from "./document.ts";
 import { parseDocument } from "./parse.ts";
 import type { PresetShape } from "./preset.ts";
 import {
@@ -264,5 +270,199 @@ export function setPlacement(
         placement.elementId === elementId ? next : placement,
       ),
     },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Rule 7 — the three mobile adjustments
+// ---------------------------------------------------------------------------
+
+/**
+ * Where each of a section's elements sits on mobile, and what number says so.
+ *
+ * **One rule, two readers.** `packages/renderer` emits these numbers as CSS `order` and the editor
+ * needs the same answer to decide what «Subir» does and when it stops — and two implementations of
+ * one rule is how the panel and the canvas came to disagree about the selected element on day 3.
+ * So it lives here, where document semantics belong, and both import it.
+ *
+ * The rule, in one sentence: **a patch's `order` is a position among the section's elements, and an
+ * element nobody numbered keeps its own place in content order, one-based.** That was not the first
+ * version — emitting `order` only where a patch named one put an unpatched body ahead of a headline
+ * patched to 1, because CSS's default is 0. A real browser at 390px is what found it.
+ *
+ * Ties are possible and settled the way CSS settles them: by document order. Deterministic, so
+ * `INV_5` and the golden corpus still hold.
+ */
+export interface MobileSlot {
+  elementId: string;
+  /** The number published as `order`, whether it came from a patch or from content order. */
+  order: number;
+  /** Whether that number was written by a patch rather than derived. */
+  patched: boolean;
+}
+
+export function mobileSequence(section: Section): MobileSlot[] {
+  const patches = new Map(
+    (section.layout?.breakpoints?.mobile ?? []).map((patch) => [patch.elementId, patch]),
+  );
+  /**
+   * The derived position of an element nobody numbered — **the automatic derivation's order, not
+   * content order**, and that distinction is a defect a browser walk caught on day 6.
+   *
+   * The derivation puts the photograph first: the shared stylesheet says
+   * `.rb-section > img { order: -1 }`, which is the approved option A. Numbering from content order
+   * instead meant that pressing «Foto menor» — a width, nothing to do with sequence — emitted base
+   * numbers for every element and **moved the photograph from first to fourth**. Somebody asked for a
+   * smaller photo and the whole section reordered itself.
+   *
+   * Rule 7 says mobile is a patch over the automatic derivation. So the base has to *be* the
+   * derivation, and then a patch that says nothing about order changes nothing about order.
+   */
+  const derived = [
+    ...section.content.filter((element) => element.role === "image"),
+    ...section.content.filter((element) => element.role !== "image"),
+  ].map((element) => element.id);
+
+  return (
+    section.content
+      .map((element, index) => {
+        const order = patches.get(element.id)?.order;
+        return {
+          elementId: element.id,
+          order: order ?? derived.indexOf(element.id) + 1,
+          patched: order !== undefined,
+          index,
+        };
+      })
+      // The comparison CSS itself makes: by `order`, then by position in the markup.
+      .sort((a, b) => a.order - b.order || a.index - b.index)
+      .map(({ elementId, order, patched }) => ({ elementId, order, patched }))
+  );
+}
+
+/** The patch an element carries on mobile, if it carries one. */
+export function mobilePatchFor(
+  doc: RetorikaDocument,
+  sectionId: string,
+  elementId: string,
+): BreakpointPatch | undefined {
+  return findSection(doc, sectionId)?.section.layout?.breakpoints?.mobile?.find(
+    (patch) => patch.elementId === elementId,
+  );
+}
+
+/** The three fields a caller may set, and `undefined` to take one away again. */
+export type MobilePatchEdit = Partial<Omit<BreakpointPatch, "elementId">>;
+
+/** The section's mobile patches with one element's merged in, dropping a patch left saying nothing.
+ * A patch of no properties is not a patch, and leaving `{ elementId }` behind would publish an
+ * entry the renderer has to skip and a reviewer has to wonder about. */
+function withPatch(section: Section, elementId: string, edit: MobilePatchEdit): BreakpointPatch[] {
+  const current = section.layout?.breakpoints?.mobile ?? [];
+  const existing = current.find((patch) => patch.elementId === elementId);
+  const merged: BreakpointPatch = { ...existing, ...edit, elementId };
+  for (const key of ["hidden", "order", "columnSpan"] as const) {
+    if (merged[key] === undefined) delete merged[key];
+  }
+
+  const rest = current.filter((patch) => patch.elementId !== elementId);
+  if (Object.keys(merged).length === 1) return rest;
+  // Appended rather than inserted in place when new, so the stored order is the order the
+  // adjustments were made — which is what the renderer walks and the golden corpus records.
+  return existing
+    ? current.map((patch) => (patch.elementId === elementId ? merged : patch))
+    : [...rest, merged];
+}
+
+/** The section, with a new set of mobile patches. Refuses a section the catalog draws, because
+ * patches live inside `layout` and a catalog section has `layout: null` — there is nowhere to put
+ * them. That is not a workaround: it is the dossier §5's first entry point, and the offer to design
+ * the section by hand has to say so before anybody accepts. */
+function withMobilePatches(
+  doc: RetorikaDocument,
+  sectionId: string,
+  verb: string,
+  next: (section: Section) => BreakpointPatch[],
+): RetorikaDocument {
+  const found = sectionOrThrow(doc, sectionId, verb);
+  const layout = found.section.layout;
+  if (!layout) {
+    throw new Error(
+      `${verb}: section "${sectionId}" is drawn by the catalog, so it has no layout to patch. ` +
+        "Design it by hand first (escalateSection).",
+    );
+  }
+
+  const patches = next(found.section);
+  const current = layout.breakpoints.mobile ?? [];
+  if (JSON.stringify(patches) === JSON.stringify(current)) return doc;
+
+  return withSection(doc, found.page.id, sectionId, {
+    ...found.section,
+    layout: { ...layout, breakpoints: { ...layout.breakpoints, mobile: patches } },
+  });
+}
+
+/**
+ * «Ocultar aquí» and «Foto menor» — the first and third adjustments of rule 7.
+ *
+ * `undefined` for a field takes that adjustment away, which is how a control turns itself off. An
+ * element whose patch ends up empty loses the patch entirely.
+ *
+ * There is no fourth adjustment and there cannot be: `breakpointPatchSchema` is a strict object of
+ * exactly these three, so `parseDocument` refuses anything else. That is what stops the mobile view
+ * from quietly growing into the second design rule 7 exists to prevent.
+ */
+export function setMobilePatch(
+  doc: RetorikaDocument,
+  sectionId: string,
+  elementId: string,
+  edit: MobilePatchEdit,
+): RetorikaDocument {
+  const found = sectionOrThrow(doc, sectionId, "setMobilePatch");
+  if (!found.section.content.some((element) => element.id === elementId)) {
+    throw new Error(`setMobilePatch: section "${sectionId}" has no element "${elementId}"`);
+  }
+  return withMobilePatches(doc, sectionId, "setMobilePatch", (section) =>
+    withPatch(section, elementId, edit),
+  );
+}
+
+/**
+ * «Subir» — the second adjustment, as a swap rather than a decrement.
+ *
+ * Setting this element's order to one less would not move it: the element above would then share the
+ * number, and CSS breaks that tie by document order — which is exactly the order being undone. So
+ * both elements get an explicit number, and they trade places. One history step, because trading
+ * places is one act.
+ *
+ * The same document back when the element is already first, so the control can be pressed at the top
+ * of the list without opening a step that changed nothing.
+ */
+export function moveUpOnMobile(
+  doc: RetorikaDocument,
+  sectionId: string,
+  elementId: string,
+): RetorikaDocument {
+  return withMobilePatches(doc, sectionId, "moveUpOnMobile", (section) => {
+    const sequence = mobileSequence(section);
+    const at = sequence.findIndex((slot) => slot.elementId === elementId);
+    if (at === -1) {
+      throw new Error(`moveUpOnMobile: section "${sectionId}" has no element "${elementId}"`);
+    }
+    const above = sequence[at - 1];
+    const mine = sequence[at];
+    if (!above || !mine) return section.layout?.breakpoints?.mobile ?? [];
+
+    const layout = section.layout;
+    if (!layout) return [];
+
+    const first = withPatch(section, mine.elementId, { order: above.order });
+    // Applied to a section already carrying the first change, so the second does not overwrite it.
+    return withPatch(
+      { ...section, layout: { ...layout, breakpoints: { ...layout.breakpoints, mobile: first } } },
+      above.elementId,
+      { order: mine.order },
+    );
   });
 }

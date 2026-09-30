@@ -1,5 +1,12 @@
 import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
-import { findSection, GRID_COLUMNS, type Placement, type RetorikaDocument } from "@retorika/schema";
+import {
+  findSection,
+  GRID_COLUMNS,
+  mobilePatchFor,
+  mobileSequence,
+  type Placement,
+  type RetorikaDocument,
+} from "@retorika/schema";
 
 /**
  * What the «Diseño» panel lists, and what each stepper is allowed to do — mockup 16's element tree
@@ -156,4 +163,55 @@ export function stepTo(
   const next = placement[field] + delta;
   if (next < bounds.min || next > bounds.max) return undefined;
   return next;
+}
+
+/**
+ * The three mobile adjustments as the panel needs them — rule 7, mockup 14.
+ *
+ * The order rule itself lives in `packages/schema` (`mobileSequence`), shared with the renderer so
+ * the button and the published CSS cannot drift. What is here is only what the *buttons* need: their
+ * pressed state and whether each one can do anything.
+ */
+export interface MobileControls {
+  /** «Ocultar aquí» — pressed when the element is hidden on mobile. A toggle, not a one-way door. */
+  hidden: boolean;
+  /** «Subir» — disabled for the element already first, because pressing it would change nothing and
+   * a control that looks live and does nothing is the dead button in its worst form. */
+  canMoveUp: boolean;
+  /** «Foto menor» — the span it would step down to, or `undefined` at the narrowest. Twelve is the
+   * derivation's own width, so the first press goes to nine rather than eleven: a step of one
+   * twelfth is invisible, and three presses covering three quarters, a half and a quarter is the
+   * range somebody actually wants for a photograph. */
+  narrowerTo: number | undefined;
+  /** The span in force on mobile, for the label to say where it is. */
+  span: number;
+}
+
+/** The widths «Foto menor» steps through, widest first. Not every twelfth: the control is a
+ * shortcut, and `setMobilePatch` accepts any span for anyone who needs one by hand. */
+export const MOBILE_SPANS = [12, 9, 6, 3] as const;
+
+export function mobileControlsFor(
+  doc: RetorikaDocument,
+  sectionId: string,
+  elementId: string,
+): MobileControls | undefined {
+  const section = findSection(doc, sectionId)?.section;
+  if (!section?.layout) return undefined;
+  if (!section.content.some((element) => element.id === elementId)) return undefined;
+
+  const patch = mobilePatchFor(doc, sectionId, elementId);
+  const sequence = mobileSequence(section);
+  const span = patch?.columnSpan ?? GRID_COLUMNS;
+  const at = MOBILE_SPANS.indexOf(span as (typeof MOBILE_SPANS)[number]);
+
+  return {
+    hidden: patch?.hidden === true,
+    canMoveUp: sequence[0]?.elementId !== elementId,
+    // A span the control's own list does not hold — written by hand, or by a future control — steps
+    // to the widest entry narrower than it rather than refusing, so the button still means something.
+    narrowerTo:
+      at === -1 ? MOBILE_SPANS.find((candidate) => candidate < span) : MOBILE_SPANS[at + 1],
+    span,
+  };
 }

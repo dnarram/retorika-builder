@@ -2,12 +2,21 @@ import { presetFor } from "@retorika/catalog";
 import { EMPTY_ANSWERS, generate } from "@retorika/generator";
 import {
   escalateSection,
+  moveUpOnMobile,
   type Placement,
   type RetorikaDocument,
+  setMobilePatch,
   setPlacement,
 } from "@retorika/schema";
 import { describe, expect, it } from "vitest";
-import { boundsFor, designRows, MAX_ROW, selectedRowId, stepTo } from "../src/editor/designTree.ts";
+import {
+  boundsFor,
+  designRows,
+  MAX_ROW,
+  mobileControlsFor,
+  selectedRowId,
+  stepTo,
+} from "../src/editor/designTree.ts";
 
 /**
  * The «Diseño» panel's rows, and the arithmetic that decides whether an arrow is disabled.
@@ -224,5 +233,92 @@ describe("stepTo", () => {
     // looks enabled and nothing would happen, which is the dead button again.
     expect(stepTo(placement(9, 4), "column", 1)).not.toBe(9);
     expect(stepTo(placement(9, 4), "column", 1)).toBeUndefined();
+  });
+});
+
+describe("mobileControlsFor — the three buttons of mockup 14", () => {
+  /**
+   * What the buttons need, and only that: their pressed state and whether each can do anything. The
+   * order rule itself lives in `packages/schema` (`mobileSequence`), shared with the renderer so the
+   * button and the published CSS cannot drift — the lesson `selectedRowId` above was written for.
+   */
+  const first = () => designRows(free, "sec-cover")[0]?.elementId as string;
+  const second = () => designRows(free, "sec-cover")[1]?.elementId as string;
+
+  it("is undefined for a section the catalog draws, which has no layout to patch", () => {
+    // Not a disabled row of buttons: patches live inside `layout` and a catalog section has
+    // `layout: null`. The panel shows the family only once the section is free.
+    expect(mobileControlsFor(doc, "sec-cover", "el-headline")).toBeUndefined();
+  });
+
+  it("is undefined for an element the section does not have", () => {
+    expect(mobileControlsFor(free, "sec-cover", "el-nope")).toBeUndefined();
+  });
+
+  it("starts unpressed and full width", () => {
+    expect(mobileControlsFor(free, "sec-cover", first())).toMatchObject({
+      hidden: false,
+      narrowerTo: 9,
+      span: 12,
+    });
+  });
+
+  it("asks the derivation which element is first, not the tree", () => {
+    // The two orders are different things, and conflating them was the day-6 defect. The tree lists
+    // placements — headline, subheadline, text, button, photo on a cover — while the *mobile*
+    // derivation puts the photograph first (`.rb-section > img { order: -1 }`, option A). So «Subir»
+    // is dead on the photograph and alive on the headline, which is the opposite of what reading the
+    // tree would say.
+    const photo = designRows(free, "sec-cover").find((row) => row.label === "Foto")?.elementId;
+    if (!photo) throw new Error("the cover fixture lost its photo");
+    expect(mobileControlsFor(free, "sec-cover", photo)?.canMoveUp).toBe(false);
+    expect(mobileControlsFor(free, "sec-cover", first())?.canMoveUp).toBe(true);
+    expect(mobileControlsFor(free, "sec-cover", second())?.canMoveUp).toBe(true);
+  });
+
+  it("reports «Ocultar aquí» as pressed once the element is hidden on mobile", () => {
+    const hidden = setMobilePatch(free, "sec-cover", first(), { hidden: true });
+    expect(mobileControlsFor(hidden, "sec-cover", first())?.hidden).toBe(true);
+  });
+
+  it("steps the width down the control's own list, and stops at the narrowest", () => {
+    // Not every twelfth: a step of one twelfth is invisible, and three quarters, a half and a
+    // quarter is the range somebody actually wants for a photograph.
+    let at = free;
+    const seen: (number | undefined)[] = [];
+    for (let press = 0; press < 5; press += 1) {
+      const controls = mobileControlsFor(at, "sec-cover", first());
+      seen.push(controls?.span);
+      if (controls?.narrowerTo === undefined) break;
+      at = setMobilePatch(at, "sec-cover", first(), { columnSpan: controls.narrowerTo });
+    }
+    expect(seen).toEqual([12, 9, 6, 3]);
+    expect(mobileControlsFor(at, "sec-cover", first())?.narrowerTo).toBeUndefined();
+  });
+
+  it("still steps down from a width nobody's button produced", () => {
+    // A span written by hand, or by a control that does not exist yet. The button means something
+    // rather than refusing: it goes to the widest entry narrower than the one in force.
+    const odd = setMobilePatch(free, "sec-cover", first(), { columnSpan: 8 });
+    expect(mobileControlsFor(odd, "sec-cover", first())).toMatchObject({
+      span: 8,
+      narrowerTo: 6,
+    });
+  });
+
+  it("is at its narrowest for a hand-written span below the list", () => {
+    const tiny = setMobilePatch(free, "sec-cover", first(), { columnSpan: 2 });
+    expect(mobileControlsFor(tiny, "sec-cover", first())?.narrowerTo).toBeUndefined();
+  });
+
+  it("follows the order the renderer will publish", () => {
+    // The two must agree, and they agree because they are the same function (`mobileSequence`, in
+    // `packages/schema`). Moving the headline up past the photograph makes the headline first, so its
+    // «Subir» goes dead and the photograph's comes alive — the exact opposite of a moment earlier.
+    const swapped = moveUpOnMobile(free, "sec-cover", first());
+    const photo = designRows(free, "sec-cover").find((row) => row.label === "Foto")?.elementId;
+    if (!photo) throw new Error("the cover fixture lost its photo");
+    expect(mobileControlsFor(swapped, "sec-cover", first())?.canMoveUp).toBe(false);
+    expect(mobileControlsFor(swapped, "sec-cover", photo)?.canMoveUp).toBe(true);
   });
 });

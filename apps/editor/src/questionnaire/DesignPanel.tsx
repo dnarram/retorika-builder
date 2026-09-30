@@ -1,8 +1,14 @@
 "use client";
 
-import type { Placement, PlacementEdit, RetorikaDocument } from "@retorika/schema";
+import type { MobilePatchEdit, Placement, PlacementEdit, RetorikaDocument } from "@retorika/schema";
 import { useId, useState } from "react";
-import { boundsFor, designRows, selectedRowId, stepTo } from "../editor/designTree.ts";
+import {
+  boundsFor,
+  designRows,
+  mobileControlsFor,
+  selectedRowId,
+  stepTo,
+} from "../editor/designTree.ts";
 import es from "../locales/es.json" with { type: "json" };
 
 /**
@@ -94,6 +100,89 @@ function Stepper({
   );
 }
 
+/**
+ * A collapsible family.
+ *
+ * Extracted at two uses rather than three, against this project's own rule, for one reason worth
+ * stating: the header ties `aria-expanded` and a chevron rotation to the same boolean, and two
+ * hand-written copies of that pairing is how a panel ends up announcing "collapsed" while looking
+ * open. The rule is about concepts; this is a widget.
+ */
+function Family({
+  title,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="overflow-hidden rounded-[9px] border border-ui-border">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={onToggle}
+        className="flex w-full cursor-pointer items-center justify-between border-0 bg-[#F8FAFD] px-3 py-2.5 text-left"
+      >
+        <span className="text-[12px] font-semibold text-ui-ink">{title}</span>
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2.2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          className={"text-ui-muted " + (open ? "rotate-90" : "")}
+        >
+          <path d="M9 6l6 6-6 6" />
+        </svg>
+      </button>
+      <div hidden={!open} className="flex flex-col gap-2.5 p-3">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/** One of the three mobile adjustments. `aria-pressed` only for «Ocultar aquí», which is the one
+ * that has a state to be in; the other two are acts, and a pressed state would claim otherwise. */
+function MobileButton({
+  label,
+  pressed,
+  disabled,
+  onPress,
+}: {
+  label: string;
+  pressed?: boolean;
+  disabled?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled === true}
+      {...(pressed === undefined ? {} : { "aria-pressed": pressed })}
+      onClick={onPress}
+      className={
+        "h-10 flex-grow rounded-[9px] border text-[13px] font-medium " +
+        (disabled === true
+          ? "border-ui-border bg-ui-surface text-ui-border"
+          : pressed === true
+            ? "cursor-pointer border-ui-brand bg-ui-brand-surface text-ui-brand"
+            : "cursor-pointer border-ui-border bg-ui-surface text-ui-ink hover:bg-ui-brand-surface")
+      }
+    >
+      {label}
+    </button>
+  );
+}
+
 export function DesignPanel({
   document: doc,
   sectionId,
@@ -101,6 +190,9 @@ export function DesignPanel({
   selectedElementId,
   onSelectElement,
   onSetPlacement,
+  onSetMobilePatch,
+  onMoveUpOnMobile,
+  onPreviewMobile,
   onClose,
 }: {
   document: RetorikaDocument;
@@ -110,18 +202,31 @@ export function DesignPanel({
   selectedElementId: string | null;
   onSelectElement: (elementId: string) => void;
   onSetPlacement: (elementId: string, edit: PlacementEdit) => void;
+  /** Rule 7's first and third adjustments. `undefined` for a field takes that adjustment away, which
+   * is how «Ocultar aquí» turns itself back off. */
+  onSetMobilePatch: (elementId: string, edit: MobilePatchEdit) => void;
+  /** The second, as one step: the two elements trade places, because patching one to a lower number
+   * would only tie it with the element above and lose that tie to the markup. */
+  onMoveUpOnMobile: (elementId: string) => void;
+  /** Show the mobile preview, so the three adjustments are made while looking at what they change. */
+  onPreviewMobile: () => void;
   onClose: () => void;
 }) {
   const headingId = useId();
   /** Collapsed on open, every time the panel opens, and not remembered. The dossier's safeguard is
    * about what encountering the tools feels like, which is a thing that happens on opening. */
   const [placementOpen, setPlacementOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const rows = sectionId === null ? [] : designRows(doc, sectionId);
   // The same resolution the canvas uses for its outline, from the same function — see
   // `selectedRowId` for what having two of them cost.
   const selectedId = selectedRowId(rows, selectedElementId);
   const selected = rows.find((row) => row.elementId === selectedId);
+  const mobile =
+    sectionId !== null && selectedId !== null
+      ? mobileControlsFor(doc, sectionId, selectedId)
+      : undefined;
 
   return (
     <aside
@@ -200,58 +305,92 @@ export function DesignPanel({
           </div>
 
           {selected ? (
-            <div className="overflow-hidden rounded-[9px] border border-ui-border">
-              <button
-                type="button"
-                aria-expanded={placementOpen}
-                onClick={() => setPlacementOpen((open) => !open)}
-                className="flex w-full cursor-pointer items-center justify-between border-0 bg-[#F8FAFD] px-3 py-2.5 text-left"
-              >
-                <span className="text-[12px] font-semibold text-ui-ink">
-                  {es["editor.design.placement"]}
-                </span>
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2.2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                  className={"text-ui-muted " + (placementOpen ? "rotate-90" : "")}
-                >
-                  <path d="M9 6l6 6-6 6" />
-                </svg>
-              </button>
-              <div hidden={!placementOpen} className="flex flex-col gap-2.5 p-3">
-                <Stepper
-                  label={es["editor.design.column"]}
-                  placement={selected.placement}
-                  field="column"
-                  onStep={(edit) => onSetPlacement(selected.elementId, edit)}
+            <Family
+              title={es["editor.design.placement"]}
+              open={placementOpen}
+              onToggle={() => setPlacementOpen((value) => !value)}
+            >
+              <Stepper
+                label={es["editor.design.column"]}
+                placement={selected.placement}
+                field="column"
+                onStep={(edit) => onSetPlacement(selected.elementId, edit)}
+              />
+              <Stepper
+                label={es["editor.design.width"]}
+                placement={selected.placement}
+                field="columnSpan"
+                onStep={(edit) => onSetPlacement(selected.elementId, edit)}
+              />
+              <Stepper
+                label={es["editor.design.row"]}
+                placement={selected.placement}
+                field="row"
+                onStep={(edit) => onSetPlacement(selected.elementId, edit)}
+              />
+              <Stepper
+                label={es["editor.design.height"]}
+                placement={selected.placement}
+                field="rowSpan"
+                onStep={(edit) => onSetPlacement(selected.elementId, edit)}
+              />
+            </Family>
+          ) : null}
+
+          {/*
+            The second family, and the last one this sprint (ADR 0025 §6: no family is drawn for
+            something that does not exist yet). Rule 7's three adjustments and not a fourth, under
+            the promise mockup 14 makes in its own heading: «El escritorio no se toca.»
+          */}
+          {selected && mobile ? (
+            <Family
+              title={es["editor.design.mobile"]}
+              open={mobileOpen}
+              onToggle={() => {
+                const next = !mobileOpen;
+                setMobileOpen(next);
+                // Opening it shows the mobile preview. Adjusting something you cannot see is the
+                // dead-button problem wearing a different coat, and ADR 0025 §5 is explicit that
+                // these three are made «while looking at the mobile preview». Collapsing does not
+                // switch back: nobody asked to leave.
+                if (next) onPreviewMobile();
+              }}
+            >
+              <p className="m-0 text-[12px] leading-snug text-ui-muted">
+                {es["editor.design.mobileHelp"]}
+              </p>
+              <div className="flex gap-2">
+                <MobileButton
+                  label={
+                    mobile.hidden ? es["editor.design.mobileShow"] : es["editor.design.mobileHide"]
+                  }
+                  pressed={mobile.hidden}
+                  onPress={() =>
+                    onSetMobilePatch(selected.elementId, {
+                      hidden: mobile.hidden ? undefined : true,
+                    })
+                  }
                 />
-                <Stepper
-                  label={es["editor.design.width"]}
-                  placement={selected.placement}
-                  field="columnSpan"
-                  onStep={(edit) => onSetPlacement(selected.elementId, edit)}
+                <MobileButton
+                  label={es["editor.design.mobileUp"]}
+                  disabled={!mobile.canMoveUp}
+                  onPress={() => onMoveUpOnMobile(selected.elementId)}
                 />
-                <Stepper
-                  label={es["editor.design.row"]}
-                  placement={selected.placement}
-                  field="row"
-                  onStep={(edit) => onSetPlacement(selected.elementId, edit)}
-                />
-                <Stepper
-                  label={es["editor.design.height"]}
-                  placement={selected.placement}
-                  field="rowSpan"
-                  onStep={(edit) => onSetPlacement(selected.elementId, edit)}
+                <MobileButton
+                  label={es["editor.design.mobileSmaller"]}
+                  disabled={mobile.narrowerTo === undefined}
+                  onPress={() =>
+                    mobile.narrowerTo !== undefined &&
+                    onSetMobilePatch(selected.elementId, { columnSpan: mobile.narrowerTo })
+                  }
                 />
               </div>
-            </div>
+              <p className="m-0 text-[11px] leading-snug text-ui-muted">
+                {mobile.narrowerTo === undefined
+                  ? es["editor.design.mobileNarrowest"]
+                  : es["editor.design.mobileWidth"].replace("{span}", String(mobile.span))}
+              </p>
+            </Family>
           ) : null}
 
           <p className="m-0 text-[11px] leading-normal text-ui-muted">{es["editor.design.note"]}</p>

@@ -600,6 +600,14 @@ export function Variants({
           dismissToast();
           dispatch({ type: "setPlacement", variant: openIndex, sectionId, elementId, edit });
         }}
+        onSetMobilePatch={(sectionId, elementId, edit) => {
+          dismissToast();
+          dispatch({ type: "setMobilePatch", variant: openIndex, sectionId, elementId, edit });
+        }}
+        onMoveUpOnMobile={(sectionId, elementId) => {
+          dismissToast();
+          dispatch({ type: "moveUpOnMobile", variant: openIndex, sectionId, elementId });
+        }}
         onAddItem={(sectionId, slot, item) => {
           dismissToast();
           dispatch({ type: "addItem", variant: openIndex, sectionId, slot, item });

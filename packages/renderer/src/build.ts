@@ -2,6 +2,7 @@ import { COVER_ID, FOOTER_ID, presetFor, TEASER_ID } from "@retorika/catalog";
 import {
   type ContentElement,
   GRID_COLUMNS,
+  mobileSequence,
   type Page,
   type Placement,
   type RetorikaDocument,
@@ -487,14 +488,13 @@ function breakpointCss(doc: RetorikaDocument): string[] {
        * derivation decides everything about mobile except these three adjustments, and one of the
        * three is where a thing sits in the sequence.
        */
-      const patched = new Map(mobile.map((patch) => [patch.elementId, patch]));
-      // Content order, not placement order: it is the order the elements appear in the markup, which
-      // is what a reader meets on a one-column page and what CSS falls back to for a tie.
-      const positions = new Map(section.content.map((element, index) => [element.id, index + 1]));
-      for (const [elementId, position] of positions) {
-        if (patched.get(elementId)?.order !== undefined) continue;
+      // `mobileSequence` is the rule, and it lives in `packages/schema` so the editor's «Subir»
+      // and this emission cannot drift apart. Two implementations of one rule is how the design
+      // panel and the canvas came to disagree about the selected element on day 3.
+      for (const slot of mobileSequence(section)) {
+        if (slot.patched) continue;
         rules.push(
-          `  [data-section="${section.id}"] [data-id="${elementId}"] { order: ${position}; }`,
+          `  [data-section="${section.id}"] [data-id="${slot.elementId}"] { order: ${slot.order}; }`,
         );
       }
 

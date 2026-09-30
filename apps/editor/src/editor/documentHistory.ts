@@ -3,6 +3,7 @@ import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
 import type {
   ElementAddress,
   ListItem,
+  MobilePatchEdit,
   PlacementEdit,
   RetorikaDocument,
   Section,
@@ -25,6 +26,7 @@ import {
   moveItem as moveItemInDoc,
   movePage as movePageInDoc,
   moveSection as moveSectionFromDoc,
+  moveUpOnMobile as moveUpOnMobileInDoc,
   pageToSection as pageToSectionInDoc,
   removeItem as removeItemFromDoc,
   renamePage as renamePageInDoc,
@@ -32,6 +34,7 @@ import {
   sectionToPage as sectionToPageInDoc,
   setElementImageSrc,
   setElementText,
+  setMobilePatch as setMobilePatchInDoc,
   setPlacement as setPlacementInDoc,
   setTheme as setThemeInDoc,
   setVariant as setVariantInDoc,
@@ -73,6 +76,9 @@ export type SnapshotCause =
   /** One element moved or resized in its section's grid. Names the section rather than the element:
    * the toast and `wasSectionEverEdited` both ask about sections, and a placement is not content. */
   | { type: "setPlacement"; sectionId: string }
+  /** Any of rule 7's three mobile adjustments. One cause for all three: it answers "which section
+   * was adjusted", and hiding, reordering and narrowing are the same kind of act. */
+  | { type: "mobilePatch"; sectionId: string }
   | { type: "addItem"; sectionId: string }
   | { type: "removeItem"; sectionId: string }
   | { type: "moveItem"; sectionId: string }
@@ -139,6 +145,14 @@ export type HistoryAction =
       elementId: string;
       edit: PlacementEdit;
     }
+  | {
+      type: "setMobilePatch";
+      variant: number;
+      sectionId: string;
+      elementId: string;
+      edit: MobilePatchEdit;
+    }
+  | { type: "moveUpOnMobile"; variant: number; sectionId: string; elementId: string }
   | {
       type: "revertSection";
       variant: number;
@@ -484,6 +498,36 @@ function setPlacement(
 }
 
 /**
+ * Rule 7's three mobile adjustments, as two verbs and one cause.
+ *
+ * **One cause for both**, unlike every other pair in this file, because the question the cause
+ * answers is "which section was adjusted for mobile" and a swap is not a different kind of act from
+ * a hide. `sectionOf` is what reads it, and it asks about sections.
+ *
+ * **Not a content cause.** A mobile patch says where an element sits, whether it shows on a small
+ * screen, and how wide it is there. It writes no word, and the desktop page does not change at all.
+ *
+ * Neither takes a preset: patches live inside the section's own layout, which is what having one
+ * means. Both refuse a section the catalog draws, and the panel does not offer them there.
+ */
+function setMobilePatch(
+  history: History,
+  sectionId: string,
+  elementId: string,
+  edit: MobilePatchEdit,
+): History {
+  const document = setMobilePatchInDoc(history.present.document, sectionId, elementId, edit);
+  if (document === history.present.document) return history;
+  return step(history, document, { type: "mobilePatch", sectionId });
+}
+
+function moveUpOnMobile(history: History, sectionId: string, elementId: string): History {
+  const document = moveUpOnMobileInDoc(history.present.document, sectionId, elementId);
+  if (document === history.present.document) return history;
+  return step(history, document, { type: "mobilePatch", sectionId });
+}
+
+/**
  * One more line in a list, or one line gone.
  *
  * Two verbs rather than one, and a pair rather than a toggle: adding appends a line of markers at
@@ -680,6 +724,10 @@ function apply(history: History, action: HistoryAction): History {
       return escalateSection(history, action.sectionId);
     case "setPlacement":
       return setPlacement(history, action.sectionId, action.elementId, action.edit);
+    case "setMobilePatch":
+      return setMobilePatch(history, action.sectionId, action.elementId, action.edit);
+    case "moveUpOnMobile":
+      return moveUpOnMobile(history, action.sectionId, action.elementId);
     case "revertSection":
       return revertSection(history, action.sectionId, action.decisions);
     case "addItem":

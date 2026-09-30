@@ -9,10 +9,14 @@ import type {
 import {
   escalateSection,
   isHandDesigned,
+  mobilePatchFor,
+  mobileSequence,
+  moveUpOnMobile,
   parseDocument,
   revertImpact,
   revertPlanFor,
   revertSection,
+  setMobilePatch,
   setPlacement,
 } from "../src/index.ts";
 import { type Theme, TOKEN_KEYS } from "../src/tokens.ts";
@@ -514,5 +518,182 @@ describe("revertImpact — what the return dialog has to say before it does anyt
     expect(() => revertImpact(free(), "sec-nope", preset)).toThrow(
       /revertImpact: no section "sec-nope"/,
     );
+  });
+});
+
+describe("rule 7 — the three mobile adjustments", () => {
+  /**
+   * The verbs behind «Ocultar aquí», «Subir» and «Foto menor», and the order rule the renderer
+   * publishes. `mobileSequence` lives here rather than in `packages/renderer` so that the editor's
+   * «Subir» and the CSS it produces cannot come to disagree — two implementations of one rule is
+   * exactly how the design panel and the canvas fell out of step on day 3.
+   */
+  const free = () => escalateSection(documentWith(section()), "sec-demo", preset);
+  const mobileOf = (doc: RetorikaDocument) =>
+    sectionOf(doc, "sec-demo")?.layout?.breakpoints.mobile;
+  const sequenceOf = (doc: RetorikaDocument) => {
+    const target = sectionOf(doc, "sec-demo");
+    if (!target) throw new Error("no section");
+    return mobileSequence(target).map((slot) => slot.elementId);
+  };
+
+  describe("mobileSequence", () => {
+    it("is content order when nothing is patched", () => {
+      expect(sequenceOf(free())).toEqual(["el-h", "el-b"]);
+    });
+
+    it("numbers every element, not only the patched ones", () => {
+      // The correction a browser made at 390px: an unpatched element keeps CSS's default `0`, which
+      // is ahead of anything patched to `1`, so the document said one thing and the page another.
+      const target = sectionOf(
+        setMobilePatch(free(), "sec-demo", "el-b", { order: 1 }),
+        "sec-demo",
+      );
+      if (!target) throw new Error("no section");
+      expect(mobileSequence(target)).toEqual([
+        { elementId: "el-h", order: 1, patched: false },
+        { elementId: "el-b", order: 1, patched: true },
+      ]);
+    });
+
+    it("settles a tie by document order, the way CSS does — which is why «Subir» is a swap", () => {
+      // `el-h` is first in the content and keeps its derived 1; `el-b` is patched to 1 as well. Same
+      // number, so the markup decides, and the markup puts the heading first. **So patching an
+      // element to one less does not move it up** — it lands beside the element above and loses the
+      // tie to it. That is the whole reason `moveUpOnMobile` writes both numbers instead of one.
+      expect(sequenceOf(setMobilePatch(free(), "sec-demo", "el-b", { order: 1 }))).toEqual([
+        "el-h",
+        "el-b",
+      ]);
+    });
+  });
+
+  describe("setMobilePatch", () => {
+    it("hides an element on mobile and nowhere else", () => {
+      const after = setMobilePatch(free(), "sec-demo", "el-b", { hidden: true });
+      expect(mobileOf(after)).toEqual([{ elementId: "el-b", hidden: true }]);
+      // The desktop layout is untouched: the element still has its placement and is still visible.
+      expect(sectionOf(after, "sec-demo")?.content.find((el) => el.id === "el-b")?.hidden).toBe(
+        false,
+      );
+      expect(sectionOf(after, "sec-demo")?.layout?.placements).toEqual(
+        sectionOf(free(), "sec-demo")?.layout?.placements,
+      );
+    });
+
+    it("narrows an element, and narrows it again", () => {
+      const once = setMobilePatch(free(), "sec-demo", "el-b", { columnSpan: 9 });
+      const twice = setMobilePatch(once, "sec-demo", "el-b", { columnSpan: 6 });
+      expect(mobileOf(twice)).toEqual([{ elementId: "el-b", columnSpan: 6 }]);
+    });
+
+    it("merges into an existing patch rather than replacing it", () => {
+      const hidden = setMobilePatch(free(), "sec-demo", "el-b", { hidden: true });
+      const both = setMobilePatch(hidden, "sec-demo", "el-b", { columnSpan: 6 });
+      expect(mobileOf(both)).toEqual([{ elementId: "el-b", hidden: true, columnSpan: 6 }]);
+    });
+
+    it("takes an adjustment away when its field is undefined", () => {
+      const both = setMobilePatch(free(), "sec-demo", "el-b", { hidden: true, columnSpan: 6 });
+      const narrowed = setMobilePatch(both, "sec-demo", "el-b", { hidden: undefined });
+      expect(mobileOf(narrowed)).toEqual([{ elementId: "el-b", columnSpan: 6 }]);
+    });
+
+    it("drops the patch entirely once it says nothing, rather than leaving an empty one", () => {
+      // `{ elementId }` alone is an entry the renderer skips and a reviewer has to wonder about.
+      const hidden = setMobilePatch(free(), "sec-demo", "el-b", { hidden: true });
+      expect(mobileOf(setMobilePatch(hidden, "sec-demo", "el-b", { hidden: undefined }))).toEqual(
+        [],
+      );
+    });
+
+    it("hands back the identical document when nothing changes", () => {
+      const doc = setMobilePatch(free(), "sec-demo", "el-b", { hidden: true });
+      expect(setMobilePatch(doc, "sec-demo", "el-b", { hidden: true })).toBe(doc);
+    });
+
+    it("refuses a section the catalog draws, and says what to do about it", () => {
+      // Patches live inside `layout`, and a catalog section has `layout: null` — there is nowhere to
+      // put them. The dossier §5's first entry point, and the offer has to say so beforehand.
+      expect(() =>
+        setMobilePatch(documentWith(section()), "sec-demo", "el-b", { hidden: true }),
+      ).toThrow(/has no layout to patch.*escalateSection/s);
+    });
+
+    it("refuses an element the section does not have", () => {
+      expect(() => setMobilePatch(free(), "sec-demo", "el-nope", { hidden: true })).toThrow(
+        /has no element "el-nope"/,
+      );
+    });
+
+    it("cannot write a fourth adjustment, because the schema refuses one", () => {
+      expect(() =>
+        setMobilePatch(free(), "sec-demo", "el-b", { padding: "8px" } as never),
+      ).toThrow();
+    });
+  });
+
+  describe("moveUpOnMobile", () => {
+    it("swaps two elements rather than decrementing one", () => {
+      // Setting `el-b` to one less would give it the same number as `el-h`, and CSS breaks that tie
+      // by document order — which is the order being undone. So both get a number and they trade.
+      const after = moveUpOnMobile(free(), "sec-demo", "el-b");
+      expect(sequenceOf(after)).toEqual(["el-b", "el-h"]);
+      expect(mobileOf(after)).toEqual([
+        { elementId: "el-b", order: 1 },
+        { elementId: "el-h", order: 2 },
+      ]);
+    });
+
+    it("is one step, so undoing it once puts both back", () => {
+      // Two patches written, one act. The history step is the editor's, but it can only be one if
+      // the verb is one.
+      const before = free();
+      expect(moveUpOnMobile(before, "sec-demo", "el-b")).not.toBe(before);
+      expect(sequenceOf(moveUpOnMobile(before, "sec-demo", "el-b"))).toEqual(["el-b", "el-h"]);
+    });
+
+    it("hands back the identical document for the element already first", () => {
+      const doc = free();
+      expect(moveUpOnMobile(doc, "sec-demo", "el-h")).toBe(doc);
+    });
+
+    it("moves the same element up twice without leaving a gap", () => {
+      const third = setMobilePatch(free(), "sec-demo", "el-b", { order: 2 });
+      const up = moveUpOnMobile(third, "sec-demo", "el-b");
+      expect(sequenceOf(up)).toEqual(["el-b", "el-h"]);
+      expect(moveUpOnMobile(up, "sec-demo", "el-b")).toBe(up);
+    });
+
+    it("keeps the other adjustments of both elements", () => {
+      const hidden = setMobilePatch(free(), "sec-demo", "el-b", { hidden: true });
+      const up = moveUpOnMobile(hidden, "sec-demo", "el-b");
+      expect(mobileOf(up)).toEqual([
+        { elementId: "el-b", hidden: true, order: 1 },
+        { elementId: "el-h", order: 2 },
+      ]);
+    });
+
+    it("refuses a section the catalog draws", () => {
+      expect(() => moveUpOnMobile(documentWith(section()), "sec-demo", "el-b")).toThrow(
+        /has no layout to patch/,
+      );
+    });
+  });
+
+  describe("mobilePatchFor", () => {
+    it("answers the patch, and undefined when there is none", () => {
+      expect(mobilePatchFor(free(), "sec-demo", "el-b")).toBeUndefined();
+      const hidden = setMobilePatch(free(), "sec-demo", "el-b", { hidden: true });
+      expect(mobilePatchFor(hidden, "sec-demo", "el-b")).toEqual({
+        elementId: "el-b",
+        hidden: true,
+      });
+    });
+
+    it("answers undefined for a section or element that is not there", () => {
+      expect(mobilePatchFor(free(), "sec-nope", "el-b")).toBeUndefined();
+      expect(mobilePatchFor(free(), "sec-demo", "el-nope")).toBeUndefined();
+    });
   });
 });
