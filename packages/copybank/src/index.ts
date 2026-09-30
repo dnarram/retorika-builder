@@ -1,5 +1,6 @@
 import genericoJson from "../bank/generico.json" with { type: "json" };
 import peluqueriaJson from "../bank/peluqueria-barberia.json" with { type: "json" };
+import reformasJson from "../bank/reformas.json" with { type: "json" };
 import restauranteJson from "../bank/restaurante-bar.json" with { type: "json" };
 import tiendaJson from "../bank/tienda.json" with { type: "json" };
 import { type SectorFile, type Suggestion, sectorFileSchema } from "./schema.ts";
@@ -18,7 +19,13 @@ import { type SectorFile, type Suggestion, sectorFileSchema } from "./schema.ts"
 
 export const GENERIC_SECTOR = "generico";
 
-const FILES: readonly unknown[] = [genericoJson, peluqueriaJson, restauranteJson, tiendaJson];
+const FILES: readonly unknown[] = [
+  genericoJson,
+  peluqueriaJson,
+  reformasJson,
+  restauranteJson,
+  tiendaJson,
+];
 
 const BANK: ReadonlyMap<string, SectorFile> = new Map(
   FILES.map((file) => {
