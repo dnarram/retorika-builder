@@ -1,10 +1,49 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { MIGRATIONS, migrateToCurrent } from "../migrations/index.ts";
 import { SCHEMA_VERSION } from "../src/document.ts";
 import { parseDocument } from "../src/parse.ts";
 import { type Theme, TOKEN_KEYS } from "../src/tokens.ts";
 
+/** The golden corpus, reached from this file rather than from the renderer's `corpus.ts`: schema
+ * must not import from a package that depends on it. */
+const DOCUMENTS_DIR = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+  "..",
+  "fixtures",
+  "documents",
+);
+
 const theme = Object.fromEntries(TOKEN_KEYS.map((key) => [key, `value-${key}`])) as Theme;
+
+/**
+ * A migration addressed by the version it produces, never by its position in the list.
+ *
+ * `MIGRATIONS.at(-1)` used to mean `0002` and stopped meaning it the moment `0003` landed, which
+ * turned four passing tests red for a reason that had nothing to do with what they check. The tests
+ * below are *about* a particular step, so they have to say which one — a test that follows the end
+ * of the list is a test that silently changes subject on every schema change.
+ */
+function step(version: string) {
+  const found = MIGRATIONS.find((migration) => migration.version === version);
+  if (!found) throw new Error(`no migration produces ${version}`);
+  return found;
+}
+
+/** Everything up to and including `version`, for a test that wants the document as that step left
+ * it rather than as the whole chain leaves it. */
+function upTo(input: Record<string, unknown>, version: string): Record<string, unknown> {
+  let out = input;
+  for (const migration of MIGRATIONS) {
+    out = migration.up(out);
+    if (migration.version === version) return out;
+  }
+  throw new Error(`no migration produces ${version}`);
+}
 
 describe("migrations", () => {
   it("ends at the current schema version", () => {
@@ -113,7 +152,7 @@ describe("0002 — an image may name the sample it is", () => {
   it("opens a document saved before the field existed", () => {
     // The whole promise the guard protects: a site saved today still opens in two years.
     const migrated = migrateToCurrent(before());
-    expect(migrated["schemaVersion"]).toBe("1.1.0");
+    expect(migrated["schemaVersion"]).toBe(SCHEMA_VERSION);
     expect(() => parseDocument(migrated)).not.toThrow();
   });
 
@@ -126,13 +165,13 @@ describe("0002 — an image may name the sample it is", () => {
   it("round-trips: down after up gives back exactly what went in", () => {
     // The round trip the guard demands, and the only real proof the field is additive.
     const input = before();
-    const down = MIGRATIONS.at(-1)?.down;
+    const down = step("1.1.0").down;
     if (!down) throw new Error("0002 has no down");
-    expect(down(migrateToCurrent(input))).toEqual(input);
+    expect(down(upTo(input, "1.1.0"))).toEqual(input);
   });
 
   it("strips the field from every image, list items included, on the way down", () => {
-    const down = MIGRATIONS.at(-1)?.down;
+    const down = step("1.1.0").down;
     if (!down) throw new Error("0002 has no down");
     const stripped = down(sampled());
 
@@ -144,7 +183,7 @@ describe("0002 — an image may name the sample it is", () => {
   });
 
   it("leaves an already-migrated document exactly as it found it", () => {
-    const already = sampled();
+    const already = { ...sampled(), schemaVersion: SCHEMA_VERSION };
     expect(migrateToCurrent(already)).toEqual(already);
   });
 
@@ -155,5 +194,101 @@ describe("0002 — an image may name the sample it is", () => {
   it("runs every step for a document with no version at all", () => {
     const migrated = migrateToCurrent({ id: "doc-1" });
     expect(migrated["schemaVersion"]).toBe(SCHEMA_VERSION);
+  });
+});
+
+/**
+ * `0003` narrows a shape instead of widening one, which is the first time this chain has done that.
+ *
+ * `0002` was additive: every 1.0.0 document was already a valid 1.1.0 document, so the only question
+ * was whether `down` stripped what `up` allowed. Here the question is the opposite one, and it is
+ * sharper: **a 1.1.0 document with a `style` this vocabulary does not admit cannot be migrated at
+ * all.** `{"wobble": {ref: "color.primary"}}` parsed yesterday and does not parse today.
+ *
+ * The only reason `up` can be a version stamp is that the set of such documents is empty —
+ * `ContentElement.style` has existed since phase 0 and nothing has ever written to it. That is a
+ * claim about the whole repository rather than about this file, so the last test here checks it
+ * where it can be checked: no fixture in the golden corpus carries the field.
+ */
+describe("0003 — an element's style is a closed vocabulary", () => {
+  function before(): Record<string, unknown> {
+    return {
+      schemaVersion: "1.1.0",
+      id: "doc-1",
+      siteName: "Barbería El Corte",
+      theme,
+      collections: [],
+      pages: [
+        {
+          id: "home",
+          slug: "index",
+          title: "Barbería El Corte",
+          sections: [
+            {
+              id: "sec-cover",
+              preset: { catalogId: "cover", variantId: "image-right" },
+              source: "catalog",
+              layout: null,
+              content: [
+                {
+                  id: "el-headline",
+                  role: "heading",
+                  hidden: false,
+                  slot: "headline",
+                  value: { kind: "text", text: "Barbería El Corte" },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  it("opens a document saved before the vocabulary closed", () => {
+    const migrated = migrateToCurrent(before());
+    expect(migrated["schemaVersion"]).toBe("1.2.0");
+    expect(() => parseDocument(migrated)).not.toThrow();
+  });
+
+  it("changes nothing but the version, because no stored document carries style", () => {
+    const input = before();
+    expect({ ...migrateToCurrent(input), schemaVersion: "1.1.0" }).toEqual(input);
+  });
+
+  it("round-trips: down after up gives back exactly what went in", () => {
+    const input = before();
+    const down = step("1.2.0").down;
+    if (!down) throw new Error("0003 has no down");
+    expect(down(migrateToCurrent(input))).toEqual(input);
+  });
+
+  it("carries a style written against the new vocabulary back down unharmed", () => {
+    // The mirror image of `0002`'s strip test, and it is a strip test with nothing to strip: every
+    // 1.2.0 style object is a valid 1.1.0 open map, since the old key was `z.string()` and the old
+    // value was the same ref-or-exact union. Narrowing takes nothing away that has to be given back.
+    const input = before();
+    const pages = input["pages"] as { sections: { content: Record<string, unknown>[] }[] }[];
+    const element = pages[0]?.sections[0]?.content[0];
+    if (!element) throw new Error("no element");
+    element["style"] = { color: { ref: "color.ink" } };
+
+    const down = step("1.2.0").down;
+    if (!down) throw new Error("0003 has no down");
+    const roundTripped = down(migrateToCurrent(structuredClone(input)));
+    expect(roundTripped).toEqual(input);
+  });
+
+  it("is the claim it rests on: no document in the corpus carries a style", () => {
+    // If this ever goes red, `up` is no longer allowed to be a version stamp — somebody's stored
+    // style would have to be read, checked against the new vocabulary, and either kept or refused
+    // out loud. The migration's own header says so; this is the test that would say it first.
+    const corpus = readdirSync(DOCUMENTS_DIR).filter((file) => file.endsWith(".json"));
+    expect(corpus.length).toBeGreaterThan(0);
+    for (const file of corpus) {
+      const raw = readFileSync(join(DOCUMENTS_DIR, file), "utf8");
+      expect(JSON.parse(raw), file).not.toHaveProperty("style");
+      expect(raw, file).not.toContain('"style"');
+    }
   });
 });

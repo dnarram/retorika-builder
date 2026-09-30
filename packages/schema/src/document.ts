@@ -1,14 +1,14 @@
 import { z } from "zod";
 import { roleSchema } from "./roles.ts";
 import { SLUG_PATTERN } from "./slug.ts";
-import { styleValueSchema, themeSchema } from "./tokens.ts";
+import { type ElementStyle, elementStyleSchema, themeSchema } from "./tokens.ts";
 
 /**
  * Semver rather than an integer so the asymmetry of ADR 0004 is expressible: adding a
  * role or a token is additive and bumps the minor; removing or renaming one breaks and
  * bumps the major.
  */
-export const SCHEMA_VERSION = "1.1.0";
+export const SCHEMA_VERSION = "1.2.0";
 
 const idSchema = z.string().min(1).max(128);
 
@@ -90,7 +90,8 @@ export interface ContentElement {
   /** Only meaningful for the `list` container. */
   items?: { id: string; elements: ContentElement[] }[] | undefined;
   binding?: CollectionRef | undefined;
-  style?: Record<string, z.infer<typeof styleValueSchema>> | undefined;
+  /** Rule 6: references to the system, and a marked exception where somebody left it. */
+  style?: ElementStyle | undefined;
 }
 
 export const contentElementSchema: z.ZodType<ContentElement> = z.lazy(() =>
@@ -105,7 +106,7 @@ export const contentElementSchema: z.ZodType<ContentElement> = z.lazy(() =>
       .array(z.strictObject({ id: idSchema, elements: z.array(contentElementSchema) }))
       .optional(),
     binding: collectionRefSchema.optional(),
-    style: z.record(z.string(), styleValueSchema).optional(),
+    style: elementStyleSchema.optional(),
   }),
 );
 

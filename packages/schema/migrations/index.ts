@@ -1,6 +1,7 @@
 import { SCHEMA_VERSION } from "../src/document.ts";
 import initial from "./0001-initial.ts";
 import sampleImageField from "./0002-sample-image-field.ts";
+import closedStyleVocabulary from "./0003-closed-style-vocabulary.ts";
 
 export interface Migration {
   version: string;
@@ -10,7 +11,7 @@ export interface Migration {
 }
 
 /** In application order. The guard in scripts/schema-guard.ts reads this directory. */
-export const MIGRATIONS: readonly Migration[] = [initial, sampleImageField];
+export const MIGRATIONS: readonly Migration[] = [initial, sampleImageField, closedStyleVocabulary];
 
 /** `1.2.0` → `[1, 2, 0]`, for comparing two versions without a dependency. A missing or
  * unparseable version sorts before every migration, which is what an unstamped document needs. */
