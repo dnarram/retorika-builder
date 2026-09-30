@@ -1221,3 +1221,145 @@ describe("sprint 7 día 7 — el recorrido completo del sprint", () => {
     }
   });
 });
+
+describe("sprint 8 — el modo estudio: encender, diseñar a mano, colocar, y volver", () => {
+  /**
+   * The studio mode's four days, against the running application.
+   *
+   * It is here on day 4 rather than day 7 for one reason: **the return is the thing this sprint is
+   * not allowed to ship broken.** Escalating without a safe way back is precisely the Wix trap the
+   * advanced dossier §2 exists to avoid, and until now the only evidence the dialog worked at all was
+   * a walk in a browser that leaves nothing behind. Day 7 adds the rest of the journey.
+   *
+   * One context of its own, because the design-tools switch lives in `localStorage` and every other
+   * flow in this file is written for an owner who never turned it on.
+   */
+  it("turns the tools on, lays a section out, and comes back without losing a word", async () => {
+    const studio = await (await browser.newContext()).newPage();
+    try {
+      await studio.goto(BASE_URL, { waitUntil: "networkidle" });
+      await studio.fill("#nombre", "Barbería El Corte");
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByText("Peluquería y barbería", { exact: true }).click();
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.fill("#direccion", "Calle Espinel 12, Ronda");
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByText("Que me llamen", { exact: true }).click();
+      await studio.fill("#telefono", "600111222");
+      await studio.getByRole("button", { name: "Crear mi web" }).click();
+      await studio.getByText("Ver a tamaño real →").first().click();
+
+      const frame = studio.frameLocator("iframe").first();
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+
+      // `Diseño` does not exist until the tools are on — ADR 0025 §6, and the dead-button rule.
+      await expect(studio.getByRole("button", { name: "Diseño" })).toHaveCount(0);
+
+      // The switch asks the trade, never the level (dossier §4).
+      await studio.getByRole("switch", { name: "Herramientas de diseño" }).click();
+      await expect(studio.getByText("¿Montas webs para otros?")).toBeVisible();
+      await studio.getByRole("button", { name: "Sí, enciéndelas" }).click();
+      await expect(studio.getByRole("button", { name: "Diseño" })).toHaveCount(1);
+
+      // The offer, and the promise it makes before anybody accepts it.
+      await frame.locator('[data-section="sec-cover"]').click();
+      await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
+      await expect(frame.getByText("Esta sección la coloca el catálogo")).toBeVisible();
+
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      const wordsBefore = await headline.textContent();
+      const boxBefore = await headline.boundingBox();
+
+      await frame.locator(".rb-escalate-yes").click();
+      await expect(frame.locator(".rb-handmade-badge")).toHaveText("Diseñada a mano");
+
+      // «No se mueve ni un píxel»: the same words, in the same place, the instant after.
+      expect(await headline.textContent()).toBe(wordsBefore);
+      expect(await headline.boundingBox()).toEqual(boxBefore);
+
+      // The panel: collapsed on open, because encendiendo las herramientas «añade una puerta, no
+      // descarga sesenta controles».
+      await studio.getByRole("button", { name: "Diseño" }).click();
+      const family = studio.getByRole("button", { name: "Colocación" });
+      await expect(family).toHaveAttribute("aria-expanded", "false");
+      await family.click();
+
+      // The return is lossless until something moves, and a lossless return does not ask.
+      await frame.locator(".rb-handmade-back").click();
+      await expect(studio.getByRole("alertdialog")).toHaveCount(0);
+      await expect(frame.locator(".rb-handmade")).toHaveCount(0);
+
+      // Do it again, and this time move something, so the return has something to warn about.
+      await frame.locator('[data-section="sec-cover"]').click();
+      await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
+      await frame.locator(".rb-escalate-yes").click();
+      await expect(frame.locator(".rb-handmade-badge")).toHaveText("Diseñada a mano");
+      // Already expanded: the family collapses when the panel *opens*, not every time the section
+      // changes — somebody working through three sections should not reopen it three times. Clicking
+      // unconditionally here would close it, which is what the first version of this test did.
+      const reopened = studio.getByRole("button", { name: "Colocación" });
+      if ((await reopened.getAttribute("aria-expanded")) === "false") await reopened.click();
+
+      const column = studio.getByRole("button", { name: "Columna: uno más" });
+      await column.click();
+      await column.click();
+      // Rule 4, enforced by the interface rather than repaired afterwards: the arrow stops where the
+      // element's own width stops fitting, and `setPlacement` is never sent a value it would refuse.
+      while (!(await column.isDisabled())) await column.click();
+      const numbers = await studio.locator("aside output").allTextContents();
+      expect(Number(numbers[0]) + Number(numbers[1]) - 1).toBe(12);
+
+      // Now the dialog, and what it says.
+      await frame.locator(".rb-handmade-back").click();
+      const dialog = studio.getByRole("alertdialog");
+      await expect(dialog.getByRole("heading")).toHaveText("Volver a la original");
+      await expect(dialog.getByText(/La colocación que hiciste a mano se pierde/)).toBeVisible();
+
+      // Cancelling changes nothing at all.
+      await dialog.getByRole("button", { name: "Cancelar" }).click();
+      await expect(frame.locator(".rb-handmade")).toHaveCount(1);
+      expect(await studio.locator("aside output").allTextContents()).toEqual(numbers);
+
+      // Confirming puts every word back in its exact slot — «lo que Wix no tiene».
+      await frame.locator(".rb-handmade-back").click();
+      await dialog.getByRole("button", { name: "Volver a la original" }).click();
+      await expect(frame.locator(".rb-handmade")).toHaveCount(0);
+      expect(await headline.textContent()).toBe(wordsBefore);
+      // The panel is closed first, because it sits *beside* the canvas and narrows it — comparing a
+      // box measured with it open against one measured with it shut would compare two viewport
+      // widths and call the difference a regression. (It did, the first time this was written.)
+      await studio.getByRole("button", { name: "Cerrar el diseño" }).click();
+      expect(await headline.boundingBox()).toEqual(boxBefore);
+
+      // And the escalation was one history step all along, so Ctrl+Z is the return of the first
+      // minutes exactly as the dossier §5 says it is.
+      await studio.locator('button[aria-label="Deshacer"]').click();
+      await expect(frame.locator(".rb-handmade")).toHaveCount(1);
+
+      // Turning the tools off leaves the section exactly as it is: depth belongs to the person
+      // looking, never to the site (dossier §2, first row of the table).
+      await studio.getByRole("switch", { name: "Herramientas de diseño" }).click();
+      await expect(studio.getByRole("button", { name: "Diseño" })).toHaveCount(0);
+      await expect(frame.locator(".rb-handmade")).toHaveCount(0);
+      // Read the *stored* site, so the claim is about what survives rather than about what React is
+      // rendering. Waiting for the editor's own indicator first: autosave is debounced, and flipping
+      // the switch does not trigger a save at all — by design, that is `INV_4` — so the write being
+      // waited for is the undo's, and reading too early answers `null`.
+      await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
+      const stillFree = await studio.evaluate(() => {
+        const raw = localStorage.getItem("retorika.session.v1");
+        if (!raw) return null;
+        const session = JSON.parse(raw) as {
+          openIndex: number;
+          documents: { pages: { sections: { id: string; source: string }[] }[] }[];
+        };
+        const doc = session.documents[session.openIndex];
+        return doc?.pages[0]?.sections.find((s) => s.id === "sec-cover")?.source ?? null;
+      });
+      expect(stillFree).toBe("free");
+    } finally {
+      await studio.context().close();
+    }
+  }, 120_000);
+});

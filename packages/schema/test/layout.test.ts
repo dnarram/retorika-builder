@@ -10,6 +10,7 @@ import {
   escalateSection,
   isHandDesigned,
   parseDocument,
+  revertImpact,
   revertPlanFor,
   revertSection,
   setPlacement,
@@ -397,5 +398,121 @@ describe("setPlacement", () => {
         /element "el-nope" has no placement in section "sec-demo"/,
       );
     });
+  });
+});
+
+describe("revertImpact — what the return dialog has to say before it does anything", () => {
+  /**
+   * The dialog of day 4 exists because `applyRevert` refuses to act on a surplus element with no
+   * explicit decision. What it needs from this package is one answer to «is there anything worth
+   * stopping the person for», and that answer is a decision about the document model rather than
+   * about the layout of a panel — so it lives here and the component only draws it.
+   */
+  const free = () => escalateSection(documentWith(section()), "sec-demo", preset);
+
+  const withSurplus = () => {
+    const target: Section = {
+      ...section(),
+      content: [...section().content, body("el-extra", "Una segunda entradilla")],
+    };
+    return escalateSection(documentWith(target), "sec-demo", preset);
+  };
+
+  const withMobilePatch = (doc: RetorikaDocument) =>
+    parseDocument({
+      ...doc,
+      pages: doc.pages.map((page, index) =>
+        index !== 0
+          ? page
+          : {
+              ...page,
+              sections: page.sections.map((candidate) =>
+                candidate.id !== "sec-demo" || !candidate.layout
+                  ? candidate
+                  : {
+                      ...candidate,
+                      layout: {
+                        ...candidate.layout,
+                        breakpoints: { mobile: [{ elementId: "el-b", hidden: true }] },
+                      },
+                    },
+              ),
+            },
+      ),
+    });
+
+  it("says nothing about a section the catalog still draws", () => {
+    expect(revertImpact(documentWith(section()), "sec-demo", preset)).toBeUndefined();
+  });
+
+  it("is lossless right after escalating, because nothing has been moved yet", () => {
+    // The whole reason the offer can be accepted without risk, stated as the thing the interface
+    // reads: escalate and change your mind, and the return takes away nothing at all.
+    const impact = revertImpact(free(), "sec-demo", preset);
+    expect(impact).toMatchObject({
+      lossless: true,
+      dropsPlacements: false,
+      dropsBreakpointAdjustments: false,
+      surplus: [],
+    });
+  });
+
+  it("stops being lossless the moment an element is moved", () => {
+    const moved = setPlacement(free(), "sec-demo", "el-h", { column: 3, columnSpan: 4 });
+    expect(revertImpact(moved, "sec-demo", preset)).toMatchObject({
+      lossless: false,
+      dropsPlacements: true,
+    });
+  });
+
+  it("is lossless again once the element is put back where the catalog had it", () => {
+    // Compared against what the preset draws *now*, not against a snapshot taken at escalation —
+    // so moving something and moving it back costs nothing, which is what a person would expect.
+    const there = setPlacement(free(), "sec-demo", "el-h", { column: 3, columnSpan: 4 });
+    const back = setPlacement(there, "sec-demo", "el-h", { column: 1, columnSpan: 12 });
+    expect(revertImpact(back, "sec-demo", preset)).toMatchObject({
+      lossless: true,
+      dropsPlacements: false,
+    });
+  });
+
+  it("reports the mobile adjustments that would disappear", () => {
+    // `planRevert` has returned `dropsBreakpointAdjustments` since phase 0 and nothing has ever
+    // read it. This is the field the dossier §5 wrote it for: «El diálogo lo advierte, porque si no
+    // parece un fallo.»
+    const impact = revertImpact(withMobilePatch(free()), "sec-demo", preset);
+    expect(impact).toMatchObject({ dropsBreakpointAdjustments: true, lossless: false });
+  });
+
+  it("reports the surplus with a reason per element", () => {
+    const impact = revertImpact(withSurplus(), "sec-demo", preset);
+    expect(impact?.surplus).toEqual([
+      { elementId: "el-extra", slot: "intro", reason: 'slot "intro" shows at most 1' },
+    ]);
+    expect(impact?.lossless).toBe(false);
+  });
+
+  it("reports what comes back and to which slot, which is the dialog's other half", () => {
+    expect(revertImpact(free(), "sec-demo", preset)?.assignments).toEqual([
+      { elementId: "el-h", slot: "headline" },
+      { elementId: "el-b", slot: "intro" },
+    ]);
+  });
+
+  it("reports all three losses at once when all three apply", () => {
+    const moved = setPlacement(withSurplus(), "sec-demo", "el-h", { column: 2, columnSpan: 3 });
+    const impact = revertImpact(withMobilePatch(moved), "sec-demo", preset);
+    expect(impact).toMatchObject({
+      dropsPlacements: true,
+      dropsBreakpointAdjustments: true,
+      lossless: false,
+    });
+    expect(impact?.surplus).toHaveLength(1);
+  });
+
+  it("throws for a section the document does not have, naming it", () => {
+    expect(() => revertImpact(free(), "sec-nope", preset)).toThrow(
+      /revertImpact: no section "sec-nope"/,
+    );
   });
 });

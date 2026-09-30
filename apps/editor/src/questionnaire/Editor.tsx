@@ -26,11 +26,14 @@ import {
   type PlacementEdit,
   type PresetShape,
   type RetorikaDocument,
+  type RevertImpact,
+  revertImpact,
   type SlotAddress,
   type SlotFill,
+  type SurplusDecision,
 } from "@retorika/schema";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { designRows, selectedRowId } from "../editor/designTree.ts";
+import { designRows, elementLabels, selectedRowId } from "../editor/designTree.ts";
 import { type DownloadGate, downloadGateFor } from "../editor/downloadGate.ts";
 import { EditorShell, type RailItemId, type SaveStatus } from "../editor/EditorShell.tsx";
 import { ACCEPTED_IMAGE_ACCEPT } from "../editor/imageBytes.ts";
@@ -44,6 +47,7 @@ import { DownloadWarningDialog, TooManyPhotosDialog } from "./DownloadGateDialog
 import { FieldsPanel } from "./FieldsPanel.tsx";
 import { PagesPanel } from "./PagesPanel.tsx";
 import { PhotosPanel } from "./PhotosPanel.tsx";
+import { RevertDialog } from "./RevertDialog.tsx";
 import { StylePanel } from "./StylePanel.tsx";
 import { FieldError } from "./ui.tsx";
 
@@ -352,7 +356,13 @@ export function Editor({
    * history step each, so Ctrl+Z covers the first minutes — which is what the advanced dossier §5
    * asks for and the reason day 4's dialog is about the durable case rather than this one. */
   onEscalateSection: (sectionId: string) => void;
-  onRevertSection: (sectionId: string) => void;
+  /** `decisions` names one choice per element the preset cannot place. Absent means the interface
+   * made none, and `revertSection` then hides every surplus element rather than deleting it — which
+   * is only ever the case for a return that had nothing to decide. */
+  onRevertSection: (
+    sectionId: string,
+    decisions?: Readonly<Record<string, SurplusDecision>>,
+  ) => void;
   /** One element moved or resized inside its section's twelve-column grid (rule 4). A partial edit,
    * because one press of a stepper is one number; the panel never sends a value `setPlacement`
    * would refuse, which is what keeps that refusal a backstop rather than a path. */
@@ -432,6 +442,17 @@ export function Editor({
   const [designSectionId, setDesignSectionId] = useState<string | null>(null);
   const [designElementId, setDesignElementId] = useState<string | null>(null);
   /**
+   * The section whose return is being confirmed, and what that return would cost.
+   *
+   * Held together rather than recomputed while the dialog is open, for the reason `requestDownload`
+   * gives about its own two dialogs: what is shown has to be the document **as it stood when the
+   * button was pressed**. Recomputing would let an autosave or a redo change the list of things
+   * being decided about while somebody is deciding.
+   */
+  const [revertFor, setRevertFor] = useState<{ sectionId: string; impact: RevertImpact } | null>(
+    null,
+  );
+  /**
    * Which section is selected, and whether its composition menu is open — remembered across the
    * preview's re-renders, which is what makes trying compositions usable at all.
    *
@@ -498,6 +519,30 @@ export function Editor({
     // Cleared first, so picking the same file twice in a row still fires a change.
     input.value = "";
     input.click();
+  }
+
+  /**
+   * What «Volver a la original» actually does, which is not always the same thing.
+   *
+   * **Lossless returns do not ask.** The promise the offer makes is «puedes volver a la original
+   * cuando quieras», and the dossier's own row is «Volver es un clic, no destruye nada». A section
+   * escalated and left alone — or moved and moved back — loses nothing by returning, and a
+   * confirmation over nothing destroyed would be friction defending against the promise it serves.
+   *
+   * Everything else opens the dialog, which is the only place the surplus decision is made.
+   * `revertSection` still defaults to hiding, so the reducer can never be thrown into; the dialog is
+   * what turns that default into a choice somebody saw.
+   */
+  function requestRevert(sectionId: string) {
+    const found = findSection(doc, sectionId);
+    if (!found) return;
+    const impact = revertImpact(doc, sectionId, presetFor(found.section.preset.catalogId));
+    if (!impact) return;
+    if (impact.lossless) {
+      onRevertSection(sectionId);
+      return;
+    }
+    setRevertFor({ sectionId, impact });
   }
 
   function showFields(sectionId: string | null) {
@@ -1453,10 +1498,7 @@ export function Editor({
       back.textContent = es["editor.section.revert"];
       back.addEventListener("click", (event) => {
         event.stopPropagation();
-        // Day 4 replaces this with the dialog that shows both versions and what stays behind. Today
-        // the return is lossless in every state the product can reach — nothing can add an element a
-        // preset cannot place — so going straight there loses nothing, and Ctrl+Z takes it back.
-        onRevertSection(sectionId);
+        requestRevert(sectionId);
       });
       bar.appendChild(back);
 
@@ -1974,6 +2016,22 @@ export function Editor({
             void download();
           }}
           onCancel={() => setDownloadDialog(null)}
+        />
+      ) : null}
+      {revertFor ? (
+        <RevertDialog
+          sectionName={sectionDisplayName(doc, revertFor.sectionId)}
+          impact={revertFor.impact}
+          // The same Spanish names the fields and design panels use, from the catalog's own locale,
+          // so the dialog cannot call an element something the rest of the editor calls otherwise.
+          labelFor={(elementId) =>
+            elementLabels(doc, revertFor.sectionId).get(elementId) ?? elementId
+          }
+          onCancel={() => setRevertFor(null)}
+          onConfirm={(decisions) => {
+            setRevertFor(null);
+            onRevertSection(revertFor.sectionId, decisions);
+          }}
         />
       ) : null}
     </EditorShell>

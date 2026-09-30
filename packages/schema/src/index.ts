@@ -44,10 +44,11 @@ export type { Violation } from "./invariants.ts";
 export { checkInvariants, flattenElements } from "./invariants.ts";
 export type { InvariantId } from "./invariants-catalog.ts";
 export { INVARIANTS, invariantTestName, PROVISIONAL_INVARIANTS } from "./invariants-catalog.ts";
-export type { PlacementEdit } from "./layout.ts";
+export type { PlacementEdit, RevertImpact } from "./layout.ts";
 export {
   escalateSection,
   isHandDesigned,
+  revertImpact,
   revertPlanFor,
   revertSection,
   setPlacement,
