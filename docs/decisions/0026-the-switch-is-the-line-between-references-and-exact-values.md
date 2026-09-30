@@ -1,10 +1,24 @@
 # 0026 — The switch is the line between a reference and an exact value
 
-**Status:** **proposed** · **Date:** 2026-09-30 · **Amended:** 2026-09-30 (sprint 9 days 5 and 6, §2) · **Proposed by:** development · **Accepted by:** —
+**Status:** **accepted** · **Date:** 2026-09-30 · **Amended:** 2026-09-30 (sprint 9 days 5 and 6, §2)
+· **Proposed by:** development · **Accepted by:** **David, 1 October 2026 — not direction**
 · **Amends:** `docs/design/REVIEW.md` ("Not implemented, and not planned: mockup 13's «Avanzado:
 colores exactos y tamaños»") · **Touches:** document rule 6, the advanced-module dossier §§1, 4, 6, 9
 and 11, the concept dossier §§3 and 5, ADR 0025 (the switch), `docs/tasks/a11y.md`,
 `docs/tasks/theme-css-values.md`
+
+> **Who accepted this, and what that does not mean.** The day-1 gate said the CEO would read this
+> ADR and mockup 17 before the pull request merged. That is not what happened: **David read it and
+> accepted it himself**, and the merge of PR #106 was his act rather than direction's. It is written
+> here in the same words §3 already uses about the two contrast thresholds, and for the same reason
+> — an accepted ADR gets cited later, and nobody should be able to read "accepted" here as
+> "direction agreed".
+>
+> **Direction has still not seen it**, and there is a reason that is worth keeping visible rather
+> than closing quietly: this ADR **amends `REVIEW.md`** and reconciles two *approved* documents —
+> the concept dossier §§3 and 5 against the design review. Approved documents are direction's.
+> Whether direction wants to look is direction's to decide, and until it does, the row in
+> `docs/tasks/backlog.md` says so.
 
 > **What is decided.** Rule 6 has two arms — «el estilo son referencias al sistema; un valor exacto
 > se guarda como excepción marcada» — and until now only the first has existed in any screen. This

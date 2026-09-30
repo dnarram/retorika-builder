@@ -12,13 +12,21 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 30 September 2026, **sprint 9 day 1**. Sprints 7 and 8 closed between the previous
-review and this one. The row about the seven unbanked sectors closed with the seven signings, and is
-struck rather than deleted. Two entries are new: **issue #9 is now a gate** rather than a nuisance —
-it is what keeps typography out of the style sprint — and **there is no keyboard undo**, which
-nobody had written down anywhere and which seven places in the repository contradict.
+Last reviewed: 1 October 2026, **closing sprint 9**. The style system shipped, so two rows changed
+meaning rather than wording: «el modo estudio» is now three pillars of four, and the exact-colour row
+stopped waiting on a gate and started saying **who accepted it** — David, not direction, which is a
+fact about the record rather than about the code. One entry is new and had no home: **the other half
+of the §4 pre-publish check**, the overflow below 320 pixels, which sprint 9 did not build and which
+is the reason an exact `fontSize` is still refused.
 
-The previous review was 29 September 2026, sprint 7 day 1. Sprint 6 closed between it and the one
+The review before it was 30 September 2026, sprint 9 day 1. Sprints 7 and 8 closed between it and
+the one before. The row about the seven unbanked sectors closed with the seven signings, and is
+struck rather than deleted. Two entries were new then: **issue #9 became a gate** rather than a
+nuisance — it is what keeps typography out of the style work — and **there is no keyboard undo**,
+which nobody had written down anywhere and which seven places in the repository contradict. Both are
+still open.
+
+The one before that was 29 September 2026, sprint 7 day 1. Sprint 6 closed between it and the one
 before. Three rows had gone stale — the photo bank's future tense, mockup 13's palettes and the
 editor's top bar — and were corrected in place rather than deleted, so the record of what was once
 open survives.
@@ -29,8 +37,8 @@ open survives.
 
 | What | Where it is written | Waiting on |
 |---|---|---|
-| **The professional editor is a target of the product, and the advanced module starts now.** Decided by direction, 30 September 2026: the same editor must also serve someone who builds sites for other people. That schedules «el modo estudio» ahead of its place in the protocol's phases — a deliberate crossing, with ADR 0018 as the precedent — and it changes what «done» means for the editor. | [ADR 0025](../decisions/0025-studio-mode-starts-now-and-its-switch-is-not-in-the-document.md), and the advanced-module dossier | Nothing. It is being built: sprint 8 delivered the placement, the devices and the switch; sprint 9 is the style system |
-| **Exact colour values, behind the switch, with a contrast review in front of them.** Proposed by development, 30 September 2026, and the reason it needs somebody is that it **amends a `REVIEW.md` entry** — the one that refused mockup 13's «Avanzado: colores exactos y tamaños» as "not implemented, and not planned". What arrives is not that picker: it is rule 6's marked exception, offered only with the design tools on, with a two-level contrast review that blocks below 3:1 and warns between 3:1 and 4.5:1. **The two levels were decided by David in the planning of sprint 9, not by direction**, which is why the ADR and mockup 17 go to the CEO before the day-1 pull request is merged. | [ADR 0026](../decisions/0026-the-switch-is-the-line-between-references-and-exact-values.md), and [mockup 17](../design/mockups/17-la-barra-y-el-sistema.html) | The CEO, reading the ADR and the mockup. The gate is on merging sprint 9 day 1, and day 2 does not start without it |
+| **The professional editor is a target of the product, and the advanced module starts now.** Decided by direction, 30 September 2026: the same editor must also serve someone who builds sites for other people. That schedules «el modo estudio» ahead of its place in the protocol's phases — a deliberate crossing, with ADR 0018 as the precedent — and it changes what «done» means for the editor. | [ADR 0025](../decisions/0025-studio-mode-starts-now-and-its-switch-is-not-in-the-document.md), and the advanced-module dossier | Nothing. Three of the four pillars are built: sprint 8 delivered **la colocación** and **los dispositivos** with the switch, sprint 9 **el sistema de estilo**. The fourth — **el contenido reutilizable**, the §7 collections — is unscheduled, and nobody has asked for it |
+| **Exact colour values, behind the switch, with a contrast review in front of them — built, and accepted by David rather than by direction.** Sprint 9 delivered it: the vocabulary closed (schema 1.2.0), the renderer emits rule 6 for the first time since phase 0, the floating toolbar offers references to everybody, and an exact colour exists only with the design tools on and only behind a review that blocks under 3:1 and warns between 3:1 and 4.5:1. What is *not* closed is who agreed to it. The ADR **amends a `REVIEW.md` entry** and reconciles two approved documents — concept dossier §§3 and 5 against the design review — and approved documents are direction's. The day-1 gate said the CEO would read it first; **David read it and accepted it himself on 1 October 2026**, and the ADR's own header says so in as many words. | [ADR 0026](../decisions/0026-the-switch-is-the-line-between-references-and-exact-values.md), and [mockup 17](../design/mockups/17-la-barra-y-el-sistema.html) | Direction, if it wants to look — which is direction's to decide, not development's to chase. Nothing in the code waits on it; this row exists so that "accepted" is never read as "direction agreed" |
 | **A contact form.** Scoped, 28 September 2026: [ADR 0020](../decisions/0020-contact-stays-links-only-for-phase-1.md) accepted ADR 0016's phase 1 links-only scope and split the form off as its own, unscheduled phase 2 item. | [ADR 0020](../decisions/0020-contact-stays-links-only-for-phase-1.md), resolving [ADR 0016](../decisions/0016-contact-section-has-links-not-a-form.md) | A phase 2 ADR naming the service, its cost, what happens to a client's site the day that service stops, and the data processing agreement protocol Part 15 requires |
 | **How a carta of several courses reads.** Three «Precios» sections one after another are three separate blocks: each has 48px of its own padding and the page puts 76px between them, so **172px of air separates the last dish of one course from the heading of the next**, and nothing frames them as one menu. Measured by building one on 28 September 2026. The cheap lever is a renderer rule making two adjacent sections of the same preset close up; whether that should happen at all is a general design decision, since it would apply to two «Opiniones» just as much. | [`docs/design/REVIEW.md`](../design/REVIEW.md) | Direction, on whether adjacent sections of one kind should read as one |
 | **The hostelería text bank — resolved, 28 September 2026.** Both `packages/copybank/drafts/*.json` files were read and signed; the hostelería rewrite and the per-sector «Precios» headings are in `bank/` now. What the draft could not write — a sixth question, direction's to add — is still open. | [ADR 0009](../decisions/0009-generated-texts-from-a-reviewed-bank.md), and [ADR 0010](../decisions/0010-initial-questionnaire.md) | Nothing, for the bank itself. The sixth-question option in ADR 0010 is direction's whenever it wants it |
@@ -43,6 +51,7 @@ open survives.
 | What | Where |
 |---|---|
 | **Formatting inside a text — designed on 29 September 2026, and waiting.** [ADR 0024](../decisions/0024-formatting-inside-a-text-is-designed-and-waiting.md) settles the shape (bold and italic over a run of characters; **underline refused**, because on the web it means a link) and decides that the code waits for the third session, which asks whether the request survives the text bank being fixed. #52 stays open and points at the ADR. | [#52](https://github.com/dnarram/retorika-builder/issues/52), [ADR 0024](../decisions/0024-formatting-inside-a-text-is-designed-and-waiting.md) |
+| **The other half of the pre-publish check: overflow below 320 pixels.** The advanced dossier §4 promises one review covering two things — «contraste insuficiente **o de desbordes por debajo de 320 píxeles**» — and sprint 9 built the first half only. `a11y.md` has cited that same sentence since sprint 2 as the reason the browser harness exists, and the harness *does* measure overflow — over the corpus, in CI, at 320/768/1280. What does not exist is the same question asked of **this owner's document, before this download**, which is what the dossier promises and what a gate would need. It is also the reason an exact `fontSize` is refused: a size is the one value in rule 6's vocabulary that can cause an overflow, and offering it behind a gate that cannot see what it would cause is the shape of promise ADR 0026 exists to refuse. Costed at more than a day: it needs a rendered page measured at 320px somewhere the editor can reach, which is a second measurement path beside the contrast arithmetic. Unscheduled, and nobody is waiting on it. | [ADR 0026](../decisions/0026-the-switch-is-the-line-between-references-and-exact-values.md) §2's table, and [`a11y.md`](a11y.md) |
 | **Type pairs falling back** on machines without Inter / Playfair Display. Still open — the fallback itself is unchanged — but the interface half is now handled: the Estilo panel names typefaces by character («Moderna y neutra») and never by font, and its `Aa` specimen renders in the real stack, so what it shows is what that machine will give. **Sprint 9 makes this a gate rather than a nuisance:** it is what keeps «tipografías propias» and the toolbar's per-element `Aa` out of the style work, which is half of the advanced dossier §4's "On" column for the style panel. It needs a decision, and [ADR 0026](../decisions/0026-the-switch-is-the-line-between-references-and-exact-values.md) says so by name rather than leaving the omission to be noticed later. | [#9](https://github.com/dnarram/retorika-builder/issues/9), and [ADR 0026](../decisions/0026-the-switch-is-the-line-between-references-and-exact-values.md) |
 
 ## Recorded against the thing it challenges
@@ -69,6 +78,18 @@ open survives.
   This was the one section with no evidence behind it — no session asked for it, it closed the
   catalogue rather than answering anybody's own words — and that stays true of it going forward:
   nothing here claims a usability finding it does not have.
+- **The third session is unblocked, unscheduled, and five decisions are waiting on it.** Its own
+  script names them — #51's «Precios» as a carta, ADR 0022's "would anyone look for a way to make a
+  page", ADR 0023's three-entry threshold, ADR 0024's "does formatting survive the texts being
+  fixed", and the evidence for declaring phase 1 accepted — each written down *before* the session
+  was scheduled, which is what the script says makes it different from the first two.
+  **Its precondition has been met since sprint 8**: «Pick a sector whose bank is signed… If none
+  is, the session waits», and all ten launch sectors have been signed since 30 September 2026. The
+  sprint 9 plan said the session would run mid-sprint. **It did not**, and nothing in the sprint
+  replaced it — so five decisions that were waiting on evidence are still waiting on the same
+  evidence, and none of them moved. Recorded here rather than left as a plan that quietly did not
+  happen. Whose call: scheduling it is direction's; the script is written and needs nothing from
+  development.
 - **There is no keyboard undo, and seven places in this repository say there is.** Found by walking
   the editor on **sprint 9 day 1**, and not caused by that day's work — it has been true for as long
   as the editor has existed. `Meta+Z`, `Control+Z` and `Meta+Shift+Z` were each pressed against a

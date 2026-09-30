@@ -266,6 +266,15 @@ Things someone could reasonably add unasked, and must not:
 - **Rendering `ContentElement.style` exact values.** They are not emitted today. When they are,
   they cross the same boundary and must go through the same guard. That belongs to the task
   that starts emitting them.
+
+  **Done, sprint 9 day 3 — and the obligation was met the way this line asked.** `elementStyleCss`
+  in `packages/renderer/src/build.ts` emits them, and every exact value goes through
+  `cssThemeValue`. What changed since this line was written is that the guard is now a *second*
+  line of defence rather than the only one: sprint 9 day 2 narrowed the schema so an exact value is
+  a hex triple for `color` and a plain length for the rest, which means `cssThemeValue` can no
+  longer fire for a document that parsed. It is kept anyway, and the reason is this file's own —
+  a boundary check belongs at the boundary, not at whichever gate happens to be upstream of it
+  today.
 - **Allowing any CSS function** (`clamp()`, `calc()`, `var()`, `rgb()`), even though a future
   scale may want one.
 - A Content-Security-Policy header or meta tag.

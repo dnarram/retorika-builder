@@ -27,12 +27,21 @@ import es from "../locales/es.json" with { type: "json" };
  *
  * **The families open collapsed.** Dossier §4, in its own words: «encenderlo añade una puerta, no
  * descarga sesenta controles». And **no family is drawn for something that does not exist yet** —
- * a greyed `Tipografía` waiting for sprint 9 would be the dead button this editor has refused since
- * sprint 1 — so today there is exactly one family, and the panel does not pretend otherwise.
+ * a greyed `Tipografía` waiting for a sprint that might bring it would be the dead button this
+ * editor has refused since sprint 1.
  *
- * **This sprint brings no dragging.** Guides that snap are phase 3 of the concept dossier and do not
- * fit in a day; stepping by column, row and width is what a professional reaches for anyway, over
- * the grid the canvas now draws. Saying so by name is what kept day 3 from eating the sprint.
+ * **Three families now, and each one arrived with the thing it controls**, which is the whole
+ * point of that rule: `Colocación` on sprint 8 day 3, `Ajustar solo en móvil` on day 6, and
+ * `Fuera del sistema` — the audit of rule 6's marked exceptions — on sprint 9 day 5. There is
+ * still no `Tipografía`, and there is not meant to be until issue #9 is answered.
+ *
+ * **The last of the three is not about the selected section**, unlike the other two: it asks the
+ * whole document «what in this web no longer follows the system», which is why it sits outside the
+ * branches below and why this panel now says something useful with nothing selected at all.
+ *
+ * **No dragging, still.** Guides that snap are phase 3 of the concept dossier and did not fit in a
+ * day; stepping by column, row and width is what a professional reaches for anyway, over the grid
+ * the canvas draws. Saying so by name is what kept sprint 8 day 3 from eating that sprint.
  */
 
 /** One number, with the two arrows that change it. */
@@ -369,9 +378,11 @@ export function DesignPanel({
           ) : null}
 
           {/*
-            The second family, and the last one this sprint (ADR 0025 §6: no family is drawn for
-            something that does not exist yet). Rule 7's three adjustments and not a fourth, under
-            the promise mockup 14 makes in its own heading: «El escritorio no se toca.»
+            The second family — the last one sprint 8 added, and no longer the last in the panel:
+            sprint 9 day 5 put «Fuera del sistema» below, outside this branch because it is about
+            the document rather than about the selected section. Rule 7's three adjustments and not
+            a fourth, under the promise mockup 14 makes in its own heading: «El escritorio no se
+            toca.»
           */}
           {selected && mobile ? (
             <Family
