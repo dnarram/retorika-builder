@@ -174,7 +174,8 @@ describe("suggestions", () => {
  * What the questionnaire asks before it warns somebody their sector has no texts prepared.
  *
  * The screen used to say it for «Otro sector» alone, which left the other nine looking covered
- * when seven of them are not. This is the question that replaced that hard-coded case, and its
+ * when seven of them were not — until sprint 8 signed all seven. This is the question that
+ * replaced that hard-coded case, and its
  * whole value is that it answers about the bank the product **serves** rather than about what is
  * written in the repository — `test/drafts.test.ts` is where that half is pinned.
  */

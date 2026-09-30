@@ -38,9 +38,14 @@ read it yet. So it sat in `drafts/`, and `test/drafts.test.ts` is the promised t
 until 29 September, which is the kind of claim that stays true for three days and then quietly
 is not; it is corrected here rather than repeated.
 
-`drafts/` is in use again from **29 September 2026** (sprint 7 days 4 and 5): the seven launch
-sectors that have no bank file of their own, written as drafts for one person to read. See "How
+`drafts/` was in use again from **29 September 2026** (sprint 7 days 4 and 5), the seven launch
+sectors that had no bank file of their own, written as drafts for one person to read. See "How
 the texts were drafted" below.
+
+**All seven were read and signed on 30 September 2026** (sprint 8), one PR per sector, each with
+the Spanish words in the PR body for direction to read before merging — the `git mv` ADR 0009
+calls the review. `drafts/` is empty. This paragraph used to describe an in-use directory; it is
+corrected in place rather than repeated, for the same reason the paragraph above it was.
 
 A draft file carries `"review": { "status": "draft", "drafted": "YYYY-MM-DD" }` — **no `by`
 field**, because nobody has approved it and there is nobody to name. It is validated by
@@ -99,19 +104,21 @@ menu, and the rule above — nothing the owner has not already said — holds. W
 would have to ask before a text could do more is written up in
 [ADR 0010](../../docs/decisions/0010-initial-questionnaire.md).
 
-### The seven remaining sectors, drafted 29 September 2026
+### The seven remaining sectors, drafted 29 September 2026 and signed 30 September 2026
 
-**Drafted by Claude (Opus). Unread, unsigned, and serving nothing** until somebody moves each file
-out of `drafts/`. Sprint 7 days 4 and 5, in the order of the likely number of small businesses in
-Spain that would want a simple website — `reformas`, `estetica`, `taller`, `asesoria`,
-`fisioterapia`, `academia`, `fotografia`. That order is a judgement, not a figure anybody can
-cite, and it only decides which get read first.
+**Drafted by Claude (Opus), one PR per sector, direction's own act of review each time.** Sprint 7
+days 4 and 5 wrote them, in the order of the likely number of small businesses in Spain that would
+want a simple website — `reformas`, `estetica`, `taller`, `asesoria`, `fisioterapia`, `academia`,
+`fotografia`. That order was a judgement, not a figure anybody can cite, and it only decided which
+got read first; sprint 8 signed all seven the same way, one PR at a time, none merged before the
+one before it was.
 
-**Why this was worth a sprint at all:** these seven fall through to `generico`, whose
-`suggestions` array is empty. So question 3 offers them nothing to tick — and by
+**Why this was worth a sprint at all:** until they were signed, these seven fell through to
+`generico`, whose `suggestions` array is empty. So question 3 offered them nothing to tick — and by
 [ADR 0013](../../docs/decisions/0013-services-cardinality.md) ticking nothing means **no services
-section at all**. For seven of the ten launch sectors the site comes out shorter as well as
-blander, which is what Taberna described as «vacía y fría».
+section at all**. For seven of the ten launch sectors the site used to come out shorter as well as
+blander, which is what Taberna described as «vacía y fría». Not any more: `servesSector` answers
+`true` for all ten today, checked directly rather than assumed.
 
 **Each file carries only what differs from `generico`,** which is the cascade's own rule and not a
 shortcut: a sector file that repeated «Dónde estamos» would be a line to re-read on every review
@@ -159,8 +166,8 @@ A sector file holds three things:
 ### The cascade
 
 A lookup tries the sector, then `generico`. So a sector's file carries only what differs, and
-"Dónde estamos" is written once. A sector with no file of its own — seven of the ten launch
-sectors today, and every "Otro sector" — gets the generic texts and no suggestions.
+"Dónde estamos" is written once. A sector with no file of its own — every "Otro sector", and no
+launch sector any more as of 30 September 2026 — gets the generic texts and no suggestions.
 
 **And the questionnaire says so**, since 29 September 2026. `servesSector` is the question it asks
 before warning somebody that their sector has no texts prepared, and it is asked of the loaded

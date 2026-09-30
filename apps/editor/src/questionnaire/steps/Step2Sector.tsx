@@ -52,10 +52,12 @@ export function Step2Sector({
    * unsigned still warns — and it should, because what its owner would get is the generic file and
    * an empty question 3.
    *
-   * Until today this box only appeared for «Otro sector», which left the other nine looking
-   * covered. Seven of them are not: they fall through to `generico`, whose `suggestions` array is
-   * empty, so question 3 offers nothing to tick and ADR 0013 then gives the site no services
-   * section at all. The warning was true and shown in one of the eight places it applied.
+   * Added on sprint 7 day 5, when this box only appeared for «Otro sector» and seven of the other
+   * nine were silently in the same state: falling through to `generico`, whose `suggestions` array
+   * is empty, so question 3 offered nothing to tick and ADR 0013 then gave the site no services
+   * section at all. Sprint 8 signed all seven. As of 30 September 2026 `servesSector` answers
+   * `true` for every launch sector, so this box now appears only for «Otro sector» — the one case
+   * it was always going to keep warning about, since that sector has no file to sign.
    */
   const noBank = answers.sector !== null && !servesSector(answers.sector);
 
