@@ -1,5 +1,12 @@
 export { RETORIKA_BRAND } from "./brand.ts";
-export { contrastRatio, relativeLuminance } from "./contrast.ts";
+export type { ContrastPair } from "./contrast.ts";
+export {
+  AA_NORMAL_TEXT,
+  CONTRAST_PAIRS,
+  contrastRatio,
+  provedOn,
+  relativeLuminance,
+} from "./contrast.ts";
 export type { ColorKey, Palette } from "./palettes.ts";
 export { PALETTES } from "./palettes.ts";
 

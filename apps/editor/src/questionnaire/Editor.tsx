@@ -28,10 +28,14 @@ import {
   type PresetShape,
   type RetorikaDocument,
   type RevertImpact,
+  type Role,
   revertImpact,
   type SlotAddress,
   type SlotFill,
+  type StyleProperty,
+  type StyleValue,
   type SurplusDecision,
+  styleFor,
 } from "@retorika/schema";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { designRows, elementLabels, selectedRowId } from "../editor/designTree.ts";
@@ -42,6 +46,7 @@ import { countPhotos, listPhotos, type PhotoState } from "../editor/photoInvento
 import { withPhotoUrls } from "../editor/previewDocument.ts";
 import { sectionFields } from "../editor/sectionFields.ts";
 import { offersMatching } from "../editor/sectionSearch.ts";
+import { hasAnyControl, toolbarFor } from "../editor/textToolbar.ts";
 import es from "../locales/es.json" with { type: "json" };
 import { DesignPanel } from "./DesignPanel.tsx";
 import { DownloadWarningDialog, TooManyPhotosDialog } from "./DownloadGateDialogs.tsx";
@@ -318,6 +323,7 @@ export function Editor({
   onPickPalette,
   onPickTypePair,
   onPickScale,
+  onSetElementStyle,
   photoUrls,
   photoError,
   offers,
@@ -408,6 +414,14 @@ export function Editor({
   onPickPalette: (paletteId: string) => void;
   onPickTypePair: (typePairId: string) => void;
   onPickScale: (scaleId: string) => void;
+  /** One property of one element's own style, from the floating toolbar (rule 6). `undefined`
+   * takes the property away and lets the site's own rule show through again. Available with the
+   * design tools off as well as on: the advanced dossier §4 gives «color del tema» to everybody. */
+  onSetElementStyle: (
+    address: ElementAddress,
+    property: StyleProperty,
+    value: StyleValue | undefined,
+  ) => void;
   /** Object URLs for photos already uploaded, keyed by the `src` the document carries. The
    * preview needs them because a bundle-relative path resolves against the parent page inside a
    * `srcDoc` iframe and 404s — the same trap `placeholder-image.ts` documents. */
@@ -433,6 +447,15 @@ export function Editor({
   const [downloadDialog, setDownloadDialog] = useState<DownloadGate | null>(null);
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  /**
+   * Which element the floating toolbar is on, across the frame reloads every edit causes.
+   *
+   * A ref and not state, for the same reason `fileInputRef` below is: nothing on the React side
+   * renders from it, and making it state would re-render the whole editor on every focus. It is
+   * ephemeral interface state either way — like the design-tools switch, it belongs to the person
+   * looking and never to the site, so it is not in the document (`INV_4`).
+   */
+  const toolbarOn = useRef<ElementAddress | null>(null);
   // One input, reused: the picker is opened from inside the frame, and the element that asked
   // for it is remembered here until a file comes back.
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1418,6 +1441,228 @@ export function Editor({
     return badge;
   }
 
+  /**
+   * The floating toolbar — the advanced dossier §4's "Apagado" row, for everybody, switch or no
+   * switch: «Texto, tamaño, **color del tema**, enlace».
+   *
+   * **It is a child of the section, never of the element, and that is not a styling choice.**
+   * `wireEditing` makes every text element `contentEditable` and commits `el.textContent` on blur.
+   * A `<div>` inside the `<h1>` is part of that element's text content, so the first click would
+   * have **saved the toolbar's own words into the heading**. It is the same trap the renderer
+   * documents for the hidden `<span>` of an «Avance» and answered with `aria-label`. Sections are
+   * already `position: relative` (`wireInteractions`); elements are not, and do not need to be —
+   * the bar's position is computed with `offsetTop`/`offsetLeft` against the section.
+   *
+   * **`mousedown` is cancelled on the bar**, so pressing a button never moves focus out of the
+   * element being edited. Without it every press fires `blur` first, which commits a text edit at
+   * the wrong moment and closes the bar underneath the pointer.
+   *
+   * **It flips below when there is no room above**, which is what mockup 17 draws and what mockup
+   * 08 gets wrong: the cover's headline is the first element on the page, so a bar at `top: -52px`
+   * lands outside the iframe's own visible area and cannot be clicked. The same trap the section's
+   * action cluster already documents and solved by sitting inside.
+   */
+  function wireToolbar(iframeDoc: Document) {
+    const close = () => {
+      for (const bar of iframeDoc.querySelectorAll(".rb-toolbar")) bar.remove();
+    };
+
+    /** Forget which element the bar belongs to, as well as removing it. Separate from `close`
+     * because a re-wire removes the bar in order to draw it again, and must not forget. */
+    const dismiss = () => {
+      toolbarOn.current = null;
+      close();
+    };
+
+    const open = (el: HTMLElement) => {
+      close();
+      const section = el.closest<HTMLElement>("[data-section]");
+      const sectionId = section?.dataset.section;
+      const elementId = el.dataset.id;
+      const role = el.dataset["role"] as Role | undefined;
+      if (!section || !sectionId || !elementId || !role) return;
+
+      const controls = toolbarFor({ role });
+      if (!controls || !hasAnyControl(controls)) return;
+
+      const address: ElementAddress = { sectionId, elementId };
+      toolbarOn.current = address;
+      const current = styleFor(doc, address);
+
+      const bar = iframeDoc.createElement("div");
+      bar.className = "rb-toolbar";
+      bar.setAttribute("role", "toolbar");
+      bar.setAttribute("aria-label", es["editor.toolbar.label"]);
+      // The one listener that makes the rest work: the press must not take focus off the text.
+      bar.addEventListener("mousedown", (event) => event.preventDefault());
+      bar.addEventListener("click", (event) => event.stopPropagation());
+
+      const group = (label: string): HTMLElement => {
+        const wrapper = iframeDoc.createElement("div");
+        wrapper.className = "rb-toolbar-group";
+        const caption = iframeDoc.createElement("span");
+        caption.className = "rb-toolbar-caption";
+        caption.textContent = label;
+        wrapper.appendChild(caption);
+        return wrapper;
+      };
+
+      const write = (property: StyleProperty, value: StyleValue | undefined) => {
+        onSetElementStyle(address, property, value);
+      };
+
+      if (controls.size.length > 0) {
+        const sizes = group(es["editor.toolbar.size"]);
+        for (const ref of controls.size) {
+          const button = iframeDoc.createElement("button");
+          button.type = "button";
+          button.className = "rb-toolbar-step";
+          button.dataset["ref"] = ref;
+          const chosen =
+            current?.fontSize !== undefined && "ref" in current.fontSize
+              ? current.fontSize.ref === ref
+              : false;
+          if (chosen) button.classList.add("rb-toolbar-on");
+          button.setAttribute("aria-pressed", String(chosen));
+          button.textContent = es[`editor.toolbar.sizeOf.${ref}` as keyof typeof es];
+          // Pressing the step already chosen takes it off, which is the only way back to the
+          // site's own size without a separate «quitar» for a control of three buttons.
+          button.addEventListener("click", () => write("fontSize", chosen ? undefined : { ref }));
+          sizes.appendChild(button);
+        }
+        bar.appendChild(sizes);
+      }
+
+      if (controls.color.length > 0) {
+        const colors = group(es["editor.toolbar.color"]);
+        for (const ref of controls.color) {
+          const button = iframeDoc.createElement("button");
+          button.type = "button";
+          button.className = "rb-toolbar-swatch";
+          button.dataset["ref"] = ref;
+          button.style.background = doc.theme[ref];
+          const label = es[`editor.toolbar.colorOf.${ref}` as keyof typeof es];
+          button.title = label;
+          button.setAttribute("aria-label", label);
+          const chosen =
+            current?.color !== undefined && "ref" in current.color
+              ? current.color.ref === ref
+              : false;
+          if (chosen) button.classList.add("rb-toolbar-on");
+          button.setAttribute("aria-pressed", String(chosen));
+          button.addEventListener("click", () => write("color", chosen ? undefined : { ref }));
+          colors.appendChild(button);
+        }
+        bar.appendChild(colors);
+      }
+
+      if (controls.link) {
+        const linkGroup = group(es["editor.toolbar.link"]);
+        const button = iframeDoc.createElement("button");
+        button.type = "button";
+        button.className = "rb-toolbar-link";
+        button.textContent = es["editor.toolbar.link"];
+        // A second door, not a second mechanism: it opens the panel that already owns
+        // destinations, on this section. Editing an href in the frame would be a second place a
+        // destination can be written, and `listDeadDestinations` would have two sources to chase.
+        button.addEventListener("click", () => {
+          dismiss();
+          setFieldsFor(sectionId);
+        });
+        linkGroup.appendChild(button);
+        bar.appendChild(linkGroup);
+      }
+
+      // Appended to the section, then measured, then placed: the height is not known until it is
+      // in the document, and the flip depends on the height.
+      section.appendChild(bar);
+
+      /**
+       * The element's offset from the section's own box, summed up the `offsetParent` chain.
+       *
+       * **Not `el.offsetTop - section.offsetTop`**, which is what this was and which the walk
+       * caught. `offsetTop` is measured against the nearest *positioned* ancestor, and the section
+       * already is one (`wireInteractions` sets `position: relative` on every `[data-section]`), so
+       * `el.offsetTop` is the number wanted and subtracting the section's own page offset skews it
+       * by however far down the page that section sits — 76px for the cover, more for every section
+       * after it. It read as correct because the error then pushed the calculation into the flip
+       * branch, which pushed the bar back up by roughly the same amount: two mistakes cancelling,
+       * and both of them would have come apart on the second section.
+       *
+       * The loop rather than the single read, because an intermediate positioned ancestor would
+       * make the single read wrong again, silently, and there is no reason to depend on there never
+       * being one.
+       */
+      let top = 0;
+      let left = 0;
+      for (
+        let node: HTMLElement | null = el;
+        node && node !== section;
+        node = node.offsetParent as HTMLElement | null
+      ) {
+        top += node.offsetTop;
+        left += node.offsetLeft;
+      }
+
+      const above = top - bar.offsetHeight - 8;
+      // Below when there is no room above — the cover's headline under a tight scale, where the
+      // section's own padding is all the room there is. Mockup 08 puts the bar at `top: -52px`
+      // unconditionally, which for the first element of the page lands outside the iframe's visible
+      // area and cannot be clicked; mockup 17 draws this flip instead.
+      bar.style.top = above < 0 ? `${top + el.offsetHeight + 8}px` : `${above}px`;
+      bar.style.left = `${Math.max(left, 0)}px`;
+    };
+
+    for (const el of iframeDoc.querySelectorAll<HTMLElement>("[data-id]")) {
+      if (!EDITABLE_TAGS.has(el.tagName)) continue;
+      el.addEventListener("focus", () => open(el));
+      el.addEventListener("blur", () => {
+        // Deferred, so a click that lands on the bar itself is not raced by the blur it follows.
+        // `mousedown`'s preventDefault stops the blur in the ordinary case; this covers a keyboard
+        // tab out, where there is no mousedown at all.
+        setTimeout(() => {
+          // **Only if the bar is still this element's.** Clicking from one text straight to
+          // another fires the new element's `focus` *before* this deferred blur, so the bar has
+          // already been rebuilt for the new element by the time this runs — and a blur that
+          // closed it unconditionally would tear down the bar it never opened. The walk found
+          // exactly that: the toolbar appeared on the cover and on no other section, because
+          // every later click opened it and then immediately took it away again.
+          if (toolbarOn.current?.elementId !== el.dataset.id) return;
+          if (iframeDoc.activeElement !== el && !iframeDoc.activeElement?.closest(".rb-toolbar")) {
+            dismiss();
+          }
+        }, 0);
+      });
+    }
+
+    /**
+     * Put the bar back on the element it was on, after an edit rebuilt the frame.
+     *
+     * **Found by the walk, and it made the control useless: the bar vanished the moment it was
+     * used.** Writing a style changes the document, which changes `srcDoc`, which reloads the
+     * iframe — every edit in this editor does. Nothing had focus in the new frame, so nothing
+     * reopened the bar, and a person got exactly one press per click into the text.
+     *
+     * Reopened **without focusing**, deliberately. `wireEditing` selects a whole field on focus,
+     * which is right when somebody clicks into it to type and wrong here — having just pressed a
+     * swatch, they would watch their heading flash to selected for no reason. The words stay put
+     * and the bar stays put; clicking the text again is what resumes typing.
+     */
+    const remembered = toolbarOn.current;
+    if (remembered) {
+      const section = iframeDoc.querySelector(
+        `[data-section="${CSS.escape(remembered.sectionId)}"]`,
+      );
+      const el = section?.querySelector<HTMLElement>(
+        `[data-id="${CSS.escape(remembered.elementId)}"]`,
+      );
+      // Gone means the element was deleted or hidden while the bar was open; forget it rather than
+      // keeping a pointer to something nobody can see.
+      if (el) open(el);
+      else toolbarOn.current = null;
+    }
+  }
+
   function wireEditing(iframeDoc: Document) {
     for (const el of iframeDoc.querySelectorAll<HTMLElement>("[data-id]")) {
       if (!EDITABLE_TAGS.has(el.tagName)) continue;
@@ -1743,6 +1988,32 @@ export function Editor({
       ".rb-line-down { right: 25px; }",
       ".rb-line:hover .rb-line-move, .rb-line-move:focus { opacity: 1; }",
       ".rb-line-move:hover { border-color: #156FE7; background: #F2F7FE; }",
+
+      // The floating toolbar (mockup 17, band 1). Absolute inside the section, which is already
+      // `position: relative` — never inside the element, whose `textContent` is what `wireEditing`
+      // saves on blur.
+      `.rb-toolbar { font-family: ${UI_FONT}; position: absolute; z-index: 30;`,
+      "  display: flex; align-items: center; gap: 2px; padding: 5px;",
+      "  background: #FFFFFF; border: 1px solid #E3E8F0; border-radius: 11px;",
+      "  box-shadow: 0 6px 18px rgba(15,23,42,0.14); }",
+      ".rb-toolbar-group { display: flex; align-items: center; gap: 4px; padding: 0 7px;",
+      "  border-right: 1px solid #EDF1F6; }",
+      ".rb-toolbar-group:last-child { border-right: 0; }",
+      ".rb-toolbar-caption { font-size: 11px; font-weight: 600; color: #94A3B8; }",
+      `.rb-toolbar button { font-family: ${UI_FONT}; cursor: pointer; }`,
+      ".rb-toolbar-step { height: 26px; padding: 0 9px; font-size: 12px; font-weight: 500;",
+      "  color: #334155; background: #FFFFFF; border: 1px solid #E3E8F0; border-radius: 7px; }",
+      ".rb-toolbar-step:hover { background: #F2F7FE; border-color: #156FE7; }",
+      ".rb-toolbar-step.rb-toolbar-on { font-weight: 700; color: #156FE7;",
+      "  background: #E8F1FE; border-color: #156FE7; }",
+      // A ring rather than a tick, so the chosen swatch is marked without hiding the colour it is
+      // there to show.
+      ".rb-toolbar-swatch { width: 20px; height: 20px; padding: 0; border-radius: 999px;",
+      "  border: 1px solid rgba(15,23,42,0.18); }",
+      ".rb-toolbar-swatch.rb-toolbar-on { box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px #156FE7; }",
+      ".rb-toolbar-link { height: 26px; padding: 0 11px; font-size: 12px; font-weight: 500;",
+      "  color: #334155; background: #FFFFFF; border: 1px solid #E3E8F0; border-radius: 7px; }",
+      ".rb-toolbar-link:hover { background: #F2F7FE; border-color: #156FE7; }",
     ].join("\n");
     iframeDoc.head.appendChild(style);
 
@@ -1752,6 +2023,8 @@ export function Editor({
     wireLines(iframeDoc);
     wirePhotos(iframeDoc);
     wireEditing(iframeDoc);
+    // After `wireEditing`, which is what makes an element focusable in the first place.
+    wireToolbar(iframeDoc);
     wireHandmade(iframeDoc);
   }
 

@@ -9,6 +9,8 @@ import type {
   Section,
   SlotAddress,
   SlotFill,
+  StyleProperty,
+  StyleValue,
   SurplusDecision,
   Theme,
 } from "@retorika/schema";
@@ -33,6 +35,7 @@ import {
   revertSection as revertSectionInDoc,
   sectionToPage as sectionToPageInDoc,
   setElementImageSrc,
+  setElementStyle as setElementStyleInDoc,
   setElementText,
   setMobilePatch as setMobilePatchInDoc,
   setPlacement as setPlacementInDoc,
@@ -76,6 +79,10 @@ export type SnapshotCause =
   /** One element moved or resized in its section's grid. Names the section rather than the element:
    * the toast and `wasSectionEverEdited` both ask about sections, and a placement is not content. */
   | { type: "setPlacement"; sectionId: string }
+  /** One element's own style, written from the floating toolbar. Names the section for the same
+   * reason `setPlacement` does — the toast and `wasSectionEverEdited` both ask about sections — and
+   * it is **not** a content cause: a colour writes no word. */
+  | { type: "setElementStyle"; sectionId: string }
   /** Any of rule 7's three mobile adjustments. One cause for all three: it answers "which section
    * was adjusted", and hiding, reordering and narrowing are the same kind of act. */
   | { type: "mobilePatch"; sectionId: string }
@@ -153,6 +160,15 @@ export type HistoryAction =
       edit: MobilePatchEdit;
     }
   | { type: "moveUpOnMobile"; variant: number; sectionId: string; elementId: string }
+  | {
+      type: "setElementStyle";
+      variant: number;
+      address: ElementAddress;
+      property: StyleProperty;
+      /** `undefined` takes the property away again, which is how the toolbar's «quitar» works and
+       * how day 6's one-click fix will drop an exception. */
+      value: StyleValue | undefined;
+    }
   | {
       type: "revertSection";
       variant: number;
@@ -498,6 +514,35 @@ function setPlacement(
 }
 
 /**
+ * One property of one element's own style (rule 6), from the floating toolbar.
+ *
+ * **Its own step, like every other small deliberate adjustment.** Choosing a colour and then a size
+ * is two acts, and one «Deshacer» should take back one of them — the argument `setPlacement` makes
+ * at more length.
+ *
+ * **Not a content cause.** A colour writes no word, so a toolbar press must not keep a delete toast
+ * alive or make a section count as edited in the sense `wasSectionEverEdited` asks about.
+ *
+ * **No preset and no layout needed, which is what separates this from the two below.** A style
+ * belongs to the element, not to the section's grid, so it works on a catalog section exactly as it
+ * does on a hand-designed one — and it must, because the "Apagado" row of the advanced dossier §4
+ * gives the colour control to everybody, switch or no switch.
+ *
+ * `setElementStyle` in the schema returns the identical document when nothing changes, so pressing
+ * the swatch that is already chosen opens no step at all.
+ */
+function setElementStyle(
+  history: History,
+  address: ElementAddress,
+  property: StyleProperty,
+  value: StyleValue | undefined,
+): History {
+  const document = setElementStyleInDoc(history.present.document, address, property, value);
+  if (document === history.present.document) return history;
+  return step(history, document, { type: "setElementStyle", sectionId: address.sectionId });
+}
+
+/**
  * Rule 7's three mobile adjustments, as two verbs and one cause.
  *
  * **One cause for both**, unlike every other pair in this file, because the question the cause
@@ -726,6 +771,8 @@ function apply(history: History, action: HistoryAction): History {
       return setPlacement(history, action.sectionId, action.elementId, action.edit);
     case "setMobilePatch":
       return setMobilePatch(history, action.sectionId, action.elementId, action.edit);
+    case "setElementStyle":
+      return setElementStyle(history, action.address, action.property, action.value);
     case "moveUpOnMobile":
       return moveUpOnMobile(history, action.sectionId, action.elementId);
     case "revertSection":
