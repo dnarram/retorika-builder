@@ -3,6 +3,7 @@ import academiaJson from "../bank/academia.json" with { type: "json" };
 import asesoriaJson from "../bank/asesoria.json" with { type: "json" };
 import esteticaJson from "../bank/estetica.json" with { type: "json" };
 import fisioterapiaJson from "../bank/fisioterapia.json" with { type: "json" };
+import fotografiaJson from "../bank/fotografia.json" with { type: "json" };
 import genericoJson from "../bank/generico.json" with { type: "json" };
 import peluqueriaJson from "../bank/peluqueria-barberia.json" with { type: "json" };
 import reformasJson from "../bank/reformas.json" with { type: "json" };
@@ -24,6 +25,7 @@ const FILES = [
   ["asesoria", asesoriaJson],
   ["estetica", esteticaJson],
   ["fisioterapia", fisioterapiaJson],
+  ["fotografia", fotografiaJson],
   ["generico", genericoJson],
   ["peluqueria-barberia", peluqueriaJson],
   ["reformas", reformasJson],
