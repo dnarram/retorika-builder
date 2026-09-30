@@ -3,6 +3,7 @@ import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
 import type {
   ElementAddress,
   ListItem,
+  PlacementEdit,
   RetorikaDocument,
   Section,
   SlotAddress,
@@ -31,6 +32,7 @@ import {
   sectionToPage as sectionToPageInDoc,
   setElementImageSrc,
   setElementText,
+  setPlacement as setPlacementInDoc,
   setTheme as setThemeInDoc,
   setVariant as setVariantInDoc,
 } from "@retorika/schema";
@@ -68,6 +70,9 @@ export type SnapshotCause =
    * moves either way. */
   | { type: "escalateSection"; sectionId: string }
   | { type: "revertSection"; sectionId: string }
+  /** One element moved or resized in its section's grid. Names the section rather than the element:
+   * the toast and `wasSectionEverEdited` both ask about sections, and a placement is not content. */
+  | { type: "setPlacement"; sectionId: string }
   | { type: "addItem"; sectionId: string }
   | { type: "removeItem"; sectionId: string }
   | { type: "moveItem"; sectionId: string }
@@ -127,6 +132,13 @@ export type HistoryAction =
   | { type: "setTheme"; variant: number; theme: Theme }
   | { type: "setVariant"; variant: number; sectionId: string; variantId: string }
   | { type: "escalateSection"; variant: number; sectionId: string }
+  | {
+      type: "setPlacement";
+      variant: number;
+      sectionId: string;
+      elementId: string;
+      edit: PlacementEdit;
+    }
   | {
       type: "revertSection";
       variant: number;
@@ -447,6 +459,31 @@ function revertSection(
 }
 
 /**
+ * One element moved or resized inside its section's grid (day 3, advanced dossier §6).
+ *
+ * **Not amendable**, like every other structural verb here and unlike typing. Two presses of the
+ * same arrow are two moves somebody would expect to take back one at a time — the reason `moveItem`
+ * gives at more length, and it applies harder here: laying out by hand is a sequence of small
+ * deliberate adjustments, and an amalgamated step would undo a whole minute of them at once.
+ *
+ * **Not a content cause below.** A placement says where an element sits, never what it says.
+ *
+ * No preset is needed: a placement belongs to the section's own layout, which is what having one
+ * means. `setPlacement` refuses a section the catalog still draws, and the panel does not offer the
+ * control in that case, so that refusal is a backstop rather than a path anyone walks.
+ */
+function setPlacement(
+  history: History,
+  sectionId: string,
+  elementId: string,
+  edit: PlacementEdit,
+): History {
+  const document = setPlacementInDoc(history.present.document, sectionId, elementId, edit);
+  if (document === history.present.document) return history;
+  return step(history, document, { type: "setPlacement", sectionId });
+}
+
+/**
  * One more line in a list, or one line gone.
  *
  * Two verbs rather than one, and a pair rather than a toggle: adding appends a line of markers at
@@ -641,6 +678,8 @@ function apply(history: History, action: HistoryAction): History {
       return setVariant(history, action.sectionId, action.variantId);
     case "escalateSection":
       return escalateSection(history, action.sectionId);
+    case "setPlacement":
+      return setPlacement(history, action.sectionId, action.elementId, action.edit);
     case "revertSection":
       return revertSection(history, action.sectionId, action.decisions);
     case "addItem":

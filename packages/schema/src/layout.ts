@@ -1,4 +1,4 @@
-import type { RetorikaDocument } from "./document.ts";
+import { GRID_COLUMNS, type Placement, type RetorikaDocument } from "./document.ts";
 import { parseDocument } from "./parse.ts";
 import type { PresetShape } from "./preset.ts";
 import { applyRevert, escalate, planRevert, type SurplusDecision } from "./revert.ts";
@@ -111,4 +111,100 @@ export function revertPlanFor(doc: RetorikaDocument, sectionId: string, preset: 
  * what decides which of the two actions the section header offers. */
 export function isHandDesigned(doc: RetorikaDocument, sectionId: string): boolean {
   return findSection(doc, sectionId)?.section.source === "free";
+}
+
+/** The part of a placement a caller may change. `elementId` is which placement, not what it says. */
+export type PlacementEdit = Partial<Omit<Placement, "elementId">>;
+
+/**
+ * One element moved or resized inside its section's grid — what the professional came for.
+ *
+ * **Rule 4 is not amended, it is the reason this can exist at all**: «la colocación libre siempre
+ * ocurre dentro de la rejilla de la sección, nunca sobre coordenadas absolutas» (advanced dossier
+ * §6). Columns, spans and rows, and no `x` or `y` anywhere.
+ *
+ * **It refuses before `parseDocument`, and the message says which rule and which numbers.**
+ * `checkInvariants` already rejects a placement that overflows the twelve columns, and `parseDocument`
+ * already rejects a column outside 1..12 — so there is a net underneath either way. The net is not
+ * enough on its own: it would report «column 11 + span 4 overflows» against a path into a parsed
+ * object, at the end of a stack that started with somebody pressing an arrow. The caller that
+ * pressed the arrow is the one that needs to hear why.
+ *
+ * A partial edit, because that is how the control works: one press changes the column, or the span,
+ * or the row, never all of them. Anything left out keeps the value it had.
+ *
+ * **Two elements may end up in the same cell, and that is allowed.** CSS grid stacks them, the
+ * schema has never forbidden it, and `checkInvariants` only rejects the *same* element being placed
+ * twice. Overlapping deliberately is a real technique; refusing it here would be this package
+ * deciding a question of taste it has no way to judge.
+ */
+export function setPlacement(
+  doc: RetorikaDocument,
+  sectionId: string,
+  elementId: string,
+  edit: PlacementEdit,
+): RetorikaDocument {
+  const found = sectionOrThrow(doc, sectionId, "setPlacement");
+  const layout = found.section.layout;
+  if (layout === null) {
+    throw new Error(
+      `setPlacement: section "${sectionId}" is drawn by the catalog, so its placements belong to ` +
+        "the preset rather than to the document. Design it by hand first (escalateSection).",
+    );
+  }
+
+  const current = layout.placements.find((placement) => placement.elementId === elementId);
+  if (!current) {
+    throw new Error(
+      `setPlacement: element "${elementId}" has no placement in section "${sectionId}". Only a ` +
+        "placed element can be moved; a list's own lines move with the list.",
+    );
+  }
+
+  const next: Placement = { ...current, ...edit };
+
+  // Named one at a time rather than as one "invalid placement", because the control that sent this
+  // is a stepper on a single number and the useful answer is which number it was.
+  for (const [field, value] of [
+    ["column", next.column],
+    ["columnSpan", next.columnSpan],
+    ["row", next.row],
+    ["rowSpan", next.rowSpan],
+  ] as const) {
+    if (!Number.isInteger(value) || value < 1) {
+      throw new Error(`setPlacement: ${field} must be a whole number of at least 1, not ${value}`);
+    }
+  }
+  if (next.column > GRID_COLUMNS) {
+    throw new Error(
+      `setPlacement: column ${next.column} is outside the ${GRID_COLUMNS}-column grid (rule 4)`,
+    );
+  }
+  if (next.column + next.columnSpan - 1 > GRID_COLUMNS) {
+    throw new Error(
+      `setPlacement: column ${next.column} with a span of ${next.columnSpan} reaches column ` +
+        `${next.column + next.columnSpan - 1}, past the ${GRID_COLUMNS}-column grid (rule 4)`,
+    );
+  }
+
+  // The same numbers back are not a change, so the history opens no step — the answer every verb
+  // here gives, and what lets the control be held down at its limit without filling the undo stack.
+  if (
+    next.column === current.column &&
+    next.columnSpan === current.columnSpan &&
+    next.row === current.row &&
+    next.rowSpan === current.rowSpan
+  ) {
+    return doc;
+  }
+
+  return withSection(doc, found.page.id, sectionId, {
+    ...found.section,
+    layout: {
+      ...layout,
+      placements: layout.placements.map((placement) =>
+        placement.elementId === elementId ? next : placement,
+      ),
+    },
+  });
 }
