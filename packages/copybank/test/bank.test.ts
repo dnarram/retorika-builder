@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import asesoriaJson from "../bank/asesoria.json" with { type: "json" };
 import esteticaJson from "../bank/estetica.json" with { type: "json" };
+import fisioterapiaJson from "../bank/fisioterapia.json" with { type: "json" };
 import genericoJson from "../bank/generico.json" with { type: "json" };
 import peluqueriaJson from "../bank/peluqueria-barberia.json" with { type: "json" };
 import reformasJson from "../bank/reformas.json" with { type: "json" };
@@ -20,6 +21,7 @@ import { sectorFileSchema } from "../src/schema.ts";
 const FILES = [
   ["asesoria", asesoriaJson],
   ["estetica", esteticaJson],
+  ["fisioterapia", fisioterapiaJson],
   ["generico", genericoJson],
   ["peluqueria-barberia", peluqueriaJson],
   ["reformas", reformasJson],
