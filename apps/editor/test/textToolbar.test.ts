@@ -170,12 +170,16 @@ describe("what the design tools add", () => {
     expect(measures?.borderRadius).toEqual(["radius.sm", "radius.md", "radius.lg"]);
   });
 
-  it("offers an exact value for padding and corners, and for nothing else today", () => {
-    // ADR 0026 §2, made precise on this day: an exact colour is coupled to the contrast review and
-    // an exact size to the overflow half of it, and both land on day 6. A 20px gap carries no
-    // legibility claim, so there is nothing for a review to say about it.
-    expect([...EXACT_TODAY]).toEqual(["padding", "borderRadius"]);
-    expect(EXACT_TODAY).not.toContain("color");
+  it("offers an exact colour only now that the review exists, and never an exact size", () => {
+    // ADR 0026 §2. On day 5 this list was `["padding", "borderRadius"]` and this test said so:
+    // shipping the colour control a day before the gate that refuses what it can produce would
+    // have left a deployed editor in the state `REVIEW.md` refuses, for a day. Day 6 brought the
+    // review, so the colour joins — together, which is what the ADR asks.
+    expect([...EXACT_TODAY]).toEqual(["color", "padding", "borderRadius"]);
+    // `fontSize` stays out, and for a different reason than contrast: every proved pair clears
+    // 4.5:1 at any size, but the same §4 sentence promises the check covers «desbordes por debajo
+    // de 320 píxeles», and nothing measures that yet. An exact size is the one value in this
+    // vocabulary that can cause one.
     expect(EXACT_TODAY).not.toContain("fontSize");
   });
 
@@ -189,13 +193,22 @@ describe("what the design tools add", () => {
   });
 
   it("every exact value it offers is one the schema accepts", () => {
+    // A length for the two measurements, a hex for the colour — the schema narrowed each of them on
+    // day 2 precisely so an exact value cannot be something the renderer could not emit.
+    const sample: Record<string, string> = {
+      color: "#1D4ED8",
+      padding: "20px",
+      borderRadius: "20px",
+    };
     for (const property of EXACT_TODAY) {
+      const value = sample[property];
+      expect(value, `no sample for ${property}`).toBeDefined();
       expect(
-        () => elementStyleSchema.parse({ [property]: { exact: "20px", exception: true } }),
+        () => elementStyleSchema.parse({ [property]: { exact: value, exception: true } }),
         property,
       ).not.toThrow();
       // And an unmarked one is still refused, which is rule 6's second arm.
-      expect(() => elementStyleSchema.parse({ [property]: { exact: "20px" } }), property).toThrow();
+      expect(() => elementStyleSchema.parse({ [property]: { exact: value } }), property).toThrow();
     }
   });
 

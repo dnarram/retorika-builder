@@ -1856,3 +1856,121 @@ describe("sprint 9 día 5 — medidas, espaciado y la excepción marcada", () =>
     }
   }, 120_000);
 });
+
+/**
+ * Sprint 9 day 6 — the pre-publish contrast review.
+ *
+ * The advanced dossier §4 promised it in phase 0 and `docs/tasks/a11y.md` has cited it since
+ * sprint 2. It is also the net ADR 0026 §2 couples the exact colour to: the control that can write
+ * an unreadable colour and the gate that refuses one ship together, and this is the test that they
+ * did.
+ *
+ * **The chain is the part only a browser could have found.** A site can be two kinds of
+ * not-quite-ready at once — an unfilled photo marker and a hard-to-read colour — and «Descargar
+ * igualmente» used to call `download()`, so the second warning was never said at all.
+ */
+describe("sprint 9 día 6 — la revisión de contraste", () => {
+  async function studioWithTools(): Promise<Page> {
+    const studio = await (await browser.newContext()).newPage();
+    await studio.goto(BASE_URL, { waitUntil: "networkidle" });
+    await studio.fill("#nombre", "Reformas Vega");
+    await studio.getByRole("button", { name: "Siguiente" }).click();
+    await studio.getByText("Peluquería y barbería", { exact: true }).click();
+    await studio.getByRole("button", { name: "Siguiente" }).click();
+    await studio.getByRole("button", { name: "Siguiente" }).click();
+    await studio.fill("#direccion", "Calle Espinel 12, Ronda");
+    await studio.getByRole("button", { name: "Siguiente" }).click();
+    await studio.getByText("Que me llamen", { exact: true }).click();
+    await studio.fill("#telefono", "600111222");
+    await studio.getByRole("button", { name: "Crear mi web" }).click();
+    await studio.getByText("Ver a tamaño real →").first().click();
+    await studio.frameLocator("iframe").first().locator('[data-section="sec-cover"]').waitFor();
+    await studio.getByRole("switch", { name: "Herramientas de diseño" }).click();
+    await studio.getByRole("button", { name: "Sí, enciéndelas" }).click();
+    return studio;
+  }
+
+  /** Paint the cover's headline an exact colour, through the toolbar's own control. */
+  async function paint(studio: Page, hex: string): Promise<void> {
+    const frame = studio.frameLocator("iframe").first();
+    await frame.locator('[data-section="sec-cover"] [data-id="el-headline"]').click();
+    await frame.locator(".rb-toolbar-color").waitFor();
+    // `fill` does not fire `change` on a colour input the way a picker does.
+    await frame.locator(".rb-toolbar-color").evaluate((el, value) => {
+      (el as HTMLInputElement).value = value as string;
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    }, hex);
+    await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
+  }
+
+  it("blocks an unreadable colour with no way past, and fixes it in one click", async () => {
+    const studio = await studioWithTools();
+    try {
+      // 1.0:1 — white on white. Measured, not guessed: `color.surface` is #FFFFFF.
+      await paint(studio, "#ffffff");
+      await studio.getByRole("button", { name: "Descargar", exact: true }).click();
+
+      const dialog = studio.getByRole("alertdialog");
+      await expect(dialog.getByText("Hay texto que no se puede leer")).toBeVisible();
+      // Named in the owner's own words, with the number that justifies the refusal.
+      await expect(dialog.getByText("Reformas Vega")).toBeVisible();
+      await expect(dialog.getByText("1,0 de contraste")).toBeVisible();
+      // No way past: the same shape `TooManyPhotosDialog` has, because there is nothing to decide.
+      await expect(dialog.getByRole("button", { name: "Descargar igualmente" })).toHaveCount(0);
+
+      // The one-click fix is to drop the exception, so the reference underneath shows through.
+      await dialog.getByRole("button", { name: "Volver al color del tema" }).click();
+      // Polled, for the reason day 5's test records: autosave is debounced, so the document is
+      // fixed before storage says so and a single read answers with the state before the click.
+      await expect
+        .poll(
+          () =>
+            studio.evaluate(() => {
+              const raw = localStorage.getItem("retorika.session.v1");
+              if (!raw) return "missing";
+              const session = JSON.parse(raw) as {
+                openIndex: number;
+                documents: {
+                  pages: { sections: { content: { id: string; style?: unknown }[] }[] }[];
+                }[];
+              };
+              const element = session.documents[
+                session.openIndex
+              ]?.pages[0]?.sections[0]?.content.find((c) => c.id === "el-headline");
+              return element && "style" in element ? "still styled" : "back to the system";
+            }),
+          { timeout: 10_000 },
+        )
+        .toBe("back to the system");
+    } finally {
+      await studio.context().close();
+    }
+  }, 120_000);
+
+  it("says both warnings, one after the other, and only then downloads", async () => {
+    const studio = await studioWithTools();
+    try {
+      // 3.95:1 — between the two thresholds, so it warns rather than blocks.
+      await paint(studio, "#808080");
+      await studio.getByRole("button", { name: "Descargar", exact: true }).click();
+
+      // The photo warning first: it is about the whole site, and a site nobody can read is not in
+      // a state where "some of your photographs are still ours" is the useful thing to say.
+      await expect(studio.getByText("Antes de descargar")).toBeVisible();
+      await studio.getByRole("button", { name: "Descargar igualmente" }).click();
+
+      // Then the contrast one, which used to be skipped entirely.
+      const contrast = studio.getByRole("alertdialog");
+      await expect(contrast.getByText("Un texto se lee justo")).toBeVisible();
+      await expect(contrast.getByText("3,8 de contraste")).toBeVisible();
+
+      const [download] = await Promise.all([
+        studio.waitForEvent("download"),
+        contrast.getByRole("button", { name: "Descargar igualmente" }).click(),
+      ]);
+      expect(download.suggestedFilename()).toMatch(/\.zip$/);
+    } finally {
+      await studio.context().close();
+    }
+  }, 120_000);
+});
