@@ -135,6 +135,13 @@ Font stacks must end in a real generic family (`system-ui, sans-serif`), because
 site must render on a machine that has none of our fonts. Declare at least three type pairs.
 One scale is enough for phase 0.
 
+> **Three scales since sprint 9 day 1**, and the sentence above is why it took until then: one was
+> enough for phase 0 and stayed the only one for eight sprints, which made the advanced dossier
+> §6's «escala tipográfica, espaciados, radios y sombras **como sistema**» a system with a single
+> setting. `compact`, `default` and `generous`, named by character and never by number, with
+> `default`'s eleven values unchanged to the byte because every document ever generated carries
+> them. `Scale` also gained a `nameKey`, which is the one change to the shape declared above.
+
 ### 4. `src/brand.ts`
 
 Retorika's own tokens, for the **editor interface**, kept deliberately separate from the client

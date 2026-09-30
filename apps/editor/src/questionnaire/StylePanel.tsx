@@ -39,12 +39,20 @@ import es from "../locales/es.json" with { type: "json" };
  *   actually paints with; `color.accent` is left out because no rule reads it and its contrast is
  *   asserted nowhere. See `RENDERED_COLOR_KEYS`.
  *
- * **A third group, `SISTEMA`, appears only with the design tools on** (sprint 9). That is the
+ * **A third group, `MEDIDAS`, appears only with the design tools on** (sprint 9). That is the
  * advanced dossier §4's own line: apagado the panel offers «Paletas y parejas tipográficas»,
  * encendido it «Añade el sistema y tipografías propias». This delivers the first half of that
  * sentence and not the second — «tipografías propias» waits for issue #9, because a font the
  * visitor may never receive is a promise this product does not make, and ADR 0026 says so by name
  * rather than leaving the omission to be noticed later.
+ *
+ * **The dossier's word is «el sistema» and the legend says «MEDIDAS».** Not a divergence from an
+ * approved screen — mockup 13 draws no such group at all, and mockup 17, which does, labels it
+ * exactly this — so it is not in the list above and there is nothing for `REVIEW.md` to record.
+ * It is a copy choice, for the same reason the typefaces are named by character and never by
+ * font: «el sistema» is what the document calls the thing and «medidas» is what the owner sees
+ * change. The help line under the legend says which three — el tamaño del texto, el aire entre
+ * las cosas y las esquinas.
  *
  * Nothing here holds state. Which palette is ticked is *deduced* from the document's own theme,
  * because a theme keeps values and not identities — see `identifyPalette`. That is why the tick

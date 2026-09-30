@@ -284,15 +284,24 @@ part that must not move — the interface tokens and their separation from the p
   damage is invisible to the person causing it.
 
   **Amended by [ADR 0026](../decisions/0026-the-switch-is-the-line-between-references-and-exact-values.md)
-  (proposed, sprint 9 day 1) — and the picker stays refused.** What that ADR admits is not this row's
-  free picker: it is document rule 6's own second arm, `{exact, exception: true}`, offered **only with
-  the design tools on**, and only behind the pre-publish contrast review the advanced dossier §4
-  promised and nobody built — blocking below 3:1, warning between 3:1 and 4.5:1, with the one-click
-  fix being to drop the exception and go back to the reference. The sentence this row rests on stays
-  true, and the ADR quotes it: an exact colour with no net is exactly what was refused here.
-  **The exact value and that review ship together or neither ships.** The half this paragraph is
-  wrong about from sprint 9 day 1 onward is «tamaños»: the style panel now offers three scales, by
-  reference and named by character, which is the system the dossier §6 always described.
+  — and the picker stays refused.** What that ADR admits is not this row's free picker: it is
+  document rule 6's own second arm, `{exact, exception: true}`, offered **only with the design tools
+  on**, and only behind the pre-publish contrast review the advanced dossier §4 promised and nobody
+  had built — blocking below 3:1, warning between 3:1 and 4.5:1, with the one-click fix being to
+  drop the exception and go back to the reference. The sentence this row rests on stays true, and
+  the ADR quotes it: an exact colour with no net is exactly what was refused here.
+  **The exact value and that review shipped together**, in one merge, which is what the ADR's §2
+  asks for by name.
+
+  Two corrections to this entry, both true from sprint 9 onward. «Tamaños»: the style panel now
+  offers three scales, by reference and named by character, which is the system the dossier §6
+  always described — so that half of the mockup's row is answered without a picker. And **an exact
+  `fontSize` is still refused**, which the ADR's own table records: not for contrast, but because
+  the same §4 sentence promises the check covers «desbordes por debajo de 320 píxeles», nothing
+  measures that yet, and a size is the one value in this vocabulary that can cause one.
+
+  **Accepted by David on 1 October 2026, not by direction** — see the ADR's own header for what
+  that does and does not mean. This entry is amended by a decision direction has not looked at.
 
 - **Five swatches per palette, but not the mockup's five.** The mockup draws five circles; our
   palettes hold six colours. The one left out is `color.accent`, and that is a fact about the code
