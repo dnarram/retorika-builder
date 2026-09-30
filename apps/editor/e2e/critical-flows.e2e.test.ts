@@ -1974,3 +1974,311 @@ describe("sprint 9 día 6 — la revisión de contraste", () => {
     }
   }, 120_000);
 });
+
+describe("sprint 9 día 7 — el recorrido completo del sprint", () => {
+  /**
+   * Every day of the style system, in one session, ending in the promise every day-7 walk since
+   * sprint 5 has closed on: a ZIP that opens by double-clicking, with nothing missing — and this
+   * time with an element's own style surviving the trip.
+   *
+   * Days 4–6 already have their own e2e, each in isolation. What none of them prove is
+   * **composition through a download**: that a reference, an exact value, and the fix a blocked
+   * download forced all survive `render(doc, "html")` and come back out of the ZIP exactly as the
+   * editor left them — the one property no unit test can stand in for, because it belongs to the
+   * whole pipeline rather than to any single verb.
+   *
+   * The sequence follows the plan's own words for this day: touch a text, change its size and
+   * colour by reference, turn the tools on, press an exact value in, see it marked in the audit,
+   * try to download with an illegible colour and fail, fix it in one click, and download.
+   */
+  it("touches a text, styles it by reference and by exception, is blocked and recovers, and downloads a ZIP with the style intact", async () => {
+    const studio = await (await browser.newContext()).newPage();
+    try {
+      await studio.goto(BASE_URL, { waitUntil: "networkidle" });
+      await studio.fill("#nombre", "Reformas Vega");
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByText("Peluquería y barbería", { exact: true }).click();
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.fill("#direccion", "Calle Espinel 12, Ronda");
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByText("Que me llamen", { exact: true }).click();
+      await studio.fill("#telefono", "600111222");
+      await studio.getByRole("button", { name: "Crear mi web" }).click();
+      await studio.getByText("Ver a tamaño real →").first().click();
+
+      const frame = studio.frameLocator("iframe").first();
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+
+      // ---- day 4: a reference, with the tools off ----
+      await expect(studio.getByRole("button", { name: "Diseño" })).toHaveCount(0);
+      await headline.click();
+      const bar = frame.locator(".rb-toolbar");
+      await expect(bar).toHaveCount(1);
+      await bar.locator('.rb-toolbar-step[data-ref="size.subheading"]').click();
+      await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
+      await expect(frame.locator('[data-id="el-headline"]')).toHaveCSS("font-size", "24px");
+
+      await headline.click();
+      await frame.locator('.rb-toolbar-swatch[data-ref="color.muted"]').click();
+      // #57534E — «peluquería y barbería» generates on `warm-terracotta`, not `classic-blue`, so
+      // this is that palette's own `color.muted` rather than the value most of this file's other
+      // walks reach for. Measured rather than assumed, which is the whole discipline this file
+      // exists to keep.
+      await expect(frame.locator('[data-id="el-headline"]')).toHaveCSS("color", "rgb(87, 83, 78)");
+
+      // ---- day 1/5: the tools, and measures behind them ----
+      await studio.getByRole("switch", { name: "Herramientas de diseño" }).click();
+      await studio.getByRole("button", { name: "Sí, enciéndelas" }).click();
+      await expect(studio.getByRole("button", { name: "Diseño" })).toHaveCount(1);
+
+      await headline.click();
+      await expect(frame.locator(".rb-toolbar-select")).toHaveCount(2);
+      await frame.locator(".rb-toolbar-select").first().selectOption("space.lg");
+      await expect(frame.locator('[data-id="el-headline"]')).toHaveCSS("padding", "24px");
+
+      // ---- day 6: an exact colour that blocks, then the one-click fix ----
+      await headline.click();
+      await frame.locator(".rb-toolbar-color").waitFor();
+      await frame.locator(".rb-toolbar-color").evaluate((el) => {
+        (el as HTMLInputElement).value = "#ffffff";
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+      await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
+
+      // The audit sees it (day 5's surface), marked and named in the owner's own words.
+      await studio.getByRole("button", { name: "Diseño" }).click();
+      const panel = studio.locator("aside").first();
+      await panel.getByRole("button", { name: /Fuera del sistema/ }).click();
+      await expect(panel.getByText("Reformas Vega")).toBeVisible();
+
+      // The download is blocked — no way past, with the number that justifies it.
+      await studio.getByRole("button", { name: "Descargar", exact: true }).click();
+      const blocked = studio.getByRole("alertdialog");
+      await expect(blocked.getByText("Hay texto que no se puede leer")).toBeVisible();
+      await expect(blocked.getByRole("button", { name: "Descargar igualmente" })).toHaveCount(0);
+
+      // Fixed in one click, from the dialog itself — back to a reference, not a guessed colour.
+      await blocked.getByRole("button", { name: "Volver al color del tema" }).click();
+      await expect(blocked).toHaveCount(0);
+
+      // ---- press an exact value in for real, this time a legible one, so the ZIP has something
+      //      to prove: the exception arm surviving the trip, not just the reference arm ----
+      await headline.click();
+      await frame.locator(".rb-toolbar-color").waitFor();
+      await frame.locator(".rb-toolbar-color").evaluate((el) => {
+        (el as HTMLInputElement).value = "#7a1f1f";
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+      await expect
+        .poll(() =>
+          frame.locator('[data-id="el-headline"]').evaluate((el) => getComputedStyle(el).color),
+        )
+        .toBe("rgb(122, 31, 31)");
+
+      // ---- the download, and the ZIP opened with no server (ADR 0001) ----
+      // The cover's photo is still the catalog's own marker — nobody in this walk uploaded one —
+      // so the photo warning stands between here and the file, same as every other download walk
+      // in this suite.
+      await studio.getByRole("button", { name: "Descargar", exact: true }).click();
+      const photoWarning = studio.getByRole("button", { name: "Descargar igualmente" });
+      await photoWarning.waitFor();
+      const [download, response] = await Promise.all([
+        studio.waitForEvent("download"),
+        studio.waitForResponse((candidate) => candidate.url().includes("/api/download")),
+        photoWarning.click(),
+      ]);
+      expect(response.status()).toBe(200);
+
+      const dir = mkdtempSync(join(tmpdir(), "retorika-e2e-sprint9-dia7-"));
+      const zipPath = join(dir, download.suggestedFilename());
+      await download.saveAs(zipPath);
+      const zip = new Uint8Array(readFileSync(zipPath));
+      const html = extractFileBytes(zip, "index.html");
+      const filePath = join(dir, "index.html");
+      writeFileSync(filePath, html);
+
+      const offlinePage = await (await browser.newContext()).newPage();
+      const failed: string[] = [];
+      offlinePage.on("requestfailed", (request) => failed.push(request.url()));
+      try {
+        await offlinePage.goto(`file://${filePath}`, { waitUntil: "load" });
+        await expect(offlinePage).toHaveTitle("Reformas Vega");
+
+        const el = offlinePage.locator('[data-id="el-headline"]');
+        // The reference: still 24px, still color.muted's own size, proving rule 6's first arm
+        // survived render(doc, "html") unaltered.
+        await expect(el).toHaveCSS("font-size", "24px");
+        await expect(el).toHaveCSS("padding", "24px");
+        // The exact value: literal, not var(--color-x), and still the colour that was pressed —
+        // the exception arm reaching a published page for the first time in the product.
+        await expect(el).toHaveCSS("color", "rgb(122, 31, 31)");
+
+        // And the rule 6 block sits above everything else in the stylesheet, exactly as day 3
+        // measured: the colour applies even though `.rb-section h1` also sets one.
+        const css = await offlinePage.evaluate(() =>
+          [...document.styleSheets]
+            .flatMap((sheet) => [...sheet.cssRules])
+            .some(
+              (rule) =>
+                "selectorText" in rule &&
+                (rule as CSSStyleRule).selectorText?.includes("[data-role]") &&
+                (rule as CSSStyleRule).style.color !== "",
+            ),
+        );
+        expect(css).toBe(true);
+
+        expect(failed).toEqual([]);
+      } finally {
+        await offlinePage.context().close();
+      }
+    } finally {
+      await studio.context().close();
+    }
+  }, 120_000);
+});
+
+describe("sprint 9 día 7 — colchón: el diálogo se queda sobre lo que sigue mal", () => {
+  /**
+   * The finding the day-7 walk made: paint two elements unreadable, open the block dialog, fix
+   * the first. Before this, the dialog closed — over a document that still had the second,
+   * unfixed finding in it. Closing looked exactly like success, and nothing said another press
+   * of «Descargar» was still necessary.
+   */
+  it("stays open on a remaining finding, and closes without downloading once none are left", async () => {
+    const studio = await (await browser.newContext()).newPage();
+    try {
+      await studio.goto(BASE_URL, { waitUntil: "networkidle" });
+      await studio.fill("#nombre", "Reformas Vega");
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByText("Peluquería y barbería", { exact: true }).click();
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.fill("#direccion", "Calle Espinel 12, Ronda");
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByText("Que me llamen", { exact: true }).click();
+      await studio.fill("#telefono", "600111222");
+      await studio.getByRole("button", { name: "Crear mi web" }).click();
+      await studio.getByText("Ver a tamaño real →").first().click();
+
+      const frame = studio.frameLocator("iframe").first();
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+      await studio.getByRole("switch", { name: "Herramientas de diseño" }).click();
+      await studio.getByRole("button", { name: "Sí, enciéndelas" }).click();
+
+      const paint = async (elementId: string, hex: string) => {
+        await frame.locator(`[data-section="sec-cover"] [data-id="${elementId}"]`).click();
+        await frame.locator(".rb-toolbar-color").waitFor();
+        await frame.locator(".rb-toolbar-color").evaluate((el, value) => {
+          (el as HTMLInputElement).value = value as string;
+          el.dispatchEvent(new Event("change", { bubbles: true }));
+        }, hex);
+        await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
+      };
+
+      // Two elements, both under 3:1 against their own background.
+      await paint("el-headline", "#fefefe");
+      await paint("el-body", "#fdfdfd");
+
+      await studio.getByRole("button", { name: "Descargar", exact: true }).click();
+      const dialog = studio.getByRole("alertdialog");
+      await expect(dialog.getByRole("button", { name: "Volver al color del tema" })).toHaveCount(2);
+
+      await dialog.getByRole("button", { name: "Volver al color del tema" }).first().click();
+
+      // The dialog is still here, with the one finding that is still true.
+      await expect(studio.getByRole("alertdialog")).toHaveCount(1);
+      await expect(
+        studio.getByRole("alertdialog").getByRole("button", { name: "Volver al color del tema" }),
+      ).toHaveCount(1);
+
+      // The second fix closes it — and does not download on its own. `download` was never
+      // triggered by this click; only an explicit press of «Descargar» does that, and this walk
+      // does not make one, so no download event should ever fire here.
+      const downloadPromise = studio
+        .waitForEvent("download", { timeout: 2000 })
+        .then(() => "downloaded")
+        .catch(() => "no download");
+      await studio
+        .getByRole("alertdialog")
+        .getByRole("button", { name: "Volver al color del tema" })
+        .click();
+      await expect(studio.getByRole("alertdialog")).toHaveCount(0);
+      expect(await downloadPromise).toBe("no download");
+    } finally {
+      await studio.context().close();
+    }
+  }, 120_000);
+});
+
+describe("sprint 9 día 7 — colchón: la barra no traga un clic que era para otro elemento", () => {
+  /**
+   * Found chasing the CI run of the walk above, which failed on a machine this one did not: the
+   * same click, on the same document, blocked on a GitHub Actions runner and succeeded on a
+   * laptop. The difference was font metrics between the two Chromium builds, not the logic — and
+   * that is exactly why this is pinned at a fixed width rather than left to whatever a given
+   * machine happens to render: 1100px, inside `MIN_STUDIO_WIDTH`'s own floor, is where painting the
+   * headline's exact colour reliably grows its wrapped bar to 66px tall and puts its bottom edge
+   * past the body paragraph's own top — a real, supported width, not a contrived one.
+   *
+   * The bar's every blank pixel used to be a `<div>`'s own hit-testing box, and its own `click`
+   * handler stopped propagation on all of it — so a click meant for the paragraph hidden underneath
+   * landed on the bar instead and went nowhere. `pointer-events: none` on the bar with `auto` on
+   * each control turns that blank space to glass: the click reaches the paragraph, which opens its
+   * own toolbar, while every real button, swatch, select and input keeps working exactly as before.
+   */
+  it("lets a click through the bar's blank space to the paragraph sitting underneath it", async () => {
+    const studio = await (
+      await browser.newContext({ viewport: { width: 1100, height: 900 } })
+    ).newPage();
+    try {
+      await studio.goto(BASE_URL, { waitUntil: "networkidle" });
+      await studio.fill("#nombre", "Reformas Vega");
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByText("Peluquería y barbería", { exact: true }).click();
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.fill("#direccion", "Calle Espinel 12, Ronda");
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByText("Que me llamen", { exact: true }).click();
+      await studio.fill("#telefono", "600111222");
+      await studio.getByRole("button", { name: "Crear mi web" }).click();
+      await studio.getByText("Ver a tamaño real →").first().click();
+
+      const frame = studio.frameLocator("iframe").first();
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+      await studio.getByRole("switch", { name: "Herramientas de diseño" }).click();
+      await studio.getByRole("button", { name: "Sí, enciéndelas" }).click();
+
+      await frame.locator('[data-section="sec-cover"] [data-id="el-headline"]').click();
+      await frame.locator(".rb-toolbar-color").waitFor();
+      await frame.locator(".rb-toolbar-color").evaluate((el) => {
+        (el as HTMLInputElement).value = "#fefefe";
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+
+      const bar = frame.locator(".rb-toolbar");
+      const body = frame.locator('[data-section="sec-cover"] [data-id="el-body"]');
+      const [barBox, bodyBox] = await Promise.all([bar.boundingBox(), body.boundingBox()]);
+      // The overlap this test needs to be a real test of the fix, not a green light for nothing.
+      expect(barBox, "toolbar not found").not.toBeNull();
+      expect(bodyBox, "body not found").not.toBeNull();
+      if (barBox && bodyBox) {
+        expect(
+          barBox.y + barBox.height,
+          "the bar's blank space no longer reaches the body",
+        ).toBeGreaterThan(bodyBox.y);
+      }
+
+      // The click that used to time out.
+      await body.click({ timeout: 5000 });
+      // And it did what a real click on the paragraph should: the body is now the focused field,
+      // not the headline, which is what makes this the paragraph's own toolbar and not the one
+      // left over from before.
+      await expect(body).toBeFocused();
+    } finally {
+      await studio.context().close();
+    }
+  }, 120_000);
+});

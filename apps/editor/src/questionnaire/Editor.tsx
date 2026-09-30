@@ -32,9 +32,11 @@ import {
   revertImpact,
   type SlotAddress,
   type SlotFill,
+  type StyleException,
   type StyleProperty,
   type StyleValue,
   type SurplusDecision,
+  setElementStyle,
   styleFor,
 } from "@retorika/schema";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -2150,12 +2152,37 @@ export function Editor({
       // nothing, removing `wrap` puts the e2e back in red. It is not kept as insurance.
       "  display: flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 5px;",
       "  background: #FFFFFF; border: 1px solid #E3E8F0; border-radius: 11px;",
-      "  box-shadow: 0 6px 18px rgba(15,23,42,0.14); }",
+      "  box-shadow: 0 6px 18px rgba(15,23,42,0.14);",
+      // **`pointer-events: none` on the bar itself, re-enabled per control — found by the day-7
+      // walk, not designed in from the start.** Wrapping (above) keeps every control reachable
+      // within the bar; it does nothing about what sits *beneath* the bar. A short section — the
+      // cover's own headline immediately followed by its subheadline — puts the next element close
+      // enough that a tall, wrapped bar (colour, size, and with the tools on, two measures each
+      // with its own exact-value field) can cover it entirely. Every click inside a plain `<div>`'s
+      // box is swallowed by that div first, including its padding and the gaps between controls —
+      // `bar.addEventListener("click", stopPropagation)` was catching them all, on purpose, and
+      // that included clicks the person meant for the paragraph hidden underneath. Reproduced at
+      // an editor 1100px wide — inside `MIN_STUDIO_WIDTH`'s own floor, not a contrived width —
+      // where painting the headline grew its bar to 66px tall and put its bottom edge past the
+      // body text's own top.
+      //
+      // `none` here and `auto` on every interactive child turns the bar's blank space — its
+      // padding, its dividers, the gaps a caption leaves — into glass: a click there reaches
+      // whatever is genuinely behind it, which opens that element's own toolbar in turn, rather
+      // than landing on nothing. `pointer-events: none` is a hit-testing rule only; it does not
+      // stop `mousedown`'s `preventDefault` or a button's own `click` listener from firing, because
+      // both are attached to descendants the click still originates on and then bubbles up through.",
+      "  pointer-events: none; }",
       ".rb-toolbar-group { display: flex; align-items: center; gap: 4px; padding: 0 7px;",
       "  border-right: 1px solid #EDF1F6; }",
       ".rb-toolbar-group:last-child { border-right: 0; }",
       ".rb-toolbar-caption { font-size: 11px; font-weight: 600; color: #94A3B8; }",
-      `.rb-toolbar button { font-family: ${UI_FONT}; cursor: pointer; }`,
+      // Re-enabled here rather than only on the specific classes below, because it is the one
+      // property every interactive element in the bar needs and the failure mode of missing it on
+      // any one of them is silent — a control sitting over a swallowed click, indistinguishable
+      // from a working one until someone tries to press it.
+      `.rb-toolbar button, .rb-toolbar select, .rb-toolbar input { pointer-events: auto; }`,
+      `.rb-toolbar button, .rb-toolbar select { font-family: ${UI_FONT}; cursor: pointer; }`,
       ".rb-toolbar-step { height: 26px; padding: 0 9px; font-size: 12px; font-weight: 500;",
       "  color: #334155; background: #FFFFFF; border: 1px solid #E3E8F0; border-radius: 7px; }",
       ".rb-toolbar-step:hover { background: #F2F7FE; border-color: #156FE7; }",
@@ -2271,6 +2298,48 @@ export function Editor({
   function acceptAndContinue(warning: AcceptedWarning) {
     setDownloadDialog(null);
     requestDownload(new Set([...acceptedWarnings, warning]));
+  }
+
+  /**
+   * The contrast dialog's «Volver al color del tema» — day 6's one-click fix, corrected on day 7's
+   * buffer after the walk found what it missed.
+   *
+   * **Found by painting two elements unreadable at once.** The dialog listed both, fixing the
+   * first closed the dialog entirely, and the second — still unreadable — went unmentioned. The
+   * document was genuinely still wrong and the interface looked like it had finished: the closed
+   * dialog is exactly the silence a fixed page gets, so nothing told the owner the site was not
+   * ready. Pressing «Descargar» again did re-surface it (the gate is always recomputed fresh), but
+   * nothing said that press was necessary.
+   *
+   * **Computes the fixed document itself, rather than trusting `doc`.** `doc` is this render's
+   * value and the write this makes has not reached React's state yet, so reading `doc` right after
+   * dispatching would see the *previous* document — the same exception, still there. `setElementStyle`
+   * is called twice on purpose: once here, synchronously, purely to decide what to show next;
+   * once through `onSetElementStyle`, which is the one that actually reaches history, undo and
+   * autosave. Two calls to a pure function that can only ever agree, not two sources of truth.
+   *
+   * **Never downloads on its own**, even when fixing the last finding leaves the document clean.
+   * `download()` reads `doc` from this same closure and would ship that same stale copy — the
+   * exception this fix just removed, still in the file. A press that closes the dialog because
+   * there is nothing left to say is not the same act as a press that means "go ahead and publish
+   * this", so the dialog simply closes and «Descargar» is there to press again, reading the
+   * document fresh.
+   */
+  function fixException(exception: StyleException) {
+    const fixed = setElementStyle(
+      doc,
+      { sectionId: exception.sectionId, elementId: exception.elementId },
+      exception.property,
+      undefined,
+    );
+    onSetElementStyle(
+      { sectionId: exception.sectionId, elementId: exception.elementId },
+      exception.property,
+      undefined,
+    );
+
+    const gate = downloadGateFor(countPhotos(fixed), fixed, acceptedWarnings);
+    setDownloadDialog(gate.kind === "unreadable" || gate.kind === "lowContrast" ? gate : null);
   }
 
   return (
@@ -2524,20 +2593,10 @@ export function Editor({
           level={downloadDialog.kind === "unreadable" ? "block" : "warn"}
           // The «arreglo en un clic», through the same verb the `Diseño` panel's audit calls:
           // dropping the exception returns the element to the reference it overwrote, which is
-          // rule 6's own default rather than a colour this dialog picked.
-          //
-          // The dialog closes on the fix rather than staying open over a document that has just
-          // changed underneath it. `requestDownload` recomputes from scratch on the next press,
-          // which is what lets fixing one finding and pressing «Descargar» again re-evaluate
-          // instead of reopening a stale verdict — the same reason the gate is not derived state.
-          onFix={(exception) => {
-            setDownloadDialog(null);
-            onSetElementStyle(
-              { sectionId: exception.sectionId, elementId: exception.elementId },
-              exception.property,
-              undefined,
-            );
-          }}
+          // rule 6's own default rather than a colour this dialog picked. `fixException` is what
+          // reopens over a remaining finding instead of silently closing on one — see its own
+          // comment for the walk that found the gap.
+          onFix={fixException}
           {...(downloadDialog.kind === "lowContrast"
             ? { onDownloadAnyway: () => acceptAndContinue("contrast") }
             : {})}
