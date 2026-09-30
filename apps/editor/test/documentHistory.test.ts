@@ -1323,4 +1323,90 @@ describe("designing a section by hand, and taking it back", () => {
   it("throws naming the section when asked for one the document does not have", () => {
     expect(() => run(start(), escalate("sec-nope"))).toThrow(/no section "sec-nope"/);
   });
+
+  describe("and then moving something inside its grid", () => {
+    const escalated = () => run(start(), escalate());
+    const firstElement = (state: Histories) =>
+      state[0]?.present.document.pages[0]?.sections.find((s) => s.id === "sec-cover")?.layout
+        ?.placements[0]?.elementId as string;
+    const place = (state: Histories, edit: Record<string, number>): HistoryAction => ({
+      type: "setPlacement",
+      variant: 0,
+      sectionId: "sec-cover",
+      elementId: firstElement(state),
+      edit,
+    });
+    const placementIn = (state: Histories, elementId: string) =>
+      state[0]?.present.document.pages[0]?.sections
+        .find((s) => s.id === "sec-cover")
+        ?.layout?.placements.find((p) => p.elementId === elementId);
+
+    it("is one step, and one undo puts the element back", () => {
+      const before = escalated();
+      const id = firstElement(before);
+      const moved = run(before, place(before, { column: 4, columnSpan: 6 }));
+      expect(placementIn(moved, id)).toMatchObject({ column: 4, columnSpan: 6 });
+      expect(run(moved, { type: "undo", variant: 0 })[0]?.present.document).toEqual(
+        before[0]?.present.document,
+      );
+    });
+
+    it("is not amendable, so two presses of the same arrow are two steps", () => {
+      // Unlike typing. Laying out by hand is a sequence of small deliberate adjustments, and an
+      // amalgamated step would take back a whole minute of them at once.
+      const before = escalated();
+      const twice = run(before, place(before, { column: 2 }), place(before, { column: 3 }));
+      expect(twice[0]?.amendable).toBe(false);
+      const once = run(twice, { type: "undo", variant: 0 });
+      expect(placementIn(once, firstElement(once))).toMatchObject({ column: 2 });
+    });
+
+    it("opens no step for the numbers the element already had", () => {
+      const before = escalated();
+      const current = placementIn(before, firstElement(before));
+      const again = run(before, place(before, { column: current?.column as number }));
+      expect(again).toBe(before);
+    });
+
+    it("does not count as having worked on the section's content", () => {
+      // A placement says where an element sits, never what it says (ADR 0014).
+      const after = run(escalated(), place(escalated(), { row: 3 }));
+      expect(wasSectionEverEdited(after[0] as Histories[number], "sec-cover")).toBe(false);
+    });
+
+    it("refuses a section the catalog still draws, naming the verb that would allow it", () => {
+      const fresh = start();
+      expect(() =>
+        run(fresh, {
+          type: "setPlacement",
+          variant: 0,
+          sectionId: "sec-services",
+          elementId: "el-headline",
+          edit: { column: 2 },
+        }),
+      ).toThrow(/drawn by the catalog.*escalateSection/s);
+    });
+
+    it("refuses to break rule 4, with the arithmetic in the message", () => {
+      const before = escalated();
+      expect(() => run(before, place(before, { column: 10, columnSpan: 6 }))).toThrow(
+        /reaches column 15, past the 12-column grid \(rule 4\)/,
+      );
+    });
+
+    it("survives the return: reverting drops the layout the moves were written into", () => {
+      // Not a defect — rule 1 says layout belongs to the layout object, and `document-rules.md`
+      // says losing it on revert is correct. The day-4 dialog is what warns before it happens.
+      const before = escalated();
+      const moved = run(before, place(before, { column: 5, columnSpan: 4 }));
+      const back = run(moved, { type: "revertSection", variant: 0, sectionId: "sec-cover" });
+      const section = back[0]?.present.document.pages[0]?.sections.find(
+        (s) => s.id === "sec-cover",
+      );
+      expect(section?.source).toBe("catalog");
+      expect(section?.layout).toBeNull();
+      // And the words are all still there, which is the half that is promised.
+      expect(headline(back)).toBe(headline(before));
+    });
+  });
 });

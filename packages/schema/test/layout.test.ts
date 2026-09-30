@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
-import type { ContentElement, PresetShape, RetorikaDocument, Section } from "../src/index.ts";
+import type {
+  ContentElement,
+  PlacementEdit,
+  PresetShape,
+  RetorikaDocument,
+  Section,
+} from "../src/index.ts";
 import {
   escalateSection,
   isHandDesigned,
   parseDocument,
   revertPlanFor,
   revertSection,
+  setPlacement,
 } from "../src/index.ts";
 import { type Theme, TOKEN_KEYS } from "../src/tokens.ts";
 
@@ -219,5 +226,176 @@ describe("what the interface asks before it offers either action", () => {
 
     expect(plan?.surplus.map((item) => item.elementId)).toEqual(["el-extra"]);
     expect(plan?.assignments.map((item) => item.elementId)).toEqual(["el-h", "el-b"]);
+  });
+});
+
+describe("setPlacement", () => {
+  /**
+   * Moving and resizing inside the grid — the first verb in this package that edits a placement.
+   *
+   * Rule 4 is the whole subject: every number here is a column, a span or a row, and the tests that
+   * matter most are the ones that **provoke the refusal on purpose**, in the verb rather than in the
+   * schema underneath it. `parseDocument` and `checkInvariants` would both catch an overflowing
+   * placement eventually; catching it here is what lets the message name the arrow that was pressed.
+   */
+  const free = () => escalateSection(documentWith(section()), "sec-demo", preset);
+  const placementOf = (doc: RetorikaDocument, elementId: string) =>
+    sectionOf(doc, "sec-demo")?.layout?.placements.find((p) => p.elementId === elementId);
+
+  it("starts from the layout the catalog was drawing, which is what makes a first move sensible", () => {
+    expect(placementOf(free(), "el-h")).toEqual({
+      elementId: "el-h",
+      column: 1,
+      columnSpan: 12,
+      row: 1,
+      rowSpan: 1,
+    });
+  });
+
+  it("changes one number and leaves the other three alone", () => {
+    // A partial edit, because one press of a stepper is one number. Requiring all four would make
+    // every caller restate what it is not changing, which is how the other three drift.
+    const after = setPlacement(free(), "sec-demo", "el-h", { columnSpan: 5 });
+    expect(placementOf(after, "el-h")).toEqual({
+      elementId: "el-h",
+      column: 1,
+      columnSpan: 5,
+      row: 1,
+      rowSpan: 1,
+    });
+  });
+
+  it("moves the element it was given and nothing else in the section", () => {
+    const before = free();
+    const after = setPlacement(before, "sec-demo", "el-h", { column: 4, columnSpan: 6 });
+    expect(placementOf(after, "el-b")).toEqual(placementOf(before, "el-b"));
+    expect(sectionOf(after, "sec-demo")?.content).toEqual(sectionOf(before, "sec-demo")?.content);
+  });
+
+  it("leaves the other sections and pages untouched", () => {
+    const before = free();
+    const after = setPlacement(before, "sec-demo", "el-h", { row: 3 });
+    expect(sectionOf(after, "sec-otra")).toEqual(sectionOf(before, "sec-otra"));
+    expect(after.pages[1]).toEqual(before.pages[1]);
+  });
+
+  it("keeps the breakpoint patches, which belong to the layout and not to one placement", () => {
+    const withPatch = free();
+    const patched = {
+      ...withPatch,
+      pages: withPatch.pages.map((page, index) =>
+        index !== 0
+          ? page
+          : {
+              ...page,
+              sections: page.sections.map((s) =>
+                s.id !== "sec-demo" || !s.layout
+                  ? s
+                  : {
+                      ...s,
+                      layout: {
+                        ...s.layout,
+                        breakpoints: { mobile: [{ elementId: "el-b", hidden: true }] },
+                      },
+                    },
+              ),
+            },
+      ),
+    };
+    const after = setPlacement(patched, "sec-demo", "el-h", { column: 2, columnSpan: 4 });
+    expect(sectionOf(after, "sec-demo")?.layout?.breakpoints).toEqual({
+      mobile: [{ elementId: "el-b", hidden: true }],
+    });
+  });
+
+  it("hands back the identical document when the numbers are the ones it already had", () => {
+    // What lets a stepper be held down at its limit without filling the undo stack with steps that
+    // changed nothing — the same answer `setVariant` and `escalateSection` give.
+    const doc = free();
+    expect(setPlacement(doc, "sec-demo", "el-h", { column: 1, columnSpan: 12 })).toBe(doc);
+    expect(setPlacement(doc, "sec-demo", "el-h", {})).toBe(doc);
+  });
+
+  it("does not touch the document it was given", () => {
+    const doc = free();
+    const snapshot = JSON.stringify(doc);
+    setPlacement(doc, "sec-demo", "el-h", { column: 5, columnSpan: 2 });
+    expect(JSON.stringify(doc)).toBe(snapshot);
+  });
+
+  describe("rule 4, refused in the verb and named", () => {
+    it("refuses a span that reaches past the twelfth column, saying which column it reached", () => {
+      // The provocation the plan asked for: not "the schema would have caught it", but this verb
+      // catching it, with the arithmetic in the message.
+      expect(() => setPlacement(free(), "sec-demo", "el-h", { column: 10, columnSpan: 4 })).toThrow(
+        /column 10 with a span of 4 reaches column 13, past the 12-column grid \(rule 4\)/,
+      );
+    });
+
+    it("refuses a column outside the grid", () => {
+      expect(() => setPlacement(free(), "sec-demo", "el-h", { column: 13 })).toThrow(
+        /column 13 is outside the 12-column grid \(rule 4\)/,
+      );
+    });
+
+    it("accepts the placement that ends exactly on the twelfth column", () => {
+      // The boundary in the other direction, because an off-by-one here would silently forbid the
+      // full-width element every cover has.
+      expect(
+        placementOf(setPlacement(free(), "sec-demo", "el-h", { column: 9, columnSpan: 4 }), "el-h"),
+      ).toMatchObject({ column: 9, columnSpan: 4 });
+    });
+
+    it("refuses zero, negative and fractional values, naming the field", () => {
+      const cases: [PlacementEdit, RegExp][] = [
+        [{ column: 0 }, /column must be a whole number of at least 1, not 0/],
+        [{ columnSpan: 0 }, /columnSpan must be a whole number of at least 1, not 0/],
+        [{ row: -1 }, /row must be a whole number of at least 1, not -1/],
+        [{ rowSpan: 0 }, /rowSpan must be a whole number of at least 1, not 0/],
+        [{ column: 2.5 }, /column must be a whole number of at least 1, not 2.5/],
+      ];
+      for (const [edit, message] of cases) {
+        expect(() => setPlacement(free(), "sec-demo", "el-h", edit), JSON.stringify(edit)).toThrow(
+          message,
+        );
+      }
+    });
+
+    it("lets two elements share a cell, which the schema has never forbidden", () => {
+      // Overlap stacks in CSS grid and is a real technique. `checkInvariants` rejects the same
+      // element being placed twice, not two elements in one place, and this verb does not invent a
+      // rule the document model does not have.
+      const after = setPlacement(free(), "sec-demo", "el-b", { row: 1 });
+      expect(placementOf(after, "el-b")).toMatchObject({ row: 1, column: 1, columnSpan: 12 });
+      expect(placementOf(after, "el-h")).toMatchObject({ row: 1 });
+    });
+
+    it("accepts a row far below the last one, because rows are not a fixed count", () => {
+      expect(
+        placementOf(setPlacement(free(), "sec-demo", "el-b", { row: 40 }), "el-b"),
+      ).toMatchObject({ row: 40 });
+    });
+  });
+
+  describe("what it refuses to be asked at all", () => {
+    it("throws for a section the document does not have, naming it", () => {
+      expect(() => setPlacement(free(), "sec-nope", "el-h", { column: 2 })).toThrow(
+        /setPlacement: no section "sec-nope"/,
+      );
+    });
+
+    it("throws for a section the catalog is still drawing, and says what to do about it", () => {
+      // Not a silent no-op: a section of the catalog has no placements of its own, so there is
+      // nothing here to change, and the honest answer names the verb that would make it possible.
+      expect(() =>
+        setPlacement(documentWith(section()), "sec-demo", "el-h", { column: 2 }),
+      ).toThrow(/is drawn by the catalog.*escalateSection/s);
+    });
+
+    it("throws for an element that has no placement", () => {
+      expect(() => setPlacement(free(), "sec-demo", "el-nope", { column: 2 })).toThrow(
+        /element "el-nope" has no placement in section "sec-demo"/,
+      );
+    });
   });
 });

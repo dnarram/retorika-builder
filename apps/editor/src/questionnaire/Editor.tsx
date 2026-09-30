@@ -23,12 +23,14 @@ import {
   listEditableFields,
   listLinksTo,
   MAX_PAGES,
+  type PlacementEdit,
   type PresetShape,
   type RetorikaDocument,
   type SlotAddress,
   type SlotFill,
 } from "@retorika/schema";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { designRows, selectedRowId } from "../editor/designTree.ts";
 import { type DownloadGate, downloadGateFor } from "../editor/downloadGate.ts";
 import { EditorShell, type RailItemId, type SaveStatus } from "../editor/EditorShell.tsx";
 import { ACCEPTED_IMAGE_ACCEPT } from "../editor/imageBytes.ts";
@@ -37,6 +39,7 @@ import { withPhotoUrls } from "../editor/previewDocument.ts";
 import { sectionFields } from "../editor/sectionFields.ts";
 import { offersMatching } from "../editor/sectionSearch.ts";
 import es from "../locales/es.json" with { type: "json" };
+import { DesignPanel } from "./DesignPanel.tsx";
 import { DownloadWarningDialog, TooManyPhotosDialog } from "./DownloadGateDialogs.tsx";
 import { FieldsPanel } from "./FieldsPanel.tsx";
 import { PagesPanel } from "./PagesPanel.tsx";
@@ -294,6 +297,7 @@ export function Editor({
   onDesignToolsChange,
   onEscalateSection,
   onRevertSection,
+  onSetPlacement,
   pageId,
   onSelectPage,
   onSectionToPage,
@@ -349,6 +353,10 @@ export function Editor({
    * asks for and the reason day 4's dialog is about the durable case rather than this one. */
   onEscalateSection: (sectionId: string) => void;
   onRevertSection: (sectionId: string) => void;
+  /** One element moved or resized inside its section's twelve-column grid (rule 4). A partial edit,
+   * because one press of a stepper is one number; the panel never sends a value `setPlacement`
+   * would refuse, which is what keeps that refusal a backstop rather than a path. */
+  onSetPlacement: (sectionId: string, elementId: string, edit: PlacementEdit) => void;
   /** Which page the canvas is showing. Undefined means the document's first, which is what
    * `render` already means by an absent `pageId`. */
   pageId: string | undefined;
@@ -410,6 +418,20 @@ export function Editor({
    * ref because the popover is React's to draw, unlike everything inside the canvas. */
   const [askingDesignTools, setAskingDesignTools] = useState(false);
   /**
+   * Which section and element the «Diseño» panel is about.
+   *
+   * State, unlike `selectedSection` below, and that difference is the whole point: the canvas
+   * selection is a ref precisely because nothing React renders depends on it, and this panel is the
+   * first thing that does. `select()` inside the frame writes both, so the panel follows the canvas
+   * — clicking a section is how you choose what to lay out, which is the only ordering that makes
+   * sense when the grid you are working against is drawn on that section.
+   *
+   * Setting these does not reload the frame: `html` is memoised on the document, the photos and the
+   * page, so a re-render produces the identical string and the selection survives.
+   */
+  const [designSectionId, setDesignSectionId] = useState<string | null>(null);
+  const [designElementId, setDesignElementId] = useState<string | null>(null);
+  /**
    * Which section is selected, and whether its composition menu is open — remembered across the
    * preview's re-renders, which is what makes trying compositions usable at all.
    *
@@ -445,7 +467,20 @@ export function Editor({
     // Going anywhere answers the question by walking away from it, which is an answer. Leaving it
     // hanging over a panel that just opened would be the only modal thing in this editor.
     setAskingDesignTools(false);
+    // Opening «Diseño» adopts whatever the canvas already had selected, so somebody who clicked a
+    // section and then reached for the panel does not have to click it again.
+    if (item === "design" && designSectionId === null) setDesignSectionId(selectedSection.current);
   }
+
+  /**
+   * The rail item actually shown.
+   *
+   * «Diseño» exists only while the tools are on, so turning them off with the panel open has to
+   * land somewhere. Derived rather than corrected in an effect: an effect would render the invalid
+   * pairing once before fixing it, and `rail` is kept as it was so that turning the tools back on
+   * returns to the panel rather than to `Secciones`.
+   */
+  const effectiveRail: RailItemId = rail === "design" && !designTools ? "sections" : rail;
 
   /**
    * Open the file picker for one image, from outside the canvas.
@@ -499,6 +534,58 @@ export function Editor({
         .join("")}`,
     [designTools, doc],
   );
+
+  /**
+   * The grid stripes follow the selected section, **without** remounting the frame.
+   *
+   * `designSectionId` is deliberately not part of `chromeKey`. Adding it there was the obvious move
+   * and it was wrong: `select()` sets it on every click, so keying on it would reload the frame on
+   * every click and throw away the selection that very click had just made — the editor would
+   * deselect whatever you pressed.
+   *
+   * Nothing here attaches a listener, so nothing needs re-wiring: it is one class, on or off. The
+   * same toggle also runs at the end of `wireHandmade`, because after a remount this effect can fire
+   * before the new frame has loaded, and both directions are idempotent.
+   */
+  function syncGrid(
+    iframeDoc: Document | null | undefined,
+    sectionId: string | null,
+    elementId: string | null,
+  ) {
+    if (!iframeDoc) return;
+    for (const element of iframeDoc.querySelectorAll<HTMLElement>("[data-section]")) {
+      const wanted = element.dataset.section === sectionId && element.classList.contains("rb-free");
+      element.classList.toggle("rb-designing", wanted);
+    }
+    // And the one element being stepped, outlined, so the numbers in the panel and the thing on the
+    // page are visibly the same subject. `data-id` is what the renderer emits (`build.ts`).
+    for (const element of iframeDoc.querySelectorAll<HTMLElement>("[data-id]")) {
+      element.classList.toggle(
+        "rb-placing",
+        elementId !== null && element.dataset["id"] === elementId,
+      );
+    }
+  }
+
+  /**
+   * Which element the outline is on — resolved by the same function the panel uses.
+   *
+   * `designElementId` is `null` until somebody clicks a row, while the panel steps the first row
+   * from the moment it opens. Reading the raw state here is what left the canvas outlining nothing
+   * while the numbers moved something: `selectedRowId` is now the one answer both read.
+   */
+  const designOn = designTools === true && effectiveRail === "design";
+  const placingElementId = designOn
+    ? selectedRowId(designSectionId ? designRows(doc, designSectionId) : [], designElementId)
+    : null;
+
+  useEffect(() => {
+    syncGrid(
+      iframeRef.current?.contentDocument,
+      designOn ? designSectionId : null,
+      placingElementId,
+    );
+  });
 
   /**
    * Where each photograph stands, by address, so the canvas can label the ones that came from the
@@ -745,6 +832,10 @@ export function Editor({
       const sectionId = target.dataset.section;
       if (!sectionId) return;
       selectedSection.current = sectionId;
+      // The «Diseño» panel follows the canvas: clicking a section is how you choose what to lay
+      // out. The element resets, because the elements of the section just left are not this one's.
+      setDesignSectionId(sectionId);
+      setDesignElementId(null);
       const index = sections.indexOf(target);
 
       const actions = iframeDoc.createElement("div");
@@ -1372,6 +1463,10 @@ export function Editor({
       element.classList.add("rb-free");
       element.prepend(bar);
     }
+
+    // The stripes, on whichever section the panel is about. Here as well as in the effect above,
+    // because after a remount the effect can fire before the new frame has loaded.
+    syncGrid(iframeDoc, designOn ? designSectionId : null, placingElementId);
   }
 
   function wireInteractions() {
@@ -1497,6 +1592,22 @@ export function Editor({
       "  font-size: 11px; font-weight: 600; color: #156FE7; background: #FFFFFF;",
       "  border: 1px solid #C6D9F3; border-radius: 7px; cursor: pointer; }",
       ".rb-handmade-back:hover { background: #F2F7FE; border-color: #156FE7; }",
+      // The twelve columns of rule 4, behind the section being laid out — mockup 16's own stripes.
+      //
+      // Only on the one section the panel is about: stripes are an answer to «where will this land»,
+      // not decoration, and every free section wearing them at once would make the page unreadable
+      // at the moment somebody needs to read it.
+      //
+      // A pseudo-element rather than an injected node, because the toggle then costs one class and
+      // needs no re-wiring — see `syncGrid`. `position: absolute` keeps it out of the grid, which is
+      // the lesson the bar above had to learn the hard way. One twelfth is 8.3333%.
+      '.rb-designing::before { content: ""; position: absolute; inset: 0; z-index: 0;',
+      "  pointer-events: none; background: repeating-linear-gradient(90deg,",
+      "    rgba(21,111,231,0.16) 0 1px, transparent 1px 8.3333%); }",
+      // The element the panel is stepping, outlined the way mockup 16 draws it, so the numbers in
+      // the panel and the thing on the page are visibly the same subject.
+      ".rb-designing .rb-placing { outline: 2px solid #156FE7; outline-offset: 2px;",
+      "  border-radius: 4px; }",
       // The one in use is marked, not hidden: a toggle group where something is always chosen.
       '.rb-composition-choice[aria-pressed="true"] { background: #EAF2FE; }',
       '.rb-composition-choice[aria-pressed="true"] .rb-menu-name { color: #156FE7; }',
@@ -1657,7 +1768,7 @@ export function Editor({
       onUndo={onUndo}
       onRedo={onRedo}
       saveStatus={saveStatus}
-      rail={rail}
+      rail={effectiveRail}
       onRailChange={showRail}
       designTools={designTools}
       askingDesignTools={askingDesignTools}
@@ -1668,7 +1779,7 @@ export function Editor({
         onDesignToolsChange(on);
       }}
       panel={
-        rail === "photos" ? (
+        effectiveRail === "photos" ? (
           <PhotosPanel
             document={doc}
             photoUrls={photoUrls}
@@ -1680,7 +1791,7 @@ export function Editor({
               selectedSection.current = photo.sectionId;
             }}
           />
-        ) : rail === "pages" ? (
+        ) : effectiveRail === "pages" ? (
           <PagesPanel
             document={doc}
             currentPageId={pageId}
@@ -1692,11 +1803,23 @@ export function Editor({
             canFold={(id) => canFoldPage(doc, id)}
             linksTo={(id) => listLinksTo(doc, id).length}
           />
-        ) : rail === "style" ? (
+        ) : effectiveRail === "style" ? (
           <StylePanel
             theme={doc.theme}
             onPickPalette={onPickPalette}
             onPickTypePair={onPickTypePair}
+            onClose={() => showRail("sections")}
+          />
+        ) : effectiveRail === "design" ? (
+          <DesignPanel
+            document={doc}
+            sectionId={designSectionId}
+            sectionName={designSectionId ? sectionDisplayName(doc, designSectionId) : null}
+            selectedElementId={designElementId}
+            onSelectElement={setDesignElementId}
+            onSetPlacement={(elementId, edit) => {
+              if (designSectionId) onSetPlacement(designSectionId, elementId, edit);
+            }}
             onClose={() => showRail("sections")}
           />
         ) : undefined

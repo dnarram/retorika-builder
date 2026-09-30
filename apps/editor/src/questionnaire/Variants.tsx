@@ -591,6 +591,10 @@ export function Variants({
           dismissToast();
           dispatch({ type: "revertSection", variant: openIndex, sectionId });
         }}
+        onSetPlacement={(sectionId, elementId, edit) => {
+          dismissToast();
+          dispatch({ type: "setPlacement", variant: openIndex, sectionId, elementId, edit });
+        }}
         onAddItem={(sectionId, slot, item) => {
           dismissToast();
           dispatch({ type: "addItem", variant: openIndex, sectionId, slot, item });

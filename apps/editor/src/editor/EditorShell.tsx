@@ -110,11 +110,37 @@ const RAIL_ICONS = {
       <path d="M21 16l-5-5L6 20" />
     </svg>
   ),
+  /** The grid, because that is the whole of what this panel is about (rule 4). Drawn from mockup
+   * 16's own icon rather than invented. */
+  design: (
+    <svg
+      width="21"
+      height="21"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.7}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M9 3v18" />
+      <path d="M3 9h18" />
+    </svg>
+  ),
 } as const;
 
-/** What the rail can select. `Páginas` and `Fotos` are not here: a value the rail cannot take is
- * not a state the app has to handle. */
-export type RailItemId = "sections" | "style" | "pages" | "photos";
+/**
+ * What the rail can select.
+ *
+ * The comment this replaces said «`Páginas` and `Fotos` are not here: a value the rail cannot take
+ * is not a state the app has to handle» — which stopped being true when both shipped, and stayed in
+ * the file regardless. The rule it was stating is still the right one and now applies to `design`:
+ * it is a value the rail can take **only while the design tools are on**, which `EditorShell` is
+ * what enforces, and `Editor` falls back to `sections` if the tools go off while it is open.
+ */
+export type RailItemId = "sections" | "style" | "pages" | "photos" | "design";
 
 function RailIcon({ icon, active }: { icon: keyof typeof RAIL_ICONS; active: boolean }) {
   return (
@@ -586,9 +612,18 @@ export function EditorShell({
             active={rail === "photos"}
             onSelect={() => onRailChange("photos")}
           />
-          {/* `Diseño` is not here yet, and that is deliberate: its panel arrives on day 3, and a
-              rail item that opens nothing is the dead button this editor has refused since sprint 1.
-              What the switch unlocks today is the offer in each section's header. */}
+          {/* The fifth item, and the only one the switch adds (ADR 0025 §6). **Absent** rather than
+              dimmed while the tools are off: `RailLabel`'s own note records that the grey shade for
+              "this exists but not yet" lost its last caller in sprint 6, and it is not coming back
+              for a panel that is a setting away rather than a sprint away. */}
+          {designTools ? (
+            <RailButton
+              icon="design"
+              label={es["editor.rail.design"]}
+              active={rail === "design"}
+              onSelect={() => onRailChange("design")}
+            />
+          ) : null}
           {designTools === undefined ? null : (
             <DesignToolsSwitch
               on={designTools}
