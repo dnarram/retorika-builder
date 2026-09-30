@@ -1,7 +1,7 @@
 import type { RetorikaDocument, Theme } from "@retorika/schema";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { cssThemeValue } from "../src/escape.ts";
+import { cssAttributeValue, cssThemeValue } from "../src/escape.ts";
 import { NEUTRALISED_URL, render, safeUrl } from "../src/index.ts";
 import { loadCorpus } from "./corpus.ts";
 
@@ -287,5 +287,46 @@ describe("cssThemeValue — theme values inside <style>", () => {
     const total = accepted + refused;
     expect(accepted / total, `accepted ${accepted} of ${total}`).toBeGreaterThanOrEqual(0.25);
     expect(refused / total, `refused ${refused} of ${total}`).toBeGreaterThanOrEqual(0.25);
+  });
+});
+
+/**
+ * The fourth defence in `escape.ts`, and the only one that escapes rather than refuses.
+ *
+ * `idSchema` is `z.string().min(1).max(128)` with no pattern, so every one of these is a document
+ * that parses. Until sprint 9 day 3 `buildCss` interpolated ids into `[data-section="..."]` raw,
+ * and the first case below published an arbitrary rule into the client's own stylesheet.
+ */
+describe("cssAttributeValue - a document id inside a CSS selector", () => {
+  it("keeps a quote from closing the attribute and starting a new rule", () => {
+    const nasty = 'sec-a"] * { display: none } [data-section="sec-a';
+    const escaped = cssAttributeValue(nasty);
+    expect(escaped).not.toMatch(/(^|[^\\])"/);
+    expect(escaped).toContain('\\"');
+  });
+
+  it("escapes a backslash, so it cannot escape the escape", () => {
+    // `a\` followed by our own `\"` would otherwise produce `a\\"`, ending the string after all.
+    expect(cssAttributeValue('a\\"')).toBe('a\\\\\\"');
+  });
+
+  it("escapes a newline, which would end the string and ruin the rest of the stylesheet", () => {
+    expect(cssAttributeValue("a\nb")).toBe("a\\a b");
+    expect(cssAttributeValue("a\rb")).toBe("a\\d b");
+    expect(cssAttributeValue("a\u0000b")).toBe("a\\0 b");
+  });
+
+  it("leaves an ordinary id exactly as it is, so no golden file moves for it", () => {
+    for (const id of ["sec-cover", "el-headline", "item-1", "el-card-1-title", "seccion-n"]) {
+      expect(cssAttributeValue(id), id).toBe(id);
+    }
+  });
+
+  it("changes nothing for any id the product actually mints", () => {
+    fc.assert(
+      fc.property(fc.stringMatching(/^[a-z][a-z0-9-]{0,24}$/), (id) => {
+        expect(cssAttributeValue(id)).toBe(id);
+      }),
+    );
   });
 });

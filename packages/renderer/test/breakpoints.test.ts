@@ -26,11 +26,17 @@ function styleOf(html: string): string {
 
 /** Only the patch block — everything after the last `@media` the shared stylesheet writes. Needed
  * because `display: none` and `width:` both appear in the shared rules too, so a bare `not.toContain`
- * would pass or fail for the wrong reason. */
+ * would pass or fail for the wrong reason.
+ *
+ * **Rule 6's block is excluded, and that is the second time this helper has had to get narrower.**
+ * Since sprint 9 day 3 the stylesheet has another per-element block, and it addresses elements the
+ * same way — so `[data-section="` alone stopped meaning "a mobile patch". The two are told apart by
+ * the third attribute: rule 6's selector always ends `[data-role]` and rule 7's never does, which is
+ * the same distinction that makes rule 6's rules outrank everything else. */
 function patchBlock(css: string): string {
   return css
     .split("\n")
-    .filter((line) => line.includes('[data-section="'))
+    .filter((line) => line.includes('[data-section="') && !line.includes("[data-role]"))
     .join("\n");
 }
 
@@ -81,17 +87,16 @@ describe("the patches the renderer now reads", () => {
   });
 
   it("emits nothing at all for a section with no patches", () => {
-    const css = styleOf(render(documentWith([]), "html").html);
-    expect(css).not.toContain("[data-section=");
+    expect(patchBlock(styleOf(render(documentWith([]), "html").html))).toBe("");
   });
 
   it("leaves every fixture without patches exactly as it was", () => {
-    // The condition this day was accepted on: one golden file moves, and only one.
+    // The condition sprint 8 day 6 was accepted on: one golden file moves, and only one. Asked of
+    // the patch block alone since day 3 of this sprint, because `estilo-por-elemento` carries rule
+    // 6 rules and no patches — a fixture that would have failed this for being about the other rule.
     for (const entry of corpus) {
       if (entry.name === "physio-free-cover") continue;
-      expect(styleOf(render(entry.document, "html").html), entry.name).not.toContain(
-        "[data-section=",
-      );
+      expect(patchBlock(styleOf(render(entry.document, "html").html)), entry.name).toBe("");
     }
   });
 });
