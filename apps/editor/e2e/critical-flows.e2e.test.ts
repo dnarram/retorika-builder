@@ -2211,3 +2211,74 @@ describe("sprint 9 día 7 — colchón: el diálogo se queda sobre lo que sigue 
     }
   }, 120_000);
 });
+
+describe("sprint 9 día 7 — colchón: la barra no traga un clic que era para otro elemento", () => {
+  /**
+   * Found chasing the CI run of the walk above, which failed on a machine this one did not: the
+   * same click, on the same document, blocked on a GitHub Actions runner and succeeded on a
+   * laptop. The difference was font metrics between the two Chromium builds, not the logic — and
+   * that is exactly why this is pinned at a fixed width rather than left to whatever a given
+   * machine happens to render: 1100px, inside `MIN_STUDIO_WIDTH`'s own floor, is where painting the
+   * headline's exact colour reliably grows its wrapped bar to 66px tall and puts its bottom edge
+   * past the body paragraph's own top — a real, supported width, not a contrived one.
+   *
+   * The bar's every blank pixel used to be a `<div>`'s own hit-testing box, and its own `click`
+   * handler stopped propagation on all of it — so a click meant for the paragraph hidden underneath
+   * landed on the bar instead and went nowhere. `pointer-events: none` on the bar with `auto` on
+   * each control turns that blank space to glass: the click reaches the paragraph, which opens its
+   * own toolbar, while every real button, swatch, select and input keeps working exactly as before.
+   */
+  it("lets a click through the bar's blank space to the paragraph sitting underneath it", async () => {
+    const studio = await (
+      await browser.newContext({ viewport: { width: 1100, height: 900 } })
+    ).newPage();
+    try {
+      await studio.goto(BASE_URL, { waitUntil: "networkidle" });
+      await studio.fill("#nombre", "Reformas Vega");
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByText("Peluquería y barbería", { exact: true }).click();
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.fill("#direccion", "Calle Espinel 12, Ronda");
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByText("Que me llamen", { exact: true }).click();
+      await studio.fill("#telefono", "600111222");
+      await studio.getByRole("button", { name: "Crear mi web" }).click();
+      await studio.getByText("Ver a tamaño real →").first().click();
+
+      const frame = studio.frameLocator("iframe").first();
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+      await studio.getByRole("switch", { name: "Herramientas de diseño" }).click();
+      await studio.getByRole("button", { name: "Sí, enciéndelas" }).click();
+
+      await frame.locator('[data-section="sec-cover"] [data-id="el-headline"]').click();
+      await frame.locator(".rb-toolbar-color").waitFor();
+      await frame.locator(".rb-toolbar-color").evaluate((el) => {
+        (el as HTMLInputElement).value = "#fefefe";
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+
+      const bar = frame.locator(".rb-toolbar");
+      const body = frame.locator('[data-section="sec-cover"] [data-id="el-body"]');
+      const [barBox, bodyBox] = await Promise.all([bar.boundingBox(), body.boundingBox()]);
+      // The overlap this test needs to be a real test of the fix, not a green light for nothing.
+      expect(barBox, "toolbar not found").not.toBeNull();
+      expect(bodyBox, "body not found").not.toBeNull();
+      if (barBox && bodyBox) {
+        expect(
+          barBox.y + barBox.height,
+          "the bar's blank space no longer reaches the body",
+        ).toBeGreaterThan(bodyBox.y);
+      }
+
+      // The click that used to time out.
+      await body.click({ timeout: 5000 });
+      // And it did what a real click on the paragraph should: the body is now the focused field,
+      // not the headline, which is what makes this the paragraph's own toolbar and not the one
+      // left over from before.
+      await expect(body).toBeFocused();
+    } finally {
+      await studio.context().close();
+    }
+  }, 120_000);
+});
