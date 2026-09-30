@@ -32,9 +32,11 @@ import {
   revertImpact,
   type SlotAddress,
   type SlotFill,
+  type StyleException,
   type StyleProperty,
   type StyleValue,
   type SurplusDecision,
+  setElementStyle,
   styleFor,
 } from "@retorika/schema";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -2273,6 +2275,48 @@ export function Editor({
     requestDownload(new Set([...acceptedWarnings, warning]));
   }
 
+  /**
+   * The contrast dialog's «Volver al color del tema» — day 6's one-click fix, corrected on day 7's
+   * buffer after the walk found what it missed.
+   *
+   * **Found by painting two elements unreadable at once.** The dialog listed both, fixing the
+   * first closed the dialog entirely, and the second — still unreadable — went unmentioned. The
+   * document was genuinely still wrong and the interface looked like it had finished: the closed
+   * dialog is exactly the silence a fixed page gets, so nothing told the owner the site was not
+   * ready. Pressing «Descargar» again did re-surface it (the gate is always recomputed fresh), but
+   * nothing said that press was necessary.
+   *
+   * **Computes the fixed document itself, rather than trusting `doc`.** `doc` is this render's
+   * value and the write this makes has not reached React's state yet, so reading `doc` right after
+   * dispatching would see the *previous* document — the same exception, still there. `setElementStyle`
+   * is called twice on purpose: once here, synchronously, purely to decide what to show next;
+   * once through `onSetElementStyle`, which is the one that actually reaches history, undo and
+   * autosave. Two calls to a pure function that can only ever agree, not two sources of truth.
+   *
+   * **Never downloads on its own**, even when fixing the last finding leaves the document clean.
+   * `download()` reads `doc` from this same closure and would ship that same stale copy — the
+   * exception this fix just removed, still in the file. A press that closes the dialog because
+   * there is nothing left to say is not the same act as a press that means "go ahead and publish
+   * this", so the dialog simply closes and «Descargar» is there to press again, reading the
+   * document fresh.
+   */
+  function fixException(exception: StyleException) {
+    const fixed = setElementStyle(
+      doc,
+      { sectionId: exception.sectionId, elementId: exception.elementId },
+      exception.property,
+      undefined,
+    );
+    onSetElementStyle(
+      { sectionId: exception.sectionId, elementId: exception.elementId },
+      exception.property,
+      undefined,
+    );
+
+    const gate = downloadGateFor(countPhotos(fixed), fixed, acceptedWarnings);
+    setDownloadDialog(gate.kind === "unreadable" || gate.kind === "lowContrast" ? gate : null);
+  }
+
   return (
     <EditorShell
       // The business name, not the variant's. The bar said «Clásica» — the caption of whichever of
@@ -2524,20 +2568,10 @@ export function Editor({
           level={downloadDialog.kind === "unreadable" ? "block" : "warn"}
           // The «arreglo en un clic», through the same verb the `Diseño` panel's audit calls:
           // dropping the exception returns the element to the reference it overwrote, which is
-          // rule 6's own default rather than a colour this dialog picked.
-          //
-          // The dialog closes on the fix rather than staying open over a document that has just
-          // changed underneath it. `requestDownload` recomputes from scratch on the next press,
-          // which is what lets fixing one finding and pressing «Descargar» again re-evaluate
-          // instead of reopening a stale verdict — the same reason the gate is not derived state.
-          onFix={(exception) => {
-            setDownloadDialog(null);
-            onSetElementStyle(
-              { sectionId: exception.sectionId, elementId: exception.elementId },
-              exception.property,
-              undefined,
-            );
-          }}
+          // rule 6's own default rather than a colour this dialog picked. `fixException` is what
+          // reopens over a remaining finding instead of silently closing on one — see its own
+          // comment for the walk that found the gap.
+          onFix={fixException}
           {...(downloadDialog.kind === "lowContrast"
             ? { onDownloadAnyway: () => acceptAndContinue("contrast") }
             : {})}
