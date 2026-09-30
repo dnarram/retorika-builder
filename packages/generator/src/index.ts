@@ -22,8 +22,10 @@ export interface GeneratedSite {
 }
 
 /**
- * "Otro sector" reads the bank's generic file, same as any of the seven launch sectors with no
- * file of their own — the cascade in `@retorika/copybank` already falls back to `generico`.
+ * "Otro sector" reads the bank's generic file — the cascade in `@retorika/copybank` falls back to
+ * `generico` for any sector with no file of its own, and "otro" is the one launch answer that can
+ * never have one. Every named sector had that same gap until 30 September 2026, when the seven
+ * drafts sprint 7 wrote were signed.
  */
 function effectiveSector(answers: Answers): SectorId {
   return answers.sector ?? "otro";
