@@ -46,6 +46,21 @@ left implicit.
    > hear the request should hear it as the second time rather than the first. Acting on it would
    > need an ADR before any code, which `CLAUDE.md` already requires.
 
+   > *And it is now the second time, 30 September 2026 — and it still held.* The third session's
+   > owner named «más libertad en la posición» among seven things he wanted and could not find
+   > (`docs/sessions/2026-09-30-taller.md`). **Two owners out of three have now asked.**
+   >
+   > **The rule is still not amended.** What changed is the shape of the request, and that is the
+   > part worth having: by 30 September the grid *existed* — sprint 8 built placement inside the
+   > section's grid (ADR 0025 §7) — and he had the design tools switched on, so both doors were
+   > open to him. What he was refused was never placement; it was placement off the grid. Whether
+   > he ever opened the `Diseño` panel is not recorded.
+   >
+   > So the second asking does not say the grid is missing. It says the grid as built did not read
+   > as the answer to "I want to move this", which is a question about the control and not about
+   > this rule. Two owners is still not a case for moving a foundation, and rule 5 below still
+   > names exactly what both of them asked for.
+
 5. **There are no orphan elements: every element belongs to a section, every section to a
    page.** This closes the hole free placement would otherwise open — there is no floating layer
    above the site.

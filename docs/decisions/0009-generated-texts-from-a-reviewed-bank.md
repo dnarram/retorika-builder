@@ -168,3 +168,47 @@ about this one.
 entry written from one owner's words would be that owner's site, not a sector's): «hostelería»,
 «convencer», «hacer soñar con comidas y servicio», «hacer soñar con el plato», «platos», «la
 carta».
+
+## Evidence from session 3 — the first «sí» (30 September 2026)
+
+> Source: `docs/sessions/2026-09-30-taller.md`. One business, sector `taller`, run against an
+> editor with sprint 9 complete. The first session that is not hostelería.
+
+Asked «¿Estos textos suenan a los tuyos?», the owner answered **sí**.
+
+**This is the first «sí» the product has had**, and it is the strongest evidence this ADR has
+received. Two things qualify it, and both belong here rather than in a summary that would report
+only the first line.
+
+### It is reported, not quoted
+
+The session recorded the substance and not the words. Every other answer in this ADR is a
+quotation; this one is not, and none of the owner's vocabulary was harvested — which is the thing
+the script asks for on this ADR's behalf, because it is what a bank should be using. So the
+strongest validation this decision has is also the least literal, and the next session should fix
+that before it does anything else.
+
+### It is not the answer to the two noes
+
+**The three answers are not about the same bank**, and merging them into "two noes then a yes"
+would describe a repair that has not been tested:
+
+- Taberna and Conchi are both hostelería. Both were shown **`restaurante-bar`**, which was signed
+  on 28 September, the day after Conchi's session.
+- This owner was shown **`taller`**, signed on 30 September — one of the seven the sprint 7 rewrite
+  added, all seven of which carry that date.
+
+**No hostelero has been asked since the hostelería bank was fixed.** The two noes that caused the
+rewrite remain unanswered for their own sector.
+
+### What it does establish, which is not small
+
+**The method works.** This ADR's decision is that generated texts come from a reviewed, per-sector
+bank rather than from free generation. A reviewed sector bank has now produced a site whose texts a
+real owner of that sector claimed as sounding like his own, on the first try, with no editing of
+the copy recorded. That is the first time any evidence has pointed at this decision rather than at
+a gap in it.
+
+**What it does not establish:** that one of the seven working validates the other six, or that the
+rewrite satisfied the two owners it was written for. Both need a session each, and the hostelería
+one is the older debt.

@@ -169,6 +169,77 @@ where divergences from an approved design artefact belong.
 - **`docs/tasks/backlog.md` gains a row** pointing here for the audience decision, rather than a
   second copy of it.
 - **What this ADR does not decide:** the floating toolbar and the «marked exception» of rule 6
-  (sprint 9); bold and italic (ADR 0024 stands, and neither of its two wake conditions has
-  happened); collections (§7); locking and the transfer of ownership (§8, and the document model
-  already refuses `locked` and `ownerId`); third-party templates (§9); private areas (§10, phase 4).
+  (sprint 9); bold and italic (ADR 0024, whose wait ended on 1 October 2026 — see that file;
+  this clause used to say neither of its wake conditions had happened, which stopped being true);
+  collections (§7); locking and the transfer of ownership (§8, and the document model already
+  refuses `locked` and `ownerId`); third-party templates (§9); private areas (§10, phase 4).
+
+---
+
+## Evidence from session 3 — the switch was found, and it sorted wrong (30 September 2026)
+
+> Source: `docs/sessions/2026-09-30-taller.md`. One business, sector `taller`, the first owner ever
+> to meet this switch. **This section records the evidence; it does not change the decision** —
+> what to do about it is sprint 10 day 2's, per the approved plan.
+
+**What is recorded:** he saw the switch, he turned it on, and he used the floating toolbar.
+
+### §4 and §5 hold, and by a wider margin than they had earned
+
+The switch is a `role="switch"` button **34×19 pixels** with a **9-pixel** label at the foot of the
+rail, and **it never offers itself**: `EditorShell.tsx` has
+`onClick={() => (on ? onChange(false) : onAsk())}`, so the question appears only because somebody
+pressed it. Nothing onboards it, nothing interrupts anyone with it.
+
+§5 chose an absent control over a disabled one, arguing that a greyed switch «invites working out
+how to enable it». The first owner to meet the switch it settled on **found it and pressed it,
+unprompted**. That is the discoverability question answered in this decision's favour, on evidence
+it did not have when it was taken.
+
+### §1's question does not sort the way §1 assumes
+
+The panel asks **«¿Montas webs para otros?»** — «Si es tu trabajo, te encendemos las herramientas
+de diseño: rejilla, colocación y ajustes por dispositivo.» He pressed **«Sí, enciéndelas»**.
+
+**He runs a car workshop.** He does not build websites for other people, which is what the
+question's own words make the condition. The gate admitted somebody it was not written for.
+
+**Why he said yes is not recorded**, and the two readings the record cannot separate are that he
+did not read it and that he read it and wanted the tools anyway. Either is enough for the finding,
+because the finding is about the gate: **a question that offers more capability to whoever answers
+yes will be answered yes.** That is a property of its shape, not of this owner.
+
+### And two of the things he asked for were already behind it
+
+Of the seven things he named wanting and not finding (ADR 0024), **two exist**, and both are behind
+this switch — in two different places:
+
+| What he asked for | Where it is | Was he there? |
+|---|---|---|
+| `color exacto` | the **floating toolbar**, `measures.exact` | **Yes — he used the toolbar** |
+| `más libertad en la posición` | the **`Diseño` panel's** grid (§7, sprint 8) | **Not recorded** |
+
+**The order of events is not recorded**, so it cannot be said the exact-colour control was in front
+of him at the moment he named colour as missing. What is established is that by the end of the
+session he had opted in, used the bar, and still had both on his list.
+
+**Finding the switch is not the same as finding what is behind it.** This is the first real
+evidence this ADR has about its own premise, and it does not point at a missing control — it points
+at the gate and at what sits behind it. **It is not fixed by building anything**, which is why
+nothing in this file changes today.
+
+### What day 2 has to decide, and what it may not
+
+Three live options, named here so the decision starts from a list rather than from scratch:
+
+1. **Is the question the right question?** It asks about a trade and uses the answer to grant
+   capability. Those are not the same thing, and one owner has already shown they come apart.
+2. **Should the exact value come out from behind the switch** now that the contrast review of
+   sprint 9 day 6 refuses a colour under 3:1 and warns under 4.5:1? ADR 0026 drew the line between
+   references and exact values; this is a question about which side of the switch that line sits on.
+3. **Is what is behind the switch findable once you are through it?** The `Diseño` panel's own copy
+   says «Encender las herramientas añade una puerta, no sesenta controles» — a door that was opened
+   and, on this record, may not have been walked through.
+
+**What it may not do is decide this is fine because the switch was found.** It was found and it
+admitted the wrong person on its own terms; those are two findings, not one.

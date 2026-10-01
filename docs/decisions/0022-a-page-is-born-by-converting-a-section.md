@@ -101,3 +101,26 @@ uniqueness that rule 5 already puts there.
 - **Someone needs a page with nothing on it yet** — a placeholder for a thing they will write next
   week. Nothing in the evidence asks for that, and the dossier is explicit that structure should
   emerge from content, but it is the obvious pressure this decision will take.
+
+## Evidence from session 3 — the first there has been (30 September 2026)
+
+> Source: `docs/sessions/2026-09-30-taller.md`. Watched, not asked: this ADR's condition is about
+> someone looking and failing, and a question would have handed him the idea.
+
+**He found «Convertir esta sección en página» on his own.**
+
+**This decision holds, and it is the first evidence it has ever had.** It was accepted on the
+strength of the dossier's own reasoning — structure emerges from content — against mockup 06, which
+drew a `+` in the rail. The reopening condition is the precise opposite of what happened: nobody
+looked in the rail and gave up. **The `+` is still not needed.**
+
+Two limits on that, so it is not read as more than it is:
+
+- **One owner.** ADR 0017's framing applies: an experiment of one subject. What it rules out is the
+  specific failure this ADR was most exposed to, not every failure.
+- **How he got there is not recorded** — whether he selected a section first and found the control
+  in its header, or went looking elsewhere and arrived at it. The condition is about giving up, and
+  he did not; the route is blank.
+
+**How many pages he ended with is also not recorded**, which is what leaves ADR 0023's threshold
+untested. See that file.
