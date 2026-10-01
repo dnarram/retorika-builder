@@ -213,12 +213,26 @@ sprints as though it were new.
   and ADR 0001 forbids downloading either. Offering a typeface before that is resolved is promising a
   letterform the visitor may never receive. #9 has four costed options and none of them is free; it
   is direction's and deserves its own ADR.
+
+  > *Discharged 1 October 2026:* it has one — [ADR 0028](0028-typography-needs-a-decision-from-direction.md),
+  > written because the third session's owner asked for «fuente de letra» by name. It puts the four
+  > options and their costs in front of direction and **does not choose**, which is what this bullet
+  > asked for. What it adds is that **option C is already half-built and undecided**: the editor
+  > stopped promising a font in sprint 4, and the three pairs still have not been chosen to survive
+  > not getting one — measured again on 1 October, two of the three lose their heading/body contrast
+  > entirely on a machine without Inter or Playfair Display.
 - **Alignment.** The worst-founded control of the set: **the advanced dossier does not mention it
   once**. It exists only in `HANDOFF.md`'s list and `REVIEW.md`'s. It has no token and no field, and
   it would be the only thing in the toolbar that is neither a reference nor a marked exception.
-- **Bold and italic.** ADR 0024 stands; neither of its two waking conditions has been met, and its
-  granularity is explicitly «a run of characters, not the whole element», which is its own sprint.
-  Underline stays refused for good: on the web it means a link.
+- **Bold and italic.** ADR 0024 stands, and its granularity is explicitly «a run of characters, not
+  the whole element», which is its own sprint. Underline stays refused for good: on the web it means
+  a link.
+
+  > *Corrected 1 October 2026.* This bullet used to add «neither of its two waking conditions has
+  > been met», which stopped being true on 30 September: the third session asked, and
+  > [ADR 0024](0024-formatting-inside-a-text-is-designed-and-waiting.md) is built in sprint 10 —
+  > not because a condition fired, but on a decision recorded in that file. **The omission from
+  > sprint 9 was correct and is unchanged**; «its own sprint» turned out to be the next one.
 - **`Mover` / `Duplicar` / `Borrar` per element.** Moving already lives in the `Diseño` panel;
   **deleting an element collides with document rule 3** and the fields panel already achieves the
   same end by emptying; duplicating has no precedent and nobody has asked.

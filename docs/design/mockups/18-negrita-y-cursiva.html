@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Negrita y cursiva en la barra flotante</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>body { margin: 0; font-family: 'Inter', system-ui, sans-serif; background: #F5F7FA; }</style>
+</head>
+<body>
+<div style="width: 1280px; box-sizing: border-box; padding: 9px 16px; background: #0F172A; color: #FFFFFF; font-family: 'Inter', system-ui, sans-serif; font-size: 13px; font-weight: 600; letter-spacing: 0.01em;">NEGRITA Y CURSIVA — el ADR 0024 deja de esperar. Dos botones más, para todo el mundo: el formato no es un valor exacto y no va detrás del interruptor. El ADR 0027 decide qué le pasa a una marca cuando el texto cambia debajo.</div>
+
+<div style="width: 1280px; box-sizing: border-box; padding: 7px 16px; background: #FEF9C3; border-bottom: 1px solid #FDE68A; color: #713F12; font-size: 12px; line-height: 1.45;"><strong style="font-weight: 700;">Sustituye una tarjeta de la maqueta 17.</strong> Allí «Negritas y cursivas» aparece tachada, con el motivo «ninguna de sus dos condiciones de despertar se ha cumplido». El 30 de septiembre se cumplió la segunda y un segundo dueño las pidió. Esa tarjeta queda anotada en <code style="font-family: ui-monospace, monospace; font-size: 11px;">docs/design/REVIEW.md</code>; lo demás de la 17 sigue en pie.</div>
+
+<div style="width: 1280px; box-sizing: border-box; background: #F5F7FA; padding: 30px 60px 44px 60px; display: flex; flex-direction: column; gap: 34px;">
+
+  <!-- ============ 1. LA BARRA ============ -->
+  <div style="display: flex; gap: 34px; align-items: flex-start;">
+
+    <div style="width: 272px; flex-shrink: 0; display: flex; flex-direction: column; gap: 9px; padding-top: 6px;">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: #156FE7;">1 — DOS BOTONES, PARA TODO EL MUNDO</span>
+      <span style="font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: #0F172A;">B e I se suman a la barra del sprint 9, delante del interruptor</span>
+      <span style="font-size: 14px; line-height: 1.5; color: #64748B;">La regla 6 divide referencias de valores exactos, y el interruptor es esa línea. <strong style="color: #334155; font-weight: 600;">Una negrita no es ninguna de las dos</strong>: no es un color ni una medida, es qué significa una palabra dentro de una frase. Así que no va detrás de nada.</span>
+      <span style="font-size: 13px; line-height: 1.5; color: #94A3B8;">Van primeros en la barra, antes de «Tamaño», porque actúan sobre la selección y no sobre el elemento. El separador lo dice: a la izquierda lo que toca las palabras elegidas, a la derecha lo que toca el elemento entero.</span>
+    </div>
+
+    <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 22px;">
+
+      <div style="display: flex; flex-direction: column; gap: 7px;">
+        <span style="font-size: 13px; font-weight: 600; color: #64748B; padding-left: 2px;">Apagado — todo el mundo, incluidos B e I</span>
+        <div style="display: inline-flex; align-self: flex-start; align-items: center; gap: 2px; padding: 5px; background: #FFFFFF; border: 1px solid #E3E8F0; border-radius: 11px; box-shadow: 0 6px 18px rgba(15,23,42,0.12);">
+          <span style="display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 7px; font-size: 15px; font-weight: 800; color: #334155;">B</span>
+          <span style="display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 7px; font-size: 15px; font-weight: 500; font-style: italic; color: #334155; font-family: Georgia, serif;">I</span>
+          <span style="width: 1px; height: 20px; background: #EDF1F6; margin: 0 3px;"></span>
+          <span style="display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 7px; background: #F6F8FB;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7V5h16v2"></path><path d="M12 5v14"></path><path d="M9 19h6"></path></svg><span style="font-size: 12px; font-weight: 600; color: #334155;">Tamaño</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></span>
+          <span style="width: 1px; height: 20px; background: #EDF1F6; margin: 0 3px;"></span>
+          <span style="display: flex; align-items: center; gap: 5px; height: 30px; padding: 0 9px; border-radius: 7px;"><span style="width: 15px; height: 15px; border-radius: 50%; background: #1D4ED8; border: 1px solid rgba(15,23,42,0.12);"></span><span style="font-size: 12px; font-weight: 500; color: #334155;">Color</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></span>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 7px;">
+        <span style="font-size: 13px; font-weight: 600; color: #156FE7; padding-left: 2px;">Encendido — los mismos dos, más lo que ya añadía el sprint 9</span>
+        <div style="display: inline-flex; align-self: flex-start; align-items: center; gap: 2px; padding: 5px; background: #FFFFFF; border: 1px solid #E3E8F0; border-radius: 11px; box-shadow: 0 6px 18px rgba(15,23,42,0.12); flex-wrap: wrap; max-width: 100%;">
+          <span style="display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 7px; font-size: 15px; font-weight: 800; color: #334155;">B</span>
+          <span style="display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 7px; font-size: 15px; font-weight: 500; font-style: italic; color: #334155; font-family: Georgia, serif;">I</span>
+          <span style="width: 1px; height: 20px; background: #EDF1F6; margin: 0 3px;"></span>
+          <span style="display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 7px; background: #F6F8FB;"><span style="font-size: 12px; font-weight: 600; color: #334155;">Tamaño</span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></span>
+          <span style="display: flex; align-items: center; gap: 5px; height: 30px; padding: 0 9px; border-radius: 7px;"><span style="width: 15px; height: 15px; border-radius: 50%; background: #1D4ED8; border: 1px solid rgba(15,23,42,0.12);"></span><span style="font-size: 12px; font-weight: 500; color: #334155;">Color</span></span>
+          <span style="display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 7px;"><span style="font-size: 12px; font-weight: 500; color: #334155;">Espaciado</span></span>
+          <span style="display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 7px;"><span style="font-size: 12px; font-weight: 500; color: #334155;">Esquinas</span></span>
+        </div>
+        <span style="font-size: 12px; line-height: 1.5; color: #94A3B8; padding-left: 2px;">La barra ya envuelve desde el sprint 9 día 5, cuando se desbordó en una sección estrecha. Dos controles más no cambian eso.</span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============ 2. MIENTRAS SE MARCA ============ -->
+  <div style="display: flex; gap: 34px; align-items: flex-start;">
+
+    <div style="width: 272px; flex-shrink: 0; display: flex; flex-direction: column; gap: 9px; padding-top: 6px;">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: #156FE7;">2 — LO QUE SE VE MIENTRAS SE MARCA</span>
+      <span style="font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: #0F172A;">Tres estados, y el tercero es el que evita el botón muerto</span>
+      <span style="font-size: 14px; line-height: 1.5; color: #64748B;">Sin selección los dos botones <strong style="color: #334155; font-weight: 600;">no se dibujan</strong>, no se dibujan apagados: es la misma regla que el resto de la barra sigue desde el sprint 9 — un control que no aplica no se dibuja, porque uno gris invita a averiguar cómo encenderlo.</span>
+      <span style="font-size: 13px; line-height: 1.5; color: #94A3B8;">Con la selección dentro de un tramo ya marcado, <code style="font-family: ui-monospace, monospace; font-size: 11px;">B</code> aparece activa — y pulsarla quita la marca. Es lo mismo que hace cualquier procesador de textos y por eso no hay que explicarlo.</span>
+    </div>
+
+    <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 14px;">
+
+      <div style="display: flex; gap: 14px; align-items: stretch;">
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 8px; padding: 15px 17px; background: #FFFFFF; border: 1px solid #E8ECF2; border-radius: 11px;">
+          <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.04em; color: #94A3B8;">A — CURSOR, SIN SELECCIÓN</span>
+          <span style="font-size: 15px; line-height: 1.6; color: #0F172A;">Solomillo al whisky<span style="display: inline-block; width: 1px; height: 17px; background: #156FE7; vertical-align: -3px; margin: 0 1px;"></span> con patatas</span>
+          <div style="display: inline-flex; align-self: flex-start; align-items: center; gap: 2px; padding: 4px; background: #FFFFFF; border: 1px solid #E3E8F0; border-radius: 9px; box-shadow: 0 4px 12px rgba(15,23,42,0.1);">
+            <span style="display: flex; align-items: center; gap: 5px; height: 26px; padding: 0 9px; border-radius: 6px; background: #F6F8FB; font-size: 11px; font-weight: 600; color: #334155;">Tamaño</span>
+            <span style="display: flex; align-items: center; gap: 5px; height: 26px; padding: 0 8px; border-radius: 6px;"><span style="width: 13px; height: 13px; border-radius: 50%; background: #1D4ED8;"></span><span style="font-size: 11px; color: #334155;">Color</span></span>
+          </div>
+          <span style="font-size: 11px; line-height: 1.45; color: #94A3B8;">Sin B ni I. No hay palabras elegidas que marcar.</span>
+        </div>
+
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 8px; padding: 15px 17px; background: #FFFFFF; border: 1px solid #E8ECF2; border-radius: 11px;">
+          <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.04em; color: #156FE7;">B — DOS PALABRAS ELEGIDAS</span>
+          <span style="font-size: 15px; line-height: 1.6; color: #0F172A;"><span style="background: #BFDBFE;">Solomillo al whisky</span> con patatas</span>
+          <div style="display: inline-flex; align-self: flex-start; align-items: center; gap: 2px; padding: 4px; background: #FFFFFF; border: 1px solid #E3E8F0; border-radius: 9px; box-shadow: 0 4px 12px rgba(15,23,42,0.1);">
+            <span style="display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 6px; font-size: 13px; font-weight: 800; color: #334155;">B</span>
+            <span style="display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 6px; font-size: 13px; font-style: italic; color: #334155; font-family: Georgia, serif;">I</span>
+            <span style="width: 1px; height: 17px; background: #EDF1F6; margin: 0 2px;"></span>
+            <span style="display: flex; align-items: center; height: 26px; padding: 0 9px; border-radius: 6px; background: #F6F8FB; font-size: 11px; font-weight: 600; color: #334155;">Tamaño</span>
+          </div>
+          <span style="font-size: 11px; line-height: 1.45; color: #94A3B8;">B e I aparecen, inactivas. Pulsar B marca lo elegido.</span>
+        </div>
+
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 8px; padding: 15px 17px; background: #FFFFFF; border: 2px solid #156FE7; border-radius: 11px;">
+          <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.04em; color: #156FE7;">C — DENTRO DE UN TRAMO MARCADO</span>
+          <span style="font-size: 15px; line-height: 1.6; color: #0F172A;"><strong style="font-weight: 700; background: #BFDBFE;">Solomillo al whisky</strong> con patatas</span>
+          <div style="display: inline-flex; align-self: flex-start; align-items: center; gap: 2px; padding: 4px; background: #FFFFFF; border: 1px solid #E3E8F0; border-radius: 9px; box-shadow: 0 4px 12px rgba(15,23,42,0.1);">
+            <span style="display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 6px; font-size: 13px; font-weight: 800; color: #FFFFFF; background: #156FE7;">B</span>
+            <span style="display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 6px; font-size: 13px; font-style: italic; color: #334155; font-family: Georgia, serif;">I</span>
+            <span style="width: 1px; height: 17px; background: #EDF1F6; margin: 0 2px;"></span>
+            <span style="display: flex; align-items: center; height: 26px; padding: 0 9px; border-radius: 6px; background: #F6F8FB; font-size: 11px; font-weight: 600; color: #334155;">Tamaño</span>
+          </div>
+          <span style="font-size: 11px; line-height: 1.45; color: #64748B;"><strong style="font-weight: 600; color: #156FE7;">B activa.</strong> Pulsarla la quita. Es <code style="font-family: ui-monospace, monospace; font-size: 10px;">aria-pressed</code>, no un segundo botón.</span>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 11px; align-items: flex-start; padding: 13px 16px; background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 10px;">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#1D4ED8" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="flex-shrink: 0; margin-top: 1px;"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v.01M12 11v5"></path></svg>
+        <span style="font-size: 12px; line-height: 1.5; color: #1E3A8A;">Lo que no se dibuja aquí porque no existe: <strong style="font-weight: 600;">el campo sigue siendo una cadena plana.</strong> Pulsar B lee las compensaciones de la selección, despacha una acción y el lienzo se redibuja desde el documento — el mismo camino que toda edición desde el sprint 2, con el mismo deshacer. Sin <code style="font-family: ui-monospace, monospace; font-size: 11px;">execCommand</code>, sin HTML editable, sin un segundo formato de serialización.</span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============ 3. LA CONVENCIÓN ============ -->
+  <div style="display: flex; gap: 34px; align-items: flex-start;">
+
+    <div style="width: 272px; flex-shrink: 0; display: flex; flex-direction: column; gap: 9px; padding-top: 6px;">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: #156FE7;">3 — CUANDO EL TEXTO CAMBIA DEBAJO</span>
+      <span style="font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: #0F172A;">La convención de los procesadores de textos, sin inventar nada</span>
+      <span style="font-size: 14px; line-height: 1.5; color: #64748B;">Es la única pregunta que el ADR 0024 dejó abierta a propósito, y la respuesta tenía que ser <strong style="color: #334155; font-weight: 600;">la que las manos ya saben</strong>. Word, Pages y Google Docs hacen las cinco cosas de abajo; el motivo para copiarlas es que el dueño las aprendió en otro sitio.</span>
+      <span style="font-size: 13px; line-height: 1.5; color: #94A3B8;">Las dos filas del medio parecen contradecirse y ahí está el truco: es lo que permite escribir <em>delante</em> de una palabra en negrita sin heredarla, y seguir escribiendo <em>detrás</em> sin perderla. El ADR 0027 demuestra que las cinco son <strong style="color: #64748B; font-weight: 600;">una sola regla</strong>.</span>
+    </div>
+
+    <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 9px;">
+
+      <div style="display: flex; gap: 11px; align-items: center; padding: 10px 16px; background: #F1F5F9; border: 1px solid #E2E8F0; border-radius: 10px;">
+        <span style="font-size: 12px; font-weight: 600; color: #64748B;">Las cinco sobre la misma frase, con <strong style="font-weight: 700; color: #0F172A;">Solomillo al whisky</strong> marcado:</span>
+        <span style="font-size: 14px; color: #334155;"><strong style="font-weight: 700;">Solomillo al whisky</strong> con patatas</span>
+        <span style="font-size: 12px; color: #94A3B8;">La barra azul es el cursor; el amarillo, lo escrito.</span>
+      </div>
+
+      <div style="display: flex; gap: 13px; align-items: center; padding: 12px 16px; background: #FFFFFF; border: 1px solid #E8ECF2; border-radius: 11px;">
+        <span style="width: 150px; flex-shrink: 0; font-size: 12px; font-weight: 600; color: #64748B;">Escribe <strong style="color: #0F172A; font-weight: 700;">dentro</strong></span>
+        <span style="width: 230px; flex-shrink: 0; font-size: 14px; color: #334155;"><strong style="font-weight: 700;">Solomillo<span style="display: inline-block; width: 2px; height: 15px; background: #156FE7; vertical-align: -3px; margin: 0 1px;"></span>al whisky</strong> con patatas</span>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#CBD5E1" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="flex-shrink: 0;"><path d="M5 12h14"></path><path d="M13 6l6 6-6 6"></path></svg>
+        <span style="width: 230px; flex-shrink: 0; font-size: 14px; color: #334155;"><strong style="font-weight: 700;">Solomillo <span style="background: #FEF08A;">ibérico</span> al whisky</strong> con patatas</span>
+        <span style="flex-grow: 1; font-size: 12px; font-weight: 600; color: #15803D;">Se alarga — lo nuevo queda marcado</span>
+      </div>
+
+      <div style="display: flex; gap: 13px; align-items: center; padding: 12px 16px; background: #FFFFFF; border: 1px solid #E8ECF2; border-radius: 11px;">
+        <span style="width: 150px; flex-shrink: 0; font-size: 12px; font-weight: 600; color: #64748B;">Escribe <strong style="color: #0F172A; font-weight: 700;">justo al final</strong></span>
+        <span style="width: 230px; flex-shrink: 0; font-size: 14px; color: #334155;"><strong style="font-weight: 700;">Solomillo al whisky</strong><span style="display: inline-block; width: 2px; height: 15px; background: #156FE7; vertical-align: -3px; margin: 0 1px;"></span> con patatas</span>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#CBD5E1" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="flex-shrink: 0;"><path d="M5 12h14"></path><path d="M13 6l6 6-6 6"></path></svg>
+        <span style="width: 230px; flex-shrink: 0; font-size: 14px; color: #334155;"><strong style="font-weight: 700;">Solomillo al whisky<span style="background: #FEF08A;"> casero</span></strong> con patatas</span>
+        <span style="flex-grow: 1; font-size: 12px; font-weight: 600; color: #15803D;">Continúa — lo nuevo queda marcado</span>
+      </div>
+
+      <div style="display: flex; gap: 13px; align-items: center; padding: 12px 16px; background: #FFFFFF; border: 1px solid #E8ECF2; border-radius: 11px;">
+        <span style="width: 150px; flex-shrink: 0; font-size: 12px; font-weight: 600; color: #64748B;">Escribe <strong style="color: #0F172A; font-weight: 700;">justo al principio</strong></span>
+        <span style="width: 230px; flex-shrink: 0; font-size: 14px; color: #334155;"><span style="display: inline-block; width: 2px; height: 15px; background: #156FE7; vertical-align: -3px; margin: 0 1px;"></span><strong style="font-weight: 700;">Solomillo al whisky</strong> con patatas</span>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#CBD5E1" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="flex-shrink: 0;"><path d="M5 12h14"></path><path d="M13 6l6 6-6 6"></path></svg>
+        <span style="width: 230px; flex-shrink: 0; font-size: 14px; color: #334155;"><span style="background: #FEF08A; font-weight: 400;">Medio </span><strong style="font-weight: 700;">Solomillo al whisky</strong> con patatas</span>
+        <span style="flex-grow: 1; font-size: 12px; font-weight: 600; color: #B45309;">No — «Medio» queda fuera de la negrita</span>
+      </div>
+
+      <div style="display: flex; gap: 13px; align-items: center; padding: 12px 16px; background: #FFFFFF; border: 1px solid #E8ECF2; border-radius: 11px;">
+        <span style="width: 150px; flex-shrink: 0; font-size: 12px; font-weight: 600; color: #64748B;">Borra <strong style="color: #0F172A; font-weight: 700;">parte</strong></span>
+        <span style="width: 230px; flex-shrink: 0; font-size: 14px; color: #334155;"><strong style="font-weight: 700;">Solomillo<span style="background: #FECACA; text-decoration: line-through;"> al whisky</span></strong> con patatas</span>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#CBD5E1" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="flex-shrink: 0;"><path d="M5 12h14"></path><path d="M13 6l6 6-6 6"></path></svg>
+        <span style="width: 230px; flex-shrink: 0; font-size: 14px; color: #334155;"><strong style="font-weight: 700;">Solomillo</strong> con patatas</span>
+        <span style="flex-grow: 1; font-size: 12px; font-weight: 600; color: #15803D;">Encoge — sigue marcado lo que queda</span>
+      </div>
+
+      <div style="display: flex; gap: 13px; align-items: center; padding: 12px 16px; background: #FFFFFF; border: 1px solid #E8ECF2; border-radius: 11px;">
+        <span style="width: 150px; flex-shrink: 0; font-size: 12px; font-weight: 600; color: #64748B;">Lo borra <strong style="color: #0F172A; font-weight: 700;">entero</strong></span>
+        <span style="width: 230px; flex-shrink: 0; font-size: 14px; color: #334155;"><strong style="font-weight: 700; background: #FECACA; text-decoration: line-through;">Solomillo al whisky</strong> con patatas</span>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#CBD5E1" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="flex-shrink: 0;"><path d="M5 12h14"></path><path d="M13 6l6 6-6 6"></path></svg>
+        <span style="width: 230px; flex-shrink: 0; font-size: 14px; color: #334155;">con patatas</span>
+        <span style="flex-grow: 1; font-size: 12px; font-weight: 600; color: #B45309;">Desaparece — no queda marca vacía</span>
+      </div>
+
+      <div style="display: flex; gap: 11px; align-items: flex-start; padding: 13px 16px; background: #F8FAFC; border: 1px dashed #CBD5E1; border-radius: 10px;">
+        <span style="font-size: 12px; line-height: 1.55; color: #64748B;"><strong style="font-weight: 700; color: #334155;">Pegar es escribir</strong>, en el sitio donde se pega y con el largo de lo pegado. Y <strong style="font-weight: 700; color: #334155;">escribir sobre una selección</strong> es borrar y después escribir, en ese orden — así que un tramo que acababa donde empezaba la selección se alarga sobre lo escrito, y uno que empezaba ahí no. Sale de las dos reglas juntas y no hace falta una sexta.</span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============ 4. SUPERPOSICIÓN Y FUSIÓN ============ -->
+  <div style="display: flex; gap: 34px; align-items: flex-start;">
+
+    <div style="width: 272px; flex-shrink: 0; display: flex; flex-direction: column; gap: 9px; padding-top: 6px;">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: #156FE7;">4 — DISTINTAS SE SUPERPONEN, IGUALES SE FUSIONAN</span>
+      <span style="font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: #0F172A;">El dueño pidió negrita <em>y</em> cursiva, así que se pueden las dos a la vez</span>
+      <span style="font-size: 14px; line-height: 1.5; color: #64748B;">El ADR 0024 decía que un tramo no puede «solaparse con otro», y leído al pie de la letra <strong style="color: #334155; font-weight: 600;">eso hacía imposible lo que pidió primero</strong>. El ADR 0027 lo enmienda en esa cláusula y en ninguna más.</span>
+      <span style="font-size: 13px; line-height: 1.5; color: #94A3B8;">La fusión no es un detalle: dos tramos pegados y uno solo se publican idénticos, y dos documentos que significan lo mismo tienen que dar los mismos bytes. Es de lo que depende el corpus dorado.</span>
+    </div>
+
+    <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 14px;">
+
+      <div style="display: flex; gap: 14px; align-items: stretch;">
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 9px; padding: 15px 17px; background: #FFFFFF; border: 1px solid #E8ECF2; border-radius: 11px;">
+          <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.04em; color: #15803D;">SE PUEDE — DISTINTAS</span>
+          <span style="font-size: 15px; line-height: 1.6; color: #0F172A;"><strong style="font-weight: 700;"><em>Solomillo</em></strong> al whisky</span>
+          <span style="font-size: 11px; line-height: 1.5; color: #94A3B8;">Un tramo <code style="font-family: ui-monospace, monospace; font-size: 10px;">strong</code> y uno <code style="font-family: ui-monospace, monospace; font-size: 10px;">em</code> sobre las mismas palabras. El renderizador parte por todos los bordes y anida en un orden fijo: <code style="font-family: ui-monospace, monospace; font-size: 10px;">strong</code> fuera, <code style="font-family: ui-monospace, monospace; font-size: 10px;">em</code> dentro, siempre.</span>
+        </div>
+
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 9px; padding: 15px 17px; background: #FFFFFF; border: 1px solid #E8ECF2; border-radius: 11px;">
+          <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.04em; color: #15803D;">SE PUEDE — SOLAPADAS A MEDIAS</span>
+          <span style="font-size: 15px; line-height: 1.6; color: #0F172A;"><strong style="font-weight: 700;">Solo<em>millo</em></strong><em> al</em> whisky</span>
+          <span style="font-size: 11px; line-height: 1.5; color: #94A3B8;">Los bordes no tienen que coincidir. Tres trozos, cada uno escapado por separado y envuelto en las marcas que lo cubren.</span>
+        </div>
+
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 9px; padding: 15px 17px; background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 11px;">
+          <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.04em; color: #B45309;">SE FUSIONA — IGUALES</span>
+          <span style="font-size: 13px; line-height: 1.6; color: #64748B;">Marca <strong style="font-weight: 700; color: #0F172A;">Solomillo</strong>, después <strong style="font-weight: 700; color: #0F172A;">al whisky</strong></span>
+          <span style="font-size: 15px; line-height: 1.6; color: #0F172A;"><strong style="font-weight: 700;">Solomillo al whisky</strong></span>
+          <span style="font-size: 11px; line-height: 1.5; color: #92400E;"><strong style="font-weight: 700;">Un tramo, no dos pegados.</strong> Así marcar dos veces lo mismo no cambia el documento, y el corpus dorado no depende de por dónde empezó a marcar la persona.</span>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 11px; align-items: flex-start; padding: 13px 16px; background: #FEF2F2; border: 1px solid #FECACA; border-radius: 10px;">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2" stroke-linecap="round" aria-hidden="true" style="flex-shrink: 0; margin-top: 1px;"><path d="M12 9v4M12 17v.01"></path><path d="M10.3 3.9L2.4 18a2 2 0 001.7 3h15.8a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"></path></svg>
+        <span style="font-size: 12px; line-height: 1.5; color: #991B1B;"><strong style="font-weight: 700;">El día delicado es el renderizador, no esta pantalla.</strong> Hoy la garantía contra <code style="font-family: ui-monospace, monospace; font-size: 11px;">fixtures/documents/xss-attempt</code> es un <code style="font-family: ui-monospace, monospace; font-size: 11px;">escapeHtml</code> sobre la cadena entera. Con marcas, la cadena se parte y <strong style="font-weight: 700;">cada trozo se escapa por separado</strong>. Ese fixture tiene que seguir verde <strong style="font-weight: 700;">sin tocarlo</strong>: si hay que tocarlo, el cambio está mal.</span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============ 5. LO QUE NO LLEVA ============ -->
+  <div style="display: flex; gap: 34px; align-items: flex-start;">
+
+    <div style="width: 272px; flex-shrink: 0; display: flex; flex-direction: column; gap: 9px; padding-top: 6px;">
+      <span style="font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: #94A3B8;">5 — LO QUE NO LLEVA</span>
+      <span style="font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: #0F172A;">Tres controles que un editor de texto tendría y este no</span>
+      <span style="font-size: 14px; line-height: 1.5; color: #64748B;">Dibujados tachados por el motivo de siempre: lo que se deja fuera a propósito hay que poder leerlo, o dentro de un mes parece un olvido.</span>
+    </div>
+
+    <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 9px;">
+
+      <div style="display: flex; gap: 13px; align-items: center; padding: 13px 16px; background: #FFFFFF; border: 1px solid #E8ECF2; border-radius: 11px;">
+        <span style="width: 44px; flex-shrink: 0; text-align: center; font-size: 17px; font-weight: 700; color: #CBD5E1; text-decoration: underline;">U</span>
+        <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px;">
+          <span style="font-size: 14px; font-weight: 600; color: #334155;">El subrayado — rechazado por segunda petición</span>
+          <span style="font-size: 12px; line-height: 1.5; color: #94A3B8;">Conchi lo pidió y el dueño del taller también: <strong style="font-weight: 600; color: #64748B;">dos dueños de tres</strong>. El ADR 0024 lo rechazó por adelantado y la respuesta no se ha movido: en la web un subrayado significa enlace, y una palabra subrayada que no va a ninguna parte es la misma promesa vacía que este producto rechaza en todo lo demás — un destino muerto bloquea la descarga, una paleta sin contraste medido no se puede ni declarar.</span>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 13px; align-items: center; padding: 13px 16px; background: #FFFFFF; border: 1px solid #E8ECF2; border-radius: 11px;">
+        <span style="width: 44px; flex-shrink: 0; text-align: center; font-size: 17px; font-weight: 700; color: #CBD5E1; text-decoration: line-through;">S</span>
+        <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px;">
+          <span style="font-size: 14px; font-weight: 600; color: #334155;">El tachado</span>
+          <span style="font-size: 12px; line-height: 1.5; color: #94A3B8;">Nadie lo ha pedido, no está en ningún dossier, y <code style="font-family: ui-monospace, monospace; font-size: 11px;">strong</code> y <code style="font-family: ui-monospace, monospace; font-size: 11px;">em</code> son los dos que significan énfasis y que un lector de pantalla transmite. Un tachado en la web de un negocio es casi siempre un precio antiguo, y eso es una sección de precios, no una marca.</span>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 13px; align-items: center; padding: 13px 16px; background: #FFFFFF; border: 1px solid #E8ECF2; border-radius: 11px;">
+        <span style="width: 44px; flex-shrink: 0; display: flex; justify-content: center;"><span style="width: 19px; height: 19px; border-radius: 4px; background: #FEF08A; border: 1px solid #CBD5E1; position: relative;"><span style="position: absolute; left: -2px; top: 8px; width: 23px; height: 1.5px; background: #CBD5E1; transform: rotate(-45deg);"></span></span></span>
+        <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px;">
+          <span style="font-size: 14px; font-weight: 600; color: #334155;">El color de resaltado</span>
+          <span style="font-size: 12px; line-height: 1.5; color: #94A3B8;">Sería <strong style="font-weight: 600; color: #64748B;">un color exacto sobre un fondo exacto</strong>, y el ADR 0026 fijó que un color exacto solo existe detrás de una revisión de contraste. Un resaltado por tramos multiplicaría los pares que hay que medir por cada tramo de cada texto. Si alguna vez se ofrece, es con esa revisión delante, igual que el color.</span>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 11px; align-items: flex-start; padding: 13px 16px; background: #F8FAFC; border: 1px dashed #CBD5E1; border-radius: 10px;">
+        <span style="font-size: 12px; line-height: 1.55; color: #64748B;">Y tampoco lleva <strong style="font-weight: 700; color: #334155;">B e I para un botón o un enlace</strong>. Un enlace no lleva una negrita dentro de sus dos palabras, y un control que no aplica no se dibuja. El esquema <em>sí</em> admite marcas en cualquier texto, a propósito: así el renderizador parte todos los textos por el mismo camino, y <strong style="font-weight: 700; color: #334155;">un solo camino es el argumento de seguridad</strong> del día que escapa una cadena en trozos.</span>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
