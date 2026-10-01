@@ -257,7 +257,7 @@ a time. Under A it answers a question nobody has: the letterform is the one that
 | Step | What it is |
 |---|---|
 | **1. C** | **Done 1 October 2026 — see "Option C, as built" below.** `TYPE_PAIRS` re-chosen so each pair keeps a heading/body contrast with no extra fonts, with the harness's own font report as the test. The golden corpus moves once and the diff is read in full. Small, and it stands on its own if A is ever reversed |
-| **2. A** | A task file first — it touches `packages/renderer` and `packages/publisher`, both exclusive zones. The `url()` exception of measurement 3 is written and tested before a byte is shipped, and `pnpm size` gains a second number: the bundle, beside the page |
+| **2. A** | **Started 1 October 2026 — the `url()` exception is written and tested; see "The `url()` exception, as built". It is not yet connected to `buildCss`, deliberately, and connects with the publisher that ships the bytes.** A task file first — it touches `packages/renderer` and `packages/publisher`, both exclusive zones. The `url()` exception of measurement 3 is written and tested before a byte is shipped, and `pnpm size` gains a second number: the bundle, beside the page |
 | **3. #9** | Closes with A, not with this file |
 
 ## Option C, as built — 1 October 2026
@@ -366,6 +366,88 @@ what makes the one number only the page can give worth having.
   is good for stability and it left **nothing in the corpus exercising the new stacks**, so
   `fixtures/documents/menu-y-paginas.json` was moved to them deliberately. The diff is two CSS custom
   property lines and nothing else.
+
+## The `url()` exception, as built — 1 October 2026
+
+Measurement 3 of this file said a font file would be the first `url()` this renderer ever emits,
+through an allowlist whose own comment promises «no `url()` and no network». Here is the exception, and
+it is as narrow as the rule it dents.
+
+**`cssThemeValue` is untouched.** Its two call sites and the tests that pin them are exactly as they
+were; the sentence in its comment is still true of it. The exception is two new functions beside it,
+each accepting a short closed vocabulary.
+
+**Three properties, and each was verified by breaking it:**
+
+1. **The caller cannot choose the directory.** `fonts/` is written inside `cssFontSrc`, not passed to
+   it, so the only `url()` this renderer can produce anywhere points inside the folder the publisher
+   writes. *Broken on purpose: 5 tests failed.*
+2. **The file name must end in `.woff2`**, lower case, hyphens only. That one pattern refuses `../`, an
+   absolute path, a protocol, a second extension and a query string. *Broken: 7 tests failed.*
+3. **The values never come from the document.** `fonts.ts` holds a closed table of family and file
+   names; a theme **selects** a row by exact equality and can never **name** one. *Loosening the match
+   to a substring: 2 failed. Emitting the document's value as the family: 20 failed. Bypassing the
+   escape function: 3 failed.*
+
+> **One property has no direct test, and the reason is the guarantee rather than a gap.** Because
+> matching is exact equality, a matched row's family string and the document's family string **are the
+> same string** — so "which of the two is emitted" cannot change a byte. Sabotage confirmed it: swapping
+> them broke nothing, exactly as the argument predicts. What the tests cover is every way that argument
+> could stop holding, and each of those fails loudly. `fonts.test.ts` carries this reasoning so the next
+> reader finds it instead of concluding there is no test.
+
+**A document that names no shippable family emits nothing**, which is what keeps «a site that needs no
+font carries zero font bytes» true rather than claimed. Fourteen of the fifteen corpus documents are on
+`editorial-serif`; only the `classic-display` fixture asks for a face at all.
+
+**The rules cost 141 bytes gzipped**, measured while wired: that fixture went from 2644 to 2785 bytes,
+**4% of the 60 KB page budget**, for two faces. The *files* are not in that number and are the
+publisher's measurement.
+
+### The rules are not wired into `buildCss` yet, and the reason is a test that caught it
+
+**Wiring them one day before the publisher ships the bytes breaks the promise this product is.** With
+`fontFaceCss` spread into `buildCss`, five of the twenty-nine critical flows went red on an assertion
+that has been there since sprint 3 and says exactly the right thing:
+
+```
+every byte the page needed was actually inside the ZIP
+```
+
+Those flows download a real ZIP, extract it to disk, open `index.html` from `file://` and require that
+**no request fails**. A stylesheet naming two files the ZIP does not contain fails two of them. That is
+not a test being fussy — it is ADR 0001 being enforced, and the ZIP is the thing the owner paid for.
+
+**So the exception, the table and all sixty-one tests land, and the two lines that connect them land
+with the publisher.** `fontFaceCss` and `fontFilesFor` are complete and tested; `buildCss` does not call
+them and `HtmlOutput` does not carry `fonts` until the day a ZIP can hold the files. The published bytes
+today are byte-for-byte what they were, and the golden corpus does not move.
+
+> **The alternative was to relax that assertion, and it is worth recording that it was refused** — one
+> paragraph above, this same file argues that asserting a `named` pair's contrast would «teach the next
+> person to loosen the check rather than read it». Loosening a self-containment check to let a
+> half-finished feature through is the same mistake with higher stakes.
+
+**What was measured while it was wired, and is kept because it is what the wiring will do:** the golden
+diff was sixteen lines in one fixture and nothing anywhere else, and the browser results below.
+
+**Measured in a real browser, with the emitted CSS rather than a hand-written probe** — Chromium 153
+and Firefox 155, page opened by double-click as `file://`:
+
+| | faces registered | `h1` drawn in | heading width |
+|---|---|---|---|
+| no files present | both `error` | the fallback (Didot) | 459.48px |
+| files present | both `loaded` | **the shipped face** | 465.47px / 465.42px |
+
+The width is the engine-independent half: CDP's platform-font report is Chromium-only, so the
+heading's own rendered width is what proves the face is *used* and not merely declared.
+
+> **The first row is why the wiring waits, and it is also reassuring.** A page whose files are missing
+> registers both faces as `error`, fails two sub-resource requests, **and renders exactly as it does
+> today** — the heading falls back to Didot, no script error, nothing visibly wrong, because
+> `font-display: swap` and the fallback chain are doing their jobs. So the failure mode is a ZIP with two
+> dead references and a page that looks right: invisible to the owner, which is precisely why it must not
+> ship for a day and why the e2e's refusal to allow it is the correct answer rather than an obstacle.
 
 ## Consequences
 
