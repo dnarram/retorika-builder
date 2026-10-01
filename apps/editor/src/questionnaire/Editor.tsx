@@ -147,6 +147,19 @@ function slotOrderOf(doc: RetorikaDocument, sectionId: string): string[] {
   }
 }
 
+/** The same thing for one line's slots, which is what places a slot created **inside** a line —
+ * a card's description belongs between the name and the price, not after it. Empty for a preset
+ * with no list, which is every section the panel shows no line groups for anyway. */
+function itemSlotOrderOf(doc: RetorikaDocument, sectionId: string): string[] {
+  const found = findSection(doc, sectionId);
+  if (!found) return [];
+  try {
+    return (presetFor(found.section.preset.catalogId).itemSlots ?? []).map((slot) => slot.slot);
+  } catch {
+    return [];
+  }
+}
+
 /**
  * One composition this section could be drawn with — its id, its Spanish name, and whether it is
  * the one in use.
@@ -2903,6 +2916,7 @@ export function Editor({
           sectionName={sectionDisplayName(doc, fieldsFor)}
           rows={sectionFields(doc, fieldsFor)}
           slotOrder={slotOrderOf(doc, fieldsFor)}
+          itemSlotOrder={itemSlotOrderOf(doc, fieldsFor)}
           onFill={onFillSlot}
           onClear={onClearSlot}
           // The panel commits a words-only change through the very same callback the canvas does,

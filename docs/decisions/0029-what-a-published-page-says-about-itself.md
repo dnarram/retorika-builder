@@ -1,19 +1,25 @@
 # 0029 — What a published page says about itself when it is shared
 
-**Status:** **proposed** · **Date:** 2026-10-02 ·
+**Status:** **accepted** · **Date:** 2026-10-02 ·
 **Decided by:** David, 2 October 2026, approving the sprint 12 plan — every choice below is his
 answer to a question, and three of them are corrections to what development had proposed ·
-**Awaiting:** his signature on this file ·
+**Accepted by:** **David, 2 October 2026 — not direction** ·
 **Touches:** [ADR 0001](0001-static-published-sites.md) (the static, offline promise),
 [ADR 0008](0008-hosted-publishing-has-no-plan.md) (why there is no origin to assume),
 [ADR 0022](0022-a-page-is-born-by-converting-a-section.md) (the derive-don't-copy principle this
 borrows), the backlog's «minimum SEO» row, and protocolo Part 14's Fase 2 — «lo mínimo de SEO»
 
-> **«Proposed» is literal, and the distinction matters.** The decisions in this file are David's: he
-> answered four questions while approving the sprint plan and then sent three corrections. What has
-> not happened is him reading *this file*. Development does not sign on anybody's behalf, so the
-> status stays `proposed` until he does — the same way sprint 10 day 2 left three ADRs unsigned
-> («none of them is mine to sign») and sprint 11 day 3 built one only after «Dentro, y la firmo yo».
+> **Signed on the day after it was written, and the gap is left visible on purpose.** This file went
+> up as `proposed` with the day 1 pull request, because the decisions in it were David's — he
+> answered four questions while approving the sprint plan and then sent three corrections — but he
+> had not read *this file*, and development does not sign on anybody's behalf. That is the same line
+> sprint 10 day 2 drew («none of them is mine to sign») and sprint 11 day 3 crossed only on «Dentro,
+> y la firmo yo». He read it and accepted it with the day 2 branch.
+>
+> **«Accepted» here means David, not direction**, the same as ADRs 0026, 0027 and 0028. It is said in
+> the header rather than left to be inferred, because an accepted ADR gets cited afterwards by people
+> who were not in the room. **Direction has not looked at it** — and this one spends bytes on every
+> page a client downloads and leans on ADR 0001, which is direction's constraint.
 >
 > **Why this is one ADR and not three.** The decision is *what a published page says about itself
 > when somebody shares it*. The owner's description, the origin field and the image rules are not

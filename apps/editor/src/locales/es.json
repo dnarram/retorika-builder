@@ -285,6 +285,8 @@
   "editor.fields.close": "Cerrar los campos",
   "editor.fields.help": "Rellena lo que quieras que salga. Lo que dejes vacío no aparece en tu web.",
   "editor.fields.none": "Esta sección no tiene campos que rellenar aquí.",
+  "editor.fields.line": "Línea",
+  "editor.fields.line.gallery": "Foto",
   "editor.fields.optional": "(opcional)",
   "editor.fields.labelHint": "Lo que dice el botón",
   "editor.fields.destination": "A dónde lleva",
