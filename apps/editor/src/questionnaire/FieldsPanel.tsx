@@ -2,7 +2,7 @@
 
 import type { ContentValue, ElementAddress, SlotAddress, SlotFill } from "@retorika/schema";
 import { useId } from "react";
-import { type FieldRow, fieldCommitFor } from "../editor/sectionFields.ts";
+import { type FieldRow, fieldCommitFor, groupedFields } from "../editor/sectionFields.ts";
 import es from "../locales/es.json" with { type: "json" };
 
 /**
@@ -22,6 +22,10 @@ export interface FieldsPanelProps {
   sectionName: string;
   rows: readonly FieldRow[];
   slotOrder: readonly string[];
+  /** The slots of one **line**, in the order the preset declares them — where a slot created inside
+   * a line gets placed, the same way `slotOrder` decides it for the section. Empty for a section
+   * whose preset has no list. */
+  itemSlotOrder: readonly string[];
   sectionId: string;
   onFill: (fill: SlotFill) => void;
   onClear: (address: SlotAddress) => void;
@@ -41,6 +45,7 @@ export function FieldsPanel({
   sectionName,
   rows,
   slotOrder,
+  itemSlotOrder,
   sectionId,
   onFill,
   onClear,
@@ -49,8 +54,20 @@ export function FieldsPanel({
 }: FieldsPanelProps) {
   const headingId = useId();
 
+  const { sectionRows, lines } = groupedFields(rows);
+
   function commit(row: FieldRow, text: string, href: string) {
-    const address: SlotAddress = { sectionId, slot: row.slot, occurrence: row.occurrence };
+    // A line's row carries its own address, and the order a created slot is placed by is the
+    // **line's**, not the section's. `fieldCommitFor` needs no say in this: a text edit is addressed
+    // by element id, and `setElementText` has always recursed into a line's elements — which is why
+    // the panel's words-only path already reached inside a line before today, and only creating or
+    // clearing one did not.
+    const address: SlotAddress = {
+      sectionId,
+      slot: row.slot,
+      occurrence: row.occurrence,
+      ...(row.item ? { item: row.item } : {}),
+    };
     const what = fieldCommitFor(row, text, href);
     if (what.kind === "clear") {
       onClear(address);
@@ -67,7 +84,7 @@ export function FieldsPanel({
       ...address,
       role: row.role,
       value: valueFor(row, text.trim(), href.trim()),
-      slotOrder,
+      slotOrder: row.item ? itemSlotOrder : slotOrder,
     });
   }
 
@@ -111,7 +128,7 @@ export function FieldsPanel({
         <p className="m-0 text-[13px] text-ui-muted">{es["editor.fields.none"]}</p>
       ) : null}
 
-      {rows.map((row) => (
+      {sectionRows.map((row) => (
         <FieldRowInputs
           // By slot and occurrence: the element id is absent for a slot the document does not
           // have yet, and appears the moment it is filled — which would remount the input
@@ -120,6 +137,24 @@ export function FieldsPanel({
           row={row}
           onCommit={commit}
         />
+      ))}
+
+      {lines.map((line) => (
+        // Grouped and headed, never mixed in with the section's rows. A row labelled «Descripción»
+        // with nothing saying which dish it belongs to is a guess, not a field — and with twelve
+        // lines there would be twelve of them. The group's key is the line's id, so the rows inside
+        // it keep their own slot-and-occurrence key: React only needs those unique among siblings,
+        // and a line's pair repeats on every line.
+        <div key={line.id} className="flex flex-col gap-3 border-t border-ui-border pt-4">
+          {/* 14px bold, between the panel's own `h2` at 15 and a field's label at 12. A browser walk
+              is what settled this: at 13px the heading and the labels read as one level however they
+              were weighted, and «Descripción» under nothing is the guess this grouping exists to
+              stop. Size is what separates them; weight alone did not. */}
+          <h3 className="m-0 text-[14px] font-bold text-ui-ink">{line.name}</h3>
+          {line.rows.map((row) => (
+            <FieldRowInputs key={`${row.slot}:${row.occurrence}`} row={row} onCommit={commit} />
+          ))}
+        </div>
       ))}
     </aside>
   );

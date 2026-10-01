@@ -1,8 +1,19 @@
-import { presetFor } from "@retorika/catalog";
+import { blankSection, GALLERY_ID, PRICES_ID, presetFor } from "@retorika/catalog";
 import { EMPTY_ANSWERS, generate } from "@retorika/generator";
-import { clearSlot, escalateSection, fillSlot, type RetorikaDocument } from "@retorika/schema";
+import {
+  clearSlot,
+  escalateSection,
+  fillSlot,
+  insertSection,
+  type RetorikaDocument,
+} from "@retorika/schema";
 import { describe, expect, it } from "vitest";
-import { type FieldRow, fieldCommitFor, sectionFields } from "../src/editor/sectionFields.ts";
+import {
+  type FieldRow,
+  fieldCommitFor,
+  groupedFields,
+  sectionFields,
+} from "../src/editor/sectionFields.ts";
 
 /**
  * The rows the field panel lists. They come from the **preset**, not from the document, which is
@@ -287,5 +298,232 @@ describe("fieldCommitFor — which of the three things a box's blur means", () =
       elementId: "el-cta",
       text: "Reserva ya",
     });
+  });
+});
+
+/**
+ * A line's own slots, which nothing in this product could reach until sprint 12 (#133).
+ *
+ * Two of them were unreachable and they were the only two: `SERVICES_ITEM_SLOTS.description` and
+ * `PRICES_ITEM_SLOTS.description`, both `0..1`, so absent from a line nobody filled, so no text on
+ * the page to click — and this panel listed the section's slots only.
+ */
+describe("the slots of a line", () => {
+  // Two cards, and the generator fills the second's description from the bank and not the first's.
+  // Left as the fixture rather than hand-built, because it is the state a real questionnaire
+  // produces: one row that exists and one that does not, side by side.
+  const twoCards = generate({
+    ...ANSWERS,
+    services: ["Comidas", "Tapas"],
+  }).document;
+  const servicesId =
+    twoCards.pages[0]?.sections.find((s) => s.preset.catalogId === "services")?.id ?? "";
+  const itemRows = (document: RetorikaDocument, sectionId: string) =>
+    sectionFields(document, sectionId).filter((row) => row.item !== undefined);
+
+  const SERVICE_LINE_SLOTS = ["title", "description"];
+
+  it("lists the description of a card that does not have one, which is the whole point", () => {
+    const first = itemRows(twoCards, servicesId).filter((row) => row.item?.id === "item-1");
+    const description = first.find((row) => row.slot === "description");
+    // Absent from the document: there is nothing on the page to click, which is why the canvas
+    // could never reach it.
+    expect(
+      twoCards.pages[0]?.sections
+        .find((s) => s.id === servicesId)
+        ?.content.find((e) => e.role === "list")
+        ?.items?.[0]?.elements.some((e) => e.slot === "description"),
+    ).toBe(false);
+    expect(description).toBeDefined();
+    expect(description?.elementId).toBeUndefined();
+    expect(description?.text).toBe("");
+    expect(description?.required).toBe(false);
+  });
+
+  it("carries the value of a line slot that is filled", () => {
+    const second = itemRows(twoCards, servicesId).filter((row) => row.item?.id === "item-2");
+    const description = second.find((row) => row.slot === "description");
+    expect(description?.elementId).toBe("el-card-2-description");
+    expect(description?.text).toBe("Para picar algo en la barra o en la mesa.");
+  });
+
+  it("names a line's slots from the catalog's own Spanish, inventing no word", () => {
+    // Every one of these keys already existed: they were written when a line gained its add and
+    // remove controls.
+    expect(itemRows(twoCards, servicesId).map((row) => row.label)).toEqual([
+      "Nombre",
+      "Descripción",
+      "Nombre",
+      "Descripción",
+    ]);
+  });
+
+  it("heads a line's group with the line's own words, not with a number", () => {
+    // «Ensaladilla» is findable by reading; «Línea 7» makes the owner count rows on the page.
+    expect(itemRows(twoCards, servicesId).map((row) => row.lineName)).toEqual([
+      "Comidas",
+      "Comidas",
+      "Tapas",
+      "Tapas",
+    ]);
+  });
+
+  it("falls back to the generic word and a number when the line has no words yet", () => {
+    const blank = insertSection(
+      twoCards,
+      "home",
+      1,
+      blankSection(PRICES_ID, "stacked", "sec-prices"),
+    );
+    const rows = itemRows(blank, "sec-prices");
+    // A blank line carries its name slot as placeholder text, so what is asserted here is the
+    // fallback's shape rather than an empty document: the heading is a word plus a 1-based number.
+    expect(rows.every((row) => row.lineName !== undefined && row.lineName !== "")).toBe(true);
+    const cleared = clearSlot(blank, {
+      sectionId: "sec-prices",
+      slot: "name",
+      item: { list: "lines", id: "item-1" },
+    });
+    expect(itemRows(cleared, "sec-prices")[0]?.lineName).toBe("Línea 1");
+  });
+
+  it("calls a gallery's lines photos, by the table `editor.line.*` already keeps", () => {
+    // A photograph is not a line. `gallery` is the only override there, and the only one here —
+    // «Qué hago» and «Opiniones» have shipped through two usability sessions calling theirs a line,
+    // and changing a word those sessions saw is a product decision, not a tidy-up.
+    const withGallery = insertSection(
+      twoCards,
+      "home",
+      1,
+      blankSection(GALLERY_ID, "stacked", "sec-gallery"),
+    );
+    const cleared = clearSlot(withGallery, {
+      sectionId: "sec-gallery",
+      slot: "caption",
+      item: { list: "photos", id: "item-1" },
+    });
+    expect(itemRows(cleared, "sec-gallery")[0]?.lineName).toBe("Foto 1");
+  });
+
+  it("leaves out a line's photo, which has its own affordance", () => {
+    const withGallery = insertSection(
+      twoCards,
+      "home",
+      1,
+      blankSection(GALLERY_ID, "stacked", "sec-gallery"),
+    );
+    // `GALLERY_ITEM_SLOTS` is photo + caption; only the caption is a box a person can honestly type
+    // in (ADR 0018 gives the photograph its own).
+    expect(itemRows(withGallery, "sec-gallery").map((row) => row.slot)).toEqual(["caption"]);
+  });
+
+  it("gives each row its own line's address", () => {
+    expect(itemRows(twoCards, servicesId).map((row) => row.item)).toEqual([
+      { list: "services", id: "item-1" },
+      { list: "services", id: "item-1" },
+      { list: "services", id: "item-2" },
+      { list: "services", id: "item-2" },
+    ]);
+  });
+
+  it("lists no line rows for a section whose preset has no list", () => {
+    expect(itemRows(twoCards, "sec-cover")).toEqual([]);
+  });
+
+  it("fills the line the row names, between the name and the price", () => {
+    // The round trip the panel actually makes: the row's own address, and the **line's** slot order
+    // rather than the section's. Placed by that order is why a description lands before the price.
+    const withPrices = insertSection(
+      twoCards,
+      "home",
+      1,
+      blankSection(PRICES_ID, "stacked", "sec-prices"),
+    );
+    const row = itemRows(withPrices, "sec-prices").find((r) => r.slot === "description");
+    expect(row?.item).toEqual({ list: "lines", id: "item-1" });
+    const filled = fillSlot(withPrices, {
+      sectionId: "sec-prices",
+      slot: row?.slot ?? "",
+      ...(row?.item ? { item: row.item } : {}),
+      role: row?.role ?? "body",
+      value: { kind: "text", text: "Con mayonesa de casa" },
+      slotOrder: presetFor(PRICES_ID).itemSlots?.map((slot) => slot.slot) ?? [],
+    });
+    expect(
+      filled.pages[0]?.sections
+        .find((s) => s.id === "sec-prices")
+        ?.content.find((e) => e.role === "list")
+        ?.items?.[0]?.elements.map((e) => e.slot),
+    ).toEqual(["name", "description", "price"]);
+  });
+
+  describe("groupedFields", () => {
+    it("keeps a line's rows together, in the order the page has them", () => {
+      const { sectionRows, lines } = groupedFields(sectionFields(twoCards, servicesId));
+      expect(sectionRows.map((row) => row.slot)).toEqual(["headline", "intro"]);
+      expect(lines.map((line) => [line.id, line.name])).toEqual([
+        ["item-1", "Comidas"],
+        ["item-2", "Tapas"],
+      ]);
+      expect(lines.map((line) => line.rows.map((row) => row.slot))).toEqual([
+        ["title", "description"],
+        ["title", "description"],
+      ]);
+    });
+
+    it("does not merge two lines that carry the same slot and occurrence", () => {
+      // The collision worth a test: every line has a `description` at occurrence 0, so keyed by
+      // slot and occurrence alone the second dish's box and the first dish's box are one box.
+      const { lines } = groupedFields(sectionFields(twoCards, servicesId));
+      expect(lines).toHaveLength(2);
+      const keys = lines.flatMap((line) =>
+        line.rows.map((row) => `${line.id}:${row.slot}:${row.occurrence}`),
+      );
+      expect(new Set(keys).size).toBe(keys.length);
+    });
+
+    it("puts a section with no lines entirely in sectionRows", () => {
+      const { sectionRows, lines } = groupedFields(sectionFields(twoCards, "sec-cover"));
+      expect(lines).toEqual([]);
+      expect(sectionRows.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("what a line's box commits", () => {
+    it("is a fill when the line does not carry the slot yet", () => {
+      const row = itemRows(twoCards, servicesId).find(
+        (r) => r.item?.id === "item-1" && r.slot === "description",
+      );
+      expect(row).toBeDefined();
+      expect(fieldCommitFor(row as FieldRow, "Con mayonesa", "")).toEqual({ kind: "fill" });
+    });
+
+    it("is a text edit when it does, so the line's marks move with the words", () => {
+      // `fieldCommitFor` needed no change for lines, and this is why: a text edit is addressed by
+      // element id, and `setElementText` has recursed into a line's elements since sprint 1.
+      const row = itemRows(twoCards, servicesId).find(
+        (r) => r.item?.id === "item-2" && r.slot === "description",
+      );
+      expect(fieldCommitFor(row as FieldRow, "Otra cosa", "")).toEqual({
+        kind: "text",
+        elementId: "el-card-2-description",
+        text: "Otra cosa",
+      });
+    });
+
+    it("clears the line's slot when the box is emptied", () => {
+      const row = itemRows(twoCards, servicesId).find(
+        (r) => r.item?.id === "item-2" && r.slot === "description",
+      );
+      expect(fieldCommitFor(row as FieldRow, "   ", "")).toEqual({ kind: "clear" });
+    });
+  });
+
+  it("the line slot order it fills by is the line's, not the section's", () => {
+    // Named here because getting it wrong is silent: the section's order has no "description" in
+    // it, so `rank` would return the length for every slot and the new element would land last.
+    expect(SERVICE_LINE_SLOTS).toEqual(
+      presetFor("services").itemSlots?.map((slot) => slot.slot) ?? [],
+    );
   });
 });
