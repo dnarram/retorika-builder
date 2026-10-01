@@ -41,7 +41,7 @@ const listPreset: PresetShape = {
         row: i + 1,
         rowSpan: 1,
       })),
-      breakpoints: { tablet: [], mobile: [] },
+      breakpoints: { mobile: [] },
     };
   },
 };

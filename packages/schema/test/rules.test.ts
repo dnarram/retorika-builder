@@ -130,6 +130,21 @@ describe("rule 7 — mobile is a patch, not a parallel tree", () => {
     expect(() => parseDocument(documentWith(section))).toThrow();
   });
 
+  it("rejects a tablet bucket, because nothing could ever publish one (ADR 0030)", () => {
+    // **The refusal the renderer used to make, moved to the gate every document passes through.**
+    // `buildCss` threw on a non-empty tablet array from sprint 8 until schema 1.4.0, which meant a
+    // document could be built, stored and autosaved and then refused at the one moment that
+    // mattered — the download. Refusing it here is the difference between an invalid state the
+    // product prevents and one it repairs.
+    const section = coverSection({
+      source: "free",
+      layout: layout([{ elementId: "el-headline", column: 1, columnSpan: 6, row: 1, rowSpan: 1 }], {
+        tablet: [{ elementId: "el-headline", hidden: true }],
+      } as never) as Section["layout"],
+    });
+    expect(() => parseDocument(documentWith(section))).toThrow();
+  });
+
   it("rejects a patch for an element the desktop never places", () => {
     const section = coverSection({
       source: "free",

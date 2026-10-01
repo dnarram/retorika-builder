@@ -49,7 +49,7 @@ function documentWith(mobile: BreakpointPatch[]): RetorikaDocument {
   const base = JSON.parse(JSON.stringify(physio.document)) as RetorikaDocument;
   const section = base.pages[0]?.sections[0];
   if (!section?.layout) throw new Error("fixture lost its layout");
-  section.layout.breakpoints = { tablet: [], mobile };
+  section.layout.breakpoints = { mobile };
   return parseDocument(base);
 }
 
@@ -172,17 +172,16 @@ describe("the three adjustments, and no fourth", () => {
     expect(patchBlock(css)).not.toContain("width:");
   });
 
-  it("refuses a tablet patch rather than publishing a page that ignores it", () => {
-    // A valid document this renderer has nowhere to put: no stylesheet, mockup or ADR names a
-    // tablet width. Silently dropping it would publish a page that disobeys the document, which is
-    // the failure an explicit error exists to prevent.
+  it("has nowhere left to put a tablet patch, because no document can carry one", () => {
+    // **This used to assert the renderer's own refusal, and that refusal moved** (ADR 0030, schema
+    // 1.4.0). A tablet patch was a *valid* document the renderer had nowhere to put, so it threw;
+    // now `parseDocument` refuses it at the gate — which is tested where that gate lives, in
+    // `packages/schema/test/rules.test.ts`. What is left to check here is the half this file owns:
+    // the renderer reads one bucket, and a document's mobile patches are all of it.
     const base = JSON.parse(JSON.stringify(physio.document)) as RetorikaDocument;
     const section = base.pages[0]?.sections[0];
     if (!section?.layout) throw new Error("fixture lost its layout");
-    section.layout.breakpoints = { tablet: [{ elementId: "el-body", hidden: true }], mobile: [] };
-    expect(() => render(parseDocument(base), "html")).toThrow(
-      /carries tablet breakpoint patches, and no tablet width is defined/,
-    );
+    expect(Object.keys(section.layout.breakpoints)).toEqual(["mobile"]);
   });
 
   it("has no fourth adjustment, because the schema refuses one", () => {
@@ -192,7 +191,6 @@ describe("the three adjustments, and no fourth", () => {
     const section = base.pages[0]?.sections[0];
     if (!section?.layout) throw new Error("fixture lost its layout");
     section.layout.breakpoints = {
-      tablet: [],
       mobile: [{ elementId: "el-body", padding: "8px" } as never],
     };
     expect(() => parseDocument(base)).toThrow();

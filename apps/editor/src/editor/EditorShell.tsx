@@ -1,6 +1,7 @@
 "use client";
 
 import es from "../locales/es.json" with { type: "json" };
+import { NARROWEST_WIDTH } from "./overflowCheck.ts";
 
 /**
  * The editor's chrome (mockup 08): a 58px top bar, an 80px left rail, and the canvas in
@@ -652,7 +653,15 @@ export function EditorShell({
           <div className="flex flex-grow justify-center overflow-hidden">
             <div
               className="flex flex-col overflow-hidden rounded-[10px] bg-ui-surface shadow-[0_1px_4px_rgba(15,23,42,0.1)] transition-[max-width] duration-200"
-              style={{ width: "100%", maxWidth: device === "mobile" ? 400 : "100%" }}
+              // **The width the pre-download gate measures, imported rather than written again.**
+              // This was 400 from the day the chrome was built — a number with no recorded reason,
+              // chosen because it is narrow enough for the renderer's own responsive CSS to take
+              // over, which 720 already decides. Meanwhile `overflowCheck` warns about what sticks
+              // out **at 320**, and its own words are «Míralo en la vista de móvil» — sending the
+              // owner to a canvas where the thing it just measured does not happen. Mockup 14 draws
+              // the phone frame at 330px with 12px of padding, so the page inside it is about 304:
+              // the drawing was never 400 either. One number, and it lives where the gate is.
+              style={{ width: "100%", maxWidth: device === "mobile" ? NARROWEST_WIDTH : "100%" }}
             >
               {children}
             </div>
