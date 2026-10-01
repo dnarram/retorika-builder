@@ -270,10 +270,14 @@ that he is not a web professional does not mean the gate failed at its purpose.
 somebody is and grants capability for the answer. Anyone who wants the capability answers yes, so
 the question filters nobody while looking as though it does — and the real consent was the press.
 
-**Proposed: the question describes what the tools are, not who the person is.** Not to keep anyone
+**Decided: the question describes what the tools are, not who the person is.** Not to keep anyone
 out — §1 does not ask us to — but so the answer is accurate rather than aspirational, and so a
 person deciding has the information instead of a label. The body copy already does this well
 («rejilla, colocación y ajustes por dispositivo»); it is the title that asks about a trade.
+
+> **Built 1 October 2026**: «¿Montas webs para otros?» became **«¿Quieres colocar tú cada
+> elemento?»**, and `docs/design/REVIEW.md` carries the override, because mockup 16 still draws the
+> old wording and that file is where an ADR overrules a drawn screen.
 
 ### What the evidence does **not** license: moving the exact-value line
 
@@ -302,8 +306,14 @@ libertad en la posición». The path from that yes to moving an element, as buil
 recorded; what is recorded is that he opted in and did not find what he had just been promised, and
 this is the only path there is.
 
-**Proposed: the «Diseñar a mano» offer is reachable from that paragraph**, where the person has just
+**Decided: the «Diseñar a mano» offer is reachable from that paragraph**, where the person has just
 learned they need it.
+
+> **Built 1 October 2026**: the paragraph now promises the return in the same breath and the offer is
+> a button beside it, calling the same `escalateSection` the section header's own offer calls. The
+> panel's four states moved into `designPanelState`, which is where a second defect turned up —
+> reachable and latent: the panel offered «Diseñar a mano» for a section that had been **deleted**
+> while it was open, and `escalateSection` throws on a missing id. A dead button that looked alive.
 
 **§7 is not amended.** Escalation stays per section, the offer still says what it does and promises
 the return in the same breath, and `escalate` still moves nothing — all of that is why the offer is
