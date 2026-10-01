@@ -330,11 +330,28 @@ with the harness's CDP measurement, in both Chromium 153 and Firefox 155 — `Ge
 `system-ui/system-ui`, `Didot/Charter`. Two independent techniques agreeing where both can be run is
 what makes the one number only the page can give worth having.
 
-| platform | measured | heading / body per pair |
-|---|---|---|
-| macOS 26 (Chromium 153, Firefox 155) | **yes**, 1 October 2026 | `Georgia / .SF NS` · `.SF NS / .SF NS` · `Didot / Charter` |
-| Linux (CI runner, Chromium) | **yes** — read from this branch's `a11y-size` job log | recorded when the run is read |
-| **Windows** | **no** | **awaiting the hand check above** |
+| platform | measured | `editorial-serif` | `modern-sans` | `classic-display` |
+|---|---|---|---|---|
+| macOS 26 (Chromium 153, Firefox 155) | **yes**, 1 Oct 2026 | Georgia / .SF NS ✅ | .SF NS / .SF NS ⬛ | **Didot / Charter** ✅ |
+| Linux (CI runner, Chromium 153) | **yes**, 1 Oct 2026 | Liberation Serif / DejaVu Sans ✅ | DejaVu Sans / DejaVu Sans ⬛ | **Liberation Serif / Liberation Serif ❌** |
+| **Windows** | **no** | — | — | — |
+
+✅ two faces · ⬛ one face by design · ❌ one face where two were wanted
+
+> **Linux collapses `classic-display`, exactly as `named` predicts, and that is the row worth keeping.**
+> The CI runner has none of Didot, Bodoni MT, Big Caslon, Charter, Iowan Old Style, Palatino, Palatino
+> Linotype or Georgia, so both stacks reach their `serif` keyword and land on Liberation Serif
+> together. **This is the measurement that would have been hidden by asserting the `named` contrast**:
+> the build would have gone red for a property of the runner's font set, and the honest reading —
+> *option C raises the floor on the platforms that have the faces and cannot raise it where none
+> exist* — would have been replaced by a loosened check.
+>
+> It is also the sharpest argument for A that this file has. On Linux, `classic-display` without font
+> files is one serif at two sizes **whatever stack is chosen**, and no amount of option C fixes that.
+> Shipping the face does.
+>
+> **Every pair keeps its 700/400 weight and its 40/16px size on both platforms**, which is the part
+> that holds everywhere and the reason no visitor sees an undifferentiated block.
 
 ### Two consequences of changing a stack, both recorded rather than fixed
 
