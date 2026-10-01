@@ -465,17 +465,13 @@ function breakpointCss(doc: RetorikaDocument): string[] {
       const breakpoints = section.layout?.breakpoints;
       if (!breakpoints) continue;
 
-      // A tablet patch is a valid document and this renderer has nowhere to put it: no stylesheet,
-      // mockup or ADR names a tablet width. Emitting nothing would publish a page that quietly
-      // disobeys the document, which is the failure an explicit error exists to prevent — the same
-      // reason an unknown section throws rather than rendering an empty box.
-      if ((breakpoints.tablet?.length ?? 0) > 0) {
-        throw new Error(
-          `buildCss: section "${section.id}" carries tablet breakpoint patches, and no tablet ` +
-            "width is defined. Only mobile patches can be published today.",
-        );
-      }
-
+      // **A tablet patch used to be refused here, and the refusal moved to the schema** (ADR 0030,
+      // schema 1.4.0). It threw because such a document was *valid* and this renderer had nowhere
+      // to put it; now it is not valid, and `parseDocument` says so at the gate every document in
+      // this product already passes through. Keeping the check would mean casting past a type that
+      // states the bucket cannot exist, to look for it anyway — and the renderer re-validates
+      // nothing else the schema guarantees: not the role vocabulary, not that a placement names a
+      // real element. One place knows the shape, and it is the one whose job that is.
       const mobile = breakpoints.mobile ?? [];
       if (mobile.length === 0) continue;
 

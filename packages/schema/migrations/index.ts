@@ -3,6 +3,7 @@ import initial from "./0001-initial.ts";
 import sampleImageField from "./0002-sample-image-field.ts";
 import closedStyleVocabulary from "./0003-closed-style-vocabulary.ts";
 import marksOnAText from "./0004-marks-on-a-text.ts";
+import oneBreakpointBucket from "./0005-one-breakpoint-bucket.ts";
 
 export interface Migration {
   version: string;
@@ -17,6 +18,7 @@ export const MIGRATIONS: readonly Migration[] = [
   sampleImageField,
   closedStyleVocabulary,
   marksOnAText,
+  oneBreakpointBucket,
 ];
 
 /** `1.2.0` → `[1, 2, 0]`, for comparing two versions without a dependency. A missing or

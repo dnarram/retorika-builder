@@ -97,7 +97,6 @@
               }
             ],
             "breakpoints": {
-              "tablet": [],
               "mobile": [
                 {
                   "elementId": "el-image",

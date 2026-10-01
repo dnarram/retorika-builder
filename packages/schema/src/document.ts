@@ -9,7 +9,7 @@ import { type ElementStyle, elementStyleSchema, themeSchema } from "./tokens.ts"
  * role or a token is additive and bumps the minor; removing or renaming one breaks and
  * bumps the major.
  */
-export const SCHEMA_VERSION = "1.3.0";
+export const SCHEMA_VERSION = "1.4.0";
 
 const idSchema = z.string().min(1).max(128);
 
@@ -179,8 +179,19 @@ export type BreakpointPatch = z.infer<typeof breakpointPatchSchema>;
 export const sectionLayoutSchema = z.strictObject({
   grid: z.strictObject({ columns: z.literal(GRID_COLUMNS) }),
   placements: z.array(placementSchema),
+  /**
+   * One bucket, and that is the decision rather than the current state of things (ADR 0030).
+   *
+   * **`tablet` was accepted here and the renderer threw on it**, so a document carrying a tablet
+   * patch could be built, stored and autosaved, and then refused at the one moment it mattered —
+   * the download. A shape that admits what nothing can publish is an invalid state the schema was
+   * holding open, and closing it is cheaper than teaching four places to step around it.
+   *
+   * The advanced dossier §4 promises «Escritorio, tablet y móvil, editables». This does not keep
+   * that promise and does not pretend to: it belongs with «control por dispositivo» in phase 3, and
+   * ADR 0030 says so where somebody will find it.
+   */
   breakpoints: z.strictObject({
-    tablet: z.array(breakpointPatchSchema).optional(),
     mobile: z.array(breakpointPatchSchema).optional(),
   }),
 });

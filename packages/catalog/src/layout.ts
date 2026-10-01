@@ -57,7 +57,10 @@ export function resolvePlacements(
   return {
     grid: { columns: GRID_COLUMNS },
     placements,
-    breakpoints: { tablet: [], mobile: [] },
+    // One bucket since schema 1.4.0 (ADR 0030). This wrote `tablet: []` into every section it
+    // ever built, which is where the empty arrays in the corpus came from — present and never
+    // filled, in nine documents.
+    breakpoints: { mobile: [] },
   };
 }
 

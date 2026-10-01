@@ -85,9 +85,10 @@ export function planRevert(section: Section, preset: PresetShape): RevertPlan {
     assignments.push({ elementId: element.id, slot: element.slot });
   }
 
-  const breakpoints = section.layout?.breakpoints;
-  const dropsBreakpointAdjustments =
-    (breakpoints?.tablet?.length ?? 0) > 0 || (breakpoints?.mobile?.length ?? 0) > 0;
+  // One bucket since 1.4.0 (ADR 0030). This read `tablet` as well until then, which was always a
+  // disjunction with one reachable half: nothing could write a tablet patch and the renderer threw
+  // on one.
+  const dropsBreakpointAdjustments = (section.layout?.breakpoints?.mobile?.length ?? 0) > 0;
 
   return { assignments, surplus, dropsBreakpointAdjustments };
 }

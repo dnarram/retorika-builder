@@ -57,7 +57,7 @@ const preset: PresetShape = {
       row: index + 1,
       rowSpan: 1,
     })),
-    breakpoints: { tablet: [], mobile: [] },
+    breakpoints: { mobile: [] },
   }),
 };
 

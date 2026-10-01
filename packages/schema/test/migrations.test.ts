@@ -31,6 +31,17 @@ const theme = Object.fromEntries(TOKEN_KEYS.map((key) => [key, `value-${key}`]))
 const BEFORE_CLOSED_VOCABULARY = new Set<string | undefined>([undefined, "1.0.0", "1.1.0"]);
 
 /**
+ * The same thing for `0004`'s claim, and it is here because the warning above came true.
+ *
+ * That test said «skip the file whose version is `SCHEMA_VERSION`, assert about the rest» — the
+ * exact form the comment above describes as changing subject on a version bump. It did, on this
+ * one: `SCHEMA_VERSION` became 1.4.0, the 1.3.0 marks fixture stopped being skipped, and a test
+ * about documents written *before* marks existed went red over a document written *with* them.
+ * Named as a set, it cannot happen again.
+ */
+const BEFORE_MARKS = new Set<string | undefined>([undefined, "1.0.0", "1.1.0", "1.2.0"]);
+
+/**
  * A migration addressed by the version it produces, never by its position in the list.
  *
  * `MIGRATIONS.at(-1)` used to mean `0002` and stopped meaning it the moment `0003` landed, which
@@ -450,10 +461,138 @@ describe("0004 — a text may carry marked runs", () => {
     for (const file of corpus) {
       const raw = readFileSync(join(DOCUMENTS_DIR, file), "utf8");
       const parsed = JSON.parse(raw) as { schemaVersion?: string };
-      if (parsed.schemaVersion === SCHEMA_VERSION) continue;
+      if (!BEFORE_MARKS.has(parsed.schemaVersion)) continue;
       older += 1;
       expect(raw, file).not.toContain('"marks"');
     }
     expect(older).toBeGreaterThan(0);
+  });
+});
+
+describe("0005 — a section's breakpoints hold one bucket", () => {
+  /** A free section with both buckets, which is what the catalog wrote into every layout it built
+   * until this version: the key present and the array empty. */
+  function before(tablet: unknown[] = []): Record<string, unknown> {
+    return {
+      schemaVersion: "1.3.0",
+      id: "doc-1",
+      siteName: "Taberna",
+      theme,
+      collections: [],
+      pages: [
+        {
+          id: "home",
+          slug: "index",
+          title: "Taberna",
+          sections: [
+            {
+              id: "sec-cover",
+              preset: { catalogId: "cover", variantId: "image-right" },
+              source: "free",
+              layout: {
+                grid: { columns: 12 },
+                placements: [
+                  { elementId: "el-headline", column: 1, columnSpan: 12, row: 1, rowSpan: 1 },
+                ],
+                breakpoints: { tablet, mobile: [{ elementId: "el-headline", hidden: true }] },
+              },
+              content: [
+                {
+                  id: "el-headline",
+                  role: "heading",
+                  hidden: false,
+                  slot: "headline",
+                  value: { kind: "text", text: "Taberna" },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  function breakpoints(doc: Record<string, unknown>): Record<string, unknown> {
+    const pages = doc["pages"] as { sections: { layout: Record<string, unknown> }[] }[];
+    const found = pages[0]?.sections[0]?.layout["breakpoints"];
+    if (!found) throw new Error("no breakpoints");
+    return found as Record<string, unknown>;
+  }
+
+  it("opens a document saved while the tablet bucket still existed", () => {
+    const migrated = migrateToCurrent(before());
+    expect(migrated["schemaVersion"]).toBe(SCHEMA_VERSION);
+    expect(() => parseDocument(migrated)).not.toThrow();
+  });
+
+  it("takes the key out rather than emptying it, because a strict schema rejects it either way", () => {
+    expect(breakpoints(upTo(before(), "1.4.0"))).toEqual({
+      mobile: [{ elementId: "el-headline", hidden: true }],
+    });
+  });
+
+  it("leaves the mobile patches exactly as they were", () => {
+    const input = before();
+    expect({ ...upTo(input, "1.4.0"), schemaVersion: "1.3.0" }).toEqual({
+      ...input,
+      pages: [
+        {
+          ...(input["pages"] as Record<string, unknown>[])[0],
+          sections: [
+            {
+              ...((input["pages"] as { sections: Record<string, unknown>[] }[])[0]
+                ?.sections[0] as Record<string, unknown>),
+              layout: {
+                grid: { columns: 12 },
+                placements: [
+                  { elementId: "el-headline", column: 1, columnSpan: 12, row: 1, rowSpan: 1 },
+                ],
+                breakpoints: { mobile: [{ elementId: "el-headline", hidden: true }] },
+              },
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("drops a real tablet patch, which is the case that makes this window close", () => {
+    // The set of documents this would cost anything is empty today, and that is the whole reason
+    // the change is a minor rather than a major. The day somebody writes one, dropping it silently
+    // stops being free -- so what `up` does to one is written down rather than left to be found.
+    const input = before([{ elementId: "el-headline", hidden: true }]);
+    expect(breakpoints(upTo(input, "1.4.0"))).toEqual({
+      mobile: [{ elementId: "el-headline", hidden: true }],
+    });
+  });
+
+  it("leaves a section with no layout alone", () => {
+    const input = before();
+    const section = (input["pages"] as { sections: Record<string, unknown>[] }[])[0]?.sections[0];
+    if (!section) throw new Error("no section");
+    section["layout"] = null;
+    expect(() => parseDocument(migrateToCurrent(input))).not.toThrow();
+  });
+
+  it("round-trips: down after up gives back the document without the key", () => {
+    // Not "exactly what went in", and the difference is honest: `down` is a version stamp because
+    // the bucket was optional, so a 1.4.0 document is already a valid 1.3.0 one. What it cannot do
+    // is invent back a key whose only ever value was an empty array.
+    const down = step("1.4.0").down;
+    if (!down) throw new Error("0005 has no down");
+    const back = down(upTo(before(), "1.4.0"));
+    expect(back["schemaVersion"]).toBe("1.3.0");
+    expect(breakpoints(back)).toEqual({ mobile: [{ elementId: "el-headline", hidden: true }] });
+  });
+
+  it("is the claim it rests on: no stored document carries a tablet patch", () => {
+    // The mirror of the 0003 and 0004 tests above, and the measurement the ADR cites: every
+    // `tablet` in the corpus was the empty array the catalog wrote, never a patch somebody made.
+    const corpus = readdirSync(DOCUMENTS_DIR).filter((file) => file.endsWith(".json"));
+    expect(corpus.length).toBeGreaterThan(0);
+    for (const file of corpus) {
+      const raw = readFileSync(join(DOCUMENTS_DIR, file), "utf8");
+      expect(raw, file).not.toContain('"tablet"');
+    }
   });
 });

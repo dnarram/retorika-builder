@@ -25,7 +25,7 @@ const listPreset: PresetShape = {
     { slot: "services", role: "list", min: 1, max: 1 },
   ],
   layoutFor() {
-    return { grid: { columns: 12 }, placements: [], breakpoints: { tablet: [], mobile: [] } };
+    return { grid: { columns: 12 }, placements: [], breakpoints: { mobile: [] } };
   },
 };
 

@@ -881,7 +881,7 @@ describe("setVariant", () => {
       layout: {
         grid: { columns: 12 },
         placements: [{ elementId: "el-headline", column: 1, columnSpan: 12, row: 1, rowSpan: 1 }],
-        breakpoints: { tablet: [], mobile: [] },
+        breakpoints: { mobile: [] },
       },
     };
     expect(() => setVariant(documentWith([escalated]), "sec-cover", "image-background")).toThrow(
