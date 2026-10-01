@@ -82,7 +82,7 @@ export type { RevertPlan, SurplusDecision } from "./revert.ts";
 export { applyRevert, escalate, planRevert, RevertDecisionRequiredError } from "./revert.ts";
 export type { Role } from "./roles.ts";
 export { CONTAINER_ROLE, isContainerRole, OPAQUE_ROLE, ROLES, roleSchema } from "./roles.ts";
-export type { ListItem, SlotAddress, SlotFill } from "./sections.ts";
+export type { ItemAddress, ListItem, SlotAddress, SlotFill } from "./sections.ts";
 export {
   addItem,
   clearSlot,

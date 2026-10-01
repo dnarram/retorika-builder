@@ -154,14 +154,41 @@ export function insertSection(
   });
 }
 
-/** Which occurrence of which slot, in which section. Occurrences are counted in `content` order,
- * the same way `resolvePlacements` counts them, so the two never disagree about which element a
- * preset's geometry belongs to. */
+/**
+ * Which line of which list, when the slot being addressed lives inside one.
+ *
+ * **The line is named by its id and never by its position.** A position would be read against a
+ * list the owner can reorder and delete from (`moveItem`, `removeItem`), so an address held across
+ * either of those would quietly come to mean a different line — and a silently wrong line is the
+ * failure this package exists to refuse. The id is also what the canvas already carries as
+ * `data-item`, so the editor has it in hand and never has to count.
+ */
+export interface ItemAddress {
+  /** The slot of the `list` element holding the line, named the way `addItem` names it. */
+  list: string;
+  /** The line's own id. */
+  id: string;
+}
+
+/** Which occurrence of which slot, in which section — or, with `item`, in which line of which
+ * list. Occurrences are counted in `content` order, the same way `resolvePlacements` counts them,
+ * so the two never disagree about which element a preset's geometry belongs to. */
 export interface SlotAddress {
   sectionId: string;
   slot: string;
   /** Default 0. Only a slot the preset lets hold more than one ever needs another. */
   occurrence?: number;
+  /**
+   * Present when `slot` names a slot **of a line** rather than of the section.
+   *
+   * Absent is the default and the common case — a section's own slots. What it buys is the two
+   * slots nothing in this product could reach: a card's `description` in «Qué hago» and a line's
+   * in a carta, both `0..1` and therefore absent from a line nobody filled. Absent means nothing
+   * renders, so there is no text on the page to click, and the fields panel offers section rows
+   * only («a list holds items rather than a value»). Those two have been unreachable since
+   * sprint 1 and `prices.ts` names the gap rather than widening it.
+   */
+  item?: ItemAddress;
 }
 
 export interface SlotFill extends SlotAddress {
@@ -189,14 +216,65 @@ export function mintElementId(section: Section, slot: string): string {
   return `${root}-${suffix}`;
 }
 
-function indexOfOccurrence(section: Section, slot: string, occurrence: number): number {
+function indexOfOccurrence(
+  elements: readonly ContentElement[],
+  slot: string,
+  occurrence: number,
+): number {
   let seen = 0;
-  for (const [index, element] of section.content.entries()) {
+  for (const [index, element] of elements.entries()) {
     if (element.slot !== slot) continue;
     if (seen === occurrence) return index;
     seen += 1;
   }
   return -1;
+}
+
+/**
+ * The `list` element in a slot, or a refusal naming the section.
+ *
+ * **Extracted rather than written a fourth time.** `addItem`, `removeItem` and `moveItem` each
+ * carried this lookup already, so there were three copies of "which element is the list" before
+ * this file needed a fourth — and three is where CLAUDE.md's rule says an abstraction has earned
+ * itself. The error text is the one those three already produced, word for word, because a
+ * refusal an owner's bug report quotes is not free to change.
+ */
+function findList(section: Section, slot: string, verb: string): ContentElement {
+  const list = section.content.find((element) => element.slot === slot && element.role === "list");
+  if (!list) throw new Error(`${verb}: section "${section.id}" has no list in slot "${slot}"`);
+  return list;
+}
+
+/** The line an `ItemAddress` names, and the list holding it. */
+function findItem(
+  section: Section,
+  address: ItemAddress,
+  verb: string,
+): { list: ContentElement; item: ListItem } {
+  const list = findList(section, address.list, verb);
+  const item = (list.items ?? []).find((candidate) => candidate.id === address.id);
+  if (!item) throw new Error(`${verb}: list "${address.list}" has no item "${address.id}"`);
+  return { list, item };
+}
+
+/**
+ * A section's content with one line's elements put through `change`.
+ *
+ * The shared tail of reaching inside a line, so the two verbs that do it cannot come to disagree
+ * about where the line goes back — which is the same reason `resolvePlacements` and
+ * `indexOfOccurrence` count occurrences in one place.
+ */
+function withItemElements(
+  section: Section,
+  address: ItemAddress,
+  verb: string,
+  change: (elements: readonly ContentElement[]) => ContentElement[],
+): ContentElement[] {
+  const { list, item } = findItem(section, address, verb);
+  const items = (list.items ?? []).map((candidate) =>
+    candidate.id === item.id ? { ...candidate, elements: change(candidate.elements) } : candidate,
+  );
+  return section.content.map((element) => (element === list ? { ...element, items } : element));
 }
 
 /**
@@ -214,27 +292,37 @@ function indexOfOccurrence(section: Section, slot: string, occurrence: number): 
 export function fillSlot(doc: RetorikaDocument, fill: SlotFill): RetorikaDocument {
   const found = findSection(doc, fill.sectionId);
   if (!found) throw new Error(`fillSlot: no section "${fill.sectionId}"`);
+  const section = found.section;
   const occurrence = fill.occurrence ?? 0;
-  const at = indexOfOccurrence(found.section, fill.slot, occurrence);
 
-  const content = [...found.section.content];
-  if (at >= 0) {
-    const element = content[at];
-    if (!element) throw new Error(`fillSlot: no element at ${at}`);
-    content[at] = { ...element, hidden: false, value: fill.value };
-  } else {
+  // One body for both depths. A line's slots are slots: the occurrence arithmetic, the unhiding
+  // and the placement by declared order all mean the same thing inside a line as outside one, and
+  // `fill.slotOrder` is the item's order when `fill.item` is set — which the caller already has to
+  // know, for the reason the field's own comment gives.
+  const filled = (elements: readonly ContentElement[]): ContentElement[] => {
+    const at = indexOfOccurrence(elements, fill.slot, occurrence);
+    const next = [...elements];
+    if (at >= 0) {
+      const element = next[at];
+      if (!element) throw new Error(`fillSlot: no element at ${at}`);
+      next[at] = { ...element, hidden: false, value: fill.value };
+      return next;
+    }
     // Occurrences are positions in a sequence, not names, so the only one that can be created is
     // the next one. Creating the third of something when there is no second would silently make
     // it the second — and the preset's geometry, which counts occurrences the same way, would
     // then place it where the second belongs.
-    const existing = found.section.content.filter((element) => element.slot === fill.slot).length;
+    const existing = elements.filter((element) => element.slot === fill.slot).length;
     if (occurrence !== existing) {
       throw new Error(
         `fillSlot: cannot create occurrence ${occurrence} of "${fill.slot}", which has ${existing}`,
       );
     }
-    const created: Section["content"][number] = {
-      id: mintElementId(found.section, fill.slot),
+    const created: ContentElement = {
+      // Free across the whole section even when the element is going inside a line: `checkSection`
+      // scopes element ids to the section, items included, and `mintElementId` already walks every
+      // level — so one line's new element cannot collide with another line's.
+      id: mintElementId(section, fill.slot),
       role: fill.role,
       hidden: false,
       slot: fill.slot,
@@ -247,9 +335,14 @@ export function fillSlot(doc: RetorikaDocument, fill: SlotFill): RetorikaDocumen
       return index === -1 ? fill.slotOrder.length : index;
     };
     const mine = rank(fill.slot);
-    const before = content.findIndex((element) => rank(element.slot) > mine);
-    content.splice(before === -1 ? content.length : before, 0, created);
-  }
+    const before = next.findIndex((element) => rank(element.slot) > mine);
+    next.splice(before === -1 ? next.length : before, 0, created);
+    return next;
+  };
+
+  const content = fill.item
+    ? withItemElements(section, fill.item, "fillSlot", filled)
+    : filled(section.content);
 
   return parseDocument({
     ...doc,
@@ -277,13 +370,32 @@ export function fillSlot(doc: RetorikaDocument, fill: SlotFill): RetorikaDocumen
 export function clearSlot(doc: RetorikaDocument, address: SlotAddress): RetorikaDocument {
   const found = findSection(doc, address.sectionId);
   if (!found) throw new Error(`clearSlot: no section "${address.sectionId}"`);
-  const at = indexOfOccurrence(found.section, address.slot, address.occurrence ?? 0);
-  if (at < 0) return doc;
 
-  const content = [...found.section.content];
-  const element = content[at];
-  if (!element) throw new Error(`clearSlot: no element at ${at}`);
-  content[at] = { ...element, hidden: true };
+  // Hiding, inside a line exactly as outside one. **A line's slot is a role, so rule 3 governs
+  // it** — which is not in tension with `removeItem` removing a whole line: that comment's own
+  // argument is that a line is a repetition rather than a role. The place to put a card's
+  // description back has to survive emptying it, or the owner who clears it by accident has
+  // nowhere to find it again.
+  let emptied = false;
+  const hidden = (elements: readonly ContentElement[]): ContentElement[] => {
+    const at = indexOfOccurrence(elements, address.slot, address.occurrence ?? 0);
+    if (at < 0) return [...elements];
+    const next = [...elements];
+    const element = next[at];
+    if (!element) throw new Error(`clearSlot: no element at ${at}`);
+    next[at] = { ...element, hidden: true };
+    emptied = true;
+    return next;
+  };
+
+  const content = address.item
+    ? withItemElements(found.section, address.item, "clearSlot", hidden)
+    : hidden(found.section.content);
+
+  // Nothing to hide: the document itself comes back, not an equal copy. Reference equality is what
+  // the editor's history checks to keep the undo arrow dark for a press that changed nothing —
+  // `setVariant`'s test says so in as many words — and a line address must not quietly lose it.
+  if (!emptied) return doc;
 
   return parseDocument({
     ...doc,
@@ -433,10 +545,7 @@ export function addItem(
 ): RetorikaDocument {
   const found = findSection(doc, sectionId);
   if (!found) throw new Error(`addItem: no section "${sectionId}"`);
-  const list = found.section.content.find(
-    (element) => element.slot === slot && element.role === "list",
-  );
-  if (!list) throw new Error(`addItem: section "${sectionId}" has no list in slot "${slot}"`);
+  const list = findList(found.section, slot, "addItem");
 
   const minted = mintItem(found.section, item);
   const content = found.section.content.map((element) =>
@@ -481,10 +590,7 @@ export function removeItem(
 ): RetorikaDocument {
   const found = findSection(doc, sectionId);
   if (!found) throw new Error(`removeItem: no section "${sectionId}"`);
-  const list = found.section.content.find(
-    (element) => element.slot === slot && element.role === "list",
-  );
-  if (!list) throw new Error(`removeItem: section "${sectionId}" has no list in slot "${slot}"`);
+  const list = findList(found.section, slot, "removeItem");
   if (!(list.items ?? []).some((item) => item.id === itemId)) {
     throw new Error(`removeItem: list "${slot}" has no item "${itemId}"`);
   }
@@ -538,10 +644,7 @@ export function moveItem(
 ): RetorikaDocument {
   const found = findSection(doc, sectionId);
   if (!found) throw new Error(`moveItem: no section "${sectionId}"`);
-  const list = found.section.content.find(
-    (element) => element.slot === slot && element.role === "list",
-  );
-  if (!list) throw new Error(`moveItem: section "${sectionId}" has no list in slot "${slot}"`);
+  const list = findList(found.section, slot, "moveItem");
 
   const items = [...(list.items ?? [])];
   const fromIndex = items.findIndex((item) => item.id === itemId);

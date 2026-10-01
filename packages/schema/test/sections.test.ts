@@ -571,6 +571,238 @@ describe("fillSlot and clearSlot", () => {
   });
 });
 
+describe("fillSlot and clearSlot inside a line", () => {
+  // The two slots this exists for are real and named in the catalog: `SERVICES_ITEM_SLOTS` and
+  // `PRICES_ITEM_SLOTS` each declare a `description` at 0..1, so a line nobody filled does not
+  // carry one, nothing renders, and there is no text on the page to click. `prices.ts` names the
+  // gap rather than widening it. This fixture is a carta with two lines and no description on
+  // either — the state the questionnaire actually produces.
+  const text = (value: string) => ({ kind: "text" as const, text: value });
+  /** The order `PRICES_ITEM_SLOTS` declares: a description belongs between the name and the price. */
+  const LINE_SLOTS = ["name", "description", "price"];
+
+  const line = (n: number, dish: string) => ({
+    id: `item-${n}`,
+    elements: [
+      {
+        id: `el-item-${n}-name`,
+        role: "heading" as const,
+        hidden: false,
+        slot: "name",
+        value: text(dish),
+      },
+      {
+        id: `el-item-${n}-price`,
+        role: "body" as const,
+        hidden: false,
+        slot: "price",
+        value: text("12 €"),
+      },
+    ],
+  });
+
+  const carta: Section = {
+    id: "sec-prices",
+    preset: { catalogId: "prices", variantId: "stacked" },
+    source: "catalog",
+    layout: null,
+    content: [
+      {
+        id: "el-headline",
+        role: "heading",
+        hidden: false,
+        slot: "headline",
+        value: text("Nuestra carta"),
+      },
+      {
+        id: "el-lines",
+        role: "list",
+        hidden: false,
+        slot: "lines",
+        items: [line(1, "Ensaladilla"), line(2, "Solomillo")],
+      },
+    ],
+  };
+
+  const withCarta = documentWith([carta]);
+  const at = { list: "lines", id: "item-1" };
+
+  const linesOf = (next: RetorikaDocument) =>
+    next.pages[0]?.sections[0]?.content.find((element) => element.role === "list")?.items ?? [];
+  const lineSlots = (next: RetorikaDocument, index: number) =>
+    linesOf(next)[index]?.elements.map((element) => element.slot) ?? [];
+  /** The section's own slots. Every test below checks this too, because the failure worth catching
+   * is not "nothing happened" — it is the slot landing on the **section** instead of in the line,
+   * which is exactly what an ignored item address does and what reads as success from inside the
+   * line. */
+  const sectionSlots = (next: RetorikaDocument) =>
+    (next.pages[0]?.sections[0]?.content ?? []).map((element) => element.slot);
+
+  it("creates the description of a line that did not have one", () => {
+    // Unreachable since sprint 1: this is the press that was missing, not a new capability.
+    const next = fillSlot(withCarta, {
+      sectionId: "sec-prices",
+      slot: "description",
+      item: at,
+      role: "body",
+      value: text("Con mayonesa de casa"),
+      slotOrder: LINE_SLOTS,
+    });
+    const created = linesOf(next)[0]?.elements.find((element) => element.slot === "description");
+    expect(created?.value).toEqual(text("Con mayonesa de casa"));
+    expect(created?.hidden).toBe(false);
+    expect(created?.role).toBe("body");
+  });
+
+  it("puts it between the name and the price, by the item's declared order", () => {
+    const next = fillSlot(withCarta, {
+      sectionId: "sec-prices",
+      slot: "description",
+      item: at,
+      role: "body",
+      value: text("Con mayonesa de casa"),
+      slotOrder: LINE_SLOTS,
+    });
+    expect(lineSlots(next, 0)).toEqual(["name", "description", "price"]);
+  });
+
+  it("touches only the line it was given", () => {
+    const next = fillSlot(withCarta, {
+      sectionId: "sec-prices",
+      slot: "description",
+      item: at,
+      role: "body",
+      value: text("Con mayonesa de casa"),
+      slotOrder: LINE_SLOTS,
+    });
+    expect(lineSlots(next, 1)).toEqual(["name", "price"]);
+    expect(linesOf(next)[1]).toEqual(linesOf(withCarta)[1]);
+    expect(sectionSlots(next)).toEqual(["headline", "lines"]);
+  });
+
+  it("mints an id free across the whole section, so two lines' descriptions cannot collide", () => {
+    // Element ids are unique per section, items included (`checkSection`), which is why
+    // `mintElementId` walks every level rather than one line.
+    const one = fillSlot(withCarta, {
+      sectionId: "sec-prices",
+      slot: "description",
+      item: at,
+      role: "body",
+      value: text("Con mayonesa de casa"),
+      slotOrder: LINE_SLOTS,
+    });
+    const two = fillSlot(one, {
+      sectionId: "sec-prices",
+      slot: "description",
+      item: { list: "lines", id: "item-2" },
+      role: "body",
+      value: text("Al punto"),
+      slotOrder: LINE_SLOTS,
+    });
+    const ids = (two.pages[0]?.sections[0]?.content ?? []).flatMap((element) => [
+      element.id,
+      ...(element.items ?? []).flatMap((item) => item.elements.map((child) => child.id)),
+    ]);
+    expect(new Set(ids).size).toBe(ids.length);
+    // Both descriptions are in their own line, and neither is on the section.
+    expect(lineSlots(two, 0)).toContain("description");
+    expect(lineSlots(two, 1)).toContain("description");
+    expect(sectionSlots(two)).toEqual(["headline", "lines"]);
+  });
+
+  it("replaces the value when the line's slot is already there, keeping the element's id", () => {
+    const next = fillSlot(withCarta, {
+      sectionId: "sec-prices",
+      slot: "name",
+      item: at,
+      role: "heading",
+      value: text("Ensaladilla de la casa"),
+      slotOrder: LINE_SLOTS,
+    });
+    const name = linesOf(next)[0]?.elements.find((element) => element.slot === "name");
+    expect(name?.id).toBe("el-item-1-name");
+    expect(name?.value).toEqual(text("Ensaladilla de la casa"));
+    expect(lineSlots(next, 0)).toEqual(["name", "price"]);
+  });
+
+  it("hides rather than removes when a line's slot is emptied (rule 3)", () => {
+    // A line's slot is a role, so rule 3 governs it. That is not in tension with `removeItem`
+    // removing a whole line: a line is a repetition, not a role.
+    const next = clearSlot(withCarta, { sectionId: "sec-prices", slot: "price", item: at });
+    const price = linesOf(next)[0]?.elements.find((element) => element.slot === "price");
+    expect(price).toBeDefined();
+    expect(price?.hidden).toBe(true);
+    expect(price?.value).toEqual(text("12 €"));
+  });
+
+  it("brings a hidden line slot back rather than creating a second one", () => {
+    const hidden = clearSlot(withCarta, { sectionId: "sec-prices", slot: "price", item: at });
+    const back = fillSlot(hidden, {
+      sectionId: "sec-prices",
+      slot: "price",
+      item: at,
+      role: "body",
+      value: text("14 €"),
+      slotOrder: LINE_SLOTS,
+    });
+    const matching = (linesOf(back)[0]?.elements ?? []).filter(
+      (element) => element.slot === "price",
+    );
+    expect(matching).toHaveLength(1);
+    expect(matching[0]?.hidden).toBe(false);
+    expect(matching[0]?.value).toEqual(text("14 €"));
+    expect(sectionSlots(back)).toEqual(["headline", "lines"]);
+  });
+
+  it("returns the document itself when clearing a line slot that was never filled", () => {
+    // Reference equality, for the reason `setVariant`'s own test gives: it is what keeps the undo
+    // arrow dark for a press that changed nothing.
+    expect(clearSlot(withCarta, { sectionId: "sec-prices", slot: "description", item: at })).toBe(
+      withCarta,
+    );
+  });
+
+  it("refuses a list the section does not have, and a line the list does not have", () => {
+    const fill = (item: { list: string; id: string }) => () =>
+      fillSlot(withCarta, {
+        sectionId: "sec-prices",
+        slot: "description",
+        item,
+        role: "body",
+        value: text("Texto"),
+        slotOrder: LINE_SLOTS,
+      });
+    expect(fill({ list: "nope", id: "item-1" })).toThrow(/has no list in slot "nope"/);
+    expect(fill({ list: "lines", id: "item-9" })).toThrow(/has no item "item-9"/);
+    expect(() =>
+      clearSlot(withCarta, {
+        sectionId: "sec-prices",
+        slot: "price",
+        item: { list: "lines", id: "item-9" },
+      }),
+    ).toThrow(/has no item "item-9"/);
+  });
+
+  it("leaves a filled line valid against the document schema", () => {
+    // Every verb in this file ends at `parseDocument`; reaching inside a line must not be the one
+    // that produces something the gate would have refused.
+    const next = fillSlot(withCarta, {
+      sectionId: "sec-prices",
+      slot: "description",
+      item: at,
+      role: "body",
+      value: text("Con mayonesa de casa"),
+      slotOrder: LINE_SLOTS,
+    });
+    const reparsed = parseDocument(next);
+    expect(
+      reparsed.pages[0]?.sections[0]?.content
+        .find((element) => element.role === "list")
+        ?.items?.[0]?.elements.map((element) => element.slot),
+    ).toEqual(["name", "description", "price"]);
+  });
+});
+
 describe("mintElementId", () => {
   it("uses the plain name when it is free", () => {
     expect(mintElementId(cover, "body")).toBe("el-body");
