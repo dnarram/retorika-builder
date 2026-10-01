@@ -189,7 +189,26 @@ merge touching or overlapping runs of the same mark, sort by `from` and then by 
 declaration order. Two documents that mean the same thing come out byte-identical, which is what
 the golden corpus needs.
 
-### 5. The renderer nests in a fixed order
+> **Corrected 1 October 2026, by sprint 10 day 7's own walk.** §4 says where an offset lands once
+> `s` is known; it does not say how `s` is found when the editor only has the text before and after
+> an edit, which is `textEditBetween`'s job and which this ADR did not spell out as its own rule.
+> The first version of that function scanned its common **prefix** before its common **suffix**,
+> and that order could misplace `s` by one character — found live, typing a word right after a bold
+> run that was itself followed by a space.
+>
+> A common prefix and a common suffix can **overlap**: the run of matching characters right before
+> an edit and the run right after it can share a character when what was typed repeats what is
+> already adjacent to it, which a space is extremely often. In `"beber y…" → "beber casero y…"`,
+> the typed text starts with a space and the next original character already was one, so a prefix
+> scanned from the start walks straight through it and reports the edit one position later than
+> where it happened — past the bold run's own `to`, which is exactly the boundary «al final
+> continúa» depends on. The run stopped extending, silently, on the one case the rule exists for.
+>
+> **The fix is to scan the suffix first** and let the prefix take only what is left over. For an
+> insertion this never lands `s` *later* than the true boundary — the direction that breaks the
+> rule — it can only land it earlier or exact, which keeps «at it or after moves» true. The function
+> itself carries the full reasoning; this note exists so the next reader of §4 does not assume the
+> offset `s` it describes was ever unambiguous to find.
 
 Where two different marks cover the same text, **`<strong>` is the outer element and `<em>` the
 inner**. The choice is arbitrary; having one is not. Without a fixed order, two documents with the

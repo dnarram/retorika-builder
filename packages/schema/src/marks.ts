@@ -270,19 +270,46 @@ export function shiftMarks(marks: readonly MarkRun[], edit: TextEdit): MarkRun[]
  * whole string replaced, because nothing in two strings says a letter moved. That is the honest
  * answer and it degrades the way the owner would expect — the marks on text that did not change
  * survive, and the marks on text that did are gone.
+ *
+ * **The suffix is scanned before the prefix, which is not the obvious order and is load-bearing.**
+ * See the comment inside the function for the case that found it: a common prefix and a common
+ * suffix can overlap when the typed text repeats a character already adjacent to it — a space is
+ * the frequent one — and which side gets credit for that shared character changes where `from`
+ * lands relative to a mark's own boundary.
  */
 export function textEditBetween(before: string, after: string): TextEdit {
-  let prefix = 0;
   const shortest = Math.min(before.length, after.length);
-  while (prefix < shortest && before[prefix] === after[prefix]) prefix += 1;
 
+  // The suffix is computed first, and that order is load-bearing — found by sprint 10 day 7's walk
+  // the hard way, typing a word right after a bold run that was itself followed by a space.
+  //
+  // A common prefix and a common suffix can **overlap**: the run of matching characters right
+  // before the edit and the run right after it can share a character when the typed text happens
+  // to repeat what is already adjacent to it, which a space is extremely often. In
+  // `"beber y..." -> "beber XTEST y..."`, the typed text starts with a space and the very next
+  // original character was already a space — so a prefix scanned greedily from the start walks
+  // straight through it, reporting the edit as starting one character later than where it actually
+  // did. That one character is exactly the boundary a mark ending at «beber»'s own end depends on:
+  // with the prefix swallowing it, `edit.from` lands past the run's `to`, and «al final continúa»
+  // silently stops applying to the one case it exists for.
+  //
+  // Scanning the **suffix** first resolves it the other way: the unchanged tail is credited in
+  // full, and the prefix is capped to whatever is left. For an insertion, that is **always** at
+  // least as early as the true edit start, never later — the opposite of the prefix-first bug,
+  // and the correct side to be wrong on: a prefix that stops one character short of the true
+  // boundary still has `edit.from` sitting at or before where typing happened, which keeps `at it
+  // or after moves` true for marks ending there. The prefix-first version could land `edit.from`
+  // **past** the true boundary, which is the direction that breaks the rule.
   let suffix = 0;
   while (
-    suffix < shortest - prefix &&
+    suffix < shortest &&
     before[before.length - 1 - suffix] === after[after.length - 1 - suffix]
   ) {
     suffix += 1;
   }
+
+  let prefix = 0;
+  while (prefix < shortest - suffix && before[prefix] === after[prefix]) prefix += 1;
 
   return {
     from: prefix,
