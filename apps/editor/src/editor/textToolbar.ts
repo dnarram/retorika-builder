@@ -85,6 +85,20 @@ export interface ToolbarControls {
   size: readonly SizeRef[];
   link: boolean;
   /**
+   * Whether `B` and `I` are drawn — ADR 0024's bold and italic, over a run of characters.
+   *
+   * **For everybody, switch or no switch.** Rule 6 divides references from exact values and the
+   * design-tools switch is that line (ADR 0026); a mark is neither. It is not a colour and not a
+   * measure — it is what a word means inside a sentence — so there is nothing for the switch to
+   * gate. Two owners out of three asked for it and neither was a professional.
+   *
+   * **`false` for a button and a link**, which is an interface choice and not a rule: the schema
+   * accepts marks on any text value on purpose (ADR 0027 §6), so that the renderer splits every
+   * text by one code path. A two-word label has nothing to emphasise *inside* it, and a control
+   * that does not apply is not drawn.
+   */
+  marks: boolean;
+  /**
    * The "Encendido" half of the §4 row: «Añade **posición, medidas y espaciado**». Position is the
    * `Diseño` panel's grid, from sprint 8; these are the other two, and they appear only with the
    * design tools on.
@@ -134,6 +148,7 @@ export function toolbarFor(
     color: colorRolesFor(element.role),
     size: sizeRefsFor(),
     link: element.role === "button" || element.role === "link",
+    marks: element.role !== "button" && element.role !== "link",
     ...(designTools
       ? {
           measures: {
@@ -153,6 +168,7 @@ export function hasAnyControl(controls: ToolbarControls): boolean {
     controls.color.length > 0 ||
     controls.size.length > 0 ||
     controls.link ||
+    controls.marks ||
     controls.measures !== undefined
   );
 }

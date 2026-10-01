@@ -1,5 +1,6 @@
 import type { ContentElement, RetorikaDocument } from "./document.ts";
 import { flattenElements } from "./invariants.ts";
+import { shiftMarks, textEditBetween } from "./marks.ts";
 import type { Role } from "./roles.ts";
 
 /**
@@ -66,14 +67,35 @@ export function listEditableFields(doc: RetorikaDocument): EditableField[] {
   return fields;
 }
 
-/** The write side of textOf: the same field each value kind carries, replaced. */
+/**
+ * The write side of textOf: the same field each value kind carries, replaced.
+ *
+ * **This is also where marks move with the text under them**, and it is the right place rather
+ * than a convenient one: every text write in the product funnels through here — `setElementText`,
+ * which the canvas commits a click-to-edit through, and `applyTextEdits`, which the fields panel
+ * uses. Putting the shift in the editor would have covered the first and quietly not the second,
+ * and a mark that survives the canvas but not the fields panel is worse than one that never
+ * survived at all.
+ *
+ * `textEditBetween` turns the two strings into the edit ADR 0027 §4 defines, and `shiftMarks`
+ * applies it. A text that did not change produces an empty edit and the marks do not move.
+ */
 function withText(element: ContentElement, text: string): ContentElement {
   const value = element.value;
   if (!value) return element;
   switch (value.kind) {
     case "text":
-    case "link":
-      return { ...element, value: { ...value, text } };
+    case "link": {
+      const marks = shiftMarks(value.marks ?? [], textEditBetween(value.text, text));
+      if (marks.length === 0) {
+        // Rebuilt without the key rather than set to undefined: an absent `marks` and an empty one
+        // have to publish the same bytes, and only the absent one round-trips through the strict
+        // schema with `exactOptionalPropertyTypes` on.
+        const { marks: _gone, ...bare } = value;
+        return { ...element, value: { ...bare, text } };
+      }
+      return { ...element, value: { ...value, text, marks } };
+    }
     case "image":
       return { ...element, value: { ...value, alt: text } };
     case "map":

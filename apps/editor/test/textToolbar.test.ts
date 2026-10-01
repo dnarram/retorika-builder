@@ -146,7 +146,7 @@ describe("which elements get a bar at all", () => {
   });
 
   it("draws nothing when nothing applies", () => {
-    expect(hasAnyControl({ color: [], size: [], link: false })).toBe(false);
+    expect(hasAnyControl({ color: [], size: [], link: false, marks: false })).toBe(false);
     const heading = toolbarFor({ role: "heading" });
     expect(heading && hasAnyControl(heading)).toBe(true);
   });
@@ -215,14 +215,41 @@ describe("what the design tools add", () => {
   it("draws a bar with the tools on even where every other control is empty", () => {
     // A hypothetical element whose background has no proved pair: no colours, but measurements
     // still apply, so there is still a bar. `hasAnyControl` has to know that.
-    expect(hasAnyControl({ color: [], size: [], link: false })).toBe(false);
+    expect(hasAnyControl({ color: [], size: [], link: false, marks: false })).toBe(false);
     expect(
       hasAnyControl({
         color: [],
         size: [],
         link: false,
+        marks: false,
         measures: { padding: [], borderRadius: [], exact: [] },
       }),
     ).toBe(true);
+  });
+});
+
+describe("B and I", () => {
+  it("are offered to everybody, with the design tools off", () => {
+    // Rule 6 divides references from exact values and the switch is that line (ADR 0026). A mark
+    // is neither — it is what a word means inside a sentence — so there is nothing to gate.
+    expect(toolbarFor({ role: "heading" })?.marks).toBe(true);
+    expect(toolbarFor({ role: "subheading" })?.marks).toBe(true);
+    expect(toolbarFor({ role: "body" })?.marks).toBe(true);
+  });
+
+  it("are the same with the design tools on", () => {
+    expect(toolbarFor({ role: "body" }, true)?.marks).toBe(true);
+  });
+
+  it("are not drawn for a button or a link", () => {
+    // An interface choice, not a rule: the schema accepts marks on any text value on purpose
+    // (ADR 0027 §6), so the renderer splits every text by one code path. A two-word label has
+    // nothing to emphasise inside it, and a control that does not apply is not drawn.
+    expect(toolbarFor({ role: "button" })?.marks).toBe(false);
+    expect(toolbarFor({ role: "link" })?.marks).toBe(false);
+  });
+
+  it("are enough on their own to make a bar worth drawing", () => {
+    expect(hasAnyControl({ color: [], size: [], link: false, marks: true })).toBe(true);
   });
 });

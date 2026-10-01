@@ -660,6 +660,13 @@ export function Variants({
           dismissToast();
           dispatch({ type: "setElementStyle", variant: openIndex, address, property, value });
         }}
+        // ADR 0024's bold and italic, from the same bar. Unlike the style write above this **is**
+        // a content cause — `strong` and `em` were chosen because they mean emphasis and a screen
+        // reader conveys them, so a mark changes what the section says.
+        onSetMark={(address, range, mark, on) => {
+          dismissToast();
+          dispatch({ type: "setMark", variant: openIndex, address, range, mark, on });
+        }}
         pageId={currentPageId}
         onSelectPage={(next) => {
           dismissToast();

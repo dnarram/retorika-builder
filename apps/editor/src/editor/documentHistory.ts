@@ -3,6 +3,8 @@ import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
 import type {
   ElementAddress,
   ListItem,
+  Mark,
+  MarkRange,
   MobilePatchEdit,
   PlacementEdit,
   RetorikaDocument,
@@ -16,6 +18,7 @@ import type {
 } from "@retorika/schema";
 import {
   addItem as addItemToDoc,
+  applyMark as applyMarkInDoc,
   clearSlot as clearSlotInDoc,
   deletePage as deletePageFromDoc,
   deleteSection as deleteSectionFromDoc,
@@ -31,6 +34,7 @@ import {
   moveUpOnMobile as moveUpOnMobileInDoc,
   pageToSection as pageToSectionInDoc,
   removeItem as removeItemFromDoc,
+  removeMark as removeMarkInDoc,
   renamePage as renamePageInDoc,
   revertSection as revertSectionInDoc,
   sectionToPage as sectionToPageInDoc,
@@ -83,6 +87,17 @@ export type SnapshotCause =
    * reason `setPlacement` does — the toast and `wasSectionEverEdited` both ask about sections — and
    * it is **not** a content cause: a colour writes no word. */
   | { type: "setElementStyle"; sectionId: string }
+  /**
+   * Bold or italic over a run of characters, from the floating toolbar (ADR 0024, ADR 0027).
+   *
+   * **A content cause, and it lands on the opposite side of that line from `setElementStyle`** —
+   * which is a judgement, so here is the reasoning rather than the verdict. A colour is excluded
+   * above because «a colour writes no word», and a mark writes no word either. What separates them
+   * is why ADR 0024 chose these two marks in the first place: `strong` and `em` are «the two that
+   * mean **emphasis** rather than decoration, and that a screen reader can convey». So a mark
+   * changes what the section *says* to somebody listening to it, and a colour does not.
+   */
+  | { type: "setMark"; sectionId: string }
   /** Any of rule 7's three mobile adjustments. One cause for all three: it answers "which section
    * was adjusted", and hiding, reordering and narrowing are the same kind of act. */
   | { type: "mobilePatch"; sectionId: string }
@@ -168,6 +183,17 @@ export type HistoryAction =
       /** `undefined` takes the property away again, which is how the toolbar's «quitar» works and
        * how day 6's one-click fix will drop an exception. */
       value: StyleValue | undefined;
+    }
+  | {
+      type: "setMark";
+      variant: number;
+      address: ElementAddress;
+      range: MarkRange;
+      mark: Mark;
+      /** `true` marks the range, `false` unmarks it. One action rather than two, because `B` is one
+       * button whose meaning is "this selection is bold, or it is not" — and the editor already
+       * knows which, from `rangeHasMark`. */
+      on: boolean;
     }
   | {
       type: "revertSection";
@@ -543,6 +569,30 @@ function setElementStyle(
 }
 
 /**
+ * Bold or italic over a selection, and its undo (ADR 0024, ADR 0027).
+ *
+ * **No inverse is recorded and none is needed**, which is the whole reason ADR 0024 insisted the
+ * field stays a plain string: this is a document in, a document out, and the history is a stack of
+ * documents. «Deshacer» costs nothing extra here, exactly as it costs nothing for a text edit.
+ *
+ * `applyMark` and `removeMark` return the identical document when nothing changes — marking the
+ * same words twice, or unmarking what was never marked — so a press that means nothing opens no
+ * step. The same contract the swatch above keeps.
+ */
+function setMark(
+  history: History,
+  address: ElementAddress,
+  range: MarkRange,
+  mark: Mark,
+  on: boolean,
+): History {
+  const verb = on ? applyMarkInDoc : removeMarkInDoc;
+  const document = verb(history.present.document, address, range, mark);
+  if (document === history.present.document) return history;
+  return step(history, document, { type: "setMark", sectionId: address.sectionId });
+}
+
+/**
  * Rule 7's three mobile adjustments, as two verbs and one cause.
  *
  * **One cause for both**, unlike every other pair in this file, because the question the cause
@@ -773,6 +823,8 @@ function apply(history: History, action: HistoryAction): History {
       return setMobilePatch(history, action.sectionId, action.elementId, action.edit);
     case "setElementStyle":
       return setElementStyle(history, action.address, action.property, action.value);
+    case "setMark":
+      return setMark(history, action.address, action.range, action.mark, action.on);
     case "moveUpOnMobile":
       return moveUpOnMobile(history, action.sectionId, action.elementId);
     case "revertSection":
@@ -847,7 +899,7 @@ export function historiesReducer(state: Histories, action: HistoryAction): Histo
 /** The causes that mean the owner worked on a section's content, as opposed to moving, copying
  * or removing the section itself. Kept as a list rather than a growing chain of `||`, so adding
  * a verb is a decision about which side of that line it falls on. */
-const CONTENT_CAUSES = ["editText", "setImage", "fillSlot", "clearSlot"] as const;
+const CONTENT_CAUSES = ["editText", "setImage", "fillSlot", "clearSlot", "setMark"] as const;
 
 /**
  * Which section a cause is about, or `undefined` when it is about none.

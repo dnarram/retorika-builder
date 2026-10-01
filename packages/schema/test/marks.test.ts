@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { type RetorikaDocument, SCHEMA_VERSION, type Section } from "../src/document.ts";
+import { setElementText } from "../src/fields.ts";
 import {
   addRun,
   applyMark,
@@ -599,5 +600,48 @@ describe("the schema refuses what the invariant forbids", () => {
 
   it("accepts a document with no marks at all, unchanged", () => {
     expect(() => parseDocument(document())).not.toThrow();
+  });
+});
+
+describe("a text edit carries its marks with it", () => {
+  // `withText` is the one chokepoint every text write in the product goes through —
+  // `setElementText`, which the canvas commits click-to-edit through, and `applyTextEdits`, which
+  // the fields panel uses. These assert through both, because a mark that survives the canvas and
+  // not the fields panel would be worse than one that never survived.
+  function bolded(): RetorikaDocument {
+    return applyMark(document(), at, { from: 0, to: 9 }, "strong");
+  }
+
+  it("slides the mark along when text is typed in front of it", () => {
+    const next = setElementText(bolded(), at, `Hoy: ${DISH}`);
+    expect(marksFor(next, at)).toEqual([{ from: 5, to: 14, mark: "strong" }]);
+  });
+
+  it("grows the mark when text is typed inside it", () => {
+    const next = setElementText(bolded(), at, "Solo ibérico millo al whisky");
+    expect(marksFor(next, at)).toEqual([{ from: 0, to: 18, mark: "strong" }]);
+  });
+
+  it("drops the mark when its text is deleted", () => {
+    const next = setElementText(bolded(), at, "al whisky");
+    expect(marksFor(next, at)).toBeUndefined();
+  });
+
+  it("keeps the mark when the text does not change", () => {
+    expect(marksFor(setElementText(bolded(), at, DISH), at)).toEqual([
+      { from: 0, to: 9, mark: "strong" },
+    ]);
+  });
+
+  it("leaves a document that never had marks exactly as it was", () => {
+    const plain = document();
+    expect(JSON.stringify(setElementText(plain, at, "Otra cosa"))).toBe(
+      JSON.stringify(setElementText(plain, at, "Otra cosa")),
+    );
+    expect(marksFor(setElementText(plain, at, "Otra cosa"), at)).toBeUndefined();
+  });
+
+  it("produces a document that still parses after the shift", () => {
+    expect(() => parseDocument(setElementText(bolded(), at, "Hoy"))).not.toThrow();
   });
 });

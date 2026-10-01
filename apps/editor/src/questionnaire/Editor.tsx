@@ -13,7 +13,6 @@ import {
 import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
 import { render } from "@retorika/renderer";
 import {
-  type ContentElement,
   canFoldPage,
   type ElementAddress,
   findSection,
@@ -22,13 +21,18 @@ import {
   type ListItem,
   listEditableFields,
   listLinksTo,
+  MARKS,
   MAX_PAGES,
+  type Mark,
+  type MarkRange,
   type MobilePatchEdit,
+  marksFor,
   type PlacementEdit,
   type PresetShape,
   type RetorikaDocument,
   type RevertImpact,
   type Role,
+  rangeHasMark,
   revertImpact,
   type SlotAddress,
   type SlotFill,
@@ -334,6 +338,7 @@ export function Editor({
   onPickTypePair,
   onPickScale,
   onSetElementStyle,
+  onSetMark,
   photoUrls,
   photoError,
   offers,
@@ -432,6 +437,14 @@ export function Editor({
     property: StyleProperty,
     value: StyleValue | undefined,
   ) => void;
+  /**
+   * Bold or italic over the characters currently selected (ADR 0024, ADR 0027).
+   *
+   * The offsets are the ones the document uses, read off the selection inside the frame. `on`
+   * says which way the press goes, because `B` is one button and the editor already knows whether
+   * what is selected is bold.
+   */
+  onSetMark: (address: ElementAddress, range: MarkRange, mark: Mark, on: boolean) => void;
   /** Object URLs for photos already uploaded, keyed by the `src` the document carries. The
    * preview needs them because a bundle-relative path resolves against the parent page inside a
    * `srcDoc` iframe and 404s — the same trap `placeholder-image.ts` documents. */
@@ -1482,7 +1495,21 @@ export function Editor({
    * action cluster already documents and solved by sitting inside.
    */
   function wireToolbar(iframeDoc: Document) {
+    /**
+     * The one listener that outlives the bar's own element, so `close` has to take it off.
+     *
+     * `B` has to know whether what is selected *is* bold, and the selection changes after the bar
+     * is drawn — `wireEditing` selects the whole element on focus, and then the person drags to
+     * pick two words. Reading it once at open time would draw a pressed state about a selection
+     * that no longer exists.
+     */
+    let followSelection: (() => void) | undefined;
+
     const close = () => {
+      if (followSelection) {
+        iframeDoc.removeEventListener("selectionchange", followSelection);
+        followSelection = undefined;
+      }
       for (const bar of iframeDoc.querySelectorAll(".rb-toolbar")) bar.remove();
     };
 
@@ -1529,6 +1556,104 @@ export function Editor({
       const write = (property: StyleProperty, value: StyleValue | undefined) => {
         onSetElementStyle(address, property, value);
       };
+
+      /**
+       * `B` and `I`, first in the bar because they act on the **selection** and everything after
+       * them acts on the whole element. The divider says so.
+       *
+       * **The field stays a plain string**, which ADR 0024 calls the thing that would be easiest
+       * to get wrong: no `execCommand`, no editable HTML, no second serialisation format. A press
+       * reads the character offsets of what is selected, dispatches an action, and the canvas
+       * redraws from the document — the identical path every other edit in this editor takes,
+       * with the identical undo.
+       */
+      if (controls.marks) {
+        const marksGroup = group(es["editor.toolbar.marks"]);
+
+        /**
+         * What is selected, as offsets into the **document's** text.
+         *
+         * Two corrections, and the second was found by walking it.
+         *
+         * **Measured with a range from the start of the element**, never off `anchorOffset`: a
+         * marked text is several nodes, so the selection may begin inside a `<strong>`, and that
+         * node's own offsets say nothing about where the word sits in the sentence the document
+         * stores. The span from the element's start counts in the same UTF-16 code units the
+         * document uses (ADR 0027 §2).
+         *
+         * **And the frame's text is not the document's text.** The html target pretty-prints, so an
+         * unmarked heading arrives as `"\n      Taberna del Puerto\n    "` — the words with the
+         * file's own indentation wrapped around them. `wireEditing` has committed
+         * `textContent.trim()` since sprint 2 for exactly that reason, and this has to agree with
+         * it: measured against the raw node, every mark landed as many characters to the right as
+         * the element happened to be indented. The walk caught it on the first press.
+         *
+         * The clamp is the other half: a drag that runs past the last word selects into the
+         * indentation, and an offset the document has no character for would be refused by
+         * `applyMark` — correctly, and far too late to be useful.
+         */
+        const selectionRange = (): MarkRange | undefined => {
+          const selection = iframeDoc.getSelection();
+          if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return undefined;
+          const range = selection.getRangeAt(0);
+          if (!el.contains(range.commonAncestorContainer)) return undefined;
+
+          const raw = el.textContent ?? "";
+          const indent = raw.length - raw.trimStart().length;
+          const text = raw.trim();
+
+          const upTo = iframeDoc.createRange();
+          upTo.selectNodeContents(el);
+          upTo.setEnd(range.startContainer, range.startOffset);
+
+          const from = Math.max(0, Math.min(upTo.toString().length - indent, text.length));
+          const to = Math.max(from, Math.min(from + range.toString().length, text.length));
+          return to > from ? { from, to } : undefined;
+        };
+
+        const buttons: { mark: Mark; node: HTMLButtonElement }[] = [];
+
+        const refresh = () => {
+          const range = selectionRange();
+          const marks = marksFor(doc, address);
+          for (const { mark, node } of buttons) {
+            const pressed = range !== undefined && rangeHasMark(marks, range, mark);
+            node.setAttribute("aria-pressed", String(pressed));
+            node.classList.toggle("rb-toolbar-on", pressed);
+            // Disabled rather than hidden, and this is the one place in the bar that does that on
+            // purpose: the control applies to this element, there is simply nothing selected yet.
+            // "No door" and "the door is here, pick some words first" are different things, and
+            // removing the buttons as the selection collapses would make them flicker.
+            node.disabled = range === undefined;
+          }
+        };
+
+        for (const mark of MARKS) {
+          const button = iframeDoc.createElement("button");
+          button.type = "button";
+          button.className = `rb-toolbar-mark rb-toolbar-mark-${mark}`;
+          button.dataset["mark"] = mark;
+          button.textContent = es[`editor.toolbar.markOf.${mark}` as keyof typeof es];
+          button.title = es[`editor.toolbar.markTitleOf.${mark}` as keyof typeof es];
+          button.setAttribute(
+            "aria-label",
+            es[`editor.toolbar.markTitleOf.${mark}` as keyof typeof es],
+          );
+          button.addEventListener("click", () => {
+            const range = selectionRange();
+            if (!range) return;
+            // Read at press time, never at draw time: between the two the person chose the words.
+            onSetMark(address, range, mark, !rangeHasMark(marksFor(doc, address), range, mark));
+          });
+          buttons.push({ mark, node: button });
+          marksGroup.appendChild(button);
+        }
+
+        refresh();
+        followSelection = refresh;
+        iframeDoc.addEventListener("selectionchange", refresh);
+        bar.appendChild(marksGroup);
+      }
 
       if (controls.size.length > 0) {
         const sizes = group(es["editor.toolbar.size"]);
@@ -2183,6 +2308,17 @@ export function Editor({
       // from a working one until someone tries to press it.
       `.rb-toolbar button, .rb-toolbar select, .rb-toolbar input { pointer-events: auto; }`,
       `.rb-toolbar button, .rb-toolbar select { font-family: ${UI_FONT}; cursor: pointer; }`,
+      // `B` and `I`: square, because they are one glyph each and a padded pill would read as a
+      // word. Drawn in the weight and slant they apply, which is what makes them legible without a
+      // caption — the group still has one, for a screen reader.
+      ".rb-toolbar-mark { width: 26px; height: 26px; padding: 0; font-size: 13px;",
+      "  color: #334155; background: #FFFFFF; border: 1px solid #E3E8F0; border-radius: 7px; }",
+      ".rb-toolbar-mark-strong { font-weight: 800; }",
+      ".rb-toolbar-mark-em { font-style: italic; font-family: Georgia, serif; }",
+      ".rb-toolbar-mark:hover:not(:disabled) { background: #F2F7FE; border-color: #156FE7; }",
+      ".rb-toolbar-mark.rb-toolbar-on { color: #156FE7; background: #E8F1FE; border-color: #156FE7; }",
+      // Faded rather than gone: the control applies here, there is just nothing selected yet.
+      ".rb-toolbar-mark:disabled { opacity: 0.42; cursor: default; }",
       ".rb-toolbar-step { height: 26px; padding: 0 9px; font-size: 12px; font-weight: 500;",
       "  color: #334155; background: #FFFFFF; border: 1px solid #E3E8F0; border-radius: 7px; }",
       ".rb-toolbar-step:hover { background: #F2F7FE; border-color: #156FE7; }",
