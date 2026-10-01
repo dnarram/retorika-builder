@@ -1410,3 +1410,69 @@ describe("designing a section by hand, and taking it back", () => {
     });
   });
 });
+
+describe("setMark — bold and italic from the floating toolbar", () => {
+  function marksOf(state: Histories, variant = 0) {
+    const document = state[variant]?.present.document;
+    const section = document?.pages[0]?.sections.find((s) => s.id === "sec-cover");
+    const element = section?.content.find((el) => el.id === "el-headline");
+    const value = element?.value;
+    return value?.kind === "text" ? value.marks : undefined;
+  }
+
+  const press = (
+    state: Histories,
+    range: { from: number; to: number },
+    mark: "strong" | "em",
+    on: boolean,
+  ): Histories =>
+    historiesReducer(state, {
+      type: "setMark",
+      variant: 0,
+      address: HEADLINE,
+      range,
+      mark,
+      on,
+    } as HistoryAction);
+
+  it("marks a run, and undo takes it back", () => {
+    const marked = press(start(), { from: 0, to: 4 }, "strong", true);
+    expect(marksOf(marked)).toEqual([{ from: 0, to: 4, mark: "strong" }]);
+
+    const undone = historiesReducer(marked, { type: "undo", variant: 0 });
+    expect(marksOf(undone)).toBeUndefined();
+  });
+
+  it("opens no step when the press changes nothing", () => {
+    // `applyMark` returns the identical document when the words are already marked, so pressing a
+    // pressed button must not grow the history — the contract the swatch already keeps.
+    const once = press(start(), { from: 0, to: 4 }, "strong", true);
+    const twice = press(once, { from: 0, to: 4 }, "strong", true);
+    expect(twice).toBe(once);
+  });
+
+  it("lets both marks cover the same words, which is what the third owner asked for", () => {
+    let state = press(start(), { from: 0, to: 4 }, "strong", true);
+    state = press(state, { from: 0, to: 4 }, "em", true);
+    expect(marksOf(state)).toEqual([
+      { from: 0, to: 4, mark: "strong" },
+      { from: 0, to: 4, mark: "em" },
+    ]);
+  });
+
+  it("takes one mark off and leaves the other", () => {
+    let state = press(start(), { from: 0, to: 4 }, "strong", true);
+    state = press(state, { from: 0, to: 4 }, "em", true);
+    state = press(state, { from: 0, to: 4 }, "strong", false);
+    expect(marksOf(state)).toEqual([{ from: 0, to: 4, mark: "em" }]);
+  });
+
+  it("counts as working on the section's content", () => {
+    // Unlike a colour. ADR 0024 chose `strong` and `em` *because* they mean emphasis and a screen
+    // reader conveys them, so a mark changes what the section says — which is what keeps a delete
+    // toast from fading out from under somebody who has been marking words.
+    const history = press(start(), { from: 0, to: 4 }, "strong", true)[0];
+    if (!history) throw new Error("no history for variant 0");
+    expect(wasSectionEverEdited(history, "sec-cover")).toBe(true);
+  });
+});
