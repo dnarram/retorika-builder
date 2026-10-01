@@ -239,6 +239,18 @@ does not apply is not drawn. That is an interface choice, reversible, and it is 
 - **The renderer splits at every boundary of every mark**, escapes each piece separately, and wraps.
   `fixtures/documents/xss-attempt` must stay green **without being touched**; if it has to be
   edited, the change is wrong.
+
+  > **Built 1 October 2026, and the delicate part was not where this ADR expected.** The split
+  > happens in the **node tree**, not in the HTML string — and `nodeToHtml` has escaped every string
+  > child separately since sprint 1, so «each piece escaped separately» needed no new escaping rule
+  > at all. A piece of a marked text takes the identical path a whole unmarked text already took.
+  >
+  > **What did need deciding was whitespace.** The html target pretty-prints: each child on its own
+  > line, indented. Harmless for one string child, and it **corrupts the words** with several —
+  > measured in Chromium, a `<p>` holding `"Solo"`, `<strong>millo</strong>` and `" al whisky"`
+  > renders as «**Solo millo** al whisky», from a newline the document does not contain. So a node
+  > holding marks is marked `inlineChildren` and its contents are laid end to end. A text with no
+  > marks has one string child, does not set it, and publishes the bytes it published before.
 - **A document with no marks publishes the same bytes it publishes today**, which keeps the golden
   corpus still and makes the whole change additive.
 - **`arbitraryDocument` generates marks**, so `INV_3A` and `INV_3B` cover them from the first day

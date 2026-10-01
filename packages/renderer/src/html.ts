@@ -12,6 +12,25 @@ function attributesToString(attributes: Record<string, string>): string {
     .join("");
 }
 
+/**
+ * Inline content, end to end: no newline and no indentation anywhere inside.
+ *
+ * **Every string still goes through `escapeHtml`, one piece at a time**, which is the whole of what
+ * ADR 0024 called «the delicate part» — «the string is split, each piece escaped separately, and
+ * only the marked pieces wrapped». Splitting a text into marked runs happens in the node tree, so
+ * the pieces arrive here as separate children and this function escapes each of them exactly as the
+ * block path already escaped the single child it used to get. There is no second escaping rule and
+ * no place where a piece travels unescaped.
+ */
+function inlineToHtml(child: RenderNode | string): string {
+  if (typeof child === "string") return escapeHtml(child);
+  if (isComment(child)) return `<!-- ${escapeHtml(child.comment ?? "")} -->`;
+
+  const open = `<${child.tag}${attributesToString(child.attributes)}>`;
+  if (VOID_TAGS.has(child.tag)) return open;
+  return `${open}${child.children.map(inlineToHtml).join("")}</${child.tag}>`;
+}
+
 export function nodeToHtml(node: RenderNode, indent = 0): string {
   const pad = "  ".repeat(indent);
 
@@ -19,6 +38,13 @@ export function nodeToHtml(node: RenderNode, indent = 0): string {
 
   const open = `${pad}<${node.tag}${attributesToString(node.attributes)}>`;
   if (VOID_TAGS.has(node.tag)) return open;
+
+  // The node keeps its own place in the indented layout; only what is *inside* it is laid end to
+  // end. Pretty-printing between inline children inserts whitespace the document does not contain,
+  // and HTML collapses it into a space in the middle of a word.
+  if (node.inlineChildren) {
+    return `${open}${node.children.map(inlineToHtml).join("")}</${node.tag}>`;
+  }
 
   const children = node.children.map((child) =>
     typeof child === "string" ? `${pad}  ${escapeHtml(child)}` : nodeToHtml(child, indent + 1),
