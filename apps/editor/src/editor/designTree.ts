@@ -2,6 +2,7 @@ import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
 import {
   findSection,
   GRID_COLUMNS,
+  isHandDesigned,
   mobilePatchFor,
   mobileSequence,
   type Placement,
@@ -214,4 +215,37 @@ export function mobileControlsFor(
       at === -1 ? MOBILE_SPANS.find((candidate) => candidate < span) : MOBILE_SPANS[at + 1],
     span,
   };
+}
+
+/**
+ * Which of four things the «Diseño» panel has to say, decided here rather than in a chain of
+ * ternaries inside the JSX.
+ *
+ * **`offerEscalate` is the state ADR 0025's amendment is about.** Until 1 October 2026 this case
+ * rendered a paragraph telling the owner to go and find «Diseñar a mano» *on the section's header* and
+ * offered nothing — a dead end naming its own exit. Session 3 found an owner who turned the tools on,
+ * was told by this panel that the grid existed, and still asked for «más libertad en la posición».
+ *
+ * **Decided on `source`, not on whether there are rows**, which is the distinction that made this
+ * worth extracting. The two nearly coincide: a catalog-placed section has no layout, so it has no
+ * rows. Nearly is the problem — a hand-designed section whose placements all point at **nested**
+ * elements also has no rows (`designRows` leaves those out, deliberately, so a Spanish screen never
+ * shows a raw id), and offering to hand-design that one would be offering what it already is.
+ * `noPlaceable` is that case, and it has its own sentence instead of borrowing a false one.
+ */
+export type DesignPanelState = "noSection" | "offerEscalate" | "noPlaceable" | "tree";
+
+export function designPanelState(
+  doc: RetorikaDocument,
+  sectionId: string | null,
+): DesignPanelState {
+  // **A section id the document no longer has counts as nothing selected**, and that is not
+  // defensiveness. `designSectionId` is set from a canvas click and never cleared, so deleting the
+  // section the panel is open on leaves it pointing at a ghost — and `isHandDesigned` answers `false`
+  // for a ghost, which would offer «Diseñar a mano» for something that is not there and throw inside
+  // `escalateSection` when pressed. A dead button that looks alive is what this editor refuses, and
+  // the floating toolbar already forgets a vanished element for the same reason.
+  if (sectionId === null || findSection(doc, sectionId) === undefined) return "noSection";
+  if (!isHandDesigned(doc, sectionId)) return "offerEscalate";
+  return designRows(doc, sectionId).length === 0 ? "noPlaceable" : "tree";
 }

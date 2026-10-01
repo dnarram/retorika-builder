@@ -207,11 +207,20 @@ function RailButton({
 /**
  * The design-tools switch, at the foot of the rail (ADR 0025 §4, mockup 16 band 1).
  *
- * **Turning them on asks the trade, not the level.** The dossier §4 is blunt about why: «ante
- * "básico o avanzado" mucha gente miente hacia arriba», so the question is «¿Montas webs para
- * otros?» and it is asked by the switch itself rather than sprung on anyone. An owner who never
- * presses it is never asked anything — ADR 0025 §1 promises they meet no control they did not ask
+ * **Turning them on asks what the tools do, not who the person is** — «¿Quieres colocar tú cada
+ * elemento?» — and it is asked by the switch itself rather than sprung on anyone. An owner who never
+ * presses it is never asked anything: ADR 0025 §1 promises they meet no control they did not ask
  * for, and a first-run dialog would break that promise on the way to keeping another one.
+ *
+ * > **This asked the trade until 1 October 2026, and that was wrong on its own terms.** The question
+ * > was «¿Montas webs para otros?», from the dossier §4's point that «ante "básico o avanzado" mucha
+ * > gente miente hacia arriba» — true about *levels*, and the fix it suggested does not follow.
+ * > Asking who somebody is and granting the capability for the answer means **anyone who wants the
+ * > capability says yes**, so the question filtered nobody while looking as though it did. Session 3
+ * > watched a car workshop's owner read it and answer «Sí, enciéndelas»; nothing about that was a
+ * > misunderstanding, and nothing was lost by it — §1 is kept by the press, not by the wording.
+ * > Describing the tools makes the answer accurate rather than aspirational, and gives the person
+ * > deciding the information instead of a label. ADR 0025's amendment, accepted by David.
  *
  * Turning them **off** asks nothing. Nobody needs talking out of a setting.
  *

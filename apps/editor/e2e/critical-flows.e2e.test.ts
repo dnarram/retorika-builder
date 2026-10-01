@@ -1258,7 +1258,10 @@ describe("sprint 8 — el modo estudio: encender, diseñar a mano, colocar, y vo
 
       // The switch asks the trade, never the level (dossier §4).
       await studio.getByRole("switch", { name: "Herramientas de diseño" }).click();
-      await expect(studio.getByText("¿Montas webs para otros?")).toBeVisible();
+      // The question describes the tools rather than asking who the person is — ADR 0025's
+      // amendment, accepted 1 October 2026. «¿Montas webs para otros?» granted the capability for
+      // an answer about identity, so anyone who wanted it said yes and it filtered nobody.
+      await expect(studio.getByText("¿Quieres colocar tú cada elemento?")).toBeVisible();
       await studio.getByRole("button", { name: "Sí, enciéndelas" }).click();
       await expect(studio.getByRole("button", { name: "Diseño" })).toHaveCount(1);
 
