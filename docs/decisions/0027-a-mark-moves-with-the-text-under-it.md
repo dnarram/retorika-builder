@@ -1,6 +1,7 @@
 # 0027 — A mark moves with the text under it, and two of the same kind become one
 
 **Status:** accepted · **Date:** 2026-10-01 · **Accepted by:** David, **not direction** ·
+**Amendment §4b proposed:** 2026-10-01, by development, **unsigned** ·
 **Touches:** [ADR 0024](0024-formatting-inside-a-text-is-designed-and-waiting.md) (which it
 **amends**), [#52](https://github.com/dnarram/retorika-builder/issues/52), document rule 6
 
@@ -12,6 +13,12 @@
 > **Accepted with one correction, which he found and which was a real error rather than a wording
 > one**: §1's merging example did not merge. See the note in that section — the rule is unchanged,
 > the example was wrong, and the case it got wrong is now a required test.
+>
+> **And one amendment is proposed and not yet signed — §4b, 1 October 2026.** It replaces a
+> *premise*: §4 said the editor knows only the text before and after an edit, which was a choice and
+> not a constraint. Two strings do not determine an edit, so the rules of §4 were being fed a guess
+> that is wrong in both directions — measured. The browser's `beforeinput` supplies the real range,
+> and the guess becomes the fallback. **No rule in §1–§6 changes.**
 
 > **This answers the one question ADR 0024 left open on purpose, and fixes one thing that ADR said
 > which cannot be built as written.** It decides nothing about whether formatting happens — that was
@@ -210,6 +217,91 @@ the golden corpus needs.
 > itself carries the full reasoning; this note exists so the next reader of §4 does not assume the
 > offset `s` it describes was ever unambiguous to find.
 
+### 4b. **Proposed amendment, 1 October 2026 — the editor is told where the edit is, and only guesses when the browser will not say**
+
+> **Status of this section: proposed by development, not yet signed.** The sprint it belongs to was
+> approved by David on 1 October 2026 with this amendment named in it, which is approval of the
+> plan, not of this text. It becomes part of the decision when he says so and not before; until
+> then §4 above is what the code answers to, and the code built on 1 October 2026 implements both —
+> this section's mechanism where the browser supplies it, §4's where it does not.
+
+**What this amends is a premise, not a rule.** §4's own correction note says the editor "only has
+the text before and after an edit". That sentence was written as a statement of fact and it was a
+**choice of mine** — the browser knows exactly which range it is about to replace, and nothing was
+asking the editor to throw that away and reconstruct it. Every rule §4 states about where an offset
+lands is correct and is unchanged. What was wrong is that finding `s` was left to a guess.
+
+**The guess has no correct version.** The day-7 note treats suffix-first scanning as the fix, and it
+fixed the case that was found, not the class. Two strings do not determine an edit: for any text
+where what was typed or deleted also appears beside where it happened, more than one edit produces
+the same pair of strings, and the diff must pick one. Both directions were measured on 1 October
+2026, with the shipped `textEditBetween` and the shipped `shiftMarks`:
+
+| | the text | what the person did | the diff reads | bold `[0,3)`/`[0,1)` ends |
+|---|---|---|---|---|
+| **A** | `aXY` | types `XY` at the end (offset 3) | inserted 2 at **1** | `[0,3)` — **grows over `XY`, which nobody marked** |
+| **B** | `pan y pan y aceite` | deletes the **second** `pan y ` (offsets 6–12) | removed **[0,6)** | **gone** — destroyed, though its own word was never touched |
+
+B is the one that settles it. The bold is on the first `pan`; the person edits six characters that
+begin three characters after it ends; and the mark disappears. There is no prefix/suffix order that
+saves it, because the diff is not mistaken — `pan y pan y aceite` → `pan y aceite` genuinely has two
+readings, and the one it picks is as defensible as the other. **A silent, irreversible corruption of
+the owner's own document, with no error and nothing on screen.** Undo recovers it only if the owner
+notices in time to press it, and there is no keyboard undo yet (backlog).
+
+**So: `beforeinput` is the source of truth, and the diff becomes the fallback.** Before the browser
+mutates the element, `event.getTargetRanges()[0]` is exactly the range being replaced, and
+`event.inputType` says what is going in. Converted to document offsets, that is `s` and `e`
+measured rather than inferred, and §4's rule then applies to an input it can trust.
+
+**The input types are enumerated here rather than discovered, because an unlisted one that falls
+through the wrong branch is a silent shift of the same kind this amendment exists to stop:**
+
+| `inputType` | inserted length | why it is listed |
+|---|---|---|
+| `insertText` | `event.data` | the ordinary keystroke |
+| `insertReplacementText` | `event.data` | **the dangerous one.** Desktop spellcheck and mobile autocorrect **replace a word already written**, so the range is not the cursor and is often several characters wide, in a part of the text nobody is looking at |
+| `insertFromPaste` | `getData("text/plain")` | **and forced in as plain text**: `contentEditable` pastes HTML, which would put markup into a field ADR 0024 requires to stay a flat string |
+| `insertLineBreak`, `insertParagraph` | **not mapped** | `keydown` already cancels Enter and blurs, so neither is expected — and "not expected" is a reason to let it fall to the fallback, not a reason to assume it away |
+| `delete*` (all nine) | zero | the range is the whole answer |
+| `insertCompositionText` | **not mapped** | IME: the browser reports a sequence of provisional edits while a character is being composed, and the composed result is not a function of any one of them |
+| `historyUndo`, `historyRedo` | **not mapped** | the browser's own undo stack is not the document's, and reconciling the two is a separate decision |
+
+**The two unmapped rows are the decision, not a gap in it.** An edit whose length this table cannot
+state, or one the browser gives no target range for, sets a flag and is committed on blur by §4's
+path exactly as it is today. **Degrading to the mechanism that shipped is the floor**, so a
+regression in `beforeinput` — or a browser that reports something unforeseen — costs the accuracy
+this amendment buys and never the ability to edit text.
+
+That is also why `textEditBetween` is **demoted and not deleted**. It stays tested, stays the answer
+for IME and for the browser's own undo, and keeps the editor working in any engine whose
+`getTargetRanges` returns nothing.
+
+**Measured in two real engines before this was written, because the mechanism rests on an API that
+could have turned out not to be there.** The sprint plan named exactly that as the day's risk.
+Chromium 153.0.8010.12 and Firefox 155.0, driving the live editor, typing into the cover's headline:
+
+| what the person did | `inputType` | target ranges | captured | the diff's guess |
+|---|---|---|---|---|
+| typed `!` at the end of `Reformas Vega` | `insertText` | 1 | `{13,13,+1}` ✓ | — |
+| deleted the **second** `pan y ` of `pan y pan y aceite` | `deleteContentBackward` | 1 | `{6,12,0}` ✓ | **`{0,6,0}` ✗** |
+| pasted `<b>TINTO</b><i>!</i>` over `de` | `insertFromPaste` | 1 | `{5,7,+6}` ✓ | — |
+| Alt+Backspace over `aceite` | `deleteWordBackward` | 1 | `{6,12,0}` ✓ | — |
+
+Identical in both engines, exactly one target range every time, and the paste arrived as
+`vino TINTO! la casa` with **no `<b>` and no `<i>` in the element's HTML** — the plain-text forcing
+holds. Row 2 is the measured failing case of this amendment, reproduced live: the mechanism is right
+where the guess is wrong, in the browser rather than in a unit test.
+
+**What is *not* measured, and is said rather than implied:** `insertReplacementText` — the row this
+amendment calls the most dangerous — could not be provoked from automation, because it comes from the
+platform's own spellcheck or a phone's autocorrect and neither can be driven by a script. It is
+covered by the table and by unit tests over that table, and it stays on the list for a walk by hand.
+Nothing about it is special in the code: it reads `event.data` and takes the same target range as
+every other row.
+
+### 5. Where two marks meet, the nesting order is fixed
+
 Where two different marks cover the same text, **`<strong>` is the outer element and `<em>` the
 inner**. The choice is arbitrary; having one is not. Without a fixed order, two documents with the
 same marks in a different array order would publish different bytes, and `INV_5` and the golden
@@ -276,6 +368,12 @@ does not apply is not drawn. That is an interface choice, reversible, and it is 
   rather than from the sprint that remembers.
 - **ADR 0024 is amended in one clause and otherwise stands.** Its design, its refusal of underline,
   its granularity and its "not a rich-text editor" argument are all unchanged.
+- **If §4b is signed, the editor carries a `beforeinput` listener per editable element**, and the
+  one technique it needs — a range from the element's start, in UTF-16 code units, less the
+  indentation the html target pretty-prints — is **extracted from `selectionRange()` rather than
+  written a second time**. That correction was found by walking the toolbar in a browser and cost a
+  day; two copies of it would drift, and the drift would be invisible until a mark landed wrong.
+  The fallback keeps `textEditBetween` tested and reachable, so neither path can rot unnoticed.
 
 ## What would reopen this
 
