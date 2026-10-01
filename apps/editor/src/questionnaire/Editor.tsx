@@ -25,6 +25,7 @@ import {
   MAX_PAGES,
   type Mark,
   type MarkRange,
+  type MarkRun,
   type MobilePatchEdit,
   marksFor,
   type PlacementEdit,
@@ -41,7 +42,9 @@ import {
   type StyleValue,
   type SurplusDecision,
   setElementStyle,
+  shiftMarks,
   styleFor,
+  type TextEdit,
 } from "@retorika/schema";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { designRows, elementLabels, selectedRowId } from "../editor/designTree.ts";
@@ -57,6 +60,7 @@ import { countPhotos, listPhotos, type PhotoState } from "../editor/photoInvento
 import { withPhotoUrls } from "../editor/previewDocument.ts";
 import { sectionFields } from "../editor/sectionFields.ts";
 import { offersMatching } from "../editor/sectionSearch.ts";
+import { insertedLengthFor, offsetFor, textFrameOf } from "../editor/textEdits.ts";
 import { hasAnyControl, toolbarFor } from "../editor/textToolbar.ts";
 import es from "../locales/es.json" with { type: "json" };
 import { DesignPanel } from "./DesignPanel.tsx";
@@ -1593,6 +1597,12 @@ export function Editor({
          * The clamp is the other half: a drag that runs past the last word selects into the
          * indentation, and an offset the document has no character for would be refused by
          * `applyMark` — correctly, and far too late to be useful.
+         *
+         * **Both corrections now live in `textEdits.ts`**, because `wireEditing`'s `beforeinput`
+         * listener needs the identical arithmetic on a different kind of range (ADR 0027 §4b). They
+         * cost a day to find by walking the toolbar in a browser, and two copies would drift
+         * silently — the symptom being a mark landing in the wrong place, which is the whole thing
+         * this file is trying to stop.
          */
         const selectionRange = (): MarkRange | undefined => {
           const selection = iframeDoc.getSelection();
@@ -1600,16 +1610,13 @@ export function Editor({
           const range = selection.getRangeAt(0);
           if (!el.contains(range.commonAncestorContainer)) return undefined;
 
-          const raw = el.textContent ?? "";
-          const indent = raw.length - raw.trimStart().length;
-          const text = raw.trim();
-
+          const frame = textFrameOf(el.textContent ?? "");
           const upTo = iframeDoc.createRange();
           upTo.selectNodeContents(el);
           upTo.setEnd(range.startContainer, range.startOffset);
 
-          const from = Math.max(0, Math.min(upTo.toString().length - indent, text.length));
-          const to = Math.max(from, Math.min(from + range.toString().length, text.length));
+          const from = offsetFor(frame, upTo.toString().length);
+          const to = Math.max(from, Math.min(from + range.toString().length, frame.text.length));
           return to > from ? { from, to } : undefined;
         };
 
@@ -1992,16 +1999,127 @@ export function Editor({
       el.contentEditable = "true";
       const original = (el.textContent ?? "").trim();
 
+      /**
+       * The marks as they stand after every edit this focus has seen, and whether every one of
+       * those edits was anchored in a range the browser gave us (ADR 0027 §4b).
+       *
+       * `anchored` going false is not an error: it is the mechanism choosing to fall back. An IME
+       * composition, the browser's own undo, or an engine whose `getTargetRanges()` returns nothing
+       * all land here, and the commit then takes §4's path — the diff — exactly as it did before
+       * this listener existed. Degrading to what shipped is the floor.
+       *
+       * **Written today and read on day 2**, when `setElementText` can accept marks that are
+       * already shifted. Kept here rather than held back so that the capture and its consumer land
+       * in separate reviews: the schema is an exclusive zone and this is not.
+       */
+      let liveMarks: MarkRun[] = [];
+      let anchored = true;
+
       // Select the whole field the moment it gains focus, the same as clicking into a
       // pre-filled name field: the first keystroke replaces the placeholder text rather
       // than landing mid-word wherever the click happened to fall.
       el.addEventListener("focus", () => {
+        liveMarks = marksFor(doc, address) ?? [];
+        anchored = true;
         const selection = iframeDoc.getSelection();
         if (!selection) return;
         const range = iframeDoc.createRange();
         range.selectNodeContents(el);
         selection.removeAllRanges();
         selection.addRange(range);
+      });
+
+      /**
+       * The range `beforeinput` says it is about to replace, as offsets into the document's text.
+       *
+       * `getTargetRanges()` hands back `StaticRange`s, which carry the four container/offset fields
+       * and none of a live `Range`'s methods — so it is copied into one, which is also what makes
+       * `toString()` available for the same code-unit measurement the toolbar uses.
+       */
+      const editOf = (range: Range, inserted: number): TextEdit | undefined => {
+        if (!el.contains(range.commonAncestorContainer)) return undefined;
+        const frame = textFrameOf(el.textContent ?? "");
+        const upTo = iframeDoc.createRange();
+        upTo.selectNodeContents(el);
+        upTo.setEnd(range.startContainer, range.startOffset);
+        const from = offsetFor(frame, upTo.toString().length);
+        const to = Math.max(from, Math.min(from + range.toString().length, frame.text.length));
+        return { from, to, inserted };
+      };
+
+      const liveRange = (target: StaticRange | undefined): Range | undefined => {
+        if (target) {
+          const range = iframeDoc.createRange();
+          range.setStart(target.startContainer, target.startOffset);
+          range.setEnd(target.endContainer, target.endOffset);
+          return range;
+        }
+        // No target range is the fallback's own case, and paste still has to be made plain — so the
+        // live selection stands in for it there, and nowhere else.
+        const selection = iframeDoc.getSelection();
+        if (!selection || selection.rangeCount === 0) return undefined;
+        const range = selection.getRangeAt(0);
+        return el.contains(range.commonAncestorContainer) ? range : undefined;
+      };
+
+      /**
+       * Where the edit stops being a guess (ADR 0027 §4b).
+       *
+       * Fires **before** the browser changes anything, which is the whole point: the range it is
+       * about to replace is still measurable, and `inputType` says what is going in. `textEditBetween`
+       * cannot recover either from the two strings afterwards, and gets both wrong in ways that
+       * silently corrupt a mark — `"pan y pan y aceite"` with the second `pan y ` deleted destroys a
+       * bold on the first `pan`, measured.
+       */
+      el.addEventListener("beforeinput", (event) => {
+        const input = event as InputEvent;
+        const targets = input.getTargetRanges();
+        const range = liveRange(targets[0]);
+
+        // **Paste is forced to plain text, whatever the clipboard holds.** `contentEditable` pastes
+        // HTML by default, and ADR 0024 requires this field to stay a flat string — one paste of a
+        // formatted sentence from a word processor would otherwise put markup where the document
+        // expects characters. The length the table reads and the text inserted here are the same
+        // `text/plain`, so the anchored edit describes exactly what happened.
+        if (input.inputType === "insertFromPaste") {
+          input.preventDefault();
+          const text = input.dataTransfer?.getData("text/plain") ?? "";
+          if (!range) {
+            anchored = false;
+            return;
+          }
+          const edit = editOf(range, text.length);
+          range.deleteContents();
+          const inserted = iframeDoc.createTextNode(text);
+          range.insertNode(inserted);
+          const selection = iframeDoc.getSelection();
+          if (selection) {
+            const caret = iframeDoc.createRange();
+            caret.setStartAfter(inserted);
+            caret.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(caret);
+          }
+          if (edit) liveMarks = shiftMarks(liveMarks, edit);
+          else anchored = false;
+          return;
+        }
+
+        const inserted = insertedLengthFor({
+          inputType: input.inputType,
+          data: input.data,
+          pastedText: null,
+        });
+        // An unmapped type, or more than one target range — which the specification allows and no
+        // engine is known to produce for a plain text field. Either way the honest answer is that
+        // this edit was not measured, so the commit must not pretend it was.
+        if (inserted === undefined || !range || targets.length > 1) {
+          anchored = false;
+          return;
+        }
+        const edit = editOf(range, inserted);
+        if (edit) liveMarks = shiftMarks(liveMarks, edit);
+        else anchored = false;
       });
 
       // These are real hrefs (a "Reservar mesa" button, say): clicking one to place a
@@ -2014,6 +2132,11 @@ export function Editor({
           el.blur();
         } else if (event.key === "Escape") {
           el.textContent = original;
+          // A programmatic reset no `beforeinput` ever reported, so the captured marks now describe
+          // a text that is gone. The blur below commits nothing, since the text is back to
+          // `original` — but leaving stale offsets behind would be a trap for whoever reads them.
+          liveMarks = marksFor(doc, address) ?? [];
+          anchored = true;
           el.blur();
         }
       });
