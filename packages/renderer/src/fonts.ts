@@ -20,7 +20,14 @@ import { cssFontFamilyName, cssFontSrc } from "./escape.ts";
 export interface ShippableFace {
   /** The weight this file carries, and the one its `@font-face` rule declares. */
   weight: number;
-  /** The file's name inside `fonts/`. Chosen here; never read from a document. */
+  /**
+   * The file's name inside `fonts/`. Chosen here; never read from a document.
+   *
+   * **Spelled exactly as `@fontsource` ships it**, `-normal` and all, so that the name in a published
+   * ZIP says out loud what the licence requires: the file is the package's file, unmodified. Playfair
+   * Display carries a Reserved Font Name, and the OFL only lets the name travel with an unchanged
+   * face — so a shortened name here would be the first step towards a file nobody could check.
+   */
   file: string;
 }
 
@@ -44,15 +51,15 @@ export const SHIPPABLE_FAMILIES: readonly ShippableFamily[] = [
   {
     family: "Inter",
     faces: [
-      { weight: 400, file: "inter-latin-400.woff2" },
-      { weight: 700, file: "inter-latin-700.woff2" },
+      { weight: 400, file: "inter-latin-400-normal.woff2" },
+      { weight: 700, file: "inter-latin-700-normal.woff2" },
     ],
   },
   {
     family: "Playfair Display",
     faces: [
-      { weight: 400, file: "playfair-display-latin-400.woff2" },
-      { weight: 700, file: "playfair-display-latin-700.woff2" },
+      { weight: 400, file: "playfair-display-latin-400-normal.woff2" },
+      { weight: 700, file: "playfair-display-latin-700-normal.woff2" },
     ],
   },
 ];

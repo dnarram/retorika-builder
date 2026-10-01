@@ -7,9 +7,11 @@
   "exports": {
     ".": "./src/index.ts"
   },
-  "comment": "No third-party runtime dependency. The ZIP is handed to clients, so it is written by hand against node:zlib rather than pulled from a supply chain.",
+  "comment": "No third-party runtime dependency beyond the two font packages, whose bytes are the deliverable: the woff2 files travel into the client's ZIP exactly as @fontsource ships them, which is what the OFL's Reserved Font Name on Playfair Display requires. The ZIP itself is written by hand against node:zlib rather than pulled from a supply chain.",
   "dependencies": {
     "@retorika/schema": "workspace:*",
-    "@retorika/renderer": "workspace:*"
+    "@retorika/renderer": "workspace:*",
+    "@fontsource/inter": "5.2.8",
+    "@fontsource/playfair-display": "5.2.8"
   }
 }

@@ -28,11 +28,14 @@
     "coverage:ratchet": "node scripts/coverage-ratchet.ts",
     "audit:exceptions": "node scripts/audit-exceptions.ts",
     "security:audit": "pnpm audit --audit-level=moderate",
-    "security:secrets": "pre-commit run gitleaks --all-files"
+    "security:secrets": "pre-commit run gitleaks --all-files",
+    "fonts:generate": "node scripts/generate-font-data.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
     "@biomejs/biome": "2.5.14",
+    "@fontsource/inter": "5.2.8",
+    "@fontsource/playfair-display": "5.2.8",
     "@playwright/test": "1.63.0",
     "@types/node": "24.13.5",
     "@vitest/coverage-v8": "5.0.1",

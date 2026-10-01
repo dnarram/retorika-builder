@@ -1,6 +1,10 @@
 import { flattenElements, type RetorikaDocument } from "@retorika/schema";
 import { buildCss, buildTree, resolvePage } from "./build.ts";
 import { treeToFragment } from "./dom.ts";
+import { fontFilesFor } from "./fonts.ts";
+
+export { fontFilesFor, SHIPPABLE_FAMILIES } from "./fonts.ts";
+
 import { pageToHtml } from "./html.ts";
 import { type RenderOptions, withDefaults } from "./options.ts";
 
@@ -18,6 +22,20 @@ export interface HtmlOutput {
   html: string;
   css: string;
   assets: AssetRef[];
+  /**
+   * The font files this page's stylesheet names, as names inside `fonts/`.
+   *
+   * **A channel of its own, and not a kind of asset, because a font has nothing to be collected
+   * from.** `assets` is built by walking elements for an image `src`; a face is named by the CSS the
+   * theme produced, so there is no element, no `src`, and nothing for `collectAssets` to find. Putting
+   * fonts in `assets` would also make `assetPathFor` learn a font extension, and
+   * `publisher/test/site.test.ts` asserts that a document of only `data:` images produces **no** file
+   * under `assets/` — true today and worth keeping true.
+   *
+   * Empty for every document that names no shippable family, which is what keeps a site on
+   * `editorial-serif` carrying zero font bytes.
+   */
+  fonts: string[];
 }
 
 /**
@@ -55,6 +73,7 @@ export function render(
     html: pageToHtml(tree, css, titleFor(page, doc.siteName)),
     css,
     assets: collectAssets(doc),
+    fonts: fontFilesFor(doc),
   };
 }
 

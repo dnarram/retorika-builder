@@ -8,7 +8,7 @@ import {
   type RetorikaDocument,
 } from "@retorika/schema";
 import { describe, expect, it } from "vitest";
-import { buildSite, type SiteBundle } from "../src/index.ts";
+import { buildSite, readFontBundle, type SiteBundle } from "../src/index.ts";
 
 /**
  * The acceptance criterion of phase 0, as a test: "publicar un sitio de una sección …,
@@ -34,7 +34,7 @@ function loadCorpus(): { name: string; document: RetorikaDocument }[] {
     }));
 }
 
-function bundleFor(name: string, document: RetorikaDocument): SiteBundle {
+async function bundleFor(name: string, document: RetorikaDocument): Promise<SiteBundle> {
   const assets = new Map<string, Uint8Array>();
   for (const page of document.pages) {
     for (const section of page.sections) {
@@ -47,7 +47,12 @@ function bundleFor(name: string, document: RetorikaDocument): SiteBundle {
       }
     }
   }
-  return buildSite(document, { siteId: name, baseUrl: "https://example.test", assets });
+  return buildSite(document, {
+    siteId: name,
+    baseUrl: "https://example.test",
+    assets,
+    fonts: readFontBundle(document),
+  });
 }
 
 const ENTITIES: Readonly<Record<string, string>> = {
@@ -72,12 +77,44 @@ const OUTBOUND_SCHEMES = ["https:", "mailto:", "tel:"];
 const INTERNAL_PAGE = /^\.\/([a-z0-9][a-z0-9-]*\.html)(#.*)?$/;
 
 /** Every broken promise in one page, as readable strings; empty means double-click safe. */
+/**
+ * Every `url(...)` in a page's inlined stylesheet.
+ *
+ * **Added in sprint 11 day 6, because until then there were none to find.** `@font-face` is the first
+ * `url()` this renderer emits, and the attribute scan below could never have seen it: a face is named
+ * inside `<style>`, not by a `src` or an `href`. A font file missing from the ZIP would have been a
+ * page that looks right and is not — `font-display: swap` hides it behind the fallback — which is the
+ * worst shape of incompleteness and the one this whole file exists to refuse.
+ */
+function cssUrls(html: string): string[] {
+  const urls: string[] = [];
+  for (const style of html.matchAll(/<style>([\s\S]*?)<\/style>/g)) {
+    for (const found of (style[1] ?? "").matchAll(
+      /url\(\s*(?:"([^"]*)"|'([^']*)'|([^)\s]*))\s*\)/g,
+    )) {
+      urls.push(found[1] ?? found[2] ?? found[3] ?? "");
+    }
+  }
+  return urls;
+}
+
 function doubleClickProblems(bundle: SiteBundle): string[] {
   const paths = new Set(bundle.files.map((f) => f.path));
   const problems: string[] = [];
 
   for (const page of bundle.files.filter((f) => f.path.endsWith(".html"))) {
     const html = new TextDecoder().decode(page.contents);
+
+    for (const url of cssUrls(html)) {
+      const where = `${page.path}: url("${url}")`;
+      if (url.startsWith("data:")) continue;
+      if (url.startsWith("/") || SCHEME.test(url) || url.includes("..")) {
+        problems.push(`${where} is not a relative bundle path`);
+      } else if (!paths.has(url)) {
+        problems.push(`${where} names no file in the bundle`);
+      }
+    }
+
     for (const { name, value } of urlAttributes(html)) {
       const where = `${page.path}: ${name}="${value}"`;
 
@@ -162,22 +199,57 @@ function multiPageDocument(base: RetorikaDocument): RetorikaDocument {
 
 const corpus = loadCorpus();
 const barbershop = corpus.find((entry) => entry.name === "barbershop-cover")?.document;
+/** The one fixture whose type pair names a face that has to be shipped — `classic-display`, which asks
+ * for Playfair Display. Every other fixture is on `editorial-serif` and carries no font bytes at all. */
+const classicDisplay = corpus.find((entry) => entry.name === "menu-y-paginas")?.document;
 if (!barbershop) throw new Error("fixture barbershop-cover is missing");
+if (!classicDisplay) throw new Error("fixture menu-y-paginas is missing");
 
 describe("double-click", () => {
-  it("every page of every fixture works from file:// with no server", () => {
+  it("every page of every fixture works from file:// with no server", async () => {
     for (const { name, document } of corpus) {
-      expect(doubleClickProblems(bundleFor(name, document)), name).toEqual([]);
+      expect(doubleClickProblems(await bundleFor(name, document)), name).toEqual([]);
     }
   });
 
-  it("a multi-page site links by file name and every link resolves", () => {
-    const bundle = bundleFor("multi", multiPageDocument(barbershop));
+  it("a multi-page site links by file name and every link resolves", async () => {
+    const bundle = await bundleFor("multi", multiPageDocument(barbershop));
 
     expect(bundle.files.map((f) => f.path)).toEqual(
       expect.arrayContaining(["index.html", "servicios.html", "contacto.html"]),
     );
     expect(doubleClickProblems(bundle)).toEqual([]);
+  });
+
+  it("catches a font the stylesheet names and the bundle does not carry", async () => {
+    /**
+     * The guard today's work needs, tested by taking the file away rather than by trusting that
+     * `buildSite` always puts it there. `buildSite` now refuses to build without the bytes, so this
+     * removes the entry afterwards — which is what a wrong `path`, a lost entry or a future caller
+     * assembling a bundle by hand would look like.
+     *
+     * It matters more than it looks: a missing face is invisible on the page, because
+     * `font-display: swap` shows the fallback and nothing else changes.
+     */
+    const complete = await bundleFor("fonts", classicDisplay);
+    expect(complete.files.some((f) => f.path.endsWith(".woff2"))).toBe(true);
+    expect(doubleClickProblems(complete)).toEqual([]);
+
+    const withoutFaces: SiteBundle = {
+      ...complete,
+      files: complete.files.filter((f) => !f.path.endsWith(".woff2")),
+    };
+    const problems = doubleClickProblems(withoutFaces);
+    // One per face **per page**: each page carries its own inlined stylesheet, so each one names the
+    // faces and each one would break. Derived from the bundle rather than written as a number, because
+    // this fixture has three pages and the next one might not.
+    const pages = complete.files.filter((f) => f.path.endsWith(".html")).length;
+    const faces = complete.files.filter((f) => f.path.endsWith(".woff2")).length;
+    expect(pages).toBeGreaterThan(1);
+    expect(problems).toHaveLength(pages * faces);
+    for (const problem of problems) {
+      expect(problem).toMatch(/url\("fonts\/.*\.woff2"\) names no file in the bundle/);
+    }
   });
 
   it.each([
@@ -187,13 +259,13 @@ describe("double-click", () => {
     ["a plain http link", "http://example.test"],
     ["a file:// link", "file:///Users/cliente/index.html"],
     ["a link to a page that does not exist", "./precios.html"],
-  ])("catches %s", (_label, href) => {
+  ])("catches %s", async (_label, href) => {
     const doc = parseDocument({
       ...barbershop,
       pages: [pageWith(barbershop, "home", "index", [link("el-bad", "x", href)])],
     });
     // The publisher does not rewrite links (decision 2), so a bad one reaches the page
     // and this suite is what catches it.
-    expect(doubleClickProblems(bundleFor("bad", doc))).toHaveLength(1);
+    expect(doubleClickProblems(await bundleFor("bad", doc))).toHaveLength(1);
   });
 });

@@ -14,4 +14,7 @@ export interface SiteManifest {
   pages: { slug: string; path: string; title: string }[];
   /** Every asset path in the bundle, relative, e.g. "assets/photo.svg". */
   assets: string[];
+  /** Every font file and licence in the bundle, relative, e.g. "fonts/inter-latin-400-normal.woff2".
+   * Empty for a site whose type pair names no face anyone could be missing. */
+  fonts: string[];
 }

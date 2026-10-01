@@ -8,7 +8,7 @@ import {
   type RetorikaDocument,
 } from "@retorika/schema";
 import { describe, expect, it } from "vitest";
-import { buildSite, bundleToZip, type SiteBundle } from "../src/index.ts";
+import { buildSite, bundleToZip, readFontBundle, type SiteBundle } from "../src/index.ts";
 
 const FIXTURES_DIR = join(import.meta.dirname, "..", "..", "..", "fixtures");
 const DOCUMENTS_DIR = join(FIXTURES_DIR, "documents");
@@ -23,7 +23,10 @@ function loadCorpus(): { name: string; document: RetorikaDocument }[] {
     }));
 }
 
-function bundleFor(name: string, document: RetorikaDocument): SiteBundle {
+/** Async since sprint 11 day 6: a site whose type pair names a face owes the ZIP those bytes and the
+ * licence beside them, and reading them is I/O. `buildSite` refuses to build without them, which is
+ * the point — a ZIP is complete or it is not. */
+async function bundleFor(name: string, document: RetorikaDocument): Promise<SiteBundle> {
   const assets = new Map<string, Uint8Array>();
   for (const page of document.pages) {
     for (const section of page.sections) {
@@ -36,7 +39,12 @@ function bundleFor(name: string, document: RetorikaDocument): SiteBundle {
       }
     }
   }
-  return buildSite(document, { siteId: name, baseUrl: "https://example.test", assets });
+  return buildSite(document, {
+    siteId: name,
+    baseUrl: "https://example.test",
+    assets,
+    fonts: readFontBundle(document),
+  });
 }
 
 interface ParsedEntry {
@@ -115,16 +123,16 @@ function parseZip(bytes: Uint8Array): ParsedEntry[] {
 const corpus = loadCorpus();
 
 describe("bundleToZip", () => {
-  it("produces an archive whose headers, central directory and EOCD line up", () => {
+  it("produces an archive whose headers, central directory and EOCD line up", async () => {
     for (const { name, document } of corpus) {
-      const entries = parseZip(bundleToZip(bundleFor(name, document)));
+      const entries = parseZip(bundleToZip(await bundleFor(name, document)));
       expect(entries.length, name).toBeGreaterThan(0);
     }
   });
 
-  it("contains exactly bundle.files, in sorted order, and never the manifest", () => {
+  it("contains exactly bundle.files, in sorted order, and never the manifest", async () => {
     for (const { name, document } of corpus) {
-      const bundle = bundleFor(name, document);
+      const bundle = await bundleFor(name, document);
       const names = parseZip(bundleToZip(bundle)).map((e) => e.name);
       expect(names, name).toEqual(bundle.files.map((f) => f.path).sort());
       expect(
@@ -134,9 +142,9 @@ describe("bundleToZip", () => {
     }
   });
 
-  it("decompresses every entry to the original contents", () => {
+  it("decompresses every entry to the original contents", async () => {
     for (const { name, document } of corpus) {
-      const bundle = bundleFor(name, document);
+      const bundle = await bundleFor(name, document);
       const byName = new Map(parseZip(bundleToZip(bundle)).map((e) => [e.name, e.contents]));
       for (const file of bundle.files) {
         expect(byName.get(file.path), `${name}: ${file.path}`).toEqual(file.contents);
@@ -144,17 +152,17 @@ describe("bundleToZip", () => {
     }
   });
 
-  it(`${invariantTestName("INV_5")} (ZIP bytes)`, () => {
+  it(`${invariantTestName("INV_5")} (ZIP bytes)`, async () => {
     for (const { name, document } of corpus) {
-      expect(bundleToZip(bundleFor(name, document)), name).toEqual(
-        bundleToZip(bundleFor(name, document)),
+      expect(bundleToZip(await bundleFor(name, document)), name).toEqual(
+        bundleToZip(await bundleFor(name, document)),
       );
     }
   });
 
-  it("uses a fixed timestamp and no extra fields", () => {
+  it("uses a fixed timestamp and no extra fields", async () => {
     for (const { name, document } of corpus) {
-      for (const entry of parseZip(bundleToZip(bundleFor(name, document)))) {
+      for (const entry of parseZip(bundleToZip(await bundleFor(name, document)))) {
         expect(entry.dosDate, `${name}: ${entry.name}`).toBe(0x0021); // 1980-01-01
         expect(entry.dosTime, `${name}: ${entry.name}`).toBe(0);
         expect(entry.extraLength, `${name}: ${entry.name}`).toBe(0);
@@ -162,9 +170,9 @@ describe("bundleToZip", () => {
     }
   });
 
-  it("marks every entry as a Unix regular file with mode 0644, never mode 000", () => {
+  it("marks every entry as a Unix regular file with mode 0644, never mode 000", async () => {
     for (const { name, document } of corpus) {
-      for (const entry of parseZip(bundleToZip(bundleFor(name, document)))) {
+      for (const entry of parseZip(bundleToZip(await bundleFor(name, document)))) {
         // High byte 3 means the external attributes carry a Unix mode. With that host
         // byte, attributes of 0 would extract as an unreadable file.
         expect(entry.versionMadeBy >> 8, `${name}: ${entry.name}`).toBe(3);
@@ -181,7 +189,14 @@ describe("bundleToZip", () => {
         { path: "a.txt", contents: text, contentType: "text/plain; charset=utf-8" },
         { path: "b.bin", contents: incompressible, contentType: "application/octet-stream" },
       ],
-      manifest: { siteId: "s", schemaVersion: "1.0.0", entry: "index.html", pages: [], assets: [] },
+      manifest: {
+        siteId: "s",
+        schemaVersion: "1.0.0",
+        entry: "index.html",
+        pages: [],
+        assets: [],
+        fonts: [],
+      },
     };
     const [a, b] = parseZip(bundleToZip(bundle));
     expect(a?.method).toBe(8);
@@ -197,7 +212,14 @@ describe("bundleToZip", () => {
   ])("refuses %s rather than writing a zip-slip entry", (_label, path) => {
     const bundle: SiteBundle = {
       files: [{ path, contents: new Uint8Array([1]), contentType: "text/html" }],
-      manifest: { siteId: "s", schemaVersion: "1.0.0", entry: "index.html", pages: [], assets: [] },
+      manifest: {
+        siteId: "s",
+        schemaVersion: "1.0.0",
+        entry: "index.html",
+        pages: [],
+        assets: [],
+        fonts: [],
+      },
     };
     expect(() => bundleToZip(bundle)).toThrow(/unsafe path/);
   });
@@ -206,7 +228,14 @@ describe("bundleToZip", () => {
     const file = { path: "index.html", contents: new Uint8Array([1]), contentType: "text/html" };
     const bundle: SiteBundle = {
       files: [file, file],
-      manifest: { siteId: "s", schemaVersion: "1.0.0", entry: "index.html", pages: [], assets: [] },
+      manifest: {
+        siteId: "s",
+        schemaVersion: "1.0.0",
+        entry: "index.html",
+        pages: [],
+        assets: [],
+        fonts: [],
+      },
     };
     expect(() => bundleToZip(bundle)).toThrow(/duplicate path/);
   });

@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { buildSite } from "@retorika/publisher";
+import { buildSite, readFontBundle } from "@retorika/publisher";
 import { flattenElements, parseDocument } from "@retorika/schema";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
@@ -160,7 +160,7 @@ describe("the publisher -> serve contract", () => {
   const fixtures = join(import.meta.dirname, "..", "..", "..", "fixtures");
   const documentsDir = join(fixtures, "documents");
 
-  it("serves every file buildSite produces at exactly its own path", () => {
+  it("serves every file buildSite produces at exactly its own path", async () => {
     for (const file of readdirSync(documentsDir).filter((f) => f.endsWith(".json"))) {
       const document = parseDocument(JSON.parse(readFileSync(join(documentsDir, file), "utf8")));
       const assets = new Map<string, Uint8Array>();
@@ -173,7 +173,14 @@ describe("the publisher -> serve contract", () => {
           }
         }
       }
-      const bundle = buildSite(document, { siteId: "x", baseUrl: "https://x.example.com", assets });
+      const bundle = buildSite(document, {
+        siteId: "x",
+        baseUrl: "https://x.example.com",
+        assets,
+        // A site whose type pair names a face owes the ZIP those bytes; `buildSite` refuses without
+        // them, which is what keeps a published site complete.
+        fonts: readFontBundle(document),
+      });
 
       // If publisher ever writes a path serve would refuse, a published file becomes a
       // 404 that no test anywhere else would notice.

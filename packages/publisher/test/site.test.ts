@@ -9,7 +9,7 @@ import {
   type RetorikaDocument,
 } from "@retorika/schema";
 import { describe, expect, it } from "vitest";
-import { buildSite } from "../src/index.ts";
+import { buildSite, readFontBundle } from "../src/index.ts";
 
 const FIXTURES_DIR = join(import.meta.dirname, "..", "..", "..", "fixtures");
 const DOCUMENTS_DIR = join(FIXTURES_DIR, "documents");
@@ -86,10 +86,23 @@ function withPages(doc: RetorikaDocument, slugs: string[]): RetorikaDocument {
   });
 }
 
+/**
+ * The faces a document's type pair obliges the bundle to carry, with their licences.
+ *
+ * Empty for the fourteen fixtures on `editorial-serif`, and two faces plus one licence for the
+ * `classic-display` one — which is the fixture that makes `buildSite` refuse to build without them.
+ * Reading them is I/O, which is why the tests that walk the corpus are async from here on.
+ */
+const fontsFor = (document: RetorikaDocument) => readFontBundle(document);
+
 describe("buildSite", () => {
-  it("produces an index.html for every fixture", () => {
+  it("produces an index.html for every fixture", async () => {
     for (const { name, document } of corpus) {
-      const bundle = buildSite(document, { siteId: name, assets: assetsFor(document) });
+      const bundle = buildSite(document, {
+        siteId: name,
+        assets: assetsFor(document),
+        fonts: await fontsFor(document),
+      });
       expect(
         bundle.files.map((f) => f.path),
         name,
@@ -98,12 +111,13 @@ describe("buildSite", () => {
     }
   });
 
-  it("never emits an absolute or parent-relative path", () => {
+  it("never emits an absolute or parent-relative path", async () => {
     for (const { name, document } of corpus) {
       const bundle = buildSite(document, {
         siteId: name,
         baseUrl: "https://example.test",
         assets: assetsFor(document),
+        fonts: await fontsFor(document),
       });
       for (const file of bundle.files) {
         expect(file.path.startsWith("/"), `${name}: ${file.path}`).toBe(false);
@@ -113,9 +127,13 @@ describe("buildSite", () => {
     }
   });
 
-  it("bundles a file for every AssetRef the renderer reports", () => {
+  it("bundles a file for every AssetRef the renderer reports", async () => {
     for (const { name, document } of corpus) {
-      const bundle = buildSite(document, { siteId: name, assets: assetsFor(document) });
+      const bundle = buildSite(document, {
+        siteId: name,
+        assets: assetsFor(document),
+        fonts: await fontsFor(document),
+      });
       const paths = new Set(bundle.files.map((f) => f.path));
       for (const ref of render(document, "html").assets) {
         // A `data:` URI needs no file: it is already the whole image, inline in the HTML.
@@ -208,12 +226,13 @@ describe("buildSite", () => {
     expect(bundle.files.some((f) => f.path.startsWith("assets/"))).toBe(false);
   });
 
-  it("never places the manifest in files", () => {
+  it("never places the manifest in files", async () => {
     for (const { name, document } of corpus) {
       const bundle = buildSite(document, {
         siteId: name,
         baseUrl: "https://example.test",
         assets: assetsFor(document),
+        fonts: await fontsFor(document),
       });
       const serialised = JSON.stringify(bundle.manifest);
       for (const file of bundle.files) {
@@ -223,12 +242,13 @@ describe("buildSite", () => {
     }
   });
 
-  it(`${invariantTestName("INV_5")} (publisher bundle)`, () => {
+  it(`${invariantTestName("INV_5")} (publisher bundle)`, async () => {
     for (const { name, document } of corpus) {
       const options = {
         siteId: name,
         baseUrl: "https://example.test",
         assets: assetsFor(document),
+        fonts: await fontsFor(document),
       };
       expect(buildSite(document, options), name).toEqual(buildSite(document, options));
     }

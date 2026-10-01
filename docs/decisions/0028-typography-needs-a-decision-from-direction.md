@@ -257,8 +257,8 @@ a time. Under A it answers a question nobody has: the letterform is the one that
 | Step | What it is |
 |---|---|
 | **1. C** | **Done 1 October 2026 — see "Option C, as built" below.** `TYPE_PAIRS` re-chosen so each pair keeps a heading/body contrast with no extra fonts, with the harness's own font report as the test. The golden corpus moves once and the diff is read in full. Small, and it stands on its own if A is ever reversed |
-| **2. A** | **Started 1 October 2026 — the `url()` exception is written and tested; see "The `url()` exception, as built". It is not yet connected to `buildCss`, deliberately, and connects with the publisher that ships the bytes.** A task file first — it touches `packages/renderer` and `packages/publisher`, both exclusive zones. The `url()` exception of measurement 3 is written and tested before a byte is shipped, and `pnpm size` gains a second number: the bundle, beside the page |
-| **3. #9** | Closes with A, not with this file |
+| **2. A** | **Done 1 October 2026 — see "The `url()` exception, as built" and "The faces in the ZIP".** A task file first — it touches `packages/renderer` and `packages/publisher`, both exclusive zones. The `url()` exception of measurement 3 is written and tested before a byte is shipped, and `pnpm size` gains a second number: the bundle, beside the page |
+| **3. #9** | **Closed 1 October 2026, with A.** Not with this file: the decision was never the deliverable |
 
 ## Option C, as built — 1 October 2026
 
@@ -324,6 +324,13 @@ remember:
    each one actually used** — by measuring the text's width with each family alone against a control
    family that cannot exist, which is what tells "declared" from "used".
 3. Copy the dark block at the foot and send it.
+
+> **Less urgent since option A shipped, and still worth doing.** With the faces in the ZIP, a visitor on
+> `modern-sans` or `classic-display` gets the letterform whatever their machine has. What the hand check
+> still answers is the **fallback**: `editorial-serif` ships no file by design, and any visitor whose
+> browser blocks or fails a font download sees the stack. So the question changed from «is the site
+> readable» to «is the floor sound on the platform most visitors use», which is a smaller question and
+> not a closed one.
 
 **Cross-checked before being trusted.** On this machine the page's width measurement agrees exactly
 with the harness's CDP measurement, in both Chromium 153 and Firefox 155 — `Georgia/system-ui`,
@@ -404,7 +411,7 @@ font carries zero font bytes» true rather than claimed. Fourteen of the fifteen
 **4% of the 60 KB page budget**, for two faces. The *files* are not in that number and are the
 publisher's measurement.
 
-### The rules are not wired into `buildCss` yet, and the reason is a test that caught it
+### The rules waited a day for `buildCss`, and the reason is a test that caught it
 
 **Wiring them one day before the publisher ships the bytes breaks the promise this product is.** With
 `fontFaceCss` spread into `buildCss`, five of the twenty-nine critical flows went red on an assertion
@@ -418,10 +425,10 @@ Those flows download a real ZIP, extract it to disk, open `index.html` from `fil
 **no request fails**. A stylesheet naming two files the ZIP does not contain fails two of them. That is
 not a test being fussy — it is ADR 0001 being enforced, and the ZIP is the thing the owner paid for.
 
-**So the exception, the table and all sixty-one tests land, and the two lines that connect them land
-with the publisher.** `fontFaceCss` and `fontFilesFor` are complete and tested; `buildCss` does not call
-them and `HtmlOutput` does not carry `fonts` until the day a ZIP can hold the files. The published bytes
-today are byte-for-byte what they were, and the golden corpus does not move.
+**So the exception, the table and all sixty-one tests landed first, and the two lines that connect them
+landed the next day with the publisher.** For one day `fontFaceCss` and `fontFilesFor` were complete,
+tested and uncalled; published bytes were byte-for-byte what they had been and the golden corpus did not
+move. Both halves are now in, and that same assertion is what proves the ZIP is whole.
 
 > **The alternative was to relax that assertion, and it is worth recording that it was refused** — one
 > paragraph above, this same file argues that asserting a `named` pair's contrast would «teach the next
@@ -448,6 +455,100 @@ heading's own rendered width is what proves the face is *used* and not merely de
 > `font-display: swap` and the fallback chain are doing their jobs. So the failure mode is a ZIP with two
 > dead references and a page that looks right: invisible to the owner, which is precisely why it must not
 > ship for a day and why the e2e's refusal to allow it is the correct answer rather than an obstacle.
+
+## The faces in the ZIP — 1 October 2026
+
+**Option A is complete: a published site carries the letterform the editor showed, offline, with no
+third party.** Measured end to end by posting to the real download route and unzipping what came back:
+
+```
+Archive:  site.zip                                  54,729 bytes
+     6483  donde-estamos.html
+     4630  fonts/OFL-PlayfairDisplay.txt
+    21856  fonts/playfair-display-latin-400-normal.woff2
+    23224  fonts/playfair-display-latin-700-normal.woff2
+     9716  index.html
+     6971  que-ponemos.html
+       23  robots.txt
+```
+
+Extracted and opened by double-click in **Chromium 153 and Firefox 155**: all three pages register both
+faces as `loaded`, **no request fails**, and the licence is in the folder beside them. A site on
+`editorial-serif` carries no `fonts/` directory at all.
+
+### The three conditions, and what each one turned out to mean
+
+**1. Only the weights the pairs use, and only the latin subset.** Both weights, and that is measured
+rather than chosen: `--font-heading` is used by `h1`, `h2` and `h3` — heading tags, so **700** by the
+browser's own default — and by `p.rb-subtitle`, the cover's tagline, which is a `<p>` and therefore
+**400**. Ship only 700 and every tagline renders bold; ship only 400 and every heading is a synthetic
+bold. The subset is `latin`, never `latin-ext`, `cyrillic`, `greek` or `vietnamese`, and never an
+italic — no rule in `build.ts` can ask for one.
+
+**And the resulting size is checked against a budget, because nothing measured it before.** `pnpm size`
+now reports two numbers per fixture:
+
+| | page | bundle | fonts |
+|---|---|---|---|
+| a site on `editorial-serif` | 1.6–2.0 KB | **1.8–2.5 KB** | none |
+| the site on `classic-display` | 2.7 KB | **52.7 KB** | 45.9 KB |
+
+The budget is **80 KB gzipped per bundle**, about 1.5× the measured worst case — loose enough not to
+fail on a rounding, tight enough that a third family cannot arrive unseen. It measures our bytes and
+not the owner's: a real site with six photographs can exceed any number there, and should.
+
+**2. A face never travels without its licence.** `fonts/OFL-Inter.txt` and
+`fonts/OFL-PlayfairDisplay.txt`, derived from the faces rather than listed, so no caller can ask for one
+and forget the other — and `buildSite` **refuses to build** a bundle with a `woff2` and no licence
+beside it. Both licences were read at the pinned version, `@fontsource` **5.2.8**, on 1 October 2026:
+both are the **SIL Open Font License 1.1**.
+
+> **Inter declares no Reserved Font Name. Playfair Display declares one: «Playfair Display».**
+>
+> That is the answer to the question this sprint's plan asked for, and it turns out to decide condition
+> 3 rather than being a footnote to it. The OFL §3 forbids using a Reserved Font Name for a **Modified
+> Version** — so the moment we subset or re-encode Playfair Display, we would have to ship it under a
+> different family name, and rename it in the renderer's table, in the three type-pair stacks, and in
+> the editor's own specimen. **Shipping the file untouched is both the cheap path and the compliant
+> one**, which is a pleasant thing to be able to say and a poor thing to leave unverified.
+
+**3. The `woff2` travel exactly as `@fontsource` ships them.** The package already splits every face by
+subset and weight, so choosing the latin file of a weight the stylesheet asks for **is** using it as it
+comes — conditions 1 and 3 look as though they pull against each other and do not. The file keeps the
+package's own name, `-normal` and all, so a reader can check the bytes against the package without
+trusting anything written here. A test does exactly that.
+
+### Where the bytes live, and three failures that decided it
+
+The bytes are **in source**, base64 in a generated `fontData.ts`, and that was not the first design.
+Reading them from `node_modules` was tried three times; **every attempt passed the whole unit suite and
+returned HTTP 500 from the download route**:
+
+| attempt | what happened inside Next's bundled server runtime |
+|---|---|
+| `import.meta.resolve(specifier)` | `{import.meta}.resolve is not a function` |
+| `createRequire(...).resolve(\`${pkg}/files/${file}\`)` | `Cannot find module as expression is too dynamic` |
+| `resolve("@fontsource/inter/package.json")` + `join` | Turbopack rewrote the path to the literal placeholder `[project]/node_modules/…`, and the read failed with `ENOENT` |
+
+**The pattern is that a bundler treats module resolution as its own business**, so the way to be certain
+is to have nothing to resolve and no path to read. Each failure was found by posting to the real route —
+not one of them was visible to a green test suite, which is the plainest argument this sprint has
+produced for walking a day's work in the thing the owner actually uses.
+
+Carrying bytes in source has one hazard, a generated file going stale against a bumped version, and it
+is guarded: a test compares every face and every licence against the package's own file, so a forgotten
+`pnpm fonts:generate` is a red build rather than a wrong font. It also leaves `@retorika/publisher` with
+no third-party **runtime** dependency, which its own package comment has prized since it was written.
+
+### One test got stronger on the way
+
+Five critical flows used to write `index.html` out of the ZIP and open that one file. That was enough
+while a page's only companions were images it named with a `src`; a face is named inside `<style>`, so
+those flows began reporting failed requests for files that were in the ZIP and not on the disk. **They
+now extract the whole download**, which is both the stronger check and the more faithful imitation of
+what an owner does. And `double-click.test.ts`, whose whole job is «this page works from `file://` with
+no server», **now scans the inlined stylesheet's `url()` references** as well as the HTML's attributes —
+it could not have seen a missing font before, because until this sprint there were none to see.
 
 ## Consequences
 

@@ -1,5 +1,5 @@
 import { presetFor } from "@retorika/catalog";
-import { buildSite, bundleToZip } from "@retorika/publisher";
+import { buildSite, bundleToZip, readFontBundle } from "@retorika/publisher";
 import {
   checkAgainstPreset,
   DocumentValidationError,
@@ -254,7 +254,17 @@ export async function POST(request: Request): Promise<Response> {
   // not accept. `assets` carries the owner's uploaded photos and nothing else — the placeholder
   // is a self-contained data: URI (packages/catalog/src/placeholder-image.ts) which buildSite
   // leaves inline and needs no bundled file for.
-  const zip = new Uint8Array(bundleToZip(buildSite(document, { siteId: document.id, assets })));
+  // The faces this site's stylesheet will name, with their licence texts, read before the bundle is
+  // built: `buildSite` is synchronous and pure on purpose, so fetching bytes is the caller's job here
+  // exactly as it is for photos. It takes the document rather than a list, so there is no way to hand
+  // over a set of faces that disagrees with the ones the page asks for.
+  //
+  // Empty for every site on `editorial-serif`, which is most of them — one Map allocation, no read.
+  const fonts = readFontBundle(document);
+
+  const zip = new Uint8Array(
+    bundleToZip(buildSite(document, { siteId: document.id, assets, fonts })),
+  );
 
   return new Response(zip, {
     status: 200,

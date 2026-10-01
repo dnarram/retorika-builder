@@ -27,6 +27,22 @@
   --space-xs: 4px;
 }
 
+/* Self-hosted faces. Relative to this file, so a double-clicked page finds them. */
+@font-face {
+  font-family: 'Playfair Display';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/playfair-display-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: 'Playfair Display';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("fonts/playfair-display-latin-700-normal.woff2") format("woff2");
+}
+
 * { box-sizing: border-box; }
 body { margin: 0; font-family: var(--font-body); color: var(--color-ink);
   background: var(--color-surface); }
