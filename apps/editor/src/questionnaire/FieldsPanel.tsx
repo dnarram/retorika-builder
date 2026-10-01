@@ -1,8 +1,8 @@
 "use client";
 
-import type { ContentValue, SlotAddress, SlotFill } from "@retorika/schema";
+import type { ContentValue, ElementAddress, SlotAddress, SlotFill } from "@retorika/schema";
 import { useId } from "react";
-import type { FieldRow } from "../editor/sectionFields.ts";
+import { type FieldRow, fieldCommitFor } from "../editor/sectionFields.ts";
 import es from "../locales/es.json" with { type: "json" };
 
 /**
@@ -25,6 +25,9 @@ export interface FieldsPanelProps {
   sectionId: string;
   onFill: (fill: SlotFill) => void;
   onClear: (address: SlotAddress) => void;
+  /** The same commit the canvas uses, so a text edit here moves the field's marks with it instead of
+   * replacing the whole value and dropping them (`fieldCommitFor`). */
+  onEditText: (address: ElementAddress, text: string) => void;
   onClose: () => void;
 }
 
@@ -41,16 +44,23 @@ export function FieldsPanel({
   sectionId,
   onFill,
   onClear,
+  onEditText,
   onClose,
 }: FieldsPanelProps) {
   const headingId = useId();
 
   function commit(row: FieldRow, text: string, href: string) {
     const address: SlotAddress = { sectionId, slot: row.slot, occurrence: row.occurrence };
-    // An empty label is an empty field, whatever the destination says: a link with a
-    // destination and no words is a button nobody can see, which is worse than no button.
-    if (text.trim() === "") {
+    const what = fieldCommitFor(row, text, href);
+    if (what.kind === "clear") {
       onClear(address);
+      return;
+    }
+    // Only the words changed, so only the words are written — and `setElementText` carries the
+    // field's marks across. Sending a rebuilt value here is what used to strip the bold off a
+    // field, on a blur that had changed nothing at all.
+    if (what.kind === "text") {
+      onEditText({ sectionId, elementId: what.elementId }, what.text);
       return;
     }
     onFill({

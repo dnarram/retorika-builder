@@ -1,7 +1,7 @@
 # 0027 — A mark moves with the text under it, and two of the same kind become one
 
 **Status:** accepted · **Date:** 2026-10-01 · **Accepted by:** David, **not direction** ·
-**Amendment §4b proposed:** 2026-10-01, by development, **unsigned** ·
+**Amendment §4b:** accepted 2026-10-01 by **David, not direction** ·
 **Touches:** [ADR 0024](0024-formatting-inside-a-text-is-designed-and-waiting.md) (which it
 **amends**), [#52](https://github.com/dnarram/retorika-builder/issues/52), document rule 6
 
@@ -14,7 +14,7 @@
 > one**: §1's merging example did not merge. See the note in that section — the rule is unchanged,
 > the example was wrong, and the case it got wrong is now a required test.
 >
-> **And one amendment is proposed and not yet signed — §4b, 1 October 2026.** It replaces a
+> **And one amendment is accepted on its own signature — §4b, 1 October 2026, by David.** It replaces a
 > *premise*: §4 said the editor knows only the text before and after an edit, which was a choice and
 > not a constraint. Two strings do not determine an edit, so the rules of §4 were being fed a guess
 > that is wrong in both directions — measured. The browser's `beforeinput` supplies the real range,
@@ -219,11 +219,14 @@ the golden corpus needs.
 
 ### 4b. **Proposed amendment, 1 October 2026 — the editor is told where the edit is, and only guesses when the browser will not say**
 
-> **Status of this section: proposed by development, not yet signed.** The sprint it belongs to was
-> approved by David on 1 October 2026 with this amendment named in it, which is approval of the
-> plan, not of this text. It becomes part of the decision when he says so and not before; until
-> then §4 above is what the code answers to, and the code built on 1 October 2026 implements both —
-> this section's mechanism where the browser supplies it, §4's where it does not.
+> **Status of this section: accepted 1 October 2026 by David, not by direction** — the same as the
+> rest of this ADR, and signed separately from it because it was written a day later and read on its
+> own. Proposed by development; the sprint plan that named it was approved first, and that was
+> approval of the plan rather than of this text, so the signature is its own.
+>
+> **§4 above is not retired by it.** The code implements both, deliberately: this section's mechanism
+> where the browser supplies a target range and an input type the table names, §4's wherever it does
+> not. That is the fallback, and it is the floor.
 
 **What this amends is a premise, not a rule.** §4's own correction note says the editor "only has
 the text before and after an edit". That sentence was written as a statement of fact and it was a
@@ -292,6 +295,36 @@ Identical in both engines, exactly one target range every time, and the paste ar
 `vino TINTO! la casa` with **no `<b>` and no `<i>` in the element's HTML** — the plain-text forcing
 holds. Row 2 is the measured failing case of this amendment, reproduced live: the mechanism is right
 where the guess is wrong, in the browser rather than in a unit test.
+
+> **Two things the build found that this amendment had not foreseen, both measured, 1 October 2026.**
+> Neither changes the mechanism; both are conditions it turns out to depend on, and the second is a
+> bug that existed before §4b and would have outlived it.
+>
+> **1. The editor's own `trim()` is an edit nobody reports.** Offsets are captured against the live
+> DOM text and the commit stores `textContent.trim()`, so a space typed after the last word grows a
+> run by §4's "at the end continues" rule into a character the commit then throws away — and the run
+> reaches past the end of the stored text. **Reconciling that with the diff is wrong**, and looked
+> right: `"  pan "` → `"pan"` has no common prefix *and* no common suffix, so `textEditBetween`
+> reports the whole string replaced and every run on it dies. It is instead **two deletions whose
+> offsets are known exactly**, applied trailing-first, which is what `marksAfterTrim` does.
+>
+> **2. `contentEditable` writes characters nobody typed, and they were reaching the published page.**
+> Deleting `millo` out of `Solomillo al whisky` in Chromium leaves the neighbouring space as
+> **U+00A0**, a non-breaking space. That did two kinds of damage: it was **stored in the document and
+> would have been written into the owner's ZIP**, in a product whose premise is that the file is the
+> deliverable; and to two strings a space becoming U+00A0 is one character deleted and a different
+> one inserted, so the diff read the edit as `[4,10)` with one insertion and the bold on `Solomillo`
+> **grew over the new space** instead of shrinking to `Solo`. The visible symptom was a mark in the
+> wrong place; the cause was a character the editor should never have accepted. Every read of an
+> element's text now normalises it — the mirror of `withText` on the way in. **A real non-breaking
+> space in pasted text is normalised too**, deliberately: the editor offers no way to type one, the
+> renderer has no use for one, `trim()` already treats it as whitespace, and keeping some would make
+> the document's spaces depend on which browser did the editing.
+>
+> Worth keeping together because of what they have in common: **both are the browser's text differing
+> from the document's text in ways neither end declares.** That is the same class of thing as the
+> pretty-printed indentation found in sprint 10 day 5, and it is now three for three — every time
+> this editor has assumed the DOM's string is the document's string, it has been wrong.
 
 **What is *not* measured, and is said rather than implied:** `insertReplacementText` — the row this
 amendment calls the most dangerous — could not be provoked from automation, because it comes from the

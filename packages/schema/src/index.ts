@@ -63,6 +63,7 @@ export {
   applyMark,
   MARKS,
   markRunSchema,
+  marksAfterTrim,
   marksFor,
   marksSchema,
   markTextIssue,

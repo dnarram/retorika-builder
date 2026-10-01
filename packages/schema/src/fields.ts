@@ -1,6 +1,12 @@
 import type { ContentElement, RetorikaDocument } from "./document.ts";
 import { flattenElements } from "./invariants.ts";
-import { shiftMarks, textEditBetween } from "./marks.ts";
+import {
+  type MarkRun,
+  markTextIssue,
+  normaliseMarks,
+  shiftMarks,
+  textEditBetween,
+} from "./marks.ts";
 import type { Role } from "./roles.ts";
 
 /**
@@ -68,25 +74,69 @@ export function listEditableFields(doc: RetorikaDocument): EditableField[] {
 }
 
 /**
+ * Anchored marks, normalised and refused if they do not fit the text they came with.
+ *
+ * **Checked here because this is where they enter the document**, and the same reason `applyMark`
+ * checks its own range: a refusal at the verb names what caused it, where the same mistake caught
+ * later surfaces as a document that will not parse, or — worse, and the whole point of §4b — one
+ * that parses and publishes a mark over the wrong words.
+ *
+ * It is a tripwire and not a routine path. The caller reconciles its captured offsets with the text
+ * it is committing before calling, so this throwing means that reconciliation has a bug, and a loud
+ * failure on a blur is better than a silent corruption of the owner's own carta.
+ */
+function checkedAnchored(text: string, anchored: readonly MarkRun[]): MarkRun[] {
+  const issue = markTextIssue(text, anchored);
+  if (issue) throw new Error(`setElementText: ${issue}.`);
+  // Normalised rather than trusted: merging, sorting and dropping empties is what makes two
+  // documents meaning the same thing publish the same bytes (INV_5, and the golden corpus).
+  return normaliseMarks(anchored);
+}
+
+/**
  * The write side of textOf: the same field each value kind carries, replaced.
  *
  * **This is also where marks move with the text under them**, and it is the right place rather
  * than a convenient one: every text write in the product funnels through here — `setElementText`,
- * which the canvas commits a click-to-edit through, and `applyTextEdits`, which the fields panel
- * uses. Putting the shift in the editor would have covered the first and quietly not the second,
- * and a mark that survives the canvas but not the fields panel is worse than one that never
- * survived at all.
+ * which the canvas commits a click-to-edit through **and which the fields panel now commits a
+ * words-only change through too**, and `applyTextEdits`, which is the download route. Putting the
+ * shift in the editor would have covered one and quietly not the others, and a mark that survives
+ * the canvas but not the fields panel is worse than one that never survived at all.
+ *
+ * > **That sentence used to name the fields panel as `applyTextEdits`' caller, and it was wrong in a
+ * > way that cost a mark.** Until 1 October 2026 the panel reached neither of these: it rebuilt the
+ * > element's whole `ContentValue` and sent it through `fillSlot`, which carries no marks at all — so
+ * > the warning one line above was describing a split that already existed, in the file that was
+ * > supposed to prevent it. Measured, then routed through `setElementText` (`fieldCommitFor`). Worth
+ * > keeping as a note: the comment was accurate about the danger and wrong about the code, which is
+ * > the combination that reads as reassuring.
  *
  * `textEditBetween` turns the two strings into the edit ADR 0027 §4 defines, and `shiftMarks`
  * applies it. A text that did not change produces an empty edit and the marks do not move.
+ *
+ * **`anchored` is ADR 0027 §4b, and it is the better of two paths rather than a second one.** Given,
+ * it is used as the answer: the caller watched the edit happen and knows where it was, which two
+ * strings cannot say — `"pan y pan y aceite"` losing its second `pan y ` reads to the diff as the
+ * *first* one going, and a bold on the first `pan` is destroyed although its own word was never
+ * touched. Absent, the diff derives it exactly as before, which is what an IME, the browser's own
+ * undo, and any engine that reports no target range all fall back to.
+ *
+ * One parameter rather than a second verb, so this stays the only place a text write can happen.
  */
-function withText(element: ContentElement, text: string): ContentElement {
+function withText(
+  element: ContentElement,
+  text: string,
+  anchored?: readonly MarkRun[],
+): ContentElement {
   const value = element.value;
   if (!value) return element;
   switch (value.kind) {
     case "text":
     case "link": {
-      const marks = shiftMarks(value.marks ?? [], textEditBetween(value.text, text));
+      const marks =
+        anchored === undefined
+          ? shiftMarks(value.marks ?? [], textEditBetween(value.text, text))
+          : checkedAnchored(text, anchored);
       if (marks.length === 0) {
         // Rebuilt without the key rather than set to undefined: an absent `marks` and an empty one
         // have to publish the same bytes, and only the absent one round-trips through the strict
@@ -166,17 +216,18 @@ function replaceById(
   elements: readonly ContentElement[],
   elementId: string,
   text: string,
+  anchored?: readonly MarkRun[],
 ): ContentElement[] | undefined {
   let found = false;
   const next = elements.map((element) => {
     if (element.id === elementId) {
       found = true;
-      return withText(element, text);
+      return withText(element, text, anchored);
     }
     if (!element.items) return element;
     let changedItems = false;
     const items = element.items.map((item) => {
-      const replaced = replaceById(item.elements, elementId, text);
+      const replaced = replaceById(item.elements, elementId, text, anchored);
       if (!replaced) return item;
       changedItems = true;
       return { ...item, elements: replaced };
@@ -198,18 +249,24 @@ function replaceById(
  * An address that matches nothing throws rather than passing quietly: every address the editor
  * sends was read off the very document it is editing, so a miss is a bug in that round trip, and
  * a silent no-op would show up as an edit that simply did not happen.
+ *
+ * **`marks` are the ones the caller already shifted**, in the coordinates of the `text` beside them
+ * (ADR 0027 §4b). Omitting them is not a lesser call: it is the documented fallback, and it is what
+ * every caller that did not watch the edit happen — the download route, an undo, a composition —
+ * must do.
  */
 export function setElementText(
   doc: RetorikaDocument,
   address: ElementAddress,
   text: string,
+  marks?: readonly MarkRun[],
 ): RetorikaDocument {
   let found = false;
   const pages = doc.pages.map((page) => ({
     ...page,
     sections: page.sections.map((section) => {
       if (section.id !== address.sectionId) return section;
-      const content = replaceById(section.content, address.elementId, text);
+      const content = replaceById(section.content, address.elementId, text, marks);
       if (!content) return section;
       found = true;
       return { ...section, content };

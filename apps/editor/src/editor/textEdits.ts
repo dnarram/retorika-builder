@@ -37,8 +37,71 @@ export interface TextFrame {
   readonly indent: number;
 }
 
+/**
+ * An element's text as the editor is willing to believe it, with `contentEditable`'s own invention
+ * taken back out.
+ *
+ * **The browser writes characters nobody typed.** Measured on 1 October 2026, in Chromium: delete
+ * `millo` out of `Solomillo al whisky` and the space that ends up beside the edit comes back as
+ * **U+00A0**, a non-breaking space. Nothing asked for it — it is how `contentEditable` stops a
+ * trailing space from collapsing when it renders — and it did two kinds of damage at once:
+ *
+ * 1. **It reached the document and the published page.** The editor committed `textContent` as it
+ *    found it, so `Solo al whisky` is what got stored, autosaved and would have been written
+ *    into the owner's ZIP, in a product whose whole premise is that the file is the deliverable.
+ * 2. **It made the diff mis-read the edit.** A space becoming a non-breaking space is, to two
+ *    strings, one character deleted and a different one inserted — so the common suffix broke early,
+ *    `textEditBetween` reported the edit as `[4,10)` with one character inserted, and a bold on
+ *    `Solomillo` grew over the new space instead of shrinking to `Solo`. The visible symptom was a
+ *    mark in the wrong place; the cause was a character the editor should never have accepted.
+ *
+ * So every read of an element's text goes through here. It is the mirror of `withText` on the way
+ * in: one place where the DOM's idea of the text becomes the document's.
+ *
+ * **A real non-breaking space the owner pasted is normalised too**, which is a deliberate loss. The
+ * editor offers no way to type one, the renderer has no use for one, and `trim()` already treats it
+ * as whitespace — so keeping some and not others would mean the document's spaces depend on which
+ * browser did the editing.
+ */
+/**
+ * A regular expression rather than `replaceAll` on a string escape, which is not a style choice.
+ *
+ * Biome's formatter rewrites a `"\u00A0"` **string** escape into the literal character, so this
+ * function's body became `replaceAll(" ", " ")` — two spaces that look identical, one of them
+ * invisible. The next person to read that sees a no-op, deletes it, and the published page quietly
+ * gets its non-breaking spaces back. A regex literal's escape survives formatting, so the intent
+ * stays legible to a reader and to a reviewer.
+ */
+const NBSP = /\u00A0/g;
+
+function asTyped(raw: string): string {
+  return raw.replace(NBSP, " ");
+}
+
 export function textFrameOf(raw: string): TextFrame {
-  return { text: raw.trim(), indent: raw.length - raw.trimStart().length };
+  const text = asTyped(raw);
+  return { text: text.trim(), indent: text.length - text.trimStart().length };
+}
+
+/**
+ * The same element in the coordinates an **edit in progress** has to use: leading indentation gone,
+ * trailing whitespace kept.
+ *
+ * **Why the two differ, which took measuring to see.** `textFrameOf` describes what the document
+ * stores, and that is right for the toolbar: a mark is applied to the trimmed text. It is wrong
+ * while somebody is typing, because `trim()` moves under them. Type a space after `pan` and the
+ * trimmed text is still `"pan"`, length 3 — so the next keystroke, really at offset 4, clamps to 3,
+ * and from there every offset in the session is one short. The mark ends up over the wrong letters
+ * by exactly the number of trailing spaces the person happened to type.
+ *
+ * Keeping the trailing whitespace makes the coordinate system stable for as long as the person is
+ * editing, and the commit reconciles it with the trimmed text in one step (`marksAfterTrim`).
+ * Leading indentation still comes off, because the document's offset zero is its first real
+ * character and the marks read at focus are already in that frame.
+ */
+export function liveFrameOf(raw: string): TextFrame {
+  const text = asTyped(raw);
+  return { text: text.trimStart(), indent: text.length - text.trimStart().length };
 }
 
 /**
@@ -71,7 +134,7 @@ export interface InputIntent {
 }
 
 /**
- * How many code units the edit puts in, or `undefined` for "this one is not mapped — fall back".
+ * The text the edit puts in, or `undefined` for "this one is not mapped — fall back".
  *
  * **The whole table is written down, and the default is the fallback.** An input type that reached
  * the wrong branch would shift a mark silently, which is the failure this mechanism exists to stop,
@@ -88,20 +151,23 @@ export interface InputIntent {
  *   is not a function of any one of them), `historyUndo`/`historyRedo` (the browser's undo stack is
  *   not the document's), and anything unforeseen — **deliberately unmapped**.
  *
- * `String.length` is UTF-16 code units, which is exactly the unit ADR 0027 §2 fixed for offsets. No
- * conversion, and no place for one to be forgotten.
+ * **The text and not just its length**, so that the caller can keep the string its captured marks
+ * believe in and check it against the DOM after every edit. A length alone would make that check
+ * impossible, and without it a single mis-mapped edit is undetectable until a mark publishes over
+ * the wrong words. `String.length` is UTF-16 code units, which is exactly the unit ADR 0027 §2 fixed
+ * for offsets — so the length the caller needs is `.length` on this, with no conversion anywhere.
  */
-export function insertedLengthFor(intent: InputIntent): number | undefined {
+export function insertedTextFor(intent: InputIntent): string | undefined {
   switch (intent.inputType) {
     case "insertText":
     case "insertReplacementText":
-      return intent.data === null ? undefined : intent.data.length;
+      return intent.data ?? undefined;
     case "insertFromPaste":
-      return intent.pastedText === null ? undefined : intent.pastedText.length;
+      return intent.pastedText ?? undefined;
     default:
       // Nine `delete…` types in the specification, and they all answer the same thing. Matched by
       // prefix rather than listed, because a tenth would mean the same and listing them invites a
       // list that is one short.
-      return intent.inputType.startsWith("delete") ? 0 : undefined;
+      return intent.inputType.startsWith("delete") ? "" : undefined;
   }
 }

@@ -259,6 +259,35 @@ export function shiftMarks(marks: readonly MarkRun[], edit: TextEdit): MarkRun[]
 }
 
 /**
+ * The marks after the surrounding whitespace was trimmed off the text they sit in.
+ *
+ * **Trimming is not an edit a diff can find, and assuming it was cost a mark.** The editor commits
+ * `textContent.trim()` and has since sprint 2, so marks captured against the live DOM text are in
+ * the coordinates of a string one or two characters wider at each end. Reconciling that with
+ * `textEditBetween` looks right and is wrong: `"  pan "` → `"pan"` has no common prefix *and* no
+ * common suffix, so the diff reports the whole string replaced and every run on it dies. Measured
+ * while building this, which is the only reason it is not in the product.
+ *
+ * It is instead **two deletions whose offsets are known exactly**, so they are applied as such. The
+ * trailing one goes first, because removing the end cannot move the start — the other order needs
+ * the leading length subtracted from the trailing offsets, and that subtraction is a place to make
+ * an off-by-one for no gain.
+ *
+ * A run that was entirely whitespace maps to an empty one and `normaliseMarks`, inside `shiftMarks`,
+ * drops it. That is ADR 0027 §4's fifth row falling out rather than being special-cased here.
+ */
+export function marksAfterTrim(raw: string, marks: readonly MarkRun[]): MarkRun[] {
+  const leading = raw.length - raw.trimStart().length;
+  const trailing = raw.length - raw.trimEnd().length;
+  let out = [...marks];
+  if (trailing > 0) {
+    out = shiftMarks(out, { from: raw.length - trailing, to: raw.length, inserted: 0 });
+  }
+  if (leading > 0) out = shiftMarks(out, { from: 0, to: leading, inserted: 0 });
+  return out;
+}
+
+/**
  * The edit that turns `before` into `after`, as the shortest replacement that explains it.
  *
  * The editor confirms an element's text on `blur` and knows only the two strings, so something has
