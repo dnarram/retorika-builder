@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Retorika — qué letra ves tú</title>
+    <style>
+      :root { color-scheme: light; }
+      body {
+        margin: 0;
+        padding: 24px;
+        background: #f8fafd;
+        color: #0f172a;
+        font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      }
+      main { max-width: 760px; margin: 0 auto; }
+      h1 { font-size: 20px; margin: 0 0 4px; }
+      .lead { color: #475569; margin: 0 0 20px; }
+      .pair {
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 16px 18px;
+        margin-bottom: 14px;
+      }
+      .pair h2 { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: #64748b; margin: 0 0 10px; }
+      .sample-heading { font-weight: 700; font-size: 40px; line-height: 1.15; margin: 0; }
+      .sample-body { font-size: 16px; margin: 6px 0 0; color: #334155; }
+      .verdict { margin: 12px 0 0; font-size: 13px; color: #0f172a; }
+      .verdict b { font-weight: 700; }
+      .copy {
+        margin-top: 20px;
+        background: #0f172a;
+        color: #e2e8f0;
+        border-radius: 10px;
+        padding: 14px 16px;
+        font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      table { border-collapse: collapse; width: 100%; margin-top: 10px; font-size: 12px; }
+      th, td { text-align: left; padding: 3px 8px 3px 0; color: #475569; }
+      th { color: #0f172a; }
+      td.used { color: #0f172a; font-weight: 700; }
+      .note { color: #64748b; font-size: 12px; margin-top: 18px; }
+      canvas { display: none; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>¿Qué letra ves tú?</h1>
+      <p class="lead">
+        Abre este archivo con doble clic. No hace falta servidor ni instalar nada. Cuando cargue,
+        copia el bloque oscuro del final y pásamelo.
+      </p>
+      <div id="pairs"></div>
+      <div class="copy" id="copy">Midiendo…</div>
+      <p class="note">
+        Cada pareja se dibuja con la pila de fuentes exacta que lleva la web publicada. Debajo de cada
+        una, la letra que tu máquina ha usado de verdad — medida comparando el ancho del texto con cada
+        familia por separado contra un control que no existe, que es lo que distingue «declarada» de
+        «usada».
+      </p>
+    </main>
+
+    <canvas id="ruler" width="10" height="10"></canvas>
+
+    <script>
+      // The three pairs, with the stacks `packages/tokens/src/typography.ts` declares. Kept in step by
+      // `packages/tokens/test/fontCheckFixture.test.ts`, which fails if they drift apart — a page that
+      // measures last sprint's stacks would answer the wrong question convincingly.
+      var PAIRS = [
+        {
+          id: "editorial-serif",
+          name: "Sobria y legible",
+          contrast: "generic",
+          heading: "Georgia, Cambria, 'Times New Roman', Times, serif",
+          body: "system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+        },
+        {
+          id: "modern-sans",
+          name: "Moderna y neutra",
+          contrast: "weightAndSize",
+          heading: "Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+          body: "system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+        },
+        {
+          id: "classic-display",
+          name: "Clásica y seria",
+          contrast: "named",
+          heading: "'Playfair Display', Didot, 'Bodoni MT', 'Big Caslon', Georgia, 'Times New Roman', serif",
+          body: "Charter, 'Iowan Old Style', Palatino, 'Palatino Linotype', Georgia, Cambria, 'Times New Roman', Times, serif"
+        }
+      ];
+
+      const SENTENCE = "Solomillo al whisky — 1234";
+      const ABSENT = "ZZNoExisteEstaFamilia";
+
+      const ctx = document.getElementById("ruler").getContext("2d");
+
+      // Canvas rather than a DOM node: one number per family, with no layout to disturb, and the same
+      // measurement in every browser that can open a local file.
+      const widthWith = (family) => {
+        ctx.font = `40px ${family}`;
+        return Math.round(ctx.measureText(SENTENCE).width * 100) / 100;
+      };
+
+      const familiesOf = (stack) =>
+        stack.split(",").map((part) => part.trim().replace(/^['"]|['"]$/g, ""));
+
+      const quoted = (family) => (/\s/.test(family) ? `'${family}'` : family);
+
+      /**
+       * Which family of the stack the browser actually used.
+       *
+       * The stack's own width is measured, then each family alone. A family that is not installed
+       * measures exactly like a family that does not exist, so the control is what tells "absent" from
+       * "present and used". The first installed family whose own width equals the stack's is the one in
+       * use; if none matches, the stack fell through to its generic keyword and that is reported.
+       */
+      const resolve = (stack) => {
+        const control = widthWith(quoted(ABSENT));
+        const whole = widthWith(stack);
+        const families = familiesOf(stack);
+        const rows = families.map((family) => {
+          const alone = widthWith(quoted(family));
+          return { family, width: alone, present: alone !== control, matches: alone === whole };
+        });
+        const hit = rows.find((row) => row.present && row.matches);
+        return { used: hit ? hit.family : null, whole, control, rows, families };
+      };
+
+      const table = (result) =>
+        `<table><tr><th>familia declarada</th><th>ancho</th><th>¿está?</th></tr>${result.rows
+          .map((row) => {
+            const isUsed = row.family === result.used;
+            return (
+              `<tr><td class="${isUsed ? "used" : ""}">${row.family}` +
+              `${isUsed ? " ← la que se usa" : ""}</td>` +
+              `<td>${row.width}</td><td>${row.present ? "sí" : "no"}</td></tr>`
+            );
+          })
+          .join("")}</table>`;
+
+      const host = document.getElementById("pairs");
+      const lines = PAIRS.map((pair) => {
+        const h = resolve(pair.heading);
+        const b = resolve(pair.body);
+        const headingUsed = h.used ?? `(el genérico: ${h.families[h.families.length - 1]})`;
+        const bodyUsed = b.used ?? `(el genérico: ${b.families[b.families.length - 1]})`;
+        const same = headingUsed === bodyUsed;
+
+        const block = document.createElement("div");
+        block.className = "pair";
+        const esc = (stack) => stack.replace(/"/g, "&quot;");
+        block.innerHTML =
+          `<h2>${pair.name} · ${pair.id} · [${pair.contrast}]</h2>` +
+          `<p class="sample-heading" style="font-family: ${esc(pair.heading)}">${SENTENCE}</p>` +
+          `<p class="sample-body" style="font-family: ${esc(pair.body)}">` +
+          "Abrimos de martes a sábado. Reserva por teléfono y te guardamos mesa junto a la ventana." +
+          "</p>" +
+          `<p class="verdict">Titular: <b>${headingUsed}</b> · Cuerpo: <b>${bodyUsed}</b> · ` +
+          `${same ? "la misma letra en los dos" : "letras distintas"}</p>` +
+          table(h) +
+          table(b);
+        host.appendChild(block);
+
+        return (
+          `${pair.id}  titular: ${headingUsed}  |  cuerpo: ${bodyUsed}  |  ` +
+          `${same ? "MISMA letra" : "letras DISTINTAS"}`
+        );
+      });
+
+      const platform = navigator.userAgentData?.platform ?? navigator.platform;
+      document.getElementById("copy").textContent =
+        `retorika font-check\n` +
+        `navegador: ${navigator.userAgent}\n` +
+        `plataforma: ${platform}\n` +
+        `fecha: ${new Date().toISOString().slice(0, 10)}\n\n` +
+        lines.join("\n");
+    </script>
+  </body>
+</html>

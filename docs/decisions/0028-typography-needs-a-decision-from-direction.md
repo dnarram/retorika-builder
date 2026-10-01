@@ -65,6 +65,18 @@ reading off it is not the fallback itself:
 > `classic-display`. Only `editorial-serif`, whose stack never asked for a font that might be
 > missing, still contrasts.
 
+> **Corrected 1 October 2026, while building option C: that sentence is too strong, and the
+> correction changed what C had to do.** Heading and body also differ by **weight and size** —
+> measured in Chromium, `h1` computes to **700** against the body's **400**, at **2.5×** the size,
+> because `build.ts` sets no `font-weight` and the heading keeps the browser's bold. No absent font
+> can take either away, so a visitor never sees one undifferentiated block and the pair never stops
+> reading as a pair.
+>
+> What the third row really loses is the **character** the owner chose, which is narrower and is the
+> complaint worth fixing. The distinction matters because it changes the answer for `modern-sans`:
+> «moderna y neutra» setting one family and separating by weight is **a legitimate design**, not a
+> defect, and the fix below leaves it alone on purpose.
+
 A visitor on that machine sees two of the owner's three choices as the same decision. Linux — the CI
 runner, and some visitors — has neither font either, and its fallback differs again from macOS's and
 Windows'.
@@ -244,9 +256,116 @@ a time. Under A it answers a question nobody has: the letterform is the one that
 
 | Step | What it is |
 |---|---|
-| **1. C** | `TYPE_PAIRS` re-chosen so each pair keeps a heading/body contrast with no extra fonts, with the harness's own font report as the test. The golden corpus moves once and the diff is read in full. Small, and it stands on its own if A is ever reversed |
+| **1. C** | **Done 1 October 2026 — see "Option C, as built" below.** `TYPE_PAIRS` re-chosen so each pair keeps a heading/body contrast with no extra fonts, with the harness's own font report as the test. The golden corpus moves once and the diff is read in full. Small, and it stands on its own if A is ever reversed |
 | **2. A** | A task file first — it touches `packages/renderer` and `packages/publisher`, both exclusive zones. The `url()` exception of measurement 3 is written and tested before a byte is shipped, and `pnpm size` gains a second number: the bundle, beside the page |
 | **3. #9** | Closes with A, not with this file |
+
+## Option C, as built — 1 October 2026
+
+**Not «fix two pairs». Each pair now declares *how* it survives getting no font**, as a field on the
+pair itself (`FontContrast`), because the three survive in three different ways and each way breaks
+differently. A test holds each one still, which is what stops a pair sliding from one kind to another
+the way `classic-display` did without anyone deciding it should.
+
+| | kind | what keeps heading apart from body | changed? |
+|---|---|---|---|
+| `editorial-serif` | **`generic`** | the stacks end in **different generic keywords**, so a serif against a sans survives even where no named family exists | no — it was already the only one that degraded well |
+| `modern-sans` | **`weightAndSize`** | **one family on purpose**, separated by the 700 weight and the 2.5× size | no — and that is the decision, not the absence of one |
+| `classic-display` | **`named`** | a display serif over a text serif, with **distinct fallback chains** | **yes** — it was the one that genuinely lost everything |
+
+**Why `modern-sans` is left alone.** Forcing a family contrast was considered and refused: adding
+`'Helvetica Neue', Arial` after Inter would give macOS a Helvetica heading over an SF body, Windows one
+family for both, and Linux something else again — a difference *between platforms* bought for a design
+distinction nobody asked for, and less neutral than «moderna y neutra» promises.
+
+**Why `classic-display` changed, and how the faces were chosen.** Candidate families were measured on
+this machine rather than assumed, with the same `CSS.getPlatformFontsForNode` the harness uses:
+
+```
+  present on macOS : Didot, Big Caslon, Baskerville, Hoefler Text, Palatino, Charter,
+                     Iowan Old Style, Georgia, Times New Roman
+  absent on macOS  : Playfair Display, Bodoni MT, Palatino Linotype, Book Antiqua,
+                     Constantia, Cambria, Garamond
+```
+
+So the heading keeps Playfair first and then names faces that stand in for its didone character, and
+the body names a text serif that is **not** the heading's next fallback. The result, measured through
+the harness after the change:
+
+```
+Fonts Chromium renders (darwin):
+  editorial-serif  heading: Georgia   body: .SF NS    [generic]       different faces, weight 700/400, size 40/16px
+  modern-sans      heading: .SF NS    body: .SF NS    [weightAndSize] SAME face,       weight 700/400, size 40/16px
+  classic-display  heading: Didot     body: Charter   [named]         different faces, weight 700/400, size 40/16px
+```
+
+`classic-display` was `Georgia / Georgia` before this change.
+
+### What the test asserts, and what it deliberately does not
+
+The font report now asserts **the weight and size contrast for every pair** — a property of `build.ts`
+and the scale, true on every platform — and **that a `generic` pair resolves two different faces**,
+which cannot fail for want of an installed font.
+
+**A `named` pair is reported and not asserted.** Its contrast depends on which of the faces it names
+the machine has, and that is not ours to guarantee: asserting it would turn a CI runner's font set into
+a red build and teach the next person to loosen the check rather than read it. **Best-effort is what
+`named` means**, and pretending a stack can promise more would be the dishonest half of option C.
+
+### Windows is not measured, and here is the procedure for measuring it
+
+macOS is measured locally and Linux by the CI runner. **Windows is neither, and it is the platform most
+of a neighbourhood site's visitors use.** So this is a procedure rather than a note asking somebody to
+remember:
+
+1. Open **`fixtures/font-check.html`** by double-clicking it. No server, no install — the same promise
+   ADR 0001 makes of a published site, and a test enforces that the page needs nothing but itself.
+2. It draws the same sentence in all three pairs with their exact stacks, and reports **which letter
+   each one actually used** — by measuring the text's width with each family alone against a control
+   family that cannot exist, which is what tells "declared" from "used".
+3. Copy the dark block at the foot and send it.
+
+**Cross-checked before being trusted.** On this machine the page's width measurement agrees exactly
+with the harness's CDP measurement, in both Chromium 153 and Firefox 155 — `Georgia/system-ui`,
+`system-ui/system-ui`, `Didot/Charter`. Two independent techniques agreeing where both can be run is
+what makes the one number only the page can give worth having.
+
+| platform | measured | `editorial-serif` | `modern-sans` | `classic-display` |
+|---|---|---|---|---|
+| macOS 26 (Chromium 153, Firefox 155) | **yes**, 1 Oct 2026 | Georgia / .SF NS ✅ | .SF NS / .SF NS ⬛ | **Didot / Charter** ✅ |
+| Linux (CI runner, Chromium 153) | **yes**, 1 Oct 2026 | Liberation Serif / DejaVu Sans ✅ | DejaVu Sans / DejaVu Sans ⬛ | **Liberation Serif / Liberation Serif ❌** |
+| **Windows** | **no** | — | — | — |
+
+✅ two faces · ⬛ one face by design · ❌ one face where two were wanted
+
+> **Linux collapses `classic-display`, exactly as `named` predicts, and that is the row worth keeping.**
+> The CI runner has none of Didot, Bodoni MT, Big Caslon, Charter, Iowan Old Style, Palatino, Palatino
+> Linotype or Georgia, so both stacks reach their `serif` keyword and land on Liberation Serif
+> together. **This is the measurement that would have been hidden by asserting the `named` contrast**:
+> the build would have gone red for a property of the runner's font set, and the honest reading —
+> *option C raises the floor on the platforms that have the faces and cannot raise it where none
+> exist* — would have been replaced by a loosened check.
+>
+> It is also the sharpest argument for A that this file has. On Linux, `classic-display` without font
+> files is one serif at two sizes **whatever stack is chosen**, and no amount of option C fixes that.
+> Shipping the face does.
+>
+> **Every pair keeps its 700/400 weight and its 40/16px size on both platforms**, which is the part
+> that holds everywhere and the reason no visitor sees an undifferentiated block.
+
+### Two consequences of changing a stack, both recorded rather than fixed
+
+- **A site built before today keeps the letters it was built with.** A document stores its theme as
+  resolved strings, so changing `TYPE_PAIRS` cannot reach one that already exists — and
+  `identifyTypePair` matches on those exact strings, so the style panel will say «Ahora mismo tu web
+  usa una letra que no está en esta lista. Elige una para cambiarla.» That sentence is **true**, and
+  picking the pair again fixes it. No migration: the theme is free strings, the document still
+  validates, and nothing is lost.
+- **The golden corpus did not move on its own, which the plan expected it to.** Same reason: its
+  fixtures are documents with their themes already baked, so a token change is invisible to them. That
+  is good for stability and it left **nothing in the corpus exercising the new stacks**, so
+  `fixtures/documents/menu-y-paginas.json` was moved to them deliberately. The diff is two CSS custom
+  property lines and nothing else.
 
 ## Consequences
 
