@@ -310,8 +310,13 @@ describe("textEditBetween", () => {
   });
 
   it("reports no change as an empty edit, which shifts nothing", () => {
+    // The suffix is scanned first (see the function's own comment), so a wholly unchanged string
+    // credits every character to the suffix and reports `{from: 0, to: 0}` rather than
+    // `{from: length, to: length}` — both are genuine no-ops for `shiftMarks`, since nothing is
+    // removed or inserted either way. The position is not what this test is about.
     const edit = textEditBetween(DISH, DISH);
-    expect(edit).toEqual({ from: 19, to: 19, inserted: 0 });
+    expect(edit.inserted).toBe(0);
+    expect(edit.to - edit.from).toBe(0);
     const bold: MarkRun[] = [{ from: 0, to: 9, mark: "strong" }];
     expect(shiftMarks(bold, edit)).toEqual(bold);
   });
@@ -319,6 +324,45 @@ describe("textEditBetween", () => {
   it("falls back to the whole string when nothing in it stayed put", () => {
     // Honest rather than clever: two strings do not say that a letter moved.
     expect(textEditBetween("ab", "ba")).toEqual({ from: 0, to: 2, inserted: 2 });
+  });
+
+  describe("the boundary ambiguity sprint 10 day 7's walk found", () => {
+    // Typing "beber" + " casero" right after a bold "beber" that is itself followed by a space:
+    // the inserted text starts with a space, and a space already sat right there. A prefix scanned
+    // from the start walks straight through that shared character, reporting the edit one position
+    // later than where it actually happened — which put it past the end of the bold run and made
+    // "al final continúa" silently stop applying. Caught live, in a real contentEditable, not by
+    // any of this file's other cases: none of them had a repeated character sitting at the edit's
+    // own boundary.
+    const before = "Comer, beber y quedarse un rato";
+    const after = "Comer, beber casero y quedarse un rato";
+
+    it("places the edit at the true boundary, not past it", () => {
+      // "Comer, beber" is 12 code units; that is where the person's cursor was.
+      expect(textEditBetween(before, after)).toEqual({ from: 12, to: 12, inserted: 7 });
+    });
+
+    it("lets a run ending exactly there continue, the way ADR 0027 §3 promises", () => {
+      const bold: MarkRun[] = [{ from: 7, to: 12, mark: "strong" }];
+      const edit = textEditBetween(before, after);
+      expect(shiftMarks(bold, edit)).toEqual([{ from: 7, to: 19, mark: "strong" }]);
+    });
+
+    it("still round-trips: applying the edit to `before` gives `after`", () => {
+      const edit = textEditBetween(before, after);
+      const rebuilt =
+        before.slice(0, edit.from) +
+        after.slice(edit.from, edit.from + edit.inserted) +
+        before.slice(edit.to);
+      expect(rebuilt).toBe(after);
+    });
+
+    it("holds in the mirror case: deleting right after a run end", () => {
+      // The same boundary, the other direction: removing " casero" should land the edit back at
+      // the run's own end rather than one character into it.
+      const edit = textEditBetween(after, before);
+      expect(edit).toEqual({ from: 12, to: 19, inserted: 0 });
+    });
   });
 
   it("round-trips: applying the edit to `before` gives `after`", () => {

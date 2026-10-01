@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { inflateRawSync } from "node:zlib";
-import { type Browser, chromium, expect, type Page } from "@playwright/test";
+import { type Browser, chromium, expect, type Locator, type Page } from "@playwright/test";
 import { afterAll, beforeAll, describe, it } from "vitest";
 import { BASE_URL, startEditorServer, stopEditorServer } from "./server.ts";
 
@@ -2283,6 +2283,246 @@ describe("sprint 9 día 7 — colchón: la barra no traga un clic que era para o
       // not the headline, which is what makes this the paragraph's own toolbar and not the one
       // left over from before.
       await expect(body).toBeFocused();
+    } finally {
+      await studio.context().close();
+    }
+  }, 120_000);
+});
+
+/**
+ * Sprint 10 day 7 — the complete walk, and the first e2e for marks at all.
+ *
+ * Days 3-6 each have their own proof in isolation: the schema's offset arithmetic, the renderer's
+ * run-by-run escaping, the toolbar's two buttons, the 320px measurement. None of them is exercised
+ * through a real `contentEditable`, a real blur-commit, a real debounced autosave and a real
+ * download — which is exactly the seam sprint 9 day 7's walk existed to prove for the style system,
+ * and the one no unit test can stand in for here either.
+ *
+ * **One correction to the plan this sprint was approved on.** The plan said the overflow check
+ * would mean a download that "no se pueda" — cannot happen. Day 6 decided the opposite on purpose:
+ * overflow *warns*, the same as the photo marker, because the owner can see it in the mobile
+ * preview and the commonest cause is a word they typed themselves. This walk follows what was
+ * actually built rather than the plan's older wording — it shows the warning, lets a cautious owner
+ * back out of it, and downloads once the size is fixed.
+ *
+ * **And one addition beyond the plan's own words.** Rather than re-opening the hand-written
+ * `xss-attempt` fixture — already proven green and untouched on day 4, at the unit level and now in
+ * a real browser — this walk types a `<script>` tag into a live, marked, edited field and lets the
+ * whole pipeline carry it to a downloaded, double-clicked page. That is a stronger claim than
+ * replaying a fixture: it is the one sentence ADR 0024 built this feature on, satisfied by an
+ * owner's actual keystrokes rather than by a document nobody but a test ever writes.
+ */
+async function selectWord(locator: Locator, word: string): Promise<void> {
+  const found = await locator.evaluate((el, w) => {
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let node: Text | null;
+    // biome-ignore lint/suspicious/noAssignInExpressions: the idiomatic shape of a TreeWalker loop
+    while ((node = walker.nextNode() as Text | null)) {
+      const index = node.textContent?.indexOf(w) ?? -1;
+      if (index < 0) continue;
+      const range = document.createRange();
+      range.setStart(node, index);
+      range.setEnd(node, index + w.length);
+      const selection = el.ownerDocument.defaultView?.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      return true;
+    }
+    return false;
+  }, word);
+  if (!found) throw new Error(`selectWord: "${word}" not found in ${await locator.innerHTML()}`);
+}
+
+/**
+ * A collapsed caret at the very start or the very end of the **first occurrence** of `word` inside
+ * `locator` — placed this precisely because ADR 0027 §3's asymmetry is about exactly that
+ * boundary, not about the word in general.
+ *
+ * Searches by substring rather than requiring a node whose entire content equals `word`, because
+ * after the first mark grows (ADR 0027 §3's own "continúa" row) the run's text node is no longer
+ * "beber" alone — it is "beber <script>bad()</script>", with "beber" now only a prefix of it. A
+ * helper that only matched a lone, exact node would stop working the moment the feature it tests
+ * did what it was supposed to.
+ */
+async function caretAt(locator: Locator, word: string, edge: "start" | "end"): Promise<void> {
+  const found = await locator.evaluate(
+    (el, { w, e }) => {
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      let node: Text | null;
+      // biome-ignore lint/suspicious/noAssignInExpressions: the idiomatic shape of a TreeWalker loop
+      while ((node = walker.nextNode() as Text | null)) {
+        const index = node.textContent?.indexOf(w) ?? -1;
+        if (index < 0) continue;
+        const offset = e === "start" ? index : index + w.length;
+        const range = document.createRange();
+        range.setStart(node, offset);
+        range.collapse(true);
+        const selection = el.ownerDocument.defaultView?.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+        return true;
+      }
+      return false;
+    },
+    { w: word, e: edge },
+  );
+  if (!found) {
+    throw new Error(`caretAt: "${word}" not found in ${await locator.innerHTML()}`);
+  }
+}
+
+describe("sprint 10 día 7 — el recorrido completo del sprint", () => {
+  it("marks two words, edits around the mark, triggers and clears an overflow, and downloads a ZIP with the emphasis and the escaping intact", async () => {
+    const studio = await (await browser.newContext()).newPage();
+    try {
+      await studio.goto(BASE_URL, { waitUntil: "networkidle" });
+      await studio.fill("#nombre", "Taberna del Puerto");
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByText("Restaurante y bar", { exact: true }).click();
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByText("Comidas", { exact: true }).click();
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.fill("#direccion", "Muelle 3, Ronda");
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByText("Que reserven", { exact: true }).click();
+      await studio.fill("#enlace", "https://reservas.example.com/taberna");
+      await studio.getByRole("button", { name: "Crear mi web" }).click();
+      await studio.getByText("Ver a tamaño real →").first().click();
+
+      const frame = studio.frameLocator("iframe").first();
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+      const subheadline = frame.locator('[data-id="el-subheadline"]');
+      await expect(subheadline).toHaveText("Comer, beber y quedarse un rato");
+
+      // ---- day 5: both marks on the same word, which is what the third session's owner asked
+      //      for by naming cursiva and negrita together (docs/sessions/2026-09-30-taller.md) ----
+      await subheadline.click();
+      await selectWord(subheadline, "beber");
+      await frame.locator('.rb-toolbar-mark[data-mark="strong"]').click();
+      await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
+      await expect(subheadline.locator("strong")).toHaveText("beber");
+
+      await subheadline.click();
+      await selectWord(subheadline, "beber");
+      await frame.locator('.rb-toolbar-mark[data-mark="em"]').click();
+      await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
+      // strong outside, em inside — ADR 0027 §5's fixed nesting order, read back from real markup.
+      await expect(subheadline.locator("strong em")).toHaveText("beber");
+
+      // ---- ADR 0027 §3-4: the boundary is asymmetric, and both halves are tested live ----
+      // Typing right at the END of the run makes it continue — and this is where the <script>
+      // ADR 0024 was built against goes in, so the whole pipeline carries it to the ZIP.
+      await subheadline.click();
+      await caretAt(subheadline, "beber", "end");
+      await studio.keyboard.type(" <script>bad()</script>");
+      await studio.keyboard.press("Enter");
+      await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
+      await expect(subheadline.locator("strong em")).toHaveText("beber <script>bad()</script>");
+
+      // Typing right at the START of the run does not — the same asymmetry, the other edge.
+      await subheadline.click();
+      await caretAt(subheadline, "beber", "start");
+      await studio.keyboard.type("Muy ");
+      await studio.keyboard.press("Enter");
+      await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
+      // "Muy " sits outside the mark: the bold+italic span is unchanged by the edit at its start.
+      await expect(subheadline.locator("strong em")).toHaveText("beber <script>bad()</script>");
+      await expect(subheadline).toHaveText(
+        "Comer, Muy beber <script>bad()</script> y quedarse un rato",
+      );
+
+      // ---- day 6: an exact size big enough to overflow at 320px, on purpose ----
+      await studio.getByRole("switch", { name: "Herramientas de diseño" }).click();
+      await studio.getByRole("button", { name: "Sí, enciéndelas" }).click();
+
+      const headline = frame.locator('[data-id="el-headline"]');
+      const sizeInput = frame.locator('.rb-toolbar-exact[aria-label^="Tamaño"]');
+      await headline.click();
+      await sizeInput.fill("200");
+      await sizeInput.dispatchEvent("change");
+      await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
+      await expect
+        .poll(() => headline.evaluate((el) => getComputedStyle(el).fontSize))
+        .toBe("200px");
+
+      // ---- the download: the photo warning first, then the overflow warning, and a cautious
+      //      owner backing out of it rather than publishing past it ----
+      await studio.getByRole("button", { name: "Descargar", exact: true }).click();
+      await studio.getByRole("button", { name: "Descargar igualmente" }).waitFor();
+      await studio.getByRole("button", { name: "Descargar igualmente" }).click();
+      await expect(studio.getByText("Algo se sale en el móvil")).toBeVisible();
+      await studio.getByRole("button", { name: "Volver", exact: true }).click();
+      await expect(studio.getByText("Algo se sale en el móvil")).toHaveCount(0);
+
+      // Fixed, by dropping the exception — back to the system's own size.
+      await headline.click();
+      await sizeInput.fill("");
+      await sizeInput.dispatchEvent("change");
+      await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
+
+      // A fresh press re-evaluates from the document as it now stands (`requestDownload`'s own
+      // contract) rather than remembering the overflow that no longer exists.
+      await studio.getByRole("button", { name: "Descargar", exact: true }).click();
+      const photoWarning = studio.getByRole("button", { name: "Descargar igualmente" });
+      await photoWarning.waitFor();
+      await expect(studio.getByText("Algo se sale en el móvil")).toHaveCount(0);
+      const [download, response] = await Promise.all([
+        studio.waitForEvent("download"),
+        studio.waitForResponse((candidate) => candidate.url().includes("/api/download")),
+        photoWarning.click(),
+      ]);
+      expect(response.status()).toBe(200);
+
+      const dir = mkdtempSync(join(tmpdir(), "retorika-e2e-sprint10-dia7-"));
+      const zipPath = join(dir, download.suggestedFilename());
+      await download.saveAs(zipPath);
+      const zip = new Uint8Array(readFileSync(zipPath));
+      const html = extractFileBytes(zip, "index.html");
+      const filePath = join(dir, "index.html");
+      writeFileSync(filePath, html);
+
+      const offlinePage = await (await browser.newContext()).newPage();
+      const dialogs: string[] = [];
+      const failed: string[] = [];
+      offlinePage.on("dialog", (dialog) => {
+        dialogs.push(dialog.message());
+        void dialog.dismiss();
+      });
+      offlinePage.on("requestfailed", (request) => failed.push(request.url()));
+      try {
+        await offlinePage.goto(`file://${filePath}`, { waitUntil: "load" });
+        await expect(offlinePage).toHaveTitle("Taberna del Puerto");
+
+        // Nothing ran, and there is nothing that could: the <script> typed into a marked run is
+        // text on the page, not a script element — the same claim the day 4 browser test makes
+        // against a hand-written fixture, proven here against one a person actually typed.
+        expect(await offlinePage.evaluate(() => document.querySelectorAll("script").length)).toBe(
+          0,
+        );
+        expect(dialogs).toEqual([]);
+
+        const publishedSub = offlinePage.locator('[data-id="el-subheadline"]');
+        await expect(publishedSub.locator("strong em")).toHaveText("beber <script>bad()</script>");
+        await expect(publishedSub).toHaveText(
+          "Comer, Muy beber <script>bad()</script> y quedarse un rato",
+        );
+        // No mark bled into "Muy " or past the end of the script text — the fixed nesting order
+        // and the clipped boundaries both survived render(doc, "html").
+        await expect(publishedSub.locator("strong")).toHaveCount(1);
+        await expect(publishedSub.locator("em")).toHaveCount(1);
+
+        // The exact size was dropped, not merely overridden: the published headline is back to
+        // whatever size.subheading resolves to for this palette, not a literal 200px.
+        const headlineFontSize = await offlinePage
+          .locator('[data-id="el-headline"]')
+          .evaluate((el) => getComputedStyle(el).fontSize);
+        expect(headlineFontSize).not.toBe("200px");
+
+        // And the whole promise ADR 0001 makes: every byte the page needed was inside the ZIP.
+        expect(failed).toEqual([]);
+      } finally {
+        await offlinePage.context().close();
+      }
     } finally {
       await studio.context().close();
     }
