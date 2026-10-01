@@ -149,9 +149,18 @@ There is no fifth, and three deliberate absences are worth naming:
 - **`color.accent` is admitted nowhere.** No rule the renderer emits reads `var(--color-accent)`, a
   test asserts that no document in the corpus does either, and it is the one colour whose contrast is
   asserted in no palette — 3.19:1 on surface in `classic-blue`, under AA.
-- **`font.heading` and `font.body` are not here at all**, so there is no per-element typeface. Issue
-  #9: those stacks fall back to the system font on a machine without the fonts, and ADR 0001 forbids
-  downloading them, so offering one would promise a letterform the visitor may never receive.
+- **`font.heading` and `font.body` are not here at all**, so there is no per-element typeface — only
+  the type pair's own two stacks, chosen as a whole rather than named loose by an element.
+
+  > **Corrected 1 October 2026.** This used to say ADR 0001 forbids downloading the stacks at all,
+  > which stopped being true the same day: ADR 0028 self-hosts `modern-sans` and `classic-display`'s
+  > own faces inside the ZIP, which is shipping bytes the owner already has rather than a client's
+  > published page calling out to a third party — exactly what ADR 0001 actually forbids.
+  > `editorial-serif` still carries none; its stack never names a face that might be missing. What
+  > stays refused is the different thing issue #9's other half was really about: a typeface chosen
+  > *per element*, which could name a face nobody has shipped and promise a letterform the visitor
+  > may never receive. That is still unbuilt and still comes after the type pair itself, never
+  > before it.
 - **The list is disjoint from `display`, `order`, `width` and the grid columns**, and that is rule 7
   rather than tidiness. **A media query adds no specificity**, so a per-element rule outranks a
   mobile patch: if `display` were here, an element hidden by its own patch would reappear on the

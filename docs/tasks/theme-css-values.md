@@ -6,6 +6,13 @@
 >
 > Not delegated to OpenCode under any circumstances, however small the diff looks.
 
+> **`escape.ts` has since grown a second, unrelated exception.** Sprint 11 day 5 added
+> `cssFontFamilyName` and `cssFontSrc` beside `cssThemeValue` — the first `url()` this renderer has
+> ever emitted, for a self-hosted `@font-face` (ADR 0028). `cssThemeValue` itself, the guard this
+> task built, is untouched: the two call sites and the tests pinning them are exactly as this task
+> left them. A reader who comes to this file expecting the one guard it describes should know the
+> file now carries two.
+
 ## Objective
 
 Every theme value reaches the published CSS **exactly as written** — `'Times New Roman'` stays
