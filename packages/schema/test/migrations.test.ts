@@ -21,6 +21,16 @@ const DOCUMENTS_DIR = join(
 const theme = Object.fromEntries(TOKEN_KEYS.map((key) => [key, `value-${key}`])) as Theme;
 
 /**
+ * The versions `0003`'s claim is about: documents written before the style vocabulary closed.
+ *
+ * Named as a set rather than written as `!== "1.2.0"`, which is what it said until day 3 of sprint
+ * 10. That form meant «everything except the then-current version», so the first 1.3.0 fixture
+ * would have been swept into the assertion instead of out of it — the test would have changed
+ * subject on a version bump, which is the exact failure the `step` helper above exists to avoid.
+ */
+const BEFORE_CLOSED_VOCABULARY = new Set<string | undefined>([undefined, "1.0.0", "1.1.0"]);
+
+/**
  * A migration addressed by the version it produces, never by its position in the list.
  *
  * `MIGRATIONS.at(-1)` used to mean `0002` and stopped meaning it the moment `0003` landed, which
@@ -246,21 +256,24 @@ describe("0003 — an element's style is a closed vocabulary", () => {
   }
 
   it("opens a document saved before the vocabulary closed", () => {
+    // The whole chain, deliberately: this one is about a 1.1.0 document still opening *today*, so
+    // it follows the current version rather than the step's. `upTo` is used below, where the
+    // subject is 0003 itself.
     const migrated = migrateToCurrent(before());
-    expect(migrated["schemaVersion"]).toBe("1.2.0");
+    expect(migrated["schemaVersion"]).toBe(SCHEMA_VERSION);
     expect(() => parseDocument(migrated)).not.toThrow();
   });
 
   it("changes nothing but the version, because no stored document carries style", () => {
     const input = before();
-    expect({ ...migrateToCurrent(input), schemaVersion: "1.1.0" }).toEqual(input);
+    expect({ ...upTo(input, "1.2.0"), schemaVersion: "1.1.0" }).toEqual(input);
   });
 
   it("round-trips: down after up gives back exactly what went in", () => {
     const input = before();
     const down = step("1.2.0").down;
     if (!down) throw new Error("0003 has no down");
-    expect(down(migrateToCurrent(input))).toEqual(input);
+    expect(down(upTo(input, "1.2.0"))).toEqual(input);
   });
 
   it("carries a style written against the new vocabulary back down unharmed", () => {
@@ -275,7 +288,7 @@ describe("0003 — an element's style is a closed vocabulary", () => {
 
     const down = step("1.2.0").down;
     if (!down) throw new Error("0003 has no down");
-    const roundTripped = down(migrateToCurrent(structuredClone(input)));
+    const roundTripped = down(upTo(structuredClone(input), "1.2.0"));
     expect(roundTripped).toEqual(input);
   });
 
@@ -298,11 +311,149 @@ describe("0003 — an element's style is a closed vocabulary", () => {
     for (const file of corpus) {
       const raw = readFileSync(join(DOCUMENTS_DIR, file), "utf8");
       const parsed = JSON.parse(raw) as { schemaVersion?: string };
-      if (parsed.schemaVersion === "1.2.0") continue;
+      if (!BEFORE_CLOSED_VOCABULARY.has(parsed.schemaVersion)) continue;
       older += 1;
       expect(raw, file).not.toContain('"style"');
     }
     // And the filter has not quietly excluded everything, which would make this pass by vacuum.
+    expect(older).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * `0004` is additive, like `0002` and unlike `0003`: `marks` is a new optional field, so every
+ * 1.2.0 document is already a valid 1.3.0 one.
+ *
+ * The interesting half is `down`, and it is the first in this chain that **loses something on
+ * purpose**. 1.2.0 has nowhere to put a mark, so going back drops it: the text survives and the
+ * emphasis does not. The alternative is refusing to migrate down, which locks somebody out of their
+ * own site over a bold word. The tests below pin that it drops marks and *only* marks.
+ */
+describe("0004 — a text may carry marked runs", () => {
+  function before(): Record<string, unknown> {
+    return {
+      schemaVersion: "1.2.0",
+      id: "doc-1",
+      siteName: "Taberna",
+      theme,
+      collections: [],
+      pages: [
+        {
+          id: "home",
+          slug: "index",
+          title: "Taberna",
+          sections: [
+            {
+              id: "sec-cover",
+              preset: { catalogId: "cover", variantId: "image-right" },
+              source: "catalog",
+              layout: null,
+              content: [
+                {
+                  id: "el-headline",
+                  role: "heading",
+                  hidden: false,
+                  slot: "headline",
+                  value: { kind: "text", text: "Solomillo al whisky" },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  function headline(doc: Record<string, unknown>): Record<string, unknown> {
+    const pages = doc["pages"] as { sections: { content: Record<string, unknown>[] }[] }[];
+    const element = pages[0]?.sections[0]?.content[0];
+    if (!element) throw new Error("no element");
+    return element;
+  }
+
+  it("opens a document saved before marks existed", () => {
+    const migrated = migrateToCurrent(before());
+    expect(migrated["schemaVersion"]).toBe(SCHEMA_VERSION);
+    expect(() => parseDocument(migrated)).not.toThrow();
+  });
+
+  it("changes nothing but the version", () => {
+    const input = before();
+    expect({ ...upTo(input, "1.3.0"), schemaVersion: "1.2.0" }).toEqual(input);
+  });
+
+  it("round-trips: down after up gives back exactly what went in", () => {
+    const input = before();
+    const down = step("1.3.0").down;
+    if (!down) throw new Error("0004 has no down");
+    expect(down(upTo(input, "1.3.0"))).toEqual(input);
+  });
+
+  it("drops marks on the way down, because 1.2.0 has nowhere to keep them", () => {
+    const input = upTo(before(), "1.3.0");
+    headline(input)["value"] = {
+      kind: "text",
+      text: "Solomillo al whisky",
+      marks: [{ from: 0, to: 9, mark: "strong" }],
+    };
+    const down = step("1.3.0").down;
+    if (!down) throw new Error("0004 has no down");
+
+    const back = down(structuredClone(input));
+    expect(back["schemaVersion"]).toBe("1.2.0");
+    expect(headline(back)["value"]).toEqual({ kind: "text", text: "Solomillo al whisky" });
+    // The text is untouched. Losing the emphasis is the decision; losing the words would be a bug.
+    expect(JSON.stringify(back)).not.toContain('"marks"');
+  });
+
+  it("drops marks on a link's text too, which is where ADR 0027 §6 puts them as well", () => {
+    const input = upTo(before(), "1.3.0");
+    headline(input)["value"] = {
+      kind: "link",
+      text: "Reserva ya",
+      href: "#",
+      marks: [{ from: 0, to: 7, mark: "em" }],
+    };
+    const down = step("1.3.0").down;
+    if (!down) throw new Error("0004 has no down");
+    expect(headline(down(input))["value"]).toEqual({
+      kind: "link",
+      text: "Reserva ya",
+      href: "#",
+    });
+  });
+
+  it("does not empty something else that happens to be called marks", () => {
+    // The walk is keyed on a text-carrying value rather than on the key name alone, so a future
+    // collection field called `marks` is not silently erased by a migration about typography.
+    const input = upTo(before(), "1.3.0");
+    const pages = input["pages"] as { sections: Record<string, unknown>[] }[];
+    const section = pages[0]?.sections[0];
+    if (!section) throw new Error("no section");
+    section["marks"] = ["not a text value"];
+
+    const down = step("1.3.0").down;
+    if (!down) throw new Error("0004 has no down");
+    const back = down(input);
+    const backSection = (back["pages"] as { sections: Record<string, unknown>[] }[])[0]
+      ?.sections[0];
+    expect(backSection?.["marks"]).toEqual(["not a text value"]);
+  });
+
+  it("is the claim it rests on: no document written before 1.3.0 carries marks", () => {
+    // The mirror of the 0003 test above. If this goes red, `up` can no longer be a version stamp:
+    // a stored `marks` written against 1.2.0 would predate `marksSchema`'s normal form and would
+    // have to be normalised or refused out loud rather than waved through.
+    const corpus = readdirSync(DOCUMENTS_DIR).filter((file) => file.endsWith(".json"));
+    expect(corpus.length).toBeGreaterThan(0);
+    let older = 0;
+    for (const file of corpus) {
+      const raw = readFileSync(join(DOCUMENTS_DIR, file), "utf8");
+      const parsed = JSON.parse(raw) as { schemaVersion?: string };
+      if (parsed.schemaVersion === SCHEMA_VERSION) continue;
+      older += 1;
+      expect(raw, file).not.toContain('"marks"');
+    }
     expect(older).toBeGreaterThan(0);
   });
 });

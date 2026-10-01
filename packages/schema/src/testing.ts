@@ -1,5 +1,6 @@
 import fc from "fast-check";
 import { type ContentElement, type RetorikaDocument, SCHEMA_VERSION } from "./document.ts";
+import { MARKS, type MarkRun, markTextIssue, normaliseMarks } from "./marks.ts";
 import type { PresetShape, PresetSlot } from "./preset.ts";
 import { type Theme, TOKEN_KEYS } from "./tokens.ts";
 
@@ -30,6 +31,48 @@ export const arbitraryTheme: fc.Arbitrary<Theme> = fc
   .string({ minLength: 1, maxLength: 8 })
   .map((suffix) => Object.fromEntries(TOKEN_KEYS.map((key) => [key, `${key}-${suffix}`])) as Theme);
 
+/**
+ * Marks that are valid for this exact text: inside it, in the normal form, and not cutting a
+ * surrogate pair in half.
+ *
+ * Generated rather than hand-written, and generated **from the first day the field exists**,
+ * because `INV_3A` and `INV_3B` only ever see what this file produces. The collections reference
+ * has been declared in the schema since phase 0 and has never been through either invariant,
+ * which is the mistake this avoids repeating.
+ *
+ * Candidate ranges are built loosely and then put through `normaliseMarks` and `markTextIssue`, so
+ * the generator does not have to reimplement the rules it is meant to exercise — and so a rule
+ * that changes cannot leave this file quietly producing documents that no longer parse.
+ */
+function arbitraryMarks(text: string): fc.Arbitrary<MarkRun[] | undefined> {
+  if (text.length === 0) return fc.constant(undefined);
+  return fc
+    .array(
+      fc.record({
+        from: fc.nat({ max: text.length - 1 }),
+        span: fc.integer({ min: 1, max: text.length }),
+        mark: fc.constantFrom(...MARKS),
+      }),
+      { maxLength: 3 },
+    )
+    .map((raw) => {
+      const runs = normaliseMarks(
+        raw.map(({ from, span, mark }) => ({ from, to: Math.min(from + span, text.length), mark })),
+      );
+      const usable = runs.filter((run) => markTextIssue(text, [run]) === undefined);
+      return usable.length === 0 ? undefined : normaliseMarks(usable);
+    });
+}
+
+/**
+ * A text and its marks as one arbitrary, because the marks have to be valid *for that text* — a
+ * `from` is meaningless without the string it indexes, so these cannot be generated independently
+ * and zipped.
+ */
+const arbitraryTextWithMarks = arbitraryText.chain((text) =>
+  arbitraryMarks(text).map((marks) => ({ text, marks })),
+);
+
 /** A value whose kind suits the role, so generated documents render like real ones. */
 function arbitraryValue(slot: PresetSlot) {
   switch (slot.role) {
@@ -37,9 +80,18 @@ function arbitraryValue(slot: PresetSlot) {
       return arbitraryText.map((alt) => ({ kind: "image" as const, src: "assets/x.svg", alt }));
     case "button":
     case "link":
-      return arbitraryText.map((text) => ({ kind: "link" as const, text, href: "#" }));
+      return arbitraryTextWithMarks.map(({ text, marks }) => ({
+        kind: "link" as const,
+        text,
+        href: "#",
+        ...(marks === undefined ? {} : { marks }),
+      }));
     default:
-      return arbitraryText.map((text) => ({ kind: "text" as const, text }));
+      return arbitraryTextWithMarks.map(({ text, marks }) => ({
+        kind: "text" as const,
+        text,
+        ...(marks === undefined ? {} : { marks }),
+      }));
   }
 }
 

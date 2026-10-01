@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { type MarkRun, marksSchema, markTextIssue } from "./marks.ts";
 import { roleSchema } from "./roles.ts";
 import { SLUG_PATTERN } from "./slug.ts";
 import { type ElementStyle, elementStyleSchema, themeSchema } from "./tokens.ts";
@@ -8,7 +9,7 @@ import { type ElementStyle, elementStyleSchema, themeSchema } from "./tokens.ts"
  * role or a token is additive and bumps the minor; removing or renaming one breaks and
  * bumps the major.
  */
-export const SCHEMA_VERSION = "1.2.0";
+export const SCHEMA_VERSION = "1.3.0";
 
 const idSchema = z.string().min(1).max(128);
 
@@ -29,8 +30,34 @@ export const collectionRefSchema = z.strictObject({
 });
 export type CollectionRef = z.infer<typeof collectionRefSchema>;
 
+/**
+ * The bounds check for marked runs, applied to every value that carries a `text`.
+ *
+ * **A plain text and a link both get it, and that is ADR 0027 §6 rather than an oversight.** A mark
+ * is a property of the value, not of the role, so the renderer splits every text the same way and
+ * there is exactly one path through the one piece of this product that escapes a string in pieces.
+ * Forbidding marks on a button's label would buy a second path through that code, which is a worse
+ * trade than an unused capability. The editor draws `B` and `I` only where they mean something,
+ * which is an interface choice and reversible.
+ */
+function withinText(
+  value: { text: string; marks?: MarkRun[] | undefined },
+  ctx: z.RefinementCtx,
+): void {
+  const issue = markTextIssue(value.text, value.marks);
+  if (issue) ctx.addIssue({ code: "custom", message: `Marks do not fit this text: ${issue}.` });
+}
+
 const contentValueSchema = z.union([
-  z.strictObject({ kind: z.literal("text"), text: z.string() }),
+  z
+    .strictObject({
+      kind: z.literal("text"),
+      text: z.string(),
+      /** Rule 6's neighbour: emphasis inside a text, as offsets beside it rather than markup in
+       * it (ADR 0024, ADR 0027). Absent on every document written before 1.3.0. */
+      marks: marksSchema.optional(),
+    })
+    .superRefine(withinText),
   z.strictObject({
     kind: z.literal("image"),
     /** Relative path or URL. The publisher rewrites it; the renderer escapes it. */
@@ -52,11 +79,14 @@ const contentValueSchema = z.union([
      */
     sample: z.string().min(1).optional(),
   }),
-  z.strictObject({
-    kind: z.literal("link"),
-    text: z.string(),
-    href: z.string(),
-  }),
+  z
+    .strictObject({
+      kind: z.literal("link"),
+      text: z.string(),
+      href: z.string(),
+      marks: marksSchema.optional(),
+    })
+    .superRefine(withinText),
   z.strictObject({
     kind: z.literal("map"),
     /** Published as a static image plus a link to the maps application (ADR 0004). */
