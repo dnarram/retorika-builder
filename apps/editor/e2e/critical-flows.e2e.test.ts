@@ -207,6 +207,25 @@ describe("critical flow 3 — cambio de paleta", () => {
  * Not an independent validator of the ZIP format — that is `packages/publisher/test/zip.test.ts`'s
  * job. Walks the central directory from the end, the same as unzip does.
  */
+/**
+ * Every entry of the ZIP written to disk, the way an owner unzips it.
+ *
+ * **Replaced writing `index.html` alone, in five flows, on 1 October 2026.** That was enough while a
+ * page's only companions were images it named with a `src`; from the day a stylesheet names a font file
+ * it is not, and the five flows started reporting failed requests for faces that were in the ZIP and not
+ * on the disk. Extracting everything is both the stronger check and the more faithful imitation: the
+ * `requestfailed` assertions below now cover the whole download rather than one file of it.
+ */
+function extractAll(zip: Uint8Array, dir: string): string[] {
+  const entries = listZipEntries(zip);
+  for (const entry of entries) {
+    const target = join(dir, entry);
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, extractFileBytes(zip, entry));
+  }
+  return entries;
+}
+
 function extractFileBytes(bytes: Uint8Array, path: string): Uint8Array {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const eocd = bytes.length - 22;
@@ -290,10 +309,9 @@ describe("critical flow 5 — descarga del ZIP y el HTML abre sin servidor", () 
     const zipPath = join(dir, download.suggestedFilename());
     await download.saveAs(zipPath);
     const zip = new Uint8Array(readFileSync(zipPath));
-    const html = extractFileBytes(zip, "index.html");
+    extractAll(zip, dir);
 
     const filePath = join(dir, "index.html");
-    writeFileSync(filePath, html);
 
     // A fresh page, with no route interception and no server behind file://, which is the
     // whole promise ADR 0001 makes: no server, no network, opened by double-clicking.
@@ -485,10 +503,20 @@ describe("día 7 — dos conversiones desde el editor, y el ZIP resultante abier
     const bytes = new Uint8Array(readFileSync(zipPath));
 
     const entries = listZipEntries(bytes);
-    // Exactly the four files this document should produce: no sitemap.xml (a download has no
-    // baseUrl, ADR-settled since sprint 3), no stray page, nothing from an earlier fixture.
+    // Exactly the files this document should produce: no sitemap.xml (a download has no baseUrl,
+    // ADR-settled since sprint 3), no stray page, nothing from an earlier fixture — and, since
+    // sprint 11 day 6, the two faces this restaurant's type pair asks for **with the OFL text beside
+    // them**, which is the condition rather than a detail.
     expect([...entries].sort()).toEqual(
-      ["donde-estamos.html", "index.html", "que-ponemos.html", "robots.txt"].sort(),
+      [
+        "donde-estamos.html",
+        "fonts/OFL-PlayfairDisplay.txt",
+        "fonts/playfair-display-latin-400-normal.woff2",
+        "fonts/playfair-display-latin-700-normal.woff2",
+        "index.html",
+        "que-ponemos.html",
+        "robots.txt",
+      ].sort(),
     );
 
     for (const entry of entries) {
@@ -730,9 +758,8 @@ describe("sprint 6 día 7 — fotos subidas desde el panel y desde el aviso, log
         ].sort(),
       );
 
-      const html = extractFileBytes(zip, "index.html");
+      extractAll(zip, dir);
       const filePath = join(dir, "index.html");
-      writeFileSync(filePath, html);
       for (const entry of entries) {
         if (entry === "index.html") continue;
         mkdirSync(dirname(join(dir, entry)), { recursive: true });
@@ -1183,9 +1210,8 @@ describe("sprint 7 día 7 — el recorrido completo del sprint", () => {
       const zipPath = join(dir, download.suggestedFilename());
       await download.saveAs(zipPath);
       const zip = new Uint8Array(readFileSync(zipPath));
-      const html = extractFileBytes(zip, "index.html");
+      extractAll(zip, dir);
       const filePath = join(dir, "index.html");
-      writeFileSync(filePath, html);
 
       const offlinePage = await (await browser.newContext()).newPage();
       const failed: string[] = [];
@@ -1489,9 +1515,8 @@ describe("sprint 8 día 7 — el recorrido completo del sprint", () => {
       const zipPath = join(dir, download.suggestedFilename());
       await download.saveAs(zipPath);
       const zip = new Uint8Array(readFileSync(zipPath));
-      const html = extractFileBytes(zip, "index.html");
+      extractAll(zip, dir);
       const filePath = join(dir, "index.html");
-      writeFileSync(filePath, html);
 
       const offlinePage = await (await browser.newContext()).newPage();
       const failed: string[] = [];
@@ -2104,9 +2129,8 @@ describe("sprint 9 día 7 — el recorrido completo del sprint", () => {
       const zipPath = join(dir, download.suggestedFilename());
       await download.saveAs(zipPath);
       const zip = new Uint8Array(readFileSync(zipPath));
-      const html = extractFileBytes(zip, "index.html");
+      extractAll(zip, dir);
       const filePath = join(dir, "index.html");
-      writeFileSync(filePath, html);
 
       const offlinePage = await (await browser.newContext()).newPage();
       const failed: string[] = [];
@@ -2480,9 +2504,8 @@ describe("sprint 10 día 7 — el recorrido completo del sprint", () => {
       const zipPath = join(dir, download.suggestedFilename());
       await download.saveAs(zipPath);
       const zip = new Uint8Array(readFileSync(zipPath));
-      const html = extractFileBytes(zip, "index.html");
+      extractAll(zip, dir);
       const filePath = join(dir, "index.html");
-      writeFileSync(filePath, html);
 
       const offlinePage = await (await browser.newContext()).newPage();
       const dialogs: string[] = [];

@@ -103,7 +103,8 @@ October.
 | `pnpm test:coverage` | The same suite with the coverage floor applied |
 | `pnpm typecheck` | Types across the workspace |
 | `pnpm lint` / `pnpm format` | Biome |
-| `pnpm size` | Published page under 60 KB gzipped, zero JavaScript |
+| `pnpm size` | Published page under 60 KB gzipped and the whole bundle under 80 KB, zero JavaScript |
+| `pnpm fonts:generate` | Regenerates the shipped font bytes from `@fontsource`; needed only after bumping a pinned version |
 | `pnpm schema:guard` | A schema change carries its migration. Takes a diff range: `pnpm schema:guard origin/main...HEAD` |
 | `pnpm renderer:deps` | No runtime dependency reaches the client's site |
 | `pnpm site:sample <fixture> [out-dir]` | Builds a fixture as a real site plus its ZIP (default `.scratch/site` and `.scratch/site.zip`), so the double-click check is something you can actually do |

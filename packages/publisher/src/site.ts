@@ -1,5 +1,6 @@
 import { render } from "@retorika/renderer";
 import type { ContentElement, Page, RetorikaDocument } from "@retorika/schema";
+import { FONT_SOURCES, licencesFor } from "./fonts.ts";
 import type { SiteManifest } from "./manifest.ts";
 import { buildRobotsTxt, buildSitemapXml } from "./metafiles.ts";
 
@@ -22,6 +23,21 @@ export interface BuildSiteOptions {
    * Resolution is the caller's job, so buildSite stays synchronous and pure.
    */
   assets: ReadonlyMap<string, Uint8Array>;
+  /**
+   * Font bytes, keyed by the file name the stylesheet asks for, plus each licence text.
+   *
+   * **A channel of its own and not a kind of asset**, for the reason `HtmlOutput.fonts` gives: a face
+   * is named by the CSS the theme produced, so it has no element and no `src` for `collectAssets` to
+   * find. It writes to `fonts/`, never `assets/`, which keeps `assetPathFor` ignorant of font
+   * extensions and keeps «a document of only `data:` images produces no file under `assets/`» true.
+   *
+   * Resolution is the caller's job, exactly as it is for `assets`, so this function stays synchronous
+   * and pure — the bytes live in an npm package and reading them is I/O. `readFontBundle` does that
+   * for both callers.
+   *
+   * Omitted is the same as empty, and a document naming no shippable face needs nothing here.
+   */
+  fonts?: ReadonlyMap<string, Uint8Array>;
 }
 
 export interface SiteBundle {
@@ -179,8 +195,17 @@ export function buildSite(doc: RetorikaDocument, options: BuildSiteOptions): Sit
   };
 
   const encoder = new TextEncoder();
+  /**
+   * Every face the site's pages name, gathered across pages before any file is written.
+   *
+   * Across pages rather than per page, and for the same reason the asset check below is: the ZIP is
+   * one site. Two pages of one document share a theme today, so this is one set either way — but a
+   * per-page collection would quietly become wrong the day they do not.
+   */
+  const fontFiles = new Set<string>();
   const pageFiles = pages.map(({ page, path }): SiteFile => {
-    const { html, assets } = render(rewrittenDoc, "html", { pageId: page.id });
+    const { html, assets, fonts } = render(rewrittenDoc, "html", { pageId: page.id });
+    for (const file of fonts) fontFiles.add(file);
     // `collectAssets` walks the whole document, so this now checks the bundle holds every image
     // the *site* names rather than every image this page names. That is the stronger claim and the
     // one the promise is about: a ZIP is complete or it is not.
@@ -192,17 +217,51 @@ export function buildSite(doc: RetorikaDocument, options: BuildSiteOptions): Sit
     return { path, contents: encoder.encode(html), contentType: "text/html; charset=utf-8" };
   });
 
+  /**
+   * The faces and their licences, as files.
+   *
+   * **The licence is not optional and not a courtesy.** The OFL requires its text to travel with the
+   * Font Software, and a client publishes these files on their own domain — so a ZIP with a `woff2`
+   * and no licence beside it is one we had no right to produce. `licencesFor` derives them from the
+   * faces, so there is no list to keep in step by hand, and a test refuses the pairing being broken.
+   */
+  const fontBundleFiles: SiteFile[] = [];
+  if (fontFiles.size > 0) {
+    const supplied = options.fonts ?? new Map<string, Uint8Array>();
+    for (const file of [...fontFiles].sort()) {
+      if (!Object.hasOwn(FONT_SOURCES, file)) {
+        throw new Error(
+          `buildSite: the page asks for font "${file}", which this product does not ship`,
+        );
+      }
+      const contents = supplied.get(file);
+      if (contents === undefined) throw new Error(`buildSite: missing font bytes for "${file}"`);
+      fontBundleFiles.push({ path: `fonts/${file}`, contents, contentType: "font/woff2" });
+    }
+    for (const path of licencesFor([...fontFiles])) {
+      const contents = supplied.get(path);
+      if (contents === undefined) {
+        throw new Error(
+          `buildSite: missing licence text for "${path}", which a shipped face requires`,
+        );
+      }
+      fontBundleFiles.push({ path, contents, contentType: "text/plain; charset=utf-8" });
+    }
+  }
+
   const manifest: SiteManifest = {
     siteId: options.siteId,
     schemaVersion: doc.schemaVersion,
     entry: ENTRY,
     pages: pages.map(({ page, path }) => ({ slug: page.slug, path, title: page.title })),
     assets: [...assetFiles.keys()].sort(),
+    fonts: fontBundleFiles.map((file) => file.path).sort(),
   };
 
   const files: SiteFile[] = [
     ...pageFiles,
     ...assetFiles.values(),
+    ...fontBundleFiles,
     {
       path: "robots.txt",
       contents: encoder.encode(buildRobotsTxt(options.baseUrl)),

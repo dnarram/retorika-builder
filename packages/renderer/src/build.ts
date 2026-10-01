@@ -13,6 +13,7 @@ import {
   tokenToCssVariable,
 } from "@retorika/schema";
 import { cssAttributeValue, cssThemeValue, safeUrl } from "./escape.ts";
+import { fontFaceCss } from "./fonts.ts";
 import { menuNodes } from "./menu.ts";
 import { commentNode, element, type RenderNode } from "./nodes.ts";
 import type { ResolvedRenderOptions } from "./options.ts";
@@ -641,6 +642,15 @@ export function buildCss(doc: RetorikaDocument): string {
     variables,
     "}",
     "",
+    // The faces this document's theme asks for, before anything that uses them. `[]` for a document
+    // that names none, which is every site on `editorial-serif` — and those publish exactly the bytes
+    // they always did.
+    //
+    // **Connected a day later than it was written, and the delay was the point.** Wired before the
+    // publisher could put the files in the ZIP, it made five critical flows fail on "every byte the
+    // page needed was actually inside the ZIP" — the assertion that holds ADR 0001 up. The rules and
+    // the bytes go live together or not at all.
+    ...fontFaceCss(doc),
     "* { box-sizing: border-box; }",
     "body { margin: 0; font-family: var(--font-body); color: var(--color-ink);",
     "  background: var(--color-surface); }",

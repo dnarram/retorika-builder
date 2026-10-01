@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
-import { buildSite, bundleToZip } from "@retorika/publisher";
+import { buildSite, bundleToZip, readFontBundle } from "@retorika/publisher";
 import { parseDocument, type RetorikaDocument } from "@retorika/schema";
 
 /**
@@ -86,6 +86,7 @@ for (const page of document.pages) {
 const bundle = buildSite(document, {
   siteId: `sample-${basename(documentPath, ".json")}`,
   assets,
+  fonts: readFontBundle(document),
 });
 
 for (const file of bundle.files) {

@@ -95,17 +95,20 @@ describe("a document selects a row; it can never name a file", () => {
     const rules = rulesIn(fontFaceCss(doc).join("\n"));
     expect(rules).toHaveLength(2);
     expect(rules[0]).toContain("font-family: 'Inter'");
-    expect(rules[0]).toContain('src: url("fonts/inter-latin-400.woff2") format("woff2")');
+    expect(rules[0]).toContain('src: url("fonts/inter-latin-400-normal.woff2") format("woff2")');
     expect(rules[0]).toContain("font-weight: 400");
-    expect(rules[1]).toContain('src: url("fonts/inter-latin-700.woff2") format("woff2")');
-    expect(fontFilesFor(doc)).toEqual(["inter-latin-400.woff2", "inter-latin-700.woff2"]);
+    expect(rules[1]).toContain('src: url("fonts/inter-latin-700-normal.woff2") format("woff2")');
+    expect(fontFilesFor(doc)).toEqual([
+      "inter-latin-400-normal.woff2",
+      "inter-latin-700-normal.woff2",
+    ]);
   });
 
   it("emits both faces for a theme whose heading asks for Playfair Display", () => {
     const doc = withFont("font.heading", "'Playfair Display', Didot, Georgia, serif");
     expect(fontFilesFor(doc)).toEqual([
-      "playfair-display-latin-400.woff2",
-      "playfair-display-latin-700.woff2",
+      "playfair-display-latin-400-normal.woff2",
+      "playfair-display-latin-700-normal.woff2",
     ]);
   });
 
@@ -154,7 +157,7 @@ describe("a document selects a row; it can never name a file", () => {
       },
     };
     expect(fontFilesFor(headingInter)).toEqual(fontFilesFor(bodyInter));
-    expect(fontFilesFor(headingInter)[0]).toBe("inter-latin-400.woff2");
+    expect(fontFilesFor(headingInter)[0]).toBe("inter-latin-400-normal.woff2");
   });
 
   it("is deterministic: the same document twice gives identical bytes", () => {
@@ -211,7 +214,7 @@ describe("what a theme cannot talk its way into", () => {
     const doc = withFont("font.heading", "Inter, url(http://evil.example/x), sans-serif");
 
     const rules = fontFaceCss(doc).join("\n");
-    expect(rules).toContain("inter-latin-400.woff2");
+    expect(rules).toContain("inter-latin-400-normal.woff2");
     expect(rules).not.toContain("evil");
     expect(rules).not.toContain("url(http");
 
