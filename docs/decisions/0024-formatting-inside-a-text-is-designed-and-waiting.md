@@ -4,6 +4,13 @@
 **Touches:** [#52](https://github.com/dnarram/retorika-builder/issues/52), ADR 0004 (the closed role
 vocabulary), ADR 0009 (the text bank)
 
+> **Superseded by its own condition being tested, 2026-10-01: the waiting is over and this is
+> built in sprint 10.** The design below is unchanged — it is what gets built. What changed is the
+> status of the wait, and **neither waking condition was met at the letter**; see "What the third
+> session actually returned" at the foot of this file for the exact shape of the evidence and for
+> who decided on the strength of it. The one open question the decision named — what happens to a
+> mark when the text beneath it changes — is answered in ADR 0027 and not here.
+
 ## Context
 
 Asked whether she would publish the site she had just built, the owner in the second usability
@@ -107,12 +114,112 @@ Either of these, and neither is a date:
 The third session's script carries the question. If neither happens, this ADR is the record that
 the design exists and that nobody needed it.
 
+> **It happened, and not in the shape this paragraph expected.** Both conditions were tested on 30
+> September and **neither came back met at the letter**. What was decided, and on what, is at the
+> foot of this file.
+
 ## Consequences
 
 - **#52 stays open** and points here. It is not closed by this ADR: the question it asks is the one
   the session answers, and closing it would file the answer as given.
+
+  > **Still open as of 1 October 2026, and now for a different reason.** The session answered its
+  > question — bold and italic yes, underline no, and it was not vocabulary — and that answer is
+  > written into the issue. What is not built yet is the thing the answer licenses, so closing it
+  > today would file *the work* as done rather than the question as asked. **It closes with the
+  > pull request that puts `B` and `I` in the toolbar**, which is what `CLAUDE.md` requires of an
+  > issue-resolving PR and what #19 and #25 were both merged without.
 - **ADR 0004's role vocabulary is untouched.** Marks are not a role; a `strong` run inside a body
   text is still a body text. Whatever the implementation does, it does not open the closed list.
 - **Nothing in the product changes today.** No schema field, no renderer branch, no control. The
   cost of this ADR is the time it took to write, and its value is that the next person to raise
   formatting starts from a design and a reason to wait rather than from the beginning.
+
+---
+
+## What the third session actually returned (30 September 2026)
+
+> Source: `docs/sessions/2026-09-30-taller.md`. Sector `taller`, bank signed before the session,
+> run against an editor with sprint 9 complete.
+
+Asked the question this ADR's own script required — «¿Hay algo que quieras cambiar de cómo se ven
+los textos y no encuentres cómo?» — the owner named **seven** things:
+
+> cursiva, negrita, subrayado, tamaño exacto, fuente de letra, color exacto, y más libertad en la
+> posición.
+
+**His own wording is not on record.** The list is the substance as reported, not a quotation, and
+that is a real limit on what follows: this ADR was written to compare this answer against Conchi's,
+and hers *is* a quotation. The comparison is between a quote and a summary.
+
+### Condition 1 — not met at the letter
+
+> «A second owner asks for it, in a session, **without being prompted**.»
+
+**A second owner asked. He was not unprompted.**
+
+- **Conchi's was spontaneous.** Nobody asked her about formatting; she named it answering
+  «¿Publicarías esto tal y como está?» and again answering «¿Qué le falta?».
+- **His was an answer.** It came out of a question that points straight at the appearance of text —
+  and the question was in the script *because this ADR put it there*.
+
+Writing this condition down as satisfied would be the facilitator's script's own lesson — «the
+paraphrase in the first session cost a real answer» — committed in the other direction: turning an
+answer into a spontaneous request. It is not recorded as met.
+
+### Condition 2 — met in substance, not verifiable at the letter
+
+> «It survives the texts being fixed … a site whose texts **do sound like the owner's** and
+> formatting is still **the first thing they name**.»
+
+- **«Texts do sound like the owner's» — met, and it is the first «sí» the product has had.** The
+  `taller` bank was signed before the session (ADR 0009, session 3).
+- **«Still the first thing they name» — not verifiable.** The order in which he named the seven is
+  not recorded, and «¿Qué le falta?» came back blank. What is recorded is that formatting is still
+  named *at all*, after the texts stopped being the complaint.
+
+**The substance of this condition is what the third session was for, and it returned the answer
+this ADR hoped to get:** the doubt #52 raised — «whether formatting is what she wants or what she
+reached for» — is answered. **It was not vocabulary.** An owner who says the texts sound like his
+still wants to put two words in bold.
+
+### What was decided, and by whom
+
+**The decision to build is the CEO's, taken on 1 October 2026 in approving the sprint 10 plan**,
+not a condition firing on its own. The conditions above were written so that meeting one would make
+this automatic; neither was met at the letter, so it was not automatic, and this file does not
+pretend a trigger did the work.
+
+**The case it was approved on is three things together, and no one of them alone:**
+
+1. **Two owners have asked** — one spontaneously, one answering a question this ADR's own script
+   required. Two requests, in two different shapes.
+2. **The texts are already fixed and the request survived them.** This is the substance of
+   condition 2, and it is what removes the cheap explanation the decision to wait was built on.
+3. **The professional audience.** [ADR 0025](0025-studio-mode-starts-now-and-its-switch-is-not-in-the-document.md)
+   made the professional editor a goal of the product after this ADR was written. A bold run inside
+   a sentence does not depend on an owner asking for it; whoever builds sites for other people
+   needs it, and that audience did not exist in the product's goals on 29 September.
+
+### Underline, refused for the third time
+
+He named `subrayado`, as Conchi did. **The refusal above stands, and it was written in advance of
+being tested**: «Underline is not offered, and would not be offered if she asked again.» Two owners
+out of three have now asked; the answer has not moved. A refusal that holds against a repeated
+request is recorded as holding rather than left to be assumed.
+
+### What of the seven this ADR does not answer
+
+Only two of the seven are this ADR's: **negrita** and **cursiva**. The rest are recorded here so
+the next reader does not come looking for them in the wrong file:
+
+| What he named | Where it is answered |
+|---|---|
+| `subrayado` | here, refused, above |
+| `tamaño exacto` | [ADR 0026](0026-the-switch-is-the-line-between-references-and-exact-values.md) §2 — waits on the overflow half of dossier §4 |
+| `fuente de letra` | [#9](https://github.com/dnarram/retorika-builder/issues/9), and ADR 0028 takes it to direction |
+| `color exacto` | **exists** since sprint 9 day 6, behind the design-tools switch |
+| `más libertad en la posición` | document rule 4; the grid **exists** since sprint 8, behind the same switch |
+
+The last two are why the session's sharpest finding is not about formatting at all: he had the
+switch on and still asked for both. That is ADR 0025's business, not this file's.

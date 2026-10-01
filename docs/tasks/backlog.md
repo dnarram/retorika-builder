@@ -12,12 +12,21 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 1 October 2026, **closing sprint 9**. The style system shipped, so two rows changed
-meaning rather than wording: «el modo estudio» is now three pillars of four, and the exact-colour row
-stopped waiting on a gate and started saying **who accepted it** — David, not direction, which is a
-fact about the record rather than about the code. One entry is new and had no home: **the other half
-of the §4 pre-publish check**, the overflow below 320 pixels, which sprint 9 did not build and which
-is the reason an exact `fontSize` is still refused.
+Last reviewed: 1 October 2026, **sprint 10 day 1 — the third usability session ran**, on 30
+September, and it is the single event that has moved the most rows at once. Five decisions were
+waiting on it; **two moved, two came back unanswered, and one could not be asked.** The rows that
+changed: ADR 0024's wait is over, ADR 0022 has evidence for the first time, phase 1 has a second
+timing, #9 has a real owner asking for it, and #51 is still owed because the session was not
+hostelería. Two entries are new and had no home: **the design-tools switch sorted wrong** — it was
+found and pressed by somebody who does not build sites for others — and **the observation table came
+back blank for the third time**, which is a finding about the sessions rather than the product.
+
+The review before it was 1 October 2026, closing sprint 9. The style system shipped, so two rows
+changed meaning rather than wording: «el modo estudio» is now three pillars of four, and the
+exact-colour row stopped waiting on a gate and started saying **who accepted it** — David, not
+direction, which is a fact about the record rather than about the code. One entry was new and had no
+home: **the other half of the §4 pre-publish check**, the overflow below 320 pixels, which sprint 9
+did not build and which is the reason an exact `fontSize` is still refused.
 
 The review before it was 30 September 2026, sprint 9 day 1. Sprints 7 and 8 closed between it and
 the one before. The row about the seven unbanked sectors closed with the seven signings, and is
@@ -50,17 +59,19 @@ open survives.
 
 | What | Where |
 |---|---|
-| **Formatting inside a text — designed on 29 September 2026, and waiting.** [ADR 0024](../decisions/0024-formatting-inside-a-text-is-designed-and-waiting.md) settles the shape (bold and italic over a run of characters; **underline refused**, because on the web it means a link) and decides that the code waits for the third session, which asks whether the request survives the text bank being fixed. #52 stays open and points at the ADR. | [#52](https://github.com/dnarram/retorika-builder/issues/52), [ADR 0024](../decisions/0024-formatting-inside-a-text-is-designed-and-waiting.md) |
+| **Formatting inside a text — the wait is over, and it is built in sprint 10.** [ADR 0024](../decisions/0024-formatting-inside-a-text-is-designed-and-waiting.md) settled the shape on 29 September 2026 (bold and italic over a run of characters; **underline refused**, because on the web it means a link) and made the code wait for the third session. **That session ran on 30 September and asked the question**, and the second owner named negrita and cursiva. **Neither waking condition was met at the letter** — Conchi's request was spontaneous and his was an answer to a question the ADR's own script required, and «the first thing they name» is not verifiable because the order and «¿Qué le falta?» are both blank. So the build was **authorised by David on 1 October 2026 in approving the sprint 10 plan**, on three things together: two requests in two different shapes, the texts already fixed and the request surviving them, and the professional audience ADR 0025 added after this ADR was written. **Underline was asked for a second time and is still refused.** | [#52](https://github.com/dnarram/retorika-builder/issues/52), [ADR 0024](../decisions/0024-formatting-inside-a-text-is-designed-and-waiting.md), and [the session](../sessions/2026-09-30-taller.md) |
+| **What happens to a mark when the text beneath it changes.** The one question ADR 0024 deliberately left open — «a run whose text changes beneath it either moves, shrinks or dies, and which of those it does is a **product decision**» — plus the one its own wording creates: it forbids a run overlapping another, which read literally makes bold *and* italic on the same words impossible, and the third owner asked for both. Sprint 10 day 2 answers both in ADR 0027. | [ADR 0024](../decisions/0024-formatting-inside-a-text-is-designed-and-waiting.md), "The editor does not become a rich-text editor" |
+| **The design-tools switch was found, and it sorted wrong.** The first owner ever to meet it found a 34×19px switch with a 9px label at the foot of the rail, pressed it unprompted, read «¿Montas webs para otros?» and answered «Sí, enciéndelas» — while running a car workshop. **The discoverability half of ADR 0025 §5 holds on evidence it did not have; the sorting half does not.** And two of the seven things he then said he could not find — `color exacto` and `más libertad en la posición` — were already behind that switch, the first in the very toolbar he is recorded using. **Finding the switch is not the same as finding what is behind it**, and it is not fixed by building anything. Sprint 10 day 2 decides whether the question is the right question, whether the exact value should come out from behind the switch now that the contrast review guards it, and whether what is behind it is findable. | [ADR 0025](../decisions/0025-studio-mode-starts-now-and-its-switch-is-not-in-the-document.md), "Evidence from session 3" |
 | **The other half of the pre-publish check: overflow below 320 pixels.** The advanced dossier §4 promises one review covering two things — «contraste insuficiente **o de desbordes por debajo de 320 píxeles**» — and sprint 9 built the first half only. `a11y.md` has cited that same sentence since sprint 2 as the reason the browser harness exists, and the harness *does* measure overflow — over the corpus, in CI, at 320/768/1280. What does not exist is the same question asked of **this owner's document, before this download**, which is what the dossier promises and what a gate would need. It is also the reason an exact `fontSize` is refused: a size is the one value in rule 6's vocabulary that can cause an overflow, and offering it behind a gate that cannot see what it would cause is the shape of promise ADR 0026 exists to refuse. Costed at more than a day: it needs a rendered page measured at 320px somewhere the editor can reach, which is a second measurement path beside the contrast arithmetic. Unscheduled, and nobody is waiting on it. | [ADR 0026](../decisions/0026-the-switch-is-the-line-between-references-and-exact-values.md) §2's table, and [`a11y.md`](a11y.md) |
-| **Type pairs falling back** on machines without Inter / Playfair Display. Still open — the fallback itself is unchanged — but the interface half is now handled: the Estilo panel names typefaces by character («Moderna y neutra») and never by font, and its `Aa` specimen renders in the real stack, so what it shows is what that machine will give. **Sprint 9 makes this a gate rather than a nuisance:** it is what keeps «tipografías propias» and the toolbar's per-element `Aa` out of the style work, which is half of the advanced dossier §4's "On" column for the style panel. It needs a decision, and [ADR 0026](../decisions/0026-the-switch-is-the-line-between-references-and-exact-values.md) says so by name rather than leaving the omission to be noticed later. | [#9](https://github.com/dnarram/retorika-builder/issues/9), and [ADR 0026](../decisions/0026-the-switch-is-the-line-between-references-and-exact-values.md) |
+| **Type pairs falling back** on machines without Inter / Playfair Display. Still open — the fallback itself is unchanged — but the interface half is now handled: the Estilo panel names typefaces by character («Moderna y neutra») and never by font, and its `Aa` specimen renders in the real stack, so what it shows is what that machine will give. **Sprint 9 makes this a gate rather than a nuisance:** it is what keeps «tipografías propias» and the toolbar's per-element `Aa` out of the style work, which is half of the advanced dossier §4's "On" column for the style panel. It needs a decision, and [ADR 0026](../decisions/0026-the-switch-is-the-line-between-references-and-exact-values.md) says so by name rather than leaving the omission to be noticed later. **An owner has now asked for it**: «fuente de letra» is one of the seven things the third session's owner named wanting and not finding, which turns this from a gate development chose to respect into a request from outside. **Sprint 10 day 2 takes the four costed options to direction as ADR 0028 without choosing between them** — ADR 0026 already said «it is direction's and deserves its own ADR». | [#9](https://github.com/dnarram/retorika-builder/issues/9), [ADR 0026](../decisions/0026-the-switch-is-the-line-between-references-and-exact-values.md), and [the session](../sessions/2026-09-30-taller.md) |
 
 ## Recorded against the thing it challenges
 
 | What | Where |
 |---|---|
-| **Moving images freely.** Conchi asked for it; it collides with document rule 4, and rule 5 already named the hole it would open. The rule stands, and the request is on the record so the next person hears it as the second time. | [`docs/document-rules.md`](../document-rules.md), the note under rule 4 |
+| **Moving images freely — and now it is the second time.** Conchi asked for it; it collides with document rule 4, and rule 5 already named the hole it would open. This row existed so «the next person hears it as the second time», and **the next person asked on 30 September 2026**: «más libertad en la posición», one of his seven. It arrives in a different shape, which is the useful half — **the grid exists** (sprint 8, ADR 0025 §7) and he had the design tools on, so what he was refused was not placement but placement off the grid. **Rule 4 stands.** What two owners out of three now say is that the grid as built did not read as the answer, and whether he ever opened the `Diseño` panel is not recorded. | [`docs/document-rules.md`](../document-rules.md), the note under rule 4, and [the session](../sessions/2026-09-30-taller.md) |
 | **The design review's own open list** — the third cover composition, `location`'s `split` gap, and the rest. *(Mockup 13's palettes were named here until sprint 7 day 1 and had been resolved since 28 September: the Estilo panel ships their names from `packages/tokens/src/locales/es.json`.)* | [`docs/design/REVIEW.md`](../design/REVIEW.md), "Still open" |
-| **The price.** Two sessions answered it and they overlap at 50 €. | [`docs/design/HANDOFF.md`](../design/HANDOFF.md), the open-questions table |
+| **The price — still two answers, and still a coincidence.** Two sessions answered it and they overlap at 50 €. **The third session was the one that could have made that a price rather than a coincidence, and the answer was not recorded.** The question was the fifth of the five and it is blank. | [`docs/design/HANDOFF.md`](../design/HANDOFF.md), the open-questions table, and [the session](../sessions/2026-09-30-taller.md) |
 
 ## No home but this one
 
@@ -78,18 +89,33 @@ open survives.
   This was the one section with no evidence behind it — no session asked for it, it closed the
   catalogue rather than answering anybody's own words — and that stays true of it going forward:
   nothing here claims a usability finding it does not have.
-- **The third session is unblocked, unscheduled, and five decisions are waiting on it.** Its own
-  script names them — #51's «Precios» as a carta, ADR 0022's "would anyone look for a way to make a
-  page", ADR 0023's three-entry threshold, ADR 0024's "does formatting survive the texts being
-  fixed", and the evidence for declaring phase 1 accepted — each written down *before* the session
-  was scheduled, which is what the script says makes it different from the first two.
-  **Its precondition has been met since sprint 8**: «Pick a sector whose bank is signed… If none
-  is, the session waits», and all ten launch sectors have been signed since 30 September 2026. The
-  sprint 9 plan said the session would run mid-sprint. **It did not**, and nothing in the sprint
-  replaced it — so five decisions that were waiting on evidence are still waiting on the same
-  evidence, and none of them moved. Recorded here rather than left as a plan that quietly did not
-  happen. Whose call: scheduling it is direction's; the script is written and needs nothing from
-  development.
+- ~~The third session is unblocked, unscheduled, and five decisions are waiting on it.~~ **It ran
+  on 30 September 2026**, sector `taller`, against an editor with sprint 9 complete:
+  [`docs/sessions/2026-09-30-taller.md`](../sessions/2026-09-30-taller.md). Of the five decisions
+  its own script named, **two moved, two came back unanswered, and one could not be asked:**
+  - **ADR 0024 — moved.** Formatting survived the texts being fixed. The wait is over; see the row
+    above for what it was authorised on, which is not a condition met at the letter.
+  - **ADR 0022 — moved, and it holds.** He found «Convertir esta sección en página» unprompted, which
+    is the first evidence that decision has ever had. The `+` is still not needed.
+  - **ADR 0023 — unanswered.** The threshold question is asked only of somebody who ends with three
+    pages, and **the page count is not recorded**. Still «a judgement with no evidence behind it».
+  - **#51 — could not be asked.** The question is for a hostelero and this owner runs a taller. The
+    issue stays closed with no evidence from the session that was supposed to test it, and the next
+    hostelería session still owes it.
+  - **Phase 1 — a second timing, and not the missing clause.** Six minutes to the ZIP, one and a
+    half to the end of the questionnaire. See "What phase 1 is still waiting on" below.
+  **And one thing the script could not have asked for**: it was the first session against the design
+  tools, and the switch finding is its own row above.
+- **The observation table came back blank for the third time, and so did the owner's own words.**
+  The script calls that table «the point of this session», because the editor is where most of the
+  clock goes and it has never had a direct observation behind it. Three sessions, three blank
+  tables. **This one also has no verbatim quote for any of the five closing questions** — the first
+  two quote all five — which is what limits the ADR 0024 comparison to a quote against a summary,
+  and what left ADR 0009 with a reported «sí» instead of the owner's vocabulary. Nothing in the
+  product causes this and nothing in the product fixes it: it is how the sessions are recorded.
+  **A fourth session should fix the recording before it adds anything else**, and the cheapest
+  version of that is the script's own list filled in as it happens plus the five answers written
+  down word for word. Whose call: direction's, as scheduling and facilitation always were.
 - **There is no keyboard undo, and seven places in this repository say there is.** Found by walking
   the editor on **sprint 9 day 1**, and not caused by that day's work — it has been true for as long
   as the editor has existed. `Meta+Z`, `Control+Z` and `Meta+Shift+Z` were each pressed against a
@@ -111,7 +137,7 @@ open survives.
   `SlotAddress` to name an item, or a second panel; neither is small.
 - **The three findings of sprint 4 that nobody has acted on**, all of them measured rather than
   supposed, and each one already written up where it belongs:
-  - Whether a hostelería owner recognises «Precios» in the menu ([#51](https://github.com/dnarram/retorika-builder/issues/51), a hypothesis for the next session). **The question is now written out, word for word, in [`docs/sessions/guion-tercera-sesion.md`](../sessions/guion-tercera-sesion.md).**
+  - Whether a hostelería owner recognises «Precios» in the menu ([#51](https://github.com/dnarram/retorika-builder/issues/51)). The question is written out, word for word, in [`docs/sessions/guion-tercera-sesion.md`](../sessions/guion-tercera-sesion.md) — and **it still has not been asked.** #51 closed on 28 September saying the search field is what holds the name, and asked for the next session to show the menu and ask; the third session's owner runs a taller, so it could not be put. Two hosteleros out of two asked for «la carta» and neither has been shown the menu. **It needs a hostelería session, not just any session.**
   - Whether two adjacent sections of the same preset should read as one (the 172px row above).
   - ~~The editor's top bar naming the variant where mockup 08 names the business.~~ **Done**,
     28 September 2026: direction settled it and the bar shows the business name
@@ -130,13 +156,27 @@ open survives.
 
 ## What phase 1 is still waiting on
 
-The acceptance criterion **was measured** on 27 September: two minutes to the end of the
-questionnaire, eight to the ZIP, unaided and unexplained
-(`docs/sessions/2026-09-27-conchi.md`, and the Fase 1 note in `docs/protocolo.md`).
+The acceptance criterion **has been measured twice**, and both came in under ten minutes:
 
-**Declaring phase 1 accepted is direction's, not development's.** The same session that produced
-the number also said she would not publish the result as it stands, and both facts are in the
-write-up. What is recorded is the measurement.
+| Session | To the end of the questionnaire | To the ZIP |
+|---|---|---|
+| Conchi, 27 September 2026 | 2 minutes | **8 minutes** |
+| A taller, 30 September 2026 | 1 minute 30 seconds | **6 minutes** |
+
+Sources: `docs/sessions/2026-09-27-conchi.md` and `docs/sessions/2026-09-30-taller.md`, with the
+Fase 1 note in `docs/protocolo.md`.
+
+**The second measurement does not add the clause the first one carried.** The criterion is «sin
+explicación previa y sin ayuda»; Conchi's write-up evidences that («El cliente no hizo preguntas y
+usó correctamente la app») and the third session's does not — nothing records whether he asked
+questions or needed help. So there are two timings and still **one** session's worth of
+unaided-use evidence. The criterion also says «se cronometra **y se observa**», and the observation
+table is blank for all three.
+
+**Declaring phase 1 accepted is direction's, not development's.** Both sessions that produced a
+number also said they would not publish the result as it stands — three owners out of three have
+now said that, for three different sets of reasons. Every one of those facts is in its write-up.
+What is recorded here is the measurement.
 
 ---
 

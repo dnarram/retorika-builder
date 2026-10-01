@@ -89,3 +89,19 @@ corpus is a record of what the renderer does, never a reason for it to do it.
   derived — which is a different decision, with a place in the document to store it.
 - **Three turns out to be the wrong number.** It is a judgement with no evidence behind it yet; the
   first session run against a site with a menu is what would say so.
+
+## Session 3 could have answered this and did not (30 September 2026)
+
+> Source: `docs/sessions/2026-09-30-taller.md`.
+
+**The threshold is still a judgement with no evidence behind it.** The third session was the one
+scheduled to test it — its script carries both questions, «¿Qué es esto de aquí arriba?» and «¿Te
+haría falta si tu web tuviera solo dos páginas?», to be put **only if the owner ended with three or
+more pages**.
+
+**The page count is not recorded.** He is recorded finding «Convertir esta sección en página» on his
+own (ADR 0022), so he reached at least two; whether he reached three is blank, and so is whether the
+questions were asked. Nothing here moves.
+
+This stays owed. It needs a session that ends with three pages, and the cheapest way to get one is
+to record the page count every time.
