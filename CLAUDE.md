@@ -43,9 +43,15 @@ If a task seems to require breaking one, the task is wrong. Write an ADR before 
 
 ## Zones only Claude touches
 
-`packages/schema`, `packages/renderer`, `packages/catalog`, database migrations, anything that
-touches money, and anything that touches permissions or ownership. Never delegated to OpenCode,
-regardless of how mechanical the change looks.
+`packages/schema`, `packages/renderer`, `packages/catalog`, `packages/publisher`, `apps/serve`,
+database migrations, anything that touches money, and anything that touches permissions or
+ownership. Never delegated to OpenCode, regardless of how mechanical the change looks.
+
+This list used to name three packages. `docs/protocolo.md` Part 2 — the actual source of truth
+for the split — has named five since before `packages/publisher` and `apps/serve` existed in
+code; both task files declare themselves exclusive in their own header, in the protocol's own
+words. This copy simply never caught up, found closing sprint 11. If a list like this starts
+sounding like it predates something, check it against Part 2 rather than against memory.
 
 ## Commands
 

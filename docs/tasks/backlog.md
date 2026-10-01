@@ -154,6 +154,15 @@ open survives.
   product does not have — which is the exact failure `CLAUDE.md` already records once, about the
   note that said `test:a11y` did not exist. Whose call: adding the binding is a small feature and
   direction's to schedule; correcting the prose is a one-PR chore.
+- **The fields panel's own `<input>` is not anchored; an edit from it still falls back to the
+  diff.** ADR 0027 §4b's `beforeinput` capture lives in the canvas's `wireEditing`; the panel
+  commits through the same `setElementText` chokepoint but without ever watching the keystroke
+  happen, so a mark on a field edited from the panel moves by `textEditBetween`'s guess — the
+  mechanism day 1 measured losing a mark whose own word was never touched. Named in sprint 11
+  day 2's own cut line and not built: the panel's `<input>` is a real DOM element with its own
+  `selectionStart`/`selectionEnd`, so the capture needs the same range-to-offset arithmetic
+  `textEdits.ts` already carries, wired to a different event source. Small, and nobody has
+  marked a word from inside the fields panel yet to hit it.
 - **A list item's optional slots cannot be reached.** The fields panel is explicit that "a list
   holds items rather than a value", so its rows are the section's slots and never an item's. A
   card's `description` in «Qué hago» has been `0..1` and unreachable since sprint 1, and a price

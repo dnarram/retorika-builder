@@ -6,6 +6,15 @@
 >
 > Not delegated to OpenCode under any circumstances, however mechanical a change looks.
 
+> **The closed list below predates the font channel.** Sprint 11 day 6 added
+> `packages/publisher/src/fonts.ts`, `fontBytes.ts` and `fontData.ts`, `test/fonts.test.ts`,
+> `scripts/generate-font-data.ts`, two runtime dependencies in `package.json` (`@fontsource/inter`,
+> `@fontsource/playfair-display` — the bytes the ZIP ships, not a build tool), and touched
+> `scripts/size-budget.ts` and `apps/serve/test/routing.test.ts` outside this file's own package.
+> ADR 0028 is where that work is decided; this list is left as the record of what this task asked
+> for when it was written, the same way `ci.md`'s own job count is kept as a record rather than
+> rewritten.
+
 ## Objective
 
 A validated document becomes the exact set of files that constitute a website, and those files

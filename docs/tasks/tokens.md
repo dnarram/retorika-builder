@@ -8,6 +8,12 @@
 > closed for schema version 1.0.0. Needing a new key is a schema change, which is exclusive —
 > stop and ask.
 
+> **The closed list below predates `test/typography.test.ts`, `test/fontCheckFixture.test.ts` and
+> `fixtures/font-check.html`**, all added sprint 11 day 4 for the same reason this task supplies
+> values rather than code: deciding what each type pair *is* when its font does not arrive (ADR
+> 0028's option C) stayed inside this boundary, no token key moved, and `typography.ts` itself
+> is already on the list below.
+
 ## Objective
 
 A document can be given a complete, valid `Theme` by naming a palette and a type pair, and no
