@@ -541,12 +541,21 @@ export function Variants({
       <Editor
         title={es[caption.titleKey]}
         document={history.present.document}
-        onEditText={(address, text) => {
+        onEditText={(address, text, marks) => {
           // Any of these makes "Deshacer" on a showing toast undo the wrong thing — the most
           // recent action, not the delete the toast still names — so the toast stops being
           // accurate the moment something else lands on top of it.
           dismissToast();
-          dispatch({ type: "editText", variant: openIndex, address, text });
+          // Spread rather than `marks` outright: `exactOptionalPropertyTypes` makes a present-but-
+          // undefined key a different thing from an absent one, and "absent" is what means «derive
+          // them by diff» all the way down to `withText`.
+          dispatch({
+            type: "editText",
+            variant: openIndex,
+            address,
+            text,
+            ...(marks === undefined ? {} : { marks }),
+          });
         }}
         onDeleteSection={(sectionId) => handleDeleteSection(openIndex, history, sectionId)}
         onDuplicateSection={(sectionId) => {

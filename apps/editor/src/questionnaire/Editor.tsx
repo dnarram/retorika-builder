@@ -27,6 +27,7 @@ import {
   type MarkRange,
   type MarkRun,
   type MobilePatchEdit,
+  marksAfterTrim,
   marksFor,
   type PlacementEdit,
   type PresetShape,
@@ -60,7 +61,7 @@ import { countPhotos, listPhotos, type PhotoState } from "../editor/photoInvento
 import { withPhotoUrls } from "../editor/previewDocument.ts";
 import { sectionFields } from "../editor/sectionFields.ts";
 import { offersMatching } from "../editor/sectionSearch.ts";
-import { insertedLengthFor, offsetFor, textFrameOf } from "../editor/textEdits.ts";
+import { insertedTextFor, liveFrameOf, offsetFor, textFrameOf } from "../editor/textEdits.ts";
 import { hasAnyControl, toolbarFor } from "../editor/textToolbar.ts";
 import es from "../locales/es.json" with { type: "json" };
 import { DesignPanel } from "./DesignPanel.tsx";
@@ -360,7 +361,7 @@ export function Editor({
 }: {
   title: string;
   document: RetorikaDocument;
-  onEditText: (address: ElementAddress, text: string) => void;
+  onEditText: (address: ElementAddress, text: string, marks?: readonly MarkRun[]) => void;
   onDeleteSection: (sectionId: string) => void;
   onDuplicateSection: (sectionId: string) => void;
   onMoveSection: (sectionId: string, toIndex: number) => void;
@@ -1997,22 +1998,29 @@ export function Editor({
       const address: ElementAddress = { sectionId, elementId };
 
       el.contentEditable = "true";
-      const original = (el.textContent ?? "").trim();
+      // Through `textFrameOf`, not a bare `.trim()`: it is the one place that also takes out the
+      // non-breaking spaces `contentEditable` invents, which otherwise reach the document and the
+      // owner's ZIP. `original` is compared against `next` to decide whether anything changed, so
+      // the two have to be normalised the same way or a space turning into U+00A0 reads as an edit.
+      const original = textFrameOf(el.textContent ?? "").text;
 
       /**
-       * The marks as they stand after every edit this focus has seen, and whether every one of
-       * those edits was anchored in a range the browser gave us (ADR 0027 §4b).
+       * The marks after every edit this focus has seen, the text they believe in, and whether every
+       * one of those edits was anchored in a range the browser gave us (ADR 0027 §4b).
        *
        * `anchored` going false is not an error: it is the mechanism choosing to fall back. An IME
        * composition, the browser's own undo, or an engine whose `getTargetRanges()` returns nothing
        * all land here, and the commit then takes §4's path — the diff — exactly as it did before
        * this listener existed. Degrading to what shipped is the floor.
        *
-       * **Written today and read on day 2**, when `setElementText` can accept marks that are
-       * already shifted. Kept here rather than held back so that the capture and its consumer land
-       * in separate reviews: the schema is an exclusive zone and this is not.
+       * **`liveText` is what makes the capture checkable rather than merely plausible.** Each edit
+       * is applied to it as well as to the marks, so after every keystroke it must equal what the
+       * element actually holds. When it does not, something changed the text that this listener never
+       * saw, the offsets are no longer about the string in front of the person, and the only honest
+       * answer is to stop claiming they are.
        */
       let liveMarks: MarkRun[] = [];
+      let liveText = "";
       let anchored = true;
 
       // Select the whole field the moment it gains focus, the same as clicking into a
@@ -2020,6 +2028,7 @@ export function Editor({
       // than landing mid-word wherever the click happened to fall.
       el.addEventListener("focus", () => {
         liveMarks = marksFor(doc, address) ?? [];
+        liveText = liveFrameOf(el.textContent ?? "").text;
         anchored = true;
         const selection = iframeDoc.getSelection();
         if (!selection) return;
@@ -2038,13 +2047,44 @@ export function Editor({
        */
       const editOf = (range: Range, inserted: number): TextEdit | undefined => {
         if (!el.contains(range.commonAncestorContainer)) return undefined;
-        const frame = textFrameOf(el.textContent ?? "");
+        // `liveFrameOf`, not `textFrameOf`: trailing whitespace stays, because `trim()` moves under
+        // somebody who types a space at the end and every offset after that would be one short.
+        const frame = liveFrameOf(el.textContent ?? "");
         const upTo = iframeDoc.createRange();
         upTo.selectNodeContents(el);
         upTo.setEnd(range.startContainer, range.startOffset);
         const from = offsetFor(frame, upTo.toString().length);
         const to = Math.max(from, Math.min(from + range.toString().length, frame.text.length));
         return { from, to, inserted };
+      };
+
+      /**
+       * Whether this listener's picture of the text still matches the element's.
+       *
+       * **Checked on the way in to the next edit and again at the commit, never with a timer.**
+       * `beforeinput` runs before the browser applies anything, so the result of an edit can only be
+       * read later — and "later" has two moments that are already there and are exactly the ones that
+       * matter. A `setTimeout` would buy the same answer with a scheduling race attached.
+       *
+       * A mismatch means something changed the text that this listener never saw, so every offset it
+       * has is about a string that is not in front of the person any more. Falling back then is not
+       * caution, it is correctness.
+       *
+       * **Compared trimmed, and that is not laxness — it was measured.** The html target prints a
+       * trailing `"\n    "` after the words, and Chromium's select-all reports a target range that
+       * covers only the visible text while removing that whitespace as well. So after the very first
+       * edit, `liveText` carries a tail the element no longer has, every later check fails, and the
+       * anchored path is lost for the rest of the session — which is exactly what the walk found
+       * happening on an ordinary replacement. Whitespace at the two ends is the one difference that
+       * cannot matter here, because `marksAfterTrim` removes it before anything is committed.
+       */
+      const stillInStep = (): boolean =>
+        liveFrameOf(el.textContent ?? "").text.trim() === liveText.trim();
+
+      /** One captured edit, applied to the marks and to the text they believe in, together. */
+      const record = (edit: TextEdit, inserted: string): void => {
+        liveMarks = shiftMarks(liveMarks, edit);
+        liveText = liveText.slice(0, edit.from) + inserted + liveText.slice(edit.to);
       };
 
       const liveRange = (target: StaticRange | undefined): Range | undefined => {
@@ -2073,14 +2113,19 @@ export function Editor({
        */
       el.addEventListener("beforeinput", (event) => {
         const input = event as InputEvent;
+        // The previous edit's result is in the element by now, so this is where it gets verified.
+        if (anchored && !stillInStep()) anchored = false;
         const targets = input.getTargetRanges();
         const range = liveRange(targets[0]);
 
         // **Paste is forced to plain text, whatever the clipboard holds.** `contentEditable` pastes
         // HTML by default, and ADR 0024 requires this field to stay a flat string — one paste of a
         // formatted sentence from a word processor would otherwise put markup where the document
-        // expects characters. The length the table reads and the text inserted here are the same
+        // expects characters. The text the table measures and the text inserted here are the same
         // `text/plain`, so the anchored edit describes exactly what happened.
+        //
+        // Cancelled and done by hand even when the capture has already fallen back, because the
+        // plain-text rule is not about marks: it is what keeps the value a flat string at all.
         if (input.inputType === "insertFromPaste") {
           input.preventDefault();
           const text = input.dataTransfer?.getData("text/plain") ?? "";
@@ -2090,22 +2135,22 @@ export function Editor({
           }
           const edit = editOf(range, text.length);
           range.deleteContents();
-          const inserted = iframeDoc.createTextNode(text);
-          range.insertNode(inserted);
+          const node = iframeDoc.createTextNode(text);
+          range.insertNode(node);
           const selection = iframeDoc.getSelection();
           if (selection) {
             const caret = iframeDoc.createRange();
-            caret.setStartAfter(inserted);
+            caret.setStartAfter(node);
             caret.collapse(true);
             selection.removeAllRanges();
             selection.addRange(caret);
           }
-          if (edit) liveMarks = shiftMarks(liveMarks, edit);
+          if (edit) record(edit, text);
           else anchored = false;
           return;
         }
 
-        const inserted = insertedLengthFor({
+        const inserted = insertedTextFor({
           inputType: input.inputType,
           data: input.data,
           pastedText: null,
@@ -2117,8 +2162,8 @@ export function Editor({
           anchored = false;
           return;
         }
-        const edit = editOf(range, inserted);
-        if (edit) liveMarks = shiftMarks(liveMarks, edit);
+        const edit = editOf(range, inserted.length);
+        if (edit) record(edit, inserted);
         else anchored = false;
       });
 
@@ -2136,13 +2181,14 @@ export function Editor({
           // a text that is gone. The blur below commits nothing, since the text is back to
           // `original` — but leaving stale offsets behind would be a trap for whoever reads them.
           liveMarks = marksFor(doc, address) ?? [];
+          liveText = liveFrameOf(el.textContent ?? "").text;
           anchored = true;
           el.blur();
         }
       });
 
       el.addEventListener("blur", () => {
-        const next = (el.textContent ?? "").trim();
+        const next = textFrameOf(el.textContent ?? "").text;
         // **Emptying a text is a real edit**, and used to be silently undone here. The comment
         // that guarded it said "nothing here offers a real way to hide the element instead", and
         // that stopped being true twice: the fields panel clears a section's slot (sprint 3
@@ -2164,7 +2210,30 @@ export function Editor({
           el.textContent = original;
           return;
         }
-        if (next !== original) onEditText(address, next);
+        if (next === original) return;
+
+        /**
+         * The captured marks, in the coordinates of the text actually being stored (ADR 0027 §4b).
+         *
+         * Three conditions, and all three have to hold for the capture to be used:
+         *
+         * 1. **Every edit was anchored.** One unmapped input type in the session is enough to make
+         *    the running offsets wrong, and there is no way to repair them halfway.
+         * 2. **The listener is still in step with the element**, which also verifies the last edit —
+         *    the one no later `beforeinput` was ever going to check.
+         * 3. **Trimming `liveText` gives exactly the text being committed.** `marksAfterTrim` removes
+         *    the whitespace at the two ends; if what is left is not the committed string, then the
+         *    element changed some other way and the offsets are not about it.
+         *
+         * Failing any of them hands `onEditText` no marks at all, and `withText` derives them by
+         * diff exactly as it did before §4b existed. That is the floor, and it is reached by
+         * returning less information rather than by a different code path.
+         */
+        const anchoredMarks =
+          anchored && stillInStep() && liveText.trim() === next
+            ? marksAfterTrim(liveText, liveMarks)
+            : undefined;
+        onEditText(address, next, anchoredMarks);
       });
     }
   }
@@ -2831,6 +2900,10 @@ export function Editor({
           slotOrder={slotOrderOf(doc, fieldsFor)}
           onFill={onFillSlot}
           onClear={onClearSlot}
+          // The panel commits a words-only change through the very same callback the canvas does,
+          // which is what keeps the field's marks alive. No anchored marks: the panel's `<input>`
+          // has no `beforeinput` capture yet, so this is the diff path on purpose.
+          onEditText={(address, text) => onEditText(address, text)}
           onClose={() => showFields(null)}
         />
       ) : null}

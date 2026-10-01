@@ -5,6 +5,7 @@ import {
   addRun,
   applyMark,
   type MarkRun,
+  marksAfterTrim,
   marksFor,
   markTextIssue,
   normaliseMarks,
@@ -687,5 +688,143 @@ describe("a text edit carries its marks with it", () => {
 
   it("produces a document that still parses after the shift", () => {
     expect(() => parseDocument(setElementText(bolded(), at, "Hoy"))).not.toThrow();
+  });
+});
+
+describe("ADR 0027 §4b — an edit the caller watched happen beats one it guessed", () => {
+  /**
+   * The two cases that the amendment exists for, measured before it was written.
+   *
+   * Both are documents whose text contains the thing that changed **twice**, which is when two
+   * strings stop determining an edit. The diff is not mistaken so much as it is guessing: both
+   * readings produce the same pair of strings, and it picks one.
+   */
+  /** `documentWithText` plus the real verb, rather than a hand-built value: a fixture that writes
+   * `marks` directly could hold a shape `applyMark` would never produce. */
+  const bold = (text: string, from: number, to: number): RetorikaDocument =>
+    applyMark(documentWithText(text), at, { from, to }, "strong");
+
+  it("the measured insertion: typing at the end must not grow a mark at the start", () => {
+    // "aXY" with "a" bold. The person types "XY" at offset 3. The diff reads the edit as starting at
+    // offset 1, because the typed "XY" repeats the "XY" already there — so the bold's `to`, which
+    // sits exactly at 1, grows by the §4 rule and swallows two characters nobody marked.
+    const doc = bold("aXY", 0, 1);
+
+    expect(marksFor(setElementText(doc, at, "aXYXY"), at)).toEqual([
+      { from: 0, to: 3, mark: "strong" },
+    ]);
+
+    expect(
+      marksFor(setElementText(doc, at, "aXYXY", [{ from: 0, to: 1, mark: "strong" }]), at),
+    ).toEqual([{ from: 0, to: 1, mark: "strong" }]);
+  });
+
+  it("the measured deletion: a mark whose own word was never touched must survive", () => {
+    // The worse of the two, because the mark is destroyed rather than stretched. Bold on the first
+    // «pan»; the person deletes the SECOND «pan y », offsets 6 to 12. The diff blames the first.
+    const doc = bold("pan y pan y aceite", 0, 3);
+
+    expect(marksFor(setElementText(doc, at, "pan y aceite"), at)).toBeUndefined();
+
+    expect(
+      marksFor(setElementText(doc, at, "pan y aceite", [{ from: 0, to: 3, mark: "strong" }]), at),
+    ).toEqual([{ from: 0, to: 3, mark: "strong" }]);
+  });
+
+  it("normalises what it is given, so two callers meaning the same publish the same bytes", () => {
+    const doc = documentWithText("pan y aceite");
+    // Out of order, and two runs of one mark that touch. INV_5 and the golden corpus both rest on
+    // this coming out as one sorted, merged list however the caller happened to build it.
+    const next = setElementText(doc, at, "pan y aceite", [
+      { from: 6, to: 12, mark: "strong" },
+      { from: 0, to: 6, mark: "strong" },
+    ]);
+    expect(marksFor(next, at)).toEqual([{ from: 0, to: 12, mark: "strong" }]);
+    expect(() => parseDocument(next)).not.toThrow();
+  });
+
+  it("drops the key entirely when the anchored marks are empty", () => {
+    // An absent `marks` and an empty one have to publish the same bytes, which is why `withText`
+    // rebuilds the value without the key rather than setting it to undefined.
+    const doc = bold("pan", 0, 3);
+    const next = setElementText(doc, at, "pan", []);
+    expect(marksFor(next, at)).toBeUndefined();
+    expect(JSON.stringify(next)).not.toContain("marks");
+  });
+
+  it("refuses anchored marks that do not fit the text, rather than storing them", () => {
+    // The tripwire. The caller reconciles its offsets before calling, so this firing means that
+    // reconciliation has a bug — and a mark reaching past the end would publish over nothing.
+    const doc = documentWithText("pan");
+    expect(() => setElementText(doc, at, "pan", [{ from: 0, to: 9, mark: "strong" }])).toThrow(
+      /past the end of a text of 3 code units/,
+    );
+  });
+
+  it("refuses an anchored boundary that cuts a surrogate pair in half", () => {
+    // ADR 0027 §2b, which the diff path gets for free by construction and this path has to check:
+    // the renderer escapes each piece separately, so half a pair publishes as a replacement mark.
+    const doc = documentWithText("Café 🍷 tinto");
+    expect(() =>
+      setElementText(doc, at, "Café 🍷 tinto", [{ from: 0, to: 6, mark: "strong" }]),
+    ).toThrow(/surrogate pair/);
+  });
+
+  it("still throws on an address that matches nothing, marks or no marks", () => {
+    const doc = documentWithText("pan");
+    const nowhere = { sectionId: at.sectionId, elementId: "el-nope" };
+    expect(() => setElementText(doc, nowhere, "pan", [])).toThrow(/no element "el-nope"/);
+  });
+});
+
+describe("marksAfterTrim — the editor's trim is two deletions, not a diff", () => {
+  const strong = (from: number, to: number): MarkRun => ({ from, to, mark: "strong" });
+
+  it("a space typed after a bold word does not stay inside the bold", () => {
+    // §4 grows a run whose `to` sits at the insertion point, so "pan" bold [0,3) becomes [0,4) the
+    // moment a space is typed at 3 — and the commit stores "pan", three code units.
+    expect(marksAfterTrim("pan ", [strong(0, 4)])).toEqual([strong(0, 3)]);
+  });
+
+  it("a space typed before a bold word brings the run back to zero", () => {
+    expect(marksAfterTrim(" pan", [strong(1, 4)])).toEqual([strong(0, 3)]);
+  });
+
+  it("handles whitespace at both ends at once, which a diff cannot", () => {
+    // `textEditBetween("  pan ", "pan")` finds no common prefix and no common suffix, so it reports
+    // the whole string replaced and every run on it dies. This is the case that proves the two are
+    // not interchangeable.
+    expect(marksAfterTrim("  pan y aceite ", [strong(2, 5)])).toEqual([strong(0, 3)]);
+    expect(shiftMarks([strong(2, 5)], textEditBetween("  pan y aceite ", "pan y aceite"))).toEqual(
+      [],
+    );
+  });
+
+  it("handles the renderer's own pretty-printing, which is the shape this really arrives in", () => {
+    expect(marksAfterTrim("\n      pan y aceite\n    ", [strong(7, 10)])).toEqual([strong(0, 3)]);
+  });
+
+  it("drops a run that was entirely whitespace instead of keeping an empty one", () => {
+    expect(marksAfterTrim("pan  ", [strong(3, 5)])).toEqual([]);
+  });
+
+  it("leaves the marks alone when there is nothing to trim", () => {
+    expect(marksAfterTrim("pan y aceite", [strong(0, 3)])).toEqual([strong(0, 3)]);
+  });
+
+  it("never produces a run outside the trimmed text", () => {
+    for (const raw of ["pan ", " pan", "  pan  ", "\n  pan y aceite \n", "pan", "   "]) {
+      for (let from = 0; from < raw.length; from += 1) {
+        for (let to = from + 1; to <= raw.length; to += 1) {
+          for (const run of marksAfterTrim(raw, [strong(from, to)])) {
+            expect(run.from, `${JSON.stringify(raw)} [${from},${to})`).toBeGreaterThanOrEqual(0);
+            expect(run.to, `${JSON.stringify(raw)} [${from},${to})`).toBeLessThanOrEqual(
+              raw.trim().length,
+            );
+            expect(run.to).toBeGreaterThan(run.from);
+          }
+        }
+      }
+    }
   });
 });

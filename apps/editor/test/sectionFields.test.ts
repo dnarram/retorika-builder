@@ -2,7 +2,7 @@ import { presetFor } from "@retorika/catalog";
 import { EMPTY_ANSWERS, generate } from "@retorika/generator";
 import { clearSlot, escalateSection, fillSlot, type RetorikaDocument } from "@retorika/schema";
 import { describe, expect, it } from "vitest";
-import { sectionFields } from "../src/editor/sectionFields.ts";
+import { type FieldRow, fieldCommitFor, sectionFields } from "../src/editor/sectionFields.ts";
 
 /**
  * The rows the field panel lists. They come from the **preset**, not from the document, which is
@@ -195,5 +195,97 @@ describe("a section that is designed by hand", () => {
       })),
     };
     expect(sectionFields(unknown, "sec-cover")).toEqual([]);
+  });
+});
+
+describe("fieldCommitFor — which of the three things a box's blur means", () => {
+  /**
+   * The bug this function exists for, measured on 1 October 2026: the panel sent **every** commit
+   * through `fillSlot`, which replaces an element's whole value — so editing a bolded field from the
+   * panel came back unbolded, and so did blurring one that had not been edited at all. The canvas has
+   * shifted marks since sprint 10; the panel threw them away, which is the exact split `withText`'s
+   * own comment warns about.
+   */
+  const text = (over: Partial<FieldRow> = {}): FieldRow => ({
+    slot: "headline",
+    occurrence: 0,
+    role: "heading",
+    label: "Titular",
+    kind: "text",
+    elementId: "el-headline",
+    text: "pan y aceite",
+    required: true,
+    ...over,
+  });
+
+  const link = (over: Partial<FieldRow> = {}): FieldRow =>
+    text({
+      slot: "cta",
+      role: "button",
+      kind: "link",
+      elementId: "el-cta",
+      href: "#contacto",
+      ...over,
+    });
+
+  it("a words-only change is a text edit, which is what carries the marks over", () => {
+    expect(fieldCommitFor(text(), "pan y aceite de oliva", "")).toEqual({
+      kind: "text",
+      elementId: "el-headline",
+      text: "pan y aceite de oliva",
+    });
+  });
+
+  it("an unchanged box is still a text edit, never a value replacement", () => {
+    // The worse half of the bug: this path used to rebuild the value and strip the formatting off a
+    // field nobody had touched. `setElementText` with the same text is a no-op on the marks.
+    expect(fieldCommitFor(text(), "pan y aceite", "")).toEqual({
+      kind: "text",
+      elementId: "el-headline",
+      text: "pan y aceite",
+    });
+  });
+
+  it("trims, because that is what both paths store", () => {
+    expect(fieldCommitFor(text(), "  pan y aceite  ", "")).toEqual({
+      kind: "text",
+      elementId: "el-headline",
+      text: "pan y aceite",
+    });
+  });
+
+  it("an emptied box clears the field, whatever the destination says", () => {
+    expect(fieldCommitFor(text(), "", "")).toEqual({ kind: "clear" });
+    expect(fieldCommitFor(text(), "   ", "")).toEqual({ kind: "clear" });
+    expect(fieldCommitFor(link(), "", "#contacto")).toEqual({ kind: "clear" });
+  });
+
+  it("a slot the document does not have yet is a fill: there is no element to edit", () => {
+    // Built by omission rather than by `elementId: undefined`: with `exactOptionalPropertyTypes`
+    // those are different types, and the row a missing slot really produces has no such key.
+    const { elementId: _none, ...noElement } = text();
+    expect(fieldCommitFor(noElement, "pan", "")).toEqual({ kind: "fill" });
+  });
+
+  it("a link whose destination moved is a fill, because a whole value changed", () => {
+    expect(fieldCommitFor(link(), "Reserva ya", "#reservas")).toEqual({ kind: "fill" });
+  });
+
+  it("a link whose label changed but not its destination is a text edit", () => {
+    // The case that makes the distinction worth drawing: a button's label can carry marks too
+    // (ADR 0027 §6), and renaming it must not drop them.
+    expect(fieldCommitFor(link({ text: "Reserva ya" }), "Reserva mesa", "#contacto")).toEqual({
+      kind: "text",
+      elementId: "el-cta",
+      text: "Reserva mesa",
+    });
+  });
+
+  it("compares the destination trimmed, so whitespace alone is not a value change", () => {
+    expect(fieldCommitFor(link(), "Reserva ya", "  #contacto  ")).toEqual({
+      kind: "text",
+      elementId: "el-cta",
+      text: "Reserva ya",
+    });
   });
 });

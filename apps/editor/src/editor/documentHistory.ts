@@ -5,6 +5,7 @@ import type {
   ListItem,
   Mark,
   MarkRange,
+  MarkRun,
   MobilePatchEdit,
   PlacementEdit,
   RetorikaDocument,
@@ -149,7 +150,15 @@ export interface History {
 export type Histories = readonly History[];
 
 export type HistoryAction =
-  | { type: "editText"; variant: number; address: ElementAddress; text: string }
+  | {
+      type: "editText";
+      variant: number;
+      address: ElementAddress;
+      text: string;
+      /** The marks the editor already shifted, when it watched the edit happen (ADR 0027 §4b).
+       * Absent means "derive them from the two strings", which is the documented fallback. */
+      marks?: readonly MarkRun[];
+    }
   | { type: "deleteSection"; variant: number; sectionId: string }
   | { type: "duplicateSection"; variant: number; sectionId: string }
   | { type: "moveSection"; variant: number; sectionId: string; toIndex: number }
@@ -244,8 +253,21 @@ function sameField(cause: SnapshotCause, address: ElementAddress): boolean {
   );
 }
 
-function editText(history: History, address: ElementAddress, text: string): History {
-  const document = setElementText(history.present.document, address, text);
+/**
+ * `marks` passes straight through to the schema and changes nothing about the stack itself.
+ *
+ * **Undo is unaffected by §4b, and that is worth saying rather than leaving to be noticed.** This is
+ * a stack of whole documents, so going back restores one that already has its marks where they
+ * belong — there is nothing to re-derive and no inverse edit to compute. The amendment made the
+ * forward step accurate; it did not give the stack a new kind of state to keep.
+ */
+function editText(
+  history: History,
+  address: ElementAddress,
+  text: string,
+  marks?: readonly MarkRun[],
+): History {
+  const document = setElementText(history.present.document, address, text, marks);
   const present: Snapshot = { document, cause: { type: "editText", address } };
   // Still typing into the field the last edit touched: amend that step rather than adding one.
   // `amendable` is what an undo or a redo turns off — a restored snapshot may well carry an
@@ -796,7 +818,7 @@ function redo(history: History): History {
 function apply(history: History, action: HistoryAction): History {
   switch (action.type) {
     case "editText":
-      return editText(history, action.address, action.text);
+      return editText(history, action.address, action.text, action.marks);
     case "deleteSection":
       return deleteSection(history, action.sectionId);
     case "duplicateSection":

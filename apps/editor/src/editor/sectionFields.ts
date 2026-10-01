@@ -139,3 +139,42 @@ export function sectionFields(doc: RetorikaDocument, sectionId: string): FieldRo
 
   return rows;
 }
+
+/**
+ * What committing one of a row's boxes should actually do (ADR 0027 §4b, and the bug that found it).
+ *
+ * **The fields panel used to answer this one way for everything, and it destroyed every mark on the
+ * field it touched.** Measured on 1 October 2026: the panel built a whole `ContentValue` and sent it
+ * through `fillSlot`, which replaces `value` outright — so a bolded word edited from the panel came
+ * back unbolded, and, worse, came back unbolded **even when the text had not changed at all**, because
+ * blurring an untouched box committed the same rebuilt value. Clicking into a field and clicking away
+ * was enough to strip the formatting off it.
+ *
+ * It is the opposite of the canvas, where `withText` has shifted marks since sprint 10 — the same
+ * split `withText`'s own comment warned about: «a mark that survives the canvas but not the fields
+ * panel is worse than one that never survived at all».
+ *
+ * So the three cases are told apart here, as a pure function, because the panel is a React component
+ * and this is the part worth having a test on:
+ *
+ * - **`clear`** — an empty label is an empty field, whatever the destination says.
+ * - **`text`** — the element exists and only its words changed. Goes through `setElementText`, which
+ *   is the one chokepoint that moves marks with the text under them.
+ * - **`fill`** — everything that is not just words: a slot the document does not have yet, and a
+ *   link whose destination moved. `fillSlot` writes a whole value because a whole value is what
+ *   changed; a destination carries no marks, and a slot being created has none to lose.
+ */
+export type FieldCommit =
+  | { kind: "clear" }
+  | { kind: "text"; elementId: string; text: string }
+  | { kind: "fill" };
+
+export function fieldCommitFor(row: FieldRow, text: string, href: string): FieldCommit {
+  if (text.trim() === "") return { kind: "clear" };
+  // No element yet: there is nothing to edit the text of, and no mark to keep.
+  if (row.elementId === undefined) return { kind: "fill" };
+  // A link whose destination changed is a value change, not a text edit. Compared trimmed, because
+  // that is what both paths store.
+  if (row.kind === "link" && href.trim() !== (row.href ?? "").trim()) return { kind: "fill" };
+  return { kind: "text", elementId: row.elementId, text: text.trim() };
+}
