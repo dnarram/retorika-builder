@@ -23,5 +23,5 @@ export type { RadiusKey, Scale, SizeKey, SpaceKey } from "./scales.ts";
 export { DEFAULT_SCALE_ID, SCALES } from "./scales.ts";
 export type { BuildThemeInput } from "./theme.ts";
 export { buildTheme } from "./theme.ts";
-export type { FontKey, TypePair } from "./typography.ts";
-export { TYPE_PAIRS } from "./typography.ts";
+export type { FontContrast, FontKey, TypePair } from "./typography.ts";
+export { familiesOf, TYPE_PAIRS } from "./typography.ts";

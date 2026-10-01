@@ -191,6 +191,22 @@ describe("overflow — long text (every composition that declares it, every type
    * Drawn from `contrastCombinations()` rather than this describe's own `combinations`: that set
    * is the one that already varies every type pair against a single fixed composition
    * (`cover/image-right`), which is exactly what "one combination per type pair" needs.
+   *
+   * **Since sprint 11 day 4 it also asserts, and only what belongs to this code rather than to the
+   * machine** (ADR 0028's option C):
+   *
+   * - **Every pair's heading differs from its body in weight and size.** This is what `modern-sans`
+   *   rests on entirely — it sets one family on purpose — and it is the one kind of contrast no
+   *   absent font can remove. It is a property of `build.ts` and the scale, so it holds on every
+   *   platform and is safe to require.
+   * - **A `generic` pair resolves a different platform font for heading and body.** Its stacks end in
+   *   different generic keywords, so this cannot fail for want of an installed face.
+   *
+   * **A `named` pair is reported and not asserted, deliberately.** Its contrast depends on which of
+   * the faces it names the machine has, which is not ours to guarantee — asserting it would turn a
+   * Linux runner's font set into a red build and teach the next person to loosen the check rather
+   * than read it. The per-platform result belongs in ADR 0028, and the report below is where it comes
+   * from.
    */
   it("reports the font Chromium actually renders for each type pair", async () => {
     const report: string[] = [];
@@ -223,7 +239,34 @@ describe("overflow — long text (every composition that declares it, every type
         };
         const heading = await fontsOf('[data-slot="headline"]');
         const body = await fontsOf('[data-slot="body"]');
-        report.push(`  ${typePair.id.padEnd(16)} heading: ${heading.padEnd(20)} body: ${body}`);
+
+        // Weight and size, which is the contrast that survives every missing font.
+        const type = await page.evaluate(() => {
+          const read = (selector: string) => {
+            const el = document.querySelector(selector);
+            if (!el) throw new Error(`no ${selector}`);
+            const style = getComputedStyle(el);
+            return { size: Number.parseFloat(style.fontSize), weight: Number(style.fontWeight) };
+          };
+          return { heading: read('[data-slot="headline"]'), body: read('[data-slot="body"]') };
+        });
+        expect(type.heading.weight, `${typePair.id}: heading weight`).toBeGreaterThan(
+          type.body.weight,
+        );
+        expect(type.heading.size, `${typePair.id}: heading size`).toBeGreaterThan(type.body.size);
+
+        const sameFace = heading === body;
+        if (typePair.contrast === "generic") {
+          expect(sameFace, `${typePair.id} is a \`generic\` pair: ${heading} vs ${body}`).toBe(
+            false,
+          );
+        }
+        report.push(
+          `  ${typePair.id.padEnd(16)} heading: ${heading.padEnd(20)} body: ${body.padEnd(20)}` +
+            ` [${typePair.contrast}] ${sameFace ? "SAME face" : "different faces"},` +
+            ` weight ${type.heading.weight}/${type.body.weight},` +
+            ` size ${type.heading.size}/${type.body.size}px`,
+        );
       } finally {
         await closeCombination(page);
       }
