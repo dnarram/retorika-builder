@@ -276,3 +276,61 @@ describe("two warnings are two warnings", () => {
     });
   });
 });
+
+/**
+ * The other half of the advanced dossier §4, from sprint 10 day 6.
+ *
+ * The measurement itself needs a browser and lives in `overflowCheck.ts`; **the decision does not**,
+ * and that separation is the reason the gate takes the findings as data rather than becoming
+ * `async`. Every case below runs with no layout engine anywhere.
+ */
+describe("overflow at 320 pixels", () => {
+  const overflowing = [{ pageId: "home", sectionId: "sec-cover", label: "Solomillo", over: 14.2 }];
+
+  it("says nothing when the measurement came back empty", () => {
+    expect(downloadGateFor(counts({}), plain, new Set(), [])).toEqual({ kind: "ready" });
+  });
+
+  it("is the default, so a caller that passes nothing is a caller that measured nothing", () => {
+    expect(downloadGateFor(counts({}), plain)).toEqual({ kind: "ready" });
+  });
+
+  it("warns, and does not block", () => {
+    const gate = downloadGateFor(counts({}), plain, new Set(), overflowing);
+    expect(gate.kind).toBe("overflows");
+    // The distinction that matters: `tooManyPhotos` and `unreadable` have no way past them. This
+    // one does, which is what makes it a warning — the dossier's own word is «avisa», the owner can
+    // see it in the mobile view, and the commonest cause is a word they typed.
+    expect(downloadGateFor(counts({}), plain, new Set(["overflow"]), overflowing)).toEqual({
+      kind: "ready",
+    });
+  });
+
+  it("carries the findings through, so the dialog can name the section", () => {
+    const gate = downloadGateFor(counts({}), plain, new Set(), overflowing);
+    expect(gate).toEqual({ kind: "overflows", findings: overflowing });
+  });
+
+  it("comes after the photo warning, which is about the whole site", () => {
+    const gate = downloadGateFor(counts({ sample: 1, total: 1 }), plain, new Set(), overflowing);
+    expect(gate.kind).toBe("warn");
+    // And going past that one surfaces this one rather than downloading — the «two warnings are two
+    // warnings» contract sprint 9 day 7 paid for.
+    expect(
+      downloadGateFor(counts({ sample: 1, total: 1 }), plain, new Set(["photos"]), overflowing)
+        .kind,
+    ).toBe("overflows");
+  });
+
+  it("never comes before a block, however much overflows", () => {
+    const tooMany = counts({ own: MAX_PHOTOS + 1, total: MAX_PHOTOS + 1 });
+    expect(downloadGateFor(tooMany, plain, new Set(), overflowing).kind).toBe("tooManyPhotos");
+  });
+
+  it("does not let accepting it wave through a different warning", () => {
+    expect(
+      downloadGateFor(counts({ empty: 1, total: 1 }), plain, new Set(["overflow"]), overflowing)
+        .kind,
+    ).toBe("warn");
+  });
+});

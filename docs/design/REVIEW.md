@@ -300,6 +300,13 @@ part that must not move — the interface tokens and their separation from the p
   the same §4 sentence promises the check covers «desbordes por debajo de 320 píxeles», nothing
   measures that yet, and a size is the one value in this vocabulary that can cause one.
 
+  **The second of those two stopped being true on 1 October 2026**, sprint 10 day 6: the editor
+  measures each page at 320 pixels before a download and warns with the sections that run past the
+  edge, so an exact `fontSize` shipped in that same merge. **The picker is still refused** — that is
+  the sentence this entry rests on and nothing has touched it. What exists is rule 6's marked
+  exception, behind the design tools, behind a review; what is still refused is a free colour
+  control with nothing in front of it.
+
   **Accepted by David on 1 October 2026, not by direction** — see the ADR's own header for what
   that does and does not mean. This entry is amended by a decision direction has not looked at.
 

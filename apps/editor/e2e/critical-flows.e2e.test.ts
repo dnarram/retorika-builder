@@ -1780,7 +1780,12 @@ describe("sprint 9 día 5 — medidas, espaciado y la excepción marcada", () =>
       await studio.getByRole("button", { name: "Sí, enciéndelas" }).click();
       await headline.click();
       await expect(frame.locator(".rb-toolbar-select")).toHaveCount(2);
-      await expect(frame.locator(".rb-toolbar-exact")).toHaveCount(2);
+      // Three exact inputs since sprint 10 day 6, not two: `fontSize` joined `EXACT_TODAY` the day
+      // the gate learned to measure a page at 320px, which is what ADR 0026 §2 held it back for.
+      // The size one is **first** in the bar, because it sits beside the three size steps rather
+      // than in the measures group — so everything below addresses its input by name instead of by
+      // position, which is what this assertion going red taught.
+      await expect(frame.locator(".rb-toolbar-exact")).toHaveCount(3);
 
       // Every control reachable inside the frame, at the width where it was not.
       const reach = await frame.locator(".rb-toolbar").evaluate((bar) => {
@@ -1807,8 +1812,9 @@ describe("sprint 9 día 5 — medidas, espaciado y la excepción marcada", () =>
 
       // An exact value: rule 6's second arm, arriving for the first time in the product.
       await headline.click();
-      await frame.locator(".rb-toolbar-exact").first().fill("37");
-      await frame.locator(".rb-toolbar-exact").first().dispatchEvent("change");
+      const exactPadding = frame.locator('.rb-toolbar-exact[aria-label^="Espaciado"]');
+      await exactPadding.fill("37");
+      await exactPadding.dispatchEvent("change");
       await expect(frame.locator('[data-id="el-headline"]')).toHaveCSS("padding", "37px");
 
       // Marked, in the document, rather than merely applied.

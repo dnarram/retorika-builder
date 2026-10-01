@@ -104,7 +104,7 @@ the colour half waits and the sprint ships references only.
 > |---|---|
 > | `padding`, `borderRadius` | Day 5, alone. Pure geometry — no contrast, no legibility |
 > | `color` | Day 6 only, with the two-level contrast review |
-> | `fontSize` | **Not this sprint.** Not for contrast — every proved pair clears 4.5:1 at any size — but because the dossier §4 promises the same pre-publish check covers «desbordes por debajo de 320 píxeles», and an exact size is the one value in this vocabulary that can cause one. Nothing measures that yet |
+> | `fontSize` | **Not this sprint.** Not for contrast — every proved pair clears 4.5:1 at any size — but because the dossier §4 promises the same pre-publish check covers «desbordes por debajo de 320 píxeles», and an exact size is the one value in this vocabulary that can cause one. Nothing measures that yet · **Sprint 10 day 6, with the 320px measurement** |
 >
 > The record is changed rather than the reading, which is the point of writing it down.
 >
@@ -114,6 +114,18 @@ the colour half waits and the sprint ships references only.
 > own piece of work — a measurement at 320px that nothing in the editor makes today — rather than
 > something to bolt onto a contrast gate. Offering an exact size behind a gate that cannot see the
 > thing it would cause is the shape of promise this ADR exists to refuse.
+>
+> **And closed for size on 1 October 2026, sprint 10 day 6 — the table is now complete.** The
+> overflow half got built: `apps/editor/src/editor/overflowCheck.ts` loads each page into a hidden
+> 320-pixel frame and measures every element's right edge against it, and the download gate warns
+> with the sections it names. `fontSize` joined `EXACT_TODAY` **in that same merge**, which is the
+> rule this section states and which has now been kept three times. The gate can see what an exact
+> size would cause, so the reason for holding it back is gone.
+>
+> **It warns rather than blocks, unlike the colour**, and the difference is deliberate: the dossier's
+> own word for both halves is «avisa», the owner can see an overflow in the mobile preview, and the
+> commonest cause is a long word they typed. A colour at 2:1 is invisible to the person who chose
+> it, which is why that one blocks. `downloadGate.ts` carries the reasoning where the code is.
 
 ### 3. Two levels, and who decided them
 
