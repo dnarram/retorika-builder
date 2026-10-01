@@ -1,7 +1,8 @@
 # 0025 — Studio mode starts now, and its switch is not in the document
 
 **Status:** **accepted** · **Date:** 2026-09-30 · **Proposed by:** development · **Accepted by:** the
-CEO · **Amends:** protocol Part 14 (phase boundary) · **Touches:** the advanced-module dossier §§1-6
+CEO · **Amendment at the foot:** accepted 2026-10-01 by **David, not direction**, and built ·
+**Amends:** protocol Part 14 (phase boundary) · **Touches:** the advanced-module dossier §§1-6
 and §11, `docs/document-rules.md` (`INV_4`), ADR 0012 (`localStorage` only), ADR 0018 (the precedent
 for crossing a phase boundary on purpose)
 
@@ -244,10 +245,19 @@ Three live options, named here so the decision starts from a list rather than fr
 **What it may not do is decide this is fine because the switch was found.** It was found and it
 admitted the wrong person on its own terms; those are two findings, not one.
 
-## Amendment proposed 1 October 2026 — the gate worked, the wording does not, and the door behind it is three places away
+## Amendment — the gate worked, the wording does not, and the door behind it is three places away
 
-**Status of this section: `proposed`.** It is sprint 10 day 2's answer to the three questions above,
-and it is direction's to accept or refuse. Nothing has been built for it.
+**Status of this section: accepted 1 October 2026.** Proposed by development on 1 October 2026 as
+sprint 10 day 2's answer to the three questions above; **accepted by David, not by direction**, asked
+directly while planning sprint 11 and answered «**Dentro, y la firmo yo**». Built the same day.
+
+> **The header says «not direction» for the same reason ADR 0026, 0027 and 0028 do.** The body of this
+> ADR above was decided by the CEO; this amendment was not, and an amendment gets cited afterwards as
+> part of whatever it amends. The distinction is written down rather than left to be inferred.
+>
+> **What was signed is the text below as it already stood** — it has been in this file since sprint 10
+> day 2 and was read there, so the signature is on wording its signer had in front of him, not on
+> anything written afterwards to suit it.
 
 ### The gate did its job, and §1 is why
 

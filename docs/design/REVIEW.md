@@ -136,6 +136,28 @@ part that must not move — the interface tokens and their separation from the p
   sits at the rail's foot, separated — and ADR 0025 records why it is not in the top bar, which is
   the measurement sprint 7 day 7 took of that row overflowing.
 
+- **Mockup 16's switch question is overruled, and the shipped wording is not what it draws.**
+  Mockup 16 band 1 draws **«¿Montas webs para otros?»**, from the advanced dossier §4's point that
+  «ante "básico o avanzado" mucha gente miente hacia arriba». That is true about *levels* and the
+  remedy does not follow from it: a question about **who somebody is**, answered to obtain a
+  capability, is answered yes by everyone who wants the capability — so it filtered nobody while
+  looking as though it did. Session 3 watched a car workshop's owner read it, answer «Sí,
+  enciéndelas» and carry on, and nothing was lost by that, because ADR 0025 §1 is kept by the press
+  rather than by the wording.
+
+  **Amended by [ADR 0025](../decisions/0025-studio-mode-starts-now-and-its-switch-is-not-in-the-document.md)'s
+  own amendment, accepted by David on 1 October 2026 and built the same day.** The question now
+  describes the tools — **«¿Quieres colocar tú cada elemento?»** — so the answer is accurate rather
+  than aspirational. The mockup is left as drawn: it is the record of what was specified, and this is
+  the file where an ADR overrules it.
+
+  **The same amendment puts «Diseñar a mano» inside the `Diseño` panel**, beside the sentence that
+  says you need it. The panel used to render «Diséñala a mano **desde su cabecera**» as a bare
+  paragraph — a dead end naming its own exit — which is how an owner who had turned the tools on, and
+  been told by that very panel that the grid existed, still asked for «más libertad en la posición».
+  **ADR 0025 §7 is not amended**: escalation stays per section and `escalate` moves no element, which
+  is exactly what makes a second door to the same offer safe.
+
 - **`Páginas` and `Fotos` are phase 2, and mockup 08 draws them.** Organic pages and photo
   upload both belong to phase 2 in the protocol, and ADR 0011 says a phase 1 site carries sample
   photos only. The mockup now draws both dimmed and marked `Fase 2`, so nobody implements them by

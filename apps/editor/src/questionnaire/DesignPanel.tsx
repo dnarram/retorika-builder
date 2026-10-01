@@ -11,6 +11,7 @@ import { listStyleExceptions } from "@retorika/schema";
 import { useId, useState } from "react";
 import {
   boundsFor,
+  designPanelState,
   designRows,
   mobileControlsFor,
   selectedRowId,
@@ -210,6 +211,7 @@ export function DesignPanel({
   onMoveUpOnMobile,
   onPreviewMobile,
   onClearException,
+  onEscalate,
   onClose,
 }: {
   document: RetorikaDocument;
@@ -230,6 +232,20 @@ export function DesignPanel({
   /** Drop one exception and let the system show through again — the whole of the «arreglo en un
    * clic», and the same act day 6's contrast review will offer from its own dialog. */
   onClearException: (exception: StyleException) => void;
+  /**
+   * «Diseñar a mano», offered from here as well as from the section's own header (ADR 0025's
+   * amendment, accepted 1 October 2026).
+   *
+   * **The second door, not a second decision.** Until today this panel told a catalog-placed section's
+   * owner to go and find the offer «desde su cabecera» and did not offer it — a dead end that names
+   * its own exit. Session 3 found an owner who turned the tools on, was told by this very panel that
+   * the grid was there, and still asked for «más libertad en la posición».
+   *
+   * It is the **same** act as the header's: the same label, the same `escalateSection`, and §7 is
+   * untouched — escalation stays per section and `escalate` copies the preset's own layout in, so
+   * nothing moves when it is pressed. That is precisely what makes a second door safe.
+   */
+  onEscalate: () => void;
   onClose: () => void;
 }) {
   const headingId = useId();
@@ -259,6 +275,9 @@ export function DesignPanel({
   const exceptions = listStyleExceptions(doc);
 
   const rows = sectionId === null ? [] : designRows(doc, sectionId);
+  /** Which of the four things this panel has to say. Decided in `designTree.ts` so it can be tested
+   * without a DOM, and so the «Diseñar a mano» case is a named state rather than a row count. */
+  const state = designPanelState(doc, sectionId);
   // The same resolution the canvas uses for its outline, from the same function — see
   // `selectedRowId` for what having two of them cost.
   const selectedId = selectedRowId(rows, selectedElementId);
@@ -305,14 +324,33 @@ export function DesignPanel({
         </button>
       </div>
 
-      {sectionId === null ? (
+      {state === "noSection" ? (
         // A sentence saying what to do, not a disabled tree — the shape `PagesPanel` and
         // `PhotosPanel` both use for "you cannot do this from here yet".
         <p className="m-0 text-[12px] leading-snug text-ui-muted">
           {es["editor.design.noSection"]}
         </p>
-      ) : rows.length === 0 ? (
-        <p className="m-0 text-[12px] leading-snug text-ui-muted">{es["editor.design.notFree"]}</p>
+      ) : state === "offerEscalate" ? (
+        // The paragraph says what it costs and promises the return in the same breath, which is what
+        // ADR 0025 §7 asks of the offer wherever it appears — and then the door is right here,
+        // instead of naming a place to go and find it. See `designPanelState` for why this is a
+        // state and not a row count.
+        <div className="flex flex-col items-start gap-2.5">
+          <p className="m-0 text-[12px] leading-snug text-ui-muted">
+            {es["editor.design.notFree"]}
+          </p>
+          <button
+            type="button"
+            onClick={onEscalate}
+            className="cursor-pointer rounded-lg border-0 bg-ui-ink px-3 py-2 text-[12px] font-semibold text-white"
+          >
+            {es["editor.section.escalate.yes"]}
+          </button>
+        </div>
+      ) : state === "noPlaceable" ? (
+        <p className="m-0 text-[12px] leading-snug text-ui-muted">
+          {es["editor.design.noPlaceable"]}
+        </p>
       ) : (
         <>
           <div className="flex flex-col gap-[3px]">

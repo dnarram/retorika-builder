@@ -504,8 +504,8 @@ export function Editor({
   // be in the way rather than at hand.
   const [fieldsFor, setFieldsFor] = useState<string | null>(null);
   const [rail, setRail] = useState<RailItemId>("sections");
-  /** Whether the switch's own question — «¿Montas webs para otros?» — is open. State rather than a
-   * ref because the popover is React's to draw, unlike everything inside the canvas. */
+  /** Whether the switch's own question — «¿Quieres colocar tú cada elemento?» — is open. State rather
+   * than a ref because the popover is React's to draw, unlike everything inside the canvas. */
   const [askingDesignTools, setAskingDesignTools] = useState(false);
   /**
    * Which section and element the «Diseño» panel is about.
@@ -2829,6 +2829,11 @@ export function Editor({
               if (designSectionId) onMoveUpOnMobile(designSectionId, elementId);
             }}
             onPreviewMobile={() => setDevice("mobile")}
+            // The same verb the section header's own «Diseñar a mano» calls, so the two doors are
+            // one offer (ADR 0025's amendment). Nothing is escalated without a press.
+            onEscalate={() => {
+              if (designSectionId) onEscalateSection(designSectionId);
+            }}
             onClose={() => showRail("sections")}
           />
         ) : undefined
