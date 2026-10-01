@@ -2554,3 +2554,207 @@ describe("sprint 10 día 7 — el recorrido completo del sprint", () => {
     }
   }, 120_000);
 });
+
+describe("sprint 11 día 7 — el recorrido completo del sprint", () => {
+  /**
+   * Every day of this sprint, in one session, closing on the same promise every day-7 walk since
+   * sprint 5 has closed on: a ZIP that opens by double-clicking, with nothing missing.
+   *
+   * **The five rows of ADR 0027 §3, chained on one field rather than five pristine ones.** Days 1–2
+   * proved each row in isolation — a fresh document per case, so a bug in one could not hide behind
+   * the setup of another. What none of that proves is **composition across real focus and blur
+   * cycles**: that `beforeinput`'s capture, committed and re-rendered five times in a row, keeps
+   * agreeing with itself. The text is ADR 0027's own canonical example, "Solomillo al whisky",
+   * walked through grows → continues → does not join → shrinks → removes, with the arithmetic
+   * checked by hand below each step so a wrong assertion cannot pass by accident.
+   *
+   * **Then the type pair, and the ZIP day 6 built.** Switching to «Clásica y seria» is the one
+   * action that turns `TYPE_PAIRS` from a stack nobody ships bytes for into one that does — the
+   * live path from a click in the Estilo panel to two `woff2` files and a licence inside a
+   * downloaded ZIP. And the `<script>` typed into the headline right after is sprint 10 day 7's own
+   * check, repeated here on purpose: nothing about this sprint's edits to the capture pipeline
+   * (`asTyped`, `beforeinput`, the anchored `shiftMarks`) may be the thing that finally lets one
+   * through.
+   */
+  it("marks and edits a run through all five rows of ADR 0027 §3, switches type pair, and downloads a ZIP with the chosen letter, its licence and the escaping intact", async () => {
+    const studio = await (await browser.newContext()).newPage();
+    try {
+      await studio.goto(BASE_URL, { waitUntil: "networkidle" });
+      await studio.fill("#nombre", "Reformas Vega");
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByText("Peluquería y barbería", { exact: true }).click();
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.fill("#direccion", "Calle Espinel 12, Ronda");
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByText("Que me llamen", { exact: true }).click();
+      await studio.fill("#telefono", "600111222");
+      await studio.getByRole("button", { name: "Crear mi web" }).click();
+      await studio.getByText("Ver a tamaño real →").first().click();
+
+      const frame = studio.frameLocator("iframe").first();
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+      const subheadline = frame.locator('[data-id="el-subheadline"]');
+
+      // A controlled string rather than whatever the generator wrote, so every offset below is
+      // exact and the reader can check the arithmetic against the text on the page.
+      await subheadline.click();
+      await studio.keyboard.press("ControlOrMeta+a");
+      await studio.keyboard.type("Solomillo al whisky");
+      await studio.keyboard.press("Enter");
+      await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
+      await expect(subheadline).toHaveText("Solomillo al whisky");
+
+      // Bold on "Solomillo", [0,9) — the mark every step below moves.
+      await subheadline.click();
+      await selectWord(subheadline, "Solomillo");
+      await frame.locator('.rb-toolbar-mark[data-mark="strong"]').click();
+      await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
+      await expect(subheadline.locator("strong")).toHaveText("Solomillo");
+
+      // ---- row 1: typing INSIDE the run grows it ----
+      // Caret after "Solo" (offset 4, strictly inside [0,9)) · +"XX" → mark [0,11).
+      await subheadline.click();
+      await caretAt(subheadline, "Solo", "end");
+      await studio.keyboard.type("XX");
+      await studio.keyboard.press("Enter");
+      await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
+      await expect(subheadline.locator("strong")).toHaveText("SoloXXmillo");
+      await expect(subheadline).toHaveText("SoloXXmillo al whisky");
+
+      // ---- row 2: typing right AT THE END of the run continues it ----
+      // Caret at offset 11, which equals the run's own `to` · +"YY" → mark [0,13).
+      await subheadline.click();
+      await caretAt(subheadline, "SoloXXmillo", "end");
+      await studio.keyboard.type("YY");
+      await studio.keyboard.press("Enter");
+      await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
+      await expect(subheadline.locator("strong")).toHaveText("SoloXXmilloYY");
+      await expect(subheadline).toHaveText("SoloXXmilloYY al whisky");
+
+      // ---- row 3: typing right AT THE START of the run does not join it ----
+      // Caret at offset 0, which equals the run's own `from` · +"Hoy: " (5 chars) pushes the run
+      // along to [5,18) without taking the inserted text in — the one asymmetry the whole table
+      // rests on.
+      await subheadline.click();
+      await caretAt(subheadline, "SoloXXmilloYY", "start");
+      await studio.keyboard.type("Hoy: ");
+      await studio.keyboard.press("Enter");
+      await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
+      await expect(subheadline.locator("strong")).toHaveText("SoloXXmilloYY");
+      await expect(subheadline).toHaveText("Hoy: SoloXXmilloYY al whisky");
+
+      // ---- row 4: deleting PART of the run shrinks it ----
+      // "XX" sits entirely inside [5,18) · removing it leaves the run at [5,16).
+      await subheadline.click();
+      await selectWord(subheadline, "XX");
+      await studio.keyboard.press("Backspace");
+      await studio.keyboard.press("Enter");
+      await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
+      await expect(subheadline.locator("strong")).toHaveText("SolomilloYY");
+      await expect(subheadline).toHaveText("Hoy: SolomilloYY al whisky");
+
+      // ---- row 5: deleting ALL of the run removes it, leaving no empty run behind ----
+      await subheadline.click();
+      await selectWord(subheadline, "SolomilloYY");
+      await studio.keyboard.press("Backspace");
+      await studio.keyboard.press("Enter");
+      await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
+      await expect(subheadline.locator("strong")).toHaveCount(0);
+      await expect(subheadline).toHaveText("Hoy:  al whisky");
+
+      // ---- day 3-4: the type pair that needs a file, chosen from the Estilo panel ----
+      await studio.getByRole("button", { name: "Estilo", exact: true }).click();
+      await studio.getByText("Clásica y seria", { exact: true }).click();
+      await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
+
+      // ---- sprint 10 day 7's own check, repeated: this sprint rewrote the capture under the
+      //      text an owner types, and the one thing that must never change is that a <script>
+      //      typed into a field stays text on the page ----
+      const headline = frame.locator('[data-id="el-headline"]');
+      await headline.click();
+      await studio.keyboard.press("ControlOrMeta+a");
+      await studio.keyboard.type("Reformas Vega <script>alert(1)</script>");
+      await studio.keyboard.press("Enter");
+      await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
+      await expect(headline).toHaveText("Reformas Vega <script>alert(1)</script>");
+
+      // ---- day 5-6: download, and the owner's own ZIP ----
+      await studio.getByRole("button", { name: "Descargar", exact: true }).click();
+      const downloadAnyway = studio.getByRole("button", { name: "Descargar igualmente" });
+      await downloadAnyway.waitFor();
+      const [download, response] = await Promise.all([
+        studio.waitForEvent("download"),
+        studio.waitForResponse((candidate) => candidate.url().includes("/api/download")),
+        downloadAnyway.click(),
+      ]);
+      expect(response.status()).toBe(200);
+
+      const dir = mkdtempSync(join(tmpdir(), "retorika-e2e-sprint11-dia7-"));
+      const zipPath = join(dir, download.suggestedFilename());
+      await download.saveAs(zipPath);
+      const zip = new Uint8Array(readFileSync(zipPath));
+      const entries = extractAll(zip, dir);
+
+      // Exactly the files a single-page site on classic-display produces: no sitemap.xml (a
+      // download has no baseUrl), nothing from an earlier fixture — and, since day 6, the two
+      // faces this pair asks for **with the OFL text beside them**.
+      expect([...entries].sort()).toEqual(
+        [
+          "fonts/OFL-PlayfairDisplay.txt",
+          "fonts/playfair-display-latin-400-normal.woff2",
+          "fonts/playfair-display-latin-700-normal.woff2",
+          "index.html",
+          "robots.txt",
+        ].sort(),
+      );
+
+      const licence = readFileSync(join(dir, "fonts", "OFL-PlayfairDisplay.txt"), "utf8");
+      expect(licence).toContain("SIL OPEN FONT LICENSE Version 1.1");
+      expect(licence).toContain('Reserved Font Name "Playfair Display"');
+
+      const filePath = join(dir, "index.html");
+      const offlinePage = await (await browser.newContext()).newPage();
+      const dialogs: string[] = [];
+      const failed: string[] = [];
+      offlinePage.on("dialog", (dialog) => {
+        dialogs.push(dialog.message());
+        void dialog.dismiss();
+      });
+      offlinePage.on("requestfailed", (request) => failed.push(request.url()));
+      try {
+        await offlinePage.goto(`file://${filePath}`, { waitUntil: "load" });
+        await offlinePage.waitForTimeout(500); // let @font-face settle before reading document.fonts
+
+        // The <script> an owner typed is text on the published page and never an element — the
+        // same claim ADR 0024 was built on, satisfied again under this sprint's own capture.
+        expect(await offlinePage.evaluate(() => document.querySelectorAll("script").length)).toBe(
+          0,
+        );
+        expect(dialogs).toEqual([]);
+        await expect(offlinePage.locator('[data-id="el-headline"]')).toHaveText(
+          "Reformas Vega <script>alert(1)</script>",
+        );
+
+        // The letter that arrives is the one that was chosen: both faces this pair names loaded
+        // from the ZIP's own fonts/ folder, with no server behind the page.
+        const faces = await offlinePage.evaluate(() =>
+          [...document.fonts].map((f) => `${f.family} ${f.weight} ${f.status}`),
+        );
+        expect(faces.length).toBeGreaterThan(0);
+        for (const face of faces) {
+          expect(face, face).toContain("Playfair Display");
+          expect(face, face).toContain("loaded");
+        }
+
+        // And the whole promise ADR 0001 makes: every byte the page needed, fonts included, was
+        // actually inside the ZIP.
+        expect(failed).toEqual([]);
+      } finally {
+        await offlinePage.context().close();
+      }
+    } finally {
+      await studio.context().close();
+    }
+  }, 120_000);
+});
