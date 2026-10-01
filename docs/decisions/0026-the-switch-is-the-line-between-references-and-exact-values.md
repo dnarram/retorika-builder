@@ -245,6 +245,12 @@ sprints as though it were new.
   > [ADR 0024](0024-formatting-inside-a-text-is-designed-and-waiting.md) is built in sprint 10 —
   > not because a condition fired, but on a decision recorded in that file. **The omission from
   > sprint 9 was correct and is unchanged**; «its own sprint» turned out to be the next one.
+  >
+  > *Closed 1 October 2026, at the sprint 10 closeout.* That sprint is over and the control
+  > shipped: `B` and `I` are in the floating toolbar, **for everybody**, because a mark is neither a
+  > reference nor an exact value and so there is nothing for this ADR's switch to gate. Marks are in
+  > the schema at 1.3.0, the renderer emits them, and [ADR 0027](0027-a-mark-moves-with-the-text-under-it.md)
+  > holds what happens to one when the text beneath it changes. **The underline is still refused.**
 - **`Mover` / `Duplicar` / `Borrar` per element.** Moving already lives in the `Diseño` panel;
   **deleting an element collides with document rule 3** and the fields panel already achieves the
   same end by emptying; duplicating has no precedent and nobody has asked.

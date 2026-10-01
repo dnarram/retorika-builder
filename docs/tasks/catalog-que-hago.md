@@ -288,6 +288,22 @@ before the `h1` rule:
 - **Not used:** `word-break` and `overflow-wrap: anywhere`. Both would also break words that fit,
   or change the min-content size the grid lays out by.
 
+> **What that last bullet left possible, and what now measures it — sprint 10 day 6.** This rule
+> makes a word break rather than spill out of **its own box**, and that is all it was ever asked to
+> do. It deliberately does **not** touch the min-content size, so a box can still be pushed *wider*
+> than the viewport by a word it cannot shrink below — which is a different failure with the same
+> look, and the one an exact `fontSize` can now cause on purpose.
+>
+> Measured on 1 October 2026 against `barbershop-cover` at 320px: with no exact size, and with an
+> exact 40px, **nothing overflows** and `scrollWidth` is 320. With an exact 200px on the headline,
+> the heading's box becomes 567px and **five elements** pass the right edge — the grid track grows
+> to the word's min-content width and drags the image and the button with it. The heading still
+> never overflows *its own box*; the box is simply the wrong size. Both sentences are true at once,
+> and keeping them straight is why this note exists.
+>
+> `apps/editor/src/editor/overflowCheck.ts` is what catches it before a download, naming the
+> section rather than the rule.
+
 **The goldens.** Regenerated with `UPDATE_GOLDEN=1 pnpm test:golden`, in its own commit, before
 step 9's. The diff must be exactly:
 - **`2 0` in each of the eight goldens,** the seven existing ones and `cover-and-services`;

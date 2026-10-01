@@ -1,5 +1,11 @@
 # The GitHub Actions workflow
 
+> **The job count below is this task's, not today's.** It was written for **eight** jobs and its
+> own checklist later says nine; the workflow carries **ten** as of sprint 10 — `a11y-size` grew
+> its browser half, and `e2e` arrived in sprint 3 with the flows it exists to exercise. The steps
+> below are the record of what was asked for at the time and are deliberately not rewritten; the
+> live list is `.github/workflows/ci.yml`, and the README's table is the one kept current.
+
 > **Delegable to OpenCode.** This task touches none of `packages/schema`, `packages/renderer` or
 > `packages/catalog`, so it falls outside the exclusive zones of Part 2. `vitest.config.ts` and
 > `package.json` are root files, not core packages, and stay inside the delegable zone.

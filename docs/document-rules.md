@@ -164,6 +164,60 @@ See ADR 0026.
 
 ---
 
+## The two marks
+
+Sprint 10, schema 1.3.0. A text value may carry **runs of emphasis over its own characters** — the
+first thing in this model that is smaller than an element.
+
+```
+{ kind: "text", text: "Solomillo al whisky", marks: [{ from: 0, to: 9, mark: "strong" }] }
+```
+
+**The field stays a plain string**, and that is the decision rather than the implementation. A mark
+is a pair of offsets *beside* the text, never markup *inside* it: no `execCommand`, no editable
+HTML, no second serialisation format. Applying one reads the character offsets of a selection and
+dispatches an action like every other edit; the renderer splits the string at those offsets, escapes
+each piece separately, and wraps only the marked ones. See ADR 0024.
+
+**There are two and there is no third.** `strong` and `em` are the ones that mean *emphasis* rather
+than decoration, and that a screen reader conveys. **Underline is refused permanently** — on the web
+an underline means a link, and a word underlined that goes nowhere is the same promise-with-nothing-
+behind-it this product refuses everywhere else. Two owners out of three have now asked for it; the
+answer has not moved.
+
+Four rules the schema enforces, each refused rather than repaired:
+
+| Rule | Why it is not merely tidiness |
+|---|---|
+| A run points inside its own text | An offset past the end publishes nothing the owner wrote |
+| `from < to` | A mark over nothing is not a mark, and would be a second document meaning the same as one without it |
+| **No two runs of the same mark touch or cross** | One meaning, one document. Otherwise the bytes depend on which word somebody marked first, and `removeMark` stops being expressible |
+| A boundary may not split a surrogate pair | An emoji is two code units; the renderer escapes each piece separately and the file is written as UTF-8, so a cut between them publishes `Café 🍷 tinto` as `Café �� tinto` |
+
+**Two runs of *different* marks may cover the same characters**, which is the one clause of ADR 0024
+that ADR 0027 amends. Read literally, «a run may not overlap another» made bold *and* italic on the
+same words impossible — and that is the first thing the third session's owner named. Two runs of the
+*same* mark that touch or overlap merge into one; two separated by any unmarked text, **one space
+included**, stay two and publish different bytes.
+
+**Offsets are UTF-16 code units** — the units `String.prototype.slice` takes and the units a DOM
+`Range` reports inside a text node. The same units at both ends, with no conversion anywhere, is
+what keeps a mark from drifting the first time somebody bolds a word after an emoji.
+
+Two deliberate absences, named for the same reason the style table names its three:
+
+- **A mark is a property of the value, not of the role.** ADR 0004's closed vocabulary is untouched:
+  a `strong` run inside a body text is still a body text. The schema accepts marks on **any** text
+  value, a link's label included, so the renderer splits every text by one code path — one path is
+  the safety argument for the only place in this product that escapes a string in pieces. The editor
+  draws `B` and `I` only where they mean something, which is an interface choice and reversible.
+- **What happens to a mark when the text beneath it changes is not here**, because it is behaviour
+  rather than shape: ADR 0027 holds the word processors' convention — inside grows, at the end
+  continues, at the start does not, deleting part shrinks, deleting all removes — and the finding
+  that those five rows are one offset rule.
+
+---
+
 ## The three breakpoint adjustments
 
 A breakpoint patch may do exactly three things, and the type says so rather than accepting a
