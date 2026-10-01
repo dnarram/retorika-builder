@@ -180,6 +180,33 @@ Two different widths is the whole proof: the face loaded and was used, with no s
 missing case fell back through the stack with no visible error — which is the behaviour option C
 exists to make good, and which **stays necessary under A**.
 
+> **Re-measured before sprint 11 started, in two real browsers, because this measurement decided the
+> shape of two days' work and the version above had only been taken in Chromium.** David asked for it
+> explicitly before any code was written. Real Chrome 154 — not Chromium — and Firefox 155, each
+> opening the page by double-click, with the file at `fonts/probe.ttf`:
+>
+> | Page opened from `file://` | Chrome 154 | Firefox 155 |
+> |---|---|---|
+> | control, no `@font-face` | 411px | 411px |
+> | **A** — `url("fonts/probe.ttf")`, relative, in the page's own `<style>` | **385px, face used** | **385px, face used** |
+> | **B** — a `<link>` to `fonts/fonts.css` with the face inlined as `data:` | 385px | 385px |
+>
+> **Option A stands, and B was measured only to be able to refuse it.** The fallback plan if CORS had
+> blocked a relative `url()` was that `data:` stylesheet; it works, and it would have inflated every
+> bundle by about a third for nothing, because base64 costs that over raw bytes. It is not built.
+>
+> **And the green was nearly false, which is the part worth keeping.** The profile Playwright launches
+> Firefox with sets `user_pref("security.fileuri.strict_origin_policy", false)` — precisely the
+> protection that decides whether a `file://` page may load a subresource from another `file://` path.
+> Measuring with it off says nothing at all about a real double-click. Repeated with the default
+> (`true`), **A and B both still work.** Chrome was checked the same way, by reading its actual command
+> line: no `--allow-file-access-from-files`, no `--disable-web-security`, nothing that relaxes
+> `file://`.
+>
+> **Anyone re-running this must check the browser's own flags first.** A harness that quietly disables
+> the thing being measured produces a confident, wrong answer — and this is the one measurement
+> ADR 0001's whole double-click promise rests on.
+
 ### 3. A font file is the first `url()` this renderer would ever emit
 
 `packages/renderer/src/escape.ts` allows a theme value exactly these characters —

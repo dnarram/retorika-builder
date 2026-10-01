@@ -217,7 +217,7 @@ the golden corpus needs.
 > itself carries the full reasoning; this note exists so the next reader of §4 does not assume the
 > offset `s` it describes was ever unambiguous to find.
 
-### 4b. **Proposed amendment, 1 October 2026 — the editor is told where the edit is, and only guesses when the browser will not say**
+### 4b. **Amendment, accepted 1 October 2026 — the editor is told where the edit is, and only guesses when the browser will not say**
 
 > **Status of this section: accepted 1 October 2026 by David, not by direction** — the same as the
 > rest of this ADR, and signed separately from it because it was written a day later and read on its
