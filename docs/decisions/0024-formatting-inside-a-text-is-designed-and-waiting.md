@@ -1,8 +1,10 @@
 # 0024 — Formatting inside a text is designed, and waits for the third session
 
-**Status:** accepted (the decision to wait) · **Date:** 2026-09-29 · **Decided by:** the CEO ·
-**Touches:** [#52](https://github.com/dnarram/retorika-builder/issues/52), ADR 0004 (the closed role
-vocabulary), ADR 0009 (the text bank)
+**Status:** accepted — **and built in sprint 10; the wait it decided is over** · **Date:** 2026-09-29
+· **Decided by:** the CEO · **Wait ended:** 2026-10-01, by David · **Amended by:**
+[ADR 0027](0027-a-mark-moves-with-the-text-under-it.md) in one clause ·
+**Touches:** [#52](https://github.com/dnarram/retorika-builder/issues/52) (closed 1 October 2026),
+ADR 0004 (the closed role vocabulary), ADR 0009 (the text bank)
 
 > **Superseded by its own condition being tested, 2026-10-01: the waiting is over and this is
 > built in sprint 10.** The design below is unchanged — it is what gets built. What changed is the

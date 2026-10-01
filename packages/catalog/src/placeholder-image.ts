@@ -1,8 +1,15 @@
 /**
- * The cover's image slot is 1..1 (required), and `packages/photobank` does not exist yet: ADR
- * 0011 needs real photos, generated and reviewed like the text bank, which is content production
- * this sprint does not include. This is the same honest placeholder the usability prototype used
- * (see `docs/design/prototype/`, each business's `assets/foto-muestra.svg`).
+ * The cover's image slot is 1..1 (required) and there is still no photograph to put in it, so it
+ * gets an honest marker — the same one the usability prototype used (see `docs/design/prototype/`,
+ * each business's `assets/foto-muestra.svg`).
+ *
+ * **The reason changed and this comment did not, until the sprint 10 closeout.** It used to say
+ * `packages/photobank` «does not exist yet». That package shipped in sprint 6: eleven sector files,
+ * a schema that refuses an image breaking any of ADR 0011's checkable rules, and the same path an
+ * upload takes. What it still holds is **zero images** — counted, not assumed — because ADR 0011
+ * wants photographs generated and reviewed like the text bank, and that is content production with
+ * a licence attached rather than code. So the marker stays, for a reason that is one step further
+ * along than the one written here before.
  *
  * Inlined as a `data:` URI rather than a file at a path: a relative "assets/placeholder.svg" only
  * resolves when something actually serves it there, which was true nowhere this generator runs —

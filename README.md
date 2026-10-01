@@ -112,8 +112,14 @@ October.
 | `pnpm security:audit` | `pnpm audit`, blocking at moderate |
 | `pnpm security:secrets` | gitleaks, at the version pinned in `.pre-commit-config.yaml` |
 
-`INV_4` is **provisional**: the design-tools switch does not exist yet, so only the schema's
-refusal to store it is verified. See `docs/document-rules.md`.
+`INV_4` **is no longer provisional**, and `PROVISIONAL_INVARIANTS` is empty. It was provisional
+while the design-tools switch did not exist and only the schema's refusal to store it could be
+checked; the switch shipped in sprint 8 and ADR 0025 §3 is where that gate was crossed, so the
+invariant is now proved against a real control being flipped. See `docs/document-rules.md`.
+
+> This paragraph said the opposite for two sprints after it stopped being true — the same way the
+> note about `test:a11y` and `e2e` not existing did, which `CLAUDE.md` already records once. Found
+> on the sprint 10 closeout by reading the file against the code rather than against memory.
 
 ### Coverage is a floor, not a target
 
@@ -162,6 +168,7 @@ bare job name; the pull request page displays them as `CI / lint`.
 | `invariants` | `pnpm test:invariants` |
 | `golden` | `pnpm test:golden` |
 | `a11y-size` | `pnpm size`, `pnpm test:a11y` |
+| `e2e` | `pnpm e2e` — the critical flows against a real `next dev`. **Pull requests only**, per protocol Part 9.2 |
 | `security` | `pnpm audit:exceptions`, `pnpm security:audit`, `pnpm security:secrets` |
 | `guards` | `pnpm schema:guard`, `pnpm renderer:deps`, `pnpm coverage:ratchet`, all on an explicit diff range |
 
@@ -171,14 +178,26 @@ contrast findings (a contrast axe could not measure counts as a finding), and no
 overflow at 320, 768 or 1280 pixels. `pnpm test:a11y` runs the same thing locally; it needs
 `pnpm exec playwright install --with-deps chromium` once, and `pnpm test` never needs a browser.
 
-**There is no `e2e` job.** Playwright is installed, but only for the two assertions of the
-accessibility harness; browser flow tests arrive with the flows they are meant to test. A job that
-cannot run anything is worse than no job: it shows up in the branch-protection list as a check
-that will never report.
+**`e2e` runs the critical flows against a real running application**, which nothing else here does:
+a live Next server, a questionnaire's React state, click-to-edit committing through a real `fetch`,
+and `/api/download` answering with a real ZIP. It is limited to pull requests because Actions
+minutes are finite, and it needs its own Chromium the same way `a11y-size` does.
+
+> **This paragraph used to say «There is no `e2e` job».** That was true when it was written —
+> Playwright was installed for the accessibility harness's two assertions and nothing else, and the
+> note existed so an empty job would not sit in the branch-protection list reporting nothing. The
+> job arrived in sprint 3 with the flows it exists to exercise, and the sentence stayed behind. It
+> is corrected here rather than deleted, because the reasoning it carried is still the right
+> reasoning: a job that cannot run anything is worse than no job.
+
+**The protocol names five critical flows and four exist.** The fifth, *pago de prueba y
+publicación*, waits on ADR 0008 — hosted publishing is on hold with no plan, so there is no payment
+flow and no publish target to test against. `apps/editor/e2e/critical-flows.e2e.test.ts` says so in
+its own header, so the count cannot drift unnoticed.
 
 Branch protection on `main` is switched on **after** these workflows have run at least once — a
 check does not appear in the protection list until it has reported. The order is: push the
-branch, open the pull request, wait for the nine jobs, then configure protection.
+branch, open the pull request, wait for the ten jobs, then configure protection.
 
 ## Repository layout
 
@@ -199,13 +218,15 @@ as an empty placeholder.
 | `apps/editor` | Next.js: the five-question flow, three generated variants, click-to-edit text, the ZIP download | **here** |
 | `packages/generator` | The five answers → a valid `RetorikaDocument`. Not in the protocol's Part 3.4 tree — a deliberate addition, product logic that needs invariant tests, so it lives in a package rather than inside the app | **here** |
 | `packages/copybank` | The reviewed, per-sector text bank the generator draws from ([ADR 0009](docs/decisions/0009-generated-texts-from-a-reviewed-bank.md)) | **here** |
+| `packages/photobank` | The per-sector sample-photo bank ([ADR 0011](docs/decisions/0011-sample-photos-per-sector.md)). **The machinery is here and the bank is empty** — eleven sector files, zero images, because a photograph needs a licence checked and a person's approval rather than code. Until the first one lands, a generated site opens on the catalog's grey marker | **here** |
 | `packages/templates` | Template extraction and application | 3 |
 | `.claude/skills`, `.claude/commands` | Specialist checklists and project commands | as needed |
 
 ## Documentation
 
 - `docs/dossiers/` — the two approved dossiers. Source of truth for the product.
-- `docs/document-rules.md` — the document model: seven rules, roles, tokens, invariants.
+- `docs/document-rules.md` — the document model: seven rules, roles, tokens, the four style
+  properties, the two marks, the three breakpoint adjustments, and the invariants.
 - `docs/decisions/` — ADRs. Where one amends a dossier, it says so.
 - `docs/design/` — the phase 1 screens, and the review that checks them against the ADRs.
 - `docs/tasks/` — task plans, written before implementing.
