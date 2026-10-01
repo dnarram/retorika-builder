@@ -172,8 +172,24 @@ open survives.
   nothing ships Bodoni. **That is the decision it needs**: whether «choose a typeface» means a third
   shipped pair, or a free field with the fallback honestly described. Recorded here rather than inside
   the resolved row above, where it was a clause nobody would find.
-- **The fields panel's own `<input>` is not anchored; an edit from it still falls back to the
-  diff.** ADR 0027 §4b's `beforeinput` capture lives in the canvas's `wireEditing`; the panel
+- **A second undo pressed immediately after the first can be lost, while the canvas re-renders.**
+  Found by measuring the shortcut that sprint 12 day 3 built, not by supposing: undoing replaces the
+  canvas `<iframe>`'s document, and with it the `keydown` listener `wireInteractions` installs on
+  load. Between the new document existing and that listener arriving, a keystroke reaches neither
+  document. **At machine speed a press sent with no gap is dropped; with 400ms between them none
+  is**, so a person pressing twice deliberately is unaffected and a person holding the keys down may
+  not be. The e2e test clicks the canvas between presses rather than sleeping, and says why. The fix
+  is not another listener — it is the canvas not losing its document on every step, which is a
+  bigger change than the shortcut was and has nobody waiting on it.
+- ~~**The fields panel's own `<input>` is not anchored; an edit from it still falls back to the
+  diff.**~~ **Built 1 October 2026, sprint 12 day 3.** The capture ADR 0027 §4b describes now runs
+  on the panel's box too, through `fieldEditFor` — which is a second measurement rather than a reuse
+  of the canvas's, because **`getTargetRanges()` returns an empty list for an `<input>`**: its value
+  is not in the DOM, so there are no nodes to measure a range against. What an input reports instead
+  is `selectionStart`/`selectionEnd`, already in the document's own coordinates. The two call sites
+  share the input-type table and nothing else. Proved in a browser on the exact case the diff was
+  measured getting wrong: «pan y pan y aceite» with the second «pan y » deleted **from the panel**,
+  and the bold still on the first «pan». *What follows is the row as it stood.* ADR 0027 §4b's `beforeinput` capture lives in the canvas's `wireEditing`; the panel
   commits through the same `setElementText` chokepoint but without ever watching the keystroke
   happen, so a mark on a field edited from the panel moves by `textEditBetween`'s guess — the
   mechanism day 1 measured losing a mark whose own word was never touched. Named in sprint 11

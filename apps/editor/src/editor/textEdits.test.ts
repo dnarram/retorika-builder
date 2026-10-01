@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  fieldEditFor,
   type InputIntent,
   insertedTextFor,
   liveFrameOf,
@@ -206,5 +207,79 @@ describe("insertedTextFor", () => {
   it("treats an empty string as inserting nothing, which is not the same as unmapped", () => {
     expect(insertedTextFor(intent("insertText", { data: "" }))).toBe("");
     expect(insertedTextFor(intent("insertFromPaste", { pastedText: "" }))).toBe("");
+  });
+});
+
+/**
+ * The fields panel's own box (ADR 0027 §4b, and sprint 11 day 2's cut line).
+ *
+ * An `<input>` exposes no nodes, so `getTargetRanges()` is empty for one and the canvas's `editOf`
+ * has nothing to measure against. What it does expose is `selectionStart`/`selectionEnd`, as offsets
+ * into `value` — already the document's own coordinate system.
+ */
+describe("fieldEditFor", () => {
+  const field = (value: string, start: number | null, end: number | null = start) => ({
+    value,
+    selectionStart: start,
+    selectionEnd: end,
+  });
+
+  it("reads a caret as an empty range at the caret", () => {
+    expect(fieldEditFor(field("Ensaladilla", 11), intent("insertText", { data: " rusa" }))).toEqual(
+      {
+        edit: { from: 11, to: 11, inserted: 5 },
+        inserted: " rusa",
+      },
+    );
+  });
+
+  it("reads a selection as the range it replaces", () => {
+    expect(
+      fieldEditFor(field("Ensaladilla", 0, 11), intent("insertText", { data: "Gazpacho" })),
+    ).toEqual({ edit: { from: 0, to: 11, inserted: 8 }, inserted: "Gazpacho" });
+  });
+
+  it("reads a delete as the range with nothing going in", () => {
+    expect(fieldEditFor(field("Ensaladilla", 4, 11), intent("deleteContentBackward"))).toEqual({
+      edit: { from: 4, to: 11, inserted: 0 },
+      inserted: "",
+    });
+  });
+
+  it("takes a paste at the length of its plain text", () => {
+    // Which is also all an `<input>` can hold: it flattens whatever the clipboard carried, so the
+    // text measured and the text inserted are the same string.
+    expect(
+      fieldEditFor(field("", 0), intent("insertFromPaste", { pastedText: "Con mayonesa" })),
+    ).toEqual({ edit: { from: 0, to: 0, inserted: 12 }, inserted: "Con mayonesa" });
+  });
+
+  it("falls back on an unmapped input type, the same as the canvas does", () => {
+    // The default is the fallback, and that is the whole safety property: an edit this table does
+    // not describe must not be committed as though it had been measured.
+    expect(fieldEditFor(field("Ensaladilla", 3), intent("insertCompositionText"))).toBeUndefined();
+    expect(fieldEditFor(field("Ensaladilla", 3), intent("historyUndo"))).toBeUndefined();
+  });
+
+  it("falls back when the input reports no selection at all", () => {
+    expect(
+      fieldEditFor(field("Ensaladilla", null), intent("insertText", { data: "x" })),
+    ).toBeUndefined();
+  });
+
+  it("clamps a range the value has no characters for", () => {
+    // `applyMark` would refuse such an offset, correctly and far too late to be useful.
+    expect(fieldEditFor(field("Pan", 99, 120), intent("insertText", { data: "!" }))).toEqual({
+      edit: { from: 3, to: 3, inserted: 1 },
+      inserted: "!",
+    });
+  });
+
+  it("never reports an end before its start", () => {
+    expect(fieldEditFor(field("Pan", 2, 1), intent("deleteContentBackward"))?.edit).toEqual({
+      from: 2,
+      to: 2,
+      inserted: 0,
+    });
   });
 });

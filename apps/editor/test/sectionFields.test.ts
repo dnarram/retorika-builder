@@ -6,6 +6,7 @@ import {
   fillSlot,
   insertSection,
   type RetorikaDocument,
+  setElementText,
 } from "@retorika/schema";
 import { describe, expect, it } from "vitest";
 import {
@@ -147,6 +148,26 @@ describe("sectionFields", () => {
   it("does not flag a destination that resolves", () => {
     const rows = sectionFields(doc, "sec-cover");
     expect(rows.find((row) => row.slot === "primaryAction")?.dead).toBeUndefined();
+  });
+
+  it("carries the field's marks, which is what a box anchors its edit against", () => {
+    // Read once, when the box takes focus. Carried on the row because the panel has rows and not
+    // the document (ADR 0027 §4b).
+    const marked = setElementText(
+      doc,
+      { sectionId: "sec-cover", elementId: "el-headline" },
+      "Taberna Santo Domingo",
+      [{ mark: "strong", from: 0, to: 7 }],
+    );
+    const row = sectionFields(marked, "sec-cover").find((r) => r.slot === "headline");
+    expect(row?.marks).toEqual([{ mark: "strong", from: 0, to: 7 }]);
+  });
+
+  it("carries no marks for a field that has none, rather than an empty list", () => {
+    // Absent and empty mean the same thing to `withText`, but the row is compared in tests and
+    // stored in nothing, so the honest shape is the one the document has.
+    const row = sectionFields(doc, "sec-cover").find((r) => r.slot === "headline");
+    expect(row?.marks).toBeUndefined();
   });
 
   it("is empty for a section that is not there", () => {

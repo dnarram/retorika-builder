@@ -1,8 +1,17 @@
 "use client";
 
-import type { ContentValue, ElementAddress, SlotAddress, SlotFill } from "@retorika/schema";
-import { useId } from "react";
+import {
+  type ContentValue,
+  type ElementAddress,
+  type MarkRun,
+  marksAfterTrim,
+  type SlotAddress,
+  type SlotFill,
+  shiftMarks,
+} from "@retorika/schema";
+import { useEffect, useId, useRef } from "react";
 import { type FieldRow, fieldCommitFor, groupedFields } from "../editor/sectionFields.ts";
+import { fieldEditFor } from "../editor/textEdits.ts";
 import es from "../locales/es.json" with { type: "json" };
 
 /**
@@ -30,8 +39,9 @@ export interface FieldsPanelProps {
   onFill: (fill: SlotFill) => void;
   onClear: (address: SlotAddress) => void;
   /** The same commit the canvas uses, so a text edit here moves the field's marks with it instead of
-   * replacing the whole value and dropping them (`fieldCommitFor`). */
-  onEditText: (address: ElementAddress, text: string) => void;
+   * replacing the whole value and dropping them (`fieldCommitFor`). `marks` are the ones the box
+   * anchored, or absent for the diff fallback — the same contract the canvas has (ADR 0027 §4b). */
+  onEditText: (address: ElementAddress, text: string, marks?: readonly MarkRun[]) => void;
   onClose: () => void;
 }
 
@@ -56,7 +66,7 @@ export function FieldsPanel({
 
   const { sectionRows, lines } = groupedFields(rows);
 
-  function commit(row: FieldRow, text: string, href: string) {
+  function commit(row: FieldRow, text: string, href: string, anchored?: readonly MarkRun[]) {
     // A line's row carries its own address, and the order a created slot is placed by is the
     // **line's**, not the section's. `fieldCommitFor` needs no say in this: a text edit is addressed
     // by element id, and `setElementText` has always recursed into a line's elements — which is why
@@ -77,7 +87,7 @@ export function FieldsPanel({
     // field's marks across. Sending a rebuilt value here is what used to strip the bold off a
     // field, on a blur that had changed nothing at all.
     if (what.kind === "text") {
-      onEditText({ sectionId, elementId: what.elementId }, what.text);
+      onEditText({ sectionId, elementId: what.elementId }, what.text, anchored);
       return;
     }
     onFill({
@@ -160,15 +170,95 @@ export function FieldsPanel({
   );
 }
 
+/**
+ * One row's boxes, with the label box anchored in the range the browser is about to replace.
+ *
+ * **This closes the cut line sprint 11 day 2 wrote for itself.** The capture ADR 0027 §4b describes
+ * lived only in the canvas's `wireEditing`; this panel committed through the same `setElementText`
+ * chokepoint without ever having watched a keystroke, so a mark on a field edited here moved by
+ * `textEditBetween`'s guess — the mechanism sprint 11 day 1 measured losing a mark whose own word
+ * was never touched.
+ *
+ * **A native listener rather than React's `onBeforeInput`**, which is a synthetic event that does
+ * not carry `inputType`, and `inputType` is the whole table.
+ */
 function FieldRowInputs({
   row,
   onCommit,
 }: {
   row: FieldRow;
-  onCommit: (row: FieldRow, text: string, href: string) => void;
+  onCommit: (row: FieldRow, text: string, href: string, anchored?: readonly MarkRun[]) => void;
 }) {
   const textId = useId();
   const hrefId = useId();
+  const box = useRef<HTMLInputElement>(null);
+
+  /**
+   * The marks after every edit this focus has seen, the text they believe in, and whether every one
+   * of those edits was anchored — the canvas's three values, kept in a ref for the same reason it
+   * keeps them in closure variables: nothing React renders depends on them, so a re-render for
+   * each keystroke would buy nothing and cost the input's own selection.
+   */
+  const anchor = useRef<{ marks: readonly MarkRun[]; text: string; anchored: boolean }>({
+    marks: [],
+    text: "",
+    anchored: false,
+  });
+
+  useEffect(() => {
+    const input = box.current;
+    if (!input) return;
+    const onBeforeInput = (event: Event) => {
+      const intent = event as InputEvent;
+      const state = anchor.current;
+      if (!state.anchored) return;
+      // The previous edit's result is in `value` by now, so this is where it gets verified. A
+      // mismatch means something changed the box that this listener never saw, and every offset it
+      // holds is about a string that is not in front of the person any more.
+      if (input.value !== state.text) {
+        state.anchored = false;
+        return;
+      }
+      const captured = fieldEditFor(
+        {
+          value: input.value,
+          selectionStart: input.selectionStart,
+          selectionEnd: input.selectionEnd,
+        },
+        {
+          inputType: intent.inputType,
+          data: intent.data,
+          pastedText: intent.dataTransfer?.getData("text/plain") ?? null,
+        },
+      );
+      if (!captured) {
+        state.anchored = false;
+        return;
+      }
+      state.marks = shiftMarks([...state.marks], captured.edit);
+      state.text =
+        state.text.slice(0, captured.edit.from) +
+        captured.inserted +
+        state.text.slice(captured.edit.to);
+    };
+    input.addEventListener("beforeinput", onBeforeInput);
+    return () => input.removeEventListener("beforeinput", onBeforeInput);
+  }, []);
+
+  /**
+   * The captured marks, or nothing — which is the documented fallback and not a lesser answer.
+   *
+   * Two conditions. Every edit was anchored, because one unmapped input type is enough to make the
+   * running offsets wrong and there is no repairing them halfway; and the box still holds the text
+   * the listener believes it does, which is what verifies the **last** edit — the one no later
+   * `beforeinput` was ever going to check. `marksAfterTrim` then reconciles the live text with the
+   * trimmed string `fieldCommitFor` actually stores.
+   */
+  const anchoredMarks = (): readonly MarkRun[] | undefined => {
+    const state = anchor.current;
+    if (!state.anchored || box.current?.value !== state.text) return undefined;
+    return marksAfterTrim(state.text, state.marks);
+  };
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -180,10 +270,14 @@ function FieldRowInputs({
       </label>
       <input
         id={textId}
+        ref={box}
         type="text"
         defaultValue={row.text}
         placeholder={row.kind === "link" ? es["editor.fields.labelHint"] : ""}
-        onBlur={(event) => onCommit(row, event.target.value, row.href ?? "")}
+        onFocus={(event) => {
+          anchor.current = { marks: row.marks ?? [], text: event.target.value, anchored: true };
+        }}
+        onBlur={(event) => onCommit(row, event.target.value, row.href ?? "", anchoredMarks())}
         className="h-9 w-full rounded-lg border border-ui-border bg-white px-2.5 text-[13px] text-ui-ink"
       />
       {row.kind === "link" ? (
