@@ -112,13 +112,15 @@ export interface ToolbarControls {
     borderRadius: readonly RadiusRef[];
     /**
      * Which of the four properties accept an exact value, and the list is a decision rather than a
-     * capability — the schema has accepted all four since day 2.
+     * capability — the schema has accepted all four since sprint 9 day 2.
      *
-     * `color` joined on day 6, **with its review and not before it** (ADR 0026 §2): the day the
-     * download gate learned to refuse a colour under 3:1 is the day the control that can write one
-     * became safe to offer. `fontSize` is still out, and for a different reason — the same §4
-     * sentence promises the check also covers «desbordes por debajo de 320 píxeles», and nothing
-     * measures that yet. An exact size is the one value in this vocabulary that can cause one.
+     * **Each one joined with the review that makes it safe, never before it.** `color` joined on
+     * sprint 9 day 6, the day the download gate learned to refuse a colour under 3:1 (ADR 0026 §2).
+     * `fontSize` joined on **sprint 10 day 6**, the day the gate learned to measure the page at 320
+     * pixels — the other half of the same dossier §4 sentence, and the reason ADR 0026 gave for
+     * holding it back: «a size is the one value in this vocabulary that can cause an overflow, and
+     * offering it behind a gate that cannot see what it would cause is the shape of promise ADR
+     * 0026 exists to refuse.» The gate can see it now, so the list is complete.
      */
     exact: readonly StyleProperty[];
   };
@@ -137,7 +139,12 @@ const TOOLBARED_ROLES: ReadonlySet<Role> = new Set([
 
 /** The exact values offered, by property. See `ToolbarControls["measures"]` for why each is in or
  * out, and ADR 0026 §2 for the record. */
-export const EXACT_TODAY: readonly StyleProperty[] = ["color", "padding", "borderRadius"];
+export const EXACT_TODAY: readonly StyleProperty[] = [
+  "color",
+  "fontSize",
+  "padding",
+  "borderRadius",
+];
 
 export function toolbarFor(
   element: Pick<ContentElement, "role">,

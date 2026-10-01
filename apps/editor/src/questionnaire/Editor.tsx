@@ -52,6 +52,7 @@ import {
 } from "../editor/downloadGate.ts";
 import { EditorShell, type RailItemId, type SaveStatus } from "../editor/EditorShell.tsx";
 import { ACCEPTED_IMAGE_ACCEPT } from "../editor/imageBytes.ts";
+import { measureOverflow } from "../editor/overflowCheck.ts";
 import { countPhotos, listPhotos, type PhotoState } from "../editor/photoInventory.ts";
 import { withPhotoUrls } from "../editor/previewDocument.ts";
 import { sectionFields } from "../editor/sectionFields.ts";
@@ -62,6 +63,7 @@ import { DesignPanel } from "./DesignPanel.tsx";
 import {
   ContrastDialog,
   DownloadWarningDialog,
+  OverflowDialog,
   TooManyPhotosDialog,
 } from "./DownloadGateDialogs.tsx";
 import { FieldsPanel } from "./FieldsPanel.tsx";
@@ -1674,6 +1676,48 @@ export function Editor({
           button.addEventListener("click", () => write("fontSize", chosen ? undefined : { ref }));
           sizes.appendChild(button);
         }
+
+        /**
+         * An exact size, with the design tools on — the last entry of ADR 0026's table, and the
+         * one it held back until something could measure what a size does at 320 pixels.
+         *
+         * It sits in this group rather than in `measures` because a size *is* a size: an owner
+         * looking for «un poco más grande» looks where the three steps are. The other two exact
+         * values live beside their own references for the same reason.
+         */
+        if (controls.measures?.exact.includes("fontSize")) {
+          const exact = iframeDoc.createElement("input");
+          exact.type = "number";
+          exact.min = "8";
+          exact.max = "200";
+          exact.className = "rb-toolbar-exact";
+          exact.placeholder = "px";
+          exact.title = es["editor.toolbar.exactHelp"];
+          exact.setAttribute(
+            "aria-label",
+            `${es["editor.toolbar.size"]} — ${es["editor.toolbar.exactHelp"]}`,
+          );
+          const exactSize =
+            current?.fontSize !== undefined && "exact" in current.fontSize
+              ? current.fontSize.exact
+              : "";
+          exact.value = exactSize.endsWith("px") ? exactSize.slice(0, -2) : "";
+          if (exactSize !== "") exact.classList.add("rb-toolbar-on");
+          // `change`, not `input`: a number typed digit by digit would open a history step per
+          // keystroke, and the gate would re-measure the page on each one.
+          exact.addEventListener("change", () => {
+            const raw = exact.value.trim();
+            if (raw === "") {
+              write("fontSize", undefined);
+              return;
+            }
+            const number = Number(raw);
+            if (!Number.isFinite(number) || number <= 0) return;
+            write("fontSize", { exact: `${Math.round(number)}px`, exception: true });
+          });
+          sizes.appendChild(exact);
+        }
+
         bar.appendChild(sizes);
       }
 
@@ -2419,8 +2463,19 @@ export function Editor({
    * — after fixing the one photograph the dialog was about — re-evaluate rather than reopen the
    * same stale verdict.
    */
-  function requestDownload(accepted: ReadonlySet<AcceptedWarning> = new Set()) {
-    const gate = downloadGateFor(countPhotos(doc), doc, accepted);
+  /**
+   * **Asynchronous, because measuring is**, and the asynchrony stops here rather than spreading
+   * into the gate. `measureOverflow` loads the page into a hidden 320px frame and waits for it to
+   * lay out; `downloadGateFor` stays pure and takes the result as data, which is what keeps every
+   * one of its cases testable without a browser.
+   *
+   * The measurement runs on every press and is never cached. It is cheap next to reading every
+   * photograph off disk, which is what happens immediately afterwards, and a cached one would be
+   * wrong exactly when it matters — after the owner has fixed the thing the dialog named.
+   */
+  async function requestDownload(accepted: ReadonlySet<AcceptedWarning> = new Set()) {
+    const overflow = await measureOverflow(doc, { hostDocument: window.document });
+    const gate = downloadGateFor(countPhotos(doc), doc, accepted, overflow);
     if (gate.kind === "ready") {
       void download();
       return;
@@ -2433,7 +2488,7 @@ export function Editor({
    * worth saying says both. See `downloadGateFor`'s `accepted`. */
   function acceptAndContinue(warning: AcceptedWarning) {
     setDownloadDialog(null);
-    requestDownload(new Set([...acceptedWarnings, warning]));
+    void requestDownload(new Set([...acceptedWarnings, warning]));
   }
 
   /**
@@ -2497,7 +2552,7 @@ export function Editor({
       // and the failure was precise enough to look like something else — `accepted.has` threw only
       // on the warning path, because the blocking check runs before it, so the block dialog worked
       // perfectly and the warning silently did nothing.
-      onDownload={() => requestDownload()}
+      onDownload={() => void requestDownload()}
       device={device}
       onDeviceChange={setDevice}
       canUndo={canUndo}
@@ -2736,6 +2791,13 @@ export function Editor({
           {...(downloadDialog.kind === "lowContrast"
             ? { onDownloadAnyway: () => acceptAndContinue("contrast") }
             : {})}
+          onCancel={() => setDownloadDialog(null)}
+        />
+      ) : null}
+      {downloadDialog?.kind === "overflows" ? (
+        <OverflowDialog
+          findings={downloadDialog.findings}
+          onDownloadAnyway={() => acceptAndContinue("overflow")}
           onCancel={() => setDownloadDialog(null)}
         />
       ) : null}

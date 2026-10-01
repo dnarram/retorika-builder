@@ -2,6 +2,7 @@
 
 import type { ElementAddress, RetorikaDocument, StyleException } from "@retorika/schema";
 import { useId } from "react";
+import type { OverflowFinding } from "../editor/overflowCheck.ts";
 import { listPhotos } from "../editor/photoInventory.ts";
 import { type ContrastFinding, formatRatio } from "../editor/styleReview.ts";
 import es from "../locales/es.json" with { type: "json" };
@@ -312,6 +313,89 @@ export function ContrastDialog({
               {es["editor.download.warning.downloadAnyway"]}
             </button>
           ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The other half of the advanced dossier §4's review: something runs past the right edge at 320
+ * pixels, the narrowest phone the dossier names.
+ *
+ * **A warning, not a block, and `downloadGate.ts` explains the line.** The short version: the owner
+ * can see this one — the canvas has a mobile view — and the commonest cause is a long word they
+ * typed. A colour at 2:1 is invisible to the person who chose it, which is why that one blocks.
+ *
+ * **No one-click fix, unlike the contrast dialog, and that is honest rather than lazy.** Dropping an
+ * exception is a repair because the reference it overwrote is right there to go back to. An
+ * overflow has no such default: it might be a long word, a wide photograph, an exact size, or the
+ * composition itself, and a button promising to fix it would be picking one of those at random.
+ * What this does instead is **name the section**, so the owner knows where to look.
+ */
+export function OverflowDialog({
+  findings,
+  onDownloadAnyway,
+  onCancel,
+}: {
+  findings: readonly OverflowFinding[];
+  onDownloadAnyway: () => void;
+  onCancel: () => void;
+}) {
+  const titleId = useId();
+  const body =
+    findings.length === 1
+      ? es["editor.download.overflow.body.one"]
+      : es["editor.download.overflow.body.many"].replace("{n}", String(findings.length));
+
+  return (
+    <div className="fixed inset-0 z-20 flex items-center justify-center bg-[#0F172A]/45 p-5">
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="flex max-h-full w-full max-w-[520px] flex-col rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.28)]"
+      >
+        <h2 id={titleId} className="m-0 text-[17px] font-bold text-ui-ink">
+          {es["editor.download.overflow.title"]}
+        </h2>
+        <p className="mt-2 mb-0 text-[14px] leading-snug text-ui-muted">{body}</p>
+
+        <div className="mt-4 flex min-h-0 flex-col gap-2 overflow-y-auto">
+          {findings.map((finding) => (
+            <div
+              key={`${finding.pageId}/${finding.sectionId ?? ""}/${finding.over}`}
+              className="flex flex-col gap-0.5 rounded-[9px] border border-ui-border px-3 py-2.5"
+            >
+              <span className="truncate text-[13px] text-ui-ink">
+                {finding.label ?? finding.sectionId ?? finding.pageId}
+              </span>
+              <span className="text-[12px] text-ui-muted">
+                {es["editor.download.overflow.over"].replace("{px}", String(finding.over))}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <p className="mt-4 mb-0 text-[12px] leading-snug text-ui-muted">
+          {es["editor.download.overflow.foot"]}
+        </p>
+
+        <div className="mt-5 flex justify-end gap-2.5">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="h-10 cursor-pointer rounded-[10px] border border-ui-border bg-white px-4 text-[14px] font-medium text-ui-ink"
+          >
+            {es["editor.download.contrast.cancel"]}
+          </button>
+          <button
+            type="button"
+            onClick={onDownloadAnyway}
+            className="h-10 cursor-pointer rounded-[10px] border-0 bg-ui-brand px-5 text-[14px] font-semibold text-white"
+          >
+            {es["editor.download.warning.downloadAnyway"]}
+          </button>
         </div>
       </div>
     </div>

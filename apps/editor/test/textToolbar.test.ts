@@ -1,4 +1,4 @@
-import { elementStyleSchema, type Role, STYLE_REFS } from "@retorika/schema";
+import { elementStyleSchema, type Role, STYLE_PROPERTIES, STYLE_REFS } from "@retorika/schema";
 import { CONTRAST_PAIRS, contrastRatio, PALETTES } from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
 import {
@@ -170,17 +170,25 @@ describe("what the design tools add", () => {
     expect(measures?.borderRadius).toEqual(["radius.sm", "radius.md", "radius.lg"]);
   });
 
-  it("offers an exact colour only now that the review exists, and never an exact size", () => {
-    // ADR 0026 §2. On day 5 this list was `["padding", "borderRadius"]` and this test said so:
-    // shipping the colour control a day before the gate that refuses what it can produce would
-    // have left a deployed editor in the state `REVIEW.md` refuses, for a day. Day 6 brought the
-    // review, so the colour joins — together, which is what the ADR asks.
-    expect([...EXACT_TODAY]).toEqual(["color", "padding", "borderRadius"]);
-    // `fontSize` stays out, and for a different reason than contrast: every proved pair clears
-    // 4.5:1 at any size, but the same §4 sentence promises the check covers «desbordes por debajo
-    // de 320 píxeles», and nothing measures that yet. An exact size is the one value in this
-    // vocabulary that can cause one.
-    expect(EXACT_TODAY).not.toContain("fontSize");
+  it("offers each exact value only once the review that makes it safe exists", () => {
+    // ADR 0026 §2, and this list has grown exactly twice, each time with its own guard:
+    //
+    // - Sprint 9 day 5 it was `["padding", "borderRadius"]`. Shipping the colour control a day
+    //   before the gate that refuses what it can produce would have left a deployed editor in the
+    //   state `REVIEW.md` refuses, for a day.
+    // - Sprint 9 day 6 `color` joined, with the contrast review, in the same merge.
+    // - **Sprint 10 day 6 `fontSize` joined**, with the 320px measurement — the other half of the
+    //   same dossier §4 sentence, and the reason ADR 0026 held it back: a size is the one value in
+    //   this vocabulary that can cause an overflow, and a gate that could not see one would have
+    //   been the shape of promise that ADR exists to refuse.
+    //
+    // This test used to end «and never an exact size», asserting `not.toContain("fontSize")`. It
+    // was right for as long as nothing measured overflow, and it went red the day something did —
+    // which is the whole value of having written the reason into it rather than the verdict.
+    expect([...EXACT_TODAY]).toEqual(["color", "fontSize", "padding", "borderRadius"]);
+    // The list is now every property the vocabulary has, so what this guards from here is that a
+    // *fifth* property cannot appear without a decision.
+    expect(EXACT_TODAY).toHaveLength(STYLE_PROPERTIES.length);
   });
 
   it("keeps the colour list computed even with the tools on", () => {
@@ -197,6 +205,7 @@ describe("what the design tools add", () => {
     // day 2 precisely so an exact value cannot be something the renderer could not emit.
     const sample: Record<string, string> = {
       color: "#1D4ED8",
+      fontSize: "28px",
       padding: "20px",
       borderRadius: "20px",
     };

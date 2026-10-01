@@ -1,5 +1,6 @@
 import { GALLERY_PHOTOS } from "@retorika/catalog";
 import { MAX_PAGES, type RetorikaDocument } from "@retorika/schema";
+import type { OverflowFinding } from "./overflowCheck.ts";
 import type { PhotoCounts } from "./photoInventory.ts";
 import { type ContrastFinding, reviewStyle } from "./styleReview.ts";
 
@@ -55,7 +56,15 @@ export const MAX_PHOTOS = MAX_PAGES * (GALLERY_PHOTOS.max + 1);
  *    a normal one. The same warn-or-block line the rest of the product draws, and the same "you
  *    decide" the marker-text warning gives. **After** the photo warning, because that one is about
  *    the whole site and this one about one element somebody deliberately painted.
- * 5. **`"ready"`** — nothing to say; `download()` runs immediately.
+ * 5. **`"overflows"`** — something runs past the right edge at 320 pixels, which is the narrowest
+ *    phone the dossier names. **A warning and not a block, and that is a decision rather than a
+ *    default.** The dossier's own word for both halves of this review is «avisa», and the contrast
+ *    half blocks below 3:1 only because ADR 0026 escalated it deliberately. Overflow is different
+ *    in the way that matters: the owner can *see* it — the canvas has a mobile preview — and the
+ *    commonest cause is a long word they typed, which is theirs to decide about. A colour at 2:1
+ *    is invisible to the person who chose it, which is why that one blocks. **Last of the three
+ *    warnings**, because it is the least likely to be a surprise.
+ * 6. **`"ready"`** — nothing to say; `download()` runs immediately.
  *
  * Two of the five now need the document rather than the counts, which is why this takes it. The
  * counts stay a separate argument rather than being recomputed here, so the gate and the «Fotos»
@@ -69,18 +78,34 @@ export const MAX_PHOTOS = MAX_PAGES * (GALLERY_PHOTOS.max + 1);
  * again, and answers with whatever is still true. A block is never in this set, which is what a
  * block means.
  */
-export type AcceptedWarning = "photos" | "contrast";
+export type AcceptedWarning = "photos" | "contrast" | "overflow";
 export type DownloadGate =
   | { kind: "ready" }
   | { kind: "tooManyPhotos"; count: number; max: number }
   | { kind: "unreadable"; findings: ContrastFinding[] }
   | { kind: "warn"; sample: number; empty: number }
-  | { kind: "lowContrast"; findings: ContrastFinding[] };
+  | { kind: "lowContrast"; findings: ContrastFinding[] }
+  | { kind: "overflows"; findings: OverflowFinding[] };
 
+/**
+ * **This stays pure and synchronous, and the measurement arrives as data.**
+ *
+ * Measuring a page at 320 pixels needs a browser and a frame to load, so the obvious move was to
+ * make this `async`. It is the wrong one: the gate is the piece that decides what happens to a
+ * download, it is exercised to the corner in `downloadGate.test.ts` with no browser anywhere, and
+ * an `await` in here would drag a layout engine into every one of those tests. The measurement
+ * happens before the call — `measureOverflow` in `overflowCheck.ts` — and comes in like the photo
+ * counts do.
+ *
+ * `[]` means «measured, and nothing overflows». There is deliberately no third state for «not
+ * measured»: a caller that cannot measure should not be calling a gate that is about to tell
+ * somebody their site fits on a phone.
+ */
 export function downloadGateFor(
   counts: PhotoCounts,
   doc: RetorikaDocument,
   accepted: ReadonlySet<AcceptedWarning> = new Set(),
+  overflow: readonly OverflowFinding[] = [],
 ): DownloadGate {
   const real = counts.own + counts.sample;
   if (real > MAX_PHOTOS) return { kind: "tooManyPhotos", count: real, max: MAX_PHOTOS };
@@ -93,6 +118,9 @@ export function downloadGateFor(
   }
   if (!accepted.has("contrast") && review.warning.length > 0) {
     return { kind: "lowContrast", findings: review.warning };
+  }
+  if (!accepted.has("overflow") && overflow.length > 0) {
+    return { kind: "overflows", findings: [...overflow] };
   }
   return { kind: "ready" };
 }
