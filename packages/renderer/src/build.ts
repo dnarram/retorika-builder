@@ -16,6 +16,7 @@ import { cssAttributeValue, cssThemeValue, safeUrl } from "./escape.ts";
 import { menuNodes } from "./menu.ts";
 import { commentNode, element, type RenderNode } from "./nodes.ts";
 import type { ResolvedRenderOptions } from "./options.ts";
+import { textElement } from "./runs.ts";
 
 /**
  * Document -> node tree. Layout, grid and tokens live here and nowhere else (Part 3.2).
@@ -109,26 +110,30 @@ function elementNode(
       if (value.text.trim() === "") return undefined;
       switch (el.role) {
         case "heading":
-          return element(headingTag(level), base, [value.text]);
+          return textElement(headingTag(level), base, value.text, value.marks);
         case "subheading":
           // A paragraph, not a heading (#19). A subheadline is a tagline — "Reserva en treinta
           // segundos" — and it heads nothing: marked up as h{level+1} it appears in a screen
           // reader's heading list and rotor as if a section of the page started there, so the
           // outline claims more sections than the page has (WCAG 1.3.1). The role in the document
           // is unchanged and so is the look; only the tag the renderer picks for it changes.
-          return element("p", { ...base, class: "rb-subtitle" }, [value.text]);
+          return textElement("p", { ...base, class: "rb-subtitle" }, value.text, value.marks);
         default:
-          return element("p", base, [value.text]);
+          return textElement("p", base, value.text, value.marks);
       }
 
     case "image":
       return element("img", { ...base, src: safeUrl(value.src), alt: value.alt });
 
     case "link":
-      return element(
-        el.role === "button" ? "a" : "a",
+      return textElement(
+        "a",
         { ...base, href: safeUrl(value.href), ...(el.role === "button" ? { role: "button" } : {}) },
-        [value.text],
+        value.text,
+        // ADR 0027 §6: the schema allows marks on a link's text, so the renderer splits it the same
+        // way as any other. **One path through the code that escapes a string in pieces** is the
+        // reason, and it is worth the unused capability — the editor does not draw `B` and `I` here.
+        value.marks,
       );
 
     case "map": {
