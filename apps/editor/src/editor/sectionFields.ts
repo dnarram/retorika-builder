@@ -5,6 +5,7 @@ import {
   type ItemAddress,
   type ListItem,
   listDeadDestinations,
+  type MarkRun,
   type PresetSlot,
   type RetorikaDocument,
   type Role,
@@ -71,6 +72,15 @@ export interface FieldRow {
   /** What the group holding this row is headed with. Only on an item row, and the same string for
    * every row of one line. */
   lineName?: string;
+  /**
+   * The marks this field's text carries right now, for the box to anchor an edit against
+   * (ADR 0027 §4b).
+   *
+   * Carried on the row rather than looked up by the panel, because the panel has rows and not the
+   * document — and because this is read exactly once, when a box takes focus, which is the moment
+   * the row is already in hand.
+   */
+  marks?: readonly MarkRun[];
 }
 
 function slotLabel(catalogId: string, slot: string): string {
@@ -160,6 +170,7 @@ export function sectionFields(doc: RetorikaDocument, sectionId: string): FieldRo
             ? value.text
             : "";
       const href = element.hidden ? "" : value?.kind === "link" ? value.href : undefined;
+      const marks = value?.kind === "text" || value?.kind === "link" ? value.marks : undefined;
       rows.push({
         slot: slot.slot,
         occurrence,
@@ -171,6 +182,7 @@ export function sectionFields(doc: RetorikaDocument, sectionId: string): FieldRo
         ...(kind === "link" ? { href: href ?? "" } : {}),
         required: slot.min > 0,
         ...(deadIds.has(element.id) ? { dead: true } : {}),
+        ...(marks ? { marks } : {}),
       });
     }
 
@@ -222,6 +234,7 @@ export function sectionFields(doc: RetorikaDocument, sectionId: string): FieldRo
       for (const [occurrence, element] of existing.entries()) {
         const value = element.value;
         const text = element.hidden ? "" : value?.kind === "text" ? value.text : "";
+        const marks = value?.kind === "text" || value?.kind === "link" ? value.marks : undefined;
         rows.push({
           slot: slot.slot,
           occurrence,
@@ -233,6 +246,7 @@ export function sectionFields(doc: RetorikaDocument, sectionId: string): FieldRo
           ...(kind === "link" ? { href: "" } : {}),
           required: slot.min > 0,
           ...(deadIds.has(element.id) ? { dead: true } : {}),
+          ...(marks ? { marks } : {}),
           item: address,
           lineName,
         });

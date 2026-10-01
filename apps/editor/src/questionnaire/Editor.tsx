@@ -61,6 +61,7 @@ import { countPhotos, listPhotos, type PhotoState } from "../editor/photoInvento
 import { withPhotoUrls } from "../editor/previewDocument.ts";
 import { sectionFields } from "../editor/sectionFields.ts";
 import { offersMatching } from "../editor/sectionSearch.ts";
+import { keepsItsOwnUndo, shortcutFor } from "../editor/shortcuts.ts";
 import { insertedTextFor, liveFrameOf, offsetFor, textFrameOf } from "../editor/textEdits.ts";
 import { hasAnyControl, toolbarFor } from "../editor/textToolbar.ts";
 import es from "../locales/es.json" with { type: "json" };
@@ -723,6 +724,48 @@ export function Editor({
       designOn ? designSectionId : null,
       placingElementId,
     );
+  });
+
+  /**
+   * `Meta+Z` and the rest, against the history the «Deshacer» button already drives.
+   *
+   * **A second road to the same verb, not a second verb.** `documentHistory` has had undo since
+   * sprint 2 and the button has driven it correctly all along; what did not exist was any key
+   * handler at all — no `metaKey`, no `ctrlKey`, no `key === "z"` anywhere in `apps/editor/src` —
+   * while seven places in the repository described the shortcut as a thing the product had.
+   *
+   * **`canUndo` is deliberately not consulted.** `undo` and `redo` return the same history when
+   * there is nothing to do, so the press is already a no-op — and reading the flag here would mean
+   * the frame's listener, which is installed once per iframe load, held whatever value was true at
+   * that moment. A stale guard that refuses a legitimate undo is worse than a press that does
+   * nothing.
+   */
+  const handleShortcut = (event: KeyboardEvent) => {
+    const shortcut = shortcutFor(event);
+    if (!shortcut) return;
+    const target = event.target;
+    // Built by reading the two properties, rather than cast or tested with `instanceof`: the frame
+    // has its own `window`, so an element from inside it fails `instanceof HTMLElement` against this
+    // document's constructor — the one cross-realm trap in a listener that runs in two documents.
+    const focused =
+      target !== null && typeof target === "object"
+        ? {
+            tagName: String((target as { tagName?: unknown }).tagName ?? ""),
+            isContentEditable:
+              (target as { isContentEditable?: unknown }).isContentEditable === true,
+          }
+        : null;
+    if (keepsItsOwnUndo(focused)) return;
+    event.preventDefault();
+    if (shortcut === "undo") onUndo();
+    else onRedo();
+  };
+
+  // The editor's own document. The frame's is wired in `wireInteractions`, because a key pressed
+  // inside an `<iframe>` is dispatched in that document and never reaches this one.
+  useEffect(() => {
+    document.addEventListener("keydown", handleShortcut);
+    return () => document.removeEventListener("keydown", handleShortcut);
   });
 
   /**
@@ -2308,6 +2351,11 @@ export function Editor({
     const iframeDoc = iframeRef.current?.contentDocument;
     if (!iframeDoc) return;
 
+    // The canvas is an `<iframe srcDoc>`, so a key pressed over the page being edited is dispatched
+    // in *its* document and never reaches the editor's. Without this the shortcut would work
+    // everywhere except the one place the person is actually looking.
+    iframeDoc.addEventListener("keydown", handleShortcut);
+
     const style = iframeDoc.createElement("style");
     style.textContent = [
       // The buffer fix noted on day 3 and again on day 5: selecting *any* section made the
@@ -2920,9 +2968,10 @@ export function Editor({
           onFill={onFillSlot}
           onClear={onClearSlot}
           // The panel commits a words-only change through the very same callback the canvas does,
-          // which is what keeps the field's marks alive. No anchored marks: the panel's `<input>`
-          // has no `beforeinput` capture yet, so this is the diff path on purpose.
-          onEditText={(address, text) => onEditText(address, text)}
+          // and since sprint 12 day 3 it anchors that change in the range the browser is replacing
+          // too — so the marks arrive measured rather than guessed, exactly as they do from the
+          // canvas. Absent still means the diff, which is the documented floor (ADR 0027 §4b).
+          onEditText={onEditText}
           onClose={() => showFields(null)}
         />
       ) : null}

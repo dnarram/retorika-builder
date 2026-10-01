@@ -2758,3 +2758,132 @@ describe("sprint 11 día 7 — el recorrido completo del sprint", () => {
     }
   }, 120_000);
 });
+
+/**
+ * Sprint 12 day 3 — the panel's own box is anchored, and the keyboard reaches the history.
+ *
+ * Both halves are the same wiring seen from two sides: a key pressed over an `<input>`. The edit is
+ * measured where it happens rather than guessed afterwards, and the undo shortcut deliberately does
+ * **not** fire while that box has the caret.
+ */
+describe("sprint 12 día 3 — el input anclado y el atajo de deshacer", () => {
+  async function tavern(): Promise<Page> {
+    const studio = await (await browser.newContext()).newPage();
+    await studio.goto(BASE_URL, { waitUntil: "networkidle" });
+    await studio.fill("#nombre", "Taberna del Puerto");
+    await studio.getByRole("button", { name: "Siguiente" }).click();
+    await studio.getByText("Restaurante y bar", { exact: true }).click();
+    await studio.getByRole("button", { name: "Siguiente" }).click();
+    await studio.getByText("Comidas", { exact: true }).click();
+    await studio.getByRole("button", { name: "Siguiente" }).click();
+    await studio.fill("#direccion", "Muelle 3, Ronda");
+    await studio.getByRole("button", { name: "Siguiente" }).click();
+    await studio.getByText("Que reserven", { exact: true }).click();
+    await studio.fill("#enlace", "https://reservas.example.com/taberna");
+    await studio.getByRole("button", { name: "Crear mi web" }).click();
+    await studio.getByText("Ver a tamaño real →").first().click();
+    await studio.frameLocator("iframe").first().locator('[data-section="sec-cover"]').waitFor();
+    return studio;
+  }
+
+  it("keeps a mark on its own word when the edit is committed from the fields panel", async () => {
+    // **The exact case sprint 11 day 1 measured the diff getting wrong**, committed from the panel
+    // rather than from the canvas: in «pan y pan y aceite», deleting the *second* «pan y » destroys
+    // a bold on the first «pan», whose own letters nobody touched. The panel used to reach
+    // `setElementText` without ever having watched the keystroke, so it took that guess.
+    const studio = await tavern();
+    try {
+      const frame = studio.frameLocator("iframe").first();
+      const sub = frame.locator('[data-id="el-subheadline"]');
+
+      await sub.click();
+      await studio.keyboard.type("pan y pan y aceite");
+      await studio.keyboard.press("Enter");
+      await expect(sub).toHaveText("pan y pan y aceite");
+
+      await sub.click();
+      await selectWord(sub, "pan");
+      await frame.locator('.rb-toolbar-mark[data-mark="strong"]').click();
+      await expect(sub.locator("strong")).toHaveText("pan");
+
+      await frame.locator('[data-section="sec-cover"]').click();
+      await frame.getByRole("button", { name: "Campos de esta sección" }).click();
+      const box = studio.getByLabel("Subtítulo");
+      await expect(box).toHaveValue("pan y pan y aceite");
+      await box.click();
+      await box.evaluate((el) => (el as HTMLInputElement).setSelectionRange(6, 12));
+      await studio.keyboard.press("Delete");
+      await expect(box).toHaveValue("pan y aceite");
+      await studio.getByRole("button", { name: "Cerrar los campos" }).click();
+
+      await expect(sub).toHaveText("pan y aceite");
+      // The bold is still on the word it was put on, and has not swallowed or lost anything.
+      await expect(sub.locator("strong")).toHaveText("pan");
+    } finally {
+      await studio.close();
+    }
+  }, 180_000);
+
+  it("undoes and redoes from the keyboard, and leaves the panel's own box alone", async () => {
+    const studio = await tavern();
+    try {
+      const frame = studio.frameLocator("iframe").first();
+      const undoBtn = studio.getByRole("button", { name: "Deshacer", exact: true });
+      const redoBtn = studio.getByRole("button", { name: "Rehacer", exact: true });
+
+      /**
+       * Back onto the canvas before each press, and **it is not ceremony.**
+       *
+       * Undoing re-renders the canvas, which replaces the `<iframe>`'s document — and with it the
+       * `keydown` listener `wireInteractions` installs on load. Between the new document existing
+       * and that listener arriving there is a window in which a keystroke reaches neither document.
+       * Measured: at machine speed, a second press sent immediately after the first is lost; with
+       * 400ms between them it is not. A click is deterministic where a sleep is a guess, so the
+       * test clicks — and the limit is written down rather than papered over.
+       */
+      const onCanvas = () => frame.locator('[data-section="sec-cover"]').click();
+
+      await expect(undoBtn).toBeDisabled();
+      await expect(redoBtn).toBeDisabled();
+
+      await onCanvas();
+      await frame.getByRole("button", { name: "Campos de esta sección" }).click();
+      const box = studio.getByLabel("Titular");
+      await box.fill("Primero");
+      await box.blur();
+      await expect(undoBtn).toBeEnabled();
+      await expect(redoBtn).toBeDisabled();
+
+      await onCanvas();
+      await studio.keyboard.press("Meta+z");
+      await expect(redoBtn).toBeEnabled();
+
+      await onCanvas();
+      await studio.keyboard.press("Meta+Shift+z");
+      await expect(redoBtn).toBeDisabled();
+
+      await onCanvas();
+      await studio.keyboard.press("Control+z");
+      await expect(redoBtn).toBeEnabled();
+
+      // The third redo binding, which is the Windows one and not a macOS convention.
+      await onCanvas();
+      await studio.keyboard.press("Control+y");
+      await expect(redoBtn).toBeDisabled();
+
+      await onCanvas();
+      await studio.keyboard.press("Meta+z");
+      await expect(redoBtn).toBeEnabled();
+
+      // **The condition the shortcut was written under.** With the caret in the panel's own box the
+      // browser keeps its undo, so the document must not step: the redo that was available stays
+      // available, because nothing consumed it.
+      await box.click();
+      await studio.keyboard.press("Control+y");
+      await studio.waitForTimeout(500);
+      await expect(redoBtn).toBeEnabled();
+    } finally {
+      await studio.close();
+    }
+  }, 180_000);
+});

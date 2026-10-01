@@ -1,3 +1,5 @@
+import type { TextEdit } from "@retorika/schema";
+
 /**
  * Turning what the browser is about to do to a text into the edit the document understands
  * (ADR 0027 §4b).
@@ -11,10 +13,12 @@
  * own word was never touched. Silent, and it corrupts the owner's document.
  *
  * `beforeinput` fires with the range the browser is about to replace and the kind of edit it is,
- * which is the same information measured instead of inferred. This module holds the two pieces of
- * that translation that are **pure**, so they are tested without a browser: the UTF-16 arithmetic
- * that the frame's text and the document's text do not share, and the table of input types. The DOM
- * plumbing around them lives at its one call site in `Editor.tsx`.
+ * which is the same information measured instead of inferred. This module holds the pieces of that
+ * translation that are **pure**, so they are tested without a browser: the UTF-16 arithmetic that
+ * the frame's text and the document's text do not share, the table of input types, and — since
+ * sprint 12 — the same measurement for an `<input>`, which reports its selection as numbers rather
+ * than as a range. The DOM plumbing around them lives at the two call sites: the canvas's
+ * `wireEditing` in `Editor.tsx`, and the fields panel's own box in `FieldsPanel.tsx`.
  */
 
 /**
@@ -170,4 +174,51 @@ export function insertedTextFor(intent: InputIntent): string | undefined {
       // list that is one short.
       return intent.inputType.startsWith("delete") ? "" : undefined;
   }
+}
+
+/**
+ * What a panel `<input>` reports about itself when `beforeinput` fires on it.
+ *
+ * Three numbers and a string, rather than the element, so the arithmetic below is testable in a
+ * project with no DOM — the same reason `InputIntent` exists beside `InputEvent`.
+ */
+export interface FieldSelection {
+  readonly value: string;
+  /** `input.selectionStart`. Null for an input type that does not report one. */
+  readonly selectionStart: number | null;
+  /** `input.selectionEnd`. */
+  readonly selectionEnd: number | null;
+}
+
+/**
+ * The edit a `beforeinput` on the fields panel's `<input>` describes.
+ *
+ * **Why the canvas's `editOf` cannot be reused, which is the whole reason this function exists.**
+ * In the canvas an element is a tree of nodes, so `getTargetRanges()` hands back a range that can be
+ * measured against them. **An `<input>` has no such nodes**: its value is not in the DOM, so
+ * `getTargetRanges()` returns an empty list for one, by specification. What an input does report is
+ * `selectionStart` and `selectionEnd`, as plain offsets into `value` — which is the same coordinate
+ * system the document uses, with none of the canvas's corrections needed. There is no
+ * pretty-printing to subtract, because nothing printed it, and no indentation to measure.
+ *
+ * So the two call sites share the **table** (`insertedTextFor`) and nothing else, and that is the
+ * right split: the table is what ADR 0027 §4b decided, and the measuring is what each element can
+ * actually tell you.
+ *
+ * `undefined` means "not measured" and is the fallback, exactly as it is in the canvas: an unmapped
+ * input type, or an input that reports no selection at all.
+ */
+export function fieldEditFor(
+  field: FieldSelection,
+  intent: InputIntent,
+): { edit: TextEdit; inserted: string } | undefined {
+  const inserted = insertedTextFor(intent);
+  if (inserted === undefined) return undefined;
+  if (field.selectionStart === null || field.selectionEnd === null) return undefined;
+  // Clamped the way the canvas clamps, and for a duller reason: a selection cannot really run past
+  // the value, but an offset the document has no character for would be refused by `applyMark` far
+  // too late to be useful, so it is refused here instead.
+  const from = Math.max(0, Math.min(field.selectionStart, field.value.length));
+  const to = Math.max(from, Math.min(field.selectionEnd, field.value.length));
+  return { edit: { from, to, inserted: inserted.length }, inserted };
 }
