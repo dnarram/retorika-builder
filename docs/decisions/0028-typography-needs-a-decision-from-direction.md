@@ -7,7 +7,8 @@
 > track of. The heading says what the file decides; the filename says what it was for.
 
 **Status:** **accepted — option A, with option C first** · **Date:** 2026-10-01 ·
-**Decided by:** development, at David's request · **Not seen by direction** ·
+**Proposed by:** development, at David's request · **Accepted by:** **David, 1 October 2026 —
+not direction** ·
 **Touches:** [#9](https://github.com/dnarram/retorika-builder/issues/9),
 [ADR 0001](0001-static-published-sites.md) (the static, offline promise),
 [ADR 0026](0026-the-switch-is-the-line-between-references-and-exact-values.md) (which deferred this
@@ -27,11 +28,11 @@ by name), the advanced dossier §4
 > their costs are left exactly as they were written before it** — so a reader can see what the
 > decision was made from, not only what it concluded.
 >
-> **Direction has not seen this.** The header says so, and the backlog keeps a row saying so,
-> because an accepted ADR gets cited afterwards and nobody should read «accepted» here as
-> «direction agreed». This is the same shape as ADR 0026, and the reason is the same: **it leans on
-> ADR 0001**, which is a constraint of direction's, and it spends bytes on every site a client
-> downloads.
+> **Who accepted this, and what that does not mean.** David read it and accepted it himself, the
+> same act ADR 0026 records and for the same reason: it leans on **ADR 0001**, a constraint of
+> direction's, and it spends bytes on every site a client downloads. **Accepting it is not direction
+> agreeing to it** — the header says so, the backlog keeps a row saying so, and an accepted ADR gets
+> cited afterwards by people who were not in the room when it was signed.
 
 ## Context
 
