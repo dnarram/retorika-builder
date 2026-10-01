@@ -57,6 +57,22 @@ export {
   setMobilePatch,
   setPlacement,
 } from "./layout.ts";
+export type { Mark, MarkRange, MarkRun, TextEdit } from "./marks.ts";
+export {
+  addRun,
+  applyMark,
+  MARKS,
+  markRunSchema,
+  marksFor,
+  marksSchema,
+  markTextIssue,
+  normaliseMarks,
+  rangeHasMark,
+  removeMark,
+  removeRun,
+  shiftMarks,
+  textEditBetween,
+} from "./marks.ts";
 export { deletePage, movePage, renamePage } from "./pages.ts";
 export { DocumentValidationError, parseDocument, safeParseDocument } from "./parse.ts";
 export type { PresetShape, PresetSlot } from "./preset.ts";

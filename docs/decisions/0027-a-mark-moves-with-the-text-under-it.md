@@ -1,8 +1,17 @@
 # 0027 — A mark moves with the text under it, and two of the same kind become one
 
-**Status:** proposed · **Date:** 2026-10-01 · **Touches:**
-[ADR 0024](0024-formatting-inside-a-text-is-designed-and-waiting.md) (which it **amends**),
-[#52](https://github.com/dnarram/retorika-builder/issues/52), document rule 6
+**Status:** accepted · **Date:** 2026-10-01 · **Accepted by:** David, **not direction** ·
+**Touches:** [ADR 0024](0024-formatting-inside-a-text-is-designed-and-waiting.md) (which it
+**amends**), [#52](https://github.com/dnarram/retorika-builder/issues/52), document rule 6
+
+> **«Accepted» here means David read it and accepted it, the same as
+> [ADR 0026](0026-the-switch-is-the-line-between-references-and-exact-values.md).** It is said in the
+> header rather than left to be inferred, because an accepted ADR gets cited afterwards and nobody
+> should be able to read this as «direction agreed». Direction has not looked at it.
+>
+> **Accepted with one correction, which he found and which was a real error rather than a wording
+> one**: §1's merging example did not merge. See the note in that section — the rule is unchanged,
+> the example was wrong, and the case it got wrong is now a required test.
 
 > **This answers the one question ADR 0024 left open on purpose, and fixes one thing that ADR said
 > which cannot be built as written.** It decides nothing about whether formatting happens — that was
@@ -46,17 +55,44 @@ ADR 0024's «overlap another» is **amended to «overlap another of the same kin
 - **`strong` and `em` may cover the same range, or any two overlapping ranges.** The renderer draws
   it by splitting the string at every boundary of every mark and nesting, which is one more turn of
   the same partition it already has to do.
-- **Two runs of the same mark that touch or overlap become one.** Bolding «Solomillo» and then
-  bolding «al whisky» immediately after it produces **one** run, not two that abut.
+- **Two runs of the same mark that touch or overlap become one.**
 
 **The invariant, and it is validated in the schema** the way every other document rule is:
 
 > **No two runs of the same `mark` touch or cross.**
 
+### Touching means touching, and a space is not nothing
+
+In `Solomillo al whisky` — nineteen code units — the offsets are exactly these:
+
+| Range | Text |
+|---|---|
+| `[0,9)` | `Solomillo` |
+| `[9,10)` | a single space |
+| `[10,19)` | `al whisky` |
+
+- **`[0,10)` + `[10,19)` merge** into `[0,19)`. They touch at 10: the first run took the space.
+- **`[0,12)` + `[10,19)` merge** into `[0,19)`. They overlap.
+- **`[0,9)` + `[10,19)` do *not* merge.** The space at `[9,10)` is unmarked, so they do not touch,
+  and the document keeps **two** runs.
+
+**Two runs of the same mark separated by any unmarked text — one space included — are two runs and
+stay two runs.** They are not an untidy spelling of one run: `<strong>Solomillo</strong>
+<strong>al whisky</strong>` and `<strong>Solomillo al whisky</strong>` publish different bytes,
+and they mean different things, because in one of them the space is bold and in the other it is
+not. Merging them would be changing the owner's document rather than normalising it.
+
+> **This paragraph exists because the first version of this ADR got it wrong.** It illustrated
+> merging with «mark Solomillo, then mark al whisky», which is `[0,9)` and `[10,19)` — the one case
+> on this list that does **not** merge. The rule was right and the example demonstrated its
+> opposite. Caught by David on review, before any schema was written. **`applyMark`'s tests must
+> cover it**: marking those two ranges in either order leaves two runs, and nothing in the merge
+> may close the gap.
+
 Three reasons it is merging rather than permissiveness, and the third is the one that would have
 bitten later:
 
-- **One meaning, one document.** `[0,9) strong` + `[9,19) strong` and `[0,19) strong` render
+- **One meaning, one document.** `[0,10) strong` + `[10,19) strong` and `[0,19) strong` render
   identically. Two serialisations of one meaning is the thing `INV_5` exists to prevent, and it is
   how a golden corpus starts depending on which word somebody marked first.
 - **Ordering becomes total.** With no two same-mark runs touching, sorting by `from` and then by the
@@ -80,6 +116,25 @@ impossible rather than unlikely.
 A combining accent is two code units and a letter with a precomposed accent is one; both are
 correct, both round-trip, and neither is normalised. Normalising would change the owner's text,
 which no part of this product is allowed to do.
+
+### 2b. A boundary may not cut a surrogate pair in half
+
+> **Added 1 October 2026, while building §2, and it is a rule this ADR did not foresee.** Written
+> here rather than left as an implementation detail because it is a refusal — a document can say
+> something the product will not accept — and every other such refusal is in this file.
+
+An emoji is **two** code units, and §2 says offsets are code units. A boundary between the two
+breaks nothing in JavaScript: `a + b` is still the original string. **The renderer does not put the
+pieces back together.** It escapes each one, wraps some of them in tags, and the file is written as
+UTF-8 — by which point each half is a lone surrogate, UTF-8 cannot encode one, and `Café 🍷 tinto`
+publishes as `Café �� tinto`.
+
+Measured, not supposed, and the measurement is a test.
+
+**So the schema refuses it**, in the same place it refuses a run that reaches past the end of its
+text. A browser will not put a caret inside a pair, so the editor cannot produce one; a hand-written
+or generated document can, and «no current caller does that» is the argument every corruption is
+eventually found behind — the same sentence `cssAttributeValue` was written on.
 
 ### 3. The convention is the word processor's, because everyone already has it in their hands
 
@@ -178,6 +233,9 @@ does not apply is not drawn. That is an interface choice, reversible, and it is 
 - **`shiftMarks` is a pure function over a string and a list of offsets**, so the table in §3 is
   testable row by row with no browser, and §4 means the implementation is one offset map rather
   than a branch per row. There is no excuse for it to be under-tested.
+- **`applyMark` is tested on both sides of «touching»**, which is the distinction this ADR got wrong
+  the first time: `[0,10)` then `[10,19)` must give one run; `[0,9)` then `[10,19)` must give two,
+  in either order, with the gap left open.
 - **The renderer splits at every boundary of every mark**, escapes each piece separately, and wraps.
   `fixtures/documents/xss-attempt` must stay green **without being touched**; if it has to be
   edited, the change is wrong.
