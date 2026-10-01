@@ -81,6 +81,13 @@ is worth saying why, because it is the one someone would reach for to make this 
 - **The schema gains a marked-run field on a text value**, with its own migration and round-trip
   test, in the exclusive zone. The offsets are validated where every other document rule is —
   inside the schema — so a run cannot point outside its text, overlap another, or arrive unsorted.
+
+  > **Amended by [ADR 0027](0027-a-mark-moves-with-the-text-under-it.md), 1 October 2026: «overlap
+  > another» is «overlap another of the same kind».** Read literally, the clause above makes bold
+  > *and* italic on the same words impossible — and that is the first thing the third session's
+  > owner named. Different marks may overlap; two runs of the *same* mark that touch or overlap
+  > merge into one, and that is what the schema validates. **Do not implement this bullet as
+  > written.**
 - **The renderer escapes run by run.** Today the guarantee against `fixtures/documents/xss-attempt`
   is one `escapeHtml` over the whole string. With runs, the string is split, **each piece escaped
   separately**, and only the marked pieces wrapped. That is the delicate part and the reason this
@@ -101,6 +108,10 @@ format. What a mark is, is data in the document; what the owner sees, is the ren
 **Editing the text under a mark is the open question the implementation has to answer**, and it is
 named here so it is not discovered on the day: a run whose text changes beneath it either moves,
 shrinks or dies, and which of those it does is a product decision, not an implementation detail.
+
+> **Answered by [ADR 0027](0027-a-mark-moves-with-the-text-under-it.md), 1 October 2026**, with the
+> word processors' convention — it does all three, depending on where the edit lands — and with the
+> finding that the five cases are **one** offset rule rather than five.
 
 ## What wakes this up
 

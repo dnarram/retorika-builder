@@ -326,6 +326,21 @@ part that must not move — the interface tokens and their separation from the p
   `packages/catalog/src/services.ts` now declares `{ min: 1, max: 6 }`, which is what ADR 0013
   decided. The claim above had outlived the code and is corrected here rather than deleted, so the
   record of what was once open survives.
+- **Superseded, 1 October 2026 — mockup 17's «Negritas y cursivas» card.** That mockup draws the
+  control struck through, with the reason «ninguna de sus dos condiciones de despertar se ha
+  cumplido». The third usability session met the second condition on 30 September and a second owner
+  asked for both marks, so
+  [ADR 0024](../decisions/0024-formatting-inside-a-text-is-designed-and-waiting.md) stopped waiting
+  and [mockup 18](mockups/18-negrita-y-cursiva.html) draws the control that replaces the struck one.
+  **The rest of mockup 17 stands**, its other three struck cards included — alignment, typography
+  and per-element move/duplicate/delete are all still out, for the reasons it gives.
+  Mockup 17 is not edited: it is the record of what sprint 9 decided, and a dated artefact that
+  gets rewritten stops being evidence of anything.
+  **Amended by [ADR 0027](../decisions/0027-a-mark-moves-with-the-text-under-it.md) in one further
+  clause**, which is not a design matter but is recorded here because it changes what mockup 18 may
+  draw: ADR 0024 forbade one run overlapping another, which read literally made bold *and* italic on
+  the same words impossible — the first thing the owner named. Different marks may now overlap;
+  identical ones merge.
 - The handoff's own open list stands: the price, who issues the invoice and how VAT is handled,
   and the photo bank's actual images.
 

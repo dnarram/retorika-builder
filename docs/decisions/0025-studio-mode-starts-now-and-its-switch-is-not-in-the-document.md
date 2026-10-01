@@ -243,3 +243,64 @@ Three live options, named here so the decision starts from a list rather than fr
 
 **What it may not do is decide this is fine because the switch was found.** It was found and it
 admitted the wrong person on its own terms; those are two findings, not one.
+
+## Amendment proposed 1 October 2026 — the gate worked, the wording does not, and the door behind it is three places away
+
+**Status of this section: `proposed`.** It is sprint 10 day 2's answer to the three questions above,
+and it is direction's to accept or refuse. Nothing has been built for it.
+
+### The gate did its job, and §1 is why
+
+§1 says what the switch protects: «without the owner who maintains the site afterwards ever meeting
+a control they did not ask for». **He asked.** The panel never offers itself; pressing a switch is
+the asking. So the thing §1 protects was protected, *whatever the question said*, and the finding
+that he is not a web professional does not mean the gate failed at its purpose.
+
+**That is also why the question's wording is doing no work.** «¿Montas webs para otros?» asks who
+somebody is and grants capability for the answer. Anyone who wants the capability answers yes, so
+the question filters nobody while looking as though it does — and the real consent was the press.
+
+**Proposed: the question describes what the tools are, not who the person is.** Not to keep anyone
+out — §1 does not ask us to — but so the answer is accurate rather than aspirational, and so a
+person deciding has the information instead of a label. The body copy already does this well
+(«rejilla, colocación y ajustes por dispositivo»); it is the title that asks about a trade.
+
+### What the evidence does **not** license: moving the exact-value line
+
+It is the tempting response and it is wrong. ADR 0026 put the line at the switch on the authority
+of the dossier §4's own table, and **the switch is not what stopped him**: the tools were on. Moving
+the line would have changed nothing about his session.
+
+**So this amendment proposes no change to ADR 0026.** Recording that is the point — a finding that
+appears to support a change it does not support is how an approved document gets amended on
+evidence that was never about it.
+
+### The real finding: one intention, three places
+
+He was told the grid was there — the panel's own copy names it — said yes, and still named «más
+libertad en la posición». The path from that yes to moving an element, as built:
+
+1. Press the switch at the foot of the rail.
+2. Open `Diseño` and select a section.
+3. **Read a paragraph that tells you to go somewhere else.** `DesignPanel.tsx:315` renders
+   `editor.design.notFree` as a plain `<p>`: «Esta sección la coloca el catálogo. **Diséñala a mano
+   desde su cabecera** y podrás mover y ensanchar cada elemento dentro de la rejilla.»
+4. Find «Diseñar a mano» on the section's header in the canvas (§6).
+5. Come back to `Diseño` and move the element.
+
+**Step 3 is a dead end that names its own exit and does not offer it.** Whether he reached it is not
+recorded; what is recorded is that he opted in and did not find what he had just been promised, and
+this is the only path there is.
+
+**Proposed: the «Diseñar a mano» offer is reachable from that paragraph**, where the person has just
+learned they need it.
+
+**§7 is not amended.** Escalation stays per section, the offer still says what it does and promises
+the return in the same breath, and `escalate` still moves nothing — all of that is why the offer is
+safe to put in a second place. **This is about where the door is, not about what is behind it.**
+
+### What is still open after this
+
+Whether the *rest* of what is behind the switch is findable. One owner reached step 1 and the record
+stops there. **This is the question a fourth session should watch rather than ask**, and it is the
+reason the observation table matters more than another feature.
