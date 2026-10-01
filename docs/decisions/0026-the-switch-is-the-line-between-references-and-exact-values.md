@@ -233,6 +233,12 @@ sprints as though it were new.
   > stopped promising a font in sprint 4, and the three pairs still have not been chosen to survive
   > not getting one — measured again on 1 October, two of the three lose their heading/body contrast
   > entirely on a machine without Inter or Playfair Display.
+  >
+  > *And answered the same day, at David's request:* **option A, ship the faces, with option C
+  > first.** Decided by development, **not seen by direction** — that ADR's header and the backlog
+  > both say so for the same reason this one does. The sentence above still holds and is why the
+  > order is C then A: a shipped font that fails to load falls back to the stack, so the stack has
+  > to be worth falling back to before anything is shipped on top of it.
 - **Alignment.** The worst-founded control of the set: **the advanced dossier does not mention it
   once**. It exists only in `HANDOFF.md`'s list and `REVIEW.md`'s. It has no token and no field, and
   it would be the only thing in the toolbar that is neither a reference nor a marked exception.
