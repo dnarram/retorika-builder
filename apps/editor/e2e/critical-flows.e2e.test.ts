@@ -3283,3 +3283,107 @@ describe("sprint 13 día 2 — la barra se deja usar con el ratón", () => {
     }
   }, 180_000);
 });
+
+/**
+ * Sprint 13 day 3 — the three states that only reported, and the drawing that won.
+ *
+ * None of these was a missing feature: each was a control that showed something and could not be
+ * acted on, or showed something the document did not hold.
+ */
+describe("sprint 13 día 3 — lo que solo informaba", () => {
+  async function studioOnCover(): Promise<{ studio: Page; frame: FrameLocator }> {
+    const studio = await (await browser.newContext()).newPage();
+    await studio.goto(BASE_URL, { waitUntil: "networkidle" });
+    await studio.fill("#nombre", "Taberna del Puerto");
+    await studio.getByRole("button", { name: "Siguiente" }).click();
+    await studio.getByText("Restaurante y bar", { exact: true }).click();
+    await studio.getByRole("button", { name: "Siguiente" }).click();
+    await studio.getByText("Comidas", { exact: true }).click();
+    await studio.getByRole("button", { name: "Siguiente" }).click();
+    await studio.fill("#direccion", "Muelle 3, Ronda");
+    await studio.getByRole("button", { name: "Siguiente" }).click();
+    await studio.getByText("Que reserven", { exact: true }).click();
+    await studio.fill("#enlace", "https://reservas.example.com/taberna");
+    await studio.getByRole("button", { name: "Crear mi web" }).click();
+    await studio.getByText("Ver a tamaño real →").first().click();
+    const frame = studio.frameLocator("iframe").first();
+    await frame.locator('[data-section="sec-cover"]').waitFor();
+    return { studio, frame };
+  }
+
+  it("does not draw B and I without a selection, which is what mockup 18 says", async () => {
+    // «sin selección los dos botones no se dibujan, **no se dibujan apagados**». They were drawn
+    // disabled from sprint 10, which `REVIEW.md` recorded as a divergence and David closed in favour
+    // of the drawing. The whole group goes: a caption over nothing is the empty row this bar refuses
+    // everywhere else.
+    const { studio, frame } = await studioOnCover();
+    try {
+      const sub = frame.locator('[data-id="el-subheadline"]');
+      await sub.click();
+      await frame.locator(".rb-toolbar").waitFor();
+      // Focus selects the whole element, so the marks are there to start with.
+      await expect(frame.locator(".rb-toolbar-mark").first()).toBeVisible();
+
+      await studio.keyboard.press("ArrowRight"); // collapse to a caret
+      await expect(frame.locator(".rb-toolbar-mark").first()).toBeHidden();
+      // And not merely disabled, which is what this replaces.
+      await expect(frame.locator(".rb-toolbar-caption", { hasText: "Resaltar" })).toBeHidden();
+      await expect(frame.locator(".rb-toolbar-caption", { hasText: "Tamaño" })).toBeVisible();
+    } finally {
+      await studio.context().close();
+    }
+  }, 180_000);
+
+  it("shows the colour in force rather than the browser's black", async () => {
+    // With no exception an `<input type=color>` defaults to `#000000` — a value the document does
+    // not hold. It now reads the theme's colour for the reference in force, which with no style at
+    // all is the first role `colorRolesFor` offers: `color.ink` for text.
+    const { studio, frame } = await studioOnCover();
+    try {
+      await studio.getByRole("switch", { name: "Herramientas de diseño" }).click();
+      await studio.getByRole("button", { name: "Sí, enciéndelas" }).click();
+      await frame.locator('[data-id="el-headline"]').click();
+      await frame.locator(".rb-toolbar").waitFor();
+
+      const swatch = frame.locator(".rb-toolbar-color");
+      const shown = await swatch.inputValue();
+      expect(shown).not.toBe("#000000");
+      // It is the theme's own ink, read off the page rather than off a second table.
+      const ink = await frame
+        .locator("body")
+        .evaluate(() =>
+          getComputedStyle(document.documentElement).getPropertyValue("--color-ink").trim(),
+        );
+      expect(shown.toLowerCase()).toBe(ink.toLowerCase());
+    } finally {
+      await studio.context().close();
+    }
+  }, 180_000);
+
+  it("shows an exact measurement in the select and does not offer it as a choice", async () => {
+    // The option existed, looked like every other and returned early from its own handler. It cannot
+    // be removed — it is what the box displays while an exception is in force, and without it the
+    // select would read «Por defecto» for an element visibly not on it — so it is disabled: it shows
+    // the state and says this is not where the state is changed.
+    const { studio, frame } = await studioOnCover();
+    try {
+      await studio.getByRole("switch", { name: "Herramientas de diseño" }).click();
+      await studio.getByRole("button", { name: "Sí, enciéndelas" }).click();
+      await frame.locator('[data-id="el-headline"]').click();
+      await frame.locator(".rb-toolbar").waitFor();
+
+      const padding = frame.locator('.rb-toolbar-exact[aria-label^="Espaciado"]');
+      await padding.click();
+      await studio.keyboard.type("37");
+      await padding.dispatchEvent("change");
+      await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
+
+      await frame.locator('[data-id="el-headline"]').click();
+      const option = frame.locator('.rb-toolbar-select option[value="exact"]');
+      await expect(option).toHaveText(/37px/);
+      expect(await option.evaluate((el) => (el as HTMLOptionElement).disabled)).toBe(true);
+    } finally {
+      await studio.context().close();
+    }
+  }, 180_000);
+});

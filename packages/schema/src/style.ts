@@ -247,7 +247,7 @@ const STYLE_REFS_TEXT: Record<StyleProperty, string> = {
 
 const EXACT_TEXT: Record<StyleProperty, string> = {
   color: "must be a hex colour such as #1D4ED8",
-  fontSize: "must be a length such as 1.5rem",
+  fontSize: "must be a length in pixels such as 24px",
   padding: "must be a length such as 16px",
   borderRadius: "must be a length such as 8px",
 };

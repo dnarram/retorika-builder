@@ -3,6 +3,7 @@ import { parseDocument } from "@retorika/schema";
 import fixture from "../../../../../fixtures/documents/contacto-y-horario.json" with {
   type: "json",
 };
+import es from "../../locales/es.json" with { type: "json" };
 
 /**
  * Day one's spike proof, kept reachable as a technical check rather than deleted: that
@@ -35,13 +36,12 @@ export default function MotorCheck() {
           R
         </span>
         <span style={{ fontSize: "16px", fontWeight: 700, letterSpacing: "-0.01em" }}>
-          Retorika Builder — comprobación técnica
+          {es["motor.title"]}
         </span>
       </header>
 
       <p style={{ margin: "0 0 20px", color: "var(--ui-muted)", fontSize: "15px" }}>
-        Esto no es una maqueta: la web de abajo la ha dibujado el motor de Retorika a partir de un
-        documento real, con el mismo código que se descargará el cliente.
+        {es["motor.body"]}
       </p>
 
       <div
@@ -53,7 +53,7 @@ export default function MotorCheck() {
         }}
       >
         <iframe
-          title={`Vista previa de ${doc.siteName}`}
+          title={es["motor.previewOf"].replace("{site}", doc.siteName)}
           srcDoc={html}
           style={{ display: "block", width: "100%", height: "860px", border: 0 }}
         />

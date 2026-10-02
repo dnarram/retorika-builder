@@ -668,3 +668,54 @@ describe("0006 — a document may say how a shared link reads", () => {
     expect(Object.hasOwn(back, "siteUrl")).toBe(false);
   });
 });
+
+describe("0007 — an exact length is a number of pixels", () => {
+  it("opens a document saved while other units were admitted", () => {
+    const migrated = migrateToCurrent({
+      schemaVersion: "1.5.0",
+      id: "doc-1",
+      siteName: "Taberna",
+      theme,
+      collections: [],
+      pages: [
+        {
+          id: "home",
+          slug: "index",
+          title: "Taberna",
+          sections: [
+            {
+              id: "sec-cover",
+              preset: { catalogId: "cover", variantId: "image-right" },
+              source: "catalog",
+              layout: null,
+              content: [
+                {
+                  id: "el-headline",
+                  role: "heading",
+                  hidden: false,
+                  slot: "headline",
+                  value: { kind: "text", text: "Taberna" },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    expect(migrated["schemaVersion"]).toBe(SCHEMA_VERSION);
+    expect(() => parseDocument(migrated)).not.toThrow();
+  });
+
+  it("is the claim it rests on: no stored document carries a length in another unit", () => {
+    // **`up` is a version stamp only because this is true.** The day a document carries `2rem`, this
+    // migration has to decide between converting it — to what? — and refusing to open somebody's
+    // own site. The same mirror `0003`, `0004` and `0005` each keep for their own claim.
+    const corpus = readdirSync(DOCUMENTS_DIR).filter((file) => file.endsWith(".json"));
+    expect(corpus.length).toBeGreaterThan(0);
+    const unit = /"exact":\s*"[^"]*(?:rem|em|%|vh|vw|ch)"/;
+    for (const file of corpus) {
+      const raw = readFileSync(join(DOCUMENTS_DIR, file), "utf8");
+      expect(unit.test(raw), `${file} carries an exact length in a unit 1.6.0 refuses`).toBe(false);
+    }
+  });
+});

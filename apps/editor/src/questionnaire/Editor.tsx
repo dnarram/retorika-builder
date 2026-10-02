@@ -1722,12 +1722,22 @@ export function Editor({
             const pressed = range !== undefined && rangeHasMark(marks, range, mark);
             node.setAttribute("aria-pressed", String(pressed));
             node.classList.toggle("rb-toolbar-on", pressed);
-            // Disabled rather than hidden, and this is the one place in the bar that does that on
-            // purpose: the control applies to this element, there is simply nothing selected yet.
-            // "No door" and "the door is here, pick some words first" are different things, and
-            // removing the buttons as the selection collapses would make them flicker.
-            node.disabled = range === undefined;
           }
+          /**
+           * **Not drawn without a selection, which is what mockup 18 band 2 draws** — «sin selección
+           * los dos botones no se dibujan, **no se dibujan apagados**».
+           *
+           * This drew them disabled from sprint 10, and the comment that stood here argued for it:
+           * «"No door" and "the door is here, pick some words first" are different things, and
+           * removing the buttons as the selection collapses would make them flicker». The flicker
+           * is a real cost and the argument is a good one — **and it was a divergence from an
+           * approved drawing that nobody had written down for two sprints**, found by the sweep that
+           * closed sprint 12 and decided by David on 2 October 2026 in favour of the mockup.
+           *
+           * The whole group goes, not the two buttons: a caption «Resaltar» over nothing is the
+           * empty row this bar already refuses elsewhere.
+           */
+          marksGroup.hidden = range === undefined;
         };
 
         for (const mark of MARKS) {
@@ -1863,7 +1873,27 @@ export function Editor({
           exact.setAttribute("aria-label", es["editor.toolbar.exactColor"]);
           const exactColor =
             current?.color !== undefined && "exact" in current.color ? current.color.exact : "";
-          if (exactColor !== "") exact.value = exactColor;
+          /**
+           * **With no exception it showed `#000000`, which is a colour the document does not have.**
+           * An `<input type=color>` defaults to black when nothing is assigned, so the swatch
+           * claimed a value nobody had chosen — the same class as a select reading «Por defecto»
+           * for an element that is not on it.
+           *
+           * What it shows now is the colour actually in force: the theme's value for the reference
+           * this element carries, or, with no style at all, the first role `colorRolesFor` offers —
+           * which is `color.ink` for text and `color.surface` on a button, the same order the
+           * swatches draw in and the same one the renderer paints. Derived, not a second table.
+           */
+          const inForce =
+            current?.color !== undefined && "ref" in current.color
+              ? current.color.ref
+              : controls.color[0];
+          exact.value =
+            exactColor !== ""
+              ? exactColor
+              : inForce
+                ? (doc.theme[inForce] ?? "#000000")
+                : "#000000";
           if (exactColor !== "") exact.classList.add("rb-toolbar-on");
           // `change` rather than `input`: dragging across a colour wheel fires `input` continuously
           // and would open a history step per pixel.
@@ -1918,16 +1948,28 @@ export function Editor({
           select.appendChild(option);
         }
         if (exactValue !== "") {
-          // Shown only while an exception exists, so the select never claims «Por defecto» for an
-          // element that is visibly not on the default. Selecting it does nothing; the number
-          // beside it is what changes an exact value.
+          /**
+           * Shown only while an exception exists, so the select never claims «Por defecto» for an
+           * element that is visibly not on the default.
+           *
+           * **Disabled, because it was choosable and did nothing.** Its handler returned early —
+           * «Selecting it does nothing» said the comment that stood here — so the list offered an
+           * option that looked like every other and was a dead end. It cannot be removed instead:
+           * it is what the select *displays* when an exception is in force, and without it the box
+           * would read «Por defecto» for an element that visibly is not. So it shows the state and
+           * says, by being disabled, that this is not where the state is changed — the number
+           * beside it is.
+           */
           const marked = iframeDoc.createElement("option");
           marked.value = "exact";
+          marked.disabled = true;
           marked.textContent = `${es["editor.toolbar.exact"]}: ${exactValue}`;
           select.appendChild(marked);
         }
         select.value = exactValue !== "" ? "exact" : chosenRef;
         select.addEventListener("change", () => {
+          // Unreachable through the control now that the option is disabled, and kept as the
+          // backstop on a path that writes to the owner's document.
           if (select.value === "exact") return;
           write(property, select.value === "" ? undefined : { ref: select.value as never });
         });
@@ -2631,6 +2673,11 @@ export function Editor({
       // stop `mousedown`'s `preventDefault` or a button's own `click` listener from firing, because
       // both are attached to descendants the click still originates on and then bubbles up through.",
       "  pointer-events: none; }",
+      // **`[hidden]` needs saying here, and that is not boilerplate.** The browser's own stylesheet
+      // gives `[hidden]` a `display: none`, and an author rule with an explicit `display` beats it —
+      // so the marks group set `hidden` and went on being drawn. Found by the test written for
+      // mockup 18, after a probe that read the `.hidden` property and believed it.
+      ".rb-toolbar-group[hidden] { display: none; }",
       ".rb-toolbar-group { display: flex; align-items: center; gap: 4px; padding: 0 7px;",
       "  border-right: 1px solid #EDF1F6; }",
       ".rb-toolbar-group:last-child { border-right: 0; }",

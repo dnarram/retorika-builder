@@ -1,4 +1,5 @@
 import type { CSSProperties, InputHTMLAttributes, ReactNode } from "react";
+import es from "../locales/es.json" with { type: "json" };
 
 /**
  * The questionnaire's shared visual pieces, transcribed from the seven approved mockups
@@ -64,7 +65,7 @@ export function Brand() {
         R
       </span>
       <span style={{ fontSize: 17, fontWeight: 700, color: "#0F172A", letterSpacing: "-0.01em" }}>
-        Retorika Builder
+        {es["brand.name"]}
       </span>
     </div>
   );

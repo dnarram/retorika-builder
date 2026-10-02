@@ -425,10 +425,24 @@ nobody inside can supply.
   is what this file is for. It shipped in sprint 10 and nothing wrote it down for two sprints; the
   sweep that closes sprint 12 is what found it, by reading the mockup against the code rather than
   against memory.
-  **Left as it is, pending a word.** Changing a control two usability sessions have not yet met is
+  ~~**Left as it is, pending a word.** Changing a control two usability sessions have not yet met is
   not a tidy-up, and the flicker the comment names is a real cost that the mockup, drawn before the
   bar existed, could not have weighed. What is refused is the current state: a product doing one
-  thing while an approved drawing says another, with nobody told.
+  thing while an approved drawing says another, with nobody told.~~
+
+  **Closed in favour of the drawing, 2 October 2026, by David, and built in sprint 13 day 3.** Without
+  a selection the two buttons are not drawn — and the whole `Resaltar` group goes with them, because a
+  caption over nothing is the empty row this bar refuses everywhere else.
+
+  **The code's argument was good and lost on its merits rather than on authority.** «"No door" and
+  "the door is here, pick some words first" are different things» is true, and the flicker is real.
+  What decided it is that the bar already answers this question the same way everywhere else — «a
+  control that does not apply is not drawn, not drawn greyed out», which is `textToolbar.ts`'s own
+  rule and ADR 0025 §6's — so the disabled state was the single exception to a rule the rest of the
+  bar keeps. The comment is kept in the code saying why it was discarded.
+
+  **And the sentence above about «two usability sessions» stopped being a reason**: [ADR 0031](../decisions/0031-usability-is-judged-by-david-and-the-sessions-are-cancelled.md)
+  cancels them, so «a control the sessions have not met» describes every control there will ever be.
 - The handoff's own open list stands: the price, who issues the invoice and how VAT is handled,
   and the photo bank's actual images.
 

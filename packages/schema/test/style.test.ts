@@ -160,18 +160,35 @@ describe("the closed vocabulary", () => {
     }
   });
 
-  it("refuses an exact measurement that is not a plain length", () => {
+  it("refuses an exact measurement that is not a plain length in pixels", () => {
     for (const bad of ["calc(1rem + 2px)", "16", "16 px", "auto", "-4px", "1e3px"]) {
       expect(
         () => elementStyleSchema.parse({ padding: { exact: bad, exception: true } }),
         bad,
       ).toThrow();
     }
-    for (const good of ["0", "16px", "1.5rem", "0.5em", "50%"]) {
+    for (const good of ["0", "16px", "8.5px"]) {
       expect(
         () => elementStyleSchema.parse({ padding: { exact: good, exception: true } }),
         good,
       ).not.toThrow();
+    }
+  });
+
+  it("refuses every unit but the pixel, which it used to admit (migration 0007)", () => {
+    // `rem`, `em` and `%` parsed until 2 October 2026 and nothing could write one: the floating
+    // toolbar is the only producer of an exact length and it writes pixels — and **reads** them, so
+    // a stored `2rem` came back as an empty field wearing the highlight that means «there is an
+    // exception here». Narrowed when the affected set was counted and found empty.
+    for (const unit of ["1.5rem", "0.5em", "50%", "2vh", "3ch"]) {
+      expect(
+        () => elementStyleSchema.parse({ padding: { exact: unit, exception: true } }),
+        unit,
+      ).toThrow();
+      expect(
+        () => elementStyleSchema.parse({ fontSize: { exact: unit, exception: true } }),
+        unit,
+      ).toThrow();
     }
   });
 
