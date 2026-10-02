@@ -165,6 +165,24 @@ open survives.
   is type-level only, which `schema-guard` confirms independently. **No mechanism connects them, and
   the correlation is left unexplained rather than explained away.**
 
+  **A fourth run settled the question of whether this branch is involved, and the answer is no.** The
+  commit that carried the paragraphs above changes **one markdown file and nothing else**, and its
+  `e2e` job failed where the run before it — identical application code, identical tests — had gone
+  green. Two tests that time, «día 7 — dos conversiones desde el editor» and «regression — a section
+  is added to the page you are looking at», neither of them touched this sprint. Identical code, green
+  then red: whatever this is, it is not in the diff.
+
+  **The tally for 2 October 2026, so a fifth occurrence has numbers to sit beside.** Four `e2e` runs on
+  one branch inside about forty minutes: one failure, one failure, zero, two. Five distinct victim
+  tests across them, every one an interaction with the inside of the preview frame that did not take
+  effect. Before today: twenty-four consecutive green runs and a single occurrence. **Playwright and
+  its Chromium are pinned by the lockfile and cached by version**, so a browser that changed under us
+  is ruled out too — checked, not assumed.
+
+  **What this costs right now, said plainly:** `e2e` is failing roughly one run in two, so a pull
+  request may need its job re-run before it can be merged. That is a tax on every day until it is
+  found.
+
   **The hypothesis worth measuring on day 7, unmeasured and labelled as a hypothesis.** The frame
   re-renders on interaction — this repository already knows that makes what is inside it unstable
   while it remounts — so an event landing inside that window may be **lost entirely** rather than
