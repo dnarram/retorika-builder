@@ -124,8 +124,39 @@ open survives.
   selection. The frame *does* reload — `srcDoc` depends on `photoUrls` — but `wireInteractions`
   puts the selection back from `selectedSection.current`. So there is no proven mechanism, and this
   row says so rather than offering one.
-  Whose call: nobody's yet. It is recorded so the next person who sees it has the history instead of
-  an empty hunch, and so a second occurrence is evidence rather than a surprise.
+  ~~Whose call: nobody's yet. It is recorded so the next person who sees it has the history instead of
+  an empty hunch, and so a second occurrence is evidence rather than a surprise.~~
+
+  **It happened again on 2 October 2026, in PR #146 (sprint 13 day 5), and the second occurrence is
+  worth more than the first because of what the two have in common.** A different test —
+  «sprint 7 día 7 … la tira de pestañas nunca se solapa», not «deshacer una conversión» — and the
+  **identical two statements**, character for character:
+
+  ```ts
+  await frame.locator('[data-section="sec-services"]').click();
+  await frame
+    .locator('[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]')
+    .click();
+  ```
+
+  Same section id, same button, same 30-second timeout on the **second** click. So what this is
+  evidence of is narrower than «a test»: it is **that pair of gestures** — select a section, then
+  immediately press chrome drawn inside the frame *for that selection* — and the branch it failed on
+  touched neither `conversion.ts` nor any test above its own additions. The job passed on a re-run of
+  the identical commit, for the second time.
+
+  **The hypothesis now worth measuring, still unmeasured and written down as a hypothesis.** That
+  chrome is drawn only for the *selected* section, and clicking a section re-renders the frame —
+  which this repository already knows makes chrome inside it unstable while it remounts. If the first
+  click lands inside that window it may be **lost entirely** rather than delayed: selection never
+  happens, `.rb-action` is never drawn, and the second click waits the full thirty seconds. **The
+  shape of the failure fits that and does not fit a slow render** — a lost click times out, a slow one
+  passes late. Nothing has measured it.
+
+  **If it is true it is a product defect and not a test defect**, which is the reason to spend day 7
+  on it: a person who clicks a section at that instant gets nothing back. They click again and never
+  mention it. A test does not click again.
+  Whose call: day 7's colchón, this sprint.
 - **Four Spanish strings still live in `.ts` files, and `brand.name` sits unused beside them.**
   `ui.tsx:67` renders «Retorika Builder» inline while `apps/editor/src/locales/es.json` holds exactly
   that string unread; `layout.tsx` carries the page description; and the whole `/motor` route is
