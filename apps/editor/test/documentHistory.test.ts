@@ -102,6 +102,46 @@ describe("editText", () => {
     expect(state[1]?.past).toEqual([]);
   });
 
+  it("is not a step when the field already says it, which is what a stray blur is", () => {
+    // **Found by sprint 12's day-7 walk.** The fields panel commits on every blur, so clicking into
+    // a box and clicking out of it — typing nothing — reached here. Every other verb in this file
+    // already refused a step that undoes to itself; this one did not.
+    const before = start();
+    const after = run(before, edit("Taberna Santo Domingo"));
+    expect(after[0]).toBe(before[0]);
+    expect(after[0]?.past).toEqual([]);
+  });
+
+  it("does not throw away the redo stack for a commit that changes nothing", () => {
+    // The half that made it a trap rather than a blemish: an undo, then a stray click into a field,
+    // and the redo was gone. Measured in a browser with «Rehacer» going dark.
+    const edited = run(start(), edit("Taberna renovada"));
+    const undone = historiesReducer(edited, { type: "undo", variant: 0 });
+    expect(undone[0]?.future).toHaveLength(1);
+
+    const touched = historiesReducer(undone, {
+      type: "editText",
+      variant: 0,
+      address: HEADLINE,
+      text: "Taberna Santo Domingo",
+    });
+    expect(touched[0]?.future).toHaveLength(1);
+    expect(headline(historiesReducer(touched, { type: "redo", variant: 0 }))).toBe(
+      "Taberna renovada",
+    );
+  });
+
+  it("is still a step when only the marks moved, because that is a real change", () => {
+    const marked = historiesReducer(start(), {
+      type: "editText",
+      variant: 0,
+      address: HEADLINE,
+      text: "Taberna Santo Domingo",
+      marks: [{ mark: "strong", from: 0, to: 7 }],
+    });
+    expect(marked[0]?.past).toHaveLength(1);
+  });
+
   it("throws on an address the document does not have", () => {
     expect(() =>
       historiesReducer(start(), edit("x", { sectionId: "sec-cover", elementId: "no-such" })),

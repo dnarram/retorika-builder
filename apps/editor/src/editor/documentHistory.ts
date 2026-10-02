@@ -27,7 +27,9 @@ import {
   escalateSection as escalateSectionInDoc,
   fillSlot as fillSlotInDoc,
   findSection,
+  flattenElements,
   insertSection as insertSectionIntoDoc,
+  marksFor,
   mintSectionId,
   moveItem as moveItemInDoc,
   movePage as movePageInDoc,
@@ -269,12 +271,59 @@ function sameField(cause: SnapshotCause, address: ElementAddress): boolean {
  * belong — there is nothing to re-derive and no inverse edit to compute. The amendment made the
  * forward step accurate; it did not give the stack a new kind of state to keep.
  */
+/**
+ * Whether a commit would write the value the field already holds.
+ *
+ * **Found by sprint 12's day-7 walk, and it is the half that made the stale box dangerous.** Every
+ * other verb in this file guards on identity — `setTheme`, `clearSlot` and `setVariant` each refuse
+ * a step that would undo to itself — and this one did not. So *clicking into a field and clicking
+ * out of it*, typing nothing, pushed a history step **and cleared the redo stack**: measured, with
+ * «Rehacer» going dark after a press that changed no byte of the document.
+ *
+ * Compared on the stored value rather than on object identity, because `setElementText` rebuilds
+ * the document whether or not anything moved. Marks are compared field by field rather than by
+ * serialising them: a `JSON.stringify` comparison would quietly start returning false the day a
+ * run gained a key, and this is a guard whose failure mode is a silently lost redo.
+ */
+function alreadySays(
+  doc: RetorikaDocument,
+  address: ElementAddress,
+  text: string,
+  marks?: readonly MarkRun[],
+): boolean {
+  const found = findSection(doc, address.sectionId);
+  if (!found) return false;
+  const element = flattenElements(found.section.content).find(
+    (candidate) => candidate.id === address.elementId,
+  );
+  const value = element?.value;
+  if (value?.kind !== "text" && value?.kind !== "link") return false;
+  if (value.text !== text) return false;
+
+  // Absent and empty mean the same thing to `withText`, so they mean the same thing here.
+  const before = marksFor(doc, address) ?? [];
+  const after = marks ?? [];
+  if (before.length !== after.length) return false;
+  return before.every((run, index) => {
+    const other = after[index];
+    return (
+      other !== undefined &&
+      run.mark === other.mark &&
+      run.from === other.from &&
+      run.to === other.to
+    );
+  });
+}
+
 function editText(
   history: History,
   address: ElementAddress,
   text: string,
   marks?: readonly MarkRun[],
 ): History {
+  // A blur that changed nothing is not a step. It used to be one, and worse: it threw away the
+  // redo stack, so an undo followed by a stray click into a field could not be redone.
+  if (alreadySays(history.present.document, address, text, marks)) return history;
   const document = setElementText(history.present.document, address, text, marks);
   const present: Snapshot = { document, cause: { type: "editText", address } };
   // Still typing into the field the last edit touched: amend that step rather than adding one.

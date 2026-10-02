@@ -2887,3 +2887,224 @@ describe("sprint 12 día 3 — el input anclado y el atajo de deshacer", () => {
     }
   }, 180_000);
 });
+
+/**
+ * Sprint 12's full walk, composed: the six days in one session, against the real application.
+ *
+ * It closes on the promise every day-7 walk since sprint 5 has closed on — **a ZIP that opens by
+ * double-clicking, with nothing missing** — and adds the one this sprint owes: the `<head>` of that
+ * file says what the link will show, and the picture it names is really inside the ZIP.
+ *
+ * Its own context, like every other day-7 walk: this needs a document the ordered flows above have
+ * not already converted, styled and marked.
+ */
+describe("sprint 12 día 7 — el recorrido completo del sprint", () => {
+  it("fills a card's description from the panel, keeps its mark through an anchored edit, undoes from the keyboard, sees the width the gate measures, and downloads a ZIP whose head says what a shared link shows", async () => {
+    const walk = await (await browser.newContext()).newPage();
+    try {
+      await walk.goto(BASE_URL, { waitUntil: "networkidle" });
+      await walk.fill("#nombre", "Taberna del Puerto");
+      await walk.getByRole("button", { name: "Siguiente" }).click();
+      await walk.getByText("Restaurante y bar", { exact: true }).click();
+      await walk.getByRole("button", { name: "Siguiente" }).click();
+      await walk.getByText("Comidas", { exact: true }).click();
+      await walk.getByRole("button", { name: "Siguiente" }).click();
+      await walk.fill("#direccion", "Muelle 3, Ronda");
+      await walk.getByRole("button", { name: "Siguiente" }).click();
+      await walk.getByText("Que reserven", { exact: true }).click();
+      await walk.fill("#enlace", "https://reservas.example.com/taberna");
+      await walk.getByRole("button", { name: "Crear mi web" }).click();
+      await walk.getByText("Ver a tamaño real →").first().click();
+
+      const frame = walk.frameLocator("iframe").first();
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+      const fileInput = walk.locator('input[type="file"]:not(#logo)');
+
+      // ---- day 2: the slot nothing could reach ----------------------------------------------
+      // «Qué hago» has one card and the catalog gives it no description: `0..1`, so absent from the
+      // document, so nothing on the page to click. Before this sprint there was no way in at all.
+      await frame.locator('[data-section="sec-services"]').click();
+      await frame.getByRole("button", { name: "Campos de esta sección" }).click();
+      const description = walk.getByLabel("Descripción");
+      await expect(description).toHaveValue("");
+      // The text is chosen to be the case the diff gets wrong: deleting the second «pan y » from
+      // this leaves a string two different edits could have produced.
+      await description.fill("pan y pan y aceite de la tierra");
+      await description.blur();
+      const card = frame.locator('[data-preset="services"] .rb-item').first();
+      await expect(card).toContainText("pan y pan y aceite de la tierra");
+
+      // ---- day 3a: a mark on it, then an edit from the panel that the diff would have broken --
+      const cardDescription = card.locator("p").first();
+      await cardDescription.click();
+      await selectWord(cardDescription, "pan");
+      await frame.locator('.rb-toolbar-mark[data-mark="strong"]').click();
+      await expect(cardDescription.locator("strong")).toHaveText("pan");
+
+      // The panel never closed: it is a fixed aside, and the canvas stayed clickable underneath the
+      // whole time. Re-opening it here is what the first attempt did, and the button never settled
+      // — the canvas re-renders after a mark, so a click on chrome inside the frame is a race.
+      const marked = walk.getByLabel("Descripción");
+      await expect(marked).toHaveValue("pan y pan y aceite de la tierra");
+      await marked.click();
+      // [6,12) — the *second* «pan y ». The diff attributes this to the first one and destroys a
+      // bold whose own letters nobody touched; `beforeinput` measures it instead (ADR 0027 §4b).
+      await marked.evaluate((el) => (el as HTMLInputElement).setSelectionRange(6, 12));
+      await walk.keyboard.press("Delete");
+      await expect(marked).toHaveValue("pan y aceite de la tierra");
+      await walk.getByRole("button", { name: "Cerrar los campos" }).click();
+
+      await expect(cardDescription).toHaveText("pan y aceite de la tierra");
+      await expect(cardDescription.locator("strong")).toHaveText("pan");
+
+      // ---- what this walk found: undoing with the panel open, and the box that lied -----------
+      // **The colchón's finding.** These inputs are uncontrolled, so an undo reverted the page and
+      // left the box showing the text that had just been undone — and then *clicking into it and
+      // out again*, typing nothing, wrote the undone edit back and cleared the redo stack. The
+      // walk keeps the whole sequence, because the second half is what made it a trap rather than
+      // a blemish.
+      await frame.locator('[data-section="sec-services"]').click();
+      await frame.getByRole("button", { name: "Campos de esta sección" }).click();
+      const open = walk.getByLabel("Descripción");
+      await expect(open).toHaveValue("pan y aceite de la tierra");
+
+      await walk.getByRole("button", { name: "Deshacer", exact: true }).click();
+      await expect(cardDescription).toHaveText("pan y pan y aceite de la tierra");
+      // The box followed the document rather than keeping what is no longer there.
+      await expect(open).toHaveValue("pan y pan y aceite de la tierra");
+
+      // Touched and left, with nothing typed: the page must not move.
+      await open.click();
+      await open.blur();
+      await expect(cardDescription).toHaveText("pan y pan y aceite de la tierra");
+      await expect(walk.getByRole("button", { name: "Rehacer", exact: true })).toBeEnabled();
+
+      await walk.getByRole("button", { name: "Rehacer", exact: true }).click();
+      await expect(cardDescription).toHaveText("pan y aceite de la tierra");
+      await expect(open).toHaveValue("pan y aceite de la tierra");
+      await expect(cardDescription.locator("strong")).toHaveText("pan");
+      await walk.getByRole("button", { name: "Cerrar los campos" }).click();
+
+      // ---- day 3b: the keyboard reaches the history, and leaves a text box alone --------------
+      const undoBtn = walk.getByRole("button", { name: "Deshacer", exact: true });
+      const redoBtn = walk.getByRole("button", { name: "Rehacer", exact: true });
+      await expect(undoBtn).toBeEnabled();
+
+      await frame.locator('[data-section="sec-cover"]').click();
+      await walk.keyboard.press("Meta+z");
+      await expect(cardDescription).toHaveText("pan y pan y aceite de la tierra");
+      await expect(redoBtn).toBeEnabled();
+
+      await frame.locator('[data-section="sec-cover"]').click();
+      await walk.keyboard.press("Control+y");
+      await expect(cardDescription).toHaveText("pan y aceite de la tierra");
+
+      // Inside a text being edited the browser keeps its own undo, which is the condition the
+      // shortcut was written under: taking it would mean correcting a word costs the sentence.
+      const headline = frame.locator('[data-id="el-headline"]');
+      await headline.click();
+      await walk.keyboard.press("Meta+z");
+      await walk.keyboard.press("Escape");
+      await expect(headline).toHaveText("Taberna del Puerto");
+      await expect(cardDescription).toHaveText("pan y aceite de la tierra");
+
+      // ---- day 4: the canvas shows the width the gate measures --------------------------------
+      await walk.getByRole("button", { name: "Ver en móvil" }).click();
+      await expect
+        .poll(async () =>
+          frame.locator("body").evaluate(() => document.documentElement.clientWidth),
+        )
+        .toBe(320);
+      await walk.getByRole("button", { name: "Ver en ordenador" }).click();
+
+      // ---- the cover needs a real photograph, or there is no card to show at all --------------
+      // The generator's cover is the grey marker: a `data:` URI whose payload is an SVG, which
+      // ADR 0029 §4 refuses twice over. An owner's own JPEG is what makes `og:image` possible.
+      await walk.getByRole("button", { name: "Fotos", exact: true }).click();
+      const photoRows = walk.locator('ul li:has(button:has-text("Cambiar"))');
+      await photoRows.first().getByRole("button", { name: "Cambiar" }).click();
+      await fileInput.setInputFiles(join(import.meta.dirname, "fixtures/cover-photo.jpg"));
+      await expect(walk.getByText("Todas las fotos de tu web son tuyas.")).toBeVisible();
+
+      // ---- day 5: the two fields, and the address normalising in front of the owner -----------
+      await walk.getByRole("button", { name: "Compartir" }).click();
+      const shareText = walk.getByLabel("Frase que acompaña al enlace");
+      // The placeholder is the cover's subheadline — what publishes if this is left alone.
+      await expect(shareText).toHaveAttribute("placeholder", "Comer, beber y quedarse un rato");
+      await shareText.fill("Cocina de puerto, con la lonja a cien metros");
+      await shareText.blur();
+
+      const domain = walk.getByLabel("Dirección de tu web");
+      await domain.fill("TabernaDelPuerto.es/");
+      await domain.blur();
+      await expect(walk.getByText("Se publicará como https://tabernadelpuerto.es")).toBeVisible();
+
+      // ---- day 6: the head of the real file, and the picture it names ------------------------
+      const [download] = await Promise.all([
+        walk.waitForEvent("download"),
+        walk.getByRole("button", { name: "Descargar" }).click(),
+      ]);
+      const dir = mkdtempSync(join(tmpdir(), "retorika-s12-"));
+      const zipPath = join(dir, download.suggestedFilename());
+      await download.saveAs(zipPath);
+      const zip = new Uint8Array(readFileSync(zipPath));
+      const entries = extractAll(zip, dir);
+      const html = new TextDecoder().decode(extractFileBytes(zip, "index.html"));
+
+      expect(html).toContain(
+        '<meta name="description" content="Cocina de puerto, con la lonja a cien metros">',
+      );
+      expect(html).toContain('<meta property="og:title" content="Taberna del Puerto">');
+      expect(html).toContain('<meta property="og:url" content="https://tabernadelpuerto.es">');
+
+      // **The picture it names is really in the ZIP**, checked against the entries rather than
+      // against a string. An og:image pointing at a file that does not travel renders a broken
+      // card, which is worse than a plain link.
+      const ogImage = /<meta property="og:image" content="([^"]+)">/.exec(html);
+      expect(ogImage, "no og:image was emitted").not.toBeNull();
+      const named = new URL(ogImage?.[1] ?? "").pathname.replace(/^\//, "");
+      expect(entries, `og:image names "${named}", which is not in the ZIP`).toContain(named);
+
+      // ---- and the promise every day 7 closes on ---------------------------------------------
+      const offline = await (await browser.newContext()).newPage();
+      const failed: string[] = [];
+      offline.on("requestfailed", (request) => failed.push(request.url()));
+      try {
+        await offline.goto(`file://${join(dir, "index.html")}`, { waitUntil: "load" });
+        await expect(offline.getByText("pan y aceite de la tierra")).toBeVisible();
+        // The mark survived the panel, the undo, the redo and the ZIP.
+        await expect(offline.locator("strong", { hasText: "pan" }).first()).toBeVisible();
+        // An absolute og:image does not dent ADR 0001: it is metadata and nothing fetches it. The
+        // relative one is the `<img>`, and an empty `failed` is what says it was really inside.
+        expect(failed).toEqual([]);
+      } finally {
+        await offline.context().close();
+      }
+
+      // ---- the other half of ADR 0029: no address, no picture, and the sentence stays ---------
+      await walk.getByRole("button", { name: "Compartir" }).click();
+      const clearDomain = walk.getByLabel("Dirección de tu web");
+      await clearDomain.fill("");
+      await clearDomain.blur();
+      await expect(walk.getByText(/Se publicará como/)).toHaveCount(0);
+
+      const [second] = await Promise.all([
+        walk.waitForEvent("download"),
+        walk.getByRole("button", { name: "Descargar" }).click(),
+      ]);
+      const secondPath = join(dir, `sin-dominio-${second.suggestedFilename()}`);
+      await second.saveAs(secondPath);
+      const withoutDomain = new TextDecoder().decode(
+        extractFileBytes(new Uint8Array(readFileSync(secondPath)), "index.html"),
+      );
+      expect(withoutDomain).toContain(
+        '<meta name="description" content="Cocina de puerto, con la lonja a cien metros">',
+      );
+      expect(withoutDomain).toContain('<meta property="og:title"');
+      expect(withoutDomain).not.toContain("og:image");
+      expect(withoutDomain).not.toContain("og:url");
+    } finally {
+      await walk.context().close();
+    }
+  });
+});

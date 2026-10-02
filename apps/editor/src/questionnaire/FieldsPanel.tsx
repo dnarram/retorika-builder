@@ -192,6 +192,7 @@ function FieldRowInputs({
   const textId = useId();
   const hrefId = useId();
   const box = useRef<HTMLInputElement>(null);
+  const hrefBox = useRef<HTMLInputElement>(null);
 
   /**
    * The marks after every edit this focus has seen, the text they believe in, and whether every one
@@ -204,6 +205,38 @@ function FieldRowInputs({
     text: "",
     anchored: false,
   });
+
+  /**
+   * The box follows the document when the document moves **underneath** it.
+   *
+   * **Found by sprint 12's day-7 walk, and it was a trap rather than a blemish.** These inputs are
+   * uncontrolled — `defaultValue` is read once and never again — so pressing «Deshacer» with the
+   * panel open reverted the page and left the box showing the text that had just been undone. Then
+   * the owner only had to *click into that box and click away*, typing nothing, for the undone
+   * edit to be written back: the panel commits on blur, and an untouched blur is still a commit.
+   * Measured: the card came back, and «Rehacer» went dark.
+   *
+   * It is the same *class* sprint 11 day 2 fixed — «a blur that had changed nothing at all» — one
+   * step further out. That fix stopped an untouched blur from destroying marks; it could not stop
+   * one from re-applying a value the document no longer had. The other half of the repair is in
+   * `documentHistory`'s `alreadySays`, which refuses the step; this half is what stops the box
+   * showing something the page does not.
+   *
+   * **Written as an assignment rather than by keying the input on its text**, which would also work
+   * and would remount it. The rule this expresses is narrower and is the one that matters: *never
+   * touch the box somebody is typing in*. A remount keyed on `row.text` would be correct only
+   * because the undo shortcut already refuses to fire inside an `<input>` (`keepsItsOwnUndo`) — a
+   * second rule, in another file, holding this one up.
+   */
+  useEffect(() => {
+    for (const [input, value] of [
+      [box.current, row.text],
+      [hrefBox.current, row.href ?? ""],
+    ] as const) {
+      if (!input || input === input.ownerDocument.activeElement) continue;
+      if (input.value !== value) input.value = value;
+    }
+  }, [row.text, row.href]);
 
   useEffect(() => {
     const input = box.current;
@@ -287,6 +320,7 @@ function FieldRowInputs({
           </label>
           <input
             id={hrefId}
+            ref={hrefBox}
             type="text"
             defaultValue={row.href ?? ""}
             placeholder={es["editor.fields.destinationHint"]}
