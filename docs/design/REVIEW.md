@@ -109,12 +109,45 @@ part that must not move — the interface tokens and their separation from the p
 - **Top bar, 58px:** the mark, the site name with a chevron, centred page tabs, a device toggle
   (view only in phase 1), undo and redo, a green `Guardado` tick, and `Descargar`.
 - **Left rail, 80px:** four icon buttons — `Secciones`, `Estilo`, `Páginas`, `Fotos`. The
-  advanced-module dossier describes these four with the design tools switched off.
+  advanced-module dossier describes these four with the design tools switched off. **A fifth,
+  `Compartir`, shipped on 2 October 2026 and is in no mockup before 19** — see the entry below.
 - **Canvas:** the rest of the screen. Selection is a 2px blue outline with four corner handles.
 - **Floating toolbar** above the selection, four to seven actions: `Aa`, a size stepper, bold,
   alignment, a colour swatch, link, then move, duplicate and delete.
 - **Section insertion** happens in the gap between sections, as a dashed rule broken by a pill
   reading `Añadir sección aquí` — never a list in a side panel.
+
+## `Compartir`: a rail item no earlier mockup draws, and the download dialog it stayed out of
+
+Added 2 October 2026 with [ADR 0029](../decisions/0029-what-a-published-page-says-about-itself.md)
+and **mockup 19**, which is the drawing the assessment below was made from.
+
+**Why a rail item at all.** The two fields — the sentence a shared link shows, and the origin the
+site will live at — belong to the whole site, like the theme and the pages, and the rail is this
+editor's only site-wide navigation. The `Estilo` panel is scoped by mockup 13 to colour, type and
+measures, and these are none of those.
+
+**It takes the rail to six with the design tools on, which this file already flagged as a question.**
+That is a real cost and is not waved away; what makes it worth paying is that the alternative
+homes are each wrong for a reason, and the one that is only wrong *by a little* is the download
+dialog, which is the next entry.
+
+**«¿También en el diálogo de descarga?» — asked by David, drawn in mockup 19 band 3, and answered
+no.** The moment is right: an owner usually knows their domain exactly when they are about to
+download. What rules it out is what surrounds that moment. **The download path is where phase 1's
+ten-minute criterion is measured**, and every gate on it today exists to stop or warn about
+something that is wrong — too many photos, a colour nobody can read, something overflowing at
+320px. An empty address is explicitly none of those: ADR 0029 makes it optional and says «vacío no
+es error y no bloquea nada». A form there would be the first thing to interrupt a download that is
+already correct, paid for by everybody so that a minority can fill it in.
+
+What answers the worry underneath — that nobody finds the field — is the **name**. `Compartir` is
+the word an owner already has in their head when the link is what they care about, and the help
+line closes the sequence: «si la cambias, vuelve a descargar».
+
+**What would reopen it:** a fourth usability session showing that nobody opens `Compartir`. That is
+evidence this decision does not have, and the mockup says so rather than implying the question is
+settled forever.
 
 ## Still open
 

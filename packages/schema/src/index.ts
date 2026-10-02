@@ -98,6 +98,13 @@ export {
   removeItem,
   setVariant,
 } from "./sections.ts";
+export { shareImageOf } from "./shareImage.ts";
+export {
+  readSiteUrl,
+  type SiteUrlIssue,
+  type SiteUrlReading,
+  siteUrlIssue,
+} from "./siteUrl.ts";
 export { mintSlug, SLUG_PATTERN, slugFrom } from "./slug.ts";
 export type { StyleException } from "./style.ts";
 export { listStyleExceptions, setElementStyle, styleFor } from "./style.ts";

@@ -1,16 +1,21 @@
 # 0030 — One breakpoint bucket, and the canvas shows the width the gate measures
 
-**Status:** **proposed** · **Date:** 2026-10-02 ·
+**Status:** **accepted** · **Date:** 2026-10-02 ·
 **Decided by:** David, 2 October 2026, approving the sprint 12 plan — asked which of three things to
 do with the tablet hole, and chose «el esquema lo rechaza» ·
-**Awaiting:** his signature on this file ·
+**Accepted by:** **David, 2 October 2026 — not direction** ·
 **Touches:** the advanced dossier §4 (which it **does not keep**),
 [ADR 0004](0004-role-vocabulary-v1.md) (the minor/major asymmetry this reads against),
 [ADR 0026](0026-the-switch-is-the-line-between-references-and-exact-values.md) §2 (whose overflow
 check is the gate below), document rule 7, protocolo Part 14's Fase 3 — «control por dispositivo»
 
-> **`proposed` is literal.** The decision is David's — he was given three options and picked one —
-> but he has not read this file. Development does not sign on anybody's behalf.
+> **Signed the day after it was written, and «accepted» means David, not direction** — the same as
+> ADRs 0026, 0027, 0028 and 0029. It went up `proposed` with the day 4 pull request because the
+> decision was his and the file was not; he read it and accepted it with the day 5 branch.
+>
+> **Direction has not looked at it, and this one touches a dossier.** The advanced dossier §4 is an
+> approved document and §4's promise is the thing this ADR declines to keep. That is said here, in
+> the header, because an accepted ADR gets cited afterwards by people who were not in the room.
 >
 > **Two things in one ADR, and they are one decision.** Both are the same sentence said twice: *the
 > editor must not hold a state it cannot publish, and must not measure one width while showing

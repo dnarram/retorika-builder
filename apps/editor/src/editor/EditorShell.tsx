@@ -130,6 +130,22 @@ const RAIL_ICONS = {
       <path d="M3 9h18" />
     </svg>
   ),
+  share: (
+    <svg
+      width="21"
+      height="21"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+    </svg>
+  ),
 } as const;
 
 /**
@@ -141,7 +157,7 @@ const RAIL_ICONS = {
  * it is a value the rail can take **only while the design tools are on**, which `EditorShell` is
  * what enforces, and `Editor` falls back to `sections` if the tools go off while it is open.
  */
-export type RailItemId = "sections" | "style" | "pages" | "photos" | "design";
+export type RailItemId = "sections" | "style" | "pages" | "photos" | "share" | "design";
 
 function RailIcon({ icon, active }: { icon: keyof typeof RAIL_ICONS; active: boolean }) {
   return (
@@ -615,6 +631,12 @@ export function EditorShell({
             label={es["editor.rail.pages"]}
             active={rail === "pages"}
             onSelect={() => onRailChange("pages")}
+          />
+          <RailButton
+            icon="share"
+            label={es["editor.rail.share"]}
+            active={rail === "share"}
+            onSelect={() => onRailChange("share")}
           />
           <RailButton
             icon="photos"

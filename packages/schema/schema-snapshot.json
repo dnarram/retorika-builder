@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.4.0",
+  "schemaVersion": "1.5.0",
   "document": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -14,6 +14,13 @@
         "maxLength": 128
       },
       "siteName": {
+        "type": "string"
+      },
+      "siteDescription": {
+        "type": "string",
+        "maxLength": 300
+      },
+      "siteUrl": {
         "type": "string"
       },
       "theme": {

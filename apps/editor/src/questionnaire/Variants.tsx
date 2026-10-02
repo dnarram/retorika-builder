@@ -581,6 +581,14 @@ export function Variants({
           dismissToast();
           dispatch({ type: "clearSlot", variant: openIndex, address });
         }}
+        onSetSiteDescription={(text) => {
+          dismissToast();
+          dispatch({ type: "setSiteDescription", variant: openIndex, text });
+        }}
+        onSetSiteUrl={(url) => {
+          dismissToast();
+          dispatch({ type: "setSiteUrl", variant: openIndex, url });
+        }}
         onSetVariant={(sectionId, variantId) => {
           dismissToast();
           dispatch({ type: "setVariant", variant: openIndex, sectionId, variantId });

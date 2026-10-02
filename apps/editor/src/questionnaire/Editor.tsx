@@ -76,6 +76,7 @@ import { FieldsPanel } from "./FieldsPanel.tsx";
 import { PagesPanel } from "./PagesPanel.tsx";
 import { PhotosPanel } from "./PhotosPanel.tsx";
 import { RevertDialog } from "./RevertDialog.tsx";
+import { SharePanel } from "./SharePanel.tsx";
 import { StylePanel } from "./StylePanel.tsx";
 import { FieldError } from "./ui.tsx";
 
@@ -337,6 +338,8 @@ export function Editor({
   onPickPhoto,
   onFillSlot,
   onClearSlot,
+  onSetSiteDescription,
+  onSetSiteUrl,
   onSetVariant,
   designTools,
   onDesignToolsChange,
@@ -385,6 +388,10 @@ export function Editor({
   onPickPhoto: (address: ElementAddress, file: File) => void;
   onFillSlot: (fill: SlotFill) => void;
   onClearSlot: (address: SlotAddress) => void;
+  /** What a shared link says about the whole site (ADR 0029). Site-wide like the theme, so neither
+   * names a section. */
+  onSetSiteDescription: (text: string) => void;
+  onSetSiteUrl: (url: string | undefined) => void;
   /** A different composition for one section, chosen from its own menu. */
   onSetVariant: (sectionId: string, variantId: string) => void;
   /**
@@ -2824,7 +2831,15 @@ export function Editor({
         onDesignToolsChange(on);
       }}
       panel={
-        effectiveRail === "photos" ? (
+        effectiveRail === "share" ? (
+          <SharePanel
+            doc={doc}
+            photoUrls={photoUrls}
+            onSetDescription={onSetSiteDescription}
+            onSetUrl={onSetSiteUrl}
+            onClose={() => showRail("sections")}
+          />
+        ) : effectiveRail === "photos" ? (
           <PhotosPanel
             document={doc}
             photoUrls={photoUrls}
