@@ -190,7 +190,69 @@ open survives.
   delivered to a node that is about to be replaced land nowhere. **If it is true it is a product
   defect and not a test defect**, which is why it is worth a day: a person who clicks or types at that
   instant gets nothing back, clicks again, and never mentions it. A test does not click again.
-  Whose call: day 7's colchón, this sprint.
+  ~~Whose call: day 7's colchón, this sprint.~~
+
+  ---
+
+  **Found, measured and fixed on 2 October 2026, sprint 13 day 7. The hypothesis was right in its
+  conclusion and wrong about the mechanism, and both halves are worth keeping.**
+
+  It is a **product defect**, exactly as the paragraph above suspected: a lost event, not a delayed
+  one. But the window is not a re-render. It is the gap between the preview being **parsed** and the
+  preview being **wired**:
+
+  | Moment | When |
+  |---|---|
+  | `[data-section]` queryable, `readyState: "interactive"` | **0.2 ms** |
+  | `wireInteractions` attaches the chrome, on the frame's `load` | **64.9 ms** |
+
+  For the whole of those 64.7 ms the preview is fully drawn, looks exactly as it does a moment later,
+  and **nothing is listening**. Instrumented over a real press delivered inside the window:
+  `{"wiredAtClick":false,"selected":0,"actions":0}` — two and a half seconds later the section had
+  never been selected and the action cluster had never been drawn. That is the thirty-second timeout CI
+  kept printing, and a keystroke is lost the same way, because `wireEditing` is what makes anything
+  `contenteditable` in the first place — which is the second symptom, the gallery captions that came
+  back as placeholders.
+
+  **Why the window exists, and why a loaded runner widens it.** `wireInteractions` runs on the
+  iframe's `load`, and `load` waits for subresources. The rendered page's `@font-face` rules name
+  `fonts/*.woff2` **relative**, so inside a `srcDoc` iframe they resolve against the editor's own
+  origin — **eight requests, and nothing there to answer them.** `load` waits for the last of them, so
+  the window is as wide as the slowest. That is the correlation the row above could not explain:
+  nothing about the failing branches mattered, only how long eight dead requests took on the day.
+
+  **The fix** attaches the chrome as soon as the document is parsed — a look-ahead keyed on the
+  rendered string that watches for a `contentDocument` the chrome is not yet attached to — with
+  `onLoad` kept as the backstop and the attach made idempotent by document identity. Three `e2e` tests
+  hold it, and they are **deterministic rather than a second flake**: the font requests are delayed to
+  1.5 s with `page.route`, which is the same cause slowed down, so the race becomes a fact. Each one
+  fails against the old wiring; the third fails if the chrome is ever attached twice.
+
+  **Four consecutive green `e2e` jobs on CI over the fix**, re-run on the identical commit, against
+  three failures in four runs the day before. That is evidence and not proof — the failure was always
+  intermittent, so a fifth run could still be red and would mean the mechanism above is not the only
+  one. What makes it more than a lucky streak is that the mechanism was measured directly rather than
+  inferred from the streak, and that the three tests holding it fail against the old wiring on demand.
+
+  **What the row got wrong is kept above, unedited.** The earlier falsification — «a bank photograph
+  arriving reloads the frame and loses the selection… `wireInteractions` puts the selection back» —
+  was correct about what it tested and tested the wrong step: it showed that a reload after a
+  *successful* selection keeps it, and said nothing about a click that was never registered at all.
+  There is nothing to put back when nothing was recorded.
+- **The editor's preview never shows the typeface the ZIP ships, found on the way to the row above
+  (2 October 2026) and not fixed.** The renderer emits `@font-face` with `fonts/*.woff2` relative,
+  which is right for the ZIP and for `file://`. Inside the editor's `srcDoc` preview those eight
+  requests resolve against the editor's own origin, where **nothing is served** — there is no
+  `apps/editor/public/fonts` — so every one of them 404s and the canvas falls back to the stack.
+  **The owner chooses a typeface, edits in the fallback, and downloads the real face.** The `Estilo`
+  panel's own `Aa` specimen is honest about this by accident: the backlog row for #9 says it «renders
+  in the real stack», which is the stack and not the shipped face.
+  Not fixed here because it is not one line: the bytes live base64 in source (ADR 0028's own
+  consequence, after «three ways of reading them from `node_modules` each passed every test and
+  returned 500 from the real download route»), so serving them to the editor is a decision about where
+  they come from, not a path to add. **It is recorded now because it was measured now**, and because
+  the 404s it causes are what made the lost-click window as wide as it was.
+  Whose call: nobody's yet. It costs nobody a published page — only the fidelity of the preview.
 - **Four Spanish strings still live in `.ts` files, and `brand.name` sits unused beside them.**
   `ui.tsx:67` renders «Retorika Builder» inline while `apps/editor/src/locales/es.json` holds exactly
   that string unread; `layout.tsx` carries the page description; and the whole `/motor` route is

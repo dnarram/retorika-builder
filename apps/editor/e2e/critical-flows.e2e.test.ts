@@ -3767,3 +3767,377 @@ describe("sprint 13 día 6 — las pantallas que faltaban, y los dos fallos sile
     }
   }, 180_000);
 });
+
+/**
+ * The intermittent failure, found and closed — and the reason it is here rather than in a comment:
+ * **it was never a test defect.**
+ *
+ * The backlog recorded four `e2e` failures across 2 October, five distinct victim tests, every one an
+ * interaction with the inside of the preview frame that did not take effect, and «no mechanism». The
+ * mechanism, measured:
+ *
+ * | Moment | When |
+ * |---|---|
+ * | `[data-section]` queryable, `readyState: "interactive"` | **0.2 ms** |
+ * | the chrome attached, on the frame's `load` | **64.9 ms** |
+ *
+ * The preview is fully drawn and completely inert for the whole of that window, because `load` waits
+ * for the eight `fonts/*.woff2` requests a `srcDoc` iframe resolves against the editor's own origin
+ * and nothing answers. A click inside it is **lost**, not delayed — nothing selects, so the action
+ * cluster is never drawn, which is the thirty-second timeout CI kept printing. A loaded runner makes
+ * the window wider, which is the correlation the backlog could not account for.
+ */
+describe("sprint 13 día 7 — el clic que se perdía mientras la vista previa parecía lista", () => {
+  /**
+   * The window, widened on purpose and held open.
+   *
+   * Delaying the font requests is not a trick: it is the same cause, slowed down. The frame asks for
+   * eight files that are not there, `load` waits for the last of them, and a runner under load is a
+   * runner where that takes longer. At 1.5 s the race stops being a race and becomes a fact, which is
+   * what makes this a regression test rather than a second flake.
+   */
+  async function withSlowFonts(page: Page): Promise<void> {
+    await page.route("**/fonts/*.woff2", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 1_500));
+      await route.fulfill({ status: 404, body: "" });
+    });
+  }
+
+  async function openedVariant(page: Page): Promise<FrameLocator> {
+    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    await page.fill("#nombre", "Taberna del Puerto");
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Restaurante y bar", { exact: true }).click();
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Comidas", { exact: true }).click();
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.fill("#direccion", "Muelle 3, Ronda");
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Que reserven", { exact: true }).click();
+    await page.fill("#enlace", "https://reservas.example.com/taberna");
+    await page.getByRole("button", { name: "Crear mi web" }).click();
+    await page.getByText("Ver a tamaño real →").first().click();
+    return page.frameLocator("iframe").first();
+  }
+
+  it("selects a section clicked before the frame has finished loading", async () => {
+    const page = await (await browser.newContext()).newPage();
+    try {
+      await withSlowFonts(page);
+      const frame = await openedVariant(page);
+
+      // The press happens while the frame is still loading — the state the old code was inert in.
+      // Asserted rather than assumed, so a future change that makes `load` fire first turns this into
+      // a test of nothing without saying so.
+      await frame.locator('[data-section="sec-services"]').click();
+      expect(
+        await frame.locator("body").evaluate(() => document.readyState),
+        "the frame had already finished loading, so this press no longer lands in the window",
+      ).not.toBe("complete");
+
+      // And the press took effect: the section is selected and its action cluster is drawn. Against
+      // the old code both of these were zero, for as long as the fonts took.
+      await expect(frame.locator('[data-section="sec-services"].rb-selected')).toHaveCount(1);
+      await expect(
+        frame.locator('[data-section="sec-services"] .rb-action[aria-label="Borrar esta sección"]'),
+      ).toBeVisible();
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it("takes a text edit typed before the frame has finished loading", async () => {
+    // The other half of the same window, and the other symptom CI printed: two captions typed into a
+    // gallery came back as the placeholder. `wireEditing` is what makes anything `contenteditable`,
+    // so until it ran there was nothing to type into and the keystrokes went nowhere.
+    const page = await (await browser.newContext()).newPage();
+    try {
+      await withSlowFonts(page);
+      const frame = await openedVariant(page);
+
+      const headline = frame.locator('[data-id="el-headline"]');
+      const before = (await headline.textContent())?.trim() ?? "";
+      await headline.click();
+      expect(await frame.locator("body").evaluate(() => document.readyState)).not.toBe("complete");
+      // A string the generated page cannot already be saying, read back exactly. The first version of
+      // this test typed « del Puerto» and asserted `/del Puerto/`, which the business name already
+      // satisfied — so it passed against the broken code and proved nothing. The sabotage is what
+      // said so.
+      //
+      // It **replaces** rather than appends, and that is the editor's own behaviour: focusing a text
+      // selects the whole of it, which is why the toolbar draws `B`/`I` the moment a click lands.
+      await page.keyboard.type("ZZQ");
+      await page.getByText("Haz clic en cualquier texto para cambiarlo").click();
+
+      await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+      await expect(headline).toHaveText("ZZQ");
+      expect(before, "the headline already said the typed text, so this asserts nothing").not.toBe(
+        "ZZQ",
+      );
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it("attaches the chrome exactly once, however it is reached", async () => {
+    // `onLoad` still fires, after the look-ahead has already wired the document. Both go through
+    // `wireOnce`, so the second call is free — and this is what says so, because a double attach
+    // would put two of every stylesheet and two listeners on every gesture.
+    const page = await (await browser.newContext()).newPage();
+    try {
+      await withSlowFonts(page);
+      const frame = await openedVariant(page);
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+      // Wait past the `load` the look-ahead beat, so both paths have certainly run.
+      await expect
+        .poll(async () => frame.locator("body").evaluate(() => document.readyState), {
+          timeout: 10_000,
+        })
+        .toBe("complete");
+
+      const styles = await frame
+        .locator("body")
+        .evaluate(
+          () =>
+            [...document.querySelectorAll("style")].filter((node) =>
+              (node.textContent ?? "").includes(".rb-toolbar"),
+            ).length,
+        );
+      expect(styles, "the chrome's stylesheet was attached more than once").toBe(1);
+      // And one row of insertion pills per gap, not two.
+      const sections = await frame.locator("[data-section]").count();
+      expect(await frame.locator(".rb-gap").count()).toBe(sections + 1);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+});
+
+/**
+ * Sprint 13's whole week in one journey, **driven with real mouse gestures throughout** — which is
+ * day 2's lesson applied to the walk itself.
+ *
+ * Every control the first six days touched was conducted programmatically for four sprints
+ * (`selectOption`, `fill`, `evaluate(el => { el.value = … })`), and that is precisely why six of them
+ * shipped drawn and unusable. So this walk opens a native dropdown by pressing it, types into a field
+ * it had to click first, opens the system colour picker, presses a letter, deletes a section and reads
+ * the hole it leaves — and closes on the promise every day 7 closes on: a ZIP that opens by
+ * double-clicking, now with the element's own `font-family` inside it.
+ */
+describe("sprint 13 día 7 — el recorrido completo del sprint", () => {
+  it("uses every control the week fixed with the pointer, and downloads a ZIP that opens offline with the letter inside", async () => {
+    const walk = await (
+      await browser.newContext({ viewport: { width: 1440, height: 980 } })
+    ).newPage();
+    try {
+      await walk.goto(BASE_URL, { waitUntil: "networkidle" });
+      await walk.fill("#nombre", "Taberna del Puerto");
+      await walk.getByRole("button", { name: "Siguiente" }).click();
+      await walk.getByText("Restaurante y bar", { exact: true }).click();
+      await walk.getByRole("button", { name: "Siguiente" }).click();
+      await walk.getByText("Comidas", { exact: true }).click();
+      await walk.getByRole("button", { name: "Siguiente" }).click();
+      await walk.fill("#direccion", "Muelle 3, Ronda");
+      await walk.getByRole("button", { name: "Siguiente" }).click();
+      await walk.getByText("Que reserven", { exact: true }).click();
+      await walk.fill("#enlace", "https://reservas.example.com/taberna");
+
+      // ---- day 6a: mockup 06 is not drawn, because there is nothing for it to cover -----------
+      const started = Date.now();
+      await walk.getByRole("button", { name: "Crear mi web" }).click();
+      await expect(walk.getByText("Ver a tamaño real →").first()).toBeVisible();
+      expect(Date.now() - started).toBeLessThan(2_000);
+      await expect(walk.getByText("Estamos montando tu web")).toHaveCount(0);
+
+      await walk.getByText("Ver a tamaño real →").first().click();
+      const frame = walk.frameLocator("iframe").first();
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+
+      // ---- day 3c: B and I are not drawn without a selection, which is what mockup 18 says ----
+      const sub = frame.locator('[data-id="el-subheadline"]');
+      await sub.click();
+      await frame.locator(".rb-toolbar").waitFor();
+      await expect(frame.locator(".rb-toolbar-mark").first()).toBeVisible();
+      await walk.keyboard.press("ArrowRight");
+      await expect(frame.locator(".rb-toolbar-caption", { hasText: "Resaltar" })).toBeHidden();
+
+      await walk.getByRole("switch", { name: "Herramientas de diseño" }).click();
+      await walk.getByRole("button", { name: "Sí, enciéndelas" }).click();
+
+      const headline = frame.locator('[data-id="el-headline"]');
+      await headline.click();
+      await frame.locator(".rb-toolbar").waitFor();
+
+      // ---- day 2a: the dropdown opens to a real press, and writes what is chosen --------------
+      // The press and the choice are separated on purpose: pressing is the gesture that used to be
+      // cancelled, and `selectOption` is how the value moves without depending on a platform's own
+      // dropdown keyboard — a first-letter press passed on macOS and failed on Linux in CI.
+      const padding = frame.locator('.rb-toolbar-select[aria-label="Espaciado"]');
+      await padding.click();
+      expect(
+        await padding.evaluate((el) => el.ownerDocument.activeElement === el),
+        "the press did not even reach the select",
+      ).toBe(true);
+      await padding.selectOption("space.lg");
+      await expect(walk.getByText("Guardado en este navegador")).toBeVisible();
+
+      // ---- day 2b: an exact size goes into the field, and not into the headline ---------------
+      await headline.click();
+      const exactSize = frame.locator('.rb-toolbar-exact[aria-label^="Tamaño"]');
+      await exactSize.click();
+      await walk.keyboard.type("43");
+      await expect(exactSize).toHaveValue("43");
+      await expect(headline).toHaveText("Taberna del Puerto");
+      await exactSize.dispatchEvent("change");
+      await expect(walk.getByText("Guardado en este navegador")).toBeVisible();
+
+      // ---- day 3a: an exact measurement shows in the select and cannot be chosen from it ------
+      await headline.click();
+      const corners = frame.locator('.rb-toolbar-exact[aria-label^="Esquinas"]');
+      await corners.click();
+      await walk.keyboard.type("9");
+      await corners.dispatchEvent("change");
+      await expect(walk.getByText("Guardado en este navegador")).toBeVisible();
+
+      await headline.click();
+      const marked = frame.locator(
+        '.rb-toolbar-select[aria-label="Esquinas"] option[value="exact"]',
+      );
+      await expect(marked).toHaveText(/9px/);
+      expect(
+        await marked.evaluate((el) => (el as HTMLOptionElement).disabled),
+        "the dead option is choosable again",
+      ).toBe(true);
+
+      // ---- day 3b: the colour input shows the colour in force, not the browser's black --------
+      const colour = frame.locator(".rb-toolbar-color");
+      await colour.click();
+      const shown = await colour.inputValue();
+      expect(shown.toLowerCase()).not.toBe("#000000");
+      const ink = await frame
+        .locator("body")
+        .evaluate(() =>
+          getComputedStyle(document.documentElement).getPropertyValue("--color-ink").trim(),
+        );
+      expect(shown.toLowerCase()).toBe(ink.toLowerCase());
+
+      // ---- day 5: the letter, named by role, behind the switch -------------------------------
+      const letters = frame.locator('.rb-toolbar-step[data-ref^="font."]');
+      await expect(letters).toHaveCount(2);
+      await expect(letters.nth(1)).toHaveText("Texto");
+      await letters.nth(1).click();
+      await expect(walk.getByText("Guardado en este navegador")).toBeVisible();
+
+      // ---- day 6b: the hole mockup 11 draws, and the undo that takes it back ------------------
+      await frame.locator('[data-section="sec-services"]').click();
+      await frame
+        .locator('[data-section="sec-services"] .rb-action[aria-label="Borrar esta sección"]')
+        .click();
+      await expect(frame.locator(".rb-hole")).toHaveCount(1);
+      await expect(frame.locator(".rb-hole-fate")).toHaveText(
+        "El hueco desaparecerá solo en unos segundos.",
+      );
+
+      /**
+       * **And it does disappear on its own**, which is the sentence above being kept rather than
+       * merely written.
+       *
+       * A sabotage is what put this here. The walk used to undo from the toast and assert the hole was
+       * gone — but undo changes the document, the frame reloads, and a reload wipes every injected
+       * node whatever `syncHole` does. So that assertion was satisfied by the reload, and the removal
+       * that matters was untested: when the six seconds run out, nothing changes and nothing reloads,
+       * and the notice has to take itself away.
+       */
+      await expect(frame.locator(".rb-hole")).toHaveCount(0, { timeout: 12_000 });
+      await expect(walk.getByText(/Has borrado la sección/)).toHaveCount(0);
+
+      // The section comes back from the header's own undo, the toast having long since gone.
+      await walk.locator('button[aria-label="Deshacer"]').click();
+      await expect(frame.locator('[data-section="sec-services"]')).toBeVisible();
+      await expect(frame.locator(".rb-hole")).toHaveCount(0);
+
+      // ---- and the promise every day 7 closes on ---------------------------------------------
+      await walk.getByRole("button", { name: "Descargar", exact: true }).click();
+      const anyway = walk.getByRole("button", { name: "Descargar igualmente" });
+      await anyway.waitFor();
+      const [download, response] = await Promise.all([
+        walk.waitForEvent("download"),
+        walk.waitForResponse((candidate) => candidate.url().includes("/api/download")),
+        anyway.click(),
+      ]);
+      expect(response.status()).toBe(200);
+
+      const dir = mkdtempSync(join(tmpdir(), "retorika-e2e-sprint13-dia7-"));
+      const zipPath = join(dir, download.suggestedFilename());
+      await download.saveAs(zipPath);
+      const zip = new Uint8Array(readFileSync(zipPath));
+      const entries = extractAll(zip, dir);
+      const html = new TextDecoder().decode(extractFileBytes(zip, "index.html"));
+
+      /**
+       * **The fifth style property is in the published bytes, on the element's own rule** — as a
+       * reference to the system and never as a family name, which is ADR 0032 §2 read off the one
+       * artefact that matters.
+       *
+       * Matched against the whole rule rather than the declaration alone, and a sabotage is what
+       * taught that: `toContain("font-family: var(--font-body)")` passes on a page with no
+       * per-element style at all, because the base stylesheet sets `body { font-family:
+       * var(--font-body) }`. The assertion was satisfied by the thing it was not testing.
+       */
+      const rule = /\[data-id="el-headline"\]\[data-role\] \{[^}]*font-family: var\(--font-body\)/;
+      expect(html, "the headline's own rule does not carry the chosen family").toMatch(rule);
+      /**
+       * **And no per-element rule ever names a family outright**, which is what having no exact arm
+       * buys at the level of the published bytes.
+       *
+       * Scoped to the element rules, and the first version of this was not: `not.toMatch(/Playfair|
+       * Inter/)` over the whole page fails on a correct page, because the `@font-face` blocks name
+       * the family and have to — that is how sprint 11 ships the faces at all. An assertion that
+       * cannot be satisfied by working code is not a strict assertion, it is a broken one.
+       */
+      const elementRules = [...html.matchAll(/\[data-id="[^"]+"\]\[data-role\] \{([^}]*)\}/g)].map(
+        (match) => match[1] ?? "",
+      );
+      expect(elementRules.length, "no per-element rules were emitted at all").toBeGreaterThan(0);
+      for (const body of elementRules) {
+        const family = /font-family:\s*([^;]+)/.exec(body);
+        if (family) {
+          expect(family[1]?.trim(), `an element rule names a family: ${body.trim()}`).toMatch(
+            /^var\(--font-(?:heading|body)\)$/,
+          );
+        }
+      }
+      // Beside the three the week already shipped, from the same element.
+      expect(html).toContain("font-size: 43px");
+      expect(html).toContain("padding: var(--space-lg)");
+      expect(html).toContain("border-radius: 9px");
+      // The faces this pair asks for travel, with their licence — sprint 11's promise, unbroken.
+      expect(entries).toContain("fonts/OFL-PlayfairDisplay.txt");
+
+      const offline = await (await browser.newContext()).newPage();
+      const failed: string[] = [];
+      offline.on("requestfailed", (request) => failed.push(request.url()));
+      try {
+        await offline.goto(`file://${join(dir, "index.html")}`, { waitUntil: "load" });
+        await expect(offline.getByText("Taberna del Puerto").first()).toBeVisible();
+        // The letter is the body family on the page itself, not merely in the stylesheet text.
+        const resolved = await offline
+          .locator("h1")
+          .first()
+          .evaluate((el) => ({
+            used: getComputedStyle(el).fontFamily,
+            body: getComputedStyle(document.documentElement).getPropertyValue("--font-body").trim(),
+          }));
+        const flat = (value: string) =>
+          value.replace(/["']/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+        expect(flat(resolved.used)).toBe(flat(resolved.body));
+        // Nothing fetched and failed: the whole site is in the folder, fonts included.
+        expect(failed).toEqual([]);
+      } finally {
+        await offline.context().close();
+      }
+    } finally {
+      await walk.context().close();
+    }
+  }, 240_000);
+});
