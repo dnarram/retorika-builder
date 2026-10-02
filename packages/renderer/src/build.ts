@@ -543,12 +543,14 @@ function breakpointCss(doc: RetorikaDocument): string[] {
   return rules.length === 0 ? [] : ["@media (max-width: 720px) {", ...rules, "}", ""];
 }
 
-/** The CSS property each of rule 6's four properties writes. Written out rather than derived by
- * camel-to-kebab, so adding a fifth is a decision somebody makes here rather than a transformation
- * that happens to produce something. */
+/** The CSS property each of rule 6's five properties writes. Written out rather than derived by
+ * camel-to-kebab, so adding one is a decision somebody makes here rather than a transformation that
+ * happens to produce something — which is exactly how `fontFamily` arrived (ADR 0032), with the
+ * typechecker naming this table as one of the three places that had to answer. */
 const CSS_PROPERTY: Record<StyleProperty, string> = {
   color: "color",
   fontSize: "font-size",
+  fontFamily: "font-family",
   padding: "padding",
   borderRadius: "border-radius",
 };

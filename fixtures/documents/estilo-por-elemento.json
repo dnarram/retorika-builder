@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.2.0",
+  "schemaVersion": "1.7.0",
   "id": "doc-estilo",
   "siteName": "Reformas Vega",
   "theme": {
@@ -68,6 +68,9 @@
               "style": {
                 "color": {
                   "ref": "color.muted"
+                },
+                "fontFamily": {
+                  "ref": "font.heading"
                 }
               }
             },
@@ -176,6 +179,9 @@
                         },
                         "padding": {
                           "ref": "space.sm"
+                        },
+                        "fontFamily": {
+                          "ref": "font.body"
                         }
                       }
                     },
@@ -202,6 +208,11 @@
                       "value": {
                         "kind": "text",
                         "text": "Baños"
+                      },
+                      "style": {
+                        "fontFamily": {
+                          "ref": "font.body"
+                        }
                       }
                     },
                     {

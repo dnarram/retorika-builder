@@ -29,7 +29,7 @@ describe("rule 6 in the stylesheet", () => {
     // «Cambiar la paleta sigue funcionando en toda la web»: it is the custom property that does
     // that, so an emitted literal here would quietly break the promise for every referenced value.
     expect(styleRules(styled.document)).toContain(
-      '[data-section="sec-cover"] [data-id="el-subheadline"][data-role] { color: var(--color-muted); }',
+      '[data-section="sec-cover"] [data-id="el-subheadline"][data-role] { color: var(--color-muted); font-family: var(--font-heading); }',
     );
   });
 
@@ -59,7 +59,7 @@ describe("rule 6 in the stylesheet", () => {
 
   it("reaches an element inside a list item", () => {
     expect(styleRules(styled.document)).toContain(
-      '[data-section="sec-services"] [data-id="el-card-1-title"][data-role] { color: #7A1F1F; padding: var(--space-sm); }',
+      '[data-section="sec-services"] [data-id="el-card-1-title"][data-role] { color: #7A1F1F; font-family: var(--font-body); padding: var(--space-sm); }',
     );
   });
 

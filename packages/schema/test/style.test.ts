@@ -8,6 +8,7 @@ import {
 import { parseDocument } from "../src/parse.ts";
 import { listStyleExceptions, setElementStyle, styleFor } from "../src/style.ts";
 import {
+  admitsExact,
   elementStyleSchema,
   STYLE_PROPERTIES,
   STYLE_REFS,
@@ -84,9 +85,55 @@ const base = (): RetorikaDocument => documentWith(section);
 const HEADLINE = { sectionId: "sec-cover", elementId: "el-headline" };
 
 describe("the closed vocabulary", () => {
-  it("admits the four properties and nothing else", () => {
-    expect([...STYLE_PROPERTIES]).toEqual(["color", "fontSize", "padding", "borderRadius"]);
+  it("admits the five properties and nothing else", () => {
+    expect([...STYLE_PROPERTIES]).toEqual([
+      "color",
+      "fontSize",
+      "fontFamily",
+      "padding",
+      "borderRadius",
+    ]);
     expect(() => elementStyleSchema.parse({ wobble: { ref: "color.primary" } })).toThrow();
+  });
+
+  it("admits a font family by reference and refuses one by name (ADR 0032)", () => {
+    // **The asymmetry is the decision.** Four properties take a reference *or* an exact value marked
+    // as an exception; this one takes a reference and nothing else, because an exact family is a
+    // name the owner types, a face the ZIP does not ship and a letter the visitor may never see —
+    // the promise mockup 17 refused. `EXACT_PATTERNS` leaves it out, so there is no shape to write.
+    expect(() => elementStyleSchema.parse({ fontFamily: { ref: "font.heading" } })).not.toThrow();
+    expect(() => elementStyleSchema.parse({ fontFamily: { ref: "font.body" } })).not.toThrow();
+
+    for (const named of ["Bodoni", "Georgia, serif", '"Comic Sans"', "inherit"]) {
+      expect(
+        () => elementStyleSchema.parse({ fontFamily: { exact: named, exception: true } }),
+        named,
+      ).toThrow();
+    }
+    // Not even a family the product does ship, which is the point: the arm does not exist.
+    expect(() =>
+      elementStyleSchema.parse({ fontFamily: { exact: "Inter", exception: true } }),
+    ).toThrow();
+  });
+
+  it("names which properties admit an exact value, and fontFamily is not one", () => {
+    expect(STYLE_PROPERTIES.filter((p) => admitsExact(p))).toEqual([
+      "color",
+      "fontSize",
+      "padding",
+      "borderRadius",
+    ]);
+    expect(admitsExact("fontFamily")).toBe(false);
+  });
+
+  it("says so in the refusal, rather than describing an exact value it has none of", () => {
+    const doc = base();
+    expect(() =>
+      setElementStyle(doc, HEADLINE, "fontFamily", {
+        exact: "Bodoni",
+        exception: true,
+      } as never),
+    ).toThrow(/admits no exact value/);
   });
 
   it("refuses a reference to the wrong family of tokens", () => {
