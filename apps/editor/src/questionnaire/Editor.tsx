@@ -697,6 +697,47 @@ export function Editor({
   );
 
   /**
+   * Look for the new page every frame until it is there, and wire it the moment it is.
+   *
+   * **This is what actually closes the window** `wireOnce` describes; `onLoad` is only the backstop.
+   * The parent cannot listen for the frame's `DOMContentLoaded`, because at the moment `srcDoc`
+   * changes the document that will fire it does not exist yet — and the document that *does* exist is
+   * the outgoing one, already wired. So the test is document **identity**: keep looking until
+   * `contentDocument` is something other than what the chrome is attached to, and has sections in it.
+   *
+   * Bounded, and it terminates on the first interesting frame in every real case: this effect runs
+   * only when `html` or `chromeKey` changes, and both of those mean a new document is on its way.
+   * The deadline is for the one case where neither produces one, so a missed swap costs a second of
+   * idle frames rather than a loop with no end.
+   */
+  /*
+   * `wireOnce` is deliberately not a dependency. The two that are listed are the whole trigger — a
+   * new rendered string, or a remount — and they are the only two things that put a new document in
+   * the frame. `wireOnce` is redeclared on every render, so listing it would restart this look-ahead
+   * on every render instead, which is the opposite of what it is for; and it can hold nothing stale,
+   * because it reads the frame's document at the moment it runs.
+   */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: see the note above this line
+  useEffect(() => {
+    let frame = 0;
+    const deadline = Date.now() + 1_000;
+    const look = () => {
+      const iframeDoc = iframeRef.current?.contentDocument;
+      if (
+        iframeDoc &&
+        iframeDoc !== wiredDoc.current &&
+        iframeDoc.querySelector("[data-section]") !== null
+      ) {
+        wireOnce();
+        return;
+      }
+      if (Date.now() < deadline) frame = requestAnimationFrame(look);
+    };
+    look();
+    return () => cancelAnimationFrame(frame);
+  }, [html, chromeKey]);
+
+  /**
    * The grid stripes follow the selected section, **without** remounting the frame.
    *
    * `designSectionId` is deliberately not part of `chromeKey`. Adding it there was the obvious move
@@ -2559,6 +2600,48 @@ export function Editor({
     syncGrid(iframeDoc, designOn ? designSectionId : null, placingElementId);
   }
 
+  /**
+   * Which document the chrome is attached to, so attaching it twice is impossible and attaching it
+   * *early* is safe. A reload and a remount both produce a new `Document`, so the identity is the
+   * whole bookkeeping — there is no flag to reset and nothing to clear.
+   */
+  const wiredDoc = useRef<Document | null>(null);
+
+  /**
+   * Attach the canvas's chrome **as soon as the page is parsed**, and never twice.
+   *
+   * **This closes a window in which the whole preview was visible and completely inert**, measured on
+   * 2 October 2026 and the cause of the `e2e` failure this sprint recorded four times:
+   *
+   * | Moment | When |
+   * |---|---|
+   * | `[data-section]` queryable, `readyState: "interactive"` | **0.2 ms** |
+   * | `wireInteractions` runs, on the frame's `load` | **64.9 ms** |
+   *
+   * Sixty-four milliseconds in which every section is on screen, looks exactly as it does a moment
+   * later, and **nothing is listening**. A click there is not delayed, it is *lost*: instrumented
+   * over a real press, the section was never selected and the action cluster was never drawn —
+   * `{"selected":0,"actions":0}` two and a half seconds later. A keystroke is lost the same way,
+   * because `wireEditing` is what makes anything `contenteditable` in the first place. That is a
+   * person clicking the preview the instant it appears and getting nothing back; they click again and
+   * never mention it, which is why nothing but a test ever reported it.
+   *
+   * **The window is the `load` event waiting for subresources.** The rendered page's `@font-face`
+   * rules name `fonts/*.woff2` relative, which inside a `srcDoc` iframe resolve against the editor's
+   * own origin — eight requests, nothing there to answer them. `load` waits for all eight, so the
+   * window is as wide as the slowest of them: ~65 ms on this machine, and wider on a loaded CI
+   * runner, which is exactly the correlation the backlog could not explain.
+   *
+   * `onLoad` stays, as the backstop for anything this misses. It is the same call, and the document
+   * identity above is what makes the second one free.
+   */
+  function wireOnce() {
+    const iframeDoc = iframeRef.current?.contentDocument;
+    if (!iframeDoc || wiredDoc.current === iframeDoc) return;
+    wiredDoc.current = iframeDoc;
+    wireInteractions();
+  }
+
   function wireInteractions() {
     const iframeDoc = iframeRef.current?.contentDocument;
     if (!iframeDoc) return;
@@ -3193,7 +3276,7 @@ export function Editor({
         ref={iframeRef}
         title={title}
         srcDoc={html}
-        onLoad={wireInteractions}
+        onLoad={wireOnce}
         className="w-full flex-grow border-0 bg-ui-surface"
         style={{ minHeight: "60vh" }}
       />
