@@ -145,9 +145,21 @@ What answers the worry underneath — that nobody finds the field — is the **n
 the word an owner already has in their head when the link is what they care about, and the help
 line closes the sequence: «si la cambias, vuelve a descargar».
 
-**What would reopen it:** a fourth usability session showing that nobody opens `Compartir`. That is
+~~**What would reopen it:** a fourth usability session showing that nobody opens `Compartir`. That is
 evidence this decision does not have, and the mockup says so rather than implying the question is
-settled forever.
+settled forever.~~
+
+**Rewritten 2 October 2026 —
+[ADR 0031](../decisions/0031-usability-is-judged-by-david-and-the-sessions-are-cancelled.md)
+cancels the sessions**, and a reopening condition that names one would hold this closed forever.
+Mockup 19 band 3 even says «y **no antes**», which was a guard against revisiting a decision on a
+hunch and becomes a lock once the hunch is all there will ever be.
+
+**What reopens it now:** David opening the editor, looking for where the site's address goes, and
+not finding it — written down when it happens. It is weaker evidence than watching a stranger, and
+saying so is the point of this paragraph rather than a hedge: the decision was taken on the shape of
+the download path, which has not changed, and the thing a session would have added was the one fact
+nobody inside can supply.
 
 ## Still open
 

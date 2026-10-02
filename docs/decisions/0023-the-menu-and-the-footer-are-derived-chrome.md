@@ -103,5 +103,16 @@ more pages**.
 own (ADR 0022), so he reached at least two; whether he reached three is blank, and so is whether the
 questions were asked. Nothing here moves.
 
-This stays owed. It needs a session that ends with three pages, and the cheapest way to get one is
-to record the page count every time.
+~~This stays owed. It needs a session that ends with three pages, and the cheapest way to get one is
+to record the page count every time.~~
+
+**There are no more sessions, 2 October 2026 —
+[ADR 0031](0031-usability-is-judged-by-david-and-the-sessions-are-cancelled.md).** The threshold of
+three is a judgement with no evidence behind it, and now it is one that no session will ever supply.
+
+**What is left of this debt is the half that never needed a session.** The sentence above names the
+cheap part itself — «record the page count» — and that is an observation about a document, not about
+a person: anybody building a site, David included, can say how many pages they ended with and
+whether a menu of two read as missing something. **The threshold is testable against a document; it
+is only the surprise that needed a stranger.** So this is not closed and not unanswerable: it is
+owed to whoever next builds a site with three pages and writes down what the menu looked like.

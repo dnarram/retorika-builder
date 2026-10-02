@@ -322,5 +322,16 @@ safe to put in a second place. **This is about where the door is, not about what
 ### What is still open after this
 
 Whether the *rest* of what is behind the switch is findable. One owner reached step 1 and the record
-stops there. **This is the question a fourth session should watch rather than ask**, and it is the
-reason the observation table matters more than another feature.
+stops there. ~~**This is the question a fourth session should watch rather than ask**, and it is the
+reason the observation table matters more than another feature.~~
+
+**And it is now a question with no method, 2 October 2026 —
+[ADR 0031](0031-usability-is-judged-by-david-and-the-sessions-are-cancelled.md).** The sessions are
+cancelled and usability is David's to judge. **This particular question is the one that resists that
+most**, and it is said here rather than left to be discovered: discoverability is measured by
+watching somebody naive to the control, and the person who placed it cannot be naive to it. Judgement
+substitutes for an opinion; it does not substitute for an instrument.
+
+So this stays open, and open differently: not «waiting for a session» but **without a way to be
+answered as written**. ADR 0031 names it as one of the three things cancellation cannot route
+around.

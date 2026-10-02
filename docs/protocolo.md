@@ -948,9 +948,16 @@ encima habrá que rehacerla.
 Cuestionario de cinco preguntas, generación de las tres variantes, catálogo de secciones,
 edición sobre el propio texto, reordenar, duplicar, borrar, guardado automático y deshacer.
 
-**Criterio de aceptación:** una persona de fuera del equipo, sin explicación previa y sin
-ayuda, monta la web de un negocio real en menos de diez minutos. Se cronometra y se
-observa, no se pregunta.
+**Criterio de aceptación (enmendado el 2 de octubre de 2026, ADR 0031):** David juzga que la
+Fase 1 está lista, y lo escribe — en un ADR, con su fecha y su razón. Hasta que ese ADR exista,
+la Fase 1 no está aceptada.
+
+> **El criterio anterior decía esto, y se deja escrito porque es lo que se midió contra él:**
+> «una persona de fuera del equipo, sin explicación previa y sin ayuda, monta la web de un negocio
+> real en menos de diez minutos. Se cronometra y se observa, no se pregunta.» Lo sustituye el
+> ADR 0031, que anula las sesiones de usabilidad. Las dos mediciones que sí existen —ocho y seis
+> minutos hasta el ZIP— se quedan en `docs/sessions/` como lo que son: un hecho sobre dos tardes
+> en Ronda, que el criterio nuevo ya no usa.
 
 > Antes de crear `apps/editor` se harán las pantallas detalladas de la fase 1, con todos sus
 > estados y mensajes, y un prototipo navegable probado con dos negocios reales (decisión de
@@ -987,6 +994,16 @@ observa, no se pregunta.
 > menos de diez minutos. No pregunta si le convence. Lo primero está medido; lo segundo, no. **Dar
 > la Fase 1 por aceptada es decisión de dirección, no de desarrollo**, y esto es la medición, no
 > la aceptación.
+>
+> **Esta nota entera es anterior al ADR 0031 (2 de octubre de 2026), y se queda como está.** Aquel
+> ADR anula las sesiones de usabilidad y sustituye el criterio de arriba por el juicio escrito de
+> David. Lo de abajo describe un criterio que ya no rige y mediciones que ya no se usan para
+> aceptar nada; se conserva porque es el registro de lo que se hizo y de lo que costó, no porque
+> siga en vigor. **Lo que el ADR 0031 deja escrito que se pierde**: la mesa de observación, en
+> blanco tres veces de tres; el precio, que sigue siendo una coincidencia de dos; el
+> «¿publicarías esto tal y como está?», que son tres noes de tres y es la puerta del ADR 0021
+> sobre el cobro; y si lo que hay detrás del interruptor se encuentra, que el ADR 0025 §5 dice que
+> hay que mirar y no preguntar.
 
 ## Fase 2 — El producto completo
 

@@ -194,7 +194,10 @@ all green.
   the photo bank: recorded, not improvised.
 - **Section anchors** (`id` on `<section>`), which would let the cover's button reach the contact
   section, and **issue #19**. Both rewrite every golden's `<body>`, and both wait until after the
-  usability sessions.
+  ~~usability sessions~~ — **cancelled on 2 October 2026 ([ADR 0031](../decisions/0031-usability-is-judged-by-david-and-the-sessions-are-cancelled.md)),
+  so this is a date that will never arrive.** What the marker meant is «not yet, and not in a hurry»,
+  and that part still holds on its own: rewriting every golden's `<body>` is a reason without a
+  session behind it.
 - **Closing the gap above**: location without contact is a generator decision.
 - The other five catalog sections, the generator, and the editor.
 

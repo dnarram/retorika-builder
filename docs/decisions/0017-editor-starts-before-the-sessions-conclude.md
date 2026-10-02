@@ -1,6 +1,19 @@
 # 0017 — apps/editor empieza antes de que concluyan las sesiones del prototipo
 
-**Status:** accepted · **Date:** 2026-09-24 · **Decided by:** the CEO · **Amends:** protocol Part 14, the Fase 1 note
+**Status:** accepted, and **reversed in its central clause on 2026-10-02 by
+[ADR 0031](0031-usability-is-judged-by-david-and-the-sessions-are-cancelled.md)** ·
+**Date:** 2026-09-24 · **Decided by:** the CEO · **Amends:** protocol Part 14, the Fase 1 note
+
+> **«The sessions are not cancelled, they are split» is no longer true, and the sentence is left
+> standing.** ADR 0031 cancels them and makes usability David's to judge. This file is not edited
+> into agreement with it: what it decided on 24 September is what it decided, the gamble it took
+> paid, and its own bill is settled at the foot of the page. A decision that gets rewritten when it
+> is overturned stops being a record of anything — the same reason ADR 0007 keeps its words after
+> ADR 0008 replaced them.
+>
+> **What survives it:** everything in this file about the three sessions that *did* run, and the
+> cost it names for having split them. **What does not:** the promise that both sessions happen and
+> that the Fase 1 criterion is untouched. ADR 0031 replaces that criterion entirely.
 
 ## Context
 
