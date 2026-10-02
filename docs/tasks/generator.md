@@ -37,7 +37,9 @@ the catalog declares. Raised with the product owner before any of this was writt
 2. **"Que vengan al local" has nowhere to point.** The published HTML carries no real `id` on a
    section, only `data-section`, which an in-page anchor cannot jump to — building real anchors
    rewrites every golden's `<body>`, the same class of change as issue #19, deferred past the
-   usability sessions. **Decided:** no link is built for this action. The cover's button is
+   ~~usability sessions~~ — **cancelled on 2 October 2026 (ADR 0031), so the marker names a date that
+   will never arrive; the golden rewrite is reason enough on its own.** **Decided:** no link is built
+   for this action. The cover's button is
    simply absent (optional there), and no contact section is generated (its button is required).
 3. **The `map` slot needs coordinates question 4 never asks for.** It only collects a free-text
    address. **Decided:** the slot is left unfilled — optional in the catalog (0..1) — rather than

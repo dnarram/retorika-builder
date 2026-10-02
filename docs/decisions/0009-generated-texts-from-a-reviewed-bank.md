@@ -185,8 +185,10 @@ only the first line.
 The session recorded the substance and not the words. Every other answer in this ADR is a
 quotation; this one is not, and none of the owner's vocabulary was harvested — which is the thing
 the script asks for on this ADR's behalf, because it is what a bank should be using. So the
-strongest validation this decision has is also the least literal, and the next session should fix
-that before it does anything else.
+strongest validation this decision has is also the least literal, and ~~the next session should fix
+that before it does anything else~~ **no session will fix it: they are cancelled
+([ADR 0031](0031-usability-is-judged-by-david-and-the-sessions-are-cancelled.md), 2 October 2026).
+The strongest validation this decision has is the least literal one it will ever have.**
 
 ### It is not the answer to the two noes
 
@@ -210,5 +212,13 @@ the copy recorded. That is the first time any evidence has pointed at this decis
 a gap in it.
 
 **What it does not establish:** that one of the seven working validates the other six, or that the
-rewrite satisfied the two owners it was written for. Both need a session each, and the hostelería
-one is the older debt.
+rewrite satisfied the two owners it was written for. ~~Both need a session each, and the hostelería
+one is the older debt.~~
+
+**Neither will get one, 2 October 2026 —
+[ADR 0031](0031-usability-is-judged-by-david-and-the-sessions-are-cancelled.md).** The bank's texts
+are reviewed and signed, one sector at a time, by a person reading the Spanish words — that part of
+this ADR never depended on a session and is unchanged. What is gone is the chance of an owner of
+each sector saying the words sound like their own. **The hostelería debt in particular cannot be
+judged from inside**: it exists because two hosteleros said no to the first draft, and whether the
+rewrite answers them is a question about them.

@@ -44,7 +44,11 @@ and the download itself, built in memory and never written to Render's ephemeral
 Building the editor before the protocol's usability-prototype gate concluded was a deliberate,
 CEO-directed exception, not an oversight —
 [ADR 0017](docs/decisions/0017-editor-starts-before-the-sessions-conclude.md) records why, and
-what it costs.
+what it costs. **Three sessions ran, and there will be no more**
+([ADR 0031](docs/decisions/0031-usability-is-judged-by-david-and-the-sessions-are-cancelled.md),
+2 October 2026): usability is David's to judge, and phase 1's acceptance criterion is now his
+written judgement rather than a stranger timed and observed. That ADR names what the change costs,
+including three questions nobody inside the team can answer.
 
 **The editor chrome this list used to call unbuilt is built.** The floating toolbar landed in
 sprint 9 and gained bold and italic in sprint 10; undo, reorder and duplicate landed in sprint 2,

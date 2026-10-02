@@ -35,7 +35,9 @@ Each is a real gap, decided with the product owner, not silently worked around:
   as ADR 0004's other half, still pending a tile provider.
 - **"Que vengan al local" builds no link.** The published HTML carries no real section `id`
   (only `data-section`, not something an in-page anchor can jump to), and adding one rewrites
-  every golden's `<body>` — deferred with issue #19, past the usability sessions.
+  every golden's `<body>` — deferred with issue #19, past the usability sessions. **Those were
+  cancelled on 2 October 2026 (ADR 0031)**, so what defers it now is the golden rewrite alone, which
+  was always the real reason.
 
 None of these need a schema or catalog change to fix later: they are gaps in what this package
 knows how to read, not in what a document can express.

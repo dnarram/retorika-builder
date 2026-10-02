@@ -1,5 +1,20 @@
 # The facilitator's script — third session
 
+> **There is no session left to conduct, 2 October 2026 —
+> [ADR 0031](../decisions/0031-usability-is-judged-by-david-and-the-sessions-are-cancelled.md)
+> cancels the usability sessions and makes usability David's to judge.**
+>
+> **This file is not deleted and not rewritten.** It is the record of how the third session was
+> asked, and of the five decisions that were waiting on it — the same reason
+> `docs/design/prototype/guion-de-prueba.md` is kept after it ran out of sessions, in its own words:
+> «what it is now is the record of how these two were asked». A dated artefact that gets rewritten
+> stops being evidence of anything.
+>
+> **The two parts of it worth reading afterwards** are the observation table, which names what three
+> sessions never managed to record, and the five closing questions, which are what made three
+> sessions comparable at all. Two of those five — the price and «¿publicarías esto tal y como
+> está?» — are listed in ADR 0031 as things no judgement from inside can answer.
+
 Written 29 September 2026, sprint 7 day 1. For the next session, against the deployed editor.
 Written in English; **every line meant to be spoken is quoted in Spanish, and is said as written.**
 
