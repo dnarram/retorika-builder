@@ -139,23 +139,39 @@ open survives.
     .click();
   ```
 
-  Same section id, same button, same 30-second timeout on the **second** click. So what this is
-  evidence of is narrower than «a test»: it is **that pair of gestures** — select a section, then
-  immediately press chrome drawn inside the frame *for that selection* — and the branch it failed on
-  touched neither `conversion.ts` nor any test above its own additions. The job passed on a re-run of
-  the identical commit, for the second time.
+  Same section id, same button, same 30-second timeout on the **second** click.
 
-  **The hypothesis now worth measuring, still unmeasured and written down as a hypothesis.** That
-  chrome is drawn only for the *selected* section, and clicking a section re-renders the frame —
-  which this repository already knows makes chrome inside it unstable while it remounts. If the first
-  click lands inside that window it may be **lost entirely** rather than delayed: selection never
-  happens, `.rb-action` is never drawn, and the second click waits the full thirty seconds. **The
-  shape of the failure fits that and does not fit a slow render** — a lost click times out, a slow one
-  passes late. Nothing has measured it.
+  **And then it failed a third time, in the same session, on something else — which corrected the
+  conclusion this row had already reached.** The paragraph above was written claiming the evidence
+  pointed at *that pair of gestures*. The next re-run of the same commit failed in
+  «sprint 7 día 7 — el recorrido completo», with no timeout at all: two captions typed into the
+  gallery came back reading «Escribe aquí de qué es esta foto», the placeholder. A
+  click-and-type that never committed, not a button that never appeared. The fourth run went green,
+  all 43.
 
-  **If it is true it is a product defect and not a test defect**, which is the reason to spend day 7
-  on it: a person who clicks a section at that instant gets nothing back. They click again and never
-  mention it. A test does not click again.
+  So the honest common factor is wider than one gesture pair and still narrower than «flaky»:
+  **three failures, three different tests, two different symptoms, every one of them an interaction
+  with the inside of the preview frame that did not take effect.** Twice a click that produced
+  nothing; once a typed string that was never committed. That is the whole of what is shared, and the
+  sentence above is left standing, struck through in effect, because a row that quietly tightens its
+  own story is worth less than one that shows where it was wrong.
+
+  **What is ruled out about PR #146 specifically**, since three failures on one branch against
+  twenty-odd green runs on `main` is a correlation that deserves an answer rather than a shrug: its
+  three new `e2e` tests are **appended at the end of the file**, and with `--maxWorkers 1` on a single
+  file that is also the end of the execution order — so they run *after* both victims and cannot have
+  loaded the runner for them. Its one source change to the toolbar is behind the design-tools switch,
+  and both failing tests run with the switch off, where the bar's DOM is unchanged. Its schema change
+  is type-level only, which `schema-guard` confirms independently. **No mechanism connects them, and
+  the correlation is left unexplained rather than explained away.**
+
+  **The hypothesis worth measuring on day 7, unmeasured and labelled as a hypothesis.** The frame
+  re-renders on interaction — this repository already knows that makes what is inside it unstable
+  while it remounts — so an event landing inside that window may be **lost entirely** rather than
+  delayed. The shape fits all three: a lost click times out instead of passing late, and keystrokes
+  delivered to a node that is about to be replaced land nowhere. **If it is true it is a product
+  defect and not a test defect**, which is why it is worth a day: a person who clicks or types at that
+  instant gets nothing back, clicks again, and never mentions it. A test does not click again.
   Whose call: day 7's colchón, this sprint.
 - **Four Spanish strings still live in `.ts` files, and `brand.name` sits unused beside them.**
   `ui.tsx:67` renders «Retorika Builder» inline while `apps/editor/src/locales/es.json` holds exactly
