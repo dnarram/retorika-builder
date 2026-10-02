@@ -204,7 +204,12 @@ export function buildSite(doc: RetorikaDocument, options: BuildSiteOptions): Sit
    */
   const fontFiles = new Set<string>();
   const pageFiles = pages.map(({ page, path }): SiteFile => {
-    const { html, assets, fonts } = render(rewrittenDoc, "html", { pageId: page.id });
+    // `pagePath` is this file's own name, handed to the renderer rather than worked out there: one
+    // authority for what a page is called, so `og:url` cannot disagree with the file beside it.
+    const { html, assets, fonts } = render(rewrittenDoc, "html", {
+      pageId: page.id,
+      pagePath: path,
+    });
     for (const file of fonts) fontFiles.add(file);
     // `collectAssets` walks the whole document, so this now checks the bundle holds every image
     // the *site* names rather than every image this page names. That is the stronger claim and the

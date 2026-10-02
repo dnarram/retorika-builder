@@ -23,12 +23,22 @@ export interface RenderOptions {
    * over the whole document and just say which page it wants.
    */
   pageId?: string;
+
+  /**
+   * What this page's file is called in the bundle — `index.html`, or `<slug>.html`.
+   *
+   * **Passed in rather than derived, and that is the one rule this option exists to keep.** The
+   * publisher decides what a page's file is called, and a second opinion about it here would be an
+   * `og:url` that disagrees with the file sitting beside it in the ZIP. Unset is the editor's live
+   * preview, where there is no bundle and nothing to link to, so no `og:url` is emitted at all.
+   */
+  pagePath?: string;
 }
 
 /** `allowEmbeds` resolved; `pageId` stays optional because "unset" is itself a meaningful value
  * (the first page) and not a gap to be filled in. */
-export type ResolvedRenderOptions = Omit<Required<RenderOptions>, "pageId"> &
-  Pick<RenderOptions, "pageId">;
+export type ResolvedRenderOptions = Omit<Required<RenderOptions>, "pageId" | "pagePath"> &
+  Pick<RenderOptions, "pageId" | "pagePath">;
 
 export const DEFAULT_RENDER_OPTIONS: ResolvedRenderOptions = {
   allowEmbeds: false,
