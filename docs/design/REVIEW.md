@@ -486,6 +486,49 @@ nobody inside can supply.
   evidence of anything. Its line 157 — «La otra mitad, «tipografías propias», no entra en este sprint:
   la incidencia #9 sigue abierta» — is now true of one half and stale about the issue, and stays as
   written.
+- **Not built, and that is the decision — 2 October 2026, mockup 06, «Estamos montando tu web».**
+  The only approved phase-1 screen with no code and no locale keys, and after measuring what it would
+  cover, there is nothing there to cover.
+
+  It draws five progress lines — «Elegidas las secciones…», «Escritos los textos…», «Sacada la
+  paleta…», «Colocando las fotos…», «Preparando las tres versiones» — under «Tarda unos segundos. No
+  cierres esta ventana». **Measured, the whole of generation takes a median of 0.12 ms** (60 runs,
+  min 0.07 ms, max 3.57 ms on the first cold call): `generateVariants` is synchronous and runs in the
+  browser, the logo's palette was already extracted back at question 1, and the photo bank's bytes
+  arrive *after* the three cards are up, filling in over the grey markers. So there is no moment
+  between the last answer and mockup 07 for this screen to occupy.
+
+  **Drawing it would mean faking all five lines and making a false statement in the sixth** — «tarda
+  unos segundos» is three orders of magnitude out, and there is no window somebody must not close. A
+  progress bar that reports nothing is the kind of claim this file exists to refuse; the honest
+  version of this screen is its absence.
+
+  **The premise is guarded rather than trusted.** The `e2e` suite measures the real time from
+  pressing «Crear mi web» to the three cards and fails above two seconds, with the failure message
+  saying what to do about it: if generation ever grows something genuinely slow, that test goes red
+  and mockup 06 should be built rather than the number raised. The same test asserts the screen's own
+  words appear nowhere, so «not drawn» cannot quietly become «drawn for a tenth of a millisecond».
+  Mockup 06 is not edited; it stays as the record of what was expected before anything was measured.
+- **Built, with one clause of its text refused — 2 October 2026, mockup 11's in-canvas notice.**
+  Mockup 11 draws **two** things for one delete and only one of them had ever been built: the dark
+  toast with «Deshacer», shipped in sprint 4, and a `2px dashed` panel in the flow of the page reading
+  «Aquí estaba «Opiniones»» over «El hueco desaparecerá solo en unos segundos.» The second is now
+  built — sprint 13 day 6 — because it says the thing the toast cannot: **where.** A section deleted
+  below the fold leaves a page that silently reflows while «Deshacer» sits at the bottom of the window
+  pointing at nothing the person can see.
+
+  **The second line is not the mockup's when the toast has no timer, and the drawing loses that clause
+  on its merits.** [ADR 0014](../decisions/0014-deleting-a-section-is-immediate-with-an-undo.md) gives
+  a section the owner had edited **no timer at all** — its toast waits until it is undone or dismissed
+  — so for that section «desaparecerá solo en unos segundos» is a promise the product does not keep.
+  It reads «El hueco se queda hasta que deshagas o cierres el aviso» instead. **The mockup is not
+  wrong so much as earlier**: it was drawn before the two-speed toast existed, and the clause is the
+  only part of it that the later decision contradicts. Mockup 11 is not edited.
+
+  The notice is injected chrome, like every other `rb-` node in the canvas: the section is gone from
+  the document the instant it is deleted (rule 3's own exception, ADR 0003 — there is no trash inside
+  the document), so there is nothing for the renderer to draw and nothing that could reach a published
+  page.
 - The handoff's own open list stands: the price, who issues the invoice and how VAT is handled,
   and the photo bank's actual images.
 

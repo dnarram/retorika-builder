@@ -40,6 +40,22 @@ interface Restored {
 export function Questionnaire() {
   const [restoring, setRestoring] = useState(true);
   const [restored, setRestored] = useState<Restored | null>(null);
+  /**
+   * Whether something was saved in this browser and could not be reopened.
+   *
+   * **`loadSession` has answered three things since sprint 3 and this component read two.**
+   * `undefined` is «nothing was there», which is a first visit; `null` is «something was there and
+   * it did not survive» — wrong shape, a document that no longer validates, storage that threw —
+   * and `autosave.ts` says so in as many words, moving the raw value to `.rejected` «so a corrupt
+   * session is inspectable, not silently destroyed». Nothing read it. `if (session)` collapsed the
+   * two, so an owner whose saved site failed to reopen was dropped at question 1 with the same
+   * blank screen as somebody who had never been here, and the word «guardado» they had been shown
+   * for however long turned out to mean nothing with nobody saying so.
+   *
+   * That is the shape of claim the `Guardado en este navegador` tick exists to avoid making, which
+   * is why this is worth a line of interface rather than a console warning.
+   */
+  const [rejected, setRejected] = useState(false);
 
   const [step, setStep] = useState(1);
   const [done, setDone] = useState(false);
@@ -47,6 +63,8 @@ export function Questionnaire() {
 
   useEffect(() => {
     const session = loadSession();
+    // `null` and `undefined` are different answers and only one of them is silence. See `rejected`.
+    if (session === null) setRejected(true);
     if (session) {
       setRestored({
         answers: { ...EMPTY_ANSWERS, ...session.answers },
@@ -68,6 +86,8 @@ export function Questionnaire() {
   function restart() {
     clearSession();
     setRestored(null);
+    // «Volver a empezar» throws away `.rejected` too, so the notice has nothing left to point at.
+    setRejected(false);
     setAnswers(EMPTY_ANSWERS);
     setStep(1);
     setDone(false);
@@ -94,6 +114,32 @@ export function Questionnaire() {
 
   return (
     <Shell caption={footerCaption}>
+      {/* Only over question 1, which is where a failed restore lands somebody. Past that they have
+          started answering and the notice would be about a thing they have moved on from. */}
+      {rejected && step === 1 ? (
+        <div
+          role="status"
+          style={{
+            boxSizing: "border-box",
+            width: "100%",
+            maxWidth: 620,
+            display: "flex",
+            flexDirection: "column",
+            gap: 5,
+            padding: "14px 16px",
+            background: "#FFFBEB",
+            border: "1px solid #FDE68A",
+            borderRadius: 11,
+          }}
+        >
+          <span style={{ fontSize: 15, fontWeight: 600, color: "#0F172A" }}>
+            {es["questionnaire.rejected.title"]}
+          </span>
+          <span style={{ fontSize: 13, lineHeight: 1.45, color: "#64748B" }}>
+            {es["questionnaire.rejected.body"]}
+          </span>
+        </div>
+      ) : null}
       {step === 1 && <Step1Name answers={answers} update={update} onNext={() => setStep(2)} />}
       {step === 2 && (
         <Step2Sector
