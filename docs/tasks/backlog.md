@@ -228,6 +228,12 @@ open survives.
   1.5 s with `page.route`, which is the same cause slowed down, so the race becomes a fact. Each one
   fails against the old wiring; the third fails if the chrome is ever attached twice.
 
+  **Four consecutive green `e2e` jobs on CI over the fix**, re-run on the identical commit, against
+  three failures in four runs the day before. That is evidence and not proof — the failure was always
+  intermittent, so a fifth run could still be red and would mean the mechanism above is not the only
+  one. What makes it more than a lucky streak is that the mechanism was measured directly rather than
+  inferred from the streak, and that the three tests holding it fail against the old wiring on demand.
+
   **What the row got wrong is kept above, unedited.** The earlier falsification — «a bank photograph
   arriving reloads the frame and loses the selection… `wireInteractions` puts the selection back» —
   was correct about what it tested and tested the wrong step: it showed that a reload after a
