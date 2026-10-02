@@ -3523,3 +3523,247 @@ describe("sprint 13 día 5 — el «Aa» de la barra", () => {
     }
   }, 180_000);
 });
+
+/**
+ * The two approved screens that shipped half-built or not at all, and the two failures nobody was
+ * ever told about.
+ */
+describe("sprint 13 día 6 — las pantallas que faltaban, y los dos fallos silenciosos", () => {
+  async function answered(page: Page): Promise<void> {
+    await page.fill("#nombre", "Taberna del Puerto");
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Restaurante y bar", { exact: true }).click();
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Comidas", { exact: true }).click();
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.fill("#direccion", "Muelle 3, Ronda");
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Que reserven", { exact: true }).click();
+    await page.fill("#enlace", "https://reservas.example.com/taberna");
+  }
+
+  /**
+   * **The measurement that decides mockup 06, and the guard that re-opens it.**
+   *
+   * Mockup 06 — «Estamos montando tu web», with five progress lines and «Tarda unos segundos. No
+   * cierres esta ventana» — is the only approved phase-1 screen with no code and no locale keys.
+   * It is not built, and this is why: there is nothing to wait for. `generateVariants` is
+   * synchronous and runs in the browser (measured at a median of **0.12 ms** over 60 runs in
+   * `packages/generator`), the logo's palette is already extracted back at question 1, and the
+   * bank's photo bytes arrive *after* the three cards are up, over the grey markers.
+   *
+   * So the five lines could only be faked, and «tarda unos segundos» would be false. `REVIEW.md`
+   * carries the decision.
+   *
+   * **This test is the premise, not the feature.** If generation ever grows something slow — a
+   * network call, a real image pass — this goes red, and the right response is to draw mockup 06
+   * rather than to raise the number. The threshold is deliberately far above what was measured and
+   * far below what a progress screen would be for.
+   */
+  it("goes from the last answer to three built sites with nothing to wait for (mockup 06)", async () => {
+    const page = await (await browser.newContext()).newPage();
+    try {
+      await page.goto(BASE_URL, { waitUntil: "networkidle" });
+      await answered(page);
+
+      const started = Date.now();
+      await page.getByRole("button", { name: "Crear mi web" }).click();
+      // The three cards of mockup 07, which is the screen that *does* exist.
+      await expect(page.getByText("Ver a tamaño real →").first()).toBeVisible();
+      const elapsed = Date.now() - started;
+
+      expect(
+        elapsed,
+        `generation took ${elapsed}ms — if this is now slow, mockup 06 has work to cover and should be built`,
+      ).toBeLessThan(2_000);
+      // And no progress screen was drawn on the way, which is the other half of the decision: the
+      // words of mockup 06 appear nowhere, rather than appearing for a tenth of a millisecond.
+      await expect(page.getByText("Estamos montando tu web")).toHaveCount(0);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  /**
+   * Mockup 11's other half: the dashed notice inside the canvas, where the section was.
+   */
+  it("leaves a dashed hole where the deleted section was, and takes it back on undo (mockup 11)", async () => {
+    const page = await (await browser.newContext()).newPage();
+    try {
+      await page.goto(BASE_URL, { waitUntil: "networkidle" });
+      await answered(page);
+      await page.getByRole("button", { name: "Crear mi web" }).click();
+      await page.getByText("Ver a tamaño real →").first().click();
+      const frame = page.frameLocator("iframe").first();
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+
+      // A section the owner has never touched, which is the six-second half of ADR 0014.
+      await frame.locator('[data-section="sec-services"]').click();
+      await frame
+        .locator('[data-section="sec-services"] .rb-action[aria-label="Borrar esta sección"]')
+        .click();
+
+      const hole = frame.locator(".rb-hole");
+      await expect(hole).toHaveCount(1);
+      await expect(hole.locator(".rb-hole-was")).toHaveText(/Aquí estaba/);
+      await expect(hole.locator(".rb-hole-fate")).toHaveText(
+        "El hueco desaparecerá solo en unos segundos.",
+      );
+      // The toast is the half that already existed; both say the same name.
+      await expect(page.getByText(/Has borrado la sección/)).toBeVisible();
+
+      // **Where** it is, which is the whole point of drawing it in the flow rather than in a corner:
+      // the hole sits between the sections that used to surround the deleted one.
+      const order = await frame
+        .locator("body")
+        .evaluate(() =>
+          [...document.querySelectorAll("[data-section], .rb-hole")].map((node) =>
+            node.classList.contains("rb-hole")
+              ? "HOLE"
+              : ((node as HTMLElement).dataset.section ?? "?"),
+          ),
+        );
+      expect(order[0]).toBe("sec-cover");
+      expect(order[1]).toBe("HOLE");
+
+      // The toast's own «Deshacer», which carries its label as text — the header's is an icon with
+      // an `aria-label`, so by accessible name the two are indistinguishable and `getByRole` sees
+      // both. Either would undo the delete; this test is about the one the person is looking at.
+      await page.locator("button", { hasText: "Deshacer" }).click();
+      await expect(frame.locator('[data-section="sec-services"]')).toBeVisible();
+      await expect(frame.locator(".rb-hole")).toHaveCount(0);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it("tells the truth about the hole for a section that was edited, where the mockup could not", async () => {
+    // ADR 0014 gives an edited section's toast no timer at all — it waits to be undone or dismissed
+    // — so mockup 11's «desaparecerá solo en unos segundos» would be a promise the product does not
+    // keep. The mockup was drawn before the two-speed toast existed. `REVIEW.md` records it.
+    const page = await (await browser.newContext()).newPage();
+    try {
+      await page.goto(BASE_URL, { waitUntil: "networkidle" });
+      await answered(page);
+      await page.getByRole("button", { name: "Crear mi web" }).click();
+      await page.getByText("Ver a tamaño real →").first().click();
+      const frame = page.frameLocator("iframe").first();
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+
+      // Touch it first: that is what makes the toast persistent.
+      const heading = frame.locator('[data-section="sec-services"] [data-id]').first();
+      await heading.click();
+      await page.keyboard.type(" y más");
+      await page.getByText("Haz clic en cualquier texto para cambiarlo").click();
+      await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+
+      await frame.locator('[data-section="sec-services"]').click();
+      await frame
+        .locator('[data-section="sec-services"] .rb-action[aria-label="Borrar esta sección"]')
+        .click();
+
+      await expect(frame.locator(".rb-hole-fate")).toHaveText(
+        "El hueco se queda hasta que deshagas o cierres el aviso.",
+      );
+      // And it is still there well after the six seconds a non-persistent toast would have had.
+      await page.waitForTimeout(7_000);
+      await expect(frame.locator(".rb-hole")).toHaveCount(1);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  /**
+   * A session that was there and could not be reopened.
+   */
+  it("says so when a saved site fails to restore, instead of opening question 1 in silence", async () => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    try {
+      await page.goto(BASE_URL, { waitUntil: "networkidle" });
+      // A payload of the right shape whose document the schema refuses — the realistic corruption,
+      // and the one `loadSession` was already written to survive.
+      await page.evaluate(() => {
+        localStorage.setItem(
+          "retorika.session.v1",
+          JSON.stringify({
+            payloadVersion: 1,
+            savedAt: new Date().toISOString(),
+            answers: { businessName: "Taberna del Puerto" },
+            documents: [{ schemaVersion: "1.7.0", id: "doc", siteName: "x", pages: [] }],
+            openIndex: 0,
+          }),
+        );
+      });
+      await page.reload({ waitUntil: "networkidle" });
+
+      await expect(
+        page.getByText("Teníamos una web guardada aquí y no se ha podido abrir"),
+      ).toBeVisible();
+      // Question 1 is there underneath it: the notice explains the blank screen, it does not replace it.
+      await expect(page.locator("#nombre")).toBeVisible();
+
+      // And it was not destroyed, which is what the notice claims. `autosave.ts` has moved the raw
+      // value to `.rejected` since sprint 3; nothing had ever read it.
+      const kept = await page.evaluate(() => localStorage.getItem("retorika.session.v1.rejected"));
+      expect(kept).toContain("Taberna del Puerto");
+      expect(await page.evaluate(() => localStorage.getItem("retorika.session.v1"))).toBeNull();
+
+      // It goes once they are answering: it explains where they are, not what they are doing.
+      await page.fill("#nombre", "Taberna del Puerto");
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await expect(
+        page.getByText("Teníamos una web guardada aquí y no se ha podido abrir"),
+      ).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  /**
+   * The switch that could fail to be remembered without saying so.
+   */
+  it("says the switch will not be remembered when this browser refuses to store it", async () => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    try {
+      // Blocked site data, as a private window or a strict setting produces it — narrowed to the
+      // switch's own key so the rest of the editor behaves exactly as it always does, and the
+      // assertion is about this one write.
+      await page.addInitScript(() => {
+        const real = Storage.prototype.setItem;
+        Storage.prototype.setItem = function (key: string, value: string) {
+          if (key === "retorika.designTools.v1") throw new Error("blocked");
+          return real.call(this, key, value);
+        };
+      });
+      await page.goto(BASE_URL, { waitUntil: "networkidle" });
+      await answered(page);
+      await page.getByRole("button", { name: "Crear mi web" }).click();
+      await page.getByText("Ver a tamaño real →").first().click();
+
+      await expect(page.getByText("No se recordará")).toHaveCount(0);
+      await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
+      await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
+
+      // The tools are on — the refusal costs nothing now — and the notice is about the next visit.
+      await expect(page.getByRole("button", { name: "Diseño" })).toBeVisible();
+      await expect(page.getByText("No se recordará")).toBeVisible();
+
+      // Turned off, the notice goes — and that is the truth rather than a reset. Nothing stored *is*
+      // off, so a browser that refuses to store anything keeps «off» perfectly.
+      await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
+      await expect(page.getByText("No se recordará")).toHaveCount(0);
+
+      // **And the panel does not make the claim again on the way back up.** `saveDesignTools(false)`
+      // calls `removeItem`, which this browser allows, so reading every result would have reported
+      // the preference safe between two presses that both proved it was not. The refusal is latched;
+      // the walk is what found this.
+      await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
+      await expect(page.getByText(/no nos deja guardar la preferencia/)).toBeVisible();
+      await expect(page.getByText("Se guarda en este navegador, como tus cambios.")).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+});

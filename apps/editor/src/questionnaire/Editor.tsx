@@ -101,6 +101,17 @@ export interface DeleteToast {
   /** How many visible buttons pointed at the deleted section by its anchor, counted before the
    * delete. Zero for a section nothing linked to, which is every section until this sprint. */
   brokenAnchors: number;
+  /**
+   * Which page the section was on, and where among that page's sections — both read **before** the
+   * delete, because afterwards there is nothing left to ask.
+   *
+   * They exist for the dashed notice mockup 11 draws inside the canvas, and they are on the toast
+   * rather than in their own state for the reason the name and `persistent` are: it is one event
+   * with one lifetime. The toast going takes the notice with it, which is what makes «el hueco
+   * desaparecerá solo» true without a second timer to keep in step.
+   */
+  pageId: string;
+  index: number;
 }
 
 /**
@@ -342,6 +353,7 @@ export function Editor({
   onSetSiteUrl,
   onSetVariant,
   designTools,
+  toolsRemembered,
   onDesignToolsChange,
   onEscalateSection,
   onRevertSection,
@@ -404,6 +416,9 @@ export function Editor({
    * `undefined` means the editor's own window is too narrow to offer them at all.
    */
   designTools: boolean | undefined;
+  /** Whether this browser agreed to remember the switch. Passed straight through to the rail: the
+   * canvas has no business with it, and `Variants` is where the write that failed happened. */
+  toolsRemembered: boolean;
   onDesignToolsChange: (on: boolean) => void;
   /** This section starts being designed by hand, and goes back to the catalog's layout. One
    * history step each, so Ctrl+Z covers the first minutes — which is what the advanced dossier §5
@@ -731,6 +746,76 @@ export function Editor({
       designOn ? designSectionId : null,
       placingElementId,
     );
+  });
+
+  /**
+   * The dashed notice mockup 11 draws **inside the canvas**, where the deleted section was.
+   *
+   * **Mockup 11 is the only approved screen that shipped half-built, and this is the other half.**
+   * It draws two things for one delete: the dark toast at the bottom with «Deshacer», which has
+   * existed since sprint 4, and a `2px dashed` panel in the flow of the page reading «Aquí estaba
+   * «Opiniones»» over «El hueco desaparecerá solo en unos segundos.» Only the toast was built. The
+   * toast says what happened; this says *where*, which on a long page is the part the toast cannot
+   * give — a section deleted below the fold leaves a page that silently reflows, and «Deshacer»
+   * sits at the bottom of the window pointing at nothing the person can see.
+   *
+   * **Its second line is not the mockup's, in the case ADR 0014 created.** «Desaparecerá solo en
+   * unos segundos» is true of a section nobody had edited: six seconds, then both go. A section the
+   * owner *had* edited gets no timer at all — ADR 0014 keeps its toast until it is undone or
+   * dismissed — so for that one the mockup's sentence would be a promise the product does not keep,
+   * and the notice says what actually happens instead. `REVIEW.md` records the divergence and why
+   * the drawing loses this clause: it was drawn before the two-speed toast existed.
+   *
+   * **Injected chrome, not rendered output**, like every other `rb-` node: the section is gone from
+   * the document the instant it is deleted (ADR 0003 — there is no trash inside the document), so
+   * there is nothing for the renderer to draw. It cannot reach a published page because it is put
+   * here, on the live frame, and `render(doc, "html")` never runs this code.
+   *
+   * It runs on every render rather than on frame load, because it has to **leave** when the toast
+   * does — the six-second timer changes no document and reloads no frame — which is the same reason
+   * `syncGrid` above is shaped this way. It also runs at the end of `wireInteractions`, which is what
+   * draws it after a delete: that reloads the frame, and the reload wipes every `rb-` node with it.
+   *
+   * **A guard against a stale frame was written here, measured, and removed.** A delete changes the
+   * document, which changes `srcDoc`, which reloads the frame — so the reasoning was that this render
+   * could land while the old page, deleted section and all, was still on screen, and put the notice
+   * beside the very section it says is gone. Instrumented over a real delete it **never once
+   * happened**: two calls, both against a frame that had already dropped the section, zero stale. The
+   * `srcDoc` swap is in place before a passive effect runs. Taken out on the same grounds the bar's
+   * own `max-width` was a few hundred lines down — «proved redundant: removing it changes nothing…
+   * It is not kept as insurance» — and the measurement left here so that somebody who does see the
+   * notice flash in the wrong place knows this was looked at rather than missed.
+   */
+  function syncHole(iframeDoc: Document | null | undefined) {
+    if (!iframeDoc) return;
+    // Removed first, always: the only state this function has is the DOM, and rebuilding is what
+    // keeps «no toast», «a second delete» and «the same delete» from needing three code paths.
+    for (const old of iframeDoc.querySelectorAll(".rb-hole")) old.remove();
+    if (!toast) return;
+    // The page being shown, resolved the way the renderer resolves it: absent means the first one.
+    const shown = pageId ?? doc.pages[0]?.id;
+    if (toast.pageId !== shown || toast.index < 0) return;
+
+    const sections = [...iframeDoc.querySelectorAll<HTMLElement>("[data-section]")];
+    const hole = iframeDoc.createElement("div");
+    hole.className = "rb-hole";
+    hole.setAttribute("role", "status");
+    const was = iframeDoc.createElement("span");
+    was.className = "rb-hole-was";
+    was.textContent = es["editor.hole.was"].replace("{name}", toast.sectionName);
+    const fate = iframeDoc.createElement("span");
+    fate.className = "rb-hole-fate";
+    fate.textContent = toast.persistent ? es["editor.hole.stays"] : es["editor.hole.goes"];
+    hole.append(was, fate);
+
+    // Where the section was: before whichever one took its place, or after the last if it was last.
+    const after = sections[toast.index];
+    if (after) after.before(hole);
+    else sections[sections.length - 1]?.after(hole);
+  }
+
+  useEffect(() => {
+    syncHole(iframeRef.current?.contentDocument);
   });
 
   /**
@@ -2516,6 +2601,14 @@ export function Editor({
       ".rb-action-move { background: #156FE7; } .rb-action-move:hover { background: #0E5BC4; }",
       ".rb-action-delete { background: #DC2626; } .rb-action-delete:hover { background: #B91C1C; }",
       ".rb-action:disabled { background: #B9CDEA; cursor: not-allowed; }",
+      // The hole a delete leaves, drawn as mockup 11 draws it — `2px dashed`, its own margin, the
+      // name above and what happens next below. `UI_FONT` because it is the editor talking, not the
+      // site: every other `rb-` node in this frame does the same.
+      `.rb-hole { box-sizing: border-box; margin: 22px 30px; padding: 26px; font-family: ${UI_FONT};`,
+      "  background: #F7FAFE; border: 2px dashed #B9CDEA; border-radius: 11px; display: flex;",
+      "  flex-direction: column; align-items: center; gap: 6px; }",
+      ".rb-hole-was { font-size: 15px; font-weight: 600; color: #475569; }",
+      ".rb-hole-fate { font-size: 13px; color: #94A3B8; text-align: center; }",
       // The gap between sections, drawn as mockup 08 draws it: a dashed rule broken by a pill.
       ".rb-gap { position: relative; box-sizing: border-box; height: 76px; padding: 0 40px;",
       "  display: flex; align-items: center; gap: 0; background: #FFFFFF; }",
@@ -2783,6 +2876,11 @@ export function Editor({
     // After `wireEditing`, which is what makes an element focusable in the first place.
     wireToolbar(iframeDoc);
     wireHandmade(iframeDoc);
+    // Last, and on the load rather than only on a render: a delete reloads this frame, so the render
+    // that opened the toast ran against the document that still had the section in it. This is the
+    // pass that actually draws the notice. It goes after `wireInsertion`, which inserts the `.rb-gap`
+    // rows the notice is positioned among.
+    syncHole(iframeDoc);
   }
 
   /**
@@ -2948,6 +3046,7 @@ export function Editor({
       rail={effectiveRail}
       onRailChange={showRail}
       designTools={designTools}
+      toolsRemembered={toolsRemembered}
       askingDesignTools={askingDesignTools}
       onAskDesignTools={() => setAskingDesignTools(true)}
       onDismissDesignTools={() => setAskingDesignTools(false)}

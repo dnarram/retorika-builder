@@ -246,12 +246,21 @@ function RailButton({
  */
 function DesignToolsSwitch({
   on,
+  remembered,
   asking,
   onAsk,
   onDismiss,
   onChange,
 }: {
   on: boolean;
+  /**
+   * Whether this browser agreed to remember the switch.
+   *
+   * `false` means one thing only: a `localStorage` write was refused — a private window, blocked
+   * site data. The tools are still on, because the switch the editor obeys is React state; what is
+   * gone is the next visit. So the notice says that and nothing stronger.
+   */
+  remembered: boolean;
   /** Whether the trade question is open. Held by the caller so that pressing a rail item, or
    * anything else that moves the person along, can close it. */
   asking: boolean;
@@ -292,6 +301,21 @@ function DesignToolsSwitch({
         {es["editor.designTools.label"]}
       </span>
 
+      {/* Under the label, and only when the tools are **on** and a write was refused. Both halves
+          matter: «off» survives a browser that stores nothing, because nothing stored *is* off, so a
+          notice there would be false. The rail is 9px-text narrow, so the line is three words and
+          the sentence that explains it is the `title` — the same division the `Diseño` rail item's
+          own note uses. Amber rather than red: nothing is broken now, and a red line beside a switch
+          that just worked would be the overstatement this fixes. */}
+      {on && !remembered ? (
+        <span
+          title={es["editor.designTools.notRememberedHelp"]}
+          className="text-center text-[9px] font-semibold leading-[1.25] text-[#B45309]"
+        >
+          {es["editor.designTools.notRemembered"]}
+        </span>
+      ) : null}
+
       {asking ? (
         <div className="absolute bottom-full left-full z-20 mb-1 ml-1 flex w-[300px] flex-col gap-3 rounded-xl border border-ui-border bg-ui-surface p-4 text-left shadow-[0_8px_24px_rgba(15,23,42,0.15)]">
           <span className="text-[15px] font-bold text-ui-ink">
@@ -318,8 +342,14 @@ function DesignToolsSwitch({
           </div>
           {/* The same honesty as «Guardado en este navegador», and for the same reason: there are no
               accounts, so saying «tu cuenta» would claim a guarantee this does not have. */}
+          {/* **The note swaps once we know the claim is false.** «Se guarda en este navegador» is
+              true until a write is refused; after that, repeating it in a panel the person can
+              reopen — turn the tools off, press again — would be the product insisting on something
+              it has already been told is not so. */}
           <span className="border-t border-ui-border pt-2.5 text-xs leading-normal text-ui-muted">
-            {es["editor.designTools.ask.note"]}
+            {remembered
+              ? es["editor.designTools.ask.note"]
+              : es["editor.designTools.ask.noteBlocked"]}
           </span>
         </div>
       ) : null}
@@ -408,6 +438,7 @@ export function EditorShell({
   rail,
   onRailChange,
   designTools,
+  toolsRemembered,
   askingDesignTools,
   onAskDesignTools,
   onDismissDesignTools,
@@ -439,6 +470,8 @@ export function EditorShell({
    * invites someone to work out how to enable it and the honest answer is «use a bigger screen».
    */
   designTools: boolean | undefined;
+  /** Whether this browser agreed to remember the switch — `false` only after a write it refused. */
+  toolsRemembered: boolean;
   askingDesignTools: boolean;
   onAskDesignTools: () => void;
   onDismissDesignTools: () => void;
@@ -659,6 +692,7 @@ export function EditorShell({
           {designTools === undefined ? null : (
             <DesignToolsSwitch
               on={designTools}
+              remembered={toolsRemembered}
               asking={askingDesignTools}
               onAsk={onAskDesignTools}
               onDismiss={onDismissDesignTools}

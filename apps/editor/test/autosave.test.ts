@@ -111,6 +111,26 @@ describe("a corrupted or foreign payload", () => {
     expect(storage.getItem("retorika.session.v1.rejected")).toBe("{not json");
   });
 
+  it("answers three things and not two, which is the distinction a caller has to keep", () => {
+    /**
+     * **This module got it right from sprint 3 and its only caller collapsed it until sprint 13.**
+     * `undefined` is «nothing was here», which is a first visit. `null` is «something was here and it
+     * did not survive». `Questionnaire.tsx` read them with `if (session)`, so an owner whose saved
+     * site failed to reopen got the same blank question 1 as somebody who had never visited — and the
+     * «Guardado en este navegador» they had been shown turned out to mean nothing, with nobody saying
+     * so.
+     *
+     * The three answers asserted side by side, because the bug was never in either value: it was in
+     * nobody writing down that there were three.
+     */
+    expect(loadSession(), "nothing saved").toBeUndefined();
+    storage.setItem("retorika.session.v1", "{not json");
+    expect(loadSession(), "saved and unreadable").toBeNull();
+    saveSession({ answers: ANSWERS, documents: documents(), openIndex: 0 });
+    expect(loadSession(), "saved and readable").not.toBeNull();
+    expect(loadSession()).not.toBeUndefined();
+  });
+
   it("never throws, even when storage itself throws on read", () => {
     vi.stubGlobal("localStorage", {
       getItem: () => {

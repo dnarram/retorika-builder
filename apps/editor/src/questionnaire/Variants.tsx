@@ -229,6 +229,32 @@ export function Variants({
    */
   const [designTools, setDesignTools] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(MIN_STUDIO_WIDTH);
+  /**
+   * Whether this browser agreed to remember the switch.
+   *
+   * **`saveDesignTools` has returned a boolean since sprint 8 and the only caller threw it away.**
+   * Its own comment names the contract — «`false` when storage refuses, so a caller can tell the
+   * difference between "off" and "we could not remember". Same contract as `saveSession`» — and
+   * `saveSession`'s half of that sentence is honoured two effects above, where a refused write moves
+   * the tick to «No guardado». This half was not: in a private window, or with site data blocked,
+   * the switch went on, the panel said «Se guarda en este navegador», and the next visit had it off
+   * with nobody having said a word.
+   *
+   * Starts `true` because nothing has been refused yet — not because anything has been written. The
+   * switch is not saved until it is pressed, and claiming a failure before then would be the
+   * mirror image of the mistake.
+   *
+   * **It only ever latches false, and the walk is what found the reason.** Turning the tools *off*
+   * calls `removeItem`, which a browser that refuses `setItem` will happily do — so reading every
+   * result would have set this back to `true` on the way down and told the person the preference was
+   * safe between two presses that both proved it was not. What is being reported is a property of
+   * the browser, not of one write.
+   *
+   * That is only honest because of where it is drawn: the notice appears when the tools are **on**
+   * and this is false, and «off» needs no storage to survive — nothing stored *is* off. So turning
+   * them off hides the notice by being true rather than by forgetting.
+   */
+  const [toolsRemembered, setToolsRemembered] = useState(true);
 
   useEffect(() => {
     setDesignTools(loadDesignTools());
@@ -522,6 +548,10 @@ export function Variants({
     // named it are simply dead — `/api/download` would say so, but only once the person tried to
     // download. The moment worth telling them about is this one, while "Deshacer" is on screen.
     const brokenAnchors = listAnchorsTo(history.present.document, sectionId).length;
+    // Where the hole goes, read before the delete for the same reason the anchors are counted
+    // before it: afterwards the section is not there to ask. See `DeleteToast`.
+    const pageId = found?.page.id;
+    const index = found?.page.sections.findIndex((candidate) => candidate.id === sectionId) ?? -1;
     dispatch({ type: "deleteSection", variant, sectionId });
 
     clearTimeout(toastTimer.current);
@@ -529,6 +559,12 @@ export function Variants({
       sectionName: found ? catalogSectionName(found.section.preset.catalogId) : sectionId,
       persistent,
       brokenAnchors,
+      // `findSection` answers `undefined` for an id the document does not hold, which cannot happen
+      // from the canvas — every id came from a section it had just drawn — and the fallbacks keep
+      // the toast itself working rather than letting a notice take the undo down with it. An empty
+      // `pageId` matches no page, so no hole is drawn, which is the right failure.
+      pageId: pageId ?? "",
+      index,
     });
     if (!persistent) toastTimer.current = setTimeout(dismissToast, TOAST_DURATION_MS);
   }
@@ -598,8 +634,13 @@ export function Variants({
           // The stored value and the state, and nothing else. No `dismissToast`: turning the tools
           // on is not an edit, and a delete's toast has six seconds that belong to the delete.
           setDesignTools(on);
-          saveDesignTools(on);
+          // **The answer is read, and only a refusal is recorded.** The switch still works for this
+          // session either way — the state above is what the editor obeys — so a refusal costs the
+          // person nothing now and everything on the next visit, which is what the notice says.
+          // See `toolsRemembered` for why a success does not clear it.
+          if (!saveDesignTools(on)) setToolsRemembered(false);
         }}
+        toolsRemembered={toolsRemembered}
         onEscalateSection={(sectionId) => {
           dismissToast();
           dispatch({ type: "escalateSection", variant: openIndex, sectionId });
