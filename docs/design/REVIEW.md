@@ -403,6 +403,20 @@ settled forever.
   draw: ADR 0024 forbade one run overlapping another, which read literally made bold *and* italic on
   the same words impossible — the first thing the owner named. Different marks may now overlap;
   identical ones merge.
+- **Diverged since sprint 10 and recorded only now, closing sprint 12 — mockup 18's band 2, first
+  state.** The mockup says that with nothing selected the `B` and `I` buttons **are not drawn**, and
+  says it in as many words: «no se dibujan apagados». `Editor.tsx` draws them and disables them, and
+  its comment argues for that on purpose — «"No door" and "the door is here, pick some words first"
+  are different things, and removing the buttons as the selection collapses would make them
+  flicker».
+  **The reasoning in the code is good and it is still a divergence from an approved mockup**, which
+  is what this file is for. It shipped in sprint 10 and nothing wrote it down for two sprints; the
+  sweep that closes sprint 12 is what found it, by reading the mockup against the code rather than
+  against memory.
+  **Left as it is, pending a word.** Changing a control two usability sessions have not yet met is
+  not a tidy-up, and the flicker the comment names is a real cost that the mockup, drawn before the
+  bar existed, could not have weighed. What is refused is the current state: a product doing one
+  thing while an approved drawing says another, with nobody told.
 - The handoff's own open list stands: the price, who issues the invoice and how VAT is handled,
   and the photo bank's actual images.
 

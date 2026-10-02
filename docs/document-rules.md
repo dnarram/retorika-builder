@@ -227,7 +227,15 @@ Two deliberate absences, named for the same reason the style table names its thr
 
 ---
 
-## The three breakpoint adjustments
+## The three breakpoint adjustments, in the one bucket there is
+
+**`breakpoints` holds exactly one key, `mobile`** (ADR 0030, schema 1.4.0). It held a `tablet` one
+until sprint 12, and nothing could ever publish it: no verb wrote a tablet patch, and the renderer
+threw on one from sprint 8 onwards — so a document carrying it was valid, storable and autosavable,
+and refused at the one moment that mattered. The schema refuses it now, which is the difference
+between an invalid state the product prevents and one it repairs. The advanced dossier §4's
+«Escritorio, tablet y móvil, editables» is **not** kept, and ADR 0030 says so rather than letting
+the omission be discovered.
 
 A breakpoint patch may do exactly three things, and the type says so rather than accepting a
 free-form patch:
@@ -242,6 +250,30 @@ carrying any other property, which is what stops the mobile view from quietly gr
 second design rule 7 exists to prevent.
 
 ---
+
+## What a shared link reads
+
+Two optional fields on the document itself, and the only two that describe the site rather than a
+page of it (ADR 0029).
+
+| | |
+|---|---|
+| `siteDescription` | The sentence a shared link shows. **Starts empty and usually stays empty**: the renderer falls back to the cover's subheadline, so this holds a sentence only when somebody chose a different one |
+| `siteUrl` | The `https` origin the owner says their site will live at. An origin and nothing else — no path, no query, no trailing slash |
+
+**Derived, never copied**, which is ADR 0022's principle applied a second time. A field born
+pre-filled with the subheadline would be stale the first day somebody edited the cover, and then
+there would be two sentences and neither in charge. Deriving at the moment of publishing cannot go
+stale, and nothing has to be kept in step.
+
+**The chain may end at nothing, and that is an answer.** A cover's `subheadline` is `0..1`, so a
+document can have neither — and no description is better than one invented from the business name,
+which is a sentence nobody reviewed.
+
+**`siteUrl` is not `buildSite`'s `baseUrl`.** That one says where *this build* is being served from
+and is omitted for a download; this says where the owner is going to put the files. Reading one as
+the other would put a sitemap in a ZIP. It exists because a preview image must be an absolute URL —
+every scraper refuses a relative one — and a ZIP does not know what domain it will be opened under.
 
 ## What never enters the document
 
