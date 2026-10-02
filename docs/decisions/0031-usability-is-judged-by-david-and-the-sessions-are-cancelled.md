@@ -1,9 +1,9 @@
 # 0031 — Usability is judged by David, and the sessions are cancelled
 
-**Status:** **proposed** · **Date:** 2026-10-02 ·
+**Status:** **accepted** · **Date:** 2026-10-02 ·
 **Decided by:** David, 2 October 2026, planning sprint 13 — asked what the record should do and
 what the Fase 1 criterion becomes, and answered both ·
-**Awaiting:** his signature on this file ·
+**Accepted by:** **David, 2 October 2026 — not direction** ·
 **Supersedes:** [ADR 0017](0017-editor-starts-before-the-sessions-conclude.md) in its central
 clause · **Amends:** protocol Part 14, the Fase 1 acceptance criterion ·
 **Touches:** [ADR 0009](0009-generated-texts-from-a-reviewed-bank.md),
@@ -13,9 +13,14 @@ clause · **Amends:** protocol Part 14, the Fase 1 acceptance criterion ·
 [#51](https://github.com/dnarram/retorika-builder/issues/51), and
 `docs/sessions/guion-tercera-sesion.md`
 
-> **`proposed` is literal.** The decision is David's — he was asked what the record should do and
-> what the criterion becomes, and answered both. What has not happened is him reading *this file*.
-> Development does not sign on anybody's behalf.
+> **Signed the day it was written, and «accepted» means David, not direction** — the same as ADRs
+> 0026 through 0030. It went up `proposed` with the day 1 pull request because the decision was his
+> and the file was not; he read it and accepted it with the day 2 branch.
+>
+> **Direction has not looked at it, and this one reverses direction's own.** ADR 0017 was decided by
+> the CEO and the two-session requirement originates in the concept dossier, which is direction's
+> document and sits above the protocol in `CLAUDE.md`'s hierarchy. That is said here, in the header,
+> because an accepted ADR gets cited afterwards by people who were not in the room.
 >
 > **This is not «we will stop scheduling sessions».** It reverses an accepted ADR decided by the
 > CEO and rewrites the acceptance criterion of a phase. Both are said in the header rather than

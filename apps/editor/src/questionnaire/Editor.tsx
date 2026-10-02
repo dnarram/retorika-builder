@@ -1609,8 +1609,37 @@ export function Editor({
       bar.className = "rb-toolbar";
       bar.setAttribute("role", "toolbar");
       bar.setAttribute("aria-label", es["editor.toolbar.label"]);
-      // The one listener that makes the rest work: the press must not take focus off the text.
-      bar.addEventListener("mousedown", (event) => event.preventDefault());
+      /**
+       * The press must not take focus off the text — **but only when it lands on a button.**
+       *
+       * **This listener was on the whole bar, and it switched off half of it.** `preventDefault` on
+       * a `mousedown` cancels that element's default action, and for the four kinds of control in
+       * this bar that are not buttons, the default action *is* the control: opening a `<select>`'s
+       * popup, focusing an `<input type=number>`, opening the system colour picker. So «Espaciado»
+       * and «Esquinas» rendered, read «Por defecto» and could not be opened; the three exact-px
+       * fields could not be focused, which meant **the digits typed into them landed in the
+       * headline**; and the exact colour never opened a picker. Six controls, drawn and unusable,
+       * from the day the bar grew its second half in sprint 9.
+       *
+       * The narrowing honours what the comment above already said — «pressing a **button** never
+       * moves focus out of the element being edited». A button needs it, because a `blur` fired
+       * before the `click` commits a text edit at the wrong moment and closes the bar under the
+       * pointer. Nothing else in here needs it, and `click` fires on a button either way.
+       *
+       * **Delegated with `closest("button")` rather than attached per button**, which is a change
+       * of mind from the sprint plan and worth saying why: both defaults come out right. A control
+       * added later that is not a button is unprotected, which is the side that fails loudly at the
+       * first press; a button added later is protected, which is what every button in this bar
+       * wants. Attaching it per button would have made each new one remember.
+       */
+      bar.addEventListener("mousedown", (event) => {
+        const target = event.target;
+        const onButton =
+          target !== null && typeof target === "object" && "closest" in target
+            ? (target as Element).closest("button") !== null
+            : false;
+        if (onButton) event.preventDefault();
+      });
       bar.addEventListener("click", (event) => event.stopPropagation());
 
       const group = (label: string): HTMLElement => {
