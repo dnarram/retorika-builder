@@ -2,7 +2,14 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { inflateRawSync } from "node:zlib";
-import { type Browser, chromium, expect, type Locator, type Page } from "@playwright/test";
+import {
+  type Browser,
+  chromium,
+  expect,
+  type FrameLocator,
+  type Locator,
+  type Page,
+} from "@playwright/test";
 import { afterAll, beforeAll, describe, it } from "vitest";
 import { BASE_URL, startEditorServer, stopEditorServer } from "./server.ts";
 
@@ -3107,4 +3114,158 @@ describe("sprint 12 día 7 — el recorrido completo del sprint", () => {
       await walk.context().close();
     }
   });
+});
+
+/**
+ * Sprint 13 day 2 — the half of the floating toolbar that was drawn and could not be used.
+ *
+ * **Every test in this file drove these controls programmatically, which is why seven sprints went
+ * by.** `selectOption` sets `.value` and dispatches `change`; `fill()` focuses by API; the colour
+ * input was written with `evaluate(el => { el.value = …; dispatch })`. All three skip the gesture,
+ * and the gesture was the broken part: `mousedown` was cancelled on the whole bar, so a `<select>`
+ * never opened, an `<input>` never took focus, and **the digits typed into a size field landed in
+ * the headline** — measured against the old code, which turned a business called «Taberna del
+ * Puerto» into one called «42».
+ *
+ * So these are pointer tests on purpose, and they assert the two things a real press changes:
+ * **what has focus**, and **where the characters go**.
+ */
+describe("sprint 13 día 2 — la barra se deja usar con el ratón", () => {
+  async function barOpen(): Promise<{ studio: Page; frame: FrameLocator }> {
+    const studio = await (await browser.newContext()).newPage();
+    await studio.goto(BASE_URL, { waitUntil: "networkidle" });
+    await studio.fill("#nombre", "Taberna del Puerto");
+    await studio.getByRole("button", { name: "Siguiente" }).click();
+    await studio.getByText("Restaurante y bar", { exact: true }).click();
+    await studio.getByRole("button", { name: "Siguiente" }).click();
+    await studio.getByText("Comidas", { exact: true }).click();
+    await studio.getByRole("button", { name: "Siguiente" }).click();
+    await studio.fill("#direccion", "Muelle 3, Ronda");
+    await studio.getByRole("button", { name: "Siguiente" }).click();
+    await studio.getByText("Que reserven", { exact: true }).click();
+    await studio.fill("#enlace", "https://reservas.example.com/taberna");
+    await studio.getByRole("button", { name: "Crear mi web" }).click();
+    await studio.getByText("Ver a tamaño real →").first().click();
+    const frame = studio.frameLocator("iframe").first();
+    await frame.locator('[data-section="sec-cover"]').waitFor();
+    await studio.getByRole("switch", { name: "Herramientas de diseño" }).click();
+    await studio.getByRole("button", { name: "Sí, enciéndelas" }).click();
+    await frame.locator('[data-id="el-headline"]').click();
+    await frame.locator(".rb-toolbar").waitFor();
+    return { studio, frame };
+  }
+
+  /** Whether this element is the frame's `activeElement` — the one thing a cancelled `mousedown`
+   * takes away, and the one a `fill()` or a `selectOption` grants without ever pressing. */
+  const focused = (locator: Locator) =>
+    locator.evaluate((el) => el.ownerDocument.activeElement === el);
+
+  it("gives a real press the focus, on all four kinds of control that are not buttons", async () => {
+    const { studio, frame } = await barOpen();
+    try {
+      // Two selects, three number fields and one colour field: the whole design half of the bar.
+      await expect(frame.locator(".rb-toolbar-select")).toHaveCount(2);
+      await expect(frame.locator(".rb-toolbar-exact")).toHaveCount(3);
+      await expect(frame.locator(".rb-toolbar-color")).toHaveCount(1);
+
+      for (const selector of [".rb-toolbar-select", ".rb-toolbar-exact", ".rb-toolbar-color"]) {
+        const all = frame.locator(selector);
+        for (let i = 0; i < (await all.count()); i += 1) {
+          const control = all.nth(i);
+          await control.click();
+          expect(await focused(control), `${selector} #${i} took no focus from a real press`).toBe(
+            true,
+          );
+          // And the bar is still there: a press that moved focus out of the text used to be exactly
+          // what the cancelled `mousedown` existed to stop.
+          await expect(frame.locator(".rb-toolbar")).toHaveCount(1);
+        }
+      }
+    } finally {
+      await studio.context().close();
+    }
+  }, 180_000);
+
+  it("types a size into the size field, and not into the business name", async () => {
+    // **The measured symptom, and the worst of the six.** Against the old code this press left the
+    // field empty and unfocused, and «42» replaced the headline.
+    const { studio, frame } = await barOpen();
+    try {
+      const headline = frame.locator('[data-id="el-headline"]');
+      const exact = frame.locator('.rb-toolbar-exact[aria-label^="Tamaño"]');
+      await exact.click();
+      await studio.keyboard.type("42");
+      await expect(exact).toHaveValue("42");
+      await expect(headline).toHaveText("Taberna del Puerto");
+
+      // And it commits on `change`, which a blur is: the size reaches the document.
+      await frame.locator('[data-section="sec-cover"]').click();
+      await expect
+        .poll(async () => (await headline.evaluate((el) => getComputedStyle(el).fontSize)) ?? "")
+        .toBe("42px");
+    } finally {
+      await studio.context().close();
+    }
+  }, 180_000);
+
+  it("changes a spacing from the keyboard once the press has focused it", async () => {
+    // A native `<select>` popup is drawn by the browser and Playwright cannot click inside it, so
+    // what is driven here is the half that was broken — the press that focuses — followed by typing
+    // an option's first letter, which is a real gesture and fires `change` the same way choosing
+    // with the mouse does. `selectOption`, which every earlier test used, would skip both.
+    const { studio, frame } = await barOpen();
+    try {
+      const select = frame.locator(".rb-toolbar-select").first();
+      await expect(select).toHaveValue("");
+      await select.click();
+      expect(await focused(select)).toBe(true);
+      await studio.keyboard.type("a"); // «Amplio»
+      await expect(select).toHaveValue("space.lg");
+      await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
+    } finally {
+      await studio.context().close();
+    }
+  }, 180_000);
+
+  it("does not cancel the press on a control that is not a button", async () => {
+    /**
+     * **The change itself, measured where it is decidable.**
+     *
+     * Read on the frame's **document**, which the event reaches after the bar — a listener on the
+     * control itself runs in the target phase, before the bar's, and sees `false` either way. That
+     * is why the first probe written for this could not tell the two builds apart and focus could.
+     *
+     * **Only the select half is asserted here, and that is a limit rather than an omission.** The
+     * other half — that a press on a *button* is still cancelled — cannot be read the same way: a
+     * button press writes a style, which changes the document, which reloads the frame and takes
+     * the recording with it. What covers it instead is every other toolbar test in this file: they
+     * all drive buttons, and a button that stopped being cancelled would fire `blur` before
+     * `click`, commit a text edit at the wrong moment and close the bar under the pointer — which
+     * is what those tests were written against and what they would catch.
+     */
+    const { studio, frame } = await barOpen();
+    try {
+      await frame.locator(".rb-toolbar").evaluate((bar) => {
+        const w = bar.ownerDocument.defaultView as unknown as { cancelled: boolean[] };
+        w.cancelled = [];
+        bar.ownerDocument.addEventListener("mousedown", (event) => {
+          w.cancelled.push(event.defaultPrevented);
+        });
+      });
+
+      await frame.locator(".rb-toolbar-select").first().click();
+      await frame.locator('.rb-toolbar-exact[aria-label^="Tamaño"]').click();
+
+      const cancelled = await frame
+        .locator("body")
+        .evaluate(() => (window as unknown as { cancelled: boolean[] }).cancelled);
+      expect(cancelled.length, "neither press reached the document").toBe(2);
+      expect(cancelled, "a press on a select or an input must not be cancelled").toEqual([
+        false,
+        false,
+      ]);
+    } finally {
+      await studio.context().close();
+    }
+  }, 180_000);
 });
