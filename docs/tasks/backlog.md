@@ -12,7 +12,27 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 1 October 2026, **closing sprint 10**. Bold and italic shipped — schema, renderer,
+Last reviewed: 2 October 2026, **closing sprint 12**. The editor reached the parts of the document
+it did not reach, and phase 2's last code point shipped. Seven things changed state: the two
+unreachable line slots (#133), the fields panel's unanchored `<input>`, the keyboard undo that seven
+places claimed, the tablet bucket the schema accepted and nothing could publish, the three different
+mobile widths, the minimum SEO, and «tipografías propias» — which is **not** built and whose row is
+only re-pointed, because ADR 0029 is about a shared link and not about letterforms.
+
+**What this sweep found is the usual shape — older rot, not this sprint's.** `README.md` said the
+catalog had four sections, which stopped being true in sprint 7, and listed the whole editor chrome
+as unbuilt although every item of it shipped between sprints 2 and 10. It also said «nine check
+names» over a table of ten. That is the **third** time this file has been caught describing a
+product two sprints younger than itself, after `INV_4` and after the `e2e` job, and the pattern is
+worth more than any one correction.
+
+Two things are new and had no home: **an approved mockup has diverged since sprint 10 and nobody
+wrote it down** (mockup 18's first state — `REVIEW.md` carries it now), and **`e2e` failed once in
+CI and passed on a re-run**, after twenty-four green runs, in a test this sprint did not touch.
+Both are rows below. **Two things end this sprint waiting on somebody**, and both are direction's:
+the fourth usability session, still, and the word on mockup 18.
+
+The review before it was 1 October 2026, **closing sprint 10**. Bold and italic shipped — schema, renderer,
 toolbar and a walk through a download — so the rows about them are records rather than debts now.
 What this review mostly found was **older rot, not this sprint's**: the README said `INV_4` was
 provisional and that there was no `e2e` job, both true when written and both false for sprints, and
@@ -66,6 +86,37 @@ editor's top bar — and were corrected in place rather than deleted, so the rec
 open survives.
 
 ---
+
+## What this sprint leaves open, and on whom
+
+- **`e2e` failed once in CI, on a test this sprint did not touch, and passed on a re-run.** «sprint 7
+  día 3 — deshacer una conversión» timed out for 30 seconds waiting for the «Convertir esta sección
+  en página» button after clicking its section. **What is known:** twenty-four consecutive CI runs
+  were green before it, including six of this sprint's own; the re-run of the identical commit went
+  green; the test passes three times out of three locally in isolation and in the full suite; and
+  this sprint grew the `e2e` job from about 1m46 to 2m30 by adding a walk.
+  **What was checked and rules out this sprint's code:** `canConvert` is a pure function of a freshly
+  generated document and nothing touched `conversion.ts`; the test opens its own browser context, so
+  no earlier test's state reaches it; and neither of day 7's two source changes is reachable from its
+  path — the fields panel is never opened and `editText` is never called before the failure.
+  **What was guessed and is false:** that a bank photograph arriving reloads the frame and loses the
+  selection. The frame *does* reload — `srcDoc` depends on `photoUrls` — but `wireInteractions`
+  puts the selection back from `selectedSection.current`. So there is no proven mechanism, and this
+  row says so rather than offering one.
+  Whose call: nobody's yet. It is recorded so the next person who sees it has the history instead of
+  an empty hunch, and so a second occurrence is evidence rather than a surprise.
+- **Four Spanish strings still live in `.ts` files, and `brand.name` sits unused beside them.**
+  `ui.tsx:67` renders «Retorika Builder» inline while `apps/editor/src/locales/es.json` holds exactly
+  that string unread; `layout.tsx` carries the page description; and the whole `/motor` route is
+  unlocalised. `REVIEW.md` has claimed since 26 September that «no Spanish user-facing literal lives
+  in a `.ts` or `.tsx` file», which stopped being true without anybody noticing. Whose call: nobody's
+  — it is a one-PR chore, left out of the closing sprint because a closeout changes no behaviour and
+  a locale key is a behaviour change however small.
+- **`next dev` rewrites `apps/editor/tsconfig.json` every time it starts**, reformatting it and
+  adding a `.next/dev/dev/types/**/*.ts` include with a doubled `dev` segment, which Biome's hook
+  then reformats back. Seen on three days of this sprint and reverted each time; it has never been
+  committed. Whose call: nobody's, until it is. A `.gitattributes` entry or an ignore rule would end
+  it; working out which is a small task nobody is waiting on.
 
 ## Decided elsewhere, waiting on someone
 
@@ -141,6 +192,20 @@ open survives.
   **A fourth session should fix the recording before it adds anything else**, and the cheapest
   version of that is the script's own list filled in as it happens plus the five answers written
   down word for word. Whose call: direction's, as scheduling and facilitation always were.
+- ~~**There is no keyboard undo, and seven places in this repository say there is.**~~ **Written on
+  2 October 2026, sprint 12 day 3**, which is the half David chose of the two this row named.
+  `Meta+Z` and `Control+Z` undo; `Meta+Shift+Z`, `Control+Shift+Z` and `Control+Y` redo. Not
+  `Meta+Y`, which means something else on macOS in enough applications that claiming it would be
+  taking a key this editor has no business taking, and nothing carrying Alt.
+  **The rule that makes it safe is the half that matters**, and it was David's condition for writing
+  it at all: nothing fires while the focus is in a `contentEditable`, an `<input>` or a `<textarea>`,
+  where `Meta+Z` is the browser undoing the letters being typed right now. Two listeners, not one —
+  a key pressed over the canvas is dispatched in the `<iframe>`'s own document and never reaches the
+  editor's.
+  **One limit, measured rather than left to be found:** undoing re-renders the canvas, which
+  replaces the frame's document and the listener on it, so a second press sent with **no** gap is
+  lost; with 400ms between them none is. Two deliberate presses are fine and holding the keys down
+  may not be. Its own row is above. *What follows is the row as it stood.*
 - **There is no keyboard undo, and seven places in this repository say there is.** Found by walking
   the editor on **sprint 9 day 1**, and not caused by that day's work — it has been true for as long
   as the editor has existed. `Meta+Z`, `Control+Z` and `Meta+Shift+Z` were each pressed against a
@@ -211,6 +276,20 @@ open survives.
   `selectionStart`/`selectionEnd`, so the capture needs the same range-to-offset arithmetic
   `textEdits.ts` already carries, wired to a different event source. Small, and nobody has
   marked a word from inside the fields panel yet to hit it.
+- ~~**A list item's optional slots cannot be reached.**~~ **Built 2 October 2026, sprint 12 days 1
+  and 2, closing [#133](https://github.com/dnarram/retorika-builder/issues/133).** It was costed
+  here as «either extending `SlotAddress` to name an item, or a second panel; neither is small», and
+  it was the first of the two: `SlotAddress` gained an optional line address — the line named by
+  its **id**, never its position, because a position read across a `moveItem` or a `removeItem`
+  would quietly come to mean a different line. No migration, and that was checked rather than
+  assumed: `SlotAddress` is an addressing type and is stored in no document.
+  **Exactly two slots were unreachable and they were the only two** — `SERVICES_ITEM_SLOTS` and
+  `PRICES_ITEM_SLOTS`, both `description`, both `0..1`. Every other item slot is `min: 1`, so it
+  exists in a new line and the canvas already reached it. The panel now lists **every** editable slot
+  of every line, which is what `INV_1` asks of a simple view; showing only the two that happened to
+  be optional would have been a rule nobody could state. A line's group is headed by its own words —
+  «Ensaladilla», not «Línea 7» — derived from the line rather than copied into it.
+  *What follows is the row as it stood, kept because its costing is what the work was planned from.*
 - **A list item's optional slots cannot be reached.** The fields panel is explicit that "a list
   holds items rather than a value", so its rows are the section's slots and never an item's. A
   card's `description` in «Qué hago» has been `0..1` and unreachable since sprint 1, and a price

@@ -24,22 +24,40 @@ generic static server, with the invariants green in CI. Publishing on a Retorika
 no plan ([ADR 0008](docs/decisions/0008-hosted-publishing-has-no-plan.md)): `apps/serve` stays
 built, tested and dormant.
 
-**Phase 1 is under way, and the generation path works end to end.** The catalog has four
-sections — Portada, Qué hago, Horario y ubicación, Contacto y reservas — and `apps/editor` is a
-real Next.js application, deployed and growing daily: the five questions with their error states,
-three real generated variants with a live preview of each, click-to-edit text that carries into
-the ZIP, and the download itself, built in memory and never written to Render's ephemeral disk.
+**Phase 1 is under way, and the generation path works end to end.** The catalog has **nine
+sections a page can hold** — Portada, Qué hago, Horario y ubicación, Opiniones, Precios, Fotos de
+trabajos, Equipo, Contacto y reservas, and the footer — plus an avance, which exists only as the
+reference a converted page leaves behind and is never offered in the menu. `apps/editor` is a real
+Next.js application, deployed and growing daily: the five questions with their error states, three
+real generated variants with a live preview of each, click-to-edit text that carries into the ZIP,
+and the download itself, built in memory and never written to Render's ephemeral disk.
 `packages/generator` turns the five answers into a valid `RetorikaDocument`, drawing its text from
 `packages/copybank`'s reviewed per-sector bank
 ([ADR 0009](docs/decisions/0009-generated-texts-from-a-reviewed-bank.md)).
 
+> **This paragraph said «four sections» until the sprint 12 closeout**, which was true when it was
+> written and stopped being true in sprint 7, when «Quién soy / El equipo» made the catalogue nine
+> of nine. Corrected here rather than deleted, because it is the third time this file has been
+> found describing a product two sprints younger than itself — after `INV_4` and after the `e2e`
+> job — and the pattern is worth more than any one correction.
+
 Building the editor before the protocol's usability-prototype gate concluded was a deliberate,
 CEO-directed exception, not an oversight —
 [ADR 0017](docs/decisions/0017-editor-starts-before-the-sessions-conclude.md) records why, and
-what it costs. **Not yet built:** the full editor chrome (floating toolbar, undo, reorder,
-duplicate, a properties panel), accounts and persistence (the browser tab is the only copy until
-it downloads), payment, the remaining sectors' text and the photo bank
-([ADR 0011](docs/decisions/0011-sample-photos-per-sector.md)).
+what it costs.
+
+**The editor chrome this list used to call unbuilt is built.** The floating toolbar landed in
+sprint 9 and gained bold and italic in sprint 10; undo, reorder and duplicate landed in sprint 2,
+and undo gained its keyboard shortcut in sprint 12; the properties panel — `Campos de esta sección`
+— landed in sprint 3 and reached inside a list's lines in sprint 12.
+
+**Not yet built:** accounts and persistence (the browser tab is the only copy until it downloads),
+payment ([ADR 0021](docs/decisions/0021-charging-waits-for-a-sellable-product.md)), the photo bank's
+images ([ADR 0011](docs/decisions/0011-sample-photos-per-sector.md)) — the machinery shipped in
+sprint 6 and the eleven sector files hold zero photographs — and a tablet breakpoint, which
+[ADR 0030](docs/decisions/0030-one-breakpoint-bucket-and-the-width-the-gate-measures.md) defers to
+phase 3 rather than leaving half-present. The remaining sectors' text is **done**: all ten launch
+sectors have their own bank since sprint 8.
 
 ## Getting started
 
@@ -157,7 +175,7 @@ written only in the YAML.
 > open PR, the `pull_request` trigger already covers every push to that branch, and adding a
 > branch `push` trigger would only double the bill.
 
-These are the nine check names, exactly as GitHub reports them. Branch protection matches the
+These are the ten check names, exactly as GitHub reports them. Branch protection matches the
 bare job name; the pull request page displays them as `CI / lint`.
 
 | Check | What it runs |
