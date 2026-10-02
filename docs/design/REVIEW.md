@@ -8,6 +8,15 @@ record of reading them against what the repository already decided: what holds, 
 and what was decided to close each gap. Where this file and `HANDOFF.md` disagree, this file is
 the later document.
 
+> **The header above is a dated record and the file is not.** The date, the eleven ADRs and the
+> fifteen mockups are what the *first* reading was done against, on 23 September 2026; they are left
+> as written because a review that silently re-dates itself stops saying when it looked. What has
+> grown since, noted here so the numbers do not read as current: there are now **32 ADRs** and
+> **19 mockups** — 16 through 19 (modo estudio, la barra y el sistema, negrita y cursiva, cómo se ve
+> al compartir) were drawn after this review and are read against it rather than by it. Entries
+> below carry their own dates, and the ones added in sprints 9 through 13 are the live half of this
+> file. Last added to: **2 October 2026, closing sprint 13.**
+
 ## What the screens get right
 
 Checked one by one, not assumed:

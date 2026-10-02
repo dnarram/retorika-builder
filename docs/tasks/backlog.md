@@ -12,7 +12,16 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 2 October 2026, **sprint 13 day 1 — the usability sessions are cancelled**
+Last reviewed: 2 October 2026, **closing sprint 13 — the editor's half-drawn controls, and a defect
+that had been hiding as a flaky test.** Six toolbar controls that had been drawn and unusable since
+sprint 9 work with a mouse; three states that only reported now change something; an element may
+choose between the two typefaces the ZIP already ships; the two approved screens that had shipped
+half-built or not at all are settled; and two silent failures — a rejected session, a switch that
+could not be remembered — now say so. The **intermittent `e2e`** turned out to be a product defect
+with a measured mechanism, not a test defect, and its row below is closed. One row was closed by a
+sweep rather than by work: the four inline Spanish strings were fixed on day 3 and nothing said so.
+
+The review before that was 2 October 2026, **sprint 13 day 1 — the usability sessions are cancelled**
 ([ADR 0031](../decisions/0031-usability-is-judged-by-david-and-the-sessions-are-cancelled.md)).
 David judges usability, and the Fase 1 acceptance criterion becomes his written judgement. **This is
 the single event that has moved the most rows in this file**: fourteen places waited on a session,
@@ -253,18 +262,28 @@ open survives.
   they come from, not a path to add. **It is recorded now because it was measured now**, and because
   the 404s it causes are what made the lost-click window as wide as it was.
   Whose call: nobody's yet. It costs nobody a published page — only the fidelity of the preview.
-- **Four Spanish strings still live in `.ts` files, and `brand.name` sits unused beside them.**
+- ~~**Four Spanish strings still live in `.ts` files, and `brand.name` sits unused beside them.**
   `ui.tsx:67` renders «Retorika Builder» inline while `apps/editor/src/locales/es.json` holds exactly
   that string unread; `layout.tsx` carries the page description; and the whole `/motor` route is
   unlocalised. `REVIEW.md` has claimed since 26 September that «no Spanish user-facing literal lives
   in a `.ts` or `.tsx` file», which stopped being true without anybody noticing. Whose call: nobody's
   — it is a one-PR chore, left out of the closing sprint because a closeout changes no behaviour and
-  a locale key is a behaviour change however small.
+  a locale key is a behaviour change however small.~~
+  **Closed in sprint 13 day 3, and this closeout is what noticed** — the row outlived the work by four
+  days because nothing pointed at it. `ui.tsx` and `layout.tsx` both read `brand.name` and
+  `brand.tagline` now, and `/motor` reads three keys of its own. **Verified against the code rather
+  than against the commit message**: a sweep for a Spanish-looking literal across `apps/editor/src`
+  returns only prose inside comments, which the rule has never been about. `REVIEW.md`'s claim is true
+  again.
 - **`next dev` rewrites `apps/editor/tsconfig.json` every time it starts**, reformatting it and
   adding a `.next/dev/dev/types/**/*.ts` include with a doubled `dev` segment, which Biome's hook
-  then reformats back. Seen on three days of this sprint and reverted each time; it has never been
-  committed. Whose call: nobody's, until it is. A `.gitattributes` entry or an ignore rule would end
-  it; working out which is a small task nobody is waiting on.
+  then reformats back. ~~Seen on three days of this sprint and reverted each time; it has never been
+  committed.~~ **Now seen across two sprints — three days of sprint 12 and days 5, 6 and 7 of sprint
+  13 — and reverted every time; it has still never been committed.** Six occurrences is no longer a
+  curiosity: it is a step that has to be remembered before every commit that ran the dev server, and
+  the one kind of step that gets forgotten on the day somebody is in a hurry. Whose call: nobody's,
+  until it is. A `.gitattributes` entry or an ignore rule would end it; working out which is a small
+  task nobody is waiting on.
 
 ## Decided elsewhere, waiting on someone
 

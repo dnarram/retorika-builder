@@ -55,6 +55,23 @@ sprint 9 and gained bold and italic in sprint 10; undo, reorder and duplicate la
 and undo gained its keyboard shortcut in sprint 12; the properties panel — `Campos de esta sección`
 — landed in sprint 3 and reached inside a list's lines in sprint 12.
 
+**And in sprint 13 it became usable with a mouse, which it had not been.** Six of the toolbar's
+controls — both measurement dropdowns, the three exact-pixel fields and the colour picker — had been
+drawn and unusable since sprint 9: a `preventDefault` on the whole bar cancelled the gesture that
+*is* the control, so a dropdown never opened and digits typed into a size field landed in the
+headline. Nothing caught it because every test drove those controls programmatically. The bar also
+gained an element's typeface, chosen between the two faces the ZIP already ships
+([ADR 0032](docs/decisions/0032-typography-per-element-with-the-faces-that-travel.md)), and the two
+approved screens that had shipped half-built or not at all were settled — mockup 11's in-canvas
+notice built, mockup 06's progress screen refused as a measured fiction.
+
+**A defect older and quieter than any of those was found by measuring it**: the preview was fully
+drawn but completely inert for the first ~65 ms of every load, because the chrome attaches on the
+frame's `load` and `load` waits for eight font requests nothing answers. A click or a keystroke in
+that window was **lost, not delayed**. It had been surfacing for two sprints as an intermittent CI
+failure with no mechanism; sprint 13 day 7 has the measurement, the fix and three deterministic
+tests.
+
 **Not yet built:** accounts and persistence (the browser tab is the only copy until it downloads),
 payment ([ADR 0021](docs/decisions/0021-charging-waits-for-a-sellable-product.md)), the photo bank's
 images ([ADR 0011](docs/decisions/0011-sample-photos-per-sector.md)) — the machinery shipped in
@@ -248,7 +265,7 @@ as an empty placeholder.
 ## Documentation
 
 - `docs/dossiers/` — the two approved dossiers. Source of truth for the product.
-- `docs/document-rules.md` — the document model: seven rules, roles, tokens, the four style
+- `docs/document-rules.md` — the document model: seven rules, roles, tokens, the five style
   properties, the two marks, the three breakpoint adjustments, and the invariants.
 - `docs/decisions/` — ADRs. Where one amends a dossier, it says so.
 - `docs/design/` — the phase 1 screens, and the review that checks them against the ADRs.
