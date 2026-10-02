@@ -127,49 +127,75 @@ The Retorika brand palette does not live here. A document's theme is the client'
 
 ---
 
-## The four style properties
+## The five style properties
 
-Sprint 9, schema 1.2.0. The namespace above says which *values* exist; this says which
-**properties an element may set**, and it is the other half of making rule 6 checkable.
+Sprint 9, schema 1.2.0; the fifth joined in sprint 13, schema 1.7.0. The namespace above says which
+*values* exist; this says which **properties an element may set**, and it is the other half of making
+rule 6 checkable.
 
 An element's `style` used to be an open map: `{"wobble": {ref: "color.primary"}}` parsed. Closing
 the key to a flat list of property names would not have been enough either, because
 `{color: {ref: "space.md"}}` publishes `color: 16px` — a dead reference of a different kind, and one
 nobody discovers until it is on a client's site. So each property is bound to its own family:
 
-| Property | References it admits |
-|---|---|
-| `color` | `color.primary`, `color.secondary`, `color.surface`, `color.ink`, `color.muted` |
-| `fontSize` | `size.heading`, `size.subheading`, `size.body` |
-| `padding` | `space.xs` … `space.xl` |
-| `borderRadius` | `radius.sm`, `radius.md`, `radius.lg` |
+| Property | References it admits | An exact value? |
+|---|---|---|
+| `color` | `color.primary`, `color.secondary`, `color.surface`, `color.ink`, `color.muted` | a hex triple |
+| `fontSize` | `size.heading`, `size.subheading`, `size.body` | a length in pixels |
+| `fontFamily` | `font.heading`, `font.body` | **no — and that is the decision** |
+| `padding` | `space.xs` … `space.xl` | a length in pixels |
+| `borderRadius` | `radius.sm`, `radius.md`, `radius.lg` | a length in pixels |
 
-There is no fifth, and three deliberate absences are worth naming:
+### The asymmetry in the last column
+
+**Four properties have both of rule 6's arms; `fontFamily` has only the first** (ADR 0032, sprint 13).
+A reference here resolves through the type pair the site is on, to a family the ZIP either ships or
+degrades from honestly. An **exact** family would be a name somebody types: a face that does not
+travel, and a letterform the visitor may never receive — which is the one promise this product has
+refused since mockup 17 drew the control struck through.
+
+So the refusal is **not a rule anybody has to remember.** `EXACT_PATTERNS` in `tokens.ts` is partial
+over the property list rather than total, and the schema for this one property is built from the
+reference arm alone, so there is no shape an exact family could take. Writing one is a **compile
+error** as well as a rejected parse — the second half arrived a day after the first and `style.test.ts`
+holds it with a `@ts-expect-error` that fails the build if the arm ever comes back.
+
+Two deliberate absences remain:
 
 - **`color.accent` is admitted nowhere.** No rule the renderer emits reads `var(--color-accent)`, a
   test asserts that no document in the corpus does either, and it is the one colour whose contrast is
   asserted in no palette — 3.19:1 on surface in `classic-blue`, under AA.
-- **`font.heading` and `font.body` are not here at all**, so there is no per-element typeface — only
-  the type pair's own two stacks, chosen as a whole rather than named loose by an element.
+- **No third family**, and no family of the owner's own. The two in the table are the two the theme
+  already carries, so an element chooses between the faces that are already in the ZIP and costs it
+  nothing.
 
-  > **Corrected 1 October 2026.** This used to say ADR 0001 forbids downloading the stacks at all,
-  > which stopped being true the same day: ADR 0028 self-hosts `modern-sans` and `classic-display`'s
-  > own faces inside the ZIP, which is shipping bytes the owner already has rather than a client's
-  > published page calling out to a third party — exactly what ADR 0001 actually forbids.
-  > `editorial-serif` still carries none; its stack never names a face that might be missing. What
-  > stays refused is the different thing issue #9's other half was really about: a typeface chosen
-  > *per element*, which could name a face nobody has shipped and promise a letterform the visitor
-  > may never receive. That is still unbuilt and still comes after the type pair itself, never
-  > before it.
+  > **This entry said the opposite until 2 October 2026, and both corrections are worth keeping.**
+  > It first said «`font.heading` and `font.body` are not here at all», on the stated grounds that
+  > ADR 0001 forbids downloading the stacks. **Corrected 1 October 2026:** that ground was false —
+  > ADR 0028 self-hosts `modern-sans` and `classic-display`'s faces inside the ZIP, which is shipping
+  > bytes the owner already has, not a published page calling out to a third party. The entry then
+  > kept refusing the *per-element* typeface, on the grounds that it «could name a face nobody has
+  > shipped». **Corrected again 2 October 2026 (ADR 0032):** it cannot, because it cannot name a face
+  > at all. A reference is all there is, both references already travel, and the exact arm the
+  > objection assumed does not exist. What stays refused is only «tipografías propias» — a family the
+  > owner writes — and that reason has not expired.
 - **The list is disjoint from `display`, `order`, `width` and the grid columns**, and that is rule 7
   rather than tidiness. **A media query adds no specificity**, so a per-element rule outranks a
   mobile patch: if `display` were here, an element hidden by its own patch would reappear on the
   phone and rule 7 would lose in silence. Those properties belong to rules 4 and 7, and stay there.
 
-An exact value is narrower still: **a colour is a hex triple and a measurement is a plain length.**
-The schema is the gate a *stored* document passes, so admitting `rgb(0 0 0)` would let somebody save
-a site the renderer cannot publish — an invalid state whose only repair would be an interface for it.
-See ADR 0026.
+An exact value is narrower still: **a colour is a hex triple, and a measurement is a length in
+pixels and in no other unit.** The schema is the gate a *stored* document passes, so admitting
+`rgb(0 0 0)` would let somebody save a site the renderer cannot publish — an invalid state whose only
+repair would be an interface for it. See ADR 0026.
+
+> **Narrowed to pixels on 2 October 2026 (schema 1.6.0), and counted before it was narrowed.** It
+> admitted `rem`, `em` and `%`, and **nothing in the product could ever write one**: the floating
+> toolbar is the only producer of an exact length and it reads and writes `px`, so a stored `2rem`
+> came back as an empty field highlighted as though it held an exception — visible on the page,
+> unreadable in the control, and only clearable. Three exact values exist across the corpus and the
+> prototype documents, all of them `px` or hex, so the narrowing moved no data. `0` keeps its place
+> without a unit, because `0` is a length and the one value for which a unit is noise.
 
 ---
 
