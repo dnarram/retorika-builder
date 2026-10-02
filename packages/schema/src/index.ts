@@ -116,6 +116,7 @@ export { listStyleExceptions, setElementStyle, styleFor } from "./style.ts";
 export { setTheme } from "./theme.ts";
 export type { ElementStyle, StyleProperty, StyleValue, Theme, TokenKey } from "./tokens.ts";
 export {
+  admitsExact,
   elementStyleSchema,
   SORTED_TOKEN_KEYS,
   STYLE_PROPERTIES,

@@ -73,10 +73,15 @@ export function setElementStyle(
   if (value !== undefined) {
     const check = elementStyleSchema.safeParse({ [property]: value });
     if (!check.success) {
+      const exact = EXACT_TEXT[property];
       throw new Error(
         `setElementStyle: "${property}" does not admit ${JSON.stringify(value)}. ` +
-          `A reference must be one of ${STYLE_REFS_TEXT[property]}, and an exact value ` +
-          `${EXACT_TEXT[property]} carrying exception: true.`,
+          `A reference must be one of ${STYLE_REFS_TEXT[property]}` +
+          // A property with no exact arm says so rather than describing one. `fontFamily` is the
+          // first, and the sentence is what tells a caller that the omission is the decision.
+          (exact === undefined
+            ? ", and it admits no exact value."
+            : `, and an exact value ${exact} carrying exception: true.`),
       );
     }
   }
@@ -241,11 +246,14 @@ export function listStyleExceptions(doc: RetorikaDocument): StyleException[] {
 const STYLE_REFS_TEXT: Record<StyleProperty, string> = {
   color: "color.primary, color.secondary, color.surface, color.ink or color.muted",
   fontSize: "size.heading, size.subheading or size.body",
+  fontFamily: "font.heading or font.body",
   padding: "space.xs, space.sm, space.md, space.lg or space.xl",
   borderRadius: "radius.sm, radius.md or radius.lg",
 };
 
-const EXACT_TEXT: Record<StyleProperty, string> = {
+/** Partial for the reason `EXACT_PATTERNS` is partial: `fontFamily` admits no exact value at all
+ * (ADR 0032), so there is no sentence to write for it and the refusal below says so instead. */
+const EXACT_TEXT: Partial<Record<StyleProperty, string>> = {
   color: "must be a hex colour such as #1D4ED8",
   fontSize: "must be a length in pixels such as 24px",
   padding: "must be a length such as 16px",

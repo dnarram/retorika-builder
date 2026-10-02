@@ -6,6 +6,7 @@ import marksOnAText from "./0004-marks-on-a-text.ts";
 import oneBreakpointBucket from "./0005-one-breakpoint-bucket.ts";
 import howASharedLinkReads from "./0006-how-a-shared-link-reads.ts";
 import anExactLengthIsPixels from "./0007-an-exact-length-is-pixels.ts";
+import typographyPerElement from "./0008-typography-per-element.ts";
 
 export interface Migration {
   version: string;
@@ -23,6 +24,7 @@ export const MIGRATIONS: readonly Migration[] = [
   oneBreakpointBucket,
   howASharedLinkReads,
   anExactLengthIsPixels,
+  typographyPerElement,
 ];
 
 /** `1.2.0` → `[1, 2, 0]`, for comparing two versions without a dependency. A missing or

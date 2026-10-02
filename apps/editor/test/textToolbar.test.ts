@@ -1,4 +1,10 @@
-import { elementStyleSchema, type Role, STYLE_PROPERTIES, STYLE_REFS } from "@retorika/schema";
+import {
+  admitsExact,
+  elementStyleSchema,
+  type Role,
+  STYLE_PROPERTIES,
+  STYLE_REFS,
+} from "@retorika/schema";
 import { CONTRAST_PAIRS, contrastRatio, PALETTES } from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
 import {
@@ -186,9 +192,22 @@ describe("what the design tools add", () => {
     // was right for as long as nothing measured overflow, and it went red the day something did —
     // which is the whole value of having written the reason into it rather than the verdict.
     expect([...EXACT_TODAY]).toEqual(["color", "fontSize", "padding", "borderRadius"]);
-    // The list is now every property the vocabulary has, so what this guards from here is that a
-    // *fifth* property cannot appear without a decision.
-    expect(EXACT_TODAY).toHaveLength(STYLE_PROPERTIES.length);
+
+    /**
+     * **The fifth property arrived, and this guard is what caught it.**
+     *
+     * The line that stood here was `expect(EXACT_TODAY).toHaveLength(STYLE_PROPERTIES.length)`, with
+     * the comment «the list is now every property the vocabulary has, so what this guards from here
+     * is that a *fifth* property cannot appear without a decision». `fontFamily` appeared on
+     * 2 October 2026 (ADR 0032) and the test went red, which is precisely what it was written to do.
+     *
+     * **The decision it was asking for is that this one admits no exact value at all.** An exact
+     * family is a name the owner types, a face the ZIP does not ship, and a letter the visitor may
+     * never see. So the list is no longer «every property»: it is every property that *has* an exact
+     * arm, which the schema answers rather than this file guessing.
+     */
+    expect(STYLE_PROPERTIES.filter((property) => admitsExact(property))).toEqual([...EXACT_TODAY]);
+    expect(admitsExact("fontFamily")).toBe(false);
   });
 
   it("keeps the colour list computed even with the tools on", () => {

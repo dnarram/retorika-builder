@@ -58,7 +58,13 @@ export type TokenKey = z.infer<typeof tokenKeySchema>;
  * not a fixture, not a prototype document, not any producer — so narrowing the key moves no data.
  * The day somebody writes styles against 1.1.0 that stops being true.
  */
-export const STYLE_PROPERTIES = ["color", "fontSize", "padding", "borderRadius"] as const;
+export const STYLE_PROPERTIES = [
+  "color",
+  "fontSize",
+  "fontFamily",
+  "padding",
+  "borderRadius",
+] as const;
 export type StyleProperty = (typeof STYLE_PROPERTIES)[number];
 
 /** Which references each property admits. Data rather than four schemas, because the toolbar has
@@ -66,6 +72,9 @@ export type StyleProperty = (typeof STYLE_PROPERTIES)[number];
 export const STYLE_REFS = {
   color: ["color.primary", "color.secondary", "color.surface", "color.ink", "color.muted"],
   fontSize: ["size.heading", "size.subheading", "size.body"],
+  /** The two families the theme already carries, and therefore the two the ZIP already ships
+   * (ADR 0032). No token is invented here: both are keys of the namespace above. */
+  fontFamily: ["font.heading", "font.body"],
   padding: ["space.xs", "space.sm", "space.md", "space.lg", "space.xl"],
   borderRadius: ["radius.sm", "radius.md", "radius.lg"],
 } as const satisfies Record<StyleProperty, readonly TokenKey[]>;
@@ -101,25 +110,43 @@ const EXACT_COLOR = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
  */
 const EXACT_LENGTH = /^(?:0|\d{1,4}(?:\.\d{1,3})?px)$/;
 
+/**
+ * What an exact value may be, **for the properties that admit one at all**.
+ *
+ * **Partial over `StyleProperty` rather than total, and that asymmetry is a decision** (ADR 0032).
+ * `fontFamily` is missing on purpose: an exact family is a name the owner types, a face the ZIP does
+ * not ship, and a letter the visitor may never see — which is the promise mockup 17 refused and the
+ * one this product still does not make. Leaving it out of this table is what makes it
+ * **unexpressible** rather than merely unoffered, so there is no rule for anybody to remember and
+ * nothing to enforce in an interface later.
+ */
 const EXACT_PATTERNS = {
   color: EXACT_COLOR,
   fontSize: EXACT_LENGTH,
   padding: EXACT_LENGTH,
   borderRadius: EXACT_LENGTH,
-} as const satisfies Record<StyleProperty, RegExp>;
+} as const satisfies Partial<Record<StyleProperty, RegExp>>;
+
+/** Whether this property admits an exact value, which is the same question as «is it in the table
+ * above» and is asked by name so the answer reads as a decision. */
+export function admitsExact(property: StyleProperty): boolean {
+  return property in EXACT_PATTERNS;
+}
 
 function styleValueFor(property: StyleProperty) {
+  const reference = z.strictObject({ ref: z.enum(STYLE_REFS[property]) });
+  const pattern: RegExp | undefined = (EXACT_PATTERNS as Partial<Record<StyleProperty, RegExp>>)[
+    property
+  ];
+  if (pattern === undefined) return reference;
   return z.union([
-    z.strictObject({ ref: z.enum(STYLE_REFS[property]) }),
-    z.strictObject({
-      exact: z.string().regex(EXACT_PATTERNS[property]),
-      exception: z.literal(true),
-    }),
+    reference,
+    z.strictObject({ exact: z.string().regex(pattern), exception: z.literal(true) }),
   ]);
 }
 
 /**
- * An element's style: up to four properties, every one optional.
+ * An element's style: up to five properties, every one optional.
  *
  * A `z.strictObject` of optionals rather than a `z.record` keyed by the enum — a record would
  * demand *every* key, and an element that only recolours its text carries one property.
@@ -127,6 +154,7 @@ function styleValueFor(property: StyleProperty) {
 export const elementStyleSchema = z.strictObject({
   color: styleValueFor("color").optional(),
   fontSize: styleValueFor("fontSize").optional(),
+  fontFamily: styleValueFor("fontFamily").optional(),
   padding: styleValueFor("padding").optional(),
   borderRadius: styleValueFor("borderRadius").optional(),
 });

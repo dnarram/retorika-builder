@@ -719,3 +719,117 @@ describe("0007 — an exact length is a number of pixels", () => {
     }
   });
 });
+
+describe("0008 — an element may name one of the two families its theme carries", () => {
+  function before(style?: Record<string, unknown>): Record<string, unknown> {
+    return {
+      schemaVersion: "1.6.0",
+      id: "doc-1",
+      siteName: "Taberna",
+      theme,
+      collections: [],
+      pages: [
+        {
+          id: "home",
+          slug: "index",
+          title: "Taberna",
+          sections: [
+            {
+              id: "sec-cover",
+              preset: { catalogId: "cover", variantId: "image-right" },
+              source: "catalog",
+              layout: null,
+              content: [
+                {
+                  id: "el-headline",
+                  role: "heading",
+                  hidden: false,
+                  slot: "headline",
+                  value: { kind: "text", text: "Taberna" },
+                  ...(style ? { style } : {}),
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  const headline = (doc: Record<string, unknown>): Record<string, unknown> => {
+    const pages = doc["pages"] as { sections: { content: Record<string, unknown>[] }[] }[];
+    const element = pages[0]?.sections[0]?.content[0];
+    if (!element) throw new Error("no element");
+    return element;
+  };
+
+  it("opens a document saved before the property existed", () => {
+    const migrated = migrateToCurrent(before());
+    expect(migrated["schemaVersion"]).toBe(SCHEMA_VERSION);
+    expect(() => parseDocument(migrated)).not.toThrow();
+  });
+
+  it("changes nothing but the version, because it ships no face and fills nothing in", () => {
+    const input = before();
+    expect({ ...upTo(input, "1.7.0"), schemaVersion: "1.6.0" }).toEqual(input);
+  });
+
+  it("round-trips: down after up gives back exactly what went in", () => {
+    const input = before();
+    const down = step("1.7.0").down;
+    if (!down) throw new Error("0008 has no down");
+    expect(down(upTo(input, "1.7.0"))).toEqual(input);
+  });
+
+  it("drops the family on the way down, because 1.6.0 has nowhere to keep it", () => {
+    const input = upTo(before({ fontFamily: { ref: "font.heading" } }), "1.7.0");
+    const down = step("1.7.0").down;
+    if (!down) throw new Error("0008 has no down");
+    const back = down(input);
+    expect(back["schemaVersion"]).toBe("1.6.0");
+    // The whole `style` goes with it, because an element left carrying `{}` is not what
+    // `setElementStyle` ever stores and would not round-trip.
+    expect(Object.hasOwn(headline(back), "style")).toBe(false);
+  });
+
+  it("keeps the other properties when it drops the family", () => {
+    const input = upTo(
+      before({ color: { ref: "color.ink" }, fontFamily: { ref: "font.body" } }),
+      "1.7.0",
+    );
+    const down = step("1.7.0").down;
+    if (!down) throw new Error("0008 has no down");
+    expect(headline(down(input))["style"]).toEqual({ color: { ref: "color.ink" } });
+  });
+
+  it("reaches a family inside a list item, which is where a card's title lives", () => {
+    const input = upTo(before(), "1.7.0");
+    const pages = input["pages"] as { sections: { content: Record<string, unknown>[] }[] }[];
+    const content = pages[0]?.sections[0]?.content;
+    if (!content) throw new Error("no content");
+    content.push({
+      id: "el-list",
+      role: "list",
+      hidden: false,
+      slot: "services",
+      items: [
+        {
+          id: "item-1",
+          elements: [
+            {
+              id: "el-card-title",
+              role: "heading",
+              hidden: false,
+              slot: "title",
+              value: { kind: "text", text: "Comidas" },
+              style: { fontFamily: { ref: "font.body" } },
+            },
+          ],
+        },
+      ],
+    });
+    const down = step("1.7.0").down;
+    if (!down) throw new Error("0008 has no down");
+    expect(JSON.stringify(down(input))).not.toContain("fontFamily");
+  });
+});

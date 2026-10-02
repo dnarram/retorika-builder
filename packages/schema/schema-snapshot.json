@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.6.0",
+  "schemaVersion": "1.7.0",
   "document": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -729,6 +729,22 @@
                     "additionalProperties": false
                   }
                 ]
+              },
+              "fontFamily": {
+                "type": "object",
+                "properties": {
+                  "ref": {
+                    "type": "string",
+                    "enum": [
+                      "font.heading",
+                      "font.body"
+                    ]
+                  }
+                },
+                "required": [
+                  "ref"
+                ],
+                "additionalProperties": false
               },
               "padding": {
                 "anyOf": [
