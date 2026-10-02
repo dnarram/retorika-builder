@@ -343,3 +343,82 @@ describe("buildSite", () => {
     expect(bundle.manifest.schemaVersion).toBe(barbershop.schemaVersion);
   });
 });
+
+/**
+ * What a shared link reads, once the document is a bundle (ADR 0029).
+ *
+ * **These are the publisher's half and could not be tested anywhere else.** `og:url` needs a page's
+ * file name, which only `buildSite` decides, and `og:image` names a path that has to *be* in the
+ * ZIP — a claim about files, not about a string.
+ */
+describe("the tags a shared link reads", () => {
+  const document = () => {
+    const found = loadCorpus().find((entry) => entry.name === "enlace-compartido");
+    if (!found) throw new Error("fixture enlace-compartido is missing");
+    return found.document;
+  };
+
+  const htmlOf = (bundle: { files: { path: string; contents: Uint8Array }[] }, path: string) => {
+    const file = bundle.files.find((candidate) => candidate.path === path);
+    if (!file) throw new Error(`no ${path} in the bundle`);
+    return new TextDecoder().decode(file.contents);
+  };
+
+  it("points og:image at a file that is actually in the ZIP", () => {
+    // **The test David asked for, and the one that matters most.** An og:image pointing at a file
+    // that does not travel is worse than no og:image: the card renders broken rather than plain.
+    const doc = document();
+    const bundle = buildSite(doc, { siteId: "taberna", assets: assetsFor(doc) });
+    const html = htmlOf(bundle, "index.html");
+
+    const match = /<meta property="og:image" content="([^"]+)">/.exec(html);
+    expect(match, "no og:image was emitted").not.toBeNull();
+    const url = new URL(match?.[1] ?? "");
+    expect(url.origin).toBe("https://tabernadelpuerto.es");
+
+    const path = url.pathname.replace(/^\//, "");
+    expect(
+      bundle.files.map((file) => file.path),
+      `og:image names "${path}", which is not a file in the bundle`,
+    ).toContain(path);
+  });
+
+  it("names the origin itself for the entry page", () => {
+    const doc = document();
+    const bundle = buildSite(doc, { siteId: "taberna", assets: assetsFor(doc) });
+    expect(htmlOf(bundle, "index.html")).toContain(
+      '<meta property="og:url" content="https://tabernadelpuerto.es">',
+    );
+  });
+
+  it("names the file the publisher chose for a second page, and never a guess", () => {
+    // One authority for what a page is called. A second opinion in the renderer would be a URL that
+    // disagrees with the file sitting beside it.
+    const doc = document();
+    const home = doc.pages[0];
+    if (!home) throw new Error("no home page");
+    const second = parseDocument({
+      ...doc,
+      pages: [home, { ...home, id: "carta", slug: "la-carta", title: "La carta", sections: [] }],
+    });
+    const bundle = buildSite(second, { siteId: "taberna", assets: assetsFor(second) });
+    expect(bundle.files.map((file) => file.path)).toContain("la-carta.html");
+    expect(htmlOf(bundle, "la-carta.html")).toContain(
+      '<meta property="og:url" content="https://tabernadelpuerto.es/la-carta.html">',
+    );
+  });
+
+  it("emits neither tag for a document with no origin, which is every other fixture", async () => {
+    for (const entry of loadCorpus()) {
+      if (entry.document.siteUrl !== undefined) continue;
+      const bundle = buildSite(entry.document, {
+        siteId: "x",
+        assets: assetsFor(entry.document),
+        fonts: await fontsFor(entry.document),
+      });
+      const html = htmlOf(bundle, "index.html");
+      expect(html, entry.name).not.toContain("og:image");
+      expect(html, entry.name).not.toContain("og:url");
+    }
+  });
+});

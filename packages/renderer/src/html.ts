@@ -1,4 +1,5 @@
 import { escapeHtml } from "./escape.ts";
+import type { HeadMeta } from "./head.ts";
 import { isComment, type RenderNode } from "./nodes.ts";
 
 /** Elements with no closing tag. */
@@ -60,7 +61,12 @@ export function nodeToHtml(node: RenderNode, indent = 0): string {
  * ADR 0001: the CSS is inlined and there is no script tag, so the file works when opened
  * by double-clicking it, with no server and no network.
  */
-export function pageToHtml(body: readonly RenderNode[], css: string, title: string): string {
+export function pageToHtml(
+  body: readonly RenderNode[],
+  css: string,
+  title: string,
+  meta: HeadMeta,
+): string {
   return [
     "<!doctype html>",
     '<html lang="es">',
@@ -68,6 +74,7 @@ export function pageToHtml(body: readonly RenderNode[], css: string, title: stri
     '<meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
     `<title>${escapeHtml(title)}</title>`,
+    ...shareTags(meta),
     "<style>",
     css.trimEnd(),
     "</style>",
@@ -78,4 +85,29 @@ export function pageToHtml(body: readonly RenderNode[], css: string, title: stri
     "</html>",
     "",
   ].join("\n");
+}
+
+/**
+ * The tags a shared link reads (ADR 0029), in a fixed order so the same document is the same bytes.
+ *
+ * **Every one of these carries the owner's own words into an attribute**, which is the only reason
+ * this function is worth reading twice. `escapeHtml` is the same defence the body has used since
+ * phase 0, and `xss-attempt` in the golden corpus is what proves it is on this path too — its
+ * headline and subheadline are the attack, and they now reach `<meta>` as well as `<h1>`.
+ *
+ * An absent field emits no tag at all. An empty one would be worse than none: a scraper shows an
+ * empty card rather than falling back to the page.
+ */
+function shareTags(meta: HeadMeta): string[] {
+  const tags: string[] = [];
+  const add = (attribute: string, name: string, content: string) => {
+    tags.push(`<meta ${attribute}="${name}" content="${escapeHtml(content)}">`);
+  };
+
+  if (meta.description !== undefined) add("name", "description", meta.description);
+  add("property", "og:title", meta.ogTitle);
+  if (meta.description !== undefined) add("property", "og:description", meta.description);
+  if (meta.ogUrl !== undefined) add("property", "og:url", meta.ogUrl);
+  if (meta.ogImage !== undefined) add("property", "og:image", meta.ogImage);
+  return tags;
 }

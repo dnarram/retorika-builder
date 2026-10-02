@@ -98,7 +98,12 @@ export {
   removeItem,
   setVariant,
 } from "./sections.ts";
-export { shareImageOf } from "./shareImage.ts";
+export {
+  type ShareImageIssue,
+  shareDescriptionOf,
+  shareImageIssue,
+  shareImageOf,
+} from "./share.ts";
 export {
   readSiteUrl,
   type SiteUrlIssue,

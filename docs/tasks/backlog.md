@@ -154,6 +154,20 @@ open survives.
   product does not have — which is the exact failure `CLAUDE.md` already records once, about the
   note that said `test:a11y` did not exist. Whose call: adding the binding is a small feature and
   direction's to schedule; correcting the prose is a one-PR chore.
+- ~~**The minimum SEO: a published page's `<head>` carries no `description` and no Open Graph.**~~
+  **Built 2 October 2026, sprint 12 days 5 and 6, under [ADR 0029](../decisions/0029-what-a-published-page-says-about-itself.md).**
+  `description` and `og:title` on every page; `og:description` whenever there is a sentence;
+  `og:image` and `og:url` only with an origin the owner typed, because a relative `og:image` is
+  refused by every scraper and a ZIP does not know what domain it will be opened under. **The
+  description is derived, not copied** — `siteDescription` starts empty and the renderer falls back
+  to the cover's subheadline, so there is nothing to keep in step and no second sentence to go
+  stale. `og:image` additionally refuses a `data:` URI, an SVG and the catalog's grey marker, and a
+  publisher test proves the path it names **is a file in the bundle**. The corpus gained
+  `enlace-compartido`, the first fixture with a bitmap, because every other asset is an SVG and so
+  nothing proved the tag was ever emitted at all. What is **not** done is a preview image for a site
+  with no domain yet: that is the honest half, and the `Compartir` panel says so.
+  *What follows is the row as it stood, kept because the costing in it is what the work was planned
+  from.*
 - **The minimum SEO: a published page's `<head>` carries no `description` and no Open Graph.**
   Measured on the corpus closing sprint 11 — `pageToHtml` emits exactly `charset`, `viewport`,
   `<title>` and the inlined `<style>`, and nothing else. So a site shared on WhatsApp or Facebook,

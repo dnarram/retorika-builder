@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RetorikaDocument, Section } from "../src/document.ts";
-import { shareImageOf } from "../src/shareImage.ts";
+import { shareImageOf } from "../src/share.ts";
 import { type Theme, TOKEN_KEYS } from "../src/tokens.ts";
 
 const theme = Object.fromEntries(TOKEN_KEYS.map((key) => [key, `value-${key}`])) as Theme;

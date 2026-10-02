@@ -5,6 +5,7 @@ import { fontFilesFor } from "./fonts.ts";
 
 export { fontFilesFor, SHIPPABLE_FAMILIES } from "./fonts.ts";
 
+import { headMetaOf } from "./head.ts";
 import { pageToHtml } from "./html.ts";
 import { type RenderOptions, withDefaults } from "./options.ts";
 
@@ -69,8 +70,9 @@ export function render(
 
   const css = buildCss(doc);
   const page = resolvePage(doc, resolved.pageId);
+  const title = titleFor(page, doc.siteName);
   return {
-    html: pageToHtml(tree, css, titleFor(page, doc.siteName)),
+    html: pageToHtml(tree, css, title, headMetaOf(doc, title, resolved.pagePath)),
     css,
     assets: collectAssets(doc),
     fonts: fontFilesFor(doc),

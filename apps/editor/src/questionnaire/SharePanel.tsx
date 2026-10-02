@@ -1,6 +1,12 @@
 "use client";
 
-import { type RetorikaDocument, readSiteUrl, shareImageOf } from "@retorika/schema";
+import {
+  type RetorikaDocument,
+  readSiteUrl,
+  shareDescriptionOf,
+  shareImageIssue,
+  shareImageOf,
+} from "@retorika/schema";
 import { useEffect, useId, useState } from "react";
 import es from "../locales/es.json" with { type: "json" };
 
@@ -44,11 +50,16 @@ export function SharePanel({
   const [urlIssue, setUrlIssue] = useState<string | null>(null);
 
   const image = shareImageOf(doc);
-  const heavyKb = useHeavyPreview(image?.src, photoUrls);
+  // **The same question the renderer asks**, so the panel cannot promise a card the ZIP will not
+  // carry. A picture that is a `data:` URI, an SVG or the grey marker publishes no `og:image`, and
+  // before this read that it said nothing at all and the owner found out by sharing the link.
+  const willShowImage = image !== undefined && shareImageIssue(image.src) === undefined;
+  const heavyKb = useHeavyPreview(willShowImage ? image?.src : undefined, photoUrls);
 
-  // What the renderer will publish when the box is empty: the cover's subheadline, read out of the
-  // document rather than copied into the field. Nothing to keep in step (ADR 0022's principle).
-  const fallback = subheadlineOf(doc);
+  // What the renderer will publish when the box is empty — asked by giving it a document with no
+  // description, rather than by a second copy of the fallback rule living here. One definition
+  // (`shareDescriptionOf`), so the preview and the published page cannot disagree.
+  const fallback = shareDescriptionOf({ ...doc, siteDescription: undefined });
 
   function commitUrl(typed: string) {
     const reading = readSiteUrl(typed);
@@ -155,7 +166,7 @@ export function SharePanel({
             {es["editor.share.url.saved"].replace("{url}", doc.siteUrl)}
           </p>
         ) : null}
-        {!image ? (
+        {!willShowImage ? (
           <p className="m-0 text-[12px] leading-snug text-ui-muted">
             {es["editor.share.url.noPhoto"]}
           </p>
@@ -168,19 +179,6 @@ export function SharePanel({
       </div>
     </aside>
   );
-}
-
-/** The cover's subheadline, which is what the renderer falls back to when no description is
- * written. Read by slot, the way the fields panel reads everything. */
-function subheadlineOf(doc: RetorikaDocument): string | undefined {
-  for (const section of doc.pages[0]?.sections ?? []) {
-    for (const element of section.content) {
-      if (element.slot !== "subheadline" || element.hidden) continue;
-      const value = element.value;
-      if (value?.kind === "text" && value.text.trim() !== "") return value.text.trim();
-    }
-  }
-  return undefined;
 }
 
 /**
