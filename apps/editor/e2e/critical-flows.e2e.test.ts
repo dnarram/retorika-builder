@@ -3208,18 +3208,32 @@ describe("sprint 13 día 2 — la barra se deja usar con el ratón", () => {
     }
   }, 180_000);
 
-  it("changes a spacing from the keyboard once the press has focused it", async () => {
-    // A native `<select>` popup is drawn by the browser and Playwright cannot click inside it, so
-    // what is driven here is the half that was broken — the press that focuses — followed by typing
-    // an option's first letter, which is a real gesture and fires `change` the same way choosing
-    // with the mouse does. `selectOption`, which every earlier test used, would skip both.
+  it("opens to a real press and still writes what is chosen", async () => {
+    /**
+     * **Two halves, kept apart on purpose — and the first version of this test conflated them and
+     * failed in CI for it.**
+     *
+     * It pressed the select and then typed an option's first letter, expecting the typeahead to
+     * jump to «Amplio». That passed on macOS and went red on Linux: **type-to-select on a native
+     * `<select>` is platform behaviour**, and so is what `ArrowDown` does to a closed one. There is
+     * no keyboard gesture that changes a native select the same way everywhere, so a test built on
+     * one is testing the runner rather than the product.
+     *
+     * What is portable, and what this sprint actually fixed, is **the press**: it focuses the
+     * control and is not cancelled. The value-change is driven with `selectOption` — the
+     * programmatic half, which was never the broken one and has been covered since sprint 9. Said
+     * out loud rather than hidden, because «this test uses `selectOption`» is exactly the sentence
+     * that let the real defect sit here for seven sprints.
+     */
     const { studio, frame } = await barOpen();
     try {
       const select = frame.locator(".rb-toolbar-select").first();
       await expect(select).toHaveValue("");
+
       await select.click();
-      expect(await focused(select)).toBe(true);
-      await studio.keyboard.type("a"); // «Amplio»
+      expect(await focused(select), "the press must focus the select").toBe(true);
+
+      await select.selectOption("space.lg");
       await expect(select).toHaveValue("space.lg");
       await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
     } finally {
