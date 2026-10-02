@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import type { ReactNode } from "react";
 import "./globals.css";
+import es from "../locales/es.json" with { type: "json" };
 
 // Self-hosted at build time: the interface loads a font the way an application does, and a
 // published site never depends on one being fetched (ADR 0001, ADR 0015).
@@ -16,8 +17,8 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "sw
  * sees this file.
  */
 export const metadata: Metadata = {
-  title: "Retorika Builder",
-  description: "Tu web en cinco preguntas.",
+  title: es["brand.name"],
+  description: es["brand.tagline"],
   robots: { index: false, follow: false },
 };
 

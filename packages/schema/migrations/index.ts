@@ -5,6 +5,7 @@ import closedStyleVocabulary from "./0003-closed-style-vocabulary.ts";
 import marksOnAText from "./0004-marks-on-a-text.ts";
 import oneBreakpointBucket from "./0005-one-breakpoint-bucket.ts";
 import howASharedLinkReads from "./0006-how-a-shared-link-reads.ts";
+import anExactLengthIsPixels from "./0007-an-exact-length-is-pixels.ts";
 
 export interface Migration {
   version: string;
@@ -21,6 +22,7 @@ export const MIGRATIONS: readonly Migration[] = [
   marksOnAText,
   oneBreakpointBucket,
   howASharedLinkReads,
+  anExactLengthIsPixels,
 ];
 
 /** `1.2.0` → `[1, 2, 0]`, for comparing two versions without a dependency. A missing or

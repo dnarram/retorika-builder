@@ -179,9 +179,3 @@ export function hasAnyControl(controls: ToolbarControls): boolean {
     controls.measures !== undefined
   );
 }
-
-/** The style property each control writes, so the DOM code and the tests name it once. */
-export const TOOLBAR_PROPERTY: Record<"color" | "size", StyleProperty> = {
-  color: "color",
-  size: "fontSize",
-};

@@ -1,5 +1,9 @@
 {
   "brand.name": "Retorika Builder",
+  "brand.tagline": "Tu web en cinco preguntas.",
+  "motor.title": "Retorika Builder — comprobación técnica",
+  "motor.body": "Esto no es una maqueta: la web de abajo la ha dibujado el motor de Retorika a partir de un documento real, con el mismo código que se descargará el cliente.",
+  "motor.previewOf": "Vista previa de {site}",
   "questionnaire.footer.tagline": "Sin registro, sin tutoriales: cinco preguntas y ya tienes web.",
 
   "questionnaire.step1.step": "Paso 1 de 5",

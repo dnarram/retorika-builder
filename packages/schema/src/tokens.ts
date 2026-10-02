@@ -82,7 +82,24 @@ export const STYLE_REFS = {
  * never has to fire for a document this schema accepted.
  */
 const EXACT_COLOR = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
-const EXACT_LENGTH = /^(?:0|\d{1,4}(?:\.\d{1,3})?(?:px|rem|em|%))$/;
+/**
+ * A length, in pixels, and **in no other unit** (ADR 0026 §2, narrowed on 2 October 2026).
+ *
+ * **It admitted `rem`, `em` and `%` until sprint 13, and nothing could write one.** The floating
+ * toolbar is the only producer of an exact length in this product and it writes `px`; it also reads
+ * `px`, so a stored `2rem` came back as an **empty field highlighted as though it held an
+ * exception** — a value the owner could see on the page, could not read in the control and could
+ * only clear. A shape that admits what the product cannot edit is the same invalid state ADR 0030
+ * closed for the tablet bucket, one property down.
+ *
+ * **Counted rather than assumed, the way `0003` and `0005` were:** three exact values exist across
+ * the corpus and the six prototype documents — one `28px` and two hex colours. No `rem`, no `em`,
+ * no `%`, anywhere. So the narrowing costs nobody anything, and that window is open exactly once.
+ *
+ * `0` keeps its place without a unit, because `0` is a length in CSS and the one value for which a
+ * unit is noise.
+ */
+const EXACT_LENGTH = /^(?:0|\d{1,4}(?:\.\d{1,3})?px)$/;
 
 const EXACT_PATTERNS = {
   color: EXACT_COLOR,
