@@ -1,16 +1,22 @@
 # 0032 — Typography per element, with the two faces that already travel
 
-**Status:** **proposed** · **Date:** 2026-10-02 ·
+**Status:** **accepted** · **Date:** 2026-10-02 ·
 **Decided by:** David, 2 October 2026, planning sprint 13 — given three shapes «tipografías propias»
 could take and choosing the narrowest ·
-**Awaiting:** his signature on this file ·
+**Accepted by:** **David, 2 October 2026 — not direction** ·
 **Touches:** [ADR 0028](0028-typography-needs-a-decision-from-direction.md) (which shipped the faces
 and deferred this by name), [ADR 0001](0001-static-published-sites.md) (whose supposed prohibition
 was the stated reason for the refusal), [ADR 0026](0026-the-switch-is-the-line-between-references-and-exact-values.md)
 (the line this sits behind), mockup 17's «lo que no lleva», and document rule 6
 
-> **`proposed` is literal.** David chose between three shapes; he has not read this file.
-> Development does not sign on anybody's behalf.
+> **Signed the day after it was written, and «accepted» means David, not direction** — the same as
+> ADRs 0026 through 0031. It went up `proposed` with the day 4 pull request because the decision was
+> his and the file was not; he read it and accepted it with the day 5 branch.
+>
+> **It overturns a refusal direction has not been asked about.** Mockup 17 is an approved drawing and
+> the card it struck is struck in direction's own record; what this ADR argues is that the *reason*
+> written on that card expired, not that the judgement behind it was wrong. Direction has not looked
+> at the argument.
 
 ## Context
 
@@ -91,6 +97,14 @@ here rather than presented as a consequence of something.
   object, so every stored document is already valid under it.
 - The renderer emits `font-family` for an element, through the same rule-6 path and the same
   specificity the browser tests already prove.
+- **The type-level half of §2 arrived a day late, and this is the record of it.** `styleValueFor`
+  returns `reference | union`, so TypeScript inferred the same broad value type for all five
+  properties: an exact family **compiled** while `parse` refused it, which made the sentence «written
+  into the type rather than into a rule somebody has to remember» true of the runtime and not of the
+  type. The compiler found it on the morning of day 5, on the first line of the editor that read
+  `current?.fontFamily?.ref`. A generic `referenceFor` fixes it with no change to any accepted value —
+  so no version moves and no migration is owed — and a `@ts-expect-error` in `style.test.ts` now fails
+  the build if the arm ever comes back.
 - **`STYLE_PROPERTIES` is five, and rule 6's own test asks the question each addition has to answer**
   — whether the new property collides with what rule 7 or rule 4 own. `font-family` collides with
   neither: a breakpoint patch may hide, reorder and resize, and a placement owns columns and rows.

@@ -11,6 +11,7 @@ import {
   backgroundOf,
   colorRolesFor,
   EXACT_TODAY,
+  familyRefsFor,
   hasAnyControl,
   sizeRefsFor,
   toolbarFor,
@@ -176,6 +177,29 @@ describe("what the design tools add", () => {
     expect(measures?.borderRadius).toEqual(["radius.sm", "radius.md", "radius.lg"]);
   });
 
+  it("adds the letter too, and it is a sibling of the measures rather than one of them", () => {
+    // ADR 0032 §3. The §4 "Encendido" row names «posición, medidas y espaciado» and a typeface is
+    // none of the three: it is behind the same switch because ADR 0026 draws that line at «a design
+    // choice about one loose element», not because the dossier listed it as a measurement. The shape
+    // of the object is where that distinction is kept, so this asserts the shape.
+    const controls = toolbarFor({ role: "heading" }, true);
+    expect(controls?.family).toEqual(["font.heading", "font.body"]);
+    expect(controls?.measures).not.toHaveProperty("family");
+  });
+
+  it("adds no letter at all when they are off", () => {
+    expect(toolbarFor({ role: "heading" })?.family).toBeUndefined();
+    expect(toolbarFor({ role: "heading" }, false)?.family).toBeUndefined();
+  });
+
+  it("offers the letter to every role that gets a bar, including a button", () => {
+    // Unlike `B`/`I`, which a two-word label has nothing to emphasise inside: a button's label is
+    // set in a face like any other text, and the `Estilo` panel already changes it site-wide.
+    for (const role of ["heading", "subheading", "body", "button", "link"] as const) {
+      expect(toolbarFor({ role }, true)?.family, role).toEqual(["font.heading", "font.body"]);
+    }
+  });
+
   it("offers each exact value only once the review that makes it safe exists", () => {
     // ADR 0026 §2, and this list has grown exactly twice, each time with its own guard:
     //
@@ -253,6 +277,43 @@ describe("what the design tools add", () => {
         measures: { padding: [], borderRadius: [], exact: [] },
       }),
     ).toBe(true);
+    // And on the letter alone, which is the same question asked of the field added last: the answer
+    // has to come from what the object holds, not from `toolbarFor` happening to set the two at once.
+    expect(
+      hasAnyControl({ color: [], size: [], link: false, marks: false, family: ["font.body"] }),
+    ).toBe(true);
+  });
+});
+
+/**
+ * «Letra», which is the control mockup 17 struck and ADR 0032 un-struck — and the part of it that
+ * is a promise rather than a feature: **the offer is exactly what the ZIP ships.**
+ */
+describe("the letter the bar offers", () => {
+  it("is the two families the theme already carries, and no third", () => {
+    expect(familyRefsFor()).toEqual(["font.heading", "font.body"]);
+    // Taken from the schema rather than written twice, so the offer and the acceptance cannot drift.
+    expect(familyRefsFor()).toEqual([...STYLE_REFS.fontFamily]);
+  });
+
+  it("offers nothing the writer would refuse, and both are real token keys", () => {
+    for (const ref of familyRefsFor()) {
+      expect(() => elementStyleSchema.parse({ fontFamily: { ref } }), ref).not.toThrow();
+    }
+  });
+
+  it("cannot offer «tipografías propias», because there is nothing to offer it with", () => {
+    // ADR 0032 §2, and the half of mockup 17's card whose reason did **not** expire: a family the
+    // owner types is a face the ZIP does not ship and a letter the visitor may never see. The schema
+    // has no exact arm for this property, so the refusal is unexpressible rather than unoffered —
+    // there is no rule for a future control to remember and nothing for it to forget.
+    expect(admitsExact("fontFamily")).toBe(false);
+    expect(() =>
+      elementStyleSchema.parse({ fontFamily: { exact: "Comic Sans MS", exception: true } }),
+    ).toThrow();
+    expect(() => elementStyleSchema.parse({ fontFamily: { ref: "font.display" } })).toThrow();
+    // And the bar's own exact list never names it, which is the first place a control would look.
+    expect(EXACT_TODAY).not.toContain("fontFamily");
   });
 });
 

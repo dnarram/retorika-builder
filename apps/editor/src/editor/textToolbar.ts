@@ -13,6 +13,7 @@ import { type ColorKey, provedOn } from "@retorika/tokens";
  */
 type ColorRef = (typeof STYLE_REFS)["color"][number];
 type SizeRef = (typeof STYLE_REFS)["fontSize"][number];
+type FamilyRef = (typeof STYLE_REFS)["fontFamily"][number];
 type PaddingRef = (typeof STYLE_REFS)["padding"][number];
 type RadiusRef = (typeof STYLE_REFS)["borderRadius"][number];
 
@@ -70,6 +71,20 @@ export function sizeRefsFor(): readonly SizeRef[] {
 }
 
 /**
+ * The two families an element may choose between, which are the two its theme already carries and
+ * therefore the two the ZIP already ships (ADR 0032).
+ *
+ * **There is no third, and there is no exact arm**, which is not this function's restraint but the
+ * schema's: `fontFamily` has no entry in `EXACT_PATTERNS`, so «a family the owner types» — the half
+ * of mockup 17's struck card whose reason did *not* expire — cannot be expressed at all. A function
+ * returning the schema's own list is what keeps the toolbar's offer and the writer's acceptance the
+ * same list rather than two that agree today.
+ */
+export function familyRefsFor(): readonly FamilyRef[] {
+  return STYLE_REFS.fontFamily;
+}
+
+/**
  * Which controls this element gets.
  *
  * `link` is true only for something that already has a destination — a button or a link. It is a
@@ -107,12 +122,27 @@ export interface ToolbarControls {
    * "this control has nothing to offer" are different states and only the second is a row drawn
    * empty.
    */
+  /**
+   * «Letra»: which of the theme's two families this element may choose, named by role and never by
+   * font (ADR 0032). `undefined` with the design tools off, for the reason `measures` is.
+   *
+   * **A sibling of `measures` and deliberately not a field inside it.** The §4 "Encendido" row names
+   * «posición, medidas y espaciado», and a typeface is none of the three — it is behind the same
+   * switch for the reason ADR 0026 gives for drawing that line, «a design choice about one loose
+   * element», which is what choosing a different family for one heading is. Nesting it under
+   * `measures` would have left the next reader believing the dossier listed it there.
+   */
+  family?: readonly FamilyRef[];
   measures?: {
     padding: readonly PaddingRef[];
     borderRadius: readonly RadiusRef[];
     /**
-     * Which of the four properties accept an exact value, and the list is a decision rather than a
-     * capability — the schema has accepted all four since sprint 9 day 2.
+     * Which properties accept an exact value here, and the list is a decision rather than a
+     * capability — the schema has accepted these four since sprint 9 day 2.
+     *
+     * **Four of the five, and the fifth is the schema's answer rather than this list's.** Since ADR
+     * 0032 `fontFamily` has no exact arm at all, so it is absent here because it could not be
+     * present, which is a different kind of absence from the three below.
      *
      * **Each one joined with the review that makes it safe, never before it.** `color` joined on
      * sprint 9 day 6, the day the download gate learned to refuse a colour under 3:1 (ADR 0026 §2).
@@ -158,6 +188,7 @@ export function toolbarFor(
     marks: element.role !== "button" && element.role !== "link",
     ...(designTools
       ? {
+          family: familyRefsFor(),
           measures: {
             padding: STYLE_REFS.padding,
             borderRadius: STYLE_REFS.borderRadius,
@@ -176,6 +207,7 @@ export function hasAnyControl(controls: ToolbarControls): boolean {
     controls.size.length > 0 ||
     controls.link ||
     controls.marks ||
+    controls.family !== undefined ||
     controls.measures !== undefined
   );
 }

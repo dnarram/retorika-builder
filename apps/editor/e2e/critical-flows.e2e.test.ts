@@ -3387,3 +3387,139 @@ describe("sprint 13 día 3 — lo que solo informaba", () => {
     }
   }, 180_000);
 });
+
+/**
+ * The `Aa` mockup 17 struck, drawn at last — and the two things about it that are promises rather
+ * than features: **the offer is the two families the ZIP already ships**, and they are named by what
+ * they are for.
+ *
+ * Driven with real presses throughout, which is day 2's lesson in this same sprint: every control in
+ * this bar was conducted programmatically for four sprints, and six of them were unusable the whole
+ * time.
+ */
+describe("sprint 13 día 5 — el «Aa» de la barra", () => {
+  async function onTheCover(designTools: boolean): Promise<{ studio: Page; frame: FrameLocator }> {
+    const studio = await (await browser.newContext()).newPage();
+    await studio.goto(BASE_URL, { waitUntil: "networkidle" });
+    await studio.fill("#nombre", "Taberna del Puerto");
+    await studio.getByRole("button", { name: "Siguiente" }).click();
+    await studio.getByText("Restaurante y bar", { exact: true }).click();
+    await studio.getByRole("button", { name: "Siguiente" }).click();
+    await studio.getByText("Comidas", { exact: true }).click();
+    await studio.getByRole("button", { name: "Siguiente" }).click();
+    await studio.fill("#direccion", "Muelle 3, Ronda");
+    await studio.getByRole("button", { name: "Siguiente" }).click();
+    await studio.getByText("Que reserven", { exact: true }).click();
+    await studio.fill("#enlace", "https://reservas.example.com/taberna");
+    await studio.getByRole("button", { name: "Crear mi web" }).click();
+    await studio.getByText("Ver a tamaño real →").first().click();
+    const frame = studio.frameLocator("iframe").first();
+    await frame.locator('[data-section="sec-cover"]').waitFor();
+    if (designTools) {
+      await studio.getByRole("switch", { name: "Herramientas de diseño" }).click();
+      await studio.getByRole("button", { name: "Sí, enciéndelas" }).click();
+    }
+    return { studio, frame };
+  }
+
+  /** A `font-family` as the browser hands it back, flattened so two spellings of one stack compare
+   * equal: the custom property keeps the author's quotes and spacing, the computed value need not. */
+  const sameStack = (a: string, b: string) =>
+    a.replace(/["']/g, "").replace(/\s+/g, " ").trim().toLowerCase() ===
+    b.replace(/["']/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+
+  it("is behind the switch, and nowhere to be seen without it", async () => {
+    // ADR 0032 §3. Mockup 17 puts typography in «lo que no lleva» rather than in the «Encendido»
+    // half, so there was no drawing to follow and this is where the choice is recorded in behaviour.
+    const { studio, frame } = await onTheCover(false);
+    try {
+      await frame.locator('[data-id="el-headline"]').click();
+      await frame.locator(".rb-toolbar").waitFor();
+      await expect(frame.locator(".rb-toolbar-caption", { hasText: "Tamaño" })).toBeVisible();
+      await expect(frame.locator(".rb-toolbar-caption", { hasText: "Letra" })).toHaveCount(0);
+      await expect(frame.locator('.rb-toolbar-step[data-ref^="font."]')).toHaveCount(0);
+    } finally {
+      await studio.context().close();
+    }
+  }, 180_000);
+
+  it("names the two by their role, and never by the font they resolve to", async () => {
+    // Issue #9's rule for the whole product — «Typefaces are named by character, never by font» —
+    // and the reason it is not a matter of taste: `font.heading` is Georgia on one type pair, Inter
+    // on another and Playfair on a third, so a button reading «Georgia» would be wrong on two pairs
+    // out of three. The `Estilo` panel has named them this way since sprint 4.
+    const { studio, frame } = await onTheCover(true);
+    try {
+      await frame.locator('[data-id="el-headline"]').click();
+      await frame.locator(".rb-toolbar").waitFor();
+      const letters = frame.locator('.rb-toolbar-step[data-ref^="font."]');
+      await expect(letters).toHaveCount(2);
+      await expect(letters.nth(0)).toHaveText("Titular");
+      await expect(letters.nth(1)).toHaveText("Texto");
+      // Two buttons rather than a select, because two fit — the measures are a select for the
+      // opposite reason. So the count of selects in the bar has not moved.
+      await expect(frame.locator(".rb-toolbar-select")).toHaveCount(2);
+
+      const words = (await frame.locator(".rb-toolbar").innerText()).toLowerCase();
+      for (const face of ["georgia", "inter", "playfair", "system-ui", "serif"]) {
+        expect(words, `the bar names a font: ${face}`).not.toContain(face);
+      }
+    } finally {
+      await studio.context().close();
+    }
+  }, 180_000);
+
+  it("sets a heading in the body family with one press, and takes it off with the next", async () => {
+    const { studio, frame } = await onTheCover(true);
+    try {
+      const headline = frame.locator('[data-id="el-headline"]');
+      await headline.click();
+      await frame.locator(".rb-toolbar").waitFor();
+
+      const stack = (name: string) =>
+        frame
+          .locator("body")
+          .evaluate(
+            (_el, property) =>
+              getComputedStyle(document.documentElement).getPropertyValue(property).trim(),
+            name,
+          );
+      const [heading, body] = [await stack("--font-heading"), await stack("--font-body")];
+      // The premise of the whole test: the default pair really does set the two apart, so a change
+      // here is visible rather than a write nobody could see. `editorial-serif` is a serif heading
+      // over a sans body.
+      expect(sameStack(heading, body)).toBe(false);
+
+      const shown = () => headline.evaluate((el) => getComputedStyle(el).fontFamily);
+      expect(
+        sameStack(await shown(), heading),
+        "the headline did not start on the heading face",
+      ).toBe(true);
+
+      await frame.locator('.rb-toolbar-step[data-ref="font.body"]').click();
+      await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
+      expect(sameStack(await shown(), body), "the press did not change the family").toBe(true);
+
+      // Pressing the chosen one again takes it off, which with two buttons and no exact arm is the
+      // only way back to the family the type pair gives this role.
+      await headline.click();
+      const chosen = frame.locator('.rb-toolbar-step[data-ref="font.body"]');
+      await expect(chosen).toHaveAttribute("aria-pressed", "true");
+      // **And the other one is not pressed, which a sabotage is what added.** Asserting only the
+      // chosen button could not tell `ref === chosen` from «something is set»: deriving the state as
+      // `ref !== undefined` marks both buttons as chosen, writes the right value on the first press
+      // and toggles off correctly, so every other assertion here stayed green against it. A two-button
+      // group where both read pressed is the kind of lie this bar spent four sprints telling.
+      await expect(frame.locator('.rb-toolbar-step[data-ref="font.heading"]')).toHaveAttribute(
+        "aria-pressed",
+        "false",
+      );
+      await chosen.click();
+      await expect
+        .poll(async () => sameStack(await shown(), heading), { timeout: 10_000 })
+        .toBe(true);
+    } finally {
+      await studio.context().close();
+    }
+  }, 180_000);
+});

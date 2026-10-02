@@ -1831,6 +1831,55 @@ export function Editor({
         bar.appendChild(sizes);
       }
 
+      /**
+       * «Letra» — the two families the theme carries, with the design tools on (ADR 0032).
+       *
+       * **Drawn beside the sizes**, because the two questions about a letter are which one and how
+       * big, and an owner looking for the first will look where the second is.
+       *
+       * **Buttons and not a `<select>`**, which is the same reason the measures are a select read
+       * from the other side: five spacing steps as buttons would make a bar nobody can read at the
+       * width a section gives it, and two fit the way three sizes fit.
+       *
+       * **Named «Titular» and «Texto», by what the family is for and never by the font.** A heading
+       * face is Playfair on one type pair and Inter on another, so a button reading «Playfair» would
+       * be wrong on two pairs out of three; issue #9 settled that vocabulary for the whole product
+       * and the `Estilo` panel has followed it since sprint 4.
+       */
+      if (controls.family) {
+        const families = group(es["editor.toolbar.family"]);
+        for (const ref of controls.family) {
+          const button = iframeDoc.createElement("button");
+          button.type = "button";
+          button.className = "rb-toolbar-step";
+          button.dataset["ref"] = ref;
+          // No `"ref" in` test, unlike every other property here: `fontFamily` has one arm, so the
+          // value is a reference or it is absent. That is ADR 0032 §2 showing through the type.
+          const chosen = current?.fontFamily?.ref === ref;
+          if (chosen) button.classList.add("rb-toolbar-on");
+          button.setAttribute("aria-pressed", String(chosen));
+          const label = es[`editor.toolbar.familyOf.${ref}` as keyof typeof es];
+          button.textContent = label;
+          /**
+           * The caption spelled into the accessible name, which no other group here needs.
+           *
+           * «Texto» is already the `color.ink` swatch's label one group over, so this is the first
+           * pair of controls in the bar whose names collide. The captions are `<span>`s rather than
+           * groups with accessible names, so a screen reader announcing «Texto, botón» twice would
+           * give no way to tell the colour from the family. Naming the newcomer rather than renaming
+           * the swatch: the swatch is in the mockup, this is not.
+           */
+          button.setAttribute("aria-label", `${es["editor.toolbar.family"]} — ${label}`);
+          button.title = `${es["editor.toolbar.family"]} — ${label}`;
+          // Pressing the one already chosen takes it off, like the size steps. With two buttons and
+          // no exact arm it is the only way back to the family the site's type pair gives this role,
+          // and a «quitar» for a control of two would be half the group again.
+          button.addEventListener("click", () => write("fontFamily", chosen ? undefined : { ref }));
+          families.appendChild(button);
+        }
+        bar.appendChild(families);
+      }
+
       if (controls.color.length > 0) {
         const colors = group(es["editor.toolbar.color"]);
         for (const ref of controls.color) {
@@ -2657,8 +2706,8 @@ export function Editor({
       // walk, not designed in from the start.** Wrapping (above) keeps every control reachable
       // within the bar; it does nothing about what sits *beneath* the bar. A short section — the
       // cover's own headline immediately followed by its subheadline — puts the next element close
-      // enough that a tall, wrapped bar (colour, size, and with the tools on, two measures each
-      // with its own exact-value field) can cover it entirely. Every click inside a plain `<div>`'s
+      // enough that a tall, wrapped bar (colour, size, and with the tools on, a letter and two
+      // measures each with its own exact-value field) can cover it entirely. Every click inside a plain `<div>`'s
       // box is swallowed by that div first, including its padding and the gaps between controls —
       // `bar.addEventListener("click", stopPropagation)` was catching them all, on purpose, and
       // that included clicks the person meant for the paragraph hidden underneath. Reproduced at
