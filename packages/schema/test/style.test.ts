@@ -9,6 +9,7 @@ import { parseDocument } from "../src/parse.ts";
 import { listStyleExceptions, setElementStyle, styleFor } from "../src/style.ts";
 import {
   admitsExact,
+  type ElementStyle,
   elementStyleSchema,
   STYLE_PROPERTIES,
   STYLE_REFS,
@@ -114,6 +115,29 @@ describe("the closed vocabulary", () => {
     expect(() =>
       elementStyleSchema.parse({ fontFamily: { exact: "Inter", exception: true } }),
     ).toThrow();
+  });
+
+  it("refuses an exact family at build time too, which is where ADR 0032 §2 said it would", () => {
+    /**
+     * **This is the assertion the ADR's own words promised and the code did not yet keep.** §2 says
+     * the decision is «written into the type rather than into a rule somebody has to remember», and
+     * for one day it was written only into the runtime: `styleValueFor` returned
+     * `reference | union`, so TypeScript inferred the same broad value type for all five properties
+     * and an exact family compiled while `parse` refused it. The compiler found it the next morning,
+     * on the first line of the editor that read `current?.fontFamily?.ref`.
+     *
+     * `@ts-expect-error` is the whole test: it fails the build if this line ever *stops* being an
+     * error, which is the only way to catch the arm coming back. `referenceFor` is what keeps it so.
+     */
+    // @ts-expect-error — an exact family has no type to be, and that is the decision.
+    const unwritable: NonNullable<ElementStyle["fontFamily"]> = { exact: "Inter", exception: true };
+    // Read, so the constant is not merely declared — and refused at runtime as well, which is the
+    // same decision from the other side.
+    expect(() => elementStyleSchema.parse({ fontFamily: unwritable })).toThrow();
+
+    // And the arm that does exist is typed as narrowly as it validates: two references, no third.
+    const writable: NonNullable<ElementStyle["fontFamily"]> = { ref: "font.heading" };
+    expect(writable.ref).toBe("font.heading");
   });
 
   it("names which properties admit an exact value, and fontFamily is not one", () => {

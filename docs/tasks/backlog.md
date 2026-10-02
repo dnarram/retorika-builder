@@ -124,8 +124,73 @@ open survives.
   selection. The frame *does* reload — `srcDoc` depends on `photoUrls` — but `wireInteractions`
   puts the selection back from `selectedSection.current`. So there is no proven mechanism, and this
   row says so rather than offering one.
-  Whose call: nobody's yet. It is recorded so the next person who sees it has the history instead of
-  an empty hunch, and so a second occurrence is evidence rather than a surprise.
+  ~~Whose call: nobody's yet. It is recorded so the next person who sees it has the history instead of
+  an empty hunch, and so a second occurrence is evidence rather than a surprise.~~
+
+  **It happened again on 2 October 2026, in PR #146 (sprint 13 day 5), and the second occurrence is
+  worth more than the first because of what the two have in common.** A different test —
+  «sprint 7 día 7 … la tira de pestañas nunca se solapa», not «deshacer una conversión» — and the
+  **identical two statements**, character for character:
+
+  ```ts
+  await frame.locator('[data-section="sec-services"]').click();
+  await frame
+    .locator('[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]')
+    .click();
+  ```
+
+  Same section id, same button, same 30-second timeout on the **second** click.
+
+  **And then it failed a third time, in the same session, on something else — which corrected the
+  conclusion this row had already reached.** The paragraph above was written claiming the evidence
+  pointed at *that pair of gestures*. The next re-run of the same commit failed in
+  «sprint 7 día 7 — el recorrido completo», with no timeout at all: two captions typed into the
+  gallery came back reading «Escribe aquí de qué es esta foto», the placeholder. A
+  click-and-type that never committed, not a button that never appeared. The fourth run went green,
+  all 43.
+
+  So the honest common factor is wider than one gesture pair and still narrower than «flaky»:
+  **three failures, three different tests, two different symptoms, every one of them an interaction
+  with the inside of the preview frame that did not take effect.** Twice a click that produced
+  nothing; once a typed string that was never committed. That is the whole of what is shared, and the
+  sentence above is left standing, struck through in effect, because a row that quietly tightens its
+  own story is worth less than one that shows where it was wrong.
+
+  **What is ruled out about PR #146 specifically**, since three failures on one branch against
+  twenty-odd green runs on `main` is a correlation that deserves an answer rather than a shrug: its
+  three new `e2e` tests are **appended at the end of the file**, and with `--maxWorkers 1` on a single
+  file that is also the end of the execution order — so they run *after* both victims and cannot have
+  loaded the runner for them. Its one source change to the toolbar is behind the design-tools switch,
+  and both failing tests run with the switch off, where the bar's DOM is unchanged. Its schema change
+  is type-level only, which `schema-guard` confirms independently. **No mechanism connects them, and
+  the correlation is left unexplained rather than explained away.**
+
+  **A fourth run settled the question of whether this branch is involved, and the answer is no.** The
+  commit that carried the paragraphs above changes **one markdown file and nothing else**, and its
+  `e2e` job failed where the run before it — identical application code, identical tests — had gone
+  green. Two tests that time, «día 7 — dos conversiones desde el editor» and «regression — a section
+  is added to the page you are looking at», neither of them touched this sprint. Identical code, green
+  then red: whatever this is, it is not in the diff.
+
+  **The tally for 2 October 2026, so a fifth occurrence has numbers to sit beside.** Four `e2e` runs on
+  one branch inside about forty minutes: one failure, one failure, zero, two. Five distinct victim
+  tests across them, every one an interaction with the inside of the preview frame that did not take
+  effect. Before today: twenty-four consecutive green runs and a single occurrence. **Playwright and
+  its Chromium are pinned by the lockfile and cached by version**, so a browser that changed under us
+  is ruled out too — checked, not assumed.
+
+  **What this costs right now, said plainly:** `e2e` is failing roughly one run in two, so a pull
+  request may need its job re-run before it can be merged. That is a tax on every day until it is
+  found.
+
+  **The hypothesis worth measuring on day 7, unmeasured and labelled as a hypothesis.** The frame
+  re-renders on interaction — this repository already knows that makes what is inside it unstable
+  while it remounts — so an event landing inside that window may be **lost entirely** rather than
+  delayed. The shape fits all three: a lost click times out instead of passing late, and keystrokes
+  delivered to a node that is about to be replaced land nowhere. **If it is true it is a product
+  defect and not a test defect**, which is why it is worth a day: a person who clicks or types at that
+  instant gets nothing back, clicks again, and never mentions it. A test does not click again.
+  Whose call: day 7's colchón, this sprint.
 - **Four Spanish strings still live in `.ts` files, and `brand.name` sits unused beside them.**
   `ui.tsx:67` renders «Retorika Builder» inline while `apps/editor/src/locales/es.json` holds exactly
   that string unread; `layout.tsx` carries the page description; and the whole `/motor` route is

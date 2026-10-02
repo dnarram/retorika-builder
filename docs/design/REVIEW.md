@@ -443,6 +443,49 @@ nobody inside can supply.
 
   **And the sentence above about «two usability sessions» stopped being a reason**: [ADR 0031](../decisions/0031-usability-is-judged-by-david-and-the-sessions-are-cancelled.md)
   cancels them, so «a control the sessions have not met» describes every control there will ever be.
+- **Half superseded, 2 October 2026 — mockup 17's struck `Aa` card.** That card strikes two things
+  at once, and only one of them comes back. Its text, word for word:
+
+  > «La tipografía, entera — ni el `Aa` por elemento ni «tipografías propias». Incidencia #9:
+  > `modern-sans` y `classic-display` caen a la fuente del sistema en máquinas sin Inter ni Playfair,
+  > **y el ADR 0001 prohíbe descargarlas**. Ofrecerla sería prometer una letra que el visitante puede
+  > no ver nunca.»
+
+  **Both clauses of that reason were measured false in sprint 11**, which is why this is a premise
+  that expired rather than a change of mind:
+
+  - «el ADR 0001 prohíbe descargarlas» — a relative `@font-face` **loads and renders from `file://`**,
+    measured at 385px against 411px with the file missing, in Chrome 154 and Firefox 155 by
+    double-click. The double-click promise survives a shipped face, which is what let
+    [ADR 0028](../decisions/0028-typography-needs-a-decision-from-direction.md) ship the two faces at
+    all.
+  - «caen a la fuente del sistema» — [#9](https://github.com/dnarram/retorika-builder/issues/9) closed
+    on 1 October 2026. The faces travel in the ZIP with their OFL text beside them, and `buildSite`
+    refuses a bundle with a face and no licence.
+
+  So the per-element `Aa` is built, in sprint 13 day 5, as
+  [ADR 0032](../decisions/0032-typography-per-element-with-the-faces-that-travel.md): a «Letra» group
+  of two buttons offering the two families the theme already carries, behind the design-tools switch,
+  **named «Titular» and «Texto» — by role and never by font**, which is issue #9's own rule and the one
+  the `Estilo` panel has followed since sprint 4.
+
+  **«Tipografías propias» stays struck, and its reason has not expired**: a family the owner types is
+  a face the ZIP does not ship and a letter the visitor may never see, which is exactly the promise
+  this card refused. ADR 0032 §2 makes it **unexpressible** rather than merely unoffered — `fontFamily`
+  is the one style property with no exact arm, in the type as well as at runtime — so there is no rule
+  for a later control to remember.
+
+  **The switch is this file's business and is recorded as an open question rather than as a reading of
+  the drawing.** Mockup 17 puts typography in «lo que no lleva», not in the «Encendido» half, so there
+  was no drawing to follow; it went behind the switch because [ADR 0026](../decisions/0026-the-switch-is-the-line-between-references-and-exact-values.md)
+  draws that line at «a design choice about one loose element». **Reversible in a line** if seeing it
+  says otherwise.
+
+  Mockup 17 is not edited, for the reason given two entries above: it is the record of what sprint 9
+  decided *and of the reason it decided it*, and a dated artefact that gets rewritten stops being
+  evidence of anything. Its line 157 — «La otra mitad, «tipografías propias», no entra en este sprint:
+  la incidencia #9 sigue abierta» — is now true of one half and stale about the issue, and stays as
+  written.
 - The handoff's own open list stands: the price, who issues the invoice and how VAT is handled,
   and the photo bank's actual images.
 

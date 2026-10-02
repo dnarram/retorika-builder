@@ -133,8 +133,24 @@ export function admitsExact(property: StyleProperty): boolean {
   return property in EXACT_PATTERNS;
 }
 
+/**
+ * The reference arm on its own — every property's first arm, and `fontFamily`'s only one.
+ *
+ * **Generic over the property on purpose, and that is what makes ADR 0032 §2 true of the type and
+ * not only of the runtime.** `styleValueFor` returns `reference | union`, so TypeScript infers the
+ * *same* broad value type for all five properties: `fontFamily` came out carrying an
+ * `{exact, exception}` arm that `parse` would refuse at runtime. The ADR says the decision is
+ * «written into the type rather than into a rule somebody has to remember», and it was not — found
+ * the next morning by the compiler, on the first line of the editor that read
+ * `current?.fontFamily?.ref`. Instantiated with a literal property this returns the narrow shape, so
+ * an exact family is now a build error and not merely a rejected parse.
+ */
+function referenceFor<P extends StyleProperty>(property: P) {
+  return z.strictObject({ ref: z.enum(STYLE_REFS[property]) });
+}
+
 function styleValueFor(property: StyleProperty) {
-  const reference = z.strictObject({ ref: z.enum(STYLE_REFS[property]) });
+  const reference = referenceFor(property);
   const pattern: RegExp | undefined = (EXACT_PATTERNS as Partial<Record<StyleProperty, RegExp>>)[
     property
   ];
@@ -154,7 +170,14 @@ function styleValueFor(property: StyleProperty) {
 export const elementStyleSchema = z.strictObject({
   color: styleValueFor("color").optional(),
   fontSize: styleValueFor("fontSize").optional(),
-  fontFamily: styleValueFor("fontFamily").optional(),
+  /**
+   * **`referenceFor`, not `styleValueFor`, and the difference is the whole of ADR 0032 §2.** Both
+   * build the identical schema for this property — `EXACT_PATTERNS` has no entry, so `styleValueFor`
+   * returned the bare reference too — but only this one *says so in the type*. Writing an exact
+   * family is now a compile error rather than a parse that fails, which is what the ADR claimed and
+   * what the day after shipping it discovered was not yet so.
+   */
+  fontFamily: referenceFor("fontFamily").optional(),
   padding: styleValueFor("padding").optional(),
   borderRadius: styleValueFor("borderRadius").optional(),
 });
