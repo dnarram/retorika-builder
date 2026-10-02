@@ -596,3 +596,75 @@ describe("0005 — a section's breakpoints hold one bucket", () => {
     }
   });
 });
+
+describe("0006 — a document may say how a shared link reads", () => {
+  function before(): Record<string, unknown> {
+    return {
+      schemaVersion: "1.4.0",
+      id: "doc-1",
+      siteName: "Taberna",
+      theme,
+      collections: [],
+      pages: [
+        {
+          id: "home",
+          slug: "index",
+          title: "Taberna",
+          sections: [
+            {
+              id: "sec-cover",
+              preset: { catalogId: "cover", variantId: "image-right" },
+              source: "catalog",
+              layout: null,
+              content: [
+                {
+                  id: "el-headline",
+                  role: "heading",
+                  hidden: false,
+                  slot: "headline",
+                  value: { kind: "text", text: "Taberna" },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  it("opens a document saved before the two fields existed", () => {
+    const migrated = migrateToCurrent(before());
+    expect(migrated["schemaVersion"]).toBe(SCHEMA_VERSION);
+    expect(() => parseDocument(migrated)).not.toThrow();
+  });
+
+  it("changes nothing but the version, because both fields are optional", () => {
+    // And that is the point of deriving rather than copying: a document written before today
+    // publishes the cover's subheadline, which is also what it publishes after today.
+    const input = before();
+    expect({ ...upTo(input, "1.5.0"), schemaVersion: "1.4.0" }).toEqual(input);
+  });
+
+  it("round-trips: down after up gives back exactly what went in", () => {
+    const input = before();
+    const down = step("1.5.0").down;
+    if (!down) throw new Error("0006 has no down");
+    expect(down(upTo(input, "1.5.0"))).toEqual(input);
+  });
+
+  it("takes both fields out on the way down, because 1.4.0 has nowhere to keep them", () => {
+    const input = {
+      ...upTo(before(), "1.5.0"),
+      siteDescription: "Comer y beber en el puerto",
+      siteUrl: "https://taberna.example",
+    };
+    const down = step("1.5.0").down;
+    if (!down) throw new Error("0006 has no down");
+    const back = down(input);
+    expect(back["schemaVersion"]).toBe("1.4.0");
+    // The *key* is gone, not a key set to undefined: the strict schema treats those differently and
+    // only the first round-trips.
+    expect(Object.hasOwn(back, "siteDescription")).toBe(false);
+    expect(Object.hasOwn(back, "siteUrl")).toBe(false);
+  });
+});

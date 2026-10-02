@@ -34,6 +34,7 @@ import {
   moveSection as moveSectionFromDoc,
   moveUpOnMobile as moveUpOnMobileInDoc,
   pageToSection as pageToSectionInDoc,
+  parseDocument,
   removeItem as removeItemFromDoc,
   removeMark as removeMarkInDoc,
   renamePage as renamePageInDoc,
@@ -121,6 +122,11 @@ export type SnapshotCause =
   /** The first cause that names no section, because a theme belongs to none of them: it restyles
    * every section at once, hand-designed ones included. `sectionOf` is what keeps that honest. */
   | { type: "setTheme" }
+  /** The other two causes that name no section: what a shared link says about the whole site
+   * (ADR 0029). Neither writes a word onto the page, so neither is a content cause — the delete
+   * toast asking «did somebody write here» must not start saying yes because a domain was typed. */
+  | { type: "setSiteDescription" }
+  | { type: "setSiteUrl" }
   | null;
 
 export interface Snapshot {
@@ -167,6 +173,8 @@ export type HistoryAction =
   | { type: "fillSlot"; variant: number; fill: SlotFill }
   | { type: "clearSlot"; variant: number; address: SlotAddress }
   | { type: "setTheme"; variant: number; theme: Theme }
+  | { type: "setSiteDescription"; variant: number; text: string }
+  | { type: "setSiteUrl"; variant: number; url: string | undefined }
   | { type: "setVariant"; variant: number; sectionId: string; variantId: string }
   | { type: "escalateSection"; variant: number; sectionId: string }
   | {
@@ -445,6 +453,38 @@ function setTheme(history: History, theme: Theme): History {
   return {
     past: [...history.past, history.present].slice(-LIMIT),
     present: { document, cause: { type: "setTheme" } },
+    future: [],
+    amendable: false,
+  };
+}
+
+/**
+ * The sentence a shared link shows, or the address it will live at (ADR 0029).
+ *
+ * **An empty box removes the key rather than storing an empty string**, which is the same thing
+ * `0002`'s `down` does with `sample` and for the same reason: the strict schema treats an absent key
+ * and a present-but-undefined one as different, and only the first round-trips. For the description
+ * it also means something — absent is «fall back to the subheadline», and `""` would be a sentence
+ * the owner chose to be empty.
+ *
+ * Both guard on identity, like `setTheme`: a blur that changed nothing must not light the undo
+ * arrow for a step that undoes to itself.
+ */
+function setSiteField(
+  history: History,
+  key: "siteDescription" | "siteUrl",
+  value: string | undefined,
+  cause: SnapshotCause,
+): History {
+  const current = history.present.document;
+  const next = value === undefined || value === "" ? undefined : value;
+  if ((current[key] ?? undefined) === next) return history;
+
+  const { [key]: _removed, ...rest } = current;
+  const document = parseDocument(next === undefined ? rest : { ...current, [key]: next });
+  return {
+    past: [...history.past, history.present].slice(-LIMIT),
+    present: { document, cause },
     future: [],
     amendable: false,
   };
@@ -835,6 +875,12 @@ function apply(history: History, action: HistoryAction): History {
       return clearSlot(history, action.address);
     case "setTheme":
       return setTheme(history, action.theme);
+    case "setSiteDescription":
+      return setSiteField(history, "siteDescription", action.text.trim(), {
+        type: "setSiteDescription",
+      });
+    case "setSiteUrl":
+      return setSiteField(history, "siteUrl", action.url, { type: "setSiteUrl" });
     case "setVariant":
       return setVariant(history, action.sectionId, action.variantId);
     case "escalateSection":

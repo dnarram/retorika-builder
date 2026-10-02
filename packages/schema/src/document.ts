@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { type MarkRun, marksSchema, markTextIssue } from "./marks.ts";
 import { roleSchema } from "./roles.ts";
+import { siteUrlIssue } from "./siteUrl.ts";
 import { SLUG_PATTERN } from "./slug.ts";
 import { type ElementStyle, elementStyleSchema, themeSchema } from "./tokens.ts";
 
@@ -9,7 +10,7 @@ import { type ElementStyle, elementStyleSchema, themeSchema } from "./tokens.ts"
  * role or a token is additive and bumps the minor; removing or renaming one breaks and
  * bumps the major.
  */
-export const SCHEMA_VERSION = "1.4.0";
+export const SCHEMA_VERSION = "1.5.0";
 
 const idSchema = z.string().min(1).max(128);
 
@@ -249,6 +250,32 @@ export const documentSchema = z.strictObject({
   schemaVersion: z.string().min(1),
   id: idSchema,
   siteName: z.string(),
+  /**
+   * The sentence a shared link shows, when the owner wrote one (ADR 0029).
+   *
+   * **Absent is the ordinary state and not a gap.** The renderer falls back to the cover's
+   * subheadline, so this holds a sentence only when somebody chose a different one — derived rather
+   * than copied, which is ADR 0022's principle and means there is nothing to keep in step.
+   *
+   * Bounded rather than free, because every stored string in this document is: no scraper shows
+   * anything near 300 characters, so the cap is about what the document may hold and not about what
+   * reads well, which is the editor's business.
+   */
+  siteDescription: z.string().max(300).optional(),
+  /**
+   * The origin the owner says their site will be served from, which is what makes an absolute
+   * `og:image` and `og:url` possible from a ZIP (ADR 0029).
+   *
+   * **Not `buildSite`'s `baseUrl`, and the two must not be conflated.** That one says where *this
+   * build* is being served from and is omitted for a download; this one says where the owner is
+   * going to put the files. Reading one as the other would put a sitemap in a ZIP.
+   */
+  siteUrl: z
+    .string()
+    .optional()
+    .refine((value) => value === undefined || siteUrlIssue(value) === undefined, {
+      message: "siteUrl must be an https origin and nothing else, e.g. https://midominio.es",
+    }),
   theme: themeSchema,
   pages: z.array(pageSchema).min(1),
   collections: z.array(collectionSchema),

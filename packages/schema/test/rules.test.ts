@@ -156,6 +156,44 @@ describe("rule 7 — mobile is a patch, not a parallel tree", () => {
   });
 });
 
+describe("what a shared link says about the site (ADR 0029)", () => {
+  // `documentWith` answers `unknown` on purpose — these tests feed `parseDocument` things it should
+  // refuse — so the spread needs an object type to work from.
+  const base = () => documentWith(coverSection({})) as Record<string, unknown>;
+
+  it("accepts a document with neither field, which is the ordinary state", () => {
+    expect(() => parseDocument(base())).not.toThrow();
+  });
+
+  it("accepts a description and an https origin", () => {
+    expect(() =>
+      parseDocument({
+        ...base(),
+        siteDescription: "Comer, beber y quedarse un rato",
+        siteUrl: "https://taberna.example",
+      }),
+    ).not.toThrow();
+  });
+
+  it("refuses an address that is not an https origin, where it is written", () => {
+    // `siteUrl.ts` says why this lives here and not in the publisher: a rule checked inside
+    // `buildSite` fails at the moment of download rather than where the value was typed.
+    for (const bad of [
+      "http://taberna.example",
+      "https://taberna.example/inicio",
+      "https://taberna.example/",
+      "taberna.example",
+    ]) {
+      expect(() => parseDocument({ ...base(), siteUrl: bad }), bad).toThrow();
+    }
+  });
+
+  it("bounds the description, because every stored string here is bounded", () => {
+    expect(() => parseDocument({ ...base(), siteDescription: "x".repeat(300) })).not.toThrow();
+    expect(() => parseDocument({ ...base(), siteDescription: "x".repeat(301) })).toThrow();
+  });
+});
+
 describe("rule 6 — style is references to the system", () => {
   // These two build deliberately invalid style values, so they go through `unknown`.
   // TypeScript rejecting them at compile time is the first line of the same defence.
