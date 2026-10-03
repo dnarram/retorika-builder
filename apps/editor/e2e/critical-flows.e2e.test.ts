@@ -4141,3 +4141,156 @@ describe("sprint 13 día 7 — el recorrido completo del sprint", () => {
     }
   }, 240_000);
 });
+
+/**
+ * **The preview is set in the letter the ZIP ships**, which it had not been since sprint 11 shipped
+ * the faces.
+ *
+ * The renderer emits `@font-face` with `url("fonts/<file>")` — relative, which is right for the ZIP
+ * and right for `file://`. The canvas is an `<iframe srcDoc>`, so inside it that relative URL resolves
+ * against the editor's own origin, where nothing answered: eight 404s per render and a page set in the
+ * fallback stack. So an owner chose «Clásica y seria», edited in Georgia, and downloaded Playfair
+ * Display. Measured on sprint 13 day 7 while chasing the lost click, and left standing as the last
+ * consequence of that root cause.
+ *
+ * These tests read the **used** typeface rather than the stylesheet's text, because the stylesheet was
+ * never the thing that was wrong.
+ */
+describe("sprint 14 día 2 — la vista previa enseña la letra que envía", () => {
+  async function openedVariant(page: Page): Promise<FrameLocator> {
+    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    await page.fill("#nombre", "Taberna del Puerto");
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Restaurante y bar", { exact: true }).click();
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Comidas", { exact: true }).click();
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.fill("#direccion", "Muelle 3, Ronda");
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Que reserven", { exact: true }).click();
+    await page.fill("#enlace", "https://reservas.example.com/taberna");
+    await page.getByRole("button", { name: "Crear mi web" }).click();
+    await page.getByText("Ver a tamaño real →").first().click();
+    const frame = page.frameLocator("iframe").first();
+    await frame.locator('[data-section="sec-cover"]').waitFor();
+    return frame;
+  }
+
+  it("serves the four faces the renderer may name, and nothing else", async () => {
+    const page = await (await browser.newContext()).newPage();
+    try {
+      await page.goto(BASE_URL, { waitUntil: "networkidle" });
+
+      for (const file of [
+        "inter-latin-400-normal.woff2",
+        "inter-latin-700-normal.woff2",
+        "playfair-display-latin-400-normal.woff2",
+        "playfair-display-latin-700-normal.woff2",
+      ]) {
+        const response = await page.request.get(`${BASE_URL}/fonts/${file}`);
+        expect(response.status(), file).toBe(200);
+        expect(response.headers()["content-type"], file).toBe("font/woff2");
+        const bytes = await response.body();
+        // Really a WOFF2 and not an error page with a font's content type: `wOF2`, the signature
+        // the format declares. A test that only checked the status would pass on an empty body.
+        expect([...bytes.subarray(0, 4)], file).toEqual([0x77, 0x4f, 0x46, 0x32]);
+        expect(bytes.byteLength, file).toBeGreaterThan(1_000);
+      }
+
+      /**
+       * **And it is a closed list, not a directory.** The name never becomes a path: the route asks
+       * the renderer's own table first, which is the property `fonts.ts` protects for the published
+       * page — «a document may *choose* a row from this table and can never *name* a file».
+       */
+      // Names that reach the route and are not in its table: **exactly 404**, which is this code's
+      // own answer.
+      for (const unknown of [
+        "inter-latin-500-normal.woff2", // a weight the table does not name
+        "inter-latin-400-normal.ttf", // a format it does not ship
+        "OFL-Inter.txt", // a licence, which travels in the ZIP and not here
+      ]) {
+        const response = await page.request.get(`${BASE_URL}/fonts/${unknown}`);
+        expect(response.status(), unknown).toBe(404);
+      }
+
+      /**
+       * Traversal-shaped names: **refused, and not necessarily by this route.** Two versions of this
+       * assertion were wrong before this one, both in the same way — guessing at the *shape* of the
+       * refusal instead of asserting the property. It demanded `404` and got `400`, because the server
+       * rejects a path like that before any route runs; then it demanded a body under 200 bytes and got
+       * 3597, because what comes back is an error *page*. Neither is a leak and neither was what this
+       * test is for. **So the property is what it asserts now:** not a success, not a font, and not the
+       * contents of a file from this repository.
+       */
+      for (const traversal of [
+        "..%2F..%2Fpackage.json",
+        "....//....//package.json",
+        "%2e%2e/.env",
+      ]) {
+        const response = await page.request.get(`${BASE_URL}/fonts/${traversal}`);
+        expect(response.status(), traversal).not.toBe(200);
+        const body = await response.body();
+        expect([...body.subarray(0, 4)], traversal).not.toEqual([0x77, 0x4f, 0x46, 0x32]);
+        // `workspace:*` is in every package.json here and nowhere a browser should ever see.
+        expect(body.toString("utf8"), traversal).not.toContain("workspace:*");
+      }
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it("sets the cover's heading in the face the ZIP ships, not in the fallback", async () => {
+    const page = await (await browser.newContext()).newPage();
+    try {
+      const frame = await openedVariant(page);
+
+      // `restaurante-bar` is on `classic-display`, whose heading stack starts with Playfair Display
+      // — the one pair that genuinely lost everything when the file was missing, because both of its
+      // stacks end in `serif` and collapsed onto Georgia together (ADR 0028).
+      const heading = frame.locator("h1").first();
+      const declared = await heading.evaluate((el) => getComputedStyle(el).fontFamily);
+      expect(declared).toContain("Playfair Display");
+
+      /**
+       * **The used face, which is the assertion that was impossible before this route existed.**
+       * `document.fonts.check` answers whether the browser can actually set this text in that family
+       * — it was `false` for every render of this editor until today, and the stylesheet above said
+       * «Playfair Display» the whole time. That gap is the whole defect.
+       */
+      const usable = await frame.locator("body").evaluate(async () => {
+        await document.fonts.ready;
+        return {
+          regular: document.fonts.check('400 16px "Playfair Display"'),
+          bold: document.fonts.check('700 16px "Playfair Display"'),
+          loaded: [...document.fonts].map((face) => `${face.family}:${face.weight}:${face.status}`),
+        };
+      });
+      expect(usable.regular, `the face never loaded: ${usable.loaded.join(", ")}`).toBe(true);
+      expect(usable.bold, `the bold face never loaded: ${usable.loaded.join(", ")}`).toBe(true);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it("asks for every face it names and is refused none of them", async () => {
+    // The eight requests that used to 404. Counted rather than assumed, because "the fonts work now"
+    // is the kind of claim that stays true in a comment after it stops being true in the product.
+    const page = await (await browser.newContext()).newPage();
+    const refused: string[] = [];
+    const served: string[] = [];
+    page.on("response", (response) => {
+      const url = response.url();
+      if (!url.includes("/fonts/")) return;
+      if (response.status() === 200) served.push(url);
+      else refused.push(`${response.status()} ${url}`);
+    });
+    try {
+      await openedVariant(page);
+      await page.waitForLoadState("networkidle");
+      expect(refused, "the preview asked for a face and was refused").toEqual([]);
+      expect(served.length, "the preview asked for no face at all").toBeGreaterThan(0);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+});
