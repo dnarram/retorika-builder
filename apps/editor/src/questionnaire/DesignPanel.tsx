@@ -33,8 +33,20 @@ import es from "../locales/es.json" with { type: "json" };
  *
  * **Three families now, and each one arrived with the thing it controls**, which is the whole
  * point of that rule: `Colocación` on sprint 8 day 3, `Ajustar solo en móvil` on day 6, and
- * `Fuera del sistema` — the audit of rule 6's marked exceptions — on sprint 9 day 5. There is
- * still no `Tipografía`, and there is not meant to be until issue #9 is answered.
+ * `Fuera del sistema` — the audit of rule 6's marked exceptions — on sprint 9 day 5.
+ *
+ * **There is still no `Tipografía` family here, and the reason this paragraph used to give expired.**
+ * It said «not meant to be until issue #9 is answered»: #9 closed on 1 October 2026 and
+ * [ADR 0032](../../../../docs/decisions/0032-typography-per-element-with-the-faces-that-travel.md)
+ * shipped per-element typeface the next day. **It shipped in the floating toolbar, not here**, and
+ * that is the rule the bar follows rather than an oversight: the bar is what acts on **the element
+ * you have selected**, and a family is a property of one element. This panel's two section families
+ * are position and the mobile patch; its third asks the whole document a question. A `Tipografía`
+ * family here would be a fourth door to a control that already has the right one.
+ *
+ * So the rule the paragraph above states is intact and its example is gone. Kept rather than deleted,
+ * because «no family is drawn for something that does not exist yet» is still the rule, and a reader
+ * who finds a typeface control in the bar and no family here deserves to be told it was deliberate.
  *
  * **The last of the three is not about the selected section**, unlike the other two: it asks the
  * whole document «what in this web no longer follows the system», which is why it sits outside the

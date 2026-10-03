@@ -1,18 +1,29 @@
 # 0033 — Reusable content, and the template that is one item
 
-**Status:** **proposed** · **Date:** 2026-10-02 ·
+**Status:** **accepted** · **Date:** 2026-10-02 ·
 **Decided by:** David, 2 October 2026, planning sprint 14 — given the choice of what «closing the
 editor» means and choosing «colecciones + pulido», then settling four of this file's decisions by
 answering questions about them ·
-**Awaiting:** his signature on this file ·
+**Accepted by:** **David, 3 October 2026 — not direction** ·
 **Touches:** [ADR 0025](0025-studio-mode-starts-now-and-its-switch-is-not-in-the-document.md) (which
 deferred collections by name), the advanced dossier §4, §6 and §7, document rules 1, 3 and 5,
 [ADR 0013](0013-services-cardinality.md) (the cardinality this has to respect),
 [ADR 0027](0027-a-mark-moves-with-the-text-under-it.md) (whose one escaping path this reuses) and
 [ADR 0001](0001-static-published-sites.md) (which this does not bend)
 
-> **`proposed` is literal.** David chose the shape and answered four questions about it; he has not
-> read this file. Development does not sign on anybody's behalf.
+> **Signed the day after it was written, and «accepted» means David, not direction** — the same as
+> ADRs 0026 through 0032. It went up `proposed` with the day 1 pull request because the decision was
+> his and the file was not; he read it and accepted it with the day 2 branch.
+>
+> **One of its decisions is his correction and not development's proposal**, and it is the
+> load-bearing one. The approved plan had «Cambiar solo aquí» unbinding a single card; he pointed out
+> that with no entry id the card's elements are one shared template, so that control would have
+> unbound every card — and asked for a per-section exit instead. §7 is that answer. The plan was
+> wrong and this file is right because he read it closely.
+>
+> **It pulls phase-3 work forward**, which is direction's territory by the protocol's own phase list.
+> The precedent is ADR 0025, where direction decided the advanced module starts now; this is the
+> fourth of the four pillars that decision scheduled, and direction has not been asked about this one.
 
 ## Context
 
