@@ -26,10 +26,17 @@ import { NARROWEST_WIDTH } from "./overflowCheck.ts";
  * colores». This is phase 2's own list in its own order, so it needs no phase-boundary ADR the way
  * the cover photo did (ADR 0018) — that one overtook phase 1 while phase 1 was unfinished.
  *
- * `Páginas` and `Fotos` stay as they were, and stay **non-interactive elements rather than disabled
+ * ~~`Páginas` and `Fotos` stay as they were, and stay **non-interactive elements rather than disabled
  * buttons**. A disabled button says "not right now"; these are not buttons at all yet, and the
- * `Fase 2` badge under them is what says so. Drawing them as buttons would be the dead-button
- * mistake with an attribute over it.
+ * `Fase 2` badge under them is what says so.~~ **Both became real rail items — `Páginas` in sprint 5,
+ * `Fotos` in sprint 6 — and this paragraph went on describing them as placeholders until the sprint-14
+ * closeout read it against the code.** `docs/design/REVIEW.md` carried the identical stale claim, which
+ * is what made it findable: two copies of one sentence are easier to catch than one.
+ *
+ * **The rule it states is intact and still the reason nothing here is drawn disabled**: a disabled
+ * button says "not right now", and drawing one would be the dead-button mistake with an attribute over
+ * it. That is why the two items the design-tools switch adds, `Diseño` and `Listas`, are **absent**
+ * rather than dimmed when it is off (ADR 0025 §6).
  *
  * Undo and redo are live from day 2; they grey out when there is nothing to go back or forward
  * to, which is the honest state and not a placeholder. The `Guardado` tick is live from day 3

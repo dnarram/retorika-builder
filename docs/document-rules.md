@@ -277,6 +277,76 @@ second design rule 7 exists to prevent.
 
 ---
 
+## Reusable content: a list, and a section that shows it
+
+Sprint 14, schema 1.8.0, [ADR 0033](decisions/0033-reusable-content-and-the-template-that-is-one-item.md).
+The fourth and last pillar of «el modo estudio», and the interface the advanced dossier §11 made the
+document carry from day one — «**referencias a colecciones** … aunque la interfaz de la fase 1 no
+exponga ninguna de esas cuatro cosas. **Decidirlo después obliga a reescribir el editor.**»
+
+A **collection** is a named list of entries; an entry has fields; a field is a text and the marks over
+it. A section that holds a `list` can be **bound** to one, and then its cards come from the entries.
+Editing an entry changes every card that shows it, on every page. That is the function, not a side
+effect of it.
+
+```
+collections: [{ id: "col-servicios", name: "Servicios",
+                entries: [{ id: "entry-1", fields: { title: {text: "Chapa"}, … } }] }]
+```
+
+### One template item, drawn N times
+
+**A bound list stores exactly one item and the renderer draws one card per entry**, and this is forced
+rather than chosen. A binding is `{collectionId, field?}` with **no entry id**, so it can say «this
+leaf reads `title`» and can never say «of entry 3». The elements inside a card are therefore **one
+shared template**, which is also what the dossier means by «plantilla de ficha».
+
+Three things follow, and each is checked rather than trusted:
+
+- **A container's binding names no field; a leaf's does.** `field` is optional for exactly that
+  reason — it was required until 1.8.0, which is what made a container's binding meaningless.
+- **A bound list with two stored items is a violation.** Is the second a second template, or a card
+  that was there before the binding? An ambiguity the schema admits is an invalid state waiting.
+- **A bound leaf must sit inside a list bound to the same collection.** Otherwise there is no entry to
+  read from, and the renderer would have to throw on a document the schema had accepted — which is the
+  failure ADR 0030 closed for the tablet bucket.
+
+### Rule 5's other half
+
+A binding must name a collection that exists **and a field every entry carries.** The first half has
+been checked since phase 0 and had never had a real case to judge; the second was legal until
+sprint 14, and it is exactly the dead reference rule 5 exists to forbid — a card drawing a field that
+is not there is a hole on a published page.
+
+### Cardinality holds in both directions
+
+A bound section's card count *is* the entry count, and the catalog declares how many a section may
+hold («Qué hago» is 1..6, [ADR 0013](decisions/0013-services-cardinality.md)). So:
+
+- a collection that does not fit **cannot be bound**, and
+- an entry **cannot be added or removed** if it would push a bound section outside its range.
+
+Both are refusals and neither is a repair. **This is the first thing in the repository to validate
+`itemRange`**: five presets declared it and only the editor's own «añadir línea» gate ever read it,
+and that gate cannot reach this case, because entries are added in a panel that does not know which
+sections are bound. It runs in `checkInvariants` when a caller hands the presets in — `packages/schema`
+may not import `packages/catalog` — and `checkAgainstPreset` says why the rule is not there instead.
+
+### What a published page knows about it: nothing
+
+Resolution happens **when the page is rendered**, so what ships is the same static HTML and CSS it
+always was: no collection id, no collection name, no entry id. The editor's canvas needs to know which
+card is which entry — every card shares the template's `data-id` — and gets it from a `data-entry`
+attribute emitted **only** under a render option that is off by default. `buildSite` does not pass it,
+the golden corpus is generated without it, and a test reads the published bytes to say so.
+
+### Leaving
+
+**«Desenlazar esta sección» is the exit, and it is the section's and never a card's.** The entries
+become ordinary cards, each carrying its own words and its own emphasis: what was on screen becomes
+what the document holds. Per card it could not work — the card is a shared template, so unbinding one
+would change them all, which is the surprise the warning before the edit exists to prevent.
+
 ## What a shared link reads
 
 Two optional fields on the document itself, and the only two that describe the site rather than a

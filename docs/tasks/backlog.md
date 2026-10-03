@@ -12,7 +12,22 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 2 October 2026, **closing sprint 13 — the editor's half-drawn controls, and a defect
+Last reviewed: 4 October 2026, **closing sprint 14 — «el contenido reutilizable», the last pillar of
+the studio that had no code at all.** A list can now be made out of the cards a section already has,
+shown in several sections at once, edited in one place, and left again with its cards intact; the
+preview is finally set in the letter the ZIP ships; and the **second-undo race this file has carried
+since sprint 12 is closed by measurement** — it turned out to be the same defect as the `e2e` flake
+row above it, seen from the other end, and the fix for that one closed this one a sprint before
+anybody connected them.
+
+**And a correction about this file itself, which is the fifth time.** Closing sprint 14 it still did
+not mention **ADR 0030 or ADR 0032 anywhere** — both accepted on 2 October, both shipped — so the
+«tipografías propias» row below spent two sprints describing a question those ADRs had answered. The
+pattern this file names at its own §«the third time» has now happened five times, and the thing worth
+saying is no longer «it happened again»: it is that **every instance has been found by somebody
+re-reading the file against the code, and never by the file itself**. Nothing in CI reads it.
+
+The review before that was 2 October 2026, **closing sprint 13 — the editor's half-drawn controls, and a defect
 that had been hiding as a flaky test.** Six toolbar controls that had been drawn and unusable since
 sprint 9 work with a mouse; three states that only reported now change something; an element may
 choose between the two typefaces the ZIP already ships; the two approved screens that had shipped
@@ -445,6 +460,16 @@ open survives.
   nothing ships Bodoni. **That is the decision it needs**: whether «choose a typeface» means a third
   shipped pair, or a free field with the fallback honestly described. Recorded here rather than inside
   the resolved row above, where it was a clause nobody would find.
+
+  **Half of this was answered on 2 October 2026 and this row did not hear about it for two sprints.**
+  [ADR 0032](../decisions/0032-typography-per-element-with-the-faces-that-travel.md) decided the
+  per-element choice — «Titular» and «Texto», the two faces the ZIP already carries — and built it in
+  sprint 13. What is left is narrower than the sentence above: **a free field, and a third shipped
+  pair.** And the free field is no longer a question with two answers, because ADR 0032 §2 made it
+  **unexpressible**: `fontFamily` is the one style property with no exact arm, in the type as well as
+  at runtime, so there is no shape a typed family could take. So the decision this row asks for is
+  only «a third shipped pair?», which is ADR 0028's territory and costs bytes in every client's ZIP.
+  `docs/document-rules.md` is the current authority and has said so since sprint 13's closeout.
 - ~~**A second undo pressed immediately after the first can be lost, while the canvas re-renders.**
   Found by measuring the shortcut that sprint 12 day 3 built, not by supposing: undoing replaces the
   canvas `<iframe>`'s document, and with it the `keydown` listener `wireInteractions` installs on
@@ -519,7 +544,7 @@ open survives.
   `SlotAddress` to name an item, or a second panel; neither is small.
 - **The three findings of sprint 4 that nobody has acted on**, all of them measured rather than
   supposed, and each one already written up where it belongs:
-  - Whether a hostelería owner recognises «Precios» in the menu ([#51](https://github.com/dnarram/retorika-builder/issues/51)). The question is written out, word for word, in [`docs/sessions/guion-tercera-sesion.md`](../sessions/guion-tercera-sesion.md) — and **it still has not been asked.** #51 closed on 28 September saying the search field is what holds the name, and asked for the next session to show the menu and ask; the third session's owner runs a taller, so it could not be put. Two hosteleros out of two asked for «la carta» and neither has been shown the menu. **It needs a hostelería session, not just any session.**
+  - Whether a hostelería owner recognises «Precios» in the menu ([#51](https://github.com/dnarram/retorika-builder/issues/51)). The question is written out, word for word, in [`docs/sessions/guion-tercera-sesion.md`](../sessions/guion-tercera-sesion.md) — and **it still has not been asked.** #51 closed on 28 September saying the search field is what holds the name, and asked for the next session to show the menu and ask; the third session's owner runs a taller, so it could not be put. Two hosteleros out of two asked for «la carta» and neither has been shown the menu. ~~**It needs a hostelería session, not just any session.**~~ **And that is now unsatisfiable, said plainly on 4 October 2026: [ADR 0031](../decisions/0031-usability-is-judged-by-david-and-the-sessions-are-cancelled.md) cancelled every session, so this row asks for an instrument that no longer exists.** It is the one row the header's claim about re-pointing all fourteen missed, because what it needs is not a session in general but a *hostelero* — and ADR 0031 names precisely this class of question as what judgement cannot substitute for: it is about what a word means to somebody who is not you. So it stays open with no method, like the other three the ADR lists, rather than being quietly re-pointed at a judgement that cannot answer it.
   - Whether two adjacent sections of the same preset should read as one (the 172px row above).
   - ~~The editor's top bar naming the variant where mockup 08 names the business.~~ **Done**,
     28 September 2026: direction settled it and the bar shows the business name
@@ -531,7 +556,13 @@ open survives.
   flow and no publish target, so writing it would test code that does not exist. Named in the doc
   comment at the top of `apps/editor/e2e/critical-flows.e2e.test.ts`, which is where it belongs
   when it arrives.
-- **Filling a destination by hand is done** (sprint 3, day 4) — listed here only so that the
+- **Filling a destination by hand is done** (sprint 3, day 4) — and **the code disagreed with this
+  line until 4 October 2026, when the sprint-14 planning sweep found the two and read the code to see
+  which was right.** `apps/editor/src/app/api/download/route.ts` said «Filling a destination in by
+  hand does not exist yet; when it does, this is the rule it has to satisfy». It does exist:
+  `FieldsPanel.tsx` draws the box, labelled «A dónde lleva», and routes it through `fillSlot`. The
+  rule the comment names is live and the sentence was a sprint behind; the comment is corrected and
+  this row stands. Listed here only so that the
   entry which sat in the old planning file as "pending" is visibly closed rather than lost.
 
 ---
@@ -555,7 +586,7 @@ questions or needed help. So there are two timings and still **one** session's w
 unaided-use evidence. The criterion also says «se cronometra **y se observa**», and the observation
 table is blank for all three.
 
-**Declaring phase 1 accepted is direction's, not development's.** Both sessions that produced a
+~~**Declaring phase 1 accepted is direction's, not development's.**~~ **Corrected 4 October 2026: [ADR 0031](../decisions/0031-usability-is-judged-by-david-and-the-sessions-are-cancelled.md) made it David's written judgement**, and the `README` has said so since the day that ADR was signed while this section went on saying the older thing.** Both sessions that produced a
 number also said they would not publish the result as it stands — three owners out of three have
 now said that, for three different sets of reasons. Every one of those facts is in its write-up.
 What is recorded here is the measurement.

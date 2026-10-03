@@ -131,7 +131,9 @@ function assertPresetsMatch(doc: RetorikaDocument): void {
  * Nothing this app produces can reach here: a section added from the editor is either built
  * blank by the catalog, which refuses to invent a destination and so never carries a link slot
  * it cannot fill, or built from the questionnaire's own answer to question 5, which has a real
- * one. Filling a destination in by hand does not exist yet; when it does, this is the rule it
+ * one. **Filling a destination in by hand does exist** — `FieldsPanel` draws the box labelled «A
+ * dónde lleva» and routes it through `fillSlot`, since sprint 3 day 4 — and this sentence said it did
+ * not until the sprint-14 planning sweep read the two against each other. The rule below is what it
  * has to satisfy.
  */
 function assertNoDeadDestinations(doc: RetorikaDocument): void {
