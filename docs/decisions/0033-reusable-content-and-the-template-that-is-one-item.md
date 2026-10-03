@@ -230,6 +230,27 @@ with one.
 - **Ordering beyond the stored order.** Entries draw in the order they are stored and `moveEntry` is
   how that order changes. No sorting by a field.
 
+## Amendment — what happens to a collection something is still showing (3 October 2026)
+
+**This file was signed with a hole in it, and building the verbs is what found it.** The approved plan
+said «`deleteCollection` no deja enlaces muertos: o se niega nombrando lo que apunta a ella, o
+desenlaza en el mismo paso. **El ADR elige; el verbo no improvisa**» — and then the ADR did not
+choose. Recorded as an amendment rather than edited into §1 above, so that the gap and its date stay
+legible: the verb was written on day 3 and would have had to improvise.
+
+**`deleteCollection` refuses while anything is bound to it, and names the sections.**
+
+The alternative — unbind for the caller — was refused on the ADR's own grounds. §7 settles that
+unbinding is not a neutral tidy-up: it turns the entries into ordinary cards carrying their own text
+and marks, which is **a change to the page**, and §6 settles that a change to the page gets a warning
+in front of it. Doing that as a side effect of deleting a list, when the owner was thinking about the
+list and not about the three sections showing it, is how content changes without anybody deciding it
+should.
+
+So the path is the ordinary one and it is lossless: unbind the sections that use it — which keeps what
+they show — and then the collection has nothing to take with it. The refusal says that in as many
+words, because a refusal a caller cannot act on is one that gets worked around.
+
 ## Consequences
 
 - `SCHEMA_VERSION` 1.7.0 → 1.8.0, migration `0009`: an entry's field gains marks and

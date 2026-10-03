@@ -10,7 +10,7 @@ import { type ElementStyle, elementStyleSchema, themeSchema } from "./tokens.ts"
  * role or a token is additive and bumps the minor; removing or renaming one breaks and
  * bumps the major.
  */
-export const SCHEMA_VERSION = "1.7.0";
+export const SCHEMA_VERSION = "1.8.0";
 
 const idSchema = z.string().min(1).max(128);
 
@@ -21,13 +21,25 @@ const idSchema = z.string().min(1).max(128);
 // ---------------------------------------------------------------------------
 
 /**
- * Phase-3 collections reference. Declared from day one because the advanced dossier
- * §11 requires the document to support collection references before the interface
- * exposes them — deciding it later means rewriting the editor.
+ * A reference from an element to a collection (ADR 0033).
+ *
+ * Declared from day one because the advanced dossier §11 required the document to carry collection
+ * references before the interface exposed them — «Decidirlo después obliga a reescribir el editor».
+ * Sprint 14 is that interface, and it cost this one widening rather than a rewrite.
+ *
+ * **`field` is optional, and which kind of binding this is depends on it** (ADR 0033 §3):
+ *
+ * - **On a `list` container**, `field` is absent: the binding says *which collection*, and the
+ *   renderer draws one card per entry. A container does not show a field, so naming one would be a
+ *   value nothing reads — and it was required until sprint 14, which is what made a container's
+ *   binding meaningless.
+ * - **On a leaf inside that list's single template item**, `field` names the field of the entry
+ *   being drawn. There is no entry id here and that is not an omission: the elements inside a card
+ *   are **one shared template**, which is ADR 0033 §2's load-bearing decision.
  */
 export const collectionRefSchema = z.strictObject({
   collectionId: idSchema,
-  field: z.string().min(1),
+  field: z.string().min(1).optional(),
 });
 export type CollectionRef = z.infer<typeof collectionRefSchema>;
 
@@ -232,10 +244,33 @@ export const pageSchema = z.strictObject({
 });
 export type Page = z.infer<typeof pageSchema>;
 
+/**
+ * One field of one entry: a text, and the marks over its own characters (ADR 0033 §5).
+ *
+ * **It was a bare `string` until schema 1.8.0, and marks are why it is not.** A bound card's text is
+ * a text like any other — the renderer has to split it at the same offsets, escape each piece
+ * separately and wrap only the marked ones, through the **same** `runs.ts` path every other text
+ * takes. Storing a bare string here would have meant either no emphasis inside a collection, or a
+ * second place where a string is cut into pieces. ADR 0027's whole property is that there is exactly
+ * one such place.
+ *
+ * So it is shaped like the `text` arm of `contentValueSchema` and checked by the same `withinText`,
+ * which is one bounds check rather than two that agree today.
+ */
+const entryFieldSchema = z
+  .strictObject({
+    text: z.string(),
+    marks: marksSchema.optional(),
+  })
+  .superRefine(withinText);
+export type EntryField = z.infer<typeof entryFieldSchema>;
+
 export const collectionSchema = z.strictObject({
   id: idSchema,
   name: z.string().min(1),
-  entries: z.array(z.strictObject({ id: idSchema, fields: z.record(z.string(), z.string()) })),
+  entries: z.array(
+    z.strictObject({ id: idSchema, fields: z.record(z.string(), entryFieldSchema) }),
+  ),
 });
 export type Collection = z.infer<typeof collectionSchema>;
 

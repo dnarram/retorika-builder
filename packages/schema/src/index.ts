@@ -1,3 +1,17 @@
+export type { CollectionUse } from "./collections.ts";
+export {
+  addCollection,
+  addEntry,
+  bindElement,
+  deleteCollection,
+  mintCollectionId,
+  moveEntry,
+  removeEntry,
+  renameCollection,
+  setEntryField,
+  unbindElement,
+  usesOfCollection,
+} from "./collections.ts";
 export type { TeaserFactory } from "./conversion.ts";
 export { canFoldPage, foldsInto, MAX_PAGES, pageToSection, sectionToPage } from "./conversion.ts";
 export type { DeadDestination } from "./destinations.ts";
@@ -40,7 +54,7 @@ export {
   setElementImageSrc,
   setElementText,
 } from "./fields.ts";
-export type { Violation } from "./invariants.ts";
+export type { PresetLookup, Violation } from "./invariants.ts";
 export { checkInvariants, flattenElements } from "./invariants.ts";
 export type { InvariantId } from "./invariants-catalog.ts";
 export { INVARIANTS, invariantTestName, PROVISIONAL_INVARIANTS } from "./invariants-catalog.ts";

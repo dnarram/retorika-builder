@@ -76,6 +76,14 @@ export interface PresetShape {
  * a list is one element in its slot, and the elements inside its items belong to the list,
  * so judging them here would report every visible card as filling an undeclared slot.
  */
+/**
+ * **The bound-list cardinality rule of ADR 0033 §8 is deliberately not here**, where a reader would
+ * reasonably look for it: this function has the preset — and therefore `itemRange` — but it is handed
+ * a *section*, and a bound list's card count lives in the document's `collections`. Putting it here
+ * would mean a third argument whose only purpose is to reach past the section. It runs in
+ * `checkInvariants`, which has the whole document, and it runs there **only**, so there is one place
+ * that judges it rather than two that agree today.
+ */
 export function checkAgainstPreset(section: Section, preset: PresetShape): Violation[] {
   const violations: Violation[] = [];
   const elements = section.content;
