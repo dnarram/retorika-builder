@@ -23,7 +23,9 @@ import {
   addEntry as addEntryToDoc,
   addItem as addItemToDoc,
   applyMark as applyMarkInDoc,
+  bindList as bindListInDoc,
   clearSlot as clearSlotInDoc,
+  collectionFromList as collectionFromListInDoc,
   deleteCollection as deleteCollectionFromDoc,
   deletePage as deletePageFromDoc,
   deleteSection as deleteSectionFromDoc,
@@ -58,6 +60,7 @@ import {
   setPlacement as setPlacementInDoc,
   setTheme as setThemeInDoc,
   setVariant as setVariantInDoc,
+  unbindList as unbindListInDoc,
 } from "@retorika/schema";
 
 /**
@@ -157,6 +160,12 @@ export type SnapshotCause =
   | { type: "setEntryField"; collectionId: string; entryId: string }
   | { type: "removeEntry"; collectionId: string }
   | { type: "moveEntry"; collectionId: string }
+  /** The three that change a section, so these **do** name one — and they are content causes, unlike
+   * the four above: making a list from the cards that are there, or turning the entries back into
+   * cards, is the section's own words moving. A delete toast is right to wait for them. */
+  | { type: "collectionFromList"; sectionId: string; collectionId: string }
+  | { type: "bindList"; sectionId: string; collectionId: string }
+  | { type: "unbindList"; sectionId: string }
   | null;
 
 export interface Snapshot {
@@ -284,6 +293,15 @@ export type HistoryAction =
     }
   | { type: "removeEntry"; variant: number; collectionId: string; entryId: string }
   | { type: "moveEntry"; variant: number; collectionId: string; entryId: string; toIndex: number }
+  | {
+      type: "collectionFromList";
+      variant: number;
+      sectionId: string;
+      slot: string;
+      name: string;
+    }
+  | { type: "bindList"; variant: number; sectionId: string; slot: string; collectionId: string }
+  | { type: "unbindList"; variant: number; sectionId: string; slot: string }
   | { type: "undo"; variant: number }
   | { type: "redo"; variant: number };
 
@@ -983,6 +1001,48 @@ function moveEntry(
   return step(history, document, { type: "moveEntry", collectionId });
 }
 
+/**
+ * The three that change a section (ADR 0033 §2 and §7).
+ *
+ * `collectionFromList` mints the collection's id inside the verb, so the cause is read back off the
+ * document it produced rather than guessed at here — which is also the only way to name it, since
+ * `mintCollectionId` is what decides whether it is `col-servicios` or `col-servicios-2`.
+ */
+function collectionFromList(
+  history: History,
+  sectionId: string,
+  slot: string,
+  name: string,
+): History {
+  const document = collectionFromListInDoc(history.present.document, sectionId, slot, name);
+  const minted = document.collections[document.collections.length - 1]?.id;
+  if (!minted) throw new Error("collectionFromList: the verb produced no collection");
+  return step(history, document, { type: "collectionFromList", sectionId, collectionId: minted });
+}
+
+function bindList(
+  history: History,
+  sectionId: string,
+  slot: string,
+  collectionId: string,
+): History {
+  const document = bindListInDoc(
+    history.present.document,
+    sectionId,
+    slot,
+    collectionId,
+    presetFor,
+  );
+  if (document === history.present.document) return history;
+  return step(history, document, { type: "bindList", sectionId, collectionId });
+}
+
+function unbindList(history: History, sectionId: string, slot: string): History {
+  const document = unbindListInDoc(history.present.document, sectionId, slot);
+  if (document === history.present.document) return history;
+  return step(history, document, { type: "unbindList", sectionId });
+}
+
 /** One snapshot pushed onto the stack, which every verb above does identically. */
 function step(history: History, document: RetorikaDocument, cause: SnapshotCause): History {
   return {
@@ -1108,6 +1168,12 @@ function apply(history: History, action: HistoryAction): History {
       return removeEntry(history, action.collectionId, action.entryId);
     case "moveEntry":
       return moveEntry(history, action.collectionId, action.entryId, action.toIndex);
+    case "collectionFromList":
+      return collectionFromList(history, action.sectionId, action.slot, action.name);
+    case "bindList":
+      return bindList(history, action.sectionId, action.slot, action.collectionId);
+    case "unbindList":
+      return unbindList(history, action.sectionId, action.slot);
     case "undo":
       return undo(history);
     case "redo":
@@ -1162,7 +1228,20 @@ export function historiesReducer(state: Histories, action: HistoryAction): Histo
 /** The causes that mean the owner worked on a section's content, as opposed to moving, copying
  * or removing the section itself. Kept as a list rather than a growing chain of `||`, so adding
  * a verb is a decision about which side of that line it falls on. */
-const CONTENT_CAUSES = ["editText", "setImage", "fillSlot", "clearSlot", "setMark"] as const;
+const CONTENT_CAUSES = [
+  "editText",
+  "setImage",
+  "fillSlot",
+  "clearSlot",
+  "setMark",
+  // The three of ADR 0033 that move a section's own words — into a list, or back out of one. The
+  // four that change a *collection* are not here: a bound section's words live in the list, so
+  // deleting that section loses none of them and a persistent toast would be about content the
+  // delete does not touch.
+  "collectionFromList",
+  "bindList",
+  "unbindList",
+] as const;
 
 /**
  * Which section a cause is about, or `undefined` when it is about none.

@@ -737,6 +737,22 @@ export function Variants({
           dismissToast();
           dispatch({ type: "sectionToPage", variant: openIndex, sectionId });
         }}
+        onAddEntry={(collectionId, fields) => {
+          dismissToast();
+          dispatch({ type: "addEntry", variant: openIndex, collectionId, fields });
+        }}
+        onCollectionFromList={(sectionId, slot, name) => {
+          dismissToast();
+          dispatch({ type: "collectionFromList", variant: openIndex, sectionId, slot, name });
+        }}
+        onBindList={(sectionId, slot, collectionId) => {
+          dismissToast();
+          dispatch({ type: "bindList", variant: openIndex, sectionId, slot, collectionId });
+        }}
+        onUnbindList={(sectionId, slot) => {
+          dismissToast();
+          dispatch({ type: "unbindList", variant: openIndex, sectionId, slot });
+        }}
         onRenameCollection={(collectionId, name) => {
           dismissToast();
           dispatch({ type: "renameCollection", variant: openIndex, collectionId, name });

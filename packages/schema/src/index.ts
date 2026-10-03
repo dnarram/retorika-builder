@@ -3,6 +3,8 @@ export {
   addCollection,
   addEntry,
   bindElement,
+  bindList,
+  collectionFromList,
   deleteCollection,
   entryCountBlock,
   mintCollectionId,
@@ -11,6 +13,7 @@ export {
   renameCollection,
   setEntryField,
   unbindElement,
+  unbindList,
   usesOfCollection,
 } from "./collections.ts";
 export type { TeaserFactory } from "./conversion.ts";

@@ -1,4 +1,10 @@
-import type { Collection, ContentElement, EntryField, RetorikaDocument } from "./document.ts";
+import type {
+  Collection,
+  ContentElement,
+  EntryField,
+  RetorikaDocument,
+  Section,
+} from "./document.ts";
 import { collectionSchema } from "./document.ts";
 import type { ElementAddress } from "./fields.ts";
 // `flattenElements` lives beside the invariants, because that is what first needed to walk every
@@ -461,4 +467,334 @@ export function unbindElement(doc: RetorikaDocument, address: ElementAddress): R
     const { binding: _dropped, ...rest } = element;
     return rest;
   });
+}
+
+/**
+ * The three verbs that change a **section** rather than a collection (ADR 0033 §2 and §7).
+ *
+ * They were deliberately held back from the day the others shipped, because each is only safe
+ * alongside the warning the ADR requires: a verb that drops a card has no business existing a sprint
+ * before the interface that says so first.
+ */
+
+/** The text-bearing leaves of one item, which are the ones a field can hold. */
+function textLeaves(item: { elements: readonly ContentElement[] }): ContentElement[] {
+  return item.elements.filter(
+    (element) => element.value?.kind === "text" || element.value?.kind === "link",
+  );
+}
+
+/** Whatever a leaf is showing, as an entry field: the words and the emphasis over them. */
+function fieldOf(element: ContentElement): EntryField {
+  const value = element.value;
+  const text = value && "text" in value ? value.text : "";
+  const marks = value && "marks" in value ? value.marks : undefined;
+  return { text, ...(marks && marks.length > 0 ? { marks } : {}) };
+}
+
+function listIn(section: Section, slot: string, verb: string): ContentElement {
+  const list = section.content.find((element) => element.slot === slot && element.role === "list");
+  if (!list) throw new Error(`${verb}: section "${section.id}" has no list in slot "${slot}"`);
+  return list;
+}
+
+function withList(
+  doc: RetorikaDocument,
+  sectionId: string,
+  next: (list: ContentElement) => ContentElement,
+): RetorikaDocument {
+  return {
+    ...doc,
+    pages: doc.pages.map((page) => ({
+      ...page,
+      sections: page.sections.map((section) =>
+        section.id !== sectionId
+          ? section
+          : {
+              ...section,
+              content: section.content.map((element) =>
+                element.role === "list" && element.items ? next(element) : element,
+              ),
+            },
+      ),
+    })),
+  };
+}
+
+/**
+ * **The lossless way in**: the cards that are already there become a list, and the section goes on
+ * showing exactly what it was showing.
+ *
+ * This is the verb the interface offers first, and the reason it exists rather than just `bindList`:
+ * a generated «Qué hago» has three cards somebody may have written, and the obvious way to make a
+ * reusable list out of them must not be the way that throws two of them away.
+ *
+ * **The fields are named after the slots they came from**, which is what lets the panel label them in
+ * Spanish with the catalog's own words — `itemSlotLabel` reads `section.<catalog>.item.<slot>` and
+ * the fields panel has shown those since sprint 3. A field named anything else would be a word this
+ * product invented for a screen, which `sectionFields.ts` refuses to do.
+ *
+ * **It refuses a list whose cards carry anything a field cannot hold**, and names it. A field is text
+ * and its marks; a photograph is not. A gallery turned into a list would otherwise keep the template's
+ * one photograph and draw it under every entry — the same picture N times, which is not what anybody
+ * asked for and not something the owner could see coming. Whether an entry may carry a photograph is
+ * a decision ADR 0033 did not take, and this refusal is what keeps it from being taken by accident.
+ */
+export function collectionFromList(
+  doc: RetorikaDocument,
+  sectionId: string,
+  slot: string,
+  name: string,
+): RetorikaDocument {
+  const found = findSectionIn(doc, sectionId, "collectionFromList");
+  const list = listIn(found, slot, "collectionFromList");
+  if (list.binding) {
+    throw new Error(`collectionFromList: the list in "${slot}" is already bound`);
+  }
+  const items = list.items ?? [];
+  if (items.length === 0) {
+    throw new Error(`collectionFromList: the list in "${slot}" has no cards to make a list from`);
+  }
+
+  const template = items[0];
+  if (!template) throw new Error("collectionFromList: the list lost its first card between reads");
+
+  // Everything in a card that a field cannot be. Checked across every card rather than just the
+  // template, because a later card's photograph would vanish just as silently.
+  const unholdable = new Set<string>();
+  for (const item of items) {
+    for (const element of item.elements) {
+      const kind = element.value?.kind;
+      if (kind !== undefined && kind !== "text" && kind !== "link") unholdable.add(kind);
+    }
+  }
+  if (unholdable.size > 0) {
+    throw new Error(
+      `collectionFromList: a card here carries ${[...unholdable].sort().join(", ")}, which a ` +
+        "list entry cannot hold — only words and the emphasis over them",
+    );
+  }
+
+  /**
+   * **The fields are the union of every card's words, not the first card's.**
+   *
+   * Taking them from the template alone is what the first version did, and the e2e caught it on a
+   * generated site within a minute: a «Qué hago» whose first card has no description and whose third
+   * does would have lost the third one's words — in the verb whose entire promise is that nothing is
+   * lost. The copybank fills descriptions sparsely, so this is the ordinary case rather than an edge.
+   *
+   * A field the template has no leaf for means the template gains one, **copied from the first card
+   * that does have it**. Its id comes with it, which is free: that card is about to be dropped, so
+   * the id is no longer taken. An entry with nothing for that field carries an empty text, and an
+   * empty text renders as nothing — which is exactly how an optional slot already behaves and
+   * exactly what the card looked like before.
+   */
+  const fields: string[] = [];
+  const donors = new Map<string, ContentElement>();
+  for (const item of items) {
+    for (const leaf of textLeaves(item)) {
+      if (fields.includes(leaf.slot)) continue;
+      fields.push(leaf.slot);
+      donors.set(leaf.slot, leaf);
+    }
+  }
+  if (fields.length === 0) {
+    throw new Error(`collectionFromList: the cards in "${slot}" have no words to reuse`);
+  }
+
+  const templateSlots = new Set(template.elements.map((element) => element.slot));
+  const adopted = fields
+    .filter((field) => !templateSlots.has(field))
+    .map((field) => donors.get(field))
+    .filter((element): element is ContentElement => element !== undefined);
+
+  const collectionId = mintCollectionId(doc, name.trim() === "" ? slot : name);
+  const entries = items.map((item, index) => {
+    const bySlot = new Map(textLeaves(item).map((leaf) => [leaf.slot, fieldOf(leaf)]));
+    return {
+      id: `entry-${index + 1}`,
+      // Every field the template reads, for every entry — which is the invariant rule 5 now
+      // enforces. A card that happened to be missing its optional description contributes an empty
+      // one rather than no key at all, so no entry is short of a field some leaf draws.
+      fields: Object.fromEntries(fields.map((field) => [field, bySlot.get(field) ?? { text: "" }])),
+    };
+  });
+
+  const withCollection: RetorikaDocument = {
+    ...doc,
+    collections: [
+      ...doc.collections,
+      collectionSchema.parse({ id: collectionId, name: name.trim() || slot, entries }),
+    ],
+  };
+
+  return withList(withCollection, sectionId, (candidate) =>
+    candidate.slot !== slot
+      ? candidate
+      : {
+          ...candidate,
+          binding: { collectionId },
+          // One template item, which is ADR 0033 §2. The first card keeps its own ids, so a style or
+          // a placement that named them still names something.
+          items: [
+            {
+              ...template,
+              elements: [...template.elements, ...adopted].map((element) =>
+                fields.includes(element.slot)
+                  ? { ...element, binding: { collectionId, field: element.slot } }
+                  : element,
+              ),
+            },
+          ],
+        },
+  );
+}
+
+/**
+ * An existing list bound to an existing collection — which is what makes «cambiarla cambia las
+ * cuarenta páginas» true across sections rather than within one.
+ *
+ * **It refuses unless the collection carries every field this section's cards would read**, naming
+ * what is missing. The alternative is worse than a refusal: an unmatched leaf would go on showing the
+ * template's own words under every entry, so a card would be half the collection's and half a
+ * sentence nobody meant to repeat three times.
+ *
+ * **It keeps the first card as the template and drops the rest, and that is a loss.** ADR 0014's net
+ * covers it — one «Deshacer» and they are back — but the interface must say so before the press, not
+ * after. That is the caller's obligation and it is written here because this is where somebody will
+ * look for it.
+ */
+export function bindList(
+  doc: RetorikaDocument,
+  sectionId: string,
+  slot: string,
+  collectionId: string,
+  lookup?: PresetLookup,
+): RetorikaDocument {
+  const found = findSectionIn(doc, sectionId, "bindList");
+  const list = listIn(found, slot, "bindList");
+  const collection = findCollection(doc, collectionId, "bindList");
+  if (list.binding?.collectionId === collectionId) return doc;
+  if (list.binding) {
+    throw new Error(`bindList: the list in "${slot}" is already bound to another list`);
+  }
+
+  const template = (list.items ?? [])[0];
+  if (!template)
+    throw new Error(`bindList: the list in "${slot}" has no card to use as a template`);
+
+  const fields = textLeaves(template).map((leaf) => leaf.slot);
+  const carried = new Set(collection.entries.flatMap((entry) => Object.keys(entry.fields)));
+  const missing = fields.filter((field) => !carried.has(field));
+  if (missing.length > 0) {
+    throw new Error(
+      `bindList: "${collectionId}" has no ${missing.map((f) => `"${f}"`).join(", ")}, ` +
+        `which this section's cards read`,
+    );
+  }
+
+  if (lookup) {
+    const issue = cardinalityIssue(doc, collectionId, collection.entries.length, lookup);
+    // Asked against the document as it will be, not as it is: this section is about to become a use.
+    const after = cardinalityIssue(
+      { ...doc, pages: bindFor(doc, sectionId, slot, collectionId).pages },
+      collectionId,
+      collection.entries.length,
+      lookup,
+    );
+    const blocking = after ?? issue;
+    if (blocking) throw new Error(`bindList: ${blocking}`);
+  }
+
+  return bindFor(doc, sectionId, slot, collectionId);
+}
+
+/** The binding written, with the first card kept as the template and the others dropped. */
+function bindFor(
+  doc: RetorikaDocument,
+  sectionId: string,
+  slot: string,
+  collectionId: string,
+): RetorikaDocument {
+  return withList(doc, sectionId, (candidate) => {
+    if (candidate.slot !== slot) return candidate;
+    const template = (candidate.items ?? [])[0];
+    if (!template) return candidate;
+    const fields = new Set(textLeaves(template).map((leaf) => leaf.slot));
+    return {
+      ...candidate,
+      binding: { collectionId },
+      items: [
+        {
+          ...template,
+          elements: template.elements.map((element) =>
+            fields.has(element.slot)
+              ? { ...element, binding: { collectionId, field: element.slot } }
+              : element,
+          ),
+        },
+      ],
+    };
+  });
+}
+
+/**
+ * **The exit** (ADR 0033 §7): the entries become ordinary cards, each carrying its own words and its
+ * own emphasis. What was on screen becomes what the document holds.
+ *
+ * **Per section and never per card**, which is the decision David corrected the plan into. The
+ * elements inside a card are one shared template, so unbinding one card's text would unbind the
+ * template and change every card — the exact surprise §6's warning exists to prevent, arriving
+ * through the control meant to avoid it.
+ *
+ * **Every expanded card gets fresh element ids except the first**, because duplicate element ids
+ * within a section are a violation this schema already reports. The first card keeps the template's
+ * own ids so that a style or a placement naming them still names something; the rest are suffixed.
+ * Each card carries its own copy of the template's `style`, so the cards go on looking identical —
+ * before, one rule styled them all because they were one element.
+ */
+export function unbindList(
+  doc: RetorikaDocument,
+  sectionId: string,
+  slot: string,
+): RetorikaDocument {
+  const found = findSectionIn(doc, sectionId, "unbindList");
+  const list = listIn(found, slot, "unbindList");
+  const binding = list.binding;
+  if (!binding) return doc;
+  const collection = findCollection(doc, binding.collectionId, "unbindList");
+  const template = (list.items ?? [])[0];
+  if (!template) throw new Error(`unbindList: the bound list in "${slot}" has no template card`);
+
+  const expanded = collection.entries.map((entry, index) => ({
+    id: index === 0 ? template.id : `${template.id}-${index + 1}`,
+    elements: template.elements.map((element) => {
+      const field = element.binding?.field;
+      const resolved = field === undefined ? undefined : entry.fields[field];
+      const id = index === 0 ? element.id : `${element.id}-${index + 1}`;
+      const { binding: _dropped, ...rest } = element;
+      if (!resolved || !element.value || !("text" in element.value)) return { ...rest, id };
+      return {
+        ...rest,
+        id,
+        value: {
+          ...element.value,
+          text: resolved.text,
+          ...(resolved.marks && resolved.marks.length > 0 ? { marks: resolved.marks } : {}),
+        },
+      };
+    }),
+  }));
+
+  const { binding: _gone, ...bare } = list;
+  return withList(doc, sectionId, (candidate) =>
+    candidate.slot !== slot ? candidate : { ...bare, items: expanded },
+  );
+}
+
+function findSectionIn(doc: RetorikaDocument, sectionId: string, verb: string): Section {
+  for (const page of doc.pages) {
+    for (const section of page.sections) if (section.id === sectionId) return section;
+  }
+  throw new Error(`${verb}: no section "${sectionId}"`);
 }

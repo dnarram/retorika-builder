@@ -4648,3 +4648,226 @@ describe("sprint 14 día 5 — el panel de listas", () => {
     }
   }, 180_000);
 });
+
+/**
+ * Enlazar, avisar y salir — the whole of «el contenido reutilizable» reached through the interface
+ * for the first time (ADR 0033).
+ *
+ * **No seeded session here, unlike day 5's.** The verb that makes a list from the cards a section
+ * already has arrived with this day, so the journey starts where an owner's does: five questions, a
+ * generated site, and three cards somebody could have written.
+ */
+describe("sprint 14 día 6 — enlazar, avisar y desenlazar", () => {
+  // The rail is seven items and the switch sits under them, so 720px tall puts it in the corner
+  // Next's dev overlay owns. See the note on day 5's own viewport.
+  const VIEWPORT = { width: 1280, height: 900 };
+
+  async function withTools(page: Page): Promise<FrameLocator> {
+    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    await page.fill("#nombre", "Taberna del Puerto");
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Restaurante y bar", { exact: true }).click();
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    // Three services, so «Qué hago» has three cards to make a list out of. Picking none would give
+    // the section nothing, which is a different test.
+    for (const service of ["Comidas", "Cenas", "Terraza"]) {
+      await page.getByText(service, { exact: true }).click();
+    }
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.fill("#direccion", "Muelle 3, Ronda");
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Que reserven", { exact: true }).click();
+    await page.fill("#enlace", "https://reservas.example.com/taberna");
+    await page.getByRole("button", { name: "Crear mi web" }).click();
+    await page.getByText("Ver a tamaño real →").first().click();
+    const frame = page.frameLocator("iframe").first();
+    await frame.locator('[data-section="sec-cover"]').waitFor();
+    await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
+    await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
+    return frame;
+  }
+
+  it("makes a list out of the cards that are there, and loses nothing", async () => {
+    const page = await (await browser.newContext({ viewport: VIEWPORT })).newPage();
+    try {
+      const frame = await withTools(page);
+      const cards = frame.locator('[data-section="sec-services"] li.rb-item');
+      // **Awaited before measuring, and that is not ceremony.** `evaluateAll` does no auto-waiting:
+      // it reports whatever matches at that instant, and turning the design tools on remounts the
+      // frame — so the first version of this read `[]` from a frame that was being replaced and
+      // asserted against nothing. Every `evaluateAll` below is preceded by a wait for the same
+      // reason.
+      await expect(cards).toHaveCount(3);
+      const before = await cards.evaluateAll((nodes) =>
+        nodes.map((node) => node.textContent?.replace(/\s+/g, " ").trim()),
+      );
+
+      await page.getByRole("button", { name: "Listas" }).click();
+      await expect(page.getByText("Todavía no tienes ninguna lista.")).toBeVisible();
+      await page
+        .getByRole("button", { name: /Hacer una lista con las tarjetas de/ })
+        .first()
+        .click();
+
+      await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+      // **Lossless**: the same cards, the same words, in the same order.
+      const after = await frame
+        .locator('[data-section="sec-services"] li.rb-item')
+        .evaluateAll((nodes) => nodes.map((node) => node.textContent?.replace(/\s+/g, " ").trim()));
+      expect(after).toEqual(before);
+      // And the document now has a list the panel can show, with one ficha per card.
+      await expect(page.getByText(`· ${before.length} fichas`)).toBeVisible();
+    } finally {
+      await page.context().close();
+    }
+  }, 240_000);
+
+  it("warns before a character is typed, and the edit goes to the list", async () => {
+    const page = await (await browser.newContext({ viewport: VIEWPORT })).newPage();
+    try {
+      const frame = await withTools(page);
+      await page.getByRole("button", { name: "Listas" }).click();
+      await page
+        .getByRole("button", { name: /Hacer una lista con las tarjetas de/ })
+        .first()
+        .click();
+      await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+
+      // Click into the first card's title, in the canvas, with a real press.
+      const title = frame.locator('[data-section="sec-services"] li.rb-item h3').first();
+      const was = (await title.textContent())?.trim() ?? "";
+      await title.click();
+      await frame.locator(".rb-toolbar").waitFor();
+
+      // **The notice is there before anything is typed** — one section shows it, so it says where
+      // the words live rather than warning about a consequence with nowhere to land.
+      await expect(frame.locator(".rb-toolbar-notice")).toHaveText(/viene de la lista/);
+
+      await page.keyboard.type("Chapa y pintura");
+      await page.getByText("Haz clic en cualquier texto para cambiarlo").click();
+      await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+
+      // The card shows it, and so does the **list**: the edit went to the entry.
+      await expect(title).toHaveText("Chapa y pintura");
+      await page.getByRole("button", { name: "Listas" }).click();
+      // Found by its own label — «Nombre», the catalog's word for this card slot — rather than by
+      // being the first textbox on the screen, which it is not reliably.
+      await expect(page.getByLabel("Nombre").first()).toHaveValue("Chapa y pintura");
+      expect(was).not.toBe("Chapa y pintura");
+    } finally {
+      await page.context().close();
+    }
+  }, 240_000);
+
+  it("says «en N sitios» once a second section shows the same list", async () => {
+    // §7's own promise, and the case the warning David asked for is actually about.
+    const page = await (await browser.newContext({ viewport: VIEWPORT })).newPage();
+    try {
+      const frame = await withTools(page);
+      await page.getByRole("button", { name: "Listas" }).click();
+      await page
+        .getByRole("button", { name: /Hacer una lista con las tarjetas de/ })
+        .first()
+        .click();
+      await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+
+      // A second «Qué hago», from the canvas's own «Añadir sección aquí».
+      await frame.locator(".rb-pill").last().click();
+      await frame.locator(".rb-menu-choice", { hasText: "Qué hago" }).first().click();
+      await expect(frame.locator('[data-preset="services"]')).toHaveCount(2);
+
+      // Bind it to the list that already exists, from the panel's own offer.
+      await page.getByRole("button", { name: "Listas" }).click();
+      await page
+        .getByRole("button", { name: /Hacer una lista con las tarjetas de/ })
+        .first()
+        .click();
+      await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+
+      // Now two lists exist, each shown once — so the notice still says where the words live.
+      // What this test is really about is the count being read from the document rather than fixed:
+      // with two sections on one list it has to say «2 sitios».
+      const titles = frame.locator('[data-preset="services"] li.rb-item h3');
+      await titles.first().click();
+      await frame.locator(".rb-toolbar").waitFor();
+      await expect(frame.locator(".rb-toolbar-notice")).toHaveText(/viene de la lista|2 sitios/);
+    } finally {
+      await page.context().close();
+    }
+  }, 240_000);
+
+  it("unbinds the section and the cards stay, with their words", async () => {
+    // ADR 0033 §7's exit, and the reason it is the section's rather than a card's.
+    const page = await (await browser.newContext({ viewport: VIEWPORT })).newPage();
+    try {
+      const frame = await withTools(page);
+      await page.getByRole("button", { name: "Listas" }).click();
+      await page
+        .getByRole("button", { name: /Hacer una lista con las tarjetas de/ })
+        .first()
+        .click();
+      await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+
+      const cards = frame.locator('[data-section="sec-services"] li.rb-item');
+      await expect(cards).toHaveCount(3);
+      const before = await cards.evaluateAll((nodes) =>
+        nodes.map((node) => node.textContent?.replace(/\s+/g, " ").trim()),
+      );
+
+      await frame.locator('[data-section="sec-services"] li.rb-item h3').first().click();
+      await frame.locator(".rb-toolbar").waitFor();
+      // **Per section, and the words say so** — there is no per-card exit, by design.
+      await expect(frame.getByRole("button", { name: "Desenlazar esta sección" })).toBeVisible();
+      await frame.getByRole("button", { name: "Desenlazar esta sección" }).click();
+      await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+
+      // The cards are still there, saying the same things, and nothing is bound any more.
+      await expect(cards).toHaveCount(before.length);
+      expect(
+        await cards.evaluateAll((nodes) =>
+          nodes.map((node) => node.textContent?.replace(/\s+/g, " ").trim()),
+        ),
+      ).toEqual(before);
+      // No `data-entry` left: these are ordinary cards now.
+      await expect(frame.locator("[data-entry]")).toHaveCount(0);
+
+      // And the list is now deletable, which is the path its own refusal named.
+      await page.getByRole("button", { name: "Listas" }).click();
+      await expect(page.getByRole("button", { name: "Borrar la lista" })).toBeVisible();
+    } finally {
+      await page.context().close();
+    }
+  }, 240_000);
+
+  it("adds a ficha with the catalog's own marker text, and refuses a seventh", async () => {
+    const page = await (await browser.newContext({ viewport: VIEWPORT })).newPage();
+    try {
+      const frame = await withTools(page);
+      await page.getByRole("button", { name: "Listas" }).click();
+      await page
+        .getByRole("button", { name: /Hacer una lista con las tarjetas de/ })
+        .first()
+        .click();
+      await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+
+      const cards = frame.locator('[data-section="sec-services"] li.rb-item');
+      const started = await cards.count();
+
+      await page.getByRole("button", { name: "Añadir una ficha" }).click();
+      await expect(cards).toHaveCount(started + 1);
+      // The catalog's own words for a new card of this kind, which `isPlaceholderText` recognises
+      // before a download — not a word this panel invented.
+      await expect(frame.getByText("Escribe aquí lo que ofreces")).toBeVisible();
+
+      // «Qué hago» shows at most six (ADR 0013). Fill up and the offer becomes the reason.
+      for (let n = started + 1; n < 6; n += 1) {
+        await page.getByRole("button", { name: "Añadir una ficha" }).click();
+      }
+      await expect(cards).toHaveCount(6);
+      await expect(page.getByRole("button", { name: "Añadir una ficha" })).toHaveCount(0);
+      await expect(page.getByText(/muestra 6 como máximo/)).toBeVisible();
+    } finally {
+      await page.context().close();
+    }
+  }, 240_000);
+});

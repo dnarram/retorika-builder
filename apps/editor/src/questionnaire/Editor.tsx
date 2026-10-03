@@ -48,6 +48,7 @@ import {
   shiftMarks,
   styleFor,
   type TextEdit,
+  usesOfCollection,
 } from "@retorika/schema";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { designRows, elementLabels, selectedRowId } from "../editor/designTree.ts";
@@ -143,6 +144,57 @@ export interface SectionOffer {
 }
 
 /** The catalog's Spanish name for the section the panel is showing, e.g. "Portada". */
+/**
+ * The binding this element carries, with the entry the card on screen is drawing.
+ *
+ * **The entry comes from the DOM and the field from the document**, and it has to be that way: the
+ * document says «this leaf reads `title`» and cannot say which card, because there is one template
+ * drawn N times. `data-entry` is the editor-only attribute ADR 0033 §10 exists for.
+ */
+function boundAt(
+  doc: RetorikaDocument,
+  address: ElementAddress,
+  el: Element,
+): { collectionId: string; field: string; entryId: string } | undefined {
+  const found = findSection(doc, address.sectionId);
+  if (!found) return undefined;
+  const element = flattenElements(found.section.content).find(
+    (candidate) => candidate.id === address.elementId,
+  );
+  const binding = element?.binding;
+  if (!binding?.field) return undefined;
+  const entryId = el.closest("[data-entry]")?.getAttribute("data-entry");
+  if (!entryId) return undefined;
+  return { collectionId: binding.collectionId, field: binding.field, entryId };
+}
+
+/** The bound list in this section, if it has one — what «Desenlazar esta sección» and the section's
+ * own «convertir en lista» both need to know. */
+function boundListOf(
+  doc: RetorikaDocument,
+  sectionId: string,
+): { slot: string; collectionId: string } | undefined {
+  const found = findSection(doc, sectionId);
+  if (!found) return undefined;
+  for (const element of found.section.content) {
+    if (element.role !== "list") continue;
+    const binding = element.binding;
+    if (binding && binding.field === undefined) {
+      return { slot: element.slot, collectionId: binding.collectionId };
+    }
+  }
+  return undefined;
+}
+
+/** A list this section has that is **not** bound — the subject of «convertir en lista». */
+function looseListOf(doc: RetorikaDocument, sectionId: string): string | undefined {
+  const found = findSection(doc, sectionId);
+  if (!found) return undefined;
+  return found.section.content.find(
+    (element) => element.role === "list" && !element.binding && (element.items ?? []).length > 0,
+  )?.slot;
+}
+
 function sectionDisplayName(doc: RetorikaDocument, sectionId: string): string {
   const found = findSection(doc, sectionId);
   if (!found) return sectionId;
@@ -368,6 +420,10 @@ export function Editor({
   onSectionToPage,
   onRenameCollection,
   onDeleteCollection,
+  onAddEntry,
+  onCollectionFromList,
+  onBindList,
+  onUnbindList,
   onSetEntryField,
   onRemoveEntry,
   onMoveEntry,
@@ -465,6 +521,12 @@ export function Editor({
   onSectionToPage: (sectionId: string) => void;
   onRenameCollection: (collectionId: string, name: string) => void;
   onDeleteCollection: (collectionId: string) => void;
+  onAddEntry: (collectionId: string, fields: Record<string, EntryField>) => void;
+  /** Make a list out of the cards a section already has — the lossless way in (ADR 0033). */
+  onCollectionFromList: (sectionId: string, slot: string, name: string) => void;
+  onBindList: (sectionId: string, slot: string, collectionId: string) => void;
+  /** ADR 0033 §7's exit, which is the section's and never a card's. */
+  onUnbindList: (sectionId: string, slot: string) => void;
   onSetEntryField: (
     collectionId: string,
     entryId: string,
@@ -696,7 +758,11 @@ export function Editor({
   // the ZIP needs — a relative path inside a `srcDoc` iframe resolves against the parent page's
   // URL and 404s, which is exactly why the placeholder is a data: URI and not a file.
   const html = useMemo(() => {
-    const options = pageId === undefined ? {} : { pageId };
+    // `entryHints` (ADR 0033 §10): each card drawn from a collection entry says which entry it is.
+    // **Only here.** The document cannot supply it — a binding carries no entry id and every card
+    // shares the template's `data-id` — and a published page must never carry it, which is why the
+    // option is off by default and `buildSite` does not pass it.
+    const options = { entryHints: true, ...(pageId === undefined ? {} : { pageId }) };
     // `withPhotoUrls` since sprint 6 day 4, when this logic moved out of here and became shared.
     // It had been inline, and the three "elige por dónde empezar" cards rendered the raw document
     // instead — invisible for as long as a generated site's only image was the placeholder, and a
@@ -1814,6 +1880,54 @@ export function Editor({
        * redraws from the document — the identical path every other edit in this editor takes,
        * with the identical undo.
        */
+      /**
+       * **The warning, on focus, before a character is typed** (ADR 0033 §6).
+       *
+       * First in the bar, before `B`/`I` and before everything else, because it is not a control: it
+       * is the one thing the owner has to know *before* using the controls. Editing this text changes
+       * every card that shows this entry, and a product that changes three things when somebody meant
+       * to change one — without having said so first — is making exactly the surprise this sprint
+       * spent an ADR avoiding.
+       *
+       * **Two sentences, and which one depends on the count.** With more than one section showing the
+       * list, the warning David asked for word for word. With one, there is no surprise to warn
+       * about and the useful thing is where the words live — so it says that instead, rather than
+       * warning about a consequence that has nowhere to land.
+       */
+      const boundHere = boundAt(doc, address, el);
+      if (boundHere) {
+        const collection = doc.collections.find(
+          (candidate) => candidate.id === boundHere.collectionId,
+        );
+        const places = usesOfCollection(doc, boundHere.collectionId).length;
+        const notice = iframeDoc.createElement("div");
+        notice.className = "rb-toolbar-notice";
+        notice.setAttribute("role", "status");
+        notice.textContent =
+          places > 1
+            ? es["editor.toolbar.boundMany"].replace("{n}", String(places))
+            : es["editor.toolbar.boundOne"].replace("{list}", collection?.name ?? "");
+        bar.appendChild(notice);
+
+        // **The exit is the section's, never the card's** — ADR 0033 §7, and David's correction to
+        // the plan. The elements inside a card are one shared template, so unbinding this card's
+        // text would unbind the template and change every card: the surprise the notice above exists
+        // to prevent, arriving through the control meant to avoid it.
+        const exitGroup = group(es["editor.toolbar.bound"]);
+        const exit = iframeDoc.createElement("button");
+        exit.type = "button";
+        exit.className = "rb-toolbar-link";
+        exit.textContent = es["editor.toolbar.unbindSection"];
+        exit.title = es["editor.toolbar.unbindHelp"];
+        exit.addEventListener("click", () => {
+          dismiss();
+          const list = boundListOf(doc, sectionId);
+          if (list) onUnbindList(sectionId, list.slot);
+        });
+        exitGroup.appendChild(exit);
+        bar.appendChild(exitGroup);
+      }
+
       if (controls.marks) {
         const marksGroup = group(es["editor.toolbar.marks"]);
 
@@ -2564,6 +2678,25 @@ export function Editor({
           anchored && stillInStep() && liveText.trim() === next
             ? marksAfterTrim(liveText, liveMarks)
             : undefined;
+
+        /**
+         * **A bound text's words live in the list, so that is where the edit goes** (ADR 0033 §6).
+         *
+         * Same gesture, same commit, different destination — and the destination is the whole point:
+         * one edit changes every card that shows this entry. The toolbar has already said so, on
+         * focus, before a character was typed.
+         *
+         * The marks go straight through: `anchoredMarks` is already in the coordinates of the text
+         * being stored, which is exactly what an entry's field wants.
+         */
+        const bound = boundAt(doc, address, el);
+        if (bound) {
+          onSetEntryField(bound.collectionId, bound.entryId, bound.field, {
+            text: next,
+            ...(anchoredMarks && anchoredMarks.length > 0 ? { marks: anchoredMarks } : {}),
+          });
+          return;
+        }
         onEditText(address, next, anchoredMarks);
       });
     }
@@ -2924,6 +3057,10 @@ export function Editor({
       // gives `[hidden]` a `display: none`, and an author rule with an explicit `display` beats it —
       // so the marks group set `hidden` and went on being drawn. Found by the test written for
       // mockup 18, after a probe that read the `.hidden` property and believed it.
+      // The notice is not a control and does not look like one: full width of the bar, its own line
+      // above the groups, and no border — so nothing about it invites a press.
+      `.rb-toolbar-notice { font-family: ${UI_FONT}; flex-basis: 100%; padding: 2px 7px 4px;`,
+      "  font-size: 11px; line-height: 1.35; color: #92400E; }",
       ".rb-toolbar-group[hidden] { display: none; }",
       ".rb-toolbar-group { display: flex; align-items: center; gap: 4px; padding: 0 7px;",
       "  border-right: 1px solid #EDF1F6; }",
@@ -3215,6 +3352,24 @@ export function Editor({
             blockFor={(collectionId, would) =>
               entryCountBlock(doc, collectionId, would, (catalogId) => presetFor(catalogId))
             }
+            // Every section with cards and no list yet, named by the catalog. Read from the document
+            // rather than tracked, so no new verb has to remember to keep a list of candidates.
+            candidates={doc.pages.flatMap((page) =>
+              page.sections.flatMap((section) => {
+                const slot = looseListOf(doc, section.id);
+                return slot === undefined
+                  ? []
+                  : [
+                      {
+                        sectionId: section.id,
+                        slot,
+                        suggestedName: sectionDisplayName(doc, section.id),
+                      },
+                    ];
+              }),
+            )}
+            onMakeList={onCollectionFromList}
+            onAddEntry={onAddEntry}
             onRenameCollection={onRenameCollection}
             onDeleteCollection={onDeleteCollection}
             onSetEntryField={onSetEntryField}
