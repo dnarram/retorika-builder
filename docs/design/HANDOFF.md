@@ -144,6 +144,8 @@ therefore:
   `Páginas`, `Fotos`. This rail is not a contradiction: the advanced-module
   dossier describes exactly these four with the design tools switched off.
   *(From 30 September 2026 that is half the story: with the tools on it gains
+> **Re-counted 4 October 2026, closing sprint 14: it is seven.** `Compartir` made it six in sprint
+> 12 and `Listas` seven in sprint 14. `docs/design/REVIEW.md` carries what that length has cost.
   `Diseño`, and the switch itself sits at the rail's foot. Mockup 16 and
   ADR 0025.)*
 - **Canvas**: takes the rest of the screen. Editing happens on the element

@@ -72,6 +72,31 @@ that window was **lost, not delayed**. It had been surfacing for two sprints as 
 failure with no mechanism; sprint 13 day 7 has the measurement, the fix and three deterministic
 tests.
 
+## The editor, pillar by pillar (4 October 2026, closing sprint 14)
+
+**This section exists so that the sprint after this one does not have to come back and work it out.**
+The protocol's Fase 3 defines «modo estudio completo» as five things; four are decided and the fifth
+is not started. Where something is deferred, the ADR that defers it is named, because «not built» and
+«decided against, with a reason» are different states and only the second needs no further thought.
+
+| Pillar | State | Under |
+|---|---|---|
+| Grid and placement | **complete** | sprint 8, [ADR 0025](docs/decisions/0025-studio-mode-starts-now-and-its-switch-is-not-in-the-document.md) |
+| Style system | **complete**, five properties, the fifth with no exact value | [ADR 0026](docs/decisions/0026-the-switch-is-the-line-between-references-and-exact-values.md), [ADR 0032](docs/decisions/0032-typography-per-element-with-the-faces-that-travel.md) |
+| Per-device control | **complete for mobile; tablet deferred** to phase 3 | [ADR 0030](docs/decisions/0030-one-breakpoint-bucket-and-the-width-the-gate-measures.md) |
+| Reusable content | **complete** in the shape that ADR decides | [ADR 0033](docs/decisions/0033-reusable-content-and-the-template-that-is-one-item.md) |
+| Interactions | **not started**: tabs, accordions, carousels, modals, scroll animations, conditional forms. Zero code, and it needs its own ADR | forms already deferred by [ADR 0020](docs/decisions/0020-contact-stays-links-only-for-phase-1.md) |
+
+**And what is refused rather than pending**, so nobody reopens it by accident: «tipografías propias»
+and a third shipped pair (ADR 0028 and ADR 0032 §2, which makes a typed family *unexpressible* rather
+than merely unoffered); alignment and per-element move/duplicate/delete (ADR 0026's own "what this
+refuses", and ADR 0032 — deleting an element collides with document rule 3); guides that snap and
+entry animations (phase 3 of the concept dossier); and the template gallery (§9).
+
+**Three things about reusable content are deliberately not built**, each named in ADR 0033: a page per
+entry and the menu that would follow it, collections shared between documents — that is accounts —
+and a bound leaf outside a list.
+
 **Not yet built:** accounts and persistence (the browser tab is the only copy until it downloads),
 payment ([ADR 0021](docs/decisions/0021-charging-waits-for-a-sellable-product.md)), the photo bank's
 images ([ADR 0011](docs/decisions/0011-sample-photos-per-sector.md)) — the machinery shipped in

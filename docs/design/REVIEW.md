@@ -184,11 +184,17 @@ nobody inside can supply.
     *is* the canvas (`EditorShell.tsx` says so). The mark is a pill drawn on the section itself, as
     injected chrome, so it can never reach a published page.
 
-- **The left rail is five items with the design tools on.** `HANDOFF.md` and this file both justify
+- **The left rail is ~~five~~ *seven* items with the design tools on.** `HANDOFF.md` and this file both justify
   the four-item rail as the advanced dossier's «Apagado» column, which was right and is now only
   half the story: with the tools on it gains `Diseño`. The switch itself is **not** a rail item — it
   sits at the rail's foot, separated — and ADR 0025 records why it is not in the top bar, which is
   the measurement sprint 7 day 7 took of that row overflowing.
+  **Re-counted 4 October 2026: five became six with `Compartir` (sprint 12) and seven with `Listas`
+  (sprint 14).** The number is corrected rather than the entry deleted, because the entry's point was
+  never the number — it was that the rail's length is a cost nobody had priced. **Sprint 14 priced
+  it**: the seventh item pushed the design-tools switch to 43 pixels from the bottom-left corner at
+  720px tall, where browser chrome gathers, and two `e2e` tests started failing on it. `backlog.md`
+  carries the measurement. This is the question becoming a number.
 
 - **Mockup 16's switch question is overruled, and the shipped wording is not what it draws.**
   Mockup 16 band 1 draws **«¿Montas webs para otros?»**, from the advanced dossier §4's point that
@@ -233,8 +239,14 @@ nobody inside can supply.
   `Fotos` and `Páginas`, but protocol Part 14 put "Estilo global" in phase 2 alongside them, and
   the mockup predates that being pinned down. **No longer true**: sprint 4 day 2 gave the rail a
   live `Estilo` item and the panel behind it, once phase 1's acceptance criterion was measured
-  and the same usability session named the gap. `Páginas` and `Fotos` stay dimmed — organic pages
-  and a real photo upload are both still unbuilt, not merely undecided.
+  and the same usability session named the gap. ~~`Páginas` and `Fotos` stay dimmed — organic pages
+  and a real photo upload are both still unbuilt, not merely undecided.~~
+  **Corrected 4 October 2026, closing sprint 14: both shipped, and the stale half of this entry sat
+  inside an entry that was already correcting itself.** `PagesPanel.tsx` and `PhotosPanel.tsx` exist,
+  the `e2e` suite drives both, and `EditorShell` records that the grey shade for «this exists but not
+  yet» lost its last caller in sprint 6. Somebody read this line, fixed the sentence above it and left
+  the one below — which is the shape of rot this file is most prone to, because a corrected entry
+  looks like a checked one.
 - **Resolved, 28 September 2026 — mockup 13's palettes and typefaces are not the ones in the
   code.** The claim was that the screen offers `Azul confianza`, `Verde natural`, `Coral cercano`
   and `Neutro elegante`, plus Inter, Poppins and Source Serif, while `packages/tokens` ships
@@ -558,10 +570,15 @@ improvised: each one is recorded here and left as it is.
 - **A free section's heading level follows the `catalogId` it declares:** `cover` gives `h1`,
   anything else `h2`. The prototype's "Contacto" declares `services` so that its title is an
   `h2`, which is right by accident rather than by design.
-- **The main button has nowhere to point.** The renderer emits no `id` on a section, so an
+- ~~**The main button has nowhere to point.** The renderer emits no `id` on a section, so an
   in-page anchor like `#contacto` does not resolve. In the prototype the button reads `Visítanos`
   and goes nowhere, and that will have to be decided for real when the questionnaire's fifth
-  answer becomes a link.
+  answer becomes a link.~~
+  **Corrected 4 October 2026: it does.** `packages/renderer/src/build.ts:474` emits the section's own
+  id — «deliberately the section's own id rather than a slug of its Spanish name», because this package
+  may not import the catalog — and `packages/schema/src/destinations.ts` counts the anchors pointing at
+  it, which is what the delete toast's «un botón de tu web llevaba aquí» reads. The entry outlived the
+  code by several sprints.
 - **`location`'s `split` composition leaves a hole when `hours` is absent.** The right-hand
   column places `hours` at row 2 and `map` at row 3, so with no hours the map sits alone under an
   empty row rather than moving up. Seen building `fixtures/documents/contacto-y-horario.json`
