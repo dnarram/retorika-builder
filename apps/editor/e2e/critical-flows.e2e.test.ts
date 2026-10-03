@@ -1268,7 +1268,15 @@ describe("sprint 8 — el modo estudio: encender, diseñar a mano, colocar, y vo
    * flow in this file is written for an owner who never turned it on.
    */
   it("turns the tools on, lays a section out, and comes back without losing a word", async () => {
-    const studio = await (await browser.newContext()).newPage();
+    // **A taller viewport, because the rail grew a seventh item in sprint 14 day 5.** The
+    // design-tools switch sits directly under the rail's items rather than at the foot of the rail,
+    // so a seventh pushed it to about 60px from the bottom — which at 720px tall is the corner Next's
+    // dev overlay occupies, and the click began timing out. `EditorShell`'s own comment predicted
+    // this when the switch was placed. The product consequence is recorded in `backlog.md`; here, the
+    // extra height is what keeps the test about what it is about.
+    const studio = await (
+      await browser.newContext({ viewport: { width: 1280, height: 900 } })
+    ).newPage();
     try {
       await studio.goto(BASE_URL, { waitUntil: "networkidle" });
       await studio.fill("#nombre", "Barbería El Corte");
@@ -3724,7 +3732,13 @@ describe("sprint 13 día 6 — las pantallas que faltaban, y los dos fallos sile
    * The switch that could fail to be remembered without saying so.
    */
   it("says the switch will not be remembered when this browser refuses to store it", async () => {
-    const context = await browser.newContext();
+    // **A taller viewport, because the rail grew a seventh item in sprint 14 day 5.** The
+    // design-tools switch sits directly under the rail's items rather than at the foot of the rail,
+    // so a seventh pushed it to about 60px from the bottom — which at 720px tall is the corner Next's
+    // dev overlay occupies, and the click began timing out. `EditorShell`'s own comment predicted
+    // this when the switch was placed. The product consequence is recorded in `backlog.md`; here, the
+    // extra height is what keeps the test about what it is about.
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
     const page = await context.newPage();
     try {
       // Blocked site data, as a private window or a strict setting produces it — narrowed to the
@@ -4289,6 +4303,346 @@ describe("sprint 14 día 2 — la vista previa enseña la letra que envía", () 
       await page.waitForLoadState("networkidle");
       expect(refused, "the preview asked for a face and was refused").toEqual([]);
       expect(served.length, "the preview asked for no face at all").toBeGreaterThan(0);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+});
+
+/**
+ * «Listas» — the collections panel, behind the design-tools switch (ADR 0033 §11).
+ *
+ * **The session is seeded rather than built through the interface**, and that is a statement about
+ * where this sprint is rather than a shortcut: the verb that *makes* a list from a section's cards is
+ * day 6's, so today there is no way to reach one by clicking. Seeding is also the realistic path —
+ * it is exactly what an owner who comes back to a saved site does, through `loadSession`.
+ */
+describe("sprint 14 día 5 — el panel de listas", () => {
+  /**
+   * **A taller viewport than the default, and the reason is worth writing down.**
+   *
+   * The switch sits directly under the rail's items rather than at the foot of the rail, so adding a
+   * seventh item moved it about sixty pixels down — onto the bottom-left corner at 720px tall, which
+   * is where Next's dev overlay (`NEXTJS-PORTAL`) sits. `EditorShell`'s own comment predicted exactly
+   * this when the switch was placed: «It is also the corner the dev overlay occupies, which is only a
+   * nuisance for a test — but browser chrome tends to gather there too, and that is not.»
+   *
+   * It is a test-environment collision and not a defect: the overlay does not exist in a built app.
+   * But it is also the rail's length becoming a real cost, which `REVIEW.md` has flagged as an open
+   * question since `Compartir` made it six, and this sprint makes it seven.
+   */
+  const VIEWPORT = { width: 1280, height: 900 };
+
+  /** A site whose «Qué hago» is bound to a three-entry list, plus a second section showing the
+   * same one — which is what makes «se muestra en» worth drawing at all. */
+  function seededDocument(entries = 3, options: { marked?: boolean } = {}) {
+    const theme: Record<string, string> = {};
+    for (const key of [
+      "color.primary",
+      "color.secondary",
+      "color.accent",
+      "color.surface",
+      "color.ink",
+      "color.muted",
+      "font.heading",
+      "font.body",
+      "size.heading",
+      "size.subheading",
+      "size.body",
+      "space.xs",
+      "space.sm",
+      "space.md",
+      "space.lg",
+      "space.xl",
+      "radius.sm",
+      "radius.md",
+      "radius.lg",
+    ]) {
+      theme[key] = key.startsWith("color.") ? "#1D4ED8" : "8px";
+    }
+    const card = (id: string) => ({
+      id,
+      role: "list",
+      hidden: false,
+      slot: "services",
+      binding: { collectionId: "col-servicios" },
+      items: [
+        {
+          id: `item-${id}`,
+          elements: [
+            {
+              id: `${id}-title`,
+              role: "heading",
+              hidden: false,
+              slot: "title",
+              binding: { collectionId: "col-servicios", field: "title" },
+              value: { kind: "text", text: "Plantilla" },
+            },
+          ],
+        },
+      ],
+    });
+    const section = (id: string, list: unknown) => ({
+      id,
+      preset: { catalogId: "services", variantId: "stacked" },
+      source: "catalog",
+      layout: null,
+      content: [
+        {
+          id: `${id}-headline`,
+          role: "heading",
+          hidden: false,
+          slot: "headline",
+          value: { kind: "text", text: "Qué hacemos" },
+        },
+        list,
+      ],
+    });
+    return {
+      schemaVersion: "1.8.0",
+      id: "doc-seeded",
+      siteName: "Taller Hermanos Ruiz",
+      theme,
+      collections: [
+        {
+          id: "col-servicios",
+          name: "Servicios",
+          entries: Array.from({ length: entries }, (_unused, index) => ({
+            id: `entry-${index + 1}`,
+            fields:
+              options.marked && index === 0
+                ? {
+                    title: {
+                      text: "Presupuesto cerrado",
+                      marks: [{ from: 0, to: 11, mark: "strong" }],
+                    },
+                  }
+                : { title: { text: `Servicio ${index + 1}` } },
+          })),
+        },
+      ],
+      pages: [
+        {
+          id: "home",
+          slug: "index",
+          title: "Taller Hermanos Ruiz",
+          sections: [
+            section("sec-services", card("el-list")),
+            section("sec-two", card("el-list-2")),
+          ],
+        },
+      ],
+    };
+  }
+
+  async function openPanel(
+    page: Page,
+    entries = 3,
+    options: { marked?: boolean } = {},
+  ): Promise<FrameLocator> {
+    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    await page.evaluate(
+      (document_) => {
+        localStorage.setItem(
+          "retorika.session.v1",
+          JSON.stringify({
+            payloadVersion: 1,
+            savedAt: new Date().toISOString(),
+            answers: { businessName: "Taller Hermanos Ruiz" },
+            documents: [document_],
+            openIndex: 0,
+          }),
+        );
+      },
+      seededDocument(entries, options),
+    );
+    await page.reload({ waitUntil: "networkidle" });
+
+    const frame = page.frameLocator("iframe").first();
+    await frame.locator('[data-section="sec-services"]').waitFor();
+    await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
+    await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
+    await page.getByRole("button", { name: "Listas" }).click();
+    return frame;
+  }
+
+  it("is absent with the tools off and present with them on", async () => {
+    const page = await (await browser.newContext({ viewport: VIEWPORT })).newPage();
+    try {
+      await page.goto(BASE_URL, { waitUntil: "networkidle" });
+      await page.evaluate((document_) => {
+        localStorage.setItem(
+          "retorika.session.v1",
+          JSON.stringify({
+            payloadVersion: 1,
+            savedAt: new Date().toISOString(),
+            answers: { businessName: "Taller Hermanos Ruiz" },
+            documents: [document_],
+            openIndex: 0,
+          }),
+        );
+      }, seededDocument());
+      await page.reload({ waitUntil: "networkidle" });
+      await page.frameLocator("iframe").first().locator('[data-section="sec-services"]').waitFor();
+
+      // Absent, not dimmed — ADR 0025 §6, and the rule `RailLabel`'s own note states.
+      await expect(page.getByRole("button", { name: "Listas" })).toHaveCount(0);
+      await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
+      await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
+      await expect(page.getByRole("button", { name: "Listas" })).toBeVisible();
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it("shows the list, its fichas and which sections show it", async () => {
+    const page = await (await browser.newContext({ viewport: VIEWPORT })).newPage();
+    try {
+      await openPanel(page);
+      await expect(page.getByRole("heading", { name: "Listas reutilizables" })).toBeVisible();
+      await expect(page.getByText("Servicios")).toBeVisible();
+      await expect(page.getByText("· 3 fichas")).toBeVisible();
+      // Named by the catalog, never by the section id — «Qué hago», twice, because two show it.
+      await expect(page.getByText(/Se muestra en:.*Qué hago.*Qué hago/)).toBeVisible();
+      // And the field is labelled by the catalog's own word for the slot it fills.
+      await expect(page.getByText("Nombre", { exact: true }).first()).toBeVisible();
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it("edits a ficha and both sections showing it change", async () => {
+    // §7's own promise: «cambiarla cambia las cuarenta páginas», measured on two.
+    const page = await (await browser.newContext({ viewport: VIEWPORT })).newPage();
+    try {
+      const frame = await openPanel(page);
+      await expect(frame.getByText("Servicio 1").first()).toBeVisible();
+
+      const field = page.getByRole("textbox").filter({ hasText: "" }).first();
+      await field.fill("Chapa y pintura");
+      await field.blur();
+
+      await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+      // One edit, two sections — counted in the canvas rather than in the panel.
+      await expect(frame.getByText("Chapa y pintura")).toHaveCount(2);
+      await expect(frame.getByText("Servicio 1")).toHaveCount(0);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it("keeps a ficha's emphasis through an edit, and survives one that shortens it", async () => {
+    /**
+     * **A sabotage put this test here, and thinking about why it passed found a real defect.**
+     * Dropping the marks in the panel's write broke nothing, because the seeded entry had none. With
+     * one, carrying them verbatim is worse than dropping them: a mark over «Presupuesto cerrado»
+     * carried onto a shorter text no longer fits it, `withinText` refuses the value, and
+     * `setEntryField` throws **at the owner**. The panel now shifts them through `textEditBetween`,
+     * which is what the canvas has done since sprint 10.
+     */
+    const page = await (await browser.newContext({ viewport: VIEWPORT })).newPage();
+    try {
+      const frame = await openPanel(page, 3, { marked: true });
+      // The mark is on the page to begin with: «Presupuesto» in bold.
+      await expect(frame.locator("strong", { hasText: "Presupuesto" }).first()).toBeVisible();
+
+      const field = page.getByRole("textbox").first();
+
+      /**
+       * **Two edits, because the two failures they catch are different**, which a sabotage is what
+       * taught: one edit caught only the throw, because replacing the marked run makes "dropped" and
+       * "carried" agree.
+       *
+       * First, words added **after** the run. The mark still fits, so it has to survive — this is
+       * the half that catches a panel which drops the emphasis on every write.
+       */
+      await field.fill("Presupuesto cerrado y en firme");
+      await field.blur();
+      await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+      await expect(frame.locator("strong", { hasText: "Presupuesto" })).toHaveCount(2);
+      await expect(frame.getByText("y en firme").first()).toBeVisible();
+
+      /**
+       * Then **shorter than where the run ends**, which is the half that catches carrying them
+       * verbatim: `withinText` would refuse the value and `setEntryField` would throw at the owner.
+       */
+      await field.fill("Chapa");
+      await field.blur();
+      await expect(frame.getByText("Chapa")).toHaveCount(2);
+      // No thrown error reached the owner — the editor's own failure strip stays empty.
+      await expect(page.getByText("No se ha podido")).toHaveCount(0);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it("will not offer to delete a list a section is still showing, and says what to do", async () => {
+    // ADR 0033's amendment: `deleteCollection` throws while anything is bound. The control is not
+    // drawn and the reason takes its place — a pressable button that refuses is the dead button this
+    // editor has refused since sprint 1.
+    const page = await (await browser.newContext({ viewport: VIEWPORT })).newPage();
+    try {
+      await openPanel(page);
+      await expect(page.getByRole("button", { name: "Borrar la lista" })).toHaveCount(0);
+      await expect(page.getByText(/primero desenlaza las secciones/)).toBeVisible();
+      // And it says nothing is lost, which is true: §7's exit keeps the cards.
+      await expect(page.getByText(/se quedan como tarjetas normales/)).toBeVisible();
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it("will not offer to remove the last ficha a bound section needs, and names the limit", async () => {
+    // «Qué hago» is 1..6 (ADR 0013). With one entry left there is nothing to take away.
+    const page = await (await browser.newContext({ viewport: VIEWPORT })).newPage();
+    try {
+      await openPanel(page, 1);
+      await expect(page.getByRole("button", { name: "Quitar esta ficha" })).toHaveCount(0);
+      await expect(page.getByText(/«Qué hago» muestra 1 como mínimo/)).toBeVisible();
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it("offers it when there is room, and removing one leaves two", async () => {
+    const page = await (await browser.newContext({ viewport: VIEWPORT })).newPage();
+    try {
+      const frame = await openPanel(page);
+      await page.getByRole("button", { name: "Quitar esta ficha" }).first().click();
+      await expect(page.getByText("· 2 fichas")).toBeVisible();
+      // Two sections, two cards each.
+      await expect(frame.locator("li.rb-item")).toHaveCount(4);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it("reorders the fichas, and the canvas follows", async () => {
+    const page = await (await browser.newContext({ viewport: VIEWPORT })).newPage();
+    try {
+      const frame = await openPanel(page);
+      // The last ficha has no «Bajar» and the first has no «Subir»: a control that does not apply
+      // is not drawn, which is the rule the whole editor follows.
+      await page.getByRole("button", { name: "Bajar" }).first().click();
+      await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+      const order = await frame
+        .locator('[data-section="sec-services"] li.rb-item')
+        .evaluateAll((nodes) => nodes.map((node) => node.textContent?.trim()));
+      expect(order).toEqual(["Servicio 2", "Servicio 1", "Servicio 3"]);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it("goes away if the tools go off while it is open", async () => {
+    // Both gated rail items fall back now, not just `design`: a panel left on screen with no rail
+    // item to return to would be a dead end.
+    const page = await (await browser.newContext({ viewport: VIEWPORT })).newPage();
+    try {
+      await openPanel(page);
+      await expect(page.getByRole("heading", { name: "Listas reutilizables" })).toBeVisible();
+      await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
+      await expect(page.getByRole("heading", { name: "Listas reutilizables" })).toHaveCount(0);
     } finally {
       await page.context().close();
     }

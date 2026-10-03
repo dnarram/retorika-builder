@@ -2,6 +2,7 @@ import { presetFor, teaserSection } from "@retorika/catalog";
 import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
 import type {
   ElementAddress,
+  EntryField,
   ListItem,
   Mark,
   MarkRange,
@@ -18,9 +19,12 @@ import type {
   Theme,
 } from "@retorika/schema";
 import {
+  addCollection as addCollectionToDoc,
+  addEntry as addEntryToDoc,
   addItem as addItemToDoc,
   applyMark as applyMarkInDoc,
   clearSlot as clearSlotInDoc,
+  deleteCollection as deleteCollectionFromDoc,
   deletePage as deletePageFromDoc,
   deleteSection as deleteSectionFromDoc,
   duplicateSection as duplicateSectionFromDoc,
@@ -30,21 +34,26 @@ import {
   flattenElements,
   insertSection as insertSectionIntoDoc,
   marksFor,
+  mintCollectionId,
   mintSectionId,
+  moveEntry as moveEntryInDoc,
   moveItem as moveItemInDoc,
   movePage as movePageInDoc,
   moveSection as moveSectionFromDoc,
   moveUpOnMobile as moveUpOnMobileInDoc,
   pageToSection as pageToSectionInDoc,
   parseDocument,
+  removeEntry as removeEntryFromDoc,
   removeItem as removeItemFromDoc,
   removeMark as removeMarkInDoc,
+  renameCollection as renameCollectionInDoc,
   renamePage as renamePageInDoc,
   revertSection as revertSectionInDoc,
   sectionToPage as sectionToPageInDoc,
   setElementImageSrc,
   setElementStyle as setElementStyleInDoc,
   setElementText,
+  setEntryField as setEntryFieldInDoc,
   setMobilePatch as setMobilePatchInDoc,
   setPlacement as setPlacementInDoc,
   setTheme as setThemeInDoc,
@@ -129,6 +138,25 @@ export type SnapshotCause =
    * toast asking «did somebody write here» must not start saying yes because a domain was typed. */
   | { type: "setSiteDescription" }
   | { type: "setSiteUrl" }
+  /**
+   * The collection causes (ADR 0033). **None of them names a section, and that is right rather
+   * than convenient**: a collection belongs to no section — several may show it — so `sectionOf`
+   * answers `undefined` for all seven and they are deliberately **not** content causes.
+   *
+   * The question `CONTENT_CAUSES` exists to answer is «did somebody write words into this section»,
+   * and the delete toast reads it to decide whether to wait forever before vanishing. A bound
+   * section's words live in the collection, so **deleting that section loses none of them** — they
+   * are still in the list, and binding another section shows them again. Treating an entry edit as
+   * having written into every section that shows it would make a delete persistent for content the
+   * delete does not touch.
+   */
+  | { type: "addCollection"; collectionId: string }
+  | { type: "renameCollection"; collectionId: string }
+  | { type: "deleteCollection"; collectionId: string }
+  | { type: "addEntry"; collectionId: string }
+  | { type: "setEntryField"; collectionId: string; entryId: string }
+  | { type: "removeEntry"; collectionId: string }
+  | { type: "moveEntry"; collectionId: string }
   | null;
 
 export interface Snapshot {
@@ -237,6 +265,25 @@ export type HistoryAction =
   | { type: "renamePage"; variant: number; pageId: string; title: string }
   | { type: "movePage"; variant: number; pageId: string; toIndex: number }
   | { type: "deletePage"; variant: number; pageId: string }
+  | { type: "addCollection"; variant: number; name: string }
+  | { type: "renameCollection"; variant: number; collectionId: string; name: string }
+  | { type: "deleteCollection"; variant: number; collectionId: string }
+  | {
+      type: "addEntry";
+      variant: number;
+      collectionId: string;
+      fields: Record<string, EntryField>;
+    }
+  | {
+      type: "setEntryField";
+      variant: number;
+      collectionId: string;
+      entryId: string;
+      field: string;
+      value: EntryField;
+    }
+  | { type: "removeEntry"; variant: number; collectionId: string; entryId: string }
+  | { type: "moveEntry"; variant: number; collectionId: string; entryId: string; toIndex: number }
   | { type: "undo"; variant: number }
   | { type: "redo"; variant: number };
 
@@ -857,6 +904,85 @@ function deletePage(history: History, pageId: string): History {
   });
 }
 
+/**
+ * The seven collection verbs (ADR 0033), each the same two lines: call the schema's verb, and push a
+ * step unless it handed back the identical document.
+ *
+ * **The cardinality refusals are not caught here, and that is the decision.** `addEntry` and
+ * `removeEntry` throw when a bound section would fall outside its range — and the panel asks
+ * `entryCountBlock` *before* offering the control, so the throw is a backstop and not a path the
+ * owner can walk into. Catching it here would turn a refusal into a press that silently did nothing,
+ * which is the dead button this editor has refused since sprint 1.
+ */
+function addCollection(history: History, name: string): History {
+  return step(history, addCollectionToDoc(history.present.document, name), {
+    type: "addCollection",
+    // Minted inside the verb, so the cause names what was actually created rather than what the
+    // caller guessed it would be called.
+    collectionId: mintCollectionId(history.present.document, name),
+  });
+}
+
+function renameCollection(history: History, collectionId: string, name: string): History {
+  const document = renameCollectionInDoc(history.present.document, collectionId, name);
+  if (document === history.present.document) return history;
+  return step(history, document, { type: "renameCollection", collectionId });
+}
+
+function deleteCollection(history: History, collectionId: string): History {
+  return step(history, deleteCollectionFromDoc(history.present.document, collectionId), {
+    type: "deleteCollection",
+    collectionId,
+  });
+}
+
+function addEntry(
+  history: History,
+  collectionId: string,
+  fields: Record<string, EntryField>,
+): History {
+  return step(history, addEntryToDoc(history.present.document, collectionId, fields), {
+    type: "addEntry",
+    collectionId,
+  });
+}
+
+function setEntryField(
+  history: History,
+  collectionId: string,
+  entryId: string,
+  field: string,
+  value: EntryField,
+): History {
+  const document = setEntryFieldInDoc(
+    history.present.document,
+    collectionId,
+    entryId,
+    field,
+    value,
+  );
+  if (document === history.present.document) return history;
+  return step(history, document, { type: "setEntryField", collectionId, entryId });
+}
+
+function removeEntry(history: History, collectionId: string, entryId: string): History {
+  return step(history, removeEntryFromDoc(history.present.document, collectionId, entryId), {
+    type: "removeEntry",
+    collectionId,
+  });
+}
+
+function moveEntry(
+  history: History,
+  collectionId: string,
+  entryId: string,
+  toIndex: number,
+): History {
+  const document = moveEntryInDoc(history.present.document, collectionId, entryId, toIndex);
+  if (document === history.present.document) return history;
+  return step(history, document, { type: "moveEntry", collectionId });
+}
+
 /** One snapshot pushed onto the stack, which every verb above does identically. */
 function step(history: History, document: RetorikaDocument, cause: SnapshotCause): History {
   return {
@@ -962,6 +1088,26 @@ function apply(history: History, action: HistoryAction): History {
       return movePage(history, action.pageId, action.toIndex);
     case "deletePage":
       return deletePage(history, action.pageId);
+    case "addCollection":
+      return addCollection(history, action.name);
+    case "renameCollection":
+      return renameCollection(history, action.collectionId, action.name);
+    case "deleteCollection":
+      return deleteCollection(history, action.collectionId);
+    case "addEntry":
+      return addEntry(history, action.collectionId, action.fields);
+    case "setEntryField":
+      return setEntryField(
+        history,
+        action.collectionId,
+        action.entryId,
+        action.field,
+        action.value,
+      );
+    case "removeEntry":
+      return removeEntry(history, action.collectionId, action.entryId);
+    case "moveEntry":
+      return moveEntry(history, action.collectionId, action.entryId, action.toIndex);
     case "undo":
       return undo(history);
     case "redo":

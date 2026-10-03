@@ -146,6 +146,28 @@ const RAIL_ICONS = {
       <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
     </svg>
   ),
+  // Three lines with a bullet each, which is a list: the thing the panel is about, drawn as the
+  // owner would draw it. Not a stack of cards or a database icon — a list.
+  collections: (
+    <svg
+      width="21"
+      height="21"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.7}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M9 6h11" />
+      <path d="M9 12h11" />
+      <path d="M9 18h11" />
+      <path d="M4.5 6h.01" />
+      <path d="M4.5 12h.01" />
+      <path d="M4.5 18h.01" />
+    </svg>
+  ),
 } as const;
 
 /**
@@ -157,7 +179,14 @@ const RAIL_ICONS = {
  * it is a value the rail can take **only while the design tools are on**, which `EditorShell` is
  * what enforces, and `Editor` falls back to `sections` if the tools go off while it is open.
  */
-export type RailItemId = "sections" | "style" | "pages" | "photos" | "share" | "design";
+export type RailItemId =
+  | "sections"
+  | "style"
+  | "pages"
+  | "photos"
+  | "share"
+  | "design"
+  | "collections";
 
 function RailIcon({ icon, active }: { icon: keyof typeof RAIL_ICONS; active: boolean }) {
   return (
@@ -687,6 +716,18 @@ export function EditorShell({
               label={es["editor.rail.design"]}
               active={rail === "design"}
               onSelect={() => onRailChange("design")}
+            />
+          ) : null}
+          {/* The seventh item, and the second the switch adds (ADR 0033 §11). **Absent** rather than
+              dimmed while the tools are off, for the reason `RailLabel`'s own note gives and ADR 0025
+              §6 fixes: the grey shade for «this exists but not yet» lost its last caller in sprint 6
+              and is not coming back for a panel that is a setting away. */}
+          {designTools ? (
+            <RailButton
+              icon="collections"
+              label={es["editor.rail.collections"]}
+              active={rail === "collections"}
+              onSelect={() => onRailChange("collections")}
             />
           ) : null}
           {designTools === undefined ? null : (

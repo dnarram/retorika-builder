@@ -91,7 +91,7 @@ function slotLabel(catalogId: string, slot: string): string {
 /** A line's own slot, named in Spanish by the catalog. Every one of these keys already existed —
  * they were written when a line gained its add and remove controls — so nothing here invents a word
  * for a screen in Spanish, which is what this file's own comment refuses to do. */
-function itemSlotLabel(catalogId: string, slot: string): string {
+export function itemSlotLabel(catalogId: string, slot: string): string {
   const key = `section.${catalogId}.item.${slot}` as keyof typeof catalogEs;
   return catalogEs[key] ?? slot;
 }

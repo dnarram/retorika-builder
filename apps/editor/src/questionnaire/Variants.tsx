@@ -737,6 +737,33 @@ export function Variants({
           dismissToast();
           dispatch({ type: "sectionToPage", variant: openIndex, sectionId });
         }}
+        onRenameCollection={(collectionId, name) => {
+          dismissToast();
+          dispatch({ type: "renameCollection", variant: openIndex, collectionId, name });
+        }}
+        onDeleteCollection={(collectionId) => {
+          dismissToast();
+          dispatch({ type: "deleteCollection", variant: openIndex, collectionId });
+        }}
+        onSetEntryField={(collectionId, entryId, field, value) => {
+          dismissToast();
+          dispatch({
+            type: "setEntryField",
+            variant: openIndex,
+            collectionId,
+            entryId,
+            field,
+            value,
+          });
+        }}
+        onRemoveEntry={(collectionId, entryId) => {
+          dismissToast();
+          dispatch({ type: "removeEntry", variant: openIndex, collectionId, entryId });
+        }}
+        onMoveEntry={(collectionId, entryId, toIndex) => {
+          dismissToast();
+          dispatch({ type: "moveEntry", variant: openIndex, collectionId, entryId, toIndex });
+        }}
         onRenamePage={(id, title) => {
           dismissToast();
           dispatch({ type: "renamePage", variant: openIndex, pageId: id, title });

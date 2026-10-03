@@ -1,9 +1,10 @@
-export type { CollectionUse } from "./collections.ts";
+export type { CardinalityBlock, CollectionUse } from "./collections.ts";
 export {
   addCollection,
   addEntry,
   bindElement,
   deleteCollection,
+  entryCountBlock,
   mintCollectionId,
   moveEntry,
   removeEntry,
@@ -27,6 +28,7 @@ export type {
   CollectionRef,
   ContentElement,
   ContentValue,
+  EntryField,
   Page,
   Placement,
   RetorikaDocument,
