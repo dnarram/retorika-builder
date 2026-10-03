@@ -51,6 +51,8 @@ export function CollectionsPanel({
   blockFor,
   candidates,
   onMakeList,
+  onBindList,
+  canBind,
   onAddEntry,
   onRenameCollection,
   onDeleteCollection,
@@ -76,6 +78,17 @@ export function CollectionsPanel({
    */
   candidates: readonly { sectionId: string; slot: string; suggestedName: string }[];
   onMakeList: (sectionId: string, slot: string, name: string) => void;
+  /**
+   * Show an existing list here instead of making a new one — §7's «las secciones del catálogo pueden
+   * alimentarse de una colección», which is the half that makes «cambiarla cambia las cuarenta
+   * páginas» true *across* sections rather than inside one.
+   *
+   * **Offered only where it would be accepted.** `bindList` refuses a collection that has no field
+   * this section's cards read, and one that does not fit the section — so `canBind` asks before the
+   * button is drawn rather than after it is pressed.
+   */
+  onBindList: (sectionId: string, slot: string, collectionId: string) => void;
+  canBind: (sectionId: string, slot: string, collectionId: string) => boolean;
   /** `undefined` when this panel cannot know what a ficha is made of — see `addableFields`. */
   onAddEntry: (collectionId: string, fields: Record<string, EntryField>) => void;
   onRenameCollection: (collectionId: string, name: string) => void;
@@ -144,16 +157,37 @@ export function CollectionsPanel({
             {es["editor.collections.makeHelp"]}
           </span>
           {candidates.map((candidate) => (
-            <button
+            <div
               key={`${candidate.sectionId}:${candidate.slot}`}
-              type="button"
-              onClick={() =>
-                onMakeList(candidate.sectionId, candidate.slot, candidate.suggestedName)
-              }
-              className="self-start rounded-md border border-ui-border bg-white px-2 py-1 text-[12px] font-medium text-ui-ink"
+              className="flex flex-col items-start gap-1"
             >
-              {es["editor.collections.make"].replace("{section}", sectionName(candidate.sectionId))}
-            </button>
+              <button
+                type="button"
+                onClick={() =>
+                  onMakeList(candidate.sectionId, candidate.slot, candidate.suggestedName)
+                }
+                className="rounded-md border border-ui-border bg-white px-2 py-1 text-left text-[12px] font-medium text-ui-ink"
+              >
+                {es["editor.collections.make"].replace(
+                  "{section}",
+                  sectionName(candidate.sectionId),
+                )}
+              </button>
+              {doc.collections
+                .filter((collection) => canBind(candidate.sectionId, candidate.slot, collection.id))
+                .map((collection) => (
+                  <button
+                    key={collection.id}
+                    type="button"
+                    onClick={() => onBindList(candidate.sectionId, candidate.slot, collection.id)}
+                    className="rounded-md border border-ui-border bg-white px-2 py-1 text-left text-[12px] font-medium text-ui-ink"
+                  >
+                    {es["editor.collections.useHere"]
+                      .replace("{list}", collection.name)
+                      .replace("{section}", sectionName(candidate.sectionId))}
+                  </button>
+                ))}
+            </div>
           ))}
         </div>
       )}
