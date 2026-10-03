@@ -1,5 +1,6 @@
 "use client";
 
+import { blankItem } from "@retorika/catalog";
 import {
   type CardinalityBlock,
   type Collection,
@@ -48,6 +49,9 @@ export function CollectionsPanel({
   document: doc,
   sectionName,
   blockFor,
+  candidates,
+  onMakeList,
+  onAddEntry,
   onRenameCollection,
   onDeleteCollection,
   onSetEntryField,
@@ -61,6 +65,19 @@ export function CollectionsPanel({
   /** What would be in the way if this collection had `would` entries — the schema's own
    * `entryCountBlock`, so the message and the refusal cannot drift apart. */
   blockFor: (collectionId: string, would: number) => CardinalityBlock | undefined;
+  /**
+   * The sections that have cards and no list yet — the subject of «hacer una lista con estas
+   * tarjetas», which is the **lossless** way in and therefore the only one offered.
+   *
+   * **The offer lives here rather than in the canvas's action cluster**, and that follows ADR 0025's
+   * amendment: when the `Diseño` panel was found naming its own exit in a paragraph that did not
+   * offer it, the fix was a button beside the sentence. This panel's empty state is that sentence.
+   * The cluster is also eight buttons already, and mouse-only.
+   */
+  candidates: readonly { sectionId: string; slot: string; suggestedName: string }[];
+  onMakeList: (sectionId: string, slot: string, name: string) => void;
+  /** `undefined` when this panel cannot know what a ficha is made of — see `addableFields`. */
+  onAddEntry: (collectionId: string, fields: Record<string, EntryField>) => void;
   onRenameCollection: (collectionId: string, name: string) => void;
   onDeleteCollection: (collectionId: string) => void;
   onSetEntryField: (
@@ -74,7 +91,21 @@ export function CollectionsPanel({
   onClose: () => void;
 }) {
   const headingId = useId();
-  const [open, setOpen] = useState<string | null>(doc.collections[0]?.id ?? null);
+  /**
+   * Which list is expanded — **derived with a fallback rather than initialised**, which a test found
+   * the hard way.
+   *
+   * `useState(doc.collections[0]?.id)` reads the document **once**, and the ordinary journey opens
+   * this panel while there are no lists at all: the offer to make one is in here. So the state
+   * initialised to `null`, the owner pressed «Hacer una lista», the list appeared — collapsed, with
+   * its fichas hidden behind a second click nobody was told about.
+   *
+   * `undefined` means «has not chosen yet» and falls through to the first list; `null` means
+   * «collapsed it on purpose». Three states, because two of them were being asked to mean the same
+   * thing and could not.
+   */
+  const [chosen, setChosen] = useState<string | null | undefined>(undefined);
+  const open = chosen === undefined ? (doc.collections[0]?.id ?? null) : chosen;
   const [renaming, setRenaming] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const nameRef = useRef<HTMLInputElement>(null);
@@ -103,7 +134,31 @@ export function CollectionsPanel({
 
       {doc.collections.length === 0 ? (
         <p className="text-xs leading-normal text-ui-muted">{es["editor.collections.none"]}</p>
-      ) : (
+      ) : null}
+
+      {/* The way in, offered wherever there is something to offer it for — above the lists when
+          there are none, below them when there are. */}
+      {candidates.length > 0 && (
+        <div className="flex flex-col gap-1.5 rounded-[10px] border border-dashed border-ui-border p-2">
+          <span className="text-[11px] leading-normal text-ui-muted">
+            {es["editor.collections.makeHelp"]}
+          </span>
+          {candidates.map((candidate) => (
+            <button
+              key={`${candidate.sectionId}:${candidate.slot}`}
+              type="button"
+              onClick={() =>
+                onMakeList(candidate.sectionId, candidate.slot, candidate.suggestedName)
+              }
+              className="self-start rounded-md border border-ui-border bg-white px-2 py-1 text-[12px] font-medium text-ui-ink"
+            >
+              {es["editor.collections.make"].replace("{section}", sectionName(candidate.sectionId))}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {doc.collections.length > 0 && (
         <>
           <p className="text-xs leading-normal text-ui-muted">{es["editor.collections.help"]}</p>
           <ul className="flex flex-col gap-1.5">
@@ -113,12 +168,13 @@ export function CollectionsPanel({
                   collection={collection}
                   doc={doc}
                   sectionName={sectionName}
+                  onAddEntry={onAddEntry}
                   open={open === collection.id}
                   renaming={renaming === collection.id}
                   draft={draft}
                   nameRef={nameRef}
                   blockFor={blockFor}
-                  onToggle={() => setOpen(open === collection.id ? null : collection.id)}
+                  onToggle={() => setChosen(open === collection.id ? null : collection.id)}
                   onStartRename={() => {
                     setDraft(collection.name);
                     setRenaming(collection.id);
@@ -152,6 +208,7 @@ function CollectionRow({
   collection,
   doc,
   sectionName,
+  onAddEntry,
   open,
   renaming,
   draft,
@@ -170,6 +227,7 @@ function CollectionRow({
   collection: Collection;
   doc: RetorikaDocument;
   sectionName: (sectionId: string) => string;
+  onAddEntry: (collectionId: string, fields: Record<string, EntryField>) => void;
   open: boolean;
   renaming: boolean;
   draft: string;
@@ -200,6 +258,19 @@ function CollectionRow({
    * about the count and not about which ficha: taking any one away leaves the same number.
    */
   const removalBlock = blockFor(collection.id, collection.entries.length - 1);
+
+  /**
+   * Adding one, asked the same way **before** the control is drawn — and with a second question
+   * this one needs and removal does not: **what would go in the new ficha?**
+   *
+   * The words come from the catalog's own marker text for the slots the fields are named after
+   * (`blankItem`), which is what every other new line in this editor is filled with and what
+   * `isPlaceholderText` recognises before a download. Where a field is not one of those slots — a
+   * list somebody wrote by hand — this panel genuinely does not know what to put, and says so rather
+   * than inventing a word or writing an empty one, which would draw no card at all.
+   */
+  const additionBlock = blockFor(collection.id, collection.entries.length + 1);
+  const newFields = addableFields(collection, uses);
 
   return (
     <>
@@ -258,59 +329,129 @@ function CollectionRow({
       </div>
 
       {open && (
-        <ul className="flex flex-col gap-1.5 border-t border-ui-border p-1.5">
-          {collection.entries.map((entry, index) => (
-            <li key={entry.id} className="rounded-md border border-ui-border bg-ui-surface p-1.5">
-              <div className="flex flex-col gap-1">
-                {Object.entries(entry.fields).map(([field, value]) => (
-                  <EntryFieldRow
-                    key={field}
-                    field={field}
-                    value={value}
-                    uses={uses}
-                    onCommit={(text) =>
-                      onSetEntryField(collection.id, entry.id, field, {
-                        text,
-                        ...marksAfterEdit(value, text),
-                      })
-                    }
-                  />
-                ))}
-              </div>
+        <>
+          <ul className="flex flex-col gap-1.5 border-t border-ui-border p-1.5">
+            {collection.entries.map((entry, index) => (
+              <li key={entry.id} className="rounded-md border border-ui-border bg-ui-surface p-1.5">
+                <div className="flex flex-col gap-1">
+                  {Object.entries(entry.fields).map(([field, value]) => (
+                    <EntryFieldRow
+                      key={field}
+                      field={field}
+                      value={value}
+                      uses={uses}
+                      onCommit={(text) =>
+                        onSetEntryField(collection.id, entry.id, field, {
+                          text,
+                          ...marksAfterEdit(value, text),
+                        })
+                      }
+                    />
+                  ))}
+                </div>
 
-              <div className="mt-1 flex flex-wrap items-center gap-1">
-                {index > 0 && (
-                  <SmallButton
-                    label={es["editor.collections.up"]}
-                    onClick={() => onMoveEntry(collection.id, entry.id, index - 1)}
-                  />
-                )}
-                {index < collection.entries.length - 1 && (
-                  <SmallButton
-                    label={es["editor.collections.down"]}
-                    onClick={() => onMoveEntry(collection.id, entry.id, index + 1)}
-                  />
-                )}
-                {removalBlock === undefined ? (
-                  <SmallButton
-                    label={es["editor.collections.removeEntry"]}
-                    onClick={() => onRemoveEntry(collection.id, entry.id)}
-                    danger
-                  />
-                ) : (
-                  <span className="px-1.5 py-1 text-[11px] leading-normal text-ui-muted">
-                    {es["editor.collections.cannotRemove"]
-                      .replace("{section}", sectionName(removalBlock.sectionId))
-                      .replace("{n}", String(removalBlock.limit))}
-                  </span>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
+                <div className="mt-1 flex flex-wrap items-center gap-1">
+                  {index > 0 && (
+                    <SmallButton
+                      label={es["editor.collections.up"]}
+                      onClick={() => onMoveEntry(collection.id, entry.id, index - 1)}
+                    />
+                  )}
+                  {index < collection.entries.length - 1 && (
+                    <SmallButton
+                      label={es["editor.collections.down"]}
+                      onClick={() => onMoveEntry(collection.id, entry.id, index + 1)}
+                    />
+                  )}
+                  {removalBlock === undefined ? (
+                    <SmallButton
+                      label={es["editor.collections.removeEntry"]}
+                      onClick={() => onRemoveEntry(collection.id, entry.id)}
+                      danger
+                    />
+                  ) : (
+                    <span className="px-1.5 py-1 text-[11px] leading-normal text-ui-muted">
+                      {es["editor.collections.cannotRemove"]
+                        .replace("{section}", sectionName(removalBlock.sectionId))
+                        .replace("{n}", String(removalBlock.limit))}
+                    </span>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="flex flex-wrap items-center gap-1 border-t border-ui-border px-1.5 py-1">
+            {newFields === undefined ? (
+              <span className="px-1.5 py-1 text-[11px] leading-normal text-ui-muted">
+                {es["editor.collections.cannotAddShape"]}
+              </span>
+            ) : additionBlock ? (
+              <span className="px-1.5 py-1 text-[11px] leading-normal text-ui-muted">
+                {es["editor.collections.cannotAdd"]
+                  .replace("{section}", sectionName(additionBlock.sectionId))
+                  .replace("{n}", String(additionBlock.limit))}
+              </span>
+            ) : (
+              <SmallButton
+                label={es["editor.collections.addEntry"]}
+                onClick={() => onAddEntry(collection.id, newFields)}
+              />
+            )}
+          </div>
+        </>
       )}
     </>
   );
+}
+
+/**
+ * What a new ficha would be filled with, or `undefined` when this panel cannot know.
+ *
+ * Every field the entries carry has to be covered, because `addEntry` refuses an entry short of a
+ * field some binding reads — and that refusal must never reach the owner. `blankItem` is the catalog's
+ * own answer for «a new card of this kind», so the marker text here is the same text a new line gets
+ * anywhere else in this editor.
+ */
+function addableFields(
+  collection: Collection,
+  uses: readonly { catalogId: string }[],
+): Record<string, EntryField> | undefined {
+  const catalogId = uses[0]?.catalogId;
+  if (!catalogId) return undefined;
+  const wanted = new Set(collection.entries.flatMap((entry) => Object.keys(entry.fields)));
+  if (wanted.size === 0) return undefined;
+
+  let markers: { slot: string; text: string }[];
+  try {
+    markers = blankItem(catalogId)
+      .elements.filter((element) => element.value && "text" in element.value)
+      .map((element) => ({
+        slot: element.slot,
+        text: element.value && "text" in element.value ? element.value.text : "",
+      }));
+  } catch {
+    // `blankItem` throws for a preset with no marker text for a slot, which is a catalog gap rather
+    // than something to paper over here.
+    return undefined;
+  }
+
+  /**
+   * **A field `blankItem` has nothing for gets an empty text, not a refusal**, and that is right
+   * rather than lenient — found by a test that went looking for a button that was not there.
+   *
+   * `blankItem` fills the preset's item slots, and `elementsForSlot` leaves out the ones whose `min`
+   * is 0. So `description` on a «Qué hago» card has no marker, because a card with no description is
+   * a card the preset already allows. An empty text renders as nothing — which is exactly what that
+   * card looks like today — so the new ficha arrives with its required words marked and its optional
+   * ones blank, and the owner fills in whichever they want.
+   *
+   * The only case left where this panel genuinely cannot know is a list nothing is bound to, which is
+   * the `catalogId` check above.
+   */
+  const bySlot = new Map(markers.map((marker) => [marker.slot, marker.text]));
+  const fields: Record<string, EntryField> = {};
+  for (const field of wanted) fields[field] = { text: bySlot.get(field) ?? "" };
+  return fields;
 }
 
 /**
