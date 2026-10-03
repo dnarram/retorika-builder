@@ -1,5 +1,6 @@
 import { COVER_ID, FOOTER_ID, presetFor, TEASER_ID } from "@retorika/catalog";
 import {
+  type Collection,
   type ContentElement,
   GRID_COLUMNS,
   mobileSequence,
@@ -53,22 +54,135 @@ function headingTag(level: number): string {
  * VoiceOver users would lose "list, 4 items". An item with nothing visible is not emitted,
  * and neither is a list with no item left: an empty <li> or <ul> would be published.
  */
+/**
+ * What a bound card is drawn with: the collections the document carries, and — inside a bound list —
+ * the entry this particular card is for.
+ *
+ * Threaded as a parameter rather than folded into `ResolvedRenderOptions`, because it is not a
+ * choice about the output: it is part of the document. An option that smuggled document data would
+ * make `withDefaults` a thing that has to be told about `collections`.
+ */
+interface Bound {
+  collections: readonly Collection[];
+  /** Set only while drawing the cards of a bound list. A leaf's binding is read against this. */
+  entry?: Collection["entries"][number];
+}
+
+/**
+ * A list, drawn the same way for every section that has one: a semantic <ul> whose items
+ * are <li>, each item's elements rendered one heading level below the section's.
+ *
+ * role="list" because WebKit drops list semantics from a <ul> with list-style: none, and
+ * VoiceOver users would lose "list, 4 items". An item with nothing visible is not emitted,
+ * and neither is a list with no item left: an empty <li> or <ul> would be published.
+ *
+ * **A bound list draws one card per entry from one stored item** (ADR 0033 §2). The elements inside
+ * that item are a shared template, because a binding carries no entry id and so cannot address a
+ * card; the entries are what the template is drawn with. Entries draw **in stored order** — no
+ * sorting, no clock, no randomness — because the golden corpus and `INV_5` both rest on this
+ * function being a pure function of the document.
+ */
 function listNode(
   el: ContentElement,
   options: ResolvedRenderOptions,
   level: number,
   base: Record<string, string>,
+  bound: Bound,
 ): RenderNode | undefined {
+  const binding = el.binding;
+  if (binding && binding.field === undefined) {
+    const collection = bound.collections.find((candidate) => candidate.id === binding.collectionId);
+    // Explicit, never a silent fallback: a list bound to a collection that is not there would
+    // otherwise publish as an empty box, and the empty box is what gets downloaded. `checkInvariants`
+    // refuses this document (rule 5), so reaching here means something bypassed the parser.
+    if (!collection) {
+      throw new Error(
+        `A list is bound to collection "${binding.collectionId}", which this document does not carry`,
+      );
+    }
+    const template = el.items?.[0];
+    if (!template) return undefined;
+
+    const cards: RenderNode[] = [];
+    for (const entry of collection.entries) {
+      const children = template.elements
+        .map((child) => elementNode(child, options, level + 1, { ...bound, entry }))
+        .filter((node) => node !== undefined);
+      if (children.length === 0) continue;
+      cards.push(
+        element(
+          "li",
+          {
+            class: "rb-item",
+            // **No `data-item`**, and that is the honest answer rather than a synthetic one: a card
+            // drawn from an entry has no identity in the document, so there is nothing to address.
+            // `data-entry` says which entry it came from, and only for the editor (ADR 0033 §10).
+            ...(options.entryHints ? { "data-entry": entry.id } : {}),
+          },
+          children,
+        ),
+      );
+    }
+    if (cards.length === 0) return undefined;
+    return element("ul", { ...base, class: "rb-list", role: "list" }, cards);
+  }
+
   const items: RenderNode[] = [];
   for (const item of el.items ?? []) {
     const children = item.elements
-      .map((child) => elementNode(child, options, level + 1))
+      .map((child) => elementNode(child, options, level + 1, bound))
       .filter((node) => node !== undefined);
     if (children.length === 0) continue;
     items.push(element("li", { class: "rb-item", "data-item": item.id }, children));
   }
   if (items.length === 0) return undefined;
   return element("ul", { ...base, class: "rb-list", role: "list" }, items);
+}
+
+/**
+ * The value this element draws: its own, or — when it is a bound leaf inside the card being drawn —
+ * the entry's field (ADR 0033 §6).
+ *
+ * **The substitution happens here and nowhere else**, so everything downstream is the path every
+ * other text takes: `textElement` splits it at the same offsets, escapes each piece separately and
+ * wraps only the marked ones. That is ADR 0027's property — exactly one place in this product cuts a
+ * string into pieces — and a second resolution path for bound text would have bought a second one.
+ *
+ * Both refusals are explicit for the reason the style guide gives: «an unknown section or variant
+ * throws rather than rendering an empty box, because the empty box gets published». `checkInvariants`
+ * refuses both documents, so reaching either throw means something got past the parser.
+ */
+function boundValue(el: ContentElement, bound: Bound): ContentElement["value"] {
+  const field = el.binding?.field;
+  if (field === undefined) return el.value;
+
+  if (!bound.entry) {
+    throw new Error(
+      `Element "${el.id}" reads field "${field}" of a collection, but it is not inside a bound list`,
+    );
+  }
+  const resolved = bound.entry.fields[field];
+  if (!resolved) {
+    throw new Error(
+      `Entry "${bound.entry.id}" has no field "${field}", which element "${el.id}" draws`,
+    );
+  }
+
+  // A bound leaf keeps its own `kind`: a link reading a collection is still a link, and only the
+  // words come from the entry. Anything that is not a text-bearing value draws its own value, which
+  // is what a bound photograph will mean when a collection can carry one.
+  if (el.value?.kind === "link") {
+    return {
+      ...el.value,
+      text: resolved.text,
+      ...(resolved.marks ? { marks: resolved.marks } : {}),
+    };
+  }
+  return {
+    kind: "text",
+    text: resolved.text,
+    ...(resolved.marks ? { marks: resolved.marks } : {}),
+  };
 }
 
 /**
@@ -80,6 +194,7 @@ function elementNode(
   el: ContentElement,
   options: ResolvedRenderOptions,
   level: number,
+  bound: Bound,
 ): RenderNode | undefined {
   if (el.hidden) return undefined;
 
@@ -89,9 +204,9 @@ function elementNode(
   const base = { "data-id": el.id, "data-role": el.role, "data-slot": el.slot };
 
   // A list holds items rather than a value, so it is handled before the value check.
-  if (el.role === "list") return listNode(el, options, level, base);
+  if (el.role === "list") return listNode(el, options, level, base, bound);
 
-  const value = el.value;
+  const value = boundValue(el, bound);
   if (!value) return undefined;
 
   switch (value.kind) {
@@ -268,6 +383,7 @@ function sectionNode(
   section: Section,
   options: ResolvedRenderOptions,
   isH1: boolean,
+  bound: Bound,
   target?: TeaserTarget,
 ): RenderNode {
   const preset = presetFor(section.preset.catalogId);
@@ -287,7 +403,7 @@ function sectionNode(
 
   const emitted: { el: ContentElement; node: RenderNode; placement: Placement | undefined }[] = [];
   for (const el of elements) {
-    const node = elementNode(el, options, level);
+    const node = elementNode(el, options, level, bound);
     if (!node) continue;
 
     // **The accessible name of a teaser's link**, and the one thing on it that is not the owner's
@@ -383,6 +499,10 @@ export function resolvePage(doc: RetorikaDocument, pageId: string | undefined): 
 export function buildTree(doc: RetorikaDocument, options: ResolvedRenderOptions): RenderNode[] {
   const page = resolvePage(doc, options.pageId);
 
+  // The collections, resolved once for the whole page rather than looked up per element: a bound
+  // list reads them and nothing else does, and a page with no binding never touches them.
+  const bound: Bound = { collections: doc.collections };
+
   // Which section(s) get the h1. Unchanged for a page that has a cover: every section built on
   // the cover preset is h1, exactly as before — including a free section on that preset, which
   // `hidden-and-embed` in the golden corpus tests deliberately (see the comment in `sectionNode`).
@@ -418,10 +538,11 @@ export function buildTree(doc: RetorikaDocument, options: ResolvedRenderOptions)
           section,
           options,
           section.preset.catalogId === COVER_ID || section.id === fallbackH1Id,
+          bound,
           section.preset.catalogId === TEASER_ID ? teaserTarget(doc, hrefOf(section)) : undefined,
         ),
       ),
-      ...borrowedFooter.map((section) => sectionNode(section, options, false)),
+      ...borrowedFooter.map((section) => sectionNode(section, options, false, bound)),
     ]),
   ];
 }

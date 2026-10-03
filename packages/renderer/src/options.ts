@@ -33,6 +33,23 @@ export interface RenderOptions {
    * preview, where there is no bundle and nothing to link to, so no `og:url` is emitted at all.
    */
   pagePath?: string;
+
+  /**
+   * Whether each card drawn from a collection entry says **which entry it is**, as `data-entry`.
+   *
+   * **Off by default, and the editor is the only caller that turns it on** (ADR 0033 §10). The
+   * editor needs it and the document cannot supply it: a binding carries no entry id, and the cards
+   * do not exist in the document at all — they are one template drawn N times, so every card shares
+   * the template's `data-id`. Without this there is nothing to tell card three from card one, and
+   * editing one would write to the wrong entry.
+   *
+   * **A published page must never carry it**, which is why it defaults to false rather than being
+   * stripped later: `buildSite` does not pass it, the golden corpus is generated without it, and
+   * `collections.test.ts` in this package asserts the published bytes contain no `data-entry`, no
+   * collection name and no entry id. A page that shipped with these would be telling a visitor how
+   * the site was built, and ADR 0001's promise is that a published page is just HTML and CSS.
+   */
+  entryHints?: boolean;
 }
 
 /** `allowEmbeds` resolved; `pageId` stays optional because "unset" is itself a meaningful value
@@ -42,6 +59,7 @@ export type ResolvedRenderOptions = Omit<Required<RenderOptions>, "pageId" | "pa
 
 export const DEFAULT_RENDER_OPTIONS: ResolvedRenderOptions = {
   allowEmbeds: false,
+  entryHints: false,
 };
 
 export function withDefaults(options: RenderOptions = {}): ResolvedRenderOptions {

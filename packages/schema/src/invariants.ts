@@ -177,6 +177,35 @@ export function checkInvariants(doc: RetorikaDocument, lookup?: PresetLookup): V
           });
           continue;
         }
+        /**
+         * **A bound leaf has to be inside a list bound to the same collection** (ADR 0033 §4), and
+         * **this invariant is day 4's, not day 3's** — writing the renderer is what found it missing.
+         * `boundValue` in `packages/renderer/src/build.ts` throws on this document, and a document
+         * the schema accepts and the renderer refuses is the shape of failure ADR 0030 closed for the
+         * tablet bucket: it could be built, stored and autosaved, and then fail at the download.
+         */
+        if (binding.field !== undefined) {
+          const container = elements.find(
+            (candidate) =>
+              candidate.role === "list" &&
+              candidate.binding?.collectionId === binding.collectionId &&
+              candidate.binding.field === undefined &&
+              (candidate.items ?? []).some((item) =>
+                item.elements.some((leaf) => leaf.id === element.id),
+              ),
+          );
+          if (!container) {
+            violations.push({
+              rule: 5,
+              path: `${at}.content#${element.id}`,
+              message:
+                `reads "${binding.field}" of "${binding.collectionId}" but sits in no list ` +
+                "bound to it, so there is no entry to read it from",
+            });
+            continue;
+          }
+        }
+
         if (binding.field === undefined) continue;
         const without = collection.entries.filter(
           (entry) => entry.fields[binding.field as string] === undefined,

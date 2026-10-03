@@ -134,47 +134,53 @@ describe("where a collection is used", () => {
     expect(usesOfCollection(doc, "col-otra")).toEqual([]);
   });
 
-  it("does not count a leaf whose list is not bound, because there are no cards to draw", () => {
-    // A leaf binding with no bound container above it resolves to nothing. It is refused by
-    // `bindElement` and would be a rule-5 violation; what matters here is that it is not a *use*.
+  it("refuses a leaf whose list is not bound, because there is no entry to read from", () => {
+    /**
+     * **This test asserted something weaker until day 4.** It said a leaf with no bound container
+     * above it «is not a *use*», which is true and beside the point: the document is invalid, and
+     * writing the renderer is what made that obvious — `boundValue` throws on it, and a document the
+     * schema accepts and the renderer refuses is the failure ADR 0030 closed for the tablet bucket.
+     * So the invariant now catches it, and `parseDocument` is where this test ends up.
+     */
     const doc = docWith([servicesSection({ items: 1 })], servicios(3));
-    const leafOnly = parseDocument({
-      ...doc,
-      pages: [
-        {
-          ...doc.pages[0],
-          sections: [
-            {
-              ...servicesSection(),
-              content: [
-                {
-                  id: "el-list",
-                  role: "list",
-                  hidden: false,
-                  slot: "services",
-                  items: [
-                    {
-                      id: "item-1",
-                      elements: [
-                        {
-                          id: "el-card-title",
-                          role: "heading",
-                          hidden: false,
-                          slot: "title",
-                          value: { kind: "text", text: "Comidas" },
-                          binding: { collectionId: "col-servicios", field: "nombre" },
-                        },
-                      ],
-                    },
-                  ],
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    });
-    expect(usesOfCollection(leafOnly, "col-servicios")).toEqual([]);
+    const leafOnly = () =>
+      parseDocument({
+        ...doc,
+        pages: [
+          {
+            ...doc.pages[0],
+            sections: [
+              {
+                ...servicesSection(),
+                content: [
+                  {
+                    id: "el-list",
+                    role: "list",
+                    hidden: false,
+                    slot: "services",
+                    items: [
+                      {
+                        id: "item-1",
+                        elements: [
+                          {
+                            id: "el-card-title",
+                            role: "heading",
+                            hidden: false,
+                            slot: "title",
+                            value: { kind: "text", text: "Comidas" },
+                            binding: { collectionId: "col-servicios", field: "nombre" },
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      });
+    expect(leafOnly).toThrow(/sits in no list bound to it/);
   });
 });
 
