@@ -833,3 +833,156 @@ describe("0008 — an element may name one of the two families its theme carries
     expect(JSON.stringify(down(input))).not.toContain("fontFamily");
   });
 });
+
+describe("0009 — a collection entry's field carries marks", () => {
+  /** A 1.7.0 document, optionally with a collection in it. Every document this product has ever
+   * produced has `collections: []`, which is exactly why the collection has to be written by hand
+   * here: the transform has no real input to be tested against. */
+  function before(collections: unknown[] = []): Record<string, unknown> {
+    return {
+      schemaVersion: "1.7.0",
+      id: "doc-1",
+      siteName: "Taberna",
+      theme,
+      collections,
+      pages: [
+        {
+          id: "home",
+          slug: "index",
+          title: "Inicio",
+          sections: [
+            {
+              id: "sec-services",
+              preset: { catalogId: "services", variantId: "cards" },
+              source: "catalog",
+              layout: null,
+              content: [
+                {
+                  id: "el-list",
+                  role: "list",
+                  hidden: false,
+                  slot: "services",
+                  items: [
+                    {
+                      id: "item-1",
+                      elements: [
+                        {
+                          id: "el-card-title",
+                          role: "heading",
+                          hidden: false,
+                          slot: "title",
+                          value: { kind: "text", text: "Comidas" },
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  const withEntries = () => [
+    {
+      id: "col-servicios",
+      name: "Servicios",
+      entries: [
+        { id: "entry-1", fields: { nombre: "Comidas", precio: "12 €" } },
+        { id: "entry-2", fields: { nombre: "Cenas", precio: "18 €" } },
+      ],
+    },
+  ];
+
+  const entries = (doc: Record<string, unknown>): Record<string, unknown>[] => {
+    const collections = doc["collections"] as { entries: Record<string, unknown>[] }[];
+    const first = collections[0];
+    if (!first) throw new Error("no collection");
+    return first.entries;
+  };
+
+  it("opens a document saved before an entry could carry a mark", () => {
+    const migrated = migrateToCurrent(before());
+    expect(migrated["schemaVersion"]).toBe(SCHEMA_VERSION);
+    expect(() => parseDocument(migrated)).not.toThrow();
+  });
+
+  it("changes nothing but the version for the documents that actually exist", () => {
+    // The counted case: `collections: []` on every stored document, so there is nothing to convert.
+    const input = before();
+    expect({ ...upTo(input, "1.8.0"), schemaVersion: "1.7.0" }).toEqual(input);
+  });
+
+  it("wraps a bare string into a text that can carry marks", () => {
+    const migrated = upTo(before(withEntries()), "1.8.0");
+    expect(entries(migrated)[0]?.["fields"]).toEqual({
+      nombre: { text: "Comidas" },
+      precio: { text: "12 €" },
+    });
+    // And the result is a document the current schema accepts, which is the only claim that matters.
+    expect(() => parseDocument(migrateToCurrent(before(withEntries())))).not.toThrow();
+  });
+
+  it("does not wrap a value twice, so running up again is not a corruption", () => {
+    const once = upTo(before(withEntries()), "1.8.0");
+    const twice = step("1.8.0").up(once);
+    expect(twice["collections"]).toEqual(once["collections"]);
+  });
+
+  it("round-trips: down after up gives back exactly what went in", () => {
+    const input = before(withEntries());
+    const down = step("1.8.0").down;
+    if (!down) throw new Error("0009 has no down");
+    expect(down(upTo(input, "1.8.0"))).toEqual(input);
+  });
+
+  it("drops the marks on the way down, because 1.7.0 has nowhere to keep an offset", () => {
+    const marked = [
+      {
+        id: "col-servicios",
+        name: "Servicios",
+        entries: [
+          {
+            id: "entry-1",
+            fields: {
+              nombre: { text: "Comidas y cenas", marks: [{ from: 0, to: 7, mark: "strong" }] },
+            },
+          },
+        ],
+      },
+    ];
+    const down = step("1.8.0").down;
+    if (!down) throw new Error("0009 has no down");
+    const back = down({ ...before(), collections: marked, schemaVersion: "1.8.0" });
+    expect(back["schemaVersion"]).toBe("1.7.0");
+    // The words survive; the emphasis does not. Said in the migration and asserted here.
+    expect(entries(back)[0]?.["fields"]).toEqual({ nombre: "Comidas y cenas" });
+  });
+
+  it("drops a container's fieldless binding on the way down rather than inventing a field", () => {
+    // 1.7.0 required `field`, so a binding without one could not have existed there. Giving it a
+    // made-up name would be a dead reference, which is what rule 5 refuses.
+    const input = before(withEntries());
+    const pages = input["pages"] as { sections: { content: Record<string, unknown>[] }[] }[];
+    const list = pages[0]?.sections[0]?.content[0];
+    if (!list) throw new Error("no list");
+    list["binding"] = { collectionId: "col-servicios" };
+    const inner = (list["items"] as { elements: Record<string, unknown>[] }[])[0]?.elements[0];
+    if (!inner) throw new Error("no inner element");
+    inner["binding"] = { collectionId: "col-servicios", field: "nombre" };
+
+    const down = step("1.8.0").down;
+    if (!down) throw new Error("0009 has no down");
+    const back = down({ ...input, schemaVersion: "1.8.0" });
+    const backPages = back["pages"] as { sections: { content: Record<string, unknown>[] }[] }[];
+    const backList = backPages[0]?.sections[0]?.content[0];
+    if (!backList) throw new Error("no list came back");
+    expect(Object.hasOwn(backList, "binding")).toBe(false);
+    // The leaf's binding named a field, so 1.7.0 can hold it and it stays.
+    const backInner = (backList["items"] as { elements: Record<string, unknown>[] }[])[0]
+      ?.elements[0];
+    expect(backInner?.["binding"]).toEqual({ collectionId: "col-servicios", field: "nombre" });
+  });
+});
