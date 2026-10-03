@@ -13,6 +13,7 @@ import {
 import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
 import { render } from "@retorika/renderer";
 import {
+  bindList,
   canFoldPage,
   type ElementAddress,
   type EntryField,
@@ -3369,6 +3370,18 @@ export function Editor({
               }),
             )}
             onMakeList={onCollectionFromList}
+            onBindList={onBindList}
+            // **Asked by trying it**, which is the only way to keep this answer and `bindList`'s own
+            // refusals from drifting: the verb is pure, so calling it is cheaper than restating its
+            // three conditions here and keeping the restatement in step.
+            canBind={(sectionId, slot, collectionId) => {
+              try {
+                bindList(doc, sectionId, slot, collectionId, (catalogId) => presetFor(catalogId));
+                return true;
+              } catch {
+                return false;
+              }
+            }}
             onAddEntry={onAddEntry}
             onRenameCollection={onRenameCollection}
             onDeleteCollection={onDeleteCollection}

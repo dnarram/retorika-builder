@@ -166,6 +166,7 @@
   "editor.collections.none": "Todavía no tienes ninguna lista.",
   "editor.collections.makeHelp": "Una lista se hace con las tarjetas que ya tienes. No se pierde nada: siguen mostrando lo mismo.",
   "editor.collections.make": "Hacer una lista con las tarjetas de «{section}»",
+  "editor.collections.useHere": "Mostrar la lista «{list}» en «{section}»",
   "editor.collections.addEntry": "Añadir una ficha",
   "editor.collections.cannotAdd": "No se puede añadir: «{section}» muestra {n} como máximo.",
   "editor.collections.cannotAddShape": "Esta lista tiene campos que no vienen de una sección, así que desde aquí no sé con qué rellenar una ficha nueva.",

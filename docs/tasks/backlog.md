@@ -445,7 +445,7 @@ open survives.
   nothing ships Bodoni. **That is the decision it needs**: whether «choose a typeface» means a third
   shipped pair, or a free field with the fallback honestly described. Recorded here rather than inside
   the resolved row above, where it was a clause nobody would find.
-- **A second undo pressed immediately after the first can be lost, while the canvas re-renders.**
+- ~~**A second undo pressed immediately after the first can be lost, while the canvas re-renders.**
   Found by measuring the shortcut that sprint 12 day 3 built, not by supposing: undoing replaces the
   canvas `<iframe>`'s document, and with it the `keydown` listener `wireInteractions` installs on
   load. Between the new document existing and that listener arriving, a keystroke reaches neither
@@ -453,7 +453,34 @@ open survives.
   is**, so a person pressing twice deliberately is unaffected and a person holding the keys down may
   not be. The e2e test clicks the canvas between presses rather than sleeping, and says why. The fix
   is not another listener — it is the canvas not losing its document on every step, which is a
-  bigger change than the shortcut was and has nobody waiting on it.
+  bigger change than the shortcut was and has nobody waiting on it.~~
+
+  **Closed on 3 October 2026, sprint 14 day 7 — re-measured, gone, and it was fixed a sprint before
+  anybody connected the two.**
+
+  Re-measured because this row predated sprint 13 day 7, which changed the one thing it names: the
+  frame's `keydown` listener now installs when the document is **parsed**, not when it has **loaded**.
+  **Five gapless presses, five undos, every time** — at 0ms between them, and again with 600ms of
+  latency on every font request to widen the old window as far as it goes.
+
+  **And the cause is established rather than assumed, by putting the old world back.** Four runs:
+
+  | Parse-time wiring | `load` slowed | Presses landed |
+  |---|---|---|
+  | on | no | 5 of 5 |
+  | on | yes (600ms) | 5 of 5 |
+  | **off** | no | 5 of 5 |
+  | **off** | **yes** | the *typing* was lost — five edits landed as two |
+
+  Neither condition alone reproduces it; both together do. So the row's own diagnosis was right and
+  its proposed fix was not needed: «the canvas not losing its document on every step» would have
+  worked, and attaching the listener earlier was enough.
+
+  **This row and the `e2e` flake row above it were one defect seen from two ends**, and nothing said
+  so at the time: that one measured a lost *click* in the window, this one a lost *keystroke*. The
+  fix for the first closed the second a sprint before anybody looked. The guard is now an `e2e` test
+  that types five edits and presses five times with the window held as wide as it will go — and its
+  first assertion is that the typing arrived at all, because that is what fails first.
 - ~~**The fields panel's own `<input>` is not anchored; an edit from it still falls back to the
   diff.**~~ **Built 1 October 2026, sprint 12 day 3.** The capture ADR 0027 §4b describes now runs
   on the panel's box too, through `fieldEditFor` — which is a second measurement rather than a reuse

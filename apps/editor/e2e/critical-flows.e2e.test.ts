@@ -4871,3 +4871,277 @@ describe("sprint 14 día 6 — enlazar, avisar y desenlazar", () => {
     }
   }, 240_000);
 });
+
+/**
+ * Sprint 14's whole week in one journey, and the promise it closes on is the one every day 7 closes
+ * on: **a ZIP that opens by double-clicking**, now with a collection resolved inside it and no trace
+ * that a collection was ever involved.
+ */
+describe("sprint 14 día 7 — el recorrido completo del sprint", () => {
+  it("makes a list from the cards, shows it in two sections, edits it once, and downloads a ZIP that opens offline with no trace of it", async () => {
+    const walk = await (
+      await browser.newContext({ viewport: { width: 1440, height: 980 } })
+    ).newPage();
+    try {
+      await walk.goto(BASE_URL, { waitUntil: "networkidle" });
+      await walk.fill("#nombre", "Taberna del Puerto");
+      await walk.getByRole("button", { name: "Siguiente" }).click();
+      await walk.getByText("Restaurante y bar", { exact: true }).click();
+      await walk.getByRole("button", { name: "Siguiente" }).click();
+      for (const service of ["Comidas", "Cenas", "Terraza"]) {
+        await walk.getByText(service, { exact: true }).click();
+      }
+      await walk.getByRole("button", { name: "Siguiente" }).click();
+      await walk.fill("#direccion", "Muelle 3, Ronda");
+      await walk.getByRole("button", { name: "Siguiente" }).click();
+      await walk.getByText("Que reserven", { exact: true }).click();
+      await walk.fill("#enlace", "https://reservas.example.com/taberna");
+      await walk.getByRole("button", { name: "Crear mi web" }).click();
+      await walk.getByText("Ver a tamaño real →").first().click();
+      const frame = walk.frameLocator("iframe").first();
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+
+      // ---- day 2: the preview is set in the letter the ZIP ships -------------------------------
+      const usable = await frame.locator("body").evaluate(async () => {
+        await document.fonts.ready;
+        return [...document.fonts].some((face) => face.status === "loaded");
+      });
+      expect(usable, "the preview loaded no shipped face").toBe(true);
+
+      await walk.getByRole("switch", { name: "Herramientas de diseño" }).click();
+      await walk.getByRole("button", { name: "Sí, enciéndelas" }).click();
+
+      // ---- day 6: a list made out of the cards that are already there, losing nothing ----------
+      const cards = frame.locator('[data-section="sec-services"] li.rb-item');
+      await expect(cards).toHaveCount(3);
+      const before = await cards.evaluateAll((nodes) =>
+        nodes.map((node) => node.textContent?.replace(/\s+/g, " ").trim()),
+      );
+
+      await walk.getByRole("button", { name: "Listas" }).click();
+      await walk.getByRole("button", { name: /Hacer una lista con las tarjetas de/ }).click();
+      await expect(walk.getByText("Guardado en este navegador")).toBeVisible();
+      await expect(cards).toHaveCount(3);
+      expect(
+        await cards.evaluateAll((nodes) =>
+          nodes.map((node) => node.textContent?.replace(/\s+/g, " ").trim()),
+        ),
+      ).toEqual(before);
+
+      // ---- day 7: a second section fed from the same list --------------------------------------
+      await frame.locator(".rb-pill").last().click();
+      await frame.locator(".rb-menu-choice", { hasText: "Qué hago" }).first().click();
+      await expect(frame.locator('[data-preset="services"]')).toHaveCount(2);
+
+      await walk.getByRole("button", { name: "Listas" }).click();
+      await walk.getByRole("button", { name: /Mostrar la lista/ }).click();
+      await expect(walk.getByText("Guardado en este navegador")).toBeVisible();
+      // Six cards: three entries, twice. §7's «una plantilla y muchas páginas».
+      await expect(frame.locator('[data-preset="services"] li.rb-item')).toHaveCount(6);
+
+      // ---- days 5 and 6: one edit, both sections ------------------------------------------------
+      const first = frame.locator('[data-preset="services"] li.rb-item h3').first();
+      await first.click();
+      await frame.locator(".rb-toolbar").waitFor();
+      // The warning, before a character is typed, and now naming the count.
+      await expect(frame.locator(".rb-toolbar-notice")).toHaveText(/2 sitios/);
+      await walk.keyboard.type("Comidas caseras");
+      await walk.getByText("Haz clic en cualquier texto para cambiarlo").click();
+      await expect(walk.getByText("Guardado en este navegador")).toBeVisible();
+      await expect(frame.getByText("Comidas caseras")).toHaveCount(2);
+
+      // ---- day 5: the refusal that names the section and the limit ------------------------------
+      await walk.getByRole("button", { name: "Listas" }).click();
+      for (let n = 3; n < 6; n += 1) {
+        await walk.getByRole("button", { name: "Añadir una ficha" }).click();
+      }
+      await expect(walk.getByRole("button", { name: "Añadir una ficha" })).toHaveCount(0);
+      await expect(walk.getByText(/«Qué hago» muestra 6 como máximo/)).toBeVisible();
+      await expect(frame.locator('[data-preset="services"] li.rb-item')).toHaveCount(12);
+
+      // ---- day 6: the exit is the section's, and the cards stay ----------------------------------
+      await frame.locator('[data-section="sec-services"] li.rb-item h3').first().click();
+      await frame.locator(".rb-toolbar").waitFor();
+      await frame.getByRole("button", { name: "Desenlazar esta sección" }).click();
+      await expect(walk.getByText("Guardado en este navegador")).toBeVisible();
+      // The first section keeps six real cards; the second still draws them from the list.
+      await expect(frame.locator('[data-section="sec-services"] li.rb-item')).toHaveCount(6);
+      await expect(frame.locator("[data-entry]")).toHaveCount(6);
+
+      // ---- and the promise every day 7 closes on -------------------------------------------------
+      await walk.getByRole("button", { name: "Descargar", exact: true }).click();
+      const anyway = walk.getByRole("button", { name: "Descargar igualmente" });
+      await anyway.waitFor();
+      const [download, response] = await Promise.all([
+        walk.waitForEvent("download"),
+        walk.waitForResponse((candidate) => candidate.url().includes("/api/download")),
+        anyway.click(),
+      ]);
+      expect(response.status()).toBe(200);
+
+      const dir = mkdtempSync(join(tmpdir(), "retorika-e2e-sprint14-dia7-"));
+      const zipPath = join(dir, download.suggestedFilename());
+      await download.saveAs(zipPath);
+      const zip = new Uint8Array(readFileSync(zipPath));
+      extractAll(zip, dir);
+      const html = new TextDecoder().decode(extractFileBytes(zip, "index.html"));
+
+      // Twelve cards in the bytes, and the edited words in every place that shows them.
+      expect([...html.matchAll(/<li class="rb-item"/g)]).toHaveLength(12);
+      expect([...html.matchAll(/Comidas caseras/g)].length).toBeGreaterThanOrEqual(2);
+
+      /**
+       * **And no trace of the collection**, which is ADR 0033 §10 and ADR 0001 read off the one
+       * artefact that matters. A published page is HTML and CSS; it does not know how it was built.
+       */
+      for (const trace of ["col-", "data-entry", "entry-"]) {
+        expect(html, `the ZIP carries "${trace}"`).not.toContain(trace);
+      }
+
+      const offline = await (await browser.newContext()).newPage();
+      const failed: string[] = [];
+      offline.on("requestfailed", (request) => failed.push(request.url()));
+      try {
+        await offline.goto(`file://${join(dir, "index.html")}`, { waitUntil: "load" });
+        await expect(offline.getByText("Comidas caseras").first()).toBeVisible();
+        // Nothing fetched and failed: the whole site is in the folder, fonts included.
+        expect(failed).toEqual([]);
+      } finally {
+        await offline.context().close();
+      }
+    } finally {
+      await walk.context().close();
+    }
+  }, 300_000);
+});
+
+/**
+ * The offer that is not made, which a sabotage is what put here.
+ *
+ * Making `canBind` return `true` unconditionally broke nothing in the walk, because the only list
+ * there *is* bindable to the only candidate — always-true and correctly-computed agree on it. The
+ * case that tells them apart is a section whose cards read different fields: «Opiniones» holds an
+ * author and a quote, and a list made from «Qué hago» has neither.
+ */
+describe("sprint 14 día 7 — la oferta que no se hace", () => {
+  it("does not offer a list to a section whose cards read fields it has no answer for", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1280, height: 900 } })
+    ).newPage();
+    try {
+      await page.goto(BASE_URL, { waitUntil: "networkidle" });
+      await page.fill("#nombre", "Taberna del Puerto");
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.getByText("Restaurante y bar", { exact: true }).click();
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.getByText("Comidas", { exact: true }).click();
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.fill("#direccion", "Muelle 3, Ronda");
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.getByText("Que reserven", { exact: true }).click();
+      await page.fill("#enlace", "https://reservas.example.com/taberna");
+      await page.getByRole("button", { name: "Crear mi web" }).click();
+      await page.getByText("Ver a tamaño real →").first().click();
+      const frame = page.frameLocator("iframe").first();
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+      await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
+      await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
+
+      await page.getByRole("button", { name: "Listas" }).click();
+      await page.getByRole("button", { name: /Hacer una lista con las tarjetas de/ }).click();
+      await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+
+      // A section whose cards are made of other things entirely.
+      await frame.locator(".rb-pill").last().click();
+      await frame.locator(".rb-menu-choice", { hasText: "Opiniones" }).first().click();
+      await expect(frame.locator('[data-preset="testimonials"]')).toHaveCount(1);
+
+      await page.getByRole("button", { name: "Listas" }).click();
+      // Its own «hacer una lista» is offered — that always works, it is its own cards.
+      await expect(
+        page.getByRole("button", { name: /Hacer una lista con las tarjetas de «Opiniones»/ }),
+      ).toBeVisible();
+      // **And the existing list is not**, because `bindList` would refuse it: «Opiniones» reads an
+      // author and a quote, and this list carries a title and a description. A button that refuses
+      // on press is the dead button this editor does not draw.
+      await expect(page.getByRole("button", { name: /Mostrar la lista/ })).toHaveCount(0);
+    } finally {
+      await page.context().close();
+    }
+  }, 300_000);
+});
+
+/**
+ * El colchón del día 7 — **the second undo, re-measured, and the row it closes.**
+ *
+ * `backlog.md` has recorded since sprint 12: «At machine speed a press sent with no gap is dropped;
+ * with 400ms between them none is», with the cause named as the window «between the new document
+ * existing and that listener arriving». Nobody had re-measured it since sprint 13 day 7 changed
+ * exactly that — the frame's `keydown` listener now installs when the document is **parsed**, not
+ * when it has **loaded**.
+ *
+ * Re-measured on 3 October 2026: **five gapless presses, five undos, every time** — at 0ms, and with
+ * 600ms of font latency on top to widen the old window as far as it will go.
+ *
+ * **And the cause is established rather than guessed**, by putting the old world back: with the
+ * parse-time look-ahead disabled *and* `load` slowed, the window is so wide that the *typing* is lost
+ * too — five edits land as two. Which is the same defect sprint 13 day 7 measured from the other end,
+ * recorded in a second row, as a lost click. **One defect, two rows, and this is the one that closes
+ * the older of them.**
+ */
+describe("sprint 14 día 7 — colchón: el segundo deshacer", () => {
+  it("lands five gapless undo presses, even with the frame's load dragged out", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1280, height: 900 } })
+    ).newPage();
+    try {
+      // The old window, as wide as it gets: `load` waits on eight font requests that take 600ms to
+      // be refused. Before sprint 14 day 2 they were 404s; the delay is what stands in for a loaded
+      // machine, and it is the condition the original measurement was taken under.
+      await page.route("**/fonts/*.woff2", async (route) => {
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        await route.fulfill({ status: 404, body: "" });
+      });
+
+      await page.goto(BASE_URL, { waitUntil: "networkidle" });
+      await page.fill("#nombre", "Taberna del Puerto");
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.getByText("Restaurante y bar", { exact: true }).click();
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.getByText("Comidas", { exact: true }).click();
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.fill("#direccion", "Muelle 3, Ronda");
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.getByText("Que reserven", { exact: true }).click();
+      await page.fill("#enlace", "https://reservas.example.com/taberna");
+      await page.getByRole("button", { name: "Crear mi web" }).click();
+      await page.getByText("Ver a tamaño real →").first().click();
+      const frame = page.frameLocator("iframe").first();
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+
+      const headline = frame.locator('[data-id="el-headline"]');
+      const original = (await headline.textContent())?.trim() ?? "";
+
+      // Five history steps on one element, so five undos are individually visible — and typing them
+      // at all is the first half of the measurement: with the old wiring, three of these are lost.
+      for (const text of ["UNO", "DOS", "TRES", "CUATRO", "CINCO"]) {
+        await headline.click();
+        await page.keyboard.type(text);
+        await page.getByText("Haz clic en cualquier texto para cambiarlo").click();
+        await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+      }
+      await expect(headline, "an edit was lost before the undos were even pressed").toHaveText(
+        "CINCO",
+      );
+
+      // Focus inside the frame, which is where the race lived: the frame's document is the one each
+      // step replaces. No gap, no click between presses — the condition the row said was dropped.
+      await frame.locator('[data-section="sec-cover"]').click();
+      for (let press = 0; press < 5; press += 1) await page.keyboard.press("Meta+z");
+
+      await expect(headline).toHaveText(original, { timeout: 10_000 });
+    } finally {
+      await page.context().close();
+    }
+  }, 300_000);
+});
