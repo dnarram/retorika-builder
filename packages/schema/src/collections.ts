@@ -113,23 +113,88 @@ function replaceCollection(
  * An unbound list's item count is still not checked here, and that is unchanged by this sprint —
  * worth saying rather than leaving for somebody to discover as an inconsistency.
  */
-function cardinalityIssue(
+/**
+ * Why a collection could not have this many entries, as data rather than as a sentence.
+ *
+ * **Structured because the panel has to say it in Spanish** and a verb has to say it in an error, and
+ * those are two renderings of one fact. A reader that returned a sentence would have forced the panel
+ * to parse English back apart, or forced a second copy of the rule to exist for the interface — which
+ * is how a message and a refusal end up disagreeing.
+ */
+export interface CardinalityBlock {
+  sectionId: string;
+  catalogId: string;
+  /** Which end is in the way, so a caller can say «ya es el mínimo» rather than quoting both. */
+  bound: "min" | "max";
+  limit: number;
+  /** What the entry count would become. */
+  would: number;
+}
+
+/**
+ * **The cardinality rule, in both directions** (ADR 0033 §8), asked as a question.
+ *
+ * A bound section shows one card per entry, so the entry count *is* the card count. The catalog
+ * declares how many a section may hold — «Qué hago» is 1..6, ADR 0013 — and this is what stops a
+ * collection and a section from disagreeing.
+ *
+ * **It is the first thing in this repository to validate `itemRange`, and that is on purpose rather
+ * than by accident.** Until sprint 14 the field was declared by five presets and read in one place,
+ * the editor's own `canAdd`, which gates the «añadir línea» control. That gate cannot reach this
+ * case: entries are added in the collections panel, which does not know which sections are bound. So
+ * for a bound list the rule has to live where the document is judged rather than where a button is
+ * drawn.
+ *
+ * An unbound list's item count is still not checked here, and that is unchanged by this sprint —
+ * worth saying rather than leaving for somebody to discover as an inconsistency.
+ *
+ * The first section in reading order that objects is the one returned: a panel showing «and two
+ * others» would be a sentence nobody acts on differently.
+ */
+export function entryCountBlock(
   doc: RetorikaDocument,
   collectionId: string,
-  count: number,
+  would: number,
   lookup: PresetLookup,
-): string | undefined {
+): CardinalityBlock | undefined {
   for (const use of usesOfCollection(doc, collectionId)) {
     const range = lookup(use.catalogId)?.itemRange;
     if (!range) continue;
-    if (count < range.min) {
-      return `section "${use.sectionId}" shows at least ${range.min} and this would leave ${count}`;
+    if (would < range.min) {
+      return {
+        sectionId: use.sectionId,
+        catalogId: use.catalogId,
+        bound: "min",
+        limit: range.min,
+        would,
+      };
     }
-    if (count > range.max) {
-      return `section "${use.sectionId}" shows at most ${range.max} and this would make ${count}`;
+    if (would > range.max) {
+      return {
+        sectionId: use.sectionId,
+        catalogId: use.catalogId,
+        bound: "max",
+        limit: range.max,
+        would,
+      };
     }
   }
   return undefined;
+}
+
+/** The same fact as a sentence, for a verb's refusal. English, like every other error in this
+ * package; the Spanish the owner reads is composed in the panel from its own locale file. */
+function cardinalityIssue(
+  doc: RetorikaDocument,
+  collectionId: string,
+  would: number,
+  lookup: PresetLookup,
+): string | undefined {
+  const block = entryCountBlock(doc, collectionId, would, lookup);
+  if (!block) return undefined;
+  return block.bound === "min"
+    ? `section "${block.sectionId}" shows at least ${block.limit} and this would leave ${block.would}`
+    : `section "${block.sectionId}" shows at most ${block.limit} and this would make ${block.would}`;
 }
 
 /** An id nothing else in this document is using, from a name. */

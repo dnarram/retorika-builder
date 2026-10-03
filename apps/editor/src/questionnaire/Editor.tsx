@@ -15,6 +15,8 @@ import { render } from "@retorika/renderer";
 import {
   canFoldPage,
   type ElementAddress,
+  type EntryField,
+  entryCountBlock,
   findSection,
   flattenElements,
   isHandDesigned,
@@ -65,6 +67,7 @@ import { keepsItsOwnUndo, shortcutFor } from "../editor/shortcuts.ts";
 import { insertedTextFor, liveFrameOf, offsetFor, textFrameOf } from "../editor/textEdits.ts";
 import { hasAnyControl, toolbarFor } from "../editor/textToolbar.ts";
 import es from "../locales/es.json" with { type: "json" };
+import { CollectionsPanel } from "./CollectionsPanel.tsx";
 import { DesignPanel } from "./DesignPanel.tsx";
 import {
   ContrastDialog,
@@ -363,6 +366,11 @@ export function Editor({
   pageId,
   onSelectPage,
   onSectionToPage,
+  onRenameCollection,
+  onDeleteCollection,
+  onSetEntryField,
+  onRemoveEntry,
+  onMoveEntry,
   onRenamePage,
   onMovePage,
   onDeletePage,
@@ -455,6 +463,16 @@ export function Editor({
   /** This section becomes a page of its own (ADR 0022). One history step, so one «Deshacer»
    * takes back the page, the move and the avance together. */
   onSectionToPage: (sectionId: string) => void;
+  onRenameCollection: (collectionId: string, name: string) => void;
+  onDeleteCollection: (collectionId: string) => void;
+  onSetEntryField: (
+    collectionId: string,
+    entryId: string,
+    field: string,
+    value: EntryField,
+  ) => void;
+  onRemoveEntry: (collectionId: string, entryId: string) => void;
+  onMoveEntry: (collectionId: string, entryId: string, toIndex: number) => void;
   onRenamePage: (pageId: string, title: string) => void;
   onMovePage: (pageId: string, toIndex: number) => void;
   onDeletePage: (pageId: string) => void;
@@ -617,7 +635,11 @@ export function Editor({
    * pairing once before fixing it, and `rail` is kept as it was so that turning the tools back on
    * returns to the panel rather than to `Secciones`.
    */
-  const effectiveRail: RailItemId = rail === "design" && !designTools ? "sections" : rail;
+  // **Both gated items fall back, not just the first.** `design` has fallen back since sprint 8;
+  // `collections` joins it, because the switch going off while either panel is open would otherwise
+  // leave a panel on screen that the rail no longer offers a way back to.
+  const GATED: readonly RailItemId[] = ["design", "collections"];
+  const effectiveRail: RailItemId = GATED.includes(rail) && !designTools ? "sections" : rail;
 
   /**
    * Open the file picker for one image, from outside the canvas.
@@ -3182,6 +3204,22 @@ export function Editor({
             // panel is not showing is not showing for either reason — so the third state is
             // collapsed at this one boundary and nowhere else.
             designTools={designTools === true}
+            onClose={() => showRail("sections")}
+          />
+        ) : effectiveRail === "collections" ? (
+          <CollectionsPanel
+            document={doc}
+            sectionName={(sectionId) => sectionDisplayName(doc, sectionId)}
+            // The schema's own reader, handed the catalog: the panel's message and the verb's
+            // refusal are then two renderings of one fact rather than two rules that agree today.
+            blockFor={(collectionId, would) =>
+              entryCountBlock(doc, collectionId, would, (catalogId) => presetFor(catalogId))
+            }
+            onRenameCollection={onRenameCollection}
+            onDeleteCollection={onDeleteCollection}
+            onSetEntryField={onSetEntryField}
+            onRemoveEntry={onRemoveEntry}
+            onMoveEntry={onMoveEntry}
             onClose={() => showRail("sections")}
           />
         ) : effectiveRail === "design" ? (

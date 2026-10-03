@@ -248,6 +248,27 @@ open survives.
   was correct about what it tested and tested the wrong step: it showed that a reload after a
   *successful* selection keeps it, and said nothing about a click that was never registered at all.
   There is nothing to put back when nothing was recorded.
+- **The rail is seven items, and the design-tools switch now sits in the bottom-left corner at 720px
+  tall (3 October 2026, sprint 14 day 5).** The switch is placed directly under the rail's items
+  rather than at the foot of the rail — deliberately, because sprint 8's walk found that `mt-auto` put
+  it 600px from everything else, which «is not separation but concealment». So every new rail item
+  pushes it down: six items put it at about y=598, and `Listas` makes seven and puts it at **y=658**,
+  which at a 1280×720 viewport leaves **43 pixels** under it.
+
+  **Two pre-existing `e2e` tests started failing on it**, which is how it was found rather than
+  reasoned about: the click on the switch timed out because Next's dev overlay (`NEXTJS-PORTAL`) owns
+  that corner. Both were given a taller viewport with the reason written beside them, and that fixes
+  the tests and not the product.
+
+  **`EditorShell`'s own comment predicted exactly this** when the switch was placed, and drew the line
+  this row is about: «It is also the corner the dev overlay occupies, which is **only a nuisance for a
+  test** — but browser chrome tends to gather there too, **and that is not**.» A download bar, an OS
+  dock or a notification toast lands in the same 43 pixels, and `MIN_STUDIO_WIDTH` guards width only.
+  Nothing guards height anywhere.
+
+  Whose call: nobody's yet, and it is a design question rather than a bug — where the switch goes when
+  the rail is seven items. `REVIEW.md` has flagged the rail's own length as an open question since
+  `Compartir` made it six; this is the first time that length has cost something measurable.
 - **The editor's preview never shows the typeface the ZIP ships, found on the way to the row above
   (2 October 2026) and not fixed.** The renderer emits `@font-face` with `fonts/*.woff2` relative,
   which is right for the ZIP and for `file://`. Inside the editor's `srcDoc` preview those eight
