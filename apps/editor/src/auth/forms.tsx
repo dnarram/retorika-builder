@@ -36,6 +36,8 @@ const REASON_KEY: Record<Reason, keyof typeof es> = {
   rate_limited: "auth.error.rate_limited",
   weak_password: "auth.error.weak_password",
   expired_link: "auth.error.expired_link",
+  already_registered: "auth.error.already_registered",
+  needs_confirmation: "auth.error.needs_confirmation",
   unknown: "auth.error.unknown",
 };
 

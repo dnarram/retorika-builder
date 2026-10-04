@@ -51,6 +51,24 @@ export async function startEditorServer(): Promise<string> {
       // its own child (the actual server process), and killing only the shell pnpm started would
       // leave that child running and the port held after the suite exits.
       detached: process.platform !== "win32",
+      env: {
+        ...process.env,
+        /**
+         * Placeholder Supabase credentials, and the shape of them is the decision.
+         *
+         * The right *shape*, so the client constructs and every account screen renders — the
+         * sign-in form, and the «Guardar en mi cuenta» offer, which the editor only draws when an
+         * account is configured. And a host that does not exist, so no sign-in can appear to
+         * succeed: port 9 refuses immediately, which makes the failure path fast and real rather
+         * than a timeout. **No real key goes anywhere near a test** (protocol Part 15).
+         *
+         * One server and not two: two `next dev` processes on this project fight over `.next`,
+         * which is how this was found. So the suite runs configured, and the only thing that costs
+         * is the "no account configured" message, which `test/auth.test.ts` covers directly.
+         */
+        NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:9",
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: "placeholder-anon-key-for-tests",
+      },
     },
   );
   let output = "";
