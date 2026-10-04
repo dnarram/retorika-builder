@@ -1,7 +1,6 @@
 # 0034 — The account arrives at the end, and what it obliges
 
-**Status:** proposed ·
-**Date:** 2026-10-04 ·
+**Status:** **accepted** · **Date:** 2026-10-04 ·
 **Decided by:** David, 4 October 2026, planning sprint 15 — answering who gets an account
 («todo el mundo»), how they get in («correo y contraseña **y** Google… una fusión de las opciones 2
 y 3»), how much landing («una landing mínima»), whether this sprint charges («no, solo las cuentas»)
@@ -9,7 +8,7 @@ and what travels to the server first («primero los documentos»); then delegati
 question with a written instruction to decide it «basada en lo mejor para el proyecto… y lo mejor y
 barato económicamente… sin sacrificar calidad»; then approving the plan with seven adjustments,
 three of which change decisions in this file (§4, §9, §13) ·
-**Accepted by:** _pending — this ADR is signed by David, not by its author_ ·
+**Accepted by:** **David, 5 October 2026 — not direction** ·
 **Touches:** [ADR 0012](0012-application-stack-approved.md) (its third note, and its own release
 condition, now met), [ADR 0021](0021-charging-waits-for-a-sellable-product.md) (whose accounts
 consequence this releases while leaving its charging decision untouched),

@@ -109,8 +109,8 @@ sectors have their own bank since sprint 8.
 
 The same declaration the editor got when sprint 14 closed, for the same reason: so the next sprint
 reads this instead of working it out. Decided by
-[ADR 0034](docs/decisions/0034-the-account-arrives-at-the-end.md), which is **`proposed` and waiting
-for David's signature** — it is signed by him, not by its author.
+[ADR 0034](docs/decisions/0034-the-account-arrives-at-the-end.md), **accepted by David on
+5 October 2026**.
 
 **The shape of it, which is not the obvious one.** The account is created **at the end**, when there
 is a web worth keeping, because that is what the concept dossier says: «La cuenta se crea al final,
