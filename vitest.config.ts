@@ -72,6 +72,38 @@ export default defineConfig({
         : []),
       {
         test: {
+          name: "db",
+          root: "./packages/db",
+          environment: "node",
+          // The suites that need a real Postgres belong to the "db-pg" project below — the same
+          // split the renderer makes for its browser suites, and for the same reason: the pure
+          // logic here (the pooler guard, the migration listing) must be covered by a plain
+          // `pnpm test`, and only the part that needs infrastructure should be gated.
+          exclude: [...configDefaults.exclude, "**/*.pg.test.ts"],
+        },
+      },
+      // The policy suite: a real Postgres, running the row-level security policies that ship.
+      // Declared only when RETORIKA_DB=1, which `pnpm test:db` sets — the same reason the "a11y"
+      // and "e2e" projects are conditional: a plain `pnpm test` must not need infrastructure it
+      // cannot start, and the alternative is a suite that skips when the database is missing,
+      // which is a suite that passes while verifying nothing.
+      ...(process.env["RETORIKA_DB"] === "1"
+        ? [
+            {
+              test: {
+                name: "db-pg",
+                root: "./packages/db",
+                include: ["test/**/*.pg.test.ts"],
+                environment: "node",
+                // Dropping and recreating a database, then running every migration.
+                testTimeout: 60_000,
+                hookTimeout: 90_000,
+              },
+            },
+          ]
+        : []),
+      {
+        test: {
           name: "publisher",
           root: "./packages/publisher",
           environment: "node",

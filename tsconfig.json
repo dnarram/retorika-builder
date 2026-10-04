@@ -26,6 +26,9 @@
       "path": "./packages/generator"
     },
     {
+      "path": "./packages/db"
+    },
+    {
       "path": "./apps/serve"
     }
   ]
