@@ -5145,3 +5145,86 @@ describe("sprint 14 día 7 — colchón: el segundo deshacer", () => {
     }
   }, 300_000);
 });
+
+describe("sprint 15 día 3 — la pantalla de entrar, sin proyecto configurado", () => {
+  /**
+   * What can be walked without credentials, which is more than it sounds.
+   *
+   * ADR 0034 §4 says plainly that Google sign-in is verified by David on the real deployment,
+   * because it needs his project and his consent screen. What does **not** need either is
+   * everything this suite actually owns: that the screen renders, that the caret lands in the
+   * first field, that a failure moves focus to the reason, and that the application says it
+   * cannot sign anybody in rather than pretending it can.
+   *
+   * The server runs here with no `NEXT_PUBLIC_SUPABASE_*` set, which is the honest state of this
+   * machine — so the "not configured" path is not a contrived case, it is the only one available.
+   */
+  it("renders, puts the caret in the first field, and admits it cannot sign anybody in", async () => {
+    const signInPage = await (await browser.newContext()).newPage();
+    try {
+      await signInPage.goto(`${BASE_URL}/entrar`);
+
+      await expect(signInPage.getByRole("heading", { name: "Entra en tu cuenta" })).toBeVisible();
+
+      // Focus management, which the sprint-14 appendix found missing everywhere in this app.
+      // Asserted on the element the browser actually focused, not on the attribute asking for it.
+      await expect(signInPage.locator("#auth-email")).toBeFocused();
+
+      // Both fields carry a visible label, which is why `labelHidden={false}` exists.
+      await expect(signInPage.getByText("Correo electrónico")).toBeVisible();
+      await expect(signInPage.getByText("Contraseña", { exact: true })).toBeVisible();
+
+      // The honest message, and the honest offer beside it: you can still make a web.
+      await expect(signInPage.getByText(/le falta la configuración de la cuenta/)).toBeVisible();
+      await expect(signInPage.getByRole("button", { name: "Entrar", exact: true })).toBeDisabled();
+      await expect(signInPage.getByRole("button", { name: "Entrar con Google" })).toBeDisabled();
+
+      // «La cuenta se crea al final» — the dossier's sentence, on the screen, pointing at the
+      // questionnaire rather than at a sign-up form that deliberately does not exist (§2).
+      await expect(signInPage.getByText(/La cuenta se crea al final/)).toBeVisible();
+      await expect(signInPage.getByRole("link", { name: "Empezar una web" })).toHaveAttribute(
+        "href",
+        "/",
+      );
+    } finally {
+      await signInPage.context().close();
+    }
+  }, 120_000);
+
+  it("reaches the reset screen by keyboard alone, and focuses its field too", async () => {
+    const resetPage = await (await browser.newContext()).newPage();
+    try {
+      await resetPage.goto(`${BASE_URL}/entrar`);
+      // Reached by the link rather than by typing the URL, because a route nothing links to is a
+      // route nobody finds — and six section verbs in this editor are already only reachable by
+      // mouse (sprint 14's appendix).
+      await resetPage.getByRole("link", { name: "No me acuerdo de la contraseña" }).click();
+
+      await expect(
+        resetPage.getByRole("heading", { name: "Recuperar la contraseña" }),
+      ).toBeVisible();
+      await expect(resetPage.locator("#auth-reset-email")).toBeFocused();
+      await expect(resetPage.getByRole("link", { name: "Volver" })).toHaveAttribute(
+        "href",
+        "/entrar",
+      );
+    } finally {
+      await resetPage.context().close();
+    }
+  }, 120_000);
+
+  it("sends a cancelled Google consent screen back with a reason, not a crash", async () => {
+    const callbackPage = await (await browser.newContext()).newPage();
+    try {
+      // What Google does when somebody presses "cancel": comes back with no code at all.
+      await callbackPage.goto(`${BASE_URL}/auth/callback`);
+      await expect(callbackPage).toHaveURL(/\/entrar\?error=unknown/);
+      // Named by its text rather than by its role: the screen is showing two alerts at once
+      // here — "no configurado" and the reason the callback came back — and Next adds a route
+      // announcer with the same role. Asserting on the role alone matched all three.
+      await expect(callbackPage.getByText("No hemos podido entrar.")).toBeVisible();
+    } finally {
+      await callbackPage.context().close();
+    }
+  }, 120_000);
+});

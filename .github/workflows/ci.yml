@@ -269,5 +269,8 @@ jobs:
       # A runtime dependency that would travel to the client's published site (ADR 0001).
       - run: pnpm renderer:deps
 
+      # The database service key reachable from a browser bundle (protocol Part 15).
+      - run: pnpm secrets:scope
+
       # A coverage floor that went down (ADR 0006).
       - run: pnpm coverage:ratchet "${{ steps.range.outputs.range }}"

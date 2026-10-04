@@ -372,5 +372,42 @@
   "editor.toast.deletedAnchors.one": "Un botón de tu web llevaba aquí y ahora no lleva a ningún sitio.",
   "editor.toast.deletedAnchors.many": "{count} botones de tu web llevaban aquí y ahora no llevan a ningún sitio.",
   "editor.toast.undo": "Deshacer",
-  "editor.toast.dismiss": "Cerrar aviso"
+  "editor.toast.dismiss": "Cerrar aviso",
+
+  "auth.signIn.title": "Entra en tu cuenta",
+  "auth.signIn.subtitle": "Para volver a una web que ya guardaste.",
+  "auth.signIn.submit": "Entrar",
+  "auth.signIn.working": "Entrando\u2026",
+  "auth.signIn.google": "Entrar con Google",
+  "auth.signIn.or": "o",
+  "auth.signIn.forgot": "No me acuerdo de la contrase\u00f1a",
+  "auth.signIn.noAccount": "\u00bfTodav\u00eda no tienes cuenta? La cuenta se crea al final, cuando ya tienes una web que no quieres perder.",
+  "auth.signIn.start": "Empezar una web",
+  "auth.email.label": "Correo electr\u00f3nico",
+  "auth.password.label": "Contrase\u00f1a",
+  "auth.back": "Volver",
+  "auth.signOut": "Salir",
+
+  "auth.reset.title": "Recuperar la contrase\u00f1a",
+  "auth.reset.subtitle": "Te mandamos un correo con un enlace para poner una nueva.",
+  "auth.reset.submit": "Mandar el correo",
+  "auth.reset.working": "Mandando\u2026",
+  "auth.reset.sent": "Si ese correo tiene cuenta, el enlace ya va de camino. Mira tambi\u00e9n la carpeta de spam.",
+
+  "auth.newPassword.title": "Pon una contrase\u00f1a nueva",
+  "auth.newPassword.subtitle": "La anterior deja de funcionar en cuanto guardes esta.",
+  "auth.newPassword.label": "Contrase\u00f1a nueva",
+  "auth.newPassword.submit": "Guardar la contrase\u00f1a",
+  "auth.newPassword.working": "Guardando\u2026",
+  "auth.newPassword.done": "Listo. Ya puedes entrar con la contrase\u00f1a nueva.",
+  "auth.newPassword.noSession": "Este enlace no es v\u00e1lido o ya ha caducado. Pide otro desde la pantalla de entrar.",
+
+  "auth.error.invalid_credentials": "El correo o la contrase\u00f1a no coinciden.",
+  "auth.error.rate_limited": "Demasiados intentos en poco tiempo. Prueba otra vez en unos minutos.",
+  "auth.error.weak_password": "Esa contrase\u00f1a es demasiado corta. Ponle al menos seis caracteres.",
+  "auth.error.expired_link": "Ese enlace ya ha caducado. Pide uno nuevo.",
+  "auth.error.unknown": "No hemos podido entrar. Vuelve a intentarlo.",
+  "auth.error.emailRequired": "Escribe tu correo electr\u00f3nico.",
+  "auth.error.passwordRequired": "Escribe tu contrase\u00f1a.",
+  "auth.notConfigured": "Entrar no est\u00e1 disponible en esta copia de la aplicaci\u00f3n: le falta la configuraci\u00f3n de la cuenta. Puedes seguir haciendo tu web sin cuenta."
 }
