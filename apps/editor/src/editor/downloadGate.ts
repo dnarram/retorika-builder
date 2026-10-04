@@ -81,6 +81,17 @@ export const MAX_PHOTOS = MAX_PAGES * (GALLERY_PHOTOS.max + 1);
 export type AcceptedWarning = "photos" | "contrast" | "overflow";
 export type DownloadGate =
   | { kind: "ready" }
+  /**
+   * A bank photograph the browser could not fetch, so the document references bytes nobody has.
+   *
+   * **A block, and first, because the download cannot succeed — not merely should not.**
+   * `/api/download` refuses with «the document references "…", which was not sent», and the editor
+   * used to answer that with «Vuelve a intentarlo», which produced the identical 400 every time: a
+   * site that could never be downloaded again, with a message telling the owner to keep doing the
+   * one thing that could not work. Found by the sprint-14 sweep — `Variants.tsx` swallowed the
+   * failure in two places — and fixed here, where the decision belongs.
+   */
+  | { kind: "photosFailed"; srcs: string[] }
   | { kind: "tooManyPhotos"; count: number; max: number }
   | { kind: "unreadable"; findings: ContrastFinding[] }
   | { kind: "warn"; sample: number; empty: number }
@@ -106,7 +117,20 @@ export function downloadGateFor(
   doc: RetorikaDocument,
   accepted: ReadonlySet<AcceptedWarning> = new Set(),
   overflow: readonly OverflowFinding[] = [],
+  /**
+   * Bank photographs whose fetch failed, by the `src` the document carries.
+   *
+   * Not derivable from the document — it is what happened at runtime — so it arrives as data, the
+   * same way the overflow measurement does. Empty is «none failed», and there is deliberately no
+   * state for «not asked»: a caller that has not tried to load the photographs has no business
+   * opening a gate that is about to start a download.
+   */
+  failedSamples: readonly string[] = [],
 ): DownloadGate {
+  // First, and before even the photo count: this one makes the request impossible rather than
+  // unwise, and no amount of «Descargar igualmente» can get past it.
+  if (failedSamples.length > 0) return { kind: "photosFailed", srcs: [...failedSamples] };
+
   const real = counts.own + counts.sample;
   if (real > MAX_PHOTOS) return { kind: "tooManyPhotos", count: real, max: MAX_PHOTOS };
 
@@ -124,3 +148,30 @@ export function downloadGateFor(
   }
   return { kind: "ready" };
 }
+
+/**
+ * Every gate kind that is not `"ready"` must have a dialog, and this makes forgetting one a type
+ * error rather than a silent nothing.
+ *
+ * `Editor.tsx` renders the dialogs as a chain of `kind === "…"` checks with no exhaustiveness, so
+ * adding a case to the union above and nothing else produced a «Descargar» button that opened
+ * nothing at all — which is precisely the dead-control failure sprint 13 spent a week removing.
+ * Found while adding `photosFailed`: `tsc` was perfectly happy.
+ *
+ * So the kinds with a dialog are listed, and the line below fails to compile if the union ever
+ * grows past the list. Keep them in the order the gate returns them.
+ */
+export const DIALOG_KINDS = [
+  "photosFailed",
+  "tooManyPhotos",
+  "unreadable",
+  "warn",
+  "lowContrast",
+  "overflows",
+] as const;
+
+type KindWithDialog = (typeof DIALOG_KINDS)[number];
+type Uncovered = Exclude<Exclude<DownloadGate["kind"], "ready">, KindWithDialog>;
+
+/** If this line is red, a gate kind has no dialog. Add it to `DIALOG_KINDS` *and* to `Editor.tsx`. */
+export const EVERY_KIND_HAS_A_DIALOG: Uncovered extends never ? true : Uncovered = true;

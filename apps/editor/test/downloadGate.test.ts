@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { GALLERY_PHOTOS } from "@retorika/catalog";
 import {
   MAX_PAGES,
@@ -12,7 +14,12 @@ import {
 } from "@retorika/schema";
 import { PALETTES } from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
-import { downloadGateFor, MAX_PHOTOS } from "../src/editor/downloadGate.ts";
+import {
+  DIALOG_KINDS,
+  downloadGateFor,
+  EVERY_KIND_HAS_A_DIALOG,
+  MAX_PHOTOS,
+} from "../src/editor/downloadGate.ts";
 import type { PhotoCounts } from "../src/editor/photoInventory.ts";
 
 /**
@@ -332,5 +339,89 @@ describe("overflow at 320 pixels", () => {
       downloadGateFor(counts({ empty: 1, total: 1 }), plain, new Set(["overflow"]), overflowing)
         .kind,
     ).toBe("warn");
+  });
+});
+
+describe("a bank photograph that did not load", () => {
+  /**
+   * The sprint-14 sweep's fourth finding, which was the only one of the four that was a dead end
+   * rather than a missing control: «Una foto de muestra que falla es silenciosa y deja la web
+   * imposible de descargar, para siempre.»
+   */
+  it("blocks, because the download cannot succeed rather than should not", () => {
+    expect(
+      downloadGateFor(
+        counts({ sample: 3, total: 3 }),
+        plain,
+        new Set(["photos"]),
+        [],
+        ["assets/barbershop.svg"],
+      ),
+    ).toEqual({ kind: "photosFailed", srcs: ["assets/barbershop.svg"] });
+  });
+
+  it("comes before every other case, including the other block", () => {
+    // Nothing else is worth saying while the request is impossible: /api/download will refuse with
+    // «which was not sent» whatever the owner decides about the rest.
+    const everythingWrong = downloadGateFor(
+      counts({ sample: 2, own: MAX_PHOTOS + 5, total: MAX_PHOTOS + 7 }),
+      plain,
+      new Set(),
+      [{ pageId: "home", sectionId: "sec-cover", label: "Barbería", over: 40 }],
+      ["assets/one.svg", "assets/two.svg"],
+    );
+    expect(everythingWrong.kind).toBe("photosFailed");
+  });
+
+  it("cannot be accepted away, because there is no warning to accept", () => {
+    // `AcceptedWarning` has no member for this on purpose: «Descargar igualmente» past a request
+    // that is going to 400 is a button that lies.
+    const accepted = new Set(["photos", "contrast", "overflow"] as const);
+    expect(downloadGateFor(counts({}), plain, accepted, [], ["assets/x.svg"]).kind).toBe(
+      "photosFailed",
+    );
+  });
+
+  it("is out of the way the moment nothing is missing", () => {
+    expect(downloadGateFor(counts({}), plain, new Set(), [], [])).toEqual({ kind: "ready" });
+    // And the default keeps every existing caller behaving exactly as before.
+    expect(downloadGateFor(counts({}), plain)).toEqual({ kind: "ready" });
+  });
+
+  it("names every photograph that failed, not just the first", () => {
+    const gate = downloadGateFor(counts({}), plain, new Set(), [], ["a.svg", "b.svg", "c.svg"]);
+    expect(gate.kind === "photosFailed" && gate.srcs).toEqual(["a.svg", "b.svg", "c.svg"]);
+  });
+
+  it("hands back a copy, so a caller cannot mutate the gate's answer", () => {
+    const failed = ["a.svg"];
+    const gate = downloadGateFor(counts({}), plain, new Set(), [], failed);
+    failed.push("b.svg");
+    expect(gate.kind === "photosFailed" && gate.srcs).toEqual(["a.svg"]);
+  });
+});
+
+describe("every gate kind has a dialog", () => {
+  /**
+   * The guard that exists because `tsc` was happy to let a new gate kind render nothing at all.
+   * `Editor.tsx` dispatches with a chain of `kind === "…"` checks and no exhaustiveness, so the
+   * type system had nothing to say about the «Descargar» button that would have opened no dialog.
+   */
+  it("is asserted at compile time", () => {
+    expect(EVERY_KIND_HAS_A_DIALOG).toBe(true);
+  });
+
+  it("lists exactly the kinds Editor.tsx renders a dialog for", () => {
+    // Read from the source rather than trusted: the list is only useful if it matches what is
+    // actually rendered, and a list that drifted would make the compile-time guard a lie.
+    const editor = readFileSync(
+      join(import.meta.dirname, "..", "src", "questionnaire", "Editor.tsx"),
+      "utf8",
+    );
+    for (const kind of DIALOG_KINDS) {
+      expect(editor, `Editor.tsx renders no dialog for "${kind}"`).toContain(
+        `downloadDialog?.kind === "${kind}"`,
+      );
+    }
   });
 });

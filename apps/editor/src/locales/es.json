@@ -483,5 +483,12 @@
   "account.delete.pending": "Has pedido borrar la cuenta. Se borrar\u00e1 el {date}.",
   "account.delete.undo": "Cancelar el borrado",
   "account.delete.failed": "No hemos podido registrar la petici\u00f3n. Vuelve a intentarlo.",
-  "account.delete.whatStays": "Tus webs descargadas no se borran: son archivos tuyos y no dependen de nosotros."
+  "account.delete.whatStays": "Tus webs descargadas no se borran: son archivos tuyos y no dependen de nosotros.",
+
+  "editor.download.photosFailed.title": "Falta una foto y no podemos descargar",
+  "editor.download.photosFailed.body.one": "Una de las fotos de muestra no ha llegado a cargarse, as\u00ed que tu web se la pide a un fichero que no tenemos. Mientras falte, la descarga no puede salir bien.",
+  "editor.download.photosFailed.body.many": "{count} fotos de muestra no han llegado a cargarse, as\u00ed que tu web se las pide a ficheros que no tenemos. Mientras falten, la descarga no puede salir bien.",
+  "editor.download.photosFailed.how": "Puedes volver a intentar cargarlas, o poner tus propias fotos en su lugar desde el panel de Fotos.",
+  "editor.download.photosFailed.retry": "Volver a cargar las fotos",
+  "editor.download.photosFailed.close": "Lo hago yo"
 }

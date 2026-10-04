@@ -30,6 +30,71 @@ const closeIcon = (
 );
 
 /**
+ * **The block that can be acted on, which is what the old behaviour was missing.**
+ *
+ * A bank photograph failed to load, so the document references bytes nobody has and
+ * `/api/download` refuses with a 400. The editor used to answer that refusal with «Vuelve a
+ * intentarlo», which produced the identical 400 for ever: a site permanently undownloadable, with
+ * a message telling the owner to keep doing the thing that could not work. Sprint 14's sweep found
+ * it; this is the fix.
+ *
+ * Unlike `TooManyPhotosDialog` this **does** get a button, and the difference is the ADR 0019 line
+ * it sits on: that dialog has nothing to offer because only the owner can decide which photographs
+ * to remove, whereas here the thing that failed is a fetch *we* make, so retrying it is ours to
+ * offer. The second route out — their own photograph — is named rather than automated, because
+ * which photograph belongs in a spot is not ours to choose.
+ */
+export function PhotosFailedDialog({
+  srcs,
+  onRetry,
+  onClose,
+}: {
+  srcs: readonly string[];
+  onRetry: () => void;
+  onClose: () => void;
+}) {
+  const titleId = useId();
+  return (
+    <div className="fixed inset-0 z-20 flex items-center justify-center bg-[#0F172A]/45 p-5">
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="w-full max-w-[460px] rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.28)]"
+      >
+        <h2 id={titleId} className="m-0 text-[17px] font-bold text-ui-ink">
+          {es["editor.download.photosFailed.title"]}
+        </h2>
+        <p className="mt-2 mb-0 text-[14px] leading-snug text-ui-muted">
+          {srcs.length === 1
+            ? es["editor.download.photosFailed.body.one"]
+            : es["editor.download.photosFailed.body.many"].replace("{count}", String(srcs.length))}
+        </p>
+        <p className="mt-2 mb-0 text-[14px] leading-snug text-ui-muted">
+          {es["editor.download.photosFailed.how"]}
+        </p>
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-10 cursor-pointer rounded-[10px] border border-ui-line bg-white px-4 text-[14px] font-semibold text-ui-ink"
+          >
+            {es["editor.download.photosFailed.close"]}
+          </button>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="h-10 cursor-pointer rounded-[10px] border-0 bg-ui-brand px-5 text-[14px] font-semibold text-white"
+          >
+            {es["editor.download.photosFailed.retry"]}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
  * **The hard block.** ADR 0019's dead-destination rule is the precedent: a request that is going
  * to fail on the server regardless of what the owner decides gets no "do it anyway" button,
  * because there is nothing to warn about — only something to fix first. No thumbnails and no list
