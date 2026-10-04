@@ -127,13 +127,20 @@ export function TitleBlock({
   title,
   subtitle,
 }: {
-  step: string;
+  /**
+   * «Paso 3 de 5». Optional because the sign-in screens are not a step in anything: they are
+   * where somebody comes back to a web they already have (ADR 0034 §2), and a counter above the
+   * heading would promise a flow that does not exist.
+   */
+  step?: string;
   title: string;
   subtitle: string;
 }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-      <span style={{ fontSize: 14, fontWeight: 500, color: "#5B6B82" }}>{step}</span>
+      {step ? (
+        <span style={{ fontSize: 14, fontWeight: 500, color: "#5B6B82" }}>{step}</span>
+      ) : null}
       <h1
         style={{
           margin: 0,
@@ -200,6 +207,15 @@ interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
   /** A field the questionnaire itself fills is drawn with the "already answered" primary
    * border; an untouched optional field is drawn muted, matching the mockups exactly. */
   variant?: "primary" | "muted" | "error";
+  /**
+   * The questionnaire asks one question per screen, so its `TitleBlock` *is* the label and the
+   * field's own is hidden — which is why this defaults to true and every mockup still matches.
+   *
+   * The sign-in screens are the first with two fields under one heading, and «Correo» and
+   * «Contraseña» cannot both be inferred from a title. Those pass `false` and get a visible
+   * label. Added rather than duplicated because three screens needed it at once.
+   */
+  labelHidden?: boolean;
 }
 
 export function TextField({
@@ -208,6 +224,7 @@ export function TextField({
   height = 58,
   fontSize = 16,
   variant = "muted",
+  labelHidden = true,
   style,
   ...props
 }: TextFieldProps) {
@@ -223,6 +240,14 @@ export function TextField({
   };
   return (
     <>
+      {labelHidden ? null : (
+        <label
+          htmlFor={id}
+          style={{ fontSize: 14, fontWeight: 600, color: "#334155", marginBottom: -12 }}
+        >
+          {label}
+        </label>
+      )}
       <input
         id={id}
         style={{
@@ -235,7 +260,7 @@ export function TextField({
         }}
         {...props}
       />
-      <VisuallyHiddenLabel htmlFor={id}>{label}</VisuallyHiddenLabel>
+      {labelHidden ? <VisuallyHiddenLabel htmlFor={id}>{label}</VisuallyHiddenLabel> : null}
     </>
   );
 }

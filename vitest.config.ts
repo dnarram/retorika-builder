@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { configDefaults, defineConfig } from "vitest/config";
 import thresholds from "./coverage-thresholds.json" with { type: "json" };
 
@@ -125,6 +126,12 @@ export default defineConfig({
         },
       },
       {
+        // `@/…` is how everything under apps/editor/src/app imports, because that is what Next
+        // resolves from the app's tsconfig paths. Vitest does not read those, so a route handler
+        // was untestable until this alias existed — which is how it was found.
+        resolve: {
+          alias: { "@": fileURLToPath(new URL("./apps/editor/src", import.meta.url)) },
+        },
         test: {
           name: "editor",
           root: "./apps/editor",
