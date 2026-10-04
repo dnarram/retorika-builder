@@ -5476,3 +5476,151 @@ describe("sprint 15 día 6 — la pantalla de la cuenta", () => {
     }
   }, 120_000);
 });
+
+describe("sprint 15 día 7 — la foto que no carga, y las promesas del proyecto", () => {
+  /**
+   * The sprint-14 appendix's fourth finding, walked end to end.
+   *
+   * > «Una foto de muestra que falla es silenciosa y deja la web imposible de descargar, para
+   * > siempre. `continue` sin aviso y sin reintento → la vista previa enseña una imagen rota →
+   * > `/api/download` responde 400 «was not sent» → el editor dice «Vuelve a intentarlo», y
+   * > reintentar da el mismo 400.»
+   *
+   * The failure is produced for real rather than simulated: Playwright refuses the route the
+   * editor fetches bank photographs from, which is exactly what an offline moment or a bad deploy
+   * looks like from the browser's side.
+   */
+  it("says so, and the retry actually retries", async () => {
+    /**
+     * **The bank is empty, so this cannot be reached through a generated site** — which is very
+     * likely why the defect went unnoticed. All eleven sector files in `packages/photobank/bank`
+     * hold zero photographs, so `listSampleRefs` finds nothing, nothing is fetched and nothing can
+     * fail. It becomes reachable the day the bank is filled, which sprint 14 recorded as content
+     * production rather than code.
+     *
+     * So the state is seeded instead of walked to: a restored session whose document names a bank
+     * photograph, which is exactly what a generated document will look like once there are any.
+     * The first fetch is refused and the second is answered, so both halves — the block and the
+     * retry — are real.
+     */
+    const failing = await (await browser.newContext()).newPage();
+    let refuse = true;
+    try {
+      // A 1×1 PNG, so the successful retry hands back bytes a browser accepts as an image.
+      const png = Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==",
+        "base64",
+      );
+      await failing.route("**/api/muestras/**", async (route) => {
+        if (refuse) await route.fulfill({ status: 503, body: "no" });
+        else await route.fulfill({ status: 200, contentType: "image/png", body: png });
+      });
+
+      const document = JSON.parse(
+        readFileSync(
+          join(
+            import.meta.dirname,
+            "..",
+            "..",
+            "..",
+            "fixtures",
+            "documents",
+            "barbershop-cover.json",
+          ),
+          "utf8",
+        ),
+      ) as {
+        pages: { sections: { content: { value?: { kind: string; sample?: string } }[] }[] }[];
+      };
+      for (const page of document.pages) {
+        for (const section of page.sections) {
+          for (const element of section.content) {
+            // A bank id the document merely *names*, which is all a generated document ever does.
+            if (element.value?.kind === "image") element.value.sample = "restaurante-bar-01";
+          }
+        }
+      }
+
+      await failing.addInitScript(
+        (session: string) => window.localStorage.setItem("retorika.session.v1", session),
+        JSON.stringify({
+          payloadVersion: 1,
+          savedAt: new Date().toISOString(),
+          answers: { businessName: "Barbería El Corte", sector: "peluqueria-barberia" },
+          documents: [document],
+          openIndex: 0,
+        }),
+      );
+      await failing.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+
+      // The old behaviour: this press produced a 400 the editor reported as «Vuelve a intentarlo»,
+      // and every retry produced the identical 400. Now it names what is wrong before trying.
+      await failing.getByRole("button", { name: "Descargar" }).click();
+      const dialog = failing.getByRole("alertdialog");
+      await expect(dialog).toBeVisible({ timeout: 30_000 });
+      await expect(dialog.getByText("Falta una foto y no podemos descargar")).toBeVisible();
+      // And it says what would help, instead of telling somebody to repeat what cannot work.
+      await expect(dialog.getByText(/poner tus propias fotos en su lugar/)).toBeVisible();
+
+      // Before the retry the photograph is not loaded, so the canvas still shows the document's
+      // own src rather than bytes the browser holds.
+      const canvasImage = failing.frameLocator("iframe").first().locator('[data-slot="image"]');
+      await expect(canvasImage).not.toHaveAttribute("src", /^blob:/);
+
+      refuse = false;
+      await dialog.getByRole("button", { name: "Volver a cargar las fotos" }).click();
+      await expect(dialog).toBeHidden();
+
+      /**
+       * **The photograph actually arrives, and that is the assertion this test was missing.**
+       *
+       * The first version only checked that the block disappeared — which clearing `failedSamples`
+       * achieves on its own, with or without a re-fetch. The sabotage run proved it: neutering the
+       * line that clears the fetch markers left the test green. So what is asserted now is the
+       * thing that distinguishes a retry from a reset: the bytes are in the browser, which the
+       * canvas shows by drawing a `blob:` URL.
+       */
+      await expect(canvasImage, "the retry cleared the flag without re-fetching").toHaveAttribute(
+        "src",
+        /^blob:/,
+        { timeout: 30_000 },
+      );
+
+      // And then the download gets past the block. Whatever it meets next is a warning about this
+      // site, not the dead end.
+      await failing.getByRole("button", { name: "Descargar" }).click();
+      await expect(
+        failing.getByText("Falta una foto y no podemos descargar"),
+        "the block survived a successful retry",
+      ).toHaveCount(0, { timeout: 30_000 });
+    } finally {
+      await failing.context().close();
+    }
+  }, 300_000);
+
+  /**
+   * Part 16's first rule, which beats everything in ADR 0034 it meets: «La exportación siempre
+   * funciona, incluso con la cuenta caducada o en disputa.»
+   *
+   * Asserted as a property of the route rather than of a journey: whatever the download answers,
+   * it must not be an answer *about* authentication. A 400 for a malformed body is fine; a 401, a
+   * 403 or a redirect to the sign-in screen would mean the promise had quietly acquired a
+   * condition.
+   */
+  it("never makes the download ask who you are", async () => {
+    const anonymous = await (await browser.newContext()).newPage();
+    try {
+      const response = await anonymous.request.post(`${BASE_URL}/api/download`, {
+        headers: { "content-type": "text/plain" },
+        data: "not a multipart body",
+        maxRedirects: 0,
+      });
+      expect([401, 403, 302, 303, 307]).not.toContain(response.status());
+      const body = await response.text();
+      expect(body.toLowerCase()).not.toContain("entrar");
+      expect(body.toLowerCase()).not.toContain("sesión");
+    } finally {
+      await anonymous.context().close();
+    }
+  }, 120_000);
+});

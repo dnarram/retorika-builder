@@ -506,6 +506,18 @@ open survives.
   fix for the first closed the second a sprint before anybody looked. The guard is now an `e2e` test
   that types five edits and presses five times with the window held as wide as it will go — and its
   first assertion is that the typing arrived at all, because that is what fails first.
+- **An `e2e` flake, observed once and written down rather than waved past.** On 4 October 2026,
+  sprint 15 day 7, the full suite failed on **«sprint 14 día 5 — el panel de listas → reorders the
+  fichas, and the canvas follows»**. It passed in isolation and passed on the very next full run,
+  88 of 88, with nothing changed in between — so it is **intermittent and not a regression**, and
+  the day's own changes could not be the cause: they are in `Variants.tsx`'s bank-photograph fetch,
+  which does nothing at all while `packages/photobank/bank` holds zero photographs.
+  **What is not known is why**, and the honest state of this row is that nobody has measured it.
+  The reorder it drives is a drag, which is the one gesture in this suite that depends on real
+  pointer timing, and that is a hypothesis rather than a finding. Recorded now because a flake
+  seen once and not written down is a flake that gets blamed on the next sprint's work — which is
+  exactly what happened to the two rows above, and they turned out to be one defect.
+
 - ~~**The fields panel's own `<input>` is not anchored; an edit from it still falls back to the
   diff.**~~ **Built 1 October 2026, sprint 12 day 3.** The capture ADR 0027 §4b describes now runs
   on the panel's box too, through `fieldEditFor` — which is a second measurement rather than a reuse

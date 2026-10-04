@@ -80,6 +80,7 @@ import {
   ContrastDialog,
   DownloadWarningDialog,
   OverflowDialog,
+  PhotosFailedDialog,
   TooManyPhotosDialog,
 } from "./DownloadGateDialogs.tsx";
 import { FieldsPanel } from "./FieldsPanel.tsx";
@@ -454,6 +455,8 @@ export function Editor({
   onUndo,
   onRedo,
   saveStatus,
+  failedSamples = [],
+  onRetrySamples,
   savedWhere,
   onSaveToAccount,
   toast,
@@ -589,6 +592,9 @@ export function Editor({
   onUndo: () => void;
   onRedo: () => void;
   saveStatus: SaveStatus;
+  /** Bank photographs whose fetch failed, by `src`. A download cannot succeed while any remain. */
+  failedSamples?: readonly string[];
+  onRetrySamples?: (() => void) | undefined;
   savedWhere?: SavedWhere | undefined;
   onSaveToAccount?: (() => void) | undefined;
   toast: DeleteToast | null;
@@ -3210,7 +3216,7 @@ export function Editor({
    */
   async function requestDownload(accepted: ReadonlySet<AcceptedWarning> = new Set()) {
     const overflow = await measureOverflow(doc, { hostDocument: window.document });
-    const gate = downloadGateFor(countPhotos(doc), doc, accepted, overflow);
+    const gate = downloadGateFor(countPhotos(doc), doc, accepted, overflow, failedSamples);
     if (gate.kind === "ready") {
       void download();
       return;
@@ -3264,6 +3270,9 @@ export function Editor({
       undefined,
     );
 
+    // Deliberately without `failedSamples`: this re-check exists only to ask whether the colour
+    // the owner just fixed is still a problem, and it filters to the two contrast kinds on the
+    // next line. A photograph that failed to load is not something this fix could have changed.
     const gate = downloadGateFor(countPhotos(fixed), fixed, acceptedWarnings);
     setDownloadDialog(gate.kind === "unreadable" || gate.kind === "lowContrast" ? gate : null);
   }
@@ -3573,6 +3582,16 @@ export function Editor({
             </button>
           ) : null}
         </div>
+      ) : null}
+      {downloadDialog?.kind === "photosFailed" ? (
+        <PhotosFailedDialog
+          srcs={downloadDialog.srcs}
+          onRetry={() => {
+            setDownloadDialog(null);
+            onRetrySamples?.();
+          }}
+          onClose={() => setDownloadDialog(null)}
+        />
       ) : null}
       {downloadDialog?.kind === "tooManyPhotos" ? (
         <TooManyPhotosDialog

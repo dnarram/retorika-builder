@@ -26,7 +26,7 @@ import {
   type Section,
 } from "@retorika/schema";
 import { withPalette, withScale, withTypePair } from "@retorika/tokens";
-import { useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { loadAccountDesignTools, saveAccountDesignTools } from "../account/designTools.ts";
 import { SaveToAccountDialog } from "../account/SaveToAccountDialog.tsx";
 import { saveSite } from "../account/sites.ts";
@@ -460,6 +460,41 @@ export function Variants({
    * which is exactly what `handlePickPhoto` already does with an upload's.
    */
   const fetched = useRef(new Set<string>());
+  /**
+   * Bank photographs whose fetch failed, by the `src` the document carries.
+   *
+   * **Two silent `continue`s used to live here**, and between them they made a site permanently
+   * undownloadable: the photograph never arrived, the marker below stood so nothing retried, the
+   * preview showed a broken image, `/api/download` refused with «which was not sent», and the
+   * editor said «Vuelve a intentarlo» — which produced the same 400 every time. Reported now, so
+   * the gate can block with something the owner can actually do (`downloadGate.ts`).
+   */
+  const [failedSamples, setFailedSamples] = useState<string[]>([]);
+  /**
+   * Bumped by «Volver a cargar las fotos», and **part of the fetch key below**, which is what
+   * makes a retry a retry.
+   *
+   * The marker has to stand on failure — the note further down is right that re-asking on every
+   * render would be a request loop over a photograph that is not coming. So the retry has to
+   * invalidate markers, and folding the attempt number into the key does that **without any
+   * bookkeeping**: on attempt 1 every key is new, so nothing is marked and everything is asked
+   * again.
+   *
+   * The first version kept a separate counter and deleted the markers of the photographs that had
+   * failed, which is tidier in principle and worse in practice: the counter appeared in the
+   * dependency list without appearing in the body, so it read as a needless dependency to anything
+   * that checks — Biome said so — and a reader would have had to work out that it was load-bearing.
+   * **The price of this version is that an explicit retry re-asks for the photographs that already
+   * arrived too.** They are a handful, it only happens when somebody presses the button, and the
+   * alternative was a dependency nobody could see the point of.
+   */
+  const [sampleAttempt, setSampleAttempt] = useState(0);
+
+  const retrySamples = useCallback(() => {
+    setFailedSamples([]);
+    setSampleAttempt((attempt) => attempt + 1);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -470,7 +505,9 @@ export function Variants({
           // and never stops it from finishing what it already started. See the note below.
           if (cancelled) return;
 
-          const key = `${variant}:${ref.src}`;
+          // The attempt number is part of the key, so «Volver a cargar las fotos» invalidates every
+          // marker at once. See `sampleAttempt`.
+          const key = `${sampleAttempt}:${variant}:${ref.src}`;
           if (fetched.current.has(key)) continue;
           // Marked before the await, so two overlapping runs cannot both fetch the same photograph.
           fetched.current.add(key);
@@ -479,7 +516,12 @@ export function Variants({
             const response = await fetch(`/api/muestras/${encodeURIComponent(ref.id)}`);
             // A failure stays marked: the route answered and said no, and asking again on every
             // render would be a request loop over a photograph that is not coming.
-            if (!response.ok) continue;
+            if (!response.ok) {
+              setFailedSamples((current) =>
+                current.includes(ref.src) ? current : [...current, ref.src],
+              );
+              continue;
+            }
             const bytes = new Uint8Array(await response.arrayBuffer());
 
             // **An in-flight fetch always writes its result, even after this run was cancelled**,
@@ -505,7 +547,11 @@ export function Variants({
             // session that goes offline still downloads a complete site.
             if (!(await savePhoto(variant, ref.src, bytes))) setSaveStatus("unsaved");
           } catch {
-            // Offline, or the route is not there. The marker stands in; see the note above.
+            // Offline, or the route is not there. The marker stands in; see the note above — and
+            // this half was the other silent `continue`.
+            setFailedSamples((current) =>
+              current.includes(ref.src) ? current : [...current, ref.src],
+            );
           }
         }
       }
@@ -514,7 +560,7 @@ export function Variants({
     return () => {
       cancelled = true;
     };
-  }, [histories]);
+  }, [histories, sampleAttempt]);
 
   async function handlePickPhoto(variant: number, address: ElementAddress, file: File) {
     setPhotoError(null);
@@ -961,6 +1007,8 @@ export function Variants({
             dispatch({ type: "redo", variant: openIndex });
           }}
           saveStatus={saveStatus}
+          failedSamples={failedSamples}
+          onRetrySamples={retrySamples}
           savedWhere={savedWhere}
           onSaveToAccount={accountAvailable ? () => setAccountOpen(true) : undefined}
           toast={toast}
