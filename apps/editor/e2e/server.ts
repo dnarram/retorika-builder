@@ -17,6 +17,16 @@ import { type ChildProcess, spawn } from "node:child_process";
 const PORT = Number(process.env["RETORIKA_E2E_PORT"] ?? 4173);
 export const BASE_URL = `http://localhost:${PORT}`;
 
+/**
+ * Where the five questions live, which stopped being `/` on sprint 15 day 5.
+ *
+ * `/` is the landing now (ADR 0034 §2 and §20), so every walk that begins by typing a business
+ * name begins here instead. Named rather than spelled out at forty-two call sites, so the next
+ * move costs one line — and so a test that really does mean the landing says `BASE_URL` and means
+ * it.
+ */
+export const QUESTIONNAIRE_URL = `${BASE_URL}/empezar`;
+
 let server: ChildProcess | undefined;
 
 async function waitForReady(timeoutMs: number): Promise<void> {

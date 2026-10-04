@@ -11,7 +11,7 @@ import {
   type Page,
 } from "@playwright/test";
 import { afterAll, beforeAll, describe, it } from "vitest";
-import { BASE_URL, startEditorServer, stopEditorServer } from "./server.ts";
+import { BASE_URL, QUESTIONNAIRE_URL, startEditorServer, stopEditorServer } from "./server.ts";
 
 /**
  * The critical flows, against the real, running application — the one thing no other suite in
@@ -71,7 +71,7 @@ const HEADLINE_EDIT = "Reserva ya, no te quedes sin mesa";
 
 describe("critical flow 1 — cuestionario hasta web generada", () => {
   it("produces three real, generated sites from the five answers", async () => {
-    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
 
     await page.fill("#nombre", "Taberna Santo Domingo");
     await page.getByRole("button", { name: "Siguiente" }).click();
@@ -356,7 +356,7 @@ describe("critical flow 5 — descarga del ZIP y el HTML abre sin servidor", () 
  */
 describe("regression — the preview is a canvas, not a browsable site", () => {
   it("does not navigate, or nest a second editor, when a menu entry is clicked", async () => {
-    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
     const frame = page.frameLocator("iframe").first();
     await frame.locator('[data-section="sec-cover"]').waitFor();
 
@@ -402,7 +402,7 @@ describe("regression — the preview is a canvas, not a browsable site", () => {
  */
 describe("regression — converting a section, and renaming the page it made", () => {
   it("adds a tab, leaves an avance, and lets the new page be renamed", async () => {
-    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
     const frame = page.frameLocator("iframe").first();
     await frame.locator('[data-section="sec-cover"]').waitFor();
 
@@ -682,7 +682,7 @@ describe("sprint 6 día 7 — fotos subidas desde el panel y desde el aviso, log
   it("uploads through the panel and the warning, and the ZIP that results opens with no server", async () => {
     const walkPage = await (await browser.newContext()).newPage();
     try {
-      await walkPage.goto(BASE_URL, { waitUntil: "networkidle" });
+      await walkPage.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
       await walkPage.fill("#nombre", "Taberna Santo Domingo");
       // The logo (day 6): a blue disc, close enough to classic-blue's own primary to choose it.
       await walkPage.locator("#logo").setInputFiles(join(import.meta.dirname, "fixtures/logo.png"));
@@ -817,7 +817,7 @@ describe("sprint 7 día 3 — deshacer una conversión desde «Páginas»", () =
   it("folds the page back into the section it came from, and offers that on no other page", async () => {
     const walkPage = await (await browser.newContext()).newPage();
     try {
-      await walkPage.goto(BASE_URL, { waitUntil: "networkidle" });
+      await walkPage.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
       await walkPage.fill("#nombre", "Taberna Santo Domingo");
       await walkPage.getByRole("button", { name: "Siguiente" }).click();
       await walkPage.getByText("Restaurante y bar", { exact: true }).click();
@@ -898,7 +898,7 @@ describe("sprint 7 día 5 — el aviso de «sector sin banco»", () => {
   it("warns for a sector with no bank, and not for one that has one", async () => {
     const walkPage = await (await browser.newContext()).newPage();
     try {
-      await walkPage.goto(BASE_URL, { waitUntil: "networkidle" });
+      await walkPage.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
       await walkPage.fill("#nombre", "Fisio Ribera");
       await walkPage.getByRole("button", { name: "Siguiente" }).click();
 
@@ -943,7 +943,7 @@ describe("sprint 7 día 6 — «Equipo» en el menú, y «Avance» nunca ofrecid
   it("finds Equipo by search, inserts it with a placeholder card, and never offers Avance", async () => {
     const walkPage = await (await browser.newContext()).newPage();
     try {
-      await walkPage.goto(BASE_URL, { waitUntil: "networkidle" });
+      await walkPage.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
       await walkPage.fill("#nombre", "Fisio Ribera");
       await walkPage.getByRole("button", { name: "Siguiente" }).click();
       await walkPage.getByText("Fisioterapia", { exact: true }).click();
@@ -1006,7 +1006,7 @@ describe("sprint 7 día 7 — dos hallazgos de esta semana, cerrados", () => {
       await browser.newContext({ viewport: { width: 1280, height: 900 } })
     ).newPage();
     try {
-      await walkPage.goto(BASE_URL, { waitUntil: "networkidle" });
+      await walkPage.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
       await walkPage.fill("#nombre", "Taberna Santo Domingo");
       await walkPage.getByRole("button", { name: "Siguiente" }).click();
       await walkPage.getByText("Restaurante y bar", { exact: true }).click();
@@ -1071,7 +1071,7 @@ describe("sprint 7 día 7 — dos hallazgos de esta semana, cerrados", () => {
       await browser.newContext({ viewport: { width: 1280, height: 950 } })
     ).newPage();
     try {
-      await walkPage.goto(BASE_URL, { waitUntil: "networkidle" });
+      await walkPage.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
       await walkPage.fill("#nombre", "Fisio Ribera");
       await walkPage.getByRole("button", { name: "Siguiente" }).click();
 
@@ -1128,7 +1128,7 @@ describe("sprint 7 día 7 — el recorrido completo del sprint", () => {
   it("reorders a gallery, undoes a conversion, adds Equipo, and downloads a ZIP that opens offline", async () => {
     const walkPage = await (await browser.newContext()).newPage();
     try {
-      await walkPage.goto(BASE_URL, { waitUntil: "networkidle" });
+      await walkPage.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
       await walkPage.fill("#nombre", "Taller Ribera");
       await walkPage.getByRole("button", { name: "Siguiente" }).click();
 
@@ -1278,7 +1278,7 @@ describe("sprint 8 — el modo estudio: encender, diseñar a mano, colocar, y vo
       await browser.newContext({ viewport: { width: 1280, height: 900 } })
     ).newPage();
     try {
-      await studio.goto(BASE_URL, { waitUntil: "networkidle" });
+      await studio.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
       await studio.fill("#nombre", "Barbería El Corte");
       await studio.getByRole("button", { name: "Siguiente" }).click();
       await studio.getByText("Peluquería y barbería", { exact: true }).click();
@@ -1428,7 +1428,7 @@ describe("sprint 8 día 7 — el recorrido completo del sprint", () => {
   it("designs a section by hand, moves it, patches its mobile view, returns once, does it again, and downloads a ZIP that opens offline with the change intact", async () => {
     const studio = await (await browser.newContext()).newPage();
     try {
-      await studio.goto(BASE_URL, { waitUntil: "networkidle" });
+      await studio.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
       await studio.fill("#nombre", "Barbería El Corte");
       await studio.getByRole("button", { name: "Siguiente" }).click();
       await studio.getByText("Peluquería y barbería", { exact: true }).click();
@@ -1612,7 +1612,7 @@ describe("sprint 8 día 7 — colchón: los tiradores no desplazan el lienzo", (
   it("cannot be scrolled sideways after selecting a section, though it could be", async () => {
     const page = await (await browser.newContext()).newPage();
     try {
-      await page.goto(BASE_URL, { waitUntil: "networkidle" });
+      await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
       await page.fill("#nombre", "Taberna Santo Domingo");
       await page.getByRole("button", { name: "Siguiente" }).click();
       await page.getByText("Restaurante y bar", { exact: true }).click();
@@ -1674,7 +1674,7 @@ describe("sprint 9 día 4 — la barra flotante", () => {
   it("appears on every section, writes a reference, and never saves its own words into the text", async () => {
     const studio = await (await browser.newContext()).newPage();
     try {
-      await studio.goto(BASE_URL, { waitUntil: "networkidle" });
+      await studio.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
       await studio.fill("#nombre", "Barbería El Corte");
       await studio.getByRole("button", { name: "Siguiente" }).click();
       await studio.getByText("Peluquería y barbería", { exact: true }).click();
@@ -1797,7 +1797,7 @@ describe("sprint 9 día 5 — medidas, espaciado y la excepción marcada", () =>
       await browser.newContext({ viewport: { width: 1100, height: 1000 } })
     ).newPage();
     try {
-      await studio.goto(BASE_URL, { waitUntil: "networkidle" });
+      await studio.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
       await studio.fill("#nombre", "Reformas Vega");
       await studio.getByRole("button", { name: "Siguiente" }).click();
       await studio.getByText("Peluquería y barbería", { exact: true }).click();
@@ -1921,7 +1921,7 @@ describe("sprint 9 día 5 — medidas, espaciado y la excepción marcada", () =>
 describe("sprint 9 día 6 — la revisión de contraste", () => {
   async function studioWithTools(): Promise<Page> {
     const studio = await (await browser.newContext()).newPage();
-    await studio.goto(BASE_URL, { waitUntil: "networkidle" });
+    await studio.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
     await studio.fill("#nombre", "Reformas Vega");
     await studio.getByRole("button", { name: "Siguiente" }).click();
     await studio.getByText("Peluquería y barbería", { exact: true }).click();
@@ -2043,7 +2043,7 @@ describe("sprint 9 día 7 — el recorrido completo del sprint", () => {
   it("touches a text, styles it by reference and by exception, is blocked and recovers, and downloads a ZIP with the style intact", async () => {
     const studio = await (await browser.newContext()).newPage();
     try {
-      await studio.goto(BASE_URL, { waitUntil: "networkidle" });
+      await studio.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
       await studio.fill("#nombre", "Reformas Vega");
       await studio.getByRole("button", { name: "Siguiente" }).click();
       await studio.getByText("Peluquería y barbería", { exact: true }).click();
@@ -2197,7 +2197,7 @@ describe("sprint 9 día 7 — colchón: el diálogo se queda sobre lo que sigue 
   it("stays open on a remaining finding, and closes without downloading once none are left", async () => {
     const studio = await (await browser.newContext()).newPage();
     try {
-      await studio.goto(BASE_URL, { waitUntil: "networkidle" });
+      await studio.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
       await studio.fill("#nombre", "Reformas Vega");
       await studio.getByRole("button", { name: "Siguiente" }).click();
       await studio.getByText("Peluquería y barbería", { exact: true }).click();
@@ -2281,7 +2281,7 @@ describe("sprint 9 día 7 — colchón: la barra no traga un clic que era para o
       await browser.newContext({ viewport: { width: 1100, height: 900 } })
     ).newPage();
     try {
-      await studio.goto(BASE_URL, { waitUntil: "networkidle" });
+      await studio.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
       await studio.fill("#nombre", "Reformas Vega");
       await studio.getByRole("button", { name: "Siguiente" }).click();
       await studio.getByText("Peluquería y barbería", { exact: true }).click();
@@ -2417,7 +2417,7 @@ describe("sprint 10 día 7 — el recorrido completo del sprint", () => {
   it("marks two words, edits around the mark, triggers and clears an overflow, and downloads a ZIP with the emphasis and the escaping intact", async () => {
     const studio = await (await browser.newContext()).newPage();
     try {
-      await studio.goto(BASE_URL, { waitUntil: "networkidle" });
+      await studio.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
       await studio.fill("#nombre", "Taberna del Puerto");
       await studio.getByRole("button", { name: "Siguiente" }).click();
       await studio.getByText("Restaurante y bar", { exact: true }).click();
@@ -2594,7 +2594,7 @@ describe("sprint 11 día 7 — el recorrido completo del sprint", () => {
   it("marks and edits a run through all five rows of ADR 0027 §3, switches type pair, and downloads a ZIP with the chosen letter, its licence and the escaping intact", async () => {
     const studio = await (await browser.newContext()).newPage();
     try {
-      await studio.goto(BASE_URL, { waitUntil: "networkidle" });
+      await studio.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
       await studio.fill("#nombre", "Reformas Vega");
       await studio.getByRole("button", { name: "Siguiente" }).click();
       await studio.getByText("Peluquería y barbería", { exact: true }).click();
@@ -2784,7 +2784,7 @@ describe("sprint 11 día 7 — el recorrido completo del sprint", () => {
 describe("sprint 12 día 3 — el input anclado y el atajo de deshacer", () => {
   async function tavern(): Promise<Page> {
     const studio = await (await browser.newContext()).newPage();
-    await studio.goto(BASE_URL, { waitUntil: "networkidle" });
+    await studio.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
     await studio.fill("#nombre", "Taberna del Puerto");
     await studio.getByRole("button", { name: "Siguiente" }).click();
     await studio.getByText("Restaurante y bar", { exact: true }).click();
@@ -2917,7 +2917,7 @@ describe("sprint 12 día 7 — el recorrido completo del sprint", () => {
   it("fills a card's description from the panel, keeps its mark through an anchored edit, undoes from the keyboard, sees the width the gate measures, and downloads a ZIP whose head says what a shared link shows", async () => {
     const walk = await (await browser.newContext()).newPage();
     try {
-      await walk.goto(BASE_URL, { waitUntil: "networkidle" });
+      await walk.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
       await walk.fill("#nombre", "Taberna del Puerto");
       await walk.getByRole("button", { name: "Siguiente" }).click();
       await walk.getByText("Restaurante y bar", { exact: true }).click();
@@ -3141,7 +3141,7 @@ describe("sprint 12 día 7 — el recorrido completo del sprint", () => {
 describe("sprint 13 día 2 — la barra se deja usar con el ratón", () => {
   async function barOpen(): Promise<{ studio: Page; frame: FrameLocator }> {
     const studio = await (await browser.newContext()).newPage();
-    await studio.goto(BASE_URL, { waitUntil: "networkidle" });
+    await studio.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
     await studio.fill("#nombre", "Taberna del Puerto");
     await studio.getByRole("button", { name: "Siguiente" }).click();
     await studio.getByText("Restaurante y bar", { exact: true }).click();
@@ -3301,7 +3301,7 @@ describe("sprint 13 día 2 — la barra se deja usar con el ratón", () => {
 describe("sprint 13 día 3 — lo que solo informaba", () => {
   async function studioOnCover(): Promise<{ studio: Page; frame: FrameLocator }> {
     const studio = await (await browser.newContext()).newPage();
-    await studio.goto(BASE_URL, { waitUntil: "networkidle" });
+    await studio.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
     await studio.fill("#nombre", "Taberna del Puerto");
     await studio.getByRole("button", { name: "Siguiente" }).click();
     await studio.getByText("Restaurante y bar", { exact: true }).click();
@@ -3408,7 +3408,7 @@ describe("sprint 13 día 3 — lo que solo informaba", () => {
 describe("sprint 13 día 5 — el «Aa» de la barra", () => {
   async function onTheCover(designTools: boolean): Promise<{ studio: Page; frame: FrameLocator }> {
     const studio = await (await browser.newContext()).newPage();
-    await studio.goto(BASE_URL, { waitUntil: "networkidle" });
+    await studio.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
     await studio.fill("#nombre", "Taberna del Puerto");
     await studio.getByRole("button", { name: "Siguiente" }).click();
     await studio.getByText("Restaurante y bar", { exact: true }).click();
@@ -3571,7 +3571,7 @@ describe("sprint 13 día 6 — las pantallas que faltaban, y los dos fallos sile
   it("goes from the last answer to three built sites with nothing to wait for (mockup 06)", async () => {
     const page = await (await browser.newContext()).newPage();
     try {
-      await page.goto(BASE_URL, { waitUntil: "networkidle" });
+      await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
       await answered(page);
 
       const started = Date.now();
@@ -3598,7 +3598,7 @@ describe("sprint 13 día 6 — las pantallas que faltaban, y los dos fallos sile
   it("leaves a dashed hole where the deleted section was, and takes it back on undo (mockup 11)", async () => {
     const page = await (await browser.newContext()).newPage();
     try {
-      await page.goto(BASE_URL, { waitUntil: "networkidle" });
+      await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
       await answered(page);
       await page.getByRole("button", { name: "Crear mi web" }).click();
       await page.getByText("Ver a tamaño real →").first().click();
@@ -3651,7 +3651,7 @@ describe("sprint 13 día 6 — las pantallas que faltaban, y los dos fallos sile
     // keep. The mockup was drawn before the two-speed toast existed. `REVIEW.md` records it.
     const page = await (await browser.newContext()).newPage();
     try {
-      await page.goto(BASE_URL, { waitUntil: "networkidle" });
+      await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
       await answered(page);
       await page.getByRole("button", { name: "Crear mi web" }).click();
       await page.getByText("Ver a tamaño real →").first().click();
@@ -3688,7 +3688,7 @@ describe("sprint 13 día 6 — las pantallas que faltaban, y los dos fallos sile
     const context = await browser.newContext();
     const page = await context.newPage();
     try {
-      await page.goto(BASE_URL, { waitUntil: "networkidle" });
+      await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
       // A payload of the right shape whose document the schema refuses — the realistic corruption,
       // and the one `loadSession` was already written to survive.
       await page.evaluate(() => {
@@ -3751,7 +3751,7 @@ describe("sprint 13 día 6 — las pantallas que faltaban, y los dos fallos sile
           return real.call(this, key, value);
         };
       });
-      await page.goto(BASE_URL, { waitUntil: "networkidle" });
+      await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
       await answered(page);
       await page.getByRole("button", { name: "Crear mi web" }).click();
       await page.getByText("Ver a tamaño real →").first().click();
@@ -3818,7 +3818,7 @@ describe("sprint 13 día 7 — el clic que se perdía mientras la vista previa p
   }
 
   async function openedVariant(page: Page): Promise<FrameLocator> {
-    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
     await page.fill("#nombre", "Taberna del Puerto");
     await page.getByRole("button", { name: "Siguiente" }).click();
     await page.getByText("Restaurante y bar", { exact: true }).click();
@@ -3944,7 +3944,7 @@ describe("sprint 13 día 7 — el recorrido completo del sprint", () => {
       await browser.newContext({ viewport: { width: 1440, height: 980 } })
     ).newPage();
     try {
-      await walk.goto(BASE_URL, { waitUntil: "networkidle" });
+      await walk.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
       await walk.fill("#nombre", "Taberna del Puerto");
       await walk.getByRole("button", { name: "Siguiente" }).click();
       await walk.getByText("Restaurante y bar", { exact: true }).click();
@@ -4172,7 +4172,7 @@ describe("sprint 13 día 7 — el recorrido completo del sprint", () => {
  */
 describe("sprint 14 día 2 — la vista previa enseña la letra que envía", () => {
   async function openedVariant(page: Page): Promise<FrameLocator> {
-    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
     await page.fill("#nombre", "Taberna del Puerto");
     await page.getByRole("button", { name: "Siguiente" }).click();
     await page.getByText("Restaurante y bar", { exact: true }).click();
@@ -4193,7 +4193,7 @@ describe("sprint 14 día 2 — la vista previa enseña la letra que envía", () 
   it("serves the four faces the renderer may name, and nothing else", async () => {
     const page = await (await browser.newContext()).newPage();
     try {
-      await page.goto(BASE_URL, { waitUntil: "networkidle" });
+      await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
 
       for (const file of [
         "inter-latin-400-normal.woff2",
@@ -4440,7 +4440,7 @@ describe("sprint 14 día 5 — el panel de listas", () => {
     entries = 3,
     options: { marked?: boolean } = {},
   ): Promise<FrameLocator> {
-    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
     await page.evaluate(
       (document_) => {
         localStorage.setItem(
@@ -4469,7 +4469,7 @@ describe("sprint 14 día 5 — el panel de listas", () => {
   it("is absent with the tools off and present with them on", async () => {
     const page = await (await browser.newContext({ viewport: VIEWPORT })).newPage();
     try {
-      await page.goto(BASE_URL, { waitUntil: "networkidle" });
+      await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
       await page.evaluate((document_) => {
         localStorage.setItem(
           "retorika.session.v1",
@@ -4663,7 +4663,7 @@ describe("sprint 14 día 6 — enlazar, avisar y desenlazar", () => {
   const VIEWPORT = { width: 1280, height: 900 };
 
   async function withTools(page: Page): Promise<FrameLocator> {
-    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
     await page.fill("#nombre", "Taberna del Puerto");
     await page.getByRole("button", { name: "Siguiente" }).click();
     await page.getByText("Restaurante y bar", { exact: true }).click();
@@ -4883,7 +4883,7 @@ describe("sprint 14 día 7 — el recorrido completo del sprint", () => {
       await browser.newContext({ viewport: { width: 1440, height: 980 } })
     ).newPage();
     try {
-      await walk.goto(BASE_URL, { waitUntil: "networkidle" });
+      await walk.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
       await walk.fill("#nombre", "Taberna del Puerto");
       await walk.getByRole("button", { name: "Siguiente" }).click();
       await walk.getByText("Restaurante y bar", { exact: true }).click();
@@ -5029,7 +5029,7 @@ describe("sprint 14 día 7 — la oferta que no se hace", () => {
       await browser.newContext({ viewport: { width: 1280, height: 900 } })
     ).newPage();
     try {
-      await page.goto(BASE_URL, { waitUntil: "networkidle" });
+      await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
       await page.fill("#nombre", "Taberna del Puerto");
       await page.getByRole("button", { name: "Siguiente" }).click();
       await page.getByText("Restaurante y bar", { exact: true }).click();
@@ -5103,7 +5103,7 @@ describe("sprint 14 día 7 — colchón: el segundo deshacer", () => {
         await route.fulfill({ status: 404, body: "" });
       });
 
-      await page.goto(BASE_URL, { waitUntil: "networkidle" });
+      await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
       await page.fill("#nombre", "Taberna del Puerto");
       await page.getByRole("button", { name: "Siguiente" }).click();
       await page.getByText("Restaurante y bar", { exact: true }).click();
@@ -5258,7 +5258,7 @@ describe("sprint 15 día 4 — el diálogo de la cuenta, y las cuatro cosas que 
   beforeAll(async () => {
     accountPage = await (await browser.newContext()).newPage();
 
-    await accountPage.goto(BASE_URL, { waitUntil: "networkidle" });
+    await accountPage.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
     // The same five answers flow 1 uses, because inventing new option labels is how this walk
     // first failed: «Otro» and «Productos» are not choices this questionnaire offers.
     await accountPage.fill("#nombre", "Floristería La Vega");
@@ -5342,4 +5342,112 @@ describe("sprint 15 día 4 — el diálogo de la cuenta, y las cuatro cosas que 
     });
     await expect(accountPage.getByText("Guardado en tu cuenta")).toBeHidden();
   });
+});
+
+describe("sprint 15 día 5 — la landing, y el camino de vuelta", () => {
+  /**
+   * The landing, the route it pushed the questionnaire to, and the two screens that need a session.
+   *
+   * What these cannot do is sign in — that needs a real Supabase project (ADR 0034 §4) — so what
+   * they assert about `/mis-webs` is the half that matters without one: **a screen that needs a
+   * session does not guess when there is none.** It redirects, rather than drawing an empty list
+   * that would read as «no tienes webs» to somebody who has several.
+   */
+  it("greets a stranger with the landing and asks for nothing", async () => {
+    const visitor = await (await browser.newContext()).newPage();
+    try {
+      await visitor.goto(BASE_URL, { waitUntil: "networkidle" });
+
+      await expect(
+        visitor.getByRole("heading", { name: "Tu web en cinco preguntas", level: 1 }),
+      ).toBeVisible();
+
+      // «Sin registro» is a promise the product makes out loud, and the landing is where it is
+      // made: no form, no account, no password anywhere on this page (ADR 0034 §2).
+      await expect(visitor.locator("input")).toHaveCount(0);
+      await expect(visitor.getByText(/La cuenta se crea al final/)).toBeVisible();
+
+      // The download promise, in the owner's terms rather than ADR 0001's.
+      await expect(visitor.getByText(/se abren con doble clic, sin servidor/)).toBeVisible();
+    } finally {
+      await visitor.context().close();
+    }
+  }, 120_000);
+
+  it("reaches the five questions from «Empezar», which is the only way in", async () => {
+    const visitor = await (await browser.newContext()).newPage();
+    try {
+      await visitor.goto(BASE_URL, { waitUntil: "networkidle" });
+      await visitor.getByRole("link", { name: "Empezar" }).click();
+
+      await expect(visitor).toHaveURL(/\/empezar$/);
+      // Question 1, with no account asked for on the way.
+      await expect(visitor.locator("#nombre")).toBeVisible();
+    } finally {
+      await visitor.context().close();
+    }
+  }, 120_000);
+
+  it("offers «Ya tengo cuenta» for coming back, and it goes to the sign-in screen", async () => {
+    const visitor = await (await browser.newContext()).newPage();
+    try {
+      await visitor.goto(BASE_URL, { waitUntil: "networkidle" });
+      await visitor.getByRole("link", { name: "Ya tengo cuenta" }).click();
+      await expect(visitor).toHaveURL(/\/entrar$/);
+      await expect(visitor.getByRole("heading", { name: "Entra en tu cuenta" })).toBeVisible();
+    } finally {
+      await visitor.context().close();
+    }
+  }, 120_000);
+
+  it("sends somebody with no session to sign in rather than showing an empty list", async () => {
+    const visitor = await (await browser.newContext()).newPage();
+    try {
+      await visitor.goto(`${BASE_URL}/mis-webs`, { waitUntil: "networkidle" });
+      // An empty list would read as «no tienes webs guardadas» to somebody who has three.
+      await expect(visitor).toHaveURL(/\/entrar$/, { timeout: 20_000 });
+    } finally {
+      await visitor.context().close();
+    }
+  }, 120_000);
+
+  it("does the same for a direct link to one web, however it was obtained", async () => {
+    const visitor = await (await browser.newContext()).newPage();
+    try {
+      await visitor.goto(`${BASE_URL}/mis-webs/8f1c2a64-0000-4000-8000-000000000000`, {
+        waitUntil: "networkidle",
+      });
+      await expect(visitor).toHaveURL(/\/entrar$/, { timeout: 20_000 });
+    } finally {
+      await visitor.context().close();
+    }
+  }, 120_000);
+
+  it("asks for no account anywhere in the five questions", async () => {
+    const visitor = await (await browser.newContext()).newPage();
+    try {
+      await visitor.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+
+      // This replaced an assertion that looked for «Sin registro, sin tutoriales» here and found
+      // nothing — because all five steps carry their own footer caption, so that string's `??`
+      // fallback is unreachable and it has never been on screen. ADR 0034's context table said it
+      // was, and the table is corrected. The promise is now made on the landing, where it is read.
+      //
+      // What is asserted instead is the promise itself rather than a sentence about it: walk all
+      // five questions and no password field appears, because the account comes at the end (§2).
+      await expect(visitor.locator('input[type="password"]')).toHaveCount(0);
+      await visitor.fill("#nombre", "Bar La Esquina");
+      await visitor.getByRole("button", { name: "Siguiente" }).click();
+      await visitor.getByText("Restaurante y bar", { exact: true }).click();
+      await visitor.getByRole("button", { name: "Siguiente" }).click();
+      await visitor.getByText("Comidas", { exact: true }).click();
+      await visitor.getByRole("button", { name: "Siguiente" }).click();
+      await visitor.fill("#direccion", "Plaza del Socorro, 1, Ronda");
+      await visitor.getByRole("button", { name: "Siguiente" }).click();
+      await expect(visitor.locator('input[type="password"]')).toHaveCount(0);
+      await expect(visitor.getByText(/cuenta/i)).toHaveCount(0);
+    } finally {
+      await visitor.context().close();
+    }
+  }, 120_000);
 });

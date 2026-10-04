@@ -193,9 +193,15 @@ export function SaveToAccountDialog({
         <p style={{ margin: 0, fontSize: 14, color: "#334155" }}>{es["account.save.whichOne"]}</p>
 
         {stage.name === "saved" ? (
-          <p role="status" style={{ margin: 0, fontSize: 15, fontWeight: 600, color: "#0F766E" }}>
-            {es["account.save.done"]}
-          </p>
+          <>
+            <p role="status" style={{ margin: 0, fontSize: 15, fontWeight: 600, color: "#0F766E" }}>
+              {es["account.save.done"]}
+            </p>
+            {/* The way back, from the moment there is something to come back to. */}
+            <a href="/mis-webs" style={{ fontSize: 15, color: "#156FE7" }}>
+              {es["account.save.doneOpen"]}
+            </a>
+          </>
         ) : null}
 
         {existing !== null && existing > 0 && stage.name !== "saved" ? (

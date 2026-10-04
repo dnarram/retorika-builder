@@ -54,7 +54,7 @@ words, and this one does not have to argue for the opening — only for the shap
 | The only persistence is `localStorage`, and photos in `IndexedDB` | `apps/editor/src/editor/autosave.ts`; ADR 0018 |
 | `/` **is the questionnaire** | `apps/editor/src/app/page.tsx` |
 | The editor says `Guardado en este navegador` | `es.json:352`, and `:353` `No guardado` |
-| The visible tagline promises «**Sin registro**, sin tutoriales» | `es.json:7` |
+| A tagline promises «**Sin registro**, sin tutoriales» — **and it is never rendered**, corrected 4 October: all five questionnaire steps carry their own footer caption, so its `??` fallback in `Questionnaire.tsx:113` is unreachable. The string has been dead copy since the per-step footers arrived. Day 5 gives the promise a visible home on the landing instead | `es.json:7`, `Questionnaire.tsx:113` |
 | **There is no mockup of a landing page and none of a login.** None | `docs/design/mockups/`, `prototype/` → zero hits |
 | The runbook has **1 of the 4 cases** Part 17 requires | `docs/runbook.md` |
 
@@ -133,8 +133,15 @@ Four consequences, in order of the journey:
 3. **The account is offered at the end**, when there is a site to lose: «Guarda tu web en tu cuenta».
 4. **The login exists for coming back**, not for getting in.
 
-And therefore **the tagline «Sin registro, sin tutoriales» stays true and is not withdrawn.** That
-sentence is a promise, not a description of a limitation, and this ADR keeps it.
+And therefore **«Sin registro» stays true and is not withdrawn.** That sentence is a promise, not a
+description of a limitation, and this ADR keeps it.
+
+> **Amendment, 4 October 2026 (sprint 15 day 5).** The tagline this paragraph was written about has
+> never been on screen: every questionnaire step supplies its own footer caption, so the fallback
+> that would have shown it cannot be reached. The decision is unchanged and the promise is now
+> *made* rather than merely stored — the landing says «Sin registro. La cuenta se crea al final, si
+> quieres guardar la web» — and the e2e walk asserts the promise itself, that no password field
+> appears anywhere in the five questions, rather than asserting a sentence about it.
 
 ### 3. Everyone gets an account, and there are two ways in
 

@@ -164,6 +164,7 @@ export function Variants({
   initialDocuments,
   initialOpenIndex = null,
   initialPageId,
+  initialAccountSite,
   onRestart,
 }: {
   answers: Answers;
@@ -172,6 +173,12 @@ export function Variants({
   initialOpenIndex?: number | null;
   /** Which page of the open variant was showing, restored from the saved session. */
   initialPageId?: string;
+  /**
+   * Present when this editor was opened from the account — `/mis-webs/[id]` — rather than from
+   * this browser's session. It carries the id and the version the document was read at, so edits
+   * push back to the right row and a stale write is still refused (ADR 0034 §8).
+   */
+  initialAccountSite?: { id: string; version: number };
   onRestart: () => void;
 }) {
   // The histories outlive "Volver": edits and what can be undone survive going back to the grid
@@ -215,11 +222,25 @@ export function Variants({
    * (§5, §10).
    */
   const [accountOpen, setAccountOpen] = useState(false);
-  const [savedWhere, setSavedWhere] = useState<"browser" | "account">("browser");
+  const [savedWhere, setSavedWhere] = useState<"browser" | "account">(
+    initialAccountSite === undefined ? "browser" : "account",
+  );
   // Read once rather than per render: it is build-time configuration, not state.
   const [accountAvailable] = useState(() => authConfigured());
   /** The site this editor pushes to, once there is one, with the version it last wrote. */
-  const [accountSite, setAccountSite] = useState<{ id: string; version: number } | null>(null);
+  const [accountSite, setAccountSite] = useState<{ id: string; version: number } | null>(
+    initialAccountSite ?? null,
+  );
+  /**
+   * Whether this editor was opened from the account rather than from this browser.
+   *
+   * **It decides whether `localStorage` is written at all, and that prevents a real loss.** The
+   * session key is one per browser, so autosaving a site fetched from the account would overwrite
+   * whatever anonymous web was sitting there — the exact mirror of the rule David asked for in
+   * the other direction, and a worse version of it, because nobody would have been asked. A site
+   * opened from the account has its truth in the account; this browser is not its cache.
+   */
+  const openedFromAccount = initialAccountSite !== undefined;
   /**
    * The document last pushed, by reference.
    *
@@ -232,6 +253,8 @@ export function Variants({
   const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
+    // See `openedFromAccount`: this browser's single session slot is not this site's to take.
+    if (openedFromAccount) return;
     saveTimer.current = setTimeout(() => {
       const ok = saveSession({
         answers,
@@ -242,7 +265,7 @@ export function Variants({
       setSaveStatus(ok ? "saved" : "unsaved");
     }, SAVE_DEBOUNCE_MS);
     return () => clearTimeout(saveTimer.current);
-  }, [answers, histories, openIndex, currentPageId]);
+  }, [answers, histories, openIndex, currentPageId, openedFromAccount]);
 
   /**
    * And the same edits to the account, once there is one.
@@ -269,12 +292,21 @@ export function Variants({
           version: accountSite.version,
           document,
         });
-        if (result.ok) setAccountSite({ id: accountSite.id, version: result.version });
-        else setSavedWhere("browser");
+        if (result.ok) {
+          setAccountSite({ id: accountSite.id, version: result.version });
+          // When nothing writes to this browser, this push is the only thing that can honestly
+          // light the indicator at all.
+          if (openedFromAccount) setSaveStatus("saved");
+          return;
+        }
+        // Nothing was overwritten. The label stops claiming the account — and when the account is
+        // the only place this site lives, it stops claiming a save altogether.
+        setSavedWhere("browser");
+        if (openedFromAccount) setSaveStatus("unsaved");
       })();
     }, SAVE_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [accountSite, histories, openIndex]);
+  }, [accountSite, histories, openIndex, openedFromAccount]);
 
   /**
    * The design-tools switch (ADR 0025), and the window it is narrowed by.

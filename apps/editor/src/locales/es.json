@@ -435,5 +435,31 @@
   "account.save.failed": "No hemos podido guardar la web. Vuelve a intentarlo.",
 
   "editor.saved.account": "Guardado en tu cuenta",
-  "editor.saved.accountPhotos": "Guardado en tu cuenta \u00b7 fotos solo en este navegador"
+  "editor.saved.accountPhotos": "Guardado en tu cuenta \u00b7 fotos solo en este navegador",
+
+  "landing.title": "Tu web en cinco preguntas",
+  "landing.lede": "Contesta cinco preguntas y Retorika te devuelve una web terminada. T\u00fa solo corriges lo que no te guste.",
+  "landing.start": "Empezar",
+  "landing.startHint": "Sin registro. La cuenta se crea al final, si quieres guardar la web.",
+  "landing.enter": "Ya tengo cuenta",
+  "landing.how.title": "C\u00f3mo funciona",
+  "landing.how.one": "Cinco preguntas sobre tu negocio.",
+  "landing.how.two": "Retorika escribe y monta la web entera.",
+  "landing.how.three": "T\u00fa cambias lo que quieras, haciendo clic encima.",
+  "landing.how.four": "Te la descargas y la subes a tu alojamiento.",
+  "landing.yours.title": "La web es tuya",
+  "landing.yours.body": "Lo que te descargas son archivos que funcionan solos: se abren con doble clic, sin servidor y sin depender de nosotros. Si un d\u00eda dejas de usar Retorika, tu web sigue funcionando.",
+
+  "myWebs.title": "Tus webs guardadas",
+  "myWebs.subtitle": "Abre una para seguir trabajando en ella.",
+  "myWebs.empty": "Todav\u00eda no has guardado ninguna web en tu cuenta.",
+  "myWebs.emptyStart": "Empezar una web",
+  "myWebs.open": "Abrir",
+  "myWebs.updated": "\u00daltimo cambio: {date}",
+  "myWebs.loading": "Buscando tus webs\u2026",
+  "myWebs.photosWarning": "Las fotos que sub\u00edas se quedaron en el navegador donde las elegiste, as\u00ed que aqu\u00ed la web puede aparecer sin ellas.",
+  "myWebs.signedInAs": "Has entrado como {email}",
+  "myWebs.notFound": "Esa web no est\u00e1 en tu cuenta.",
+  "myWebs.back": "Volver a tus webs",
+  "myWebs.opening": "Abriendo la web\u2026"
 }
