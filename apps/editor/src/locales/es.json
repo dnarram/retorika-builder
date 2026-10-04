@@ -461,5 +461,27 @@
   "myWebs.signedInAs": "Has entrado como {email}",
   "myWebs.notFound": "Esa web no est\u00e1 en tu cuenta.",
   "myWebs.back": "Volver a tus webs",
-  "myWebs.opening": "Abriendo la web\u2026"
+  "myWebs.opening": "Abriendo la web\u2026",
+
+  "account.page.link": "Tu cuenta",
+  "account.page.title": "Tu cuenta",
+  "account.page.subtitle": "Lo que guardamos, y c\u00f3mo irte.",
+  "account.page.email": "Correo de la cuenta: {email}",
+  "account.export.title": "Llevarte una copia",
+  "account.export.body": "Te descargas un fichero con todas tus webs tal y como est\u00e1n guardadas. Funciona siempre, tambi\u00e9n si has pedido borrar la cuenta.",
+  "account.export.button": "Descargar una copia de mis webs",
+  "account.export.working": "Preparando la copia\u2026",
+  "account.export.failed": "No hemos podido preparar la copia. Vuelve a intentarlo.",
+  "account.delete.title": "Borrar la cuenta",
+  "account.delete.body": "Borramos tu cuenta y todas tus webs guardadas. Tienes {days} d\u00edas para cambiar de opini\u00f3n; pasados, se borra de verdad y no hay vuelta atr\u00e1s.",
+  "account.delete.button": "Borrar mi cuenta",
+  "account.delete.confirmTitle": "\u00bfSeguro que quieres borrar la cuenta?",
+  "account.delete.confirmBody": "Se borrar\u00e1n tus {count} webs guardadas. Tienes {days} d\u00edas para cancelarlo desde esta misma pantalla.",
+  "account.delete.confirmExport": "Desc\u00e1rgate una copia antes, si no lo has hecho ya.",
+  "account.delete.confirm": "S\u00ed, borrar mi cuenta",
+  "account.delete.cancel": "No, dejarlo como est\u00e1",
+  "account.delete.pending": "Has pedido borrar la cuenta. Se borrar\u00e1 el {date}.",
+  "account.delete.undo": "Cancelar el borrado",
+  "account.delete.failed": "No hemos podido registrar la petici\u00f3n. Vuelve a intentarlo.",
+  "account.delete.whatStays": "Tus webs descargadas no se borran: son archivos tuyos y no dependen de nosotros."
 }

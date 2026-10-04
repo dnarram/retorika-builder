@@ -162,3 +162,76 @@ export function renameOf(document: RetorikaDocument): string {
   // already carries. Nobody is made to name their web twice.
   return document.siteName.trim() === "" ? "Mi web" : document.siteName.trim();
 }
+
+/**
+ * Every site with its document, for the copy an owner takes before deleting the account.
+ *
+ * Protocol Part 16's first rule: «**La exportación siempre funciona**, incluso con la cuenta
+ * caducada o en disputa», and that rule beats anything in ADR 0034 it collides with. Which is why
+ * this is an ordinary read through the ordinary policies and needs no special case: a pending
+ * deletion changes nothing about what somebody can take with them.
+ */
+export async function exportSites(client: Client): Promise<{
+  exportedAt: string;
+  schemaVersion: string;
+  sites: { id: string; name: string; document: unknown; schemaVersion: string }[];
+}> {
+  const { data, error } = await client
+    .from("sites")
+    .select("id,name,document,schema_version")
+    .order("updated_at", { ascending: false });
+  return {
+    exportedAt: new Date().toISOString(),
+    schemaVersion: SCHEMA_VERSION,
+    sites:
+      error || !data
+        ? []
+        : data.map((row) => ({
+            id: String(row.id),
+            name: String(row.name),
+            document: row.document,
+            schemaVersion: String(row.schema_version),
+          })),
+  };
+}
+
+/** What the account screen needs to know about a pending deletion. */
+export interface AccountState {
+  deletionRequestedAt: string | null;
+}
+
+export async function accountState(client: Client, userId: string): Promise<AccountState> {
+  const { data } = await client
+    .from("accounts")
+    .select("deletion_requested_at")
+    .eq("id", userId)
+    .maybeSingle();
+  return {
+    deletionRequestedAt: data?.deletion_requested_at ? String(data.deletion_requested_at) : null,
+  };
+}
+
+/**
+ * Asks for the account to be deleted, from the browser, through the ordinary policies.
+ *
+ * The owner updating their own `accounts` row is all this is — `accounts_update_own` is what
+ * allows it, and what stops it being done to anybody else. **The actual removal is not this**: a
+ * sweep runs after the grace window with a connection that can reach `auth.users`, which no
+ * browser key can (`packages/db/src/deletion.ts`, and `docs/runbook.md` for who runs it).
+ */
+export async function requestAccountDeletion(client: Client, userId: string): Promise<boolean> {
+  const { error } = await client
+    .from("accounts")
+    .update({ deletion_requested_at: new Date().toISOString() })
+    .eq("id", userId)
+    .is("deletion_requested_at", null);
+  return !error;
+}
+
+export async function cancelAccountDeletion(client: Client, userId: string): Promise<boolean> {
+  const { error } = await client
+    .from("accounts")
+    .update({ deletion_requested_at: null })
+    .eq("id", userId);
+  return !error;
+}

@@ -130,6 +130,10 @@ export function MyWebs() {
           </span>
         ) : null}
 
+        <Link href="/cuenta" style={{ fontSize: 14, color: "#156FE7" }}>
+          {es["account.page.link"]}
+        </Link>
+
         <button
           type="button"
           onClick={async () => {

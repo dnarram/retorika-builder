@@ -2,7 +2,17 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseDocument, SCHEMA_VERSION } from "@retorika/schema";
 import { describe, expect, it } from "vitest";
-import { createSite, listSites, loadSite, renameOf, saveSite } from "../src/account/sites.ts";
+import { loadAccountDesignTools, saveAccountDesignTools } from "../src/account/designTools.ts";
+import {
+  cancelAccountDeletion,
+  createSite,
+  exportSites,
+  listSites,
+  loadSite,
+  renameOf,
+  requestAccountDeletion,
+  saveSite,
+} from "../src/account/sites.ts";
 import type { Client } from "../src/auth/clients.ts";
 
 /**
@@ -49,7 +59,16 @@ function recorder(result: unknown) {
   const calls: Call[] = [];
   const methods: Record<string, (...args: unknown[]) => unknown> = {};
   const chain = Object.assign(Promise.resolve(result), methods);
-  for (const method of ["select", "insert", "update", "eq", "order", "maybeSingle", "single"]) {
+  for (const method of [
+    "select",
+    "insert",
+    "update",
+    "eq",
+    "is",
+    "order",
+    "maybeSingle",
+    "single",
+  ]) {
     Object.defineProperty(chain, method, {
       value: (...args: unknown[]) => {
         calls.push({ method, args });
@@ -211,5 +230,126 @@ describe("the name a site gets", () => {
 
   it("falls back rather than storing an empty name", () => {
     expect(renameOf({ ...fixture(), siteName: "   " })).toBe("Mi web");
+  });
+});
+
+describe("the copy an owner takes with them", () => {
+  it("carries every site's document and the version it was written at", async () => {
+    const { client } = recorder({
+      data: [
+        { id: "s1", name: "Taller", document: { siteName: "Taller" }, schema_version: "1.8.0" },
+      ],
+      error: null,
+    });
+    const exported = await exportSites(client);
+    expect(exported.sites).toEqual([
+      { id: "s1", name: "Taller", document: { siteName: "Taller" }, schemaVersion: "1.8.0" },
+    ]);
+    expect(exported.schemaVersion).toBe(SCHEMA_VERSION);
+    expect(Date.parse(exported.exportedAt)).not.toBeNaN();
+  });
+
+  it("is an empty export rather than a throw when the request fails", async () => {
+    // Part 16 says the export always works. It cannot always *find* something, but it must never
+    // be the thing that breaks on the way out.
+    const { client } = recorder({ data: null, error: { message: "offline" } });
+    expect((await exportSites(client)).sites).toEqual([]);
+  });
+});
+
+describe("asking for the account to be deleted, from the browser", () => {
+  it("writes the timestamp on the owner's own row and nobody else's", async () => {
+    const { client, calls } = recorder({ error: null });
+    expect(await requestAccountDeletion(client, "u1")).toBe(true);
+    const eqs = calls.filter((call) => call.method === "eq").map((call) => call.args);
+    expect(eqs).toContainEqual(["id", "u1"]);
+    expect(payloadOf(calls, "update")["deletion_requested_at"]).toBeTruthy();
+  });
+
+  it("does not restart the clock on a second press", async () => {
+    // `.is(..., null)` is what makes this idempotent: a row that already has a timestamp matches
+    // nothing, so asking twice cannot quietly grant thirty more days.
+    const { client, calls } = recorder({ error: null });
+    await requestAccountDeletion(client, "u1");
+    expect(calls.filter((call) => call.method === "is").map((call) => call.args)).toContainEqual([
+      "deletion_requested_at",
+      null,
+    ]);
+  });
+
+  it("can be undone, which is the point of a window", async () => {
+    const { client, calls } = recorder({ error: null });
+    expect(await cancelAccountDeletion(client, "u1")).toBe(true);
+    expect(payloadOf(calls, "update")["deletion_requested_at"]).toBeNull();
+  });
+
+  it("reports a failure rather than claiming the request landed", async () => {
+    const { client } = recorder({ error: { message: "no" } });
+    expect(await requestAccountDeletion(client, "u1")).toBe(false);
+  });
+});
+
+describe("the grace window, which is written in two places", () => {
+  it("says the same number in the editor as in the sweep", () => {
+    // `AccountPage.tsx` cannot import the value: `@retorika/db` is server-only and pulling it into
+    // a client component is what `scripts/secrets-scope.ts` refuses. So the number is restated,
+    // and this is the assertion that keeps the sentence an owner reads and the interval the sweep
+    // uses from drifting apart.
+    const fromDb = readFileSync(
+      join(import.meta.dirname, "..", "..", "..", "packages", "db", "src", "deletion.ts"),
+      "utf8",
+    ).match(/GRACE_WINDOW_DAYS = (\d+)/);
+    const fromEditor = readFileSync(
+      join(import.meta.dirname, "..", "src", "account", "AccountPage.tsx"),
+      "utf8",
+    ).match(/GRACE_WINDOW_DAYS = (\d+)/);
+
+    expect(fromDb?.[1], "packages/db/src/deletion.ts no longer declares GRACE_WINDOW_DAYS").toBe(
+      "30",
+    );
+    expect(fromEditor?.[1], "AccountPage.tsx drifted from the sweep's grace window").toBe(
+      fromDb?.[1],
+    );
+  });
+});
+
+describe("the design-tools switch in the account", () => {
+  it("reads the stored preference", async () => {
+    const { client, calls } = recorder({ data: { design_tools: true }, error: null });
+    expect(await loadAccountDesignTools(client, "u1")).toBe(true);
+    expect(calls.filter((call) => call.method === "eq").map((call) => call.args)).toContainEqual([
+      "id",
+      "u1",
+    ]);
+  });
+
+  it("says off when it is off", async () => {
+    const { client } = recorder({ data: { design_tools: false }, error: null });
+    expect(await loadAccountDesignTools(client, "u1")).toBe(false);
+  });
+
+  it("says null — not false — when it could not ask", async () => {
+    // The distinction that matters: `false` is «this person has them off», `null` is «we could not
+    // ask». Collapsing them would overwrite an account preference with a browser one the first
+    // time the network hiccupped, and the person did not change their mind.
+    const { client } = recorder({ data: null, error: { message: "offline" } });
+    expect(await loadAccountDesignTools(client, "u1")).toBeNull();
+  });
+
+  it("writes only the switch, and only on the owner's own row", async () => {
+    const { client, calls } = recorder({ error: null });
+    expect(await saveAccountDesignTools(client, "u1", true)).toBe(true);
+    // Nothing else may ride along on this update: the switch is a property of the person and the
+    // row also carries the deletion request.
+    expect(payloadOf(calls, "update")).toEqual({ design_tools: true });
+    expect(calls.filter((call) => call.method === "eq").map((call) => call.args)).toContainEqual([
+      "id",
+      "u1",
+    ]);
+  });
+
+  it("reports a refused write, so the editor's «no lo recordamos» notice stays honest", async () => {
+    const { client } = recorder({ error: { message: "no" } });
+    expect(await saveAccountDesignTools(client, "u1", true)).toBe(false);
   });
 });
