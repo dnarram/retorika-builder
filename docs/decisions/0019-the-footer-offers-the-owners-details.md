@@ -84,6 +84,18 @@ Part 15 therefore gains a case it does not currently describe, and the amendment
 published site may carry its own owner's identifying details, put there by the owner, and
 Retorika stores none of them.**
 
+> **Amendment, 4 October 2026 (sprint 15, ADR 0034).** The last clause stopped being true. An
+> account holds the owner's **email address**, because that is what lets them come back to a web
+> they do not want to lose, and Part 15's own «recoger lo mínimo» is satisfied by collecting that
+> and nothing else — no name, no tax number, no address. Those three still travel only inside the
+> document, which is what this ADR was actually about, and they still reach us only when the owner
+> saves the site to their account. So the sentence becomes: **a published site may carry its own
+> owner's identifying details, put there by the owner; of those, Retorika stores only what an
+> account needs to exist, and deletes it for real when the account goes** (ADR 0034 §12, thirty
+> days). The precedent this ADR set — that `/api/download` answers a request and keeps nothing —
+> is unchanged and is now load-bearing for a different reason: Part 16's first rule means that
+> route may never ask who you are.
+
 ## Consequences
 
 - The catalog gains a sixth section, which is the count [issue #25](https://github.com/dnarram/retorika-builder/issues/25)

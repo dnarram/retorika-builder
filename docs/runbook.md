@@ -1,8 +1,11 @@
 # Runbook
 
 What to do when something breaks, written before it happens (protocol Part 17). Part 17 names
-four foreseeable cases. **Three of them are here**, and a fifth has been added that Part 17 could
-not have named because the stack it belongs to did not exist yet.
+four foreseeable cases. **Three of them are here**, and **two more** have been added that Part 17
+could not have named because the stack they belong to did not exist when it was written: a paused
+or unreachable database, and an account deleted that should not have been. Five cases in total —
+counted rather than estimated, because the first draft of this very paragraph said "a fifth" and
+there were two.
 
 The one still missing is **a payment charged with no site published**, and it has nothing to
 describe: [ADR 0021](decisions/0021-charging-waits-for-a-sellable-product.md) defers charging and

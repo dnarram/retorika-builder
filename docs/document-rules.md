@@ -386,6 +386,15 @@ These keys are rejected by the schema, not ignored. A test asserts the rejection
 The document describes a website. It does not describe who paid for it, who owns it, or what
 they are allowed to do with it.
 
+**Since sprint 15 that right-hand column names somewhere that exists** (ADR 0034). `ownerId` is a
+real column — `public.sites.owner_id` — and it is what the row-level security policies compare
+against the signed-in person, so «solo ves tus propias webs» is enforced in the database rather
+than in a route handler. `designTools` has its own column on `public.accounts`, as below.
+**`locked`, `paymentStatus` and `subscription` are deliberately still only destinations**: ADR 0034
+§6 refuses to create a column with no verb, because an unused column is an invalid state waiting
+for somebody to write to it. Locking and the transfer of ownership are the advanced dossier §8 and
+get their own sprint; charging is ADR 0021's and stays deferred.
+
 ---
 
 ## Embeds are off by default
@@ -443,10 +452,17 @@ worth keeping: the sync test below checks that the identifiers and names match t
 that the prose around them is still true.*
 
 The design-tools switch exists (ADR 0025). It lives in the browser's `localStorage` under a key of
-its own, `retorika.designTools.v1`, separate from the autosaved session — not in an account, because
-there are no accounts (ADR 0012 approved `localStorage` alone; ADR 0021 deferred the database). The
-row above still reads "the account" because that is where it belongs once accounts exist, and
-`apps/editor/src/editor/designTools.ts` is the single file that moves when they do.
+its own, `retorika.designTools.v1`, separate from the autosaved session.
+
+**Accounts arrived in sprint 15 (ADR 0034), so the row above now points at something real** — and
+at two things rather than one. With an account the switch is a column on `public.accounts`, which
+is where the dossier always put it, «del mismo rango que el idioma de la interfaz»; with no account
+it is still that `localStorage` key, because ADR 0034 §2 kept the anonymous journey and somebody
+who never signs in still gets a switch that remembers. ADR 0025 predicted that
+`apps/editor/src/editor/designTools.ts` would be «the single file that moves»; it did not move, it
+gained `apps/editor/src/account/designTools.ts` beside it. What has not changed is anything the
+invariant is about: the switch is not in the document, not in the session, and still reached by no
+save of either.
 
 The invariant has two halves and they are proven in two places, because no one place can reach both:
 

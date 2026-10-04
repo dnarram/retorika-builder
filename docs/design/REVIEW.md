@@ -11,7 +11,7 @@ the later document.
 > **The header above is a dated record and the file is not.** The date, the eleven ADRs and the
 > fifteen mockups are what the *first* reading was done against, on 23 September 2026; they are left
 > as written because a review that silently re-dates itself stops saying when it looked. What has
-> grown since, noted here so the numbers do not read as current: there are now **32 ADRs** and
+> grown since, noted here so the numbers do not read as current: there are now **34 ADRs** and
 > **19 mockups** — 16 through 19 (modo estudio, la barra y el sistema, negrita y cursiva, cómo se ve
 > al compartir) were drawn after this review and are read against it rather than by it. Entries
 > below carry their own dates, and the ones added in sprints 9 through 13 are the live half of this
@@ -539,7 +539,7 @@ nobody inside can supply.
   pointing at nothing the person can see.
 
   **The second line is not the mockup's when the toast has no timer, and the drawing loses that clause
-  on its merits.** [ADR 0014](../decisions/0014-deleting-a-section-is-immediate-with-an-undo.md) gives
+  on its merits.** [ADR 0014](../decisions/0014-deleting-a-section-never-asks.md) gives
   a section the owner had edited **no timer at all** — its toast waits until it is undone or dismissed
   — so for that section «desaparecerá solo en unos segundos» is a promise the product does not keep.
   It reads «El hueco se queda hasta que deshagas o cierres el aviso» instead. **The mockup is not
@@ -614,3 +614,36 @@ D13 names them, and they are the next step after this review: **Restaurante Tabe
 Domingo** and **Conchi**, both in Ronda, both without a website on their Google listing, both
 exactly the target user. The absence of a website is confirmed on contact, since a listing can
 simply be incomplete.
+
+---
+
+## Two screens with no mockup, and what stands in for one (4 October 2026, sprint 15)
+
+`docs/protocolo.md:971` makes the mockups the interface specification — «la maquetación, los textos
+en castellano, los colores y los gestos ya están decididos» — and **there is no mockup of a landing
+page and none of a login.** There never was: the concept dossier's «Seis pantallas y ninguna más»
+describes the journey from the first question to the download, and its first screen is «sin registro
+previo».
+
+[ADR 0034](../decisions/0034-the-account-arrives-at-the-end.md) §20 decides what to do about that:
+**no mockup is invented and none is back-dated.** For these screens the ADR and the sprint's pull
+requests are the specification, Spanish copy included, which is this file's own mechanism — an ADR
+overruling the design handoff — applied to a gap rather than to a disagreement. If a mockup is ever
+drawn for them, it inherits from there.
+
+**What the screens are, so this file says it rather than only the ADR:**
+
+| Route | What it is | Why it is not a seventh screen |
+|---|---|---|
+| `/` | The landing: what Retorika is, «Empezar», and «Ya tengo cuenta» | It sits *before* the dossier's six, and asks for nothing. The six are unchanged and still start at «¿Cómo se llama tu negocio?», now at `/empezar` |
+| `/entrar`, `/entrar/recuperar`, `/entrar/nueva-contrasena` | Coming back to a web already saved | Not a way in. The account is created at the end (§2), so nobody on their way to a first website meets any of them |
+| `/mis-webs`, `/mis-webs/[id]` | «Tus webs guardadas», and opening one | **«Guardadas», never «publicadas».** ADR 0008 gives the editor no hosted-publishing entry point, and a list on our domain that said «publicadas» would imply we host them |
+| `/cuenta` | The copy you take with you, and the way out | Protocol Parts 15 and 16 |
+
+**And one correction to this sprint's own record, found by a test that failed for the right
+reason.** ADR 0034's context table claimed `es.json:7` — «Sin registro, sin tutoriales» — was the
+visible promise on screen. It is not: every questionnaire step supplies its own footer caption, so
+that string's `??` fallback is unreachable and it has been dead copy since the per-step footers
+arrived. The ADR carries the correction and an amendment; the promise now has a visible home on the
+landing, and the e2e asserts the promise itself — no password field anywhere in the five questions —
+rather than a sentence about it.

@@ -24,6 +24,28 @@
 > browser, and the editor's `Guardado` tick says `Guardado en este navegador` rather than a bare
 > `Guardado`, precisely so nobody reads a cross-device guarantee into it. Supabase and accounts
 > remain this ADR's eventual destination, opened once the editor itself is finished.
+>
+> **This note is discharged. 4 October 2026, sprint 15
+> ([ADR 0034](0034-the-account-arrives-at-the-end.md)).** Sprint 14 closed the editor, which is the
+> condition written above, and this ADR's destination was reached: `packages/db` holds the schema
+> and its row-level security policies, and `apps/editor` signs people in with the anon key that
+> those policies constrain. Two things about the note are worth keeping rather than overwriting:
+>
+> - **The `Guardado en este navegador` wording was tied to the guarantee on purpose**, «precisely
+>   so nobody reads a cross-device guarantee into it». The guarantee changed, so the wording did:
+>   with an account it reads «Guardado en tu cuenta · fotos solo en este navegador», because the
+>   document travels and the photographs do not (ADR 0034 §5, §10). **Without an account it is
+>   unchanged**, since the anonymous journey survived.
+> - **`localStorage` was not replaced.** It is the only storage for somebody with no account, and a
+>   cache for somebody with one — and a site opened *from* the account deliberately does not write
+>   to it at all, because the session slot is one per browser and taking it would overwrite an
+>   anonymous web nobody was asked about.
+>
+> The stack decisions themselves were re-checked rather than assumed when the sprint was planned —
+> both platforms, and why neither replaces the other — and the reasoning is in ADR 0034's context
+> rather than repeated here. The pooler on port 6543 is now enforced in code:
+> `packages/db/src/connect.ts` refuses a hosted URL on any other port, with this ADR's own reason
+> in the error.
 
 ## Context
 

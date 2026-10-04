@@ -354,7 +354,18 @@ open survives.
 
 ## No home but this one
 
-- **Accounts and persistence with Supabase, and charging — deferred, not scheduled.**
+- ~~**Accounts and persistence with Supabase, and charging — deferred, not scheduled.**~~ **This
+  row was one row and should have been two, which is exactly what let it sit untouched for a
+  sprint.** Split on 4 October 2026, closing sprint 15.
+
+  **Accounts and persistence: done.** [ADR 0034](../decisions/0034-the-account-arrives-at-the-end.md)
+  released them without touching the charging decision, and the opening was in ADR 0021's own
+  shape: that ADR argued charging at length — a Price object, an invoice template, a DPA, «there is
+  no transaction to describe» — and swept accounts in through a **consequence** it never argued.
+  Nothing in it claimed accounts had nothing to attach to. The README's «The account, piece by
+  piece» says what exists and what does not.
+
+  **Charging: still deferred, and nothing about it moved.**
   [ADR 0021](../decisions/0021-charging-waits-for-a-sellable-product.md), 28 September 2026: it
   waits until the product is judged professionally sellable, the same status ADR 0008 gives hosted
   publishing. The mechanism is decided — Stripe, single payment, Checkout, idempotent webhook,
@@ -363,6 +374,33 @@ open survives.
   with a deadline; they wait for the same moment. One of the six is ours to raise when that moment
   comes: **once the ZIP is handed over there is nothing to switch off** (ADR 0001), so what a
   refund can even mean has to be decided before the terms of use are written, not after.
+
+  **And one thing ADR 0021 left ambiguous that is still ambiguous:** who declares the product
+  «profesionalmente vendible». That ADR says direction; ADR 0031 moved the sibling judgement — Fase
+  1's acceptance — to David without saying whether this one moved too. It is a one-line decision
+  and ADR 0034 deliberately did not make it.
+
+- **Three decisions are waiting on David, each in its own file rather than in this list**, because
+  each needs a number or a choice that is his and not development's:
+  [`copias.md`](copias.md) — the free Supabase plan has **zero** backup retention and pauses after a
+  week, so protocol Part 16 is not met; three ways out with their prices and nothing executed.
+  [`arranque-en-frio.md`](arranque-en-frio.md) — whether to serve the landing as a separate Render
+  static site, with the two cold-start measurements that need the deployment.
+  [`el-recorrido-de-la-cuenta.md`](el-recorrido-de-la-cuenta.md) — the thirteen-step walk that needs
+  a real project, including Google sign-in, which development could not verify.
+
+- **The five existing `aria-modal` dialogs still take focus nowhere, trap nothing, return nothing
+  and ignore Escape.** Sprint 14's sweep counted them; David scoped the sprint-15 fix to the new
+  screens, so `RevertDialog` and the four in `DownloadGateDialogs` are untouched. **What changed is
+  the cost**: `apps/editor/src/account/useFocusTrap.ts` exists and has two callers, so bringing
+  them up to date is now adding one hook call each rather than designing the behaviour.
+
+- **Two of sprint 14's four appendix findings are still open, by David's own allocation.** The four
+  corner handles that are drawn, styled and carry no listener at all; and the six section verbs
+  reachable only by mouse, in a `<section>` with a `click` and no `tabindex`, no `role` and no
+  keyboard, with no sections panel in the rail. The other two were fixed in sprint 15: focus and
+  Escape on the new screens, and the sample photograph that left a site permanently
+  undownloadable.
 - ~~One catalog section still missing of the dossier's nine: «Quién soy / El equipo».~~ **Done**,
   29 September 2026: sprint 7 day 6 built `packages/catalog/src/team.ts`. The catalogue is 9 of 9.
   This was the one section with no evidence behind it — no session asked for it, it closed the

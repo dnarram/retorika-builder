@@ -44,8 +44,13 @@ If a task seems to require breaking one, the task is wrong. Write an ADR before 
 ## Zones only Claude touches
 
 `packages/schema`, `packages/renderer`, `packages/catalog`, `packages/publisher`, `apps/serve`,
-database migrations, anything that touches money, and anything that touches permissions or
-ownership. Never delegated to OpenCode, regardless of how mechanical the change looks.
+`packages/db`, database migrations, anything that touches money, and anything that touches
+permissions or ownership. Never delegated to OpenCode, regardless of how mechanical the change
+looks.
+
+`packages/db` is named explicitly since sprint 15 rather than left to "database migrations": it
+holds the row-level security policies, which are where ownership is actually enforced, so it is
+covered twice over by the two clauses that follow the list.
 
 This list used to name three packages. `docs/protocolo.md` Part 2 — the actual source of truth
 for the split — has named five since before `packages/publisher` and `apps/serve` existed in
@@ -67,6 +72,8 @@ sounding like it predates something, check it against Part 2 rather than against
 | `pnpm renderer:deps` | Renderer dependency allowlist |
 | `pnpm test:a11y` | axe + overflow in real Chromium (`RETORIKA_A11Y=1`, gated because it launches a browser) |
 | `pnpm e2e` | The critical flows against the real running app (`RETORIKA_E2E=1`, gated for the same reason) |
+| `pnpm test:db` | The database's row-level security policies and the deletion sweep, against a real Postgres (`RETORIKA_DB=1`, gated for the same reason as `e2e` — and **no Docker**, which protocol Part 18 forbids on this machine) |
+| `pnpm secrets:scope` | Protocol Part 15: walks `apps/editor`'s import graph and fails if a `"use client"` module can reach the database service key. In Next a module becomes client code by being imported from one, possibly four files away and silently |
 | `pnpm --filter @retorika/editor dev` | The editor's own dev server. No bare `pnpm dev` at the root — the editor is the only app that has one |
 
 Both `test:a11y` and `e2e` exist since sprint 2/3; this note used to say they did not, which stopped
