@@ -50,6 +50,16 @@ import { NARROWEST_WIDTH } from "./overflowCheck.ts";
 
 export type SaveStatus = "saved" | "unsaved" | null;
 
+/**
+ * Where the last save landed, which is a different question from whether it landed.
+ *
+ * ADR 0012 tied `Guardado en este navegador` to the guarantee it had, «precisely so nobody reads a
+ * cross-device guarantee into it». ADR 0034 §10 changes the guarantee and therefore the sentence —
+ * and §5 adds the half that would otherwise be discovered on another computer: **the document
+ * travels and the photos do not.** So the account label says both.
+ */
+export type SavedWhere = "browser" | "account";
+
 const RAIL_ICONS = {
   sections: (
     <svg
@@ -471,6 +481,8 @@ export function EditorShell({
   onUndo,
   onRedo,
   saveStatus,
+  savedWhere = "browser",
+  onSaveToAccount,
   rail,
   onRailChange,
   designTools,
@@ -497,6 +509,9 @@ export function EditorShell({
   onUndo: () => void;
   onRedo: () => void;
   saveStatus: SaveStatus;
+  savedWhere?: SavedWhere | undefined;
+  /** Absent when there is no account configured at all, and then no button is drawn. */
+  onSaveToAccount?: (() => void) | undefined;
   rail: RailItemId;
   onRailChange: (item: RailItemId) => void;
   /**
@@ -663,8 +678,22 @@ export function EditorShell({
                   <path d="M20 6L9 17l-5-5" />
                 </svg>
               ) : null}
-              {saveStatus === "saved" ? es["editor.saved"] : es["editor.unsaved"]}
+              {saveStatus !== "saved"
+                ? es["editor.unsaved"]
+                : savedWhere === "account"
+                  ? es["editor.saved.accountPhotos"]
+                  : es["editor.saved"]}
             </span>
+          ) : null}
+
+          {onSaveToAccount ? (
+            <button
+              type="button"
+              onClick={onSaveToAccount}
+              className="flex h-9 items-center justify-center rounded-[9px] border border-ui-line px-[18px] text-sm font-semibold text-ui-ink"
+            >
+              {es["account.save.open"]}
+            </button>
           ) : null}
 
           <button

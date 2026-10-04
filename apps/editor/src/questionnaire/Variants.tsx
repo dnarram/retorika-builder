@@ -27,6 +27,10 @@ import {
 } from "@retorika/schema";
 import { withPalette, withScale, withTypePair } from "@retorika/tokens";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { SaveToAccountDialog } from "../account/SaveToAccountDialog.tsx";
+import { saveSite } from "../account/sites.ts";
+import { browserClient } from "../auth/clients.ts";
+import { authConfigured } from "../auth/env.ts";
 import { saveSession } from "../editor/autosave.ts";
 import {
   designToolsFor,
@@ -200,6 +204,31 @@ export function Variants({
   // `null` until the first save attempt resolves: showing "Guardado" before anything has
   // actually been written would be exactly the false claim ADR 0012's note warns against.
   const [saveStatus, setSaveStatus] = useState<"saved" | "unsaved" | null>(null);
+
+  /**
+   * The account offer, which ADR 0034 §2 puts here and not at the front door.
+   *
+   * **`savedWhere` only becomes "account" once a save has actually landed**, for the same reason
+   * `saveStatus` starts null: the indicator may not claim a guarantee before it has one. And it
+   * stays "account" afterwards while `localStorage` keeps running underneath — the browser copy
+   * is a cache now, not the truth, and both are true at once, which is why the label names both
+   * (§5, §10).
+   */
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [savedWhere, setSavedWhere] = useState<"browser" | "account">("browser");
+  // Read once rather than per render: it is build-time configuration, not state.
+  const [accountAvailable] = useState(() => authConfigured());
+  /** The site this editor pushes to, once there is one, with the version it last wrote. */
+  const [accountSite, setAccountSite] = useState<{ id: string; version: number } | null>(null);
+  /**
+   * The document last pushed, by reference.
+   *
+   * Documents are immutable here, so identity is the cheapest honest answer to "has this changed
+   * since the last push". It also breaks a loop that is otherwise invisible: a successful push
+   * sets a new version, which re-runs the effect below, which would push the same document again
+   * for ever.
+   */
+  const pushedDocument = useRef<RetorikaDocument | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
@@ -214,6 +243,38 @@ export function Variants({
     }, SAVE_DEBOUNCE_MS);
     return () => clearTimeout(saveTimer.current);
   }, [answers, histories, openIndex, currentPageId]);
+
+  /**
+   * And the same edits to the account, once there is one.
+   *
+   * **This exists because without it the indicator would lie.** `savedWhere` becomes "account"
+   * when the first save lands; every edit after that would have gone only to `localStorage` while
+   * the label still read «Guardado en tu cuenta». ADR 0018 set the standard — never a tick it has
+   * not earned — and a label that was true once is not the same as a label that is true.
+   *
+   * A push that comes back stale means somebody wrote since this version was read (ADR 0034 §8).
+   * Nothing is overwritten, and **the label drops back to «Guardado en este navegador»**, which is
+   * the honest sentence: the browser's copy is current and the account's is not ours to claim.
+   */
+  useEffect(() => {
+    if (!accountSite || openIndex === null) return;
+    const document = histories[openIndex]?.present.document;
+    if (!document || pushedDocument.current === document) return;
+
+    const timer = setTimeout(() => {
+      pushedDocument.current = document;
+      void (async () => {
+        const result = await saveSite(browserClient(), {
+          id: accountSite.id,
+          version: accountSite.version,
+          document,
+        });
+        if (result.ok) setAccountSite({ id: accountSite.id, version: result.version });
+        else setSavedWhere("browser");
+      })();
+    }, SAVE_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [accountSite, histories, openIndex]);
 
   /**
    * The design-tools switch (ADR 0025), and the window it is narrowed by.
@@ -574,260 +635,280 @@ export function Variants({
     const caption = CAPTIONS[openIndex];
     if (!history || !caption) return null;
     return (
-      <Editor
-        title={es[caption.titleKey]}
-        document={history.present.document}
-        onEditText={(address, text, marks) => {
-          // Any of these makes "Deshacer" on a showing toast undo the wrong thing — the most
-          // recent action, not the delete the toast still names — so the toast stops being
-          // accurate the moment something else lands on top of it.
-          dismissToast();
-          // Spread rather than `marks` outright: `exactOptionalPropertyTypes` makes a present-but-
-          // undefined key a different thing from an absent one, and "absent" is what means «derive
-          // them by diff» all the way down to `withText`.
-          dispatch({
-            type: "editText",
-            variant: openIndex,
-            address,
-            text,
-            ...(marks === undefined ? {} : { marks }),
-          });
-        }}
-        onDeleteSection={(sectionId) => handleDeleteSection(openIndex, history, sectionId)}
-        onDuplicateSection={(sectionId) => {
-          dismissToast();
-          dispatch({ type: "duplicateSection", variant: openIndex, sectionId });
-        }}
-        onMoveSection={(sectionId, toIndex) => {
-          dismissToast();
-          dispatch({ type: "moveSection", variant: openIndex, sectionId, toIndex });
-        }}
-        onInsertSection={(catalogId, index) =>
-          handleInsertSection(openIndex, history, catalogId, index)
-        }
-        onPickPhoto={(address, file) => {
-          dismissToast();
-          void handlePickPhoto(openIndex, address, file);
-        }}
-        onFillSlot={(fill) => {
-          dismissToast();
-          dispatch({ type: "fillSlot", variant: openIndex, fill });
-        }}
-        onClearSlot={(address) => {
-          dismissToast();
-          dispatch({ type: "clearSlot", variant: openIndex, address });
-        }}
-        onSetSiteDescription={(text) => {
-          dismissToast();
-          dispatch({ type: "setSiteDescription", variant: openIndex, text });
-        }}
-        onSetSiteUrl={(url) => {
-          dismissToast();
-          dispatch({ type: "setSiteUrl", variant: openIndex, url });
-        }}
-        onSetVariant={(sectionId, variantId) => {
-          dismissToast();
-          dispatch({ type: "setVariant", variant: openIndex, sectionId, variantId });
-        }}
-        designTools={designToolsFor(designTools, viewportWidth)}
-        onDesignToolsChange={(on) => {
-          // The stored value and the state, and nothing else. No `dismissToast`: turning the tools
-          // on is not an edit, and a delete's toast has six seconds that belong to the delete.
-          setDesignTools(on);
-          // **The answer is read, and only a refusal is recorded.** The switch still works for this
-          // session either way — the state above is what the editor obeys — so a refusal costs the
-          // person nothing now and everything on the next visit, which is what the notice says.
-          // See `toolsRemembered` for why a success does not clear it.
-          if (!saveDesignTools(on)) setToolsRemembered(false);
-        }}
-        toolsRemembered={toolsRemembered}
-        onEscalateSection={(sectionId) => {
-          dismissToast();
-          dispatch({ type: "escalateSection", variant: openIndex, sectionId });
-        }}
-        onRevertSection={(sectionId, decisions) => {
-          dismissToast();
-          dispatch({
-            type: "revertSection",
-            variant: openIndex,
-            sectionId,
-            ...(decisions === undefined ? {} : { decisions }),
-          });
-        }}
-        onSetPlacement={(sectionId, elementId, edit) => {
-          dismissToast();
-          dispatch({ type: "setPlacement", variant: openIndex, sectionId, elementId, edit });
-        }}
-        onSetMobilePatch={(sectionId, elementId, edit) => {
-          dismissToast();
-          dispatch({ type: "setMobilePatch", variant: openIndex, sectionId, elementId, edit });
-        }}
-        onMoveUpOnMobile={(sectionId, elementId) => {
-          dismissToast();
-          dispatch({ type: "moveUpOnMobile", variant: openIndex, sectionId, elementId });
-        }}
-        onAddItem={(sectionId, slot, item) => {
-          dismissToast();
-          dispatch({ type: "addItem", variant: openIndex, sectionId, slot, item });
-        }}
-        onRemoveItem={(sectionId, slot, itemId) => {
-          dismissToast();
-          dispatch({ type: "removeItem", variant: openIndex, sectionId, slot, itemId });
-        }}
-        onMoveItem={(sectionId, slot, itemId, toIndex) => {
-          dismissToast();
-          dispatch({ type: "moveItem", variant: openIndex, sectionId, slot, itemId, toIndex });
-        }}
-        // The new theme is assembled here, from the theme the open document is carrying — never
-        // from scratch. `withPalette` replaces the six colours and leaves the scale alone, which
-        // is what keeps a palette change from quietly resetting sizes and spacing to the default.
-        // And it is the open document only: the three variants are three documents, and
-        // recolouring one has no more business touching the others than editing its text does.
-        onPickPalette={(paletteId) => {
-          dismissToast();
-          dispatch({
-            type: "setTheme",
-            variant: openIndex,
-            theme: withPalette(history.present.document.theme, paletteId),
-          });
-        }}
-        onPickTypePair={(typePairId) => {
-          dismissToast();
-          dispatch({
-            type: "setTheme",
-            variant: openIndex,
-            theme: withTypePair(history.present.document.theme, typePairId),
-          });
-        }}
-        // The third choice of the Estilo panel, and the only one the panel hides until the design
-        // tools are on — the "Encendido" column of the advanced dossier §4 begins «Añade **el
-        // sistema**». It travels through `setTheme` like the other two, so it gets undo, redo and
-        // autosave for nothing, and it writes to the open document only.
-        onPickScale={(scaleId) => {
-          dismissToast();
-          dispatch({
-            type: "setTheme",
-            variant: openIndex,
-            theme: withScale(history.present.document.theme, scaleId),
-          });
-        }}
-        // Rule 6, from the floating toolbar. Unlike the three above it writes one element rather
-        // than the whole theme, so it goes through its own action — and it needs no design tools:
-        // a reference is what everybody gets (advanced dossier §4, "Apagado").
-        onSetElementStyle={(address, property, value) => {
-          dismissToast();
-          dispatch({ type: "setElementStyle", variant: openIndex, address, property, value });
-        }}
-        // ADR 0024's bold and italic, from the same bar. Unlike the style write above this **is**
-        // a content cause — `strong` and `em` were chosen because they mean emphasis and a screen
-        // reader conveys them, so a mark changes what the section says.
-        onSetMark={(address, range, mark, on) => {
-          dismissToast();
-          dispatch({ type: "setMark", variant: openIndex, address, range, mark, on });
-        }}
-        pageId={currentPageId}
-        onSelectPage={(next) => {
-          dismissToast();
-          setPageId(next);
-        }}
-        // Converting leaves the canvas where it is: the section it was just showing has become an
-        // avance in that same place, which is the visible proof that it worked, and a new tab has
-        // appeared. Jumping to the page would take the owner away from the thing they just changed.
-        onSectionToPage={(sectionId) => {
-          dismissToast();
-          dispatch({ type: "sectionToPage", variant: openIndex, sectionId });
-        }}
-        onAddEntry={(collectionId, fields) => {
-          dismissToast();
-          dispatch({ type: "addEntry", variant: openIndex, collectionId, fields });
-        }}
-        onCollectionFromList={(sectionId, slot, name) => {
-          dismissToast();
-          dispatch({ type: "collectionFromList", variant: openIndex, sectionId, slot, name });
-        }}
-        onBindList={(sectionId, slot, collectionId) => {
-          dismissToast();
-          dispatch({ type: "bindList", variant: openIndex, sectionId, slot, collectionId });
-        }}
-        onUnbindList={(sectionId, slot) => {
-          dismissToast();
-          dispatch({ type: "unbindList", variant: openIndex, sectionId, slot });
-        }}
-        onRenameCollection={(collectionId, name) => {
-          dismissToast();
-          dispatch({ type: "renameCollection", variant: openIndex, collectionId, name });
-        }}
-        onDeleteCollection={(collectionId) => {
-          dismissToast();
-          dispatch({ type: "deleteCollection", variant: openIndex, collectionId });
-        }}
-        onSetEntryField={(collectionId, entryId, field, value) => {
-          dismissToast();
-          dispatch({
-            type: "setEntryField",
-            variant: openIndex,
-            collectionId,
-            entryId,
-            field,
-            value,
-          });
-        }}
-        onRemoveEntry={(collectionId, entryId) => {
-          dismissToast();
-          dispatch({ type: "removeEntry", variant: openIndex, collectionId, entryId });
-        }}
-        onMoveEntry={(collectionId, entryId, toIndex) => {
-          dismissToast();
-          dispatch({ type: "moveEntry", variant: openIndex, collectionId, entryId, toIndex });
-        }}
-        onRenamePage={(id, title) => {
-          dismissToast();
-          dispatch({ type: "renamePage", variant: openIndex, pageId: id, title });
-        }}
-        onMovePage={(id, toIndex) => {
-          dismissToast();
-          dispatch({ type: "movePage", variant: openIndex, pageId: id, toIndex });
-        }}
-        // The canvas may be showing the page that is about to go. `currentPageId` already falls
-        // back to the first page for an id the document no longer has, so nothing has to be reset
-        // here — and undo puts both the page and the canvas back together.
-        onDeletePage={(id) => {
-          dismissToast();
-          dispatch({ type: "deletePage", variant: openIndex, pageId: id });
-        }}
-        // The canvas follows the sections. Converting deliberately stays put — the avance appears
-        // where the section was, which is the proof it worked — but folding removes the page the
-        // canvas may be showing, and `currentPageId`'s fallback to the first page is only the
-        // right destination when the avance was on the first page. `foldsInto` says where they
-        // actually land, which for a page converted out of another page is not the first one.
-        onPageToSection={(id) => {
-          dismissToast();
-          const into = foldsInto(history.present.document, id);
-          dispatch({ type: "pageToSection", variant: openIndex, pageId: id });
-          setPageId(into === history.present.document.pages[0]?.id ? undefined : into);
-        }}
-        photoUrls={photoUrls.get(openIndex) ?? EMPTY_PHOTOS}
-        photoError={photoError}
-        offers={offers}
-        contactUnavailable={contactSection === undefined}
-        canUndo={history.past.length > 0}
-        canRedo={history.future.length > 0}
-        onUndo={() => {
-          dismissToast();
-          dispatch({ type: "undo", variant: openIndex });
-        }}
-        onRedo={() => {
-          dismissToast();
-          dispatch({ type: "redo", variant: openIndex });
-        }}
-        saveStatus={saveStatus}
-        toast={toast}
-        onDismissToast={dismissToast}
-        onBack={() => {
-          dismissToast();
-          setOpenIndex(null);
-        }}
-      />
+      <>
+        <Editor
+          title={es[caption.titleKey]}
+          document={history.present.document}
+          onEditText={(address, text, marks) => {
+            // Any of these makes "Deshacer" on a showing toast undo the wrong thing — the most
+            // recent action, not the delete the toast still names — so the toast stops being
+            // accurate the moment something else lands on top of it.
+            dismissToast();
+            // Spread rather than `marks` outright: `exactOptionalPropertyTypes` makes a present-but-
+            // undefined key a different thing from an absent one, and "absent" is what means «derive
+            // them by diff» all the way down to `withText`.
+            dispatch({
+              type: "editText",
+              variant: openIndex,
+              address,
+              text,
+              ...(marks === undefined ? {} : { marks }),
+            });
+          }}
+          onDeleteSection={(sectionId) => handleDeleteSection(openIndex, history, sectionId)}
+          onDuplicateSection={(sectionId) => {
+            dismissToast();
+            dispatch({ type: "duplicateSection", variant: openIndex, sectionId });
+          }}
+          onMoveSection={(sectionId, toIndex) => {
+            dismissToast();
+            dispatch({ type: "moveSection", variant: openIndex, sectionId, toIndex });
+          }}
+          onInsertSection={(catalogId, index) =>
+            handleInsertSection(openIndex, history, catalogId, index)
+          }
+          onPickPhoto={(address, file) => {
+            dismissToast();
+            void handlePickPhoto(openIndex, address, file);
+          }}
+          onFillSlot={(fill) => {
+            dismissToast();
+            dispatch({ type: "fillSlot", variant: openIndex, fill });
+          }}
+          onClearSlot={(address) => {
+            dismissToast();
+            dispatch({ type: "clearSlot", variant: openIndex, address });
+          }}
+          onSetSiteDescription={(text) => {
+            dismissToast();
+            dispatch({ type: "setSiteDescription", variant: openIndex, text });
+          }}
+          onSetSiteUrl={(url) => {
+            dismissToast();
+            dispatch({ type: "setSiteUrl", variant: openIndex, url });
+          }}
+          onSetVariant={(sectionId, variantId) => {
+            dismissToast();
+            dispatch({ type: "setVariant", variant: openIndex, sectionId, variantId });
+          }}
+          designTools={designToolsFor(designTools, viewportWidth)}
+          onDesignToolsChange={(on) => {
+            // The stored value and the state, and nothing else. No `dismissToast`: turning the tools
+            // on is not an edit, and a delete's toast has six seconds that belong to the delete.
+            setDesignTools(on);
+            // **The answer is read, and only a refusal is recorded.** The switch still works for this
+            // session either way — the state above is what the editor obeys — so a refusal costs the
+            // person nothing now and everything on the next visit, which is what the notice says.
+            // See `toolsRemembered` for why a success does not clear it.
+            if (!saveDesignTools(on)) setToolsRemembered(false);
+          }}
+          toolsRemembered={toolsRemembered}
+          onEscalateSection={(sectionId) => {
+            dismissToast();
+            dispatch({ type: "escalateSection", variant: openIndex, sectionId });
+          }}
+          onRevertSection={(sectionId, decisions) => {
+            dismissToast();
+            dispatch({
+              type: "revertSection",
+              variant: openIndex,
+              sectionId,
+              ...(decisions === undefined ? {} : { decisions }),
+            });
+          }}
+          onSetPlacement={(sectionId, elementId, edit) => {
+            dismissToast();
+            dispatch({ type: "setPlacement", variant: openIndex, sectionId, elementId, edit });
+          }}
+          onSetMobilePatch={(sectionId, elementId, edit) => {
+            dismissToast();
+            dispatch({ type: "setMobilePatch", variant: openIndex, sectionId, elementId, edit });
+          }}
+          onMoveUpOnMobile={(sectionId, elementId) => {
+            dismissToast();
+            dispatch({ type: "moveUpOnMobile", variant: openIndex, sectionId, elementId });
+          }}
+          onAddItem={(sectionId, slot, item) => {
+            dismissToast();
+            dispatch({ type: "addItem", variant: openIndex, sectionId, slot, item });
+          }}
+          onRemoveItem={(sectionId, slot, itemId) => {
+            dismissToast();
+            dispatch({ type: "removeItem", variant: openIndex, sectionId, slot, itemId });
+          }}
+          onMoveItem={(sectionId, slot, itemId, toIndex) => {
+            dismissToast();
+            dispatch({ type: "moveItem", variant: openIndex, sectionId, slot, itemId, toIndex });
+          }}
+          // The new theme is assembled here, from the theme the open document is carrying — never
+          // from scratch. `withPalette` replaces the six colours and leaves the scale alone, which
+          // is what keeps a palette change from quietly resetting sizes and spacing to the default.
+          // And it is the open document only: the three variants are three documents, and
+          // recolouring one has no more business touching the others than editing its text does.
+          onPickPalette={(paletteId) => {
+            dismissToast();
+            dispatch({
+              type: "setTheme",
+              variant: openIndex,
+              theme: withPalette(history.present.document.theme, paletteId),
+            });
+          }}
+          onPickTypePair={(typePairId) => {
+            dismissToast();
+            dispatch({
+              type: "setTheme",
+              variant: openIndex,
+              theme: withTypePair(history.present.document.theme, typePairId),
+            });
+          }}
+          // The third choice of the Estilo panel, and the only one the panel hides until the design
+          // tools are on — the "Encendido" column of the advanced dossier §4 begins «Añade **el
+          // sistema**». It travels through `setTheme` like the other two, so it gets undo, redo and
+          // autosave for nothing, and it writes to the open document only.
+          onPickScale={(scaleId) => {
+            dismissToast();
+            dispatch({
+              type: "setTheme",
+              variant: openIndex,
+              theme: withScale(history.present.document.theme, scaleId),
+            });
+          }}
+          // Rule 6, from the floating toolbar. Unlike the three above it writes one element rather
+          // than the whole theme, so it goes through its own action — and it needs no design tools:
+          // a reference is what everybody gets (advanced dossier §4, "Apagado").
+          onSetElementStyle={(address, property, value) => {
+            dismissToast();
+            dispatch({ type: "setElementStyle", variant: openIndex, address, property, value });
+          }}
+          // ADR 0024's bold and italic, from the same bar. Unlike the style write above this **is**
+          // a content cause — `strong` and `em` were chosen because they mean emphasis and a screen
+          // reader conveys them, so a mark changes what the section says.
+          onSetMark={(address, range, mark, on) => {
+            dismissToast();
+            dispatch({ type: "setMark", variant: openIndex, address, range, mark, on });
+          }}
+          pageId={currentPageId}
+          onSelectPage={(next) => {
+            dismissToast();
+            setPageId(next);
+          }}
+          // Converting leaves the canvas where it is: the section it was just showing has become an
+          // avance in that same place, which is the visible proof that it worked, and a new tab has
+          // appeared. Jumping to the page would take the owner away from the thing they just changed.
+          onSectionToPage={(sectionId) => {
+            dismissToast();
+            dispatch({ type: "sectionToPage", variant: openIndex, sectionId });
+          }}
+          onAddEntry={(collectionId, fields) => {
+            dismissToast();
+            dispatch({ type: "addEntry", variant: openIndex, collectionId, fields });
+          }}
+          onCollectionFromList={(sectionId, slot, name) => {
+            dismissToast();
+            dispatch({ type: "collectionFromList", variant: openIndex, sectionId, slot, name });
+          }}
+          onBindList={(sectionId, slot, collectionId) => {
+            dismissToast();
+            dispatch({ type: "bindList", variant: openIndex, sectionId, slot, collectionId });
+          }}
+          onUnbindList={(sectionId, slot) => {
+            dismissToast();
+            dispatch({ type: "unbindList", variant: openIndex, sectionId, slot });
+          }}
+          onRenameCollection={(collectionId, name) => {
+            dismissToast();
+            dispatch({ type: "renameCollection", variant: openIndex, collectionId, name });
+          }}
+          onDeleteCollection={(collectionId) => {
+            dismissToast();
+            dispatch({ type: "deleteCollection", variant: openIndex, collectionId });
+          }}
+          onSetEntryField={(collectionId, entryId, field, value) => {
+            dismissToast();
+            dispatch({
+              type: "setEntryField",
+              variant: openIndex,
+              collectionId,
+              entryId,
+              field,
+              value,
+            });
+          }}
+          onRemoveEntry={(collectionId, entryId) => {
+            dismissToast();
+            dispatch({ type: "removeEntry", variant: openIndex, collectionId, entryId });
+          }}
+          onMoveEntry={(collectionId, entryId, toIndex) => {
+            dismissToast();
+            dispatch({ type: "moveEntry", variant: openIndex, collectionId, entryId, toIndex });
+          }}
+          onRenamePage={(id, title) => {
+            dismissToast();
+            dispatch({ type: "renamePage", variant: openIndex, pageId: id, title });
+          }}
+          onMovePage={(id, toIndex) => {
+            dismissToast();
+            dispatch({ type: "movePage", variant: openIndex, pageId: id, toIndex });
+          }}
+          // The canvas may be showing the page that is about to go. `currentPageId` already falls
+          // back to the first page for an id the document no longer has, so nothing has to be reset
+          // here — and undo puts both the page and the canvas back together.
+          onDeletePage={(id) => {
+            dismissToast();
+            dispatch({ type: "deletePage", variant: openIndex, pageId: id });
+          }}
+          // The canvas follows the sections. Converting deliberately stays put — the avance appears
+          // where the section was, which is the proof it worked — but folding removes the page the
+          // canvas may be showing, and `currentPageId`'s fallback to the first page is only the
+          // right destination when the avance was on the first page. `foldsInto` says where they
+          // actually land, which for a page converted out of another page is not the first one.
+          onPageToSection={(id) => {
+            dismissToast();
+            const into = foldsInto(history.present.document, id);
+            dispatch({ type: "pageToSection", variant: openIndex, pageId: id });
+            setPageId(into === history.present.document.pages[0]?.id ? undefined : into);
+          }}
+          photoUrls={photoUrls.get(openIndex) ?? EMPTY_PHOTOS}
+          photoError={photoError}
+          offers={offers}
+          contactUnavailable={contactSection === undefined}
+          canUndo={history.past.length > 0}
+          canRedo={history.future.length > 0}
+          onUndo={() => {
+            dismissToast();
+            dispatch({ type: "undo", variant: openIndex });
+          }}
+          onRedo={() => {
+            dismissToast();
+            dispatch({ type: "redo", variant: openIndex });
+          }}
+          saveStatus={saveStatus}
+          savedWhere={savedWhere}
+          onSaveToAccount={accountAvailable ? () => setAccountOpen(true) : undefined}
+          toast={toast}
+          onDismissToast={dismissToast}
+          onBack={() => {
+            dismissToast();
+            setOpenIndex(null);
+          }}
+        />
+        {accountOpen ? (
+          <SaveToAccountDialog
+            // The web that is open, which is what the dialog says it saves. The editor holds three
+            // variants; a saved site is one document (ADR 0034 §6), and the other two stay in this
+            // browser as the alternatives they always were.
+            document={history.present.document}
+            configured={accountAvailable}
+            onSaved={(site) => {
+              // The document just stored is, by definition, the one already pushed.
+              pushedDocument.current = history.present.document;
+              setAccountSite(site);
+              setSavedWhere("account");
+            }}
+            onClose={() => setAccountOpen(false)}
+          />
+        ) : null}
+      </>
     );
   }
 

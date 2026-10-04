@@ -91,7 +91,25 @@ for (const path of sourceFiles(EDITOR_SRC)) {
   // A module is server-only if it reads a secret, or imports something that cannot run in a
   // browser. `serviceRoleKey()`'s own `typeof window` guard is a runtime net; this is the one
   // that fires before anything is deployed.
-  const env = SERVER_ONLY_ENV.find((name) => text.includes(name));
+  //
+  // **It looks for a read, not for a mention**, and the difference is not pedantic: the first
+  // version matched the bare name anywhere in the file and flagged `account/sites.ts`, whose only
+  // crime was a comment explaining why it does *not* use `DATABASE_URL`. A gate that cannot be
+  // reasoned about in prose is a gate people route around, so it now requires the name to appear
+  // as an actual `process.env` access.
+  const env = SERVER_ONLY_ENV.find((name) => {
+    // Read through a literal: `process.env.X` or `process.env["X"]`.
+    const quoted = "[\"'`]";
+    const literal = new RegExp(
+      `process\\.env(?:\\[\\s*${quoted}${name}${quoted}\\s*\\]|\\.${name}\\b)`,
+    ).test(text);
+    // Read through a constant: `process.env[SERVICE_KEY_VAR]`. Needed because that is exactly how
+    // `auth/env.server.ts` reads the service key — and tightening this check the obvious way
+    // stopped detecting it, which would have left the one module the gate exists for unguarded.
+    const indirect = /process\.env\s*\[\s*[A-Za-z_$]/.test(text) && text.includes(name);
+    return literal || indirect;
+  });
+
   const pkg = SERVER_ONLY_IMPORTS.find((name) =>
     new RegExp(`from\\s*["']${name.replace("/", "\\/")}["']`).test(text),
   );

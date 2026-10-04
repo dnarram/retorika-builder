@@ -58,7 +58,12 @@ import {
   type DownloadGate,
   downloadGateFor,
 } from "../editor/downloadGate.ts";
-import { EditorShell, type RailItemId, type SaveStatus } from "../editor/EditorShell.tsx";
+import {
+  EditorShell,
+  type RailItemId,
+  type SavedWhere,
+  type SaveStatus,
+} from "../editor/EditorShell.tsx";
 import { ACCEPTED_IMAGE_ACCEPT } from "../editor/imageBytes.ts";
 import { measureOverflow } from "../editor/overflowCheck.ts";
 import { countPhotos, listPhotos, type PhotoState } from "../editor/photoInventory.ts";
@@ -449,6 +454,8 @@ export function Editor({
   onUndo,
   onRedo,
   saveStatus,
+  savedWhere,
+  onSaveToAccount,
   toast,
   onDismissToast,
   onBack,
@@ -582,6 +589,8 @@ export function Editor({
   onUndo: () => void;
   onRedo: () => void;
   saveStatus: SaveStatus;
+  savedWhere?: SavedWhere | undefined;
+  onSaveToAccount?: (() => void) | undefined;
   toast: DeleteToast | null;
   onDismissToast: () => void;
   onBack: () => void;
@@ -3286,6 +3295,8 @@ export function Editor({
       onUndo={onUndo}
       onRedo={onRedo}
       saveStatus={saveStatus}
+      savedWhere={savedWhere}
+      onSaveToAccount={onSaveToAccount}
       rail={effectiveRail}
       onRailChange={showRail}
       designTools={designTools}

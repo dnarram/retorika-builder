@@ -5146,20 +5146,20 @@ describe("sprint 14 día 7 — colchón: el segundo deshacer", () => {
   }, 300_000);
 });
 
-describe("sprint 15 día 3 — la pantalla de entrar, sin proyecto configurado", () => {
+describe("sprint 15 día 3 — la pantalla de entrar", () => {
   /**
    * What can be walked without credentials, which is more than it sounds.
    *
    * ADR 0034 §4 says plainly that Google sign-in is verified by David on the real deployment,
    * because it needs his project and his consent screen. What does **not** need either is
    * everything this suite actually owns: that the screen renders, that the caret lands in the
-   * first field, that a failure moves focus to the reason, and that the application says it
-   * cannot sign anybody in rather than pretending it can.
+   * first field, and that a failure moves focus to the reason.
    *
-   * The server runs here with no `NEXT_PUBLIC_SUPABASE_*` set, which is the honest state of this
-   * machine — so the "not configured" path is not a contrived case, it is the only one available.
+   * The server runs with placeholder credentials pointed at a host that refuses (see
+   * `server.ts`), so the failure path here is a real one. The "no account configured" screen is
+   * covered directly by `test/auth.test.ts` instead.
    */
-  it("renders, puts the caret in the first field, and admits it cannot sign anybody in", async () => {
+  it("renders, puts the caret in the first field, and moves it to the reason on a failure", async () => {
     const signInPage = await (await browser.newContext()).newPage();
     try {
       await signInPage.goto(`${BASE_URL}/entrar`);
@@ -5174,10 +5174,21 @@ describe("sprint 15 día 3 — la pantalla de entrar, sin proyecto configurado",
       await expect(signInPage.getByText("Correo electrónico")).toBeVisible();
       await expect(signInPage.getByText("Contraseña", { exact: true })).toBeVisible();
 
-      // The honest message, and the honest offer beside it: you can still make a web.
-      await expect(signInPage.getByText(/le falta la configuración de la cuenta/)).toBeVisible();
-      await expect(signInPage.getByRole("button", { name: "Entrar", exact: true })).toBeDisabled();
-      await expect(signInPage.getByRole("button", { name: "Entrar con Google" })).toBeDisabled();
+      // A failed attempt moves focus to the reason, which is the half of «gestión de foco» that
+      // actually matters: a keyboard or screen-reader user lands on the explanation instead of
+      // hunting for it. The suite's server points at a host that refuses immediately, so this is
+      // the real failure path rather than a contrived one.
+      await signInPage.fill("#auth-email", "alguien@example.test");
+      await signInPage.fill("#auth-password", "una-contrasena");
+      await signInPage.getByRole("button", { name: "Entrar", exact: true }).click();
+
+      await expect(signInPage.getByText("No hemos podido entrar.")).toBeVisible({
+        timeout: 20_000,
+      });
+      const focusedTheReason = await signInPage.evaluate(
+        () => document.activeElement?.getAttribute("role") === "alert",
+      );
+      expect(focusedTheReason, "focus did not move to the reason the sign-in failed").toBe(true);
 
       // «La cuenta se crea al final» — the dossier's sentence, on the screen, pointing at the
       // questionnaire rather than at a sign-up form that deliberately does not exist (§2).
@@ -5227,4 +5238,108 @@ describe("sprint 15 día 3 — la pantalla de entrar, sin proyecto configurado",
       await callbackPage.context().close();
     }
   }, 120_000);
+});
+
+describe("sprint 15 día 4 — el diálogo de la cuenta, y las cuatro cosas que un modal debe al teclado", () => {
+  /**
+   * The four requirements sprint 14's sweep found missing from all five `aria-modal` dialogs in
+   * this editor: focus moves in, Tab cycles inside, Escape closes, focus comes back.
+   *
+   * David's adjustment of 4 October scoped the fix to this sprint's new screens, so this is the
+   * dialog that has them — asserted against what the browser actually focused, which is the only
+   * way to tell a real trap from an `aria-modal` attribute. **The other five are still owed this**
+   * and are a backlog row, not a silent omission.
+   *
+   * The suite's server runs with placeholder Supabase credentials — the right shape, a host that
+   * refuses — because the offer is only drawn when an account is configured. See `server.ts`.
+   */
+  let accountPage: Page;
+
+  beforeAll(async () => {
+    accountPage = await (await browser.newContext()).newPage();
+
+    await accountPage.goto(BASE_URL, { waitUntil: "networkidle" });
+    // The same five answers flow 1 uses, because inventing new option labels is how this walk
+    // first failed: «Otro» and «Productos» are not choices this questionnaire offers.
+    await accountPage.fill("#nombre", "Floristería La Vega");
+    await accountPage.getByRole("button", { name: "Siguiente" }).click();
+    await accountPage.getByText("Restaurante y bar", { exact: true }).click();
+    await accountPage.getByRole("button", { name: "Siguiente" }).click();
+    await accountPage.getByText("Comidas", { exact: true }).click();
+    await accountPage.getByRole("button", { name: "Siguiente" }).click();
+    await accountPage.fill("#direccion", "Calle Nueva, 8, Ronda");
+    await accountPage.getByRole("button", { name: "Siguiente" }).click();
+    await accountPage.getByText("Que reserven", { exact: true }).click();
+    await accountPage.fill("#enlace", "https://reservas.example.com/vega");
+    await accountPage.getByRole("button", { name: "Crear mi web" }).click();
+    await accountPage.getByText("Ver a tamaño real →").first().click();
+  }, 240_000);
+
+  afterAll(async () => {
+    await accountPage?.context().close();
+  });
+
+  it("offers the account from the editor, not from the front door", async () => {
+    // ADR 0034 §2: the questionnaire was walked start to finish with no account asked for, and
+    // the offer appears only now, with a finished website on screen.
+    await expect(accountPage.getByRole("button", { name: "Guardar en mi cuenta" })).toBeVisible();
+  });
+
+  it("moves focus in, cycles Tab inside, closes on Escape and gives focus back", async () => {
+    const opener = accountPage.getByRole("button", { name: "Guardar en mi cuenta" });
+    await opener.click();
+
+    const dialog = accountPage.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+
+    // 1. Focus moved in — to the first focusable thing, which is the email field.
+    await expect(accountPage.locator("#account-email")).toBeFocused();
+
+    // 2. Tab cycles inside. Tabbing from the last focusable element wraps to the first rather
+    //    than walking out into a page `aria-modal` has told a screen reader to ignore.
+    const inside = await dialog.locator("input, button, a[href]").count();
+    for (let step = 0; step < inside; step += 1) await accountPage.keyboard.press("Tab");
+    await expect(accountPage.locator("#account-email")).toBeFocused();
+
+    // And backwards off the first element, which is the half that usually gets forgotten.
+    await accountPage.keyboard.press("Shift+Tab");
+    const focusedTag = await accountPage.evaluate(() => document.activeElement?.tagName ?? "");
+    expect(focusedTag).not.toBe("BODY");
+    const stillInside = await accountPage.evaluate(
+      () => document.querySelector('[role="dialog"]')?.contains(document.activeElement) ?? false,
+    );
+    expect(stillInside, "Shift+Tab walked out of a dialog that claims to be modal").toBe(true);
+
+    // 3. Escape closes.
+    await accountPage.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+
+    // 4. Focus came back to the button that opened it, instead of being dropped at the top of
+    //    the document.
+    await expect(opener).toBeFocused();
+  });
+
+  it("says which web it saves, that the photos stay, and what it stores", async () => {
+    await accountPage.getByRole("button", { name: "Guardar en mi cuenta" }).click();
+    const dialog = accountPage.getByRole("dialog");
+
+    // The three sentences ADR 0034 will not let this dialog drop, each one a thing the owner
+    // would otherwise discover later.
+    await expect(dialog.getByText(/Guardamos la web que tienes abierta/)).toBeVisible();
+    await expect(dialog.getByText(/Las fotos se quedan en este navegador/)).toBeVisible();
+    await expect(dialog.getByText(/Lo tratan Supabase .* y Render .*Uni.n Europea/)).toBeVisible();
+    await expect(dialog.getByText(/se borra de verdad/)).toBeVisible();
+
+    await accountPage.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+  });
+
+  it("still says «Guardado en este navegador» until a save to the account has landed", async () => {
+    // §10: the indicator may not claim the account before it has one. Nothing has been saved to
+    // an account here — the placeholder host answers nothing — so the browser sentence stands.
+    await expect(accountPage.getByText("Guardado en este navegador")).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(accountPage.getByText("Guardado en tu cuenta")).toBeHidden();
+  });
 });

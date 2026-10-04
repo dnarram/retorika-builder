@@ -409,5 +409,31 @@
   "auth.error.unknown": "No hemos podido entrar. Vuelve a intentarlo.",
   "auth.error.emailRequired": "Escribe tu correo electr\u00f3nico.",
   "auth.error.passwordRequired": "Escribe tu contrase\u00f1a.",
-  "auth.notConfigured": "Entrar no est\u00e1 disponible en esta copia de la aplicaci\u00f3n: le falta la configuraci\u00f3n de la cuenta. Puedes seguir haciendo tu web sin cuenta."
+  "auth.notConfigured": "Entrar no est\u00e1 disponible en esta copia de la aplicaci\u00f3n: le falta la configuraci\u00f3n de la cuenta. Puedes seguir haciendo tu web sin cuenta.",
+  "auth.error.already_registered": "Ese correo ya tiene cuenta. Prueba a entrar con tu contrase\u00f1a.",
+  "auth.error.needs_confirmation": "Te hemos mandado un correo para confirmar la cuenta. \u00c1brelo y vuelve aqu\u00ed para guardar tu web.",
+
+  "account.save.open": "Guardar en mi cuenta",
+  "account.save.title": "Guarda tu web en tu cuenta",
+  "account.save.subtitle": "Para poder volver a ella desde otro ordenador.",
+  "account.save.close": "Cerrar",
+  "account.save.create": "Crear la cuenta y guardar",
+  "account.save.creating": "Creando la cuenta\u2026",
+  "account.save.google": "Usar mi cuenta de Google",
+  "account.save.or": "o",
+  "account.save.haveAccount": "Si ya tienes cuenta, entra con tu correo y tu contrase\u00f1a: es el mismo formulario.",
+  "account.save.asNew": "Guardar como web nueva",
+  "account.save.saving": "Guardando\u2026",
+  "account.save.done": "Guardada en tu cuenta.",
+  "account.save.doneOpen": "Ver mis webs",
+  "account.save.whichOne": "Guardamos la web que tienes abierta ahora mismo.",
+  "account.save.alreadyHave.one": "Tu cuenta ya tiene 1 web. Esta se guarda aparte, sin tocar la que ya ten\u00edas.",
+  "account.save.alreadyHave.many": "Tu cuenta ya tiene {count} webs. Esta se guarda aparte, sin tocar ninguna de ellas.",
+  "account.save.photosStay": "Las fotos se quedan en este navegador. Si abres la web en otro ordenador, aparecer\u00e1 sin ellas: eso llega en el pr\u00f3ximo sprint.",
+  "account.save.privacy": "Al crear la cuenta guardamos tu correo para que puedas volver a entrar, y nada m\u00e1s. Lo tratan Supabase (base de datos) y Render (servidor), los dos en la Uni\u00f3n Europea. Puedes borrar la cuenta cuando quieras y se borra de verdad.",
+  "account.save.stale": "Esta web se ha guardado desde otro sitio mientras la edit\u00e1bamos. No hemos sobrescrito nada: vuelve a abrirla para ver lo \u00faltimo.",
+  "account.save.failed": "No hemos podido guardar la web. Vuelve a intentarlo.",
+
+  "editor.saved.account": "Guardado en tu cuenta",
+  "editor.saved.accountPhotos": "Guardado en tu cuenta \u00b7 fotos solo en este navegador"
 }

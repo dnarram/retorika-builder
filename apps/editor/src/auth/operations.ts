@@ -26,6 +26,10 @@ export type Reason =
   | "rate_limited"
   | "weak_password"
   | "expired_link"
+  /** The address already has an account. Not a failure — see `signUpWithPassword`. */
+  | "already_registered"
+  /** The project asks for a confirmation mail, so there is no session to save anything with. */
+  | "needs_confirmation"
   | "unknown";
 
 // `exactOptionalPropertyTypes` is on, so the optional fields have to admit `undefined`
@@ -44,6 +48,7 @@ function reasonFor(error: {
   )
     return "rate_limited";
   if (code === "weak_password") return "weak_password";
+  if (code === "user_already_exists" || code === "email_exists") return "already_registered";
   if (code === "otp_expired") return "expired_link";
   return "unknown";
 }
@@ -55,6 +60,40 @@ export async function signInWithPassword(
 ): Promise<Outcome> {
   const { error } = await client.auth.signInWithPassword({ email, password });
   return error ? { ok: false, reason: reasonFor(error) } : { ok: true };
+}
+
+/**
+ * Creates the account, at the end of the journey.
+ *
+ * ADR 0034 §2, from the concept dossier: «La cuenta se crea al final, cuando ya tiene una web que
+ * no quiere perder.» There is no sign-up form on the sign-in screens for that reason — this is
+ * reached from the editor, with a finished website already on screen.
+ *
+ * **An address that already has an account is not an error here.** Somebody coming back to save a
+ * second web will type the address they already use, and Supabase answers a repeated sign-up
+ * without saying so (deliberately — saying so would leak who has an account). So the caller signs
+ * in with the same two values when this reports `already_registered`, which turns the most likely
+ * mistake into the thing the person meant.
+ */
+export async function signUpWithPassword(
+  client: Client,
+  email: string,
+  password: string,
+): Promise<Outcome> {
+  const { data, error } = await client.auth.signUp({ email, password });
+  if (error) return { ok: false, reason: reasonFor(error) };
+  // A sign-up that returns a user with no identities is Supabase's way of saying "that address is
+  // taken" without saying it. Checked explicitly, because the alternative is telling somebody
+  // their web was saved when no session exists.
+  if (data.user && data.user.identities?.length === 0) {
+    return { ok: false, reason: "already_registered" };
+  }
+  if (!data.session) {
+    // Mail confirmation is on for this project, so there is no session yet and nothing can be
+    // saved. Reported rather than papered over: the dialog has a sentence for it.
+    return { ok: false, reason: "needs_confirmation" };
+  }
+  return { ok: true };
 }
 
 export async function signOut(client: Client): Promise<Outcome> {
