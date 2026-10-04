@@ -1074,6 +1074,27 @@ clientes, que llegan por los formularios de sus webs. El segundo nivel es el del
   el catálogo no se retribuye y solo se aprovecha la estructura.
 - Borrado de cuenta que borre de verdad, con una ventana de gracia razonable.
 
+> **Enmienda del 4 de octubre de 2026 ([ADR 0034](decisions/0034-the-account-arrives-at-the-end.md),
+> sprint 15), porque esta parte se escribió cuando no había cuentas.**
+>
+> - **«Una ventana de gracia razonable» son 30 días**, y el número lo fija el ADR 0034 §12. Era la
+>   única cláusula de todo el protocolo escrita específicamente sobre cuentas y no estaba
+>   cuantificada en ningún sitio.
+> - **«Borre de verdad» está comprobado y no prometido:** `packages/db/test/deletion.pg.test.ts`
+>   purga una cuenta contra un Postgres real y después va a buscar las filas y no las encuentra.
+> - **Lo que una cuenta guarda es un correo y nada más.** Ni nombre, ni NIF, ni dirección: esos tres
+>   siguen viajando solo dentro del documento, que es lo que el ADR 0019 decidió — y su frase
+>   «Retorika stores none of them» queda enmendada allí mismo.
+> - **Los tres documentos legales siguen atados al primer euro, y el aviso de privacidad no.**
+>   Decidido por David el 4 de octubre: un aviso breve **en el momento de crear la cuenta** vence
+>   ya, porque ahí es donde se guarda el correo; el aviso legal, la política completa y las
+>   condiciones de uso esperan donde esta parte los deja.
+> - **Supabase y Render quedan nombrados como encargados del tratamiento, los dos en la UE**, y
+>   aceptar sus DPA es tarea de dirección (ADR 0034 §14).
+> - **El registro de auditoría conserva que un borrado ocurrió y no quién.** La Parte 17 pide el
+>   «quién»; después de un borrado de verdad no queda quién. Gana esta parte, y está escrito como
+>   decisión en `packages/db/src/deletion.ts`.
+
 ---
 
 # Parte 16 — Despliegue, copias y el compromiso de no secuestrar webs
@@ -1122,10 +1143,24 @@ Si alguna vez una decisión técnica choca con una de estas tres, gana la regla.
   > sitio publicado nuestro que vigilar.
 - Registro de las operaciones que importan: publicación, pago, transferencia de propiedad,
   desbloqueo. Quién, cuándo y sobre qué web.
+
+  > **Existe desde el 4 de octubre de 2026** (ADR 0034 §17): la tabla `public.audit_log` reserva las
+  > cuatro operaciones y, de momento, solo dos pueden ocurrir. **«Publicación» es la descarga**,
+  > porque desde el ADR 0008 «publicar» significa entregar los archivos — y se registra **cuando hay
+  > sesión y nunca exigiéndola**, porque la Parte 16 dice que la exportación funciona siempre. La
+  > otra es el ciclo de vida de la cuenta. «Pago» y «transferencia de propiedad» no tienen todavía
+  > código que las produzca. **Ningún navegador puede escribir en esa tabla**: no hay política de
+  > inserción y tampoco el permiso, que es cinturón y tirantes a propósito.
 - `docs/runbook.md` con los cuatro casos previsibles y qué se hace en cada uno: un sitio
   publicado no se sirve, un pago cobrado sin web publicada, el editor no guarda, una
   migración a medias. Escrito antes de que pase, porque a las tres de la mañana no se
   improvisa.
+
+  > **Tres de los cuatro están escritos desde el 4 de octubre de 2026, y hay un quinto** que esta
+  > parte no podía nombrar porque la pila a la que pertenece no existía: **el proyecto pausado o la
+  > base inalcanzable**, con las dos medidas del sprint 15 — una semana para pausarse, cero días de
+  > copias en el plan gratuito. Falta **un pago cobrado sin web publicada**, y falta porque no hay
+  > camino de pago (ADR 0021); llegará con el código que le concierne, como llegaron los otros dos.
 
 ---
 

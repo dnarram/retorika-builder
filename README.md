@@ -105,6 +105,53 @@ sprint 6 and the eleven sector files hold zero photographs — and a tablet brea
 phase 3 rather than leaving half-present. The remaining sectors' text is **done**: all ten launch
 sectors have their own bank since sprint 8.
 
+## The account, piece by piece (4 October 2026, closing sprint 15)
+
+The same declaration the editor got when sprint 14 closed, for the same reason: so the next sprint
+reads this instead of working it out. Decided by
+[ADR 0034](docs/decisions/0034-the-account-arrives-at-the-end.md), which is **`proposed` and waiting
+for David's signature** — it is signed by him, not by its author.
+
+**The shape of it, which is not the obvious one.** The account is created **at the end**, when there
+is a web worth keeping, because that is what the concept dossier says: «La cuenta se crea al final,
+cuando ya tiene una web que no quiere perder.» The landing asks for nothing, the five questions ask
+for nothing, and the login exists for **coming back**. «Sin registro» is still true.
+
+| Piece | State | With which ADR |
+|---|---|---|
+| Landing at `/` | **built**, minimal, and prerendered — it reads nothing, so it could move to a Render static site unchanged | ADR 0034 §2, §20 |
+| The five questions | **unchanged**, moved to `/empezar`. No account anywhere in them | ADR 0034 §2 |
+| Email + password | **built**: sign in, sign up at the end, reset mail | ADR 0034 §3 |
+| Google sign-in | **built, in testing mode** — 100 test users. Leaving it needs a homepage on a domain we own, and `*.onrender.com` is not ours. **Not verified end to end by development**: it needs David's credentials | ADR 0034 §4 |
+| Saving a site | **built**, and it only ever adds. There is no `upsert` in the module at all | ADR 0034 §9 |
+| Coming back | **built**: `/mis-webs` lists, `/mis-webs/[id]` opens | ADR 0034 §2 |
+| «Solo ves tus propias webs» | **built in the database**, as row-level security, and tested as policies against a real Postgres | ADR 0034 §7 |
+| A stale write | **refused**, never merged and never silently won | ADR 0034 §8 |
+| Account deletion | **built**, with a 30-day window, and proven by going to look for the rows | ADR 0034 §12, protocol Part 15 |
+| The export | **built**, and it works with a deletion already pending | protocol Part 16, rule 1 |
+| Privacy notice | **built**, at the moment the account is created | ADR 0034 §13 |
+| The audit log | **built**, with two of Part 17's four operations possible | ADR 0034 §17 |
+| Photos on the server | **not built, and said out loud** in the dialog and in the list: the document travels, the photographs stay in the browser | ADR 0034 §5 — sprint 16 |
+| Locking, ownership transfer, collaborators | **not built.** Three of the five keys the document refuses are still only destinations | advanced dossier §8; ADR 0034 §6 |
+| Charging | **not built, and not this sprint's to release** | ADR 0021, untouched |
+| Private areas with login | **not this login.** Phase 4, on the client's own site, with its own pricing model | ADR 0001, advanced dossier §10 |
+
+**What the next sprint should not have to re-derive:**
+
+- **Both platforms are needed and neither replaces the other.** Supabase does not host a Next.js
+  server; Render has no authentication product. Row-level security is the reason the choice is
+  right rather than merely cheap. 0 € today; the first upgrade worth paying for is Render's paid
+  instance, which is one line of `render.yaml`.
+- **Drizzle is not in the stack yet**, and that is a judgement rather than an oversight — see the
+  sprint-15 day-6 pull request. The protocol names it; whether it goes in on principle is
+  direction's call.
+- **Three things are waiting on David and are written down**:
+  [`docs/tasks/copias.md`](docs/tasks/copias.md) (the free plan has no backups),
+  [`docs/tasks/arranque-en-frio.md`](docs/tasks/arranque-en-frio.md) (two measurements and whether
+  to split the landing), and
+  [`docs/tasks/el-recorrido-de-la-cuenta.md`](docs/tasks/el-recorrido-de-la-cuenta.md) (the
+  thirteen-step walk that needs a real project).
+
 ## Getting started
 
 Node and pnpm are pinned, and the pin is enforced rather than advisory (`engine-strict`).
@@ -284,6 +331,7 @@ as an empty placeholder.
 | `packages/generator` | The five answers → a valid `RetorikaDocument`. Not in the protocol's Part 3.4 tree — a deliberate addition, product logic that needs invariant tests, so it lives in a package rather than inside the app | **here** |
 | `packages/copybank` | The reviewed, per-sector text bank the generator draws from ([ADR 0009](docs/decisions/0009-generated-texts-from-a-reviewed-bank.md)) | **here** |
 | `packages/photobank` | The per-sector sample-photo bank ([ADR 0011](docs/decisions/0011-sample-photos-per-sector.md)). **The machinery is here and the bank is empty** — eleven sector files, zero images, because a photograph needs a licence checked and a person's approval rather than code. Until the first one lands, a generated site opens on the catalog's grey marker | **here** |
+| `packages/db` | The application's database: accounts, sites and the audit log, with the row-level security policies that decide who sees what. **SQL migrations are the source of truth**, because the policies are the half that matters and a generator that emitted tables but not policies would leave them hand-written anyway ([ADR 0034](docs/decisions/0034-the-account-arrives-at-the-end.md)) | **here** |
 | `packages/templates` | Template extraction and application | 3 |
 | `.claude/skills`, `.claude/commands` | Specialist checklists and project commands | as needed |
 

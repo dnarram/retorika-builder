@@ -73,6 +73,16 @@ product is judged sellable.
 words** — the same honesty as «Guardado en este navegador». When accounts arrive, that module is the
 one file that moves.
 
+> **Amendment, 4 October 2026 (sprint 15, ADR 0034).** Accounts arrived, and this prediction was
+> half right. The module did **not** move: it gained a sibling,
+> `apps/editor/src/account/designTools.ts`. The prediction assumed accounts would replace
+> `localStorage`, and ADR 0034 §2 kept the anonymous journey instead — somebody who never signs in
+> still gets a switch that remembers — so **both paths exist**. The account's answer wins when
+> there is one, and a `null` from the account never overwrites the browser's, because `null` means
+> «could not ask» and not «off». Everything else in this section stands: the switch is still not a
+> field of the document, still not part of the saved session, and `clearSession()` still cannot
+> change who is looking.
+
 **It is not a field of the saved session.** This is the part worth stating as a decision rather than
 an implementation note: `clearSession()` is «Volver a empezar», and restarting the *site* must not
 change who is *looking*. A person who throws away their draft and starts again is the same
