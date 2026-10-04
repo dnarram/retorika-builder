@@ -5451,3 +5451,28 @@ describe("sprint 15 día 5 — la landing, y el camino de vuelta", () => {
     }
   }, 120_000);
 });
+
+describe("sprint 15 día 6 — la pantalla de la cuenta", () => {
+  /**
+   * What «borrar de verdad» looks like from outside, as far as it can be walked without a session.
+   *
+   * The deletion itself is proven where it can be proven for real: `packages/db`'s policy suite
+   * runs the grace window and the purge against a Postgres and goes looking for the rows
+   * afterwards. What belongs here is the guard — that a screen holding a destructive action does
+   * not render for somebody it cannot identify.
+   *
+   * The confirmation dialog's keyboard behaviour is the same `useFocusTrap` the account dialog's
+   * walk already drives, and this is its second caller rather than a second implementation.
+   */
+  it("does not render a destructive screen for somebody with no session", async () => {
+    const visitor = await (await browser.newContext()).newPage();
+    try {
+      await visitor.goto(`${BASE_URL}/cuenta`, { waitUntil: "networkidle" });
+      await expect(visitor).toHaveURL(/\/entrar$/, { timeout: 20_000 });
+      // And nothing destructive was drawn on the way past.
+      await expect(visitor.getByRole("button", { name: "Borrar mi cuenta" })).toHaveCount(0);
+    } finally {
+      await visitor.context().close();
+    }
+  }, 120_000);
+});

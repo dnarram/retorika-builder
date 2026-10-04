@@ -27,6 +27,7 @@ import {
 } from "@retorika/schema";
 import { withPalette, withScale, withTypePair } from "@retorika/tokens";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { loadAccountDesignTools, saveAccountDesignTools } from "../account/designTools.ts";
 import { SaveToAccountDialog } from "../account/SaveToAccountDialog.tsx";
 import { saveSite } from "../account/sites.ts";
 import { browserClient } from "../auth/clients.ts";
@@ -349,6 +350,14 @@ export function Variants({
    */
   const [toolsRemembered, setToolsRemembered] = useState(true);
 
+  /**
+   * Who the switch belongs to, once there is somebody for it to belong to.
+   *
+   * `null` while unknown, and that is not the same as «nobody»: until the answer arrives the
+   * browser's own preference is what is shown, because it is the only one there is.
+   */
+  const [switchOwner, setSwitchOwner] = useState<string | null>(null);
+
   useEffect(() => {
     setDesignTools(loadDesignTools());
     const measure = () => setViewportWidth(window.innerWidth);
@@ -356,6 +365,34 @@ export function Variants({
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
   }, []);
+
+  /**
+   * And then the account's preference, which wins when there is one.
+   *
+   * The dossier puts the switch in the account, «del mismo rango que el idioma de la interfaz», so
+   * a professional who turns the tools on at the office has them on at home. The browser value
+   * above is what shows until this answers — one flash of the local preference is not a claim
+   * about anything, which is the same argument the local read already made for itself.
+   *
+   * **`null` from the account does not overwrite anything.** It means the question could not be
+   * asked, not that the answer was «off»; treating the two alike would wipe a stored preference
+   * the first time the network hiccupped.
+   */
+  useEffect(() => {
+    if (!accountAvailable) return;
+    let cancelled = false;
+    void (async () => {
+      const client = browserClient();
+      const { data } = await client.auth.getUser();
+      if (cancelled || !data.user) return;
+      setSwitchOwner(data.user.id);
+      const stored = await loadAccountDesignTools(client, data.user.id);
+      if (!cancelled && stored !== null) setDesignTools(stored);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [accountAvailable]);
 
   /**
    * The owner's uploaded photos, as object URLs the preview and the download can both use, keyed
@@ -733,6 +770,15 @@ export function Variants({
             // person nothing now and everything on the next visit, which is what the notice says.
             // See `toolsRemembered` for why a success does not clear it.
             if (!saveDesignTools(on)) setToolsRemembered(false);
+            // And to the account, when there is one, because that is where the dossier puts it —
+            // «del mismo rango que el idioma de la interfaz», so it follows the person between
+            // machines. Written *as well as* locally rather than instead: the browser copy is what
+            // answers instantly on the next visit while the account is still being asked.
+            if (switchOwner) {
+              void saveAccountDesignTools(browserClient(), switchOwner, on).then((ok) => {
+                if (!ok) setToolsRemembered(false);
+              });
+            }
           }}
           toolsRemembered={toolsRemembered}
           onEscalateSection={(sectionId) => {
