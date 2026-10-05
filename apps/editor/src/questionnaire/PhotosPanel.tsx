@@ -2,6 +2,7 @@
 
 import type { ElementAddress, RetorikaDocument } from "@retorika/schema";
 import { useId } from "react";
+import { panelShell } from "../editor/EditorShell.tsx";
 import { countPhotos, listPhotos, type PhotoState } from "../editor/photoInventory.ts";
 import es from "../locales/es.json" with { type: "json" };
 
@@ -46,7 +47,7 @@ export function PhotosPanel({
   const showsPage = doc.pages.length > 1;
 
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-3 p-4">
+    <section aria-labelledby={headingId} className={`flex flex-col gap-3 p-4 ${panelShell}`}>
       <h2 id={headingId} className="text-[13px] font-bold text-ui-ink">
         {es["editor.photos.title"]}
       </h2>

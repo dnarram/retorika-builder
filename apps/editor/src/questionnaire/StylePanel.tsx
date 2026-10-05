@@ -12,6 +12,7 @@ import {
 } from "@retorika/tokens";
 import tokensEs from "@retorika/tokens/locales/es" with { type: "json" };
 import { useId } from "react";
+import { panelShell } from "../editor/EditorShell.tsx";
 import es from "../locales/es.json" with { type: "json" };
 
 /**
@@ -103,7 +104,7 @@ export function StylePanel({
       // it: the preview narrows and stays fully visible while the choice is being made. The
       // fields panel is fixed instead, because that one docks over a card that can itself be
       // 400px wide in the mobile view.
-      className="flex max-h-full w-[372px] shrink-0 flex-col gap-[18px] self-start overflow-y-auto rounded-[14px] border border-ui-border bg-ui-surface p-6"
+      className={`flex w-[372px] shrink-0 flex-col gap-[18px] rounded-[14px] border border-ui-border bg-ui-surface p-6 ${panelShell}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-col gap-1">

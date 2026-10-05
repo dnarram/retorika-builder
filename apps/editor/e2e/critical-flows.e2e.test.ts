@@ -5868,3 +5868,149 @@ describe("el texto de un botón nunca sale del botón", () => {
     }
   }, 300_000);
 });
+
+describe("un panel que no cabe se puede desplazar hasta el final", () => {
+  /**
+   * David reported on 5 October 2026 that the right-hand panel had no scrollbar in Safari: he
+   * opened «Listas», the section was long, and there was no way to reach the end of it.
+   *
+   * **It was not a Safari problem, and this guard exists because the first explanation was
+   * wrong.** The sprint's earlier fix (`globals.css`) makes WebKit *draw* a bar on a box that
+   * scrolls. `Listas`, `Páginas` and `Fotos` were not boxes that scroll: their root carried no
+   * `overflow` and no height limit at all, so there was nothing anywhere to draw a bar on and
+   * nothing to scroll — in **Chromium too**, which is where these numbers were taken. It read as
+   * a Safari bug because Safari is where it was being looked at.
+   *
+   * Measured in Chromium, `Listas` holding one list of six fichas in a 1280x720 window:
+   *
+   * | after scrolling everything that can scroll | before | after |
+   * |---|---|---|
+   * | content below the last visible pixel | **97px** | 0 |
+   * | content above it | **119px** | 0 |
+   *
+   * The second row is the half that is easy to miss: an over-tall flex item in an
+   * `overflow-hidden` row is pushed out at **both** ends — its box sat at y=-77 with the row's
+   * top at y=82 — so «Listas reutilizables», the panel's own heading, was off the top of the
+   * screen as well.
+   *
+   * **The assertion is reachability, not position.** Content below the fold is correct behaviour
+   * when something can be scrolled to it; it is the defect only when nothing can. So the probe
+   * scrolls every scrollable ancestor to its end before asking what is left outside, which is why
+   * it keeps passing as the panels grow.
+   */
+  async function unreachable(page: Page): Promise<string[]> {
+    return page.evaluate(() => {
+      // Attribute matching rather than an exact class string: the order of Tailwind utilities is
+      // not a contract. A selector that stops matching returns the message below and fails the
+      // test, which is the right direction for a probe to break in.
+      const row = document.querySelector('div[class*="flex-grow"][class*="gap-6"]');
+      if (!row) return ["no se encuentra la fila de los paneles"];
+      const panel = row.lastElementChild;
+      if (!panel || panel === row.firstElementChild) return ["no hay ningún panel abierto"];
+      const kids = [...panel.children] as HTMLElement[];
+      if (kids.length === 0) return ["el panel abierto está vacío"];
+
+      // A `fixed` panel is laid out against the viewport, and an ancestor's `overflow: hidden`
+      // does not clip it — so the box it has to fit inside is the window, not the row.
+      let box: { top: number; bottom: number };
+      if (getComputedStyle(panel).position === "fixed") {
+        box = { top: 0, bottom: window.innerHeight };
+      } else {
+        let clip = panel.parentElement;
+        while (clip && clip !== document.documentElement) {
+          if (getComputedStyle(clip).overflowY !== "visible") break;
+          clip = clip.parentElement;
+        }
+        box =
+          clip && clip !== document.documentElement
+            ? clip.getBoundingClientRect()
+            : { top: 0, bottom: window.innerHeight };
+      }
+
+      const scrollers: HTMLElement[] = [];
+      for (let n: HTMLElement | null = panel as HTMLElement; n; n = n.parentElement) {
+        if (/(auto|scroll)/.test(getComputedStyle(n).overflowY)) scrollers.push(n);
+      }
+
+      const bottom = () => Math.max(...kids.map((k) => k.getBoundingClientRect().bottom));
+      const top = () => Math.min(...kids.map((k) => k.getBoundingClientRect().top));
+
+      for (const s of scrollers) s.scrollTop = s.scrollHeight;
+      const below = bottom() - box.bottom;
+      for (const s of scrollers) s.scrollTop = 0;
+      const above = box.top - top();
+
+      const out: string[] = [];
+      if (below > 1)
+        out.push(`${Math.round(below)}px por debajo del borde, sin nada que desplazar`);
+      if (above > 1) out.push(`${Math.round(above)}px por encima del borde`);
+      return out;
+    });
+  }
+
+  /** The rail is the same shape of element — as tall as the row, with items that need not fit. */
+  async function railUnreachable(page: Page): Promise<string[]> {
+    return page.evaluate(() => {
+      const rail = document.querySelector('div[class*="w-20"][class*="shrink-0"]');
+      if (!rail) return ["no se encuentra la barra de iconos"];
+      const kids = [...rail.children] as HTMLElement[];
+      const box = (rail.parentElement ?? document.documentElement).getBoundingClientRect();
+      if (/(auto|scroll)/.test(getComputedStyle(rail).overflowY))
+        rail.scrollTop = rail.scrollHeight;
+      const below = Math.max(...kids.map((k) => k.getBoundingClientRect().bottom)) - box.bottom;
+      return below > 1
+        ? [`${Math.round(below)}px de la barra por debajo del borde, sin nada que desplazar`]
+        : [];
+    });
+  }
+
+  it("«Listas», «Páginas», «Fotos», «Estilo», «Diseño» y la barra de iconos, en una ventana baja", async () => {
+    const walker = await (await browser.newContext()).newPage();
+    try {
+      await walker.setViewportSize({ width: 1280, height: 720 });
+      await walker.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+      // «Listas» and «Diseño» are the two rail items the design-tools switch adds (ADR 0025 §6,
+      // ADR 0033 §11), so without this the reported panel is not even reachable to measure.
+      await walker.evaluate(() => localStorage.setItem("retorika.designTools.v1", "1"));
+
+      await walker.fill("#nombre", "Taberna Santo Domingo");
+      await walker.getByRole("button", { name: "Siguiente" }).click();
+      await walker.getByText("Restaurante y bar", { exact: true }).click();
+      await walker.getByRole("button", { name: "Siguiente" }).click();
+      await walker.getByText("Comidas", { exact: true }).click();
+      await walker.getByRole("button", { name: "Siguiente" }).click();
+      await walker.fill("#direccion", "Cta. de Santo Domingo, 2, Ronda");
+      await walker.getByRole("button", { name: "Siguiente" }).click();
+      await walker.getByText("Que reserven", { exact: true }).click();
+      await walker.fill("#enlace", "https://reservas.example.com/taberna");
+      await walker.getByRole("button", { name: "Crear mi web" }).click();
+      await walker.getByText("Ver a tamaño real →").first().click();
+
+      // The reported case, built rather than imagined: a list with its fichas is what makes this
+      // panel longer than the window. A fresh site's panels are all short enough to fit, which is
+      // why nothing caught this.
+      await walker.getByRole("button", { name: "Listas", exact: true }).first().click();
+      await walker
+        .getByRole("button", { name: /^Hacer una lista/ })
+        .first()
+        .click();
+      for (let i = 0; i < 8; i += 1) {
+        const add = walker.getByRole("button", { name: "Añadir una ficha" });
+        if ((await add.count()) === 0) break;
+        await add.first().click();
+      }
+      await expect(walker.getByRole("button", { name: "Cambiar el nombre" })).toBeVisible();
+
+      for (const height of [720, 640]) {
+        await walker.setViewportSize({ width: 1280, height });
+        for (const name of ["Listas", "Páginas", "Fotos", "Estilo", "Compartir", "Diseño"]) {
+          await walker.getByRole("button", { name, exact: true }).first().click();
+          expect(await unreachable(walker), `«${name}» @ 1280x${height}`).toEqual([]);
+        }
+        expect(await railUnreachable(walker), `la barra @ 1280x${height}`).toEqual([]);
+      }
+    } finally {
+      await walker.context().close();
+    }
+  }, 300_000);
+});

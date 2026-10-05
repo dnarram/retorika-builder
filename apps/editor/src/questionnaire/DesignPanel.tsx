@@ -17,6 +17,7 @@ import {
   selectedRowId,
   stepTo,
 } from "../editor/designTree.ts";
+import { panelShell } from "../editor/EditorShell.tsx";
 import es from "../locales/es.json" with { type: "json" };
 
 /**
@@ -304,7 +305,7 @@ export function DesignPanel({
       aria-labelledby={headingId}
       // Beside the canvas like the style panel, not fixed over it: the grid the canvas draws is
       // the thing being worked against, and a panel covering it would hide the answer.
-      className="flex max-h-full w-[288px] shrink-0 flex-col gap-4 self-start overflow-y-auto rounded-[14px] border border-ui-border bg-ui-surface p-5"
+      className={`flex w-[288px] shrink-0 flex-col gap-4 rounded-[14px] border border-ui-border bg-ui-surface p-5 ${panelShell}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
