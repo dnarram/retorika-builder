@@ -127,7 +127,8 @@ for nothing, and the login exists for **coming back**. «Sin registro» is still
 | Coming back | **built**: `/mis-webs` lists, `/mis-webs/[id]` opens | ADR 0034 §2 |
 | «Solo ves tus propias webs» | **built in the database**, as row-level security, and tested as policies against a real Postgres | ADR 0034 §7 |
 | A stale write | **refused**, never merged and never silently won | ADR 0034 §8 |
-| Account deletion | **built**, with a 30-day window, and proven by going to look for the rows | ADR 0034 §12, protocol Part 15 |
+| Account deletion | **built**, with a 30-day window, and proven by going to look for the rows. The sweep that ends accounts is `pnpm accounts:purge` and **nothing schedules it yet** — runbook §6 | ADR 0034 §12, protocol Part 15 |
+| Account provisioning | **built**, as a trigger on `auth.users` (migration `0002`). It was missing entirely until 5 October 2026, which made the two rows above claims rather than behaviour | ADR 0034 §12 |
 | The export | **built**, and it works with a deletion already pending | protocol Part 16, rule 1 |
 | Privacy notice | **built**, at the moment the account is created | ADR 0034 §13 |
 | The audit log | **built**, with two of Part 17's four operations possible | ADR 0034 §17 |

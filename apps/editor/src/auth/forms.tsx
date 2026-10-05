@@ -139,7 +139,10 @@ export function SignInForm({ configured }: { configured: boolean }) {
     // `refresh` and not just `push`: the server components above have already rendered for a
     // visitor with no session, and the new cookies only mean something once they re-render.
     router.refresh();
-    router.push("/");
+    // **To the saved sites, not to the landing.** ADR 0034 §2 says this screen exists «for coming
+    // back», and coming back means to the webs you saved — landing on a marketing page with an
+    // «Empezar» button is the one destination that makes signing in feel like it did nothing.
+    router.push("/mis-webs");
   }
 
   async function google() {
@@ -147,7 +150,8 @@ export function SignInForm({ configured }: { configured: boolean }) {
     setBusy(true);
     const started = await startGoogleSignIn(
       browserClient(),
-      `${window.location.origin}/auth/callback?next=/`,
+      // Same destination as the password half above, for the same reason.
+      `${window.location.origin}/auth/callback?next=/mis-webs`,
     );
     if ("url" in started) window.location.assign(started.url);
     else fail(started.reason);

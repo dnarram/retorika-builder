@@ -61,7 +61,17 @@ const ROLES = `
  * It is dropped rather than cleaned between runs because a test that starts from whatever the
  * last one left is a test whose failures depend on its neighbours.
  */
-export async function freshDatabase(): Promise<Sql> {
+export async function freshDatabase(
+  options: {
+    /**
+     * Runs after Supabase's contract exists but **before** the migrations, which is the only
+     * window in which a database can be put into the state a previous release left behind.
+     * `accounts.pg.test.ts` uses it to create the one thing migration `0002` has to repair: a
+     * person who signed up while `0001` was the newest migration and therefore has no account row.
+     */
+    beforeMigrations?: (sql: Sql) => Promise<void>;
+  } = {},
+): Promise<Sql> {
   const admin = postgres(MAINTENANCE, { prepare: false, max: 1 });
   try {
     await admin.unsafe(ROLES);
@@ -78,16 +88,27 @@ export async function freshDatabase(): Promise<Sql> {
 
   await sql.unsafe(SUPABASE_CONTRACT);
   await sql.unsafe(ROLES);
+  if (options.beforeMigrations) await options.beforeMigrations(sql);
   await migrate(sql);
   return sql;
 }
 
-/** Registers a person the way Supabase Auth would, and gives them their `accounts` row. */
+/**
+ * Registers a person the way Supabase Auth would — and **only** that.
+ *
+ * This used to insert the `public.accounts` row by hand on the next line, and that one helpful
+ * line is what hid a defect for a whole sprint: in production nothing created that row at all,
+ * so every test here ran against a database shaped differently from the real one. Migration
+ * `0002` puts a trigger on `auth.users` where the invariant belongs, and removing the manual
+ * insert is what makes these tests exercise the path production actually takes.
+ *
+ * If the trigger ever stops firing, the suite now says so loudly rather than papering over it:
+ * half the cases below do nothing but read or write that row.
+ */
 export async function createUser(sql: Sql, email: string): Promise<string> {
   const [row] = await sql<{ id: string }[]>`
     insert into auth.users (id, email) values (gen_random_uuid(), ${email}) returning id`;
   if (!row) throw new Error("auth.users insert returned no row");
-  await sql`insert into public.accounts (id) values (${row.id})`;
   return row.id;
 }
 

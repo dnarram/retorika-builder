@@ -139,7 +139,17 @@ export function SaveToAccountDialog({
     setStage({ name: "working" });
     const started = await startGoogleSignIn(
       browserClient(),
-      `${window.location.origin}/auth/callback?next=/`,
+      /**
+       * **Back to the editor, not to the landing, and not to the list.**
+       *
+       * Google's flow leaves the page, so whatever this says is where somebody lands holding a
+       * half-finished website. `/` is the landing, which would drop them on a marketing page with
+       * their own web nowhere in sight; they would have to press «Empezar» to get it back, and
+       * «Empezar» reads like starting over. `/empezar` restores this browser's session and reopens
+       * the editor on the web they were saving, which is the only destination that continues what
+       * they were doing.
+       */
+      `${window.location.origin}/auth/callback?next=/empezar`,
     );
     if ("url" in started) window.location.assign(started.url);
     else setStage({ name: "failed", reason: started.reason });

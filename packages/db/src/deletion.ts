@@ -12,12 +12,21 @@ import type { Sql } from "./connect.ts";
  * a decision made in anger or by mistake, short enough to honour «guardarlo el menor tiempo
  * posible».
  *
- * **What this module does and what it deliberately does not.** It removes everything Retorika
- * stores — the sites, the account row — and records that the deletion happened. It does **not**
- * delete the Supabase Auth user, because that needs the service-role key through Supabase's own
- * admin API and cannot be reached from a plain Postgres connection. That call is the sweep's last
- * step and it is named in `docs/runbook.md`; splitting it this way is what makes the half that
- * holds the data testable against a real database instead of described in a comment.
+ * **What this module does.** `requestDeletion` records that somebody asked, `dueForDeletion` finds
+ * whose window has run out, `purgeAccountData` forgets one account's data, and `purgeDueAccounts`
+ * ends the accounts that are due — including the Supabase Auth user, which is what leaves nothing
+ * to sign in with. `scripts/purge-accounts.ts` is the only caller of that last one and
+ * `docs/runbook.md` §6 says who runs it and how often.
+ *
+ * > **Correction, 5 October 2026.** This header used to say the Auth user «needs the service-role
+ * > key through Supabase's own admin API and cannot be reached from a plain Postgres connection»,
+ * > and that was wrong twice over. The role the migrations already run as owns `auth.users`, and
+ * > every table that references it cascades — `public.sites`, `public.accounts`, and Supabase's own
+ * > `auth.identities`, `auth.sessions` and `auth.refresh_tokens` — so one `delete` finishes the
+ * > job. Believing otherwise is what left the sweep **unbuilt**: the untestable half was carved
+ * > out, nothing was written to call the testable half, and «borre de verdad» was a sentence on a
+ * > screen with no mechanism behind it for a whole sprint. Doing it in SQL is also what makes the
+ * > whole thing testable, which is the opposite of what the old note claimed.
  *
  * Everything here runs with a connection that bypasses row-level security, which is correct and is
  * the exception the policies were written around: a sweep acts on behalf of nobody, so there is no
@@ -63,7 +72,7 @@ export async function dueForDeletion(sql: Sql): Promise<string[]> {
 }
 
 /**
- * Removes everything Retorika stores for one account, and records that it happened.
+ * The work itself, inside a transaction the caller owns.
  *
  * **The audit row is written first, and then loses its actor.** Part 17 asks for «quién, cuándo y
  * sobre qué web», and after a real deletion there is no «quién» left to name — which is what
@@ -72,22 +81,102 @@ export async function dueForDeletion(sql: Sql): Promise<string[]> {
  * directions and Part 15 wins; this comment exists so the next reader knows it was a decision and
  * not an oversight.
  *
+ * `alsoAuthUser` is the difference between removing what Retorika stores and ending the account.
+ * Deleting the `auth.users` row cascades through everything — `public.sites`, `public.accounts`,
+ * and Supabase's own `auth.identities`, `auth.sessions` and `auth.refresh_tokens`, all of which
+ * reference it — so after it there is nothing left to sign in with.
+ */
+async function purgeWithin(
+  tx: Sql,
+  userId: string,
+  alsoAuthUser: boolean,
+): Promise<{ sitesDeleted: number; authUserDeleted: boolean }> {
+  await tx`
+    insert into public.audit_log (operation, actor_id, detail)
+    values ('account_deleted', ${userId}, ${tx.json({
+      graceWindowDays: GRACE_WINDOW_DAYS,
+      endedTheAccount: alsoAuthUser,
+    })})`;
+
+  const sites = await tx`delete from public.sites where owner_id = ${userId}`;
+  await tx`delete from public.accounts where id = ${userId}`;
+  const authUser = alsoAuthUser
+    ? await tx`delete from auth.users where id = ${userId}`
+    : { count: 0 };
+  return { sitesDeleted: sites.count, authUserDeleted: authUser.count > 0 };
+}
+
+/**
+ * Removes everything Retorika stores for one account, and records that it happened — but leaves
+ * the Supabase Auth user alone, so this is «forget their data» rather than «end the account».
+ * `purgeDueAccounts` below is the one that ends it.
+ *
  * One transaction: a half-deleted account is worse than either outcome, and «una migración a
- * medias» is already one of the four cases the runbook has to describe.
+ * medias» is already one of the cases the runbook has to describe.
  */
 export async function purgeAccountData(
   sql: Sql,
   userId: string,
 ): Promise<{ sitesDeleted: number }> {
   return sql.begin(async (tx) => {
-    await tx`
-      insert into public.audit_log (operation, actor_id, detail)
-      values ('account_deleted', ${userId}, ${tx.json({ graceWindowDays: GRACE_WINDOW_DAYS })})`;
-
-    const sites = await tx`delete from public.sites where owner_id = ${userId}`;
-    await tx`delete from public.accounts where id = ${userId}`;
-    return { sitesDeleted: sites.count };
+    const { sitesDeleted } = await purgeWithin(tx, userId, false);
+    return { sitesDeleted };
   }) as Promise<{ sitesDeleted: number }>;
+}
+
+/**
+ * The sweep: every account whose grace window has run out, ended for real.
+ *
+ * **This is what «borrado de cuenta que borre de verdad» needs in order to be true, and it did not
+ * exist.** `dueForDeletion` and `purgeAccountData` shipped in sprint 15 and nothing ever called
+ * them: no route, no script, no scheduled job. So the window could expire and nothing happened —
+ * found by auditing the project on 5 October 2026, along with the reason nobody could have asked
+ * for a deletion in the first place (migration `0002`).
+ *
+ * **It does nothing unless `confirm` is passed**, and that default is the decision rather than
+ * caution for its own sake: this is the one operation in the repository that destroys somebody's
+ * work on purpose, and a run that was meant to be a look should not be able to become one that
+ * deletes. `scripts/purge-accounts.ts` is the only caller and it requires `--confirm` on the
+ * command line.
+ *
+ * One transaction per account rather than one for all of them: an account either ends or does not,
+ * and a sweep that found six and failed on the fourth should leave three ended and two untouched,
+ * not roll back the three it had already finished honestly.
+ *
+ * **The auth user is deleted here, in SQL, and that corrects what sprint 15 day 6 wrote.** That
+ * note said this step «needs the service key through Supabase's admin API and cannot be reached
+ * from a plain Postgres connection», and splitting it that way is what left the sweep unbuilt and
+ * untestable. The role the migrations already run as owns `auth.users`, and every table that
+ * references it cascades, so one `delete` finishes the job — against the real Postgres the tests
+ * use, like everything else here.
+ */
+export interface SweepResult {
+  /** Everybody whose window has run out, whether or not this run touched them. */
+  due: string[];
+  /** The ones actually ended. Empty unless `confirm` was passed. */
+  ended: string[];
+  /** Sites removed along with them, summed. */
+  sitesDeleted: number;
+}
+
+export async function purgeDueAccounts(
+  sql: Sql,
+  { confirm = false }: { confirm?: boolean } = {},
+): Promise<SweepResult> {
+  const due = await dueForDeletion(sql);
+  if (!confirm) return { due, ended: [], sitesDeleted: 0 };
+
+  const ended: string[] = [];
+  let sitesDeleted = 0;
+  for (const userId of due) {
+    const result = (await sql.begin((tx) => purgeWithin(tx, userId, true))) as {
+      sitesDeleted: number;
+      authUserDeleted: boolean;
+    };
+    ended.push(userId);
+    sitesDeleted += result.sitesDeleted;
+  }
+  return { due, ended, sitesDeleted };
 }
 
 /**
