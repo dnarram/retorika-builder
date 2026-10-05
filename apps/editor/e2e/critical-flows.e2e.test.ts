@@ -3857,7 +3857,13 @@ describe("sprint 13 día 7 — el clic que se perdía mientras la vista previa p
     });
   }
 
-  async function openedVariant(page: Page): Promise<FrameLocator> {
+  /** `beforeOpening` runs after the five answers and before the preview is opened, which is where
+   * a test that wants the frame to parse slowly turns the screw — and nowhere earlier, so the walk
+   * itself stays fast. */
+  async function openedVariant(
+    page: Page,
+    beforeOpening?: () => Promise<void>,
+  ): Promise<FrameLocator> {
     await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
     await page.fill("#nombre", "Taberna del Puerto");
     await page.getByRole("button", { name: "Siguiente" }).click();
@@ -3870,6 +3876,7 @@ describe("sprint 13 día 7 — el clic que se perdía mientras la vista previa p
     await page.getByText("Que reserven", { exact: true }).click();
     await page.fill("#enlace", "https://reservas.example.com/taberna");
     await page.getByRole("button", { name: "Crear mi web" }).click();
+    await beforeOpening?.();
     await page.getByText("Ver a tamaño real →").first().click();
     return page.frameLocator("iframe").first();
   }
@@ -3937,10 +3944,27 @@ describe("sprint 13 día 7 — el clic que se perdía mientras la vista previa p
     // `onLoad` still fires, after the look-ahead has already wired the document. Both go through
     // `wireOnce`, so the second call is free — and this is what says so, because a double attach
     // would put two of every stylesheet and two listeners on every gesture.
+    //
+    // **And it is the gap count below that CI caught, on 5 October 2026, printing 2 where 6 was
+    // right.** The look-ahead's test used to be «has the document got a section yet», and a
+    // streaming document has its first section long before its last — so the chrome was wired to a
+    // half-parsed page, with gaps for what had arrived and none for the rest. `onLoad` then did
+    // nothing, because by then that document is already the wired one.
+    //
+    // **The CPU is throttled for exactly this, because at full speed the parse is over before the
+    // first look.** Measured at 20x with the fonts held, counting `.rb-gap` against
+    // `[data-section]` on a five-section page: 1 run in 6 wired a partial document on `main`, 3 in
+    // 4 once the canvas began resizing itself on mount, and 0 in 10 with the look-ahead waiting
+    // for `readyState` to leave `"loading"`. The throttle goes on after the questionnaire walk, so
+    // only the part being tested pays for it — and it makes the defect frequent rather than
+    // certain: a guard that fails most of the time when it is back, and never when it is not.
     const page = await (await browser.newContext()).newPage();
     try {
       await withSlowFonts(page);
-      const frame = await openedVariant(page);
+      const throttle = await page.context().newCDPSession(page);
+      const frame = await openedVariant(page, async () => {
+        await throttle.send("Emulation.setCPUThrottlingRate", { rate: 20 });
+      });
       await frame.locator('[data-section="sec-cover"]').waitFor();
       // Wait past the `load` the look-ahead beat, so both paths have certainly run.
       await expect
