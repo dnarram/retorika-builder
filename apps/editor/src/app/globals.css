@@ -58,3 +58,70 @@ body {
   color: var(--ui-ink);
   font-family: var(--font-inter), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
+
+/**
+ * A scrollbar that Safari actually draws.
+ *
+ * **The defect, reported on 5 October 2026.** With the right-hand panel longer than the screen,
+ * Chrome showed a slim scrollbar and Safari showed nothing at all — so on Safari there was no sign
+ * the panel continued below the fold, and no way to find out but guessing that a scroll gesture
+ * would do something. macOS hides overlay scrollbars until they move, and Safari never brings them
+ * back for a nested scroller the way Chrome does.
+ *
+ * **Styling `::-webkit-scrollbar` is what switches WebKit out of overlay mode**, so the bar is
+ * drawn persistently and takes its own width instead of floating over the content and fading.
+ *
+ * ## The measurement, because the obvious version of this fix does not work
+ *
+ * Measured in Playwright's WebKit — Safari's own engine — on a 200px box with 900px of content,
+ * reading `offsetWidth - clientWidth`, which is zero for an overlay bar and the lane's width for a
+ * drawn one:
+ *
+ * | rules present at load | WebKit | Chromium |
+ * |---|---|---|
+ * | none | **0px** | 0px |
+ * | `::-webkit-scrollbar` only | **10px** | 0px |
+ * | `::-webkit-scrollbar` **and** `scrollbar-width: thin` | **0px** | 0px |
+ * | `scrollbar-width: thin` only | **0px** | 0px |
+ *
+ * So the standard `scrollbar-width`/`scrollbar-color` properties are deliberately **not** used
+ * here: in WebKit they take precedence and switch the `::-webkit-scrollbar` rules back off, which
+ * is the exact behaviour this fix exists to prevent. The first draft of this block had both and
+ * would have shipped as a fix that fixed nothing.
+ *
+ * Firefox therefore keeps its own default scrollbar, which is the right trade: Firefox draws a
+ * visible one already, and an invisible scrollbar was the whole complaint.
+ *
+ * Chromium reads 0 in both columns because macOS gives it overlay scrollbars whatever the CSS
+ * says — and Chrome was never the problem; its overlay bar is the one being matched.
+ *
+ * **This cannot reach a client's site.** It is the editor application's own stylesheet; the preview
+ * is an iframe with its own document written by `packages/renderer`, and nothing here crosses that
+ * boundary (ADR 0001). A published site gets whatever scrollbars the visitor's browser gives it.
+ */
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  /* Inset by a transparent border so the thumb reads as 6px of ink inside a 10px lane, which is
+     the proportion Chrome's own overlay bar uses and the reason it looks slim rather than heavy. */
+  background-color: #c3ccd9;
+  border: 2px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: #9aa7b8;
+}
+
+/* Where a vertical and a horizontal bar meet, which otherwise shows the UA's own grey. */
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
