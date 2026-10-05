@@ -217,21 +217,60 @@ export async function accountState(client: Client, userId: string): Promise<Acco
  * The owner updating their own `accounts` row is all this is — `accounts_update_own` is what
  * allows it, and what stops it being done to anybody else. **The actual removal is not this**: a
  * sweep runs after the grace window with a connection that can reach `auth.users`, which no
- * browser key can (`packages/db/src/deletion.ts`, and `docs/runbook.md` for who runs it).
+ * browser key can. `packages/db/src/deletion.ts` has it and `docs/runbook.md` §6 says who runs it.
+ *
+ * **It asks for the row back, and that is the whole point.** This used to return `!error`, and an
+ * `update` that matches nothing is not an error: PostgREST answers it with a 204 and no complaint.
+ * So when `public.accounts` had no row for anybody — which was true in production until migration
+ * `0002` — this reported success, the screen said «Se borrará el …», and nothing had been written.
+ * The row coming back is the only evidence worth reporting, and it is the same technique
+ * `saveSite` above already uses for the stale-write check.
+ *
+ * **The timestamp returned is the stored one, never the browser's.** The screen used to compute
+ * the date from `new Date()` at the moment of the click, which is a second small untruth in the
+ * same sentence: a clock that is wrong, or a request that landed a moment later, and the date
+ * shown is not the date the window runs from.
  */
-export async function requestAccountDeletion(client: Client, userId: string): Promise<boolean> {
-  const { error } = await client
+export type DeletionRequest =
+  | { ok: true; requestedAt: string }
+  | { ok: false; reason: "missing" | "unknown" };
+
+export async function requestAccountDeletion(
+  client: Client,
+  userId: string,
+): Promise<DeletionRequest> {
+  const { data, error } = await client
     .from("accounts")
     .update({ deletion_requested_at: new Date().toISOString() })
     .eq("id", userId)
-    .is("deletion_requested_at", null);
-  return !error;
+    // Idempotent: a row that already has a timestamp matches nothing here, so asking twice cannot
+    // quietly grant thirty more days. It also means «no rows» has two meanings, which is what the
+    // second read below is for.
+    .is("deletion_requested_at", null)
+    .select("deletion_requested_at");
+  if (error) return { ok: false, reason: "unknown" };
+  const written = data?.[0]?.deletion_requested_at;
+  if (written) return { ok: true, requestedAt: String(written) };
+
+  // Nothing matched. Either there was already a request — which is a success the owner should see
+  // the original date for — or there is no account row, which is a failure and must say so.
+  const { data: existing } = await client
+    .from("accounts")
+    .select("deletion_requested_at")
+    .eq("id", userId)
+    .maybeSingle();
+  if (existing?.deletion_requested_at) {
+    return { ok: true, requestedAt: String(existing.deletion_requested_at) };
+  }
+  return { ok: false, reason: "missing" };
 }
 
+/** Changing your mind. Reports failure when no row came back, for the same reason as above. */
 export async function cancelAccountDeletion(client: Client, userId: string): Promise<boolean> {
-  const { error } = await client
+  const { data, error } = await client
     .from("accounts")
     .update({ deletion_requested_at: null })
-    .eq("id", userId);
-  return !error;
+    .eq("id", userId)
+    .select("id");
+  return !error && (data?.length ?? 0) > 0;
 }

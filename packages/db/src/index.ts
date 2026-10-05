@@ -5,6 +5,8 @@ export {
   exportAccount,
   GRACE_WINDOW_DAYS,
   purgeAccountData,
+  purgeDueAccounts,
   requestDeletion,
+  type SweepResult,
 } from "./deletion.ts";
 export { type Migration, migrate, migrations } from "./migrate.ts";

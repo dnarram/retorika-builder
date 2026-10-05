@@ -167,9 +167,14 @@ export function AccountPage() {
           onExport={exportEverything}
           onClose={() => setConfirming(false)}
           onConfirm={async () => {
-            const ok = await requestAccountDeletion(browserClient(), userId);
+            const result = await requestAccountDeletion(browserClient(), userId);
             setConfirming(false);
-            if (ok) setPendingSince(new Date().toISOString());
+            // `result.ok`, never `if (result)`: the function used to return a boolean and now
+            // returns a result object, and an object is always truthy — so the obvious shape of
+            // this line would have reported success unconditionally, which is a worse version of
+            // the bug being fixed. The date comes from `requestedAt`, which is what the database
+            // actually stored, not from this browser's clock at the moment of the click.
+            if (result.ok) setPendingSince(result.requestedAt);
             else setProblem("delete");
           }}
         />

@@ -7,6 +7,7 @@ import {
   exportAccount,
   GRACE_WINDOW_DAYS,
   purgeAccountData,
+  purgeDueAccounts,
   requestDeletion,
 } from "../src/deletion.ts";
 import { asUser, createUser, freshDatabase } from "./bootstrap.ts";
@@ -190,5 +191,115 @@ describe("the export that has to work first", () => {
          set deletion_requested_at = now() - make_interval(days => ${GRACE_WINDOW_DAYS + 5})
        where id = ${user}`;
     expect((await exportAccount(sql, user)).sites).toHaveLength(1);
+  });
+});
+
+describe("the sweep, which is what makes «borre de verdad» true", () => {
+  /**
+   * `dueForDeletion` and `purgeAccountData` shipped in sprint 15 and **nothing ever called them**
+   * — no route, no script, no job. So a window could run out and nothing happened. These are the
+   * tests for the sweep that closes that, and the first one is the only one that really matters:
+   * afterwards, there is nothing left to sign in with.
+   */
+  async function overdue(email: string): Promise<string> {
+    const user = await withSite(email);
+    await requestDeletion(sql, user);
+    await sql`
+      update public.accounts
+         set deletion_requested_at = now() - make_interval(days => ${GRACE_WINDOW_DAYS + 1})
+       where id = ${user}`;
+    return user;
+  }
+
+  it("does nothing at all without confirmation, and says who it would have ended", async () => {
+    const user = await overdue("ensayo@example.com");
+    const result = await purgeDueAccounts(sql);
+
+    expect(result.due).toEqual([user]);
+    expect(result.ended).toEqual([]);
+    // The default is a look, not a deletion. Everything is still there.
+    const [sites] = await sql<{ count: string }[]>`
+      select count(*) from public.sites where owner_id = ${user}`;
+    const [users] = await sql<{ count: string }[]>`
+      select count(*) from auth.users where id = ${user}`;
+    expect(Number(sites?.count)).toBe(1);
+    expect(Number(users?.count)).toBe(1);
+  });
+
+  it("ends the account for real: no site, no account row, and nothing to sign in with", async () => {
+    const user = await overdue("adios-de-verdad@example.com");
+    const result = await purgeDueAccounts(sql, { confirm: true });
+
+    expect(result.ended).toEqual([user]);
+    expect(result.sitesDeleted).toBe(1);
+
+    // Every table that held them, asked one by one. Going to look and not finding it is the only
+    // way to prove a deletion happened.
+    for (const table of ["public.sites", "public.accounts", "auth.users"]) {
+      const [row] = await sql.unsafe<{ count: string }[]>(
+        `select count(*) from ${table} where ${table === "public.sites" ? "owner_id" : "id"} = $1`,
+        [user],
+      );
+      expect(Number(row?.count), `${table} still has the account`).toBe(0);
+    }
+  });
+
+  it("leaves an account whose window has not run out completely alone", async () => {
+    const leaving = await overdue("se-va@example.com");
+    const staying = await withSite("se-queda@example.com");
+    await requestDeletion(sql, staying); // asked, but only just now
+
+    const result = await purgeDueAccounts(sql, { confirm: true });
+    expect(result.ended).toEqual([leaving]);
+
+    const [row] = await sql<{ count: string }[]>`
+      select count(*) from auth.users where id = ${staying}`;
+    expect(Number(row?.count)).toBe(1);
+  });
+
+  it("touches nobody who never asked", async () => {
+    const quiet = await withSite("tranquila@example.com");
+    const result = await purgeDueAccounts(sql, { confirm: true });
+    expect(result.due).toEqual([]);
+    expect(result.ended).toEqual([]);
+    const [row] = await sql<{ count: string }[]>`
+      select count(*) from public.sites where owner_id = ${quiet}`;
+    expect(Number(row?.count)).toBe(1);
+  });
+
+  it("keeps the record of each ending, with the fact and not the person", async () => {
+    await overdue("registrada@example.com");
+    await purgeDueAccounts(sql, { confirm: true });
+
+    const rows = await sql<{ operation: string; actor_id: string | null; detail: unknown }[]>`
+      select operation, actor_id, detail from public.audit_log`;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.operation).toBe("account_deleted");
+    // The actor was set when the row was written and nulled by the cascade a statement later.
+    expect(rows[0]?.actor_id).toBeNull();
+    // And the log distinguishes an ending from a mere data purge.
+    expect(rows[0]?.detail).toMatchObject({ endedTheAccount: true });
+  });
+
+  it("ends several in one run, and each one on its own", async () => {
+    const first = await overdue("una@example.com");
+    const second = await overdue("dos@example.com");
+    const result = await purgeDueAccounts(sql, { confirm: true });
+    expect(result.ended.sort()).toEqual([first, second].sort());
+    expect(result.sitesDeleted).toBe(2);
+    const [row] = await sql<{ count: string }[]>`select count(*) from auth.users`;
+    expect(Number(row?.count)).toBe(0);
+  });
+
+  it("marks a mere data purge as not having ended the account", async () => {
+    // `purgeAccountData` is the other half of the pair and must stay distinguishable in the log:
+    // it forgets the data and leaves the person able to sign in.
+    const user = await withSite("solo-datos@example.com");
+    await purgeAccountData(sql, user);
+    const [row] = await sql<{ detail: unknown }[]>`select detail from public.audit_log`;
+    expect(row?.detail).toMatchObject({ endedTheAccount: false });
+    const [users] = await sql<{ count: string }[]>`
+      select count(*) from auth.users where id = ${user}`;
+    expect(Number(users?.count)).toBe(1);
   });
 });

@@ -41,12 +41,24 @@ export async function loadAccountDesignTools(
   return data.design_tools === true;
 }
 
-/** `false` when the write did not land, so the editor's «no lo recordamos» notice stays honest. */
+/**
+ * `false` when the write did not land, so the editor's «no lo recordamos» notice stays honest.
+ *
+ * **It asks for the row back.** `!error` alone was not enough: an `update` that matches no row is
+ * answered by PostgREST with a 204 and no error, so while `public.accounts` had no rows — true in
+ * production until migration `0002` — this reported the preference saved and it was not. The
+ * switch then silently stopped following the person between machines while claiming to, which is
+ * the precise thing `toolsRemembered` exists to never do.
+ */
 export async function saveAccountDesignTools(
   client: Client,
   userId: string,
   on: boolean,
 ): Promise<boolean> {
-  const { error } = await client.from("accounts").update({ design_tools: on }).eq("id", userId);
-  return !error;
+  const { data, error } = await client
+    .from("accounts")
+    .update({ design_tools: on })
+    .eq("id", userId)
+    .select("design_tools");
+  return !error && (data?.length ?? 0) > 0;
 }

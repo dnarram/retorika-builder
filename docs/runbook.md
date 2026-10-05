@@ -1,11 +1,16 @@
 # Runbook
 
 What to do when something breaks, written before it happens (protocol Part 17). Part 17 names
-four foreseeable cases. **Three of them are here**, and **two more** have been added that Part 17
+four foreseeable cases. **Three of them are here**, and **three more** have been added that Part 17
 could not have named because the stack they belong to did not exist when it was written: a paused
-or unreachable database, and an account deleted that should not have been. Five cases in total —
-counted rather than estimated, because the first draft of this very paragraph said "a fifth" and
-there were two.
+or unreachable database, an account deleted that should not have been, and running the sweep that
+ends accounts. **Six cases in total** — counted against the headings each time this file grows,
+because the first draft of this paragraph said "a fifth" when there were two, and the second said
+"five" the day a sixth was added.
+
+Case 6 is the odd one out and says so in its own words: it is not a failure to recover from but an
+operation somebody has to perform, and it is here because the code that needs it pointed at this
+file for who runs it and this file did not say.
 
 The one still missing is **a payment charged with no site published**, and it has nothing to
 describe: [ADR 0021](decisions/0021-charging-waits-for-a-sellable-product.md) defers charging and
@@ -212,7 +217,62 @@ account — and the browser's own copy keeps the edits meanwhile.
 - **After the sweep has run, it is gone.** That is what «borre de verdad» means (Part 15), and on
   the free plan there is no backup to go back to. The export was offered twice before the deletion
   and once more inside the confirmation; if the owner took it, `retorika-mis-webs.json` has every
-  document and can be opened in the editor.
+  document and can be opened in the editor. The sweep is §6 below — **it does not run by itself.**
 - **The audit log keeps that a deletion happened and when, and not who.** `actor_id` is
   `on delete set null`, so the row survives the cascade. Part 17 asks for the «quién»; Part 15
   asks for a real deletion. Part 15 wins, and that is a decision rather than an oversight.
+
+---
+
+## 6. Running the sweep that ends accounts
+
+> **It does not run by itself, and that is the honest state of it.** Nothing schedules this: Render's
+> cron jobs are a paid feature and ADR 0034's whole stack decision was 0 €. Until something does,
+> the thirty days are a **floor** rather than a promise of the exact moment, which is why the
+> account screen says «se borrará **a partir del**» and not «el».
+>
+> This section exists because `packages/db/src/deletion.ts` pointed at the runbook «for who runs
+> it» and the runbook did not say. Found auditing the project, 5 October 2026.
+
+### How to run it
+
+```sh
+# Says who is past the thirty days and ends nobody. Safe, and the default.
+DATABASE_URL="<el pooler, puerto 6543>" pnpm accounts:purge
+
+# Ends them. There is no undo and no backup on the free plan.
+DATABASE_URL="<el pooler, puerto 6543>" pnpm accounts:purge --confirm
+```
+
+Only `DATABASE_URL` is needed — no service key, no admin API. Deleting the `auth.users` row
+cascades through `public.sites`, `public.accounts` and Supabase's own `auth.identities`,
+`auth.sessions` and `auth.refresh_tokens`, so one statement finishes the job. That is also what
+makes it testable: `packages/db/test/deletion.pg.test.ts` runs this code path against a real
+Postgres and then goes looking for the rows.
+
+### How often
+
+**Once a week is enough and once a month is defensible.** The window is thirty days, so a weekly
+run means somebody waits between thirty and thirty-seven days — which is what «a partir del» on
+the screen already says. What is *not* defensible is never: an account that asked to be deleted and
+was not is the one failure Part 15 wrote a clause about.
+
+### What to check before confirming
+
+1. **Read the ids the dry run prints.** They are the only thing it prints, because that is all it
+   needs — a uuid is not a name or an address.
+2. **If the number is surprising, stop.** More accounts due than you expected means either a bug in
+   `dueForDeletion` or somebody's deletion request that nobody expected, and both are worth a look
+   before anything is destroyed.
+3. **Check `public.audit_log` afterwards.** One `account_deleted` row per account, with
+   `endedTheAccount: true` in its `detail` and a null `actor_id` — the fact kept, the person not
+   (Part 17 against Part 15, and Part 15 wins; see `deletion.ts`).
+
+### What not to touch
+
+- **Do not run `--confirm` to "see what happens".** There is no backup on the free plan
+  (`docs/tasks/copias.md`) and no undo in the code, on purpose.
+- **Do not delete rows from `public.accounts` by hand** to tidy up a stuck request. That leaves an
+  `auth.users` row with no account row — somebody who can sign in and whose deletion request can
+  never be recorded again, because the trigger in migration `0002` only fires on insert. Run the
+  sweep, or clear `deletion_requested_at` and let the owner decide again.

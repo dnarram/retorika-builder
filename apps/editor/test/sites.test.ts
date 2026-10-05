@@ -48,39 +48,50 @@ interface Call {
 }
 
 /**
- * A chainable stand-in that records every link in the chain and resolves to `result`.
+ * A chainable stand-in that records every link in the chain and resolves to the next `response`.
  *
  * Built by attaching the chain's methods **onto a real Promise** rather than by defining a `then`
  * property: `await client.from("sites").select(...)` has to work with no terminator, and an object
  * that merely declares `then` is a thenable by accident, which is the thing `noThenProperty`
- * exists to catch.
+ * exists to catch — it caught a second, worse copy of this helper that was briefly hand-rolled
+ * further down this file.
+ *
+ * **Several responses are answered in order**, one per `from(...)`, which is what a function that
+ * reads after a write needs. Passing one response keeps the old behaviour exactly: it is clamped,
+ * so every query sees the same answer.
  */
-function recorder(result: unknown) {
+function recorder(...responses: unknown[]) {
   const calls: Call[] = [];
-  const methods: Record<string, (...args: unknown[]) => unknown> = {};
-  const chain = Object.assign(Promise.resolve(result), methods);
-  for (const method of [
-    "select",
-    "insert",
-    "update",
-    "eq",
-    "is",
-    "order",
-    "maybeSingle",
-    "single",
-  ]) {
-    Object.defineProperty(chain, method, {
-      value: (...args: unknown[]) => {
-        calls.push({ method, args });
-        return chain;
-      },
-      writable: true,
-    });
+  let answered = 0;
+
+  function chainFor(): Promise<unknown> {
+    const response = responses[Math.min(answered++, responses.length - 1)];
+    const chain = Promise.resolve(response);
+    for (const method of [
+      "select",
+      "insert",
+      "update",
+      "eq",
+      "is",
+      "order",
+      "maybeSingle",
+      "single",
+    ]) {
+      Object.defineProperty(chain, method, {
+        value: (...args: unknown[]) => {
+          calls.push({ method, args });
+          return chain;
+        },
+        writable: true,
+      });
+    }
+    return chain;
   }
+
   const client = {
     from: (table: string) => {
       calls.push({ method: "from", args: [table] });
-      return chain;
+      return chainFor();
     },
   };
   return { client: client as unknown as Client, calls };
@@ -259,8 +270,13 @@ describe("the copy an owner takes with them", () => {
 
 describe("asking for the account to be deleted, from the browser", () => {
   it("writes the timestamp on the owner's own row and nobody else's", async () => {
-    const { client, calls } = recorder({ error: null });
-    expect(await requestAccountDeletion(client, "u1")).toBe(true);
+    const stored = "2026-10-05T10:00:00.000Z";
+    const { client, calls } = recorder({ data: [{ deletion_requested_at: stored }], error: null });
+    expect(await requestAccountDeletion(client, "u1")).toEqual({
+      ok: true,
+      // The date the database stored, not the one this browser's clock happened to say.
+      requestedAt: stored,
+    });
     const eqs = calls.filter((call) => call.method === "eq").map((call) => call.args);
     expect(eqs).toContainEqual(["id", "u1"]);
     expect(payloadOf(calls, "update")["deletion_requested_at"]).toBeTruthy();
@@ -269,7 +285,7 @@ describe("asking for the account to be deleted, from the browser", () => {
   it("does not restart the clock on a second press", async () => {
     // `.is(..., null)` is what makes this idempotent: a row that already has a timestamp matches
     // nothing, so asking twice cannot quietly grant thirty more days.
-    const { client, calls } = recorder({ error: null });
+    const { client, calls } = recorder({ data: [{ deletion_requested_at: "x" }], error: null });
     await requestAccountDeletion(client, "u1");
     expect(calls.filter((call) => call.method === "is").map((call) => call.args)).toContainEqual([
       "deletion_requested_at",
@@ -277,15 +293,39 @@ describe("asking for the account to be deleted, from the browser", () => {
     ]);
   });
 
+  it("reports the original date when a request was already pending", async () => {
+    // The update matches nothing because the row already has a timestamp, and the owner should be
+    // shown the date their window actually runs from rather than a failure. Two responses in
+    // order: the update that matched nothing, then the read that finds out why.
+    const already = "2026-10-01T09:30:00.000Z";
+    const { client } = recorder(
+      { data: [], error: null },
+      { data: { deletion_requested_at: already }, error: null },
+    );
+    expect(await requestAccountDeletion(client, "u1")).toEqual({ ok: true, requestedAt: already });
+  });
+
+  it("reports a failure when there is no account row to write to", async () => {
+    // The defect this whole change exists for: until migration 0002 there was no row for anybody,
+    // the update matched nothing, PostgREST answered 204 with no error, and this said yes.
+    const { client } = recorder({ data: [], error: null }, { data: null, error: null });
+    expect(await requestAccountDeletion(client, "u1")).toEqual({ ok: false, reason: "missing" });
+  });
+
   it("can be undone, which is the point of a window", async () => {
-    const { client, calls } = recorder({ error: null });
+    const { client, calls } = recorder({ data: [{ id: "u1" }], error: null });
     expect(await cancelAccountDeletion(client, "u1")).toBe(true);
     expect(payloadOf(calls, "update")["deletion_requested_at"]).toBeNull();
   });
 
+  it("reports a cancellation that matched no row rather than claiming it worked", async () => {
+    const { client } = recorder({ data: [], error: null });
+    expect(await cancelAccountDeletion(client, "u1")).toBe(false);
+  });
+
   it("reports a failure rather than claiming the request landed", async () => {
     const { client } = recorder({ error: { message: "no" } });
-    expect(await requestAccountDeletion(client, "u1")).toBe(false);
+    expect(await requestAccountDeletion(client, "u1")).toEqual({ ok: false, reason: "unknown" });
   });
 });
 
@@ -337,7 +377,7 @@ describe("the design-tools switch in the account", () => {
   });
 
   it("writes only the switch, and only on the owner's own row", async () => {
-    const { client, calls } = recorder({ error: null });
+    const { client, calls } = recorder({ data: [{ design_tools: true }], error: null });
     expect(await saveAccountDesignTools(client, "u1", true)).toBe(true);
     // Nothing else may ride along on this update: the switch is a property of the person and the
     // row also carries the deletion request.
@@ -350,6 +390,12 @@ describe("the design-tools switch in the account", () => {
 
   it("reports a refused write, so the editor's «no lo recordamos» notice stays honest", async () => {
     const { client } = recorder({ error: { message: "no" } });
+    expect(await saveAccountDesignTools(client, "u1", true)).toBe(false);
+  });
+
+  it("reports a write that matched no row, which is what a missing account row looks like", async () => {
+    // Same defect as the deletion request: no error, no row, and the editor used to believe it.
+    const { client } = recorder({ data: [], error: null });
     expect(await saveAccountDesignTools(client, "u1", true)).toBe(false);
   });
 });

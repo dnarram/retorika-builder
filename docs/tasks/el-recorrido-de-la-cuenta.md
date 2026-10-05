@@ -8,8 +8,13 @@
 
 1. Crear **dos** proyectos de Supabase en una región de la **UE** (ADR 0034 §14), uno de desarrollo
    y uno de producción. La Parte 15 exige claves distintas para cada entorno.
-2. Aplicar la migración: `DATABASE_URL=<pooler 6543> node -e "…"` o desde el panel, pegando
-   `packages/db/migrations/0001-accounts-sites-and-the-audit-log.sql`.
+2. Aplicar las migraciones — **ahora son dos** —, desde el panel de Supabase o con
+   `DATABASE_URL` puesta, pegando en orden:
+   `packages/db/migrations/0001-accounts-sites-and-the-audit-log.sql` y
+   `packages/db/migrations/0002-every-auth-user-gets-an-account-row.sql`.
+   **La `0002` no es opcional**: sin ella `public.accounts` no tiene fila para nadie, y entonces ni
+   el borrado de cuenta ni el interruptor de herramientas pueden guardarse. Tu cuenta de ahora, que
+   se creó antes de que existiera, la arregla el relleno que la propia migración lleva dentro.
 3. Pegar en Render las **cuatro** variables obligatorias que `.env.example` nombra —
    `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
    `SUPABASE_SERVICE_ROLE_KEY`—. **Yo no veo ninguna.** (Esta lista decía «cinco» y estaba mal
@@ -38,8 +43,10 @@
 | 9 | Descargas el ZIP y lo abres con doble clic | La web se ve sin servidor | Es la promesa del ADR 0001 |
 | 10 | **«Entrar con Google»** | Entra, y `/mis-webs` enseña lo tuyo | **Esto sigue siendo lo único que no he podido probar yo.** Si falla con un error de Google antes de volver a nuestro dominio, casi siempre es el *redirect URI*: tiene que ser el que Supabase da en su panel, no `/auth/callback` directamente. **Si en cambio Safari dice «no puede abrir la página» con un `localhost` en la URL después de volver**, es el fallo que David encontró el 5 de octubre y ya está arreglado: `/auth/callback` construía su redirección con `request.url`, que detrás del proxy de Render es la dirección interna. Ver `apps/editor/src/auth/publicOrigin.ts` y `docs/tasks/cabecera-de-origen.md` |
 | 11 | `/cuenta` → «Descargar una copia de mis webs» | Baja un `.json` con tus documentos | La Parte 16 dice que esto funciona siempre |
-| 12 | «Borrar mi cuenta» → confirmas | Dice que se borrará en 30 días, y puedes cancelarlo ahí mismo | — |
+| 12 | «Borrar mi cuenta» → confirmas | Dice que se borrará **a partir del** día que toque, y puedes cancelarlo ahí mismo | **Recarga la página y compruébalo**: si el aviso desaparece, la petición no se guardó. Eso era el fallo del 5 de octubre y lo arregla la migración `0002` |
 | 13 | Cancelas el borrado | Vuelve a la normalidad | — |
+| 14 | `pnpm accounts:purge` con `DATABASE_URL` puesta | Dice quién está vencido y **no borra nada** | Es el barrido, y en seco por defecto. `docs/runbook.md` §6 |
+| 15 | Vuelves a pedir el borrado y, **solo para probarlo**, adelantas la fecha en el panel de Supabase 31 días | `pnpm accounts:purge` ya la lista; con `--confirm` la borra y no queda nada con que entrar | Hazlo con una cuenta de prueba, no con la tuya: no hay copia de seguridad (`docs/tasks/copias.md`) |
 
 ## Lo que queda por decidir, y es tuyo
 
@@ -50,6 +57,9 @@
 - **Aceptar los DPA** de Supabase y de Render, que el ADR 0034 §14 deja como tarea de dirección.
 - **Drizzle**: no se ha ganado su sitio y lo dije en la PR del día 6. El protocolo lo nombra; si
   debe estar por principio, es tu decisión.
+- **Cada cuánto corre el barrido de cuentas.** Hoy no lo programa nada: los *cron jobs* de Render se
+  pagan y el ADR 0034 eligió 0 €. Una vez por semana basta y el runbook §6 explica por qué «a partir
+  del» es la palabra honesta mientras sea manual.
 
 ## Lo que el barrido del sprint 14 dejó abierto y sigue abierto
 

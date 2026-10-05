@@ -480,7 +480,7 @@
   "account.delete.confirmExport": "Desc\u00e1rgate una copia antes, si no lo has hecho ya.",
   "account.delete.confirm": "S\u00ed, borrar mi cuenta",
   "account.delete.cancel": "No, dejarlo como est\u00e1",
-  "account.delete.pending": "Has pedido borrar la cuenta. Se borrar\u00e1 el {date}.",
+  "account.delete.pending": "Has pedido borrar la cuenta. Se borrar\u00e1 a partir del {date}, y hasta entonces puedes cancelarlo aqu\u00ed.",
   "account.delete.undo": "Cancelar el borrado",
   "account.delete.failed": "No hemos podido registrar la petici\u00f3n. Vuelve a intentarlo.",
   "account.delete.whatStays": "Tus webs descargadas no se borran: son archivos tuyos y no dependen de nosotros.",
