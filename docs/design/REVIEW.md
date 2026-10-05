@@ -927,3 +927,33 @@ ningún tamaño. Desglose medido:
 Las dos primeras son **383px, más de la mitad del grupo**. La frase de guardado la alargó el ADR
 0012 a propósito, «precisely so nobody reads a cross-device guarantee into it», así que acortarla no
 es una decisión de maquetación. Queda nombrado aquí en lugar de dejarse descubrir.
+
+### Dos correcciones: el interruptor invisible y una etiqueta que se partía (6 de octubre de 2026)
+
+**El aviso del interruptor de herramientas de diseño no se veía, y lo rompí yo.** Se dibujaba
+`absolute … left-full`, justo fuera del borde derecho del raíl, y eso funcionó hasta que la PR #172
+dio al raíl `overflow-y: auto` para que sus propios elementos se pudieran alcanzar en una ventana
+baja. **El desbordamiento recorta en los dos ejes**: `overflow-y: auto` calcula también
+`overflow-x: auto`, así que la tarjeta seguía ahí —300×267 en el DOM— con **303px fuera de la caja
+que la recorta**, invisible y sin nada que desplazar, porque no está en el flujo. Para el dueño eso
+era un interruptor muerto.
+
+`position: fixed` es lo que escapa del desbordamiento de un antepasado, así que la tarjeta se coloca
+contra el rectángulo **medido** del interruptor y no contra su padre.
+
+**«+ Añadir línea» se salía de su píldora, y eso no lo trajo el rediseño.** Caja de 30px declarada y
+etiqueta libre de partirse: medido, **texto de 48px en una caja de 30**, 9px pintados fuera. La
+regla es del **28 de septiembre** y ningún día de este trabajo la tocó. Lo que hizo el rediseño fue
+ponerla al lado de «Añadir sección aquí», que ahora parece deliberada — y eso es lo que hizo que
+esta pareciera rota. `white-space: nowrap`, y de paso el mismo suelo de 3:1 que la otra píldora.
+
+**Lo que ninguna guarda podía cazar, y es la parte útil.** El recorrido de desbordamiento de botones
+de la PR #169 lee `button, a, [role="button"]` en el documento **del editor**, y el cromo del lienzo
+vive en otro, dentro del iframe. Ahora hay un recorrido que cruza esa frontera.
+
+**Y ese recorrido nació vacío.** Copiado del otro, saltaba cualquier elemento con un antepasado que
+recorta — y el cromo inyecta `html, body { overflow-x: clip; }`, así que **todos** lo tienen: el
+recorrido no examinaba ni un botón y pasaba en verde. Quitar el arreglo que lo motivó no lo hacía
+fallar. Ahora mira solo el desbordamiento del propio elemento, y **cuenta cuántos examina**: cero
+examinados es un fallo con su propio mensaje, porque un recorrido que no miró nada y uno que no
+encontró nada son el mismo array vacío.

@@ -3050,11 +3050,33 @@ export function Editor({
       // The line controls. The pill echoes the section one, smaller and left-aligned under the
       // list it belongs to rather than centred in a gap, because it adds to a thing rather than
       // between two things.
+      /**
+       * **`white-space: nowrap`, and the label has needed it since the day it was written.**
+       *
+       * The pill is 30px tall by declaration and its text was free to wrap, so «+ Añadir línea»
+       * broke onto two lines inside a one-line box: measured in Chromium as a **48px text in a
+       * 30px pill, 9px of it painted outside**. It is `inline-flex`, so refusing the wrap costs
+       * nothing — the pill simply takes the width its own words need.
+       *
+       * It dates from 28 September and no restyle caused it. What the restyle did was put it next
+       * to «Añadir sección aquí», which is the same kind of control and now looks deliberate, and
+       * that is what made this one look broken by comparison.
+       *
+       * Its border came from the same tint as that pill's — `#A9C9F4`, **1.70:1** on the white
+       * behind it, under WCAG 1.4.11's 3:1 — so it gets the same resting colour for the same
+       * reason, and the same emphasis behind `@media (hover: hover)` plus `:focus-visible`.
+       */
       `.rb-line-add { font-family: ${UI_FONT}; margin-top: 10px; display: inline-flex;`,
       "  align-items: center; height: 30px; padding: 0 14px; font-size: 13px; font-weight: 600;",
-      "  color: #156FE7; background: #FFFFFF; border: 1px solid #A9C9F4; border-radius: 999px;",
-      "  cursor: pointer; }",
-      ".rb-line-add:hover { background: #F2F7FE; border-color: #156FE7; }",
+      "  white-space: nowrap;",
+      `  color: ${CHROME_SCALE.brand}; background: ${CHROME_SCALE.surface};`,
+      `  border: 1px solid ${PILL_REST_BORDER}; border-radius: 999px; cursor: pointer;`,
+      `  transition: background-color ${CHROME_SCALE.fast} ${CHROME_SCALE.ease},`,
+      `    box-shadow ${CHROME_SCALE.fast} ${CHROME_SCALE.ease}; }`,
+      `@media (hover: hover) { .rb-line-add:hover { background: ${CHROME_SCALE.brandSurface};`,
+      `  box-shadow: ${CHROME_SCALE.shadow2}; } }`,
+      `.rb-line-add:focus-visible { background: ${CHROME_SCALE.brandSurface};`,
+      `  outline: 2px solid ${CHROME_SCALE.brand}; outline-offset: 2px; }`,
       // The same slot the add button occupies, in the muted voice a limit deserves: it is not an
       // action and must not look like one.
       //

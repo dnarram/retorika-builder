@@ -401,8 +401,37 @@ function DesignToolsSwitch({
   onDismiss: () => void;
   onChange: (on: boolean) => void;
 }) {
+  /**
+   * **Where the question goes, and why it cannot simply sit next to the switch.**
+   *
+   * It used to be `absolute … left-full`, which puts it just outside the rail's right edge — and
+   * that worked until the rail was given `overflow-y: auto` so its own items could be reached in a
+   * short window (PR #172). Overflow clips on both axes: `overflow-y: auto` computes `overflow-x`
+   * to `auto` too, so the card was still rendered, still 300×267, and **303px of it lay outside
+   * the box that clips** — invisible, with nothing to scroll to since it is not in the flow.
+   *
+   * To the owner that read as a dead switch: press it, and nothing happens.
+   *
+   * `position: fixed` is what gets out of an ancestor's overflow — its containing block is the
+   * viewport — so the card is placed against the switch's measured rectangle instead of against
+   * its parent. Measured rather than assumed because the switch's vertical position depends on how
+   * many rail items the design-tools state is showing.
+   */
+  const anchor = useRef<HTMLDivElement>(null);
+  const [at, setAt] = useState<{ left: number; bottom: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!asking) return;
+    const box = anchor.current?.getBoundingClientRect();
+    if (box)
+      setAt({
+        left: Math.round(box.right + 4),
+        bottom: Math.round(window.innerHeight - box.top + 4),
+      });
+  }, [asking]);
+
   return (
-    <div className="relative flex flex-col items-center gap-[5px] pt-1.5">
+    <div ref={anchor} className="relative flex flex-col items-center gap-[5px] pt-1.5">
       {/* Directly under the four items, divided from them — not pushed to the bottom of the rail
           with `mt-auto`, which is what «al pie del raíl» first suggested and what walking it in a
           browser ruled out. The rail is full height, so the bottom is 842px down at 1440×900: the
@@ -462,7 +491,12 @@ function DesignToolsSwitch({
       ) : null}
 
       {asking ? (
-        <div className="absolute bottom-full left-full z-20 mb-1 ml-1 flex w-[300px] flex-col gap-3 rounded-ui-lg border border-ui-border bg-ui-surface p-4 text-left shadow-ui-3">
+        <div
+          style={at ? { left: at.left, bottom: at.bottom } : undefined}
+          className="fixed z-30 flex w-[300px] flex-col gap-3 rounded-ui-lg border border-ui-border bg-ui-surface p-4 text-left shadow-ui-3"
+          // Hidden until it has been measured, so it never paints for one frame in the corner.
+          hidden={at === null}
+        >
           <span className="text-[15px] font-bold text-ui-ink">
             {es["editor.designTools.ask.title"]}
           </span>
