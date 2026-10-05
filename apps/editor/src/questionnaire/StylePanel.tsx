@@ -12,7 +12,7 @@ import {
 } from "@retorika/tokens";
 import tokensEs from "@retorika/tokens/locales/es" with { type: "json" };
 import { useId } from "react";
-import { panelShell } from "../editor/EditorShell.tsx";
+import { panelCard, panelRow, panelRowSelected } from "../editor/panelKit.tsx";
 import es from "../locales/es.json" with { type: "json" };
 
 /**
@@ -104,7 +104,7 @@ export function StylePanel({
       // it: the preview narrows and stays fully visible while the choice is being made. The
       // fields panel is fixed instead, because that one docks over a card that can itself be
       // 400px wide in the mobile view.
-      className={`flex w-[372px] shrink-0 flex-col gap-[18px] rounded-[14px] border border-ui-border bg-ui-surface p-6 ${panelShell}`}
+      className={`w-[372px] gap-[18px] p-6 ${panelCard}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-col gap-1">
@@ -152,10 +152,8 @@ export function StylePanel({
             <label
               key={palette.id}
               className={
-                "relative flex h-14 cursor-pointer items-center gap-3.5 rounded-[11px] px-4 " +
-                (selected
-                  ? "border-2 border-ui-brand bg-ui-brand-surface"
-                  : "border border-ui-border bg-white")
+                "relative flex h-14 cursor-pointer items-center gap-3.5 px-4 " +
+                (selected ? panelRowSelected : panelRow)
               }
             >
               <input
@@ -179,7 +177,7 @@ export function StylePanel({
               <span
                 className={
                   "text-[15px] " +
-                  (selected ? "font-semibold text-ui-brand" : "font-medium text-[#334155]")
+                  (selected ? "font-semibold text-ui-ink" : "font-medium text-ui-ink")
                 }
               >
                 {nameOf(palette.nameKey)}
@@ -204,10 +202,8 @@ export function StylePanel({
             <label
               key={pair.id}
               className={
-                "relative flex h-14 cursor-pointer items-center gap-3.5 rounded-[11px] px-4 " +
-                (selected
-                  ? "border-2 border-ui-brand bg-ui-brand-surface"
-                  : "border border-ui-border bg-white")
+                "relative flex h-14 cursor-pointer items-center gap-3.5 px-4 " +
+                (selected ? panelRowSelected : panelRow)
               }
             >
               <input
@@ -230,7 +226,7 @@ export function StylePanel({
               <span
                 className={
                   "text-[15px] " +
-                  (selected ? "font-semibold text-ui-brand" : "font-medium text-[#334155]")
+                  (selected ? "font-semibold text-ui-ink" : "font-medium text-ui-ink")
                 }
               >
                 {nameOf(pair.nameKey)}
@@ -261,10 +257,8 @@ export function StylePanel({
               <label
                 key={scale.id}
                 className={
-                  "relative flex h-14 cursor-pointer items-center gap-3.5 rounded-[11px] px-4 " +
-                  (selected
-                    ? "border-2 border-ui-brand bg-ui-brand-surface"
-                    : "border border-ui-border bg-white")
+                  "relative flex h-14 cursor-pointer items-center gap-3.5 px-4 " +
+                  (selected ? panelRowSelected : panelRow)
                 }
               >
                 <input
@@ -301,7 +295,7 @@ export function StylePanel({
                 <span
                   className={
                     "text-[15px] " +
-                    (selected ? "font-semibold text-ui-brand" : "font-medium text-[#334155]")
+                    (selected ? "font-semibold text-ui-ink" : "font-medium text-ui-ink")
                   }
                 >
                   {nameOf(scale.nameKey)}

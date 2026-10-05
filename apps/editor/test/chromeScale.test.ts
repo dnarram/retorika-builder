@@ -27,7 +27,16 @@ const DECLARATIONS = CSS.replace(/\/\*[\s\S]*?\*\//g, "");
 /** The chrome, and only the chrome. `questionnaire/ui.tsx` is a transcription of approved mockups
  * with its own inline styles and is not part of this scale — ADR 0015's shell carve-out is about
  * the editor's own furniture, not the five questions. */
-const CHROME = ["editor/EditorShell.tsx"].map((f) => readFileSync(join(EDITOR, f), "utf8"));
+const CHROME = [
+  "editor/EditorShell.tsx",
+  "editor/panelKit.tsx",
+  "questionnaire/StylePanel.tsx",
+  "questionnaire/PagesPanel.tsx",
+  "questionnaire/PhotosPanel.tsx",
+  "questionnaire/CollectionsPanel.tsx",
+  "questionnaire/DesignPanel.tsx",
+  "questionnaire/SharePanel.tsx",
+].map((f) => readFileSync(join(EDITOR, f), "utf8"));
 
 /**
  * **A ratchet, not an amnesty.** Every hand-typed radius still in the chrome, named, so a new one
@@ -37,7 +46,11 @@ const CHROME = ["editor/EditorShell.tsx"].map((f) => readFileSync(join(EDITOR, f
  * | value | what wears it | when it goes |
  * |---|---|---|
  * | ~~`rounded-[9px]` ×3~~ | ~~page tabs, «Guardar en mi cuenta», «Descargar»~~ | **gone, day 2** |
+ * | ~~`rounded-[11px]`, `rounded-[9px]`, `rounded-[7px]`, `rounded-[6px]`~~ | ~~the six panels~~ | **gone, day 3** |
  * | `rounded-[9px]` ×1, `rounded-[6px]` ×2 | **the device toggle** | **never** |
+ *
+ * `CHROME` grew on day 3 from one file to eight, which is what turned those four panel radii up —
+ * they had been sitting outside the guard's reach the whole time it was passing.
  *
  * The device toggle is the only entry left and it is permanent, not a lapse: direction excluded it
  * from this work by name — «el cliente dijo que le encanta cómo transiciona de vista pc a vista

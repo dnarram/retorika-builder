@@ -8,7 +8,7 @@ import {
   shareImageOf,
 } from "@retorika/schema";
 import { useEffect, useId, useState } from "react";
-import { panelShell } from "../editor/EditorShell.tsx";
+import { panelCard } from "../editor/panelKit.tsx";
 import es from "../locales/es.json" with { type: "json" };
 
 /**
@@ -86,7 +86,7 @@ export function SharePanel({
       // it painted 316px of itself across the page being edited at every window width measured.
       // Losing `border-l` and the drawer shadow is what that change means: it is a card beside the
       // preview now, like «Estilo» and «Diseño», not an edge pulled over it.
-      className={`flex w-[340px] shrink-0 flex-col gap-4 rounded-[14px] border border-ui-border bg-ui-surface p-5 ${panelShell}`}
+      className={`w-[340px] gap-4 p-5 ${panelCard}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-col gap-1">
@@ -153,12 +153,12 @@ export function SharePanel({
           placeholder={es["editor.share.url.placeholder"]}
           onBlur={(event) => commitUrl(event.target.value)}
           className={`h-9 w-full rounded-lg border bg-white px-2.5 text-[13px] text-ui-ink ${
-            urlIssue ? "border-[#DC2626]" : "border-ui-border"
+            urlIssue ? "border-ui-danger" : "border-ui-border"
           }`}
         />
         <p className="m-0 text-[12px] leading-snug text-ui-muted">{es["editor.share.url.help"]}</p>
         {urlIssue ? (
-          <p className="m-0 text-[12px] leading-snug text-[#B91C1C]">{urlIssue}</p>
+          <p className="m-0 text-[12px] leading-snug text-ui-danger">{urlIssue}</p>
         ) : null}
         {/* What was actually stored, shown back: «midominio.es» becomes «https://midominio.es» and
             the owner sees the address their visitors will.

@@ -12,7 +12,7 @@ import {
   usesOfCollection,
 } from "@retorika/schema";
 import { useEffect, useId, useRef, useState } from "react";
-import { panelShell } from "../editor/EditorShell.tsx";
+import { panelCard, panelRow, SmallButton } from "../editor/panelKit.tsx";
 import { itemSlotLabel } from "../editor/sectionFields.ts";
 import es from "../locales/es.json" with { type: "json" };
 
@@ -141,10 +141,7 @@ export function CollectionsPanel({
   }
 
   return (
-    <section
-      aria-labelledby={headingId}
-      className={`flex w-[340px] shrink-0 flex-col gap-3 p-4 ${panelShell}`}
-    >
+    <section aria-labelledby={headingId} className={`w-[340px] gap-4 p-5 ${panelCard}`}>
       <h2 id={headingId} className="text-[13px] font-bold text-ui-ink">
         {es["editor.collections.title"]}
       </h2>
@@ -156,7 +153,7 @@ export function CollectionsPanel({
       {/* The way in, offered wherever there is something to offer it for — above the lists when
           there are none, below them when there are. */}
       {candidates.length > 0 && (
-        <div className="flex flex-col gap-1.5 rounded-[10px] border border-dashed border-ui-border p-2">
+        <div className="flex flex-col gap-1.5 rounded-ui border border-ui-border bg-ui-bg p-2">
           <span className="text-[11px] leading-normal text-ui-muted">
             {es["editor.collections.makeHelp"]}
           </span>
@@ -201,7 +198,7 @@ export function CollectionsPanel({
           <p className="text-xs leading-normal text-ui-muted">{es["editor.collections.help"]}</p>
           <ul className="flex flex-col gap-1.5">
             {doc.collections.map((collection) => (
-              <li key={collection.id} className="rounded-[10px] border border-ui-border bg-white">
+              <li key={collection.id} className={panelRow}>
                 <CollectionRow
                   collection={collection}
                   doc={doc}
@@ -324,7 +321,7 @@ function CollectionRow({
               if (event.key === "Enter") onCommitRename();
               if (event.key === "Escape") onCancelRename();
             }}
-            className="min-w-0 flex-1 rounded-md border border-ui-brand px-2 py-1 text-[13px] text-ui-ink"
+            className="min-w-0 flex-1 rounded-ui-sm border border-ui-brand px-2 py-1 text-[13px] text-ui-ink"
           />
         ) : (
           <button
@@ -370,7 +367,7 @@ function CollectionRow({
         <>
           <ul className="flex flex-col gap-1.5 border-t border-ui-border p-1.5">
             {collection.entries.map((entry, index) => (
-              <li key={entry.id} className="rounded-md border border-ui-border bg-ui-surface p-1.5">
+              <li key={entry.id} className={`p-1.5 ${panelRow}`}>
                 <div className="flex flex-col gap-1">
                   {Object.entries(entry.fields).map(([field, value]) => (
                     <EntryFieldRow
@@ -532,7 +529,7 @@ function EntryFieldRow({
           if (event.key === "Enter") onCommit(draft);
           if (event.key === "Escape") setDraft(value.text);
         }}
-        className="w-full rounded-md border border-ui-border px-2 py-1 text-[13px] text-ui-ink"
+        className="w-full rounded-ui-sm border border-ui-border px-2 py-1 text-[13px] text-ui-ink"
       />
     </label>
   );
@@ -581,26 +578,4 @@ function slotLabel(field: string, uses: readonly { catalogId: string }[]): strin
     if (label !== field) return label;
   }
   return field;
-}
-
-function SmallButton({
-  label,
-  onClick,
-  danger = false,
-}: {
-  label: string;
-  onClick: () => void;
-  danger?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-md px-2 py-1 text-[11px] font-medium ${
-        danger ? "text-[#B91C1C]" : "text-ui-ink"
-      }`}
-    >
-      {label}
-    </button>
-  );
 }

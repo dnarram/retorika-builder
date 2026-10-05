@@ -17,7 +17,7 @@ import {
   selectedRowId,
   stepTo,
 } from "../editor/designTree.ts";
-import { panelShell } from "../editor/EditorShell.tsx";
+import { panelCard } from "../editor/panelKit.tsx";
 import es from "../locales/es.json" with { type: "json" };
 
 /**
@@ -150,7 +150,7 @@ function Family({
   children: React.ReactNode;
 }) {
   return (
-    <div className="overflow-hidden rounded-[9px] border border-ui-border">
+    <div className="overflow-hidden rounded-ui border border-ui-border">
       <button
         type="button"
         aria-expanded={open}
@@ -200,12 +200,12 @@ function MobileButton({
       {...(pressed === undefined ? {} : { "aria-pressed": pressed })}
       onClick={onPress}
       className={
-        "h-10 flex-grow rounded-[9px] border text-[13px] font-medium " +
+        "ui-interactive h-10 flex-grow rounded-ui border text-[13px] font-medium " +
         (disabled === true
-          ? "border-ui-border bg-ui-surface text-ui-border"
+          ? "border-ui-border bg-ui-surface text-ui-muted opacity-40"
           : pressed === true
-            ? "cursor-pointer border-ui-brand bg-ui-brand-surface text-ui-brand"
-            : "cursor-pointer border-ui-border bg-ui-surface text-ui-ink hover:bg-ui-brand-surface")
+            ? "cursor-pointer border-ui-brand bg-ui-brand-surface font-semibold text-ui-ink"
+            : "cursor-pointer border-ui-border bg-ui-surface text-ui-ink hover:border-ui-border-strong hover:bg-ui-bg")
       }
     >
       {label}
@@ -305,7 +305,7 @@ export function DesignPanel({
       aria-labelledby={headingId}
       // Beside the canvas like the style panel, not fixed over it: the grid the canvas draws is
       // the thing being worked against, and a panel covering it would hide the answer.
-      className={`flex w-[288px] shrink-0 flex-col gap-4 rounded-[14px] border border-ui-border bg-ui-surface p-5 ${panelShell}`}
+      className={`w-[288px] gap-4 p-5 ${panelCard}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
@@ -377,10 +377,10 @@ export function DesignPanel({
                 aria-pressed={row.elementId === selectedId}
                 onClick={() => onSelectElement(row.elementId)}
                 className={
-                  "flex cursor-pointer items-center justify-between gap-2 rounded-[7px] border-0 px-2.5 py-1.5 text-left text-[12px] " +
+                  "ui-interactive flex cursor-pointer items-center justify-between gap-2 rounded-ui-sm border-0 px-2.5 py-1.5 text-left text-[12px] " +
                   (row.elementId === selectedId
-                    ? "bg-ui-brand-surface font-semibold text-ui-brand"
-                    : "bg-transparent text-ui-ink hover:bg-ui-brand-surface")
+                    ? "bg-ui-brand-surface font-semibold text-ui-ink"
+                    : "bg-transparent text-ui-ink hover:bg-ui-bg")
                 }
               >
                 <span className="min-w-0 truncate">{row.label}</span>
@@ -513,7 +513,7 @@ export function DesignPanel({
             {exceptions.map((exception) => (
               <div
                 key={`${exception.sectionId}/${exception.elementId}/${exception.property}`}
-                className="flex items-center justify-between gap-2 rounded-[7px] border border-ui-border px-2.5 py-2"
+                className="flex items-center justify-between gap-2 rounded-ui-sm border border-ui-border px-2.5 py-2"
               >
                 <span className="flex min-w-0 flex-col gap-0.5">
                   <span className="truncate text-[12px] text-ui-ink">
@@ -534,7 +534,7 @@ export function DesignPanel({
                 <button
                   type="button"
                   onClick={() => onClearException(exception)}
-                  className="shrink-0 cursor-pointer rounded-[6px] border border-ui-border bg-white px-2 py-1 text-[11px] font-medium text-ui-ink hover:border-ui-brand hover:bg-ui-brand-surface"
+                  className="ui-interactive shrink-0 cursor-pointer rounded-ui-sm border border-ui-border bg-ui-surface px-2 py-1 text-[11px] font-medium text-ui-ink hover:border-ui-border-strong hover:bg-ui-bg"
                 >
                   {es["editor.design.exceptionBack"]}
                 </button>
