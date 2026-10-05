@@ -432,14 +432,41 @@ describe("the cover's photograph comes from the bank (ADR 0011)", () => {
     }
   });
 
-  it("seeds on the variant's id and not its composition, so v1 and v3 can differ", () => {
-    // v1 and v3 are both `image-right`. Seeded on the composition they would be handed the
-    // identical photograph, and the screen that exists to offer three real choices would offer
-    // two. Asserted on the seed's inputs rather than on the outcome, because with an empty bank
-    // all three legitimately return the same marker.
-    const ids = VARIANTS.map((v) => v.id);
-    expect(new Set(ids).size).toBe(3);
-    expect(new Set(VARIANTS.map((v) => v.cover)).size).toBeLessThan(3);
+  it("offers three different compositions, so the three cards never read as two", () => {
+    /**
+     * **This test used to assert the opposite**, and that is worth keeping rather than quietly
+     * replacing: it read `expect(new Set(covers).size).toBeLessThan(3)`, because `v1` and `v3`
+     * both used `image-right` and the seed had been moved onto the variant id to stop them being
+     * handed the same photograph too. It documented a defect as an invariant.
+     *
+     * David reported the consequence on 5 October 2026 — «dos de las opciones son muy similares o
+     * incluso idénticas» — and he was right: the cover is the biggest, topmost thing on a preview
+     * card, so two identical covers made two identical cards whatever happened further down. The
+     * catalog gained `image-left` and `v3` took it.
+     */
+    expect(new Set(VARIANTS.map((v) => v.id)).size, "three cards").toBe(3);
+    expect(new Set(VARIANTS.map((v) => v.cover)).size, "three covers").toBe(3);
+    expect(new Set(VARIANTS.map((v) => v.services)).size, "three services layouts").toBe(3);
+  });
+
+  it("still seeds the photograph on the variant's id rather than its composition", () => {
+    /**
+     * The compositions are three now, so the collision that forced this is gone — and the seed
+     * stays on the id anyway, because it is the input that is guaranteed distinct. A composition
+     * is a design decision somebody may well revisit; the id is what makes the three cards three.
+     *
+     * Asserted on the seed's inputs and not on the outcome, because **the bank is empty**: every
+     * sector file holds zero photographs, so all three variants legitimately return the same
+     * marker today and will differ by photograph the day the bank has any.
+     */
+    const seeds = VARIANTS.map((v) => `Taberna:restaurante-bar:${v.id}:sec-cover:el-image`);
+    expect(new Set(seeds).size, "the three seeds are distinct").toBe(3);
+    for (const variant of VARIANTS) {
+      expect(
+        seeds.filter((seed) => seed.includes(`:${variant.id}:`)),
+        `the seed names ${variant.id}`,
+      ).toHaveLength(1);
+    }
   });
 });
 

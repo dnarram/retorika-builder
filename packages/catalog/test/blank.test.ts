@@ -145,7 +145,10 @@ describe("blankSection", () => {
   });
 
   it("refuses a variant the section does not have", () => {
-    expect(() => blankSection(COVER_ID, "image-left", "sec-new")).toThrow(/has no variant/);
+    // This named `image-left` until 5 October 2026, when the cover grew a third composition and
+    // the example of something invalid quietly became something valid. A name no composition will
+    // ever take, so it cannot happen again by the same route.
+    expect(() => blankSection(COVER_ID, "foto-en-diagonal", "sec-new")).toThrow(/has no variant/);
   });
 
   it("refuses a section the catalog does not have", () => {
