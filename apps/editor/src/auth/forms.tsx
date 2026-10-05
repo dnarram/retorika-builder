@@ -4,7 +4,15 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import es from "../locales/es.json" with { type: "json" };
-import { Card, FieldError, Shell, TextField, TitleBlock } from "../questionnaire/ui.tsx";
+import {
+  Card,
+  FieldError,
+  primaryButton,
+  Shell,
+  secondaryButton,
+  TextField,
+  TitleBlock,
+} from "../questionnaire/ui.tsx";
 import { browserClient } from "./clients.ts";
 import {
   type Reason,
@@ -85,24 +93,6 @@ function Message({
     </div>
   );
 }
-
-const buttonStyle = {
-  height: 54,
-  borderRadius: 12,
-  border: "none",
-  background: "#156FE7",
-  color: "#FFFFFF",
-  fontSize: 17,
-  fontWeight: 600,
-  cursor: "pointer",
-} as const;
-
-const secondaryButtonStyle = {
-  ...buttonStyle,
-  background: "#FFFFFF",
-  color: "#1F2937",
-  border: "1px solid #D4DCE7",
-} as const;
 
 /** Shown when the deployment has no Supabase configured — honestly, and without pretending. */
 function NotConfigured() {
@@ -191,7 +181,7 @@ export function SignInForm({ configured }: { configured: boolean }) {
               {es[REASON_KEY[failure.reason]]}
             </Message>
           ) : null}
-          <button type="submit" style={buttonStyle} disabled={busy || !configured}>
+          <button type="submit" style={primaryButton} disabled={busy || !configured}>
             {busy ? es["auth.signIn.working"] : es["auth.signIn.submit"]}
           </button>
         </form>
@@ -200,7 +190,7 @@ export function SignInForm({ configured }: { configured: boolean }) {
         </span>
         <button
           type="button"
-          style={secondaryButtonStyle}
+          style={secondaryButton}
           onClick={google}
           disabled={busy || !configured}
         >
@@ -269,7 +259,7 @@ export function ResetRequestForm({ configured }: { configured: boolean }) {
                 {es[REASON_KEY[failure.reason]]}
               </Message>
             ) : null}
-            <button type="submit" style={buttonStyle} disabled={busy || !configured}>
+            <button type="submit" style={primaryButton} disabled={busy || !configured}>
               {busy ? es["auth.reset.working"] : es["auth.reset.submit"]}
             </button>
           </form>
@@ -333,7 +323,7 @@ export function NewPasswordForm({ configured }: { configured: boolean }) {
                 {es[REASON_KEY[failure.reason]]}
               </Message>
             ) : null}
-            <button type="submit" style={buttonStyle} disabled={busy || !configured}>
+            <button type="submit" style={primaryButton} disabled={busy || !configured}>
               {busy ? es["auth.newPassword.working"] : es["auth.newPassword.submit"]}
             </button>
           </form>

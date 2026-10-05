@@ -5,7 +5,14 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { browserClient } from "../auth/clients.ts";
 import es from "../locales/es.json" with { type: "json" };
-import { Card, FieldError, Shell, TitleBlock } from "../questionnaire/ui.tsx";
+import {
+  Card,
+  dangerButton,
+  FieldError,
+  Shell,
+  secondaryButton,
+  TitleBlock,
+} from "../questionnaire/ui.tsx";
 import {
   accountState,
   cancelAccountDeletion,
@@ -110,7 +117,12 @@ export function AccountPage() {
           <p style={{ margin: 0, fontSize: 14, color: "#334155", lineHeight: 1.5 }}>
             {es["account.export.body"]}
           </p>
-          <button type="button" onClick={exportEverything} disabled={exporting} style={secondary}>
+          <button
+            type="button"
+            onClick={exportEverything}
+            disabled={exporting}
+            style={secondaryButton}
+          >
             {exporting ? es["account.export.working"] : es["account.export.button"]}
           </button>
           {problem === "export" ? <FieldError>{es["account.export.failed"]}</FieldError> : null}
@@ -132,7 +144,7 @@ export function AccountPage() {
                   if (ok) setPendingSince(null);
                   else setProblem("delete");
                 }}
-                style={secondary}
+                style={secondaryButton}
               >
                 {es["account.delete.undo"]}
               </button>
@@ -142,7 +154,7 @@ export function AccountPage() {
               <p style={{ margin: 0, fontSize: 14, color: "#334155", lineHeight: 1.5 }}>
                 {es["account.delete.body"].replace("{days}", String(GRACE_WINDOW_DAYS))}
               </p>
-              <button type="button" onClick={() => setConfirming(true)} style={danger}>
+              <button type="button" onClick={() => setConfirming(true)} style={dangerButton}>
                 {es["account.delete.button"]}
               </button>
             </>
@@ -249,36 +261,18 @@ function ConfirmDeletion({
         <p style={{ margin: 0, fontSize: 14, color: "#92400E" }}>
           {es["account.delete.confirmExport"]}
         </p>
-        <button type="button" onClick={onExport} style={secondary}>
+        <button type="button" onClick={onExport} style={secondaryButton}>
           {es["account.export.button"]}
         </button>
 
         {/* Cancel first in the DOM, so it is what the trap focuses and what Return reaches. */}
-        <button type="button" onClick={onClose} style={secondary}>
+        <button type="button" onClick={onClose} style={secondaryButton}>
           {es["account.delete.cancel"]}
         </button>
-        <button type="button" onClick={onConfirm} style={danger}>
+        <button type="button" onClick={onConfirm} style={dangerButton}>
           {es["account.delete.confirm"]}
         </button>
       </div>
     </div>
   );
 }
-
-const secondary = {
-  height: 46,
-  borderRadius: 10,
-  border: "1px solid #D4DCE7",
-  background: "#FFFFFF",
-  color: "#1F2937",
-  fontSize: 15,
-  fontWeight: 600,
-  cursor: "pointer",
-} as const;
-
-const danger = {
-  ...secondary,
-  border: "none",
-  background: "#BE123C",
-  color: "#FFFFFF",
-} as const;

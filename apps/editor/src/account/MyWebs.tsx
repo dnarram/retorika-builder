@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { browserClient } from "../auth/clients.ts";
 import { signOut } from "../auth/operations.ts";
 import es from "../locales/es.json" with { type: "json" };
-import { Card, Shell, TitleBlock } from "../questionnaire/ui.tsx";
+import { Card, compactButton, Shell, TitleBlock } from "../questionnaire/ui.tsx";
 import { listSites, type SiteSummary } from "./sites.ts";
 
 /**
@@ -98,14 +98,14 @@ export function MyWebs() {
                 </span>
                 <Link
                   href={`/mis-webs/${site.id}`}
+                  // `flexShrink: 0` so the row's long site name never squeezes «Abrir» into a
+                  // column of letters, which is the other way a label leaves its box.
                   style={{
+                    ...compactButton,
                     flexShrink: 0,
-                    padding: "9px 18px",
-                    borderRadius: 9,
                     background: "#156FE7",
                     color: "#FFFFFF",
-                    fontSize: 15,
-                    fontWeight: 600,
+                    border: "none",
                     textDecoration: "none",
                   }}
                 >
@@ -140,17 +140,7 @@ export function MyWebs() {
             await signOut(browserClient());
             router.replace("/");
           }}
-          style={{
-            alignSelf: "flex-start",
-            height: 40,
-            padding: "0 16px",
-            borderRadius: 9,
-            border: "1px solid #D4DCE7",
-            background: "#FFFFFF",
-            fontSize: 14,
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
+          style={{ ...compactButton, alignSelf: "flex-start" }}
         >
           {es["auth.signOut"]}
         </button>

@@ -5624,3 +5624,196 @@ describe("sprint 15 día 7 — la foto que no carga, y las promesas del proyecto
     }
   }, 120_000);
 });
+
+describe("el texto de un botón nunca sale del botón", () => {
+  /**
+   * David reported seeing button labels painted outside their buttons on 5 October 2026, and this
+   * is the guard for it.
+   *
+   * **What was wrong, measured rather than guessed.** Five hand-written copies of a button style,
+   * each with a fixed `height` and zero horizontal padding. A `<button>` wraps its text by
+   * default, so a label too wide for its box grew downwards while the border stayed put, and the
+   * extra lines were painted outside it. `Shell` and `Card` made it inevitable by taking 224px of
+   * horizontal padding at every viewport — at 320px that left a card, and so a button, **96 pixels
+   * wide**, where the real labels needed 64 to 97 pixels of height inside a 46-to-54 pixel box.
+   *
+   * **The detector is the painted text, not `scrollHeight`.** A button's `overflow` is `visible`,
+   * and `scrollHeight` is clamped to the padding box for such an element — the first version of
+   * this probe compared those two numbers, found nothing, and would have reported the application
+   * clean while it was not. A `Range` over the element's contents gives the rectangle the text
+   * actually occupies, which is the only thing that answers the question.
+   *
+   * Two screens are missing from this walk and cannot be added: `/cuenta` and `/mis-webs` need a
+   * session this suite has no way to obtain, and they carry the longest labels in the application.
+   * `test/buttonText.test.ts` asserts the shared style objects they use, which is where their
+   * guarantee lives.
+   */
+  const WIDTHS = [320, 375, 768, 1280];
+
+  async function overflowing(page: Page, within = "body"): Promise<string[]> {
+    return page.evaluate((scope: string) => {
+      const out: string[] = [];
+      const root = document.querySelector(scope);
+      if (!root) return [`el ámbito "${scope}" no existe`];
+      for (const el of root.querySelectorAll<HTMLElement>(
+        'button, a, [role="button"], input[type="submit"]',
+      )) {
+        const style = getComputedStyle(el);
+        if (style.display === "none" || style.visibility === "hidden") continue;
+        if (el.offsetParent === null && style.position !== "fixed") continue;
+        // Visually-hidden helpers are outside their own box on purpose — that is the technique.
+        if (style.clip !== "auto" || style.clipPath !== "none") continue;
+        if ((el.textContent ?? "").trim() === "") continue;
+
+        /**
+         * **Anything that hides its overflow is skipped, and that is not a loophole.**
+         *
+         * A `Range` reports the text's natural rectangle even when the element clips it, so the
+         * editor's own site-name button — which carries `truncate`, an unbounded business name and
+         * an ellipsis — was reported as spilling 2px while showing a perfectly tidy «Taberna
+         * Santo…». Text that cannot be seen outside the box is the opposite of the defect being
+         * guarded against: clipping is the fix, not the fault. Checked up the ancestors, because
+         * the box that clips is usually a parent.
+         */
+        let clipped = false;
+        for (let node: HTMLElement | null = el; node; node = node.parentElement) {
+          const owner = getComputedStyle(node);
+          if (owner.overflowX !== "visible" || owner.overflowY !== "visible") {
+            clipped = true;
+            break;
+          }
+        }
+        if (clipped) continue;
+
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        const text = range.getBoundingClientRect();
+        if (text.width === 0 && text.height === 0) continue;
+        const box = el.getBoundingClientRect();
+
+        const spill = Math.max(
+          box.top - text.top,
+          text.bottom - box.bottom,
+          box.left - text.left,
+          text.right - box.right,
+        );
+        // A pixel of tolerance for subpixel text metrics; anything more is visible.
+        if (spill > 1) {
+          out.push(
+            `"${(el.textContent ?? "").trim().slice(0, 40)}" se sale ${Math.round(spill)}px ` +
+              `(caja ${Math.round(box.height)}px, texto ${Math.round(text.height)}px)`,
+          );
+        }
+      }
+      return out;
+    }, within);
+  }
+
+  /**
+   * A button that looks like a button needs room inside it, checked on the computed style.
+   *
+   * **This exists because the measurement above turned out not to protect the reported defect.**
+   * Reverting the fix and re-running it passed: the reachable screens' labels — «Entrar», «Entrar
+   * con Google» — are short enough to survive even 96px with no padding, while the screens that
+   * actually broke, `/cuenta` and `/mis-webs`, need a session this suite cannot get. A guard that
+   * cannot fail on the bug it was written for is worth saying so about rather than trusting, so
+   * this second assertion carries the part that transfers: the shared style is really applied in
+   * the browser, not merely correct in a module.
+   *
+   * Only elements that *look* like buttons — a background or a border — are held to it.
+   * `NavRow`'s «Atrás» and «Saltar» are deliberately bare text with `padding: 0`, and they cannot
+   * clip anything because they have no box to clip against.
+   */
+  async function unpadded(page: Page): Promise<string[]> {
+    return page.evaluate(() => {
+      const out: string[] = [];
+      for (const el of document.querySelectorAll<HTMLElement>('button, a, [role="button"]')) {
+        const style = getComputedStyle(el);
+        if (style.display === "none" || style.visibility === "hidden") continue;
+        if (el.offsetParent === null && style.position !== "fixed") continue;
+        if ((el.textContent ?? "").trim() === "") continue;
+
+        const painted =
+          style.backgroundColor !== "rgba(0, 0, 0, 0)" && style.backgroundColor !== "transparent";
+        const bordered = Number.parseFloat(style.borderTopWidth) > 0;
+        if (!painted && !bordered) continue;
+
+        const horizontal =
+          Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight);
+        if (horizontal < 24) {
+          out.push(
+            `"${(el.textContent ?? "").trim().slice(0, 36)}" tiene ${horizontal}px de padding horizontal`,
+          );
+        }
+      }
+      return out;
+    });
+  }
+
+  it("en la landing, el cuestionario y las tres pantallas de entrar, a cualquier ancho", async () => {
+    const walker = await (await browser.newContext()).newPage();
+    try {
+      for (const [label, url] of [
+        ["/", BASE_URL],
+        ["/empezar", QUESTIONNAIRE_URL],
+        ["/entrar", `${BASE_URL}/entrar`],
+        ["/entrar/recuperar", `${BASE_URL}/entrar/recuperar`],
+        ["/entrar/nueva-contrasena", `${BASE_URL}/entrar/nueva-contrasena`],
+      ] as const) {
+        await walker.goto(url, { waitUntil: "networkidle" });
+        for (const width of WIDTHS) {
+          await walker.setViewportSize({ width, height: 900 });
+          expect(await overflowing(walker), `${label} @ ${width}px`).toEqual([]);
+          expect(await unpadded(walker), `${label} @ ${width}px sin holgura`).toEqual([]);
+        }
+      }
+    } finally {
+      await walker.context().close();
+    }
+  }, 300_000);
+
+  it("en el diálogo que ofrece la cuenta, que es el que más texto lleva", async () => {
+    const walker = await (await browser.newContext()).newPage();
+    try {
+      await walker.setViewportSize({ width: 1280, height: 900 });
+      await walker.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+      await walker.fill("#nombre", "Taberna Santo Domingo");
+      await walker.getByRole("button", { name: "Siguiente" }).click();
+      await walker.getByText("Restaurante y bar", { exact: true }).click();
+      await walker.getByRole("button", { name: "Siguiente" }).click();
+      await walker.getByText("Comidas", { exact: true }).click();
+      await walker.getByRole("button", { name: "Siguiente" }).click();
+      await walker.fill("#direccion", "Cta. de Santo Domingo, 2, Ronda");
+      await walker.getByRole("button", { name: "Siguiente" }).click();
+      await walker.getByText("Que reserven", { exact: true }).click();
+      await walker.fill("#enlace", "https://reservas.example.com/t");
+      await walker.getByRole("button", { name: "Crear mi web" }).click();
+      await walker.getByText("Ver a tamaño real →").first().click();
+      await walker.getByRole("button", { name: "Guardar en mi cuenta" }).click();
+      await expect(walker.getByRole("dialog")).toBeVisible();
+
+      /**
+       * **Scoped to the dialog**, and the first version of this was not — it measured the whole
+       * page and reported the editor's own top bar at 768px, which is below the 1024px the editor
+       * declares as its minimum (`MIN_STUDIO_WIDTH`, ADR 0025 §5). Measuring an unsupported width
+       * and calling the result a defect is how a guard starts being ignored.
+       *
+       * The dialog is a card like any other, and «Crear la cuenta y guardar» and «Usar mi cuenta
+       * de Google» are among the longest labels anywhere in the application.
+       */
+      for (const width of [768, 1024, 1280]) {
+        await walker.setViewportSize({ width, height: 900 });
+        expect(await overflowing(walker, '[role="dialog"]'), `diálogo @ ${width}px`).toEqual([]);
+      }
+
+      // And the editor's own chrome, at the widths it actually claims to support.
+      await walker.keyboard.press("Escape");
+      for (const width of [1024, 1280, 1600]) {
+        await walker.setViewportSize({ width, height: 900 });
+        expect(await overflowing(walker), `editor @ ${width}px`).toEqual([]);
+      }
+    } finally {
+      await walker.context().close();
+    }
+  }, 300_000);
+});
