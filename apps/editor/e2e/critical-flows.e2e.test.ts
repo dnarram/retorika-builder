@@ -6169,3 +6169,103 @@ describe("abrir un panel no tapa la página ni la convierte en otra", () => {
     }
   }, 300_000);
 });
+
+describe("la barra superior reparte su ancho entre el logo y las pestañas", () => {
+  /**
+   * Direction reported, after the chrome restyle, that the logo end of the bar was shaded across a
+   * wide empty area and pushed the page tabs into a scrollbar.
+   *
+   * **Both halves were one cause.** The logo button carried `flex-1`, so it grew to swallow every
+   * spare pixel. While it had no background nobody could see that; giving it a hover fill drew the
+   * emptiness. Measured in Chromium at 1280 with one page: **395px of button for ~250px of mark
+   * and name**. And under pressure the same `flex-1` ran the other way — with four pages it had
+   * given everything back and collapsed to **12px**, so the mark and the name disappeared and the
+   * tabs scrolled anyway.
+   *
+   * The rule direction set is the assertion below: «deberían verse sin barra de desplazamiento a no
+   * ser que existan 4 o más páginas».
+   *
+   * **Why 1280 and not 1024.** The bar's right-hand group is a fixed 673px — device toggle, undo,
+   * redo, the save sentence ADR 0012 refuses to shorten, «Guardar en mi cuenta» and «Descargar». At
+   * 1024 that leaves 219px for the tabs once the mark has its floor, and two page names do not fit
+   * in 219px at any setting. That is arithmetic, not styling, and it is recorded in REVIEW.md as
+   * direction's to decide rather than quietly asserted away here.
+   */
+  async function strip(page: Page) {
+    return page.evaluate(() => {
+      const tabs = document.querySelector('[data-testid="page-tabs"]');
+      const shell = document.querySelector('[data-testid="rail"]')?.closest("div.flex.h-screen");
+      const back = shell?.firstElementChild?.querySelector("button");
+      if (!tabs || !back) return { error: "no bar" } as const;
+      return {
+        tabCount: tabs.querySelectorAll("button").length,
+        scrolls: tabs.scrollWidth > tabs.clientWidth + 1,
+        backWidth: Math.round(back.getBoundingClientRect().width),
+      };
+    });
+  }
+
+  it("deja ver tres páginas sin barra, y solo la saca a partir de la cuarta", async () => {
+    const walker = await (await browser.newContext()).newPage();
+    try {
+      await walker.setViewportSize({ width: 1280, height: 800 });
+      await walker.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+      await walker.fill("#nombre", "Taberna Santo Domingo");
+      await walker.getByRole("button", { name: "Siguiente" }).click();
+      await walker.getByText("Restaurante y bar", { exact: true }).click();
+      await walker.getByRole("button", { name: "Siguiente" }).click();
+      await walker.getByText("Comidas", { exact: true }).click();
+      await walker.getByRole("button", { name: "Siguiente" }).click();
+      await walker.fill("#direccion", "Cta. de Santo Domingo, 2, Ronda");
+      await walker.getByRole("button", { name: "Siguiente" }).click();
+      await walker.getByText("Que reserven", { exact: true }).click();
+      await walker.fill("#enlace", "https://reservas.example.com/taberna");
+      await walker.getByRole("button", { name: "Crear mi web" }).click();
+      await walker.getByText("Ver a tamaño real →").first().click();
+
+      const frame = walker.frameLocator("iframe").first();
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+
+      // The defect direction actually saw: a button shaded across space it did not need.
+      const alone = await strip(walker);
+      expect(alone, "una página").not.toHaveProperty("error");
+      if ("error" in alone) return;
+      expect(alone.scrolls, "con una sola página ya había barra").toBe(false);
+      expect(
+        alone.backWidth,
+        "el botón del logo vuelve a crecer sin límite: era 395px para ~250px de contenido",
+      ).toBeLessThanOrEqual(200);
+
+      const sections = await frame
+        .locator("[data-section]")
+        .evaluateAll((els) => els.map((e) => e.getAttribute("data-section")));
+
+      for (const section of sections.slice(1, 5)) {
+        const host = frame.locator(`[data-section="${section}"]`);
+        const verb = frame.locator(
+          `[data-section="${section}"] .rb-action[aria-label="Convertir esta sección en página"]`,
+        );
+        if ((await host.count()) === 0) continue;
+        await host.click();
+        if ((await verb.count()) === 0) continue;
+        await verb.click();
+        await expect
+          .poll(async () => (await strip(walker)) as { tabCount?: number })
+          .toHaveProperty("tabCount");
+        await walker.waitForTimeout(500);
+
+        const now = await strip(walker);
+        if ("error" in now) continue;
+        // The rule, in one line: fewer than four pages must not need a scrollbar.
+        if (now.tabCount < 4) {
+          expect(now.scrolls, `${now.tabCount} páginas no deberían necesitar barra`).toBe(false);
+        }
+        // And the mark must never be squeezed out of existence; it used to reach 12px.
+        expect(now.backWidth, `el logo quedó en ${now.backWidth}px`).toBeGreaterThanOrEqual(130);
+        if (now.tabCount >= 4) break;
+      }
+    } finally {
+      await walker.context().close();
+    }
+  }, 300_000);
+});
