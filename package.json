@@ -32,7 +32,8 @@
     "audit:exceptions": "node scripts/audit-exceptions.ts",
     "security:audit": "pnpm audit --audit-level=moderate",
     "security:secrets": "pre-commit run gitleaks --all-files",
-    "fonts:generate": "node scripts/generate-font-data.ts"
+    "fonts:generate": "node scripts/generate-font-data.ts",
+    "brand:assets": "node scripts/brand-assets.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",

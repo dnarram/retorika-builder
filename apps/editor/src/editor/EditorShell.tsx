@@ -542,9 +542,16 @@ export function EditorShell({
           aria-label={es["editor.backToVariants"]}
           className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg py-1 text-left"
         >
-          <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[9px] bg-linear-to-br from-[#2B9BF4] to-[#1554D8] text-[16px] font-extrabold leading-none text-white">
-            R
-          </span>
+          {/* The mark alone, never the lockup: the business's own name is the next element along,
+              and two names side by side is one too many. See `Brand` in questionnaire/ui.tsx for
+              the rule. */}
+          <img
+            src="/brand/retorika-mark.png"
+            alt=""
+            width={30}
+            height={30}
+            className="h-[30px] w-[30px] shrink-0"
+          />
           <span className="truncate text-[16px] font-bold tracking-[-0.01em] text-ui-ink">
             {siteName}
           </span>
