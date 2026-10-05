@@ -5930,10 +5930,11 @@ describe("un panel que no cabe se puede desplazar hasta el final", () => {
    */
   async function unreachable(page: Page): Promise<string[]> {
     return page.evaluate(() => {
-      // Attribute matching rather than an exact class string: the order of Tailwind utilities is
-      // not a contract. A selector that stops matching returns the message below and fails the
-      // test, which is the right direction for a probe to break in.
-      const row = document.querySelector('div[class*="flex-grow"][class*="gap-6"]');
+      // `data-testid`, not Tailwind utilities: a class the chrome is styled with must not be part
+      // of the test contract, or restyling breaks guards that have nothing to say about the
+      // restyle. A selector that stops matching still returns the message below and fails, which
+      // is the right direction for a probe to break in.
+      const row = document.querySelector('[data-testid="canvas-and-panel"]');
       if (!row) return ["no se encuentra la fila de los paneles"];
       const panel = row.lastElementChild;
       if (!panel || panel === row.firstElementChild) return ["no hay ningún panel abierto"];
@@ -5981,7 +5982,7 @@ describe("un panel que no cabe se puede desplazar hasta el final", () => {
   /** The rail is the same shape of element — as tall as the row, with items that need not fit. */
   async function railUnreachable(page: Page): Promise<string[]> {
     return page.evaluate(() => {
-      const rail = document.querySelector('div[class*="w-20"][class*="shrink-0"]');
+      const rail = document.querySelector('[data-testid="rail"]');
       if (!rail) return ["no se encuentra la barra de iconos"];
       const kids = [...rail.children] as HTMLElement[];
       const box = (rail.parentElement ?? document.documentElement).getBoundingClientRect();
@@ -6075,11 +6076,13 @@ describe("abrir un panel no tapa la página ni la convierte en otra", () => {
    */
   async function canvasState(page: Page) {
     return page.evaluate(() => {
-      const row = document.querySelector('div[class*="flex-grow"][class*="gap-6"]');
+      const row = document.querySelector('[data-testid="canvas-and-panel"]');
       const panel = row && row.children.length > 1 ? row.lastElementChild : null;
-      const frame = document.querySelector("iframe");
-      const card = frame?.parentElement;
-      if (!row || !frame || !card) return { error: "no se encuentra el lienzo" };
+      const card = document.querySelector('[data-testid="canvas-card"]');
+      // The preview frame is still found as an iframe: it has no name of its own to hook, and
+      // "the one iframe on the page" is a fact about the editor, not about its styling.
+      const frame = card?.querySelector("iframe");
+      if (!row || !card || !frame) return { error: "no se encuentra el lienzo" };
 
       /**
        * **The clipping box, not the card's own rectangle.** The card is laid out at the preview's
@@ -6090,7 +6093,7 @@ describe("abrir un panel no tapa la página ni la convierte en otra", () => {
        *
        * What the question is actually about is the page the owner can see, which is this box.
        */
-      const area = card.parentElement;
+      const area = document.querySelector('[data-testid="canvas-area"]');
       if (!area) return { error: "el lienzo no tiene contenedor" };
       const visible = area.getBoundingClientRect();
       const over = panel ? Math.round(visible.right - panel.getBoundingClientRect().left) : 0;

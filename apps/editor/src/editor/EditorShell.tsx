@@ -39,6 +39,20 @@ import { NARROWEST_DESKTOP, NARROWEST_WIDTH } from "./overflowCheck.ts";
 export const panelShell = "max-h-full self-start overflow-y-auto";
 
 /**
+ * **Why this file carries `data-testid` at all, which nothing else in the app does.**
+ *
+ * The browser guards used to find the rail and the canvas row by their Tailwind utilities —
+ * `div[class*="w-20"][class*="shrink-0"]`, `div[class*="flex-grow"][class*="gap-6"]`. That reads
+ * as harmless and is not: it makes a utility class part of the test contract, so restyling the
+ * chrome breaks tests that have nothing to say about the restyle, and — worse — a selector that
+ * silently stops matching takes its assertions with it. These four hooks name what the thing *is*
+ * instead, so the styling above them is free to change.
+ *
+ * Only for boxes with no accessible name of their own. Everything a person can see or press is
+ * still found by role and Spanish label in the tests, which is the better selector and stays.
+ */
+
+/**
  * The editor's chrome (mockup 08): a 58px top bar, an 80px left rail, and the canvas in
  * between. Built with Tailwind against the `--ui-*` tokens of ADR 0015 (`globals.css`'s
  * `@theme inline` block), not a palette of Tailwind's own — the same rule the rest of this
@@ -801,7 +815,10 @@ export function EditorShell({
             window 640px tall the last 65 were unreachable — and the last item is the design-tools
             switch, so the control that turns the studio off was behind the one edge nothing could
             scroll. It has 15px to spare at 720. */}
-        <div className="flex w-20 shrink-0 flex-col items-center gap-3.5 overflow-y-auto border-r border-ui-border bg-ui-surface py-3.5">
+        <div
+          data-testid="rail"
+          className="flex w-20 shrink-0 flex-col items-center gap-3.5 overflow-y-auto border-r border-ui-border bg-ui-surface py-3.5"
+        >
           <RailButton
             icon="sections"
             label={es["editor.rail.sections"]}
@@ -871,10 +888,16 @@ export function EditorShell({
         {/* The wide side gutters centre the canvas when it is alone; with a panel open they would
             only squeeze the preview, so they go. */}
         <div
+          data-testid="canvas-and-panel"
           className={`flex flex-grow gap-6 overflow-hidden pt-6 ${panel ? "px-6" : "px-6 sm:px-24"}`}
         >
-          <div ref={canvasArea} className="flex flex-grow justify-center overflow-hidden">
+          <div
+            ref={canvasArea}
+            data-testid="canvas-area"
+            className="flex flex-grow justify-center overflow-hidden"
+          >
             <div
+              data-testid="canvas-card"
               className="flex shrink-0 flex-col overflow-hidden rounded-[10px] bg-ui-surface shadow-[0_1px_4px_rgba(15,23,42,0.1)] transition-transform duration-200"
               // **The width the pre-download gate measures, imported rather than written again.**
               // This was 400 from the day the chrome was built — a number with no recorded reason,
