@@ -6269,3 +6269,172 @@ describe("la barra superior reparte su ancho entre el logo y las pestañas", () 
     }
   }, 300_000);
 });
+
+describe("lo que el cromo del editor dibuja dentro del lienzo, y el aviso del interruptor", () => {
+  /**
+   * Two reports from direction on 6 October 2026, after the chrome restyle. One was mine; the other
+   * had been there for nine days and the restyle only made it conspicuous.
+   *
+   * **The switch.** Pressing «Herramientas de diseño» appeared to do nothing. The question card was
+   * rendered — 300×267 in the DOM — and `absolute … left-full`, which puts it just past the rail's
+   * right edge. That worked until PR #172 gave the rail `overflow-y: auto` so its own items could
+   * be reached in a short window: overflow clips on both axes, so **303px of the card lay outside
+   * the clipping box**, invisible, with nothing to scroll to because it is not in the flow. To the
+   * owner it read as a dead switch, which is the exact defect this repository keeps refusing to
+   * ship.
+   *
+   * **«+ Añadir línea».** A 30px-tall pill whose label was free to wrap: measured as a 48px text in
+   * a 30px box, 9px of it painted outside. Written on 28 September; no restyle touched it.
+   *
+   * **Neither could have been caught by the guards that existed**, and that is the useful part. The
+   * button-overflow walk from PR #169 reads `button, a, [role="button"]` in the *editor's* document
+   * and the canvas chrome lives in another one, inside the iframe. So the second test below crosses
+   * that boundary, which nothing did before.
+   */
+  async function spillingInsideTheCanvas(page: Page): Promise<string[]> {
+    return page.evaluate(() => {
+      const doc = document.querySelector("iframe")?.contentDocument;
+      if (!doc) return ["no se encuentra la vista previa"];
+      const out: string[] = [];
+      let examined = 0;
+      for (const el of doc.querySelectorAll<HTMLElement>("button, [role='button'], .rb-pill")) {
+        const style = getComputedStyle(el);
+        if (style.display === "none" || style.visibility === "hidden") continue;
+        if ((el.textContent ?? "").trim() === "") continue;
+        /**
+         * **Only the element's own overflow, and that is the correction this helper needed.**
+         *
+         * The editor-side walk skips anything with a *clipping ancestor*, because there the box
+         * that clips is usually a parent. Inside the preview that rule excludes everything: the
+         * chrome injects `html, body { overflow-x: clip; }`, so every button in the document has a
+         * clipping ancestor and the first version of this walk examined **nothing** while passing
+         * green. Removing the fix it was written for did not fail it.
+         *
+         * A pill that hides its own overflow is still skipped — clipping is the fix, not the fault
+         * — but nothing else gets to borrow `body`'s.
+         */
+        if (style.overflowX !== "visible" || style.overflowY !== "visible") continue;
+        examined += 1;
+
+        const range = doc.createRange();
+        range.selectNodeContents(el);
+        const text = range.getBoundingClientRect();
+        if (text.width === 0 && text.height === 0) continue;
+        const box = el.getBoundingClientRect();
+        const spill = Math.max(
+          box.top - text.top,
+          text.bottom - box.bottom,
+          box.left - text.left,
+          text.right - box.right,
+        );
+        if (spill > 1) {
+          out.push(
+            `"${(el.textContent ?? "").trim().slice(0, 30)}" se sale ${Math.round(spill)}px ` +
+              `(caja ${Math.round(box.height)}px, texto ${Math.round(text.height)}px)`,
+          );
+        }
+      }
+      // A walk that looked at nothing is not a walk that found nothing, and the two are
+      // indistinguishable from an empty array. This is what says which one happened.
+      if (examined === 0) return ["el recorrido no examinó ni un botón del lienzo"];
+      return out;
+    });
+  }
+
+  it("no deja que el texto de un botón del lienzo se salga de su contorno", async () => {
+    const walker = await (await browser.newContext()).newPage();
+    try {
+      await walker.setViewportSize({ width: 1440, height: 900 });
+      await walker.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+      await walker.fill("#nombre", "Taberna Santo Domingo");
+      await walker.getByRole("button", { name: "Siguiente" }).click();
+      await walker.getByText("Restaurante y bar", { exact: true }).click();
+      await walker.getByRole("button", { name: "Siguiente" }).click();
+      await walker.getByText("Comidas", { exact: true }).click();
+      await walker.getByRole("button", { name: "Siguiente" }).click();
+      await walker.fill("#direccion", "Cta. de Santo Domingo, 2, Ronda");
+      await walker.getByRole("button", { name: "Siguiente" }).click();
+      await walker.getByText("Que reserven", { exact: true }).click();
+      await walker.fill("#enlace", "https://reservas.example.com/taberna");
+      await walker.getByRole("button", { name: "Crear mi web" }).click();
+      await walker.getByText("Ver a tamaño real →").first().click();
+
+      const frame = walker.frameLocator("iframe").first();
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+      await expect(frame.locator(".rb-line-add").first()).toBeVisible();
+
+      // At rest, and again with a section selected, which is when its verbs are drawn.
+      expect(await spillingInsideTheCanvas(walker), "el lienzo en reposo").toEqual([]);
+      await frame.locator('[data-section="sec-services"]').click();
+      await expect(frame.locator('[data-section="sec-services"].rb-selected')).toHaveCount(1);
+      expect(await spillingInsideTheCanvas(walker), "con una sección elegida").toEqual([]);
+    } finally {
+      await walker.context().close();
+    }
+  }, 300_000);
+
+  it("enseña el aviso del interruptor donde se puede leer, y lo enciende de verdad", async () => {
+    const walker = await (await browser.newContext()).newPage();
+    try {
+      await walker.setViewportSize({ width: 1440, height: 900 });
+      await walker.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+      await walker.fill("#nombre", "Taberna Santo Domingo");
+      await walker.getByRole("button", { name: "Siguiente" }).click();
+      await walker.getByText("Restaurante y bar", { exact: true }).click();
+      await walker.getByRole("button", { name: "Siguiente" }).click();
+      await walker.getByText("Comidas", { exact: true }).click();
+      await walker.getByRole("button", { name: "Siguiente" }).click();
+      await walker.fill("#direccion", "Cta. de Santo Domingo, 2, Ronda");
+      await walker.getByRole("button", { name: "Siguiente" }).click();
+      await walker.getByText("Que reserven", { exact: true }).click();
+      await walker.fill("#enlace", "https://reservas.example.com/taberna");
+      await walker.getByRole("button", { name: "Crear mi web" }).click();
+      await walker.getByText("Ver a tamaño real →").first().click();
+      await walker.frameLocator("iframe").first().locator('[data-section="sec-cover"]').waitFor();
+
+      const toggle = walker.getByRole("switch").first();
+      await expect(toggle).toHaveAttribute("aria-checked", "false");
+      await toggle.click();
+
+      /**
+       * **Visible, not merely present.** `toBeVisible()` would have passed against the defect: the
+       * card had a size and was not `display: none`, it was simply painted outside the box that
+       * clips it. So this asks the question the owner was asking — is any of it on the screen —
+       * by comparing its rectangle against every clipping ancestor's.
+       */
+      const seen = await walker.evaluate(() => {
+        const card = [...document.querySelectorAll("div")].find((el) =>
+          (el.textContent ?? "").startsWith("¿Quieres colocar tú cada elemento?"),
+        );
+        if (!card) return { found: false } as const;
+        const box = card.getBoundingClientRect();
+        let visible = box.width > 0 && box.height > 0;
+        for (let node = card.parentElement; node; node = node.parentElement) {
+          const owner = getComputedStyle(node);
+          if (owner.overflowX === "visible" && owner.overflowY === "visible") continue;
+          if (getComputedStyle(card).position === "fixed") continue;
+          const clip = node.getBoundingClientRect();
+          if (box.right > clip.right + 1 || box.left < clip.left - 1) visible = false;
+        }
+        return {
+          found: true,
+          visible,
+          insideViewport:
+            box.left >= 0 && box.top >= 0 && box.right <= window.innerWidth && box.height > 0,
+        } as const;
+      });
+      expect(seen.found, "el aviso del interruptor no se dibuja").toBe(true);
+      if (!seen.found) return;
+      expect(seen.visible, "el aviso se pinta fuera de la caja que lo recorta").toBe(true);
+      expect(seen.insideViewport, "el aviso cae fuera de la ventana").toBe(true);
+
+      // And it does what it says: the tools come on and the two rail items they add appear.
+      await walker.getByRole("button", { name: "Sí, enciéndelas" }).click();
+      await expect(toggle).toHaveAttribute("aria-checked", "true");
+      await expect(walker.getByRole("button", { name: "Diseño", exact: true })).toBeVisible();
+      await expect(walker.getByRole("button", { name: "Listas", exact: true })).toBeVisible();
+    } finally {
+      await walker.context().close();
+    }
+  }, 300_000);
+});
