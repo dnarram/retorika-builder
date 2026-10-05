@@ -10,7 +10,15 @@
    y uno de producción. La Parte 15 exige claves distintas para cada entorno.
 2. Aplicar la migración: `DATABASE_URL=<pooler 6543> node -e "…"` o desde el panel, pegando
    `packages/db/migrations/0001-accounts-sites-and-the-audit-log.sql`.
-3. Pegar en Render las cinco variables que `.env.example` nombra. **Yo no veo ninguna.**
+3. Pegar en Render las **cuatro** variables obligatorias que `.env.example` nombra —
+   `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
+   `SUPABASE_SERVICE_ROLE_KEY`—. **Yo no veo ninguna.** (Esta lista decía «cinco» y estaba mal
+   contada: las de Google van al panel de Supabase, no a Render — corregido el 5 de octubre al
+   comprobarlo contra tu propio mensaje, que decía «he creado 4 variables».)
+   Hay una **quinta, opcional pero recomendada desde hoy**: `APP_ORIGIN`, con el origen público
+   exacto (`https://<tu-servicio>.onrender.com`, sin ruta al final). Sin ella la ruta de entrar con
+   Google ya funciona —usa lo que Render reenvía—, pero con ella deja de depender de confiar en esa
+   cabecera. Ver `docs/tasks/cabecera-de-origen.md`.
 4. En Supabase → Authentication, dar de alta el proveedor de Google con tus credenciales, y
    **añadirte como usuario de prueba** en la pantalla de consentimiento de Google (modo de pruebas,
    tope de 100).
@@ -28,7 +36,7 @@
 | 7 | La abres | Sale con tus textos. **Sin fotos, si habías subido alguna** | Eso es el §5 y está dicho en el diálogo y en la lista |
 | 8 | **Abres otro navegador**, haces una web anónima, y entras con la misma cuenta | La web anónima se ofrece **como web nueva**; la primera sigue intacta | Si sobrescribe alguna, es tu ajuste del día 4 roto |
 | 9 | Descargas el ZIP y lo abres con doble clic | La web se ve sin servidor | Es la promesa del ADR 0001 |
-| 10 | **«Entrar con Google»** | Entra, y `/mis-webs` enseña lo tuyo | **Esto es lo único que no he podido probar yo.** Si falla, casi siempre es el *redirect URI* en Google: tiene que ser `https://<tu-servicio>.onrender.com/auth/callback` |
+| 10 | **«Entrar con Google»** | Entra, y `/mis-webs` enseña lo tuyo | **Esto sigue siendo lo único que no he podido probar yo.** Si falla con un error de Google antes de volver a nuestro dominio, casi siempre es el *redirect URI*: tiene que ser el que Supabase da en su panel, no `/auth/callback` directamente. **Si en cambio Safari dice «no puede abrir la página» con un `localhost` en la URL después de volver**, es el fallo que David encontró el 5 de octubre y ya está arreglado: `/auth/callback` construía su redirección con `request.url`, que detrás del proxy de Render es la dirección interna. Ver `apps/editor/src/auth/publicOrigin.ts` y `docs/tasks/cabecera-de-origen.md` |
 | 11 | `/cuenta` → «Descargar una copia de mis webs» | Baja un `.json` con tus documentos | La Parte 16 dice que esto funciona siempre |
 | 12 | «Borrar mi cuenta» → confirmas | Dice que se borrará en 30 días, y puedes cancelarlo ahí mismo | — |
 | 13 | Cancelas el borrado | Vuelve a la normalidad | — |
