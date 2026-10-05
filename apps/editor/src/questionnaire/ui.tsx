@@ -106,6 +106,22 @@ export const compactButton = {
   fontSize: 14,
 } as const;
 
+/**
+ * Retorika naming itself: the full lockup, mark and wordmark in one image.
+ *
+ * **The rule for which logo goes where, so the next placement does not have to re-decide it:** the
+ * lockup where Retorika is naming itself and has horizontal room — this header, and the landing.
+ * The mark alone where something else is already named or where it must read small — the editor's
+ * top bar, which sits beside the *business's* own name and would otherwise have two names fighting,
+ * and the browser tab.
+ *
+ * This used to be a gradient square with a letter R drawn in CSS, because no logo file existed in
+ * the repository at all. The official one arrived on 5 October 2026 and
+ * `scripts/brand-assets.ts` is what turns the delivered PNGs into what is served here.
+ *
+ * `<img>` rather than `next/image`: a fixed-size logo gains nothing from the optimiser, and the
+ * one `<img>` already in this application set that precedent.
+ */
 export function Brand() {
   return (
     <div
@@ -114,29 +130,15 @@ export function Brand() {
         padding: "26px 34px",
         display: "flex",
         alignItems: "center",
-        gap: 12,
       }}
     >
-      <span
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: 34,
-          height: 34,
-          background: "linear-gradient(135deg, #2B9BF4, #1554D8)",
-          borderRadius: 10,
-          color: "#FFFFFF",
-          fontSize: 18,
-          fontWeight: 800,
-          lineHeight: 1,
-        }}
-      >
-        R
-      </span>
-      <span style={{ fontSize: 17, fontWeight: 700, color: "#0F172A", letterSpacing: "-0.01em" }}>
-        {es["brand.name"]}
-      </span>
+      <img
+        src="/brand/retorika-lockup.png"
+        alt={es["brand.name"]}
+        width={190}
+        height={54}
+        style={{ display: "block", height: "auto" }}
+      />
     </div>
   );
 }

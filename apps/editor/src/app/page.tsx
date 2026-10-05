@@ -39,7 +39,26 @@ export default function Page() {
         padding: "72px 24px 64px",
       }}
     >
-      <div style={{ maxWidth: 680, display: "flex", flexDirection: "column", gap: 20 }}>
+      <div
+        style={{
+          maxWidth: 680,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 20,
+        }}
+      >
+        {/* The lockup, because this is the one page whose whole job is to say who this is — and
+            it had no logo at all until the official one arrived. `eager`, since it is the first
+            thing above the fold on a page that already has a cold start to apologise for. */}
+        <img
+          src="/brand/retorika-lockup.png"
+          alt={es["brand.name"]}
+          width={232}
+          height={66}
+          loading="eager"
+          style={{ display: "block", height: "auto", marginBottom: 4 }}
+        />
         <h1
           style={{
             margin: 0,
