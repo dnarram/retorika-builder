@@ -718,7 +718,10 @@ export function EditorShell({
             is where a second one appears the moment a section is converted — which is exactly the
             feedback that the conversion worked. `aria-current="page"` rather than a pressed toggle:
             these name places, not states. */}
-        <div className="flex min-w-0 shrink items-center justify-center gap-1.5 overflow-x-auto">
+        <div
+          data-testid="page-tabs"
+          className="flex min-w-0 shrink items-center justify-center gap-1.5 overflow-x-auto"
+        >
           {pages.map((page) => {
             const current = page.id === currentPageId;
             return (
