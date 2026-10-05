@@ -1164,14 +1164,24 @@ describe("sprint 7 día 7 — el recorrido completo del sprint", () => {
 
       const captions = frame.locator('[data-preset="gallery"] [data-slot="caption"]');
       const blur = () => walkPage.getByText("Haz clic en cualquier texto para cambiarlo").click();
-      await captions.first().click();
+      await clickToEdit(frame, captions.first());
       await walkPage.keyboard.type("Primera foto");
       await blur();
+      // And it landed. Asserted here rather than only through the reorder below, because a lost
+      // edit showed up there as «the order is wrong», which is a long way from what went wrong.
+      await expect(captions.first()).toHaveText("Primera foto");
+
       await frame.locator('[data-preset="gallery"] .rb-line-add').click();
       await expect(captions).toHaveCount(2);
-      await captions.nth(1).click();
+      // The new card goes **after** the existing one — `addItem` appends — and the assertion is
+      // here because this test depends on it: if it ever prepended, «Segunda foto» would overwrite
+      // «Primera foto» below and the failure would surface three steps later as a wrong order.
+      // That was one of two theories for the CI failure, and reading `addItem` is what ruled it out.
+      await expect(captions.first()).toHaveText("Primera foto");
+      await clickToEdit(frame, captions.nth(1));
       await walkPage.keyboard.type("Segunda foto");
       await blur();
+      await expect(captions.nth(1)).toHaveText("Segunda foto");
 
       // «Poner esta foto antes» on the second card puts it first.
       const items = frame.locator('[data-preset="gallery"] [data-item]');
@@ -2354,6 +2364,30 @@ describe("sprint 9 día 7 — colchón: la barra no traga un clic que era para o
  * replaying a fixture: it is the one sentence ADR 0024 built this feature on, satisfied by an
  * owner's actual keystrokes rather than by a document nobody but a test ever writes.
  */
+/**
+ * Clicks a text in the canvas and waits until the click demonstrably took.
+ *
+ * **Visible is not ready, and that is what made CI fail on 5 October 2026.** The sprint-7 walk
+ * inserted a gallery, waited for `[data-preset="gallery"]` to be visible, clicked its caption and
+ * typed — and in CI the typing went nowhere, so the assertion saw the catalog's placeholder where
+ * «Primera foto» should have been. Measured afterwards: `wireEditing` is what makes anything
+ * `contenteditable`, it runs after React commits the freshly inserted section, and the caption
+ * spends **14 milliseconds visible and not yet editable**. A click inside that window is lost.
+ *
+ * Fourteen milliseconds is not reachable by a person — they have to move a mouse to a section they
+ * just inserted — so this is a test that trusted the wrong signal rather than a defect in the
+ * product. Playwright clicks in zero.
+ *
+ * Two waits, each for its own reason: the attribute proves the element is interactive, and the
+ * toolbar proves the click actually selected it. The second is the idiom this file already uses
+ * where it waits for `.rb-toolbar` after clicking an `h3`.
+ */
+async function clickToEdit(frame: FrameLocator, target: Locator): Promise<void> {
+  await expect(target).toHaveAttribute("contenteditable", "true");
+  await target.click();
+  await frame.locator(".rb-toolbar").waitFor();
+}
+
 async function selectWord(locator: Locator, word: string): Promise<void> {
   const found = await locator.evaluate((el, w) => {
     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
