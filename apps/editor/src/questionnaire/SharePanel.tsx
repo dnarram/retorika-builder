@@ -8,6 +8,7 @@ import {
   shareImageOf,
 } from "@retorika/schema";
 import { useEffect, useId, useState } from "react";
+import { panelShell } from "../editor/EditorShell.tsx";
 import es from "../locales/es.json" with { type: "json" };
 
 /**
@@ -79,7 +80,13 @@ export function SharePanel({
   return (
     <aside
       aria-labelledby={headingId}
-      className="fixed top-[58px] right-0 bottom-0 z-20 flex w-[340px] flex-col gap-4 overflow-y-auto border-l border-ui-border bg-ui-surface p-5 shadow-[-8px_0_24px_rgba(15,23,42,0.08)]"
+      // **Beside the canvas, not over it**, which is what `EditorShell`'s own `panel` prop has
+      // always said it would be: «rendered beside the canvas rather than over it… the preview
+      // narrows and stays visible». This was the one rail panel still `fixed` to the viewport, and
+      // it painted 316px of itself across the page being edited at every window width measured.
+      // Losing `border-l` and the drawer shadow is what that change means: it is a card beside the
+      // preview now, like «Estilo» and «Diseño», not an edge pulled over it.
+      className={`flex w-[340px] shrink-0 flex-col gap-4 rounded-[14px] border border-ui-border bg-ui-surface p-5 ${panelShell}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-col gap-1">

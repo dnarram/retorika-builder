@@ -21,6 +21,27 @@ import type { RetorikaDocument } from "@retorika/schema";
 export const NARROWEST_WIDTH = 320;
 
 /**
+ * The renderer's only breakpoint: at or below this, a page is showing its phone layout.
+ *
+ * Restated here rather than imported because `packages/renderer` writes it into CSS text and
+ * exports no constant, and `test/canvasZoom.test.ts` reads that source and fails if the two ever
+ * disagree — the same way `AccountPage` restates the grace window and a test pins the pair.
+ *
+ * The editor needs it because the canvas *is* the viewport the preview's own media query reads:
+ * a card narrower than this shows the phone layout while the device toggle still says desktop.
+ */
+export const PHONE_BREAKPOINT = 720;
+
+/**
+ * The narrowest the desktop canvas may be laid out at — one pixel past the breakpoint.
+ *
+ * This is «la mayor área de edición dentro de las posibilidades» as an actual number: the least
+ * the preview has to be zoomed out to still be the desktop page. Anything wider zooms out more
+ * than necessary; anything narrower is not the desktop page any more.
+ */
+export const NARROWEST_DESKTOP = PHONE_BREAKPOINT + 1;
+
+/**
  * Half a pixel, and never more — the same tolerance the browser harness uses.
  *
  * Sub-pixel rounding puts a box a few hundredths past its parent on perfectly ordinary layouts,
