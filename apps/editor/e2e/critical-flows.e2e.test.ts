@@ -406,7 +406,7 @@ describe("regression — converting a section, and renaming the page it made", (
     const frame = page.frameLocator("iframe").first();
     await frame.locator('[data-section="sec-cover"]').waitFor();
 
-    const tabs = page.locator(".overflow-x-auto button");
+    const tabs = page.locator('[data-testid="page-tabs"] button');
     await expect(tabs).toHaveCount(1);
 
     await frame.locator('[data-section="sec-services"]').click();
@@ -441,7 +441,7 @@ describe("regression — converting a section, and renaming the page it made", (
     await frame.locator(".rb-nav-wide a", { hasText: "Nuestra carta" }).click();
 
     await expect(frame.locator("[data-page]")).toHaveAttribute("data-page", "page-que-ponemos");
-    await expect(page.locator('.overflow-x-auto button[aria-current="page"]')).toHaveText(
+    await expect(page.locator('[data-testid="page-tabs"] button[aria-current="page"]')).toHaveText(
       "Nuestra carta",
     );
     expect(page.frames().length, "the preview navigated instead of switching page").toBe(
@@ -472,10 +472,10 @@ describe("día 7 — dos conversiones desde el editor, y el ZIP resultante abier
     // The previous test left the canvas on the page the menu click switched to. Back to the first
     // tab — home — because «Dónde estamos» is a section of the home page, not of that one.
     const frame = page.frameLocator("iframe").first();
-    await page.locator(".overflow-x-auto button").first().click();
+    await page.locator('[data-testid="page-tabs"] button').first().click();
     await expect(frame.locator('[data-section="sec-cover"]')).toBeVisible();
 
-    const tabs = page.locator(".overflow-x-auto button");
+    const tabs = page.locator('[data-testid="page-tabs"] button');
     await expect(tabs).toHaveCount(2);
 
     await frame.locator('[data-section="sec-location"]').click();
@@ -626,7 +626,7 @@ describe("regression — a section is added to the page you are looking at", () 
     // file's own docstring describes — rather than reloading. Two pages have been made by
     // converting a section, and the canvas is on the home page.
     const frame = page.frameLocator("iframe").first();
-    const tabs = page.locator(".overflow-x-auto button");
+    const tabs = page.locator('[data-testid="page-tabs"] button');
     await expect(tabs).toHaveCount(3);
     await tabs.first().click();
     await expect(frame.locator("[data-page]")).toHaveAttribute("data-page", "home");
@@ -833,7 +833,7 @@ describe("sprint 7 día 3 — deshacer una conversión desde «Páginas»", () =
 
       const frame = walkPage.frameLocator("iframe").first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
-      const tabs = walkPage.locator(".overflow-x-auto button");
+      const tabs = walkPage.locator('[data-testid="page-tabs"] button');
       await expect(tabs).toHaveCount(1);
 
       await frame.locator('[data-section="sec-services"]').click();
@@ -1030,7 +1030,7 @@ describe("sprint 7 día 7 — dos hallazgos de esta semana, cerrados", () => {
           )
           .click();
       }
-      await expect(walkPage.locator(".overflow-x-auto button")).toHaveCount(3);
+      await expect(walkPage.locator('[data-testid="page-tabs"] button')).toHaveCount(3);
       // Autosave is what actually grows the right zone — its "Guardado" tick is what was
       // missing from the header at the instant of the last click, and the overlap only exists
       // once it lands.
@@ -1038,7 +1038,7 @@ describe("sprint 7 día 7 — dos hallazgos de esta semana, cerrados", () => {
         timeout: 5_000,
       });
 
-      const strip = await walkPage.locator(".overflow-x-auto").first().boundingBox();
+      const strip = await walkPage.locator('[data-testid="page-tabs"]').first().boundingBox();
       const toggle = await walkPage.locator('button[aria-label*="óvil"]').boundingBox();
       expect(strip, "tab strip").not.toBeNull();
       expect(toggle, "device toggle").not.toBeNull();
@@ -1189,7 +1189,7 @@ describe("sprint 7 día 7 — el recorrido completo del sprint", () => {
       await expect(captions).toHaveText(["Segunda foto", "Primera foto"]);
 
       // A conversion, undone (day 3). «Dónde estamos» becomes a page, then folds back.
-      const tabs = walkPage.locator(".overflow-x-auto button");
+      const tabs = walkPage.locator('[data-testid="page-tabs"] button');
       await expect(tabs).toHaveCount(1);
       await frame.locator('[data-section="sec-location"]').click();
       await frame

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import es from "../locales/es.json" with { type: "json" };
 import { NARROWEST_DESKTOP, NARROWEST_WIDTH } from "./overflowCheck.ts";
 
@@ -658,6 +658,55 @@ export function EditorShell({
   const canvasArea = useRef<HTMLDivElement>(null);
   const [available, setAvailable] = useState(0);
 
+  /**
+   * Where the page-tab indicator has to be, measured rather than computed.
+   *
+   * The tabs are the owner's own page titles, so their widths are whatever they typed — there is
+   * no arithmetic that gets this right, only asking the browser. `useLayoutEffect` so the move
+   * happens in the same frame as the render that caused it; with `useEffect` the indicator is
+   * briefly left behind at the old tab, which is visible precisely because it animates.
+   *
+   * `null` until the first measurement, and the indicator is drawn at `opacity: 0` until then —
+   * otherwise it flashes at x=0 on first paint before jumping to the real tab.
+   */
+  const tabStrip = useRef<HTMLDivElement>(null);
+  const currentTab = useRef<HTMLButtonElement>(null);
+  const [marker, setMarker] = useState<{ left: number; width: number } | null>(null);
+
+  // The body reads refs, so neither dependency appears in it — and both are exactly what must
+  // re-run it. Biome can only see that they are unreferenced; the note on the dependency array
+  // below says why they are there anyway.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: see the note above this line
+  useLayoutEffect(() => {
+    const strip = tabStrip.current;
+    const measure = () => {
+      const tab = currentTab.current;
+      if (!tab) {
+        setMarker(null);
+        return;
+      }
+      // `offsetLeft` against the strip, not `getBoundingClientRect`: the strip scrolls sideways
+      // when the tabs outgrow it, and an offset inside the scrolled content is what the indicator
+      // is positioned in. A client rect would drift by the scroll amount.
+      setMarker({ left: tab.offsetLeft, width: tab.offsetWidth });
+    };
+    measure();
+    if (!strip) return;
+    // A page renamed, a window resized, a font finally loaded: all change a tab's width without
+    // changing which tab is current, and all of them move where the indicator belongs.
+    const observer = new ResizeObserver(measure);
+    observer.observe(strip);
+    for (const child of strip.children) observer.observe(child);
+    return () => observer.disconnect();
+    // `currentPageId` is what moves the indicator from one tab to another, and `pages.length` is
+    // what adds or removes one to move it to. **An empty array here is the bug this comment
+    // exists to have avoided**: the observer only fires on a size change, so with `[]` the
+    // indicator sat under whichever tab was current on first paint and never moved again, while
+    // every other part of the editor followed the click. `pages` itself is rebuilt on every render
+    // of the parent, so depending on it would tear down and rebuild the observer continuously; the
+    // length is what actually changes, and a rename is a width change the observer already sees.
+  }, [currentPageId, pages.length]);
+
   useEffect(() => {
     const box = canvasArea.current;
     if (!box) return;
@@ -682,7 +731,7 @@ export function EditorShell({
           type="button"
           onClick={onBack}
           aria-label={es["editor.backToVariants"]}
-          className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg py-1 text-left"
+          className="ui-interactive group flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-ui px-1.5 py-1 text-left hover:bg-ui-bg"
         >
           {/* The mark alone, never the lockup: the business's own name is the next element along,
               and two names side by side is one too many. See `Brand` in questionnaire/ui.tsx for
@@ -702,11 +751,12 @@ export function EditorShell({
             height="15"
             viewBox="0 0 24 24"
             fill="none"
-            stroke="#94A3B8"
+            stroke="currentColor"
             strokeWidth={2}
             strokeLinecap="round"
             strokeLinejoin="round"
             aria-hidden="true"
+            className="ui-interactive shrink-0 text-ui-muted group-hover:text-ui-ink"
           >
             <path d="M9 6l6 6-6 6" />
           </svg>
@@ -718,19 +768,57 @@ export function EditorShell({
             is where a second one appears the moment a section is converted — which is exactly the
             feedback that the conversion worked. `aria-current="page"` rather than a pressed toggle:
             these name places, not states. */}
-        <div className="flex min-w-0 shrink items-center justify-center gap-1.5 overflow-x-auto">
+        <div
+          ref={tabStrip}
+          data-testid="page-tabs"
+          className="relative flex min-w-0 shrink items-center justify-center gap-1.5 overflow-x-auto"
+        >
+          {/* **The indicator that says which page the canvas is showing.**
+              One element for the whole strip rather than one per tab, so moving between pages is a
+              single thing travelling rather than two things blinking. `transform`/`width` and never
+              `left`, so nothing around it is reflowed while it moves, and `ui-slide` gives it the
+              longer of the two durations because the eye has to follow it somewhere.
+
+              `aria-hidden`: it repeats what `aria-current="page"` already says. Hidden entirely
+              until it has been measured, so it never appears at x=0 on the first paint. */}
+          <span
+            aria-hidden="true"
+            className="ui-slide pointer-events-none absolute bottom-0 left-0 h-[2px] rounded-full bg-ui-brand"
+            style={{
+              width: marker?.width ?? 0,
+              transform: `translateX(${marker?.left ?? 0}px)`,
+              opacity: marker ? 1 : 0,
+            }}
+          />
           {pages.map((page) => {
             const current = page.id === currentPageId;
             return (
               <button
                 key={page.id}
+                ref={current ? currentTab : undefined}
                 type="button"
                 onClick={() => onSelectPage(page.id)}
                 {...(current ? { "aria-current": "page" as const } : {})}
-                className={`flex h-9 max-w-[180px] shrink items-center rounded-[9px] px-5 text-sm font-semibold ${
+                /**
+                 * **The chosen tab is ink on grey, and that is a contrast fix rather than a taste.**
+                 * It was `text-ui-brand` on `bg-ui-brand-surface` — the brand blue on its own tint,
+                 * which measures **4.14:1**, below the 4.5 WCAG asks of 14px semibold text. The
+                 * page titles are the owner's own words and the one thing on this bar that says
+                 * where they are, so they were the worst place in the chrome for it.
+                 *
+                 * Not one brand colour changes: ink on the chip is **15.06:1**, and the blue
+                 * moves to the indicator below, where it is a graphic at 4.71:1 on white and well
+                 * past the 3:1 asked of one. The fix was which colour sits on which, not which
+                 * colours exist — `test/chromeContrast.test.ts` pins both halves.
+                 *
+                 * The chosen tab's chip is a step darker than the hover's on purpose: with both on
+                 * `--ui-bg` the two states were all but identical in a screenshot, and «where I am»
+                 * must not look like «where the pointer happens to be».
+                 */
+                className={`ui-interactive flex h-9 max-w-[180px] shrink cursor-pointer items-center rounded-ui px-5 text-sm font-semibold ${
                   current
-                    ? "bg-ui-brand-surface text-ui-brand"
-                    : "text-ui-muted hover:bg-ui-brand-surface/60"
+                    ? "bg-ui-border text-ui-ink"
+                    : "text-ui-muted hover:bg-ui-bg hover:text-ui-ink"
                 }`}
               >
                 {/* The label truncates, not the button: `truncate` on a flex container does
@@ -760,8 +848,10 @@ export function EditorShell({
             disabled={!canUndo}
             onClick={onUndo}
             className={
-              "flex h-[30px] w-[30px] items-center justify-center " +
-              (canUndo ? "cursor-pointer text-ui-ink" : "text-ui-muted opacity-40")
+              "ui-interactive flex h-[30px] w-[30px] items-center justify-center rounded-ui-sm " +
+              (canUndo
+                ? "cursor-pointer text-ui-ink hover:bg-ui-bg active:scale-95"
+                : "text-ui-muted opacity-40")
             }
           >
             <svg
@@ -785,8 +875,10 @@ export function EditorShell({
             disabled={!canRedo}
             onClick={onRedo}
             className={
-              "flex h-[30px] w-[30px] items-center justify-center " +
-              (canRedo ? "cursor-pointer text-ui-ink" : "text-ui-muted opacity-40")
+              "ui-interactive flex h-[30px] w-[30px] items-center justify-center rounded-ui-sm " +
+              (canRedo
+                ? "cursor-pointer text-ui-ink hover:bg-ui-bg active:scale-95"
+                : "text-ui-muted opacity-40")
             }
           >
             <svg
@@ -809,7 +901,7 @@ export function EditorShell({
             <span
               className={
                 "inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] font-medium " +
-                (saveStatus === "saved" ? "text-ui-muted" : "text-[#BE123C]")
+                (saveStatus === "saved" ? "text-ui-muted" : "text-ui-danger")
               }
             >
               {saveStatus === "saved" ? (
@@ -818,7 +910,8 @@ export function EditorShell({
                   height="14"
                   viewBox="0 0 24 24"
                   fill="none"
-                  stroke="#03D26E"
+                  stroke="currentColor"
+                  className="text-ui-ok"
                   strokeWidth={3}
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -839,7 +932,14 @@ export function EditorShell({
             <button
               type="button"
               onClick={onSaveToAccount}
-              className="flex h-9 items-center justify-center rounded-[9px] border border-ui-line px-[18px] text-sm font-semibold text-ui-ink"
+              /**
+               * **`border-ui-line` is not a token and never was**, so Tailwind emitted no colour for
+               * it and the bare `border` fell back to `currentColor` — this button has been drawing a
+               * near-black 1px outline, measured in Chromium as `rgb(15, 23, 42)`, where a hairline
+               * was meant. A class that silently resolves to nothing is the same failure mode as the
+               * missing `--color-ui-line`: no error anywhere, just the wrong thing on screen.
+               */
+              className="ui-interactive flex h-9 cursor-pointer items-center justify-center rounded-ui border border-ui-border px-[18px] text-sm font-semibold text-ui-ink hover:border-ui-border-strong hover:bg-ui-bg"
             >
               {es["account.save.open"]}
             </button>
@@ -850,8 +950,10 @@ export function EditorShell({
             onClick={onDownload}
             disabled={downloadState === "downloading"}
             className={
-              "flex h-9 items-center justify-center rounded-[9px] px-[18px] text-sm font-semibold text-white " +
-              (downloadState === "downloading" ? "bg-[#8FB4E9]" : "bg-ui-brand")
+              "ui-interactive flex h-9 items-center justify-center rounded-ui px-[18px] text-sm font-semibold text-white " +
+              (downloadState === "downloading"
+                ? "bg-ui-brand opacity-65"
+                : "cursor-pointer bg-ui-brand hover:shadow-ui-2 active:scale-[0.98]")
             }
           >
             {downloadState === "downloading" ? es["editor.downloading"] : es["editor.download"]}

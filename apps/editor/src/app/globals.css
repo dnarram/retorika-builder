@@ -128,6 +128,23 @@
 }
 
 /**
+ * Something travelling across the screen, as opposed to a control answering the pointer.
+ *
+ * `--ui-base` rather than `--ui-fast`: a thing that moves a distance needs long enough for the eye
+ * to follow it there, or it reads as a jump. `width` is here because the page tabs' indicator has
+ * to grow and shrink as it goes — it is absolutely positioned, so animating its width reflows
+ * nothing around it.
+ *
+ * Under `prefers-reduced-motion` the block at the end of this file flattens it, so the indicator
+ * arrives rather than travels.
+ */
+@utility ui-slide {
+  transition-property: transform, width, opacity;
+  transition-duration: var(--ui-base);
+  transition-timing-function: var(--ui-ease);
+}
+
+/**
  * **A focus ring, which this application did not have.** `:focus-visible` appeared nowhere in
  * `apps/editor`, so a keyboard user got whatever the browser drew by default — which on the rail's
  * transparent buttons and the top bar's icon buttons is close to nothing.
