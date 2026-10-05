@@ -25,7 +25,65 @@
   /* The red the canvas already deletes with (`.rb-action-delete`), promoted to a token so the
      Páginas panel and the section buttons cannot drift apart. 4.8:1 on --ui-surface. */
   --ui-danger: #dc2626;
-  --ui-radius: 14px;
+
+  /**
+   * A boundary that carries meaning, as opposed to one that only separates.
+   *
+   * `--ui-border` is #E8ECF2 and measures **1.19:1** on white — fine for a hairline between two
+   * things, far below the **3:1** WCAG 1.4.11 asks of anything that is the visible identity of a
+   * control or of a state. This is the lightest colour in `--ui-muted`'s own slate family that
+   * clears 3:1 on **both** surfaces the interface uses, solved for rather than picked by eye:
+   * 3.24:1 on #FFFFFF and 3.02:1 on #F5F7FA.
+   *
+   * Use it where the boundary *is* the information. `--ui-border` stays everywhere else.
+   */
+  --ui-border-strong: #8490a1;
+
+  /**
+   * ## Shape: four radii, where there were thirteen
+   *
+   * The chrome had 6, 7, 8, 9, 10, 11, 12, 13, 14, 16px and `full` in play — seven of them inside
+   * a 9px span, differing by a pixel. That is not a decision repeated, it is a decision never
+   * made, and it is most of what reads as dated.
+   *
+   * The numbers are ADR 0015's own: «radius 20 for dialogs, 11–14 for controls». `--ui-radius`
+   * moves 14 → 12 to sit in the middle of that range; nothing consumed `rounded-ui`, so nothing
+   * moves with it.
+   */
+  --ui-radius-sm: 8px;
+  --ui-radius: 12px;
+  --ui-radius-lg: 16px;
+  --ui-radius-xl: 20px;
+
+  /**
+   * ## Depth: three levels, two layers each
+   *
+   * The six shadows here before were single-layer, individually tuned, and the dialogs' was
+   * `0 20px 60px rgba(15,23,42,0.28)` — one big soft smudge at 28% opacity. Real light casts a
+   * short, dark contact shadow *and* a wide, faint ambient one; a single blur is the thing that
+   * most makes an interface look like 2005. Each level below is that pair.
+   *
+   * On the slate ink the chrome already uses, never on black: a neutral-black shadow over a blue-
+   * grey background reads as dirt.
+   */
+  --ui-shadow-1: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.05);
+  --ui-shadow-2: 0 2px 4px rgba(15, 23, 42, 0.06), 0 8px 20px rgba(15, 23, 42, 0.09);
+  --ui-shadow-3: 0 10px 20px rgba(15, 23, 42, 0.08), 0 24px 56px rgba(15, 23, 42, 0.16);
+
+  /**
+   * ## Motion
+   *
+   * One curve and two durations. `--ui-fast` is for what answers the pointer — hover, press — and
+   * must stay under the threshold where feedback stops feeling attached to the gesture.
+   * `--ui-base` is for something moving or changing size.
+   *
+   * **Neither may exceed 200ms**, and that is a test's constraint rather than a taste: the panel
+   * guard in `e2e/critical-flows.e2e.test.ts` waits 350ms for the canvas to settle before
+   * measuring it.
+   */
+  --ui-ease: cubic-bezier(0.2, 0, 0, 1);
+  --ui-fast: 120ms;
+  --ui-base: 180ms;
 }
 
 /**
@@ -45,7 +103,71 @@
   --color-ui-brand-surface: var(--ui-brand-surface);
   --color-ui-ok: var(--ui-ok);
   --color-ui-danger: var(--ui-danger);
+  --color-ui-border-strong: var(--ui-border-strong);
+  --radius-ui-sm: var(--ui-radius-sm);
   --radius-ui: var(--ui-radius);
+  --radius-ui-lg: var(--ui-radius-lg);
+  --radius-ui-xl: var(--ui-radius-xl);
+  --shadow-ui-1: var(--ui-shadow-1);
+  --shadow-ui-2: var(--ui-shadow-2);
+  --shadow-ui-3: var(--ui-shadow-3);
+  --ease-ui: var(--ui-ease);
+}
+
+/**
+ * The one transition every interactive control in the chrome wears.
+ *
+ * Named rather than written out, because the list of properties is the decision: colour, border,
+ * depth and a small movement, and **never `all`** — `all` animates layout properties too, which is
+ * how a hover state ends up costing a reflow and stuttering.
+ */
+@utility ui-interactive {
+  transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+  transition-duration: var(--ui-fast);
+  transition-timing-function: var(--ui-ease);
+}
+
+/**
+ * **A focus ring, which this application did not have.** `:focus-visible` appeared nowhere in
+ * `apps/editor`, so a keyboard user got whatever the browser drew by default — which on the rail's
+ * transparent buttons and the top bar's icon buttons is close to nothing.
+ *
+ * Written once here, with `:where()` so it carries zero specificity and any component can override
+ * it without a fight, and so nothing has to remember to opt in. `:focus-visible` rather than
+ * `:focus`: a mouse press must not leave a ring behind it.
+ *
+ * **In `@layer base`, and the first draft was not — which is a cascade trap worth naming.**
+ * Unlayered CSS beats *every* layered rule whatever the specificity, and Tailwind's utilities all
+ * live in layers. So an unlayered version of this could not be overridden by `focus-visible:
+ * outline-none` anywhere, and the rail drew both the ring on its icon and a second one straight
+ * across the whole 80px button. Seen in a screenshot, not deduced.
+ */
+@layer base {
+  :where(button, a, input, select, textarea, summary, [tabindex], [role="button"]):focus-visible {
+    outline: 2px solid var(--ui-brand);
+    outline-offset: 2px;
+    border-radius: inherit;
+  }
+}
+
+/**
+ * **Motion is a preference, and this file has to honour it.** Nothing in this repository read
+ * `prefers-reduced-motion` before the chrome had transitions worth suppressing; adding movement
+ * without this would be fixing one accessibility problem by introducing another, for the people
+ * most likely to be hurt by it.
+ *
+ * `!important` on purpose: this must beat every utility and inline style, including the canvas's
+ * own zoom transition. Not `0s` but a hair above it, so a `transitionend` listener still fires.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 * {

@@ -647,3 +647,104 @@ that string's `??` fallback is unreachable and it has been dead copy since the p
 arrived. The ADR carries the correction and an amendment; the promise now has a visible home on the
 landing, and the e2e asserts the promise itself — no password field anywhere in the five questions —
 rather than a sentence about it.
+
+---
+
+## El cromo del editor gana un sistema visual (5 de octubre de 2026)
+
+Dirección pidió modernizar el cromo del editor — «los paneles se ven estilo años 2000» — con
+**sombreado, contraste y transiciones**, y usando el hover para dirigir la mirada, sin tocar los
+colores de marca. Esta sección es el registro, porque es aquí donde va: el **ADR 0015 se excluye a
+sí mismo** de la apariencia del cascarón, con todas las letras —
+
+> «The editor's shell — the bar heights, the rail width, the toolbar's contents — is **not decided
+> here**. It is drawn in the mockups and written down in `docs/design/REVIEW.md`, where it can
+> change as the editor is built without amending an ADR.»
+
+— mientras que **los valores de color sí son suyos**. De ahí la forma del trabajo: ni un color de
+marca cambia; lo que cambia es la forma, la profundidad, el movimiento, el foco, y **qué color se
+pone sobre cuál**.
+
+### Lo que dibujaban las maquetas, y lo que no
+
+La maqueta 08 dibuja el raíl de 80px con sus iconos de 46×46 en recuadro, la barra de 58px y la
+tarjeta del lienzo. **Esa geometría no se toca y sigue siendo la especificación.**
+
+Lo que las maquetas **no** dicen, y es el hallazgo que ordena todo lo demás: **la maqueta 08 no
+tiene ni una regla `:hover` ni una `transition`**. Ninguna de las diecinueve las tiene. Son dibujos,
+no especificaciones de interacción, y el código heredó esa ausencia: una sola `transition` en toda
+la aplicación y cero `:focus-visible`. Así que el movimiento y los estados **no contradicen ninguna
+maqueta**; rellenan un hueco que nunca se rellenó. Ninguna maqueta se edita.
+
+### Lo que se midió antes de tocar nada
+
+| Hecho | Medida |
+|---|---|
+| Radios distintos en el cromo | **13**, siete de ellos dentro de un rango de 9px |
+| Sombras | **6**, improvisadas, de una capa; la de diálogos con alfa 0.28 |
+| `transition` en toda la aplicación | **1** |
+| `:focus-visible` | **0** |
+| `--ui-border` como linde de un control | **1,19:1** (WCAG 1.4.11 pide 3:1) |
+| Pestaña de página activa (`#156FE7` sobre `#E8F1FE`) | **4,14:1** — falla AA para texto normal |
+| Borde de «Guardar en mi cuenta» | `rgb(15,23,42)`, casi negro: `border-ui-line` **no existe** como token |
+
+### El sistema, y de dónde salen sus números
+
+**Cuatro radios** donde había trece, y **no son inventados**: son los de la propia tabla del ADR
+0015 —«radius 20 for dialogs, 11–14 for controls»— que el código incumplía en ambas direcciones.
+`--ui-radius` pasa de 14 a 12; nada consumía `rounded-ui`, así que nada se mueve con él.
+
+**Tres niveles de profundidad, de dos capas cada uno** (sombra de contacto + ambiental), sobre la
+tinta pizarra que ya era la convención.
+
+**Una curva y dos duraciones**, con **tope de 200ms** — que es una restricción de un test, no un
+gusto: el guard de paneles espera 350ms a que el lienzo se asiente.
+
+**`--ui-border-strong: #8490A1`**, el color más claro de la familia de `--ui-muted` que supera 3:1
+sobre **las dos** superficies (3,24:1 sobre blanco, 3,02:1 sobre `#F5F7FA`), resuelto y no elegido a
+ojo. `--ui-border` se queda para lo que solo separa; el nuevo es para cuando el linde **es** la
+información.
+
+**Y `prefers-reduced-motion`, que no existía en todo el repositorio.** Añadir movimiento sin él
+habría sido arreglar un problema de accesibilidad creando otro.
+
+### El raíl, que es lo que cambia hoy
+
+**Un elemento en reposo deja de tener recuadro.** Antes los siete llevaban el suyo, estuvieran
+elegidos o no: siete cajas por el borde de la pantalla pidiendo atención que no habían ganado, y un
+estado elegido que se reducía a «la caja se pone azul». Enrecuadrar lo no elegido es la costumbre
+que envejece una barra de herramientas más rápido que ningún color.
+
+Ahora el cuadrado se dibuja **solo** cuando el elemento está elegido o el puntero está encima, y el
+elegido lleva **tres señales, no una**: la superficie de marca, la tinta de marca y una regla en el
+canto interior del raíl. Cualquiera de las tres basta por sí sola, que es lo que lo mantiene legible
+para quien no separa el azul del gris.
+
+El interruptor de herramientas: el pulgar **se desliza** en vez de teletransportarse (antes se movía
+con `justify-start`/`justify-end`, que no deja nada que animar), y su carril apagado pasa de 1,19:1
+a 3,02:1 — antes era un interruptor cuyo «apagado» no se veía.
+
+| | antes | después |
+|---|---|---|
+| El raíl | ![antes](review/2026-10-05-el-cromo/rail-antes.png) | ![después](review/2026-10-05-el-cromo/rail-despues.png) |
+
+Y los dos estados que antes no existían: [el hover](review/2026-10-05-el-cromo/rail-hover.png) y
+[el foco de teclado](review/2026-10-05-el-cromo/rail-foco.png).
+
+### Dos cosas que solo se vieron mirando la pantalla
+
+1. **La regla indicadora no se dibujaba.** Estaba colocada a `-left-3.5`, fuera de la caja que el
+   raíl recorta. Una señal que no se pinta es exactamente el fallo del botón muerto con otro traje.
+2. **El anillo de foco se dibujaba dos veces**: uno alrededor del icono y otro cruzando los 80px del
+   botón entero. La causa es de cascada y merece quedar escrita: **el CSS sin capa gana a cualquier
+   regla en capa**, sea cual sea su especificidad, y todas las utilidades de Tailwind están en capas
+   — así que un `:focus-visible` global sin capa no se puede sobrescribir en ningún sitio. Ahora
+   está en `@layer base`.
+
+### Lo que queda, y cuándo
+
+Día 2 la barra superior y las pestañas de página (incluido el contraste de 4,14:1 y el borde
+invisible); día 3 los seis paneles derechos; día 4 el cromo del lienzo. **Fuera por decisión de
+dirección: la barra flotante y el conmutador PC/móvil** — «el cliente dijo que le encanta cómo
+transiciona de vista pc a vista móvil»—, cuyos radios quedan nombrados como excepción permanente en
+`apps/editor/test/chromeScale.test.ts`.
