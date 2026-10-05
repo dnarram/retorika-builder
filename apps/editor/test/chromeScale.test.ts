@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { CHROME_SCALE } from "../src/editor/chromeScale.ts";
 
 /**
  * The chrome has a scale, and it is the only one.
@@ -162,5 +163,55 @@ describe("focus", () => {
     expect(layer, "the focus ring is not inside @layer base").toBeGreaterThan(-1);
     // and the layer must not have closed before the rule
     expect(DECLARATIONS.slice(layer, ring)).not.toMatch(/\n\}/);
+  });
+});
+
+describe("the canvas's copy of the scale", () => {
+  /**
+   * The chrome inside the preview iframe cannot read `globals.css` — it is a different document,
+   * styled by a string `Editor.tsx` injects. So `chromeScale.ts` transcribes the scale for it, and
+   * this is what stops the transcription drifting from the original.
+   *
+   * The same arrangement `overflowCheck.ts` has with the renderer's breakpoint. A copied value
+   * with nothing holding the copy to its source is a value that will be wrong one day with every
+   * test still green — which is exactly how the canvas ended up with 13px, 11px, 9px and 7px
+   * corners while the application's own side had settled on four.
+   */
+  const pairs: [keyof typeof CHROME_SCALE, string][] = [
+    ["bg", "--ui-bg"],
+    ["surface", "--ui-surface"],
+    ["border", "--ui-border"],
+    ["borderStrong", "--ui-border-strong"],
+    ["ink", "--ui-ink"],
+    ["muted", "--ui-muted"],
+    ["brand", "--ui-brand"],
+    ["brandSurface", "--ui-brand-surface"],
+    ["danger", "--ui-danger"],
+    ["radiusSm", "--ui-radius-sm"],
+    ["radius", "--ui-radius"],
+    ["radiusLg", "--ui-radius-lg"],
+    ["radiusXl", "--ui-radius-xl"],
+    ["shadow1", "--ui-shadow-1"],
+    ["shadow2", "--ui-shadow-2"],
+    ["shadow3", "--ui-shadow-3"],
+    ["ease", "--ui-ease"],
+    ["fast", "--ui-fast"],
+    ["base", "--ui-base"],
+  ];
+
+  for (const [key, custom] of pairs) {
+    it(`${key} says what ${custom} says`, () => {
+      const found = DECLARATIONS.match(new RegExp(`${custom}:\\s*([^;]+);`));
+      expect(found?.[1], `globals.css declares no ${custom}`).toBeDefined();
+      expect(CHROME_SCALE[key]).toBe((found?.[1] ?? "").trim());
+    });
+  }
+
+  it("transcribes every token the stylesheet declares, so none is quietly left behind", () => {
+    const declared = [...DECLARATIONS.matchAll(/--ui-([\w-]+):/g)].map((m) => m[1]);
+    // `ok` is the one token with no canvas use: it marks the save state in the top bar and the
+    // preview has no equivalent. Named here rather than silently absent.
+    const expected = declared.filter((name) => name !== "ok");
+    expect(expected.length).toBe(pairs.length);
   });
 });
