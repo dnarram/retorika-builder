@@ -748,3 +748,41 @@ invisible); día 3 los seis paneles derechos; día 4 el cromo del lienzo. **Fuer
 dirección: la barra flotante y el conmutador PC/móvil** — «el cliente dijo que le encanta cómo
 transiciona de vista pc a vista móvil»—, cuyos radios quedan nombrados como excepción permanente en
 `apps/editor/test/chromeScale.test.ts`.
+
+### Día 2: la barra superior y las pestañas de página (5 de octubre de 2026)
+
+| | |
+|---|---|
+| antes | ![antes](review/2026-10-05-el-cromo/barra-antes.png) |
+| después | ![después](review/2026-10-05-el-cromo/barra-despues.png) |
+
+**La pestaña activa fallaba AA y era justo lo que dirección señaló.** Era `text-ui-brand` sobre
+`bg-ui-brand-surface`: el azul de marca sobre su propio tinte, **4,14:1**, por debajo del 4,5 que
+WCAG pide a un texto de 14px semibold. Los títulos de página son las palabras del propio dueño y lo
+único en esa barra que dice dónde está, así que era el peor sitio del cromo para ese fallo.
+
+**No cambia ni un color de marca.** La tinta sobre el chip mide **15,06:1**, y el azul se muda al
+indicador, donde es un gráfico a 4,71:1 sobre blanco — muy por encima del 3:1 que se le pide. El
+arreglo fue **qué color va sobre cuál**, no qué colores existen.
+
+**El indicador se desliza**, uno para toda la tira en vez de uno por pestaña, con `transform` y
+`width` y nunca `left`, así que no reflota nada mientras viaja. Medido: `translateX` 0 → 186px y
+ancho 180 → 134px al cambiar de página, con 0,18s de transición. **Con `prefers-reduced-motion`
+cae a 1e-05s** y llega en vez de viajar, que es el ajuste que pidió dirección.
+
+**Y un bug que no era estilo.** `border-ui-line` **no existe como token**: Tailwind no emitía color
+para esa clase y el `border` a secas caía en `currentColor`, así que «Guardar en mi cuenta» llevaba
+un contorno **casi negro** — medido en Chromium como `rgb(15, 23, 42)` donde se quería una línea de
+pelo. Ahora `rgb(232, 236, 242)`. Una clase que se resuelve en silencio a nada falla igual que el
+token que falta: sin error en ninguna parte, solo lo que no era en pantalla.
+
+Cuatro valores sueltos más pasan a token: el galón `#94A3B8`, el rojo `#BE123C` —el cuarto rojo
+distinto del repositorio—, el azul deshabilitado `#8FB4E9`, y el verde `#03D26E`, que estaba escrito
+a mano **al lado del token `--ui-ok` que ya tenía ese mismo valor**.
+
+Deshacer, rehacer, el nombre del negocio y los dos botones ganan hover, foco y pulsación. **El
+conmutador PC/móvil no se toca**, y sus tres radios siguen nombrados como excepción permanente.
+
+Y una cosa que solo se vio en la captura: con la pestaña activa y la pestaña bajo el puntero las dos
+sobre `--ui-bg`, **los dos estados eran casi idénticos**. La activa lleva ahora un paso más de gris:
+«dónde estoy» no puede parecerse a «dónde está el puntero».

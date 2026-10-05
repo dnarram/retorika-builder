@@ -36,21 +36,18 @@ const CHROME = ["editor/EditorShell.tsx"].map((f) => readFileSync(join(EDITOR, f
  *
  * | value | what wears it | when it goes |
  * |---|---|---|
- * | `rounded-[9px]` ×1 | the page tabs | day 2, the top bar |
- * | `rounded-[9px]` ×2 | «Guardar en mi cuenta», «Descargar» | day 2, the top bar |
+ * | ~~`rounded-[9px]` ×3~~ | ~~page tabs, «Guardar en mi cuenta», «Descargar»~~ | **gone, day 2** |
  * | `rounded-[9px]` ×1, `rounded-[6px]` ×2 | **the device toggle** | **never** |
  *
- * The device toggle is permanent and is not a lapse: direction excluded it from this work by name
- * — «el cliente dijo que le encanta cómo transiciona de vista pc a vista móvil» — so its shape
- * stays exactly as it is, and the list says so rather than leaving the next reader to wonder.
+ * The device toggle is the only entry left and it is permanent, not a lapse: direction excluded it
+ * from this work by name — «el cliente dijo que le encanta cómo transiciona de vista pc a vista
+ * móvil» — so its shape stays exactly as it is, and the list says so rather than leaving the next
+ * reader to wonder whether it was forgotten.
  */
 const OFF_SCALE_RADII = [
   "rounded-[9px]", // DeviceToggle track — excluded by direction, permanent
   "rounded-[6px]", // DeviceToggle, desktop button — idem
   "rounded-[6px]", // DeviceToggle, mobile button — idem
-  "rounded-[9px]", // page tabs — day 2
-  "rounded-[9px]", // «Guardar en mi cuenta» — day 2
-  "rounded-[9px]", // «Descargar» — day 2
 ] as const;
 
 describe("the shape scale", () => {
