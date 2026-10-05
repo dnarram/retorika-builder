@@ -856,18 +856,21 @@ export function EditorShell({
                  * must not look like «where the pointer happens to be».
                  */
                 /**
-                 * **The width a tab may take, and why it is two numbers.**
+                 * **A third of the strip, and that is a structural answer to a pixel question.**
                  *
-                 * The bar's right-hand group is a fixed 673px — the device toggle, undo, redo, the
-                 * save sentence ADR 0012 refuses to shorten, and two buttons. At 1280 that leaves
-                 * 575px for the logo and every tab together, and three tabs of real page names
-                 * wanted 434 of it while the logo wanted 180: 39px more than exists.
+                 * Direction's rule is «sin barra de desplazamiento a no ser que existan 4 o más
+                 * páginas». The first version of this met it with a measured constant — 124px,
+                 * tuned until three tabs fitted. It passed here and **failed in CI**, because the
+                 * margin it left was zero: three tabs measured 395px inside a 395px strip, and a
+                 * runner whose text metrics differ by a pixel tips that over. A number arrived at
+                 * by tuning is a number that only holds on the machine it was tuned on.
                  *
-                 * So a tab is narrower below 1440 than above it. Direction's rule — «que se puedan
-                 * ver sin barra de desplazamiento a no ser que existan 4 o más páginas» — is met at
-                 * both, with truncation doing the work at the narrower one.
+                 * `(100% - 14px) / 3` cannot tip over, because it is the arithmetic of the rule
+                 * itself: three of them plus the two 6px gaps between them *is* the strip, whatever
+                 * the font measures, and a fourth cannot fit by construction. The 180px keeps a
+                 * single tab from sprawling once the strip is wide enough for that not to matter.
                  */
-                className={`ui-interactive flex h-9 max-w-[124px] shrink cursor-pointer items-center rounded-ui px-5 text-sm font-semibold min-[1440px]:max-w-[180px] ${
+                className={`ui-interactive flex h-9 max-w-[min(180px,calc((100%-14px)/3))] shrink cursor-pointer items-center rounded-ui px-5 text-sm font-semibold ${
                   current
                     ? "bg-ui-border text-ui-ink"
                     : "text-ui-muted hover:bg-ui-bg hover:text-ui-ink"

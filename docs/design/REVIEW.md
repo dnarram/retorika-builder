@@ -893,12 +893,24 @@ página —, lo que se vio midiendo y no razonando.
 
 | ventana | 1 página | 2 | 3 | 4 |
 |---|---|---|---|---|
-| 1024 | sin barra | **barra** | **barra** | **barra** |
+| 1024 | sin barra | sin barra | sin barra | **barra** |
 | 1280 | sin barra | sin barra | sin barra | **barra** |
 | 1440 | sin barra | sin barra | sin barra | **barra** |
 | 1600 | sin barra | sin barra | sin barra | sin barra |
 
 Que es la regla que puso dirección: «sin barra a no ser que existan 4 o más páginas».
+
+**Y el ancho de una pestaña no es un número medido, que es la corrección que hizo falta.** La
+primera versión lo fijaba en 124px, afinado hasta que tres cupieran: pasaba aquí y **falló en CI**,
+porque el margen que dejaba era cero — tres pestañas medían 395px dentro de una tira de 395px, y un
+runner cuyas métricas de texto difieren en un píxel lo tumba. Un número al que se llega afinando es
+un número que solo se sostiene en la máquina donde se afinó.
+
+El tope es ahora `(100% - 14px) / 3`: la aritmética de la propia regla. Tres pestañas más sus dos
+huecos de 6px **son** la tira, mida lo que mida la letra, y una cuarta no cabe por construcción. Eso
+es además lo que hace que **1024 pase a admitir tres páginas**, cosa que no hacía ni antes ni con la
+versión afinada — aunque allí cada pestaña se queda en unos 57px, así que se leen muy cortadas. A
+1024 el remedio de verdad sigue siendo el grupo de la derecha.
 
 **Lo que no se puede arreglar colocando cajas, y es decisión de dirección.** El grupo de la derecha
 mide **673px fijos** y a 1024 deja 219px para las pestañas, donde dos nombres de página no caben a
