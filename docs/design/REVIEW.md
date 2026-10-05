@@ -827,3 +827,44 @@ dirección.
 una sección— **no es uno de los seis** y sigue siendo un cajón `fixed` **que se pinta encima del
 lienzo**, que es justo el defecto que «Compartir» dejó de tener. No entra aquí porque no se abre
 desde el raíl; queda nombrado para que no se descubra.
+
+### Día 4: el cromo del lienzo (5 de octubre de 2026)
+
+| | |
+|---|---|
+| antes | ![antes](review/2026-10-05-el-cromo/lienzo-gap-antes.png) |
+| después | ![después](review/2026-10-05-el-cromo/lienzo-gap-despues.png) |
+| con el puntero encima | ![hover](review/2026-10-05-el-cromo/lienzo-gap-hover.png) |
+
+**Lo que la maqueta 08 dibuja aquí es «una regla discontinua rota por una píldora», y eso se
+mantiene como idea.** Lo que cambia son sus valores, y el motivo está medido: el borde de la
+píldora era `#A9C9F4`, **1,70:1** sobre el blanco que el propio hueco pinta detrás, y la regla era
+`#B9CDEA`, **1,62:1**. Los dos **por debajo del 3:1** que la WCAG 1.4.11 pide a aquello cuyo aspecto
+es lo que identifica un control. «Añadir sección aquí» llevaba desde que se dibujó siendo un botón
+que se podía no ver.
+
+**Y el plan de este día proponía empeorarlo.** Decía dejar las píldoras «casi invisibles en reposo»
+y hacerlas florecer con el puntero. Dirección lo rechazó, y la razón queda como regla: **un control
+que solo aparece bajo un puntero no existe para quien no tiene puntero.** El reposo es ahora el azul
+de marca a **4,71:1**, y el realce va **encima de un estado que ya pasa**.
+
+**El realce vive dentro de `@media (hover: hover)`**, así que una pantalla táctil —que en unos
+motores reporta un hover permanente falso y en otros no reporta ninguno— recibe siempre la versión
+visible. Y `:focus-visible` recibe el mismo realce fuera de esa consulta, porque al teclado también
+se llega a esta píldora y no tiene puntero con el que guiar.
+
+La regla pasa de `2px dashed` a **1px sólido** a 3,24:1: más silenciosa de mirar y más medible. Lo
+discontinuo era lo más datado que había en pantalla.
+
+**El problema de los dos documentos, y cómo queda resuelto.** Este cromo vive **dentro del iframe**,
+cuyo documento escribe `packages/renderer` y que nunca ve `globals.css`. Antes eso significaba una
+segunda copia a mano de cada número, y ya había divergido: el lienzo usaba esquinas de 13, 11, 9 y
+7px mientras el otro lado se había asentado en cuatro. `apps/editor/src/editor/chromeScale.ts` es
+ahora la transcripción, y `test/chromeScale.test.ts` lee **los dos** y falla si un solo valor
+discrepa.
+
+**Y lo que no se toca: `.rb-toolbar*`.** Vive en este mismo fichero y es la barra flotante que
+dirección excluyó. Se ha tocado por selector, nunca por bloque.
+
+`pnpm test:golden` sigue en **21 sin moverse**, que es la prueba de que nada de esto llega al ZIP de
+un cliente (ADR 0001).

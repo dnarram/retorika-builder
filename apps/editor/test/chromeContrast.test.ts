@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { AA_NORMAL_TEXT, contrastRatio } from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
+import { CHROME_SCALE, PILL_REST_BORDER } from "../src/editor/chromeScale.ts";
 
 /**
  * The interface's own colours, measured.
@@ -25,6 +26,24 @@ import { describe, expect, it } from "vitest";
  */
 
 const CSS = readFileSync(join(import.meta.dirname, "..", "src", "app", "globals.css"), "utf8");
+
+/**
+ * The stylesheet injected into the preview iframe, which lives as strings inside `Editor.tsx`.
+ *
+ * **Comments stripped, and that is not tidiness.** The first version of this read the file whole
+ * and found `@media (hover: hover)` in the *prose explaining the rule* rather than in the rule,
+ * then failed looking for `.rb-pill:hover` 400 characters later. A guard that can be satisfied by
+ * a sentence about the code is the same defect `scripts/secrets-scope.ts` was caught by in sprint
+ * 15: it passes while the thing it describes is absent.
+ */
+const CANVAS = readFileSync(
+  join(import.meta.dirname, "..", "src", "questionnaire", "Editor.tsx"),
+  "utf8",
+)
+  .replace(/\/\*[\s\S]*?\*\//g, "")
+  .split("\n")
+  .filter((line) => !line.trimStart().startsWith("//"))
+  .join("\n");
 
 /** The `--ui-*` colour tokens, read from the stylesheet that actually ships rather than restated
  * here — a table typed into a test is a table that can agree with itself while the app disagrees. */
@@ -80,6 +99,45 @@ describe("the chrome's text", () => {
 
   it("brand blue on a white panel is readable, which is where it is allowed", () => {
     expect(contrastRatio(BRAND, SURFACE)).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
+  });
+});
+
+/**
+ * The chrome drawn inside the preview, which is the half no stylesheet governs.
+ *
+ * Direction set this floor explicitly after reading the plan for it: «las píldoras no pueden ser
+ * casi invisibles en reposo. Deben ser sutiles pero visibles, con al menos 3:1 de contraste contra
+ * el fondo (WCAG 1.4.11), y la guarda chromeContrast.test.ts debe comprobarlo.»
+ *
+ * The plan it refused would have made a control that only exists while a pointer is on it. What
+ * measuring first showed is that the state was **already** below the floor before any of this
+ * work: `#A9C9F4` on the white the gap paints is 1.70:1, and the rule beside it 1.62:1.
+ */
+describe("«Añadir sección aquí», at rest", () => {
+  it("clears 3:1 against the white the gap paints behind it", () => {
+    expect(contrastRatio(PILL_REST_BORDER, CHROME_SCALE.surface)).toBeGreaterThanOrEqual(
+      UI_COMPONENT,
+    );
+  });
+
+  it("is not the tint it used to be, which measured 1.70:1", () => {
+    // Pinned as a number rather than a colour name: whatever the resting border becomes, it may
+    // not go back under the floor, and this says what «under» was.
+    expect(contrastRatio("#A9C9F4", CHROME_SCALE.surface)).toBeLessThan(UI_COMPONENT);
+    expect(contrastRatio(PILL_REST_BORDER, CHROME_SCALE.surface)).toBeGreaterThan(
+      contrastRatio("#A9C9F4", CHROME_SCALE.surface),
+    );
+  });
+
+  it("has its emphasis behind `hover: hover`, so a touch screen gets the visible version", () => {
+    // The other half of direction's instruction, and it cannot be measured as a ratio: a device
+    // with no pointer must never be shown the quieter of two states. The hover rule is therefore
+    // inside the query, and the resting rule outside it — which is what this reads.
+    const hover = CANVAS.indexOf("@media (hover: hover)");
+    expect(hover, "the pill's emphasis is not inside `@media (hover: hover)`").toBeGreaterThan(-1);
+    expect(CANVAS.slice(hover, hover + 400)).toContain(".rb-pill:hover");
+    // And a keyboard, which has no pointer either, gets the same emphasis.
+    expect(CANVAS).toContain(".rb-pill:focus-visible");
   });
 });
 

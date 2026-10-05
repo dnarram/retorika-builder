@@ -52,6 +52,7 @@ import {
   usesOfCollection,
 } from "@retorika/schema";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { CHROME_SCALE, PILL_REST_BORDER } from "../editor/chromeScale.ts";
 import { designRows, elementLabels, selectedRowId } from "../editor/designTree.ts";
 import {
   type AcceptedWarning,
@@ -2866,7 +2867,7 @@ export function Editor({
       ".rb-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; }",
       ".rb-action { width: 26px; height: 26px; display: flex; align-items: center;",
       "  justify-content: center; border: 2px solid #FFFFFF; border-radius: 999px;",
-      "  cursor: pointer; box-shadow: 0 2px 6px rgba(15,23,42,0.28); }",
+      `  cursor: pointer; box-shadow: ${CHROME_SCALE.shadow2}; }`,
       ".rb-action-move { background: #156FE7; } .rb-action-move:hover { background: #0E5BC4; }",
       ".rb-action-delete { background: #DC2626; } .rb-action-delete:hover { background: #B91C1C; }",
       ".rb-action:disabled { background: #B9CDEA; cursor: not-allowed; }",
@@ -2874,27 +2875,62 @@ export function Editor({
       // name above and what happens next below. `UI_FONT` because it is the editor talking, not the
       // site: every other `rb-` node in this frame does the same.
       `.rb-hole { box-sizing: border-box; margin: 22px 30px; padding: 26px; font-family: ${UI_FONT};`,
-      "  background: #F7FAFE; border: 2px dashed #B9CDEA; border-radius: 11px; display: flex;",
+      `  background: ${CHROME_SCALE.bg}; border: 1px solid ${CHROME_SCALE.borderStrong};`,
+      `  border-radius: ${CHROME_SCALE.radius}; display: flex;`,
       "  flex-direction: column; align-items: center; gap: 6px; }",
       ".rb-hole-was { font-size: 15px; font-weight: 600; color: #475569; }",
       ".rb-hole-fate { font-size: 13px; color: #94A3B8; text-align: center; }",
-      // The gap between sections, drawn as mockup 08 draws it: a dashed rule broken by a pill.
+      /**
+       * The gap between sections: mockup 08 draws a dashed rule broken by a pill, and the rule is
+       * the part that changes. `2px dashed #B9CDEA` measured **1.62:1** against the white this gap
+       * paints behind it — a decoration so faint it had to be guessed at, drawn in the one pattern
+       * that dates an interface fastest. A 1px solid hairline at `--ui-border-strong` is quieter to
+       * look at and **3.24:1** to measure.
+       */
       ".rb-gap { position: relative; box-sizing: border-box; height: 76px; padding: 0 40px;",
-      "  display: flex; align-items: center; gap: 0; background: #FFFFFF; }",
-      ".rb-rule { flex-grow: 1; height: 0; border-top: 2px dashed #B9CDEA; }",
+      `  display: flex; align-items: center; gap: 0; background: ${CHROME_SCALE.surface}; }`,
+      `.rb-rule { flex-grow: 1; height: 0; border-top: 1px solid ${CHROME_SCALE.borderStrong}; }`,
       // The interface's own typeface, never the site's. Everything else injected here is an
       // icon, so this is the first piece of chrome with words in it, and `font: inherit` would
       // have drawn them in whatever face the client picked for their own headings — ADR 0015's
       // separation, showing up as a menu set in a display serif.
       `.rb-pill, .rb-menu, .rb-menu button { font-family: ${UI_FONT}; }`,
+      /**
+       * **«Añadir sección aquí», and the resting state is the decision here.**
+       *
+       * Its border was `#A9C9F4`: **1.70:1** on the white behind it, below the **3:1** WCAG 1.4.11
+       * asks of anything whose look is what identifies a control. It has been a button you could
+       * miss since it was drawn.
+       *
+       * The plan for this day proposed making it fainter still at rest and blooming it on hover.
+       * Direction refused that and the refusal is the rule now: **a control that only appears under
+       * a pointer does not exist for anyone without one.** So the rest state is the brand blue at
+       * **4.71:1**, and the emphasis on top of it is exactly that — on top of a state that already
+       * passes.
+       *
+       * **The emphasis sits inside `@media (hover: hover)`**, so a touch screen — which reports a
+       * permanent false hover on some engines, and on others never hovers at all — is simply given
+       * the visible version always. And `:focus-visible` gets the same emphasis outside that query,
+       * because a keyboard reaches this pill too and has no pointer to lead with.
+       */
       ".rb-pill { display: inline-flex; align-items: center; gap: 8px; height: 40px;",
-      "  padding: 0 20px; font-size: 14px; font-weight: 600; color: #156FE7;",
-      "  background: #FFFFFF; border: 1px solid #A9C9F4; border-radius: 999px; cursor: pointer; }",
-      ".rb-pill:hover { background: #F2F7FE; border-color: #156FE7; }",
+      `  padding: 0 20px; font-size: 14px; font-weight: 600; color: ${CHROME_SCALE.brand};`,
+      `  background: ${CHROME_SCALE.surface}; border: 1px solid ${PILL_REST_BORDER};`,
+      "  border-radius: 999px; cursor: pointer;",
+      `  transition: background-color ${CHROME_SCALE.fast} ${CHROME_SCALE.ease},`,
+      `    box-shadow ${CHROME_SCALE.fast} ${CHROME_SCALE.ease},`,
+      `    transform ${CHROME_SCALE.fast} ${CHROME_SCALE.ease}; }`,
+      `@media (hover: hover) { .rb-pill:hover { background: ${CHROME_SCALE.brandSurface};`,
+      `  box-shadow: ${CHROME_SCALE.shadow2}; transform: translateY(-1px); } }`,
+      `.rb-pill:focus-visible { background: ${CHROME_SCALE.brandSurface};`,
+      `  box-shadow: ${CHROME_SCALE.shadow2}; outline: 2px solid ${CHROME_SCALE.brand};`,
+      "  outline-offset: 2px; }",
+      "@media (prefers-reduced-motion: reduce) { .rb-pill { transition-duration: 0.01ms; } }",
       ".rb-menu { position: absolute; top: 60px; left: 50%; transform: translateX(-50%);",
       "  z-index: 20; width: 340px; max-width: calc(100% - 80px); box-sizing: border-box;",
-      "  padding: 14px; background: #FFFFFF; border: 1px solid #E5E9F0; border-radius: 13px;",
-      "  box-shadow: 0 14px 38px rgba(15,23,42,0.18); display: flex; flex-direction: column;",
+      `  padding: 14px; background: ${CHROME_SCALE.surface}; border: 1px solid ${CHROME_SCALE.border};`,
+      `  border-radius: ${CHROME_SCALE.radiusLg};`,
+      `  box-shadow: ${CHROME_SCALE.shadow3}; display: flex; flex-direction: column;`,
       "  gap: 4px; text-align: left; }",
       ".rb-menu-header { display: flex; align-items: baseline; justify-content: space-between;",
       "  gap: 12px; margin-bottom: 6px; }",
@@ -2902,19 +2938,22 @@ export function Editor({
       // A quiet word rather than a cross: it sits beside a title, not over a photograph, and the
       // menu is small enough that an icon would need a label anyway.
       `.rb-menu-close { font-family: ${UI_FONT}; flex-shrink: 0; padding: 2px 6px; font-size: 12px;`,
-      "  font-weight: 600; color: #5B6B82; background: none; border: 0; border-radius: 7px;",
+      `  font-weight: 600; color: ${CHROME_SCALE.muted}; background: none; border: 0;`,
+      `  border-radius: ${CHROME_SCALE.radiusSm};`,
       "  cursor: pointer; }",
       ".rb-menu-close:hover { background: #F2F7FE; color: #156FE7; }",
       // The catalog's search, finally on a screen. Quiet until it is used: a plain field with no
       // icon and no button, because there is nothing to submit — it filters as you type.
       `.rb-menu-search { font-family: ${UI_FONT}; box-sizing: border-box; width: 100%;`,
       "  margin: 0 0 6px 0; height: 34px; padding: 0 10px; font-size: 13px; color: #0F172A;",
-      "  background: #F6F8FB; border: 1px solid #E3E8F0; border-radius: 9px; outline: none; }",
+      `  background: ${CHROME_SCALE.bg}; border: 1px solid ${CHROME_SCALE.border};`,
+      `  border-radius: ${CHROME_SCALE.radius}; outline: none; }`,
       ".rb-menu-search:focus { border-color: #156FE7; background: #FFFFFF; }",
       ".rb-menu-list { display: flex; flex-direction: column; gap: 4px; }",
       ".rb-menu-empty { margin: 4px 0; font-size: 12px; line-height: 1.4; color: #5B6B82; }",
       ".rb-menu-choice { display: flex; flex-direction: column; gap: 2px; padding: 9px 10px;",
-      "  text-align: left; background: none; border: 0; border-radius: 9px; cursor: pointer; }",
+      `  text-align: left; background: none; border: 0; border-radius: ${CHROME_SCALE.radius};`,
+      "  cursor: pointer; }",
       ".rb-menu-choice:hover { background: #F2F7FE; }",
       ".rb-menu-name { font-size: 14px; font-weight: 600; color: #0F172A; }",
       ".rb-menu-description { font-size: 12px; line-height: 1.35; color: #5B6B82; }",
@@ -2935,7 +2974,7 @@ export function Editor({
       ".rb-escalate .rb-menu-description { line-height: 1.5; }",
       ".rb-escalate-row { display: flex; gap: 8px; }",
       `.rb-escalate-yes, .rb-escalate-no { font-family: ${UI_FONT}; flex-grow: 1; height: 36px;`,
-      "  font-size: 13px; border-radius: 9px; cursor: pointer; }",
+      `  font-size: 13px; border-radius: ${CHROME_SCALE.radius}; cursor: pointer; }`,
       ".rb-escalate-yes { font-weight: 600; color: #FFFFFF; background: #156FE7; border: 0; }",
       ".rb-escalate-yes:hover { background: #0E5BC4; }",
       ".rb-escalate-no { font-weight: 500; color: #334155; background: #FFFFFF;",
@@ -2969,11 +3008,12 @@ export function Editor({
       ".rb-free .rb-actions { top: 52px; }",
       ".rb-handmade-badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px;",
       "  font-size: 11px; font-weight: 600; color: #8A5A08; background: #FFF4E5;",
-      "  border: 1px solid #F4DDB4; border-radius: 7px; }",
+      `  border: 1px solid #F4DDB4; border-radius: ${CHROME_SCALE.radiusSm}; }`,
       ".rb-handmade-name { flex-grow: 1; font-size: 12px; color: #5B6B82; }",
       `.rb-handmade-back { font-family: ${UI_FONT}; flex-shrink: 0; padding: 5px 10px;`,
       "  font-size: 11px; font-weight: 600; color: #156FE7; background: #FFFFFF;",
-      "  border: 1px solid #C6D9F3; border-radius: 7px; cursor: pointer; }",
+      `  border: 1px solid ${CHROME_SCALE.brand}; border-radius: ${CHROME_SCALE.radiusSm};`,
+      "  cursor: pointer; }",
       ".rb-handmade-back:hover { background: #F2F7FE; border-color: #156FE7; }",
       // The twelve columns of rule 4, behind the section being laid out — mockup 16's own stripes.
       //
