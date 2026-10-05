@@ -4,6 +4,40 @@ import es from "../locales/es.json" with { type: "json" };
 import { NARROWEST_WIDTH } from "./overflowCheck.ts";
 
 /**
+ * **The one rule every in-flow rail panel has to obey: fit the row, and scroll what does not fit.**
+ *
+ * The row below is `overflow-hidden`, so a panel taller than it is not merely cut off at the
+ * bottom — the flex line pushes it out of view at *both* ends, and nothing anywhere can be
+ * scrolled to reach the rest. Measured in Chromium on 5 October 2026, `Listas` holding one list
+ * of six fichas in a 1280x720 window, which is what the guard in `e2e/critical-flows.e2e.test.ts`
+ * reports when the three classes below are taken away again:
+ *
+ * | | before | after |
+ * |---|---|---|
+ * | content below the last visible pixel | **97px** | 0 |
+ * | content above it — the panel's own heading | **119px** | 0 |
+ * | scrollable ancestor | **none** | the panel |
+ *
+ * The second row is the half that is easy to miss: this was never only a missing scrollbar at the
+ * bottom. The panel's box sat at y=-77 with its row's top at y=82, so «Listas reutilizables» was
+ * off the top of the window.
+ *
+ * `Listas`, `Páginas` and `Fotos` each shipped without it and `Estilo` and `Diseño` each carried
+ * their own copy — which is the shape of a constraint that belongs to whoever *places* the panel,
+ * so it lives here, next to the `{panel}` that renders it, and the five share one spelling.
+ *
+ * **This is not the Safari scrollbar fix and does not overlap with it.** `globals.css` makes
+ * WebKit *draw* a bar on a box that scrolls; this decides which boxes scroll at all. A panel with
+ * neither has nothing to draw, which is why `Listas` stayed unreachable in every browser after
+ * that fix — Chrome included. Reported against Safari on 5 October 2026 because that is where it
+ * was being looked at.
+ *
+ * `SharePanel` and `FieldsPanel` are deliberately not on this list: they are `fixed` to the
+ * viewport rather than placed in the row, so they pin their own height and already scroll.
+ */
+export const panelShell = "max-h-full self-start overflow-y-auto";
+
+/**
  * The editor's chrome (mockup 08): a 58px top bar, an 80px left rail, and the canvas in
  * between. Built with Tailwind against the `--ui-*` tokens of ADR 0015 (`globals.css`'s
  * `@theme inline` block), not a palette of Tailwind's own — the same rule the rest of this
@@ -718,7 +752,12 @@ export function EditorShell({
       </div>
 
       <div className="flex flex-grow overflow-hidden">
-        <div className="flex w-20 shrink-0 flex-col items-center gap-3.5 border-r border-ui-border bg-ui-surface py-3.5">
+        {/* `overflow-y-auto`, for the reason `panelShell` above gives and measured the same way: the
+            rail is as tall as this row and its items are not. Eight of them need 705px, so in a
+            window 640px tall the last 65 were unreachable — and the last item is the design-tools
+            switch, so the control that turns the studio off was behind the one edge nothing could
+            scroll. It has 15px to spare at 720. */}
+        <div className="flex w-20 shrink-0 flex-col items-center gap-3.5 overflow-y-auto border-r border-ui-border bg-ui-surface py-3.5">
           <RailButton
             icon="sections"
             label={es["editor.rail.sections"]}

@@ -12,6 +12,7 @@ import {
   usesOfCollection,
 } from "@retorika/schema";
 import { useEffect, useId, useRef, useState } from "react";
+import { panelShell } from "../editor/EditorShell.tsx";
 import { itemSlotLabel } from "../editor/sectionFields.ts";
 import es from "../locales/es.json" with { type: "json" };
 
@@ -140,7 +141,7 @@ export function CollectionsPanel({
   }
 
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-3 p-4">
+    <section aria-labelledby={headingId} className={`flex flex-col gap-3 p-4 ${panelShell}`}>
       <h2 id={headingId} className="text-[13px] font-bold text-ui-ink">
         {es["editor.collections.title"]}
       </h2>
