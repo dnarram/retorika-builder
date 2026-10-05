@@ -786,3 +786,44 @@ conmutador PC/móvil no se toca**, y sus tres radios siguen nombrados como excep
 Y una cosa que solo se vio en la captura: con la pestaña activa y la pestaña bajo el puntero las dos
 sobre `--ui-bg`, **los dos estados eran casi idénticos**. La activa lleva ahora un paso más de gris:
 «dónde estoy» no puede parecerse a «dónde está el puntero».
+
+### Día 3: los seis paneles derechos (5 de octubre de 2026)
+
+| | antes | después |
+|---|---|---|
+| «Páginas» | ![antes](review/2026-10-05-el-cromo/panel-paginas-antes.png) | ![después](review/2026-10-05-el-cromo/panel-paginas-despues.png) |
+| «Estilo» | ![antes](review/2026-10-05-el-cromo/panel-estilo-antes.png) | ![después](review/2026-10-05-el-cromo/panel-estilo-despues.png) |
+
+**Lo que estaba mal, contado y no sentido.** Tres de los seis se dibujaban como tarjeta —«Estilo»,
+«Compartir», «Diseño»— y tres no se dibujaban en absoluto, dejando sus filas sueltas sobre el gris
+—«Páginas», «Fotos», «Listas»—. Abrir dos iconos distintos del raíl daba **dos clases de objeto
+distintas**. Las esquinas de fila venían en **cuatro radios** según en qué panel estuvieras: 10px,
+11px, 9px y `rounded-md`. Existían **dos componentes `SmallButton`** separados, en desacuerdo sobre
+tamaño, grosor, color y sobre si `disabled` era siquiera una prop. Y había **cuatro rojos distintos**
+donde ya existía un token.
+
+Nada de eso fue una decisión. Es lo que pasa cuando seis pantallas se construyen en seis sprints y
+nada las sujeta entre sí, y es la mayor parte de lo que «años 2000» quería decir.
+
+`apps/editor/src/editor/panelKit.tsx` es esa cosa que faltaba: una tarjeta, una fila, un hover, un
+seleccionado y un botón pequeño. Son cadenas y un componente diminuto a propósito, no un `<Panel>`
+envolvente: los seis difieren en su **contenido** de maneras que ningún envoltorio sobreviviría.
+
+**Y el mismo fallo de contraste del día 2, otra vez, en otros cinco sitios.** La fila seleccionada
+de «Estilo» y dos estados de «Diseño» eran `text-ui-brand` sobre `bg-ui-brand-surface`: los mismos
+**4,14:1**. Se arregla igual —la tinta al texto, el azul al borde y al fondo— y la fila elegida pasa
+a **15,68:1** sin cambiar un color. Además, un botón deshabilitado de «Diseño» usaba `text-ui-border`
+sobre blanco, **1,19:1**: no es que fuera poco legible, es que no se veía.
+
+**Lo que destapó la guarda al ensancharse.** `chromeScale.test.ts` solo miraba `EditorShell.tsx`; el
+día 3 pasa a mirar los ocho ficheros del cromo, y aparecieron **cuatro radios más** fuera de escala
+que llevaban todo el tiempo fuera de su alcance mientras el test pasaba en verde. Una guarda que
+mira poco pasa igual que una que no falla.
+
+El trinquete queda ya **solo con el conmutador PC/móvil**, que es permanente por decisión de
+dirección.
+
+**Lo que sigue fuera y conviene decir:** `FieldsPanel` —el formulario de campos que se abre al elegir
+una sección— **no es uno de los seis** y sigue siendo un cajón `fixed` **que se pinta encima del
+lienzo**, que es justo el defecto que «Compartir» dejó de tener. No entra aquí porque no se abre
+desde el raíl; queda nombrado para que no se descubra.

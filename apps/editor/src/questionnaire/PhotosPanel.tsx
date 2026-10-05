@@ -2,7 +2,7 @@
 
 import type { ElementAddress, RetorikaDocument } from "@retorika/schema";
 import { useId } from "react";
-import { panelShell } from "../editor/EditorShell.tsx";
+import { panelCard, panelRow } from "../editor/panelKit.tsx";
 import { countPhotos, listPhotos, type PhotoState } from "../editor/photoInventory.ts";
 import es from "../locales/es.json" with { type: "json" };
 
@@ -47,10 +47,7 @@ export function PhotosPanel({
   const showsPage = doc.pages.length > 1;
 
   return (
-    <section
-      aria-labelledby={headingId}
-      className={`flex w-[340px] shrink-0 flex-col gap-3 p-4 ${panelShell}`}
-    >
+    <section aria-labelledby={headingId} className={`w-[340px] gap-4 p-5 ${panelCard}`}>
       <h2 id={headingId} className="text-[13px] font-bold text-ui-ink">
         {es["editor.photos.title"]}
       </h2>
@@ -83,19 +80,19 @@ export function PhotosPanel({
               return (
                 <li
                   key={`${photo.sectionId}:${photo.elementId}`}
-                  className="flex items-center gap-2 rounded-[10px] border border-ui-border bg-white p-1.5"
+                  className={`flex items-center gap-2 p-1.5 ${panelRow}`}
                 >
                   <button
                     type="button"
                     onClick={() => onGoToPhoto(photo)}
-                    className="flex min-w-0 flex-1 items-center gap-2 rounded-md p-1 text-left"
+                    className="ui-interactive flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-ui-sm p-1 text-left hover:bg-ui-bg"
                   >
                     {/* Decorative here: the row's own words already say which photograph this is,
                         and the document's alt describes the picture rather than its place. */}
                     <img
                       src={photoUrls.get(photo.src) ?? photo.src}
                       alt=""
-                      className="h-10 w-14 shrink-0 rounded-md border border-ui-border object-cover"
+                      className="h-10 w-14 shrink-0 rounded-ui-sm border border-ui-border object-cover"
                     />
                     <span className="flex min-w-0 flex-col">
                       {/* Wrapped rather than truncated: this is the label that says which
@@ -115,7 +112,7 @@ export function PhotosPanel({
                   <button
                     type="button"
                     onClick={() => onReplacePhoto(address)}
-                    className="shrink-0 rounded-md px-2 py-1 text-[12px] font-semibold text-ui-brand hover:bg-ui-brand-surface"
+                    className="ui-interactive shrink-0 cursor-pointer rounded-ui-sm px-2 py-1 text-[12px] font-semibold text-ui-brand hover:bg-ui-brand-surface"
                   >
                     {es["editor.photos.change"]}
                   </button>

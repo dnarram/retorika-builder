@@ -2,7 +2,7 @@
 
 import { MAX_PAGES, type RetorikaDocument } from "@retorika/schema";
 import { useEffect, useId, useRef, useState } from "react";
-import { panelShell } from "../editor/EditorShell.tsx";
+import { panelCard, panelRow, SmallButton } from "../editor/panelKit.tsx";
 import es from "../locales/es.json" with { type: "json" };
 
 /**
@@ -88,10 +88,7 @@ export function PagesPanel({
   }
 
   return (
-    <section
-      aria-labelledby={headingId}
-      className={`flex w-[340px] shrink-0 flex-col gap-3 p-4 ${panelShell}`}
-    >
+    <section aria-labelledby={headingId} className={`w-[340px] gap-4 p-5 ${panelCard}`}>
       <h2 id={headingId} className="text-[13px] font-bold text-ui-ink">
         {es["editor.pages.title"]}
       </h2>
@@ -103,7 +100,7 @@ export function PagesPanel({
           const pointing = linksTo(page.id);
 
           return (
-            <li key={page.id} className="rounded-[10px] border border-ui-border bg-white">
+            <li key={page.id} className={panelRow}>
               <div className="flex items-center gap-1 p-1.5">
                 {editing === page.id ? (
                   <input
@@ -116,7 +113,7 @@ export function PagesPanel({
                       if (event.key === "Enter") commitRename(page.id);
                       if (event.key === "Escape") setEditing(null);
                     }}
-                    className="min-w-0 flex-1 rounded-md border border-ui-brand px-2 py-1 text-[13px] text-ui-ink"
+                    className="min-w-0 flex-1 rounded-ui-sm border border-ui-brand px-2 py-1 text-[13px] text-ui-ink"
                   />
                 ) : (
                   <button
@@ -223,30 +220,5 @@ export function PagesPanel({
           : es["editor.pages.howToAdd"]}
       </p>
     </section>
-  );
-}
-
-function SmallButton({
-  label,
-  onClick,
-  disabled = false,
-  danger = false,
-}: {
-  label: string;
-  onClick: () => void;
-  disabled?: boolean;
-  danger?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={`rounded-md px-2 py-1 text-[12px] font-semibold ${
-        danger ? "text-ui-danger" : "text-ui-muted"
-      } ${disabled ? "opacity-40" : "hover:bg-ui-bg"}`}
-    >
-      {label}
-    </button>
   );
 }
