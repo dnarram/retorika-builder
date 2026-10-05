@@ -47,7 +47,10 @@ export function PhotosPanel({
   const showsPage = doc.pages.length > 1;
 
   return (
-    <section aria-labelledby={headingId} className={`flex flex-col gap-3 p-4 ${panelShell}`}>
+    <section
+      aria-labelledby={headingId}
+      className={`flex w-[340px] shrink-0 flex-col gap-3 p-4 ${panelShell}`}
+    >
       <h2 id={headingId} className="text-[13px] font-bold text-ui-ink">
         {es["editor.photos.title"]}
       </h2>

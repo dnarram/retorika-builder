@@ -1384,7 +1384,13 @@ describe("sprint 8 — el modo estudio: encender, diseñar a mano, colocar, y vo
       // box measured with it open against one measured with it shut would compare two viewport
       // widths and call the difference a regression. (It did, the first time this was written.)
       await studio.getByRole("button", { name: "Cerrar el diseño" }).click();
-      expect(await headline.boundingBox()).toEqual(boxBefore);
+      // **Polled rather than sampled once, since the canvas learned to zoom.** Closing the panel
+      // gives the canvas its room back, and the card animates from the scale it was holding to 1
+      // over 200ms — so a single `boundingBox()` taken the instant the click resolves catches the
+      // card mid-flight and reports the headline 364px wide instead of 448, which is the old box
+      // times the 0.8125 «Diseño» was zoomed to. The assertion is unchanged; only the moment it is
+      // allowed to be true moved.
+      await expect.poll(() => headline.boundingBox()).toEqual(boxBefore);
 
       // And the escalation was one history step all along, so Ctrl+Z is the return of the first
       // minutes exactly as the dossier §5 says it is.
@@ -3851,7 +3857,13 @@ describe("sprint 13 día 7 — el clic que se perdía mientras la vista previa p
     });
   }
 
-  async function openedVariant(page: Page): Promise<FrameLocator> {
+  /** `beforeOpening` runs after the five answers and before the preview is opened, which is where
+   * a test that wants the frame to parse slowly turns the screw — and nowhere earlier, so the walk
+   * itself stays fast. */
+  async function openedVariant(
+    page: Page,
+    beforeOpening?: () => Promise<void>,
+  ): Promise<FrameLocator> {
     await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
     await page.fill("#nombre", "Taberna del Puerto");
     await page.getByRole("button", { name: "Siguiente" }).click();
@@ -3864,6 +3876,7 @@ describe("sprint 13 día 7 — el clic que se perdía mientras la vista previa p
     await page.getByText("Que reserven", { exact: true }).click();
     await page.fill("#enlace", "https://reservas.example.com/taberna");
     await page.getByRole("button", { name: "Crear mi web" }).click();
+    await beforeOpening?.();
     await page.getByText("Ver a tamaño real →").first().click();
     return page.frameLocator("iframe").first();
   }
@@ -3931,10 +3944,27 @@ describe("sprint 13 día 7 — el clic que se perdía mientras la vista previa p
     // `onLoad` still fires, after the look-ahead has already wired the document. Both go through
     // `wireOnce`, so the second call is free — and this is what says so, because a double attach
     // would put two of every stylesheet and two listeners on every gesture.
+    //
+    // **And it is the gap count below that CI caught, on 5 October 2026, printing 2 where 6 was
+    // right.** The look-ahead's test used to be «has the document got a section yet», and a
+    // streaming document has its first section long before its last — so the chrome was wired to a
+    // half-parsed page, with gaps for what had arrived and none for the rest. `onLoad` then did
+    // nothing, because by then that document is already the wired one.
+    //
+    // **The CPU is throttled for exactly this, because at full speed the parse is over before the
+    // first look.** Measured at 20x with the fonts held, counting `.rb-gap` against
+    // `[data-section]` on a five-section page: 1 run in 6 wired a partial document on `main`, 3 in
+    // 4 once the canvas began resizing itself on mount, and 0 in 10 with the look-ahead waiting
+    // for `readyState` to leave `"loading"`. The throttle goes on after the questionnaire walk, so
+    // only the part being tested pays for it — and it makes the defect frequent rather than
+    // certain: a guard that fails most of the time when it is back, and never when it is not.
     const page = await (await browser.newContext()).newPage();
     try {
       await withSlowFonts(page);
-      const frame = await openedVariant(page);
+      const throttle = await page.context().newCDPSession(page);
+      const frame = await openedVariant(page, async () => {
+        await throttle.send("Emulation.setCPUThrottlingRate", { rate: 20 });
+      });
       await frame.locator('[data-section="sec-cover"]').waitFor();
       // Wait past the `load` the look-ahead beat, so both paths have certainly run.
       await expect
@@ -6008,6 +6038,128 @@ describe("un panel que no cabe se puede desplazar hasta el final", () => {
           expect(await unreachable(walker), `«${name}» @ 1280x${height}`).toEqual([]);
         }
         expect(await railUnreachable(walker), `la barra @ 1280x${height}`).toEqual([]);
+      }
+    } finally {
+      await walker.context().close();
+    }
+  }, 300_000);
+});
+
+describe("abrir un panel no tapa la página ni la convierte en otra", () => {
+  /**
+   * David reported on 5 October 2026 that the middle of the editor behaved differently depending
+   * on which rail icon he pressed: sometimes the page re-centred, sometimes the panel opened *on
+   * top* of what he was editing, sometimes nothing seemed to zoom.
+   *
+   * All three were real, and they were three separate defects. Measured in Chromium:
+   *
+   * 1. **«Compartir» was painted over the page.** It was the last panel still `fixed` to the
+   *    viewport, and it covered **316px** of the canvas at 1024, 1280 and 1600 alike — while the
+   *    canvas itself did not move, which is exactly «la página queda estática».
+   * 2. **Opening a panel changed which layout the page was.** The canvas is the viewport the
+   *    preview's own `max-width: 720px` query reads, so in a 1024px window «Estilo» left it 500px
+   *    wide, «Listas» 549, «Páginas» 567, «Diseño» 584 — all **phone layout**, with the device
+   *    toggle still reading desktop. At 1280 «Listas» did it too, at 717.
+   * 3. **Three panels had no declared width**, so they sized to content and grew with the window:
+   *    «Listas» took 323/411/522px at 1024/1280/1600 and «Páginas» 305/389/493. The more screen
+   *    there was, the more they took — which is why it felt arbitrary.
+   *
+   * This guard asserts the two things David asked for, which are the two that are not taste: the
+   * panel does not cover the page, and the page stays the page. The zoom is how the second is
+   * kept — `EditorShell` holds the layout width at `NARROWEST_DESKTOP` and scales the card down —
+   * but the assertion is on the outcome, not on the mechanism, so a better mechanism would still
+   * pass.
+   *
+   * The floating toolbar is deliberately untouched and unasserted here: it lives inside the
+   * iframe, so it scales with the page it annotates, and David scoped this to the side panel.
+   */
+  async function canvasState(page: Page) {
+    return page.evaluate(() => {
+      const row = document.querySelector('div[class*="flex-grow"][class*="gap-6"]');
+      const panel = row && row.children.length > 1 ? row.lastElementChild : null;
+      const frame = document.querySelector("iframe");
+      const card = frame?.parentElement;
+      if (!row || !frame || !card) return { error: "no se encuentra el lienzo" };
+
+      /**
+       * **The clipping box, not the card's own rectangle.** The card is laid out at the preview's
+       * width and then scaled down, and `transform` takes no layout space — so while it is being
+       * zoomed its rectangle legitimately sticks out past the box that holds it, and that box has
+       * `overflow: hidden`, so none of it is painted. Measuring the card reported «Estilo» as
+       * covering the page by 197px at a moment when nothing of the sort was on screen.
+       *
+       * What the question is actually about is the page the owner can see, which is this box.
+       */
+      const area = card.parentElement;
+      if (!area) return { error: "el lienzo no tiene contenedor" };
+      const visible = area.getBoundingClientRect();
+      const over = panel ? Math.round(visible.right - panel.getBoundingClientRect().left) : 0;
+      return {
+        // > 0 is the panel painted across the page being edited.
+        coversCanvasPx: Math.max(0, over),
+        // The width the preview's own media query sees. The renderer's only breakpoint is 720.
+        previewWidth: frame.contentWindow?.innerWidth ?? 0,
+        panelWidth: panel ? Math.round(panel.getBoundingClientRect().width) : 0,
+      };
+    });
+  }
+
+  it("en los seis paneles del raíl, a 1024, 1280 y 1600", async () => {
+    const walker = await (await browser.newContext()).newPage();
+    try {
+      await walker.setViewportSize({ width: 1280, height: 800 });
+      await walker.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+      await walker.evaluate(() => localStorage.setItem("retorika.designTools.v1", "1"));
+
+      await walker.fill("#nombre", "Taberna Santo Domingo");
+      await walker.getByRole("button", { name: "Siguiente" }).click();
+      await walker.getByText("Restaurante y bar", { exact: true }).click();
+      await walker.getByRole("button", { name: "Siguiente" }).click();
+      await walker.getByText("Comidas", { exact: true }).click();
+      await walker.getByRole("button", { name: "Siguiente" }).click();
+      await walker.fill("#direccion", "Cta. de Santo Domingo, 2, Ronda");
+      await walker.getByRole("button", { name: "Siguiente" }).click();
+      await walker.getByText("Que reserven", { exact: true }).click();
+      await walker.fill("#enlace", "https://reservas.example.com/taberna");
+      await walker.getByRole("button", { name: "Crear mi web" }).click();
+      await walker.getByText("Ver a tamaño real →").first().click();
+
+      const widths: Record<string, number[]> = {};
+      for (const width of [1024, 1280, 1600]) {
+        await walker.setViewportSize({ width, height: 800 });
+        for (const name of ["Estilo", "Páginas", "Compartir", "Fotos", "Diseño", "Listas"]) {
+          await walker.getByRole("button", { name, exact: true }).first().click();
+          // The card carries a 200ms transform transition, and the layout width it is scaled from
+          // is set a frame after the panel mounts, once `ResizeObserver` has measured the room
+          // that is left. Both are settled well inside this.
+          await walker.waitForTimeout(350);
+          const state = await canvasState(walker);
+          const where = `«${name}» @ ${width}x800`;
+
+          expect(state, where).not.toHaveProperty("error");
+          if ("error" in state) continue;
+
+          expect(state.coversCanvasPx, `${where}: el panel tapa la página`).toBe(0);
+          // 720 is the renderer's breakpoint; `test/canvasZoom.test.ts` holds the editor's copy of
+          // it to the renderer's source, so this number cannot quietly stop meaning the same.
+          expect(
+            state.previewWidth,
+            `${where}: la vista previa cayó al diseño de móvil`,
+          ).toBeGreaterThan(720);
+
+          const seen = widths[name] ?? [];
+          seen.push(state.panelWidth);
+          widths[name] = seen;
+        }
+      }
+
+      // A panel that sizes to its content takes more of the screen the more screen there is, which
+      // is defect 3 and the reason the other two felt random rather than reproducible.
+      for (const [name, measured] of Object.entries(widths)) {
+        expect(
+          new Set(measured).size,
+          `«${name}» cambia de ancho con la ventana: ${measured}`,
+        ).toBe(1);
       }
     } finally {
       await walker.context().close();

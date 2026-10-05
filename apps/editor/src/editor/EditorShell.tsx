@@ -1,7 +1,8 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import es from "../locales/es.json" with { type: "json" };
-import { NARROWEST_WIDTH } from "./overflowCheck.ts";
+import { NARROWEST_DESKTOP, NARROWEST_WIDTH } from "./overflowCheck.ts";
 
 /**
  * **The one rule every in-flow rail panel has to obey: fit the row, and scroll what does not fit.**
@@ -567,6 +568,49 @@ export function EditorShell({
   panel?: React.ReactNode;
   children: React.ReactNode;
 }) {
+  /**
+   * **The canvas zooms instead of reflowing, because the canvas is the preview's own viewport.**
+   *
+   * The card used to be `width: 100%` of whatever the panels left over, so opening one did not
+   * merely shrink the preview — it changed which layout the preview *was*. The renderer's only
+   * media query is `max-width: 720px`, and measured in Chromium on 5 October 2026 the canvas fell
+   * under it the moment a panel opened in a 1024px window: «Estilo» left 500px, «Listas» 549,
+   * «Diseño» 584, «Páginas» 567. The owner clicked «Estilo» to change a colour and the page
+   * silently became the phone layout, while the device toggle still read desktop. At 1280px
+   * «Listas» did it too, at 717.
+   *
+   * So the layout width is held at `NARROWEST_DESKTOP` and the card is scaled down to the room
+   * there is. The page stays the page; it only gets smaller. And the floor is the least zoom-out
+   * that keeps it desktop, which is «la mayor área de edición dentro de las posibilidades» stated
+   * as a number rather than a preference.
+   *
+   * **Measured, not assumed**: `ResizeObserver` on the box the card lives in. The width depends on
+   * the window, the rail, and which panel is open — three things no constant here could predict,
+   * and the previous attempt to predict one is what varied by 200px between panels.
+   *
+   * `zoom` is never above 1: a preview magnified past its own size would be showing the owner
+   * something no visitor will ever see.
+   */
+  const canvasArea = useRef<HTMLDivElement>(null);
+  const [available, setAvailable] = useState(0);
+
+  useEffect(() => {
+    const box = canvasArea.current;
+    if (!box) return;
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width;
+      if (width !== undefined) setAvailable(width);
+    });
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, []);
+
+  // Before the first measurement `available` is 0, and the fallback is "no zoom": a card at its
+  // natural width for one frame is a far better first paint than one scaled by a guess.
+  const layoutWidth =
+    device === "mobile" ? NARROWEST_WIDTH : Math.max(available, NARROWEST_DESKTOP);
+  const zoom = available > 0 && layoutWidth > available ? available / layoutWidth : 1;
+
   return (
     <div className="flex h-screen flex-col bg-ui-bg">
       <div className="flex h-[58px] shrink-0 items-center border-b border-ui-border bg-ui-surface px-4">
@@ -829,9 +873,9 @@ export function EditorShell({
         <div
           className={`flex flex-grow gap-6 overflow-hidden pt-6 ${panel ? "px-6" : "px-6 sm:px-24"}`}
         >
-          <div className="flex flex-grow justify-center overflow-hidden">
+          <div ref={canvasArea} className="flex flex-grow justify-center overflow-hidden">
             <div
-              className="flex flex-col overflow-hidden rounded-[10px] bg-ui-surface shadow-[0_1px_4px_rgba(15,23,42,0.1)] transition-[max-width] duration-200"
+              className="flex shrink-0 flex-col overflow-hidden rounded-[10px] bg-ui-surface shadow-[0_1px_4px_rgba(15,23,42,0.1)] transition-transform duration-200"
               // **The width the pre-download gate measures, imported rather than written again.**
               // This was 400 from the day the chrome was built — a number with no recorded reason,
               // chosen because it is narrow enough for the renderer's own responsive CSS to take
@@ -840,7 +884,17 @@ export function EditorShell({
               // owner to a canvas where the thing it just measured does not happen. Mockup 14 draws
               // the phone frame at 330px with 12px of padding, so the page inside it is about 304:
               // the drawing was never 400 either. One number, and it lives where the gate is.
-              style={{ width: "100%", maxWidth: device === "mobile" ? NARROWEST_WIDTH : "100%" }}
+              style={{
+                width: layoutWidth,
+                // `transform` takes no layout space, so the card still *occupies* `layoutWidth`
+                // and overflows its container evenly on both sides; scaling about the top centre
+                // then pulls it back to exactly the space there is. The height is divided by the
+                // same factor so the shrunk card still fills the row instead of leaving a band of
+                // grey below it.
+                height: zoom < 1 ? `${100 / zoom}%` : "100%",
+                transform: zoom < 1 ? `scale(${zoom})` : undefined,
+                transformOrigin: "top center",
+              }}
             >
               {children}
             </div>

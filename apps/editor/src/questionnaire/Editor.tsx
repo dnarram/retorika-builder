@@ -830,6 +830,21 @@ export function Editor({
       if (
         iframeDoc &&
         iframeDoc !== wiredDoc.current &&
+        // **Parsed, not merely started.** `readyState` leaves `"loading"` at the frame's own
+        // `DOMContentLoaded`, which is exactly the moment every section exists and still long
+        // before `load` waits out the eight font requests nothing answers — so this closes the
+        // window this look-ahead was written for without opening a worse one.
+        //
+        // Without it the test was «has it got a section yet», and a streaming document has its
+        // first section long before its last. The chrome was then attached to a partial page: gaps
+        // for the sections parsed so far and none for the rest, with `onLoad` arriving later and
+        // doing nothing, because by then the document is already the wired one.
+        //
+        // Measured on 5 October 2026 with the fonts held 1.5s and the CPU throttled 20x, counting
+        // `.rb-gap` against `[data-section]` on a five-section page: 1 run in 6 wired a partial
+        // document on `main`, and 3 in 4 once the canvas started resizing itself on mount — which
+        // is how CI found it. The counts came out 5, 4 and 2 where 6 was right; CI printed 2.
+        iframeDoc.readyState !== "loading" &&
         iframeDoc.querySelector("[data-section]") !== null
       ) {
         wireOnce();
