@@ -4333,8 +4333,25 @@ describe("sprint 14 día 2 — la vista previa enseña la letra que envía", () 
       else refused.push(`${response.status()} ${url}`);
     });
     try {
-      await openedVariant(page);
-      await page.waitForLoadState("networkidle");
+      const frame = await openedVariant(page);
+
+      /**
+       * **Waits for the fonts, not for the whole network to fall quiet.**
+       *
+       * This was `page.waitForLoadState("networkidle")`, and CI timed it out at 30 seconds on
+       * 5 October 2026 — on a run whose only relevant change was that the editor had gained a
+       * logo. `networkidle` is a **global** condition: it needs *everything* on the page to stop
+       * for 500ms, so any asset added anywhere can push it over, and Playwright discourages it for
+       * exactly that reason. Locally the logo cost about a second and the 30s was never
+       * reproduced, which is the honest state of the diagnosis — but a test that an unrelated
+       * image can break was going to break again whatever the cause of this one.
+       *
+       * `document.fonts.ready` is the thing this test is actually about: it resolves once the
+       * document has finished loading its faces, **including the ones that failed**, which is
+       * precisely when `refused` and `served` are complete. The test above already relies on it.
+       */
+      await frame.locator("body").evaluate(() => document.fonts.ready.then(() => undefined));
+
       expect(refused, "the preview asked for a face and was refused").toEqual([]);
       expect(served.length, "the preview asked for no face at all").toBeGreaterThan(0);
     } finally {
