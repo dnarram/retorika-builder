@@ -550,9 +550,16 @@ open survives.
   88 of 88, with nothing changed in between — so it is **intermittent and not a regression**, and
   the day's own changes could not be the cause: they are in `Variants.tsx`'s bank-photograph fetch,
   which does nothing at all while `packages/photobank/bank` holds zero photographs.
-  **What is not known is why**, and the honest state of this row is that nobody has measured it.
-  The reorder it drives is a drag, which is the one gesture in this suite that depends on real
-  pointer timing, and that is a hypothesis rather than a finding. Recorded now because a flake
+  **Measured on 5 October 2026, which is what this row was missing** — though not for this test,
+  so it is a candidate cause rather than a diagnosis. CI failed the *sprint-7* gallery reorder the
+  same way, and the measurement that came out of it is this: after a section is inserted, its text
+  is **visible for about 14 milliseconds before `wireEditing` makes it `contenteditable`**, and a
+  click inside that window is lost. Both failing tests are reorders that depend on an earlier edit
+  having landed, so a lost edit surfaces as «the order is wrong» three steps later. What is still
+  unproven is that this is the cause here: **10× CPU throttling did not reproduce either failure
+  locally.** The sprint-7 test now waits for the real signals and asserts each edit where it
+  happens, so if it recurs the message will name its own cause; this row's test does not, and
+  doing the same to it is the obvious next step if it fails again. Recorded now because a flake
   seen once and not written down is a flake that gets blamed on the next sprint's work — which is
   exactly what happened to the two rows above, and they turned out to be one defect.
 

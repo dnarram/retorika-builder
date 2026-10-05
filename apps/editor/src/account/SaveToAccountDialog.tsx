@@ -10,7 +10,7 @@ import {
   startGoogleSignIn,
 } from "../auth/operations.ts";
 import es from "../locales/es.json" with { type: "json" };
-import { FieldError, TextField } from "../questionnaire/ui.tsx";
+import { FieldError, primaryButton, secondaryButton, TextField } from "../questionnaire/ui.tsx";
 import { createSite, listSites, renameOf } from "./sites.ts";
 import { useFocusTrap } from "./useFocusTrap.ts";
 
@@ -242,7 +242,7 @@ export function SaveToAccountDialog({
               void save();
             }}
             disabled={busy}
-            style={primary}
+            style={primaryButton}
           >
             {busy ? es["account.save.saving"] : es["account.save.asNew"]}
           </button>
@@ -272,14 +272,14 @@ export function SaveToAccountDialog({
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
               />
-              <button type="submit" disabled={busy} style={primary}>
+              <button type="submit" disabled={busy} style={primaryButton}>
                 {busy ? es["account.save.creating"] : es["account.save.create"]}
               </button>
             </form>
             <span style={{ textAlign: "center", fontSize: 13, color: "#64748B" }}>
               {es["account.save.or"]}
             </span>
-            <button type="button" onClick={google} disabled={busy} style={secondary}>
+            <button type="button" onClick={google} disabled={busy} style={secondaryButton}>
               {es["account.save.google"]}
             </button>
             <p style={{ margin: 0, fontSize: 13, color: "#64748B", lineHeight: 1.5 }}>
@@ -300,28 +300,10 @@ export function SaveToAccountDialog({
           {es["account.save.privacy"]}
         </p>
 
-        <button type="button" onClick={close} style={secondary}>
+        <button type="button" onClick={close} style={secondaryButton}>
           {es["account.save.close"]}
         </button>
       </div>
     </div>
   );
 }
-
-const primary = {
-  height: 48,
-  borderRadius: 10,
-  border: "none",
-  background: "#156FE7",
-  color: "#FFFFFF",
-  fontSize: 16,
-  fontWeight: 600,
-  cursor: "pointer",
-} as const;
-
-const secondary = {
-  ...primary,
-  background: "#FFFFFF",
-  color: "#1F2937",
-  border: "1px solid #D4DCE7",
-} as const;

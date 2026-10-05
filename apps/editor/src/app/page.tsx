@@ -75,17 +75,25 @@ export default function Page() {
         >
           <Link
             href="/empezar"
+            /**
+             * `minHeight` and real padding, like every other button in the application — see
+             * `primaryButton` in `questionnaire/ui.tsx`. Not that style itself, because this one
+             * is sized to its own text rather than stretched across a card, and it is the one
+             * button on a page that has no card.
+             */
             style={{
               display: "inline-flex",
               alignItems: "center",
               justifyContent: "center",
-              height: 56,
-              padding: "0 40px",
+              textAlign: "center",
+              minHeight: 56,
+              padding: "14px 40px",
               borderRadius: 12,
               background: "#156FE7",
               color: "#FFFFFF",
               fontSize: 18,
               fontWeight: 600,
+              lineHeight: 1.25,
               textDecoration: "none",
             }}
           >

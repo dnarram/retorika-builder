@@ -36,6 +36,76 @@ export function VisuallyHiddenLabel({
   );
 }
 
+/**
+ * The one button shape for the screens that have no mockup — sign in, the account dialog, «Tu
+ * cuenta», the landing's «Empezar» (ADR 0034 §20 makes the ADR their specification).
+ *
+ * **Why this exists: five copies of a button style, every one able to put its own text outside its
+ * own border.** Measured on 5 October 2026 after David reported seeing exactly that. Each copy set
+ * a fixed `height` with **zero horizontal padding**, and a `<button>` wraps its text by default —
+ * so a label too wide for the box grew downwards while the border did not, and the second and
+ * third lines were painted outside it. At 320px a `Card` leaves 96px of room, and in 96px the real
+ * labels spilled **19 to 46 pixels** past the bottom edge:
+ *
+ * ```
+ * AccountPage.secondary       · "Descargar una copia de mis webs"  botón 46px, texto 64px
+ * SaveToAccountDialog.primary · "Descargar una copia de mis webs"  botón 48px, texto 92px
+ * forms.buttonStyle           · "Descargar una copia de mis webs"  botón 54px, texto 97px
+ * ```
+ *
+ * Three properties make that impossible rather than unlikely, and all three are the point:
+ *
+ * - **`minHeight`, never `height`.** A label that needs two lines makes the button taller. Text
+ *   cannot leave a box that grows to hold it, which is the only fix that does not depend on
+ *   guessing how long a translation will be.
+ * - **Real horizontal padding.** Text that starts at the border reads as outside it even when it
+ *   is not, and padding is what gives a wrap somewhere to happen before the edge.
+ * - **`inline-flex` with both axes centred**, so one line and three lines are both centred rather
+ *   than one centred and the other starting at the top.
+ *
+ * `NavRow`'s own buttons are deliberately left alone: they are faithful to the approved mockups,
+ * and they do not have this defect — they grow sideways instead of clipping.
+ */
+const buttonBase = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  textAlign: "center",
+  boxSizing: "border-box",
+  width: "100%",
+  minHeight: 48,
+  padding: "11px 18px",
+  borderRadius: 12,
+  fontSize: 16,
+  fontWeight: 600,
+  lineHeight: 1.25,
+  cursor: "pointer",
+  border: "none",
+} as const;
+
+/** The affirmative one: «Entrar», «Crear la cuenta y guardar». */
+export const primaryButton = { ...buttonBase, background: "#156FE7", color: "#FFFFFF" } as const;
+
+/** Everything else: «Cerrar», «Volver», «Usar mi cuenta de Google». */
+export const secondaryButton = {
+  ...buttonBase,
+  background: "#FFFFFF",
+  color: "#1F2937",
+  border: "1px solid #D4DCE7",
+} as const;
+
+/** The one that destroys something, and reads like it. */
+export const dangerButton = { ...buttonBase, background: "#BE123C", color: "#FFFFFF" } as const;
+
+/** Sized to its own text rather than stretched — for a button sitting in a row beside others. */
+export const compactButton = {
+  ...buttonBase,
+  width: "auto",
+  minHeight: 40,
+  padding: "9px 16px",
+  fontSize: 14,
+} as const;
+
 export function Brand() {
   return (
     <div
@@ -87,7 +157,16 @@ export function Shell({ caption, children }: { caption?: string; children: React
         style={{
           flexGrow: 1,
           boxSizing: "border-box",
-          padding: "0 60px 40px 60px",
+          /**
+           * **`clamp` rather than a flat 60px, and this is half the overflow fix.**
+           *
+           * `Shell` took 120px of horizontal padding and `Card` another 104px at every viewport —
+           * 224px regardless of the screen. Measured at 320px that left a card, and therefore a
+           * button, **96 pixels wide**, which is what forced every long label to wrap in the first
+           * place. A phone now keeps its padding proportional and gets about 250px of usable room;
+           * a desktop is unchanged at 60px.
+           */
+          padding: "0 clamp(16px, 6vw, 60px) 40px",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
@@ -174,7 +253,8 @@ export function Card({
         width,
         maxWidth: "100%",
         boxSizing: "border-box",
-        padding: "34px 52px 28px 52px",
+        // The other half: see `Shell` above. 52px on a desktop, 16px on a phone.
+        padding: "34px clamp(16px, 5vw, 52px) 28px",
         background: "#FFFFFF",
         borderRadius: 20,
         boxShadow: "0 1px 3px rgba(15,23,42,0.06)",
