@@ -254,14 +254,32 @@ export type RailItemId =
   | "design"
   | "collections";
 
+/**
+ * **A resting rail item has no box, and that is the change.**
+ *
+ * Every item used to sit in its own 46px square with a visible 1px border, selected or not — seven
+ * boxes down the edge of the screen, each one drawing attention it had not earned, and a selected
+ * state that amounted to "the box turns blue". Boxing what is not chosen is the habit that dates a
+ * toolbar faster than any colour does.
+ *
+ * Now the square is drawn **only** when the item is chosen or the pointer is on it, so the rail at
+ * rest is seven icons and seven words, and the one box that exists means something. The geometry
+ * REVIEW.md records — 80px rail, 46×46 target — is untouched: this is paint, not layout, and the
+ * press target is the same size it always was.
+ *
+ * The chosen item carries three cues, not one: the brand surface, the brand ink, and the rule down
+ * the rail's inner edge drawn by `RailButton`. One of the three is enough on its own, which is
+ * what keeps it legible to someone who cannot separate the blue from the grey.
+ */
 function RailIcon({ icon, active }: { icon: keyof typeof RAIL_ICONS; active: boolean }) {
   return (
     <span
       className={
-        "flex h-[46px] w-[46px] items-center justify-center rounded-[13px] border " +
+        "ui-interactive flex h-[46px] w-[46px] items-center justify-center rounded-ui border " +
+        "outline-2 outline-offset-2 outline-transparent group-focus-visible:outline-ui-brand " +
         (active
-          ? "border-ui-brand bg-ui-brand-surface text-ui-brand"
-          : "border-ui-border bg-ui-surface text-ui-muted")
+          ? "border-transparent bg-ui-brand-surface text-ui-brand shadow-ui-1"
+          : "border-transparent bg-transparent text-ui-muted group-hover:bg-ui-bg group-hover:text-ui-ink")
       }
     >
       {RAIL_ICONS[icon]}
@@ -276,7 +294,8 @@ function RailLabel({ label, active }: { label: string; active: boolean }) {
   return (
     <span
       className={
-        "text-[11px] font-medium " + (active ? "font-semibold text-ui-brand" : "text-ui-muted")
+        "ui-interactive text-[11px] font-medium " +
+        (active ? "font-semibold text-ui-brand" : "text-ui-muted group-hover:text-ui-ink")
       }
     >
       {label}
@@ -308,8 +327,27 @@ function RailButton({
       type="button"
       aria-pressed={active}
       onClick={onSelect}
-      className="flex cursor-pointer flex-col items-center gap-[5px] border-0 bg-transparent p-0"
+      // `group` so the icon's square can answer a hover anywhere on the button, label included —
+      // the whole item is one target, and it should feel like one. `relative` and `w-full` are for
+      // the indicator: full width makes its left edge the rail's left edge, the same for every
+      // item, which it would not be if the button shrank to fit labels of different lengths.
+      //
+      // **The ring moves to the icon, so `focus-visible:outline-none` here is not a ring removed.**
+      // The global rule in `globals.css` would draw it around this button, which is 80px wide and
+      // two lines tall — a rectangle across the whole rail that reads as a glitch. The icon square
+      // takes it instead, two lines below, which is the shape the eye expects.
+      className="group relative flex w-full cursor-pointer flex-col items-center gap-[5px] border-0 bg-transparent p-0 focus-visible:outline-none"
     >
+      {/* The third cue for the chosen item: a rule on the rail's inner edge, the convention a
+          vertical navigation uses to say «you are here». Hidden from assistive technology — it
+          repeats what `aria-pressed` already says. */}
+      <span
+        aria-hidden="true"
+        className={
+          "ui-interactive absolute top-1/2 left-0 h-7 w-[3px] -translate-y-1/2 rounded-full bg-ui-brand " +
+          (active ? "opacity-100" : "opacity-0")
+        }
+      />
       <RailIcon icon={icon} active={active} />
       <RailLabel label={label} active={active} />
     </button>
@@ -380,12 +418,24 @@ function DesignToolsSwitch({
         aria-checked={on}
         aria-label={es["editor.designTools.label"]}
         onClick={() => (on ? onChange(false) : onAsk())}
+        // `translate-x` on the thumb rather than `justify-start`/`justify-end` on the track: the
+        // old pair gave the thumb nothing to animate, so a switch — the one control in the chrome
+        // whose whole job is to show a state changing — teleported. The travel is the track's
+        // 34px less its 2px padding either side less the 15px thumb.
+        //
+        // And the «off» track was `--ui-border` at 1.19:1, which is a switch you cannot see is
+        // off. `--ui-border-strong` is the same slate at 3.02:1 against the rail behind it.
         className={
-          "flex h-[19px] w-[34px] shrink-0 cursor-pointer items-center rounded-[10px] border-0 px-0.5 " +
-          (on ? "justify-end bg-ui-brand" : "justify-start bg-ui-border")
+          "ui-interactive flex h-[19px] w-[34px] shrink-0 cursor-pointer items-center rounded-full border-0 px-0.5 " +
+          (on ? "bg-ui-brand" : "bg-ui-border-strong")
         }
       >
-        <span className="h-[15px] w-[15px] rounded-full bg-white shadow-[0_1px_2px_rgba(15,23,42,0.2)]" />
+        <span
+          className={
+            "ui-interactive h-[15px] w-[15px] rounded-full bg-white shadow-ui-1 " +
+            (on ? "translate-x-[15px]" : "translate-x-0")
+          }
+        />
       </button>
       <span
         className={
@@ -412,7 +462,7 @@ function DesignToolsSwitch({
       ) : null}
 
       {asking ? (
-        <div className="absolute bottom-full left-full z-20 mb-1 ml-1 flex w-[300px] flex-col gap-3 rounded-xl border border-ui-border bg-ui-surface p-4 text-left shadow-[0_8px_24px_rgba(15,23,42,0.15)]">
+        <div className="absolute bottom-full left-full z-20 mb-1 ml-1 flex w-[300px] flex-col gap-3 rounded-ui-lg border border-ui-border bg-ui-surface p-4 text-left shadow-ui-3">
           <span className="text-[15px] font-bold text-ui-ink">
             {es["editor.designTools.ask.title"]}
           </span>
@@ -423,14 +473,14 @@ function DesignToolsSwitch({
             <button
               type="button"
               onClick={() => onChange(true)}
-              className="h-[38px] flex-grow rounded-[9px] bg-ui-brand text-[13px] font-semibold text-white"
+              className="ui-interactive h-[38px] flex-grow cursor-pointer rounded-ui bg-ui-brand text-[13px] font-semibold text-white hover:shadow-ui-2"
             >
               {es["editor.designTools.ask.yes"]}
             </button>
             <button
               type="button"
               onClick={onDismiss}
-              className="h-[38px] flex-grow rounded-[9px] border border-ui-border bg-ui-surface text-[13px] font-medium text-ui-ink"
+              className="ui-interactive h-[38px] flex-grow cursor-pointer rounded-ui border border-ui-border bg-ui-surface text-[13px] font-medium text-ui-ink hover:border-ui-border-strong hover:bg-ui-bg"
             >
               {es["editor.designTools.ask.no"]}
             </button>
@@ -898,7 +948,7 @@ export function EditorShell({
           >
             <div
               data-testid="canvas-card"
-              className="flex shrink-0 flex-col overflow-hidden rounded-[10px] bg-ui-surface shadow-[0_1px_4px_rgba(15,23,42,0.1)] transition-transform duration-200"
+              className="flex shrink-0 flex-col overflow-hidden rounded-ui bg-ui-surface shadow-ui-1 transition-transform duration-200"
               // **The width the pre-download gate measures, imported rather than written again.**
               // This was 400 from the day the chrome was built — a number with no recorded reason,
               // chosen because it is narrow enough for the renderer's own responsive CSS to take
