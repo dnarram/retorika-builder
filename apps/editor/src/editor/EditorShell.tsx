@@ -731,7 +731,35 @@ export function EditorShell({
           type="button"
           onClick={onBack}
           aria-label={es["editor.backToVariants"]}
-          className="ui-interactive group flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-ui px-1.5 py-1 text-left hover:bg-ui-bg"
+          /**
+           * **`flex-1` is gone, and that was the defect.**
+           *
+           * This button grew to swallow every spare pixel in the bar. Nobody could see that while
+           * it was invisible; giving it a hover background on day 2 of the restyle drew a shaded
+           * box across all of it, which is how direction found it. Measured in Chromium at 1280
+           * with one page: **395px of button for about 250px of logo and business name** — some
+           * 145px of empty, shaded nothing between the mark and the page tabs.
+           *
+           * And the squeeze ran the other way too. With four pages the same `flex-1` had given
+           * everything back and collapsed to **12px**, so the mark and the name vanished — and the
+           * tab strip scrolled anyway.
+           *
+           * Now it sizes to its contents between a floor and a ceiling: it may not grow past the
+           * name it has to show, may not shrink past the point where the mark and the first word
+           * are gone, and the spare space goes to the tabs, which is what the spare space is for.
+           *
+           * The ceiling lifts at 1600, where there is room for the whole business name *and* three
+           * tabs. Below that the name truncates, and that is the honest trade: the bar's right-hand
+           * group is a fixed 673px, so at 1280 there are 575px for the mark, the name and every tab
+           * together, and direction asked for the tabs to be the ones that fit.
+           *
+           * `overflow-hidden` on the button and not only `truncate` on the label: now that the
+           * button has a ceiling, a long name really can reach past it, and the browser-run guard
+           * measures a `Range` over the button's contents — which reports the text's natural
+           * rectangle whatever the label does about it. Clipping at the button's own edge is what
+           * makes «nothing is painted outside» true rather than merely invisible.
+           */
+          className="ui-interactive group flex min-w-[132px] max-w-[180px] shrink cursor-pointer items-center gap-2.5 overflow-hidden rounded-ui px-1.5 py-1 text-left hover:bg-ui-bg min-[1600px]:max-w-[320px]"
         >
           {/* The mark alone, never the lockup: the business's own name is the next element along,
               and two names side by side is one too many. See `Brand` in questionnaire/ui.tsx for
@@ -771,7 +799,19 @@ export function EditorShell({
         <div
           ref={tabStrip}
           data-testid="page-tabs"
-          className="relative flex min-w-0 shrink items-center justify-center gap-1.5 overflow-x-auto"
+          /**
+           * **`flex-auto`, not `flex-1`, and the difference is the whole fix.**
+           *
+           * Both grow into spare room; only `flex-auto` keeps the strip's *content* as its basis,
+           * so when the tabs need more than there is they push, and the logo button gives way down
+           * to its floor. `flex-1` bases them at zero, so they silently take whatever is left and
+           * scroll inside it while the logo sits at full width — which is what the first attempt at
+           * this fix did, and it made 1024 worse than before: a single page stopped fitting.
+           *
+           * `justify-center` so one tab still sits in the middle of the bar rather than against the
+           * mark.
+           */
+          className="relative flex min-w-0 flex-auto items-center justify-center gap-1.5 overflow-x-auto"
         >
           {/* **The indicator that says which page the canvas is showing.**
               One element for the whole strip rather than one per tab, so moving between pages is a
@@ -815,7 +855,19 @@ export function EditorShell({
                  * `--ui-bg` the two states were all but identical in a screenshot, and «where I am»
                  * must not look like «where the pointer happens to be».
                  */
-                className={`ui-interactive flex h-9 max-w-[180px] shrink cursor-pointer items-center rounded-ui px-5 text-sm font-semibold ${
+                /**
+                 * **The width a tab may take, and why it is two numbers.**
+                 *
+                 * The bar's right-hand group is a fixed 673px — the device toggle, undo, redo, the
+                 * save sentence ADR 0012 refuses to shorten, and two buttons. At 1280 that leaves
+                 * 575px for the logo and every tab together, and three tabs of real page names
+                 * wanted 434 of it while the logo wanted 180: 39px more than exists.
+                 *
+                 * So a tab is narrower below 1440 than above it. Direction's rule — «que se puedan
+                 * ver sin barra de desplazamiento a no ser que existan 4 o más páginas» — is met at
+                 * both, with truncation doing the work at the narrower one.
+                 */
+                className={`ui-interactive flex h-9 max-w-[124px] shrink cursor-pointer items-center rounded-ui px-5 text-sm font-semibold min-[1440px]:max-w-[180px] ${
                   current
                     ? "bg-ui-border text-ui-ink"
                     : "text-ui-muted hover:bg-ui-bg hover:text-ui-ink"

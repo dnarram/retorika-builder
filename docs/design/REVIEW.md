@@ -868,3 +868,50 @@ dirección excluyó. Se ha tocado por selector, nunca por bloque.
 
 `pnpm test:golden` sigue en **21 sin moverse**, que es la prueba de que nada de esto llega al ZIP de
 un cliente (ADR 0001).
+
+### Corrección: la barra superior repartía mal su ancho (6 de octubre de 2026)
+
+| | |
+|---|---|
+| antes | ![antes](review/2026-10-05-el-cromo/barra-logo-antes.png) |
+| después | ![después](review/2026-10-05-el-cromo/barra-logo-despues.png) |
+
+Dirección vio, tras el rediseño del cromo, que el extremo del logo se sombreaba a lo ancho de una
+zona vacía enorme y empujaba las pestañas hasta sacar una barra de desplazamiento.
+
+**Las dos mitades eran una sola causa.** El botón del logo llevaba `flex-1`, así que **crecía hasta
+tragarse cada píxel sobrante**. Mientras no tenía fondo, eso no se veía; darle un fondo al pasar el
+ratón en el día 2 dibujó el vacío. Medido en Chromium a 1280 con una página: **395px de botón para
+unos 250px de marca y nombre**. Y bajo presión el mismo `flex-1` corría al revés: con cuatro páginas
+había devuelto todo y se quedaba en **12px**, con la marca y el nombre desaparecidos — y la tira se
+desplazaba igualmente.
+
+Ahora el botón tiene suelo y techo, y **la tira es la que crece**. Con `flex-auto` y no `flex-1`,
+para que la tira conserve su contenido como base: así empuja cuando necesita sitio, y el logo cede.
+La primera versión de este arreglo usaba `flex-1` y **empeoró 1024** — dejó de caber una sola
+página —, lo que se vio midiendo y no razonando.
+
+| ventana | 1 página | 2 | 3 | 4 |
+|---|---|---|---|---|
+| 1024 | sin barra | **barra** | **barra** | **barra** |
+| 1280 | sin barra | sin barra | sin barra | **barra** |
+| 1440 | sin barra | sin barra | sin barra | **barra** |
+| 1600 | sin barra | sin barra | sin barra | sin barra |
+
+Que es la regla que puso dirección: «sin barra a no ser que existan 4 o más páginas».
+
+**Lo que no se puede arreglar colocando cajas, y es decisión de dirección.** El grupo de la derecha
+mide **673px fijos** y a 1024 deja 219px para las pestañas, donde dos nombres de página no caben a
+ningún tamaño. Desglose medido:
+
+| | |
+|---|---|
+| «Guardado en este navegador» | **200px** |
+| «Guardar en mi cuenta» | **183px** |
+| «Descargar» | 106px |
+| Conmutador PC/móvil | 74px |
+| Deshacer y rehacer | 60px |
+
+Las dos primeras son **383px, más de la mitad del grupo**. La frase de guardado la alargó el ADR
+0012 a propósito, «precisely so nobody reads a cross-device guarantee into it», así que acortarla no
+es una decisión de maquetación. Queda nombrado aquí en lugar de dejarse descubrir.
