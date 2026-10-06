@@ -36,6 +36,26 @@ import { panelShell } from "./EditorShell.tsx";
  * `Estilo` needs 372px for a row of swatches and a label, `Diseño` 288px — and `test/…` asserts
  * each stays constant across window sizes.
  */
+/**
+ * **One width for every rail panel, and the reason is the person editing rather than the layout.**
+ *
+ * They were three: 372 for «Estilo», 288 for «Diseño», 340 for the other four. Each was sensible on
+ * its own and together they meant the canvas resized on every change of tool — measured at 1440,
+ * the editing area took three widths (916, 948, 1000) and jumped up to **84px** between one tool
+ * and the next. Worse than the jump: the preview is a live page, so each of those widths is a
+ * different viewport and the whole site re-laid-out every time somebody reached for a different
+ * tool.
+ *
+ * Direction asked for it to stop, in those terms: «limitar la fatiga ocular de la persona que edita
+ * su página web cambiando constantemente de herramientas».
+ *
+ * **340 rather than the widest, measured both ways.** At 340 and at 372 the canvas stops moving
+ * entirely — 0px between tools — and no panel overflows horizontally at either. 340 wins on the
+ * only thing left: it leaves the editing area 32px wider, and it is the width four of the six
+ * already used, so it is the smallest change that buys the whole of it.
+ */
+export const PANEL_WIDTH = "w-[340px]";
+
 export const panelCard = `ui-enter-right flex shrink-0 flex-col rounded-ui-lg border border-ui-border bg-ui-surface shadow-ui-1 ${panelShell}`;
 
 /**

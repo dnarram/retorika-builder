@@ -8,7 +8,7 @@ import {
   shareImageOf,
 } from "@retorika/schema";
 import { useEffect, useId, useState } from "react";
-import { panelCard } from "../editor/panelKit.tsx";
+import { PANEL_WIDTH, panelCard } from "../editor/panelKit.tsx";
 import es from "../locales/es.json" with { type: "json" };
 
 /**
@@ -86,7 +86,7 @@ export function SharePanel({
       // it painted 316px of itself across the page being edited at every window width measured.
       // Losing `border-l` and the drawer shadow is what that change means: it is a card beside the
       // preview now, like «Estilo» and «Diseño», not an edge pulled over it.
-      className={`w-[340px] gap-4 p-5 ${panelCard}`}
+      className={`${PANEL_WIDTH} gap-4 p-5 ${panelCard}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-col gap-1">

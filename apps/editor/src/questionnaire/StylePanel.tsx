@@ -12,7 +12,7 @@ import {
 } from "@retorika/tokens";
 import tokensEs from "@retorika/tokens/locales/es" with { type: "json" };
 import { useId } from "react";
-import { panelCard, panelRow, panelRowSelected } from "../editor/panelKit.tsx";
+import { PANEL_WIDTH, panelCard, panelRow, panelRowSelected } from "../editor/panelKit.tsx";
 import es from "../locales/es.json" with { type: "json" };
 
 /**
@@ -104,7 +104,7 @@ export function StylePanel({
       // it: the preview narrows and stays fully visible while the choice is being made. The
       // fields panel is fixed instead, because that one docks over a card that can itself be
       // 400px wide in the mobile view.
-      className={`w-[372px] gap-[18px] p-6 ${panelCard}`}
+      className={`${PANEL_WIDTH} gap-[18px] p-6 ${panelCard}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-col gap-1">
