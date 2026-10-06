@@ -395,36 +395,6 @@ function readingAnchor(
   return null;
 }
 
-/**
- * Carry the reading position from the frame being replaced to the one replacing it.
- *
- * Called while both frames are alive and the incoming one is already wired, which is the only
- * moment the question can be answered: there is nowhere else in this component where two documents
- * of the same page exist at once.
- */
-function carryReadingPosition(from: HTMLIFrameElement | null, to: HTMLIFrameElement) {
-  const fromWindow = from?.contentWindow;
-  const fromDoc = from?.contentDocument;
-  const toWindow = to.contentWindow;
-  const toDoc = to.contentDocument;
-  if (!fromWindow || !toWindow) return;
-  const { scrollX, scrollY } = fromWindow;
-  const anchor = fromDoc ? readingAnchor(fromDoc, scrollY) : null;
-  const landing = anchor
-    ? [...(toDoc?.querySelectorAll<HTMLElement>("[data-section]") ?? [])].find(
-        (section) => section.dataset.section === anchor.sectionId,
-      )
-    : undefined;
-  if (anchor && landing) {
-    const top = landing.getBoundingClientRect().top + toWindow.scrollY;
-    toWindow.scrollTo(scrollX, Math.max(0, top + anchor.within));
-    return;
-  }
-  // No anchor to be had — an empty page, or a section that this very act removed. The number is
-  // still a better answer than the top of the page.
-  toWindow.scrollTo(scrollX, scrollY);
-}
-
 function filenameFrom(response: Response, fallback: string): string {
   const match = /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") ?? "");
   return match?.[1] ?? fallback;
@@ -904,6 +874,141 @@ export function Editor({
   const pendingSlot: 0 | 1 = buffer.live === 0 ? 1 : 0;
 
   /**
+   * Where the person is reading, so **nothing they do sends them back to the top**.
+   *
+   * Reported by direction on 6 October 2026: deleting an element from a section showed the start of
+   * the page, «le obliga a hacer scroll down para volver al área que estaba editando». Measured at
+   * 500 → 0.
+   *
+   * **A swap and an edit are not the same act, and that is why the buffered swap did not fix this.**
+   * A swap has two frames, so the position can be copied from one to the other. An edit changes
+   * `srcDoc` on the live frame and the browser replaces the document underneath it — there is no
+   * outgoing frame to read. So the position is not read at replacement time, it is **kept as it
+   * happens**: the frame's own `scroll` tells us, and the record survives the document that
+   * produced it.
+   *
+   * Two records rather than one, for cost. `readingRaw` is numbers only and reads no layout, so it
+   * can run on every event of a smooth scroll for nothing. `readingAnchorAt` names the section at
+   * the top of the viewport, which costs a layout flush per section, so it is taken once a frame at
+   * most. **Editing happens at rest**, so by the time anything is committed the anchor has caught
+   * up; the equality check at restore is what makes a stale one fall back to the number instead of
+   * trusting it.
+   */
+  const readingRaw = useRef<{ pageId: string | undefined; x: number; y: number } | null>(null);
+  const readingAnchorAt = useRef<{
+    pageId: string | undefined;
+    y: number;
+    sectionId: string;
+    within: number;
+  } | null>(null);
+
+  /**
+   * What the last restore aimed at, kept apart from the two records above **because the restore
+   * scrolls, and scrolling is recorded**. Without a separate slot, applying a position would
+   * immediately overwrite the position being applied, and the second pass below would have nothing
+   * left to re-anchor from.
+   */
+  const restoreTarget = useRef<{
+    pageId: string | undefined;
+    x: number;
+    sectionId: string | null;
+    within: number;
+    y: number;
+  } | null>(null);
+  const restoredTo = useRef<number | null>(null);
+
+  /** The page on screen, resolved the way the renderer resolves it: absent means the first one. */
+  function shownPageId(): string | undefined {
+    return pageId ?? doc.pages[0]?.id;
+  }
+
+  function wireReadingPosition(iframeDoc: Document) {
+    const win = iframeDoc.defaultView;
+    if (!win) return;
+    let takingAnchor = false;
+    iframeDoc.addEventListener("scroll", () => {
+      readingRaw.current = { pageId: shownPageId(), x: win.scrollX, y: win.scrollY };
+      if (takingAnchor) return;
+      takingAnchor = true;
+      win.requestAnimationFrame(() => {
+        takingAnchor = false;
+        const y = win.scrollY;
+        const anchor = readingAnchor(iframeDoc, y);
+        readingAnchorAt.current = anchor
+          ? { pageId: shownPageId(), y, sectionId: anchor.sectionId, within: anchor.within }
+          : null;
+      });
+    });
+  }
+
+  /**
+   * Put the person back where they were reading, in a document that has just arrived.
+   *
+   * **Anchored on a section rather than on the offset, because an edit changes heights.** Deleting
+   * an element makes its section shorter and everything below it moves up, so the same number is a
+   * different place. Naming the section at the top of the viewport survives that; the number is the
+   * fallback for when there is no section to name — an empty page, or the very delete that removed
+   * the one being read.
+   *
+   * **A different page of the site starts where a new page starts: at the top.** Carrying an offset
+   * across a page change would drop somebody into the middle of a page they have not seen.
+   */
+  function restoreReadingPosition(frame: HTMLIFrameElement) {
+    const raw = readingRaw.current;
+    const win = frame.contentWindow;
+    const iframeDoc = frame.contentDocument;
+    if (!raw || !win || !iframeDoc) return;
+    if (raw.pageId !== shownPageId()) return;
+    const anchor = readingAnchorAt.current;
+    const fresh = anchor !== null && anchor.pageId === raw.pageId && anchor.y === raw.y;
+    restoreTarget.current = {
+      pageId: raw.pageId,
+      x: raw.x,
+      y: raw.y,
+      sectionId: fresh && anchor ? anchor.sectionId : null,
+      within: fresh && anchor ? anchor.within : 0,
+    };
+    applyRestoreTarget(frame);
+  }
+
+  function applyRestoreTarget(frame: HTMLIFrameElement) {
+    const want = restoreTarget.current;
+    const win = frame.contentWindow;
+    const iframeDoc = frame.contentDocument;
+    if (!want || !win || !iframeDoc) return;
+    const landing = want.sectionId
+      ? [...iframeDoc.querySelectorAll<HTMLElement>("[data-section]")].find(
+          (section) => section.dataset.section === want.sectionId,
+        )
+      : undefined;
+    const y = landing
+      ? Math.max(0, landing.getBoundingClientRect().top + win.scrollY + want.within)
+      : want.y;
+    win.scrollTo(want.x, y);
+    // What the browser actually settled on, which is not always what was asked for: a page shorter
+    // than the offset clamps.
+    restoredTo.current = Math.round(win.scrollY);
+  }
+
+  /**
+   * A second pass once the pictures have arrived, and it is needed because **the renderer gives an
+   * `<img>` no dimensions** — `width: 100%; height: auto` and nothing else, so a section's height
+   * is not known until its photograph loads. The first restore runs as soon as the document is
+   * parsed, which is what keeps the first paint in the right place; a picture above the fold
+   * arriving afterwards then pushes everything down under a fixed offset.
+   *
+   * **Only if nothing has moved since.** A picture loading changes what sits at an offset without
+   * changing the offset, so the number still matching means the person has not scrolled and the
+   * view wants re-anchoring. If it has changed, they have taken over and are left alone.
+   */
+  function settleReadingPosition(frame: HTMLIFrameElement) {
+    const win = frame.contentWindow;
+    if (!win || restoredTo.current === null) return;
+    if (Math.round(win.scrollY) !== restoredTo.current) return;
+    applyRestoreTarget(frame);
+  }
+
+  /**
    * Whether a swap has ever happened, and it decides one thing: the fade.
    *
    * `ui-fade-in` is a keyframe animation, so it runs **whenever the class arrives**, not only when
@@ -981,7 +1086,13 @@ export function Editor({
         ref={ref}
         title={title}
         srcDoc={html}
-        onLoad={(event) => wireOnce(event.currentTarget)}
+        // `wireOnce` is the backstop the look-ahead usually beats; `settleReadingPosition` is not,
+        // and this is the only place it can run. `load` is what waits for the pictures, and the
+        // pictures are what the renderer gives no dimensions to.
+        onLoad={(event) => {
+          wireOnce(event.currentTarget);
+          settleReadingPosition(event.currentTarget);
+        }}
         className={`absolute inset-0 h-full w-full border-0 ${
           everSwapped.current ? "" : "ui-fade-in"
         }`}
@@ -3070,6 +3181,9 @@ export function Editor({
     wiredDoc.current = iframeDoc;
     rememberCanvasBackground(iframeDoc);
     wireInteractions(iframeDoc);
+    // Last, and on every new document rather than only on a swap: an ordinary edit replaces the
+    // document in place, which is the case direction reported and the one a swap cannot cover.
+    restoreReadingPosition(frame);
   }
 
   /**
@@ -3092,7 +3206,6 @@ export function Editor({
     wireOnce(frame);
     syncHole(frame.contentDocument);
     syncGrid(frame.contentDocument, designOn ? designSectionId : null, placingElementId);
-    carryReadingPosition(liveFrame(), frame);
     // Read before the commit, because afterwards the frame it is asking about is gone. An
     // `<iframe>` is the parent document's `activeElement` whenever focus is anywhere inside it.
     refocusAfterSwap.current = document.activeElement === liveFrame();
@@ -3506,6 +3619,7 @@ export function Editor({
     // After `wireEditing`, which is what makes an element focusable in the first place.
     wireToolbar(iframeDoc);
     wireHandmade(iframeDoc);
+    wireReadingPosition(iframeDoc);
     // Last, and on the load rather than only on a render: a delete reloads this frame, so the render
     // that opened the toast ran against the document that still had the section in it. This is the
     // pass that actually draws the notice. It goes after `wireInsertion`, which inserts the `.rb-gap`
@@ -3873,9 +3987,11 @@ export function Editor({
 
         **What this does not fix**, said plainly: the page is parsed twice during a swap, and the
         text caret inside an editable element does not survive. The section selection does —
-        `wireSelection` restores it from `selectedSection` — and the reading position does now, by
-        `carryReadingPosition`. An earlier version of this comment claimed the selection was lost;
-        it was wrong, and it had been wrong for a while.
+        `wireSelection` restores it from `selectedSection` — and so does the reading position, by
+        `restoreReadingPosition`, which `wireOnce` runs for **every** new document rather than only
+        for a swap: an ordinary edit replaces the document in place, and that is the case a swap
+        cannot cover. An earlier version of this comment claimed the remount cost the selection; it
+        was wrong, and it had been wrong for a while.
       */}
       <div
         // The frames fill this box, so it is what reserves the canvas's height — it was
