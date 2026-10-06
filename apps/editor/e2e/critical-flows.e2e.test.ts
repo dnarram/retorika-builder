@@ -7283,6 +7283,148 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
     }
   }, 300_000);
 
+  it("editar no manda la página al principio", async () => {
+    /**
+     * Reportado por dirección el 6 de octubre de 2026, y es la mitad del parpadeo que la PR #187
+     * dejó fuera a propósito: «al editar algo… el editor te muestra el inicio de la página sin
+     * importar si la edición se hizo en una sección posterior… le obliga a hacer scroll down para
+     * volver al área que estaba editando».
+     *
+     * **Un relevo y una edición no son lo mismo.** El relevo tiene dos marcos, así que el punto de
+     * lectura se puede copiar de uno a otro; una edición cambia `srcDoc` en el marco vivo y el
+     * navegador reemplaza el documento sin que haya nada de donde copiar. `carryReadingPosition`
+     * nunca se ejecutaba en este camino.
+     *
+     * El `scrollIntoView` se asevera distinto de cero antes de medir nada: una prueba que empieza
+     * en el principio de la página no puede distinguir «se quedó quieta» de «volvió al principio».
+     */
+    const walker = await (await browser.newContext()).newPage();
+    try {
+      await walker.setViewportSize({ width: 1440, height: 900 });
+      await intoTheEditor(walker);
+      const frame = walker.frameLocator(PREVIEW);
+
+      const reading = await walker.evaluate(() => {
+        const doc = document.querySelector<HTMLIFrameElement>(
+          "iframe:not([data-buffered])",
+        )?.contentDocument;
+        doc?.querySelector('[data-section="sec-services"]')?.scrollIntoView();
+        return doc?.defaultView?.scrollY ?? -1;
+      });
+      expect(
+        reading,
+        "la vista previa no se desplazó: la prueba no distinguiría nada",
+      ).toBeGreaterThan(80);
+
+      // Una edición en la sección que se está leyendo, con el ratón y el teclado.
+      const target = frame
+        .locator('[data-section="sec-services"] [contenteditable="true"]')
+        .first();
+      await target.click();
+      await walker.keyboard.type("Cocina");
+      await walker.getByText("Haz clic en cualquier texto para cambiarlo").click();
+      await expect(frame.getByText("Cocina").first()).toBeVisible();
+      await expect(walker.getByText("Guardado en este navegador")).toBeVisible();
+
+      const after = await walker.evaluate(
+        () =>
+          document.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")?.contentWindow
+            ?.scrollY ?? -1,
+      );
+      expect(
+        Math.abs(after - reading),
+        `se leía en ${reading} y tras editar en ${after}`,
+      ).toBeLessThanOrEqual(8);
+    } finally {
+      await walker.context().close();
+    }
+  }, 300_000);
+
+  it("cambiar de página sí empieza por el principio", async () => {
+    /**
+     * El límite del arreglo de arriba, y la única forma en que podría hacer daño: **otra página de
+     * la web empieza donde empieza una página nueva**, por el principio. Llevar el punto de lectura
+     * de una a otra dejaría a la persona en medio de una página que no ha visto todavía, lo cual es
+     * peor que el defecto que esto arregla.
+     *
+     * Una web generada tiene una sola página, así que la segunda se hace aquí convirtiendo una
+     * sección — el camino que `docs/design` da para ello.
+     *
+     * **La ventana es baja a propósito, y la primera versión de esta prueba era vacua por no
+     * serlo.** La página de destino tiene una sola sección: a 900px de alto su documento no llega
+     * a ser más alto que la ventana, así que el desplazamiento **se recorta a 0 de todos modos** y
+     * la prueba pasaba igual con la comprobación de página quitada del código. Comprobado
+     * saboteándola, que es lo único que lo demuestra. A 560 la página de destino sí se puede
+     * desplazar, así que un 0 significa «se quedó en el principio» y no «no cabía otra cosa».
+     */
+    const walker = await (await browser.newContext()).newPage();
+    try {
+      await walker.setViewportSize({ width: 1280, height: 560 });
+      await intoTheEditor(walker);
+      const frame = walker.frameLocator(PREVIEW);
+
+      await frame.locator('[data-section="sec-services"]').click();
+      await frame
+        .locator(
+          '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+        )
+        .click();
+      const tabs = walker.locator('[data-testid="page-tabs"] button');
+      await expect(tabs).toHaveCount(2);
+
+      // De vuelta a la primera y abajo, para que haya algo que conservar o perder.
+      await tabs.first().click();
+      await expect(frame.locator('[data-section="sec-cover"]')).toBeVisible();
+      const reading = await walker.evaluate(() => {
+        const doc = document.querySelector<HTMLIFrameElement>(
+          "iframe:not([data-buffered])",
+        )?.contentDocument;
+        doc?.defaultView?.scrollTo(0, 240);
+        return doc?.defaultView?.scrollY ?? -1;
+      });
+      expect(
+        reading,
+        "la vista previa no se desplazó: la prueba no distinguiría nada",
+      ).toBeGreaterThan(80);
+
+      await tabs.nth(1).click();
+      await expect(
+        walker.locator('[data-testid="page-tabs"] button[aria-current="page"]'),
+      ).toHaveText("Qué ponemos");
+      // Esperado antes de medir: el clic en la pestaña recarga el marco, y leer durante la
+      // recarga encuentra un documento sin `documentElement`. Misma disciplina que
+      // `replacingTheDocument` impone arriba, y por la misma razón.
+      await expect(frame.locator('[data-section="sec-services"]')).toBeVisible();
+
+      // Y que la página de destino se puede desplazar de verdad, que es lo que hace que el 0 de
+      // abajo signifique algo. Sin esto la prueba no mide nada: lo comprobé saboteando el código.
+      const room = await walker.evaluate(() => {
+        const doc = document.querySelector<HTMLIFrameElement>(
+          "iframe:not([data-buffered])",
+        )?.contentDocument;
+        const win = doc?.defaultView;
+        if (!doc?.documentElement || !win) return -1;
+        return doc.documentElement.scrollHeight - win.innerHeight;
+      });
+      expect(
+        room,
+        "la página de destino no se puede desplazar: la prueba sería vacua",
+      ).toBeGreaterThan(240);
+
+      await expect
+        .poll(async () =>
+          walker.evaluate(
+            () =>
+              document.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")
+                ?.contentWindow?.scrollY ?? -1,
+          ),
+        )
+        .toBe(0);
+    } finally {
+      await walker.context().close();
+    }
+  }, 300_000);
+
   it("el punto de lectura se conserva, también con una sección a mano por encima", async () => {
     /**
      * The remount lost the reading position outright — there was not a line of scroll restoration
