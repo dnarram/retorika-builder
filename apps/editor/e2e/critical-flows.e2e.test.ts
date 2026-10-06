@@ -7283,6 +7283,50 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
     }
   }, 300_000);
 
+  it("la selección sobrevive a usar la barra, así que caben dos marcas seguidas", async () => {
+    /**
+     * Reportado por dirección el 6 de octubre de 2026 como «el cursor de texto», y el defecto está
+     * escrito en la forma de otra prueba de este mismo fichero: la de «ambas marcas sobre la misma
+     * palabra» hace clic y **vuelve a seleccionar** «beber» entre pulsar B y pulsar I. Ese rodeo es
+     * el defecto.
+     *
+     * Usar la barra cambia el documento, el documento recarga el marco, y la selección vive en el
+     * documento que se acaba de tirar. La barra **sí** se restablece —`wireToolbar` lo hace desde
+     * `toolbarOn`, y su comentario cuenta la mitad anterior de este mismo fallo: «a person got
+     * exactly one press per click into the text»— pero sin selección el grupo «Resaltar» se oculta,
+     * porque la maqueta 18 dice que sin selección esos botones no se dibujan. Así que la segunda
+     * marca no tiene dónde pulsarse.
+     *
+     * Esta prueba es esa otra sin el rodeo: una sola selección, dos marcas.
+     */
+    const walker = await (await browser.newContext()).newPage();
+    try {
+      await walker.setViewportSize({ width: 1440, height: 900 });
+      await intoTheEditor(walker);
+      const frame = walker.frameLocator(PREVIEW);
+      const subheadline = frame.locator('[data-id="el-subheadline"]');
+      await expect(subheadline).toHaveText("Comer, beber y quedarse un rato");
+
+      await subheadline.click();
+      await selectWord(subheadline, "beber");
+      await frame.locator('.rb-toolbar-mark[data-mark="strong"]').click();
+      await expect(subheadline.locator("strong")).toHaveText("beber");
+
+      // Sin volver a hacer clic y sin volver a seleccionar: las palabras siguen elegidas, así que
+      // el grupo sigue dibujado y la segunda marca cae sobre las mismas letras.
+      await expect(
+        frame.locator(".rb-toolbar-caption", { hasText: "Resaltar" }),
+        "el grupo «Resaltar» se fue con la selección",
+      ).toBeVisible();
+      await frame.locator('.rb-toolbar-mark[data-mark="em"]').click();
+      await expect(walker.getByText("Guardado en este navegador")).toBeVisible();
+      // strong fuera, em dentro — el anidamiento fijo del ADR 0027 §5, leído del marcado real.
+      await expect(subheadline.locator("strong em")).toHaveText("beber");
+    } finally {
+      await walker.context().close();
+    }
+  }, 300_000);
+
   it("editar no manda la página al principio", async () => {
     /**
      * Reportado por dirección el 6 de octubre de 2026, y es la mitad del parpadeo que la PR #187
