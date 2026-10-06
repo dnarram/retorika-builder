@@ -26,11 +26,17 @@ import { panelShell } from "./EditorShell.tsx";
 /**
  * A panel is a card, whatever is inside it.
  *
+ * **It arrives rather than appearing.** `ui-enter-right` is a keyframe rather than a transition
+ * because each of the six is a different component: switching rail items unmounts one and mounts
+ * another, so there is no previous state to transition from and an entrance is the only thing that
+ * can run. It costs nothing in layout — `translateX` and `opacity` — so the room opens at once and
+ * the panel's contents travel into it.
+ *
  * The caller still owns its width, which is the one measurement that is genuinely per-panel —
  * `Estilo` needs 372px for a row of swatches and a label, `Diseño` 288px — and `test/…` asserts
  * each stays constant across window sizes.
  */
-export const panelCard = `flex shrink-0 flex-col rounded-ui-lg border border-ui-border bg-ui-surface shadow-ui-1 ${panelShell}`;
+export const panelCard = `ui-enter-right flex shrink-0 flex-col rounded-ui-lg border border-ui-border bg-ui-surface shadow-ui-1 ${panelShell}`;
 
 /**
  * A row, and the hover that leads the eye along it.

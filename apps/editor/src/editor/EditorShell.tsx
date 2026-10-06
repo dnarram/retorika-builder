@@ -317,11 +317,21 @@ function RailButton({
   label,
   active,
   onSelect,
+  entersAfter,
 }: {
   icon: keyof typeof RAIL_ICONS;
   label: string;
   active: boolean;
   onSelect: () => void;
+  /**
+   * Milliseconds to hold this item back, for the two the design-tools switch adds.
+   *
+   * **Absent on the five that are always there**, which is the point: an item that was on screen
+   * before the switch was pressed has not arrived, and animating it would say it had. Only the two
+   * that genuinely appear get an entrance, one after the other, so the switch reads as adding
+   * something rather than as the rail flickering.
+   */
+  entersAfter?: number;
 }) {
   return (
     <button
@@ -337,7 +347,10 @@ function RailButton({
       // The global rule in `globals.css` would draw it around this button, which is 80px wide and
       // two lines tall — a rectangle across the whole rail that reads as a glitch. The icon square
       // takes it instead, two lines below, which is the shape the eye expects.
-      className="group relative flex w-full cursor-pointer flex-col items-center gap-[5px] border-0 bg-transparent p-0 focus-visible:outline-none"
+      className={`group relative flex w-full cursor-pointer flex-col items-center gap-[5px] border-0 bg-transparent p-0 focus-visible:outline-none ${
+        entersAfter === undefined ? "" : "ui-enter-up"
+      }`}
+      style={entersAfter === undefined ? undefined : { animationDelay: `${entersAfter}ms` }}
     >
       {/* The third cue for the chosen item: a rule on the rail's inner edge, the convention a
           vertical navigation uses to say «you are here». Hidden from assistive technology — it
@@ -1146,6 +1159,7 @@ export function EditorShell({
               label={es["editor.rail.design"]}
               active={rail === "design"}
               onSelect={() => onRailChange("design")}
+              entersAfter={0}
             />
           ) : null}
           {/* The seventh item, and the second the switch adds (ADR 0033 §11). **Absent** rather than
@@ -1158,6 +1172,10 @@ export function EditorShell({
               label={es["editor.rail.collections"]}
               active={rail === "collections"}
               onSelect={() => onRailChange("collections")}
+              // Half a beat behind «Diseño», so the two read as a sequence rather than a flash.
+              // Small on purpose: a stagger long enough to notice is a stagger long enough to
+              // wait for, and this is a rail, not a reveal.
+              entersAfter={60}
             />
           ) : null}
           {designTools === undefined ? null : (

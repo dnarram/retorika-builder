@@ -187,6 +187,51 @@
 }
 
 /**
+ * Something arriving: the side panel a rail item opens, and the rail items the design-tools switch
+ * adds.
+ *
+ * **An entrance, not a transition, and that distinction is what makes it work here.** A transition
+ * needs the property to have been transitionable in the previous computed style — the lesson the
+ * view change paid for, where turning a class on and changing the value in the same commit simply
+ * jumped. These elements do not exist in the previous frame at all, so there is no previous style
+ * to transition from; a keyframe animation runs on mount by definition and needs no frame of
+ * delay.
+ *
+ * `translateX` and `opacity` only. Neither touches layout, so the room the panel occupies opens at
+ * once and its contents arrive into it — and nothing here can reflow the preview or disturb what
+ * it has scrolled to, which is the failure the view change had to be narrowed to avoid.
+ *
+ * `--ui-ease-shape` and `--ui-base`: the same curve the canvas travels on, because this is the
+ * same kind of motion — a surface arriving rather than a control answering a press — and shorter,
+ * because it has a tenth of the distance to cover.
+ */
+@keyframes ui-enter-right {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+}
+
+@utility ui-enter-right {
+  animation: ui-enter-right var(--ui-base) var(--ui-ease-shape) both;
+}
+
+/**
+ * The same arrival for something appearing in a vertical stack — the two rail items the switch
+ * adds. It comes up rather than across, because that is the direction the rail runs.
+ */
+@keyframes ui-enter-up {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+@utility ui-enter-up {
+  animation: ui-enter-up var(--ui-base) var(--ui-ease-shape) both;
+}
+
+/**
  * **A focus ring, which this application did not have.** `:focus-visible` appeared nowhere in
  * `apps/editor`, so a keyboard user got whatever the browser drew by default — which on the rail's
  * transparent buttons and the top bar's icon buttons is close to nothing.
