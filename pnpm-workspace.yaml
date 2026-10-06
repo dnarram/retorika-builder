@@ -1,6 +1,9 @@
 packages:
   - "packages/*"
   - "apps/*"
+auditConfig:
+  ignoreGhsas:
+    - GHSA-68fv-2mgg-jv7q
 minimumReleaseAgeExclude:
   - '@biomejs/biome@2.5.14'
   - '@biomejs/cli-darwin-arm64@2.5.14'
@@ -13,3 +16,19 @@ minimumReleaseAgeExclude:
   - '@biomejs/cli-win32-x64@2.5.14'
   - '@types/node@24.13.5'
   - fast-check@4.10.1
+
+# **Settings pnpm reads, which stopped being `package.json`'s `pnpm` field in pnpm 10.**
+# Found on 6 October 2026: `pnpm install` warns «The "pnpm" field in package.json is no longer read
+# by pnpm», and it had been carrying `auditConfig` — so the audit-exception mechanism had quietly
+# stopped being wired to anything. `scripts/audit-exceptions.ts` reads this file now.
+
+# `source-map-js` below 1.2.2 is GHSA-68fv-2mgg-jv7q, a high-severity event-loop denial of service
+# through indexed source-map section offsets. It arrives nine ways under `next`, `@tailwindcss/
+# postcss` and `vite`, none of which ship at runtime — PostCSS and the bundler are build tools, and
+# ADR 0001 keeps every one of them out of what a client downloads. It is pinned rather than
+# excepted because **a patch exists**: the exception hatch in `audit-exceptions.ts` is for «a
+# transitive dependency with no patch available», and using it here would be using it to avoid a
+# one-line upgrade. The range is targeted, so only the vulnerable versions are rewritten and a
+# consumer that already asks for a newer one is untouched.
+overrides:
+  "source-map-js@<1.2.2": ">=1.2.2"
