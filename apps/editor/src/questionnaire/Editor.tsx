@@ -793,6 +793,8 @@ export function Editor({
    * `<iframe>`. Kept as a string so React's own `key` comparison does the work, and derived rather
    * than tracked, so no new action has to remember to bump it.
    */
+  const [canvasBackground, setCanvasBackground] = useState<string | null>(null);
+
   const chromeKey = useMemo(
     () =>
       `${designTools}|${doc.pages
@@ -2827,7 +2829,35 @@ export function Editor({
     const iframeDoc = iframeRef.current?.contentDocument;
     if (!iframeDoc || wiredDoc.current === iframeDoc) return;
     wiredDoc.current = iframeDoc;
+    rememberCanvasBackground(iframeDoc);
     wireInteractions();
+  }
+
+  /**
+   * The colour the page paints itself, kept so the frame can wear it.
+   *
+   * **This is the flicker, and it is one frame wide.** Turning the design tools on changes
+   * `chromeKey`, the frame remounts, and for exactly one frame — measured at 79ms, `readyState`
+   * still `loading` — there is no document in it. The frame's own background was `bg-ui-surface`,
+   * so that frame painted **white** while the site being edited is whatever colour its palette
+   * chose. One white flash against a cream page is precisely what reads as the page refreshing.
+   *
+   * Remembering the colour costs nothing and removes the flash without removing the remount, which
+   * is load-bearing: the comment at the `<iframe>` records the two defects it exists to fix, and
+   * both are about chrome that cannot re-attach itself.
+   *
+   * `body` first and then `documentElement`, because a page may set its background on either, and
+   * a transparent answer is not an answer.
+   */
+  function rememberCanvasBackground(iframeDoc: Document) {
+    for (const element of [iframeDoc.body, iframeDoc.documentElement]) {
+      if (!element) continue;
+      const colour = iframeDoc.defaultView?.getComputedStyle(element).backgroundColor;
+      if (colour && colour !== "transparent" && !colour.startsWith("rgba(0, 0, 0, 0")) {
+        setCanvasBackground(colour);
+        return;
+      }
+    }
   }
 
   function wireInteractions() {
@@ -3581,8 +3611,11 @@ export function Editor({
         title={title}
         srcDoc={html}
         onLoad={wireOnce}
-        className="w-full flex-grow border-0 bg-ui-surface"
-        style={{ minHeight: "60vh" }}
+        className="ui-fade-in w-full flex-grow border-0"
+        // The remembered page colour, so the one frame between remount and first paint is the
+        // colour the page already was. `--ui-surface` until a page has ever loaded, which is the
+        // same white it used to be and the only moment nothing better is known.
+        style={{ minHeight: "60vh", background: canvasBackground ?? "var(--ui-surface)" }}
       />
       {fieldsFor && findSection(doc, fieldsFor) ? (
         <FieldsPanel

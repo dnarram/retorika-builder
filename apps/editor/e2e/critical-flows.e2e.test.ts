@@ -6874,6 +6874,97 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
     }
   }, 300_000);
 
+  it("el raíl se abre y lo de debajo baja con él, en vez de saltar", async () => {
+    /**
+     * Direction asked for the design tools to arrive «recolocándose», and the entrance alone did
+     * not do it: the two new items faded in beautifully while the switch underneath them
+     * teleported. Measured, it moved **163px in a single frame** — two items of 68px and two gaps
+     * of 14.
+     *
+     * So the entering items start folded away under the one above and open into place. This
+     * asserts the consequence, which is the thing somebody actually sees: the switch travels.
+     */
+    const walker = await (await browser.newContext()).newPage();
+    try {
+      await walker.setViewportSize({ width: 1440, height: 900 });
+      await intoTheEditor(walker);
+
+      await walker.evaluate(() => {
+        (window as unknown as { __t: number[] }).__t = [];
+        const started = performance.now();
+        const tick = () => {
+          const below = document.querySelector('[data-testid="rail"]')?.lastElementChild;
+          if (below) {
+            (window as unknown as { __t: number[] }).__t.push(
+              Math.round(below.getBoundingClientRect().top),
+            );
+          }
+          if (performance.now() - started < 1_500) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
+      await walker.getByRole("switch").first().click();
+      await walker.getByRole("button", { name: "Sí, enciéndelas" }).click();
+      await walker.waitForTimeout(1_700);
+      const positions = [
+        ...new Set(await walker.evaluate(() => (window as unknown as { __t: number[] }).__t)),
+      ];
+
+      // A jump is two positions: where it was and where it ended. Travel is many.
+      expect(positions.length, `posiciones: ${positions.join(", ")}`).toBeGreaterThan(5);
+      // And it has to finish where the rail really puts it, not part-way down.
+      await expect(walker.getByRole("button", { name: "Diseño", exact: true })).toBeVisible();
+      await expect(walker.getByRole("button", { name: "Listas", exact: true })).toBeVisible();
+      const settled = await walker.evaluate(() => {
+        const rail = document.querySelector('[data-testid="rail"]');
+        const below = rail?.lastElementChild;
+        return Math.round(below?.getBoundingClientRect().top ?? -1);
+      });
+      expect(positions.at(-1)).toBe(settled);
+    } finally {
+      await walker.context().close();
+    }
+  }, 300_000);
+
+  it("la vista previa se funde al rehacerse el cromo, y nunca pinta blanco", async () => {
+    /**
+     * Turning the tools on remounts the preview frame on purpose — `Editor.tsx`'s note at the
+     * `<iframe>` records the two defects that exist to fix — and a remounted frame holds no
+     * document for exactly one frame. Measured: one sample in 120, `readyState` still `loading`.
+     *
+     * That frame used to paint `--ui-surface`, pure white, against a page whose own background is
+     * `rgb(250, 250, 249)`. One white flash is what reads as the page refreshing. The remount
+     * stays; what goes is the white and the snap.
+     */
+    const walker = await (await browser.newContext()).newPage();
+    try {
+      await walker.setViewportSize({ width: 1440, height: 900 });
+      await intoTheEditor(walker);
+
+      const pageColour = await walker.evaluate(() => {
+        const doc = document.querySelector("iframe")?.contentDocument;
+        return doc ? getComputedStyle(doc.body).backgroundColor : "?";
+      });
+
+      const seen = await opacitiesWhile(walker, "iframe", async () => {
+        await walker.getByRole("switch").first().click();
+        await walker.getByRole("button", { name: "Sí, enciéndelas" }).click();
+      });
+      // The document arrives rather than snapping into place.
+      expect(seen.distinct.length, `opacidades: ${seen.distinct.join(", ")}`).toBeGreaterThan(3);
+      expect(seen.final).toBe("1.00");
+
+      // And the frame wears the page's own colour, so the one empty frame has no white to show.
+      const frameColour = await walker.evaluate(() => {
+        const el = document.querySelector("iframe");
+        return el ? getComputedStyle(el).backgroundColor : "?";
+      });
+      expect(frameColour, `la página es ${pageColour} y el marco ${frameColour}`).toBe(pageColour);
+    } finally {
+      await walker.context().close();
+    }
+  }, 300_000);
+
   it("con movimiento reducido llegan igual, sin recorrido", async () => {
     // The preference removes the travel, never the destination — the same contract the view change
     // keeps. A panel that stayed at `opacity: 0` for somebody who asked for less motion would be
