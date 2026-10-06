@@ -1,0 +1,4 @@
+{
+  "$comment": "Advisories pnpm audit is told to ignore, each with the date it was added and why. Read by scripts/security-audit.ts, which turns them into --ignore flags, and validated by scripts/audit-exceptions.ts. Empty is the healthy state.",
+  "ignored": {}
+}
