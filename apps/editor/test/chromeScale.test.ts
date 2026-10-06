@@ -205,6 +205,7 @@ describe("the canvas's copy of the scale", () => {
     ["shadow2", "--ui-shadow-2"],
     ["shadow3", "--ui-shadow-3"],
     ["ease", "--ui-ease"],
+    ["easeShape", "--ui-ease-shape"],
     ["fast", "--ui-fast"],
     ["base", "--ui-base"],
   ];
@@ -227,10 +228,13 @@ describe("the canvas's copy of the scale", () => {
     // The save tick in the top bar. The preview has no equivalent state to mark.
     "ok",
     // The canvas's own reflow is animated by `globals.css` on the card that *holds* the iframe,
-    // from the editor's document. Nothing inside the preview uses either, and copying them across
-    // would be an export with no callers.
+    // from the editor's document, and nothing inside the preview runs for that long.
+    //
+    // `ease-shape` was excused here beside it, on the grounds that nothing inside the preview
+    // animated at all. That stopped being true on 7 October 2026: the «Diseñada a mano» bar moved
+    // into the flow and arrives the way the rail's items do, with the same curve. So it is carried
+    // now, and the exception it used to have is gone rather than left to go stale.
     "slow",
-    "ease-shape",
   ];
 
   it("transcribes every token the stylesheet declares, apart from the ones named here", () => {

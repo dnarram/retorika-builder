@@ -44,6 +44,11 @@ export const CHROME_SCALE = {
   shadow3: "0 10px 20px rgba(15, 23, 42, 0.08), 0 24px 56px rgba(15, 23, 42, 0.16)",
 
   ease: "cubic-bezier(0.2, 0, 0, 1)",
+  // Carried across since 7 October 2026, when the «Diseñada a mano» bar moved into the flow and
+  // started having to arrive rather than appear. Until then nothing inside the preview animated, so
+  // `chromeScale.test.ts` excused this one by name — and that exception had to argue with the
+  // addition, which is the whole reason the list exists.
+  easeShape: "cubic-bezier(0.4, 0, 0.2, 1)",
   fast: "120ms",
   base: "180ms",
 } as const;

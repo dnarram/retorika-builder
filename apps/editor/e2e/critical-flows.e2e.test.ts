@@ -1379,14 +1379,44 @@ describe("sprint 8 — el modo estudio: encender, diseñar a mano, colocar, y vo
 
       const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
       const wordsBefore = await headline.textContent();
-      const boxBefore = await headline.boundingBox();
+      /**
+       * **Where the headline sits *inside its section*, which is the promise mockup 16 makes**, and
+       * this used to read `boundingBox()` — where it sits on the page.
+       *
+       * The drawing's own words: «Al aceptar se copia **la colocación que la sección ya tenía**, así
+       * que no se mueve ni un píxel». That is a statement about the placement of the elements within
+       * the section, and the same drawing puts the «Diseñada a mano» bar in the flow above the
+       * content — so the mockup never promised the section would not move down the page.
+       *
+       * This assertion was the stronger reading, and it was satisfiable only because the code had
+       * diverged by drawing that bar `position: absolute` over the section, which is what covered
+       * editable content on a narrow canvas. Narrowed by direction on 7 October 2026 with the cost
+       * measured: the section drops 44px only when it is already at the very top and there is
+       * nothing to scroll; anywhere else the reading anchor absorbs it and nothing is seen to move.
+       * `docs/design/REVIEW.md` carries the whole of it.
+       */
+      const placeInSection = async () =>
+        frame.locator('[data-section="sec-cover"]').evaluate((section) => {
+          const el = section.querySelector<HTMLElement>('[data-id="el-headline"]');
+          if (!el) return null;
+          const outer = section.getBoundingClientRect();
+          const inner = el.getBoundingClientRect();
+          return {
+            x: Math.round(inner.left - outer.left),
+            y: Math.round(inner.top - outer.top),
+            w: Math.round(inner.width),
+            h: Math.round(inner.height),
+          };
+        });
+      const placeBefore = await placeInSection();
 
       await frame.locator(".rb-escalate-yes").click();
       await expect(frame.locator(".rb-handmade-badge")).toHaveText("Diseñada a mano");
 
-      // «No se mueve ni un píxel»: the same words, in the same place, the instant after.
+      // «No se mueve ni un píxel»: the same words, in the same place within the section it belongs
+      // to, the instant after.
       expect(await headline.textContent()).toBe(wordsBefore);
-      expect(await headline.boundingBox()).toEqual(boxBefore);
+      await expect.poll(placeInSection).toEqual(placeBefore);
 
       // The panel: collapsed on open, because encendiendo las herramientas «añade una puerta, no
       // descarga sesenta controles».
@@ -1442,11 +1472,15 @@ describe("sprint 8 — el modo estudio: encender, diseñar a mano, colocar, y vo
       await studio.getByRole("button", { name: "Cerrar el diseño" }).click();
       // **Polled rather than sampled once, since the canvas learned to zoom.** Closing the panel
       // gives the canvas its room back, and the card animates from the scale it was holding to 1
-      // over 200ms — so a single `boundingBox()` taken the instant the click resolves catches the
-      // card mid-flight and reports the headline 364px wide instead of 448, which is the old box
-      // times the 0.8125 «Diseño» was zoomed to. The assertion is unchanged; only the moment it is
-      // allowed to be true moved.
-      await expect.poll(() => headline.boundingBox()).toEqual(boxBefore);
+      // over 200ms — so a measurement taken the instant the click resolves catches the card
+      // mid-flight and reports the headline 364px wide instead of 448, which is the old box times
+      // the 0.8125 «Diseño» was zoomed to. Only the moment it is allowed to be true moved.
+      //
+      // Measured inside the section for the same reason as above: the headline's place on the page
+      // is 44px lower than it was before the escalation, and that is the bar now taking room in the
+      // flow rather than drawing over the content. A scaled card still fails this, because the
+      // section's own box scales with it.
+      await expect.poll(placeInSection).toEqual(placeBefore);
 
       // And the escalation was one history step all along, so Ctrl+Z is the return of the first
       // minutes exactly as the dossier §5 says it is.
@@ -7327,6 +7361,207 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
     }
   }, 300_000);
 
+  it("la barra de «Diseñada a mano» cabe y no tapa la sección, también en móvil", async () => {
+    /**
+     * Reportado por dirección el 7 de octubre de 2026: en la vista de móvil la barra «Diseñada a
+     * mano / Portada / Volver a la original» se dibuja **encima** de la sección tapando contenido
+     * editable, y sus botones se salen de ella.
+     *
+     * Mide las dos cosas por separado porque son dos defectos distintos, y deja los números en el
+     * mensaje: un «no cabe» sin cuánto no dice si sobra un píxel o ciento.
+     */
+    const walker = await (await browser.newContext()).newPage();
+    try {
+      await walker.setViewportSize({ width: 1440, height: 900 });
+      await intoTheEditor(walker);
+      const frame = walker.frameLocator(PREVIEW);
+
+      await walker.getByRole("switch").first().click();
+      await walker.getByRole("button", { name: "Sí, enciéndelas" }).click();
+      await frame.locator('[data-section="sec-cover"]').click();
+      await frame
+        .locator('[data-section="sec-cover"] .rb-action[aria-label="Diseñar a mano"]')
+        .click();
+      await frame.locator(".rb-escalate-yes").click();
+      await expect(frame.locator(".rb-handmade")).toHaveCount(1);
+
+      const look = async (where: string) => {
+        // La barra llega con una animación que empieza con margen negativo, así que medir a mitad
+        // de camino leería una geometría que nadie ve quieta. Se espera a que termine.
+        await expect
+          .poll(async () =>
+            walker.evaluate(() => {
+              const bar = document
+                .querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")
+                ?.contentDocument?.querySelector<HTMLElement>(".rb-handmade");
+              return bar ? bar.getAnimations().every((a) => a.playState === "finished") : false;
+            }),
+          )
+          .toBe(true);
+        const seen = await walker.evaluate(() => {
+          const doc = document.querySelector<HTMLIFrameElement>(
+            "iframe:not([data-buffered])",
+          )?.contentDocument;
+          const bar = doc?.querySelector<HTMLElement>(".rb-handmade");
+          // La sección es la de al lado ahora que la barra tiene su propia fila, y seguía siendo
+          // la antepasada cuando se dibujaba encima. Las dos formas, para que esta guarda mida lo
+          // mismo si alguien la devuelve dentro.
+          const section =
+            bar?.closest<HTMLElement>("[data-section]") ??
+            (bar?.nextElementSibling as HTMLElement | null);
+          if (!doc || !bar || !section) return null;
+          const box = bar.getBoundingClientRect();
+          const spills = [...bar.children]
+            .map((child) => {
+              const r = child.getBoundingClientRect();
+              return {
+                what: child.className || child.tagName.toLowerCase(),
+                out: Math.round(Math.max(r.right - box.right, box.left - r.left)),
+              };
+            })
+            .filter((child) => child.out > 0);
+          const covers = [...section.querySelectorAll<HTMLElement>("[data-id]")]
+            .map((el) => {
+              const r = el.getBoundingClientRect();
+              if (r.height === 0) return null;
+              const overlap = Math.min(r.bottom, box.bottom) - Math.max(r.top, box.top);
+              return overlap > 1
+                ? { id: el.dataset["id"] ?? "?", overlap: Math.round(overlap) }
+                : null;
+            })
+            .filter((x) => x !== null);
+          return {
+            canvas: Math.round(doc.documentElement.clientWidth),
+            bar: Math.round(box.width),
+            scrollOut: bar.scrollWidth - bar.clientWidth,
+            spills,
+            covers,
+          };
+        });
+        expect(seen, `no se encontró la barra en ${where}`).not.toBeNull();
+        if (!seen) return;
+        // Los tres hallazgos juntos en una sola aserción: con tres seguidas, la primera que falla
+        // esconde las otras dos, y entonces medir cuesta tantas vueltas como fallos haya.
+        const wrong: string[] = [];
+        if (seen.scrollOut > 0) wrong.push(`el contenido desborda ${seen.scrollOut}px`);
+        if (seen.spills.length > 0) wrong.push(`se salen ${JSON.stringify(seen.spills)}`);
+        if (seen.covers.length > 0) wrong.push(`tapa ${JSON.stringify(seen.covers)}`);
+        expect(
+          wrong,
+          `${where} — lienzo ${seen.canvas}px, barra ${seen.bar}px: ${wrong.join("; ")}`,
+        ).toEqual([]);
+      };
+
+      await look("en ordenador");
+      await walker.getByRole("button", { name: "Ver en móvil" }).click();
+      await expect
+        .poll(async () =>
+          walker.evaluate(
+            () =>
+              document.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")
+                ?.contentWindow?.innerWidth ?? -1,
+          ),
+        )
+        .toBeLessThan(400);
+      await look("en móvil");
+    } finally {
+      await walker.context().close();
+    }
+  }, 300_000);
+
+  it("escalar una sección a media página no la mueve en pantalla", async () => {
+    /**
+     * **La evidencia de que el coste de la barra en el flujo está acotado**, y por eso dirección
+     * pidió que se quedara como guarda en vez de usarla solo para decidir.
+     *
+     * Desde el 7 de octubre de 2026 la barra «Diseñada a mano» ocupa sitio en el flujo, así que
+     * escalar una sección empuja hacia abajo lo que hay debajo. Donde haya algo por encima que
+     * ceder **no se ve mover nada**: medido en los tres momentos —antes, a mitad de la entrada y al
+     * final— la sección se queda a `top: 0` mientras el desplazamiento se come los 44px, 500 → 544.
+     *
+     * **Y no es el ancla del punto de lectura lo que lo consigue**, aunque eso fue lo primero que
+     * supuse. El ancla corre una vez, al reemplazarse el documento, y en ese instante la barra
+     * todavía está plegada bajo su margen negativo: medido, el desplazamiento seguía en 500 a mitad
+     * de la animación. Lo que mantiene la vista quieta mientras el hueco se abre es el **anclaje de
+     * desplazamiento del propio navegador**, que ajusta el scroll cuando crece contenido por encima
+     * de lo que se está viendo. Las dos cosas se reparten el trabajo: el ancla cubre el reemplazo
+     * del documento, el navegador cubre la apertura del hueco.
+     *
+     * Arriba del todo no hay nada que ceder, y ahí el contenido sí baja 44px — en 180ms y con la
+     * misma curva que usan el panel y el raíl, que es lo que dirección pidió para que se lea como
+     * una llegada y no como un salto.
+     */
+    const walker = await (await browser.newContext()).newPage();
+    try {
+      await walker.setViewportSize({ width: 1440, height: 900 });
+      await intoTheEditor(walker);
+      const frame = walker.frameLocator(PREVIEW);
+      await walker.getByRole("switch").first().click();
+      await walker.getByRole("button", { name: "Sí, enciéndelas" }).click();
+
+      // Una sección con sitio por encima, que es lo que distingue este caso del de la portada.
+      const where = async () =>
+        walker.evaluate(() => {
+          const doc = document.querySelector<HTMLIFrameElement>(
+            "iframe:not([data-buffered])",
+          )?.contentDocument;
+          const el = doc?.querySelector('[data-section="sec-services"]');
+          return {
+            top: Math.round(el?.getBoundingClientRect().top ?? -9_999),
+            scrollY: Math.round(doc?.defaultView?.scrollY ?? -1),
+          };
+        });
+      await walker.evaluate(() => {
+        document
+          .querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")
+          ?.contentDocument?.querySelector('[data-section="sec-services"]')
+          ?.scrollIntoView();
+      });
+      const before = await where();
+      expect(
+        before.scrollY,
+        "la sección quedó en el principio: sin sitio por encima esta prueba mide el otro caso",
+      ).toBeGreaterThan(80);
+
+      await frame.locator('[data-section="sec-services"]').click();
+      await frame
+        .locator('[data-section="sec-services"] .rb-action[aria-label="Diseñar a mano"]')
+        .click();
+      await frame.locator(".rb-escalate-yes").click();
+      await expect(frame.locator(".rb-handmade")).toHaveCount(1);
+      // A mitad de la entrada, no solo al final: lo que se promete es que no se mueve en ningún
+      // momento, y medir solo el destino dejaría pasar un viaje de ida y vuelta.
+      const mid = await where();
+      expect(
+        Math.abs(mid.top - before.top),
+        `a mitad de la entrada estaba a ${mid.top}px del borde, no a ${before.top}px`,
+      ).toBeLessThanOrEqual(2);
+      await expect
+        .poll(async () =>
+          walker.evaluate(() => {
+            const bar = document
+              .querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")
+              ?.contentDocument?.querySelector<HTMLElement>(".rb-handmade");
+            return bar ? bar.getAnimations().every((a) => a.playState === "finished") : false;
+          }),
+        )
+        .toBe(true);
+
+      const after = await where();
+      expect(
+        Math.abs(after.top - before.top),
+        `estaba a ${before.top}px del borde y ahora a ${after.top}px (desplazamiento ${before.scrollY} → ${after.scrollY})`,
+      ).toBeLessThanOrEqual(2);
+      // Y el desplazamiento sí cambió, que es la prueba de que había 44px que absorber.
+      expect(
+        after.scrollY - before.scrollY,
+        `el desplazamiento no se movió (${before.scrollY} → ${after.scrollY}): la barra no ocupó sitio, así que esta guarda no vigila nada`,
+      ).toBeGreaterThan(20);
+    } finally {
+      await walker.context().close();
+    }
+  }, 300_000);
+
   it("editar no manda la página al principio", async () => {
     /**
      * Reportado por dirección el 6 de octubre de 2026, y es la mitad del parpadeo que la PR #187
@@ -7478,11 +7713,15 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
      *
      * **Direction's adjustment is the interesting half of this test.** A hand-designed section
      * above the reading point is the case where copying a number could lie: the arriving frame
-     * carries chrome the outgoing one does not, and if any of it took height in the flow, the same
-     * `scrollY` would be a different place. Measured while writing this: `.rb-handmade` is
-     * `position: absolute`, so it takes none and the number would in fact have been safe —
-     * `carryReadingPosition` anchors on a section anyway, because that is a property of one
-     * stylesheet rule rather than of the design.
+     * carries chrome the outgoing one does not, and if any of it takes height in the flow, the same
+     * `scrollY` is a different place.
+     *
+     * **It took height three days later, which is why anchoring was worth it.** When this was
+     * written `.rb-handmade` was `position: absolute` and took none, so the raw number would have
+     * been safe and the anchor was insurance against a property of one stylesheet rule. On
+     * 7 October 2026 the bar moved into its own row in the flow — it was covering editable content
+     * on a 320px canvas — and now a hand-designed section above the reading point really is 44 to
+     * 75px taller than it was. The anchor is what makes that invisible here.
      */
     const walker = await (await browser.newContext()).newPage();
     try {
@@ -7513,20 +7752,40 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
           ),
         )
         .toBe(readingAt);
+      const onScreen = async () =>
+        walker.evaluate(() => {
+          const doc = document.querySelector<HTMLIFrameElement>(
+            "iframe:not([data-buffered])",
+          )?.contentDocument;
+          const win = doc?.defaultView;
+          if (!doc || !win) return { top: -10_000, scrollY: -1 };
+          const read = [...doc.querySelectorAll<HTMLElement>("[data-section]")].find(
+            (section) => section.getBoundingClientRect().bottom > 0,
+          );
+          return {
+            top: Math.round(read?.getBoundingClientRect().top ?? -10_000),
+            scrollY: Math.round(win.scrollY),
+          };
+        });
+      const before = await onScreen();
 
       // The swap, with the hand-designed section above the reading point losing its bar on the way.
       await walker.getByRole("switch").first().click();
       await expect(walker.getByRole("button", { name: "Diseño" })).toHaveCount(0);
       await expect(frame.locator(".rb-handmade")).toHaveCount(0);
 
-      const after = await walker.evaluate(
-        () =>
-          document.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")?.contentWindow
-            ?.scrollY ?? -1,
-      );
+      // **Lo que se conserva es lo que se está mirando, no el número**, y esta prueba aseveraba el
+      // número. Daba igual mientras las alturas no cambiaban; desde que la barra «Diseñada a mano»
+      // vive en el flujo (7 de octubre de 2026) quitarla sube 44px todo lo que hay encima, así que
+      // **conservar la lectura exige que el número baje otros 44**. Medido: 480 → 436, que es el
+      // ancla haciendo su trabajo y esta aserción midiendo la cosa equivocada.
+      //
+      // Se mide dónde cae en pantalla la sección que se estaba leyendo, que es lo que significa
+      // «no se ha movido» para quien edita.
+      const after = await onScreen();
       expect(
-        Math.abs(after - readingAt),
-        `se leía en ${readingAt} y tras el relevo en ${after}`,
+        Math.abs(after.top - before.top),
+        `la sección que se leía estaba a ${before.top}px del borde y ahora a ${after.top}px (desplazamiento ${before.scrollY} → ${after.scrollY})`,
       ).toBeLessThanOrEqual(2);
     } finally {
       await walker.context().close();
