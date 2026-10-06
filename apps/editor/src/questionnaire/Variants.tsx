@@ -392,17 +392,56 @@ export function Variants({
    */
   useEffect(() => {
     if (!accountAvailable) return;
+    const client = browserClient();
     let cancelled = false;
-    void (async () => {
-      const client = browserClient();
-      const { data } = await client.auth.getUser();
-      if (cancelled || !data.user) return;
-      setSwitchOwner(data.user.id);
-      const stored = await loadAccountDesignTools(client, data.user.id);
+
+    /**
+     * **`readPreference` is the difference between arriving signed in and signing in just now.**
+     *
+     * On mount the account wins, which is the documented behaviour and what a returning
+     * professional expects: the tools they turned on at the office are on at home.
+     *
+     * A session that begins *while the editor is open* is the other case, and letting the account
+     * win there would be a worse bug than the one this fixes. Somebody who turns the tools on and
+     * then presses «Guardar en mi cuenta» creates an account whose `design_tools` is the column's
+     * `default false` — so reading it back would switch off the tools they are using, a second
+     * after they signed up, for no reason they could see.
+     */
+    const adopt = async (userId: string | null, readPreference: boolean) => {
+      setSwitchOwner(userId);
+      if (!userId || !readPreference) return;
+      const stored = await loadAccountDesignTools(client, userId);
       if (!cancelled && stored !== null) setDesignTools(stored);
+    };
+
+    void (async () => {
+      const { data } = await client.auth.getUser();
+      if (!cancelled) await adopt(data.user?.id ?? null, true);
     })();
+
+    /**
+     * **And then every session that starts or ends afterwards, which nothing watched before.**
+     *
+     * `switchOwner` was asked once, on mount, so a person who signed in from «Guardar en mi cuenta»
+     * — the ordinary way an account comes into existence, at the end of the journey — kept a `null`
+     * owner until they reloaded. Reproduced on 6 October 2026: after signing up from inside the
+     * editor, turning the switch on made **no request to `accounts` at all**, and said nothing
+     * about it. The preference silently stopped being «del mismo rango que el idioma de la
+     * interfaz» while the panel went on promising it followed them.
+     *
+     * Signing out is the same gap in reverse, and the same line closes it: the owner becomes
+     * `null`, so the editor stops writing to an account nobody is in.
+     */
+    const { data: listener } = client.auth.onAuthStateChange((event, session) => {
+      // `INITIAL_SESSION` is the subscription announcing what `getUser` above is already asking
+      // for, from storage and without checking it. Taking both would race over the same answer.
+      if (cancelled || event === "INITIAL_SESSION") return;
+      void adopt(session?.user?.id ?? null, false);
+    });
+
     return () => {
       cancelled = true;
+      listener.subscription.unsubscribe();
     };
   }, [accountAvailable]);
 

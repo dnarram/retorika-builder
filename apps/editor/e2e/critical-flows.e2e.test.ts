@@ -6438,3 +6438,157 @@ describe("lo que el cromo del editor dibuja dentro del lienzo, y el aviso del in
     }
   }, 300_000);
 });
+
+describe("el interruptor de diseño llega a la cuenta", () => {
+  /**
+   * Two defects direction found by asking why the editor kept saying «Solo en este navegador», both
+   * reproduced here against a stubbed Supabase before they were fixed.
+   *
+   * 1. **The write was an `update`.** Signed in, with `public.accounts` holding no row for that
+   *    person — which is production until migration `0002` is applied — PostgREST answers an update
+   *    that matched nothing with an empty result and no error. `saveAccountDesignTools` detected
+   *    that correctly and the editor reported it honestly; the operation was simply the wrong one.
+   *    «This person's preference is X» is a statement about a row that ought to exist.
+   * 2. **A session that began after the editor was open was never noticed.** `switchOwner` was
+   *    asked once, on mount, so somebody who signed in through «Guardar en mi cuenta» — the
+   *    ordinary way an account comes into being, at the end of the journey — kept a `null` owner
+   *    until they reloaded. Turning the switch on then made **no request to `accounts` at all**,
+   *    and said nothing about it. The first defect stated something false; this one stated nothing.
+   *
+   * **The stub is the point.** The suite's Supabase is a host that refuses, so the account paths
+   * could never run here and neither bug was reachable by any existing test. Intercepting them
+   * makes the signed-in half of this editor testable for the first time, which is what both of
+   * these needed and did not have.
+   */
+  const ID = "11111111-2222-3333-4444-555555555555";
+  const USER = {
+    id: ID,
+    aud: "authenticated",
+    role: "authenticated",
+    email: "david@example.com",
+    app_metadata: { provider: "email" },
+    user_metadata: {},
+    created_at: new Date().toISOString(),
+    email_confirmed_at: new Date().toISOString(),
+  };
+
+  /** A Supabase whose `accounts` table has no row for this person: an update matches nothing, an
+   * insert creates it. Exactly the production shape before migration `0002`. */
+  async function stubbedSupabase(page: Page, seen: string[]): Promise<void> {
+    const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64url");
+    const now = Math.floor(Date.now() / 1000);
+    const token = `${b64({ alg: "HS256", typ: "JWT" })}.${b64({
+      sub: ID,
+      aud: "authenticated",
+      role: "authenticated",
+      exp: now + 3600,
+      iat: now,
+      email: USER.email,
+    })}.x`;
+    const session = {
+      access_token: token,
+      token_type: "bearer",
+      expires_in: 3600,
+      expires_at: now + 3600,
+      refresh_token: "r1",
+      user: USER,
+    };
+    await page.route("http://127.0.0.1:9/**", async (route) => {
+      const url = new URL(route.request().url());
+      const method = route.request().method();
+      seen.push(`${method} ${url.pathname}`);
+      const json = (body: string) =>
+        route.fulfill({ status: 200, contentType: "application/json", body });
+      if (url.pathname.startsWith("/auth/v1/token")) return json(JSON.stringify(session));
+      if (url.pathname.startsWith("/auth/v1/signup"))
+        return json(JSON.stringify({ ...USER, ...session }));
+      if (url.pathname.startsWith("/auth/v1/user")) return json(JSON.stringify(USER));
+      if (url.pathname.startsWith("/rest/v1/accounts"))
+        // The row is missing: an INSERT creates it, an UPDATE matches nothing.
+        return json(method === "POST" ? JSON.stringify([{ design_tools: true }]) : "[]");
+      return json("{}");
+    });
+  }
+
+  async function intoTheEditor(page: Page): Promise<void> {
+    await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+    await page.fill("#nombre", "Taberna Santo Domingo");
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Restaurante y bar", { exact: true }).click();
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Comidas", { exact: true }).click();
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.fill("#direccion", "Cta. de Santo Domingo, 2, Ronda");
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Que reserven", { exact: true }).click();
+    await page.fill("#enlace", "https://reservas.example.com/taberna");
+    await page.getByRole("button", { name: "Crear mi web" }).click();
+    await page.getByText("Ver a tamaño real →").first().click();
+    await page.frameLocator("iframe").first().locator('[data-section="sec-cover"]').waitFor();
+  }
+
+  it("guarda la preferencia aunque la cuenta todavía no tenga fila", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    const seen: string[] = [];
+    try {
+      await stubbedSupabase(page, seen);
+      await page.goto(`${BASE_URL}/entrar`, { waitUntil: "networkidle" });
+      await page.locator('input[type="email"]').first().fill(USER.email);
+      await page.locator('input[type="password"]').first().fill("contrasena123");
+      await page
+        .getByRole("button", { name: /^Entrar$/ })
+        .first()
+        .click();
+      await expect.poll(() => seen.some((c) => c.includes("/auth/v1/token"))).toBe(true);
+
+      await intoTheEditor(page);
+      await page.getByRole("switch").first().click();
+      await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
+      await expect(page.getByRole("button", { name: "Diseño", exact: true })).toBeVisible();
+
+      // The row is created rather than the failure reported, so neither notice is drawn.
+      await expect(page.getByText("Solo en este navegador")).toHaveCount(0);
+      await expect(page.getByText("No se recordará")).toHaveCount(0);
+      await expect
+        .poll(() => seen.filter((c) => c.startsWith("POST /rest/v1/accounts")).length)
+        .toBeGreaterThan(0);
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+
+  it("escribe en la cuenta aunque la sesión empiece con el editor ya abierto", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    const seen: string[] = [];
+    try {
+      await stubbedSupabase(page, seen);
+      await intoTheEditor(page);
+
+      // The ordinary way an account comes into being: at the end, from the editor itself.
+      await page.getByRole("button", { name: "Guardar en mi cuenta" }).click();
+      await page.fill("#account-email", USER.email);
+      await page.fill("#account-password", "contrasena123");
+      await page.getByRole("button", { name: /Crear la cuenta y guardar/ }).click();
+      await expect.poll(() => seen.some((c) => c.includes("/auth/v1/signup"))).toBe(true);
+      await page.getByRole("button", { name: "Cerrar" }).click();
+
+      await page.getByRole("switch").first().click();
+      await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
+      await expect(page.getByRole("button", { name: "Diseño", exact: true })).toBeVisible();
+
+      // **The assertion that was zero before.** Without watching for the session the editor made no
+      // request to `accounts` at all, and drew no notice either — a silent failure of «del mismo
+      // rango que el idioma de la interfaz».
+      await expect
+        .poll(() => seen.filter((c) => c.startsWith("POST /rest/v1/accounts")).length)
+        .toBeGreaterThan(0);
+
+      // And the brand-new account's `default false` must not switch off the tools just turned on.
+      await expect(page.getByRole("switch")).toHaveAttribute("aria-checked", "true");
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+});

@@ -71,6 +71,7 @@ function recorder(...responses: unknown[]) {
       "select",
       "insert",
       "update",
+      "upsert",
       "eq",
       "is",
       "order",
@@ -376,16 +377,34 @@ describe("the design-tools switch in the account", () => {
     expect(await loadAccountDesignTools(client, "u1")).toBeNull();
   });
 
-  it("writes only the switch, and only on the owner's own row", async () => {
+  it("writes only the switch and the id it belongs to, and nothing else", async () => {
     const { client, calls } = recorder({ data: [{ design_tools: true }], error: null });
     expect(await saveAccountDesignTools(client, "u1", true)).toBe(true);
-    // Nothing else may ride along on this update: the switch is a property of the person and the
-    // row also carries the deletion request.
-    expect(payloadOf(calls, "update")).toEqual({ design_tools: true });
-    expect(calls.filter((call) => call.method === "eq").map((call) => call.args)).toContainEqual([
-      "id",
-      "u1",
-    ]);
+    // Nothing else may ride along: the switch is a property of the person, and the same row also
+    // carries the deletion request. The id is here because it is how the row is addressed now —
+    // not an extra field being written.
+    expect(payloadOf(calls, "upsert")).toEqual({ id: "u1", design_tools: true });
+  });
+
+  /**
+   * **Upserts rather than updates, and the distinction from `createSite`'s rule matters.**
+   *
+   * Direction's adjustment of 4 October — «una web anónima nunca sobrescribe una de la cuenta» —
+   * is why `createSite` may only ever insert, and the test above enforces it on that function.
+   * This is a different kind of row: not a site somebody might clobber, but the caller's own
+   * preference, addressed by primary key, with `accounts_insert_own` restricting it to
+   * `id = auth.uid()`. There is nothing here to overwrite that is not already theirs.
+   *
+   * Reported on 6 October: signed in against an `accounts` table with no row — production until
+   * migration `0002` is applied — an update matched nothing, every press said «Solo en este
+   * navegador», and the preference never left the browser.
+   */
+  it("creates the row when it is missing, instead of reporting a failure", async () => {
+    const { client, calls } = recorder({ data: [{ design_tools: true }], error: null });
+    expect(await saveAccountDesignTools(client, "u1", true)).toBe(true);
+    const methods = calls.map((call) => call.method);
+    expect(methods).toContain("upsert");
+    expect(methods, "an update cannot create the row it did not find").not.toContain("update");
   });
 
   it("reports a refused write, so the editor's «no lo recordamos» notice stays honest", async () => {
