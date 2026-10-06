@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import es from "../locales/es.json" with { type: "json" };
+import type { SwitchNotice } from "./designTools.ts";
 import { NARROWEST_DESKTOP, NARROWEST_WIDTH } from "./overflowCheck.ts";
 
 /**
@@ -379,7 +380,7 @@ function RailButton({
  */
 function DesignToolsSwitch({
   on,
-  remembered,
+  notice,
   asking,
   onAsk,
   onDismiss,
@@ -393,7 +394,7 @@ function DesignToolsSwitch({
    * site data. The tools are still on, because the switch the editor obeys is React state; what is
    * gone is the next visit. So the notice says that and nothing stronger.
    */
-  remembered: boolean;
+  notice: SwitchNotice;
   /** Whether the trade question is open. Held by the caller so that pressing a rail item, or
    * anything else that moves the person along, can close it. */
   asking: boolean;
@@ -481,12 +482,27 @@ function DesignToolsSwitch({
           the sentence that explains it is the `title` — the same division the `Diseño` rail item's
           own note uses. Amber rather than red: nothing is broken now, and a red line beside a switch
           that just worked would be the overstatement this fixes. */}
-      {on && !remembered ? (
+      {/**
+       * **Which sentence, and the whole point of there being two.**
+       *
+       * These used to be one, drawn from one boolean that two unrelated failures could set. The
+       * account's failure then drew the browser's words — «este navegador no nos deja guardar la
+       * preferencia», «la próxima vez que entres estarán apagadas» — while `localStorage` had just
+       * accepted the value and the next visit would have had the tools on. Both halves false, from
+       * the one part of this interface whose entire job is to admit that something was not saved.
+       */}
+      {on && notice !== "none" ? (
         <span
-          title={es["editor.designTools.notRememberedHelp"]}
+          title={
+            notice === "browser"
+              ? es["editor.designTools.notRememberedHelp"]
+              : es["editor.designTools.notInAccountHelp"]
+          }
           className="text-center text-[9px] font-semibold leading-[1.25] text-[#B45309]"
         >
-          {es["editor.designTools.notRemembered"]}
+          {notice === "browser"
+            ? es["editor.designTools.notRemembered"]
+            : es["editor.designTools.notInAccount"]}
         </span>
       ) : null}
 
@@ -526,9 +542,13 @@ function DesignToolsSwitch({
               reopen — turn the tools off, press again — would be the product insisting on something
               it has already been told is not so. */}
           <span className="border-t border-ui-border pt-2.5 text-xs leading-normal text-ui-muted">
-            {remembered
-              ? es["editor.designTools.ask.note"]
-              : es["editor.designTools.ask.noteBlocked"]}
+            {/* `=== "browser"`, not «anything went wrong»: `ask.noteBlocked` says «este navegador
+                no nos deja guardar la preferencia», which is only true of that one failure. When it
+                is the account that refused, this browser *does* save it, and this note is correct
+                exactly as written. */}
+            {notice === "browser"
+              ? es["editor.designTools.ask.noteBlocked"]
+              : es["editor.designTools.ask.note"]}
           </span>
         </div>
       ) : null}
@@ -619,7 +639,7 @@ export function EditorShell({
   rail,
   onRailChange,
   designTools,
-  toolsRemembered,
+  switchNotice,
   askingDesignTools,
   onAskDesignTools,
   onDismissDesignTools,
@@ -655,7 +675,7 @@ export function EditorShell({
    */
   designTools: boolean | undefined;
   /** Whether this browser agreed to remember the switch — `false` only after a write it refused. */
-  toolsRemembered: boolean;
+  switchNotice: SwitchNotice;
   askingDesignTools: boolean;
   onAskDesignTools: () => void;
   onDismissDesignTools: () => void;
@@ -1117,7 +1137,7 @@ export function EditorShell({
           {designTools === undefined ? null : (
             <DesignToolsSwitch
               on={designTools}
-              remembered={toolsRemembered}
+              notice={switchNotice}
               asking={askingDesignTools}
               onAsk={onAskDesignTools}
               onDismiss={onDismissDesignTools}

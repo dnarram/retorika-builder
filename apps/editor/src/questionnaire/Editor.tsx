@@ -53,6 +53,7 @@ import {
 } from "@retorika/schema";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CHROME_SCALE, PILL_REST_BORDER } from "../editor/chromeScale.ts";
+import type { SwitchNotice } from "../editor/designTools.ts";
 import { designRows, elementLabels, selectedRowId } from "../editor/designTree.ts";
 import {
   type AcceptedWarning,
@@ -416,7 +417,7 @@ export function Editor({
   onSetSiteUrl,
   onSetVariant,
   designTools,
-  toolsRemembered,
+  switchNotice,
   onDesignToolsChange,
   onEscalateSection,
   onRevertSection,
@@ -494,7 +495,7 @@ export function Editor({
   designTools: boolean | undefined;
   /** Whether this browser agreed to remember the switch. Passed straight through to the rail: the
    * canvas has no business with it, and `Variants` is where the write that failed happened. */
-  toolsRemembered: boolean;
+  switchNotice: SwitchNotice;
   onDesignToolsChange: (on: boolean) => void;
   /** This section starts being designed by hand, and goes back to the catalog's layout. One
    * history step each, so Ctrl+Z covers the first minutes — which is what the advanced dossier §5
@@ -3386,7 +3387,7 @@ export function Editor({
       rail={effectiveRail}
       onRailChange={showRail}
       designTools={designTools}
-      toolsRemembered={toolsRemembered}
+      switchNotice={switchNotice}
       askingDesignTools={askingDesignTools}
       onAskDesignTools={() => setAskingDesignTools(true)}
       onDismissDesignTools={() => setAskingDesignTools(false)}

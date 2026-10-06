@@ -38,6 +38,7 @@ import {
   loadDesignTools,
   MIN_STUDIO_WIDTH,
   saveDesignTools,
+  switchNotice,
 } from "../editor/designTools.ts";
 import {
   type History,
@@ -348,7 +349,18 @@ export function Variants({
    * and this is false, and «off» needs no storage to survive — nothing stored *is* off. So turning
    * them off hides the notice by being true rather than by forgetting.
    */
-  const [toolsRemembered, setToolsRemembered] = useState(true);
+  const [browserRefused, setBrowserRefused] = useState(false);
+  /**
+   * And the account's half, kept apart from the browser's.
+   *
+   * **Not latching, unlike the one above, and the asymmetry has a reason.** The browser flag only
+   * ever latches because turning the tools *off* calls `removeItem`, which a browser that refuses
+   * `setItem` will happily do — reading every result would have reported the preference safe
+   * between two presses that both proved it was not. The account write has no such asymmetry: it is
+   * the same `update` in both directions, so a success really does prove the row can be written and
+   * is allowed to clear this.
+   */
+  const [accountRefused, setAccountRefused] = useState(false);
 
   /**
    * Who the switch belongs to, once there is somebody for it to belong to.
@@ -815,18 +827,18 @@ export function Variants({
             // session either way — the state above is what the editor obeys — so a refusal costs the
             // person nothing now and everything on the next visit, which is what the notice says.
             // See `toolsRemembered` for why a success does not clear it.
-            if (!saveDesignTools(on)) setToolsRemembered(false);
+            if (!saveDesignTools(on)) setBrowserRefused(true);
             // And to the account, when there is one, because that is where the dossier puts it —
             // «del mismo rango que el idioma de la interfaz», so it follows the person between
             // machines. Written *as well as* locally rather than instead: the browser copy is what
             // answers instantly on the next visit while the account is still being asked.
             if (switchOwner) {
               void saveAccountDesignTools(browserClient(), switchOwner, on).then((ok) => {
-                if (!ok) setToolsRemembered(false);
+                setAccountRefused(!ok);
               });
             }
           }}
-          toolsRemembered={toolsRemembered}
+          switchNotice={switchNotice(browserRefused, accountRefused)}
           onEscalateSection={(sectionId) => {
             dismissToast();
             dispatch({ type: "escalateSection", variant: openIndex, sectionId });
