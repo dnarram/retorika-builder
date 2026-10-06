@@ -84,6 +84,25 @@
   --ui-ease: cubic-bezier(0.2, 0, 0, 1);
   --ui-fast: 120ms;
   --ui-base: 180ms;
+
+  /**
+   * ## A second curve, and a third duration, for a surface changing shape
+   *
+   * `--ui-ease` is decisive on purpose: it leaves immediately, because a control answering a press
+   * has to feel attached to the press. Measured on the canvas, that is the wrong motion — desktop
+   * to phone went 1168px, 1059, 777 in three frames, so the preview had already crossed the
+   * renderer's 720px breakpoint and re-laid-out before the eye began following it.
+   *
+   * A symmetric curve eases in as well as out: 1168, 1160, 1129, 1065, 954, 809, 675 — it leaves
+   * gently and crosses the breakpoint in the **middle** of the travel, where somebody is watching.
+   * Seventeen distinct preview widths instead of twelve, and instead of the two it had before any
+   * of this.
+   *
+   * Longer too, for the same reason `--ui-base` is longer than `--ui-fast`: this is the largest
+   * thing on the screen and it is meant to be followed, not acknowledged.
+   */
+  --ui-ease-shape: cubic-bezier(0.4, 0, 0.2, 1);
+  --ui-slow: 260ms;
 }
 
 /**
@@ -112,6 +131,7 @@
   --shadow-ui-2: var(--ui-shadow-2);
   --shadow-ui-3: var(--ui-shadow-3);
   --ease-ui: var(--ui-ease);
+  --ease-ui-shape: var(--ui-ease-shape);
 }
 
 /**
@@ -142,6 +162,28 @@
   transition-property: transform, width, opacity;
   transition-duration: var(--ui-base);
   transition-timing-function: var(--ui-ease);
+}
+
+/**
+ * The canvas changing shape, which is the one place in this interface where animating `width` is
+ * the point rather than a mistake.
+ *
+ * Everywhere else a transition that touches layout is a bug: it reflows the page sixty times to
+ * move something `transform` could have moved. Here the reflow **is** the effect. The preview is a
+ * real page in a real iframe, so narrowing the card narrows that page's viewport, its own
+ * `max-width: 720px` query fires part-way through, and the sections genuinely re-lay-out on the
+ * way across. Nothing is simulated: what the owner watches rearrange is the same responsive CSS
+ * the visitor's phone will run.
+ *
+ * **`height` is deliberately not in the list.** It was, to keep `height × zoom` constant while a
+ * panel has the canvas scaled — and measuring found the vertical travel bought nothing anybody
+ * could see while giving the editor one more thing in flight. `width` and `transform` are what
+ * carry this.
+ */
+@utility ui-reflow {
+  transition-property: width, transform;
+  transition-duration: var(--ui-slow);
+  transition-timing-function: var(--ui-ease-shape);
 }
 
 /**

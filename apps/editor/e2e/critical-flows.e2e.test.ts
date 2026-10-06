@@ -11,6 +11,7 @@ import {
   type Page,
 } from "@playwright/test";
 import { afterAll, beforeAll, describe, it } from "vitest";
+import { NARROWEST_WIDTH } from "../src/editor/overflowCheck.ts";
 import { BASE_URL, QUESTIONNAIRE_URL, startEditorServer, stopEditorServer } from "./server.ts";
 
 /**
@@ -6128,14 +6129,37 @@ describe("abrir un panel no tapa la página ni la convierte en otra", () => {
       await walker.getByText("Ver a tamaño real →").first().click();
 
       const widths: Record<string, number[]> = {};
+      let lastCanvasWidth = -1;
       for (const width of [1024, 1280, 1600]) {
         await walker.setViewportSize({ width, height: 800 });
         for (const name of ["Estilo", "Páginas", "Compartir", "Fotos", "Diseño", "Listas"]) {
           await walker.getByRole("button", { name, exact: true }).first().click();
-          // The card carries a 200ms transform transition, and the layout width it is scaled from
-          // is set a frame after the panel mounts, once `ResizeObserver` has measured the room
-          // that is left. Both are settled well inside this.
-          await walker.waitForTimeout(350);
+          /**
+           * **Polled until the canvas stops moving, rather than waited out.**
+           *
+           * This was a flat 350ms, chosen when the card's transition was 200. That made a
+           * transition's duration part of this test's contract: lengthening it — which the view
+           * change did, to 260ms, so the preview can be watched rearranging — would not have
+           * failed here honestly, it would have made this flaky. The same shape of mistake as
+           * tuning a tab's width to one machine's font metrics, and the same fix: stop depending
+           * on the number.
+           */
+          await expect
+            .poll(
+              async () => {
+                const now = await walker.evaluate(() =>
+                  Math.round(
+                    document.querySelector('[data-testid="canvas-card"]')?.getBoundingClientRect()
+                      .width ?? -1,
+                  ),
+                );
+                const stable = now === lastCanvasWidth;
+                lastCanvasWidth = now;
+                return stable;
+              },
+              { timeout: 5_000, intervals: [100] },
+            )
+            .toBe(true);
           const state = await canvasState(walker);
           const where = `«${name}» @ ${width}x800`;
 
@@ -6589,6 +6613,103 @@ describe("el interruptor de diseño llega a la cuenta", () => {
       await expect(page.getByRole("switch")).toHaveAttribute("aria-checked", "true");
     } finally {
       await context.close();
+    }
+  }, 300_000);
+});
+
+describe("cambiar de escritorio a móvil se ve recolocarse", () => {
+  /**
+   * Direction asked for the view change to look like the elements re-arrange themselves rather
+   * than teleport. Measured before touching anything, desktop to phone at 1440: the preview's own
+   * viewport took **exactly two values**, 1168px and then 320px, in consecutive frames. There was
+   * nothing to watch.
+   *
+   * **What makes it watchable is that the reflow is real.** The preview is a live page in an
+   * iframe, so animating the card's width animates that page's viewport, its own
+   * `max-width: 720px` query fires part-way through, and the sections genuinely re-lay-out on the
+   * way across. Nothing is simulated: what is being watched is the same responsive CSS the
+   * visitor's phone will run.
+   *
+   * This asserts the property rather than the mechanism — how many distinct widths the preview
+   * passes through — so a better way of achieving it would still pass, and the teleport could not.
+   */
+  async function widthsCrossed(page: Page, press: () => Promise<void>): Promise<number[]> {
+    await page.evaluate(() => {
+      (window as unknown as { __w: number[] }).__w = [];
+      const card = document.querySelector('[data-testid="canvas-card"]');
+      const frame = card?.querySelector("iframe");
+      const started = performance.now();
+      const tick = () => {
+        (window as unknown as { __w: number[] }).__w.push(frame?.contentWindow?.innerWidth ?? 0);
+        if (performance.now() - started < 900) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+    await press();
+    await page.waitForTimeout(1_000);
+    return [...new Set(await page.evaluate(() => (window as unknown as { __w: number[] }).__w))];
+  }
+
+  async function intoTheEditor(page: Page): Promise<void> {
+    await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+    await page.fill("#nombre", "Taberna Santo Domingo");
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Restaurante y bar", { exact: true }).click();
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Comidas", { exact: true }).click();
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.fill("#direccion", "Cta. de Santo Domingo, 2, Ronda");
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Que reserven", { exact: true }).click();
+    await page.fill("#enlace", "https://reservas.example.com/taberna");
+    await page.getByRole("button", { name: "Crear mi web" }).click();
+    await page.getByText("Ver a tamaño real →").first().click();
+    await page.frameLocator("iframe").first().locator('[data-section="sec-cover"]').waitFor();
+    await page.waitForTimeout(1_000);
+  }
+
+  it("pasa por anchos intermedios en vez de saltar, en los dos sentidos", async () => {
+    const walker = await (await browser.newContext()).newPage();
+    try {
+      await walker.setViewportSize({ width: 1440, height: 900 });
+      await intoTheEditor(walker);
+
+      const toPhone = await widthsCrossed(walker, () =>
+        walker.getByRole("button", { name: "Ver en móvil" }).click(),
+      );
+      // Two is the teleport this replaced: the width before and the width after, nothing between.
+      expect(toPhone.length, `anchos: ${toPhone.join(", ")}`).toBeGreaterThan(5);
+      // And it really ends at the phone's own width, so the motion did not eat the result.
+      expect(toPhone.at(-1)).toBe(NARROWEST_WIDTH);
+
+      const toDesktop = await widthsCrossed(walker, () =>
+        walker.getByRole("button", { name: "Ver en ordenador" }).click(),
+      );
+      expect(toDesktop.length, `anchos: ${toDesktop.join(", ")}`).toBeGreaterThan(5);
+      // Back past the renderer's breakpoint, which is what «desktop» has to mean.
+      expect(toDesktop.at(-1)).toBeGreaterThan(720);
+    } finally {
+      await walker.context().close();
+    }
+  }, 300_000);
+
+  it("llega igualmente cuando se pide menos movimiento, sin animarlo", async () => {
+    // The preference removes the travel, never the destination. `globals.css` flattens every
+    // duration to 0.01ms, so the width arrives in one frame — exactly as it used to for everybody.
+    const walker = await (await browser.newContext({ reducedMotion: "reduce" })).newPage();
+    try {
+      await walker.setViewportSize({ width: 1440, height: 900 });
+      await intoTheEditor(walker);
+      const toPhone = await widthsCrossed(walker, () =>
+        walker.getByRole("button", { name: "Ver en móvil" }).click(),
+      );
+      expect(toPhone.at(-1), "la vista de móvil no llegó").toBe(NARROWEST_WIDTH);
+      expect(
+        toPhone.length,
+        `con movimiento reducido no debería animarse: ${toPhone.join(", ")}`,
+      ).toBeLessThanOrEqual(3);
+    } finally {
+      await walker.context().close();
     }
   }, 300_000);
 });

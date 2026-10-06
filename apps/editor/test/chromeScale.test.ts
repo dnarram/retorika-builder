@@ -107,24 +107,34 @@ describe("the depth scale", () => {
 });
 
 describe("motion", () => {
-  it("declares one curve and two durations", () => {
+  it("declares its curves and its durations", () => {
+    // `--ui-ease` answers a press; `--ui-ease-shape` carries a surface changing shape, and is
+    // symmetric so the travel is watchable rather than over before the eye arrives.
     expect(DECLARATIONS).toMatch(/--ui-ease:\s*cubic-bezier\(/);
+    expect(DECLARATIONS).toMatch(/--ui-ease-shape:\s*cubic-bezier\(/);
     expect(DECLARATIONS).toMatch(/--ui-fast:\s*\d+ms/);
     expect(DECLARATIONS).toMatch(/--ui-base:\s*\d+ms/);
+    expect(DECLARATIONS).toMatch(/--ui-slow:\s*\d+ms/);
   });
 
   /**
-   * **200ms is a test's constraint, not a taste.** The panel guard in
-   * `e2e/critical-flows.e2e.test.ts` waits 350ms for the canvas to settle before measuring it. A
-   * duration raised past that would not fail honestly — it would make that guard flaky, which is
-   * the worst way for a limit to be discovered.
+   * **Every duration token, not a named two — which is the hole this had.**
+   *
+   * The pattern used to read `--ui-(?:fast|base)`, so it checked the durations that existed when
+   * it was written and would have waved through any that arrived later. `--ui-slow` arrived with
+   * the canvas's reflow and was exactly that case.
+   *
+   * The ceiling is 400ms and it is about a person rather than a test now: the panel guard used to
+   * wait a fixed 350ms for the canvas to settle, which made a duration raised past it flaky rather
+   * than failing; that guard polls until the width stops moving instead. What is left is the rule
+   * that a chrome transition nobody asked to watch must not outstay its welcome.
    */
-  it("keeps every duration under the 350ms the panel guard waits", () => {
-    const durations = [...DECLARATIONS.matchAll(/--ui-(?:fast|base):\s*(\d+)ms/g)].map((m) =>
-      Number(m[1]),
+  it("keeps every duration a transition anybody has to wait through under 400ms", () => {
+    const durations = [...DECLARATIONS.matchAll(/--ui-[\w-]*?(?:fast|base|slow):\s*(\d+)ms/g)].map(
+      (m) => Number(m[1]),
     );
-    expect(durations.length).toBeGreaterThan(0);
-    for (const ms of durations) expect(ms).toBeLessThanOrEqual(200);
+    expect(durations.length, "no duration tokens matched — the pattern has drifted").toBe(3);
+    for (const ms of durations) expect(ms).toBeLessThanOrEqual(400);
   });
 
   /**
@@ -207,11 +217,29 @@ describe("the canvas's copy of the scale", () => {
     });
   }
 
-  it("transcribes every token the stylesheet declares, so none is quietly left behind", () => {
-    const declared = [...DECLARATIONS.matchAll(/--ui-([\w-]+):/g)].map((m) => m[1]);
-    // `ok` is the one token with no canvas use: it marks the save state in the top bar and the
-    // preview has no equivalent. Named here rather than silently absent.
-    const expected = declared.filter((name) => name !== "ok");
+  /**
+   * Tokens the canvas deliberately does not carry, each named rather than silently absent.
+   *
+   * A list is only worth having if an addition has to argue with it: a token that reached the
+   * stylesheet and not the canvas would otherwise be indistinguishable from one nobody noticed.
+   */
+  const EDITOR_ONLY = [
+    // The save tick in the top bar. The preview has no equivalent state to mark.
+    "ok",
+    // The canvas's own reflow is animated by `globals.css` on the card that *holds* the iframe,
+    // from the editor's document. Nothing inside the preview uses either, and copying them across
+    // would be an export with no callers.
+    "slow",
+    "ease-shape",
+  ];
+
+  it("transcribes every token the stylesheet declares, apart from the ones named here", () => {
+    const declared = [...DECLARATIONS.matchAll(/--ui-([\w-]+):/g)].flatMap((m) => m[1] ?? []);
+    const expected = declared.filter((name) => !EDITOR_ONLY.includes(name));
     expect(expected.length).toBe(pairs.length);
+    // And the exceptions have to be real: a stale name here would quietly widen the hole.
+    for (const name of EDITOR_ONLY) {
+      expect(declared, `${name} is excused but not declared`).toContain(name);
+    }
   });
 });

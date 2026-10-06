@@ -713,6 +713,32 @@ export function EditorShell({
   const [available, setAvailable] = useState(0);
 
   /**
+   * **Only pressing the device toggle animates the canvas, and the restriction is the design.**
+   *
+   * The card's width changes for several reasons: a panel opening, the window resizing, the
+   * preview frame remounting when the document changes shape. Animating all of them was the
+   * generous reading of «dale movimiento» and it was wrong — measured, escalating a section to
+   * hand-made reset the preview's own scroll from 76 to 0, because a page that grows wider gets
+   * shorter and the browser clamps a scroll position that no longer exists. The headline appeared
+   * to jump 76px, which is the one thing «no se mueve ni un píxel» promises will not happen.
+   *
+   * Pressing the toggle is the case direction asked for and the one where the owner is watching
+   * the canvas, expecting it to change. Everywhere else the width still snaps, exactly as before.
+   *
+   * **The frame of delay is what makes the transition run at all.** A transition only starts if
+   * the property was already transitionable in the previous computed style — turn it on and change
+   * the width in the same commit and the browser simply jumps, which is what the first version of
+   * this did. So the class goes on now and the device changes on the next frame.
+   */
+  const [changingDevice, setChangingDevice] = useState(false);
+
+  const changeDevice = (next: "desktop" | "mobile") => {
+    if (next === device) return;
+    setChangingDevice(true);
+    requestAnimationFrame(() => onDeviceChange(next));
+  };
+
+  /**
    * Where the page-tab indicator has to be, measured rather than computed.
    *
    * The tabs are the owner's own page titles, so their widths are whatever they typed — there is
@@ -949,7 +975,7 @@ export function EditorShell({
             letting the tabs give way to it, which at three pages left it 30px short of its own
             content and the undo/redo buttons visibly compressed to two thirds their size. */}
         <div className="flex shrink-0 items-center justify-end gap-2.5">
-          <DeviceToggle device={device} onChange={onDeviceChange} />
+          <DeviceToggle device={device} onChange={changeDevice} />
 
           <button
             type="button"
@@ -1159,7 +1185,15 @@ export function EditorShell({
           >
             <div
               data-testid="canvas-card"
-              className="flex shrink-0 flex-col overflow-hidden rounded-ui bg-ui-surface shadow-ui-1 transition-transform duration-200"
+              className={`flex shrink-0 flex-col overflow-hidden rounded-ui bg-ui-surface shadow-ui-1 ${
+                changingDevice ? "ui-reflow" : ""
+              }`}
+              // Ends the moment the width has actually arrived. Nothing schedules a fallback: a
+              // run with reduced motion never starts a transition, and leaving the class on an
+              // idle card costs nothing — it only matters while a width is changing.
+              onTransitionEnd={(event) => {
+                if (event.propertyName === "width") setChangingDevice(false);
+              }}
               // **The width the pre-download gate measures, imported rather than written again.**
               // This was 400 from the day the chrome was built — a number with no recorded reason,
               // chosen because it is narrow enough for the renderer's own responsive CSS to take
