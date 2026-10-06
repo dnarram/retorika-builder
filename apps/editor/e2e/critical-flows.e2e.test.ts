@@ -26,6 +26,50 @@ import { BASE_URL, QUESTIONNAIRE_URL, startEditorServer, stopEditorServer } from
 const PREVIEW = "iframe:not([data-buffered])";
 
 /**
+ * Run `act` and come back only once the preview is showing a **different document**.
+ *
+ * **Why counting the contents is not enough, and this is the correction of a comment that used to
+ * say it was.** Turning the design tools on replaces the preview's document. It used to do that by
+ * remounting the frame, which went blank, so `await expect(cards).toHaveCount(3)` could not be
+ * satisfied until the new document had parsed — the wait doubled as a wait for the swap by
+ * accident. Since the swap is buffered, the outgoing frame keeps its contents until the very last
+ * moment, so that same assertion is satisfied **by the document that is about to be thrown away**,
+ * and the `evaluateAll` after it lands on a frame mid-replacement and reports `[]`. CI caught it on
+ * 6 October 2026 at one of the two places that do this; the other passed by luck.
+ *
+ * So the wait is for the thing that actually changes: the document itself. The live document is
+ * stamped before `act`, and the mark is gone once it has been replaced — which no amount of
+ * content-counting can tell you, because both documents have the same content.
+ */
+async function replacingTheDocument(page: Page, act: () => Promise<void>): Promise<void> {
+  const stamped = await page.evaluate(() => {
+    const doc = document.querySelector<HTMLIFrameElement>(
+      "iframe:not([data-buffered])",
+    )?.contentDocument;
+    if (!doc) return false;
+    doc.documentElement.dataset["outgoing"] = "1";
+    return doc.documentElement.dataset["outgoing"] === "1";
+  });
+  // A stamp that did not land would make the poll below answer «arrived» on its first try and wait
+  // for nothing at all — the same shape of hole as a walk that examines zero elements.
+  expect(stamped, "no se pudo marcar el documento saliente: la espera no esperaría nada").toBe(
+    true,
+  );
+  await act();
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const doc = document.querySelector<HTMLIFrameElement>(
+          "iframe:not([data-buffered])",
+        )?.contentDocument;
+        if (!doc || doc.documentElement.dataset["outgoing"] === "1") return "outgoing";
+        return doc.querySelectorAll("[data-section]").length > 0 ? "arrived" : "parsing";
+      }),
+    )
+    .toBe("arrived");
+}
+
+/**
  * The critical flows, against the real, running application — the one thing no other suite in
  * this repository does. Everything else either renders in Node (`vitest`'s `happy-dom` project)
  * or serves static HTML strings through Playwright's own route interception
@@ -4775,8 +4819,10 @@ describe("sprint 14 día 6 — enlazar, avisar y desenlazar", () => {
     await page.getByText("Ver a tamaño real →").first().click();
     const frame = page.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').waitFor();
-    await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
-    await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
+    await replacingTheDocument(page, async () => {
+      await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
+      await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
+    });
     return frame;
   }
 
@@ -4786,10 +4832,15 @@ describe("sprint 14 día 6 — enlazar, avisar y desenlazar", () => {
       const frame = await withTools(page);
       const cards = frame.locator('[data-section="sec-services"] li.rb-item');
       // **Awaited before measuring, and that is not ceremony.** `evaluateAll` does no auto-waiting:
-      // it reports whatever matches at that instant, and turning the design tools on remounts the
-      // frame — so the first version of this read `[]` from a frame that was being replaced and
-      // asserted against nothing. Every `evaluateAll` below is preceded by a wait for the same
-      // reason.
+      // it reports whatever matches at that instant, and turning the design tools on replaces the
+      // frame's document — so the first version of this read `[]` from a frame that was being
+      // replaced and asserted against nothing. Every `evaluateAll` below is preceded by a wait for
+      // the same reason.
+      //
+      // **Counting is the wrong wait, though, and `withTools` is where that is now handled.** Both
+      // documents hold the same three cards, so `toHaveCount(3)` is answered by whichever one is
+      // mounted — including the one on its way out. `replacingTheDocument` waits for the swap
+      // itself; this stays as the wait for the content being there at all.
       await expect(cards).toHaveCount(3);
       const before = await cards.evaluateAll((nodes) =>
         nodes.map((node) => node.textContent?.replace(/\s+/g, " ").trim()),
@@ -5001,8 +5052,12 @@ describe("sprint 14 día 7 — el recorrido completo del sprint", () => {
       });
       expect(usable, "the preview loaded no shipped face").toBe(true);
 
-      await walk.getByRole("switch", { name: "Herramientas de diseño" }).click();
-      await walk.getByRole("button", { name: "Sí, enciéndelas" }).click();
+      // Returns once the preview is showing the document the tools produced, not the one they
+      // replaced — see `replacingTheDocument`. This is the walk CI failed on.
+      await replacingTheDocument(walk, async () => {
+        await walk.getByRole("switch", { name: "Herramientas de diseño" }).click();
+        await walk.getByRole("button", { name: "Sí, enciéndelas" }).click();
+      });
 
       // ---- day 6: a list made out of the cards that are already there, losing nothing ----------
       const cards = frame.locator('[data-section="sec-services"] li.rb-item');
