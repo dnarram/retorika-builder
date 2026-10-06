@@ -6713,3 +6713,172 @@ describe("cambiar de escritorio a móvil se ve recolocarse", () => {
     }
   }, 300_000);
 });
+
+describe("el panel y las herramientas llegan, no aparecen", () => {
+  /**
+   * The same request as the view change, one surface further in: direction asked for the right-hand
+   * panel and the design-tools items to arrive with movement rather than blink into place.
+   *
+   * **These are entrances, not transitions, and the difference is what makes them work.** A
+   * transition needs the property to have been transitionable in the previous computed style — the
+   * trap the view change paid for, where turning a class on and changing the value in the same
+   * commit simply jumped. None of these elements exist in the previous frame, so a keyframe
+   * animation runs on mount by definition and needs no frame of delay.
+   *
+   * They move only `opacity` and `transform`, so nothing reflows: the room the panel occupies opens
+   * at once and its contents travel into it. That is deliberate. The view change had to be narrowed
+   * to the device toggle alone because animating a *layout* property reset the preview's own
+   * scroll, and none of this can reach that.
+   *
+   * Asserted on the property — how many distinct opacities the thing passes through — rather than
+   * on the class or the duration, so a better way of arriving would still pass and the blink could
+   * not.
+   */
+  async function opacitiesWhile(
+    page: Page,
+    selector: string,
+    act: () => Promise<void>,
+  ): Promise<{ distinct: string[]; final: string }> {
+    await page.evaluate((sel: string) => {
+      (window as unknown as { __o: string[] }).__o = [];
+      const started = performance.now();
+      const tick = () => {
+        const el = document.querySelector(sel);
+        if (el) {
+          (window as unknown as { __o: string[] }).__o.push(
+            Number(getComputedStyle(el).opacity).toFixed(2),
+          );
+        }
+        // Generous, because the sampling starts before the click and Playwright's click is not
+        // instant: a window that closes while the thing is still arriving reports a last value of
+        // «part-way», which is a measurement artefact rather than a finding.
+        if (performance.now() - started < 2_500) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    }, selector);
+    await act();
+    await page.waitForTimeout(2_700);
+    const sampled = await page.evaluate(() => (window as unknown as { __o: string[] }).__o);
+    /**
+     * **The two answers are kept apart, because de-duplicating reorders.**
+     *
+     * The first version returned a `Set` and asked for its last entry. A `Set` keeps the order
+     * values were *first* seen — and `1.00` is seen before the panel exists at all, from the box
+     * the selector matches until then — so its last entry was `0.98`, the final value before the
+     * animation's last frame, and this read as «the panel never arrived». It had.
+     */
+    return { distinct: [...new Set(sampled)], final: sampled.at(-1) ?? "ausente" };
+  }
+
+  async function intoTheEditor(page: Page): Promise<void> {
+    await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+    await page.fill("#nombre", "Taberna Santo Domingo");
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Restaurante y bar", { exact: true }).click();
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Comidas", { exact: true }).click();
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.fill("#direccion", "Cta. de Santo Domingo, 2, Ronda");
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Que reserven", { exact: true }).click();
+    await page.fill("#enlace", "https://reservas.example.com/taberna");
+    await page.getByRole("button", { name: "Crear mi web" }).click();
+    await page.getByText("Ver a tamaño real →").first().click();
+    await page.frameLocator("iframe").first().locator('[data-section="sec-cover"]').waitFor();
+    await page.waitForTimeout(900);
+  }
+
+  it("el panel derecho entra en vez de parpadear", async () => {
+    const walker = await (await browser.newContext()).newPage();
+    try {
+      await walker.setViewportSize({ width: 1440, height: 900 });
+      await intoTheEditor(walker);
+
+      const seen = await opacitiesWhile(
+        walker,
+        '[data-testid="canvas-and-panel"] > *:last-child',
+        () => walker.getByRole("button", { name: "Estilo", exact: true }).first().click(),
+      );
+      // A blink is one value. Anything that travels passes through several.
+      expect(seen.distinct.length, `opacidades: ${seen.distinct.join(", ")}`).toBeGreaterThan(3);
+      // And it finishes arrived — a panel left part-way would be worse than one that blinked.
+      expect(seen.final).toBe("1.00");
+      await expect(walker.getByRole("heading", { name: "El estilo de toda la web" })).toBeVisible();
+    } finally {
+      await walker.context().close();
+    }
+  }, 300_000);
+
+  it("los dos elementos que añade el interruptor llegan uno tras otro", async () => {
+    const walker = await (await browser.newContext()).newPage();
+    try {
+      await walker.setViewportSize({ width: 1440, height: 900 });
+      await intoTheEditor(walker);
+
+      await walker.evaluate(() => {
+        (window as unknown as { __s: [string, string][] }).__s = [];
+        const started = performance.now();
+        const named = (name: string) =>
+          [...document.querySelectorAll('[data-testid="rail"] button')].find((b) =>
+            (b.textContent ?? "").trim().startsWith(name),
+          );
+        const tick = () => {
+          const design = named("Diseño");
+          const lists = named("Listas");
+          if (design && lists) {
+            (window as unknown as { __s: [string, string][] }).__s.push([
+              Number(getComputedStyle(design).opacity).toFixed(2),
+              Number(getComputedStyle(lists).opacity).toFixed(2),
+            ]);
+          }
+          if (performance.now() - started < 900) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
+      await walker.getByRole("switch").first().click();
+      await walker.getByRole("button", { name: "Sí, enciéndelas" }).click();
+      await walker.waitForTimeout(1_000);
+      const frames = await walker.evaluate(
+        () => (window as unknown as { __s: [string, string][] }).__s,
+      );
+
+      expect(frames.length, "no se observó ningún fotograma de los dos elementos").toBeGreaterThan(
+        3,
+      );
+      // «Diseño» leads and «Listas» follows: at some frame one is further along than the other.
+      // Asserted as «there exists», not «at 120ms», so it does not depend on when it is sampled.
+      const staggered = frames.some(([design, lists]) => Number(design) > Number(lists) + 0.1);
+      expect(staggered, `fotogramas: ${JSON.stringify(frames.slice(0, 6))}`).toBe(true);
+      // Both land, which is the half that matters more than the sequence.
+      expect(frames.at(-1)).toEqual(["1.00", "1.00"]);
+      await expect(walker.getByRole("button", { name: "Diseño", exact: true })).toBeVisible();
+      await expect(walker.getByRole("button", { name: "Listas", exact: true })).toBeVisible();
+    } finally {
+      await walker.context().close();
+    }
+  }, 300_000);
+
+  it("con movimiento reducido llegan igual, sin recorrido", async () => {
+    // The preference removes the travel, never the destination — the same contract the view change
+    // keeps. A panel that stayed at `opacity: 0` for somebody who asked for less motion would be
+    // the worst possible reading of the request.
+    const walker = await (await browser.newContext({ reducedMotion: "reduce" })).newPage();
+    try {
+      await walker.setViewportSize({ width: 1440, height: 900 });
+      await intoTheEditor(walker);
+      const seen = await opacitiesWhile(
+        walker,
+        '[data-testid="canvas-and-panel"] > *:last-child',
+        () => walker.getByRole("button", { name: "Estilo", exact: true }).first().click(),
+      );
+      expect(seen.final, "el panel no llegó a verse").toBe("1.00");
+      expect(
+        seen.distinct.length,
+        `no debería animarse: ${seen.distinct.join(", ")}`,
+      ).toBeLessThanOrEqual(2);
+      await expect(walker.getByRole("heading", { name: "El estilo de toda la web" })).toBeVisible();
+    } finally {
+      await walker.context().close();
+    }
+  }, 300_000);
+});
