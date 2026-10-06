@@ -395,6 +395,33 @@ function readingAnchor(
   return null;
 }
 
+/**
+ * The DOM point `chars` characters into an element's text — **the inverse of how every offset in
+ * this file is measured.**
+ *
+ * Offsets here are counted the way `selectionRange` counts them: a `Range` from the element's start
+ * to a position, and the length of its string. So walking the element's text nodes in order and
+ * accumulating their lengths lands on the same place, which is what makes a selection survivable
+ * across a document that has been rebuilt — the markup changes shape (a mark splits one text node
+ * into three), the character count does not.
+ *
+ * Past the end gives the last text node's end rather than nothing: a selection is still better put
+ * back clamped than dropped.
+ */
+function domPointAt(el: HTMLElement, chars: number): { node: Text; offset: number } | null {
+  const walker = el.ownerDocument.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  let left = chars;
+  let last: Text | null = null;
+  let node = walker.nextNode() as Text | null;
+  while (node) {
+    if (left <= node.data.length) return { node, offset: left };
+    left -= node.data.length;
+    last = node;
+    node = walker.nextNode() as Text | null;
+  }
+  return last ? { node: last, offset: last.data.length } : null;
+}
+
 function filenameFrom(response: Response, fallback: string): string {
   const match = /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") ?? "");
   return match?.[1] ?? fallback;
@@ -674,6 +701,69 @@ export function Editor({
    * looking and never to the site, so it is not in the document (`INV_4`).
    */
   const toolbarOn = useRef<ElementAddress | null>(null);
+
+  /**
+   * The words that were chosen, so **using the bar does not cost you them**.
+   *
+   * Reported by direction as «el cursor de texto», and the defect was written into the shape of
+   * this repository's own test for it: the walk that puts both marks on «beber» clicks the text and
+   * selects the word *again* between pressing B and pressing I. Using the bar changes the document,
+   * the document reloads the frame, and the selection lives in the document that was just thrown
+   * away. `wireToolbar` already puts the **bar** back — its note records the earlier half of this
+   * same fault, «a person got exactly one press per click into the text» — but with no selection
+   * the «Resaltar» group hides itself, because mockup 18 band 2 says those buttons are not drawn
+   * without one. So there was nowhere to press for the second mark.
+   *
+   * Kept as character offsets rather than as a `Range`, which is the only form that can survive:
+   * applying a mark splits one text node into three, so every node reference in the old document
+   * is meaningless in the new one while `{ from, to }` still names the same letters.
+   */
+  const lastSelection = useRef<{
+    sectionId: string;
+    elementId: string;
+    from: number;
+    to: number;
+  } | null>(null);
+
+  /**
+   * Put the chosen words back, in an element that has just been rebuilt.
+   *
+   * **The focus needs no guard against `wireEditing`'s select-all, and I measured that rather than
+   * reasoned it.** A first version carried a `restoringSelection` flag so the focus handler would
+   * skip selecting the whole field; removing the flag changed nothing, because `focus()` dispatches
+   * synchronously and the two lines below replace whatever it selected before the browser paints.
+   * There is no flash to prevent and so no flag to keep — this file's own rule about the toolbar's
+   * `max-width` applies: «proved redundant: removing it changes nothing… It is not kept as
+   * insurance».
+   *
+   * `preventScroll` **is** load-bearing: `focus()` scrolls its element into view by default, which
+   * would undo the reading position restored a few lines later in `wireOnce` and give back the jump
+   * that `restoreReadingPosition` exists to remove.
+   */
+  function restoreSelection(
+    iframeDoc: Document,
+    el: HTMLElement,
+    want: { from: number; to: number },
+  ) {
+    const selection = iframeDoc.getSelection();
+    if (!selection) return;
+    const frame = textFrameOf(el.textContent ?? "");
+    const start = domPointAt(el, frame.indent + want.from);
+    const end = domPointAt(el, frame.indent + want.to);
+    if (!start || !end) return;
+    const range = iframeDoc.createRange();
+    try {
+      range.setStart(start.node, start.offset);
+      range.setEnd(end.node, end.offset);
+    } catch {
+      // Offsets that no longer fit the text — the edit shortened it under us. Leaving the selection
+      // alone is the honest answer; a range guessed from stale numbers would mark the wrong letters.
+      return;
+    }
+    el.focus({ preventScroll: true });
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
   // One input, reused: the picker is opened from inside the frame, and the element that asked
   // for it is remembered here until a file comes back.
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -2364,6 +2454,13 @@ export function Editor({
 
         const refresh = () => {
           const range = selectionRange();
+          // Recorded here rather than at press time because this already runs on every
+          // `selectionchange`, so it costs nothing and is never behind. **Cleared when there is no
+          // range**, which matters as much as setting it: a stale record would put a selection back
+          // onto words the person had already deselected.
+          lastSelection.current = range
+            ? { sectionId: address.sectionId, elementId: address.elementId, ...range }
+            : null;
           const marks = marksFor(doc, address);
           for (const { mark, node } of buttons) {
             const pressed = range !== undefined && rangeHasMark(marks, range, mark);
@@ -2797,12 +2894,20 @@ export function Editor({
      * iframe — every edit in this editor does. Nothing had focus in the new frame, so nothing
      * reopened the bar, and a person got exactly one press per click into the text.
      *
-     * Reopened **without focusing**, deliberately. `wireEditing` selects a whole field on focus,
-     * which is right when somebody clicks into it to type and wrong here — having just pressed a
-     * swatch, they would watch their heading flash to selected for no reason. The words stay put
-     * and the bar stays put; clicking the text again is what resumes typing.
+     * **And the chosen words come back with it**, which is the half that was missing. This used to
+     * reopen the bar *without focusing*, deliberately: `wireEditing` selects a whole field on focus,
+     * which is right when somebody clicks in to type and wrong here — having just pressed a swatch,
+     * they would watch their heading flash to selected for no reason. That objection was sound and
+     * it is not an argument for doing nothing: putting the **exact** range back is not the flash it
+     * guarded against, it is the person's own selection surviving an edit — and the select-all it
+     * warned about is overwritten in the same synchronous block, so nothing of it is ever painted.
+     * Without this, the «Resaltar» group hides itself for want of a selection and a second mark has
+     * nowhere to be pressed.
      */
     const remembered = toolbarOn.current;
+    // Read before `open` runs. Its own `refresh` looks at a document nothing is selected in yet and
+    // would clear the very record this needs — which is correct of it, and is why the read is here.
+    const rememberedSelection = lastSelection.current;
     if (remembered) {
       const section = iframeDoc.querySelector(
         `[data-section="${CSS.escape(remembered.sectionId)}"]`,
@@ -2812,8 +2917,18 @@ export function Editor({
       );
       // Gone means the element was deleted or hidden while the bar was open; forget it rather than
       // keeping a pointer to something nobody can see.
-      if (el) open(el);
-      else toolbarOn.current = null;
+      if (el) {
+        open(el);
+        // Only the element the selection was actually in: the bar can be remembered for one
+        // element while the last selection belonged to another.
+        if (
+          rememberedSelection &&
+          rememberedSelection.sectionId === remembered.sectionId &&
+          rememberedSelection.elementId === remembered.elementId
+        ) {
+          restoreSelection(iframeDoc, el, rememberedSelection);
+        }
+      } else toolbarOn.current = null;
     }
   }
 
