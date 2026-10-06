@@ -30,5 +30,12 @@ minimumReleaseAgeExclude:
 # transitive dependency with no patch available», and using it here would be using it to avoid a
 # one-line upgrade. The range is targeted, so only the vulnerable versions are rewritten and a
 # consumer that already asks for a newer one is untouched.
+# `sharp` below 0.35.5 is GHSA-wq5f-xc86-pv6w, a high-severity flaw reached through its bundled
+# `librsvg` (CVE-2026-96889). It arrives once, as `next`'s optional dependency for image
+# optimisation, which is build-time only here and never reaches a client's site — ADR 0001 again.
+# Pinned rather than excepted for the same reason as the line above: 0.35.5 is published, so the
+# exception hatch would be standing in for a one-line upgrade. The patch is a minor bump within the
+# same line, and the prebuilt `@img/sharp-*` binaries follow it.
 overrides:
   "source-map-js@<1.2.2": ">=1.2.2"
+  "sharp@<0.35.5": ">=0.35.5"
