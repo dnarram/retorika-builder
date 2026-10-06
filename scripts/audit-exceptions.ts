@@ -4,19 +4,22 @@ import { join } from "node:path";
 /**
  * Every audit exception must carry its reason and its date.
  *
- * `pnpm audit` blocks, which is right. But a moderate advisory in a transitive dependency
- * with no patch available would turn CI red, and with the rule that nothing merges red it
- * would stop all work until a third party ships a fix — a stoppage caused by something
- * that is not ours. So there is an escape hatch, and this is what stops it becoming a
- * quiet one.
+ * `pnpm audit` blocks, which is right. But an advisory in a transitive dependency with no patch
+ * available would turn CI red, and with the rule that nothing merges red it would stop all work
+ * until a third party ships a fix — a stoppage caused by something that is not ours. So there is an
+ * escape hatch, and this is what stops it becoming a quiet one.
  *
- * pnpm reads `pnpm.auditConfig.ignoreCves`. JSON has no comments, so the reasons live
- * beside it in `pnpm.auditConfig.exceptionNotes`, and an ignored advisory without a
- * dated, explained note fails here.
+ * **It validates `audit-exceptions.json`, and that is a correction.** The list used to live in
+ * `package.json`'s `pnpm.auditConfig.ignoreCves`, and this script read it there and was satisfied.
+ * pnpm 10 stopped reading the `pnpm` field at all, and pnpm 12 has no `auditConfig` anywhere; the
+ * facility is the repeatable `--ignore <GHSA>` flag, which `scripts/security-audit.ts` now builds
+ * from that file. For some number of versions, then, an exception added here would have passed this
+ * check and still left the audit red — the hatch validated and unconnected. Found on 6 October 2026
+ * while pinning `source-map-js` past GHSA-68fv-2mgg-jv7q.
  *
- * There is deliberately **no expiry automation**. A job that turns red on a date is
- * another automatic blockage, which is the thing this exists to avoid. The dates are
- * simply visible, and reviewing the exceptions means reading them.
+ * There is deliberately **no expiry automation**. A job that turns red on a date is another
+ * automatic blockage, which is the thing this exists to avoid. The dates are simply visible, and
+ * reviewing the exceptions means reading them.
  */
 
 interface Note {
@@ -24,25 +27,36 @@ interface Note {
   why?: unknown;
 }
 
-const manifest = JSON.parse(
-  readFileSync(join(import.meta.dirname, "..", "package.json"), "utf8"),
-) as {
-  pnpm?: { auditConfig?: { ignoreCves?: unknown; exceptionNotes?: Record<string, Note> } };
+const root = join(import.meta.dirname, "..");
+const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as Record<
+  string,
+  unknown
+>;
+const exceptions = JSON.parse(readFileSync(join(root, "audit-exceptions.json"), "utf8")) as {
+  ignored?: Record<string, Note>;
 };
 
-const auditConfig = manifest.pnpm?.auditConfig ?? {};
-const ignored = Array.isArray(auditConfig.ignoreCves) ? auditConfig.ignoreCves : [];
-const notes = auditConfig.exceptionNotes ?? {};
-
+const ignored = exceptions.ignored ?? {};
 const problems: string[] = [];
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-for (const entry of ignored) {
-  const id = String(entry);
-  const note = notes[id];
+/**
+ * The dead home, kept out on purpose.
+ *
+ * Re-adding `pnpm.auditConfig` would look exactly like configuring something and would configure
+ * nothing — which is the state this script was just rescued from. It is cheaper to refuse the
+ * shape than to discover it again.
+ */
+if (manifest["pnpm"] !== undefined) {
+  problems.push(
+    'package.json has a "pnpm" field again — pnpm has not read it since v10. Settings belong in ' +
+      "pnpm-workspace.yaml, and audit exceptions in audit-exceptions.json.",
+  );
+}
 
-  if (!note) {
-    problems.push(`${id}: ignored with no entry in pnpm.auditConfig.exceptionNotes`);
+for (const [id, note] of Object.entries(ignored)) {
+  if (typeof note !== "object" || note === null) {
+    problems.push(`${id}: has no note object`);
     continue;
   }
   if (typeof note.added !== "string" || !ISO_DATE.test(note.added)) {
@@ -53,25 +67,18 @@ for (const entry of ignored) {
   }
 }
 
-// The other direction too: a note for something that is not actually ignored is a leftover,
-// and leftovers are how a list stops meaning anything.
-for (const id of Object.keys(notes)) {
-  if (!ignored.map(String).includes(id)) {
-    problems.push(`${id}: has a note but is not in ignoreCves — stale entry, remove it`);
-  }
-}
-
 if (problems.length > 0) {
   console.error("audit-exceptions: every ignored advisory needs a dated, explained note.");
   for (const problem of problems) console.error(`  ${problem}`);
   console.error("");
-  console.error('Shape: "exceptionNotes": { "<id>": { "added": "YYYY-MM-DD", "why": "..." } }');
+  console.error('Shape: { "ignored": { "<GHSA-id>": { "added": "YYYY-MM-DD", "why": "..." } } }');
   console.error("An exception is temporary by definition. Its date is how you know to revisit it.");
   process.exit(1);
 }
 
+const count = Object.keys(ignored).length;
 console.log(
-  ignored.length === 0
+  count === 0
     ? "audit-exceptions: no advisories ignored."
-    : `audit-exceptions: ${ignored.length} ignored advisory(ies), each dated and explained.`,
+    : `audit-exceptions: ${count} ignored advisory(ies), each dated and explained.`,
 );

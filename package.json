@@ -30,7 +30,7 @@
     "site:sample": "node scripts/build-sample-site.ts",
     "coverage:ratchet": "node scripts/coverage-ratchet.ts",
     "audit:exceptions": "node scripts/audit-exceptions.ts",
-    "security:audit": "pnpm audit --audit-level=moderate",
+    "security:audit": "node scripts/security-audit.ts",
     "security:secrets": "pre-commit run gitleaks --all-files",
     "fonts:generate": "node scripts/generate-font-data.ts",
     "brand:assets": "node scripts/brand-assets.ts"
@@ -54,11 +54,5 @@
     "@retorika/publisher": "workspace:*",
     "@retorika/renderer": "workspace:*",
     "@retorika/schema": "workspace:*"
-  },
-  "pnpm": {
-    "auditConfig": {
-      "ignoreCves": [],
-      "exceptionNotes": {}
-    }
   }
 }
