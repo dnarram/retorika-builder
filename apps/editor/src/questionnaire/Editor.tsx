@@ -358,6 +358,73 @@ function linesFor(doc: RetorikaDocument, sectionId: string): ListLines | undefin
 }
 
 /** From `Content-Disposition: attachment; filename="doc-taberna.zip"`. */
+/**
+ * How long a buffered frame gets to load before the swap is given up on.
+ *
+ * The frame being prepared is invisible, so a slow one is not a slow preview — it is a preview
+ * showing chrome that is one act out of date. Past this, the swap is abandoned and the live frame
+ * is remounted the old way: one visible flicker, which is what the whole change exists to remove,
+ * but in exchange for the chrome actually being right. Stale chrome is the worse failure — it is
+ * the defect the remount was introduced to fix in the first place.
+ */
+const BUFFER_DEADLINE_MS = 2_000;
+
+/**
+ * Where the reading position is, named by a section rather than by a number of pixels.
+ *
+ * **A raw `scrollY` is only the same place if everything above it is the same height**, and across
+ * a swap that is an assumption rather than a fact: the incoming frame carries chrome the outgoing
+ * one did not. Today it happens to hold — `.rb-handmade` is `position: absolute`, so a section
+ * becoming hand-designed adds no height to the flow — but it holds by a property of one stylesheet
+ * rule, and anchoring costs twenty lines.
+ *
+ * Returns the first section whose bottom edge is still below the top of the viewport, with how far
+ * into it the reading position falls.
+ */
+function readingAnchor(
+  doc: Document,
+  scrollY: number,
+): { sectionId: string; within: number } | null {
+  for (const section of doc.querySelectorAll<HTMLElement>("[data-section]")) {
+    const top = section.getBoundingClientRect().top + scrollY;
+    if (top + section.offsetHeight > scrollY) {
+      const sectionId = section.dataset.section;
+      if (sectionId) return { sectionId, within: scrollY - top };
+    }
+  }
+  return null;
+}
+
+/**
+ * Carry the reading position from the frame being replaced to the one replacing it.
+ *
+ * Called while both frames are alive and the incoming one is already wired, which is the only
+ * moment the question can be answered: there is nowhere else in this component where two documents
+ * of the same page exist at once.
+ */
+function carryReadingPosition(from: HTMLIFrameElement | null, to: HTMLIFrameElement) {
+  const fromWindow = from?.contentWindow;
+  const fromDoc = from?.contentDocument;
+  const toWindow = to.contentWindow;
+  const toDoc = to.contentDocument;
+  if (!fromWindow || !toWindow) return;
+  const { scrollX, scrollY } = fromWindow;
+  const anchor = fromDoc ? readingAnchor(fromDoc, scrollY) : null;
+  const landing = anchor
+    ? [...(toDoc?.querySelectorAll<HTMLElement>("[data-section]") ?? [])].find(
+        (section) => section.dataset.section === anchor.sectionId,
+      )
+    : undefined;
+  if (anchor && landing) {
+    const top = landing.getBoundingClientRect().top + toWindow.scrollY;
+    toWindow.scrollTo(scrollX, Math.max(0, top + anchor.within));
+    return;
+  }
+  // No anchor to be had — an empty page, or a section that this very act removed. The number is
+  // still a better answer than the top of the page.
+  toWindow.scrollTo(scrollX, scrollY);
+}
+
 function filenameFrom(response: Response, fallback: string): string {
   const match = /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") ?? "");
   return match?.[1] ?? fallback;
@@ -619,7 +686,15 @@ export function Editor({
    */
   const [acceptedWarnings, setAcceptedWarnings] = useState<ReadonlySet<AcceptedWarning>>(new Set());
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
-  const iframeRef = useRef<HTMLIFrameElement>(null);
+  /**
+   * **Two slots, and neither ever moves.** An `<iframe>` reloads when its node is removed from the
+   * document and re-inserted, and React's keyed reconciliation implements a reorder as exactly
+   * that — so a single list of frames would reload the surviving one at every swap, which is the
+   * blank frame this whole change exists to remove. Two fixed JSX positions cannot reorder: a slot
+   * is emptied or filled, and the other one is untouched.
+   */
+  const frameA = useRef<HTMLIFrameElement>(null);
+  const frameB = useRef<HTMLIFrameElement>(null);
   /**
    * Which element the floating toolbar is on, across the frame reloads every edit causes.
    *
@@ -805,6 +880,164 @@ export function Editor({
   );
 
   /**
+   * Which slot is on screen, and which is being prepared behind it.
+   *
+   * **The swap, instead of the flicker.** `chromeKey` still decides when the chrome has to be
+   * re-attached and still does it by putting a new `Document` in a frame — so `wiredDoc`'s identity
+   * guard, and the «attaches the chrome exactly once» guarantee that rests on it, are untouched.
+   * What changes is that the new document is loaded and wired in a frame nobody can see, and the
+   * frame already on screen keeps painting until it is ready. There is no moment with no page in it,
+   * so there is nothing for a fade to cover.
+   *
+   * **One pending slot, which is why «never two» needs no bookkeeping.** `pendingKey` is one
+   * string. Turning the tools on and straight back off overwrites it, React unmounts the frame
+   * whose key is gone and mounts one for the new key, and the live frame has not moved throughout.
+   * And a key that comes back to the one already live cancels the swap outright: nothing needs
+   * re-attaching, because the live frame is already wired for it.
+   */
+  const [buffer, setBuffer] = useState<{
+    live: 0 | 1;
+    liveKey: string;
+    pendingKey: string | null;
+  }>(() => ({ live: 0, liveKey: chromeKey, pendingKey: null }));
+
+  const pendingSlot: 0 | 1 = buffer.live === 0 ? 1 : 0;
+
+  /**
+   * Whether a swap has ever happened, and it decides one thing: the fade.
+   *
+   * `ui-fade-in` is a keyframe animation, so it runs **whenever the class arrives**, not only when
+   * the element mounts — which means handing it to the frame being promoted would fade the page in
+   * at every swap and put back exactly the flicker this removes. It is wanted on the very first
+   * load, which has no previous frame to carry and does briefly show the surface colour.
+   *
+   * A ref rather than state, and read during the render: the answer only ever goes from false to
+   * true, so there is nothing for a re-render to discover. Keying it on `canvasBackground` was the
+   * obvious move and was wrong — that is set at wiring time, a few milliseconds in, so it cut the
+   * first fade off almost as soon as it started.
+   */
+  const everSwapped = useRef(false);
+
+  function slotFrame(slot: 0 | 1): HTMLIFrameElement | null {
+    return (slot === 0 ? frameA : frameB).current;
+  }
+
+  function liveFrame(): HTMLIFrameElement | null {
+    return slotFrame(buffer.live);
+  }
+
+  function liveDoc(): Document | null | undefined {
+    return liveFrame()?.contentDocument;
+  }
+
+  /** What a slot is for right now, or `null` when it is empty. */
+  function slotRole(slot: 0 | 1): { key: string; live: boolean } | null {
+    if (buffer.live === slot) return { key: buffer.liveKey, live: true };
+    if (buffer.pendingKey === null) return null;
+    return { key: buffer.pendingKey, live: false };
+  }
+
+  /**
+   * One slot's frame. Both are absolutely positioned and fill the same box, so the page inside the
+   * frame being prepared lays out at exactly the width it will be shown at — a buffered frame of a
+   * different width would reflow at the reveal, which is the jump this replaces rather than a swap.
+   *
+   * **`inert` on the buffered one, not merely `opacity: 0`.** It covers the live frame for as long
+   * as it is loading, and an invisible frame that still took a click would swallow it into a
+   * document nobody can see: the click would land, edit something, and appear to do nothing.
+   * `aria-hidden` keeps it out of the accessibility tree, `tabIndex={-1}` out of the tab order, and
+   * `inert` refuses focus and interaction — `pointer-events: none` is beside it because that is the
+   * one the browser's hit test consults, so the click reaches the live frame underneath rather than
+   * merely being dropped.
+   */
+  function previewFrame(slot: 0 | 1) {
+    const role = slotRole(slot);
+    if (role === null) return null;
+    const ref = slot === 0 ? frameA : frameB;
+    // The remembered page colour, so a frame with nothing in it yet is the colour the page already
+    // was. `--ui-surface` until a page has ever loaded, which is the one moment nothing better is
+    // known — and the first arrival fades, because it has no previous frame to carry.
+    const background = { background: canvasBackground ?? "var(--ui-surface)" };
+    if (!role.live) {
+      return (
+        <iframe
+          key={role.key}
+          ref={ref}
+          data-buffered="true"
+          inert
+          aria-hidden
+          tabIndex={-1}
+          title={title}
+          srcDoc={html}
+          onLoad={(event) => promote(event.currentTarget)}
+          className="pointer-events-none absolute inset-0 h-full w-full border-0 opacity-0"
+          style={background}
+        />
+      );
+    }
+    return (
+      <iframe
+        key={role.key}
+        ref={ref}
+        title={title}
+        srcDoc={html}
+        onLoad={(event) => wireOnce(event.currentTarget)}
+        className={`absolute inset-0 h-full w-full border-0 ${
+          everSwapped.current ? "" : "ui-fade-in"
+        }`}
+        style={background}
+      />
+    );
+  }
+
+  /** Open a slot for the new chrome, or close one that is no longer wanted. */
+  useEffect(() => {
+    if (chromeKey === buffer.liveKey) {
+      if (buffer.pendingKey !== null) setBuffer((b) => ({ ...b, pendingKey: null }));
+      return;
+    }
+    if (chromeKey === buffer.pendingKey) return;
+    setBuffer((b) => ({ ...b, pendingKey: chromeKey }));
+  }, [chromeKey, buffer.liveKey, buffer.pendingKey]);
+
+  /**
+   * The deadline. Falls back to the visible remount rather than leaving the chrome stale — see
+   * `BUFFER_DEADLINE_MS`. Promoting the key into the live slot is what stops this retrying for
+   * ever: `chromeKey` and `liveKey` then agree, so the effect above opens no new slot.
+   */
+  useEffect(() => {
+    const waitingFor = buffer.pendingKey;
+    if (waitingFor === null) return;
+    const timer = setTimeout(() => {
+      setBuffer((b) =>
+        b.pendingKey === waitingFor ? { ...b, liveKey: waitingFor, pendingKey: null } : b,
+      );
+    }, BUFFER_DEADLINE_MS);
+    return () => clearTimeout(timer);
+  }, [buffer.pendingKey]);
+
+  /**
+   * The keyboard's focus was inside the frame that just left, so it goes into the one that
+   * replaced it. Without this, editing with a keyboard would drop focus to the document on every
+   * swap — which is a worse interruption than the flicker, and a silent one.
+   *
+   * After the commit rather than before it, because the incoming frame is `inert` until then and
+   * an inert element cannot take focus.
+   */
+  const refocusAfterSwap = useRef(false);
+  /*
+   * `buffer.live` flipping **is** the swap, so it is the whole trigger even though the body does
+   * not read it — and `liveFrame` is redeclared on every render, so listing it would run this on
+   * every render instead, which is the opposite of what it is for.
+   */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: see the note above this line
+  useEffect(() => {
+    if (!refocusAfterSwap.current) return;
+    refocusAfterSwap.current = false;
+    liveFrame()?.focus();
+  }, [buffer.live]);
+
+  /**
    * Look for the new page every frame until it is there, and wire it the moment it is.
    *
    * **This is what actually closes the window** `wireOnce` describes; `onLoad` is only the backstop.
@@ -830,7 +1063,14 @@ export function Editor({
     let frame = 0;
     const deadline = Date.now() + 1_000;
     const look = () => {
-      const iframeDoc = iframeRef.current?.contentDocument;
+      // **The frame being prepared, when there is one.** This look-ahead exists to wire a new
+      // document the moment it is parsed, and during a swap the new document is in the buffered
+      // frame — the live one is already wired and must stay that way. Pointing it at the live
+      // frame here would re-wire the live document the instant `wiredDoc` moved to the buffered
+      // one, which is the double attach everything else in this file is arranged to prevent.
+      const pending = buffer.pendingKey === null ? null : slotFrame(pendingSlot);
+      const target = pending ?? liveFrame();
+      const iframeDoc = target?.contentDocument;
       if (
         iframeDoc &&
         iframeDoc !== wiredDoc.current &&
@@ -851,14 +1091,17 @@ export function Editor({
         iframeDoc.readyState !== "loading" &&
         iframeDoc.querySelector("[data-section]") !== null
       ) {
-        wireOnce();
+        if (pending) promote(pending);
+        else wireOnce(target);
         return;
       }
       if (Date.now() < deadline) frame = requestAnimationFrame(look);
     };
     look();
     return () => cancelAnimationFrame(frame);
-  }, [html, chromeKey]);
+    // `buffer.pendingKey` is listed because it is what moves the target: a swap opening or closing
+    // has to restart the walk against the frame that now holds the arriving document.
+  }, [html, chromeKey, buffer.pendingKey]);
 
   /**
    * The grid stripes follow the selected section, **without** remounting the frame.
@@ -905,11 +1148,7 @@ export function Editor({
     : null;
 
   useEffect(() => {
-    syncGrid(
-      iframeRef.current?.contentDocument,
-      designOn ? designSectionId : null,
-      placingElementId,
-    );
+    syncGrid(liveDoc(), designOn ? designSectionId : null, placingElementId);
   });
 
   /**
@@ -979,7 +1218,7 @@ export function Editor({
   }
 
   useEffect(() => {
-    syncHole(iframeRef.current?.contentDocument);
+    syncHole(liveDoc());
   });
 
   /**
@@ -2825,12 +3064,40 @@ export function Editor({
    * `onLoad` stays, as the backstop for anything this misses. It is the same call, and the document
    * identity above is what makes the second one free.
    */
-  function wireOnce() {
-    const iframeDoc = iframeRef.current?.contentDocument;
+  function wireOnce(frame: HTMLIFrameElement | null | undefined) {
+    const iframeDoc = frame?.contentDocument;
     if (!iframeDoc || wiredDoc.current === iframeDoc) return;
     wiredDoc.current = iframeDoc;
     rememberCanvasBackground(iframeDoc);
-    wireInteractions();
+    wireInteractions(iframeDoc);
+  }
+
+  /**
+   * Hand the canvas over to the frame that was being prepared.
+   *
+   * **Wired before it is seen, which is the point of the whole arrangement.** If the frame were
+   * revealed first and wired after, the swap would trade one flicker for another: a page with no
+   * insertion pills, no selection outline and no hand-designed bar for however long the wiring
+   * takes. So everything that draws into the canvas runs here, against a frame that is still
+   * invisible and still `inert`, and the reveal is the last thing that happens.
+   *
+   * `syncHole` and `syncGrid` are called directly rather than left to their own passive effects
+   * for the same reason — those run after the commit, which is after the frame is on screen. They
+   * are idempotent in both directions, so running them twice costs nothing and the effects
+   * correct anything this closure read a render too early.
+   */
+  function promote(frame: HTMLIFrameElement) {
+    const arriving = buffer.pendingKey;
+    if (arriving === null || frame !== slotFrame(pendingSlot) || !frame.contentDocument) return;
+    wireOnce(frame);
+    syncHole(frame.contentDocument);
+    syncGrid(frame.contentDocument, designOn ? designSectionId : null, placingElementId);
+    carryReadingPosition(liveFrame(), frame);
+    // Read before the commit, because afterwards the frame it is asking about is gone. An
+    // `<iframe>` is the parent document's `activeElement` whenever focus is anywhere inside it.
+    refocusAfterSwap.current = document.activeElement === liveFrame();
+    everSwapped.current = true;
+    setBuffer({ live: pendingSlot, liveKey: arriving, pendingKey: null });
   }
 
   /**
@@ -2860,10 +3127,7 @@ export function Editor({
     }
   }
 
-  function wireInteractions() {
-    const iframeDoc = iframeRef.current?.contentDocument;
-    if (!iframeDoc) return;
-
+  function wireInteractions(iframeDoc: Document) {
     // The canvas is an `<iframe srcDoc>`, so a key pressed over the page being edited is dispatched
     // in *its* document and never reaches the editor's. Without this the shortcut would work
     // everywhere except the one place the person is actually looking.
@@ -3584,13 +3848,12 @@ export function Editor({
         }}
       />
       {/*
-        `key` on the chrome's own state, and it is the fix for two defects the browser walk found
-        that no test in this repository could have.
+        **Two frames, one canvas**, and `chromeKey` still decides when the chrome is re-attached.
 
-        Every piece of chrome inside the canvas is attached by `wireInteractions` on the frame's
-        `load`, and the comment above `html` explains why that is normally enough: an unchanged
-        document renders to the identical string, the frame does not reload, and the selection
-        survives. Two things this sprint break that assumption, both by being invisible in the
+        Every piece of chrome inside the canvas is attached by `wireInteractions` when the frame's
+        document is parsed, and the comment above `html` explains why that is normally enough: an
+        unchanged document renders to the identical string, the frame does not reload, and nothing
+        has to be re-attached. Two acts break that assumption, both by being invisible in the
         rendered page — which is exactly what they promise to be:
 
         1. **The switch changes no document at all** (`INV_4`). So nothing reloaded, and
@@ -3601,22 +3864,31 @@ export function Editor({
            after. That is «no se mueve ni un píxel» at the only level where it can be checked, and
            the reason accepting the offer left no bar behind.
 
-        Remounting re-runs the wiring against the current state. It costs the selection, which is the
-        right trade for two acts that are deliberate and rare — and re-attaching every listener in
-        place would be this remount with more ways to go wrong.
+        Both still need the chrome attached to a document it has never seen, and that is still what
+        happens — the document is just no longer the one on screen. The arriving page loads and is
+        wired in the buffered frame while the live one keeps painting, and the two change places
+        only once the new one is complete. So there is no frame with nothing in it, which is what
+        the fade and the remembered background existed to disguise; `wiredDoc`'s identity guard is
+        untouched, because a buffered frame is as new a `Document` as a remounted one.
+
+        **What this does not fix**, said plainly: the page is parsed twice during a swap, and the
+        text caret inside an editable element does not survive. The section selection does —
+        `wireSelection` restores it from `selectedSection` — and the reading position does now, by
+        `carryReadingPosition`. An earlier version of this comment claimed the selection was lost;
+        it was wrong, and it had been wrong for a while.
       */}
-      <iframe
-        key={chromeKey}
-        ref={iframeRef}
-        title={title}
-        srcDoc={html}
-        onLoad={wireOnce}
-        className="ui-fade-in w-full flex-grow border-0"
-        // The remembered page colour, so the one frame between remount and first paint is the
-        // colour the page already was. `--ui-surface` until a page has ever loaded, which is the
-        // same white it used to be and the only moment nothing better is known.
-        style={{ minHeight: "60vh", background: canvasBackground ?? "var(--ui-surface)" }}
-      />
+      <div
+        // The frames fill this box, so it is what reserves the canvas's height — it was
+        // `minHeight` on the frame itself, and the number has not changed. `relative` is here to
+        // be the containing block the buffered frame is positioned against: the canvas card is
+        // only a containing block while it happens to be scaled, which is not something to rest
+        // on.
+        className="relative w-full flex-grow"
+        style={{ minHeight: "60vh" }}
+      >
+        {previewFrame(0)}
+        {previewFrame(1)}
+      </div>
       {fieldsFor && findSection(doc, fieldsFor) ? (
         <FieldsPanel
           sectionId={fieldsFor}

@@ -12,7 +12,18 @@ import {
 } from "@playwright/test";
 import { afterAll, beforeAll, describe, it } from "vitest";
 import { NARROWEST_WIDTH } from "../src/editor/overflowCheck.ts";
-import { BASE_URL, QUESTIONNAIRE_URL, startEditorServer, stopEditorServer } from "./server.ts";
+import { BASE_URL, QUESTIONNAIRE_URL, startEditorServer, stopEditorServer } from "./server.ts"; /**
+ * The preview frame, addressed as the one on screen rather than as «an iframe».
+ *
+ * Turning the design tools on, or escalating a section, loads the next version of the page in a
+ * **buffered** frame so the live one never goes blank — see the note at the `<iframe>` in
+ * `Editor.tsx`. For the few milliseconds that takes there are two, and a bare `iframe` would be a
+ * strict-mode violation here and would pick the wrong one in `document.querySelector`. Excluding
+ * the buffered frame means every assertion below keeps asking exactly what it asked before, and on
+ * the landing page — which has three preview cards and no buffering — it still matches all three.
+ */
+
+const PREVIEW = "iframe:not([data-buffered])";
 
 /**
  * The critical flows, against the real, running application — the one thing no other suite in
@@ -91,12 +102,12 @@ describe("critical flow 1 — cuestionario hasta web generada", () => {
     // the iframe is showing a real render, not an empty frame that merely loaded. Scoped to the
     // cover: the business name also appears in the services intro text and in the footer's
     // "© Taberna Santo Domingo", so the bare text matches three elements on a generated page.
-    const frames = page.locator("iframe");
+    const frames = page.locator(PREVIEW);
     await expect(frames).toHaveCount(3);
     for (let i = 0; i < 3; i += 1) {
       await expect(
         page
-          .frameLocator("iframe")
+          .frameLocator(PREVIEW)
           .nth(i)
           .locator('[data-section="sec-cover"] [data-slot="headline"]'),
       ).toHaveText("Taberna Santo Domingo");
@@ -108,7 +119,7 @@ describe("critical flow 2 — edición de un texto y recarga", () => {
   it("commits a click-to-edit change and survives a reload", async () => {
     await page.getByText("Ver a tamaño real →").first().click();
 
-    const frame = page.frameLocator("iframe").first();
+    const frame = page.frameLocator(PREVIEW).first();
     // Scoped to the cover: "headline" is a slot name every section declares its own version
     // of ("Qué hacemos", "Dónde estamos", "Te esperamos" are all headlines too), so the bare
     // slot selector matches four elements on a generated page, not one.
@@ -129,7 +140,7 @@ describe("critical flow 2 — edición de un texto y recarga", () => {
 
     // A reload with no session would land back on question 1; landing straight in the editor
     // with the edited text is the localStorage round trip actually working, not assumed.
-    await expect(page.frameLocator("iframe").first().getByText(HEADLINE_EDIT)).toBeVisible();
+    await expect(page.frameLocator(PREVIEW).first().getByText(HEADLINE_EDIT)).toBeVisible();
   });
 
   it("takes a text off the page when it is emptied, and undo puts it back", async () => {
@@ -140,7 +151,7 @@ describe("critical flow 2 — edición de un texto y recarga", () => {
     //
     // The cover's subheadline rather than its headline, and undone immediately, so the flows that
     // share this page afterwards see exactly the state flow 2 left.
-    const frame = page.frameLocator("iframe").first();
+    const frame = page.frameLocator(PREVIEW).first();
     const subheadline = frame.locator('[data-section="sec-cover"] [data-slot="subheadline"]');
     await expect(subheadline).toBeVisible();
 
@@ -159,7 +170,7 @@ describe("critical flow 2 — edición de un texto y recarga", () => {
 
 describe("critical flow 3 — cambio de paleta", () => {
   it("recolours the whole preview from the Estilo panel, and undo reverts it", async () => {
-    const frame = page.frameLocator("iframe").first();
+    const frame = page.frameLocator(PREVIEW).first();
     // `--color-primary` is what a click actually has to move for "recolours" to mean anything —
     // read off the iframe's own document, the same custom property `packages/renderer` emits and
     // the same one `theme-css.test.ts` pins as one of the five the panel's swatches show.
@@ -358,7 +369,7 @@ describe("critical flow 5 — descarga del ZIP y el HTML abre sin servidor", () 
 describe("regression — the preview is a canvas, not a browsable site", () => {
   it("does not navigate, or nest a second editor, when a menu entry is clicked", async () => {
     await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
-    const frame = page.frameLocator("iframe").first();
+    const frame = page.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').waitFor();
 
     const entries = frame.locator(".rb-nav-wide a");
@@ -382,7 +393,7 @@ describe("regression — the preview is a canvas, not a browsable site", () => {
   it("still lets a link's own label be edited, which is what the guard must not break", async () => {
     // The default action is cancelled; focus is not. `mousedown` is what puts the cursor in a
     // contentEditable region, so click-to-edit on a button label works exactly as it did.
-    const frame = page.frameLocator("iframe").first();
+    const frame = page.frameLocator(PREVIEW).first();
     const action = frame
       .locator('[data-section="sec-contact"] [data-slot="primaryAction"]')
       .first();
@@ -404,7 +415,7 @@ describe("regression — the preview is a canvas, not a browsable site", () => {
 describe("regression — converting a section, and renaming the page it made", () => {
   it("adds a tab, leaves an avance, and lets the new page be renamed", async () => {
     await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
-    const frame = page.frameLocator("iframe").first();
+    const frame = page.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').waitFor();
 
     const tabs = page.locator('[data-testid="page-tabs"] button');
@@ -436,7 +447,7 @@ describe("regression — converting a section, and renaming the page it made", (
   it("takes the editor to that page when its menu entry is clicked", async () => {
     // Approved after the nesting fix: the one link in the preview that now does something. It must
     // still never navigate the frame — that is what nested an editor inside the editor.
-    const frame = page.frameLocator("iframe").first();
+    const frame = page.frameLocator(PREVIEW).first();
     const framesBefore = page.frames().length;
 
     await frame.locator(".rb-nav-wide a", { hasText: "Nuestra carta" }).click();
@@ -472,7 +483,7 @@ describe("día 7 — dos conversiones desde el editor, y el ZIP resultante abier
   it("converts a second section, downloads, and every page's own navigation works from file://", async () => {
     // The previous test left the canvas on the page the menu click switched to. Back to the first
     // tab — home — because «Dónde estamos» is a section of the home page, not of that one.
-    const frame = page.frameLocator("iframe").first();
+    const frame = page.frameLocator(PREVIEW).first();
     await page.locator('[data-testid="page-tabs"] button').first().click();
     await expect(frame.locator('[data-section="sec-cover"]')).toBeVisible();
 
@@ -626,7 +637,7 @@ describe("regression — a section is added to the page you are looking at", () 
     // Continues from the live editor the previous flow left behind — the sequential model this
     // file's own docstring describes — rather than reloading. Two pages have been made by
     // converting a section, and the canvas is on the home page.
-    const frame = page.frameLocator("iframe").first();
+    const frame = page.frameLocator(PREVIEW).first();
     const tabs = page.locator('[data-testid="page-tabs"] button');
     await expect(tabs).toHaveCount(3);
     await tabs.first().click();
@@ -700,7 +711,7 @@ describe("sprint 6 día 7 — fotos subidas desde el panel y desde el aviso, log
       await walkPage.getByRole("button", { name: "Crear mi web" }).click();
       await walkPage.getByText("Ver a tamaño real →").first().click();
 
-      const frame = walkPage.frameLocator("iframe").first();
+      const frame = walkPage.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
       const fileInput = walkPage.locator('input[type="file"]:not(#logo)');
 
@@ -832,7 +843,7 @@ describe("sprint 7 día 3 — deshacer una conversión desde «Páginas»", () =
       await walkPage.getByRole("button", { name: "Crear mi web" }).click();
       await walkPage.getByText("Ver a tamaño real →").first().click();
 
-      const frame = walkPage.frameLocator("iframe").first();
+      const frame = walkPage.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
       const tabs = walkPage.locator('[data-testid="page-tabs"] button');
       await expect(tabs).toHaveCount(1);
@@ -957,7 +968,7 @@ describe("sprint 7 día 6 — «Equipo» en el menú, y «Avance» nunca ofrecid
       await walkPage.getByRole("button", { name: "Crear mi web" }).click();
       await walkPage.getByText("Ver a tamaño real →").first().click();
 
-      const frame = walkPage.frameLocator("iframe").first();
+      const frame = walkPage.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
 
       await frame.getByRole("button", { name: "Añadir sección aquí" }).first().click();
@@ -1021,7 +1032,7 @@ describe("sprint 7 día 7 — dos hallazgos de esta semana, cerrados", () => {
       await walkPage.getByRole("button", { name: "Crear mi web" }).click();
       await walkPage.getByText("Ver a tamaño real →").first().click();
 
-      const frame = walkPage.frameLocator("iframe").first();
+      const frame = walkPage.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
       for (const id of ["sec-services", "sec-location"]) {
         await frame.locator(`[data-section="${id}"]`).click();
@@ -1150,7 +1161,7 @@ describe("sprint 7 día 7 — el recorrido completo del sprint", () => {
       await walkPage.getByRole("button", { name: "Crear mi web" }).click();
       await walkPage.getByText("Ver a tamaño real →").first().click();
 
-      const frame = walkPage.frameLocator("iframe").first();
+      const frame = walkPage.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
 
       // A gallery, reordered (day 2). Two photographs, captioned so the order is legible in the
@@ -1302,7 +1313,7 @@ describe("sprint 8 — el modo estudio: encender, diseñar a mano, colocar, y vo
       await studio.getByRole("button", { name: "Crear mi web" }).click();
       await studio.getByText("Ver a tamaño real →").first().click();
 
-      const frame = studio.frameLocator("iframe").first();
+      const frame = studio.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
 
       // `Diseño` does not exist until the tools are on — ADR 0025 §6, and the dead-button rule.
@@ -1458,7 +1469,7 @@ describe("sprint 8 día 7 — el recorrido completo del sprint", () => {
       await studio.getByRole("button", { name: "Crear mi web" }).click();
       await studio.getByText("Ver a tamaño real →").first().click();
 
-      const frame = studio.frameLocator("iframe").first();
+      const frame = studio.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
 
       await studio.getByRole("switch", { name: "Herramientas de diseño" }).click();
@@ -1643,7 +1654,7 @@ describe("sprint 8 día 7 — colchón: los tiradores no desplazan el lienzo", (
       await page.getByRole("button", { name: "Crear mi web" }).click();
       await page.getByText("Ver a tamaño real →").first().click();
 
-      const frame = page.frameLocator("iframe").first();
+      const frame = page.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').click();
 
       const scrollable = await frame.locator("body").evaluate(() => {
@@ -1704,7 +1715,7 @@ describe("sprint 9 día 4 — la barra flotante", () => {
       await studio.getByRole("button", { name: "Crear mi web" }).click();
       await studio.getByText("Ver a tamaño real →").first().click();
 
-      const frame = studio.frameLocator("iframe").first();
+      const frame = studio.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
 
       // The design tools are **off**, and the bar is still there: the advanced dossier §4 gives
@@ -1827,7 +1838,7 @@ describe("sprint 9 día 5 — medidas, espaciado y la excepción marcada", () =>
       await studio.getByRole("button", { name: "Crear mi web" }).click();
       await studio.getByText("Ver a tamaño real →").first().click();
 
-      const frame = studio.frameLocator("iframe").first();
+      const frame = studio.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
       const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
 
@@ -1950,7 +1961,7 @@ describe("sprint 9 día 6 — la revisión de contraste", () => {
     await studio.fill("#telefono", "600111222");
     await studio.getByRole("button", { name: "Crear mi web" }).click();
     await studio.getByText("Ver a tamaño real →").first().click();
-    await studio.frameLocator("iframe").first().locator('[data-section="sec-cover"]').waitFor();
+    await studio.frameLocator(PREVIEW).first().locator('[data-section="sec-cover"]').waitFor();
     await studio.getByRole("switch", { name: "Herramientas de diseño" }).click();
     await studio.getByRole("button", { name: "Sí, enciéndelas" }).click();
     return studio;
@@ -1958,7 +1969,7 @@ describe("sprint 9 día 6 — la revisión de contraste", () => {
 
   /** Paint the cover's headline an exact colour, through the toolbar's own control. */
   async function paint(studio: Page, hex: string): Promise<void> {
-    const frame = studio.frameLocator("iframe").first();
+    const frame = studio.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"] [data-id="el-headline"]').click();
     await frame.locator(".rb-toolbar-color").waitFor();
     // `fill` does not fire `change` on a colour input the way a picker does.
@@ -2073,7 +2084,7 @@ describe("sprint 9 día 7 — el recorrido completo del sprint", () => {
       await studio.getByRole("button", { name: "Crear mi web" }).click();
       await studio.getByText("Ver a tamaño real →").first().click();
 
-      const frame = studio.frameLocator("iframe").first();
+      const frame = studio.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
       const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
 
@@ -2227,7 +2238,7 @@ describe("sprint 9 día 7 — colchón: el diálogo se queda sobre lo que sigue 
       await studio.getByRole("button", { name: "Crear mi web" }).click();
       await studio.getByText("Ver a tamaño real →").first().click();
 
-      const frame = studio.frameLocator("iframe").first();
+      const frame = studio.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
       await studio.getByRole("switch", { name: "Herramientas de diseño" }).click();
       await studio.getByRole("button", { name: "Sí, enciéndelas" }).click();
@@ -2311,7 +2322,7 @@ describe("sprint 9 día 7 — colchón: la barra no traga un clic que era para o
       await studio.getByRole("button", { name: "Crear mi web" }).click();
       await studio.getByText("Ver a tamaño real →").first().click();
 
-      const frame = studio.frameLocator("iframe").first();
+      const frame = studio.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
       await studio.getByRole("switch", { name: "Herramientas de diseño" }).click();
       await studio.getByRole("button", { name: "Sí, enciéndelas" }).click();
@@ -2472,7 +2483,7 @@ describe("sprint 10 día 7 — el recorrido completo del sprint", () => {
       await studio.getByRole("button", { name: "Crear mi web" }).click();
       await studio.getByText("Ver a tamaño real →").first().click();
 
-      const frame = studio.frameLocator("iframe").first();
+      const frame = studio.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
       const subheadline = frame.locator('[data-id="el-subheadline"]');
       await expect(subheadline).toHaveText("Comer, beber y quedarse un rato");
@@ -2648,7 +2659,7 @@ describe("sprint 11 día 7 — el recorrido completo del sprint", () => {
       await studio.getByRole("button", { name: "Crear mi web" }).click();
       await studio.getByText("Ver a tamaño real →").first().click();
 
-      const frame = studio.frameLocator("iframe").first();
+      const frame = studio.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
       const subheadline = frame.locator('[data-id="el-subheadline"]');
 
@@ -2838,7 +2849,7 @@ describe("sprint 12 día 3 — el input anclado y el atajo de deshacer", () => {
     await studio.fill("#enlace", "https://reservas.example.com/taberna");
     await studio.getByRole("button", { name: "Crear mi web" }).click();
     await studio.getByText("Ver a tamaño real →").first().click();
-    await studio.frameLocator("iframe").first().locator('[data-section="sec-cover"]').waitFor();
+    await studio.frameLocator(PREVIEW).first().locator('[data-section="sec-cover"]').waitFor();
     return studio;
   }
 
@@ -2849,7 +2860,7 @@ describe("sprint 12 día 3 — el input anclado y el atajo de deshacer", () => {
     // `setElementText` without ever having watched the keystroke, so it took that guess.
     const studio = await tavern();
     try {
-      const frame = studio.frameLocator("iframe").first();
+      const frame = studio.frameLocator(PREVIEW).first();
       const sub = frame.locator('[data-id="el-subheadline"]');
 
       await sub.click();
@@ -2883,7 +2894,7 @@ describe("sprint 12 día 3 — el input anclado y el atajo de deshacer", () => {
   it("undoes and redoes from the keyboard, and leaves the panel's own box alone", async () => {
     const studio = await tavern();
     try {
-      const frame = studio.frameLocator("iframe").first();
+      const frame = studio.frameLocator(PREVIEW).first();
       const undoBtn = studio.getByRole("button", { name: "Deshacer", exact: true });
       const redoBtn = studio.getByRole("button", { name: "Rehacer", exact: true });
 
@@ -2972,7 +2983,7 @@ describe("sprint 12 día 7 — el recorrido completo del sprint", () => {
       await walk.getByRole("button", { name: "Crear mi web" }).click();
       await walk.getByText("Ver a tamaño real →").first().click();
 
-      const frame = walk.frameLocator("iframe").first();
+      const frame = walk.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
       const fileInput = walk.locator('input[type="file"]:not(#logo)');
 
@@ -3195,7 +3206,7 @@ describe("sprint 13 día 2 — la barra se deja usar con el ratón", () => {
     await studio.fill("#enlace", "https://reservas.example.com/taberna");
     await studio.getByRole("button", { name: "Crear mi web" }).click();
     await studio.getByText("Ver a tamaño real →").first().click();
-    const frame = studio.frameLocator("iframe").first();
+    const frame = studio.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').waitFor();
     await studio.getByRole("switch", { name: "Herramientas de diseño" }).click();
     await studio.getByRole("button", { name: "Sí, enciéndelas" }).click();
@@ -3355,7 +3366,7 @@ describe("sprint 13 día 3 — lo que solo informaba", () => {
     await studio.fill("#enlace", "https://reservas.example.com/taberna");
     await studio.getByRole("button", { name: "Crear mi web" }).click();
     await studio.getByText("Ver a tamaño real →").first().click();
-    const frame = studio.frameLocator("iframe").first();
+    const frame = studio.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').waitFor();
     return { studio, frame };
   }
@@ -3462,7 +3473,7 @@ describe("sprint 13 día 5 — el «Aa» de la barra", () => {
     await studio.fill("#enlace", "https://reservas.example.com/taberna");
     await studio.getByRole("button", { name: "Crear mi web" }).click();
     await studio.getByText("Ver a tamaño real →").first().click();
-    const frame = studio.frameLocator("iframe").first();
+    const frame = studio.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').waitFor();
     if (designTools) {
       await studio.getByRole("switch", { name: "Herramientas de diseño" }).click();
@@ -3643,7 +3654,7 @@ describe("sprint 13 día 6 — las pantallas que faltaban, y los dos fallos sile
       await answered(page);
       await page.getByRole("button", { name: "Crear mi web" }).click();
       await page.getByText("Ver a tamaño real →").first().click();
-      const frame = page.frameLocator("iframe").first();
+      const frame = page.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
 
       // A section the owner has never touched, which is the six-second half of ADR 0014.
@@ -3696,7 +3707,7 @@ describe("sprint 13 día 6 — las pantallas que faltaban, y los dos fallos sile
       await answered(page);
       await page.getByRole("button", { name: "Crear mi web" }).click();
       await page.getByText("Ver a tamaño real →").first().click();
-      const frame = page.frameLocator("iframe").first();
+      const frame = page.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
 
       // Touch it first: that is what makes the toast persistent.
@@ -3879,7 +3890,7 @@ describe("sprint 13 día 7 — el clic que se perdía mientras la vista previa p
     await page.getByRole("button", { name: "Crear mi web" }).click();
     await beforeOpening?.();
     await page.getByText("Ver a tamaño real →").first().click();
-    return page.frameLocator("iframe").first();
+    return page.frameLocator(PREVIEW).first();
   }
 
   it("selects a section clicked before the frame has finished loading", async () => {
@@ -4029,7 +4040,7 @@ describe("sprint 13 día 7 — el recorrido completo del sprint", () => {
       await expect(walk.getByText("Estamos montando tu web")).toHaveCount(0);
 
       await walk.getByText("Ver a tamaño real →").first().click();
-      const frame = walk.frameLocator("iframe").first();
+      const frame = walk.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
 
       // ---- day 3c: B and I are not drawn without a selection, which is what mockup 18 says ----
@@ -4250,7 +4261,7 @@ describe("sprint 14 día 2 — la vista previa enseña la letra que envía", () 
     await page.fill("#enlace", "https://reservas.example.com/taberna");
     await page.getByRole("button", { name: "Crear mi web" }).click();
     await page.getByText("Ver a tamaño real →").first().click();
-    const frame = page.frameLocator("iframe").first();
+    const frame = page.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').waitFor();
     return frame;
   }
@@ -4540,7 +4551,7 @@ describe("sprint 14 día 5 — el panel de listas", () => {
     );
     await page.reload({ waitUntil: "networkidle" });
 
-    const frame = page.frameLocator("iframe").first();
+    const frame = page.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-services"]').waitFor();
     await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
     await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
@@ -4565,7 +4576,7 @@ describe("sprint 14 día 5 — el panel de listas", () => {
         );
       }, seededDocument());
       await page.reload({ waitUntil: "networkidle" });
-      await page.frameLocator("iframe").first().locator('[data-section="sec-services"]').waitFor();
+      await page.frameLocator(PREVIEW).first().locator('[data-section="sec-services"]').waitFor();
 
       // Absent, not dimmed — ADR 0025 §6, and the rule `RailLabel`'s own note states.
       await expect(page.getByRole("button", { name: "Listas" })).toHaveCount(0);
@@ -4762,7 +4773,7 @@ describe("sprint 14 día 6 — enlazar, avisar y desenlazar", () => {
     await page.fill("#enlace", "https://reservas.example.com/taberna");
     await page.getByRole("button", { name: "Crear mi web" }).click();
     await page.getByText("Ver a tamaño real →").first().click();
-    const frame = page.frameLocator("iframe").first();
+    const frame = page.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').waitFor();
     await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
     await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
@@ -4980,7 +4991,7 @@ describe("sprint 14 día 7 — el recorrido completo del sprint", () => {
       await walk.fill("#enlace", "https://reservas.example.com/taberna");
       await walk.getByRole("button", { name: "Crear mi web" }).click();
       await walk.getByText("Ver a tamaño real →").first().click();
-      const frame = walk.frameLocator("iframe").first();
+      const frame = walk.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
 
       // ---- day 2: the preview is set in the letter the ZIP ships -------------------------------
@@ -5124,7 +5135,7 @@ describe("sprint 14 día 7 — la oferta que no se hace", () => {
       await page.fill("#enlace", "https://reservas.example.com/taberna");
       await page.getByRole("button", { name: "Crear mi web" }).click();
       await page.getByText("Ver a tamaño real →").first().click();
-      const frame = page.frameLocator("iframe").first();
+      const frame = page.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
       await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
       await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
@@ -5198,7 +5209,7 @@ describe("sprint 14 día 7 — colchón: el segundo deshacer", () => {
       await page.fill("#enlace", "https://reservas.example.com/taberna");
       await page.getByRole("button", { name: "Crear mi web" }).click();
       await page.getByText("Ver a tamaño real →").first().click();
-      const frame = page.frameLocator("iframe").first();
+      const frame = page.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
 
       const headline = frame.locator('[data-id="el-headline"]');
@@ -5646,7 +5657,7 @@ describe("sprint 15 día 7 — la foto que no carga, y las promesas del proyecto
 
       // Before the retry the photograph is not loaded, so the canvas still shows the document's
       // own src rather than bytes the browser holds.
-      const canvasImage = failing.frameLocator("iframe").first().locator('[data-slot="image"]');
+      const canvasImage = failing.frameLocator(PREVIEW).first().locator('[data-slot="image"]');
       await expect(canvasImage).not.toHaveAttribute("src", /^blob:/);
 
       refuse = false;
@@ -6082,7 +6093,7 @@ describe("abrir un panel no tapa la página ni la convierte en otra", () => {
       const card = document.querySelector('[data-testid="canvas-card"]');
       // The preview frame is still found as an iframe: it has no name of its own to hook, and
       // "the one iframe on the page" is a fact about the editor, not about its styling.
-      const frame = card?.querySelector("iframe");
+      const frame = card?.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])");
       if (!row || !card || !frame) return { error: "no se encuentra el lienzo" };
 
       /**
@@ -6263,7 +6274,7 @@ describe("la barra superior reparte su ancho entre el logo y las pestañas", () 
       await walker.getByRole("button", { name: "Crear mi web" }).click();
       await walker.getByText("Ver a tamaño real →").first().click();
 
-      const frame = walker.frameLocator("iframe").first();
+      const frame = walker.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
 
       // The defect direction actually saw: a button shaded across space it did not need.
@@ -6333,7 +6344,9 @@ describe("lo que el cromo del editor dibuja dentro del lienzo, y el aviso del in
    */
   async function spillingInsideTheCanvas(page: Page): Promise<string[]> {
     return page.evaluate(() => {
-      const doc = document.querySelector("iframe")?.contentDocument;
+      const doc = document.querySelector<HTMLIFrameElement>(
+        "iframe:not([data-buffered])",
+      )?.contentDocument;
       if (!doc) return ["no se encuentra la vista previa"];
       const out: string[] = [];
       let examined = 0;
@@ -6399,7 +6412,7 @@ describe("lo que el cromo del editor dibuja dentro del lienzo, y el aviso del in
       await walker.getByRole("button", { name: "Crear mi web" }).click();
       await walker.getByText("Ver a tamaño real →").first().click();
 
-      const frame = walker.frameLocator("iframe").first();
+      const frame = walker.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
       await expect(frame.locator(".rb-line-add").first()).toBeVisible();
 
@@ -6430,7 +6443,7 @@ describe("lo que el cromo del editor dibuja dentro del lienzo, y el aviso del in
       await walker.fill("#enlace", "https://reservas.example.com/taberna");
       await walker.getByRole("button", { name: "Crear mi web" }).click();
       await walker.getByText("Ver a tamaño real →").first().click();
-      await walker.frameLocator("iframe").first().locator('[data-section="sec-cover"]').waitFor();
+      await walker.frameLocator(PREVIEW).first().locator('[data-section="sec-cover"]').waitFor();
 
       const toggle = walker.getByRole("switch").first();
       await expect(toggle).toHaveAttribute("aria-checked", "false");
@@ -6564,7 +6577,7 @@ describe("el interruptor de diseño llega a la cuenta", () => {
     await page.fill("#enlace", "https://reservas.example.com/taberna");
     await page.getByRole("button", { name: "Crear mi web" }).click();
     await page.getByText("Ver a tamaño real →").first().click();
-    await page.frameLocator("iframe").first().locator('[data-section="sec-cover"]').waitFor();
+    await page.frameLocator(PREVIEW).first().locator('[data-section="sec-cover"]').waitFor();
   }
 
   it("guarda la preferencia aunque la cuenta todavía no tenga fila", async () => {
@@ -6653,7 +6666,7 @@ describe("cambiar de escritorio a móvil se ve recolocarse", () => {
     await page.evaluate(() => {
       (window as unknown as { __w: number[] }).__w = [];
       const card = document.querySelector('[data-testid="canvas-card"]');
-      const frame = card?.querySelector("iframe");
+      const frame = card?.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])");
       const started = performance.now();
       const tick = () => {
         (window as unknown as { __w: number[] }).__w.push(frame?.contentWindow?.innerWidth ?? 0);
@@ -6680,7 +6693,7 @@ describe("cambiar de escritorio a móvil se ve recolocarse", () => {
     await page.fill("#enlace", "https://reservas.example.com/taberna");
     await page.getByRole("button", { name: "Crear mi web" }).click();
     await page.getByText("Ver a tamaño real →").first().click();
-    await page.frameLocator("iframe").first().locator('[data-section="sec-cover"]').waitFor();
+    await page.frameLocator(PREVIEW).first().locator('[data-section="sec-cover"]').waitFor();
     await page.waitForTimeout(1_000);
   }
 
@@ -6800,7 +6813,7 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
     await page.fill("#enlace", "https://reservas.example.com/taberna");
     await page.getByRole("button", { name: "Crear mi web" }).click();
     await page.getByText("Ver a tamaño real →").first().click();
-    await page.frameLocator("iframe").first().locator('[data-section="sec-cover"]').waitFor();
+    await page.frameLocator(PREVIEW).first().locator('[data-section="sec-cover"]').waitFor();
     await page.waitForTimeout(900);
   }
 
@@ -6926,40 +6939,354 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
     }
   }, 300_000);
 
-  it("la vista previa se funde al rehacerse el cromo, y nunca pinta blanco", async () => {
+  /**
+   * Watch the preview through a swap, with **two instruments, because there are two questions**.
+   *
+   * `samples` is one reading per animation frame: it answers what a person sees, which is exactly
+   * what a repaint-based sampler is for.
+   *
+   * `events` is one reading per DOM change, from a `MutationObserver`. It exists because the swap
+   * turned out to be **faster than a frame**: measured here, a `requestAnimationFrame` loop never
+   * once caught the buffered frame — the arriving page parsed, was wired and took over between two
+   * paints. So every claim about the mechanism is read from the mutation that made it, and the
+   * hit test is run inside that callback, at the one moment the buffered frame is on screen.
+   *
+   * Both report how much they saw, and every caller asserts on that first: an instrument that
+   * observed nothing passes every assertion about what it observed, which is how this repository's
+   * in-canvas overflow walk once ran green over zero elements.
+   */
+  type Watch = {
+    samples: { opacity: string; sections: number }[];
+    events: {
+      frames: number;
+      buffered: number;
+      inert: boolean | null;
+      pointerEvents: string | null;
+      hitBuffered: boolean | null;
+    }[];
+  };
+  async function watchPreviewWhile(
+    page: Page,
+    act: () => Promise<void>,
+    ms = 3_000,
+  ): Promise<Watch> {
+    await page.evaluate((limit: number) => {
+      const bag = window as unknown as { __w: Watch };
+      bag.__w = { samples: [], events: [] };
+      const started = performance.now();
+
+      const record = () => {
+        if (bag.__w.events.length > 500) return;
+        const buffered = document.querySelector<HTMLIFrameElement>("iframe[data-buffered]");
+        let inert: boolean | null = null;
+        let pointerEvents: string | null = null;
+        let hitBuffered: boolean | null = null;
+        if (buffered) {
+          const box = buffered.getBoundingClientRect();
+          const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+          inert = buffered.inert === true;
+          pointerEvents = getComputedStyle(buffered).pointerEvents;
+          hitBuffered = hit === buffered || buffered.contains(hit);
+        }
+        bag.__w.events.push({
+          frames: document.querySelectorAll("iframe").length,
+          buffered: document.querySelectorAll("iframe[data-buffered]").length,
+          inert,
+          pointerEvents,
+          hitBuffered,
+        });
+      };
+      // Scoped to the card the frames live in, so React's ordinary attribute churn elsewhere in
+      // the editor does not drown the handful of changes this is about.
+      const watched = document.querySelector('[data-testid="canvas-card"]') ?? document.body;
+      new MutationObserver(record).observe(watched, { subtree: true, childList: true });
+
+      const tick = () => {
+        const live = document.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])");
+        const doc = live?.contentDocument;
+        bag.__w.samples.push({
+          opacity: live ? Number(getComputedStyle(live).opacity).toFixed(2) : "gone",
+          sections: doc ? doc.querySelectorAll("[data-section]").length : -1,
+        });
+        if (performance.now() - started < limit) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    }, ms);
+    await act();
+    await page.waitForTimeout(ms + 200);
+    return page.evaluate(() => (window as unknown as { __w: Watch }).__w);
+  }
+
+  /** The gesture that turns the tools on, confirmation card and all. */
+  async function turnToolsOn(page: Page): Promise<void> {
+    await page.getByRole("switch").first().click();
+    await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
+  }
+
+  it("la vista previa nunca se queda sin página al rehacerse el cromo", async () => {
     /**
-     * Turning the tools on remounts the preview frame on purpose — `Editor.tsx`'s note at the
-     * `<iframe>` records the two defects that exist to fix — and a remounted frame holds no
-     * document for exactly one frame. Measured: one sample in 120, `readyState` still `loading`.
+     * **The flicker, and what replaced it.** Turning the tools on used to remount the preview
+     * frame, and a remounted frame holds no document for a frame or two — measured at one sample
+     * in 120 with `readyState` still `loading`. PR186 stopped that frame painting white and gave
+     * the arrival a fade, which is the best a single frame can do: the page still went away and
+     * came back.
      *
-     * That frame used to paint `--ui-surface`, pure white, against a page whose own background is
-     * `rgb(250, 250, 249)`. One white flash is what reads as the page refreshing. The remount
-     * stays; what goes is the white and the snap.
+     * Now the arriving page loads in a second, invisible frame and the two change places only once
+     * it is complete, so there is no frame without a page in it. That is a stronger claim than the
+     * fade's, and it is what this asserts: **every** sample has sections in it and **every** sample
+     * is fully opaque. The fade is gone from the swap because there is nothing left for it to
+     * cover — it stays on the first load, which has nothing to fade from.
      */
     const walker = await (await browser.newContext()).newPage();
     try {
       await walker.setViewportSize({ width: 1440, height: 900 });
       await intoTheEditor(walker);
 
-      const pageColour = await walker.evaluate(() => {
-        const doc = document.querySelector("iframe")?.contentDocument;
-        return doc ? getComputedStyle(doc.body).backgroundColor : "?";
-      });
+      const watch = await watchPreviewWhile(walker, () => turnToolsOn(walker));
 
-      const seen = await opacitiesWhile(walker, "iframe", async () => {
+      expect(watch.samples.length, "el muestreo no miró nada").toBeGreaterThan(30);
+      const blank = watch.samples.filter((sample) => sample.sections < 1);
+      expect(
+        blank.length,
+        `fotogramas sin página: ${blank.length} de ${watch.samples.length}`,
+      ).toBe(0);
+      const faded = watch.samples.filter((sample) => sample.opacity !== "1.00");
+      expect(
+        faded.length,
+        `opacidades distintas de 1: ${[...new Set(faded.map((s) => s.opacity))].join(", ")}`,
+      ).toBe(0);
+      // And a frame really was prepared, so none of the above is true merely because nothing
+      // happened. Read from the mutations rather than the frames: the swap is quicker than a paint.
+      expect(
+        watch.events.filter((event) => event.buffered === 1).length,
+        "no se preparó ningún marco: la prueba no ha visto un relevo",
+      ).toBeGreaterThan(0);
+      await expect(walker.getByRole("button", { name: "Diseño" })).toHaveCount(1);
+    } finally {
+      await walker.context().close();
+    }
+  }, 300_000);
+
+  it("un clic durante el relevo no cae en el marco oculto", async () => {
+    /**
+     * Direction's adjustment, and it names a defect the first draft of this had: the frame being
+     * prepared covers the live one, so an invisible frame that still took a click would swallow it
+     * into a document nobody can see — the click would land, edit something, and appear to do
+     * nothing at all.
+     *
+     * Asserted with the browser's own hit test rather than by reading the attribute back, and run
+     * inside the mutation that inserts the frame, which is the one moment it is there to ask
+     * about: `elementFromPoint` at the middle of the canvas must answer something other than the
+     * buffered frame. The CPU is throttled as well, the same device the «attaches the chrome
+     * exactly once» guard uses, so the real presses below have a window to land in.
+     */
+    const context = await browser.newContext();
+    const walker = await context.newPage();
+    try {
+      await walker.setViewportSize({ width: 1440, height: 900 });
+      await intoTheEditor(walker);
+      const before = await walker
+        .frameLocator(PREVIEW)
+        .locator('[data-section="sec-cover"]')
+        .innerText();
+      const card = await walker.locator('[data-testid="canvas-card"]').boundingBox();
+
+      const throttle = await context.newCDPSession(walker);
+      await throttle.send("Emulation.setCPUThrottlingRate", { rate: 20 });
+      const watch = await watchPreviewWhile(
+        walker,
+        async () => {
+          await turnToolsOn(walker);
+          for (let i = 0; i < 12; i += 1) {
+            await walker.mouse.click(
+              (card?.x ?? 0) + (card?.width ?? 0) / 2,
+              (card?.y ?? 0) + (card?.height ?? 0) / 2,
+            );
+          }
+        },
+        4_000,
+      );
+      await throttle.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+
+      const whileBuffered = watch.events.filter((event) => event.buffered === 1);
+      expect(
+        whileBuffered.length,
+        "nunca se vio un marco preparándose: la prueba sería vacua",
+      ).toBeGreaterThan(0);
+      expect(
+        whileBuffered.filter((event) => event.hitBuffered).length,
+        `el marco oculto se quedó el clic en ${whileBuffered.filter((e) => e.hitBuffered).length} de ${whileBuffered.length} momentos`,
+      ).toBe(0);
+      expect(
+        whileBuffered.filter((event) => event.inert !== true).length,
+        "el marco oculto no era inert",
+      ).toBe(0);
+      expect(
+        [...new Set(whileBuffered.map((event) => event.pointerEvents))],
+        "el marco oculto aceptaba el puntero",
+      ).toEqual(["none"]);
+
+      // And nothing was edited anywhere: the presses reached the live frame, which selects rather
+      // than types, and one frame is left standing.
+      await expect(walker.locator(PREVIEW)).toHaveCount(1);
+      expect(
+        await walker.frameLocator(PREVIEW).locator('[data-section="sec-cover"]').innerText(),
+      ).toBe(before);
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+
+  it("encender y apagar seguido no deja dos marcos", async () => {
+    /**
+     * Direction's adjustment: never two frames being prepared at once, and a key that changes
+     * again mid-swap discards the pending one rather than queueing it.
+     *
+     * It needs no bookkeeping to be true — `pendingKey` is one string, so a second swap overwrites
+     * the first — and this is what says so out loud, because «one slot» is a property of the shape
+     * of the state that a later refactor could lose without noticing.
+     */
+    const context = await browser.newContext();
+    const walker = await context.newPage();
+    try {
+      await walker.setViewportSize({ width: 1440, height: 900 });
+      await intoTheEditor(walker);
+      const throttle = await context.newCDPSession(walker);
+      await throttle.send("Emulation.setCPUThrottlingRate", { rate: 20 });
+
+      const watch = await watchPreviewWhile(walker, async () => {
+        await turnToolsOn(walker);
         await walker.getByRole("switch").first().click();
-        await walker.getByRole("button", { name: "Sí, enciéndelas" }).click();
       });
-      // The document arrives rather than snapping into place.
-      expect(seen.distinct.length, `opacidades: ${seen.distinct.join(", ")}`).toBeGreaterThan(3);
-      expect(seen.final).toBe("1.00");
+      await throttle.send("Emulation.setCPUThrottlingRate", { rate: 1 });
 
-      // And the frame wears the page's own colour, so the one empty frame has no white to show.
-      const frameColour = await walker.evaluate(() => {
-        const el = document.querySelector("iframe");
-        return el ? getComputedStyle(el).backgroundColor : "?";
-      });
-      expect(frameColour, `la página es ${pageColour} y el marco ${frameColour}`).toBe(pageColour);
+      expect(watch.events.length, "el observador no vio ningún cambio").toBeGreaterThan(0);
+      const most = Math.max(...watch.events.map((event) => event.frames));
+      expect(most, `llegó a haber ${most} marcos a la vez`).toBeLessThanOrEqual(2);
+      expect(
+        watch.events.filter((event) => event.buffered > 1).length,
+        "hubo más de un marco preparándose",
+      ).toBe(0);
+      // Still never blank, through two swaps on top of each other.
+      expect(watch.samples.filter((sample) => sample.sections < 1).length).toBe(0);
+
+      // And it lands off, with one frame and the chrome that goes with «off».
+      await expect(walker.locator(PREVIEW)).toHaveCount(1);
+      await expect(walker.getByRole("button", { name: "Diseño" })).toHaveCount(0);
+      await expect(walker.frameLocator(PREVIEW).locator(".rb-handmade")).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+
+  it("el foco del teclado vuelve al marco nuevo", async () => {
+    /**
+     * Direction's adjustment, and the reason it matters more than it sounds: the swap replaces the
+     * element focus was inside, so without putting it back, editing with a keyboard would drop
+     * focus to the document on every swap — silently, mid-sentence.
+     *
+     * **Driven by escalating from inside the canvas, not by the switch**, and that is the whole
+     * design of the test rather than a detail. The switch is a button in the editor's own chrome,
+     * so pressing it takes focus out of the preview before the swap even starts — the first version
+     * of this test asserted against that and was measuring nothing. Accepting «Diseñar a mano» is a
+     * press on a button *inside* the frame, which is the real case where focus is in the document
+     * that is about to be replaced.
+     *
+     * An `<iframe>` is the parent document's `activeElement` whenever focus is anywhere inside it,
+     * which is both how this is read before the swap and how it is asserted after.
+     */
+    const walker = await (await browser.newContext()).newPage();
+    try {
+      await walker.setViewportSize({ width: 1440, height: 900 });
+      await intoTheEditor(walker);
+      const frame = walker.frameLocator(PREVIEW);
+      await turnToolsOn(walker);
+
+      await frame.locator('[data-section="sec-cover"]').click();
+      await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
+      expect(
+        await walker.evaluate(() => document.activeElement?.tagName ?? "none"),
+        "el foco no estaba dentro de la vista previa antes del relevo",
+      ).toBe("IFRAME");
+
+      await frame.locator(".rb-escalate-yes").click();
+      await expect(frame.locator(".rb-handmade")).toHaveCount(1);
+      await expect(walker.locator(PREVIEW)).toHaveCount(1);
+
+      await expect
+        .poll(async () =>
+          walker.evaluate(() => {
+            const live = document.querySelector("iframe:not([data-buffered])");
+            return document.activeElement === live
+              ? "preview"
+              : (document.activeElement?.tagName ?? "none");
+          }),
+        )
+        .toBe("preview");
+    } finally {
+      await walker.context().close();
+    }
+  }, 300_000);
+
+  it("el punto de lectura se conserva, también con una sección a mano por encima", async () => {
+    /**
+     * The remount lost the reading position outright — there was not a line of scroll restoration
+     * anywhere in `Editor.tsx` — so turning the tools on while halfway down a page sent you back to
+     * the top. That is the half of the flicker that is not about pixels, and it is the half
+     * somebody editing actually feels.
+     *
+     * **Direction's adjustment is the interesting half of this test.** A hand-designed section
+     * above the reading point is the case where copying a number could lie: the arriving frame
+     * carries chrome the outgoing one does not, and if any of it took height in the flow, the same
+     * `scrollY` would be a different place. Measured while writing this: `.rb-handmade` is
+     * `position: absolute`, so it takes none and the number would in fact have been safe —
+     * `carryReadingPosition` anchors on a section anyway, because that is a property of one
+     * stylesheet rule rather than of the design.
+     */
+    const walker = await (await browser.newContext()).newPage();
+    try {
+      await walker.setViewportSize({ width: 1440, height: 900 });
+      await intoTheEditor(walker);
+      const frame = walker.frameLocator(PREVIEW);
+
+      // Tools on, then the cover escalated — so there is a hand-designed section above whatever we
+      // read next, with its own bar drawn into it.
+      await turnToolsOn(walker);
+      await frame.locator('[data-section="sec-cover"]').click();
+      await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
+      await frame.locator(".rb-escalate-yes").click();
+      await expect(frame.locator(".rb-handmade")).toHaveCount(1);
+
+      const readingAt = 480;
+      await walker.evaluate((top: number) => {
+        document
+          .querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")
+          ?.contentWindow?.scrollTo(0, top);
+      }, readingAt);
+      await expect
+        .poll(async () =>
+          walker.evaluate(
+            () =>
+              document.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")
+                ?.contentWindow?.scrollY ?? -1,
+          ),
+        )
+        .toBe(readingAt);
+
+      // The swap, with the hand-designed section above the reading point losing its bar on the way.
+      await walker.getByRole("switch").first().click();
+      await expect(walker.getByRole("button", { name: "Diseño" })).toHaveCount(0);
+      await expect(frame.locator(".rb-handmade")).toHaveCount(0);
+
+      const after = await walker.evaluate(
+        () =>
+          document.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")?.contentWindow
+            ?.scrollY ?? -1,
+      );
+      expect(
+        Math.abs(after - readingAt),
+        `se leía en ${readingAt} y tras el relevo en ${after}`,
+      ).toBeLessThanOrEqual(2);
     } finally {
       await walker.context().close();
     }
