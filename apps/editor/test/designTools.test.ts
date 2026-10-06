@@ -8,7 +8,9 @@ import {
   loadDesignTools,
   MIN_STUDIO_WIDTH,
   saveDesignTools,
+  switchNotice,
 } from "../src/editor/designTools.ts";
+import es from "../src/locales/es.json" with { type: "json" };
 
 /**
  * The design-tools switch (ADR 0025, advanced dossier §4) — and `INV_4`, which has waited since
@@ -201,5 +203,60 @@ describe("the module cannot reach a document, by construction", () => {
 
   it("names the session's key nowhere", () => {
     expect(source).not.toContain("retorika.session");
+  });
+});
+
+describe("what the switch is allowed to say when a write is refused", () => {
+  /**
+   * **The defect this exists for, in one line: the account's failure drew the browser's words.**
+   *
+   * The preference is written twice — to this browser, and to the account when somebody is signed
+   * in — and a single `toolsRemembered` boolean carried both results. Every sentence that boolean
+   * drew names the browser: «este navegador no nos deja guardar la preferencia», «la próxima vez
+   * que entres estarán apagadas». So when it was the account write that failed, the editor said
+   * both of those while `localStorage` had just accepted the value and the next visit would have
+   * had the tools on.
+   *
+   * Direction asked «¿por qué aparece "No se recordará"?» on 6 October 2026, and the honest answer
+   * was that the editor could not tell them, because it had not kept the difference.
+   *
+   * The production case that reaches it: a browser still holding a Supabase session, against an
+   * `accounts` table with no row for that user — which is what production is until migration
+   * `0002` is applied. `saveAccountDesignTools` is deliberate about that («an `update` that matches
+   * no row is answered by PostgREST with a 204 and no error»), so it correctly returns `false`, and
+   * everything after it was what went wrong.
+   */
+  it("says nothing when both writes landed", () => {
+    expect(switchNotice(false, false)).toBe("none");
+  });
+
+  it("names the browser when the browser refused", () => {
+    expect(switchNotice(true, false)).toBe("browser");
+  });
+
+  it("names the account — and not the browser — when only the account refused", () => {
+    // The whole bug, as one assertion: this used to be indistinguishable from the line above.
+    expect(switchNotice(false, true)).toBe("account");
+  });
+
+  it("names the browser when both refused, because that is the one that costs the next visit", () => {
+    expect(switchNotice(true, true)).toBe("browser");
+  });
+
+  /**
+   * The two sentences have to differ, and in the way that matters: the account's must not blame the
+   * browser. A copy change that made them agree again would put the defect back with the logic
+   * still correct, which is the kind of regression no amount of state-machine testing would catch.
+   */
+  it("gives the account case its own words, which do not claim the browser forgot", () => {
+    const browser = es["editor.designTools.notRememberedHelp"];
+    const account = es["editor.designTools.notInAccountHelp"];
+    expect(account).not.toBe(browser);
+    expect(browser, "the browser's sentence should name the browser").toContain("este navegador");
+    expect(account, "the account's sentence should name the account").toContain("cuenta");
+    expect(
+      account,
+      "the account's sentence must not say the preference was lost here — it was not",
+    ).not.toContain("no nos deja guardar");
   });
 });

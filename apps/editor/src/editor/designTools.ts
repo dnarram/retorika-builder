@@ -74,6 +74,38 @@ export function saveDesignTools(on: boolean): boolean {
  * exactly as they were. A switch that forgot itself because somebody resized a window would be a
  * second way to lose a setting, and the person did not change their mind.
  */
+/**
+ * Which of the two places the switch is kept could not be written — and therefore what the editor
+ * is allowed to say about it.
+ *
+ * **One boolean used to carry both, and that made the interface state something untrue.** The
+ * preference is written twice: to this browser, and — when somebody is signed in — to their
+ * account, because the dossier puts it there, «del mismo rango que el idioma de la interfaz». Either
+ * write can be refused, and they are refused for unrelated reasons: blocked site data on one side,
+ * a row that is not there on the other.
+ *
+ * Both of them set a single `toolsRemembered` flag, and every sentence that flag drew names the
+ * browser as the cause: «este navegador no nos deja guardar la preferencia», «la próxima vez que
+ * entres estarán apagadas». When it was the *account* write that failed, both of those were false —
+ * `localStorage` had just accepted the value, and the next visit would have the tools on. The editor
+ * was telling the owner the one thing it exists not to tell them.
+ *
+ * Found on 6 October 2026 from direction's question «¿por qué aparece "No se recordará"?», which
+ * the editor could not answer because it did not keep the difference.
+ */
+export type SwitchNotice = "none" | "browser" | "account";
+
+/**
+ * The browser's refusal outranks the account's, and that is not arbitrary: if this browser will not
+ * keep the preference, «solo en este navegador» would be the opposite of true. When both fail the
+ * owner needs to hear the one that costs them the next visit.
+ */
+export function switchNotice(browserRefused: boolean, accountRefused: boolean): SwitchNotice {
+  if (browserRefused) return "browser";
+  if (accountRefused) return "account";
+  return "none";
+}
+
 export function designToolsFor(stored: boolean, viewportWidth: number): boolean | undefined {
   if (viewportWidth < MIN_STUDIO_WIDTH) return undefined;
   return stored;
