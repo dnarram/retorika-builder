@@ -17,7 +17,7 @@ import {
   selectedRowId,
   stepTo,
 } from "../editor/designTree.ts";
-import { panelCard } from "../editor/panelKit.tsx";
+import { PANEL_WIDTH, panelCard } from "../editor/panelKit.tsx";
 import es from "../locales/es.json" with { type: "json" };
 
 /**
@@ -305,7 +305,7 @@ export function DesignPanel({
       aria-labelledby={headingId}
       // Beside the canvas like the style panel, not fixed over it: the grid the canvas draws is
       // the thing being worked against, and a panel covering it would hide the answer.
-      className={`w-[288px] gap-4 p-5 ${panelCard}`}
+      className={`${PANEL_WIDTH} gap-4 p-5 ${panelCard}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">

@@ -6188,6 +6188,22 @@ describe("abrir un panel no tapa la página ni la convierte en otra", () => {
           `«${name}» cambia de ancho con la ventana: ${measured}`,
         ).toBe(1);
       }
+
+      /**
+       * **And they are all the same width as each other, which is a different promise.**
+       *
+       * Each being constant across window sizes stopped them growing; it did nothing about them
+       * differing. They were 372, 340 and 288, so the editing area took three widths and jumped up
+       * to 84px between one tool and the next — and because the preview is a live page, each width
+       * is a different viewport and the whole site re-laid-out every time somebody reached for a
+       * different tool.
+       *
+       * Direction asked for that to stop in those terms: «limitar la fatiga ocular de la persona
+       * que edita su página web cambiando constantemente de herramientas». This is the assertion
+       * that keeps it stopped — a seventh panel added at its own convenient width would fail here.
+       */
+      const everyWidth = new Set(Object.values(widths).flat());
+      expect(everyWidth.size, `los paneles no comparten ancho: ${JSON.stringify(widths)}`).toBe(1);
     } finally {
       await walker.context().close();
     }

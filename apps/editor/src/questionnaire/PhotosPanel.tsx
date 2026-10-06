@@ -2,7 +2,7 @@
 
 import type { ElementAddress, RetorikaDocument } from "@retorika/schema";
 import { useId } from "react";
-import { panelCard, panelRow } from "../editor/panelKit.tsx";
+import { PANEL_WIDTH, panelCard, panelRow } from "../editor/panelKit.tsx";
 import { countPhotos, listPhotos, type PhotoState } from "../editor/photoInventory.ts";
 import es from "../locales/es.json" with { type: "json" };
 
@@ -47,7 +47,7 @@ export function PhotosPanel({
   const showsPage = doc.pages.length > 1;
 
   return (
-    <section aria-labelledby={headingId} className={`w-[340px] gap-4 p-5 ${panelCard}`}>
+    <section aria-labelledby={headingId} className={`${PANEL_WIDTH} gap-4 p-5 ${panelCard}`}>
       <h2 id={headingId} className="text-[13px] font-bold text-ui-ink">
         {es["editor.photos.title"]}
       </h2>
