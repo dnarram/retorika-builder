@@ -350,7 +350,24 @@ function RailButton({
       className={`group relative flex w-full cursor-pointer flex-col items-center gap-[5px] border-0 bg-transparent p-0 focus-visible:outline-none ${
         entersAfter === undefined ? "" : "ui-enter-up"
       }`}
-      style={entersAfter === undefined ? undefined : { animationDelay: `${entersAfter}ms` }}
+      style={
+        entersAfter === undefined
+          ? undefined
+          : ({
+              animationDelay: `${entersAfter}ms`,
+              /**
+               * The height this item occupies in the rail, so it can start folded away under the
+               * one above and open into place — which is what makes the switch below ride down
+               * instead of jumping.
+               *
+               * Measured rather than guessed: a rail item is 68px and the rail's own `gap-3.5` is
+               * 14. If either changes this overshoots or undershoots *during* the animation only —
+               * the end state is `margin-top: 0` either way, so a stale number can look wrong for
+               * 180ms but can never leave the rail wrong.
+               */
+              "--ui-enter-offset": "82px",
+            } as React.CSSProperties)
+      }
     >
       {/* The third cue for the chosen item: a rule on the rail's inner edge, the convention a
           vertical navigation uses to say «you are here». Hidden from assistive technology — it

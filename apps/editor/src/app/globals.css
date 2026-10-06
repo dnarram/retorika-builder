@@ -224,11 +224,53 @@
   from {
     opacity: 0;
     transform: translateY(-6px);
+    /**
+     * **The negative margin is what makes everything below it move.**
+     *
+     * Opacity and `transform` cost no layout, which is exactly why they were the right tools for a
+     * panel arriving into a space that had already opened. A rail item has no space waiting for
+     * it: the two the design-tools switch adds push the switch itself down, and measured, it
+     * jumped **163px in a single frame** — two items of 68px and two gaps of 14. The items faded
+     * in beautifully while the thing under them teleported.
+     *
+     * So this one does touch layout, deliberately and in the one place it is safe to: the rail
+     * holds no live page, nothing here can reflow the preview or disturb what it has scrolled to.
+     * The item starts folded away under the one above it and opens into place, and the switch
+     * rides down with it.
+     *
+     * The distance comes from the caller, because it is the caller's geometry.
+     */
+    margin-top: calc(-1 * var(--ui-enter-offset, 0px));
   }
 }
 
 @utility ui-enter-up {
   animation: ui-enter-up var(--ui-base) var(--ui-ease-shape) both;
+}
+
+/**
+ * The preview settling in after the chrome has had to be rebuilt.
+ *
+ * **It cannot be removed, so it is made soft.** Turning the design tools on remounts the preview
+ * frame on purpose — `Editor.tsx`'s own note at the `<iframe>` records the two defects that exist
+ * to fix, both chrome that cannot re-attach itself — and a remounted frame has no document in it
+ * for exactly one frame. Measured: one sample in 120, `readyState` still `loading`.
+ *
+ * One frame of nothing reads as the page refreshing. Two things take that away without touching the
+ * remount: the frame now wears the page's own background colour, so there is no white to flash to,
+ * and the document fades in rather than snapping, so the gap reads as the page settling instead of
+ * as a glitch.
+ *
+ * Opacity only — the frame holds a live page, and moving it would move everything inside it.
+ */
+@keyframes ui-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@utility ui-fade-in {
+  animation: ui-fade-in var(--ui-base) var(--ui-ease-shape) both;
 }
 
 /**
