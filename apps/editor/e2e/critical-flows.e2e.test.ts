@@ -148,6 +148,48 @@ async function storedSession(page: Page): Promise<string> {
  * podían aseverar sobre bytes **anteriores** al acto y pasar por el motivo equivocado. Eso es peor
  * que fallar.
  */
+/**
+ * El desplazamiento de la vista previa **una vez que ha dejado de moverse**, que no es lo mismo que
+ * una vez que ha pasado por un número.
+ *
+ * **Medido, y es lo que hacía frágil a la guarda del punto de lectura.** Tras fijar el
+ * desplazamiento y sondear hasta verlo en 480, sigue moviéndose solo durante unos 150ms y acaba 44px
+ * más allá:
+ *
+ *     +5=481 +22=485 +38=494 +55=504 +71=512 +88=517 +105=520 +122=522 +138=523 +154=524
+ *
+ * No es una animación: no hay ninguna CSS que la pida en la vista previa y el producto solo tiene un
+ * `scrollTo` instantáneo. La forma decelerada apunta a llamadas sucesivas que convergen conforme el
+ * diseño se asienta — las imágenes que el renderizador emite **sin dimensiones** cambian el alto
+ * mientras cargan. Queda como hipótesis: confirmarla pide instrumentar el producto.
+ *
+ * Lo que esta espera arregla es la prueba: una línea base tomada de un número en movimiento no es
+ * una línea base. Tres fotogramas seguidos de acuerdo, con plazo para que un desplazamiento que no
+ * se asiente falle en la aserción de quien llame y no cuelgue aquí.
+ */
+async function settledScroll(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      new Promise<number>((done) => {
+        const win = document.querySelector<HTMLIFrameElement>(
+          "iframe:not([data-buffered])",
+        )?.contentWindow;
+        if (!win) return done(-1);
+        const deadline = performance.now() + 3_000;
+        let last = Number.NaN;
+        let same = 0;
+        const tick = () => {
+          const y = Math.round(win.scrollY);
+          same = y === last ? same + 1 : 0;
+          last = y;
+          if (same >= 3 || performance.now() > deadline) return done(y);
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }),
+  );
+}
+
 async function sessionHolds(
   page: Page,
   holds: (raw: string) => boolean,
@@ -8048,6 +8090,7 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
           ?.contentDocument?.querySelector('[data-section="sec-services"]')
           ?.scrollIntoView();
       });
+      await settledScroll(walker);
       const before = await where();
       expect(
         before.scrollY,
@@ -8114,13 +8157,13 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
       await intoTheEditor(walker);
       const frame = walker.frameLocator(PREVIEW);
 
-      const reading = await walker.evaluate(() => {
-        const doc = document.querySelector<HTMLIFrameElement>(
-          "iframe:not([data-buffered])",
-        )?.contentDocument;
-        doc?.querySelector('[data-section="sec-services"]')?.scrollIntoView();
-        return doc?.defaultView?.scrollY ?? -1;
+      await walker.evaluate(() => {
+        document
+          .querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")
+          ?.contentDocument?.querySelector('[data-section="sec-services"]')
+          ?.scrollIntoView();
       });
+      const reading = await settledScroll(walker);
       expect(
         reading,
         "la vista previa no se desplazó: la prueba no distinguiría nada",
@@ -8185,13 +8228,12 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
       // De vuelta a la primera y abajo, para que haya algo que conservar o perder.
       await tabs.first().click();
       await expect(frame.locator('[data-section="sec-cover"]')).toBeVisible();
-      const reading = await walker.evaluate(() => {
-        const doc = document.querySelector<HTMLIFrameElement>(
-          "iframe:not([data-buffered])",
-        )?.contentDocument;
-        doc?.defaultView?.scrollTo(0, 240);
-        return doc?.defaultView?.scrollY ?? -1;
+      await walker.evaluate(() => {
+        document
+          .querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")
+          ?.contentWindow?.scrollTo(0, 240);
       });
+      const reading = await settledScroll(walker);
       expect(
         reading,
         "la vista previa no se desplazó: la prueba no distinguiría nada",
@@ -8268,21 +8310,18 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
       await frame.locator(".rb-escalate-yes").click();
       await expect(frame.locator(".rb-handmade")).toHaveCount(1);
 
-      const readingAt = 480;
-      await walker.evaluate((top: number) => {
+      await walker.evaluate(() => {
         document
           .querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")
-          ?.contentWindow?.scrollTo(0, top);
-      }, readingAt);
-      await expect
-        .poll(async () =>
-          walker.evaluate(
-            () =>
-              document.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")
-                ?.contentWindow?.scrollY ?? -1,
-          ),
-        )
-        .toBe(readingAt);
+          ?.contentWindow?.scrollTo(0, 480);
+      });
+      // **Donde se asiente, no donde se le pidió.** `settledScroll` explica por qué los dos números
+      // no son el mismo; lo que esta prueba necesita es que haya sitio por encima, no un 480 exacto.
+      const readingAt = await settledScroll(walker);
+      expect(
+        readingAt,
+        "la vista previa no se desplazó: sin sitio por encima esta guarda no mide nada",
+      ).toBeGreaterThan(80);
       /**
        * **La sección se fija, no se vuelve a deducir**, y la primera versión de esto la deducía en
        * cada medición: «la visible más alta». Pasaba en local y falló en CI con 37px de diferencia
