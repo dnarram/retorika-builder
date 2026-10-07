@@ -4082,6 +4082,202 @@ describe("sprint 13 día 7 — el clic que se perdía mientras la vista previa p
 });
 
 /**
+ * **El teclado después de añadir o quitar una ficha**, que hasta ahora se quedaba en un botón que el
+ * propio cambio destruía.
+ *
+ * Los tres controles de línea son `<button>` dentro del iframe y **no cancelan `mousedown`**, al
+ * contrario que la barra flotante, que lo hace a propósito. Así que pulsar «+ Añadir línea»
+ * desenfocaba el texto, confirmaba la edición, reemplazaba el documento y dejaba el foco en el
+ * cuerpo: para escribir en la ficha nueva había que buscarla y hacer clic.
+ *
+ * **Conducido con el teclado**, que es lo que prueba el foco *y* la selección a la vez. Si la ficha
+ * nueva nace con su marcador seleccionado, escribir lo sustituye — y eso no se puede fingir sin
+ * haber enfocado el elemento correcto.
+ *
+ * **El cuarto caso que dirección pidió —la lista vacía— no existe**, y escribirlo habría sido
+ * escribir para un estado que el catálogo prohíbe: los cinco presets declaran `min: 1` y
+ * `canRemove` es `itemIds.length > range.min`, así que con una ficha el botón de quitar no se
+ * dibuja. En su lugar se asevera el estado alcanzable más cercano.
+ */
+describe("la ficha nueva nace con el cursor dentro, y quitar una no lo tira al suelo", () => {
+  /** El editor abierto sobre una web con tres fichas en «Qué hacemos». */
+  async function threeCards(page: Page): Promise<FrameLocator> {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+    await page.fill("#nombre", "Taberna Santo Domingo");
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Restaurante y bar", { exact: true }).click();
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    for (const service of ["Comidas", "Cenas", "Terraza"]) {
+      await page.getByText(service, { exact: true }).click();
+    }
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.fill("#direccion", "Cta. de Santo Domingo, 2, Ronda");
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Que reserven", { exact: true }).click();
+    await page.fill("#enlace", "https://reservas.example.com/taberna");
+    await page.getByRole("button", { name: "Crear mi web" }).click();
+    await page.getByText("Ver a tamaño real →").first().click();
+    const frame = page.frameLocator(PREVIEW).first();
+    await frame.locator('[data-section="sec-cover"]').waitFor();
+    await expect(frame.locator('[data-section="sec-services"] [data-item]')).toHaveCount(3);
+    return frame;
+  }
+
+  /** Qué ficha tiene el foco, por su posición en la lista, y qué dice. */
+  async function focusedLine(page: Page): Promise<{ at: number; text: string }> {
+    return page.evaluate(() => {
+      const doc = document.querySelector<HTMLIFrameElement>(
+        "iframe:not([data-buffered])",
+      )?.contentDocument;
+      const active = doc?.activeElement as HTMLElement | null;
+      const line = active?.closest<HTMLElement>("[data-item]");
+      if (!doc || !line) return { at: -1, text: active?.tagName ?? "nada" };
+      const items = [
+        ...(doc
+          .querySelector('[data-section="sec-services"] .rb-list')
+          ?.querySelectorAll<HTMLElement>("[data-item]") ?? []),
+      ];
+      return { at: items.indexOf(line), text: (active?.textContent ?? "").trim() };
+    });
+  }
+
+  it("la ficha nueva recibe el teclado, y escribir sustituye su marcador", async () => {
+    const page = await (await browser.newContext()).newPage();
+    try {
+      const frame = await threeCards(page);
+      const cards = frame.locator('[data-section="sec-services"] [data-item]');
+
+      await frame.locator('[data-section="sec-services"] .rb-line-add').click();
+      await expect(cards).toHaveCount(4);
+
+      // Sin un solo clic más: el foco tiene que haber llegado solo a la ficha nueva.
+      await expect.poll(async () => (await focusedLine(page)).at).toBe(3);
+      await page.keyboard.type("Paella de la casa");
+      await page.getByText("Haz clic en cualquier texto para cambiarlo").click();
+
+      // Sustituido, no añadido: eso solo pasa si el marcador estaba seleccionado al llegar el foco.
+      await expect(cards.nth(3)).toContainText("Paella de la casa");
+      expect(
+        (await cards.nth(3).innerText()).startsWith("Paella de la casa"),
+        `la ficha dice «${await cards.nth(3).innerText()}»: el marcador no se sustituyó`,
+      ).toBe(true);
+      await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+    } finally {
+      await page.context().close();
+    }
+  }, 300_000);
+
+  it("hacer clic en el marcador de la ficha nueva no escribe dentro de él", async () => {
+    /**
+     * **Una regresión que introduje yo y que la suite me cazó.** `wireEditing` selecciona todo el
+     * campo al recibir el `focus`, y eso es lo que hace cierto «escribir lo sustituye». Enfocar la
+     * ficha nueva gasta ese evento — así que quien después *haga clic* en el marcador resaltado no
+     * provoca un segundo `focus`, el clic deshace la selección, y sus palabras caen dentro del
+     * marcador. Medido en el recorrido del sprint 7: «Escribe aquí de qué es esta fot» + «Segunda
+     * foto» + «o».
+     *
+     * El arreglo es una marca que dice «esto sigue siendo nuestro»: un clic la vuelve a seleccionar
+     * entera y la primera tecla la quita. Esta prueba es el clic, que es el camino que se rompió.
+     */
+    const page = await (await browser.newContext()).newPage();
+    try {
+      const frame = await threeCards(page);
+      const cards = frame.locator('[data-section="sec-services"] [data-item]');
+
+      await frame.locator('[data-section="sec-services"] .rb-line-add').click();
+      await expect(cards).toHaveCount(4);
+      await expect.poll(async () => (await focusedLine(page)).at).toBe(3);
+
+      // El clic que rompía esto: el campo ya tiene el foco, así que no habrá un segundo `focus`.
+      const fresh = cards.nth(3).locator('[contenteditable="true"]').first();
+      const placeholder = (await fresh.innerText()).trim();
+      expect(placeholder.length, "la ficha nueva llegó sin marcador que sustituir").toBeGreaterThan(
+        0,
+      );
+      await fresh.click();
+      await page.keyboard.type("Menú del día");
+      await page.getByText("Haz clic en cualquier texto para cambiarlo").click();
+
+      const after = (await fresh.innerText()).trim();
+      expect(after, `quedó «${after}» en vez de sustituir «${placeholder}»`).toBe("Menú del día");
+    } finally {
+      await page.context().close();
+    }
+  }, 300_000);
+
+  it("quitar una ficha del medio lleva el teclado a la siguiente", async () => {
+    const page = await (await browser.newContext()).newPage();
+    try {
+      const frame = await threeCards(page);
+      const cards = frame.locator('[data-section="sec-services"] [data-item]');
+      const thirdBefore = (await cards.nth(2).innerText()).trim();
+
+      await cards.nth(1).locator(".rb-line-remove").click();
+      await expect(cards).toHaveCount(2);
+
+      const focused = await (async () => {
+        await expect.poll(async () => (await focusedLine(page)).at).toBe(1);
+        return focusedLine(page);
+      })();
+      // La que ocupa ahora ese puesto es la que era tercera, y es la que tiene el foco.
+      expect(
+        thirdBefore.startsWith(focused.text) || focused.text.length > 0,
+        "el foco cayó en algo sin texto",
+      ).toBe(true);
+      expect((await cards.nth(1).innerText()).trim()).toBe(thirdBefore);
+    } finally {
+      await page.context().close();
+    }
+  }, 300_000);
+
+  it("quitar la última lleva el teclado a la anterior", async () => {
+    const page = await (await browser.newContext()).newPage();
+    try {
+      const frame = await threeCards(page);
+      const cards = frame.locator('[data-section="sec-services"] [data-item]');
+
+      await cards.nth(2).locator(".rb-line-remove").click();
+      await expect(cards).toHaveCount(2);
+
+      // No hay «siguiente», así que el foco va hacia atrás en vez de al suelo.
+      await expect.poll(async () => (await focusedLine(page)).at).toBe(1);
+    } finally {
+      await page.context().close();
+    }
+  }, 300_000);
+
+  it("al bajar a una sola ficha el foco queda en ella, y ya no hay nada que quitar", async () => {
+    /**
+     * El estado alcanzable más cercano al «lista vacía» que se pidió. No se puede vaciar: `min: 1`
+     * en los cinco presets, así que la última ficha no tiene botón de quitar. La prueba asevera las
+     * dos mitades — que el foco quedó en la supervivienta **y** que el botón desapareció —, porque
+     * la segunda sin la primera pasaría también con el foco en el suelo.
+     */
+    const page = await (await browser.newContext()).newPage();
+    try {
+      const frame = await threeCards(page);
+      const cards = frame.locator('[data-section="sec-services"] [data-item]');
+      const removers = frame.locator('[data-section="sec-services"] .rb-line-remove');
+
+      await expect(removers, "con tres fichas debería haber tres botones de quitar").toHaveCount(3);
+      await cards.nth(2).locator(".rb-line-remove").click();
+      await expect(cards).toHaveCount(2);
+      await cards.nth(1).locator(".rb-line-remove").click();
+      await expect(cards).toHaveCount(1);
+
+      await expect.poll(async () => (await focusedLine(page)).at).toBe(0);
+      await expect(
+        removers,
+        "queda una ficha y todavía se ofrece quitarla: el mínimo del catálogo no se respeta",
+      ).toHaveCount(0);
+    } finally {
+      await page.context().close();
+    }
+  }, 300_000);
+});
+
+/**
  * Sprint 13's whole week in one journey, **driven with real mouse gestures throughout** — which is
  * day 2's lesson applied to the walk itself.
  *
