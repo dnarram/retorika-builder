@@ -7752,21 +7752,34 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
           ),
         )
         .toBe(readingAt);
-      const onScreen = async () =>
-        walker.evaluate(() => {
+      /**
+       * **La sección se fija, no se vuelve a deducir**, y la primera versión de esto la deducía en
+       * cada medición: «la visible más alta». Pasaba en local y falló en CI con 37px de diferencia
+       * (25px del borde antes, −12 después), porque con otras métricas de fuente las secciones caen
+       * en otros sitios y `antes` midió una sección y `después` midió la de al lado. Comparar dos
+       * cosas distintas y llamar a la diferencia una regresión.
+       *
+       * Con la identidad fija la igualdad es exacta por construcción: el ancla restaura
+       * `topDeLaSección + dentro`, así que la posición en pantalla de **esa** sección es la misma a
+       * los dos lados del reemplazo.
+       */
+      const onScreen = async (which?: string) =>
+        walker.evaluate((id: string | undefined) => {
           const doc = document.querySelector<HTMLIFrameElement>(
             "iframe:not([data-buffered])",
           )?.contentDocument;
           const win = doc?.defaultView;
-          if (!doc || !win) return { top: -10_000, scrollY: -1 };
-          const read = [...doc.querySelectorAll<HTMLElement>("[data-section]")].find(
-            (section) => section.getBoundingClientRect().bottom > 0,
-          );
+          if (!doc || !win) return { id: "", top: -10_000, scrollY: -1 };
+          const sections = [...doc.querySelectorAll<HTMLElement>("[data-section]")];
+          const read = id
+            ? sections.find((section) => section.dataset["section"] === id)
+            : sections.find((section) => section.getBoundingClientRect().bottom > 0);
           return {
+            id: read?.dataset["section"] ?? "",
             top: Math.round(read?.getBoundingClientRect().top ?? -10_000),
             scrollY: Math.round(win.scrollY),
           };
-        });
+        }, which);
       const before = await onScreen();
 
       // The swap, with the hand-designed section above the reading point losing its bar on the way.
@@ -7782,10 +7795,15 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
       //
       // Se mide dónde cae en pantalla la sección que se estaba leyendo, que es lo que significa
       // «no se ha movido» para quien edita.
-      const after = await onScreen();
+      expect(before.id, "no se encontró ninguna sección a la vista antes del relevo").not.toBe("");
+      const after = await onScreen(before.id);
+      expect(
+        after.id,
+        `la sección «${before.id}» no está en el documento nuevo: la comparación no diría nada`,
+      ).toBe(before.id);
       expect(
         Math.abs(after.top - before.top),
-        `la sección que se leía estaba a ${before.top}px del borde y ahora a ${after.top}px (desplazamiento ${before.scrollY} → ${after.scrollY})`,
+        `«${before.id}» estaba a ${before.top}px del borde y ahora a ${after.top}px (desplazamiento ${before.scrollY} → ${after.scrollY})`,
       ).toBeLessThanOrEqual(2);
     } finally {
       await walker.context().close();
