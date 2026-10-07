@@ -957,3 +957,53 @@ recorrido no examinaba ni un botón y pasaba en verde. Quitar el arreglo que lo 
 fallar. Ahora mira solo el desbordamiento del propio elemento, y **cuenta cuántos examina**: cero
 examinados es un fallo con su propio mensaje, porque un recorrido que no miró nada y uno que no
 encontró nada son el mismo array vacío.
+
+### La barra de «Diseñada a mano» vuelve al flujo, y la maqueta 16 ya lo decía (7 de octubre de 2026)
+
+**Reportado desde dirección en la vista de móvil**: la barra «Diseñada a mano / Portada / Volver a
+la original» se dibujaba **encima** de la sección tapando contenido editable, y sus botones se
+salían de ella.
+
+**Lo medido, a 320px de lienzo:** barra de 272px, su contenido pidiendo 282 —**10px de
+desbordamiento**, y lo que se salía era «Volver a la original»— y **31px de la fotografía de la
+portada tapados** (`el-image`). En ordenador no pasaba ninguna de las dos cosas, que es la razón por
+la que llevaba semanas sin verse.
+
+**La causa no era un ajuste mal puesto: era una divergencia de la maqueta 16 que nadie había
+escrito.** La maqueta dibuja la barra como una **cabecera en el flujo**, en columna, con el contenido
+de la sección debajo (`flex-direction: column`, y luego el div de las franjas). El código la hizo
+`position: absolute; top: 0; left: 0; right: 0; z-index: 5` sobre la sección. De ahí venían los dos
+síntomas: tapaba porque estaba encima, y se salía porque encima no tenía sitio propio al que
+envolver.
+
+**Su propia fila, no una cabecera dentro de la sección**, y la diferencia importa. En el DOM real la
+sección *es* la tarjeta que la maqueta dibuja, así que la lectura literal —meter la cabecera dentro—
+empujaría el contenido del cliente hacia abajo **dentro de su propia sección**, y la vista previa
+dejaría de mostrar la altura que esa sección va a tener publicada. Puesta antes de la sección, la
+caja del cliente queda intacta. El patrón ya existía: `.rb-gap`, la fila de «Añadir sección aquí»,
+son 76px en el flujo desde el día que se construyó.
+
+**Lo que la maqueta no puede decidir, decidido por dirección el 7 de octubre de 2026.** La maqueta
+dibuja un ancho (~600px) y a 320 los tres controles no caben en una línea. **Nada se recorta:** el
+distintivo y «Volver a la original» son unidades atómicas, así que el botón **pasa entero a una
+segunda línea** en vez de cortarse o de acortar su texto. Acortarlo a «Volver» se consideró y se
+descartó: el dossier §5 habla de *prometer la vuelta*, y un botón que dice menos de lo que hace
+promete menos. El nombre de la sección es lo único que puede envolver.
+
+Medido después: en ordenador 1168×44 en una línea; en móvil 320×75 en dos. Cero desbordamiento y
+cero solape a los dos anchos.
+
+**Y lo que ninguna guarda podía cazar, que es la parte útil.** El recorrido de desbordamiento *dentro
+del lienzo* —el que se añadió en la PR #179 precisamente para «+ Añadir línea»— corre a **un solo
+ancho (1440×900) y con las herramientas de diseño apagadas**, así que `.rb-handmade` no existe
+cuando mira. El recorrido equivalente del lado del editor corre a 320, 375, 768, 1024 y 1280. Esa
+asimetría es el agujero, vale más que esta barra, y queda para su propia PR por decisión de
+dirección: el recorrido del lienzo a 320/768/1440 con las herramientas encendidas, y lo que
+encuentre se trae medido antes de arreglarlo.
+
+**Un efecto secundario que conviene anotar.** Hasta hoy, escalar una sección no cambiaba ninguna
+altura del flujo, porque la barra era absoluta. Ahora una sección diseñada a mano es de 44 a 75px más
+alta, así que el punto de lectura que conserva `restoreReadingPosition` (PR #189) deja de estar
+anclado por precaución y pasa a estar anclado por necesidad. Su guarda «el punto de lectura se
+conserva, también con una sección a mano por encima» ya cubría este caso exacto tres días antes de
+que existiera.

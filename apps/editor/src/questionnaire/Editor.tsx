@@ -3214,7 +3214,20 @@ export function Editor({
    * mark, and someone who turns them off is asking for the simple editor back — the sections stay
    * exactly as they are, which is the point of the depth belonging to the person and not the site.
    */
+  /**
+   * Which sections already had their «Diseñada a mano» bar, so only a **new** one arrives.
+   *
+   * `wireHandmade` runs once per document, and a document is replaced on every committed edit — so
+   * without this the bar would play its entrance on every keystroke that lands, which is the
+   * mistake the fade on the preview frame taught: an entrance that re-runs stops reading as an
+   * arrival and starts reading as a flicker.
+   */
+  const barredSections = useRef<Set<string>>(new Set());
+
   function wireHandmade(iframeDoc: Document) {
+    // Which sections carry a bar in *this* document, so the set can be replaced rather than added
+    // to: a section that has been reverted has to be able to arrive again if it is escalated twice.
+    const arriving: string[] = [];
     if (!designTools) return;
 
     for (const element of iframeDoc.querySelectorAll<HTMLElement>("[data-section]")) {
@@ -3247,8 +3260,26 @@ export function Editor({
       bar.appendChild(back);
 
       element.classList.add("rb-free");
-      element.prepend(bar);
+      // **Before the section, not inside it**, which is what mockup 16 draws and what the code had
+      // diverged from — see `docs/design/REVIEW.md`, 7 October 2026. Prepended, it was
+      // `position: absolute` over the section's own first element: measured on a 320px canvas it
+      // covered 31px of the cover's photograph. Its own row covers nothing at any width, and it
+      // leaves the client's section exactly the height it will be once published, which a header
+      // pushed inside it would not.
+      //
+      // After `wireInsertion`, so the order down the page is: insertion gap, this bar, the section.
+      element.before(bar);
+      arriving.push(sectionId);
+
+      // Only a bar that was not there a document ago plays its entrance — see `barredSections`.
+      // Measured after inserting, because the height is 44px in the canvas's desktop width and 75
+      // at 320 once «Volver a la original» wraps, and only the DOM knows which.
+      if (!barredSections.current.has(sectionId)) {
+        bar.style.setProperty("--rb-enter-offset", `${bar.offsetHeight}px`);
+        bar.classList.add("rb-handmade-in");
+      }
     }
+    barredSections.current = new Set(arriving);
 
     // The stripes, on whichever section the panel is about. Here as well as in the effect above,
     // because after a remount the effect can fire before the new frame has loaded.
@@ -3448,7 +3479,12 @@ export function Editor({
       `.rb-pill:focus-visible { background: ${CHROME_SCALE.brandSurface};`,
       `  box-shadow: ${CHROME_SCALE.shadow2}; outline: 2px solid ${CHROME_SCALE.brand};`,
       "  outline-offset: 2px; }",
-      "@media (prefers-reduced-motion: reduce) { .rb-pill { transition-duration: 0.01ms; } }",
+      // Everything inside the canvas that moves, flattened for somebody who asked for less of it —
+      // the destination is never removed, only the travel, which is the same contract `globals.css`
+      // keeps on the other side of the boundary.
+      "@media (prefers-reduced-motion: reduce) {",
+      "  .rb-pill { transition-duration: 0.01ms; }",
+      "  .rb-handmade-in { animation-duration: 0.01ms; } }",
       ".rb-menu { position: absolute; top: 60px; left: 50%; transform: translateX(-50%);",
       "  z-index: 20; width: 340px; max-width: calc(100% - 80px); box-sizing: border-box;",
       `  padding: 14px; background: ${CHROME_SCALE.surface}; border: 1px solid ${CHROME_SCALE.border};`,
@@ -3521,19 +3557,41 @@ export function Editor({
       // whose photograph is flush with its top edge, and there the badge belongs on top: «Foto de
       // ejemplo» is a statement about the picture, and chrome hiding it would be how an owner ships
       // a stock photograph without noticing.
-      `.rb-handmade { font-family: ${UI_FONT}; position: absolute; top: 0; left: 0; right: 0;`,
-      "  z-index: 5; box-sizing: border-box; display: flex; align-items: center; gap: 8px;",
-      "  padding: 9px 13px; background: rgba(248,250,253,0.96); backdrop-filter: blur(2px);",
-      "  border-bottom: 1px solid #E3E8F0; }",
-      // And the action cluster steps below it, rather than the two drawing over each other. The
-      // cluster's own `top: 8px` is measured from the section, so this is the bar's height plus the
-      // same 8px of air.
-      ".rb-free .rb-actions { top: 52px; }",
-      ".rb-handmade-badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px;",
+      // In the flow of the page, as a header attached to the section below it. It was absolutely
+      // positioned over the section, which is where both of the defects reported on 7 October 2026
+      // came from: it covered editable content, and having no room of its own there was nothing for
+      // its controls to wrap into.
+      //
+      // `flex-wrap` and the two `nowrap`s are one decision, taken by direction: at 320px the three
+      // controls ask for 282px in 272, and **nothing is cut** — the badge and «Volver a la original»
+      // are atomic, so the button moves whole onto a second line rather than being clipped or
+      // shortened. The name is the only part that may wrap, and `min-width: 0` plus
+      // `overflow-wrap` is what stops a long one overflowing instead.
+      `.rb-handmade { font-family: ${UI_FONT}; box-sizing: border-box; display: flex;`,
+      "  flex-wrap: wrap; align-items: center; gap: 8px; padding: 9px 13px;",
+      "  background: #F8FAFD; border-bottom: 1px solid #E3E8F0; }",
+      // **It arrives rather than appearing, and that is what makes the 44px honest.** Accepting
+      // «Diseñar a mano» now adds the bar's height to the flow, so the section below it moves down.
+      // Anywhere but the very top of the page the reading anchor absorbs that and nothing is seen to
+      // move (measured: a section at `top: 0` stays at `top: 0`, the scroll number taking the 44px).
+      // At the top there is nothing to give, so the room has to open visibly — and direction's
+      // instruction was that it read as an arrival and not as a jump.
+      //
+      // The same two keyframes the rail's own items use, down to the curve: the negative margin is
+      // what makes everything below travel instead of teleporting, and `--rb-enter-offset` carries
+      // the height because only the caller can measure it. `--ui-ease-shape` is carried into
+      // `CHROME_SCALE` for this, which is the first thing inside the preview ever to animate.
+      "@keyframes rb-handmade-in { from { opacity: 0; transform: translateY(-6px);",
+      "  margin-top: calc(-1 * var(--rb-enter-offset, 0px)); } }",
+      `.rb-handmade-in { animation: rb-handmade-in ${CHROME_SCALE.base} ${CHROME_SCALE.easeShape} both; }`,
+      ".rb-handmade-badge { display: inline-flex; flex-shrink: 0; white-space: nowrap;",
+      "  align-items: center; gap: 5px; padding: 4px 9px;",
       "  font-size: 11px; font-weight: 600; color: #8A5A08; background: #FFF4E5;",
       `  border: 1px solid #F4DDB4; border-radius: ${CHROME_SCALE.radiusSm}; }`,
-      ".rb-handmade-name { flex-grow: 1; font-size: 12px; color: #5B6B82; }",
-      `.rb-handmade-back { font-family: ${UI_FONT}; flex-shrink: 0; padding: 5px 10px;`,
+      ".rb-handmade-name { flex-grow: 1; min-width: 0; overflow-wrap: anywhere;",
+      "  font-size: 12px; color: #5B6B82; }",
+      `.rb-handmade-back { font-family: ${UI_FONT}; flex-shrink: 0; white-space: nowrap;`,
+      "  padding: 5px 10px;",
       "  font-size: 11px; font-weight: 600; color: #156FE7; background: #FFFFFF;",
       `  border: 1px solid ${CHROME_SCALE.brand}; border-radius: ${CHROME_SCALE.radiusSm};`,
       "  cursor: pointer; }",
