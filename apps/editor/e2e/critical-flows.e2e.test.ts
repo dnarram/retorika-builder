@@ -125,6 +125,41 @@ afterAll(async () => {
 
 const HEADLINE_EDIT = "Reserva ya, no te quedes sin mesa";
 
+/** Los bytes de la sesión de este navegador, para comparar antes y después de un acto. */
+async function storedSession(page: Page): Promise<string> {
+  return page.evaluate(() => localStorage.getItem("retorika.session.v1") ?? "");
+}
+
+/**
+ * Espera a que el autoguardado **haya escrito de verdad**, y no a que una etiqueta lo parezca.
+ *
+ * **El tick «Guardado en este navegador» no es señal de esta edición**, y creerlo costó una
+ * ejecución de CI el 7 de octubre de 2026. La etiqueta aparece con el primer guardado de la sesión
+ * —el de las cinco respuestas— y **nunca se va**, así que `toBeVisible()` la satisface al instante,
+ * antes de que el autoguardado de la edición en curso haya corrido. Está amortiguado 500ms
+ * (`SAVE_DEBOUNCE_MS`), y con la CPU estrangulada 20× no llega.
+ *
+ * Medido, en el instante exacto en que la prueba iba a recargar:
+ * `tick=true sesionTieneLaEdicion=false`. La recarga cargaba entonces la sesión anterior, el texto
+ * no estaba, y el historial nacía vacío — que es por qué el volcado de CI mostraba «Deshacer»
+ * deshabilitado y por qué fallaban además los flujos 3 y 5, que aseveran sobre ese mismo texto.
+ *
+ * Dos de las cuatro llamadas peligrosas leían la sesión justo después de esperar el tick, así que
+ * podían aseverar sobre bytes **anteriores** al acto y pasar por el motivo equivocado. Eso es peor
+ * que fallar.
+ */
+async function sessionHolds(
+  page: Page,
+  holds: (raw: string) => boolean,
+  what: string,
+): Promise<void> {
+  await expect
+    .poll(async () => holds(await storedSession(page)), {
+      message: `la sesión guardada nunca ${what}`,
+    })
+    .toBe(true);
+}
+
 describe("critical flow 1 — cuestionario hasta web generada", () => {
   it("produces three real, generated sites from the five answers", async () => {
     await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
@@ -176,9 +211,10 @@ describe("critical flow 2 — edición de un texto y recarga", () => {
     await page.getByText("Haz clic en cualquier texto para cambiarlo").click();
 
     await expect(frame.getByText(HEADLINE_EDIT)).toBeVisible();
-    // The save tick is the one thing in this editor allowed to claim a save happened — it only
-    // shows "Guardado en este navegador" once autosave has actually resolved (ADR 0012).
+    // The tick says a save has happened at some point; **it does not say this edit is in it** — see
+    // `sessionHolds`, which is the signal the reload below actually depends on.
     await expect(page.getByText("Guardado en este navegador")).toBeVisible({ timeout: 5_000 });
+    await sessionHolds(page, (raw) => raw.includes(HEADLINE_EDIT), "recibió la edición");
 
     await page.reload({ waitUntil: "networkidle" });
 
@@ -1493,10 +1529,16 @@ describe("sprint 8 — el modo estudio: encender, diseñar a mano, colocar, y vo
       await expect(studio.getByRole("button", { name: "Diseño" })).toHaveCount(0);
       await expect(frame.locator(".rb-handmade")).toHaveCount(0);
       // Read the *stored* site, so the claim is about what survives rather than about what React is
-      // rendering. Waiting for the editor's own indicator first: autosave is debounced, and flipping
-      // the switch does not trigger a save at all — by design, that is `INV_4` — so the write being
-      // waited for is the undo's, and reading too early answers `null`.
+      // rendering. Autosave is debounced, and flipping the switch does not trigger a save at all —
+      // by design, that is `INV_4` — so the write being waited for is the undo's.
+      //
+      // **Waited for by the bytes changing, not by the tick.** The tick has been visible since the
+      // questionnaire's own first save, so it cannot say whether the undo's write has landed, and
+      // reading the session on its word answers with the bytes from before the act — a green
+      // assertion about the wrong document. See `sessionHolds`.
+      const beforeUndo = await storedSession(studio);
       await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
+      await sessionHolds(studio, (raw) => raw !== beforeUndo, "cambió tras el deshacer");
       const stillFree = await studio.evaluate(() => {
         const raw = localStorage.getItem("retorika.session.v1");
         if (!raw) return null;
@@ -1818,8 +1860,11 @@ describe("sprint 9 día 4 — la barra flotante", () => {
       await expect(bar.locator(".rb-toolbar-swatch")).toHaveCount(4);
       await expect(bar.locator('.rb-toolbar-swatch[data-ref="color.surface"]')).toHaveCount(0);
 
+      const beforeSwatch = await storedSession(studio);
       await bar.locator('.rb-toolbar-swatch[data-ref="color.muted"]').click();
+      // Por los bytes, no por el tick: ver `sessionHolds`.
       await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
+      await sessionHolds(studio, (raw) => raw !== beforeSwatch, "cambió tras elegir el color");
 
       // The words are untouched, in the document rather than on the screen.
       expect(await frame.locator('[data-id="el-headline"]').textContent()).toBe(wordsBefore);
