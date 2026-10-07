@@ -163,6 +163,67 @@ a file that finished.
 - **Both agree but the schema looks wrong.** The migration is not the problem. Stop here and read
   case 2 instead.
 
+### Checking one landed, when the ledger cannot say
+
+**The ledger above is not evidence for a migration pasted into the Supabase SQL editor**, which is
+how both of this project's migrations are applied (`docs/tasks/el-recorrido-de-la-cuenta.md`, step 2
+of «Antes de empezar»). Only `migrate()` writes `schema_migrations`, and the only thing that calls it
+is the test bootstrap. So an empty ledger says nothing either way, and this is the gap that left
+migration `0002` in doubt for days.
+
+**Run every check in both projects.** Part 15 requires separate keys for development and production,
+so having applied a migration to one says nothing about the other.
+
+#### The twenty-second check, no SQL
+
+**With a test account, never a real one.** The free plan has no backup (`docs/tasks/copias.md`) and
+the sweep has no undo, so a check that ends with a live deletion request is not a check worth running
+on somebody's own account.
+
+Sign in as the test account, go to `/cuenta`, press «Borrar mi cuenta» and confirm:
+
+| What the screen says | What it means |
+|---|---|
+| «Has pedido borrar la cuenta. Se borrará a partir del …» | **`0002` landed.** Press «Cancelar el borrado» — see below |
+| «No hemos podido registrar la petición. Vuelve a intentarlo.» | It did not. `public.accounts` has no row for that person |
+
+Then **press «Cancelar el borrado», and confirm the screen goes back to offering the deletion rather
+than announcing it.** That is the other half of the promise and it exercises the write in the other
+direction (`cancelAccountDeletion`, `apps/editor/src/account/sites.ts`). Leaving a pending request
+behind on a test account is how a sweep later ends something nobody meant to end.
+
+This works because a deletion request is a timestamp in a column, not a row of its own: every stage
+is an `update … where id = <person>` against a row that has to exist already. Before `0002` the
+update matched nothing, PostgREST answered 204 with no error, and the screen said it had saved. Since
+#181 the failure is reported instead of assumed, which is what makes the first row above readable.
+
+#### The three queries, for *why* it failed
+
+**All three are read-only** — no `insert`, no `update`, no `delete` — so they are safe to paste into
+either project's SQL editor.
+
+```sql
+-- 1. Nobody without a row. Expected: 0 rows.
+select u.id from auth.users u
+ where not exists (select 1 from public.accounts a where a.id = u.id);
+
+-- 2. The trigger exists. Expected: 1 row.
+select tgname from pg_trigger where tgname = 'account_row_on_signup';
+
+-- 3. One row per person. Expected: the two numbers equal.
+select (select count(*) from public.accounts) as rows,
+       (select count(*) from auth.users)     as users;
+```
+
+Query 1 is the one `packages/db/test/accounts.pg.test.ts` already calls «the query to run against
+production if the question ever comes up again». It was in the repository and nowhere in this runbook,
+which is most of why this section exists.
+
+**Re-pasting `0002` is safe**: `create or replace function`, `drop trigger if exists` before the
+`create`, and `on conflict (id) do nothing` on both inserts. **Re-pasting `0001` is not** — its nine
+`create policy` statements carry no guard and the second run errors on the first policy that already
+exists. If `0001` needs re-running, read case 3 above first.
+
 ### What not to touch
 
 - **Do not edit a migration that has already run anywhere.** Write the next one. A file whose
