@@ -6431,13 +6431,25 @@ describe("lo que el cromo del editor dibuja dentro del lienzo, y el aviso del in
    * and the canvas chrome lives in another one, inside the iframe. So the second test below crosses
    * that boundary, which nothing did before.
    */
-  async function spillingInsideTheCanvas(page: Page): Promise<string[]> {
+  /**
+   * One finding. `what` is the key and `text` is the evidence: the key has to survive a change of
+   * fixture copy, and the words are what makes a failure readable.
+   */
+  type CanvasSpill = { what: string; text: string; spill: number };
+
+  async function spillingInsideTheCanvas(
+    page: Page,
+  ): Promise<{ examined: number; markers: string[]; found: CanvasSpill[] }> {
     return page.evaluate(() => {
       const doc = document.querySelector<HTMLIFrameElement>(
         "iframe:not([data-buffered])",
       )?.contentDocument;
-      if (!doc) return ["no se encuentra la vista previa"];
-      const out: string[] = [];
+      if (!doc) return { examined: 0, markers: [], found: [] };
+      const out: { what: string; text: string; spill: number }[] = [];
+      // Which pieces of chrome the walk actually looked at. Without this, «examined > 0» only says
+      // it found *a* button — it cannot say it reached the one the state was set up for, and a
+      // walk that re-measures the same two pills in eight states would pass every assertion.
+      const markers = new Set<string>();
       let examined = 0;
       for (const el of doc.querySelectorAll<HTMLElement>("button, [role='button'], .rb-pill")) {
         const style = getComputedStyle(el);
@@ -6457,6 +6469,7 @@ describe("lo que el cromo del editor dibuja dentro del lienzo, y el aviso del in
          */
         if (style.overflowX !== "visible" || style.overflowY !== "visible") continue;
         examined += 1;
+        for (const name of el.classList) if (name.startsWith("rb-")) markers.add(name);
 
         const range = doc.createRange();
         range.selectNodeContents(el);
@@ -6470,23 +6483,75 @@ describe("lo que el cromo del editor dibuja dentro del lienzo, y el aviso del in
           text.right - box.right,
         );
         if (spill > 1) {
-          out.push(
-            `"${(el.textContent ?? "").trim().slice(0, 30)}" se sale ${Math.round(spill)}px ` +
+          // The `rb-` class is the key, because the fixture's wording is not a contract and a
+          // key built from it would go stale the first time a label is reworded.
+          const marker = [...el.classList].find((name) => name.startsWith("rb-"));
+          out.push({
+            what: marker ?? el.tagName.toLowerCase(),
+            text:
+              `"${(el.textContent ?? "").trim().slice(0, 30)}" se sale ${Math.round(spill)}px ` +
               `(caja ${Math.round(box.height)}px, texto ${Math.round(text.height)}px)`,
-          );
+            spill: Math.round(spill),
+          });
         }
       }
       // A walk that looked at nothing is not a walk that found nothing, and the two are
-      // indistinguishable from an empty array. This is what says which one happened.
-      if (examined === 0) return ["el recorrido no examinó ni un botón del lienzo"];
-      return out;
+      // indistinguishable from an empty array. The caller asserts on this before anything else.
+      return { examined, markers: [...markers], found: out };
     });
   }
 
-  it("no deja que el texto de un botón del lienzo se salga de su contorno", async () => {
+  /**
+   * **Lo que desborda hoy, y la lista solo puede encoger.**
+   *
+   * El recorrido falla ante cualquier desbordamiento que no esté aquí, y falla también si una
+   * entrada deja de desbordar — entonces exige quitarla. Cuando quede vacía, la lista se borra y el
+   * recorrido pasa a ser estrictamente «nada se sale». El precedente de forma es `EDITOR_ONLY` en
+   * `apps/editor/test/chromeScale.test.ts`: una lista en línea, una razón por entrada, y una prueba
+   * que obliga a que cada excepción siga siendo real.
+   *
+   * La clave es estado + dispositivo + clase, **sin los píxeles**: el número se anota como medida,
+   * pero CI tiene otras métricas de fuente y una clave con píxeles fallaría por ruido.
+   */
+  const KNOWN_CANVAS_SPILLS: {
+    state: string;
+    device: string;
+    what: string;
+    px: number;
+    why: string;
+  }[] = [];
+
+  it("ninguna palabra del cromo del lienzo se sale de su botón, a ningún ancho ni modo", async () => {
+    /**
+     * **El agujero que esto cierra, medido.** Este recorrido existía y caminaba un solo ancho
+     * (1440×900), con las herramientas de diseño **apagadas** y sin vista de móvil — así que
+     * `.rb-handmade` no existía cuando miraba, y la barra de «Diseñada a mano» pudo tapar 31px de la
+     * fotografía de portada y salirse 10px durante semanas. El recorrido equivalente del lado del
+     * editor camina cuatro anchos; este caminaba uno.
+     *
+     * **Los ejes son ventana × modo de dispositivo, no una lista de anchos**, y eso corrige lo que
+     * yo mismo propuse. `designToolsFor` devuelve `undefined` por debajo de `MIN_STUDIO_WIDTH =
+     * 1024`, así que a 320 o 768 de ventana las herramientas **no se ofrecen** y medirlas ahí sería
+     * medir un editor que por diseño no las tiene — el mismo razonamiento que ya está escrito en
+     * este fichero sobre el diálogo a 768px. Y el lienzo de escritorio es
+     * `max(disponible, NARROWEST_DESKTOP)` con el suelo en 721: por debajo **se escala, no se
+     * estrecha**. A un lienzo de 320 solo se llega con el conmutador de móvil.
+     *
+     * **Móvil se mide a un solo ancho de ventana, y no pierde nada.** `layoutWidth` es
+     * `NARROWEST_WIDTH` —320— en modo móvil *sea cual sea* la ventana, y `getBoundingClientRect`
+     * dentro del iframe no se entera del `scale()` que el anfitrión aplica a la tarjeta. Así que las
+     * tres pasadas en móvil medirían tres veces la misma geometría.
+     *
+     * **Cada medición asevera primero que el estado que cree medir sigue ahí.** Redimensionar no
+     * cierra un menú ni desenfoca un texto, pero **cambiar de dispositivo mueve el foco fuera del
+     * iframe** y eso cierra la barra flotante — así que el estado de la barra se vuelve a abrir en
+     * móvil en vez de darse por hecho. Un recorrido que mide el estado equivocado y lo encuentra
+     * limpio es el mismo verde falso que un recorrido que no mira nada.
+     */
     const walker = await (await browser.newContext()).newPage();
+    const seen: { key: string; px: number; text: string; where: string }[] = [];
     try {
-      await walker.setViewportSize({ width: 1440, height: 900 });
+      await walker.setViewportSize({ width: 1280, height: 900 });
       await walker.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
       await walker.fill("#nombre", "Taberna Santo Domingo");
       await walker.getByRole("button", { name: "Siguiente" }).click();
@@ -6505,15 +6570,240 @@ describe("lo que el cromo del editor dibuja dentro del lienzo, y el aviso del in
       await frame.locator('[data-section="sec-cover"]').waitFor();
       await expect(frame.locator(".rb-line-add").first()).toBeVisible();
 
-      // At rest, and again with a section selected, which is when its verbs are drawn.
-      expect(await spillingInsideTheCanvas(walker), "el lienzo en reposo").toEqual([]);
-      await frame.locator('[data-section="sec-services"]').click();
-      await expect(frame.locator('[data-section="sec-services"].rb-selected')).toHaveCount(1);
-      expect(await spillingInsideTheCanvas(walker), "con una sección elegida").toEqual([]);
+      const canvasWidth = async () =>
+        walker.evaluate(
+          () =>
+            document.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")?.contentWindow
+              ?.innerWidth ?? -1,
+        );
+
+      /** Dos lecturas seguidas iguales: el lienzo deja de moverse tras un cambio de ventana. */
+      const settle = async () => {
+        let last = -1;
+        await expect
+          .poll(async () => {
+            const now = await canvasWidth();
+            const stable = now === last && now > 0;
+            last = now;
+            return stable;
+          })
+          .toBe(true);
+      };
+
+      const toMobile = async () => {
+        await walker.getByRole("button", { name: "Ver en móvil" }).click();
+        await expect.poll(canvasWidth).toBeLessThan(400);
+        await settle();
+      };
+      const toDesktop = async () => {
+        await walker.getByRole("button", { name: "Ver en ordenador" }).click();
+        await expect.poll(canvasWidth).toBeGreaterThan(720);
+        await settle();
+      };
+
+      let passes = 0;
+      /**
+       * Mide, y asevera **tres** cosas antes de creerse el resultado: que el estado sigue puesto,
+       * que se examinó algo, y que entre lo examinado está la pieza por la que existe este estado.
+       *
+       * Lo tercero es lo que impide la trampa: un recorrido que vuelve a medir las dos mismas
+       * píldoras en ocho estados pasa todas las aserciones sin haber mirado nunca el cromo nuevo —
+       * y es exactamente el error que tuvo la primera versión de este recorrido, verde sobre cero
+       * elementos.
+       */
+      const measure = async (
+        state: string,
+        device: string,
+        width: number,
+        present: string,
+        marker: string,
+      ) => {
+        const where = `${state} / ${device} / ventana ${width}px`;
+        await expect(frame.locator(present).first(), `${where}: el estado se perdió`).toBeVisible();
+        const read = await spillingInsideTheCanvas(walker);
+        passes += 1;
+        expect(
+          read.examined,
+          `${where}: el recorrido no examinó ni un botón del lienzo`,
+        ).toBeGreaterThan(0);
+        expect(
+          read.markers,
+          `${where}: se examinaron ${read.examined} elementos y ninguno era «${marker}», así que este estado no se midió`,
+        ).toContain(marker);
+        for (const found of read.found) {
+          seen.push({
+            key: `${state}|${device}|${found.what}`,
+            px: found.spill,
+            text: found.text,
+            where,
+          });
+        }
+      };
+
+      /**
+       * Un estado, a los tres anchos de ventana en escritorio y una vez en móvil.
+       *
+       * `reopen` existe por la barra flotante: cambiar de dispositivo le quita el foco al texto y la
+       * cierra, así que el estado hay que volver a ponerlo antes de medir en móvil.
+       */
+      const sweep = async (
+        state: string,
+        present: string,
+        marker: string,
+        reopen?: () => Promise<void>,
+      ) => {
+        for (const width of [1024, 1280, 1600]) {
+          await walker.setViewportSize({ width, height: 900 });
+          await settle();
+          await measure(state, "escritorio", width, present, marker);
+        }
+        await walker.setViewportSize({ width: 1280, height: 900 });
+        await settle();
+        await toMobile();
+        await reopen?.();
+        await measure(state, "móvil", 1280, present, marker);
+        await toDesktop();
+        await reopen?.();
+      };
+
+      // ---- 1. en reposo, con las herramientas apagadas -----------------------------------------
+      await sweep("reposo", ".rb-pill", "rb-pill");
+
+      // ---- la selección y las herramientas: precondición, no estado ---------------------------
+      /**
+       * **Elegir una sección no añade nada que este recorrido pueda medir, y lo descubrí al pedirle
+       * a cada pasada que nombrara la pieza que iba a mirar.** Con una sección elegida examina 14
+       * elementos y **ninguno es `rb-action`**: los verbos de sección son solo icono —su contenido
+       * es un `<svg>`— así que el recorrido los salta por no tener texto, que es justo lo que mide.
+       *
+       * Así que aquí no hay `sweep`. Y la consecuencia incómoda: la pasada «con una sección
+       * elegida» que este test tenía **antes** era vacua por esta misma razón, y pasaba en verde.
+       *
+       * Lo que sí hace falta es la precondición: el ofrecimiento de escalar, el menú de
+       * composiciones y la barra de «Diseñada a mano» solo existen a partir de aquí.
+       *
+       * **Lo que queda sin vigilar, dicho en vez de callado:** si el grupo de iconos se saliera de
+       * su sección a 320px, nada lo mediría. Es otra sonda —caja contra contenedor, no texto contra
+       * su botón— y no la añado por mi cuenta.
+       */
+      const select = async () => {
+        await frame.locator('[data-section="sec-services"]').click();
+        await expect(frame.locator('[data-section="sec-services"].rb-selected')).toHaveCount(1);
+      };
+      await select();
+      await walker.getByRole("switch", { name: "Herramientas de diseño" }).click();
+      await walker.getByRole("button", { name: "Sí, enciéndelas" }).click();
+      await expect(walker.getByRole("button", { name: "Diseño" })).toHaveCount(1);
+      await expect(
+        frame.locator('.rb-action[aria-label="Diseñar a mano"]'),
+        "la selección no volvió tras encender las herramientas",
+      ).toHaveCount(1);
+
+      // ---- 4. el menú de composiciones ---------------------------------------------------------
+      // **Antes de escalar, y la sección se pregunta en vez de suponerse.** Una sección diseñada a
+      // mano ya no la coloca el catálogo, así que no ofrece composiciones: medir esto después de
+      // escalar es lo que hizo fallar la primera versión, con el botón que no existía. Y no todas
+      // las secciones las ofrecen, así que el recorrido busca la primera que sí y **falla si no hay
+      // ninguna** en vez de pasar sin medir.
+      const COMPOSE = '.rb-action[aria-label="Cambiar cómo se ve esta sección"]';
+      const composable = await (async () => {
+        const ids = await frame
+          .locator("[data-section]")
+          .evaluateAll((els) => els.map((el) => (el as HTMLElement).dataset["section"] ?? ""));
+        for (const id of ids) {
+          if (!id) continue;
+          await frame.locator(`[data-section="${id}"]`).click();
+          if ((await frame.locator(`[data-section="${id}"] ${COMPOSE}`).count()) > 0) return id;
+        }
+        return "";
+      })();
+      expect(composable, "ninguna sección ofrece composiciones: no habría nada que medir").not.toBe(
+        "",
+      );
+
+      const compositions = async () => {
+        if ((await frame.locator(".rb-compositions").count()) > 0) return;
+        await frame.locator(`[data-section="${composable}"]`).click();
+        await frame.locator(`[data-section="${composable}"] ${COMPOSE}`).first().click();
+        await expect(frame.locator(".rb-compositions")).toHaveCount(1);
+      };
+      await compositions();
+      await sweep(
+        "menú de composiciones",
+        ".rb-compositions",
+        "rb-composition-choice",
+        compositions,
+      );
+
+      // ---- 5. el ofrecimiento de escalar, abierto ----------------------------------------------
+      const offer = async () => {
+        if ((await frame.locator(".rb-escalate").count()) > 0) return;
+        await select();
+        await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
+        await expect(frame.locator(".rb-escalate")).toHaveCount(1);
+      };
+      await offer();
+      await sweep("ofrecimiento de escalar", ".rb-escalate", "rb-escalate-yes", offer);
+
+      // ---- 6. escalada: la barra «Diseñada a mano» ---------------------------------------------
+      await frame.locator(".rb-escalate-yes").click();
+      await expect(frame.locator(".rb-handmade")).toHaveCount(1);
+      await expect
+        .poll(async () =>
+          walker.evaluate(() => {
+            const bar = document
+              .querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")
+              ?.contentDocument?.querySelector<HTMLElement>(".rb-handmade");
+            return bar ? bar.getAnimations().every((a) => a.playState === "finished") : false;
+          }),
+        )
+        .toBe(true);
+      await sweep("sección a mano", ".rb-handmade", "rb-handmade-back");
+
+      // ---- 7. el menú de insertar --------------------------------------------------------------
+      const insertMenu = async () => {
+        if ((await frame.locator(".rb-menu").count()) > 0) return;
+        await frame.locator(".rb-pill").first().click();
+        await expect(frame.locator(".rb-menu")).toHaveCount(1);
+      };
+      await insertMenu();
+      await sweep("menú de insertar", ".rb-menu", "rb-menu-choice", insertMenu);
+      await frame.locator(".rb-menu-close").click();
+      await expect(frame.locator(".rb-menu")).toHaveCount(0);
+
+      // ---- 8. la barra flotante ----------------------------------------------------------------
+      // Se mide y no se restila: dirección la excluyó del rediseño, y hasta hoy entraba en este
+      // recorrido sin que nadie lo hubiera decidido — nada filtra `.rb-toolbar` y sus botones
+      // llevan texto. Lo que cambia es que deja de estar sin medir.
+      const toolbar = async () => {
+        if ((await frame.locator(".rb-toolbar").count()) > 0) return;
+        await frame.locator('[data-section="sec-cover"] [data-id="el-headline"]').first().click();
+        await expect(frame.locator(".rb-toolbar")).toHaveCount(1);
+      };
+      await toolbar();
+      await sweep("barra flotante", ".rb-toolbar", "rb-toolbar-mark", toolbar);
+
+      // ---- el veredicto ------------------------------------------------------------------------
+      // Seis estados × (tres anchos en escritorio + uno en móvil). Contado, porque «ninguno
+      // desbordó» y «no llegué a mirar» son el mismo array vacío — y esta vez el array vacío es la
+      // buena noticia, así que hace falta otra cosa que diga que el recorrido se completó.
+      expect(passes, "el recorrido no hizo las 24 pasadas").toBe(24);
+      const allowed = new Set(KNOWN_CANVAS_SPILLS.map((k) => `${k.state}|${k.device}|${k.what}`));
+      const unknown = seen.filter((f) => !allowed.has(f.key));
+      expect(
+        unknown.map((f) => `${f.where}: ${f.text}`),
+        "desbordamientos que no están en KNOWN_CANVAS_SPILLS",
+      ).toEqual([]);
+      const found = new Set(seen.map((f) => f.key));
+      const stale = [...allowed].filter((key) => !found.has(key));
+      expect(
+        stale,
+        "estas entradas de KNOWN_CANVAS_SPILLS ya no desbordan: quítalas, la lista solo encoge",
+      ).toEqual([]);
     } finally {
       await walker.context().close();
     }
-  }, 300_000);
+  }, 600_000);
 
   it("enseña el aviso del interruptor donde se puede leer, y lo enciende de verdad", async () => {
     const walker = await (await browser.newContext()).newPage();
