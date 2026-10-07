@@ -2123,6 +2123,9 @@ export function Editor({
             '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
           remove.addEventListener("click", (event) => {
             event.stopPropagation();
+            // The index the line being taken away occupies: after the removal that position holds
+            // the line that followed it, which is where the keyboard goes.
+            focusAfterLines.current = { kind: "removed", sectionId, index };
             onRemoveItem(sectionId, lines.slot, itemId);
           });
           li.appendChild(remove);
@@ -2154,6 +2157,7 @@ export function Editor({
         // business; the schema re-mints its ids against the document it lands in.
         const found = findSection(doc, sectionId);
         if (!found) return;
+        focusAfterLines.current = { kind: "added", sectionId, index: items.length };
         onAddItem(sectionId, lines.slot, blankItem(found.section.preset.catalogId));
       });
       list.insertAdjacentElement("afterend", add);
@@ -3058,6 +3062,8 @@ export function Editor({
        */
       el.addEventListener("beforeinput", (event) => {
         const input = event as InputEvent;
+        // Whatever is in the field from now on is the person's, not ours.
+        delete el.dataset["rbFresh"];
         // The previous edit's result is in the element by now, so this is where it gets verified.
         if (anchored && !stillInStep()) anchored = false;
         const targets = input.getTargetRanges();
@@ -3110,6 +3116,19 @@ export function Editor({
         const edit = editOf(range, inserted.length);
         if (edit) record(edit, inserted);
         else anchored = false;
+      });
+
+      // A field that still holds exactly what the editor put in it keeps all of it selected,
+      // however somebody arrives at it — see `focusLineAfterChange`. Ordinary editing is untouched:
+      // the mark only exists between a line being added and its first keystroke.
+      el.addEventListener("click", () => {
+        if (el.dataset["rbFresh"] !== "1") return;
+        const selection = iframeDoc.getSelection();
+        if (!selection) return;
+        const range = iframeDoc.createRange();
+        range.selectNodeContents(el);
+        selection.removeAllRanges();
+        selection.addRange(range);
       });
 
       // These are real hrefs (a "Reservar mesa" button, say): clicking one to place a
@@ -3224,6 +3243,78 @@ export function Editor({
    */
   const barredSections = useRef<Set<string>>(new Set());
 
+  /**
+   * Where the keyboard should land after a line was added or taken away.
+   *
+   * **Today it lands nowhere.** The three line controls are `<button>`s inside the frame and, unlike
+   * the floating toolbar, they do not cancel `mousedown` — so pressing «+ Añadir línea» blurs the
+   * text, commits the edit, replaces the document, and leaves focus on a button that the change
+   * itself destroyed. To type in the new card you have to find it and click it.
+   *
+   * Kept as an **act and an index**, not as an element id. `mintItem` mints ids against the ones
+   * already used, so removing a line and adding another can hand the new one the id the removed one
+   * had — an id that matches is not proof of identity across that pair.
+   */
+  const focusAfterLines = useRef<{
+    kind: "added" | "removed";
+    sectionId: string;
+    index: number;
+  } | null>(null);
+
+  /**
+   * Put the keyboard where the act implies, in the document that act produced.
+   *
+   * Added: the first text of the new card, which `addItem` always appends, so it is the last line.
+   * **The placeholder arrives selected and typing replaces it, and that costs nothing to arrange** —
+   * `wireEditing`'s own `focus` handler already selects a field's contents, which is exactly the
+   * «escribir lo sustituye» this wants.
+   *
+   * Removed: the line that took its place, or the one before it when the last was taken. A list
+   * cannot be emptied — every preset in the catalog declares `min: 1` and `canRemove` is
+   * `itemIds.length > range.min` — so there is no "nothing left" case to handle, and writing one
+   * would be writing for a state the catalog forbids.
+   *
+   * `preventScroll`, for the reason given at `restoreSelection`: focus scrolls its element into view
+   * by default, and this runs a few lines before the reading position is restored.
+   */
+  function focusLineAfterChange(iframeDoc: Document) {
+    const want = focusAfterLines.current;
+    focusAfterLines.current = null;
+    if (!want) return;
+    const list = iframeDoc
+      .querySelector(`[data-section="${CSS.escape(want.sectionId)}"]`)
+      ?.querySelector<HTMLElement>(".rb-list");
+    if (!list) return;
+    const items = [...list.querySelectorAll<HTMLElement>("[data-item]")];
+    const line =
+      want.kind === "added"
+        ? items[items.length - 1]
+        : (items[want.index] ?? items[want.index - 1]);
+    // Asked of the document rather than worked out from the tag, because `wireEditing` has already
+    // run by the time this does and it is the one that decides what is editable.
+    const text = line?.querySelector<HTMLElement>('[contenteditable="true"]');
+    if (!text) return;
+    /**
+     * **Marked as still holding what we put there, and this is a defect the suite caught on me.**
+     *
+     * `wireEditing` selects a field's whole contents on `focus`, and that is what makes «escribir
+     * lo sustituye» true. Focusing the new line here spends that event — so a person who then
+     * *clicks* the highlighted placeholder gets no second `focus`, the click collapses the
+     * selection, and their words land inside the placeholder. Measured, from the sprint 7 walk:
+     * «Escribe aquí de qué es esta fot» + «Segunda foto» + «o».
+     *
+     * So the field carries a mark meaning «this is still ours», a click on it re-selects the whole
+     * thing, and the first keystroke clears the mark. The rule the existing comment states —the
+     * first keystroke replaces the placeholder rather than landing mid-word— is restored for the
+     * one case that broke it.
+     *
+     * **Only for a line that was added.** The neighbour of a line that was taken away holds the
+     * person's own words, and selecting all of those on a click would be the opposite of helpful.
+     */
+    if (want.kind === "added") text.dataset["rbFresh"] = "1";
+    text.focus({ preventScroll: true });
+  }
+
   function wireHandmade(iframeDoc: Document) {
     // Which sections carry a bar in *this* document, so the set can be replaced rather than added
     // to: a section that has been reverted has to be able to arrive again if it is escalated twice.
@@ -3327,6 +3418,9 @@ export function Editor({
     wiredDoc.current = iframeDoc;
     rememberCanvasBackground(iframeDoc);
     wireInteractions(iframeDoc);
+    // Before the reading position, so that restore has the last word on the scroll — `focus` is
+    // asked not to scroll, but the order is the thing that makes that guarantee cheap.
+    focusLineAfterChange(iframeDoc);
     // Last, and on every new document rather than only on a swap: an ordinary edit replaces the
     // document in place, which is the case direction reported and the one a swap cannot cover.
     restoreReadingPosition(frame);
