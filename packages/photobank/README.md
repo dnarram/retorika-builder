@@ -36,18 +36,32 @@ rule nobody had already checked.
 **Three sentences in `apps/editor/src/locales/es.json` were made true on 29 September 2026 by
 removing photographs from them**, because the bank was empty and they promised something the
 product could not do. Approving the first image makes them false in the other direction, so they
-come back with it — in the same pull request, not afterwards:
+come back with it — in the same pull request, not afterwards.
 
-| Key | Says today | Because |
+**It happened on 8 October 2026, and two of the three came back. The third did not, and that is
+on purpose.** The instruction above was written for a bank that fills, not for a bank with one
+sector in it. With restaurante-bar approved and the other ten still empty, restoring all three
+would have swapped one untrue sentence for another:
+
+| Key | What happened | Why |
 |---|---|---|
-| `questionnaire.step2.subtitle` | «elegimos las secciones y **los textos** por ti» | Nothing chooses a photograph by sector yet |
-| `variants.subtitle` | «Las fotos **las pones tú**: donde va cada una hay un hueco esperando» | There is no sample photograph, only an empty marker |
-| `questionnaire.step2.other.warning` | «Todavía no tenemos **textos** preparados para {sector}» | It used to say «textos ni fotos», which implied the other ten sectors had photographs. None did |
+| `questionnaire.step2.other.warning` | **Restored** to «textos ni fotos» | It is shown for «Otro sector» alone, which has neither. True again, exactly as written |
+| `variants.subtitle` | **Split in two**, on `hasSamplePhotos` | Shown after the sector is known, so it can tell the truth per sector — and had to, because «hay un hueco esperando» became false for restaurante-bar the moment its photographs landed |
+| `questionnaire.step2.subtitle` | **Still waits** | It is shown *before* a sector is chosen, so it speaks for all eleven. «y las fotos por ti» would promise photographs to ten sectors that have none. It comes back when the launch sectors do |
 
-`apps/editor/src/editor/photoInventory.ts` already tells the two states apart — `"sample"` is a
-bank photograph and `"empty"` is the marker — and the whole «Foto de ejemplo» half of the editor
-(the canvas badge, the chip in «Fotos», the ADR 0011 wording in the pre-download warning) is
-written and waiting for a state the product cannot currently produce.
+`hasSamplePhotos` is the predicate the split rests on, and it is the counterpart of
+`packages/copybank`'s `servesSector`: asked of `bank/`, never `drafts/`, so photographs that are
+generated but unsigned change nothing on screen.
+
+One thing measured while wording it, worth knowing before adding a gallery section: **a generated
+site carries exactly one photograph**, on the cover. The other four sections carry none. So a
+sector either has every slot filled or every slot empty, and there is no mixed case for a sentence
+to straddle — which is why the two sentences are flat rather than conditional inside themselves.
+
+`apps/editor/src/editor/photoInventory.ts` tells the two states apart — `"sample"` is a bank
+photograph and `"empty"` is the marker — and the whole «Foto de ejemplo» half of the editor (the
+canvas badge, the chip in «Fotos», the ADR 0011 wording in the pre-download warning) was written on
+29 September and could not be reached by anything until 8 October. It is reachable now.
 
 ## What the reviewer checks
 
@@ -76,11 +90,29 @@ the record of this list for anyone who needs to act on it without reading code f
 and its declared `width`, `height` and `bytes` must match the file exactly; the schema checks both
 independently.
 
-**How many.** At least eight per sector, so the three generated variants and "volver a generar" do
-not repeat a photograph. A sector holds zero or at least eight, never something in between — a
-half-filled one would show the same photograph on two of the three variant cards.
+**How many.** At least eight per sector. A sector holds zero or at least eight, never something in
+between, and `bank.test.ts` enforces it.
+
+**What eight does not buy, measured on 8 October 2026 with nine approved:** it does not stop the
+three variant cards repeating a photograph. That was this rule's stated reason, and it is wrong.
+The three cards are three independent hashes of three seeds, not one draw without replacement, so
+two of them land on the same photograph for **39.4% of business names** (787 of 2000 measured;
+about 31% is the floor a perfect hash would give with nine). A bigger bank makes repetition rarer
+and never impossible, so raising the minimum cannot fix it either — only picking the three
+together can, which is a change to `sampleImageFor`'s contract and is in `docs/tasks/backlog.md`
+rather than here.
+
+The rule is still worth keeping: it is what stops a sector shipping with two photographs and
+showing one of them on every card. It just does not promise what it used to say it promised.
 
 ## Testing without a real bank
 
 `test/fixtures/` holds a tiny, self-authored fake bank — two flat-colour WebPs with no licence
-question — so every seam (schema → choice → bytes) is exercised while `bank/` itself is empty.
+question — so every seam (schema → choice → bytes) was exercised while `bank/` itself was empty.
+
+It stays after restaurante-bar filled on 8 October 2026, and not out of sentiment: the fixtures
+pin ids and shapes no real sector happens to produce — a photograph nested in a gallery's list
+item, two elements sharing one file — and a fixture that moved whenever the bank grew would be a
+fixture nobody could assert against. The real bank now has its own guards beside them in
+`bank.test.ts`: every approved file is opened, and its bytes, width and height are read back out of
+the WebP header and checked against what its record declares.

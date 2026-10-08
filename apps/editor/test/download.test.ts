@@ -1,6 +1,7 @@
 import { inflateRawSync } from "node:zlib";
 import { EMPTY_ANSWERS, generate, VARIANTS } from "@retorika/generator";
-import type { RetorikaDocument, Section } from "@retorika/schema";
+import { readSampleBytes } from "@retorika/photobank/server";
+import { flattenElements, type RetorikaDocument, type Section } from "@retorika/schema";
 import { describe, expect, it } from "vitest";
 import { POST } from "../src/app/api/download/route.ts";
 
@@ -56,6 +57,12 @@ function request(body: unknown, photos: { src: string; bytes: Uint8Array }[] = [
   const form = new FormData();
   const document = (body as { document?: unknown } | null)?.document;
   if (document !== undefined) form.set("document", JSON.stringify(document));
+  for (const photo of bankPhotosIn(document)) {
+    if (photos.some((explicit) => explicit.src === photo.src)) continue;
+    const buffer = new ArrayBuffer(photo.bytes.byteLength);
+    new Uint8Array(buffer).set(photo.bytes);
+    form.append("photo", new File([buffer], photo.src, { type: "image/webp" }));
+  }
   for (const photo of photos) {
     // A concrete ArrayBuffer: a Uint8Array is typed over ArrayBufferLike, which BlobPart does
     // not accept, and the route copies the ZIP the same way for the same reason.
@@ -66,12 +73,63 @@ function request(body: unknown, photos: { src: string; bytes: Uint8Array }[] = [
   return new Request("http://localhost/api/download", { method: "POST", body: form });
 }
 
+/**
+ * The bank photographs a document references, with their bytes — attached by `request` above the
+ * way the editor attaches them.
+ *
+ * **This is what the editor really does**, and it has to happen here or these tests would be
+ * testing a request the product never sends. `Variants.tsx` fetches every bank photograph the
+ * document names through `/api/muestras/[id]` into `photoUrls`, and `Editor.tsx`'s
+ * `referencedPhotos()` then puts each one in the multipart body beside the owner's uploads: one
+ * shape, as the comment above says. The route has no idea a sample is any different from an
+ * upload, and that is the design — it refuses anything the document names and the body lacks.
+ *
+ * Needed from 8 October 2026, when restaurante-bar became the first sector whose generated cover
+ * is a real file rather than the catalog's inline data: URI. Before that this walk found nothing
+ * and every fixture downloaded with an empty body.
+ */
+function bankPhotosIn(document: unknown): { src: string; bytes: Uint8Array }[] {
+  const doc = document as RetorikaDocument | undefined;
+  if (!doc?.pages) return [];
+  const found = new Map<string, Uint8Array>();
+  for (const page of doc.pages) {
+    for (const section of page.sections) {
+      for (const element of flattenElements(section.content)) {
+        const value = element.value;
+        if (value?.kind !== "image" || !value.src.startsWith("muestra-")) continue;
+        // A `muestra-` src without a `sample` cannot be produced by the bank, and would be a
+        // document somebody hand-wrote. Skipped rather than asserted: this helper exists to mirror
+        // what the editor sends, and the editor has nothing to send for it either.
+        if (!value.sample) continue;
+        found.set(value.src, readSampleBytes(value.sample));
+      }
+    }
+  }
+  return [...found].map(([src, bytes]) => ({ src, bytes }));
+}
+
 /** A JPEG as far as every check in this codebase is concerned: the first three bytes are the
  * signature, and nothing decodes it after that. */
 function jpegBytes(size = 64): Uint8Array {
   const bytes = new Uint8Array(size);
   bytes.set([0xff, 0xd8, 0xff], 0);
   return bytes;
+}
+
+/** Every path in the ZIP, from the central directory `extractFile` already walks. */
+function fileNames(bytes: Uint8Array): string[] {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const eocd = bytes.length - 22;
+  const count = view.getUint16(eocd + 10, true);
+  const decoder = new TextDecoder();
+  const names: string[] = [];
+  let at = view.getUint32(eocd + 16, true);
+  for (let i = 0; i < count; i += 1) {
+    const nameLength = view.getUint16(at + 28, true);
+    names.push(decoder.decode(bytes.subarray(at + 46, at + 46 + nameLength)));
+    at += 46 + nameLength + view.getUint16(at + 30, true) + view.getUint16(at + 32, true);
+  }
+  return names;
 }
 
 function findSection(doc: RetorikaDocument, catalogId: string): Section {
@@ -455,10 +513,54 @@ describe("POST /api/download", () => {
       expect(extractFile(zip, "index.html")).toContain('src="assets/foto-sec-cover.jpg"');
     });
 
-    it("still works with no photos at all, which is every untouched site", async () => {
-      // The placeholder is a data: URI, inline, needing no file — so a document nobody has
-      // uploaded to sends no photo part and must not be asked for one.
+    it("still works with nothing the owner uploaded, which is every untouched site", async () => {
+      // An untouched site carries no photograph of the owner's. What it does carry depends on the
+      // sector: the catalog's inline data: URI, which needs no file at all, or — since 8 October
+      // 2026 for restaurante-bar — a bank photograph, which needs exactly the same multipart part
+      // an upload would. Neither is the owner's, and the route must ask for neither any
+      // differently.
       expect((await POST(request({ document: REAL_DOCUMENT }))).status).toBe(200);
+    });
+
+    it("carries a bank photograph into the ZIP as its own file", async () => {
+      // ADR 0011's sample photographs, end to end, for the first time against a real one. Until
+      // restaurante-bar was approved on 8 October 2026 this could only have been written against a
+      // hand-stamped document, which would have proved the route and nothing about the bank.
+      const [sample] = bankPhotosIn(REAL_DOCUMENT);
+      expect(sample, "the fixture's sector no longer has a bank").toBeDefined();
+      if (!sample) return;
+
+      const response = await POST(request({ document: REAL_DOCUMENT }));
+      expect(response.status).toBe(200);
+      const zip = new Uint8Array(await response.arrayBuffer());
+
+      // A real file in the bundle, under `assets/` where the publisher puts every photograph, and
+      // the page pointing at it by a relative path — ADR 0001's promise that the ZIP opens by
+      // double-click with no server to resolve anything. An absolute `/assets/…` would resolve
+      // against the filesystem root under `file://` and the photograph would simply be missing, on
+      // the owner's machine, after the download.
+      const inBundle = `assets/${sample.src}`;
+      expect(fileNames(zip)).toContain(inBundle);
+      const html = extractFile(zip, "index.html");
+      expect(html).toContain(inBundle);
+      expect(html).not.toContain(`"/${inBundle}"`);
+    });
+
+    it("refuses a bank photograph the body does not carry, which is what the editor's gate exists for", async () => {
+      // The 400 `Variants.tsx` describes: a sample whose fetch failed is a site that cannot be
+      // downloaded, and the editor blocks with something the owner can act on rather than letting
+      // them press a button that always fails. Built by hand because `request` attaches samples the
+      // way the editor does, which is the whole point of it.
+      const [sample] = bankPhotosIn(REAL_DOCUMENT);
+      expect(sample).toBeDefined();
+      if (!sample) return;
+      const form = new FormData();
+      form.set("document", JSON.stringify(REAL_DOCUMENT));
+      const response = await POST(
+        new Request("http://localhost/api/download", { method: "POST", body: form }),
+      );
+      expect(response.status).toBe(400);
+      expect(await response.text()).toContain(sample.src);
     });
 
     it("refuses a document that names a photo the request did not send", async () => {

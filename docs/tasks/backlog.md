@@ -702,3 +702,36 @@ themselves. Sprint 6 takes **three to five for `restaurante-bar`** as the first 
 path — it is the sector of both usability sessions. A sector holds either none or at least eight;
 a half-filled one would make two of the three variant cards show the same photograph, and the
 bank's tests say so.
+
+### What the first filled sector left open — 8 October 2026
+
+`restaurante-bar` was approved with nine photographs, the first sector with any. Two things were
+measured on the way and neither is fixed, both deliberately out of that pull request's one concern.
+
+**1. «At least eight» does not stop the three cards repeating, and that was its stated reason.**
+Measured with the nine approved: two of the three variant cards show the same photograph for
+**39.4% of business names** (787 of 2000). It is not a bad hash — about 31% is the floor a perfect
+one gives with nine — it is that the three cards are three independent hashes of three seeds
+rather than one draw without replacement. **A larger bank makes it rarer and never impossible**,
+so raising the minimum is not the fix. The fix is for the three to be picked together, which means
+`sampleImageFor` growing a way to say "and not these two" — a change to its contract, so it needs
+deciding rather than doing. Until then an owner sees the repeat on the one screen where the three
+cards sit side by side, which is the worst place for it.
+
+**2. The bundle weight budget is 29% over on a real site of that sector, and nothing catches it.**
+Measured the same day, building a real restaurante-bar site through `buildSite`:
+
+| | bundle, gzipped | of which the sample |
+|---|---|---|
+| `restaurante-bar` (bank filled) | **103.3 KB** | 54.8 KB |
+| `peluqueria-barberia` (no bank) | 2.7 KB | 0 |
+
+`MAX_BUNDLE_GZIP_BYTES` in `scripts/size-budget.ts` is **80 KB**, and that script's own comment
+says sample photographs are "our bytes, not the owner's" — so this is squarely inside what the
+budget means to protect. **`pnpm size` passes anyway**, because it measures `fixtures/documents/`
+and not one of those seventeen documents carries a `sample` field. The budget is not wrong and the
+photographs are not too heavy; the two were simply sized a sprint apart, 80 KB having been chosen
+in sprint 11 from a worst case that was fonts and nothing else. What is needed is the same thing
+that produced the 80: a measurement, a number chosen from it, and a fixture that actually exercises
+a bank photograph so the number means something. **Not a number raised until the test goes
+green.**

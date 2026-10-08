@@ -8,6 +8,7 @@ import {
 import { describe, expect, it } from "vitest";
 import {
   GENERIC_SECTOR,
+  hasSamplePhotos,
   pickIndex,
   recordById,
   sampleImageFor,
@@ -96,9 +97,21 @@ describe("the record schema refuses what ADR 0011 refuses", () => {
   });
 });
 
+/** The sectors still waiting for their first photograph, read from the bank rather than listed
+ * here, so filling one needs no edit to this file. The day the last one fills, `emptySectors` is
+ * empty, the two assertions below fail on their own guard, and this whole describe can go: the
+ * case it covers will no longer exist. */
+const emptySectors = sectorsInBank().filter((sector) => !hasSamplePhotos(sector));
+const withPhotographs = sectorsInBank().filter((sector) => hasSamplePhotos(sector));
+
 describe("what a sector with no photographs gets", () => {
   it("is exactly the catalog's own placeholder — byte for byte the value the generator produced before this package existed", () => {
-    const result = sampleImageFor("restaurante-bar", "taberna:v1:sec-cover:el-image");
+    // Was written against `restaurante-bar` while every sector was empty. That sector got its nine
+    // photographs on 8 October 2026, so the subject is now read from the bank instead of named.
+    const sector = emptySectors[0];
+    expect(sector, "every sector has photographs — delete this describe").toBeDefined();
+    if (!sector) return;
+    const result = sampleImageFor(sector, "taberna:v1:sec-cover:el-image");
     expect(result).toEqual({
       kind: "image",
       src: placeholderImageSrc(),
@@ -107,8 +120,12 @@ describe("what a sector with no photographs gets", () => {
     });
   });
 
-  it("is the identical placeholder for every one of the eleven sectors", () => {
-    for (const sector of sectorsInBank()) {
+  it("is the identical placeholder for every sector that has none", () => {
+    expect(
+      emptySectors.length,
+      "every sector has photographs — delete this describe",
+    ).toBeGreaterThan(0);
+    for (const sector of emptySectors) {
       expect(sampleImageFor(sector, "seed"), sector).toEqual(sampleImageFor("otro", "seed"));
     }
   });
@@ -151,6 +168,89 @@ describe("the bank ships with exactly the eleven sectors the questionnaire offer
       const count = parsed.images.length;
       expect(count === 0 || count >= 8, `${file}: ${count} images`).toBe(true);
     }
+  });
+});
+
+/**
+ * Width and height straight out of the file.
+ *
+ * The README asks that a record's declared `width`, `height` and `bytes` match the file exactly,
+ * and until 8 October 2026 only the fixture bank could be checked, because the real one was empty.
+ * Reads the lossy VP8 frame header rather than pulling in a decoder: this package has two
+ * dependencies and an image library for a test would be a third. It asserts the flavour it can
+ * read instead of guessing, so a file encoded as VP8L or VP8X fails loudly here rather than
+ * passing on dimensions nobody parsed.
+ */
+function webpSize(bytes: Buffer): { width: number; height: number } {
+  expect(bytes.subarray(0, 4).toString("ascii")).toBe("RIFF");
+  expect(bytes.subarray(8, 12).toString("ascii")).toBe("WEBP");
+  expect(bytes.subarray(12, 16).toString("ascii"), "only lossy VP8 is parsed here").toBe("VP8 ");
+  expect([...bytes.subarray(23, 26)], "VP8 sync code").toEqual([0x9d, 0x01, 0x2a]);
+  return { width: bytes.readUInt16LE(26) & 0x3fff, height: bytes.readUInt16LE(28) & 0x3fff };
+}
+
+const approved = readdirSync(BANK_DIR)
+  .filter((name) => name.endsWith(".json"))
+  .flatMap(
+    (name) => bankFileSchema.parse(JSON.parse(readFileSync(join(BANK_DIR, name), "utf8"))).images,
+  );
+
+describe("every approved photograph, against its own record", () => {
+  it("there is at least one, or this whole block is checking nothing", () => {
+    // The guard the fixture tests needed for their first year. It goes when it stops being true,
+    // which is the day somebody empties the bank — and that should be noticed.
+    expect(approved.length, "the real bank is empty").toBeGreaterThan(0);
+    expect(withPhotographs.length).toBeGreaterThan(0);
+  });
+
+  it.each(approved.map((image) => [image.id, image] as const))(
+    "%s has the bytes, the width and the height it declares",
+    (_id, image) => {
+      const bytes = readFileSync(join(BANK_DIR, "photos", image.file));
+      expect(bytes.byteLength, "bytes").toBe(image.bytes);
+      expect(bytes.byteLength).toBeLessThanOrEqual(MAX_IMAGE_BYTES);
+      expect(webpSize(bytes)).toEqual({ width: image.width, height: image.height });
+    },
+  );
+
+  it.each(approved.map((image) => [image.id, image] as const))(
+    "%s records where it came from and the licence that lets a client publish it",
+    (_id, image) => {
+      // ADR 0011's binding half. The schema already refuses `false`, so what is checked here is
+      // that the fields carry something a person could go and re-read, not a placeholder.
+      expect(image.origin.tool.length).toBeGreaterThan(0);
+      expect(image.origin.prompt.length).toBeGreaterThan(0);
+      expect(image.licence.url).toMatch(/^https?:\/\//);
+      expect(image.licence.commercialUse).toBe(true);
+      expect(image.licence.clientsMayPublish).toBe(true);
+      expect(image.review.by.length).toBeGreaterThan(0);
+    },
+  );
+});
+
+describe("what a sector with photographs gets", () => {
+  it("is one of its own records, never the placeholder", () => {
+    const sector = withPhotographs[0];
+    expect(sector, "no sector has photographs").toBeDefined();
+    if (!sector) return;
+    const result = sampleImageFor(sector, "taberna:v1:sec-cover:el-image");
+    expect(result.sample).not.toBe(PLACEHOLDER_SAMPLE_ID);
+    expect(result.src).toBe(`muestra-${result.sample}.webp`);
+    expect(recordById(result.sample)?.alt).toBe(result.alt);
+  });
+
+  it("is what `hasSamplePhotos` promised, for every sector the bank knows", () => {
+    // The two resolve the sector by the same cascade on purpose. This is the assertion that keeps
+    // them from drifting apart, because a disagreement is a sentence on screen contradicting the
+    // photograph beside it.
+    for (const sector of sectorsInBank()) {
+      const sampled = sampleImageFor(sector, "seed").sample !== PLACEHOLDER_SAMPLE_ID;
+      expect(hasSamplePhotos(sector), sector).toBe(sampled);
+    }
+  });
+
+  it("answers for an unknown sector exactly as it answers for «otro»", () => {
+    expect(hasSamplePhotos("sector-inventado")).toBe(hasSamplePhotos(GENERIC_SECTOR));
   });
 });
 
@@ -260,9 +360,18 @@ function never(): never {
 }
 
 describe("recordById", () => {
-  it("finds nothing while the real bank is empty", () => {
-    // The honest state of the product today. This test is here so that the day a real record
-    // lands, this line is what starts failing — and starts failing for the right reason.
-    expect(recordById("restaurante-bar.01")).toBeUndefined();
+  /** Until 8 October 2026 this asserted `undefined` for exactly this id, with a comment saying it
+   * was there so that the day a real record landed, this line would be what started failing. It
+   * did. This is that line, turned around. */
+  it("finds the first record that ever landed in the real bank", () => {
+    const record = recordById("restaurante-bar.01");
+    expect(record?.file).toBe("restaurante-bar.01.webp");
+    expect(record?.sector).toBe("restaurante-bar");
+    expect(record?.review.status).toBe("approved");
+  });
+
+  it("still finds nothing for an id nobody approved", () => {
+    expect(recordById("restaurante-bar.99")).toBeUndefined();
+    expect(recordById("../../../etc/passwd")).toBeUndefined();
   });
 });

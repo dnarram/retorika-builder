@@ -1,5 +1,6 @@
 import { blankSection, GALLERY_ID, teaserSection } from "@retorika/catalog";
-import { EMPTY_ANSWERS, generateVariants } from "@retorika/generator";
+import { EMPTY_ANSWERS, generateVariants, SECTOR_IDS } from "@retorika/generator";
+import { hasSamplePhotos } from "@retorika/photobank";
 import {
   insertSection,
   parseDocument,
@@ -29,8 +30,23 @@ const ANSWERS = {
   bookingLink: "https://reservas.example.com/taberna",
 };
 
+/** A sector whose owner still gets the marker rather than a photograph, found rather than named,
+ * so this stops compiling a vacuous case the day the last sector fills. */
+const SECTOR_WITHOUT_BANK = (() => {
+  const found = SECTOR_IDS.find((sector) => !hasSamplePhotos(sector));
+  if (!found) throw new Error("every sector has photographs — the empty case no longer exists");
+  return found;
+})();
+
 function generated(): RetorikaDocument {
   const [first] = generateVariants(ANSWERS);
+  if (!first) throw new Error("the generator produced no variant");
+  return first.document;
+}
+
+/** The same site for a sector the bank has nothing for. */
+function generatedWithoutBank(): RetorikaDocument {
+  const [first] = generateVariants({ ...ANSWERS, sector: SECTOR_WITHOUT_BANK });
   if (!first) throw new Error("the generator produced no variant");
   return first.document;
 }
@@ -49,12 +65,26 @@ function withGallery(doc: RetorikaDocument): RetorikaDocument {
 
 describe("what a generated site has", () => {
   it("has exactly one photograph, and nobody has put it there", () => {
-    // The number this whole sprint is about. A site the generator produces carries one image, the
-    // catalog's grey marker, and that is its entire visual content.
-    const photos = listPhotos(generated());
+    // The number this whole sprint is about. A site the generator produces carries one image, and
+    // that is its entire visual content — one, whether the bank fills it or not.
+    const photos = listPhotos(generatedWithoutBank());
     expect(photos).toHaveLength(1);
     expect(photos[0]?.state).toBe("empty");
-    expect(countPhotos(generated())).toEqual({ empty: 1, sample: 0, own: 0, total: 1 });
+    expect(countPhotos(generatedWithoutBank())).toEqual({ empty: 1, sample: 0, own: 0, total: 1 });
+  });
+
+  it("counts that photograph as a sample when the sector has a bank", () => {
+    // `"sample"` was written on 29 September 2026 and could not be produced by anything until
+    // restaurante-bar was approved on 8 October: with every sector empty, `sampleImageFor` always
+    // answered the catalog marker, so the whole «Foto de ejemplo» half of the editor — this state,
+    // the canvas badge, the chip in «Fotos», the ADR 0011 wording in the pre-download warning —
+    // was reachable only from a hand-written document. This is the first assertion that reaches it
+    // the way an owner does.
+    expect(hasSamplePhotos("restaurante-bar"), "the fixture sector lost its bank").toBe(true);
+    const photos = listPhotos(generated());
+    expect(photos).toHaveLength(1);
+    expect(photos[0]?.state).toBe("sample");
+    expect(countPhotos(generated())).toEqual({ empty: 0, sample: 1, own: 0, total: 1 });
   });
 
   it("says where that photograph is, in words the owner would recognise", () => {

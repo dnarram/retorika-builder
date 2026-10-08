@@ -27,8 +27,8 @@
   "questionnaire.step2.search.placeholder": "Busca tu sector",
   "questionnaire.step2.fieldset.label": "Sector del negocio",
   "questionnaire.step2.error": "Elige un sector para continuar.",
-  "questionnaire.step2.other.warning": "Todavía no tenemos textos preparados para {sector}. Podemos montarte la web igual, con textos generales que tú cambias después.",
-  "questionnaire.step2.noBank": "Todavía no tenemos textos preparados para tu sector. Podemos montarte la web igual, con textos generales que tú cambias después.",
+  "questionnaire.step2.other.warning": "Todavía no tenemos textos ni fotos preparados para {sector}. Podemos montarte la web igual, con contenido general que tú cambias después.",
+  "questionnaire.step2.noBank": "Todavía no tenemos textos ni fotos preparados para tu sector. Podemos montarte la web igual, con contenido general que tú cambias después.",
   "questionnaire.step2.other.label": "Cuéntanos a qué te dedicas, con tus palabras",
   "questionnaire.step2.other.placeholder": "Por ejemplo: cerrajería y apertura de puertas 24 horas",
   "questionnaire.step2.other.help": "Lo usaremos para escribir los textos de tu web.",
@@ -100,6 +100,7 @@
 
   "variants.title": "Tu web ya está montada. Elige por dónde empezar.",
   "variants.subtitle": "Las tres llevan tus textos. Las fotos las pones tú: donde va cada una hay un hueco esperando.",
+  "variants.subtitle.sample": "Las tres llevan tus textos y una foto de muestra de tu sector: la cambias por la tuya cuando quieras.",
   "variants.v1.title": "Clásica",
   "variants.v1.caption": "Foto a la derecha y texto a la izquierda. La más directa.",
   "variants.v2.title": "Con foto grande",
