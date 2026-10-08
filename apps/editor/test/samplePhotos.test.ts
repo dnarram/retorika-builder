@@ -1,5 +1,6 @@
 import { blankSection, GALLERY_ID, PLACEHOLDER_SAMPLE_ID } from "@retorika/catalog";
-import { EMPTY_ANSWERS, generateVariants } from "@retorika/generator";
+import { EMPTY_ANSWERS, generateVariants, SECTOR_IDS } from "@retorika/generator";
+import { hasSamplePhotos } from "@retorika/photobank";
 import {
   flattenElements,
   insertSection,
@@ -13,11 +14,18 @@ import { listSampleRefs } from "../src/editor/samplePhotos.ts";
 /**
  * Which photographs the app has to fetch bytes for.
  *
- * The bank is empty today, so a generated document names none — every assertion about the empty
- * case below is the real product's behaviour, and the ones about a document that *does* reference
- * the bank are built by stamping `sample` onto an image by hand. That is the only way to exercise
- * this before the first photograph is approved, and it is worth exercising now: the day a
- * photograph lands, this is the code that decides whether it reaches the preview and the ZIP.
+ * The empty case and the bank case are both real, and since 8 October 2026 they are told apart by
+ * the sector rather than by the calendar. Until then the bank held nothing, so a generated
+ * document named no photograph whatever the answers said; restaurante-bar now holds nine, so the
+ * assertions about naming none are generated for a sector that still holds none — read off the
+ * bank rather than named here, so filling another sector does not quietly turn one of them
+ * vacuous.
+ *
+ * The documents that reference the bank are still built by stamping `sample` on by hand. That is
+ * deliberate even now that a real one exists: these assertions are about ids and nesting that no
+ * sector happens to produce today — a photograph inside a gallery's list item, two elements
+ * sharing one file — and a fixture that depends on which photograph a hash picks would be a
+ * fixture that changes when the bank grows.
  */
 
 const ANSWERS = {
@@ -30,8 +38,24 @@ const ANSWERS = {
   bookingLink: "https://reservas.example.com/taberna",
 };
 
+/** A sector whose owner still gets the empty marker, found rather than named. If every sector
+ * fills, this throws instead of silently generating a document with a photograph in it and
+ * asserting there is none. */
+const SECTOR_WITHOUT_BANK = (() => {
+  const found = SECTOR_IDS.find((sector) => !hasSamplePhotos(sector));
+  if (!found) throw new Error("every sector has photographs — the empty case no longer exists");
+  return found;
+})();
+
 function generated(): RetorikaDocument {
   const site = generateVariants(ANSWERS)[0];
+  if (!site) throw new Error("generateVariants produced nothing");
+  return site.document;
+}
+
+/** The same site for a sector the bank has nothing for: every photograph is the catalog's marker. */
+function generatedWithoutBank(): RetorikaDocument {
+  const site = generateVariants({ ...ANSWERS, sector: SECTOR_WITHOUT_BANK })[0];
   if (!site) throw new Error("generateVariants produced nothing");
   return site.document;
 }
@@ -105,12 +129,12 @@ function stampGalleryPhoto(doc: RetorikaDocument, id: string): RetorikaDocument 
 }
 
 describe("a document with no bank photographs in it", () => {
-  it("names none — which is every generated site today, with the bank empty", () => {
-    expect(listSampleRefs(generated())).toEqual([]);
+  it("names none, for a sector the bank has no photographs for", () => {
+    expect(listSampleRefs(generatedWithoutBank())).toEqual([]);
   });
 
   it("does not name the catalog's marker, which is a data: URI and needs no file", () => {
-    const doc = generated();
+    const doc = generatedWithoutBank();
     // The marker really is there; it is simply not something to fetch.
     const samples = doc.pages
       .flatMap((page) => page.sections)
@@ -149,7 +173,9 @@ describe("a document that does reference the bank", () => {
   it("looks inside list items, where a gallery's photographs live", () => {
     // The omission that caused three separate defects in one day of sprint 5. A gallery puts each
     // photograph inside a list item, so a walk over `section.content` alone finds none of them.
-    const doc = generated();
+    // Generated without a bank on purpose: the assertion below is that the *nested* photograph is
+    // the only one reported, which says nothing if the cover is a bank photograph too.
+    const doc = generatedWithoutBank();
     const page = doc.pages[0];
     if (!page) throw new Error("no page");
     const withGallery = insertSection(

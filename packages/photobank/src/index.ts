@@ -151,6 +151,25 @@ export function sampleImageFor(sector: string, seed: string): SampleImage {
   return { kind: "image", src: sampleSrcFor(record), alt: record.alt, sample: record.id };
 }
 
+/**
+ * Whether this sector's owner will actually be shown sample photographs.
+ *
+ * The question the interface has to ask before it says anything about photographs, and the
+ * counterpart of `packages/copybank`'s `servesSector` — asked of the bank that is *loaded*, which
+ * is `bank/` and never `drafts/`, so a sector whose photographs are generated but unsigned still
+ * answers `false`. What its owner would get is the empty marker, and that is what the screen has
+ * to describe.
+ *
+ * **It resolves the sector exactly as `sampleImageFor` does**, generic fallback included, rather
+ * than looking the sector up directly. That is deliberate: these two must never be able to
+ * disagree, because every disagreement is a sentence on screen contradicting the picture beside
+ * it. An unknown sector falls through to «otro» in both, so both answer for the same file.
+ */
+export function hasSamplePhotos(sector: string): boolean {
+  const images = BANK.get(sector) ?? BANK.get(GENERIC_SECTOR) ?? [];
+  return images.length > 0;
+}
+
 /** Every sector the bank has a file for, mostly for tests. */
 export function sectorsInBank(): readonly string[] {
   return [...BANK.keys()];

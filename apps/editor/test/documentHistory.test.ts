@@ -1,5 +1,6 @@
 import { blankItem, blankSection } from "@retorika/catalog";
 import { EMPTY_ANSWERS, generateVariants } from "@retorika/generator";
+import { recordById } from "@retorika/photobank";
 import {
   type ElementAddress,
   parseDocument,
@@ -520,8 +521,15 @@ describe("setImage", () => {
     expect(image(run(start(), upload()))?.src).toBe("foto-sec-cover.jpg");
   });
 
-  it("replaces the placeholder's alt, which stops being true the moment a photo arrives", () => {
-    expect(image(start())?.alt).toBe("Marcador de foto: aquí irá tu foto");
+  it("replaces the alt the photograph arrived with, whoever it described", () => {
+    // Until 8 October 2026 this read «Marcador de foto: aquí irá tu foto», because the bank was
+    // empty and every cover was the catalog's marker. The fixture's sector now has photographs, so
+    // it starts from a bank record's own alt instead — and the claim is the same either way: an
+    // alt describing a photograph that is not the owner's cannot survive the owner's arriving.
+    const before = image(start());
+    expect(before?.sample, "the fixture's cover is no longer a bank photograph").toBeDefined();
+    expect(before?.alt).toBe(recordById(before?.sample ?? "")?.alt);
+    expect(before?.alt).not.toBe("Foto de Taberna Santo Domingo");
     expect(image(run(start(), upload()))?.alt).toBe("Foto de Taberna Santo Domingo");
   });
 

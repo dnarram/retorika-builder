@@ -690,11 +690,19 @@ describe("día 7 — dos conversiones desde el editor, y el ZIP resultante abier
     const bytes = new Uint8Array(readFileSync(zipPath));
 
     const entries = listZipEntries(bytes);
+    // The cover of a restaurante-bar site has been a bank photograph since 8 October 2026, so the
+    // bundle carries one file under `assets/`. **Asserted by shape, not by name**: which of the
+    // nine the seed picks is `pickIndex`'s business and would change under this test every time
+    // the sector grows. That there is exactly one, and that it is a sample rather than an upload,
+    // is what this walk has to say.
+    const samples = [...entries].filter((entry) => entry.startsWith("assets/muestra-"));
+    expect(samples).toHaveLength(1);
+
     // Exactly the files this document should produce: no sitemap.xml (a download has no baseUrl,
     // ADR-settled since sprint 3), no stray page, nothing from an earlier fixture — and, since
     // sprint 11 day 6, the two faces this restaurant's type pair asks for **with the OFL text beside
     // them**, which is the condition rather than a detail.
-    expect([...entries].sort()).toEqual(
+    expect([...entries].filter((entry) => !entry.startsWith("assets/muestra-")).sort()).toEqual(
       [
         "donde-estamos.html",
         "fonts/OFL-PlayfairDisplay.txt",
@@ -910,7 +918,13 @@ describe("sprint 6 día 7 — fotos subidas desde el panel y desde el aviso, log
       await walkPage.getByRole("button", { name: "Descargar" }).click();
       const dialog = walkPage.locator('[role="dialog"]', { hasText: "Antes de descargar" });
       await expect(dialog).toBeVisible();
-      await expect(dialog.getByText(/hueco de foto sin rellenar/)).toBeVisible();
+      // The dialog's **other branch**, reached for the first time on 8 October 2026. The one
+      // photograph still not the owner's is the cover, and for a sector with a bank the cover is a
+      // sample rather than an empty marker — so this says «foto de ejemplo» where it said «hueco
+      // de foto sin rellenar» while every sector was empty. That wording is ADR 0011's, written on
+      // 29 September for a state nothing could produce until the first sector was approved; this
+      // is the walk that reaches it.
+      await expect(dialog.getByText(/1 foto de ejemplo/)).toBeVisible();
       const dialogRows = dialog.locator('li:has(button:has-text("Cambiar"))');
       await expect(dialogRows).toHaveCount(1);
       await dialogRows.first().getByRole("button", { name: "Cambiar" }).click();
@@ -1082,7 +1096,7 @@ describe("sprint 7 día 5 — el aviso de «sector sin banco»", () => {
       await walkPage.fill("#nombre", "Fisio Ribera");
       await walkPage.getByRole("button", { name: "Siguiente" }).click();
 
-      const warning = walkPage.getByText(/Todavía no tenemos textos preparados/);
+      const warning = walkPage.getByText(/Todavía no tenemos textos ni fotos preparados/);
       // Nothing chosen yet: nothing to warn about. Always in the layout since sprint 7 day 7
       // (`visibility: hidden` reserves its space so picking a sector never moves the grid), so
       // this checks it is hidden rather than absent.
@@ -1104,6 +1118,61 @@ describe("sprint 7 día 5 — el aviso de «sector sin banco»", () => {
       await expect(
         walkPage.getByText(/preparados para cerrajería y apertura de puertas/),
       ).toBeVisible();
+    } finally {
+      await walkPage.context().close();
+    }
+  });
+});
+
+/**
+ * The subtitle on «Elige por dónde empezar», which says two different things from 8 October 2026.
+ *
+ * It is the one place the first approved photographs changed what an owner is told, and the only
+ * one whose correctness is a rendered string rather than a value: `hasSamplePhotos` has its own
+ * unit tests, the two sentences are in `es.json`, and nothing between them is checked by a type.
+ * Walked rather than asserted in isolation because the defect this catches is the ternary wired to
+ * the wrong branch, which every unit test in the repository would pass.
+ *
+ * Both halves on purpose, the same shape the sector warning uses: a sentence that is always shown
+ * passes a test that only looks for it, and one that is never shown passes a test that only looks
+ * for its absence.
+ */
+describe("el subtítulo de las variantes dice la verdad sobre las fotos", () => {
+  async function walkTo(sector: string) {
+    const walkPage = await (await browser.newContext()).newPage();
+    await walkPage.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+    await walkPage.fill("#nombre", "Taberna Santo Domingo");
+    await walkPage.getByRole("button", { name: "Siguiente" }).click();
+    await walkPage.getByText(sector, { exact: true }).click();
+    await walkPage.getByRole("button", { name: "Siguiente" }).click();
+    await walkPage.getByRole("button", { name: "Siguiente" }).click();
+    await walkPage.fill("#direccion", "Cta. de Santo Domingo, 2, Ronda");
+    await walkPage.getByRole("button", { name: "Siguiente" }).click();
+    await walkPage.getByText("Que me llamen", { exact: true }).click();
+    await walkPage.fill("#telefono", "600111222");
+    await walkPage.getByRole("button", { name: "Crear mi web" }).click();
+    await walkPage.getByText("Tu web ya está montada. Elige por dónde empezar.").waitFor();
+    return walkPage;
+  }
+
+  const sample = /una foto de muestra de tu sector/;
+  const hole = /donde va cada una hay un hueco esperando/;
+
+  it("promises a sample photograph for a sector the bank covers", async () => {
+    const walkPage = await walkTo("Restaurante y bar");
+    try {
+      await expect(walkPage.getByText(sample)).toBeVisible();
+      await expect(walkPage.getByText(hole)).toHaveCount(0);
+    } finally {
+      await walkPage.context().close();
+    }
+  });
+
+  it("promises an empty slot for a sector it does not", async () => {
+    const walkPage = await walkTo("Fisioterapia");
+    try {
+      await expect(walkPage.getByText(hole)).toBeVisible();
+      await expect(walkPage.getByText(sample)).toHaveCount(0);
     } finally {
       await walkPage.context().close();
     }
@@ -1256,7 +1325,7 @@ describe("sprint 7 día 7 — dos hallazgos de esta semana, cerrados", () => {
       await walkPage.getByRole("button", { name: "Siguiente" }).click();
 
       const grid = walkPage.locator("fieldset").first();
-      const warning = walkPage.getByText(/Todavía no tenemos textos preparados/);
+      const warning = walkPage.getByText(/Todavía no tenemos textos ni fotos preparados/);
       const before = await grid.boundingBox();
 
       // A covered sector: the warning stays hidden and the grid does not move.

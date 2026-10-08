@@ -58,6 +58,12 @@ export function Step2Sector({
    * section at all. Sprint 8 signed all seven. As of 30 September 2026 `servesSector` answers
    * `true` for every launch sector, so this box now appears only for «Otro sector» — the one case
    * it was always going to keep warning about, since that sector has no file to sign.
+   *
+   * **The sentence names two banks and this condition asks one**, since 8 October 2026, when
+   * restaurante-bar became the first sector with photographs and «ni fotos» came back into the
+   * warning. It is true because no sector has photographs without also having texts, which is not
+   * a coincidence to rely on quietly: `banks.test.ts` asserts it, so a sector photographed before
+   * it is written turns that test red rather than this sentence into a lie on screen.
    */
   const noBank = answers.sector !== null && !servesSector(answers.sector);
 

@@ -16,6 +16,7 @@ import {
   footerSectionFor,
   generateVariants,
 } from "@retorika/generator";
+import { hasSamplePhotos } from "@retorika/photobank";
 import { render } from "@retorika/renderer";
 import {
   type ElementAddress,
@@ -1134,7 +1135,14 @@ export function Variants({
             {es["variants.title"]}
           </h1>
           <p style={{ margin: 0, fontSize: 16, color: "#64748B", textAlign: "center" }}>
-            {es["variants.subtitle"]}
+            {/* Two sentences because the screen shows two different things, and saying either one
+                of them for both cases is a claim the cards disprove. Measured on 8 October 2026:
+                a generated site carries exactly one photograph, on the cover, and the other four
+                sections carry none — so a sector with a bank has every slot filled by a sample and
+                a sector without has every slot empty. There is no mixed case to word around. */}
+            {answers.sector !== null && hasSamplePhotos(answers.sector)
+              ? es["variants.subtitle.sample"]
+              : es["variants.subtitle"]}
           </p>
         </div>
 

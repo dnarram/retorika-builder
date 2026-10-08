@@ -702,3 +702,58 @@ themselves. Sprint 6 takes **three to five for `restaurante-bar`** as the first 
 path — it is the sector of both usability sessions. A sector holds either none or at least eight;
 a half-filled one would make two of the three variant cards show the same photograph, and the
 bank's tests say so.
+
+### What the first filled sector left open — 8 October 2026
+
+`restaurante-bar` was approved with nine photographs, the first sector with any. Two things were
+measured on the way and neither is fixed, both deliberately out of that pull request's one concern.
+
+**1. «At least eight» does not stop the three cards repeating, and that was its stated reason.**
+Measured with the nine approved: two of the three variant cards show the same photograph for
+**39.4% of business names** (787 of 2000). It is not a bad hash — about 31% is the floor a perfect
+one gives with nine — it is that the three cards are three independent hashes of three seeds
+rather than one draw without replacement. **A larger bank makes it rarer and never impossible**,
+so raising the minimum is not the fix. The fix is for the three to be picked together, which means
+`sampleImageFor` growing a way to say "and not these two" — a change to its contract, so it needs
+deciding rather than doing. Until then an owner sees the repeat on the one screen where the three
+cards sit side by side, which is the worst place for it.
+
+**2. The nine are 1024 × 1024, where ADR 0011 says «longest side 1600 px». Measured, not assumed:**
+
+The clause sits under **Compression**, beside «quality around 75» and «EXIF and XMP removed» — three
+things done to make a file smaller. Read that way 1600 is a ceiling and 1024 is under it, so the
+images comply with the letter. Nothing checks it in either direction: `imageFieldsSchema` has no
+dimension constraint and no test asserts a minimum, so a 400 px image would pass today exactly as
+these do.
+
+Where it bites is one variant of the three. `--space-xl` is 48 px, so on a 1440 px window a
+section's content box is 1344 px, and `.rb-section img { width: 100% }` fills it:
+
+| Variant | The cover photo spans | A 1024 px source is |
+|---|---|---|
+| «Con foto grande» (v2) | all 12 columns, ~1344 px | upscaled **1.31×**, and **2.6×** on a 2× display |
+| «Clásica» (v1), «Compacta» (v3) | ~6 columns, ~650 px | comfortably enough at 1×, marginal at 2× |
+
+So it is not a general shortfall, it is the one variant the editor itself calls «La más llamativa».
+**The decision is direction's, not something to settle in a pull request**: either ADR 0011 gets an
+amendment saying 1600 is a ceiling and naming the floor that actually matters, or the sector is
+regenerated at 1600 and this stops being a question. Draw Things takes the size as a parameter, so
+regenerating is cheap — but the nine approved ones would all have to be re-reviewed.
+
+**3. The bundle weight budget is 29% over on a real site of that sector, and nothing catches it.**
+Measured the same day, building a real restaurante-bar site through `buildSite`:
+
+| | bundle, gzipped | of which the sample |
+|---|---|---|
+| `restaurante-bar` (bank filled) | **103.3 KB** | 54.8 KB |
+| `peluqueria-barberia` (no bank) | 2.7 KB | 0 |
+
+`MAX_BUNDLE_GZIP_BYTES` in `scripts/size-budget.ts` is **80 KB**, and that script's own comment
+says sample photographs are "our bytes, not the owner's" — so this is squarely inside what the
+budget means to protect. **`pnpm size` passes anyway**, because it measures `fixtures/documents/`
+and not one of those seventeen documents carries a `sample` field. The budget is not wrong and the
+photographs are not too heavy; the two were simply sized a sprint apart, 80 KB having been chosen
+in sprint 11 from a worst case that was fonts and nothing else. What is needed is the same thing
+that produced the 80: a measurement, a number chosen from it, and a fixture that actually exercises
+a bank photograph so the number means something. **Not a number raised until the test goes
+green.**
