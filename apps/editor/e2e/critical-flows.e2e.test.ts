@@ -148,46 +148,92 @@ async function storedSession(page: Page): Promise<string> {
  * podían aseverar sobre bytes **anteriores** al acto y pasar por el motivo equivocado. Eso es peor
  * que fallar.
  */
+
 /**
- * El desplazamiento de la vista previa **una vez que ha dejado de moverse**, que no es lo mismo que
- * una vez que ha pasado por un número.
+ * Desplaza la vista previa y dice dónde se quedó — **en el documento que sigue vivo cuando
+ * responde**, no en el que lo estaba cuando se pidió el desplazamiento.
  *
- * **Medido, y es lo que hacía frágil a la guarda del punto de lectura.** Tras fijar el
- * desplazamiento y sondear hasta verlo en 480, sigue moviéndose solo durante unos 150ms y acaba 44px
- * más allá:
+ * Medido el 8 de octubre de 2026 con la CPU estrangulada 20×, después de que esta forma fallara en
+ * CI: el desplazamiento **sí funciona** —`scrollY` vale el `offsetTop` de la sección en el instante
+ * siguiente a `scrollIntoView`— y acto seguido el editor reemplaza `srcDoc` en el marco vivo. Mismo
+ * `<iframe>`, documento nuevo, desplazamiento otra vez en cero. El reemplazo venía en vuelo de un
+ * paso anterior y bajo carga aterriza después del desplazamiento en vez de antes.
+ *
+ * **Una marca escrita en el documento antes de desplazar es lo que lo distingue**, y es lo que lo
+ * separó de un relevo amortiguado: había un solo `<iframe>`, así que no había relevo, y la marca
+ * había desaparecido igualmente.
+ *
+ * Sustituye a `settledScroll`, que esperaba a que el desplazamiento se quedara quieto y nada más.
+ * No podía ver esto, y no era culpa suya: tres fotogramas a 0 en un documento que nunca se movió
+ * son indistinguibles de tres fotogramas a 0 en uno que ya terminó. Respondía «dónde está ahora»,
+ * que es lo único que prometía; lo que faltaba era «y sigue siendo la misma página».
+ *
+ * **La espera de quietud se conserva entera, porque su motivo sigue en pie.** Medido el 7 de
+ * octubre: tras fijar el desplazamiento y verlo en 480, sigue moviéndose solo unos 150ms y acaba
+ * 44px más allá —
  *
  *     +5=481 +22=485 +38=494 +55=504 +71=512 +88=517 +105=520 +122=522 +138=523 +154=524
  *
- * No es una animación: no hay ninguna CSS que la pida en la vista previa y el producto solo tiene un
- * `scrollTo` instantáneo. La forma decelerada apunta a llamadas sucesivas que convergen conforme el
- * diseño se asienta — las imágenes que el renderizador emite **sin dimensiones** cambian el alto
- * mientras cargan. Queda como hipótesis: confirmarla pide instrumentar el producto.
- *
- * Lo que esta espera arregla es la prueba: una línea base tomada de un número en movimiento no es
- * una línea base. Tres fotogramas seguidos de acuerdo, con plazo para que un desplazamiento que no
- * se asiente falle en la aserción de quien llame y no cuelgue aquí.
+ * — y no es una animación: no hay CSS que la pida en la vista previa y el producto solo tiene un
+ * `scrollTo` instantáneo. La forma decelerada apunta a que el diseño se asienta mientras las
+ * imágenes que el renderizador emite **sin dimensiones** cargan y cambian el alto. Sigue siendo
+ * hipótesis. Una línea base tomada de un número en movimiento no es una línea base, así que se
+ * esperan tres fotogramas de acuerdo con plazo, y un desplazamiento que no se asiente falla en la
+ * aserción de quien llame en vez de colgarse aquí.
  */
-async function settledScroll(page: Page): Promise<number> {
-  return page.evaluate(
-    () =>
-      new Promise<number>((done) => {
-        const win = document.querySelector<HTMLIFrameElement>(
-          "iframe:not([data-buffered])",
-        )?.contentWindow;
-        if (!win) return done(-1);
-        const deadline = performance.now() + 3_000;
-        let last = Number.NaN;
-        let same = 0;
-        const tick = () => {
-          const y = Math.round(win.scrollY);
-          same = y === last ? same + 1 : 0;
-          last = y;
-          if (same >= 3 || performance.now() > deadline) return done(y);
-          requestAnimationFrame(tick);
-        };
-        requestAnimationFrame(tick);
-      }),
-  );
+async function scrolledPreview(
+  page: Page,
+  target: { section: string } | { to: number },
+): Promise<number> {
+  let settled = -1;
+  await expect
+    .poll(
+      async () => {
+        settled = await page.evaluate(
+          (want) =>
+            new Promise<number>((done) => {
+              const live = () =>
+                document.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")
+                  ?.contentDocument;
+              const doc = live();
+              if (!doc?.defaultView) return done(-1);
+              const stamp = Math.random();
+              (doc as unknown as { __rbStamp?: number }).__rbStamp = stamp;
+              if (want.section === null) doc.defaultView.scrollTo(0, want.to ?? 0);
+              else doc.querySelector(`[data-section="${want.section}"]`)?.scrollIntoView();
+
+              const deadline = performance.now() + 3_000;
+              let last = Number.NaN;
+              let same = 0;
+              const tick = () => {
+                const now = live();
+                // Reemplazado por debajo: lo que desplazamos ya no existe, así que no hay nada que
+                // contar. -1 hace que el `poll` lo vuelva a intentar sobre el documento nuevo.
+                if (!now || (now as unknown as { __rbStamp?: number }).__rbStamp !== stamp) {
+                  return done(-1);
+                }
+                const y = Math.round(now.defaultView?.scrollY ?? -1);
+                same = y === last ? same + 1 : 0;
+                last = y;
+                if (same >= 3 || performance.now() > deadline) return done(y);
+                requestAnimationFrame(tick);
+              };
+              requestAnimationFrame(tick);
+            }),
+          "section" in target
+            ? { section: target.section, to: null }
+            : { section: null, to: target.to },
+        );
+        return settled;
+      },
+      {
+        timeout: 20_000,
+        message:
+          "la vista previa nunca se quedó quieta sobre un documento que siguiera vivo: se reemplazó en cada intento",
+      },
+    )
+    .toBeGreaterThanOrEqual(0);
+  return settled;
 }
 
 async function sessionHolds(
@@ -8153,13 +8199,7 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
             scrollY: Math.round(doc?.defaultView?.scrollY ?? -1),
           };
         });
-      await walker.evaluate(() => {
-        document
-          .querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")
-          ?.contentDocument?.querySelector('[data-section="sec-services"]')
-          ?.scrollIntoView();
-      });
-      await settledScroll(walker);
+      await scrolledPreview(walker, { section: "sec-services" });
       const before = await where();
       expect(
         before.scrollY,
@@ -8226,13 +8266,7 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
       await intoTheEditor(walker);
       const frame = walker.frameLocator(PREVIEW);
 
-      await walker.evaluate(() => {
-        document
-          .querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")
-          ?.contentDocument?.querySelector('[data-section="sec-services"]')
-          ?.scrollIntoView();
-      });
-      const reading = await settledScroll(walker);
+      const reading = await scrolledPreview(walker, { section: "sec-services" });
       expect(
         reading,
         "la vista previa no se desplazó: la prueba no distinguiría nada",
@@ -8297,12 +8331,7 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
       // De vuelta a la primera y abajo, para que haya algo que conservar o perder.
       await tabs.first().click();
       await expect(frame.locator('[data-section="sec-cover"]')).toBeVisible();
-      await walker.evaluate(() => {
-        document
-          .querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")
-          ?.contentWindow?.scrollTo(0, 240);
-      });
-      const reading = await settledScroll(walker);
+      const reading = await scrolledPreview(walker, { to: 240 });
       expect(
         reading,
         "la vista previa no se desplazó: la prueba no distinguiría nada",
@@ -8379,14 +8408,10 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
       await frame.locator(".rb-escalate-yes").click();
       await expect(frame.locator(".rb-handmade")).toHaveCount(1);
 
-      await walker.evaluate(() => {
-        document
-          .querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")
-          ?.contentWindow?.scrollTo(0, 480);
-      });
-      // **Donde se asiente, no donde se le pidió.** `settledScroll` explica por qué los dos números
-      // no son el mismo; lo que esta prueba necesita es que haya sitio por encima, no un 480 exacto.
-      const readingAt = await settledScroll(walker);
+      // **Donde se asiente, no donde se le pidió.** `scrolledPreview` explica por qué los dos
+      // números no son el mismo; lo que esta prueba necesita es que haya sitio por encima, no un
+      // 480 exacto.
+      const readingAt = await scrolledPreview(walker, { to: 480 });
       expect(
         readingAt,
         "la vista previa no se desplazó: sin sitio por encima esta guarda no mide nada",
