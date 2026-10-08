@@ -718,7 +718,29 @@ so raising the minimum is not the fix. The fix is for the three to be picked tog
 deciding rather than doing. Until then an owner sees the repeat on the one screen where the three
 cards sit side by side, which is the worst place for it.
 
-**2. The bundle weight budget is 29% over on a real site of that sector, and nothing catches it.**
+**2. The nine are 1024 × 1024, where ADR 0011 says «longest side 1600 px». Measured, not assumed:**
+
+The clause sits under **Compression**, beside «quality around 75» and «EXIF and XMP removed» — three
+things done to make a file smaller. Read that way 1600 is a ceiling and 1024 is under it, so the
+images comply with the letter. Nothing checks it in either direction: `imageFieldsSchema` has no
+dimension constraint and no test asserts a minimum, so a 400 px image would pass today exactly as
+these do.
+
+Where it bites is one variant of the three. `--space-xl` is 48 px, so on a 1440 px window a
+section's content box is 1344 px, and `.rb-section img { width: 100% }` fills it:
+
+| Variant | The cover photo spans | A 1024 px source is |
+|---|---|---|
+| «Con foto grande» (v2) | all 12 columns, ~1344 px | upscaled **1.31×**, and **2.6×** on a 2× display |
+| «Clásica» (v1), «Compacta» (v3) | ~6 columns, ~650 px | comfortably enough at 1×, marginal at 2× |
+
+So it is not a general shortfall, it is the one variant the editor itself calls «La más llamativa».
+**The decision is direction's, not something to settle in a pull request**: either ADR 0011 gets an
+amendment saying 1600 is a ceiling and naming the floor that actually matters, or the sector is
+regenerated at 1600 and this stops being a question. Draw Things takes the size as a parameter, so
+regenerating is cheap — but the nine approved ones would all have to be re-reviewed.
+
+**3. The bundle weight budget is 29% over on a real site of that sector, and nothing catches it.**
 Measured the same day, building a real restaurante-bar site through `buildSite`:
 
 | | bundle, gzipped | of which the sample |
