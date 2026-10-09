@@ -41,6 +41,33 @@ const PREVIEW = "iframe:not([data-buffered])";
  * stamped before `act`, and the mark is gone once it has been replaced — which no amount of
  * content-counting can tell you, because both documents have the same content.
  */
+/**
+ * Wait until the bank's photograph is in the cover, which is the moment the frame has stopped being
+ * replaced underneath whoever is about to act on it.
+ *
+ * **Only for a walk whose sector has photographs — «Restaurante y bar» is the only one today.**
+ * For a sector with an empty bank there is no `blob:` src to wait for and this would hang; the
+ * marker is a `data:` URI and the frame is never replaced, so nothing needs waiting for either.
+ *
+ * `Variants.tsx` fetches the photograph's bytes from `/api/muestras/<id>` while the three cards are
+ * on screen, and whether they are back by the time «Ver a tamaño real» is pressed depends on how
+ * warm that route is. When they arrive *after* the editor opens, `srcDoc` depends on `photoUrls`
+ * and the frame is replaced once — so a test evaluating inside it loses its execution context, a
+ * selection it made is nowhere in the second document, and **a menu it opened is gone**. The object
+ * URL is what the preview shows once the bytes are stored, so a `blob:` src in the cover means the
+ * replacement, if there was going to be one, has already happened.
+ *
+ * **Three call sites, which is why this is a function now.** The two `openedVariant` helpers took
+ * the wait inline on 9 October 2026 (PR #200), each with its own copy of the reasoning; «sprint 6
+ * día 7 — fotos subidas desde el panel» is the third, found the same day by a full run going red on
+ * `.rb-menu-choice` «element(s) not found» while passing twice out of two on its own. The remaining
+ * walks that choose «Restaurante y bar» still inline their own steps and do not wait — see
+ * `docs/tasks/backlog.md`.
+ */
+async function waitForBankPhoto(frame: FrameLocator): Promise<void> {
+  await frame.locator('[data-section="sec-cover"] img[src^="blob:"]').first().waitFor();
+}
+
 async function replacingTheDocument(page: Page, act: () => Promise<void>): Promise<void> {
   const stamped = await page.evaluate(() => {
     const doc = document.querySelector<HTMLIFrameElement>(
@@ -889,6 +916,10 @@ describe("sprint 6 día 7 — fotos subidas desde el panel y desde el aviso, log
 
       const frame = walkPage.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
+      // Before any menu is opened inside the frame: this walk went red on 9 October 2026 at
+      // `.rb-menu-choice` «element(s) not found», because the bank photograph arrived while the
+      // «Añadir sección aquí» menu was open and took the whole document with it.
+      await waitForBankPhoto(frame);
       const fileInput = walkPage.locator('input[type="file"]:not(#logo)');
 
       // The search (day 6): "fotos" finds «Fotos de trabajos» among the offers and inserts it.
@@ -4258,7 +4289,7 @@ describe("sprint 13 día 7 — el clic que se perdía mientras la vista previa p
      * going to be one, has already happened. Every walk that starts from this helper then acts on
      * the document that will stay.
      */
-    await frame.locator('[data-section="sec-cover"] img[src^="blob:"]').first().waitFor();
+    await waitForBankPhoto(frame);
     return frame;
   }
 
@@ -4829,8 +4860,8 @@ describe("sprint 14 día 2 — la vista previa enseña la letra que envía", () 
     const frame = page.frameLocator(PREVIEW).first();
     // The bank photograph, not just the cover: when its bytes arrive after the editor opens, the
     // frame is replaced once, and `document.fonts.ready` evaluated in the first document dies with
-    // it. The helper of the same name in «sprint 13 día 7» has the measurement.
-    await frame.locator('[data-section="sec-cover"] img[src^="blob:"]').first().waitFor();
+    // it. `waitForBankPhoto` has the measurement.
+    await waitForBankPhoto(frame);
     return frame;
   }
 
