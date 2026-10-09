@@ -4233,7 +4233,33 @@ describe("sprint 13 día 7 — el clic que se perdía mientras la vista previa p
     await page.getByRole("button", { name: "Crear mi web" }).click();
     await beforeOpening?.();
     await page.getByText("Ver a tamaño real →").first().click();
-    return page.frameLocator(PREVIEW).first();
+    const frame = page.frameLocator(PREVIEW).first();
+    /**
+     * **Returned only once the bank photograph is in the frame, since 9 October 2026.**
+     *
+     * «Restaurante y bar» is the one sector with photographs in `packages/photobank/bank` (since
+     * 8 October), and a generated site of it names one on the cover. `Variants.tsx` fetches its
+     * bytes from `/api/muestras/<id>` while the three cards are on screen; whether they have
+     * arrived by the time «Ver a tamaño real» is pressed depends on how warm that route is. When
+     * they arrive *after* the editor opens, `srcDoc` depends on `photoUrls` and the frame is
+     * replaced once — and a test that was evaluating inside it loses its execution context
+     * («Execution context was destroyed, most likely because of a navigation»), or a selection it
+     * made in the first document is nowhere in the second.
+     *
+     * Measured rather than guessed: «asks for every face it names and is refused none of them»
+     * failed four times out of four on its own — one of them on `main` — where `next dev` compiles
+     * the route cold and the photograph always comes late, and passed inside the full suite, where
+     * the route is warm by then. The same shape — true in isolation, invisible in the suite — is what the backlog row
+     * about the intermittent `e2e` wrote off as «guessed and false» on 29 September, when the bank
+     * was empty and nothing could arrive late. Now something can.
+     *
+     * Waiting here is the cheapest honest fix: the object URL is what the preview shows once the
+     * bytes are stored, so an `<img>` with a `blob:` src in the cover means the reload, if there was
+     * going to be one, has already happened. Every walk that starts from this helper then acts on
+     * the document that will stay.
+     */
+    await frame.locator('[data-section="sec-cover"] img[src^="blob:"]').first().waitFor();
+    return frame;
   }
 
   it("selects a section clicked before the frame has finished loading", async () => {
@@ -4801,7 +4827,10 @@ describe("sprint 14 día 2 — la vista previa enseña la letra que envía", () 
     await page.getByRole("button", { name: "Crear mi web" }).click();
     await page.getByText("Ver a tamaño real →").first().click();
     const frame = page.frameLocator(PREVIEW).first();
-    await frame.locator('[data-section="sec-cover"]').waitFor();
+    // The bank photograph, not just the cover: when its bytes arrive after the editor opens, the
+    // frame is replaced once, and `document.fonts.ready` evaluated in the first document dies with
+    // it. The helper of the same name in «sprint 13 día 7» has the measurement.
+    await frame.locator('[data-section="sec-cover"] img[src^="blob:"]').first().waitFor();
     return frame;
   }
 

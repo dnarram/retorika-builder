@@ -263,6 +263,23 @@ open survives.
   was correct about what it tested and tested the wrong step: it showed that a reload after a
   *successful* selection keeps it, and said nothing about a click that was never registered at all.
   There is nothing to put back when nothing was recorded.
+
+  **And the guess became true on 8 October 2026, measured on 9 October.** The bank filled for
+  `restaurante-bar` — the sector 33 of the e2e's walks generate — and since then a photograph *can*
+  arrive after the editor opens: `Variants.tsx` fetches the three cards' photographs from
+  `/api/muestras/<id>`, and whether they are back before «Ver a tamaño real» is pressed depends on
+  how warm that route is. Logged with `framenavigated`: on a cold `next dev` the three responses
+  land about 500 ms after the editor opens and the frame is replaced once, at the same millisecond;
+  for «Peluquería y barbería», with no photographs, the frame is never replaced. Two tests died of
+  it on 9 October — «asks for every face it names and is refused none of them» four times out of
+  four on its own, one of them on `main` (`Execution context was destroyed`, evaluating `document.fonts.ready` in the
+  document that was about to go) and «selects a section clicked before the frame has finished
+  loading» once in a full run — and both passed inside a warm suite, which is why CI never saw it.
+  Both `openedVariant` helpers now wait for an `<img>` with a `blob:` src in the cover before
+  handing the frame over, so every walk that starts there acts on the document that will stay.
+  **The other 31 walks that choose «Restaurante y bar» inline their own steps and do not wait**;
+  nothing has failed there yet, and it is written here so the next intermittent red in one of them
+  is read against this mechanism first.
 - **The rail is seven items, and the design-tools switch now sits in the bottom-left corner at 720px
   tall (3 October 2026, sprint 14 day 5).** The switch is placed directly under the rail's items
   rather than at the foot of the rail — deliberately, because sprint 8's walk found that `mt-auto` put
