@@ -76,5 +76,7 @@ Dos de los cuatro hallazgos, por tu propia decisión de reparto:
 - **Seis verbos de sección solo se alcanzan con ratón.**
 
 Los otros dos están hechos: el foco y Escape en las pantallas nuevas (días 3, 4 y 6) y el callejón
-de la foto de muestra (día 7). **Y los cinco diálogos `aria-modal` antiguos siguen sin trampa de
-foco** — el hook existe y tiene dos usuarios, así que ponerlos al día es ahora un cambio pequeño.
+de la foto de muestra (día 7). **Y los diálogos `aria-modal` antiguos ya tienen trampa de foco**,
+desde el día 1 del sprint 17: los ocho llaman al hook y una prueba de fuente falla si se escribe un
+noveno sin ella. Eran seis y esta nota decía cinco, porque el sexto se escribió el 4 de octubre de
+2026, el mismo día que el hook y en otro commit.

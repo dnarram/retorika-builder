@@ -36,7 +36,10 @@ import {
  * they are pages, and a page has nothing to escape from — binding it to navigation would throw
  * away a half-typed password on a stray keypress. The focus trap, the Escape key and the returned
  * focus belong to the dialog that offers the account at the end of the journey, which is day 4's,
- * and they are the same four requirements the five existing `aria-modal` dialogs still fail.
+ * and they are the same four requirements every `aria-modal` dialog in the editor now meets —
+ * sprint 17 day 1, through `../editor/useFocusTrap.ts`. This sentence said «the five existing
+ * dialogs still fail» and there were six of them; the number is now asserted by
+ * `test/modalTrap.test.ts` instead of repeated in prose.
  */
 
 const REASON_KEY: Record<Reason, keyof typeof es> = {

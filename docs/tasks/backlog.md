@@ -483,21 +483,45 @@ open survives.
   week, so protocol Part 16 is not met; three ways out with their prices and nothing executed.
   [`arranque-en-frio.md`](arranque-en-frio.md) — whether to serve the landing as a separate Render
   static site, with the two cold-start measurements that need the deployment.
-  [`el-recorrido-de-la-cuenta.md`](el-recorrido-de-la-cuenta.md) — the thirteen-step walk that needs
-  a real project, including Google sign-in, which development could not verify.
+  [`el-recorrido-de-la-cuenta.md`](el-recorrido-de-la-cuenta.md) — the sixteen-step walk that needs
+  a real project, including Google sign-in, which development could not verify. (Thirteen until
+  sprint 16 added the photographs; counted again on 9 October 2026 rather than trusted.)
 
-- **The five existing `aria-modal` dialogs still take focus nowhere, trap nothing, return nothing
-  and ignore Escape.** Sprint 14's sweep counted them; David scoped the sprint-15 fix to the new
-  screens, so `RevertDialog` and the four in `DownloadGateDialogs` are untouched. **What changed is
-  the cost**: `apps/editor/src/account/useFocusTrap.ts` exists and has two callers, so bringing
-  them up to date is now adding one hook call each rather than designing the behaviour.
+- ~~**The five existing `aria-modal` dialogs still take focus nowhere, trap nothing, return
+  nothing and ignore Escape.**~~ **Done, sprint 17 day 1.** All eight now call
+  `apps/editor/src/editor/useFocusTrap.ts`, and `apps/editor/test/modalTrap.test.ts` fails if a
+  ninth is written without it.
+
+  **The row said five and there were six**, which is worth keeping rather than quietly correcting:
+  `PhotosFailedDialog` was committed on 4 October 2026, the same day as the hook, in a different
+  commit — so the count was taken before the last dialog existed and was stale by that evening.
+  Nobody was wrong at the time. The same slip had the sentence above saying «the four in
+  `DownloadGateDialogs`» when there are five. This is the ninth instance of the pattern this file
+  names in its own header, and the reason the new test asserts the **total** and not only the
+  property: a number in prose has nothing that makes it fail.
+
+- **A trap worth knowing about, found by falling into it on 10 October 2026: deleting a local
+  binding called `close` does not fail the typechecker.** `SaveToAccountDialog`'s «Cerrar» button
+  read `onClick={close}` against a local `close`; removing that local left the line pointing at
+  **`window.close`**, which is typed `() => void`, so `pnpm typecheck` stayed green while the dialog
+  stopped closing and its backdrop swallowed every click behind it. The `e2e` walk «escribe en la
+  cuenta aunque la sesión empiece con el editor ya abierto» is what caught it, by failing on a
+  switch something invisible was intercepting.
+
+  The whole of `src` was then swept for the same shape — a bare `close`, `open`, `focus`, `blur`,
+  `print`, `stop`, `scroll`, `confirm`, `alert`, `name`, `status`, `length`, `top`, `parent`, `self`,
+  `origin`, `event`, `history`, `location`, `screen` or `closed` passed as a value — and the other
+  three hits are destructured props that shadow the global on purpose. **No guard was added**, and
+  that is a judgement rather than an omission: telling a legitimate `open` prop from `window.open`
+  needs shadowing analysis, and `typescript` 7's npm package no longer ships a compiler API to do it
+  with. The habit that catches it is cheaper: when a local binding goes, grep for its bare name.
 
 - **Two of sprint 14's four appendix findings are still open, by David's own allocation.** The four
   corner handles that are drawn, styled and carry no listener at all; and the six section verbs
   reachable only by mouse, in a `<section>` with a `click` and no `tabindex`, no `role` and no
-  keyboard, with no sections panel in the rail. The other two were fixed in sprint 15: focus and
-  Escape on the new screens, and the sample photograph that left a site permanently
-  undownloadable.
+  keyboard, with no sections panel in the rail. Both are sprint 17's days 2 to 4. The other two were
+  fixed in sprint 15: focus and Escape on the new screens, and the sample photograph that left a
+  site permanently undownloadable.
 - ~~One catalog section still missing of the dossier's nine: «Quién soy / El equipo».~~ **Done**,
   29 September 2026: sprint 7 day 6 built `packages/catalog/src/team.ts`. The catalogue is 9 of 9.
   This was the one section with no evidence behind it — no session asked for it, it closed the

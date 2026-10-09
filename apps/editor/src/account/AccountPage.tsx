@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { browserClient } from "../auth/clients.ts";
+import { useFocusTrap } from "../editor/useFocusTrap.ts";
 import es from "../locales/es.json" with { type: "json" };
 import {
   Card,
@@ -20,7 +21,6 @@ import {
   listSites,
   requestAccountDeletion,
 } from "./sites.ts";
-import { useFocusTrap } from "./useFocusTrap.ts";
 
 /**
  * «Tu cuenta» — the copy you take with you, and the way out.
@@ -208,6 +208,13 @@ export function AccountPage() {
  * Focus moves in, Tab cycles, Escape closes, focus returns. **The default focus is the cancel
  * button and not the confirm**: a dialog that destroys something should not have its destructive
  * action under a stray Return key.
+ *
+ * That sentence was false from the day it was written until sprint 17 day 1, and it is worth
+ * leaving the correction visible. The hook focused the first focusable element, which here is
+ * «Exportar todo» — so the claim named a decision the code did not make. Nothing destructive was
+ * ever under Return, so no walk would have caught it; it was found by reading the comment against
+ * the DOM order. The fix is `data-initial-focus` on the cancel button below, which makes the markup
+ * the record.
  */
 function ConfirmDeletion({
   siteCount,
@@ -220,8 +227,7 @@ function ConfirmDeletion({
   onConfirm: () => void;
   onClose: () => void;
 }) {
-  const close = useCallback(() => onClose(), [onClose]);
-  const container = useFocusTrap(true, close);
+  const container = useFocusTrap(true, onClose);
 
   return (
     <div
@@ -272,7 +278,10 @@ function ConfirmDeletion({
         </button>
 
         {/* Cancel first in the DOM, so it is what the trap focuses and what Return reaches. */}
-        <button type="button" onClick={onClose} style={secondaryButton}>
+        {/* The first focus, said where the element is. See the hook: a destructive dialog that
+            opens with its confirm button focused is one Return away from the thing it is asking
+            about. */}
+        <button type="button" onClick={onClose} style={secondaryButton} data-initial-focus>
           {es["account.delete.cancel"]}
         </button>
         <button type="button" onClick={onConfirm} style={dangerButton}>

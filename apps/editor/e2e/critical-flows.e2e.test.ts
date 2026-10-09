@@ -68,6 +68,69 @@ async function waitForBankPhoto(frame: FrameLocator): Promise<void> {
   await frame.locator('[data-section="sec-cover"] img[src^="blob:"]').first().waitFor();
 }
 
+/**
+ * The four things a modal dialog owes a keyboard, checked on a dialog that is already open.
+ *
+ * Sprint 17 day 1. Five of the editor's eight `aria-modal` dialogs can be reached by clicking, and
+ * each already has a walk that opens it for its own reasons — the contrast block, the overflow
+ * warning, the photo warning, the failed bank photograph, and the return to the original. Rather
+ * than five new walks through the questionnaire, each of those calls this and then reopens the
+ * dialog to carry on with what it was testing. The other three dialogs are covered at the source by
+ * `test/modalTrap.test.ts`: `TooManyPhotosDialog` needs more photographs than the download ceiling
+ * allows to exist at all.
+ *
+ * `returnsTo` is where focus must land after Escape. For a dialog opened from the editor's own
+ * chrome that is the button itself. For one opened from **inside the preview** — «Volver a la
+ * original» is drawn in the frame by `wireInteractions` — the outer document's idea of what had
+ * focus is the `<iframe>` element, and focusing a frame hands focus back to the element its own
+ * document still holds. So the assertion is the frame, and it is the stronger of the two: it is the
+ * case where a trap that remembered the wrong thing would drop focus on `<body>`.
+ */
+async function expectModalTrap(
+  page: Page,
+  dialog: Locator,
+  returnsTo: Locator | "the preview frame",
+): Promise<void> {
+  const insideTheDialog = () =>
+    page.evaluate(
+      () =>
+        document.querySelector('[aria-modal="true"]')?.contains(document.activeElement) ?? false,
+    );
+
+  // 1. Focus moved in, rather than staying on whatever opened the dialog.
+  expect(await insideTheDialog(), "el foco no entró en un diálogo que dice ser modal").toBe(true);
+
+  /*
+   * 2. Tab cycles inside, both ways. One more press than there are focusable elements, so the
+   *    cycle is crossed whichever element focus started on — the assertion is «still inside», which
+   *    is the property that matters and the one an off-by-one cannot fake.
+   */
+  const focusable = await dialog
+    .locator(
+      'a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), select, textarea, [tabindex]:not([tabindex="-1"])',
+    )
+    .count();
+  expect(focusable, "un diálogo sin nada enfocable: la vuelta no probaría nada").toBeGreaterThan(0);
+  for (let step = 0; step <= focusable; step += 1) await page.keyboard.press("Tab");
+  expect(await insideTheDialog(), "Tab se salió de un diálogo que dice ser modal").toBe(true);
+  for (let step = 0; step <= focusable; step += 1) await page.keyboard.press("Shift+Tab");
+  expect(await insideTheDialog(), "Shift+Tab se salió de un diálogo que dice ser modal").toBe(true);
+
+  // 3. Escape closes it.
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+
+  // 4. And focus comes back, instead of being dropped at the top of the document.
+  if (returnsTo === "the preview frame") {
+    expect(
+      await page.evaluate(() => document.activeElement?.tagName ?? ""),
+      "al cerrar, el foco no volvió al marco desde el que se abrió el diálogo",
+    ).toBe("IFRAME");
+  } else {
+    await expect(returnsTo).toBeFocused();
+  }
+}
+
 async function replacingTheDocument(page: Page, act: () => Promise<void>): Promise<void> {
   const stamped = await page.evaluate(() => {
     const doc = document.querySelector<HTMLIFrameElement>(
@@ -949,6 +1012,14 @@ describe("sprint 6 día 7 — fotos subidas desde el panel y desde el aviso, log
       await walkPage.getByRole("button", { name: "Descargar" }).click();
       const dialog = walkPage.locator('[role="dialog"]', { hasText: "Antes de descargar" });
       await expect(dialog).toBeVisible();
+      // Sprint 17 day 1, then reopened for the branch this walk came here to read.
+      await expectModalTrap(
+        walkPage,
+        dialog,
+        walkPage.getByRole("button", { name: "Descargar", exact: true }),
+      );
+      await walkPage.getByRole("button", { name: "Descargar", exact: true }).click();
+      await expect(dialog).toBeVisible();
       // The dialog's **other branch**, reached for the first time on 8 October 2026. The one
       // photograph still not the owner's is the cover, and for a sector with a bank the cover is a
       // sample rather than an empty marker — so this says «foto de ejemplo» where it said «hueco
@@ -1720,6 +1791,11 @@ describe("sprint 8 — el modo estudio: encender, diseñar a mano, colocar, y vo
       const dialog = studio.getByRole("alertdialog");
       await expect(dialog.getByRole("heading")).toHaveText("Volver a la original");
       await expect(dialog.getByText(/La colocación que hiciste a mano se pierde/)).toBeVisible();
+
+      // Sprint 17 day 1, and this is the one where the opener is inside the preview.
+      await expectModalTrap(studio, dialog, "the preview frame");
+      await frame.locator(".rb-handmade-back").click();
+      await expect(dialog.getByRole("heading")).toHaveText("Volver a la original");
 
       // Cancelling changes nothing at all.
       await dialog.getByRole("button", { name: "Cancelar" }).click();
@@ -2615,8 +2691,15 @@ describe("sprint 9 día 7 — colchón: el diálogo se queda sobre lo que sigue 
       await paint("el-headline", "#fefefe");
       await paint("el-body", "#fdfdfd");
 
-      await studio.getByRole("button", { name: "Descargar", exact: true }).click();
+      const descargar = studio.getByRole("button", { name: "Descargar", exact: true });
+      await descargar.click();
       const dialog = studio.getByRole("alertdialog");
+      await expect(dialog.getByRole("button", { name: "Volver al color del tema" })).toHaveCount(2);
+
+      // Sprint 17 day 1, on the dialog this walk already has open. Reopened afterwards to carry on
+      // with what the walk was about — cheaper than a sixth trip through the questionnaire.
+      await expectModalTrap(studio, dialog, descargar);
+      await descargar.click();
       await expect(dialog.getByRole("button", { name: "Volver al color del tema" })).toHaveCount(2);
 
       await dialog.getByRole("button", { name: "Volver al color del tema" }).first().click();
@@ -2963,10 +3046,27 @@ describe("sprint 10 día 7 — el recorrido completo del sprint", () => {
 
       // ---- the download: the photo warning first, then the overflow warning, and a cautious
       //      owner backing out of it rather than publishing past it ----
-      await studio.getByRole("button", { name: "Descargar", exact: true }).click();
-      await studio.getByRole("button", { name: "Descargar igualmente" }).waitFor();
-      await studio.getByRole("button", { name: "Descargar igualmente" }).click();
-      await expect(studio.getByText("Algo se sale en el móvil")).toBeVisible();
+      const press = async () => {
+        await studio.getByRole("button", { name: "Descargar", exact: true }).click();
+        await studio.getByRole("button", { name: "Descargar igualmente" }).waitFor();
+        await studio.getByRole("button", { name: "Descargar igualmente" }).click();
+        await expect(studio.getByText("Algo se sale en el móvil")).toBeVisible();
+      };
+      await press();
+      /*
+       * Sprint 17 day 1, and this dialog is the chained one: it was opened by a button belonging to
+       * the photo warning, which unmounted to make room for it. The trap remembers what had focus
+       * when it opened, and what had focus by then was «Descargar» — the outgoing dialog's own trap
+       * had already put it back there on its way out. So the chain returns focus to the press that
+       * started it, which is asserted here rather than assumed, because the alternative shape of
+       * this — a remembered button that no longer exists — would silently drop focus on <body>.
+       */
+      await expectModalTrap(
+        studio,
+        studio.getByRole("alertdialog"),
+        studio.getByRole("button", { name: "Descargar", exact: true }),
+      );
+      await press();
       await studio.getByRole("button", { name: "Volver", exact: true }).click();
       await expect(studio.getByText("Algo se sale en el móvil")).toHaveCount(0);
 
@@ -6580,10 +6680,19 @@ describe("sprint 15 día 7 — la foto que no carga, y las promesas del proyecto
 
       // The old behaviour: this press produced a 400 the editor reported as «Vuelve a intentarlo»,
       // and every retry produced the identical 400. Now it names what is wrong before trying.
-      await failing.getByRole("button", { name: "Descargar" }).click();
+      await failing.getByRole("button", { name: "Descargar", exact: true }).click();
       const dialog = failing.getByRole("alertdialog");
       await expect(dialog).toBeVisible({ timeout: 30_000 });
       await expect(dialog.getByText("Falta una foto y no podemos descargar")).toBeVisible();
+
+      // Sprint 17 day 1, then reopened for the rest of this walk.
+      await expectModalTrap(
+        failing,
+        dialog,
+        failing.getByRole("button", { name: "Descargar", exact: true }),
+      );
+      await failing.getByRole("button", { name: "Descargar", exact: true }).click();
+      await expect(dialog).toBeVisible({ timeout: 30_000 });
       // And it says what would help, instead of telling somebody to repeat what cannot work.
       // «otras fotos» since ADR 0037, not «tus propias»: what failed to load can now be the
       // owner's own photograph out of the account as well as one of ours out of the bank, and
