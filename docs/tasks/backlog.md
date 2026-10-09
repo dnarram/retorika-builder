@@ -740,7 +740,7 @@ amendment saying 1600 is a ceiling and naming the floor that actually matters, o
 regenerated at 1600 and this stops being a question. Draw Things takes the size as a parameter, so
 regenerating is cheap — but the nine approved ones would all have to be re-reviewed.
 
-**4. The owner cannot choose how their own photograph is cropped — 9 October 2026.**
+**3. The owner cannot choose how their own photograph is cropped — 9 October 2026.**
 
 The cover started cropping on that date, because letting the photograph's shape decide the
 section's height gave a 3005px cover to anyone who uploaded a portrait phone photo. The crop is
@@ -759,7 +759,7 @@ photograph in the «Fotos» panel is the cheapest shape that does not need a cro
 while every cover is either a bank photograph framed for the purpose or a photo the owner can
 retake, and not something to settle inside a renderer pull request.
 
-**3. The bundle weight budget is 29% over on a real site of that sector, and nothing catches it.**
+**4. The bundle weight budget is 29% over on a real site of that sector, and nothing catches it.**
 Measured the same day, building a real restaurante-bar site through `buildSite`:
 
 | | bundle, gzipped | of which the sample |
