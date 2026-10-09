@@ -6324,7 +6324,11 @@ describe("sprint 15 día 7 — la foto que no carga, y las promesas del proyecto
       await expect(dialog).toBeVisible({ timeout: 30_000 });
       await expect(dialog.getByText("Falta una foto y no podemos descargar")).toBeVisible();
       // And it says what would help, instead of telling somebody to repeat what cannot work.
-      await expect(dialog.getByText(/poner tus propias fotos en su lugar/)).toBeVisible();
+      // «otras fotos» since ADR 0037, not «tus propias»: what failed to load can now be the
+      // owner's own photograph out of the account as well as one of ours out of the bank, and
+      // telling somebody to use their own photograph instead of their own photograph is advice
+      // that reads as a mistake.
+      await expect(dialog.getByText(/poner otras fotos en su lugar/)).toBeVisible();
 
       // Before the retry the photograph is not loaded, so the canvas still shows the document's
       // own src rather than bytes the browser holds.

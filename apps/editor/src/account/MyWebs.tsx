@@ -116,13 +116,11 @@ export function MyWebs() {
           </ul>
         )}
 
-        {/* §5 again, and in the place it actually bites: this is the screen somebody reaches on a
-            second computer, which is exactly where a web turns up without its photographs. */}
-        {sites !== null && sites.length > 0 ? (
-          <p style={{ margin: 0, fontSize: 13, color: "#92400E", lineHeight: 1.5 }}>
-            {es["myWebs.photosWarning"]}
-          </p>
-        ) : null}
+        {/* **The warning that stood here is gone, with ADR 0037.** It said the photographs had
+            stayed in the browser where they were chosen, which was true for the whole of sprint 15
+            and is what this screen existed to disclose on a second computer. They travel now, so
+            there is nothing to disclose — and an amber paragraph that no longer applies is worse
+            than no paragraph, because the next reader believes it. */}
 
         {email ? (
           <span style={{ fontSize: 13, color: "#64748B" }}>

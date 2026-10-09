@@ -19,7 +19,7 @@
     "test:db": "RETORIKA_DB=1 vitest run --project db-pg --maxWorkers 1",
     "typecheck": "tsc --build --force && tsc --noEmit -p apps/editor/tsconfig.json",
     "build:editor": "pnpm --filter @retorika/editor build",
-    "lint": "biome check .",
+    "lint": "biome check --max-diagnostics=500 .",
     "format": "biome check --write .",
     "size": "node scripts/size-budget.ts",
     "schema:guard": "node scripts/schema-guard.ts",

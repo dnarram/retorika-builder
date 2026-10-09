@@ -27,7 +27,17 @@ import { type LoadedSite, loadSite } from "./sites.ts";
  */
 export function OpenFromAccount({ id }: { id: string }) {
   const router = useRouter();
-  const [site, setSite] = useState<LoadedSite | null | undefined>(undefined);
+  /**
+   * The site and who it belongs to, in one state rather than two.
+   *
+   * A photograph's object is `<owner>/<site>/<src>` (ADR 0037), so the editor needs both — and two
+   * separate states would let a render exist with the site present and the owner still null, which
+   * is a path with an empty first segment and a photograph that fails for no reason anybody could
+   * read. One state makes that unrepresentable.
+   */
+  const [opened, setOpened] = useState<{ site: LoadedSite; ownerId: string } | null | undefined>(
+    undefined,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -39,14 +49,16 @@ export function OpenFromAccount({ id }: { id: string }) {
         return;
       }
       const found = await loadSite(client, id);
-      if (!cancelled) setSite(found);
+      // The owner travels with the site: this is the one place that has already asked who is
+      // signed in, and asking twice would be a second round trip for an answer it holds.
+      if (!cancelled) setOpened(found === null ? null : { site: found, ownerId: data.user.id });
     })();
     return () => {
       cancelled = true;
     };
   }, [id, router]);
 
-  if (site === undefined) {
+  if (opened === undefined) {
     return (
       <Shell>
         <Card width={520}>
@@ -58,7 +70,7 @@ export function OpenFromAccount({ id }: { id: string }) {
     );
   }
 
-  if (site === null) {
+  if (opened === null) {
     // A row that is not there and a row that is not theirs are indistinguishable from here, and
     // the policies make them so deliberately. One sentence covers both, and it does not speculate.
     return (
@@ -77,9 +89,13 @@ export function OpenFromAccount({ id }: { id: string }) {
   return (
     <Variants
       answers={EMPTY_ANSWERS}
-      initialDocuments={[site.document]}
+      initialDocuments={[opened.site.document]}
       initialOpenIndex={0}
-      initialAccountSite={{ id: site.id, version: site.version }}
+      initialAccountSite={{
+        id: opened.site.id,
+        version: opened.site.version,
+        ownerId: opened.ownerId,
+      }}
       // «Volver a empezar» from a saved web goes back to the list, not to question 1: the site is
       // in the account and starting a new one is a different act from discarding this one.
       onRestart={() => router.push("/mis-webs")}

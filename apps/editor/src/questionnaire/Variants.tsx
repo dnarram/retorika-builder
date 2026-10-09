@@ -29,6 +29,7 @@ import {
 import { withPalette, withScale, withTypePair } from "@retorika/tokens";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { loadAccountDesignTools, saveAccountDesignTools } from "../account/designTools.ts";
+import { downloadPhoto, photoObjectPath } from "../account/photoStorage.ts";
 import { SaveToAccountDialog } from "../account/SaveToAccountDialog.tsx";
 import { saveSite } from "../account/sites.ts";
 import { browserClient } from "../auth/clients.ts";
@@ -47,16 +48,19 @@ import {
   initHistories,
   wasSectionEverEdited,
 } from "../editor/documentHistory.ts";
+import { PHOTO_CONTENT_TYPE } from "../editor/downloadGate.ts";
+import { photoSources } from "../editor/photoSources.ts";
 import {
   clearPhotos,
   loadPhotos,
+  type PhotoScope,
   photoBlob,
   photoSrcFor,
   preparePhoto,
   savePhoto,
+  scopeKey,
 } from "../editor/photos.ts";
 import { withPhotoUrls } from "../editor/previewDocument.ts";
-import { listSampleRefs } from "../editor/samplePhotos.ts";
 import es from "../locales/es.json" with { type: "json" };
 import { type DeleteToast, Editor, type SectionOffer } from "./Editor.tsx";
 import { Brand } from "./ui.tsx";
@@ -181,7 +185,14 @@ export function Variants({
    * this browser's session. It carries the id and the version the document was read at, so edits
    * push back to the right row and a stale write is still refused (ADR 0034 §8).
    */
-  initialAccountSite?: { id: string; version: number };
+  /**
+   * The site this editor is editing in the account, when it was opened from there.
+   *
+   * `ownerId` joined it with ADR 0037: a photograph's object is `<owner>/<site>/<src>`, so fetching
+   * one back needs both halves. It is the signed-in person's id, which `OpenFromAccount` has
+   * already asked for before it renders this.
+   */
+  initialAccountSite?: { id: string; version: number; ownerId: string };
   onRestart: () => void;
 }) {
   // The histories outlive "Volver": edits and what can be undone survive going back to the grid
@@ -231,9 +242,11 @@ export function Variants({
   // Read once rather than per render: it is build-time configuration, not state.
   const [accountAvailable] = useState(() => authConfigured());
   /** The site this editor pushes to, once there is one, with the version it last wrote. */
-  const [accountSite, setAccountSite] = useState<{ id: string; version: number } | null>(
-    initialAccountSite ?? null,
-  );
+  const [accountSite, setAccountSite] = useState<{
+    id: string;
+    version: number;
+    ownerId?: string;
+  } | null>(initialAccountSite ?? null);
   /**
    * Whether this editor was opened from the account rather than from this browser.
    *
@@ -296,7 +309,7 @@ export function Variants({
           document,
         });
         if (result.ok) {
-          setAccountSite({ id: accountSite.id, version: result.version });
+          setAccountSite({ ...accountSite, version: result.version });
           // When nothing writes to this browser, this push is the only thing that can honestly
           // light the indicator at all.
           if (openedFromAccount) setSaveStatus("saved");
@@ -454,6 +467,38 @@ export function Variants({
   const [photoUrls, setPhotoUrls] = useState<Map<number, Map<string, string>>>(new Map());
   const [photoError, setPhotoError] = useState<string | null>(null);
 
+  /**
+   * Which set of stored photographs this editor owns, in IndexedDB.
+   *
+   * **A site opened from the account is its own scope** (ADR 0037, and `photos.ts` has the long
+   * version): `photoSrcFor` names the cover of every site `foto-sec-cover-el-image.jpg`, so a
+   * browser holding both an anonymous session and a saved site had one key for two photographs and
+   * showed whichever was written last — in the editor and in the ZIP. The scope is what makes them
+   * two.
+   *
+   * A site saved *from* this session keeps the variant scope. Its bytes are already here under that
+   * key, nothing has changed about where they came from, and re-keying them would mean reading one
+   * scope and writing another for no gain.
+   */
+  /**
+   * The site's id as a primitive, so everything below can depend on it honestly.
+   *
+   * `initialAccountSite` is an object literal built by the caller on every render, so an effect
+   * that listed it would re-run whenever the parent re-rendered — and the mount effect's cleanup
+   * revokes object URLs, which would blank every photograph on screen. A string changes when the
+   * site changes and not before.
+   */
+  const accountSiteId = initialAccountSite?.id ?? null;
+  const accountOwnerId = initialAccountSite?.ownerId ?? null;
+
+  const photoScope = useCallback(
+    (variant: number): PhotoScope =>
+      accountSiteId === null
+        ? { kind: "variant", variant }
+        : { kind: "site", siteId: accountSiteId },
+    [accountSiteId],
+  );
+
   // What survived the last reload. Put back once, on mount: the documents came from
   // `localStorage`, the bytes from IndexedDB, and only together do they show the site the owner
   // left behind. A store that will not open yields nothing and the covers show the placeholder
@@ -463,18 +508,40 @@ export function Variants({
     const created: string[] = [];
     void loadPhotos().then((stored) => {
       if (cancelled || stored.length === 0) return;
-      // Merged into whatever is already there rather than replacing it. The bank fetch below runs
-      // on the same mount and writes into this same map, and two effects that each assumed they
-      // were the only writer would race: whichever resolved second would erase the other's URLs.
+      /**
+       * **Only this editor's own scope**, which is the other half of the collision `photoScope`
+       * describes. Reading every record and keying it by a variant number put an anonymous
+       * session's cover into a saved site's card, because both are `foto-sec-cover-el-image.jpg`
+       * and the old record carried only the variant.
+       *
+       * So each card asks for its own scope by name. For a session that is `v0`, `v1`, `v2`; for a
+       * site opened from the account it is the site's id for all three cards, of which only one
+       * is ever open.
+       */
+      const siteScope =
+        accountSiteId === null ? null : scopeKey({ kind: "site", siteId: accountSiteId });
+      const variantOf = (scope: string): number | undefined => {
+        // A site from the account has one document, shown in one card, so every record of its
+        // scope belongs to the card that is open. A session's records name their own card.
+        if (siteScope !== null) return scope === siteScope ? (initialOpenIndex ?? 0) : undefined;
+        const match = /^v(\d+)$/.exec(scope);
+        return match?.[1] === undefined ? undefined : Number(match[1]);
+      };
+
+      // Merged into whatever is already there rather than replacing it. The fetch below runs on the
+      // same mount and writes into this same map, and two effects that each assumed they were the
+      // only writer would race: whichever resolved second would erase the other's URLs.
       setPhotoUrls((current) => {
         const next = new Map(current);
         for (const photo of stored) {
-          const forVariant = new Map(next.get(photo.variant) ?? []);
+          const variant = variantOf(photo.scope);
+          if (variant === undefined) continue;
+          const forVariant = new Map(next.get(variant) ?? []);
           if (forVariant.has(photo.src)) continue;
           const url = URL.createObjectURL(photoBlob(photo.bytes));
           created.push(url);
           forVariant.set(photo.src, url);
-          next.set(photo.variant, forVariant);
+          next.set(variant, forVariant);
         }
         return next;
       });
@@ -483,7 +550,11 @@ export function Variants({
       cancelled = true;
       for (const url of created) URL.revokeObjectURL(url);
     };
-  }, []);
+    // The two primitives above, which are constant for the life of this editor: a session has no
+    // site id and never gains one here, and `initialOpenIndex` is a prop. Listing them rather than
+    // writing `[]` keeps this honest without re-running — and a re-run would revoke, in its cleanup,
+    // the object URLs every photograph on screen is using.
+  }, [accountSiteId, initialOpenIndex]);
 
   /**
    * The bank's own photographs, fetched once each and then indistinguishable from an upload.
@@ -547,34 +618,71 @@ export function Variants({
     setSampleAttempt((attempt) => attempt + 1);
   }, []);
 
+  /** Our bytes, by bank id. `null` for any answer that is not a photograph, which the caller
+   * turns into the blocking gate rather than a broken image. */
+  const bankBytes = useCallback(async (id: string): Promise<Uint8Array | null> => {
+    const response = await fetch(`/api/muestras/${encodeURIComponent(id)}`);
+    if (!response.ok) return null;
+    return new Uint8Array(await response.arrayBuffer());
+  }, []);
+
+  /**
+   * The owner's bytes, out of their own folder in the account's bucket (ADR 0037).
+   *
+   * `null` covers three different things on purpose, because the owner can act on all three the
+   * same way: the object is not there (a site saved before the photographs travelled), the
+   * policies refused, or what came back is not an image — `downloadPhoto` sniffs before anything
+   * makes an `<img>` of it.
+   */
+  const accountBytes = useCallback(
+    async (src: string): Promise<Uint8Array | null> => {
+      // Two primitives rather than the prop object, so the effect that lists this callback does
+      // not re-run every time the parent re-renders — and its cleanup would strand photographs.
+      if (accountSiteId === null || accountOwnerId === null) return null;
+      return downloadPhoto(browserClient(), photoObjectPath(accountOwnerId, accountSiteId, src));
+    },
+    [accountSiteId, accountOwnerId],
+  );
+
   useEffect(() => {
     let cancelled = false;
 
     void (async () => {
       for (const [variant, history] of histories.entries()) {
-        for (const ref of listSampleRefs(history.present.document)) {
+        /**
+         * **Two sources since ADR 0037, and the document says which.** A bank photograph comes
+         * from `/api/muestras/<id>`, as it has since sprint 6. The owner's own comes from their
+         * folder in the account's bucket, and only for a site that is in the account — for one
+         * living in this browser those bytes are already here.
+         *
+         * A site from the account can need both at once: one saved before its owner replaced the
+         * cover still names the bank photograph the generator chose, and that stays ours.
+         */
+        for (const source of photoSources(history.present.document, {
+          fromAccount: accountSiteId !== null,
+        })) {
           // Checked here and nowhere else: `cancelled` stops this run from *starting* more work,
           // and never stops it from finishing what it already started. See the note below.
           if (cancelled) return;
 
           // The attempt number is part of the key, so «Volver a cargar las fotos» invalidates every
           // marker at once. See `sampleAttempt`.
-          const key = `${sampleAttempt}:${variant}:${ref.src}`;
+          const key = `${sampleAttempt}:${variant}:${source.src}`;
           if (fetched.current.has(key)) continue;
           // Marked before the await, so two overlapping runs cannot both fetch the same photograph.
           fetched.current.add(key);
 
           try {
-            const response = await fetch(`/api/muestras/${encodeURIComponent(ref.id)}`);
-            // A failure stays marked: the route answered and said no, and asking again on every
+            const bytes =
+              source.kind === "bank" ? await bankBytes(source.id) : await accountBytes(source.src);
+            // A failure stays marked: the source answered and said no, and asking again on every
             // render would be a request loop over a photograph that is not coming.
-            if (!response.ok) {
+            if (!bytes) {
               setFailedSamples((current) =>
-                current.includes(ref.src) ? current : [...current, ref.src],
+                current.includes(source.src) ? current : [...current, source.src],
               );
               continue;
             }
-            const bytes = new Uint8Array(await response.arrayBuffer());
 
             // **An in-flight fetch always writes its result, even after this run was cancelled**,
             // and that is the fix for the defect the browser walk found. The first version dropped
@@ -587,22 +695,29 @@ export function Variants({
             // Writing anyway is safe because "cancelled" here does not mean unmounted — in the
             // double-mount it is the same live component — and a `setState` on a genuinely
             // unmounted one is a no-op in React 19, not a warning.
-            const url = URL.createObjectURL(photoBlob(bytes, "image/webp"));
+            // The content type is the source's: the bank stores WebP and an owner's photograph is
+            // always the JPEG `preparePhoto` re-encoded. Neither is guessed from the name.
+            const url = URL.createObjectURL(
+              photoBlob(bytes, source.kind === "bank" ? "image/webp" : PHOTO_CONTENT_TYPE),
+            );
             setPhotoUrls((current) => {
               const next = new Map(current);
               const forVariant = new Map(next.get(variant) ?? []);
-              forVariant.set(ref.src, url);
+              forVariant.set(source.src, url);
               next.set(variant, forVariant);
               return next;
             });
             // Stored so a reload puts it back without asking the server again — and so that a
-            // session that goes offline still downloads a complete site.
-            if (!(await savePhoto(variant, ref.src, bytes))) setSaveStatus("unsaved");
+            // session that goes offline still downloads a complete site. Under this editor's own
+            // scope, which for a site from the account is the site and not the card.
+            if (!(await savePhoto(photoScope(variant), source.src, bytes))) {
+              setSaveStatus("unsaved");
+            }
           } catch {
-            // Offline, or the route is not there. The marker stands in; see the note above — and
+            // Offline, or the source is not there. The marker stands in; see the note above — and
             // this half was the other silent `continue`.
             setFailedSamples((current) =>
-              current.includes(ref.src) ? current : [...current, ref.src],
+              current.includes(source.src) ? current : [...current, source.src],
             );
           }
         }
@@ -612,7 +727,7 @@ export function Variants({
     return () => {
       cancelled = true;
     };
-  }, [histories, sampleAttempt]);
+  }, [histories, sampleAttempt, accountSiteId, photoScope, bankBytes, accountBytes]);
 
   async function handlePickPhoto(variant: number, address: ElementAddress, file: File) {
     setPhotoError(null);
@@ -642,7 +757,11 @@ export function Variants({
     dispatch({ type: "setImage", variant, address, src, alt });
 
     // A photo that was not stored must never show a tick. Same rule as a full `localStorage`.
-    if (!(await savePhoto(variant, src, result.photo.bytes))) setSaveStatus("unsaved");
+    // Under this editor's own scope: a site from the account keeps its photographs apart from any
+    // anonymous session in the same browser, which is the collision `photoScope` describes.
+    if (!(await savePhoto(photoScope(variant), src, result.photo.bytes))) {
+      setSaveStatus("unsaved");
+    }
   }
 
   const [toast, setToast] = useState<DeleteToast | null>(null);
