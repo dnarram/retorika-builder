@@ -51,6 +51,8 @@
   },
   "dependencies": {
     "@retorika/db": "workspace:*",
+    "@retorika/generator": "workspace:*",
+    "@retorika/photobank": "workspace:*",
     "@retorika/publisher": "workspace:*",
     "@retorika/renderer": "workspace:*",
     "@retorika/schema": "workspace:*"
