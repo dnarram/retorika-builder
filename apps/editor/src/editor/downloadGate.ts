@@ -32,6 +32,32 @@ import { type ContrastFinding, reviewStyle } from "./styleReview.ts";
 export const MAX_PHOTOS = MAX_PAGES * (GALLERY_PHOTOS.max + 1);
 
 /**
+ * How large one photograph may be, in the one place both sides of it can read.
+ *
+ * It lived in `/api/download`'s route since sprint 6, where it was the only thing that enforced it.
+ * ADR 0037 gives the bucket a `file_size_limit`, and a client that could store what the download
+ * would then refuse to bundle is exactly the invalid state `MAX_PHOTOS` moved here to stop — a
+ * person uploads a photograph, the save says it worked, and the download says no.
+ *
+ * So it is one number in one file, read by the route, and `apps/editor/test/photoCaps.test.ts`
+ * reads migration `0003`'s SQL and asserts the bucket agrees. 2 MiB is headroom, not a target: the
+ * browser has already resized and re-encoded to a 1600px JPEG at 0.82 (ADR 0018), which lands in
+ * the low hundreds of kilobytes.
+ */
+export const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
+
+/**
+ * The content type every stored photograph has, because `preparePhoto` re-encodes to it whatever
+ * the picker accepted. The bucket's `allowed_mime_types` is this and nothing else, and the same
+ * test ties them together — so changing the output format fails loudly there rather than silently
+ * at somebody's upload.
+ *
+ * Named here rather than imported from `photos.ts` so that nothing which only needs the *number*
+ * has to load a module built around `document.createElement`.
+ */
+export const PHOTO_CONTENT_TYPE = "image/jpeg";
+
+/**
  * The three things a download attempt can turn out to be, decided from the same counts the
  * «Fotos» panel already shows — so the gate and the panel can never disagree about how many
  * photographs are still not the owner's, or how many files the site is carrying in total.

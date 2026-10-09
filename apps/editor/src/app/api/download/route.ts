@@ -10,7 +10,7 @@ import {
   parseDocument,
   type RetorikaDocument,
 } from "@retorika/schema";
-import { MAX_PHOTOS } from "../../../editor/downloadGate.ts";
+import { MAX_PHOTO_BYTES, MAX_PHOTOS } from "../../../editor/downloadGate.ts";
 import { isAcceptedImage, sniffImage } from "../../../editor/imageBytes.ts";
 
 /**
@@ -37,7 +37,9 @@ export const runtime = "nodejs";
 // 1600px JPEG lands in the low hundreds of kilobytes, so the caps below are headroom rather
 // than a target.
 const MAX_BODY_BYTES = 12 * 1024 * 1024;
-const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
+// MAX_PHOTO_BYTES moved to `downloadGate.ts` with ADR 0037, for the same reason MAX_PHOTOS is
+// there: the storage bucket now has a `file_size_limit` too, and a photograph that can be stored
+// and then not bundled is a save that lied.
 // MAX_PHOTOS lives in `../../../editor/downloadGate.ts`, shared with the editor's own pre-flight
 // check (sprint 6 day 5) so both sides of the request agree about the same number for the same
 // reason — a client that thinks it can send 45 and a server that only accepts 10 is exactly the

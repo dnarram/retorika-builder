@@ -9,8 +9,10 @@ import {
   signUpWithPassword,
   startGoogleSignIn,
 } from "../auth/operations.ts";
+import { listOwnPhotoSrcs } from "../editor/ownPhotos.ts";
 import es from "../locales/es.json" with { type: "json" };
 import { FieldError, primaryButton, secondaryButton, TextField } from "../questionnaire/ui.tsx";
+import { uploadSitePhotos } from "./photoStorage.ts";
 import { createSite, listSites, renameOf } from "./sites.ts";
 import { useFocusTrap } from "./useFocusTrap.ts";
 
@@ -31,9 +33,31 @@ import { useFocusTrap } from "./useFocusTrap.ts";
  * find out later:
  *
  * - which web is being saved, since the editor holds three variants and this saves the open one;
- * - that the photos stay in this browser (§5), so another computer shows the web without them;
- * - what is stored, who processes it and that deleting really deletes (§13 and §14).
+ * - that the photographs travel with it (ADR 0037, amending §5), and how many did not make it when
+ *   some did not — never a tick the save has not earned;
+ * - what is stored, who processes it and that deleting really deletes (§13 and §14), **including
+ *   the photographs**, which that notice did not mention until they started leaving the browser.
  */
+
+/**
+ * What the dialog says once the row is in. Four sentences rather than one, because «Guardada en tu
+ * cuenta.» is only the whole truth when every photograph is up there too.
+ *
+ * A site with no photographs of its own — which is every generated site before the first upload,
+ * since its one photograph is the bank's — gets the plain sentence. It would be strange to tell
+ * somebody that nought of their photographs were stored.
+ */
+function savedSentence(photos: number, failed: number): string {
+  if (failed > 0) {
+    return failed === 1
+      ? es["account.save.photosFailed.one"]
+      : es["account.save.photosFailed.many"].replace("{count}", String(failed));
+  }
+  if (photos === 0) return es["account.save.done"];
+  return photos === 1
+    ? es["account.save.doneWithPhotos.one"]
+    : es["account.save.doneWithPhotos.many"].replace("{count}", String(photos));
+}
 
 const REASON_KEY: Record<Reason, keyof typeof es> = {
   invalid_credentials: "auth.error.invalid_credentials",
@@ -48,16 +72,33 @@ const REASON_KEY: Record<Reason, keyof typeof es> = {
 type Stage =
   | { name: "form" }
   | { name: "working" }
-  | { name: "saved" }
+  /** The row exists and the bytes are on their way. Counted, because an owner watching a progress
+   * line wants to know it is moving and how much is left. */
+  | { name: "uploading"; done: number; total: number }
+  /** `photosFailed` is how many of the owner's photographs the store refused. Zero is the ordinary
+   * case and the only one that gets an unqualified «Guardada». */
+  | { name: "saved"; photos: number; photosFailed: number }
   | { name: "failed"; reason: Reason | "save" | "stale" };
 
 export function SaveToAccountDialog({
   document: doc,
+  photoUrls,
   configured,
   onSaved,
   onClose,
 }: {
   document: RetorikaDocument;
+  /**
+   * The open variant's object URLs, keyed by the `src` the document carries — the editor's own
+   * `photoUrls` map for this card.
+   *
+   * **Handed in rather than read from storage**, because this is the same map the preview is
+   * showing and the download already builds from: what the owner can see is what gets stored, and
+   * there is no second source that could disagree with it. The bytes behind these URLs are
+   * `preparePhoto`'s output, which a canvas produced and which therefore carries no EXIF and no
+   * GPS (ADR 0018, and ADR 0037 §4 for why that now matters twice).
+   */
+  photoUrls: ReadonlyMap<string, string>;
   configured: boolean;
   /**
    * Fired only once a save has actually landed, so the indicator never claims it early — and it
@@ -106,12 +147,58 @@ export function SaveToAccountDialog({
       name: renameOf(doc),
       document: doc,
     });
-    if (created.ok) {
-      setStage({ name: "saved" });
-      onSaved({ id: created.id, version: created.version });
+    if (!created.ok) {
+      setStage({ name: "failed", reason: "save" });
       return;
     }
-    setStage({ name: "failed", reason: "save" });
+
+    /**
+     * The photographs, after the row and before `onSaved` (ADR 0037).
+     *
+     * **After the row** because the object's path contains the site's id, which does not exist
+     * until the insert comes back. **Before `onSaved`** because that callback is what moves the
+     * editor's indicator to «guardado en tu cuenta», and a site whose photographs are still in
+     * flight is not that yet. A failed upload does not undo the save: the document is up there and
+     * the bytes are still in this browser, so the honest report is «saved, and this many photographs
+     * did not make it», which is what the owner can act on.
+     *
+     * Only the owner's own. A bank photograph is ours, immutable and already served by
+     * `/api/muestras/[id]`; `listOwnPhotoSrcs` is what draws that line, out of the document's own
+     * `sample` field rather than out of the shape of a file name.
+     */
+    const srcs = listOwnPhotoSrcs(doc);
+    let report = { uploaded: [] as string[], failed: [] as string[] };
+    if (srcs.length > 0) {
+      setStage({ name: "uploading", done: 0, total: srcs.length });
+      let done = 0;
+      report = await uploadSitePhotos(
+        client,
+        { ownerId: user.id, siteId: created.id, srcs },
+        async (src) => {
+          const url = photoUrls.get(src);
+          // No URL means this browser does not hold those bytes — a site it did not upload the
+          // photograph in. `uploadSitePhotos` reports that as neither uploaded nor failed.
+          if (!url) return undefined;
+          try {
+            const blob = await (await fetch(url)).blob();
+            return new Uint8Array(await blob.arrayBuffer());
+          } catch {
+            // A revoked object URL. Nothing to upload and nothing to claim.
+            return undefined;
+          } finally {
+            done += 1;
+            setStage({ name: "uploading", done, total: srcs.length });
+          }
+        },
+      );
+    }
+
+    setStage({
+      name: "saved",
+      photos: report.uploaded.length,
+      photosFailed: report.failed.length,
+    });
+    onSaved({ id: created.id, version: created.version });
   }
 
   async function createAccountAndSave(event: React.FormEvent) {
@@ -202,10 +289,28 @@ export function SaveToAccountDialog({
         {/* Which web, because the editor holds three and this saves one. */}
         <p style={{ margin: 0, fontSize: 14, color: "#334155" }}>{es["account.save.whichOne"]}</p>
 
+        {stage.name === "uploading" ? (
+          <p role="status" style={{ margin: 0, fontSize: 15, color: "#334155" }}>
+            {es["account.save.uploadingPhotos"]
+              .replace("{done}", String(stage.done))
+              .replace("{total}", String(stage.total))}
+          </p>
+        ) : null}
+
         {stage.name === "saved" ? (
           <>
-            <p role="status" style={{ margin: 0, fontSize: 15, fontWeight: 600, color: "#0F766E" }}>
-              {es["account.save.done"]}
+            <p
+              role="status"
+              style={{
+                margin: 0,
+                fontSize: 15,
+                fontWeight: 600,
+                // Amber rather than green when something did not make it: the save worked and the
+                // sentence beside it is not unqualified good news.
+                color: stage.photosFailed > 0 ? "#92400E" : "#0F766E",
+              }}
+            >
+              {savedSentence(stage.photos, stage.photosFailed)}
             </p>
             {/* The way back, from the moment there is something to come back to. */}
             <a href="/mis-webs" style={{ fontSize: 15, color: "#156FE7" }}>
@@ -288,9 +393,9 @@ export function SaveToAccountDialog({
           </>
         )}
 
-        {/* §5: the photos do not travel yet, and nobody is going to discover that on another
-            computer. Shown whether or not the save has happened. */}
-        <p style={{ margin: 0, fontSize: 13, color: "#92400E", lineHeight: 1.5 }}>
+        {/* ADR 0037, amending §5: the photographs travel now, and this says so. It was amber
+            because it was a warning; it is slate because it is an ordinary fact. */}
+        <p style={{ margin: 0, fontSize: 13, color: "#334155", lineHeight: 1.5 }}>
           {es["account.save.photosStay"]}
         </p>
 
