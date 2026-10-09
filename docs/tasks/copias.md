@@ -47,6 +47,22 @@ un tercero, 25 $/mes compran que esto no sea nuestro problema, y eso vale su pre
    `schema_migrations` — y **no** el esquema `auth`. Las cuentas son de Supabase Auth y no nuestras
    para volcar; lo que se recupera de una copia nuestra es *el contenido*, y una cuenta se vuelve a
    crear. Esto hay que decirlo en la restauración de prueba, porque es su límite.
+
+   **Y desde el 9 de octubre de 2026, el bucket `fotos`, que es la mitad nueva de esta propuesta**
+   ([ADR 0037](../decisions/0037-the-photos-travel-with-the-account.md)). Las fotos del dueño
+   dejaron de estar solo en su navegador y ahora son ficheros en el almacenamiento de objetos de
+   Supabase. **`pg_dump` no las contiene**: vuelca `storage.objects`, que es la contabilidad, y los
+   bytes se quedan donde están. Una restauración del volcado dejaría webs que nombran fotos que no
+   existen — exactamente el estado que el editor bloquea antes de descargar, pero para todas las
+   webs a la vez.
+
+   Lo que hay que copiar, entonces, son **dos cosas**: el volcado de `public` y el contenido del
+   bucket. Lo segundo es `supabase storage` o la API de Storage con la clave de servicio, y pesa:
+   medido el 9 de octubre, **una foto de dueño pesa unos 270 KB** tras el reencodado del navegador
+   (1600 px de lado largo, calidad 0,82), así que 1 GB de almacenamiento son unas 3.800 fotos. La
+   copia de mil webs de una foto son 270 MB al día si se copia todo cada vez, y mucho menos si se
+   copia solo lo que cambió — **y cuál de las dos es otra cosa que conviene que decidas**, porque la
+   diferencia es entre un `rsync` y una copia completa.
 2. **Dónde vive.** **En la UE**, por coherencia con el §14 del ADR 0034 y con la región de
    Supabase y de Render. La opción de coste cero es el almacenamiento de objetos del propio
    Supabase, en el mismo proyecto; la opción de coste cero **y** fuera del mismo proveedor es un
@@ -61,6 +77,11 @@ un tercero, 25 $/mes compran que esto no sea nuestro problema, y eso vale su pre
 5. **La restauración de prueba, que es la mitad que se olvida.** Una vez al mes: restaurar el
    volcado en una base local y **contar las filas**. Y queda escrito en el runbook, porque «una
    copia que no se ha restaurado nunca no es una copia».
+
+   **Con una foto dentro, desde el ADR 0037.** Contar filas prueba que el volcado tiene webs; no
+   prueba que esas webs se puedan abrir. La prueba que sí lo hace es restaurar el volcado, poner
+   una foto del bucket copiado en su ruta, y **abrir esa web**: si la portada sale, la copia sirve;
+   si sale el marcador gris, la copia es media copia y nadie se habría enterado hasta necesitarla.
 6. **Y que falle en voz alta.** Si el volcado no sale, hay que enterarse. Silencio es exactamente
    el fallo que el proyecto ya cazó con la foto de muestra.
 
@@ -76,3 +97,9 @@ un tercero, 25 $/mes compran que esto no sea nuestro problema, y eso vale su pre
 **Pendiente de la aprobación de David.** Hasta entonces, el estado real es la salida C, y el
 runbook del día 6 lo dirá con esas palabras: que hoy no hay copia, y qué se pierde si el proyecto
 desaparece.
+
+> **Y desde el 9 de octubre de 2026 se pierde más que entonces.** Cuando esto se escribió, lo que
+> no había copia era los documentos; las fotos estaban en el navegador de cada dueño, que es un
+> sitio malo para la única copia pero es *una* copia. Ahora están en el mismo proyecto de Supabase
+> que los documentos, así que un proyecto que desaparece se lleva las dos cosas a la vez. **La
+> propuesta no cambia de forma por eso; lo que cambia es cuánto cuesta no aprobarla.**

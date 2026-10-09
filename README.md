@@ -97,8 +97,7 @@ entry animations (phase 3 of the concept dossier); and the template gallery (§9
 entry and the menu that would follow it, collections shared between documents — that is accounts —
 and a bound leaf outside a list.
 
-**Not yet built:** accounts and persistence (the browser tab is the only copy until it downloads),
-payment ([ADR 0021](docs/decisions/0021-charging-waits-for-a-sellable-product.md)), the photo bank's
+**Not yet built:** payment ([ADR 0021](docs/decisions/0021-charging-waits-for-a-sellable-product.md)), the photo bank's
 images for ten of the eleven sectors ([ADR 0011](docs/decisions/0011-sample-photos-per-sector.md)) —
 the machinery shipped in sprint 6, and `restaurante-bar` has held the first nine approved photographs
 since 8 October 2026 — and a tablet breakpoint, which
@@ -133,7 +132,7 @@ for nothing, and the login exists for **coming back**. «Sin registro» is still
 | The export | **built**, and it works with a deletion already pending | protocol Part 16, rule 1 |
 | Privacy notice | **built**, at the moment the account is created | ADR 0034 §13 |
 | The audit log | **built**, with two of Part 17's four operations possible | ADR 0034 §17 |
-| Photos on the server | **not built, and said out loud** in the dialog and in the list: the document travels, the photographs stay in the browser | ADR 0034 §5 — sprint 16 |
+| Photos on the server | **built** (sprint 16): the owner's photographs go to a private Supabase Storage bucket at `<owner>/<site>/<src>`, come back when the web is opened anywhere, are reconciled after every accepted save, and leave with the account when it is deleted. Bank photographs are never uploaded — ours, immutable, served by `/api/muestras/[id]` | [ADR 0037](docs/decisions/0037-the-photos-travel-with-the-account.md) |
 | Locking, ownership transfer, collaborators | **not built.** Three of the five keys the document refuses are still only destinations | advanced dossier §8; ADR 0034 §6 |
 | Charging | **not built, and not this sprint's to release** | ADR 0021, untouched |
 | Private areas with login | **not this login.** Phase 4, on the client's own site, with its own pricing model | ADR 0001, advanced dossier §10 |
@@ -333,7 +332,7 @@ as an empty placeholder.
 | `packages/generator` | The five answers → a valid `RetorikaDocument`. Not in the protocol's Part 3.4 tree — a deliberate addition, product logic that needs invariant tests, so it lives in a package rather than inside the app | **here** |
 | `packages/copybank` | The reviewed, per-sector text bank the generator draws from ([ADR 0009](docs/decisions/0009-generated-texts-from-a-reviewed-bank.md)) | **here** |
 | `packages/photobank` | The per-sector sample-photo bank ([ADR 0011](docs/decisions/0011-sample-photos-per-sector.md)). **The machinery is here, and one sector is in it**: `restaurante-bar` has held nine approved photographs since 8 October 2026 (PR #197), and the other ten sector files still hold zero, because a photograph needs a licence checked and a person's approval rather than code. A generated site of a sector without photographs opens on the catalog's grey marker. Since [ADR 0035](docs/decisions/0035-the-bank-has-a-floor-and-the-nine-are-regenerated.md) a photograph also has a floor — 1344 × 896, the full-width cover at a 1440 px window — and **the nine are to be regenerated at 1600 × 1072**: they stay published, exempt by id, and the exemption expires on 31 October 2026, after which the package's own tests fail while any record is still under the floor | **here** |
-| `packages/db` | The application's database: accounts, sites and the audit log, with the row-level security policies that decide who sees what. **SQL migrations are the source of truth**, because the policies are the half that matters and a generator that emitted tables but not policies would leave them hand-written anyway ([ADR 0034](docs/decisions/0034-the-account-arrives-at-the-end.md)) | **here** |
+| `packages/db` | The application's database: accounts, sites and the audit log, with the row-level security policies that decide who sees what — and since sprint 16 the `fotos` storage bucket with its own four policies ([ADR 0037](docs/decisions/0037-the-photos-travel-with-the-account.md)). **SQL migrations are the source of truth**, because the policies are the half that matters and a generator that emitted tables but not policies would leave them hand-written anyway ([ADR 0034](docs/decisions/0034-the-account-arrives-at-the-end.md)). The one thing here that is *not* SQL is removing a photograph: files are not rows, so the deletion sweep takes a remover built with the service key in `scripts/purge-accounts.ts` | **here** |
 | `packages/templates` | Template extraction and application | 3 |
 | `.claude/skills`, `.claude/commands` | Specialist checklists and project commands | as needed |
 

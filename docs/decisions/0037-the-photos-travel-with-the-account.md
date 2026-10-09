@@ -131,6 +131,31 @@ they replaced it, which is the interface lying about their own work. So the obje
 caching off and **the egress cost of that is measured and written down on day 7** rather than traded
 away now. Correctness first, in a product with no clients yet; the number is what would reopen it.
 
+> **Measured on 9 October 2026, sprint 16 day 7, which is the day this section promised.** Three
+> sources uploaded through the real editor in Chromium, and the bytes read back out of the object
+> URL the preview is showing:
+>
+> | Source | In | Out | Final size |
+> |---|---|---|---|
+> | 1024 × 1088 PNG | 2.0 MB | **193.5 KB** | 1024 × 1088 |
+> | 3024 × 4032 JPEG, a phone photo | 2.4 MB | **269.3 KB** | 1200 × 1600 |
+> | 3024 × 4032 PNG, the same picture | 13.1 MB | **271.0 KB** | 1200 × 1600 |
+>
+> **The input format barely matters and the re-encode decides everything**: 2.4 MB of JPEG and
+> 13.1 MB of PNG both come out at about 270 KB, because both are redrawn through a canvas at a
+> 1600 px long edge and quality 0.82. A photograph never approaches `MAX_PHOTO_BYTES`: the margin is
+> 7.5×.
+>
+> **So the free plan's numbers, against 270 KB a photograph:** 1 GB of storage is about **3,800
+> photographs**, and 5 GB of monthly egress is about **19,400 downloads** — which, at one photograph
+> per site, is 19,400 openings of an account site a month. A site at the 45-photograph ceiling
+> weighs about 12 MB and 5 GB would be about 430 openings of it.
+>
+> **Nothing here reopens the caching decision.** The product has no clients, 19,400 openings a month
+> is not a constraint it is anywhere near, and correctness was the thing being bought. What would
+> reopen it is a site with a gallery being opened daily by somebody — which is a measurement to take
+> when it exists rather than a cache to add now.
+
 ## Alternatives, and why not
 
 **`bytea` in `public.sites` or a photos table.** §1 above: the same 500 MB as the documents, hex on

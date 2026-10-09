@@ -379,3 +379,76 @@ was not is the one failure Part 15 wrote a clause about.
   `auth.users` row with no account row — somebody who can sign in and whose deletion request can
   never be recorded again, because the trigger in migration `0002` only fires on insert. Run the
   sweep, or clear `deletion_requested_at` and let the owner decide again.
+
+## 7. A saved web opens without one of its photographs
+
+> New with ADR 0037, sprint 16: the photographs travel with the account now, so there is a way for
+> a web to come back incomplete that did not exist before. The owner is told — the download is
+> blocked and the «Fotos» panel says what to do — so this section is for working out *which* of
+> four things happened, not for discovering that something did.
+
+### First question: does the object exist?
+
+Supabase → Storage → `fotos` → the folder named after the owner's id, then the site's id. The file
+names are the document's own: `foto-<section>-<element>.jpg`.
+
+- **The folder is there and the file is there.** The upload worked and the download did not. Go to
+  «the download is refused» below.
+- **The folder is there and the file is not.** The upload never happened, which is almost always
+  case A.
+- **There is no folder at all.** Either nothing was ever uploaded for this site — case A for every
+  photograph — or migration `0003` was never applied to this project, which is case C.
+
+### A. The web was saved before the photographs travelled
+
+**The commonest one, and not a fault.** Every web saved during sprint 15 has its document in the
+account and its photographs only in the browser they were chosen in. Nothing can fetch what was
+never uploaded.
+
+The editor says so: «Guardado en tu cuenta · N fotos sin subir» in the top bar, and the «Fotos»
+panel explains the remedy — upload the photograph again from there, and from then on it travels.
+**Nothing to repair in the database.** Opening that web in the browser that still has the bytes and
+editing anything also uploads them, because every accepted save reconciles.
+
+### B. The upload was refused at the time
+
+The indicator said «· N fotos sin subir» when it was saved. Usually the bucket's own caps: a file
+over 2 MiB, or a content type that is not `image/jpeg`. The editor re-encodes every upload to JPEG
+under those limits, so this means something else reached the bucket, or the bucket's row was edited
+by hand.
+
+Check the bucket's row: `select file_size_limit, allowed_mime_types from storage.buckets where id =
+'fotos'`. It should be `2097152` and `{image/jpeg}` — the same two numbers
+`apps/editor/test/photoCaps.test.ts` asserts against migration `0003`.
+
+### C. Migration `0003` was never applied here
+
+No bucket, no policies, and every upload is refused. `select id from storage.buckets where id =
+'fotos'` answers nothing. Apply it — §3's own method — and ask the owner to upload again.
+
+This is the case to suspect on a **new** project: development and production are two projects and
+the migrations are applied to each by hand.
+
+### D. The download is refused
+
+The object is there and the editor cannot read it. Two causes worth separating:
+
+- **The policies.** `fotos_select_own` compares the first path segment with `auth.uid()`, so an
+  object stored under the wrong prefix is invisible to its own owner. `select name from
+  storage.objects where bucket_id = 'fotos'` and look at whether the first segment is really the
+  owner's id.
+- **The bytes are not an image.** `downloadPhoto` sniffs before it makes an `<img>` and answers
+  nothing when the first bytes are not a JPEG, PNG or WebP, whatever the stored content type says.
+  That is deliberate and the photograph stays unreadable until it is replaced.
+
+### What not to touch
+
+- **Never `delete from storage.objects`.** It removes the bookkeeping and leaves the bytes in the
+  object store — files nobody can list and nothing will ever remove, because the sweep finds an
+  account's objects through exactly those rows. If a file has to go, remove it through the Storage
+  API, from the dashboard or with `scripts/purge-accounts.ts`'s own remover.
+- **Do not make the bucket public** to «see if that fixes it». The published ZIP never reads from
+  it (ADR 0001) and the only reader is the editor with the owner's session; public would make every
+  owner's photographs readable by anybody holding a URL.
+- **Do not re-upload somebody's photograph on their behalf** from the dashboard. The document names
+  the file and the owner is the only one who knows which picture belongs there.
