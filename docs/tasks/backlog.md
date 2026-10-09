@@ -516,12 +516,27 @@ open survives.
   needs shadowing analysis, and `typescript` 7's npm package no longer ships a compiler API to do it
   with. The habit that catches it is cheaper: when a local binding goes, grep for its bare name.
 
-- **Two of sprint 14's four appendix findings are still open, by David's own allocation.** The four
-  corner handles that are drawn, styled and carry no listener at all; and the six section verbs
-  reachable only by mouse, in a `<section>` with a `click` and no `tabindex`, no `role` and no
-  keyboard, with no sections panel in the rail. Both are sprint 17's days 2 to 4. The other two were
-  fixed in sprint 15: focus and Escape on the new screens, and the sample photograph that left a
-  site permanently undownloadable.
+- **One of sprint 14's four appendix findings is still open.** ~~The four corner handles that are
+  drawn, styled and carry no listener at all~~ — **withdrawn in sprint 17 day 2, with the refusal and
+  its four reasons in [`docs/design/REVIEW.md`](../design/REVIEW.md)**: a section has no width,
+  height or span in the model, the mockup draws them around the selected *element*, grid resizing
+  already exists with real buttons in `Colocación`, and wiring them would be the editor's first drag
+  interaction with its own ADR. What remains is the six section verbs reachable only by mouse, in a
+  `<section>` with a `click` and no `tabindex`, no `role` and no keyboard, with no sections panel in
+  the rail: sprint 17's days 3 to 5. The other two were fixed in sprint 15: focus and Escape on the
+  new screens, and the sample photograph that left a site permanently undownloadable.
+
+- **The preview's `overflow-x: clip` can show a tidier page than the one that gets published, and
+  the number came out of withdrawing the handles.** That rule was added in sprint 8 because the
+  corner handles bled 4px past a full-bleed section; with them gone the walk «no dibuja tiradores en
+  las esquinas, y el lienzo sigue sin desplazarse» was run once with the line deleted and **passed**,
+  so nothing else in the chrome bleeds. It was kept as a guard for the next piece of chrome drawn
+  past an edge — and that keeps a side effect nobody chose: a `clip` on the iframe's `html, body`
+  also clips the **owner's own** content, so a page that will scroll sideways once published can
+  look contained in the editor. `OverflowDialog` still reports it correctly, because `measureOverflow`
+  builds its own frame; what is unresolved is whether the preview should ever look calmer than the
+  page. Not sprint 17's: it touches what the preview promises, which is a design question and not a
+  rule.
 - ~~One catalog section still missing of the dossier's nine: «Quién soy / El equipo».~~ **Done**,
   29 September 2026: sprint 7 day 6 built `packages/catalog/src/team.ts`. The catalogue is 9 of 9.
   This was the one section with no evidence behind it — no session asked for it, it closed the
@@ -819,34 +834,43 @@ so these are not a checklist someone has to remember — they are a build failur
 - `licence`: name, URL, the date the terms were read, `commercialUse`, `clientsMayPublish`.
 - `review`: who approved it and when. **A person, never the tool that made it.**
 
-**How many.** ADR 0011 asks for **at least eight per sector**, so the three variants do not repeat
-themselves. Sprint 6 takes **three to five for `restaurante-bar`** as the first real test of the
-path — it is the sector of both usability sessions. A sector holds either none or at least eight;
-a half-filled one would make two of the three variant cards show the same photograph, and the
-bank's tests say so.
+**How many.** ADR 0011 asks for **at least eight per sector**. Its stated reason was «so the three
+variants do not repeat themselves», and that reason did not hold — the repetition came from three
+independent draws, not from the bank's size, and ADR 0036 is what fixed it. Sprint 6 takes **three
+to five for `restaurante-bar`** as the first real test of the path — it is the sector of both
+usability sessions. A sector holds either none or at least eight, and the bank's tests say so.
+
+**What the floor does buy, stated exactly, because it is easy to overclaim twice in a row:** a
+sector with fewer than three photographs cannot show three different cards whatever the draw does,
+because there is no third photograph to find. Eight is far above three, so the floor is a margin
+rather than the mechanism.
 
 ### What the first filled sector left open — 8 October 2026
 
 `restaurante-bar` was approved with nine photographs, the first sector with any. Two things were
 measured on the way and neither is fixed, both deliberately out of that pull request's one concern.
 
-**1. «At least eight» does not stop the three cards repeating, and that was its stated reason.**
-Measured with the nine approved: two of the three variant cards show the same photograph for
-**39.4% of business names** (787 of 2000). It is not a bad hash — about 31% is the floor a perfect
-one gives with nine — it is that the three cards are three independent hashes of three seeds
-rather than one draw without replacement. **A larger bank makes it rarer and never impossible**,
-so raising the minimum is not the fix. The fix is for the three to be picked together, which means
-`sampleImageFor` growing a way to say "and not these two" — a change to its contract, so it needs
-deciding rather than doing. Until then an owner sees the repeat on the one screen where the three
-cards sit side by side, which is the worst place for it.
+**1. ~~«At least eight» does not stop the three cards repeating, and that was its stated
+reason.~~ Fixed, sprint 17 day 2.** Measured with the nine approved: two of the three variant cards
+showed the same photograph for **39.4% of business names** (787 of 2000, re-measured on 10 October
+2026 before the change and reproducing the figure exactly). It was never a bad hash — about 31% is
+the floor a perfect one gives with nine — it was that the three cards were three independent hashes
+of three seeds rather than one draw without replacement. A larger bank makes it rarer and never
+impossible, so raising the minimum was never the fix.
 
-**Written up as [ADR 0036](../decisions/0036-the-three-cards-pick-their-photographs-together.md) on
-9 October 2026, status `proposed`, and waiting on David.** No code: the ADR argues for one draw
-without replacement, computes the floor three independent draws give (30.86% with nine, 14.5% with
-twenty, 5.9% with fifty — rarer, never impossible), and records why the cheaper fix is worse. An
-offset by variant index needs no contract change and would guarantee the three cards are three
-*adjacent* ids, and `restaurante-bar.01` and `.02` are two frames of one prompt: distinct records
-and an indistinguishable screen, which nothing would report.
+[ADR 0036](../decisions/0036-the-three-cards-pick-their-photographs-together.md) is the decision and
+`avoid` is the mechanism: `sampleImageFor` takes the ids already taken, walks forward from the hashed
+index to the first record nobody has, and wraps once; `generateVariants` became a fold that carries
+them. **Re-measured the same way: 0 of 2000.** A lone `generate(answers, variant)` is byte-identical
+to before, which is what kept every call site still.
+
+**ADR 0036 is still `proposed`.** The code is in and the signature is David's — recorded here rather
+than smoothed over, because «un ADR una decisión» cuts both ways and development does not sign.
+
+The test asserts the property and not the percentage — three or more photographs, three different
+cards, over two hundred business names — because a number in a test goes stale the moment the bank
+grows, and because the old defect was invisible on 60.6% of names: a single-name test would have
+passed before the fix six times out of ten.
 
 **2. Eight of the nine are 1024 × 1024 and `restaurante-bar.07` is 866 × 942, where ADR 0011 says
 «longest side 1600 px». Measured, not assumed:**

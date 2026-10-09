@@ -4,6 +4,7 @@ import {
   placeholderImageSrc,
   presetFor,
 } from "@retorika/catalog";
+import { hasSamplePhotos } from "@retorika/photobank";
 import {
   checkAgainstPreset,
   flattenElements,
@@ -19,6 +20,7 @@ import {
   footerSectionFor,
   generate,
   generateVariants,
+  SECTOR_IDS,
   VARIANTS,
 } from "../src/index.ts";
 
@@ -434,6 +436,67 @@ describe("the cover's photograph comes from the bank (ADR 0011)", () => {
     }
   });
 
+  it("gives the three cards three different photographs — one draw without replacement (ADR 0036)", () => {
+    /**
+     * **The property, not the percentage.** The repeat it replaces was measured — 787 of 2000
+     * business names, 39.4%, with the nine approved `restaurante-bar` photographs, and measured
+     * again on 10 October 2026 before the change went in — but a percentage in a test is a number
+     * that goes stale the moment the bank grows. What was promised is that the screen showing three
+     * cards shows three photographs, so that is what is asserted.
+     *
+     * Over two hundred business names rather than one, because the old defect was invisible on most
+     * of them: three independent hashes agreed on 60.6% of names, so a single-name test would have
+     * passed before the fix six times out of ten.
+     */
+    const filled = SECTOR_IDS.filter((sector) => hasSamplePhotos(sector));
+    expect(filled.length, "no sector has photographs — this test proves nothing").toBeGreaterThan(
+      0,
+    );
+    for (const sector of filled) {
+      for (let n = 0; n < 200; n += 1) {
+        const chosen = generateVariants(
+          answers({ businessName: `Negocio ${n}`, sector, services: ["Comidas"] }),
+        ).map((site) => coverImage(site.document).sample);
+        expect(new Set(chosen).size, `${sector} / Negocio ${n}: ${chosen.join(", ")}`).toBe(3);
+      }
+    }
+  });
+
+  it("gives all three the same placeholder when the sector has no photographs", () => {
+    /**
+     * The other half of how ADR 0036 words its guarantee — «never two the same when the sector has
+     * three or more», not «the three cards always differ». Ten of the eleven sectors are still
+     * empty, and for them three identical markers is the correct answer rather than a repeat worth
+     * avoiding: there is nothing to draw from.
+     */
+    const empty = SECTOR_IDS.filter((sector) => !hasSamplePhotos(sector));
+    expect(empty.length, "every sector has photographs — delete this case").toBeGreaterThan(0);
+    for (const sector of empty) {
+      const chosen = generateVariants(
+        answers({ businessName: "Negocio", sector, services: ["Comidas"] }),
+      ).map((site) => coverImage(site.document).sample);
+      expect(new Set(chosen), sector).toEqual(new Set([PLACEHOLDER_SAMPLE_ID]));
+    }
+  });
+
+  it("leaves a lone generate() exactly as it was, siblings being none of its business", () => {
+    /**
+     * ADR 0036's own clause, and the reason `avoid` is a parameter rather than state: the editor's
+     * «añadir sección» paths and most of this suite call `generate(answers, variant)` with no
+     * siblings at all, and that call has to answer today what it answered yesterday.
+     */
+    for (const variant of VARIANTS) {
+      const alone = coverImage(generate(MINIMAL, variant).document);
+      const explicitlyEmpty = coverImage(generate(MINIMAL, variant, []).document);
+      expect(explicitlyEmpty).toEqual(alone);
+    }
+    // And the first of the three is the lone answer, because nothing is taken yet when it is built.
+    const [first] = generateVariants(MINIMAL);
+    expect(first).toBeDefined();
+    if (!first) return;
+    expect(coverImage(first.document)).toEqual(coverImage(generate(MINIMAL, VARIANTS[0]).document));
+  });
+
   it("offers three different compositions, so the three cards never read as two", () => {
     /**
      * **This test used to assert the opposite**, and that is worth keeping rather than quietly
@@ -458,10 +521,11 @@ describe("the cover's photograph comes from the bank (ADR 0011)", () => {
      * is a design decision somebody may well revisit; the id is what makes the three cards three.
      *
      * Asserted on the seed's inputs and not on the outcome, because the outcome is not what this
-     * guards: for a sector whose bank is empty the three return the same marker, and for
-     * `restaurante-bar` two of them land on the same photograph for 39.4% of business names —
-     * three independent hashes, not one draw without replacement (`docs/tasks/backlog.md`, «What
-     * the first filled sector left open»).
+     * guards: for a sector whose bank is empty the three return the same marker. For a sector with
+     * one they are now three different photographs, and **that is no longer the seed's doing** —
+     * three independent hashes of three distinct seeds put the same photograph on two of the three
+     * cards for 39.4% of business names, 787 of 2000 measured. ADR 0036 made it one draw without
+     * replacement; the outcome is asserted in «one draw without replacement» below.
      */
     const seeds = VARIANTS.map((v) => `Taberna:restaurante-bar:${v.id}:sec-cover:el-image`);
     expect(new Set(seeds).size, "the three seeds are distinct").toBe(3);

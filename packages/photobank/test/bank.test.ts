@@ -205,6 +205,110 @@ describe("what a sector with no photographs gets", () => {
   });
 });
 
+describe("one draw without replacement — ADR 0036's `avoid`", () => {
+  /**
+   * The ids of a sector that actually has photographs, read from the bank file rather than named,
+   * so this survives `restaurante-bar` being joined by the other nine.
+   */
+  const filled = sectorsInBank().find((sector) => hasSamplePhotos(sector));
+  const idsOf = (sector: string): string[] =>
+    (
+      JSON.parse(readFileSync(join(BANK_DIR, `${sector}.json`), "utf8")) as {
+        images: { id: string }[];
+      }
+    ).images.map((image) => image.id);
+
+  it("changes nothing when nothing is avoided", () => {
+    expect(filled, "no sector has photographs — delete this describe").toBeDefined();
+    if (!filled) return;
+    // The first card's behaviour, and the reason `generate(answers, variant)` on its own is
+    // untouched by ADR 0036. An empty list and an absent option must both mean «the hashed one».
+    for (const seed of ["a", "taberna:v1", "Negocio 1783:restaurante-bar:v2:sec-cover:el-image"]) {
+      expect(sampleImageFor(filled, seed, { avoid: [] })).toEqual(sampleImageFor(filled, seed));
+      expect(sampleImageFor(filled, seed, {})).toEqual(sampleImageFor(filled, seed));
+    }
+  });
+
+  it("never returns an avoided photograph while one is left", () => {
+    expect(filled).toBeDefined();
+    if (!filled) return;
+    const ids = idsOf(filled);
+    expect(ids.length, "ADR 0011's floor is eight").toBeGreaterThanOrEqual(3);
+    // Every seed, against every single-id exclusion: the walk has to step past it whatever the
+    // hash landed on, in a bank of any size.
+    for (let seed = 0; seed < 200; seed += 1) {
+      const hashed = sampleImageFor(filled, `s${seed}`).sample;
+      expect(hashed).toBeDefined();
+      if (!hashed) continue;
+      const next = sampleImageFor(filled, `s${seed}`, { avoid: [hashed] }).sample;
+      expect(next, `avoiding ${hashed} returned it again`).not.toBe(hashed);
+      expect(ids, "the replacement is still a real record of this sector").toContain(next);
+    }
+  });
+
+  it("steps past a run of taken ids, not just one", () => {
+    expect(filled).toBeDefined();
+    if (!filled) return;
+    const ids = idsOf(filled);
+    // Two taken, as the third card actually sees it.
+    for (let seed = 0; seed < 200; seed += 1) {
+      const first = sampleImageFor(filled, `t${seed}`).sample as string;
+      const second = sampleImageFor(filled, `t${seed}`, { avoid: [first] }).sample as string;
+      const third = sampleImageFor(filled, `t${seed}`, { avoid: [first, second] }).sample;
+      expect([first, second, third], `seed t${seed}`).toHaveLength(
+        new Set([first, second, third]).size,
+      );
+      expect(ids).toContain(third);
+    }
+  });
+
+  it("wraps around the end of the list rather than running off it", () => {
+    expect(filled).toBeDefined();
+    if (!filled) return;
+    const ids = idsOf(filled);
+    const last = ids[ids.length - 1] as string;
+    // A seed whose hash lands on the final record, found rather than assumed — the wrap is the
+    // branch a walk forward would otherwise never exercise.
+    let landingOnLast: string | undefined;
+    for (let seed = 0; seed < 5000 && !landingOnLast; seed += 1) {
+      if (sampleImageFor(filled, `w${seed}`).sample === last) landingOnLast = `w${seed}`;
+    }
+    expect(landingOnLast, "no seed hashes to the last record: the wrap is untested").toBeDefined();
+    if (!landingOnLast) return;
+    const wrapped = sampleImageFor(filled, landingOnLast, { avoid: [last] }).sample;
+    expect(wrapped).toBe(ids[0]);
+  });
+
+  it("returns the hashed photograph when every id is taken, rather than throwing", () => {
+    expect(filled).toBeDefined();
+    if (!filled) return;
+    const ids = idsOf(filled);
+    // A photograph repeated beats an exception on the screen where three cards are being drawn.
+    // Unreachable through `generateVariants` with ADR 0011's floor of eight, and built anyway
+    // because the function is public and the alternative failure is a blank screen.
+    const hashed = sampleImageFor(filled, "all-taken");
+    expect(sampleImageFor(filled, "all-taken", { avoid: ids })).toEqual(hashed);
+  });
+
+  it("gives an empty sector its placeholder whatever is avoided", () => {
+    const empty = emptySectors[0];
+    expect(empty, "every sector has photographs — delete this case").toBeDefined();
+    if (!empty) return;
+    expect(sampleImageFor(empty, "seed", { avoid: [PLACEHOLDER_SAMPLE_ID] })).toEqual(
+      sampleImageFor(empty, "seed"),
+    );
+  });
+
+  it("is still the same twice, which is the determinism INV_5 depends on", () => {
+    expect(filled).toBeDefined();
+    if (!filled) return;
+    const ids = idsOf(filled);
+    const once = sampleImageFor(filled, "x", { avoid: [ids[0] as string, ids[1] as string] });
+    const twice = sampleImageFor(filled, "x", { avoid: [ids[0] as string, ids[1] as string] });
+    expect(once).toEqual(twice);
+  });
+});
+
 describe("the bank ships with exactly the eleven sectors the questionnaire offers", () => {
   it("lists all ten launch sectors plus «otro»", () => {
     expect([...sectorsInBank()].sort()).toEqual(

@@ -132,11 +132,21 @@ export function sampleSrcFor(record: ImageRecord): string {
  * An unknown sector falls through to `"otro"`'s file, the same cascade `packages/copybank` uses.
  *
  * The seed is the caller's to compose, and it is meant to include everything that already has to
- * be a pure input: which variant (`"v1"`/`"v2"`/`"v3"`, so the three do not repeat each other),
- * which section, which element — so a gallery's eight photographs are eight different ones rather
- * than the same one eight times.
+ * be a pure input: which variant (`"v1"`/`"v2"`/`"v3"`), which section, which element.
+ *
+ * **A distinct seed is not a distinct photograph, and that sentence used to claim it was.** This
+ * comment said the variant went in the seed «so the three do not repeat each other» and that a
+ * gallery's eight photographs would be «eight different ones rather than the same one eight
+ * times». Three independent hashes of three seeds collide at the rate independence gives:
+ * **measured 787 of 2000 business names, 39.4%, with the nine approved `restaurante-bar`
+ * photographs** — and about 31% is the floor a perfect hash would give with nine, so the draw was
+ * never the problem. ADR 0036 is the decision; `avoid` is how it is kept.
  */
-export function sampleImageFor(sector: string, seed: string): SampleImage {
+export function sampleImageFor(
+  sector: string,
+  seed: string,
+  options?: { readonly avoid?: readonly string[] },
+): SampleImage {
   const images = BANK.get(sector) ?? BANK.get(GENERIC_SECTOR) ?? [];
   if (images.length === 0) {
     return {
@@ -146,9 +156,41 @@ export function sampleImageFor(sector: string, seed: string): SampleImage {
       sample: PLACEHOLDER_SAMPLE_ID,
     };
   }
-  const record = images[pickIndex(seed, images.length)];
+  const record = chooseAvoiding(images, pickIndex(seed, images.length), options?.avoid);
   if (!record) throw new Error(`sampleImageFor: index out of range for sector "${sector}"`);
   return { kind: "image", src: sampleSrcFor(record), alt: record.alt, sample: record.id };
+}
+
+/**
+ * The hashed record, or the first one after it that nobody has taken — **one draw without
+ * replacement, done by walking** (ADR 0036).
+ *
+ * Forward from the hashed index and wrapping once, which keeps three properties the generator and
+ * `INV_5` depend on. It is a pure function of the sorted list, the index and the ids already taken,
+ * so the same answers still give the same site. It leaves the first caller's choice untouched,
+ * because an empty `avoid` returns the hashed record and nothing else — so `generate(answers,
+ * variant)` on its own behaves exactly as it did before this existed. And it never answers
+ * «nothing»: with every id taken it returns the hashed record, because a photograph repeated beats
+ * an exception thrown on the screen where three cards are being drawn.
+ *
+ * **Forward, not by an offset per variant**, which was the cheaper idea and is rejected in ADR 0036
+ * on the bank's own contents: ids are assigned in approval order and approval order follows the
+ * generation batch, so `restaurante-bar.01` and `.02` are two frames of one prompt. A fixed offset
+ * would guarantee three adjacent ids — distinct records and an indistinguishable screen, which is
+ * worse than the honest repeat because nothing would report it. Walking only lands on a neighbour
+ * when the hash already did.
+ */
+function chooseAvoiding(
+  images: readonly ImageRecord[],
+  at: number,
+  avoid: readonly string[] | undefined,
+): ImageRecord | undefined {
+  if (!avoid || avoid.length === 0) return images[at];
+  for (let step = 0; step < images.length; step += 1) {
+    const candidate = images[(at + step) % images.length];
+    if (candidate && !avoid.includes(candidate.id)) return candidate;
+  }
+  return images[at];
 }
 
 /**

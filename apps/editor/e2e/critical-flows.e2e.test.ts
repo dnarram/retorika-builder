@@ -2046,23 +2046,32 @@ describe("sprint 8 día 7 — el recorrido completo del sprint", () => {
   }, 120_000);
 });
 
-describe("sprint 8 día 7 — colchón: los tiradores no desplazan el lienzo", () => {
+describe("el lienzo no dibuja tiradores en las esquinas, y sigue sin desplazarse", () => {
   /**
-   * The finding day 3 deferred to this day's buffer and day 5 mentioned again: selecting *any*
-   * section made the preview canvas scroll 4px sideways.
+   * **Two things at once, and that is the point of keeping them in one walk.**
    *
-   * Measured to the actual cause rather than guessed: `.rb-handle-tr` and `.rb-handle-br` sit at
-   * `right: -4px` on a full-bleed section — a deliberate touch, a resize handle straddling its
-   * outline rather than hugging it — and the section has no margin to absorb that 4px of bleed.
-   * Predates this sprint, and is editor chrome that never reaches a published page: `.rb-handle`
-   * appears nowhere in `packages/renderer`.
+   * The four corner handles are withdrawn (sprint 17 day 2): `select()` drew a `span` at each
+   * corner of the selected section, styled as a resize grip, carrying `pointer-events: none` and no
+   * listener of any kind. The refusal and its argument are in `docs/design/REVIEW.md`; the short
+   * version is that a section has no width, height or span in the model — `sectionLayoutSchema` is
+   * `{grid, placements, breakpoints}` and rule 4 is why — so there was nothing for them to resize,
+   * and what the mockup draws them around is the selected *element*.
+   *
+   * The sideways scroll is the older finding, deferred from sprint 8 day 3 to its day 7 buffer:
+   * selecting any section made the preview canvas scroll 4px. The handles were the measured cause,
+   * sitting at `right: -4px` on a full-bleed section with no margin to absorb the bleed. So the two
+   * halves belong together: one asserts the handles are gone, the other that the guarantee they
+   * threatened still holds — and it is the guarantee, not the handles, that `overflow-x: clip`
+   * exists for. That rule was then measured rather than reasoned about: this walk was run once with
+   * it deleted and **passed**, so nothing else in the chrome bleeds today. It stays as a guard for
+   * the next piece of chrome drawn a pixel past an edge, and this walk is what would notice.
    *
    * The right measurement is not `scrollWidth > clientWidth` — `scrollWidth` reports an element's
    * content extent regardless of whether `overflow` lets anything scroll to see it, so that
-   * comparison stays true after the fix even though nothing can actually be scrolled. The real
-   * question is whether the page **can be scrolled**, which is what this test asks directly.
+   * comparison stays true even when nothing can actually be scrolled. The real question is whether
+   * the page **can be scrolled**, which is what this test asks directly.
    */
-  it("cannot be scrolled sideways after selecting a section, though it could be", async () => {
+  it("draws no corner handles, and cannot be scrolled sideways after selecting a section", async () => {
     const page = await (await browser.newContext()).newPage();
     try {
       await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
@@ -2097,15 +2106,24 @@ describe("sprint 8 día 7 — colchón: los tiradores no desplazan el lienzo", (
       });
       expect(scrollable).toBe(false);
 
-      // The handle keeps its own design — still 4px past the section's right edge, not moved
-      // inward to make this pass. `overflow-x: clip` hides the bleed; it does not relocate it.
-      const handleBox = await frame.locator(".rb-handle-tr").boundingBox();
-      const sectionBox = await frame.locator('[data-section="sec-cover"]').boundingBox();
-      expect(handleBox).not.toBeNull();
-      expect(sectionBox).not.toBeNull();
-      if (handleBox && sectionBox) {
-        expect(handleBox.x + handleBox.width).toBeGreaterThan(sectionBox.x + sectionBox.width);
-      }
+      // And no handle, at any corner, on a section that is selected right now — which is the
+      // state that used to draw four of them. Asserted on the section rather than the document so
+      // a selected section with handles cannot hide behind an unselected one without.
+      await expect(frame.locator('[data-section="sec-cover"].rb-selected')).toHaveCount(1);
+      await expect(frame.locator(".rb-handle")).toHaveCount(0);
+
+      // The outline stays: it is what says which section is selected, and withdrawing the grips
+      // was never meant to withdraw the selection.
+      const outlined = await frame
+        .locator('[data-section="sec-cover"]')
+        .evaluate((el) => getComputedStyle(el).outlineWidth);
+      expect(outlined).toBe("2px");
+
+      // The action cluster stays too, and it is the half that does something. Four inert grips
+      // leaving and six working buttons staying is the whole shape of this change.
+      await expect(
+        frame.locator('[data-section="sec-cover"] .rb-actions .rb-action'),
+      ).not.toHaveCount(0);
     } finally {
       await page.context().close();
     }

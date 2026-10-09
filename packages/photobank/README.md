@@ -94,16 +94,20 @@ independently.
 between, and `bank.test.ts` enforces it.
 
 **What eight does not buy, measured on 8 October 2026 with nine approved:** it does not stop the
-three variant cards repeating a photograph. That was this rule's stated reason, and it is wrong.
-The three cards are three independent hashes of three seeds, not one draw without replacement, so
-two of them land on the same photograph for **39.4% of business names** (787 of 2000 measured;
+three variant cards repeating a photograph. That was this rule's stated reason, and it was wrong.
+The three cards were three independent hashes of three seeds, not one draw without replacement, so
+two of them landed on the same photograph for **39.4% of business names** (787 of 2000 measured;
 about 31% is the floor a perfect hash would give with nine). A bigger bank makes repetition rarer
-and never impossible, so raising the minimum cannot fix it either — only picking the three
-together can, which is a change to `sampleImageFor`'s contract and is in `docs/tasks/backlog.md`
-rather than here.
+and never impossible, so raising the minimum could not fix it either.
 
-The rule is still worth keeping: it is what stops a sector shipping with two photographs and
-showing one of them on every card. It just does not promise what it used to say it promised.
+**Picking the three together does, and that is `avoid`** — ADR 0036, built in sprint 17 day 2.
+`sampleImageFor(sector, seed, { avoid })` hashes the seed exactly as before and then walks forward
+to the first record nobody has taken, wrapping once; `generateVariants` owns the exclusion and
+passes each card the ids the earlier ones chose. Re-measured the same way: **0 of 2000**. A lone
+`sampleImageFor(sector, seed)` is unchanged, which is why no call site had to move.
+
+The minimum is still worth keeping: it is what stops a sector shipping with two photographs and
+showing one of them on every card. It just never promised what it used to say it promised.
 
 ## Testing without a real bank
 
