@@ -120,6 +120,8 @@
   "editor.photos.title": "Fotos de tu web",
   "editor.photos.summary": "{missing} de {total} fotos todavía no son tuyas.",
   "editor.photos.allYours": "Todas las fotos de tu web son tuyas.",
+  "editor.photos.missingFromAccount.one": "1 foto de esta web no est\u00e1 en tu cuenta. Si se guard\u00f3 cuando las fotos todav\u00eda se quedaban en el navegador, vuelve a subirla desde aqu\u00ed y ya viajar\u00e1 con la web.",
+  "editor.photos.missingFromAccount.many": "{count} fotos de esta web no est\u00e1n en tu cuenta. Si se guard\u00f3 cuando las fotos todav\u00eda se quedaban en el navegador, vuelve a subirlas desde aqu\u00ed y ya viajar\u00e1n con la web.",
   "editor.photos.none": "Tu web no tiene ninguna foto. Añade una sección con foto —«Portada» o «Fotos de trabajos»— desde el botón «Añadir sección aquí».",
   "editor.photos.change": "Cambiar",
   "editor.photos.whereInList": "Foto {n} de {section}",
