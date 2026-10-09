@@ -43,6 +43,14 @@ our own use. A licence that stops at us fails the criterion.
 
 - **At least eight photos per sector,** so the three variants and "volver a generar" do not
   repeat themselves.
+
+  > **This reason did not hold, measured on 8 October 2026 with nine approved: two of the three
+  > variant cards show the same photograph for 39.4% of business names.** Three independent draws
+  > from nine repeat 30.86% of the time, so the minimum was never what stopped it, and a bigger bank
+  > makes it rarer and never impossible. «Volver a generar» no longer exists either. The clause
+  > stands for what it does buy — a sector cannot ship with two photographs and show one of them on
+  > every card — and the promise it could not keep is
+  > [ADR 0036](0036-the-three-cards-pick-their-photographs-together.md), **proposed and waiting**.
 - **"Otro" gets a neutral set:** a workspace, a counter, a shop front with no signage.
 
 ### One image's record
@@ -84,6 +92,14 @@ our own use. A licence that stops at us fails the criterion.
   from paid ones.
 
 ### Compression
+
+> **Amended on 9 October 2026 by [ADR 0035](0035-the-bank-has-a-floor-and-the-nine-are-regenerated.md),
+> David's decision.** «Longest side 1600 px» sits here among three things done to make a file
+> smaller, so it reads as a ceiling and nothing ever checked the other end — a 400 px photograph
+> would have passed review exactly as the first nine did. **1600 stays the ceiling and the floor is
+> 1344 × 896**, both numbers, because `object-fit: cover` scales by `max(W/w, H/h)` and the cover's
+> box is always landscape. The nine photographs of `restaurante-bar` are regenerated at
+> 1600 × 1072; they stay published, exempt by id, and **the exemption expires on 31 October 2026**.
 
 - **WebP, longest side 1600 px, quality around 75,** with EXIF and XMP removed. The origin is in
   the record, not in the file.
