@@ -150,14 +150,42 @@ const DB_NAME = "retorika.photos";
 const DB_VERSION = 1;
 const STORE = "photos";
 
-/** Keyed by the variant as well as the src: the three cards are three documents, and all three
- * carry a section called `sec-cover`. Without the variant they would overwrite each other. */
-function keyFor(variant: number, src: string): string {
-  return `${variant}:${src}`;
+/**
+ * Which set of photographs a stored one belongs to.
+ *
+ * **It was the variant number alone until 9 October 2026, and that was a collision waiting for a
+ * second source of documents.** The three cards are three documents and all three carry a section
+ * called `sec-cover`, so the variant was enough while every document came from this browser's own
+ * session. Since ADR 0034 a document can also come from the account, and `photoSrcFor` builds its
+ * name from the section and the element — which means the cover of *every* site is
+ * `foto-sec-cover-el-image.jpg`. One key, two sites, and whichever was written last is what both
+ * of them showed.
+ *
+ * So a site opened from the account is its own scope, keyed by the site's id. Nothing is dropped
+ * to achieve that: the alternative considered was not storing an account site's photographs here
+ * at all, which trades a collision for a photograph that disappears on reload, and a silent loss
+ * of somebody's work is worse than the thing it fixes.
+ */
+export type PhotoScope =
+  /** One of the three cards of this browser's session. */
+  | { kind: "variant"; variant: number }
+  /** One site opened from the account, whichever card it is shown in. */
+  | { kind: "site"; siteId: string };
+
+/** The scope as it is written into the store. `v0` and `site:<uuid>` cannot collide: a uuid is
+ * never a digit, and the prefix is there so a reader of the raw store can tell which is which. */
+export function scopeKey(scope: PhotoScope): string {
+  return scope.kind === "variant" ? `v${scope.variant}` : `site:${scope.siteId}`;
+}
+
+function keyFor(scope: PhotoScope, src: string): string {
+  return `${scopeKey(scope)}:${src}`;
 }
 
 export interface StoredPhoto {
-  variant: number;
+  /** `scopeKey`'s output, not the scope itself: what is in the store is a string, and reading it
+   * back as one keeps this record honest about what it is. */
+  scope: string;
   src: string;
   bytes: Uint8Array;
 }
@@ -186,11 +214,16 @@ function finish(transaction: IDBTransaction): Promise<void> {
  * site data switched off. The caller turns that into `No guardado`, the same as a full
  * `localStorage` already does. A photo that was not written must never show a tick.
  */
-export async function savePhoto(variant: number, src: string, bytes: Uint8Array): Promise<boolean> {
+export async function savePhoto(
+  scope: PhotoScope,
+  src: string,
+  bytes: Uint8Array,
+): Promise<boolean> {
   try {
     const db = await openDatabase();
     const transaction = db.transaction(STORE, "readwrite");
-    transaction.objectStore(STORE).put({ variant, src, bytes }, keyFor(variant, src));
+    const stored: StoredPhoto = { scope: scopeKey(scope), src, bytes };
+    transaction.objectStore(STORE).put(stored, keyFor(scope, src));
     await finish(transaction);
     db.close();
     return true;
@@ -199,8 +232,17 @@ export async function savePhoto(variant: number, src: string, bytes: Uint8Array)
   }
 }
 
-/** Everything stored, for putting a reloaded session back together. An unreadable store yields
- * an empty list: the documents still load, and their covers show the placeholder again. */
+/**
+ * Everything stored, for putting a reloaded session back together. An unreadable store yields an
+ * empty list: the documents still load, and their covers show the placeholder again.
+ *
+ * **Records written before scopes existed are read, not discarded.** Until 9 October 2026 a record
+ * was `{ variant, src, bytes }`; anybody who had used the editor has some, and dropping them would
+ * mean a deploy quietly losing the photograph they uploaded yesterday. A record with a numeric
+ * `variant` and no `scope` is exactly a variant-scoped one, so it is read as one. Nothing is
+ * rewritten in place: the next save writes the new shape under the new key, and the old record is
+ * simply never the one that matters again.
+ */
 export async function loadPhotos(): Promise<StoredPhoto[]> {
   try {
     const db = await openDatabase();
@@ -208,7 +250,16 @@ export async function loadPhotos(): Promise<StoredPhoto[]> {
     const request = transaction.objectStore(STORE).getAll();
     await finish(transaction);
     db.close();
-    return (request.result as StoredPhoto[]) ?? [];
+    const rows = (request.result as (Partial<StoredPhoto> & { variant?: number })[]) ?? [];
+    return rows.flatMap((row) => {
+      if (!row.src || !row.bytes) return [];
+      const scope =
+        row.scope ??
+        (typeof row.variant === "number"
+          ? scopeKey({ kind: "variant", variant: row.variant })
+          : undefined);
+      return scope === undefined ? [] : [{ scope, src: row.src, bytes: row.bytes }];
+    });
   } catch {
     return [];
   }
