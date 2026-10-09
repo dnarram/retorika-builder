@@ -173,6 +173,12 @@ importers:
       '@retorika/db':
         specifier: workspace:*
         version: link:packages/db
+      '@retorika/generator':
+        specifier: workspace:*
+        version: link:packages/generator
+      '@retorika/photobank':
+        specifier: workspace:*
+        version: link:packages/photobank
       '@retorika/publisher':
         specifier: workspace:*
         version: link:packages/publisher

@@ -746,6 +746,14 @@ so raising the minimum is not the fix. The fix is for the three to be picked tog
 deciding rather than doing. Until then an owner sees the repeat on the one screen where the three
 cards sit side by side, which is the worst place for it.
 
+**Written up as [ADR 0036](../decisions/0036-the-three-cards-pick-their-photographs-together.md) on
+9 October 2026, status `proposed`, and waiting on David.** No code: the ADR argues for one draw
+without replacement, computes the floor three independent draws give (30.86% with nine, 14.5% with
+twenty, 5.9% with fifty — rarer, never impossible), and records why the cheaper fix is worse. An
+offset by variant index needs no contract change and would guarantee the three cards are three
+*adjacent* ids, and `restaurante-bar.01` and `.02` are two frames of one prompt: distinct records
+and an indistinguishable screen, which nothing would report.
+
 **2. Eight of the nine are 1024 × 1024 and `restaurante-bar.07` is 866 × 942, where ADR 0011 says
 «longest side 1600 px». Measured, not assumed:**
 
@@ -774,6 +782,23 @@ So it is not a general shortfall, it is the one variant the editor itself calls 
 amendment saying 1600 is a ceiling and naming the floor that actually matters, or the sector is
 regenerated at 1600 and this stops being a question. Draw Things takes the size as a parameter, so
 regenerating is cheap — but the nine approved ones would all have to be re-reviewed.
+
+**Decided on 9 October 2026 by David, and it is both halves:
+[ADR 0035](../decisions/0035-the-bank-has-a-floor-and-the-nine-are-regenerated.md).** 1600 stays the
+ceiling, the floor is **1344 × 896** — two numbers, because `object-fit: cover` scales by
+`max(W/w, H/h)` and the cover's box is always landscape, so a «longest side» floor would pass a
+2000 × 800 photograph that is still stretched vertically — and **the nine are regenerated at
+1600 × 1072**, which is content production and not part of sprint 16's seven days. The schema
+enforces the floor; the nine stay published, exempt by id, and **the exemption expires on
+31 October 2026**: from 1 November `bank.test.ts` fails while any record is still under the floor.
+
+One thing that measurement got wrong and the ADR corrects: there is no width at which a photograph
+is safe. **The published page has no maximum width** — `body` has `margin: 0` and `.rb-section`
+is twelve columns with `padding: var(--space-xl)` — so the full-width cover spans the viewport less
+96px without bound: 1344 at a 1440 window, 1824 at 1920, 2464 at 2560. A floor is a choice of
+reference width, not a bound, and 1440 is the reference every measurement of 8-9 October used.
+**Whether the page should have a maximum width at all** is a new open question, about every section
+rather than about photographs, and it has no home but this row.
 
 **3. The owner cannot choose how their own photograph is cropped — 9 October 2026.**
 
@@ -811,3 +836,26 @@ in sprint 11 from a worst case that was fonts and nothing else. What is needed i
 that produced the 80: a measurement, a number chosen from it, and a fixture that actually exercises
 a bank photograph so the number means something. **Not a number raised until the test goes
 green.**
+
+**Closed on 9 October 2026, and no number was raised.** `pnpm size` now weighs **a real generated
+site of every sector that has photographs**, all three compositions, and reports four numbers:
+page, ours, the photographs, the whole download. Measured the day it landed, for «Taberna del
+Puerto»:
+
+| Composition | Page | Ours | Photograph | Download |
+|---|---|---|---|---|
+| v1 «Clásica» | 2.6 KB | 48.5 KB | 30.6 KB | 79.2 KB |
+| v2 «Con foto grande» | 2.6 KB | 48.6 KB | 79.3 KB | 127.9 KB |
+| v3 «Compacta» | 2.6 KB | 48.5 KB | 65.5 KB | 114.0 KB |
+
+The 80 KB keeps exactly the meaning sprint 11 measured — fonts and the page — and is applied to
+**our** bytes with the photographs subtracted. **What bounds a photograph is the bank's own 200 KB
+cap**, enforced in `packages/photobank` where it belongs, so nothing in this script fails on a
+heavy photograph and the script says so rather than implying a protection it does not give.
+
+Generator output rather than the fixture the row asked for, and the reason is worth keeping: a
+fixture in `fixtures/documents/` would have forced **four** asset resolvers — this script and the
+publisher's three bundle suites, which each read every corpus image as `join(FIXTURES_DIR, src)` —
+to learn how to read the bank, and added an eighteenth golden, all for a document that imitates
+what the generator hands over for free and can drift from it. The number printed is now the one an
+owner of that sector downloads.
