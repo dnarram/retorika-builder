@@ -298,7 +298,14 @@ open survives.
   it. Third occurrence, so the wait became a function — `waitForBankPhoto`, with the measurement in
   one place and three call sites — and it carries the warning that it only applies to a sector whose
   bank has photographs, because for an empty one there is no `blob:` src and the wait would hang.
-  **The remaining 30 still inline their own steps**, and the sprint 16 plan has a day for them.
+  **The remaining ones were done on 9 October 2026, sprint 16 day 6 — and there were 19, not 30.**
+  Counted properly this time: 38 places in the suite wait for a cover, of which 22 come after
+  «Restaurante y bar» was chosen, three of those already waited further down their own body and one
+  is inside a helper. The first count came from searching each `it()` body for the string
+  «Restaurante y bar», which marked fifteen — **including one that picks «Peluquería y barbería»**,
+  whose bank is empty, so the wait could never be satisfied and the walk timed out after 30
+  seconds. The string had come from the *next* test, because the body delimiter ran past its end.
+  A count by what a walk mentions is not a count by what a walk does.
 
   **And measuring that third occurrence turned up something bigger, which is not a test problem.**
   The two walks of «sprint 13 día 7» — the block that exists to click and type *inside* the window
@@ -316,12 +323,27 @@ open survives.
   the full suite, and the difference between the two is exactly the thing the mechanism above turns
   on: alone, `next dev` compiles `/api/muestras` cold and the photograph always arrives late; in the
   suite the route is warm. A photograph arriving late is a real owner on a cold instance, and what
-  the walks assert is that a click and a keystroke in that moment are not lost. **The look-ahead of
-  sprint 13 closes that window with one document in flight; since the bank filled there can be two,
-  and one run in three says it does not close it then.** No mechanism is proven — `wireOnce` marks
-  and wires the new document synchronously, and the look-ahead restarts on `html` changing — so this
-  row offers none, and the next step is measurement inside the editor rather than a change to a
-  test. Whose call: nobody's yet, and it is the first candidate for the sprint's spare day.
+  the walks assert is that a click and a keystroke in that moment are not lost.
+
+  **The mechanism this row proposed is now falsified, measured on 9 October 2026 (sprint 16 day
+  6).** It said: «the look-ahead of sprint 13 closes that window with one document in flight; since
+  the bank filled there can be two, and one run in three says it does not close it then.» A probe
+  reproduced the walk with `/api/muestras` held back 0, 300 and 800 ms and the fonts held 1.5 s and
+  404ed, then read the clicked document's own state:
+
+  | Photograph held | Before the click | After the click |
+  |---|---|---|
+  | +0 ms | `interactive`, `rb-wired=1`, 6 gaps | selected 1, 7 actions |
+  | +300 ms | `interactive`, `rb-wired=1`, 6 gaps | selected 1, 7 actions |
+  | +800 ms | `interactive`, `rb-wired=1`, 6 gaps | selected 1, 7 actions |
+
+  **The document that gets clicked is already wired, at every delay.** So a late photograph is not
+  what reopens the window, and the proposed mechanism is wrong rather than unproven. What is left is
+  a red that appears under load in a full suite and not in isolation — **four full runs on day 6
+  went green, red, green, red** — and nothing yet separates «a slower machine widens some other
+  window» from «a different walk's state leaks». Whose call: nobody's. The next step is instrumenting
+  the walk *inside a full run* rather than on its own, which is the one condition no measurement so
+  far has reproduced.
 - **The rail is seven items, and the design-tools switch now sits in the bottom-left corner at 720px
   tall (3 October 2026, sprint 14 day 5).** The switch is placed directly under the rail's items
   rather than at the foot of the rail — deliberately, because sprint 8's walk found that `mt-auto` put

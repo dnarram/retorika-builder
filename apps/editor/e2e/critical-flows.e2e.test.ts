@@ -1097,6 +1097,7 @@ describe("sprint 7 día 3 — deshacer una conversión desde «Páginas»", () =
 
       const frame = walkPage.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
+      await waitForBankPhoto(frame);
       const tabs = walkPage.locator('[data-testid="page-tabs"] button');
       await expect(tabs).toHaveCount(1);
 
@@ -1341,6 +1342,7 @@ describe("sprint 7 día 7 — dos hallazgos de esta semana, cerrados", () => {
 
       const frame = walkPage.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
+      await waitForBankPhoto(frame);
       for (const id of ["sec-services", "sec-location"]) {
         await frame.locator(`[data-section="${id}"]`).click();
         await frame
@@ -2904,6 +2906,7 @@ describe("sprint 10 día 7 — el recorrido completo del sprint", () => {
 
       const frame = studio.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
+      await waitForBankPhoto(frame);
       const subheadline = frame.locator('[data-id="el-subheadline"]');
       await expect(subheadline).toHaveText("Comer, beber y quedarse un rato");
 
@@ -3269,6 +3272,7 @@ describe("sprint 12 día 3 — el input anclado y el atajo de deshacer", () => {
     await studio.getByRole("button", { name: "Crear mi web" }).click();
     await studio.getByText("Ver a tamaño real →").first().click();
     await studio.frameLocator(PREVIEW).first().locator('[data-section="sec-cover"]').waitFor();
+    await waitForBankPhoto(studio.frameLocator(PREVIEW).first());
     return studio;
   }
 
@@ -3627,6 +3631,7 @@ describe("sprint 13 día 2 — la barra se deja usar con el ratón", () => {
     await studio.getByText("Ver a tamaño real →").first().click();
     const frame = studio.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').waitFor();
+    await waitForBankPhoto(frame);
     await studio.getByRole("switch", { name: "Herramientas de diseño" }).click();
     await studio.getByRole("button", { name: "Sí, enciéndelas" }).click();
     await frame.locator('[data-id="el-headline"]').click();
@@ -3787,6 +3792,7 @@ describe("sprint 13 día 3 — lo que solo informaba", () => {
     await studio.getByText("Ver a tamaño real →").first().click();
     const frame = studio.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').waitFor();
+    await waitForBankPhoto(frame);
     return { studio, frame };
   }
 
@@ -3894,6 +3900,7 @@ describe("sprint 13 día 5 — el «Aa» de la barra", () => {
     await studio.getByText("Ver a tamaño real →").first().click();
     const frame = studio.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').waitFor();
+    await waitForBankPhoto(frame);
     if (designTools) {
       await studio.getByRole("switch", { name: "Herramientas de diseño" }).click();
       await studio.getByRole("button", { name: "Sí, enciéndelas" }).click();
@@ -4075,6 +4082,7 @@ describe("sprint 13 día 6 — las pantallas que faltaban, y los dos fallos sile
       await page.getByText("Ver a tamaño real →").first().click();
       const frame = page.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
+      await waitForBankPhoto(frame);
 
       // A section the owner has never touched, which is the six-second half of ADR 0014.
       await frame.locator('[data-section="sec-services"]').click();
@@ -4128,6 +4136,7 @@ describe("sprint 13 día 6 — las pantallas que faltaban, y los dos fallos sile
       await page.getByText("Ver a tamaño real →").first().click();
       const frame = page.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
+      await waitForBankPhoto(frame);
 
       // Touch it first: that is what makes the toast persistent.
       const heading = frame.locator('[data-section="sec-services"] [data-id]').first();
@@ -4487,6 +4496,7 @@ describe("la ficha nueva nace con el cursor dentro, y quitar una no lo tira al s
     await page.getByText("Ver a tamaño real →").first().click();
     const frame = page.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').waitFor();
+    await waitForBankPhoto(frame);
     await expect(frame.locator('[data-section="sec-services"] [data-item]')).toHaveCount(3);
     return frame;
   }
@@ -5644,6 +5654,7 @@ describe("sprint 14 día 7 — el recorrido completo del sprint", () => {
       await walk.getByText("Ver a tamaño real →").first().click();
       const frame = walk.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
+      await waitForBankPhoto(frame);
 
       // ---- day 2: the preview is set in the letter the ZIP ships -------------------------------
       const usable = await frame.locator("body").evaluate(async () => {
@@ -5792,6 +5803,7 @@ describe("sprint 14 día 7 — la oferta que no se hace", () => {
       await page.getByText("Ver a tamaño real →").first().click();
       const frame = page.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
+      await waitForBankPhoto(frame);
       await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
       await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
 
@@ -5866,6 +5878,7 @@ describe("sprint 14 día 7 — colchón: el segundo deshacer", () => {
       await page.getByText("Ver a tamaño real →").first().click();
       const frame = page.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
+      await waitForBankPhoto(frame);
 
       const headline = frame.locator('[data-id="el-headline"]');
       const original = (await headline.textContent())?.trim() ?? "";
@@ -6105,6 +6118,151 @@ describe("sprint 15 día 4 — el diálogo de la cuenta, y las cuatro cosas que 
     });
     await expect(accountPage.getByText("Guardado en tu cuenta")).toBeHidden();
   });
+});
+
+/**
+ * Sprint 16 day 6 — the upload, walked for the first time, with Supabase answered by Playwright.
+ *
+ * **Why this is mocked and what that costs.** Signing in needs a real Supabase project (ADR 0034
+ * §4), which CI does not have: the suite runs with `NEXT_PUBLIC_SUPABASE_URL` pointing at
+ * `127.0.0.1:9`, a port nothing listens on. So every account walk before this one asserts what can
+ * be asserted without a session, and the upload — the whole of ADR 0037's first half — had no walk
+ * at all.
+ *
+ * Intercepting that origin is what makes one possible. What this proves is **the editor's side**:
+ * that saving a web with a photograph in it sends the bytes, to the path the policies are written
+ * around, and that the dialog then says so. What it cannot prove is that Supabase accepts them or
+ * that the policies allow them — the first is Supabase's own contract and the second is SQL, proven
+ * as SQL in `packages/db/test/storage.pg.test.ts` against a real Postgres. Said here rather than
+ * left for a reader to assume: a mocked walk that looked like end-to-end would be worse than none.
+ *
+ * The gated walk against a real project is `docs/tasks/el-recorrido-de-la-cuenta.md`, which David
+ * runs by hand.
+ */
+describe("sprint 16 día 6 — guardar en la cuenta sube la foto", () => {
+  it("sends the bytes to <owner>/<site>/<src>, and the dialog says the photograph went with it", async () => {
+    const page = await (await browser.newContext()).newPage();
+    const owner = "11111111-1111-4111-8111-111111111111";
+    const site = "22222222-2222-4222-8222-222222222222";
+    /** Every storage request the editor makes, in order. The assertion is on these. */
+    const uploads: { method: string; path: string; bytes: number }[] = [];
+    try {
+      // Supabase, answered by Playwright. Only the four calls this walk reaches are mocked; a
+      // request to anything else would arrive at a dead port and fail loudly, which is what keeps
+      // this from quietly passing on a path nobody wrote.
+      await page.route("http://127.0.0.1:9/**", async (route) => {
+        const url = new URL(route.request().url());
+        const method = route.request().method();
+        if (url.pathname.startsWith("/auth/v1/user")) {
+          return route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({ id: owner, email: "alguien@example.com" }),
+          });
+        }
+        if (url.pathname.startsWith("/auth/v1/signup")) {
+          return route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+              access_token: "token",
+              token_type: "bearer",
+              expires_in: 3600,
+              refresh_token: "refresh",
+              user: { id: owner, email: "alguien@example.com" },
+            }),
+          });
+        }
+        if (url.pathname.startsWith("/rest/v1/sites")) {
+          // The insert the dialog makes, and the row it needs back: the site's id is what the
+          // object's path is built from, which is why this walk can assert the path at all.
+          if (method === "POST") {
+            return route.fulfill({
+              status: 201,
+              contentType: "application/json",
+              body: JSON.stringify({ id: site, version: 1 }),
+            });
+          }
+          return route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
+        }
+        if (url.pathname.startsWith("/storage/v1/object")) {
+          const body = route.request().postDataBuffer();
+          uploads.push({
+            method,
+            path: url.pathname.replace("/storage/v1/object/", ""),
+            bytes: body?.byteLength ?? 0,
+          });
+          return route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({ Key: url.pathname }),
+          });
+        }
+        return route.fulfill({ status: 404, body: "" });
+      });
+
+      await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+      await page.fill("#nombre", "Taberna del Puerto");
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.getByText("Restaurante y bar", { exact: true }).click();
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.getByText("Comidas", { exact: true }).click();
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.fill("#direccion", "Muelle 3, Ronda");
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.getByText("Que reserven", { exact: true }).click();
+      await page.fill("#enlace", "https://reservas.example.com/taberna");
+      await page.getByRole("button", { name: "Crear mi web" }).click();
+      await page.getByText("Ver a tamaño real →").first().click();
+
+      const frame = page.frameLocator(PREVIEW).first();
+      await waitForBankPhoto(frame);
+
+      // A photograph of the owner's, which is the only kind that goes to the account: the bank's
+      // is ours and `/api/muestras/[id]` already serves it to everybody. The canvas opens the
+      // picker from the photograph itself — `wirePhotos` puts the listener on the `<img>` — rather
+      // than from a button, which is what the «Cambiar esta foto» title on it says.
+      await expect(frame.locator(".rb-sample"), "the cover starts as the bank's").toHaveCount(1);
+      await frame.locator('[data-section="sec-cover"] img').first().click();
+      // The fixture the other upload walks use, rather than a hand-rolled JPEG: `preparePhoto`
+      // decodes what it is given through `createImageBitmap`, and bytes that merely start like a
+      // JPEG are refused as `undecodable`. The first attempt here was a 1x1 base64 that did not
+      // decode, and the walk failed on the badge still being there — which is the product behaving
+      // correctly about a file that was not a photograph.
+      await page
+        .locator('input[type="file"]:not(#logo)')
+        .setInputFiles(join(import.meta.dirname, "fixtures/cover-photo.jpg"));
+      // The «Foto de ejemplo» badge goes when the photograph stops being one, which is the
+      // product's own signal that the upload landed in the document.
+      await expect(frame.locator(".rb-sample")).toHaveCount(0);
+
+      await page.getByRole("button", { name: "Guardar en mi cuenta" }).click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByLabel(/Correo/).fill("alguien@example.com");
+      await dialog.getByLabel(/Contrase/).fill("una-contrasena-larga");
+      await dialog.getByRole("button", { name: /Crear la cuenta y guardar/ }).click();
+
+      // The sentence is the product's own claim about what happened, so it is what the walk waits
+      // for rather than a timeout.
+      await expect(dialog.getByText(/Guardada en tu cuenta, con su foto/)).toBeVisible({
+        timeout: 15_000,
+      });
+
+      expect(uploads.length, "nothing was uploaded").toBeGreaterThan(0);
+      const cover = uploads.find((upload) => upload.path.includes("foto-sec-cover"));
+      expect(cover, `no cover upload among ${JSON.stringify(uploads)}`).toBeDefined();
+      // The path the bucket's policies are written around: the owner first, which is the whole of
+      // ownership, then the site, then the `src` the document already carries.
+      expect(cover?.path).toBe(`fotos/${owner}/${site}/foto-sec-cover-el-image.jpg`);
+      // And it carried bytes rather than an empty body, which a mock would otherwise happily accept.
+      expect(cover?.bytes ?? 0).toBeGreaterThan(0);
+      // The bank's photograph is not among them: it is ours, and uploading a copy per owner would
+      // be paying to store what everybody already shares.
+      expect(uploads.filter((upload) => upload.path.includes("muestra-"))).toEqual([]);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
 });
 
 describe("sprint 15 día 5 — la landing, y el camino de vuelta", () => {
@@ -6951,6 +7109,7 @@ describe("la barra superior reparte su ancho entre el logo y las pestañas", () 
 
       const frame = walker.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
+      await waitForBankPhoto(frame);
 
       // The defect direction actually saw: a button shaded across space it did not need.
       const alone = await strip(walker);
@@ -7154,6 +7313,7 @@ describe("lo que el cromo del editor dibuja dentro del lienzo, y el aviso del in
 
       const frame = walker.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
+      await waitForBankPhoto(frame);
       await expect(frame.locator(".rb-line-add").first()).toBeVisible();
 
       const canvasWidth = async () =>
@@ -7409,6 +7569,7 @@ describe("lo que el cromo del editor dibuja dentro del lienzo, y el aviso del in
       await walker.getByRole("button", { name: "Crear mi web" }).click();
       await walker.getByText("Ver a tamaño real →").first().click();
       await walker.frameLocator(PREVIEW).first().locator('[data-section="sec-cover"]').waitFor();
+      await waitForBankPhoto(walker.frameLocator(PREVIEW).first());
 
       const toggle = walker.getByRole("switch").first();
       await expect(toggle).toHaveAttribute("aria-checked", "false");
@@ -7543,6 +7704,7 @@ describe("el interruptor de diseño llega a la cuenta", () => {
     await page.getByRole("button", { name: "Crear mi web" }).click();
     await page.getByText("Ver a tamaño real →").first().click();
     await page.frameLocator(PREVIEW).first().locator('[data-section="sec-cover"]').waitFor();
+    await waitForBankPhoto(page.frameLocator(PREVIEW).first());
   }
 
   it("guarda la preferencia aunque la cuenta todavía no tenga fila", async () => {
@@ -7659,6 +7821,7 @@ describe("cambiar de escritorio a móvil se ve recolocarse", () => {
     await page.getByRole("button", { name: "Crear mi web" }).click();
     await page.getByText("Ver a tamaño real →").first().click();
     await page.frameLocator(PREVIEW).first().locator('[data-section="sec-cover"]').waitFor();
+    await waitForBankPhoto(page.frameLocator(PREVIEW).first());
     await page.waitForTimeout(1_000);
   }
 
@@ -7779,6 +7942,7 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
     await page.getByRole("button", { name: "Crear mi web" }).click();
     await page.getByText("Ver a tamaño real →").first().click();
     await page.frameLocator(PREVIEW).first().locator('[data-section="sec-cover"]').waitFor();
+    await waitForBankPhoto(page.frameLocator(PREVIEW).first());
     await page.waitForTimeout(900);
   }
 

@@ -24,6 +24,7 @@ export function PhotosPanel({
   onReplacePhoto,
   onGoToPhoto,
   photoUrls,
+  photosMissing = null,
 }: {
   document: RetorikaDocument;
   /** Open the file picker for this image. `Editor` owns the one hidden input the canvas already
@@ -36,6 +37,18 @@ export function PhotosPanel({
    * the same map the preview needs, for the same reason: a bundle-relative path resolves against
    * the parent page inside a `srcDoc` iframe and 404s. */
   photoUrls: ReadonlyMap<string, string>;
+  /**
+   * How many of this site's own photographs are not in the account (ADR 0037), or `null` when
+   * nothing has been counted — a site with no account, or one whose first reconciliation has not
+   * run yet.
+   *
+   * **This is the panel's half of the one state the indicator cannot explain.** «Guardado en tu
+   * cuenta · 1 foto sin subir» says what is wrong and has no room to say what to do about it. The
+   * commonest cause is a web saved during sprint 15, when the photographs genuinely stayed in the
+   * browser, and the remedy is to upload it again from here — which is the panel this sentence is
+   * in.
+   */
+  photosMissing?: number | null | undefined;
 }) {
   const headingId = useId();
   const photos = listPhotos(doc);
@@ -67,6 +80,25 @@ export function PhotosPanel({
                   .replace("{missing}", String(missing))
                   .replace("{total}", String(counts.total))}
           </p>
+
+          {/* A different question from the one above. That line counts photographs that are not
+              the owner's *yet*; this one counts the owner's own that are not in the account, which
+              is what makes a web open elsewhere without them.
+
+              The amber is the one this panel's «Foto de ejemplo» chip already uses, written as an
+              exact value because the interface system has `ui-danger` and no `ui-warning`: this is
+              a thing to do, not a thing that went wrong. Adding a token would be a decision about
+              the whole chrome (ADR 0015) rather than about this sentence. */}
+          {photosMissing !== null && photosMissing > 0 ? (
+            <p className="text-[12px] leading-snug text-[#92400E]">
+              {photosMissing === 1
+                ? es["editor.photos.missingFromAccount.one"]
+                : es["editor.photos.missingFromAccount.many"].replace(
+                    "{count}",
+                    String(photosMissing),
+                  )}
+            </p>
+          ) : null}
 
           <ul className="flex flex-col gap-1.5">
             {photos.map((photo) => {

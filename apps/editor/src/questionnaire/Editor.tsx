@@ -4114,6 +4114,7 @@ export function Editor({
           <PhotosPanel
             document={doc}
             photoUrls={photoUrls}
+            photosMissing={photosMissing}
             onReplacePhoto={replacePhoto}
             onGoToPhoto={(photo) => {
               // The panel is also a way of finding a photograph: show the page it is on and select
