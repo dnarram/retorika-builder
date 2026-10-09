@@ -1892,6 +1892,10 @@ export function Editor({
    * document.
    */
   function wireInsertion(iframeDoc: Document) {
+    // Drawn from a clean slate, like `.rb-menu`, `.rb-toolbar` and `.rb-hole` already are: a second
+    // pass over a document that has its gaps must replace them, never add a second row of pills
+    // under each. `wireOnce`'s mark is what stops the second pass; this is what makes one harmless.
+    for (const old of iframeDoc.querySelectorAll(".rb-gap")) old.remove();
     const sections = [...iframeDoc.querySelectorAll<HTMLElement>("[data-section]")];
     if (sections.length === 0) return;
 
@@ -3319,6 +3323,9 @@ export function Editor({
     // Which sections carry a bar in *this* document, so the set can be replaced rather than added
     // to: a section that has been reverted has to be able to arrive again if it is escalated twice.
     const arriving: string[] = [];
+    // The bars already in this document go first, for the same reason `wireInsertion` clears its
+    // gaps: a second pass replaces, it does not stack a second «Diseñada a mano» over the first.
+    for (const old of iframeDoc.querySelectorAll(".rb-handmade")) old.remove();
     if (!designTools) return;
 
     for (const element of iframeDoc.querySelectorAll<HTMLElement>("[data-section]")) {
@@ -3415,6 +3422,25 @@ export function Editor({
   function wireOnce(frame: HTMLIFrameElement | null | undefined) {
     const iframeDoc = frame?.contentDocument;
     if (!iframeDoc || wiredDoc.current === iframeDoc) return;
+    // **The document carries its own mark, and the mark is what «never twice» rests on.**
+    //
+    // `wiredDoc` is one ref shared by the two frames of the buffered swap, and a ref can only
+    // remember one document. With two documents loading at once — a `srcDoc` change (the bank
+    // photograph arriving after the editor opened) during a chrome swap (the account's switch
+    // preference arriving after mount) — their `load` events interleave: the entering document is
+    // promoted and wired, the outgoing frame's late `load` wires *its* document and moves the ref,
+    // and the entering frame's own `load` then finds its document is «not the wired one» and wires
+    // it a second time. Reported by David on 9 October 2026 on the deployed editor, right after a
+    // redeploy when fonts and photographs come off a cold instance: «+ Añadir sección aquí»,
+    // «Diseñada a mano», «Portada» and «Volver a la original» drawn twice. The ref stays, for the
+    // look-ahead's cheap identity test; the mark is what makes the second wiring impossible rather
+    // than unlikely, whatever order the events arrive in.
+    //
+    // Checked by sabotage on 9 October 2026: with this ref guard removed so `onLoad` re-enters,
+    // the old code drew 12 gaps for 5 sections — the reported picture — and the mark alone, or the
+    // clearing in `wireInsertion` and `wireHandmade` alone, each kept it at 6.
+    if (iframeDoc.documentElement.dataset["rbWired"] === "1") return;
+    iframeDoc.documentElement.dataset["rbWired"] = "1";
     wiredDoc.current = iframeDoc;
     rememberCanvasBackground(iframeDoc);
     wireInteractions(iframeDoc);
