@@ -12,8 +12,18 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 4 October 2026, **closing sprint 14 — «el contenido reutilizable», the last pillar of
-the studio that had no code at all.** A list can now be made out of the cards a section already has,
+Last reviewed: 9 October 2026, **a sweep against the photo bank, which stopped being empty on
+8 October.** `restaurante-bar` entered with nine approved photographs (PR #197), and the day after,
+the repository still said the bank was empty in fourteen places: this file twice, `README.md`
+twice, nine code comments and one test name across `packages/photobank`, `packages/generator`,
+`packages/catalog` and the `e2e` — and this file also said the nine photographs were all
+1024 × 1024, which one of them never was. The pull request that filled the bank updated the package's own
+README and the editor's sentences, and nothing else — which is the sixth instance of the pattern
+named below, and the same shape as the other five: **found by re-reading the record against the
+code, never by the record itself.** Corrected in place; the dated rows keep their history.
+
+The review before that was 4 October 2026, **closing sprint 14 — «el contenido reutilizable», the
+last pillar of the studio that had no code at all.** A list can now be made out of the cards a section already has,
 shown in several sections at once, edited in one place, and left again with its cards intact; the
 preview is finally set in the letter the ZIP ships; and the **second-undo race this file has carried
 since sprint 12 is closed by measurement** — it turned out to be the same defect as the `e2e` flake
@@ -330,7 +340,7 @@ open survives.
 | **A contact form.** Scoped, 28 September 2026: [ADR 0020](../decisions/0020-contact-stays-links-only-for-phase-1.md) accepted ADR 0016's phase 1 links-only scope and split the form off as its own, unscheduled phase 2 item. | [ADR 0020](../decisions/0020-contact-stays-links-only-for-phase-1.md), resolving [ADR 0016](../decisions/0016-contact-section-has-links-not-a-form.md) | A phase 2 ADR naming the service, its cost, what happens to a client's site the day that service stops, and the data processing agreement protocol Part 15 requires |
 | **How a carta of several courses reads.** Three «Precios» sections one after another are three separate blocks: each has 48px of its own padding and the page puts 76px between them, so **172px of air separates the last dish of one course from the heading of the next**, and nothing frames them as one menu. Measured by building one on 28 September 2026. The cheap lever is a renderer rule making two adjacent sections of the same preset close up; whether that should happen at all is a general design decision, since it would apply to two «Opiniones» just as much. | [`docs/design/REVIEW.md`](../design/REVIEW.md) | Direction, on whether adjacent sections of one kind should read as one |
 | **The hostelería text bank — resolved, 28 September 2026.** Both `packages/copybank/drafts/*.json` files were read and signed; the hostelería rewrite and the per-sector «Precios» headings are in `bank/` now. What the draft could not write — a sixth question, direction's to add — is still open. | [ADR 0009](../decisions/0009-generated-texts-from-a-reviewed-bank.md), and [ADR 0010](../decisions/0010-initial-questionnaire.md) | Nothing, for the bank itself. The sixth-question option in ADR 0010 is direction's whenever it wants it |
-| **`packages/photobank` — the machinery shipped on sprint 6 and the bank is still empty.** Eleven sector files, zero images. Until the first one is approved, every generated site opens on the grey marker, and three sentences in the editor had to stop saying otherwise (sprint 7 day 1; the list of which, and that they come back with the first image, is in `packages/photobank/README.md`). | [ADR 0011](../decisions/0011-sample-photos-per-sector.md), and "What an image has to satisfy" below | Licensed images, which is content production rather than code |
+| **`packages/photobank` — the machinery shipped on sprint 6, and the first sector filled on 8 October 2026.** `restaurante-bar` holds nine approved photographs (PR #197); the other ten sector files hold zero, and a generated site of any of them opens on the grey marker. Of the three sentences the editor had to stop saying while the bank was empty (sprint 7 day 1), two came back with the first image and one waits for the launch sectors — the table is in `packages/photobank/README.md`. What the first sector left open is in "What the first filled sector left open" below. | [ADR 0011](../decisions/0011-sample-photos-per-sector.md), and "What an image has to satisfy" below | Licensed images for the other ten sectors, which is content production rather than code |
 | **The text bank covers all ten launch sectors — resolved, 30 September 2026.** Sprint 7 days 4-5 wrote `estetica`, `fisioterapia`, `taller`, `reformas`, `academia`, `fotografia` and `asesoria` as drafts; sprint 8 signed the seven, one PR per sector, each merged by direction after reading the Spanish words in the PR body — the `git mv` ADR 0009 calls the review. `drafts/` is empty. `servesSector` now answers `true` for all ten launch sectors — checked directly, not assumed — and only «Otro sector» still falls through to `generico`. | [ADR 0009](../decisions/0009-generated-texts-from-a-reviewed-bank.md) | Nothing. Every launch sector has its own titulares, cuerpos and question-3 suggestions |
 | **Hosted publishing.** | [ADR 0008](../decisions/0008-hosted-publishing-has-no-plan.md), and `serve.md` in this directory, which is dormant by that decision | Nothing. It is on hold with no plan, and that is the decision |
 
@@ -549,7 +559,8 @@ open survives.
   fichas, and the canvas follows»**. It passed in isolation and passed on the very next full run,
   88 of 88, with nothing changed in between — so it is **intermittent and not a regression**, and
   the day's own changes could not be the cause: they are in `Variants.tsx`'s bank-photograph fetch,
-  which does nothing at all while `packages/photobank/bank` holds zero photographs.
+  which did nothing at all while `packages/photobank/bank` held zero photographs — true on that
+  date; `restaurante-bar` filled on 8 October.
   **Measured on 5 October 2026, which is what this row was missing** — though not for this test,
   so it is a candidate cause rather than a diagnosis. CI failed the *sprint-7* gallery reorder the
   same way, and the measurement that came out of it is this: after a section is inserted, its text
@@ -718,7 +729,8 @@ so raising the minimum is not the fix. The fix is for the three to be picked tog
 deciding rather than doing. Until then an owner sees the repeat on the one screen where the three
 cards sit side by side, which is the worst place for it.
 
-**2. The nine are 1024 × 1024, where ADR 0011 says «longest side 1600 px». Measured, not assumed:**
+**2. Eight of the nine are 1024 × 1024 and `restaurante-bar.07` is 866 × 942, where ADR 0011 says
+«longest side 1600 px». Measured, not assumed:**
 
 The clause sits under **Compression**, beside «quality around 75» and «EXIF and XMP removed» — three
 things done to make a file smaller. Read that way 1600 is a ceiling and 1024 is under it, so the
@@ -733,6 +745,12 @@ section's content box is 1344 px, and `.rb-section img { width: 100% }` fills it
 |---|---|---|
 | «Con foto grande» (v2) | all 12 columns, ~1344 px | upscaled **1.31×**, and **2.6×** on a 2× display |
 | «Clásica» (v1), «Compacta» (v3) | ~6 columns, ~650 px | comfortably enough at 1×, marginal at 2× |
+
+`restaurante-bar.07` is the one record whose pixels are not the original frame — 82 px cut off the
+top and 158 off the right to remove a legible sign, which is why it is 866 px wide — so at full width
+it is upscaled **1.55×**, and **3.1×** on a 2× display. This paragraph said «the nine are
+1024 × 1024» until 9 October 2026, which was never true of that one; corrected against the WebP
+header `bank.test.ts` reads out of the file.
 
 So it is not a general shortfall, it is the one variant the editor itself calls «La más llamativa».
 **The decision is direction's, not something to settle in a pull request**: either ADR 0011 gets an

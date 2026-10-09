@@ -18,9 +18,10 @@ import {
 import { bankFileSchema, imageRecordSchema, MAX_IMAGE_BYTES } from "../src/schema.ts";
 
 /**
- * `packages/photobank`, day one: the machinery, tested while `bank/` itself is empty of real
- * photographs. Every seam here has to work against a bank of zero images, because that is the
- * state this package ships in and the state most of it will spend its first days in.
+ * `packages/photobank`, day one: the machinery, tested while `bank/` itself was empty of real
+ * photographs. Every seam here has to work against a sector of zero images, because that is the
+ * state this package shipped in and the state ten of its eleven sectors are still in. The guards
+ * over the real bank further down exist since `restaurante-bar` filled on 8 October 2026.
  */
 
 const HERE = import.meta.dirname;

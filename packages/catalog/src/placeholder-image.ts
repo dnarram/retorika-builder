@@ -6,10 +6,11 @@
  * **The reason changed and this comment did not, until the sprint 10 closeout.** It used to say
  * `packages/photobank` «does not exist yet». That package shipped in sprint 6: eleven sector files,
  * a schema that refuses an image breaking any of ADR 0011's checkable rules, and the same path an
- * upload takes. What it still holds is **zero images** — counted, not assumed — because ADR 0011
- * wants photographs generated and reviewed like the text bank, and that is content production with
- * a licence attached rather than code. So the marker stays, for a reason that is one step further
- * along than the one written here before.
+ * upload takes. It held **zero images** until 8 October 2026, when `restaurante-bar` was approved
+ * with nine; the other ten sectors still hold none, because ADR 0011 wants photographs generated
+ * and reviewed like the text bank, and that is content production with a licence attached rather
+ * than code. So the marker stays for those ten, for a reason that is one step further along than
+ * the one written here before.
  *
  * Inlined as a `data:` URI rather than a file at a path: a relative "assets/placeholder.svg" only
  * resolves when something actually serves it there, which was true nowhere this generator runs —
@@ -37,7 +38,8 @@ export const PLACEHOLDER_IMAGE_ALT = "Marcador de foto: aquí irá tu foto";
  * schema's own note on the field).
  *
  * The ADR wrote `sample` as «the bank id», which was complete for a bank with images in it and
- * reaches nothing while the bank is empty — and today the marker is the *only* sample that exists.
+ * reaches nothing for a sector whose bank is empty — ten of the eleven, since 8 October 2026 —
+ * where the marker is the only sample there is.
  * So the field holds the id of whichever sample it is, and the marker declares itself as one:
  * `marcador` collides with no bank id, because a bank id always carries its sector and a number.
  *

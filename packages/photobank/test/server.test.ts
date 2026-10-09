@@ -20,16 +20,17 @@ const fixtureBank = bankFileSchema.parse(
   JSON.parse(readFileSync(join(FIXTURES_DIR, "bank.json"), "utf8")),
 );
 
-/** A stand-in for `recordById`, scoped to the fixture bank — the real one is empty today, so this
- * is the only way to exercise the "id resolves to real bytes" case at all. */
+/** A stand-in for `recordById`, scoped to the fixture bank — the only way to exercise the "id
+ * resolves to real bytes" case while the real bank was empty, and still the way that does not move
+ * whenever the real bank grows. */
 function fixtureLookup(id: string) {
   return fixtureBank.images.find((image) => image.id === id);
 }
 
 describe("readSampleBytes", () => {
   it("throws for an id the bank does not know, and reads nothing", () => {
-    // Against the real bank, which is empty today — every id is unknown. This is what a route
-    // built on top of this function gets back for a request that invented an id.
+    // Against the real bank, where this id is unknown whatever the bank holds. This is what a
+    // route built on top of this function gets back for a request that invented an id.
     expect(() => readSampleBytes("no-existe")).toThrow(/no bank image "no-existe"/);
   });
 
