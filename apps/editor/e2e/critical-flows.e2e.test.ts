@@ -1097,6 +1097,7 @@ describe("sprint 7 día 3 — deshacer una conversión desde «Páginas»", () =
 
       const frame = walkPage.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
+      await waitForBankPhoto(frame);
       const tabs = walkPage.locator('[data-testid="page-tabs"] button');
       await expect(tabs).toHaveCount(1);
 
@@ -1341,6 +1342,7 @@ describe("sprint 7 día 7 — dos hallazgos de esta semana, cerrados", () => {
 
       const frame = walkPage.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
+      await waitForBankPhoto(frame);
       for (const id of ["sec-services", "sec-location"]) {
         await frame.locator(`[data-section="${id}"]`).click();
         await frame
@@ -2904,6 +2906,7 @@ describe("sprint 10 día 7 — el recorrido completo del sprint", () => {
 
       const frame = studio.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
+      await waitForBankPhoto(frame);
       const subheadline = frame.locator('[data-id="el-subheadline"]');
       await expect(subheadline).toHaveText("Comer, beber y quedarse un rato");
 
@@ -3269,6 +3272,7 @@ describe("sprint 12 día 3 — el input anclado y el atajo de deshacer", () => {
     await studio.getByRole("button", { name: "Crear mi web" }).click();
     await studio.getByText("Ver a tamaño real →").first().click();
     await studio.frameLocator(PREVIEW).first().locator('[data-section="sec-cover"]').waitFor();
+    await waitForBankPhoto(studio.frameLocator(PREVIEW).first());
     return studio;
   }
 
@@ -3627,6 +3631,7 @@ describe("sprint 13 día 2 — la barra se deja usar con el ratón", () => {
     await studio.getByText("Ver a tamaño real →").first().click();
     const frame = studio.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').waitFor();
+    await waitForBankPhoto(frame);
     await studio.getByRole("switch", { name: "Herramientas de diseño" }).click();
     await studio.getByRole("button", { name: "Sí, enciéndelas" }).click();
     await frame.locator('[data-id="el-headline"]').click();
@@ -3787,6 +3792,7 @@ describe("sprint 13 día 3 — lo que solo informaba", () => {
     await studio.getByText("Ver a tamaño real →").first().click();
     const frame = studio.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').waitFor();
+    await waitForBankPhoto(frame);
     return { studio, frame };
   }
 
@@ -3894,6 +3900,7 @@ describe("sprint 13 día 5 — el «Aa» de la barra", () => {
     await studio.getByText("Ver a tamaño real →").first().click();
     const frame = studio.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').waitFor();
+    await waitForBankPhoto(frame);
     if (designTools) {
       await studio.getByRole("switch", { name: "Herramientas de diseño" }).click();
       await studio.getByRole("button", { name: "Sí, enciéndelas" }).click();
@@ -4075,6 +4082,7 @@ describe("sprint 13 día 6 — las pantallas que faltaban, y los dos fallos sile
       await page.getByText("Ver a tamaño real →").first().click();
       const frame = page.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
+      await waitForBankPhoto(frame);
 
       // A section the owner has never touched, which is the six-second half of ADR 0014.
       await frame.locator('[data-section="sec-services"]').click();
@@ -4128,6 +4136,7 @@ describe("sprint 13 día 6 — las pantallas que faltaban, y los dos fallos sile
       await page.getByText("Ver a tamaño real →").first().click();
       const frame = page.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
+      await waitForBankPhoto(frame);
 
       // Touch it first: that is what makes the toast persistent.
       const heading = frame.locator('[data-section="sec-services"] [data-id]').first();
@@ -4487,6 +4496,7 @@ describe("la ficha nueva nace con el cursor dentro, y quitar una no lo tira al s
     await page.getByText("Ver a tamaño real →").first().click();
     const frame = page.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').waitFor();
+    await waitForBankPhoto(frame);
     await expect(frame.locator('[data-section="sec-services"] [data-item]')).toHaveCount(3);
     return frame;
   }
@@ -5644,6 +5654,7 @@ describe("sprint 14 día 7 — el recorrido completo del sprint", () => {
       await walk.getByText("Ver a tamaño real →").first().click();
       const frame = walk.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
+      await waitForBankPhoto(frame);
 
       // ---- day 2: the preview is set in the letter the ZIP ships -------------------------------
       const usable = await frame.locator("body").evaluate(async () => {
@@ -5792,6 +5803,7 @@ describe("sprint 14 día 7 — la oferta que no se hace", () => {
       await page.getByText("Ver a tamaño real →").first().click();
       const frame = page.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
+      await waitForBankPhoto(frame);
       await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
       await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
 
@@ -5866,6 +5878,7 @@ describe("sprint 14 día 7 — colchón: el segundo deshacer", () => {
       await page.getByText("Ver a tamaño real →").first().click();
       const frame = page.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
+      await waitForBankPhoto(frame);
 
       const headline = frame.locator('[data-id="el-headline"]');
       const original = (await headline.textContent())?.trim() ?? "";
@@ -6951,6 +6964,7 @@ describe("la barra superior reparte su ancho entre el logo y las pestañas", () 
 
       const frame = walker.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
+      await waitForBankPhoto(frame);
 
       // The defect direction actually saw: a button shaded across space it did not need.
       const alone = await strip(walker);
@@ -7154,6 +7168,7 @@ describe("lo que el cromo del editor dibuja dentro del lienzo, y el aviso del in
 
       const frame = walker.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
+      await waitForBankPhoto(frame);
       await expect(frame.locator(".rb-line-add").first()).toBeVisible();
 
       const canvasWidth = async () =>
@@ -7409,6 +7424,7 @@ describe("lo que el cromo del editor dibuja dentro del lienzo, y el aviso del in
       await walker.getByRole("button", { name: "Crear mi web" }).click();
       await walker.getByText("Ver a tamaño real →").first().click();
       await walker.frameLocator(PREVIEW).first().locator('[data-section="sec-cover"]').waitFor();
+      await waitForBankPhoto(walker.frameLocator(PREVIEW).first());
 
       const toggle = walker.getByRole("switch").first();
       await expect(toggle).toHaveAttribute("aria-checked", "false");
@@ -7543,6 +7559,7 @@ describe("el interruptor de diseño llega a la cuenta", () => {
     await page.getByRole("button", { name: "Crear mi web" }).click();
     await page.getByText("Ver a tamaño real →").first().click();
     await page.frameLocator(PREVIEW).first().locator('[data-section="sec-cover"]').waitFor();
+    await waitForBankPhoto(page.frameLocator(PREVIEW).first());
   }
 
   it("guarda la preferencia aunque la cuenta todavía no tenga fila", async () => {
@@ -7659,6 +7676,7 @@ describe("cambiar de escritorio a móvil se ve recolocarse", () => {
     await page.getByRole("button", { name: "Crear mi web" }).click();
     await page.getByText("Ver a tamaño real →").first().click();
     await page.frameLocator(PREVIEW).first().locator('[data-section="sec-cover"]').waitFor();
+    await waitForBankPhoto(page.frameLocator(PREVIEW).first());
     await page.waitForTimeout(1_000);
   }
 
@@ -7779,6 +7797,7 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
     await page.getByRole("button", { name: "Crear mi web" }).click();
     await page.getByText("Ver a tamaño real →").first().click();
     await page.frameLocator(PREVIEW).first().locator('[data-section="sec-cover"]').waitFor();
+    await waitForBankPhoto(page.frameLocator(PREVIEW).first());
     await page.waitForTimeout(900);
   }
 
