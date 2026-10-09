@@ -104,6 +104,14 @@ won. That is day 4's work; this ADR fixes the rule it is built on.
 
 ### 6. Honesty, and what the interface says now
 
+> **Amended on 9 October 2026, sprint 16 day 4, by the work this section describes.** The first
+> bullet below said a refused upload moves the indicator to `No guardado`. Building it showed that
+> to be false in the other direction: the document *is* in the account and its version was
+> accepted, so «No guardado» would tell somebody their words were lost when only a photograph did
+> not make it. **What ships is a third sentence** — «Guardado en tu cuenta · N fotos sin subir» —
+> which is true about both halves and is the one the owner can act on. ADR 0018's rule is
+> untouched: no tick claims more than it earned, and the count is what stops it doing so.
+
 - A refused upload moves the save indicator to `No guardado` and says so. Never a tick it has not
   earned.
 - A photograph the browser cannot fetch back enters the `photosFailed` gate that already exists,
