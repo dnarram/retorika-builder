@@ -103,7 +103,13 @@ The indicator in the editor's top bar says where the last one went, and that is 
 
 - **`Guardado en este navegador`** — the browser copy landed. If there is an account, the push to
   it did **not**, and the label dropped back on purpose (ADR 0034 §10).
-- **`Guardado en tu cuenta · fotos solo en este navegador`** — the account has it.
+- **`Guardado en tu cuenta`** — the account has the document. **Since ADR 0037 it also has the
+  photographs**, uploaded when the site was first saved; this label stopped reading «· fotos solo
+  en este navegador» the day that became false. What it still does not tell you is whether a
+  photograph added *after* that first save is up there — an edit pushes the document and not yet
+  the photographs. So a site whose cover is missing on another computer is not this label lying:
+  look in Supabase → Storage → `fotos/<owner id>/<site id>/`, and if the object is absent, the
+  photograph was added after the save that uploaded them.
 - **`No guardado`** — nothing landed. This is the browser's own storage refusing
   ([ADR 0018](decisions/0018-own-cover-photo-before-phase-2.md)).
 - **Nothing at all** — no save has been attempted yet. On a page just opened this is normal;

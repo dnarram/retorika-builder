@@ -1085,10 +1085,20 @@ export function EditorShell({
                   <path d="M20 6L9 17l-5-5" />
                 </svg>
               ) : null}
+              {/**
+               * **«· fotos solo en este navegador» is gone, as of ADR 0037.** It was true for the
+               * whole of sprint 15 and became false the day the save started uploading them. It is
+               * replaced by the plain sentence rather than by a new claim about photographs,
+               * because what this indicator can honestly say today is only «the document is in the
+               * account»: the photographs go up when a site is first saved, and an edit that adds
+               * one does not push it until day 4 teaches the push to reconcile. A label that said
+               * «con sus fotos» would be right most of the time, and this project does not ship
+               * indicators that are right most of the time.
+               */}
               {saveStatus !== "saved"
                 ? es["editor.unsaved"]
                 : savedWhere === "account"
-                  ? es["editor.saved.accountPhotos"]
+                  ? es["editor.saved.account"]
                   : es["editor.saved"]}
             </span>
           ) : null}

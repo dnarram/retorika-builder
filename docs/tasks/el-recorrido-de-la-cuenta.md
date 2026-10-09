@@ -8,13 +8,18 @@
 
 1. Crear **dos** proyectos de Supabase en una región de la **UE** (ADR 0034 §14), uno de desarrollo
    y uno de producción. La Parte 15 exige claves distintas para cada entorno.
-2. Aplicar las migraciones — **ahora son dos** —, desde el panel de Supabase o con
+2. Aplicar las migraciones — **ahora son tres** —, desde el panel de Supabase o con
    `DATABASE_URL` puesta, pegando en orden:
-   `packages/db/migrations/0001-accounts-sites-and-the-audit-log.sql` y
-   `packages/db/migrations/0002-every-auth-user-gets-an-account-row.sql`.
+   `packages/db/migrations/0001-accounts-sites-and-the-audit-log.sql`,
+   `packages/db/migrations/0002-every-auth-user-gets-an-account-row.sql` y
+   `packages/db/migrations/0003-the-photos-bucket-and-its-policies.sql`.
    **La `0002` no es opcional**: sin ella `public.accounts` no tiene fila para nadie, y entonces ni
    el borrado de cuenta ni el interruptor de herramientas pueden guardarse. Tu cuenta de ahora, que
    se creó antes de que existiera, la arregla el relleno que la propia migración lleva dentro.
+   **La `0003` crea el bucket `fotos` y sus políticas** (ADR 0037): sin ella guardar una web con
+   foto dice «no se ha podido subir» y la web se abre sin ella en otro ordenador. Si el rol de
+   `DATABASE_URL` no puede crear políticas sobre `storage.objects`, pégala desde el editor SQL del
+   panel, que sí puede — y dilo, porque entonces el runbook §3 necesita esa línea.
 3. Pegar en Render las **cuatro** variables obligatorias que `.env.example` nombra —
    `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
    `SUPABASE_SERVICE_ROLE_KEY`—. **Yo no veo ninguna.** (Esta lista decía «cinco» y estaba mal
@@ -35,10 +40,10 @@
 | 1 | Abres la URL con el servicio **dormido** y cronometras | Tarda cerca de un minuto y luego pinta la landing | Es el plan gratuito, no un fallo. Anota el número en `docs/tasks/arranque-en-frio.md` |
 | 2 | «Empezar» → las cinco preguntas | **No te pide cuenta en ningún momento** | Si te la pide, el §2 está roto |
 | 3 | Editas un texto | El indicador dice «Guardado en este navegador» | Mira el caso 2 del runbook |
-| 4 | «Guardar en mi cuenta» → creas la cuenta con correo | Dice «Guardada en tu cuenta» y aparece «Ver mis webs» | Si pide confirmar el correo, ábrelo y vuelve: el diálogo tiene esa frase |
-| 5 | Editas otro texto | El indicador pasa a «Guardado en tu cuenta · fotos solo en este navegador» | Si se queda en «este navegador», el empujón falló: caso 2 del runbook |
+| 4 | **Subes una foto de portada** y luego «Guardar en mi cuenta» → creas la cuenta con correo | Dice «Guardada en tu cuenta, con su foto» y aparece «Ver mis webs» | Si pide confirmar el correo, ábrelo y vuelve. Si dice «pero 1 foto no se ha podido subir», la `0003` no está aplicada o la política no deja: runbook §3. Si no subes ninguna foto dice «Guardada en tu cuenta.» a secas, que también es correcto: la foto del banco es nuestra y no se sube |
+| 5 | Editas otro texto | El indicador pasa a «Guardado en tu cuenta» | Si se queda en «este navegador», el empujón falló: caso 2. **Hasta el día 4 este indicador no cuenta las fotos**: lo que el día 2 ya hace es subirlas al guardar la web por primera vez |
 | 6 | Cierras sesión y vuelves a entrar | `/mis-webs` lista tu web | — |
-| 7 | La abres | Sale con tus textos. **Sin fotos, si habías subido alguna** | Eso es el §5 y está dicho en el diálogo y en la lista |
+| 7 | La abres | Sale con tus textos. **Las fotos todavía no se ven aquí: eso es el día 3** | El día 2 las *sube* —compruébalo en Supabase → Storage → `fotos/<tu id>/<id de la web>/`— y el día 3 es el que las baja al abrir. El diálogo de guardado ya dice «con su foto» cuando la subida salió bien |
 | 8 | **Abres otro navegador**, haces una web anónima, y entras con la misma cuenta | La web anónima se ofrece **como web nueva**; la primera sigue intacta | Si sobrescribe alguna, es tu ajuste del día 4 roto |
 | 9 | Descargas el ZIP y lo abres con doble clic | La web se ve sin servidor | Es la promesa del ADR 0001 |
 | 10 | **«Entrar con Google»** | Entra, y `/mis-webs` enseña lo tuyo | **Esto sigue siendo lo único que no he podido probar yo.** Si falla con un error de Google antes de volver a nuestro dominio, casi siempre es el *redirect URI*: tiene que ser el que Supabase da en su panel, no `/auth/callback` directamente. **Si en cambio Safari dice «no puede abrir la página» con un `localhost` en la URL después de volver**, es el fallo que David encontró el 5 de octubre y ya está arreglado: `/auth/callback` construía su redirección con `request.url`, que detrás del proxy de Render es la dirección interna. Ver `apps/editor/src/auth/publicOrigin.ts` y `docs/tasks/cabecera-de-origen.md` |

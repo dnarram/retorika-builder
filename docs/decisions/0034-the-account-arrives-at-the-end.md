@@ -177,6 +177,15 @@ it starts.
 
 ### 5. What is stored, and what stays in the browser
 
+> **Amended on 9 October 2026 by [ADR 0037](0037-the-photos-travel-with-the-account.md), sprint 16
+> day 2 — the sprint this section scheduled.** The photographs travel too, into a private Supabase
+> Storage bucket under `<owner>/<site>/<src>`, with the document unchanged because it already
+> carries that `src`. Bank photographs are not uploaded: they are ours, immutable, and
+> `/api/muestras/[id]` already serves them. What stays true is the half of this section that is a
+> rule rather than a state — a consequence must be shown and not discovered — which is why the
+> three sentences that said «se quedan en este navegador» moved in the same pull request as the
+> capability.
+
 **The documents travel; the photos stay** — David's answer, with photos scheduled for sprint 16.
 
 That has a consequence that must be **shown and not discovered**: if the document travels and the
@@ -221,6 +230,13 @@ overwritten.** The anonymous site is offered as a **new** site. Creating an acco
 an existing one, is never an operation that can cost somebody a site they had.
 
 ### 10. What `Guardado en este navegador` becomes
+
+> **Amended on 9 October 2026 by [ADR 0037](0037-the-photos-travel-with-the-account.md).** «With an
+> account: the site is in the account **and the photos are only in this browser**» is no longer what
+> the indicator says, because it is no longer what happens. The photographs are in the account too;
+> what the indicator now has to distinguish is a site whose photographs are all up there from one
+> saved before they travelled, which has none. `No guardado` is untouched, and so is the rule it
+> comes from.
 
 ADR 0012 tied that string to the guarantee deliberately, «precisely so nobody reads a cross-device
 guarantee into it». The guarantee changed, so the string changes — and it changes into something that

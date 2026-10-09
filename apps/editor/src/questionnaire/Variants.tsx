@@ -1076,6 +1076,10 @@ export function Variants({
             // variants; a saved site is one document (ADR 0034 §6), and the other two stay in this
             // browser as the alternatives they always were.
             document={history.present.document}
+            // The same map the preview is drawing from, for the same card. ADR 0037: what the owner
+            // can see is what gets stored, so there is no second source that could disagree — and
+            // the bytes behind these URLs are `preparePhoto`'s, which carry no EXIF and no GPS.
+            photoUrls={photoUrls.get(openIndex) ?? EMPTY_PHOTOS}
             configured={accountAvailable}
             onSaved={(site) => {
               // The document just stored is, by definition, the one already pushed.

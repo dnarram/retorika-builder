@@ -959,7 +959,22 @@ describe("sprint 6 día 7 — fotos subidas desde el panel y desde el aviso, log
       const dialogRows = dialog.locator('li:has(button:has-text("Cambiar"))');
       await expect(dialogRows).toHaveCount(1);
       await dialogRows.first().getByRole("button", { name: "Cambiar" }).click();
-      await fileInput.setInputFiles(join(import.meta.dirname, "fixtures/cover-photo.jpg"));
+      /**
+       * **The cover is uploaded from a photograph that carries where it was taken**, since
+       * 9 October 2026 and at David's instruction while approving the sprint 16 plan: «subir una
+       * foto con GPS y comprobar que el objeto guardado no lo tiene».
+       *
+       * `fixtures/cover-photo-gps.jpg` is `cover-photo.jpg` with a camera's APP1 segment inserted
+       * after the JFIF header: an EXIF IFD holding `GPSLatitudeRef`, `GPSLatitude` and an
+       * `ImageDescription` of `RETORIKA-GPS-CANARY`, which is there to be looked for. ADR 0018 made
+       * the re-encode a decision and said why — nobody uploads a picture of their shop expecting to
+       * publish where they were standing — and ADR 0037 §4 is why it now matters twice: those bytes
+       * leave the owner's machine and are stored in the account.
+       *
+       * The assertion is on the bytes that come out of the ZIP, below. The same bytes are what the
+       * save dialog uploads, because both read the editor's own `photoUrls`.
+       */
+      await fileInput.setInputFiles(join(import.meta.dirname, "fixtures/cover-photo-gps.jpg"));
       await expect(dialog).toHaveCount(0);
 
       // Every photograph is the owner's now, which is the one state the warning never opens for.
@@ -989,6 +1004,30 @@ describe("sprint 6 día 7 — fotos subidas desde el panel y desde el aviso, log
           "assets/foto-sec-gallery-el-item-1-photo.jpg",
         ].sort(),
       );
+
+      /**
+       * **What the canvas dropped, proven on the bytes that travel** (ADR 0018, ADR 0037 §4).
+       *
+       * The fixture is asserted to carry the metadata first. Without that half this would pass just
+       * as happily against a photograph with no EXIF in it at all, which is the shape of a guard
+       * that proves nothing — and this file has been caught writing one before.
+       */
+      const uploadedBytes = readFileSync(join(import.meta.dirname, "fixtures/cover-photo-gps.jpg"));
+      expect(
+        uploadedBytes.includes(Buffer.from("RETORIKA-GPS-CANARY")),
+        "the fixture does not carry the metadata this is about",
+      ).toBe(true);
+      expect(uploadedBytes.includes(Buffer.from("Exif"))).toBe(true);
+
+      const coverBytes = Buffer.from(extractFileBytes(zip, "assets/foto-sec-cover-el-image.jpg"));
+      expect(coverBytes.byteLength, "the cover is a real file").toBeGreaterThan(0);
+      expect(
+        coverBytes.includes(Buffer.from("RETORIKA-GPS-CANARY")),
+        "the photograph still says where it was taken",
+      ).toBe(false);
+      expect(coverBytes.includes(Buffer.from("Exif")), "an EXIF segment survived").toBe(false);
+      // And the bytes really are a JPEG, so «no EXIF» is not «no photograph».
+      expect([...coverBytes.subarray(0, 3)]).toEqual([0xff, 0xd8, 0xff]);
 
       extractAll(zip, dir);
       const filePath = join(dir, "index.html");
@@ -1963,6 +2002,12 @@ describe("sprint 8 día 7 — colchón: los tiradores no desplazan el lienzo", (
       await page.getByText("Ver a tamaño real →").first().click();
 
       const frame = page.frameLocator(PREVIEW).first();
+      // One of the walks that inline their own steps and did not wait: it clicks inside the frame
+      // and then evaluates in it, so the bank photograph arriving replaces the document under
+      // both. Timed out once in a full run on 9 October 2026 and passed twice out of two on its
+      // own, which is the signature `waitForBankPhoto` exists for. The remaining ones are a day of
+      // the sprint 16 plan; this one is here because it went red.
+      await waitForBankPhoto(frame);
       await frame.locator('[data-section="sec-cover"]').click();
 
       const scrollable = await frame.locator("body").evaluate(() => {
@@ -6022,16 +6067,31 @@ describe("sprint 15 día 4 — el diálogo de la cuenta, y las cuatro cosas que 
     await expect(opener).toBeFocused();
   });
 
-  it("says which web it saves, that the photos stay, and what it stores", async () => {
+  it("says which web it saves, where the photographs go, and what it stores", async () => {
     await accountPage.getByRole("button", { name: "Guardar en mi cuenta" }).click();
     const dialog = accountPage.getByRole("dialog");
 
     // The three sentences ADR 0034 will not let this dialog drop, each one a thing the owner
     // would otherwise discover later.
     await expect(dialog.getByText(/Guardamos la web que tienes abierta/)).toBeVisible();
-    await expect(dialog.getByText(/Las fotos se quedan en este navegador/)).toBeVisible();
+
+    /**
+     * **This assertion changed with ADR 0037, and its failing is what made the pull request
+     * complete.** It read `/Las fotos se quedan en este navegador/` — ADR 0034 §5's state and a
+     * sentence that ended «eso llega en el próximo sprint». The capability shipped, so the promise
+     * became false in the other direction, and the walk that holds the dialog to its promises went
+     * red until the sentence moved. That is the guard doing its job rather than an obstacle: a
+     * product cannot change what it claims without this line changing too.
+     */
+    await expect(dialog.getByText(/Las fotos se guardan con la web/)).toBeVisible();
+    await expect(dialog.getByText(/Las fotos se quedan en este navegador/)).toHaveCount(0);
+
+    // §13 and §14, and since ADR 0037 the photographs are named in it — David's instruction while
+    // approving the sprint: the notice listed the email address and nothing else, which stopped
+    // being the whole truth the moment a photograph left the browser.
+    await expect(dialog.getByText(/y las fotos de tus webs/)).toBeVisible();
     await expect(dialog.getByText(/Lo tratan Supabase .* y Render .*Uni.n Europea/)).toBeVisible();
-    await expect(dialog.getByText(/se borra de verdad/)).toBeVisible();
+    await expect(dialog.getByText(/se borra de verdad, con tus fotos/)).toBeVisible();
 
     await accountPage.keyboard.press("Escape");
     await expect(dialog).toBeHidden();

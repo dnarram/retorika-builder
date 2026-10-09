@@ -36,6 +36,12 @@
 >   with an account it reads «Guardado en tu cuenta · fotos solo en este navegador», because the
 >   document travels and the photographs do not (ADR 0034 §5, §10). **Without an account it is
 >   unchanged**, since the anonymous journey survived.
+>
+>   **And it changed again on 9 October 2026, which is this note's own point made twice**: the
+>   photographs travel too ([ADR 0037](0037-the-photos-travel-with-the-account.md)), so the label is
+>   «Guardado en tu cuenta» with nothing after it. The principle survived both changes — the wording
+>   says exactly what the guarantee is — and the sentence above is kept as it was written rather
+>   than edited, because what it records is when each guarantee held.
 > - **`localStorage` was not replaced.** It is the only storage for somebody with no account, and a
 >   cache for somebody with one — and a site opened *from* the account deliberately does not write
 >   to it at all, because the session slot is one per browser and taking it would overwrite an
