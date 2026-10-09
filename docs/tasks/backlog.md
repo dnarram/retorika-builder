@@ -290,6 +290,38 @@ open survives.
   **The other 31 walks that choose «Restaurante y bar» inline their own steps and do not wait**;
   nothing has failed there yet, and it is written here so the next intermittent red in one of them
   is read against this mechanism first.
+
+  **It happened the same day, in one of the 31, and the row above is why it took ten minutes instead
+  of an afternoon.** «sprint 6 día 7 — fotos subidas desde el panel y desde el aviso» went red in a
+  full run on `.rb-menu-choice` «element(s) not found» and passed twice out of two on its own: the
+  photograph arrived while the «Añadir sección aquí» menu was open and took the whole document with
+  it. Third occurrence, so the wait became a function — `waitForBankPhoto`, with the measurement in
+  one place and three call sites — and it carries the warning that it only applies to a sector whose
+  bank has photographs, because for an empty one there is no `blob:` src and the wait would hang.
+  **The remaining 30 still inline their own steps**, and the sprint 16 plan has a day for them.
+
+  **And measuring that third occurrence turned up something bigger, which is not a test problem.**
+  The two walks of «sprint 13 día 7» — the block that exists to click and type *inside* the window
+  where the preview looks ready and is inert — fail about one isolated run in three, and the rates
+  do not distinguish between the three places it was measured on 9 October 2026:
+
+  | Where | Isolated runs of the block |
+  |---|---|
+  | Before PR #203 (`c6750da`) | **2 of 4 failed** |
+  | `main` with #203 | **3 of 4 failed** |
+  | This branch, with the wait extracted | **1 of 3 failed** |
+
+  So it predates the chrome fix and is not caused by the wait, and four runs cannot tell those rates
+  apart. **What it is not is a flaky test.** Those two walks fail far more often alone than inside
+  the full suite, and the difference between the two is exactly the thing the mechanism above turns
+  on: alone, `next dev` compiles `/api/muestras` cold and the photograph always arrives late; in the
+  suite the route is warm. A photograph arriving late is a real owner on a cold instance, and what
+  the walks assert is that a click and a keystroke in that moment are not lost. **The look-ahead of
+  sprint 13 closes that window with one document in flight; since the bank filled there can be two,
+  and one run in three says it does not close it then.** No mechanism is proven — `wireOnce` marks
+  and wires the new document synchronously, and the look-ahead restarts on `html` changing — so this
+  row offers none, and the next step is measurement inside the editor rather than a change to a
+  test. Whose call: nobody's yet, and it is the first candidate for the sprint's spare day.
 - **The rail is seven items, and the design-tools switch now sits in the bottom-left corner at 720px
   tall (3 October 2026, sprint 14 day 5).** The switch is placed directly under the rail's items
   rather than at the foot of the rail — deliberately, because sprint 8's walk found that `mt-auto` put
