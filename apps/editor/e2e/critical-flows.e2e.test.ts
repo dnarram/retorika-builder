@@ -6265,6 +6265,109 @@ describe("sprint 16 día 6 — guardar en la cuenta sube la foto", () => {
   }, 180_000);
 });
 
+/**
+ * Sprint 16 day 7 — the one walk that needs a real Supabase project, behind its own gate.
+ *
+ * **Everything else in this file runs with `NEXT_PUBLIC_SUPABASE_URL` pointing at a dead port**, so
+ * nothing in CI can sign in. Day 6's upload walk answers that origin with Playwright, which proves
+ * the editor's side and says so; what it cannot prove is that Supabase accepts the bytes or that
+ * the policies allow them. This is the walk that does, and it cannot run in CI because CI has no
+ * project and no credentials — so it is gated, and the gate is the honest version of «not covered».
+ *
+ * ```sh
+ * RETORIKA_E2E_ACCOUNT=1 \
+ * RETORIKA_E2E_EMAIL="<una cuenta de prueba>" \
+ * RETORIKA_E2E_PASSWORD="<su contraseña>" \
+ *   pnpm e2e
+ * ```
+ *
+ * It needs the dev project's own `NEXT_PUBLIC_SUPABASE_URL` and anon key in the environment the
+ * server starts with, which `apps/editor/e2e/server.ts` overrides for the fake host — so running
+ * this means running against a server started another way, or changing that override for the run.
+ * **Said rather than smoothed over**: this is the one walk in the file that is not self-contained,
+ * and `docs/tasks/el-recorrido-de-la-cuenta.md` is the path David actually uses.
+ */
+describe.skipIf(process.env["RETORIKA_E2E_ACCOUNT"] !== "1")(
+  "sprint 16 día 7 — contra un proyecto de verdad",
+  () => {
+    it("saves a web with a photograph, signs in elsewhere, and the photograph is there", async () => {
+      const email = process.env["RETORIKA_E2E_EMAIL"];
+      const password = process.env["RETORIKA_E2E_PASSWORD"];
+      if (!email || !password) {
+        throw new Error(
+          "RETORIKA_E2E_ACCOUNT=1 needs RETORIKA_E2E_EMAIL and RETORIKA_E2E_PASSWORD. Without " +
+            "them this walk would skip silently, which is the one thing a gated test must not do.",
+        );
+      }
+
+      const first = await (await browser.newContext()).newPage();
+      try {
+        await first.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+        await first.fill("#nombre", "Taberna del Puerto");
+        await first.getByRole("button", { name: "Siguiente" }).click();
+        await first.getByText("Restaurante y bar", { exact: true }).click();
+        await first.getByRole("button", { name: "Siguiente" }).click();
+        await first.getByText("Comidas", { exact: true }).click();
+        await first.getByRole("button", { name: "Siguiente" }).click();
+        await first.fill("#direccion", "Muelle 3, Ronda");
+        await first.getByRole("button", { name: "Siguiente" }).click();
+        await first.getByText("Que reserven", { exact: true }).click();
+        await first.fill("#enlace", "https://reservas.example.com/taberna");
+        await first.getByRole("button", { name: "Crear mi web" }).click();
+        await first.getByText("Ver a tamaño real →").first().click();
+
+        const frame = first.frameLocator(PREVIEW).first();
+        await waitForBankPhoto(frame);
+        await frame.locator('[data-section="sec-cover"] img').first().click();
+        await first
+          .locator('input[type="file"]:not(#logo)')
+          .setInputFiles(join(import.meta.dirname, "fixtures/cover-photo.jpg"));
+        await expect(frame.locator(".rb-sample")).toHaveCount(0);
+
+        await first.getByRole("button", { name: "Guardar en mi cuenta" }).click();
+        const dialog = first.getByRole("dialog");
+        await dialog.getByLabel(/Correo/).fill(email);
+        await dialog.getByLabel(/Contrase/).fill(password);
+        await dialog.getByRole("button", { name: /Crear la cuenta y guardar/ }).click();
+        await expect(dialog.getByText(/Guardada en tu cuenta, con su foto/)).toBeVisible({
+          timeout: 30_000,
+        });
+        await first.keyboard.press("Escape");
+
+        // A second browser, which is the whole point: a context of its own has no IndexedDB, no
+        // `localStorage` and no session, so anything that appears there came from the account.
+        const second = await (await browser.newContext()).newPage();
+        try {
+          await second.goto(`${BASE_URL}/entrar`, { waitUntil: "networkidle" });
+          await second.getByLabel(/Correo/).fill(email);
+          await second.getByLabel(/Contrase/).fill(password);
+          await second.getByRole("button", { name: /Entrar/ }).click();
+          await second.waitForURL(/mis-webs/, { timeout: 30_000 });
+          await second.getByRole("link", { name: /Abrir/ }).first().click();
+
+          const theirs = second.frameLocator(PREVIEW).first();
+          // The photograph, on a machine that never had its bytes. A `blob:` src means the editor
+          // fetched it out of the bucket and made an object URL of it.
+          await expect(theirs.locator('[data-section="sec-cover"] img[src^="blob:"]')).toHaveCount(
+            1,
+            { timeout: 30_000 },
+          );
+          // And it is the owner's, not the bank's: the badge is what the bank's would carry.
+          await expect(theirs.locator(".rb-sample")).toHaveCount(0);
+          // Nothing is blocking the download, which is what a photograph that failed to arrive
+          // would do.
+          await second.getByRole("button", { name: "Descargar" }).click();
+          await expect(second.getByText("Falta una foto")).toHaveCount(0);
+        } finally {
+          await second.context().close();
+        }
+      } finally {
+        await first.context().close();
+      }
+    }, 240_000);
+  },
+);
+
 describe("sprint 15 día 5 — la landing, y el camino de vuelta", () => {
   /**
    * The landing, the route it pushed the questionnaire to, and the two screens that need a session.

@@ -12,8 +12,24 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 9 October 2026, **a sweep against the photo bank, which stopped being empty on
-8 October.** `restaurante-bar` entered with nine approved photographs (PR #197), and the day after,
+Last reviewed: 9 October 2026, **closing sprint 16 — «las fotos viajan con la cuenta», which is the
+one thing ADR 0034 §5 scheduled by name and the last of phase 2's account work.** A photograph of the
+owner's now goes to a private storage bucket when a web is saved, comes back when that web is opened
+anywhere, is reconciled after every accepted save, and leaves with the account when it is deleted.
+Seven things changed state in this file: the bank's resolution and its repetition both have ADRs
+(0035 accepted, 0036 proposed), `pnpm size` stopped being blind to a bank photograph, the 19 e2e
+walks that raced the bank now wait, the mechanism this file proposed for the «sprint 13 día 7» reds
+is **falsified** rather than unproven, `docs/tasks/copias.md` grew a second half it did not have,
+and the sweep that ends accounts stopped being pure SQL.
+
+**What this sprint found about the record itself, which is the eighth instance of the pattern this
+file names at its own head.** `README.md` still listed «accounts and persistence» among what is *not
+built* — a whole sprint after sprint 15 built them — and said «the browser tab is the only copy until
+it downloads», which stopped being true on 4 October. Found by re-reading it to update a different
+row. Nothing in CI reads prose, and that is now eight times.
+
+The review before that was 9 October 2026, **a sweep against the photo bank, which stopped being
+empty on 8 October.** `restaurante-bar` entered with nine approved photographs (PR #197), and the day after,
 the repository still said the bank was empty in fourteen places: this file twice, `README.md`
 twice, nine code comments and one test name across `packages/photobank`, `packages/generator`,
 `packages/catalog` and the `e2e` — and this file also said the nine photographs were all
