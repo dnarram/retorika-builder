@@ -304,18 +304,50 @@ account — and the browser's own copy keeps the edits meanwhile.
 ### How to run it
 
 ```sh
-# Says who is past the thirty days and ends nobody. Safe, and the default.
+# Says who is past the thirty days, how many photographs each has, and ends nobody.
+# Safe, the default, and it needs no secret beyond the database.
 DATABASE_URL="<el pooler, puerto 6543>" pnpm accounts:purge
 
 # Ends them. There is no undo and no backup on the free plan.
-DATABASE_URL="<el pooler, puerto 6543>" pnpm accounts:purge --confirm
+DATABASE_URL="<el pooler, puerto 6543>" \
+NEXT_PUBLIC_SUPABASE_URL="<la URL del proyecto>" \
+SUPABASE_SERVICE_ROLE_KEY="<la clave de servicio>" \
+  pnpm accounts:purge --confirm
 ```
 
-Only `DATABASE_URL` is needed — no service key, no admin API. Deleting the `auth.users` row
-cascades through `public.sites`, `public.accounts` and Supabase's own `auth.identities`,
-`auth.sessions` and `auth.refresh_tokens`, so one statement finishes the job. That is also what
-makes it testable: `packages/db/test/deletion.pg.test.ts` runs this code path against a real
-Postgres and then goes looking for the rows.
+**A confirmed run needs the service key as well as `DATABASE_URL`, and that changed on 9 October
+2026** (ADR 0037). This section used to say «only `DATABASE_URL` is needed — no service key, no
+admin API», which was true when it was written and is now half true:
+
+- **The rows still need nothing but SQL.** Deleting the `auth.users` row cascades through
+  `public.sites`, `public.accounts` and Supabase's own `auth.identities`, `auth.sessions` and
+  `auth.refresh_tokens`, so one statement finishes them.
+- **The photographs are not rows.** They are files in the private `fotos` bucket, and
+  `delete from storage.objects` removes the bookkeeping while the bytes stay in the object store.
+  Removing a file needs the Storage API, and reaching past the bucket's own policies needs the key
+  that bypasses them.
+
+**A dry run still needs neither**, deliberately: asking «who is past the window» destroys nothing
+and should not require a key that could.
+
+`packages/db` finds the objects in SQL — testable like everything else there — and the removing is
+in `scripts/purge-accounts.ts`, where a secret is allowed to be.
+`packages/db/test/deletion.pg.test.ts` runs this code path against a real Postgres with a remover
+that records, so the order of operations is asserted without a bucket.
+
+### If it says some accounts were NOT ended
+
+The sweep removes an account's photographs **before** it ends the account, and skips the account if
+that fails. The exit code is 1 and each one is named with the reason.
+
+**That order is the decision, and it is the recoverable half of a choice between two failures.** A
+skipped account is past its window, has lost some of its photographs, and is ended by the next run:
+hours of an account that was leaving anyway. The other order — rows first — would end the account
+and leave the files with **nothing left that remembers whose they were**, because the only handle on
+those bytes is the owner id in their path and the row holding that id would be gone.
+
+So: read the reason, fix what it names — usually a missing or wrong `SUPABASE_SERVICE_ROLE_KEY`, or
+Supabase being unreachable — and run it again. **Do not end the account by hand to clear it.**
 
 ### How often
 
@@ -334,6 +366,10 @@ was not is the one failure Part 15 wrote a clause about.
 3. **Check `public.audit_log` afterwards.** One `account_deleted` row per account, with
    `endedTheAccount: true` in its `detail` and a null `actor_id` — the fact kept, the person not
    (Part 17 against Part 15, and Part 15 wins; see `deletion.ts`).
+4. **Check the bucket afterwards.** Supabase → Storage → `fotos`. No folder named after an ended
+   account's id should be left. A folder that is still there with an account that is gone means the
+   sweep reported it ended while the removal did not happen, which the code is arranged to make
+   impossible — so it is worth a look rather than a tidy-up.
 
 ### What not to touch
 

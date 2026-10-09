@@ -1,4 +1,5 @@
 import type { Sql } from "./connect.ts";
+import { photoObjectsOf, type RemoveObjects } from "./photos.ts";
 
 /**
  * Deleting an account, and meaning it.
@@ -15,7 +16,8 @@ import type { Sql } from "./connect.ts";
  * **What this module does.** `requestDeletion` records that somebody asked, `dueForDeletion` finds
  * whose window has run out, `purgeAccountData` forgets one account's data, and `purgeDueAccounts`
  * ends the accounts that are due — including the Supabase Auth user, which is what leaves nothing
- * to sign in with. `scripts/purge-accounts.ts` is the only caller of that last one and
+ * to sign in with, and including the photographs in the storage bucket, which are the one part
+ * that is not a row. `scripts/purge-accounts.ts` is the only caller of that last one and
  * `docs/runbook.md` §6 says who runs it and how often.
  *
  * > **Correction, 5 October 2026.** This header used to say the Auth user «needs the service-role
@@ -27,6 +29,14 @@ import type { Sql } from "./connect.ts";
  * > out, nothing was written to call the testable half, and «borre de verdad» was a sentence on a
  * > screen with no mechanism behind it for a whole sprint. Doing it in SQL is also what makes the
  * > whole thing testable, which is the opposite of what the old note claimed.
+ *
+ * > **And a second correction, 9 October 2026 (ADR 0037).** «One `delete` finishes the job» is
+ * > true of every *row*, and the photographs are not rows: they are files in a Supabase Storage
+ * > bucket, and `delete from storage.objects` removes the bookkeeping while the bytes stay in the
+ * > object store. So the sweep is no longer pure SQL. It asks a `removeObjects` function — handed
+ * > in, implemented in `scripts/purge-accounts.ts` with the service key — to remove them **before**
+ * > it ends the account, and **skips the account if that fails**. The order and the skip are both
+ * > decisions, argued where they are made below.
  *
  * Everything here runs with a connection that bypasses row-level security, which is correct and is
  * the exception the policies were written around: a sweep acts on behalf of nobody, so there is no
@@ -117,11 +127,18 @@ async function purgeWithin(
 export async function purgeAccountData(
   sql: Sql,
   userId: string,
-): Promise<{ sitesDeleted: number }> {
-  return sql.begin(async (tx) => {
-    const { sitesDeleted } = await purgeWithin(tx, userId, false);
-    return { sitesDeleted };
-  }) as Promise<{ sitesDeleted: number }>;
+  removeObjects: RemoveObjects,
+): Promise<{ sitesDeleted: number; photosDeleted: number }> {
+  // Before the transaction, and for the reason `purgeDueAccounts` writes out at length: a failure
+  // here must leave the account intact rather than leave files nothing remembers.
+  const photos = await photoObjectsOf(sql, userId);
+  if (photos.length > 0) await removeObjects(photos);
+
+  const { sitesDeleted } = (await sql.begin(async (tx) => {
+    const result = await purgeWithin(tx, userId, false);
+    return { sitesDeleted: result.sitesDeleted };
+  })) as { sitesDeleted: number };
+  return { sitesDeleted, photosDeleted: photos.length };
 }
 
 /**
@@ -157,26 +174,90 @@ export interface SweepResult {
   ended: string[];
   /** Sites removed along with them, summed. */
   sitesDeleted: number;
+  /** Photograph objects removed from the bucket, summed (ADR 0037). */
+  photosDeleted: number;
+  /**
+   * The accounts this run did **not** end, because their photographs could not be removed.
+   *
+   * Not an error the sweep swallows and not one it dies on: every other account is still ended, and
+   * these are named so somebody can look. The next run tries them again.
+   */
+  skipped: { userId: string; reason: string }[];
 }
 
 export async function purgeDueAccounts(
   sql: Sql,
-  { confirm = false }: { confirm?: boolean } = {},
+  {
+    confirm = false,
+    removeObjects,
+  }: { confirm?: boolean; removeObjects?: RemoveObjects | undefined } = {},
 ): Promise<SweepResult> {
   const due = await dueForDeletion(sql);
-  if (!confirm) return { due, ended: [], sitesDeleted: 0 };
+  if (!confirm) return { due, ended: [], sitesDeleted: 0, photosDeleted: 0, skipped: [] };
+
+  /**
+   * **A confirmed sweep without a way to remove the photographs is refused, not run.**
+   *
+   * The alternative — carry on and leave the files — is the one outcome nobody can repair: the
+   * account is gone, so nothing records whose bytes those were, and no later sweep can find an
+   * owner who no longer exists. Part 15 asks for a deletion that deletes for real, and half of one
+   * is not a smaller version of it. A caller that reaches this line has forgotten something, and
+   * finding out now is cheaper than finding out from the storage bill.
+   */
+  if (!removeObjects) {
+    throw new Error(
+      "purgeDueAccounts: confirm was passed with no removeObjects. The photographs in the " +
+        "`fotos` bucket are files, not rows, so SQL alone would end the account and leave them " +
+        "behind with nothing left to say whose they were (ADR 0037).",
+    );
+  }
 
   const ended: string[] = [];
+  const skipped: { userId: string; reason: string }[] = [];
   let sitesDeleted = 0;
+  let photosDeleted = 0;
+
   for (const userId of due) {
+    /**
+     * **The photographs go first, and a failure skips the account rather than ending it.**
+     *
+     * The two orders fail differently, and only one of them fails recoverably:
+     *
+     * - *Objects, then rows.* A failure leaves an account that is past its window with some of its
+     *   photographs gone. Nobody is going to come back to it — the window expired — and the next
+     *   run finishes the job. The damage is a few hours of an account that was leaving anyway.
+     * - *Rows, then objects.* A failure leaves the account ended and the files in the bucket with
+     *   **nothing left that remembers whose they were**: the only handle is the owner id in the
+     *   path, and the row that held that id is gone. Storage nobody can attribute and no sweep can
+     *   find.
+     *
+     * So: objects first, and if that throws, this account is skipped and named. The remover is
+     * allowed to be partial — Supabase's `remove` takes a list — so a skipped account may have
+     * lost some photographs already. That is the cost of the order, it is smaller than the
+     * alternative, and it is written here rather than discovered.
+     */
+    const photos = await photoObjectsOf(sql, userId);
+    if (photos.length > 0) {
+      try {
+        await removeObjects(photos);
+      } catch (error) {
+        skipped.push({
+          userId,
+          reason: error instanceof Error ? error.message : String(error),
+        });
+        continue;
+      }
+    }
+
     const result = (await sql.begin((tx) => purgeWithin(tx, userId, true))) as {
       sitesDeleted: number;
       authUserDeleted: boolean;
     };
     ended.push(userId);
     sitesDeleted += result.sitesDeleted;
+    photosDeleted += photos.length;
   }
-  return { due, ended, sitesDeleted };
+  return { due, ended, sitesDeleted, photosDeleted, skipped };
 }
 
 /**

@@ -188,6 +188,9 @@ importers:
       '@retorika/schema':
         specifier: workspace:*
         version: link:packages/schema
+      '@supabase/supabase-js':
+        specifier: 2.117.2
+        version: 2.117.2
     devDependencies:
       '@axe-core/playwright':
         specifier: 4.13.0

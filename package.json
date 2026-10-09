@@ -55,6 +55,7 @@
     "@retorika/photobank": "workspace:*",
     "@retorika/publisher": "workspace:*",
     "@retorika/renderer": "workspace:*",
-    "@retorika/schema": "workspace:*"
+    "@retorika/schema": "workspace:*",
+    "@supabase/supabase-js": "2.117.2"
   }
 }
