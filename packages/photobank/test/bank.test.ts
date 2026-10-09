@@ -15,7 +15,16 @@ import {
   sampleSrcFor,
   sectorsInBank,
 } from "../src/index.ts";
-import { bankFileSchema, imageRecordSchema, MAX_IMAGE_BYTES } from "../src/schema.ts";
+import {
+  bankFileSchema,
+  draftImageRecordSchema,
+  FLOOR_EXEMPT_IDS,
+  FLOOR_EXEMPTION_FAILS_FROM,
+  imageRecordSchema,
+  MAX_IMAGE_BYTES,
+  MIN_COVER_HEIGHT,
+  MIN_COVER_WIDTH,
+} from "../src/schema.ts";
 
 /**
  * `packages/photobank`, day one: the machinery, tested while `bank/` itself was empty of real
@@ -95,6 +104,60 @@ describe("the record schema refuses what ADR 0011 refuses", () => {
 
   it("accepts exactly the cap", () => {
     expect(() => imageRecordSchema.parse(record({ bytes: MAX_IMAGE_BYTES }))).not.toThrow();
+  });
+
+  /**
+   * ADR 0035's floor. The synthetic record above is 1600 x 1067 and clears it, which is why the
+   * eleven tests before this one never had to say so.
+   */
+  it("refuses a photograph narrower than the full-width cover asks for", () => {
+    expect(() =>
+      imageRecordSchema.parse(record({ width: MIN_COVER_WIDTH - 1, height: MIN_COVER_HEIGHT })),
+    ).toThrow();
+  });
+
+  it("refuses a photograph shorter than the full-width cover asks for, however wide it is", () => {
+    // The case a «longest side» floor would have let through: 2000 px across and still stretched
+    // vertically, because `object-fit: cover` scales by `max(W/w, H/h)`.
+    expect(() =>
+      imageRecordSchema.parse(record({ width: 2000, height: MIN_COVER_HEIGHT - 1 })),
+    ).toThrow();
+  });
+
+  it("accepts exactly the floor, and the 1600x1072 the nine are regenerated at", () => {
+    expect(() =>
+      imageRecordSchema.parse(record({ width: MIN_COVER_WIDTH, height: MIN_COVER_HEIGHT })),
+    ).not.toThrow();
+    expect(() => imageRecordSchema.parse(record({ width: 1600, height: 1072 }))).not.toThrow();
+  });
+
+  it("refuses an undersized draft too, so approving stays a `git mv` and nothing else", () => {
+    expect(() =>
+      draftImageRecordSchema.parse(
+        record({ width: 1024, height: 1024, review: { status: "draft", drafted: "2026-10-09" } }),
+      ),
+    ).toThrow();
+  });
+
+  it("lets the nine of restaurante-bar through by id, and nothing else", () => {
+    const exempt = [...FLOOR_EXEMPT_IDS][0];
+    expect(exempt, "the exemption list is empty — delete these two tests with it").toBeDefined();
+    if (!exempt) return;
+    expect(() =>
+      imageRecordSchema.parse(
+        record({ id: exempt, file: `${exempt}.webp`, width: 1024, height: 1024 }),
+      ),
+    ).not.toThrow();
+    expect(() =>
+      imageRecordSchema.parse(
+        record({
+          id: "restaurante-bar.10",
+          file: "restaurante-bar.10.webp",
+          width: 1024,
+          height: 1024,
+        }),
+      ),
+    ).toThrow();
   });
 });
 
@@ -213,6 +276,33 @@ describe("every approved photograph, against its own record", () => {
       expect(webpSize(bytes)).toEqual({ width: image.width, height: image.height });
     },
   );
+
+  /**
+   * **This test is meant to fail on 1 November 2026, and that is the whole point of it** (ADR 0035).
+   *
+   * David's decision of 9 October 2026 is that the nine are regenerated at 1600 x 1072; the
+   * exemption that lets the 1024 px ones stay published in the meantime carries a date, because an
+   * exemption with no date is a note asking somebody to come back, and this repository has caught
+   * itself failing at exactly that six times — every one found by a person re-reading the record,
+   * never by the record. Nothing in CI reads prose.
+   *
+   * It asserts the state of the bank rather than the emptiness of the list, so it stops being a
+   * deadline the moment no record is under the floor — whether the regenerated batch reuses the ids
+   * or mints new ones. **The remedy is to regenerate; moving the date is David's call and nobody
+   * else's.**
+   */
+  it("has no photograph left under the floor, or is still inside the exemption's window", () => {
+    const undersized = approved.filter(
+      (image) => image.width < MIN_COVER_WIDTH || image.height < MIN_COVER_HEIGHT,
+    );
+    expect(
+      undersized.length === 0 || Date.now() < Date.parse(FLOOR_EXEMPTION_FAILS_FROM),
+      `the exemption of ADR 0035 expired on ${FLOOR_EXEMPTION_FAILS_FROM} and ` +
+        `${undersized.length} photographs are still under the ${MIN_COVER_WIDTH}x${MIN_COVER_HEIGHT} ` +
+        `floor: ${undersized.map((image) => `${image.id} (${image.width}x${image.height})`).join(", ")}. ` +
+        "Regenerate them at 1600x1072 through ADR 0011's circuit — drafts, a review, the `git mv`.",
+    ).toBe(true);
+  });
 
   it.each(approved.map((image) => [image.id, image] as const))(
     "%s records where it came from and the licence that lets a client publish it",

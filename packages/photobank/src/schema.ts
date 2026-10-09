@@ -16,6 +16,61 @@ import { z } from "zod";
  * belongs in the record, not the file (ADR 0011). */
 export const MAX_IMAGE_BYTES = 200 * 1024;
 
+/**
+ * The floor a photograph has to clear, and the exemption that expires (ADR 0035).
+ *
+ * ADR 0011 wrote «longest side 1600 px» under **Compression**, beside quality and EXIF removal, so
+ * it reads as a ceiling and nothing ever checked the other end: a 400 px photograph would have
+ * passed review exactly as the nine of `restaurante-bar` did.
+ *
+ * **Both numbers, not just the longest side.** The cover crops to a declared ratio with
+ * `object-fit: cover`, which scales a source `w x h` into a box `W x H` by `max(W/w, H/h)` — so it
+ * is upscaled unless `w >= W` *and* `h >= H`. The box is always landscape, so a tall photograph can
+ * clear the floor on its height and still be stretched sideways. 1344 x 896 is the full-width cover
+ * at a 1440 px window on the default scale (`space.xl` is 48 px, and the page has no maximum width,
+ * which is why a floor is a choice of reference width rather than a bound — ADR 0035 has the table).
+ */
+export const MIN_COVER_WIDTH = 1344;
+export const MIN_COVER_HEIGHT = 896;
+
+/**
+ * The nine of `restaurante-bar`, approved on 8 October 2026 under the old reading and allowed to
+ * stay until they are regenerated at 1600 x 1072 (ADR 0035, David's decision).
+ *
+ * They stay published in the meantime because a sector holds zero photographs or at least eight:
+ * emptying it would put the grey marker back on every restaurante-bar site until the new batch is
+ * signed. The regenerated ones take new ids — approving a photograph mints an id and never changes
+ * a file in place — so this list is what *permitted* these nine, and it is spent the moment no
+ * record in the bank is under the floor.
+ */
+export const FLOOR_EXEMPT_IDS: ReadonlySet<string> = new Set([
+  "restaurante-bar.01",
+  "restaurante-bar.02",
+  "restaurante-bar.03",
+  "restaurante-bar.04",
+  "restaurante-bar.05",
+  "restaurante-bar.06",
+  "restaurante-bar.07",
+  "restaurante-bar.08",
+  "restaurante-bar.09",
+]);
+
+/**
+ * The first day the exemption is no longer accepted — `bank.test.ts` fails from this date while any
+ * record in the bank is still under the floor.
+ *
+ * **The clock is deliberately not here.** `src/index.ts` parses all eleven sector files at module
+ * load, inside a generator `INV_5` and the golden corpus require to be a pure function of its
+ * arguments; a date-dependent parse would make a generated site depend on when it was generated. So
+ * the refinement below is clock-free and this constant is read by a test, which is the one place
+ * that can fail loudly without changing what the product produces.
+ *
+ * ADR 0035 names the cost rather than discovering it: on this date the test goes red on whatever
+ * pull request is open, which is what a deadline that enforces itself does. The remedy is to
+ * regenerate, never to move the date.
+ */
+export const FLOOR_EXEMPTION_FAILS_FROM = "2026-11-01";
+
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD");
 
 const originSchema = z.object({
@@ -65,21 +120,43 @@ const imageFieldsSchema = z.object({
   licence: licenceSchema,
 });
 
-/** The two checks every record makes regardless of review status, applied after `.extend` so the
+/** The three checks every record makes regardless of review status, applied after `.extend` so the
  * approved and draft shapes can each add their own `review` first — a `.refine` result cannot be
- * `.extend`ed afterwards. */
+ * `.extend`ed afterwards. The floor (ADR 0035) is here rather than only on the approved shape for
+ * the reason `draftImageRecordSchema` gives: approving is a `git mv` and nothing else, so a draft
+ * that could never be approved has to fail while it is still a draft. */
 function withRecordChecks<
-  Shape extends z.ZodObject<{ id: z.ZodString; file: z.ZodString; bytes: z.ZodNumber }>,
+  Shape extends z.ZodObject<{
+    id: z.ZodString;
+    file: z.ZodString;
+    bytes: z.ZodNumber;
+    width: z.ZodNumber;
+    height: z.ZodNumber;
+  }>,
 >(schema: Shape) {
-  return schema
-    .refine((record) => record.file === `${record.id}.webp`, {
-      message: "file must be `<id>.webp`",
-      path: ["file"],
-    })
-    .refine((record) => record.bytes <= MAX_IMAGE_BYTES, {
-      message: `bytes exceeds the ${MAX_IMAGE_BYTES}-byte cap`,
-      path: ["bytes"],
-    });
+  return (
+    schema
+      .refine((record) => record.file === `${record.id}.webp`, {
+        message: "file must be `<id>.webp`",
+        path: ["file"],
+      })
+      .refine((record) => record.bytes <= MAX_IMAGE_BYTES, {
+        message: `bytes exceeds the ${MAX_IMAGE_BYTES}-byte cap`,
+        path: ["bytes"],
+      })
+      // No `path`: the failure can be either dimension, and naming one of them would send a reader to
+      // the wrong number half the time. The message carries both.
+      .refine(
+        (record) =>
+          FLOOR_EXEMPT_IDS.has(record.id) ||
+          (record.width >= MIN_COVER_WIDTH && record.height >= MIN_COVER_HEIGHT),
+        {
+          message:
+            `smaller than the ${MIN_COVER_WIDTH}x${MIN_COVER_HEIGHT} floor the full-width cover ` +
+            `asks for (ADR 0035); regenerate it at 1600x1072`,
+        },
+      )
+  );
 }
 
 export const imageRecordSchema = withRecordChecks(
