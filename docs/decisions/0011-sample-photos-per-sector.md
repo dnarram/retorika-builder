@@ -45,12 +45,17 @@ our own use. A licence that stops at us fails the criterion.
   repeat themselves.
 
   > **This reason did not hold, measured on 8 October 2026 with nine approved: two of the three
-  > variant cards show the same photograph for 39.4% of business names.** Three independent draws
+  > variant cards showed the same photograph for 39.4% of business names.** Three independent draws
   > from nine repeat 30.86% of the time, so the minimum was never what stopped it, and a bigger bank
   > makes it rarer and never impossible. «Volver a generar» no longer exists either. The clause
   > stands for what it does buy — a sector cannot ship with two photographs and show one of them on
-  > every card — and the promise it could not keep is
-  > [ADR 0036](0036-the-three-cards-pick-their-photographs-together.md), **proposed and waiting**.
+  > every card.
+  >
+  > **The promise it could not keep is kept elsewhere since 10 October 2026**, by
+  > [ADR 0036](0036-the-three-cards-pick-their-photographs-together.md): the three cards are one
+  > draw without replacement, and the rate is **0 of 2000** where it was 787. Built in sprint 17
+  > day 2, and **ADR 0036 is still `proposed`** — the code is in and the signature is David's to
+  > give.
 - **"Otro" gets a neutral set:** a workspace, a counter, a shop front with no signage.
 
 ### One image's record

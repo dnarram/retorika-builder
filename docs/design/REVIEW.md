@@ -1032,3 +1032,50 @@ Con eso el alto de la portada es el mismo con cualquier fuente: 594 px en «Clá
 
 **Lo que esto abre y no cierra**: en cuanto se recorta, el dueño no elige qué parte de su foto
 sobrevive. Está en `docs/tasks/backlog.md` con su medida.
+
+### Los cuatro tiradores de las esquinas se retiran (10 de octubre de 2026, sprint 17 día 2)
+
+**La maqueta 08 los dibuja y el editor los dibujaba. Dejan de dibujarse, y esto es la negativa
+escrita donde se lee** — regla del ADR 0026: «un ADR que no dice qué descartó invita a rediseñar lo
+descartado en tres sprints como si fuera nuevo».
+
+Lo que había: `select()` colgaba un `span` de cada esquina de la sección elegida, con el aspecto de
+un asa de redimensionado. Cuatro, desde el sprint 2. **Llevaban `pointer-events: none`**, así que no
+eran un listener a medio escribir: eran un control que rechazaba el puntero.
+
+Cuatro razones, las cuatro comprobadas hoy contra el código y no recordadas:
+
+1. **No hay nada que redimensionar.** Las asas se cuelgan del `[data-section]`, y una sección no
+   tiene ancho, alto ni span en el modelo: `sectionLayoutSchema` es
+   `{grid: {columns}, placements, breakpoints}`. La **regla 4** es el motivo — las posiciones son
+   relativas a la rejilla de la sección —, así que lo que tiene tamaño es un **elemento**, nunca la
+   sección.
+2. **La maqueta las dibuja alrededor de otra cosa.** `HANDOFF.md` las pone en el mismo aliento que
+   la barra flotante, que va «above the selected **element**»: «Selection is drawn with a 2 px blue
+   outline and four corner handles». El contorno sobrevivió al cambio de sujeto —de elemento a
+   sección— y las asas no podían: su sujeto nuevo no tiene la propiedad que ellas editan.
+3. **Si redimensionar en la rejilla es una función de verdad, ya existe y es accesible.** La
+   familia `Colocación` del panel `Diseño` mueve `column`, `columnSpan`, `row` y `rowSpan` con
+   botones de verdad, y `setPlacement` rechaza lo que la regla 4 no permite: una columna fuera de
+   las doce, un span que las pase, y **toda colocación sobre una sección que dibuja el catálogo**,
+   que lanza con «design it by hand first». Unas asas sobre una sección del catálogo estaban
+   muertas por construcción.
+4. **Cablearlas costaría dos o tres días y su propio ADR.** Sería la primera interacción de
+   arrastre del editor: geometría de rejilla medida dentro de un iframe, imán a doce columnas, un
+   equivalente de teclado que este mismo sprint exigiría, un paso de historia por arrastre, y una
+   decisión sobre qué significa arrastrar en la vista de móvil, donde la regla 7 solo permite
+   ocultar, reordenar y estrechar.
+
+**Lo que no se toca: el contorno de 2px y el grupo de seis acciones.** Retirar los agarres no era
+retirar la selección. Cuatro adornos inertes se van y seis botones que funcionan se quedan, y la
+caminata «no dibuja tiradores en las esquinas, y el lienzo sigue sin desplazarse» asevera las dos
+mitades.
+
+**Y una medida que sale de aquí.** `overflow-x: clip` sobre `html, body` del iframe se añadió en el
+sprint 8 porque elegir cualquier sección desplazaba el lienzo 4px: `.rb-handle-tr` y `.rb-handle-br`
+estaban en `right: -4px` sobre una sección a sangre sin margen que absorbiera el sangrado. Con las
+asas fuera, la caminata se ejecutó una vez **con esa línea borrada** y pasó: hoy nada más del cromo
+sangra. La regla se queda como guarda de la próxima pieza dibujada un píxel fuera, no porque haga
+falta ahora; lo que la medición abre —que un `clip` ahí también tapa el desbordamiento del contenido
+**del propio dueño**, mientras el diálogo que lo mide usa su propio marco— queda en
+`docs/tasks/backlog.md` con su número al lado.

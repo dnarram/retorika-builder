@@ -36,9 +36,19 @@ function effectiveSector(answers: Answers): SectorId {
  * every other document in this repository is, so a generator bug fails loudly here rather than
  * publishing a broken site.
  */
-export function generate(answers: Answers, variant: VariantChoice = VARIANTS[0]): GeneratedSite {
+export function generate(
+  answers: Answers,
+  variant: VariantChoice = VARIANTS[0],
+  /**
+   * Bank ids a sibling card has already taken (ADR 0036). Only `generateVariants` passes it; a
+   * lone `generate(answers, variant)` has no siblings and behaves exactly as it did before this
+   * parameter existed, which matters because that is the entry point the editor's «añadir
+   * sección» paths and most of the tests use.
+   */
+  avoid: readonly string[] = [],
+): GeneratedSite {
   const sector = effectiveSector(answers);
-  const cover = buildCover(answers, sector, variant.cover, variant.id);
+  const cover = buildCover(answers, sector, variant.cover, variant.id, avoid);
   const services = buildServices(answers, sector, variant.services);
   const location = buildLocation(answers, sector);
   const contact = buildContact(answers, sector);
@@ -104,9 +114,57 @@ export function footerSectionFor(answers: Answers): Section {
   return buildFooter(answers);
 }
 
-/** The three real compositions, for the "elige por dónde empezar" screen. */
+/**
+ * The three real compositions, for the "elige por dónde empezar" screen.
+ *
+ * **One draw without replacement, not three independent ones** (ADR 0036). This was
+ * `VARIANTS.map(...)`, and three independent hashes of three seeds put the same photograph on two
+ * of the three cards for **39.4% of business names** — 787 of 2000, measured with the nine approved
+ * `restaurante-bar` photographs and measured again before this change. About 31% is the floor a
+ * perfect hash gives with nine, so the draw was never the defect: independence was. «At least
+ * eight per sector» was asked for to prevent exactly this and could not, because a bigger bank
+ * makes repetition rarer and never impossible.
+ *
+ * So the fold, and the fold is the point: the three cards are a property of the screen that shows
+ * three, not of any one of them. It stays deterministic — the order is fixed by `VARIANTS`, the
+ * walk inside `sampleImageFor` is a pure function of the sorted bank and the ids already taken, and
+ * there is no clock and no randomness anywhere in the chain.
+ *
+ * A sector holds zero photographs or at least eight (ADR 0011, enforced by `bank.test.ts`), so with
+ * any bank at all the three cards are now three different photographs. With no bank the three share
+ * the catalog's placeholder, which is correct and is why the guarantee is written as «never two the
+ * same when the sector has three or more» rather than «eight is enough».
+ */
 export function generateVariants(answers: Answers): GeneratedSite[] {
-  return VARIANTS.map((variant) => generate(answers, variant));
+  const taken: string[] = [];
+  return VARIANTS.map((variant) => {
+    const site = generate(answers, variant, taken);
+    const chosen = coverSampleOf(site.document);
+    if (chosen) taken.push(chosen);
+    return site;
+  });
+}
+
+/**
+ * Which bank photograph this document's cover ended up with, or `undefined` for the placeholder.
+ *
+ * Read back out of the document rather than returned alongside it, because the document is what
+ * actually shipped: a `GeneratedSite` field saying «and I chose this» could disagree with the
+ * element, and then the fold would be avoiding an id no card is showing. `undefined` degrades to
+ * no avoidance, which is this function's behaviour before ADR 0036 — the empty-bank case, where
+ * the three placeholders are correct.
+ */
+function coverSampleOf(document: RetorikaDocument): string | undefined {
+  for (const section of document.pages[0]?.sections ?? []) {
+    if (section.preset.catalogId !== "cover") continue;
+    for (const element of section.content) {
+      // Asked of the value and not of the role: `value` is optional on a content element, and the
+      // `kind` discriminant is what actually proves there is a `sample` to read.
+      const value = element.value;
+      if (value?.kind === "image") return value.sample;
+    }
+  }
+  return undefined;
 }
 
 function slugify(name: string): string {

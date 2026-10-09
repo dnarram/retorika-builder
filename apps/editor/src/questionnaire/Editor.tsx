@@ -135,8 +135,6 @@ export interface DeleteToast {
  */
 const EDITABLE_TAGS = new Set(["H1", "H2", "H3", "H4", "H5", "H6", "P", "A"]);
 
-const HANDLE_CORNERS = ["tl", "tr", "bl", "br"] as const;
-
 /** The interface's typeface, for chrome injected into the preview frame. Spelled out rather
  * than inherited: inside that frame, "inherit" means the client's own site font. */
 const UI_FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
@@ -447,8 +445,7 @@ function filenameFrom(response: Response, fallback: string): string {
  * document, not answers plus a diff, is also what a section that can be added, deleted or
  * reordered requires.
  *
- * Section selection marks a section with a 2px outline and four corner handles injected into the
- * iframe's own DOM, mirroring mockup 08's per-element selection at section granularity — and,
+ * Section selection marks a section with a 2px outline injected into the iframe's own DOM — and,
  * since sprint 2 day 4, a small cluster of action buttons drawn at the selected section's corner:
  * move up, move down, its composition, duplicate, the section's fields, delete. Six as of sprint 4
  * day 4, and the composition one is the first that is drawn conditionally: a section whose layout
@@ -1711,16 +1708,11 @@ export function Editor({
     function select(target: HTMLElement) {
       for (const section of sections) {
         section.classList.remove("rb-selected");
-        for (const el of section.querySelectorAll(".rb-handle, .rb-actions, .rb-compositions")) {
+        for (const el of section.querySelectorAll(".rb-actions, .rb-compositions")) {
           el.remove();
         }
       }
       target.classList.add("rb-selected");
-      for (const corner of HANDLE_CORNERS) {
-        const handle = iframeDoc.createElement("span");
-        handle.className = `rb-handle rb-handle-${corner}`;
-        target.appendChild(handle);
-      }
 
       const sectionId = target.dataset.section;
       if (!sectionId) return;
@@ -3530,26 +3522,37 @@ export function Editor({
 
     const style = iframeDoc.createElement("style");
     style.textContent = [
-      // The buffer fix noted on day 3 and again on day 5: selecting *any* section made the
-      // preview scroll 4px sideways. Measured to the culprit rather than guessed — `.rb-handle-tr`
-      // and `.rb-handle-br` sit at `right: -4px` on a full-bleed section, which is a deliberate
-      // touch (a resize handle straddling its selection outline, not hugging it) that only becomes
-      // a problem because the section itself has no margin to absorb 4px of bleed.
-      //
-      // Editor-only chrome, this stylesheet only: `wireInteractions` runs on the live iframe and
-      // never on `render(doc, "html")`, so `overflow-x: clip` here cannot reach a published page.
-      // `clip` rather than `hidden`, because `hidden` on one axis makes the other compute to
-      // `auto` by spec — this iframe's own vertical scroll must stay exactly what it already is.
+      /*
+       * **The cause of this rule is gone, the rule stays, and it is no longer load-bearing —
+       * measured, not assumed.** It was added because selecting any section made the preview scroll
+       * 4px sideways: `.rb-handle-tr` and `.rb-handle-br` sat at `right: -4px` on a full-bleed
+       * section with no margin to absorb the bleed. Sprint 17 day 2 withdrew those handles, and the
+       * walk «no dibuja tiradores en las esquinas, y el lienzo sigue sin desplazarse» was then run
+       * with this line deleted: it **passed**. Nothing else in the chrome bleeds.
+       *
+       * Kept anyway, and the reason is the guarantee rather than the handles: the action cluster,
+       * the gap pills and the handmade bar all sit inside a section already as wide as the frame,
+       * and the next piece of chrome drawn one pixel past an edge would bring the scroll back.
+       * Deleting it in the same change that withdrew its cause would be two changes wearing one
+       * commit.
+       *
+       * **What the measurement opened, and this is not the day to close it:** a `clip` here also
+       * hides overflow from the *owner's own* content, so the preview can look narrower-than-real
+       * while `OverflowDialog` — which measures in its own frame — correctly reports a page that
+       * will scroll once published. An editor that shows a tidier page than it publishes is the
+       * kind of silence `docs/tasks/backlog.md` now records with this measurement beside it.
+       *
+       * Editor-only chrome, this stylesheet only: `wireInteractions` runs on the live iframe and
+       * never on `render(doc, "html")`, so `overflow-x: clip` here cannot reach a published page.
+       * `clip` rather than `hidden`, because `hidden` on one axis makes the other compute to `auto`
+       * by spec — this iframe's own vertical scroll must stay exactly what it already is.
+       */
       "html, body { overflow-x: clip; }",
       '[contenteditable="true"] { cursor: text; border-radius: 3px;',
       "  outline: 2px dashed transparent; outline-offset: 3px; }",
       '[contenteditable="true"]:hover, [contenteditable="true"]:focus { outline-color: #156FE7; }',
       "[data-section] { position: relative; cursor: pointer; }",
       "[data-section].rb-selected { outline: 2px solid #156FE7; outline-offset: -2px; }",
-      ".rb-handle { position: absolute; width: 7px; height: 7px; background: #FFFFFF;",
-      "  border: 2px solid #156FE7; border-radius: 2px; pointer-events: none; }",
-      ".rb-handle-tl { top: -4px; left: -4px; } .rb-handle-tr { top: -4px; right: -4px; }",
-      ".rb-handle-bl { bottom: -4px; left: -4px; } .rb-handle-br { bottom: -4px; right: -4px; }",
       // Inset within the section, not hung outside it like the corner handles: the cover is
       // the first section, with no room above it, and a button hanging above the top of the
       // page there would sit outside the iframe's own visible area — covered by whatever the

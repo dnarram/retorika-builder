@@ -63,6 +63,11 @@ export function buildCover(
   sector: SectorId,
   variant: CoverVariant,
   variantId: string,
+  /**
+   * Bank ids the sibling cards have already taken, so this one does not repeat them (ADR 0036).
+   * Empty or absent is the ordinary case and behaves exactly as it did before `avoid` existed.
+   */
+  avoid: readonly string[] = [],
 ): Section {
   const facts = factsFor(answers);
   const subheadline = textFor(sector, "cover", "subheadline", facts);
@@ -100,9 +105,14 @@ export function buildCover(
     // business, the sector, which of the three cards, and which element. No clock and no
     // randomness, because `INV_5`, the golden corpus and "same answers, same site" all depend on
     // this function being a pure function of its arguments.
+    // The seed is everything that already has to be a pure input, and `avoid` is the sibling
+    // cards' choices — which are themselves pure, because the order the three are built in is
+    // fixed by `VARIANTS`. ADR 0036: a distinct seed was never a distinct photograph, and three
+    // independent hashes of three seeds repeated for 39.4% of business names.
     value: sampleImageFor(
       sector,
       `${answers.businessName}:${sector}:${variantId}:sec-cover:el-image`,
+      { avoid },
     ),
   });
   if (destination && actionText) {
