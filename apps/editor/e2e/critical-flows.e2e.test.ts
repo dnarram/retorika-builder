@@ -2578,6 +2578,16 @@ describe("sprint 9 día 7 — colchón: la barra no traga un clic que era para o
    * headline's exact colour reliably grows its wrapped bar to 66px tall and puts its bottom edge
    * past the body paragraph's own top — a real, supported width, not a contrived one.
    *
+   * **On «Contacto» since 9 October 2026, not on the cover, and the reason is measured.** The cover
+   * provided the overlap for as long as its empty marker was 8:3: at 1100px the image was 134px
+   * tall, the text column was taller than it, and the body sat right under the headline. The marker
+   * is 4:3 now and the cover crops to it (`packages/renderer/src/build.ts`), so the image is 269px
+   * tall and `.rb-section` distributes the headline and the body against it — the body's top moved
+   * to 153px below the headline's, and the bar's bottom reaches 120px. No width recovers it: the gap
+   * grows with the image (172px at 1200, 307px at 1920), and from 1440 the bar flips above the
+   * headline altogether. «Contacto» has what the cover lost, a headline with its paragraph 18px
+   * under the bar's bottom edge, at 1100 and at 1280 alike.
+   *
    * The bar's every blank pixel used to be a `<div>`'s own hit-testing box, and its own `click`
    * handler stopped propagation on all of it — so a click meant for the paragraph hidden underneath
    * landed on the bar instead and went nowhere. `pointer-events: none` on the bar with `auto` on
@@ -2607,7 +2617,7 @@ describe("sprint 9 día 7 — colchón: la barra no traga un clic que era para o
       await studio.getByRole("switch", { name: "Herramientas de diseño" }).click();
       await studio.getByRole("button", { name: "Sí, enciéndelas" }).click();
 
-      await frame.locator('[data-section="sec-cover"] [data-id="el-headline"]').click();
+      await frame.locator('[data-section="sec-contact"] [data-id="el-contact-headline"]').click();
       await frame.locator(".rb-toolbar-color").waitFor();
       await frame.locator(".rb-toolbar-color").evaluate((el) => {
         (el as HTMLInputElement).value = "#fefefe";
@@ -2615,20 +2625,73 @@ describe("sprint 9 día 7 — colchón: la barra no traga un clic que era para o
       });
 
       const bar = frame.locator(".rb-toolbar");
-      const body = frame.locator('[data-section="sec-cover"] [data-id="el-body"]');
-      const [barBox, bodyBox] = await Promise.all([bar.boundingBox(), body.boundingBox()]);
+      const body = frame.locator('[data-section="sec-contact"] [data-id="el-contact-body"]');
+      const [barBox, bodyBox, frameBox] = await Promise.all([
+        bar.boundingBox(),
+        body.boundingBox(),
+        studio.locator(PREVIEW).first().boundingBox(),
+      ]);
       // The overlap this test needs to be a real test of the fix, not a green light for nothing.
       expect(barBox, "toolbar not found").not.toBeNull();
       expect(bodyBox, "body not found").not.toBeNull();
-      if (barBox && bodyBox) {
-        expect(
-          barBox.y + barBox.height,
-          "the bar's blank space no longer reaches the body",
-        ).toBeGreaterThan(bodyBox.y);
+      expect(frameBox, "preview frame not found").not.toBeNull();
+      if (!barBox || !bodyBox || !frameBox) return;
+      expect(
+        barBox.y + barBox.height,
+        "the bar's blank space no longer reaches the body",
+      ).toBeGreaterThan(bodyBox.y);
+
+      // **Aimed at the bar's blank space, not at the paragraph's centre.** On «Contacto» the
+      // paragraph's centre sits under a real control («Mediano»), and a click there is meant for
+      // the control — Playwright rightly refuses it as intercepted. What this test is about is the
+      // space *between* the controls, so the point is chosen as one inside both boxes that no
+      // descendant of the bar taking pointer events covers. The bar's own box is deliberately not
+      // in that list: if its blank space ever swallowed clicks again, this click would be
+      // intercepted and time out, exactly as the original defect did.
+      const y =
+        (Math.max(barBox.y, bodyBox.y) +
+          Math.min(barBox.y + barBox.height, bodyBox.y + bodyBox.height)) /
+        2;
+      const xs: number[] = [];
+      for (
+        let x = Math.max(barBox.x, bodyBox.x) + 2;
+        x < Math.min(barBox.x + barBox.width, bodyBox.x + bodyBox.width);
+        x += 4
+      ) {
+        xs.push(x);
       }
+      const blankX = await bar.evaluate(
+        (el, probe: { xs: number[]; y: number; fx: number; fy: number }) => {
+          const occupied = [...el.querySelectorAll("*")]
+            .filter((node) => getComputedStyle(node).pointerEvents !== "none")
+            .map((node) => node.getBoundingClientRect());
+          const y = probe.y - probe.fy;
+          return (
+            probe.xs.find((pageX) => {
+              const x = pageX - probe.fx;
+              return !occupied.some(
+                (r) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom,
+              );
+            }) ?? null
+          );
+        },
+        { xs, y, fx: frameBox.x, fy: frameBox.y },
+      );
+      // Null for either of two reasons, and both are the test's business: the overlap is gone, or
+      // every pixel of the bar takes pointer events again — with the rule removed, the group
+      // wrappers inherit `auto` and there is no blank space left to aim at. Sabotaged on 9 October
+      // 2026 to check: `pointer-events: auto` on the bar fails here, in 1.5 seconds.
+      expect(
+        blankX,
+        "no blank space of the bar over the paragraph: the overlap is gone, or the bar swallows clicks again",
+      ).not.toBeNull();
+      if (blankX === null) return;
 
       // The click that used to time out.
-      await body.click({ timeout: 5000 });
+      await body.click({
+        position: { x: blankX - bodyBox.x, y: y - bodyBox.y },
+        timeout: 5000,
+      });
       // And it did what a real click on the paragraph should: the body is now the focused field,
       // not the headline, which is what makes this the paragraph's own toolbar and not the one
       // left over from before.
