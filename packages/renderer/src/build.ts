@@ -828,6 +828,33 @@ export function buildCss(doc: RetorikaDocument): string {
     // shot and a landscape shot the same, which is the point for a row of headshots in a way it
     // is not for `.rb-gallery` above, where 4/3 was chosen to match what a phone shoots in.
     ".rb-team .rb-item img { aspect-ratio: 1 / 1; object-fit: cover; }",
+    // The cover photograph, which until 8 October 2026 decided how tall the cover was. `.rb-section
+    // img` alone — width 100%, height auto — hands the section whatever shape the photograph has,
+    // and the cover is the one section where that is unbounded: its image spans six columns beside
+    // the words, or all twelve beneath them. Measured in Chromium at a 1440px window:
+    //
+    //   source          image box        cover section
+    //   1024×1024       1344×1344        1440px   ← the sample bank's own squares
+    //   1536×2048 (3:4) 1344×1792        1888px   ← a photo off a phone, held upright
+    //   1170×2532       1344×2909        3005px   ← a photo off a newer phone
+    //
+    // Three screens of cover on a 900px window, from a photograph an owner was right to upload.
+    // The same fix the two rules above already make, for the same reason, applied where the
+    // consequence is largest.
+    //
+    // **Two ratios, because the two jobs measured differently.** Beside the words the text column
+    // is 545px tall at that width, and 4/3 puts the photograph at 498px — level with it, and the
+    // ratio a phone shoots in, so the common photo is cropped least (`.rb-gallery` chose it for
+    // that reason). Full width, 3/2 puts it at 896px, which is one screen; 4/3 there would be
+    // 1008px and over the fold again.
+    //
+    // `object-position: center` is written rather than left to the default. Once a photograph is
+    // cropped, that declaration is what decides which part of it survives, and a decision about
+    // what the owner sees should be in the stylesheet where it can be read and changed — not
+    // implied by an omission. Which part they *want* kept is a question this cannot answer; see
+    // `docs/tasks/backlog.md`.
+    ".rb-cover img { aspect-ratio: 4 / 3; object-fit: cover; object-position: center; }",
+    ".rb-cover.rb-image-background img { aspect-ratio: 3 / 2; }",
     ".rb-section p { font-size: var(--size-body); color: var(--color-muted); margin: 0; }",
     // Plain links (PR #6, finding 3): color.primary, which every palette guarantees against
     // color.surface, and underlined so they never rely on colour alone. The :not keeps this

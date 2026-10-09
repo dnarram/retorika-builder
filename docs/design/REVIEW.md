@@ -1007,3 +1007,28 @@ alta, así que el punto de lectura que conserva `restoreReadingPosition` (PR #18
 anclado por precaución y pasa a estar anclado por necesidad. Su guarda «el punto de lectura se
 conserva, también con una sección a mano por encima» ya cubría este caso exacto tres días antes de
 que existiera.
+
+## La portada deja de deber su alto a la foto (9 de octubre de 2026)
+
+Los mockups dibujan la portada con una fotografía de proporción cómoda y no dicen qué pasa con una
+que no lo sea. El código respondía «la que traiga la foto»: `.rb-section img` daba `width: 100%` y
+`height: auto`, así que la sección medía lo que midiera la imagen. Medido en Chromium a 1440×900,
+con la foto a doce columnas («Con foto grande»):
+
+| Fuente | Alto de la sección |
+|---|---|
+| 1024×1024, los cuadrados del banco de muestras | 1440 px |
+| 1536×2048, una foto de móvil en vertical | 1888 px |
+| 1170×2532, una de móvil más reciente | 3005 px |
+
+Tres pantallas de portada en una ventana de 900 px, a partir de una fotografía que el dueño hizo
+bien en subir. **Divergencia respecto a los mockups**: la portada recorta. Dos proporciones, cada
+una medida contra lo que tiene al lado — **4/3** junto al texto, donde la columna de palabras mide
+545 px y la foto queda en 498, y **3/2** a sangre, donde deja la imagen en 896 px, una pantalla.
+`object-position: center`, escrito y no heredado.
+
+Con eso el alto de la portada es el mismo con cualquier fuente: 594 px en «Clásica» y «Compacta»,
+992 px en «Con foto grande» a 1440; 618 y 589 a 400. Antes iba de 594 a 3005.
+
+**Lo que esto abre y no cierra**: en cuanto se recorta, el dueño no elige qué parte de su foto
+sobrevive. Está en `docs/tasks/backlog.md` con su medida.

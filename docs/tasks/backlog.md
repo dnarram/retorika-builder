@@ -775,7 +775,26 @@ amendment saying 1600 is a ceiling and naming the floor that actually matters, o
 regenerated at 1600 and this stops being a question. Draw Things takes the size as a parameter, so
 regenerating is cheap — but the nine approved ones would all have to be re-reviewed.
 
-**3. The bundle weight budget is 29% over on a real site of that sector, and nothing catches it.**
+**3. The owner cannot choose how their own photograph is cropped — 9 October 2026.**
+
+The cover started cropping on that date, because letting the photograph's shape decide the
+section's height gave a 3005px cover to anyone who uploaded a portrait phone photo. The crop is
+`object-position: center`, written explicitly so the decision is readable rather than implied.
+
+Centre is the right default and the wrong answer often enough to matter: a dish photographed from
+above with the plate low in the frame, a shopfront with the sign at the top, a person standing
+off-centre. The owner can see the result in the preview and has **no way to say "keep this part"** —
+only to upload a different photograph, which is advice rather than a feature. Measured in Chromium
+at 1440px with a 1536×2048 phone photo: it loses **43.7% of its height** to the 4/3 crop beside the
+text, and **exactly half** to the 3/2 crop at full width.
+
+What it would take: a focal point stored on the image element, which is a schema change (a new
+optional field, its migration and round-trip test), plus a way to set it — dragging a point on the
+photograph in the «Fotos» panel is the cheapest shape that does not need a cropping UI. Not urgent
+while every cover is either a bank photograph framed for the purpose or a photo the owner can
+retake, and not something to settle inside a renderer pull request.
+
+**4. The bundle weight budget is 29% over on a real site of that sector, and nothing catches it.**
 Measured the same day, building a real restaurante-bar site through `buildSite`:
 
 | | bundle, gzipped | of which the sample |
