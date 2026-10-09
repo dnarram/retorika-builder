@@ -10,3 +10,4 @@ export {
   type SweepResult,
 } from "./deletion.ts";
 export { type Migration, migrate, migrations } from "./migrate.ts";
+export { photoObjectCountOf, photoObjectsOf, type RemoveObjects } from "./photos.ts";

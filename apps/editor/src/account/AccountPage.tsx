@@ -160,8 +160,14 @@ export function AccountPage() {
             </>
           )}
 
-          {/* The thing a departing owner most needs to hear, and the one this product can say
-              because of ADR 0001: what they already downloaded is theirs and does not go. */}
+          {/* What goes and what stays, in that order, since ADR 0037 gave the first half a second
+              item. The photographs leave with the account — they are files in a bucket and the
+              sweep removes them — and saying so beside «borrar mi cuenta» is the difference between
+              a person deciding and a person finding out. The second sentence is the one this
+              product can say because of ADR 0001: what they already downloaded is theirs. */}
+          <p style={{ margin: 0, fontSize: 13, color: "#64748B", lineHeight: 1.5 }}>
+            {es["account.delete.whatGoes"]}
+          </p>
           <p style={{ margin: 0, fontSize: 13, color: "#64748B", lineHeight: 1.5 }}>
             {es["account.delete.whatStays"]}
           </p>
