@@ -9,8 +9,9 @@ import { migrate } from "../src/migrate.ts";
  * de Docker Desktop. Docker en esta máquina se come 2 o 3 GB para no aportar nada que no dé
  * Supabase» — so there is no local Supabase stack to start. What there is, is Postgres itself.
  *
- * **What this file creates is Supabase's contract and nothing more.** `auth.users`, `auth.uid()`
- * and the three roles are Supabase's, documented, and small enough to reproduce exactly:
+ * **What this file creates is Supabase's contract and nothing more.** `auth.users`, `auth.uid()`,
+ * the three roles and — since migration `0003` — the `storage` schema with its `buckets`,
+ * `objects` and `foldername()` are Supabase's, documented, and small enough to reproduce exactly:
  * `auth.uid()` reads the `sub` claim out of `request.jwt.claims`, which is how Supabase's own
  * definition reads it. That matters because it is what lets the policies in `migrations/` run
  * here **character for character as they ship**. If this shim drifted from Supabase, the tests
@@ -41,6 +42,52 @@ const SUPABASE_CONTRACT = `
         nullif(current_setting('request.jwt.claim.sub', true), ''),
         nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub'
       )::uuid
+    $fn$;
+
+  -- Storage, from migration 0003 onwards (ADR 0037). Reproduced for the same reason and to the
+  -- same standard as auth above: only what Supabase documents, so the storage policies run here
+  -- character for character as they ship.
+  --
+  -- buckets carries the two caps the migration sets, because a test asserts them. objects is
+  -- the subset the policies touch — the bucket, the name, the owner — and not Supabase's full
+  -- column list: a column no policy reads would be a column this file could get wrong without
+  -- anything noticing.
+  create schema if not exists storage;
+
+  create table if not exists storage.buckets (
+    id text primary key,
+    name text not null,
+    public boolean not null default false,
+    file_size_limit bigint,
+    allowed_mime_types text[],
+    created_at timestamptz not null default now()
+  );
+
+  create table if not exists storage.objects (
+    id uuid primary key default gen_random_uuid(),
+    bucket_id text not null references storage.buckets (id),
+    name text not null,
+    owner_id uuid,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    unique (bucket_id, name)
+  );
+
+  alter table storage.objects enable row level security;
+
+  -- Supabase's own helper, and the shape of it is load-bearing. It returns the path segments
+  -- **without** the file name, so for <owner>/<site>/foto.jpg the result is
+  -- {<owner>, <site>} and [1] is the owner. Written as Supabase defines it: split on / and
+  -- drop the last element.
+  create or replace function storage.foldername(name text) returns text[]
+    language plpgsql immutable
+    as $fn$
+    declare
+      parts text[];
+    begin
+      parts := string_to_array(name, '/');
+      return parts[1:array_length(parts, 1) - 1];
+    end
     $fn$;
 `;
 
