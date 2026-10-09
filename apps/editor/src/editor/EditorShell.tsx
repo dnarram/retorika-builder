@@ -108,6 +108,25 @@ export type SaveStatus = "saved" | "unsaved" | null;
  * and §5 adds the half that would otherwise be discovered on another computer: **the document
  * travels and the photos do not.** So the account label says both.
  */
+/**
+ * What the indicator says once a site is in the account.
+ *
+ * Three claims, not one, because a save can land completely and still leave a photograph behind —
+ * an upload the store refused, or one whose bytes are in another browser. Saying «Guardado en tu
+ * cuenta» then would be true about the document and silent about the picture the owner is looking
+ * at; saying «No guardado» would be false about their words. The count is the only sentence that
+ * is true about both, and it is the one they can act on.
+ *
+ * `null` is the plain sentence rather than «0 fotos sin subir», because nothing has been counted
+ * yet and a zero would be a claim nobody made.
+ */
+function accountSentence(photosMissing: number | null): string {
+  if (photosMissing === null || photosMissing <= 0) return es["editor.saved.account"];
+  return photosMissing === 1
+    ? es["editor.saved.accountPhotosMissing.one"]
+    : es["editor.saved.accountPhotosMissing.many"].replace("{count}", String(photosMissing));
+}
+
 export type SavedWhere = "browser" | "account";
 
 const RAIL_ICONS = {
@@ -665,6 +684,7 @@ export function EditorShell({
   onRedo,
   saveStatus,
   savedWhere = "browser",
+  photosMissing = null,
   onSaveToAccount,
   rail,
   onRailChange,
@@ -693,6 +713,14 @@ export function EditorShell({
   onRedo: () => void;
   saveStatus: SaveStatus;
   savedWhere?: SavedWhere | undefined;
+  /**
+   * How many of this site's own photographs are not in the account.
+   *
+   * `null` means no reconciliation has run, which is **not** the same as zero: «we have not
+   * looked» and «we looked and everything is up there» are different claims, and the indicator
+   * may only make the second one after looking. A site with no account passes `null` for ever.
+   */
+  photosMissing?: number | null | undefined;
   /** Absent when there is no account configured at all, and then no button is drawn. */
   onSaveToAccount?: (() => void) | undefined;
   rail: RailItemId;
@@ -1086,19 +1114,14 @@ export function EditorShell({
                 </svg>
               ) : null}
               {/**
-               * **«· fotos solo en este navegador» is gone, as of ADR 0037.** It was true for the
-               * whole of sprint 15 and became false the day the save started uploading them. It is
-               * replaced by the plain sentence rather than by a new claim about photographs,
-               * because what this indicator can honestly say today is only «the document is in the
-               * account»: the photographs go up when a site is first saved, and an edit that adds
-               * one does not push it until day 4 teaches the push to reconcile. A label that said
-               * «con sus fotos» would be right most of the time, and this project does not ship
-               * indicators that are right most of the time.
+               * **«· fotos solo en este navegador» went with ADR 0037**, and the plain sentence
+               * that replaced it now carries a count when it has one. The three states are three
+               * different claims and `accountSentence` is where they are kept apart.
                */}
               {saveStatus !== "saved"
                 ? es["editor.unsaved"]
                 : savedWhere === "account"
-                  ? es["editor.saved.account"]
+                  ? accountSentence(photosMissing)
                   : es["editor.saved"]}
             </span>
           ) : null}

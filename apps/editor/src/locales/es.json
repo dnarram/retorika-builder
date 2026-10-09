@@ -443,6 +443,8 @@
   "account.save.failed": "No hemos podido guardar la web. Vuelve a intentarlo.",
 
   "editor.saved.account": "Guardado en tu cuenta",
+  "editor.saved.accountPhotosMissing.one": "Guardado en tu cuenta \u00b7 1 foto sin subir",
+  "editor.saved.accountPhotosMissing.many": "Guardado en tu cuenta \u00b7 {count} fotos sin subir",
 
   "landing.title": "Tu web en cinco preguntas",
   "landing.lede": "Contesta cinco preguntas y Retorika te devuelve una web terminada. T\u00fa solo corriges lo que no te guste.",

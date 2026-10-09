@@ -524,6 +524,7 @@ export function Editor({
   failedSamples = [],
   onRetrySamples,
   savedWhere,
+  photosMissing,
   onSaveToAccount,
   toast,
   onDismissToast,
@@ -662,6 +663,9 @@ export function Editor({
   failedSamples?: readonly string[];
   onRetrySamples?: (() => void) | undefined;
   savedWhere?: SavedWhere | undefined;
+  /** Forwarded to the indicator: how many of this site's photographs are not in the account.
+   * `null` means nothing has been counted, which is not the same as none missing. */
+  photosMissing?: number | null | undefined;
   onSaveToAccount?: (() => void) | undefined;
   toast: DeleteToast | null;
   onDismissToast: () => void;
@@ -4084,6 +4088,7 @@ export function Editor({
       onRedo={onRedo}
       saveStatus={saveStatus}
       savedWhere={savedWhere}
+      photosMissing={photosMissing}
       onSaveToAccount={onSaveToAccount}
       rail={effectiveRail}
       onRailChange={showRail}

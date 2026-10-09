@@ -29,7 +29,14 @@ import {
 import { withPalette, withScale, withTypePair } from "@retorika/tokens";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { loadAccountDesignTools, saveAccountDesignTools } from "../account/designTools.ts";
-import { downloadPhoto, photoObjectPath } from "../account/photoStorage.ts";
+import {
+  downloadPhoto,
+  listPhotoObjects,
+  photoObjectPath,
+  removePhotos,
+  uploadPhoto,
+} from "../account/photoStorage.ts";
+import { afterAcceptedSave, photoSyncPlan } from "../account/photoSync.ts";
 import { SaveToAccountDialog } from "../account/SaveToAccountDialog.tsx";
 import { saveSite } from "../account/sites.ts";
 import { browserClient } from "../auth/clients.ts";
@@ -49,6 +56,7 @@ import {
   wasSectionEverEdited,
 } from "../editor/documentHistory.ts";
 import { PHOTO_CONTENT_TYPE } from "../editor/downloadGate.ts";
+import { listOwnPhotoSrcs } from "../editor/ownPhotos.ts";
 import { photoSources } from "../editor/photoSources.ts";
 import {
   clearPhotos,
@@ -266,6 +274,63 @@ export function Variants({
    * for ever.
    */
   const pushedDocument = useRef<RetorikaDocument | null>(null);
+
+  /**
+   * **These photograph declarations sit here, above the push effect, since ADR 0037 day 4.** They
+   * used to live further down with the rest of the photograph machinery, and the reconciliation a
+   * push now triggers reads all of them — in a function component the order of declaration is the
+   * order of the hooks, so a push effect above them could not see them. The effects that use them
+   * stayed where they were: what moved is state, whose relative order among `useState` calls is
+   * nothing but stable.
+   */
+  /**
+   * The owner's uploaded photos, as object URLs the preview and the download can both use, keyed
+   * by the src the document carries. Held per variant because the three cards are three
+   * documents and all three have a section called `sec-cover`.
+   */
+  const [photoUrls, setPhotoUrls] = useState<Map<number, Map<string, string>>>(new Map());
+  const [photoError, setPhotoError] = useState<string | null>(null);
+
+  /**
+   * The site's id as a primitive, so everything below can depend on it honestly.
+   *
+   * `initialAccountSite` is an object literal built by the caller on every render, so an effect
+   * that listed it would re-run whenever the parent re-rendered — and the mount effect's cleanup
+   * revokes object URLs, which would blank every photograph on screen. A string changes when the
+   * site changes and not before.
+   */
+  const accountSiteId = initialAccountSite?.id ?? null;
+  /**
+   * How many of this site's own photographs are not in the account.
+   *
+   * `null` until a reconciliation has run, which is not the same as zero: «we have not looked» and
+   * «we looked and everything is up there» are different claims, and the indicator may only make
+   * the second one after looking. A site with no account has nothing to count and stays `null`.
+   */
+  const [photosMissing, setPhotosMissing] = useState<number | null>(null);
+  const accountOwnerId = initialAccountSite?.ownerId ?? null;
+
+  /**
+   * Which set of stored photographs this editor owns, in IndexedDB.
+   *
+   * **A site opened from the account is its own scope** (ADR 0037, and `photos.ts` has the long
+   * version): `photoSrcFor` names the cover of every site `foto-sec-cover-el-image.jpg`, so a
+   * browser holding both an anonymous session and a saved site had one key for two photographs and
+   * showed whichever was written last — in the editor and in the ZIP. The scope is what makes them
+   * two.
+   *
+   * A site saved *from* this session keeps the variant scope. Its bytes are already here under that
+   * key, nothing has changed about where they came from, and re-keying them would mean reading one
+   * scope and writing another for no gain.
+   */
+  const photoScope = useCallback(
+    (variant: number): PhotoScope =>
+      accountSiteId === null
+        ? { kind: "variant", variant }
+        : { kind: "site", siteId: accountSiteId },
+    [accountSiteId],
+  );
+
   const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
@@ -282,6 +347,75 @@ export function Variants({
     }, SAVE_DEBOUNCE_MS);
     return () => clearTimeout(saveTimer.current);
   }, [answers, histories, openIndex, currentPageId, openedFromAccount]);
+
+  /**
+   * Brings the account's photographs in line with the document that was just saved (ADR 0037 §5).
+   *
+   * **Only ever called from the `result.ok` branch of a push, and that is David's condition rather
+   * than a convenience.** A tab holding a document somebody else has already replaced names
+   * photographs the winning document may have changed; letting it reconcile would delete the
+   * photographs of the version that won. A stale push is refused by the version check, so the one
+   * place this is called from is the one place where the document up there is this document.
+   *
+   * The arithmetic is `photoSyncPlan`, which is pure and tested to the corner. What is here is the
+   * three round trips around it and what to do when one of them says no.
+   */
+  const reconcilePhotos = useCallback(
+    async (document: RetorikaDocument) => {
+      if (accountSiteId === null || accountOwnerId === null) return;
+      const client = browserClient();
+      const plan = photoSyncPlan({
+        wanted: listOwnPhotoSrcs(document),
+        remote: (await listPhotoObjects(client, accountOwnerId, accountSiteId)).map((path) =>
+          path.slice(`${accountOwnerId}/${accountSiteId}/`.length),
+        ),
+        local: [...(photoUrls.get(openIndex ?? 0)?.keys() ?? [])],
+        pathFor: (src) => photoObjectPath(accountOwnerId, accountSiteId, src),
+      });
+
+      let failed = 0;
+      for (const src of plan.upload) {
+        const url = photoUrls.get(openIndex ?? 0)?.get(src);
+        if (!url) {
+          failed += 1;
+          continue;
+        }
+        try {
+          const blob = await (await fetch(url)).blob();
+          const bytes = new Uint8Array(await blob.arrayBuffer());
+          const ok = await uploadPhoto(
+            client,
+            photoObjectPath(accountOwnerId, accountSiteId, src),
+            bytes,
+          );
+          if (!ok) failed += 1;
+        } catch {
+          // A revoked object URL, or the store refusing. Either way nothing was stored.
+          failed += 1;
+        }
+      }
+
+      // Deleting comes last, and a failure to delete is deliberately **not** counted as a
+      // photograph missing: the document does not reference it, so an object left behind costs
+      // storage and tells the owner nothing. It is picked up by the next reconciliation.
+      if (plan.remove.length > 0) await removePhotos(client, plan.remove);
+
+      /**
+       * **A refused upload does not make the document unsaved**, and this is where ADR 0037 §6 was
+       * written one way and built another — amended there, with the reason, rather than quietly.
+       *
+       * The ADR said a refused upload moves the indicator to «No guardado». Building it showed that
+       * sentence to be false in the other direction: the document *is* in the account, the version
+       * was accepted, and only a photograph did not make it. «No guardado» would tell somebody
+       * their words were lost when their words are safe. The count is both true and something they
+       * can act on, so the count is what the indicator says. ADR 0018's rule is untouched — no tick
+       * claims more than it earned — because the tick now comes with «· N fotos sin subir» beside
+       * it when that is the case.
+       */
+      setPhotosMissing(plan.missing.length + failed);
+    },
+    [accountSiteId, accountOwnerId, photoUrls, openIndex],
+  );
 
   /**
    * And the same edits to the account, once there is one.
@@ -303,11 +437,19 @@ export function Variants({
     const timer = setTimeout(() => {
       pushedDocument.current = document;
       void (async () => {
-        const result = await saveSite(browserClient(), {
-          id: accountSite.id,
-          version: accountSite.version,
-          document,
-        });
+        // `afterAcceptedSave` is the rule, not a convenience: the photographs are reconciled only
+        // when the database accepted this version, because a tab that lost the race names
+        // photographs the winning document may have replaced. It lives in `photoSync.ts` with a
+        // test that asserts exactly that, at David's instruction.
+        const result = await afterAcceptedSave(
+          () =>
+            saveSite(browserClient(), {
+              id: accountSite.id,
+              version: accountSite.version,
+              document,
+            }),
+          () => reconcilePhotos(document),
+        );
         if (result.ok) {
           setAccountSite({ ...accountSite, version: result.version });
           // When nothing writes to this browser, this push is the only thing that can honestly
@@ -322,7 +464,7 @@ export function Variants({
       })();
     }, SAVE_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [accountSite, histories, openIndex, openedFromAccount]);
+  }, [accountSite, histories, openIndex, openedFromAccount, reconcilePhotos]);
 
   /**
    * The design-tools switch (ADR 0025), and the window it is narrowed by.
@@ -458,46 +600,6 @@ export function Variants({
       listener.subscription.unsubscribe();
     };
   }, [accountAvailable]);
-
-  /**
-   * The owner's uploaded photos, as object URLs the preview and the download can both use, keyed
-   * by the src the document carries. Held per variant because the three cards are three
-   * documents and all three have a section called `sec-cover`.
-   */
-  const [photoUrls, setPhotoUrls] = useState<Map<number, Map<string, string>>>(new Map());
-  const [photoError, setPhotoError] = useState<string | null>(null);
-
-  /**
-   * Which set of stored photographs this editor owns, in IndexedDB.
-   *
-   * **A site opened from the account is its own scope** (ADR 0037, and `photos.ts` has the long
-   * version): `photoSrcFor` names the cover of every site `foto-sec-cover-el-image.jpg`, so a
-   * browser holding both an anonymous session and a saved site had one key for two photographs and
-   * showed whichever was written last — in the editor and in the ZIP. The scope is what makes them
-   * two.
-   *
-   * A site saved *from* this session keeps the variant scope. Its bytes are already here under that
-   * key, nothing has changed about where they came from, and re-keying them would mean reading one
-   * scope and writing another for no gain.
-   */
-  /**
-   * The site's id as a primitive, so everything below can depend on it honestly.
-   *
-   * `initialAccountSite` is an object literal built by the caller on every render, so an effect
-   * that listed it would re-run whenever the parent re-rendered — and the mount effect's cleanup
-   * revokes object URLs, which would blank every photograph on screen. A string changes when the
-   * site changes and not before.
-   */
-  const accountSiteId = initialAccountSite?.id ?? null;
-  const accountOwnerId = initialAccountSite?.ownerId ?? null;
-
-  const photoScope = useCallback(
-    (variant: number): PhotoScope =>
-      accountSiteId === null
-        ? { kind: "variant", variant }
-        : { kind: "site", siteId: accountSiteId },
-    [accountSiteId],
-  );
 
   // What survived the last reload. Put back once, on mount: the documents came from
   // `localStorage`, the bytes from IndexedDB, and only together do they show the site the owner
@@ -1181,6 +1283,7 @@ export function Variants({
           failedSamples={failedSamples}
           onRetrySamples={retrySamples}
           savedWhere={savedWhere}
+          photosMissing={photosMissing}
           onSaveToAccount={accountAvailable ? () => setAccountOpen(true) : undefined}
           toast={toast}
           onDismissToast={dismissToast}
