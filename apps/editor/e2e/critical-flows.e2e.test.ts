@@ -6101,11 +6101,12 @@ describe("sprint 15 día 7 — la foto que no carga, y las promesas del proyecto
    */
   it("says so, and the retry actually retries", async () => {
     /**
-     * **The bank is empty, so this cannot be reached through a generated site** — which is very
-     * likely why the defect went unnoticed. All eleven sector files in `packages/photobank/bank`
-     * hold zero photographs, so `listSampleRefs` finds nothing, nothing is fetched and nothing can
-     * fail. It becomes reachable the day the bank is filled, which sprint 14 recorded as content
-     * production rather than code.
+     * **The bank was empty when this was written, so it could not be reached through a generated
+     * site** — which is very likely why the defect went unnoticed: with every sector file in
+     * `packages/photobank/bank` holding zero photographs, `listSampleRefs` found nothing, nothing
+     * was fetched and nothing could fail. It is reachable since 8 October 2026 through a
+     * `restaurante-bar` site. The seeded state below stays anyway: it pins a document that names
+     * exactly one bank photograph, whatever the bank grows into.
      *
      * So the state is seeded instead of walked to: a restored session whose document names a bank
      * photograph, which is exactly what a generated document will look like once there are any.

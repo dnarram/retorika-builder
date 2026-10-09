@@ -401,10 +401,11 @@ describe("the cover's photograph comes from the bank (ADR 0011)", () => {
     return image.value;
   }
 
-  it("is the catalog's placeholder while the bank is empty — byte for byte what this generator produced before the bank existed", () => {
+  it("is the catalog's placeholder for a sector whose bank is empty — byte for byte what this generator produced before the bank existed", () => {
     // The claim the whole day rests on: asking the bank changed nothing for a sector with no
-    // photographs in it. If this ever fails with an empty bank, the fallback stopped being the
-    // catalog's own marker and every generated site quietly changed.
+    // photographs in it — `tienda` here, one of the ten still empty. If this ever fails for an
+    // empty sector, the fallback stopped being the catalog's own marker and every generated site
+    // of those sectors quietly changed.
     const image = coverImage(generate(MINIMAL).document);
     expect(image.src).toBe(placeholderImageSrc());
     expect(image.alt).toBe(PLACEHOLDER_IMAGE_ALT);
@@ -420,8 +421,9 @@ describe("the cover's photograph comes from the bank (ADR 0011)", () => {
   });
 
   it("references a relative file, never an absolute path (ADR 0001: the ZIP opens with no server)", () => {
-    // Vacuous while the bank is empty — the placeholder is a data: URI — and it stops being
-    // vacuous the day a photograph lands. An absolute `/muestras/x.webp` resolves against the
+    // Vacuous for `tienda`, whose bank is empty — the placeholder is a data: URI — and real for
+    // `restaurante-bar` since 8 October 2026, which `packages/publisher/test/site.test.ts` builds
+    // and finds the photograph under `assets/`. An absolute `/muestras/x.webp` resolves against the
     // filesystem root under file://, so the photograph would simply be missing from a downloaded
     // site, on the owner's machine, where nothing of ours would ever see it.
     for (const site of generateVariants(MINIMAL)) {
@@ -455,9 +457,11 @@ describe("the cover's photograph comes from the bank (ADR 0011)", () => {
      * stays on the id anyway, because it is the input that is guaranteed distinct. A composition
      * is a design decision somebody may well revisit; the id is what makes the three cards three.
      *
-     * Asserted on the seed's inputs and not on the outcome, because **the bank is empty**: every
-     * sector file holds zero photographs, so all three variants legitimately return the same
-     * marker today and will differ by photograph the day the bank has any.
+     * Asserted on the seed's inputs and not on the outcome, because the outcome is not what this
+     * guards: for a sector whose bank is empty the three return the same marker, and for
+     * `restaurante-bar` two of them land on the same photograph for 39.4% of business names —
+     * three independent hashes, not one draw without replacement (`docs/tasks/backlog.md`, «What
+     * the first filled sector left open»).
      */
     const seeds = VARIANTS.map((v) => `Taberna:restaurante-bar:${v.id}:sec-cover:el-image`);
     expect(new Set(seeds).size, "the three seeds are distinct").toBe(3);

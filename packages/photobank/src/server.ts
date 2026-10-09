@@ -20,9 +20,11 @@ import type { ImageRecord } from "./schema.ts";
  * fails at the lookup, before a `join` ever sees it.
  *
  * `root` and `lookup` are overridable, and that is for the tests rather than for any real caller.
- * `recordById` only knows the real bank, which is empty today — without the ability to inject a
- * stand-in, the one case that matters most, a known id resolving to real bytes, could never be
- * exercised until the bank had a real photograph in it.
+ * `recordById` only knows the real bank, which was empty until 8 October 2026 — without the
+ * ability to inject a stand-in, the one case that matters most, a known id resolving to real bytes,
+ * could not be exercised before the bank had a real photograph in it. The stand-in stays now that
+ * it has: the fixture bank pins ids and shapes no real sector produces, so the case does not move
+ * whenever the bank grows.
  */
 /**
  * `fileURLToPath(import.meta.url)` and not `import.meta.dirname`, and the difference is the whole

@@ -99,8 +99,9 @@ and a bound leaf outside a list.
 
 **Not yet built:** accounts and persistence (the browser tab is the only copy until it downloads),
 payment ([ADR 0021](docs/decisions/0021-charging-waits-for-a-sellable-product.md)), the photo bank's
-images ([ADR 0011](docs/decisions/0011-sample-photos-per-sector.md)) — the machinery shipped in
-sprint 6 and the eleven sector files hold zero photographs — and a tablet breakpoint, which
+images for ten of the eleven sectors ([ADR 0011](docs/decisions/0011-sample-photos-per-sector.md)) —
+the machinery shipped in sprint 6, and `restaurante-bar` has held the first nine approved photographs
+since 8 October 2026 — and a tablet breakpoint, which
 [ADR 0030](docs/decisions/0030-one-breakpoint-bucket-and-the-width-the-gate-measures.md) defers to
 phase 3 rather than leaving half-present. The remaining sectors' text is **done**: all ten launch
 sectors have their own bank since sprint 8.
@@ -331,7 +332,7 @@ as an empty placeholder.
 | `apps/editor` | Next.js: the five-question flow, three generated variants, click-to-edit text, the ZIP download | **here** |
 | `packages/generator` | The five answers → a valid `RetorikaDocument`. Not in the protocol's Part 3.4 tree — a deliberate addition, product logic that needs invariant tests, so it lives in a package rather than inside the app | **here** |
 | `packages/copybank` | The reviewed, per-sector text bank the generator draws from ([ADR 0009](docs/decisions/0009-generated-texts-from-a-reviewed-bank.md)) | **here** |
-| `packages/photobank` | The per-sector sample-photo bank ([ADR 0011](docs/decisions/0011-sample-photos-per-sector.md)). **The machinery is here and the bank is empty** — eleven sector files, zero images, because a photograph needs a licence checked and a person's approval rather than code. Until the first one lands, a generated site opens on the catalog's grey marker | **here** |
+| `packages/photobank` | The per-sector sample-photo bank ([ADR 0011](docs/decisions/0011-sample-photos-per-sector.md)). **The machinery is here, and one sector is in it**: `restaurante-bar` has held nine approved photographs since 8 October 2026 (PR #197), and the other ten sector files still hold zero, because a photograph needs a licence checked and a person's approval rather than code. A generated site of a sector without photographs opens on the catalog's grey marker | **here** |
 | `packages/db` | The application's database: accounts, sites and the audit log, with the row-level security policies that decide who sees what. **SQL migrations are the source of truth**, because the policies are the half that matters and a generator that emitted tables but not policies would leave them hand-written anyway ([ADR 0034](docs/decisions/0034-the-account-arrives-at-the-end.md)) | **here** |
 | `packages/templates` | Template extraction and application | 3 |
 | `.claude/skills`, `.claude/commands` | Specialist checklists and project commands | as needed |
