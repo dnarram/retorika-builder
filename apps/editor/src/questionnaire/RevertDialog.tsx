@@ -2,6 +2,7 @@
 
 import type { RevertImpact, SurplusDecision } from "@retorika/schema";
 import { useId, useState } from "react";
+import { useFocusTrap } from "../editor/useFocusTrap.ts";
 import es from "../locales/es.json" with { type: "json" };
 
 /**
@@ -48,6 +49,7 @@ export function RevertDialog({
   onConfirm: (decisions: Record<string, SurplusDecision>) => void;
 }) {
   const titleId = useId();
+  const container = useFocusTrap(true, onCancel);
   /**
    * Which surplus elements are being kept. Ticked for every one of them on open, and that default is
    * the decision rather than a convenience: `document-rules.md` says «The interface's default for
@@ -60,9 +62,11 @@ export function RevertDialog({
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-[#0F172A]/45 p-5">
       <div
+        ref={container}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        tabIndex={-1}
         className="flex max-h-full w-full max-w-[460px] flex-col gap-4 overflow-y-auto rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.28)]"
       >
         <div className="flex flex-col gap-2">

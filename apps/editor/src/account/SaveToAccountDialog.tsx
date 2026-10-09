@@ -1,7 +1,7 @@
 "use client";
 
 import type { RetorikaDocument } from "@retorika/schema";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { browserClient } from "../auth/clients.ts";
 import {
   type Reason,
@@ -10,11 +10,11 @@ import {
   startGoogleSignIn,
 } from "../auth/operations.ts";
 import { listOwnPhotoSrcs } from "../editor/ownPhotos.ts";
+import { useFocusTrap } from "../editor/useFocusTrap.ts";
 import es from "../locales/es.json" with { type: "json" };
 import { FieldError, primaryButton, secondaryButton, TextField } from "../questionnaire/ui.tsx";
 import { uploadSitePhotos } from "./photoStorage.ts";
 import { createSite, listSites, renameOf } from "./sites.ts";
-import { useFocusTrap } from "./useFocusTrap.ts";
 
 /**
  * «Guarda tu web en tu cuenta» — the offer at the end of the journey.
@@ -115,8 +115,7 @@ export function SaveToAccountDialog({
   const [existing, setExisting] = useState<number | null>(null);
   const [signedIn, setSignedIn] = useState(false);
 
-  const close = useCallback(() => onClose(), [onClose]);
-  const container = useFocusTrap(true, close);
+  const container = useFocusTrap(true, onClose);
 
   // Whether somebody is already signed in, asked once when the dialog opens. A person saving a
   // second web does not need to see a sign-up form.
@@ -405,7 +404,17 @@ export function SaveToAccountDialog({
           {es["account.save.privacy"]}
         </p>
 
-        <button type="button" onClick={close} style={secondaryButton}>
+        {/*
+          **`onClose`, not `close`.** This read `onClose={close}` against a `const close =
+          useCallback(() => onClose(), [onClose])` that sprint 17 day 1 removed, because the
+          `useCallback` stabilised nothing — the parent passes an inline arrow, so `close` changed
+          identity on every render anyway. Removing it left this line referring to **`window.close`**,
+          the DOM global, which typechecks as `() => void` and does nothing: the dialog stopped
+          closing and the backdrop went on swallowing every click behind it. `pnpm typecheck` was
+          green. The walk «escribe en la cuenta aunque la sesión empiece con el editor ya abierto»
+          is what caught it, by failing on a switch that something invisible was intercepting.
+        */}
+        <button type="button" onClick={onClose} style={secondaryButton}>
           {es["account.save.close"]}
         </button>
       </div>

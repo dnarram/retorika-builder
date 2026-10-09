@@ -1239,6 +1239,18 @@ export function Editor({
   useEffect(() => {
     if (!refocusAfterSwap.current) return;
     refocusAfterSwap.current = false;
+    /*
+     * **Not while a dialog claims the page is unavailable.** A swap can happen with a modal open —
+     * an autosave or an arriving photograph is enough to re-render and re-render the frame — and
+     * this would then move focus to the preview, out of a dialog whose `aria-modal` has just told a
+     * screen reader the preview does not exist. The trap pulls focus back on the next Tab, but by
+     * then the person has already pressed a key into the wrong place.
+     *
+     * Asked of the DOM rather than tracked in state, because the question is literally «is anything
+     * claiming to be modal right now», and the eight dialogs are mutually exclusive but owned by
+     * three different components. A boolean here would be a fourth thing to keep in step.
+     */
+    if (document.querySelector('[aria-modal="true"]')) return;
     liveFrame()?.focus();
   }, [buffer.live]);
 

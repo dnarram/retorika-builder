@@ -5,6 +5,7 @@ import { useId } from "react";
 import type { OverflowFinding } from "../editor/overflowCheck.ts";
 import { listPhotos } from "../editor/photoInventory.ts";
 import { type ContrastFinding, formatRatio } from "../editor/styleReview.ts";
+import { useFocusTrap } from "../editor/useFocusTrap.ts";
 import es from "../locales/es.json" with { type: "json" };
 import { StateChip } from "./PhotosPanel.tsx";
 
@@ -54,12 +55,15 @@ export function PhotosFailedDialog({
   onClose: () => void;
 }) {
   const titleId = useId();
+  const container = useFocusTrap(true, onClose);
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-[#0F172A]/45 p-5">
       <div
+        ref={container}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        tabIndex={-1}
         className="w-full max-w-[460px] rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.28)]"
       >
         <h2 id={titleId} className="m-0 text-[17px] font-bold text-ui-ink">
@@ -111,12 +115,15 @@ export function TooManyPhotosDialog({
   onClose: () => void;
 }) {
   const titleId = useId();
+  const container = useFocusTrap(true, onClose);
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-[#0F172A]/45 p-5">
       <div
+        ref={container}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        tabIndex={-1}
         className="w-full max-w-[440px] rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.28)]"
       >
         <h2 id={titleId} className="m-0 text-[17px] font-bold text-ui-ink">
@@ -170,6 +177,7 @@ export function DownloadWarningDialog({
   onCancel: () => void;
 }) {
   const titleId = useId();
+  const container = useFocusTrap(true, onCancel);
   const photos = listPhotos(doc).filter((photo) => photo.state !== "own");
   const sampleCount = photos.filter((photo) => photo.state === "sample").length;
   const emptyCount = photos.filter((photo) => photo.state === "empty").length;
@@ -177,9 +185,11 @@ export function DownloadWarningDialog({
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-[#0F172A]/45 p-5">
       <div
+        ref={container}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        tabIndex={-1}
         className="flex max-h-[85vh] w-full max-w-[520px] flex-col rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.28)]"
       >
         <div className="flex items-start justify-between gap-3">
@@ -298,6 +308,7 @@ export function ContrastDialog({
   onCancel: () => void;
 }) {
   const titleId = useId();
+  const container = useFocusTrap(true, onCancel);
   const blocking = level === "block";
   const prefix = blocking ? "editor.download.unreadable" : "editor.download.lowContrast";
   const body =
@@ -308,9 +319,11 @@ export function ContrastDialog({
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-[#0F172A]/45 p-5">
       <div
+        ref={container}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        tabIndex={-1}
         className="flex max-h-full w-full max-w-[520px] flex-col rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.28)]"
       >
         <h2 id={titleId} className="m-0 text-[17px] font-bold text-ui-ink">
@@ -408,6 +421,7 @@ export function OverflowDialog({
   onCancel: () => void;
 }) {
   const titleId = useId();
+  const container = useFocusTrap(true, onCancel);
   const body =
     findings.length === 1
       ? es["editor.download.overflow.body.one"]
@@ -416,9 +430,11 @@ export function OverflowDialog({
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-[#0F172A]/45 p-5">
       <div
+        ref={container}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        tabIndex={-1}
         className="flex max-h-full w-full max-w-[520px] flex-col rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.28)]"
       >
         <h2 id={titleId} className="m-0 text-[17px] font-bold text-ui-ink">
