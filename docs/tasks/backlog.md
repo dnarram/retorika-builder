@@ -547,6 +547,20 @@ open survives.
     `packages/renderer`'s harness forces contrast to run and this pass deliberately does not, so
     that one failure cannot appear in two places with two owners.
 
+- **A verb that changes how many sections a page has produces two documents, and the first one is
+  discarded.** Found on sprint 17 day 4 and worth keeping, because it is the kind of thing that
+  explains a future bug in one line. An edit changes `html`, so the live frame's `srcDoc` is replaced
+  and that document is wired; if it also changes the **count**, `chromeKey` changes too — it is one
+  character per section — so the buffered swap opens, parses a second document in the other frame,
+  wires that, and promotes it. Moving a section changes neither the count nor any section's `source`,
+  so it never swaps.
+
+  The practical consequence: **anything that remembers something across a rebuild has to survive two
+  wirings, and «the live frame's document» is not a test for «this one will stay».** Measured during
+  the duplicate as `isLive=true buffered=1 frames=2`. The test that works is the absence of an
+  `iframe[data-buffered]`, asked of the DOM rather than of `buffer`, which a closure can be a render
+  behind.
+
 - **A realm trap this repository has now fallen into three times, and had already written up twice.**
   A handler registered on the preview frame's document still runs in the **parent window's realm**,
   and the frame has its own: an element from inside it is not `instanceof` this window's

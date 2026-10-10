@@ -1,4 +1,4 @@
-import { type FocusedElement, type KeyPress, keepsItsOwnUndo } from "./shortcuts.ts";
+import type { KeyPress } from "./shortcuts.ts";
 
 /**
  * What a key press means when the keyboard is in the canvas — decided without a DOM.
@@ -36,65 +36,69 @@ const IGNORED: SectionKeyAction = { kind: "ignore" };
 /**
  * Which section the keyboard should go to, or what else the press means.
  *
- * `at` is the index of the section that currently holds the keyboard's place, or `-1` for «the
- * canvas has it and no section does» — the state after Tab lands on the first section but before
- * any arrow, and the state after Escape.
+ * **`at` is the index of the section that has focus — the section element *itself* — or `-1` for
+ * anything else.** That one sentence is the rule, and it replaced three of them on sprint 17 day 4
+ * after the first version swallowed a keystroke it had no business taking.
  *
- * Three rules decide more than the key does:
+ * The first version asked the ref «which section does the keyboard belong to» and then refused the
+ * press only when a `contentEditable` or an `<input>` had focus. A section's six verbs are
+ * `<button>`s *inside* the section, so with focus on «bajar» the ref still said «this section», the
+ * press was not in a text box, and `Enter` was taken as «choose this section» — **so the verb could
+ * not be pressed at all.** The `e2e` walk «mueve una sección dos veces» is what caught it, by
+ * pressing Enter on a move button and finding the page unchanged.
  *
- * 1. **Writing wins.** Inside a `contentEditable` or an `<input>`, an arrow moves the caret, Enter
- *    makes a paragraph and Escape ends the edit — and sprint 11 spent itself on making that typing
- *    trustworthy. `keepsItsOwnUndo` is reused rather than re-derived: the question «does the thing
- *    with focus own this keystroke» has one answer and should have one implementation. Stealing an
- *    arrow from somebody mid-word would be a worse version of the defect ADR 0022's shortcut was
- *    careful not to cause.
- * 2. **Only a bare press.** Any modifier disqualifies everything, including Shift. `Meta+ArrowDown`
+ * Asking instead what actually has focus settles every case at once, and it is the rule a composite
+ * widget always has: the canvas's keys are the canvas's only while the canvas is what is focused.
+ *
+ * - A verb has focus → not ours. `Enter` and `Space` belong to a button, which is how it is pressed.
+ * - Text has focus → not ours. An arrow moves the caret, `Enter` commits the edit (`wireEditing`
+ *   has done exactly that since sprint 11), `Escape` ends it. This is what «writing wins» means, and
+ *   it is now the same rule rather than a second one — the explicit `keepsItsOwnUndo` check this
+ *   function used to carry became unreachable the moment `at` stopped coming from a ref, and a
+ *   guard that cannot fire is a trap for whoever trusts it next.
+ * - A link in the rendered page has focus → not ours, for the same reason.
+ * - Nothing in the canvas has focus → not ours. `ArrowDown` on a document body scrolls it, and
+ *   taking that would be stealing. Tab is how the canvas is entered, which is what the roving
+ *   `tabindex` is for.
+ *
+ * Two rules survive from the first version, both unchanged:
+ *
+ * 1. **Only a bare press.** Any modifier disqualifies everything, including Shift. `Meta+ArrowDown`
  *    means «end of document» in every text context there is, `Control+ArrowUp` is Mission Control on
  *    the machine this is built on, and `Shift+Arrow` is a selection gesture everywhere. A shortcut
  *    that fires on a superset of what it claims is how an editor eats a keystroke that was not for
  *    it — the same rule `shortcutFor` applies to `altKey`, applied wider because arrows are far more
  *    contested than `Z`.
- * 3. **The ends do not wrap.** `ArrowDown` on the last section stays on the last section. A page's
+ * 2. **The ends do not wrap.** `ArrowDown` on the last section stays on the last section. A page's
  *    sections are a document read top to bottom, and in a document the bottom is the bottom: a wrap
  *    would answer «down» with «back to the top», which is disorienting precisely for the person who
  *    cannot see that it happened. Tab still leaves in both directions, so nothing is a dead end.
- *
- * **What `ArrowUp` does from nowhere is a choice and not a fallback:** it goes to the **last**
- * section, because somebody pressing up is travelling upwards and the thing above the canvas's
- * start is its end. The focus trap in `useFocusTrap` resolved the same question the same way for
- * `Shift+Tab`, and two answers to one shape would be two things to remember.
  */
 export function sectionKeyAction(
   press: KeyPress,
-  focused: FocusedElement | null | undefined,
   place: { readonly count: number; readonly at: number },
 ): SectionKeyAction {
   if (place.count <= 0) return IGNORED;
-  if (keepsItsOwnUndo(focused)) return IGNORED;
+  if (place.at < 0) return IGNORED;
   if (press.altKey || press.metaKey || press.ctrlKey || press.shiftKey) return IGNORED;
 
   const count = place.count;
   /*
-   * **The remembered place can be past the end, and clamping is a decision.** A section is deleted,
-   * the frame is rebuilt with one fewer, and `at` still names the index that was. Clamped to the
-   * last section and *then* moved, rather than clamped and left there: the person cannot see where
-   * they are, so a press that produces no movement teaches them nothing, and the place they would
-   * have been «left» at is one they never heard announced anyway. `-1` is left alone, because it
-   * means something different — nothing holds the keyboard — and the two entry rules below are
-   * what answer it.
+   * **The index can be past the end, and clamping is a decision.** A list read a moment before the
+   * frame was replaced can be longer than the one being asked about. Clamped to the last section
+   * and *then* moved, rather than clamped and left there: the person cannot see where they are, so
+   * a press that produces no movement teaches them nothing.
    */
-  const at = place.at < 0 ? -1 : Math.min(place.at, count - 1);
+  const at = Math.min(place.at, count - 1);
   switch (press.key) {
     case "ArrowDown":
-      return { kind: "focus", index: at < 0 ? 0 : Math.min(at + 1, count - 1) };
+      return { kind: "focus", index: Math.min(at + 1, count - 1) };
     case "ArrowUp":
-      return { kind: "focus", index: at < 0 ? count - 1 : Math.max(at - 1, 0) };
+      return { kind: "focus", index: Math.max(at - 1, 0) };
     case "Enter":
-      // Nothing to choose when no section holds the keyboard's place. Enter then belongs to
-      // whatever does — a button in the chrome, most often.
-      return at < 0 ? IGNORED : { kind: "choose" };
+      return { kind: "choose" };
     case "Escape":
-      return at < 0 ? IGNORED : { kind: "release" };
+      return { kind: "release" };
     default:
       return IGNORED;
   }
@@ -112,4 +116,53 @@ export function rovingTabIndex(count: number, at: number): number[] {
   if (count <= 0) return [];
   const holder = at >= 0 && at < count ? at : 0;
   return Array.from({ length: count }, (_, index) => (index === holder ? 0 : -1));
+}
+
+/**
+ * Where the keyboard goes once a verb has rebuilt the document — **one rule for all five verbs**,
+ * which is the whole point of writing it down.
+ *
+ * Move up, move down, duplicate, «convertir en página» and delete each change the page in a
+ * different way, and the frame is thrown away and parsed again for every one of them. The obvious
+ * design is five cases: follow the section up, follow it down, step to the copy, step to the
+ * teaser, step to the neighbour. The rule below replaces all five with a sentence:
+ *
+ * > **Follow the section that was acted on. If it is no longer on this page, take whatever is now
+ * > in its place.**
+ *
+ * Which comes out right for each of them without knowing which one ran:
+ *
+ * | Verb | What happened | Where this lands |
+ * |---|---|---|
+ * | move up / down | the same section, a different index | on it, at its new index |
+ * | duplicate | the original is still there, the copy below it | on the original |
+ * | «convertir en página» | the section left, a teaser took its index | on the teaser |
+ * | delete | the section is gone | on the one that moved up into its place |
+ * | delete the last one | gone, and nothing after it | on the new last |
+ * | delete the only one | gone, and nothing at all | nowhere, honestly |
+ *
+ * **Duplicate stays on the original rather than stepping to the copy**, and that is the one case
+ * worth defending. The copy is new, so «focus what the verb produced» is arguable — but it is
+ * identical to the original, including its name, so a screen reader would hear the same section
+ * name twice and have no way to know it had moved. The live region says what happened, the copy is
+ * one `ArrowDown` away, and the rule stays one sentence.
+ *
+ * `idIndex` is where the remembered section is in the **new** list, or `-1` when it is gone.
+ * `wasAt` is the index it held before. `null` back means there is nothing to focus, which happens
+ * only when the last section on a page has just been deleted.
+ */
+export function placeAfterRebuild({
+  idIndex,
+  wasAt,
+  count,
+}: {
+  readonly idIndex: number;
+  readonly wasAt: number;
+  readonly count: number;
+}): number | null {
+  if (count <= 0) return null;
+  if (idIndex >= 0) return Math.min(idIndex, count - 1);
+  // Gone. Whatever is at that index now is what took its place; clamped because deleting the last
+  // section leaves no index `wasAt` to take.
+  return Math.min(Math.max(wasAt, 0), count - 1);
 }
