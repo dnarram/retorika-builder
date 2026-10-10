@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { inflateRawSync } from "node:zlib";
+import AxeBuilder from "@axe-core/playwright";
 import {
   type Browser,
   chromium,
@@ -9079,4 +9080,393 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
       await walker.context().close();
     }
   }, 300_000);
+});
+
+describe("sprint 17 día 3 — el lienzo se maneja con el teclado", () => {
+  /**
+   * **Six verbs that only a mouse could reach, and the reason was never the buttons.**
+   *
+   * Move up, move down, composition, duplicate, fields and delete have been `<button aria-label=…>`
+   * since sprint 2 and perfectly usable with a keyboard. What they could not do is **exist**: the
+   * cluster is drawn by `select()`, and `select()` only ever ran from a `click`. So the keyboard
+   * route is not a second way to press the buttons — it is the first way to make them appear.
+   *
+   * `docs/design/REVIEW.md` closed the obvious alternative: «There is no sections panel: `Secciones`
+   * *is* the canvas». The route therefore has to be the canvas, which is an `<iframe srcDoc>` whose
+   * document `packages/renderer` wrote — and nothing of what this walk exercises may ever reach that
+   * renderer's output, which `packages/renderer/test/editor-chrome-stays-home.test.ts` asserts over
+   * the whole corpus.
+   */
+
+  async function intoTheCanvas(page: Page): Promise<void> {
+    await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+    await page.fill("#nombre", "Taberna Santo Domingo");
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Restaurante y bar", { exact: true }).click();
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Comidas", { exact: true }).click();
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.fill("#direccion", "Cta. de Santo Domingo, 2, Ronda");
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Que reserven", { exact: true }).click();
+    await page.fill("#enlace", "https://reservas.example.com/taberna");
+    await page.getByRole("button", { name: "Crear mi web" }).click();
+    await page.getByText("Ver a tamaño real →").first().click();
+    const frame = page.frameLocator(PREVIEW).first();
+    await frame.locator('[data-section="sec-cover"]').waitFor();
+    await waitForBankPhoto(frame);
+  }
+
+  /**
+   * Which section inside the preview holds focus right now, or `null`.
+   *
+   * **Read by shape, never with `instanceof`.** This runs in the top document's realm and the
+   * element belongs to the frame's, so `active instanceof HTMLElement` is `false` for every element
+   * in the canvas — measured in Chromium, `false` from here and `true` against the frame's own
+   * constructor. The first version of this helper used it and reported «Tab never reached a
+   * section» for forty presses while Tab was arriving at the seventeenth.
+   */
+  function focusedSection(page: Page): Promise<string | null> {
+    return page.evaluate(() => {
+      const doc = document.querySelector<HTMLIFrameElement>(
+        "iframe:not([data-buffered])",
+      )?.contentDocument;
+      const active = doc?.activeElement as HTMLElement | null | undefined;
+      return active?.dataset?.["section"] ?? null;
+    });
+  }
+
+  /** The `data-id` of whatever holds focus inside the preview, for the same reason and in the
+   * same way. `toBeFocused` is not used on an element inside the frame: it answers «inactive»
+   * for an element that is its document's `activeElement` while the frame is not the focused
+   * one, which is a different question from the one these walks ask. */
+  function focusedElementId(page: Page): Promise<string | null> {
+    return page.evaluate(() => {
+      const doc = document.querySelector<HTMLIFrameElement>(
+        "iframe:not([data-buffered])",
+      )?.contentDocument;
+      const active = doc?.activeElement as HTMLElement | null | undefined;
+      return active?.dataset?.["id"] ?? null;
+    });
+  }
+
+  it("se alcanza con Tab, es una sola parada, y las flechas recorren las secciones", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+
+      /*
+       * **One Tab stop for the whole canvas, not one per section.** This is what the roving
+       * tabindex buys: without it a visitor to the editor would Tab through five to nine sections
+       * before reaching anything else.
+       */
+      const tabIndexes = await frame
+        .locator("[data-section]")
+        .evaluateAll((nodes) => nodes.map((node) => node.getAttribute("tabindex")));
+      expect(tabIndexes.length, "the preview rendered no sections").toBeGreaterThan(1);
+      expect(tabIndexes.filter((value) => value === "0")).toHaveLength(1);
+      expect(new Set(tabIndexes.filter((value) => value !== "0"))).toEqual(new Set(["-1"]));
+
+      // `role="group"` with the Spanish name, and **not** a named `<section>`: a section with an
+      // accessible name is a `region` landmark, and naming every one of them would add five to
+      // nine landmarks to the editor's tree. The names come from the same `sectionDisplayName` the
+      // panels use.
+      const described = await frame
+        .locator("[data-section]")
+        .evaluateAll((nodes) =>
+          nodes.map((node) => [node.getAttribute("role"), node.getAttribute("aria-label")]),
+        );
+      for (const [role, label] of described) {
+        expect(role).toBe("group");
+        expect(label ?? "", "a focusable section with no name").not.toBe("");
+      }
+      expect(described.map(([, label]) => label)).toContain("Portada");
+
+      /*
+       * Reached by pressing Tab and nothing else. Bounded and counted rather than looped blindly:
+       * the published page's own navigation links come before the first section in the DOM, so a
+       * handful of presses is expected and fifty would mean something is wrong.
+       */
+      await page.keyboard.press("Tab");
+      let presses = 1;
+      while (presses < 40 && (await focusedSection(page)) === null) {
+        await page.keyboard.press("Tab");
+        presses += 1;
+      }
+      const arrived = await focusedSection(page);
+      expect(arrived, `Tab never reached a section in ${presses} presses`).not.toBeNull();
+      expect(presses, "Tab took suspiciously many presses to reach the canvas").toBeLessThan(40);
+
+      // Down and up, one section at a time, with the roving tabindex following.
+      const order = await frame
+        .locator("[data-section]")
+        .evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-section")));
+      const startedAt = order.indexOf(arrived);
+      await page.keyboard.press("ArrowDown");
+      expect(await focusedSection(page)).toBe(order[startedAt + 1]);
+      await page.keyboard.press("ArrowDown");
+      expect(await focusedSection(page)).toBe(order[startedAt + 2]);
+      await page.keyboard.press("ArrowUp");
+      expect(await focusedSection(page)).toBe(order[startedAt + 1]);
+
+      // The ends do not wrap: down at the bottom stays at the bottom.
+      for (let step = 0; step < order.length + 2; step += 1) await page.keyboard.press("ArrowDown");
+      expect(await focusedSection(page)).toBe(order[order.length - 1]);
+
+      // And the keyboard's place is still exactly one Tab stop after all that moving.
+      const afterMoving = await frame
+        .locator("[data-section]")
+        .evaluateAll((nodes) => nodes.map((node) => node.getAttribute("tabindex")));
+      expect(afterMoving.filter((value) => value === "0")).toHaveLength(1);
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
+  it("Intro hace aparecer las seis acciones, lo anuncia, y Esc suelta el lienzo", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+
+      // Nothing is drawn before anything is chosen.
+      await expect(frame.locator(".rb-actions")).toHaveCount(0);
+
+      await page.keyboard.press("Tab");
+      let presses = 1;
+      while (presses < 40 && (await focusedSection(page)) === null) {
+        await page.keyboard.press("Tab");
+        presses += 1;
+      }
+      expect(await focusedSection(page)).not.toBeNull();
+
+      // The legend appears when the keyboard starts moving, which is the moment it is useful.
+      await page.keyboard.press("ArrowDown");
+      await expect(frame.locator(".rb-keys")).toHaveCount(1);
+      await expect(frame.locator(".rb-keys")).toContainText("Teclas del lienzo");
+      await expect(frame.locator(".rb-keys")).toContainText("cambiar de sección");
+
+      // **The six verbs, which is the whole point of the day.** They did not exist until now.
+      const chosen = await focusedSection(page);
+      await page.keyboard.press("Enter");
+      await expect(frame.locator(".rb-actions")).toHaveCount(1);
+      const actions = frame.locator(".rb-actions .rb-action");
+      await expect(actions).not.toHaveCount(0);
+      // Every one of them is a real button with a name, which they always were.
+      for (const name of await actions.evaluateAll((nodes) =>
+        nodes.map((node) => node.getAttribute("aria-label")),
+      )) {
+        expect(name ?? "", "an action with no accessible name").not.toBe("");
+      }
+
+      // The chosen section is marked, and the marking is on the chosen one only.
+      const current = await frame
+        .locator("[data-section]")
+        .evaluateAll((nodes) =>
+          nodes
+            .filter((node) => node.getAttribute("aria-current") === "true")
+            .map((node) => node.getAttribute("data-section")),
+        );
+      expect(current).toEqual([chosen]);
+
+      // And it is said out loud, in the live region, in Spanish and by name.
+      await expect(frame.locator(".rb-announce")).toContainText("elegida");
+      await expect(frame.locator('[aria-live="polite"]')).toHaveCount(1);
+
+      // Esc gives the keyboard back, and the legend goes with it.
+      await page.keyboard.press("Escape");
+      expect(await focusedSection(page)).toBeNull();
+      await expect(frame.locator(".rb-keys")).toHaveCount(0);
+      // The choice survives letting go: Escape is not «forget where I was».
+      await expect(frame.locator(".rb-actions")).toHaveCount(1);
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
+  it("escribir gana: las flechas mueven el cursor, no la sección", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+
+      /*
+       * The rule `keepsItsOwnUndo` already encoded for `Meta+Z` and which `sectionKeyAction` reuses
+       * rather than re-deriving. Sprint 11 spent itself on making this typing trustworthy; an arrow
+       * stolen mid-word would be a worse version of the defect ADR 0022's shortcut was careful not
+       * to cause.
+       */
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      await headline.click();
+      expect(await focusedElementId(page)).toBe("el-headline");
+
+      const before = await focusedSection(page);
+      await page.keyboard.press("ArrowDown");
+      await page.keyboard.press("ArrowUp");
+      // Focus is still in the text, not on another section, and no legend appeared.
+      expect(await focusedElementId(page), "an arrow was stolen mid-word").toBe("el-headline");
+      expect(await focusedSection(page)).toBe(before);
+      await expect(frame.locator(".rb-keys")).toHaveCount(0);
+
+      /*
+       * **Enter inside text belongs to the text, and what the text does with it is commit.**
+       * `wireEditing` has caught Enter in an editable element since sprint 11 — `preventDefault`
+       * then `blur`, so a heading cannot grow a second line — and that is the proof the key reached
+       * the editing layer rather than the canvas keyboard: the first version of this assertion
+       * expected the caret to stay put and was simply wrong about which behaviour it was testing.
+       *
+       * What must not happen is the canvas keyboard acting on it, so the keyboard's section is
+       * asserted unchanged. The section is already chosen here, because clicking its headline
+       * bubbles to the section and chooses it — a mouse click doing what a mouse click does.
+       */
+      const sectionBeforeEnter = await frame
+        .locator("[data-section][aria-current='true']")
+        .evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-section")));
+      await page.keyboard.press("Enter");
+      expect(await focusedElementId(page), "Enter did not reach the text's own handler").toBe(null);
+      const sectionAfterEnter = await frame
+        .locator("[data-section][aria-current='true']")
+        .evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-section")));
+      expect(sectionAfterEnter, "Enter in a heading moved the canvas's choice").toEqual(
+        sectionBeforeEnter,
+      );
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+});
+
+describe("sprint 17 día 3 — axe sobre el documento del editor", () => {
+  /**
+   * **The first time axe has ever looked at the editor, and that is a finding in itself.**
+   *
+   * `pnpm test:a11y` has been green since sprint 2 and «a11y en verde» has been read as covering
+   * this application. It does not: that project's root is `packages/renderer`, so what it scans is
+   * **published pages**. The chrome somebody actually edits with — the rail, the top bar, the six
+   * panels, the dialogs, and since today the canvas's own keyboard — has never been scanned at all.
+   *
+   * It lives here rather than there because this project already has a real `next dev` and a real
+   * Chromium, which is what axe needs. David moved this pass from day 7 to day 3 when he approved
+   * the sprint, so the `role="group"` decision would be checked the day it was made rather than
+   * four days later: «Compruébalo con axe ese mismo día».
+   */
+
+  /**
+   * Everything in a document that is a landmark, by the rule that actually decides it.
+   *
+   * `<section>` and `<form>` are landmarks **only when they carry an accessible name**, which is
+   * the whole reason David refused `aria-label` on `[data-section]`: naming five to nine sections
+   * would have made five to nine `region` landmarks, in the editor only, for somebody navigating by
+   * landmark. `role="group"` overrides the implicit role, so a named section is not one.
+   */
+  const LANDMARKS = [
+    "nav",
+    "main",
+    "header",
+    "footer",
+    "aside",
+    "[role=navigation]",
+    "[role=main]",
+    "[role=banner]",
+    "[role=contentinfo]",
+    "[role=complementary]",
+    "[role=region]",
+    "[role=search]",
+    "[role=form]",
+    "section[aria-label]:not([role])",
+    "section[aria-labelledby]:not([role])",
+    "form[aria-label]:not([role])",
+  ].join(",");
+
+  function landmarksInFrame(page: Page, selector: string): Promise<string[]> {
+    return page.evaluate((list) => {
+      const doc = document.querySelector<HTMLIFrameElement>(
+        "iframe:not([data-buffered])",
+      )?.contentDocument;
+      if (!doc) return [];
+      return [...doc.querySelectorAll(list)].map(
+        (node) =>
+          `${node.tagName.toLowerCase()}${node.getAttribute("role") ? `[role=${node.getAttribute("role")}]` : ""}`,
+      );
+    }, selector);
+  }
+
+  it("no tiene violaciones serias ni críticas, con una sección elegida con el teclado", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    ).newPage();
+    try {
+      await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+      await page.fill("#nombre", "Taberna Santo Domingo");
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.getByText("Restaurante y bar", { exact: true }).click();
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.getByText("Comidas", { exact: true }).click();
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.fill("#direccion", "Cta. de Santo Domingo, 2, Ronda");
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.getByText("Que reserven", { exact: true }).click();
+      await page.fill("#enlace", "https://reservas.example.com/taberna");
+      await page.getByRole("button", { name: "Crear mi web" }).click();
+      await page.getByText("Ver a tamaño real →").first().click();
+      const frame = page.frameLocator(PREVIEW).first();
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+      await waitForBankPhoto(frame);
+
+      /*
+       * The landmarks of the canvas before the keyboard has touched anything, and after a section
+       * has been chosen with it. **Identical is the assertion**, and it is the one David's
+       * correction is about: the published page's own `nav`, `header` and `footer` are landmarks
+       * and should be, while a chosen section must not become a sixth.
+       */
+      const before = await landmarksInFrame(page, LANDMARKS);
+      expect(
+        before.length,
+        "the preview has no landmarks at all: this would prove nothing",
+      ).toBeGreaterThan(0);
+
+      await frame.locator('[data-section="sec-cover"]').click();
+      await expect(frame.locator(".rb-actions")).toHaveCount(1);
+      const after = await landmarksInFrame(page, LANDMARKS);
+      expect(after, "choosing a section added a landmark to the editor's tree").toEqual(before);
+
+      // Every section is a `group`, which is what keeps the line above true rather than lucky.
+      const roles = await frame
+        .locator("[data-section]")
+        .evaluateAll((nodes) => nodes.map((node) => node.getAttribute("role")));
+      expect(new Set(roles)).toEqual(new Set(["group"]));
+
+      /*
+       * And axe over the whole thing — the editor's document and the preview's, because axe walks
+       * same-origin frames and the canvas chrome lives in one.
+       *
+       * Serious and critical only, which is the same bar `packages/renderer`'s own axe harness
+       * applies. Contrast is deliberately **not** forced to run here: this page is mostly the
+       * client's generated site, whose contrast is that harness's subject across every palette, and
+       * duplicating it would make one failure appear in two places with two different owners.
+       */
+      const results = await new AxeBuilder({ page }).analyze();
+      const serious = results.violations.filter(
+        (rule) => rule.impact === "serious" || rule.impact === "critical",
+      );
+      const lines = serious.flatMap((rule) =>
+        rule.nodes.map(
+          (node) => `  ${rule.id} (${rule.impact}) at ${node.target.join(" ")}: ${rule.help}`,
+        ),
+      );
+      expect(lines, `axe on the editor:\n${lines.join("\n")}`).toEqual([]);
+
+      // A guard on the guard: axe has to have actually examined something.
+      expect(results.passes.length, "axe ran no checks at all").toBeGreaterThan(0);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
 });

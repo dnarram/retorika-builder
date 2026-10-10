@@ -1,9 +1,15 @@
 # 0036 — The three cards pick their photographs together
 
-**Status:** **proposed** · **Date:** 2026-10-09 ·
+**Status:** **accepted** · **Date:** 2026-10-09 · **Accepted:** 2026-10-10 ·
 **Proposed by:** development, sprint 16 day 1, with the measurement ADR 0011's own reason asked for
-and never got · **Amends if accepted:** [ADR 0011](0011-sample-photos-per-sector.md), the «at least
-eight» clause
+and never got ·
+**Accepted by:** **David, 10 October 2026** — «Firma los ADR 0036 y 0037 por mi», opening sprint 17
+day 3. **Recorded by development at his instruction, which is said out loud because the standing
+rule is that development does not sign.** The decision is his; the keystrokes are not, and anybody
+reading this later should be able to tell the difference without asking. ·
+**Amends:** [ADR 0011](0011-sample-photos-per-sector.md), the «at least eight» clause ·
+**Built:** sprint 17 day 2, before the signature — the code landed with this ADR still `proposed`,
+which is recorded in the pull request and in `docs/tasks/backlog.md` rather than tidied away.
 
 ## Context
 
@@ -30,9 +36,14 @@ this. The rule is still worth keeping for what it does buy — it is what stops 
 two photographs and showing one of them on every card — and ADR 0011's stated reason has to move
 somewhere that can hold it.
 
-## Decision (proposed)
+## Decision
 
 **The three cards are picked together, as one draw without replacement.**
+
+> **Built and measured, 10 October 2026 (sprint 17 day 2).** The rate this ADR was written about was
+> re-measured first and reproduced exactly — 787 of 2000, 39.4% — and is now **0 of 2000**. The test
+> that landed asserts the property over two hundred business names per filled sector, not the
+> percentage, for the reason the last consequence below gives.
 
 - `sampleImageFor(sector, seed, options?)` in `packages/photobank/src/index.ts` takes an optional
   `avoid: readonly string[]` of bank ids. It hashes the seed exactly as today (`pickIndex`, FNV-1a,
