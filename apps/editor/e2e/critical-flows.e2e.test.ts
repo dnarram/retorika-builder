@@ -9470,3 +9470,282 @@ describe("sprint 17 día 3 — axe sobre el documento del editor", () => {
     }
   }, 180_000);
 });
+
+describe("sprint 17 día 4 — los verbos se usan con el teclado y sobreviven al uso", () => {
+  /**
+   * **The rule of after-the-change, which is the whole day.**
+   *
+   * Four of the section's verbs replace the document: the frame is thrown away and parsed again.
+   * Before this, the element that had focus went with it and focus fell to the new document's body
+   * — the top of the page. A keyboard user moved a section once and had to walk back down to move
+   * it again; a screen-reader user was simply told they were at the beginning of the site.
+   *
+   * `placeAfterRebuild` is the one rule for all of them: follow the section that was acted on, and
+   * if it is no longer on this page take whatever is now in its place. Then the same verb again, if
+   * it still exists and is still usable. The arithmetic is unit-tested; what this walk adds is the
+   * part no unit test can reach — **the document really being replaced**.
+   */
+
+  async function intoTheCanvas(page: Page): Promise<void> {
+    await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+    await page.fill("#nombre", "Taberna Santo Domingo");
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Restaurante y bar", { exact: true }).click();
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Comidas", { exact: true }).click();
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.fill("#direccion", "Cta. de Santo Domingo, 2, Ronda");
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Que reserven", { exact: true }).click();
+    await page.fill("#enlace", "https://reservas.example.com/taberna");
+    await page.getByRole("button", { name: "Crear mi web" }).click();
+    await page.getByText("Ver a tamaño real →").first().click();
+    const frame = page.frameLocator(PREVIEW).first();
+    await frame.locator('[data-section="sec-cover"]').waitFor();
+    await waitForBankPhoto(frame);
+  }
+
+  /**
+   * Everything about where focus is inside the preview, read by shape.
+   *
+   * Never `instanceof`: this runs in the top document's realm and the elements belong to the
+   * frame's, where that test is `false` for every one of them. Sprint 17 day 3 learned it the hard
+   * way and day 4 is not going to learn it again.
+   */
+  function focus(page: Page): Promise<{
+    tag: string;
+    action: string | null;
+    section: string | null;
+    disabled: boolean;
+  }> {
+    return page.evaluate(() => {
+      const doc = document.querySelector<HTMLIFrameElement>(
+        "iframe:not([data-buffered])",
+      )?.contentDocument;
+      const active = doc?.activeElement as HTMLElement | null | undefined;
+      const host = active?.closest?.("[data-section]") as HTMLElement | null | undefined;
+      return {
+        tag: active?.tagName ?? "none",
+        action: active?.dataset?.["action"] ?? null,
+        section: host?.dataset?.["section"] ?? null,
+        disabled: (active as HTMLButtonElement | undefined)?.disabled ?? false,
+      };
+    });
+  }
+
+  /**
+   * The ids of the sections on the page right now, in order.
+   *
+   * Read through `page.evaluate` and not through a `FrameLocator`, because every verb here replaces
+   * the document and some of them remount the frame: a locator resolved a moment earlier throws
+   * «Frame was detached» mid-swap, which is what the first version of this walk did. Asking the page
+   * to find the live frame on each call cannot go stale, and it returns `[]` rather than throwing
+   * while there is no document — which is exactly what a poll wants to see.
+   */
+  function order(page: Page): Promise<string[]> {
+    return page.evaluate(() => {
+      const doc = document.querySelector<HTMLIFrameElement>(
+        "iframe:not([data-buffered])",
+      )?.contentDocument;
+      if (!doc) return [];
+      return [...doc.querySelectorAll("[data-section]")].map(
+        (node) => node.getAttribute("data-section") ?? "",
+      );
+    });
+  }
+
+  /**
+   * Where focus is, as one string, for polling.
+   *
+   * **Polled and not read once, because the rebuild and the rewiring are two moments.** The new
+   * document appears in the frame, and `wireSelection` runs when the look-ahead notices it — which
+   * can be a frame later. A single read right after the section count changes caught the gap: the
+   * move happened to be slow enough to pass and the duplicate was not, which is the shape of a
+   * flake that would have landed in CI rather than here.
+   */
+  function focusPlace(page: Page): Promise<string> {
+    return focus(page).then((at) => `${at.section ?? "-"}/${at.action ?? "-"}`);
+  }
+
+  /** Walk into the canvas with Tab alone, and stop on the named section with the arrows. */
+  async function keyboardTo(page: Page, sectionId: string): Promise<void> {
+    await page.keyboard.press("Tab");
+    for (let press = 1; press < 40 && (await focus(page)).section === null; press += 1) {
+      await page.keyboard.press("Tab");
+    }
+    const here = await focus(page);
+    expect(here.section, "Tab never reached a section").not.toBeNull();
+    for (let step = 0; step < 20; step += 1) {
+      if ((await focus(page)).section === sectionId) return;
+      await page.keyboard.press("ArrowDown");
+    }
+    expect(await focus(page), `the arrows never reached ${sectionId}`).toMatchObject({
+      section: sectionId,
+    });
+  }
+
+  /** Tab from the chosen section onto one of its verbs, by name, with Tab alone. */
+  async function tabToVerb(page: Page, verb: string): Promise<void> {
+    for (let press = 0; press < 14; press += 1) {
+      const at = await focus(page);
+      if (at.action === verb) return;
+      await page.keyboard.press("Tab");
+    }
+    expect(await focus(page), `Tab never reached the «${verb}» button`).toMatchObject({
+      action: verb,
+    });
+  }
+
+  it("mueve una sección dos veces sin salir del botón, y nunca cae en el body", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      const before = await order(page);
+      expect(before.length, "the generated page has too few sections for this").toBeGreaterThan(3);
+
+      await keyboardTo(page, "sec-services");
+      await page.keyboard.press("Enter");
+      await expect(frame.locator(".rb-actions")).toHaveCount(1);
+      await tabToVerb(page, "move-down");
+
+      /*
+       * **The press, and then the assertion the whole day exists for.** The document is replaced
+       * between these two lines: the button that was pressed no longer exists, nor does the
+       * document it was in.
+       */
+      await page.keyboard.press("Enter");
+      await expect
+        .poll(async () => (await order(page)).indexOf("sec-services"))
+        .toBe(before.indexOf("sec-services") + 1);
+      await expect
+        .poll(() => focusPlace(page), { message: "the first move lost the keyboard" })
+        .toBe("sec-services/move-down");
+
+      // And again, in the same place, which is what a person does with a verb like this one.
+      await page.keyboard.press("Enter");
+      await expect
+        .poll(async () => (await order(page)).indexOf("sec-services"))
+        .toBe(before.indexOf("sec-services") + 2);
+      await expect
+        .poll(() => focusPlace(page), { message: "the second move lost the keyboard" })
+        .toBe("sec-services/move-down");
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it("al llegar al tope, el botón se desactiva y el foco cae en la sección, no en el body", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+
+      /*
+       * The fallback in the chain, reached for real: «subir» on a section that is about to become
+       * the first one is drawn **disabled** in the rebuilt document, so the same-verb step cannot
+       * be taken and the section itself takes the focus. The alternative — focusing a disabled
+       * button — would be focusing something that cannot be pressed, and most browsers refuse it
+       * anyway, which is how focus ends up on the body.
+       */
+      await keyboardTo(page, "sec-services");
+      await page.keyboard.press("Enter");
+      await tabToVerb(page, "move-up");
+      await page.keyboard.press("Enter");
+
+      await expect.poll(async () => (await order(page))[0]).toBe("sec-services");
+      // Settled before it is read: the fallback is still a rewiring, and reading it one frame early
+      // would report the gap rather than the answer.
+      await expect.poll(() => focusPlace(page)).toBe("sec-services/-");
+      const landed = await focus(page);
+      expect(landed.tag, "focus fell to the document's body").not.toBe("BODY");
+      expect(landed.section, "focus left the section it was acting on").toBe("sec-services");
+      expect(landed.disabled, "focus landed on a button that cannot be pressed").toBe(false);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it("duplica, convierte en página y borra, y el foco acaba donde una persona espera", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+
+      // ---- duplicate: the original keeps the keyboard and the copy lands below it ----
+      await keyboardTo(page, "sec-services");
+      await page.keyboard.press("Enter");
+      await tabToVerb(page, "duplicate");
+      const beforeCopy = await order(page);
+      await page.keyboard.press("Enter");
+      await expect.poll(async () => (await order(page)).length).toBe(beforeCopy.length + 1);
+      await expect
+        .poll(() => focusPlace(page), {
+          message: "duplicating moved the keyboard off the original",
+        })
+        .toBe("sec-services/duplicate");
+      // The copy really is the next one along, which is what makes «stay on the original» a
+      // defensible rule rather than a shrug.
+      const withCopy = await order(page);
+      expect(withCopy.indexOf("sec-services") + 1).toBeLessThan(withCopy.length);
+
+      // ---- convertir en página: the section leaves, an avance takes its index ----
+      await tabToVerb(page, "to-page");
+      const indexBefore = (await order(page)).indexOf("sec-services");
+      await page.keyboard.press("Enter");
+      await expect.poll(async () => (await order(page)).includes("sec-services")).toBe(false);
+      /*
+       * **Polled as one question, because the two halves are read from a moving target.** This
+       * conversion adds a page, so `chromeKey` changes and the rebuild goes through the buffered
+       * swap: a list read between the two frames comes back empty or stale. The first version read
+       * the focus and the order in two separate awaits and compared them, which passed on its own
+       * three times and failed inside the full suite — a flake of my own making, and exactly the
+       * shape that would otherwise have landed in CI.
+       */
+      await expect
+        .poll(async () => {
+          const at = await focus(page);
+          const list = await order(page);
+          if (at.tag === "BODY") return "focus fell to the body";
+          if (at.section === null) return "focus is on nothing";
+          if (at.section === "sec-services") return "the converted section is still here";
+          return list[indexBefore] === at.section
+            ? "on the avance that took its place"
+            : `focused ${at.section} but ${list[indexBefore] ?? "nothing"} is in its place`;
+        })
+        .toBe("on the avance that took its place");
+
+      // ---- delete: the section is gone and the keyboard takes its place ----
+      await page.keyboard.press("Enter");
+      await expect(frame.locator(".rb-actions")).toHaveCount(1);
+      await tabToVerb(page, "delete");
+      const deleting = (await focus(page)).section ?? "";
+      expect(deleting, "nothing was focused to delete").not.toBe("");
+      const indexOfDeleted = (await order(page)).indexOf(deleting);
+      const countBefore = (await order(page)).length;
+      await page.keyboard.press("Enter");
+      await expect.poll(async () => (await order(page)).length).toBe(countBefore - 1);
+      // One question again, for the same reason: a delete changes the count, so it swaps too.
+      await expect
+        .poll(async () => {
+          const at = await focus(page);
+          const list = await order(page);
+          if (at.tag === "BODY") return "focus fell to the body";
+          if (at.section === null) return "focus is on nothing";
+          if (at.section === deleting) return "focus stayed on the deleted section";
+          return list[indexOfDeleted] === at.section
+            ? "on the one that moved up into the gap"
+            : `focused ${at.section} but ${list[indexOfDeleted] ?? "nothing"} is in its place`;
+        })
+        .toBe("on the one that moved up into the gap");
+    } finally {
+      await page.context().close();
+    }
+  }, 240_000);
+});

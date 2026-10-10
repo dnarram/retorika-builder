@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rovingTabIndex, sectionKeyAction } from "../src/editor/sectionKeys.ts";
+import { placeAfterRebuild, rovingTabIndex, sectionKeyAction } from "../src/editor/sectionKeys.ts";
 
 /**
  * The canvas's keyboard rules, which are the half that can be wrong in a way no walk would notice.
@@ -17,49 +17,49 @@ const bare = (key: string) => ({
   altKey: false,
 });
 
-const plainDiv = { tagName: "DIV", isContentEditable: false };
-const whileTyping = { tagName: "P", isContentEditable: true };
-const inAField = { tagName: "INPUT", isContentEditable: false };
-
 const five = { count: 5, at: 2 };
 
 describe("moving between sections", () => {
   it("goes down and up one at a time", () => {
-    expect(sectionKeyAction(bare("ArrowDown"), plainDiv, five)).toEqual({
+    expect(sectionKeyAction(bare("ArrowDown"), five)).toEqual({
       kind: "focus",
       index: 3,
     });
-    expect(sectionKeyAction(bare("ArrowUp"), plainDiv, five)).toEqual({ kind: "focus", index: 1 });
+    expect(sectionKeyAction(bare("ArrowUp"), five)).toEqual({ kind: "focus", index: 1 });
   });
 
   it("stops at the ends instead of wrapping", () => {
     // A page's sections are read top to bottom, so «down» at the bottom must not answer «back to
     // the top» — least of all for somebody who cannot see that it happened.
-    expect(sectionKeyAction(bare("ArrowDown"), plainDiv, { count: 5, at: 4 })).toEqual({
+    expect(sectionKeyAction(bare("ArrowDown"), { count: 5, at: 4 })).toEqual({
       kind: "focus",
       index: 4,
     });
-    expect(sectionKeyAction(bare("ArrowUp"), plainDiv, { count: 5, at: 0 })).toEqual({
+    expect(sectionKeyAction(bare("ArrowUp"), { count: 5, at: 0 })).toEqual({
       kind: "focus",
       index: 0,
     });
   });
 
-  it("enters at the top going down, and at the bottom going up", () => {
-    // `at: -1` is a real state: a frame rebuilt by an edit has no focus in it.
-    expect(sectionKeyAction(bare("ArrowDown"), plainDiv, { count: 5, at: -1 })).toEqual({
-      kind: "focus",
-      index: 0,
-    });
-    expect(sectionKeyAction(bare("ArrowUp"), plainDiv, { count: 5, at: -1 })).toEqual({
-      kind: "focus",
-      index: 4,
-    });
+  it("does nothing at all when the canvas is not what has focus", () => {
+    /**
+     * **`at: -1` means «something else has focus», and it used to mean «enter the canvas».** The
+     * first version answered `ArrowDown` from `-1` by focusing the first section, which read as a
+     * convenience and was really a way of taking a keystroke from whoever had it: on a document
+     * body an arrow scrolls the page. Tab is how the canvas is entered, which is the entire job of
+     * the roving `tabindex`.
+     *
+     * This is also what makes «writing wins» and «a button owns Enter» one rule instead of three:
+     * if a paragraph or a verb has focus, the canvas is not focused, so nothing here fires.
+     */
+    for (const key of ["ArrowDown", "ArrowUp", "Enter", "Escape"]) {
+      expect(sectionKeyAction(bare(key), { count: 5, at: -1 }), key).toEqual({ kind: "ignore" });
+    }
   });
 
   it("does nothing in a canvas with no sections", () => {
     for (const key of ["ArrowDown", "ArrowUp", "Enter", "Escape"]) {
-      expect(sectionKeyAction(bare(key), plainDiv, { count: 0, at: -1 })).toEqual({
+      expect(sectionKeyAction(bare(key), { count: 0, at: -1 })).toEqual({
         kind: "ignore",
       });
     }
@@ -75,17 +75,17 @@ describe("moving between sections", () => {
      * answered `8` and the caller would have focused nothing at all. Writing the case out is what
      * produced the question of which of the two clamps was right.
      */
-    expect(sectionKeyAction(bare("ArrowUp"), plainDiv, { count: 3, at: 9 })).toEqual({
+    expect(sectionKeyAction(bare("ArrowUp"), { count: 3, at: 9 })).toEqual({
       kind: "focus",
       index: 1,
     });
-    expect(sectionKeyAction(bare("ArrowDown"), plainDiv, { count: 3, at: 9 })).toEqual({
+    expect(sectionKeyAction(bare("ArrowDown"), { count: 3, at: 9 })).toEqual({
       kind: "focus",
       index: 2,
     });
     // And never an index the caller cannot use.
     for (const key of ["ArrowUp", "ArrowDown"]) {
-      const action = sectionKeyAction(bare(key), plainDiv, { count: 3, at: 50 });
+      const action = sectionKeyAction(bare(key), { count: 3, at: 50 });
       expect(action.kind).toBe("focus");
       if (action.kind === "focus") {
         expect(action.index, key).toBeGreaterThanOrEqual(0);
@@ -97,37 +97,37 @@ describe("moving between sections", () => {
 
 describe("choosing and letting go", () => {
   it("chooses on Enter and releases on Escape", () => {
-    expect(sectionKeyAction(bare("Enter"), plainDiv, five)).toEqual({ kind: "choose" });
-    expect(sectionKeyAction(bare("Escape"), plainDiv, five)).toEqual({ kind: "release" });
+    expect(sectionKeyAction(bare("Enter"), five)).toEqual({ kind: "choose" });
+    expect(sectionKeyAction(bare("Escape"), five)).toEqual({ kind: "release" });
   });
 
-  it("has nothing to choose or release when no section holds the keyboard", () => {
-    expect(sectionKeyAction(bare("Enter"), plainDiv, { count: 5, at: -1 })).toEqual({
-      kind: "ignore",
-    });
-    expect(sectionKeyAction(bare("Escape"), plainDiv, { count: 5, at: -1 })).toEqual({
-      kind: "ignore",
-    });
+  it("has nothing to choose or release when the canvas is not focused", () => {
+    expect(sectionKeyAction(bare("Enter"), { count: 5, at: -1 })).toEqual({ kind: "ignore" });
+    expect(sectionKeyAction(bare("Escape"), { count: 5, at: -1 })).toEqual({ kind: "ignore" });
   });
 });
 
-describe("writing wins", () => {
-  it("leaves every key alone inside a contentEditable", () => {
-    // An arrow moves the caret, Enter makes a paragraph, Escape ends the edit. Sprint 11 spent
-    // itself on making this typing trustworthy and this is what keeps it.
-    for (const key of ["ArrowDown", "ArrowUp", "Enter", "Escape"]) {
-      expect(sectionKeyAction(bare(key), whileTyping, five), key).toEqual({ kind: "ignore" });
+describe("writing wins, and so does a button — the same rule", () => {
+  /**
+   * **One rule does both jobs, and the day it took two is recorded in `sectionKeys.ts`.** A verb is
+   * a `<button>` inside the section and text is a `contentEditable` inside the section; in both
+   * cases the section itself is not what has focus, so `at` is `-1` and nothing here fires.
+   *
+   * The first version asked a separate question — «is the focused thing a text box» — and answered
+   * it correctly while missing the buttons entirely, so `Enter` on «bajar» was taken as «choose
+   * this section» and the verb could not be pressed. These cases are the shape of both failures.
+   */
+  it("leaves the press alone whenever something inside the section has it", () => {
+    for (const key of ["ArrowDown", "ArrowUp", "Enter", "Escape", " "]) {
+      expect(sectionKeyAction(bare(key), { count: 5, at: -1 }), key).toEqual({ kind: "ignore" });
     }
   });
 
-  it("leaves every key alone inside a field", () => {
-    for (const key of ["ArrowDown", "ArrowUp", "Enter", "Escape"]) {
-      expect(sectionKeyAction(bare(key), inAField, five), key).toEqual({ kind: "ignore" });
-    }
-  });
-
-  it("acts when nothing is focused at all, which is a frame just rebuilt", () => {
-    expect(sectionKeyAction(bare("ArrowDown"), null, five)).toEqual({ kind: "focus", index: 3 });
+  it("acts only when a section itself has it", () => {
+    expect(sectionKeyAction(bare("ArrowDown"), { count: 5, at: 2 })).toEqual({
+      kind: "focus",
+      index: 3,
+    });
   });
 });
 
@@ -142,7 +142,7 @@ describe("only a bare press", () => {
     for (const modifier of ["metaKey", "ctrlKey", "shiftKey", "altKey"] as const) {
       for (const key of ["ArrowDown", "ArrowUp", "Enter", "Escape"]) {
         expect(
-          sectionKeyAction({ ...bare(key), [modifier]: true }, plainDiv, five),
+          sectionKeyAction({ ...bare(key), [modifier]: true }, five),
           `${modifier}+${key}`,
         ).toEqual({ kind: "ignore" });
       }
@@ -151,7 +151,7 @@ describe("only a bare press", () => {
 
   it("ignores keys that are nobody's business here", () => {
     for (const key of ["ArrowLeft", "ArrowRight", "Tab", "a", " ", "Home", "PageDown"]) {
-      expect(sectionKeyAction(bare(key), plainDiv, five), key).toEqual({ kind: "ignore" });
+      expect(sectionKeyAction(bare(key), five), key).toEqual({ kind: "ignore" });
     }
   });
 });
@@ -176,5 +176,72 @@ describe("the roving tabindex", () => {
 
   it("is empty for an empty canvas", () => {
     expect(rovingTabIndex(0, -1)).toEqual([]);
+  });
+});
+
+describe("where the keyboard lands after a verb rebuilt the document", () => {
+  /**
+   * One rule, checked against each of the five verbs it has to serve. The table in
+   * `placeAfterRebuild`'s own comment is the specification; these are the same rows as assertions,
+   * because a table in a comment cannot fail.
+   */
+
+  it("follows a section that moved up", () => {
+    // Five sections, the keyboard on the third, moved up: it is now the second.
+    expect(placeAfterRebuild({ idIndex: 1, wasAt: 2, count: 5 })).toBe(1);
+  });
+
+  it("follows a section that moved down", () => {
+    expect(placeAfterRebuild({ idIndex: 3, wasAt: 2, count: 5 })).toBe(3);
+  });
+
+  it("stays on the original after a duplicate, with the copy below it", () => {
+    // Six sections now; the original kept its index and the copy went in after it.
+    expect(placeAfterRebuild({ idIndex: 2, wasAt: 2, count: 6 })).toBe(2);
+  });
+
+  it("takes the teaser's place after «convertir en página»", () => {
+    // The section left this page and `sectionToPage` put an avance at the same index, so the id is
+    // gone and the count is unchanged.
+    expect(placeAfterRebuild({ idIndex: -1, wasAt: 2, count: 5 })).toBe(2);
+  });
+
+  it("steps to the section that moved up into the gap after a delete", () => {
+    expect(placeAfterRebuild({ idIndex: -1, wasAt: 2, count: 4 })).toBe(2);
+  });
+
+  it("steps back to the new last when the deleted one was last", () => {
+    // Five became four, and index 4 no longer exists.
+    expect(placeAfterRebuild({ idIndex: -1, wasAt: 4, count: 4 })).toBe(3);
+  });
+
+  it("has nowhere to go when the only section was deleted", () => {
+    expect(placeAfterRebuild({ idIndex: -1, wasAt: 0, count: 0 })).toBe(null);
+  });
+
+  it("never answers an index the caller cannot use", () => {
+    // The guard against the whole class of failure this exists to prevent: an out-of-range index
+    // means `sections[index]` is undefined, nothing is focused, and focus falls to the body — which
+    // is «el foco acaba al principio de la página», the one outcome day 4 is about.
+    for (const count of [1, 2, 5]) {
+      for (const wasAt of [-1, 0, 1, 4, 99]) {
+        for (const idIndex of [-1, 0, 1, 4, 99]) {
+          const place = placeAfterRebuild({ idIndex, wasAt, count });
+          expect(place, `idIndex ${idIndex}, wasAt ${wasAt}, count ${count}`).not.toBe(null);
+          if (place !== null) {
+            expect(place).toBeGreaterThanOrEqual(0);
+            expect(place).toBeLessThan(count);
+          }
+        }
+      }
+    }
+  });
+
+  it("answers null only for an empty page, whatever else it is told", () => {
+    for (const wasAt of [-1, 0, 3]) {
+      for (const idIndex of [-1, 0, 3]) {
+        expect(placeAfterRebuild({ idIndex, wasAt, count: 0 })).toBe(null);
+      }
+    }
   });
 });

@@ -1194,3 +1194,88 @@ cosas por debajo de ese umbral que quedan anotadas en `docs/tasks/backlog.md` co
 cualquier landmark, y la respuesta no es nombrar las secciones sino que el armazón tenga los suyos—
 y un `color-contrast` que axe **no pudo medir** sobre `.rb-sample`, el botón «Cambiar esta foto»
 dibujado encima de una fotografía.
+
+### Los verbos se usan con el teclado y sobreviven al uso (10 de octubre de 2026, sprint 17 día 4)
+
+El día 3 hizo que los seis verbos **existieran** para el teclado. Este hace que se puedan pulsar y
+que el foco acabe donde una persona lo espera cuando el documento se ha reconstruido debajo.
+
+#### Una regla para los cinco verbos, en vez de cinco casos
+
+Subir, bajar, duplicar, «convertir en página» y borrar cambian la página de maneras distintas, y los
+cinco tiran el marco y lo vuelven a parsear. El diseño obvio son cinco casos. La regla que los
+sustituye cabe en una frase:
+
+> **Sigue a la sección sobre la que se actuó. Si ya no está en esta página, toma lo que ahora ocupa
+> su sitio.**
+
+| Verbo | Qué pasó | Dónde aterriza |
+|---|---|---|
+| subir / bajar | la misma sección, otro índice | en ella, en su índice nuevo |
+| duplicar | el original sigue ahí, la copia debajo | en el original |
+| convertir en página | la sección se fue, un avance tomó su índice | en el avance |
+| borrar | la sección ya no está | en la que subió a ocupar el hueco |
+| borrar la última | no hay nada después | en la nueva última |
+| borrar la única | no hay nada | en ninguna parte, honestamente |
+
+**Duplicar se queda en el original y no salta a la copia**, y es el único caso que merece defensa.
+La copia es nueva, así que «enfoca lo que el verbo produjo» es defendible — pero es idéntica al
+original, nombre incluido, así que un lector de pantalla oiría el mismo nombre dos veces sin saber
+que se ha movido. La región en vivo dice qué ha pasado, la copia está a un `ArrowDown`, y la regla
+sigue siendo una frase.
+
+Y luego, dentro de esa sección, **el mismo verbo otra vez** si sigue ahí y sigue pulsable: tres
+pulsaciones de «subir» son tres pulsaciones en el mismo sitio, que es lo que una persona hace con un
+verbo así. Si el botón está ahora desactivado —la sección llegó arriba— el foco cae en la sección,
+nunca en un botón que no se puede pulsar, porque la mayoría de motores le niegan el foco y así es
+como se acaba en el `body`.
+
+#### Lo que la regla del día 3 tuvo que estrecharse, y por qué
+
+El manejador del lienzo preguntaba al ref «¿de qué sección es el teclado?» y rechazaba la pulsación
+solo si tenía el foco un `contentEditable` o un `<input>`. **Los seis verbos son botones dentro de la
+sección**, así que con el foco en «bajar» el ref seguía nombrando la sección, la pulsación no estaba
+en una caja de texto, y el `Enter` se tomaba como «elige esta sección»: **el verbo no se podía pulsar
+en absoluto.** Lo cazó la caminata «mueve una sección dos veces», pulsando Enter sobre el botón y
+encontrando la página igual.
+
+Preguntar en cambio **qué tiene el foco de verdad** resuelve todos los casos a la vez, y es la regla
+que cualquier componente compuesto tiene: las teclas del lienzo son del lienzo solo mientras el
+lienzo es lo enfocado. Un verbo, un texto, un enlace de la página o nada en absoluto: en los cuatro
+casos la pulsación no es nuestra. De paso, la comprobación explícita de «escribir gana» quedó
+inalcanzable y se ha **quitado** en vez de dejarla ahí: una guarda que no puede dispararse es una
+trampa para quien se fíe de ella después, que es justo lo que este sprint encontró el día 3.
+
+#### Un verbo que cambia el número de secciones produce dos documentos, y el primero se tira
+
+Esto costó tres intentos y lo resolvió la instrumentación, no el razonamiento.
+
+Un verbo cambia `html`, así que el `srcDoc` del marco en vivo se reemplaza y ese documento se
+cablea. Si además cambia **cuántas** secciones hay cambia `chromeKey` —que es un carácter por
+sección—, así que se abre también el intercambio con doble búfer: se parsea un **segundo** documento
+en el otro marco, se cablea, y se promueve. Mover no cambia ni el número ni el `source` de ninguna
+sección, así que nunca intercambia: por eso mover funcionaba y duplicar, borrar y convertir no.
+
+Mi primera explicación fue que el marco entrante es `inert` y no puede tomar el foco. **Falsa:** el
+registro mostró el foco aterrizando en el botón correcto, con `took=true` e `inert=false`, y después
+una segunda pasada de cableado sin nada pendiente, y después el foco en el `body`. El intento se
+estaba gastando en el documento que iba a morir.
+
+La segunda fue que bastaba con comprobar «este documento es el del marco en vivo». También falsa, y
+con número: durante el duplicado el registro leyó `isLive=true buffered=1 frames=2`. El documento en
+vivo también se descarta cuando hay un intercambio en vuelo.
+
+Lo que quedó: el intento sobrevive a una pasada de cableado, se reaplica en cada documento, y **se
+gasta solo cuando no hay ningún intercambio en vuelo** —preguntado al DOM por la presencia del marco
+con `data-buffered`, no al estado, porque esto corre dentro de un cierre que puede ir un render por
+detrás—. El efecto posterior a la promoción es donde acaba gastándose.
+
+Y ese mismo efecto, que existía para devolver el foco al marco tras un intercambio, ahora prefiere
+el sitio del verbo: enfocar el marco pondría el teclado al principio de la página, que es
+exactamente lo que este día existe para evitar.
+
+#### El nombre del verbo sobrevive al documento
+
+Cada botón lleva `data-action`. Es el asidero: el mismo verbo sobre la misma sección se encuentra en
+el documento que reemplazó al que la persona pulsó. El `aria-label` no podía hacerlo, siendo prosa en
+español que un cambio de copia movería.

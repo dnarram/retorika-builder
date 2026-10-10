@@ -71,7 +71,7 @@ import { measureOverflow } from "../editor/overflowCheck.ts";
 import { countPhotos, listPhotos, type PhotoState } from "../editor/photoInventory.ts";
 import { withPhotoUrls } from "../editor/previewDocument.ts";
 import { sectionFields } from "../editor/sectionFields.ts";
-import { rovingTabIndex, sectionKeyAction } from "../editor/sectionKeys.ts";
+import { placeAfterRebuild, rovingTabIndex, sectionKeyAction } from "../editor/sectionKeys.ts";
 import { offersMatching } from "../editor/sectionSearch.ts";
 import { keepsItsOwnUndo, shortcutFor } from "../editor/shortcuts.ts";
 import { insertedTextFor, liveFrameOf, offsetFor, textFrameOf } from "../editor/textEdits.ts";
@@ -828,6 +828,79 @@ export function Editor({
    * still has to leave a door open on the first section.
    */
   const keyboardSection = useRef<string | null>(null);
+  /**
+   * The verb that was just pressed, kept so the keyboard can be put back once the document it was
+   * pressed in has been replaced (sprint 17 day 4).
+   *
+   * Four of the section's verbs rebuild the page and two of those take the section with it, so
+   * «put focus back» cannot mean «back on that element»: the element is gone, along with the
+   * document it lived in. What survives is a name — the section's id, the index it held, and which
+   * verb — and `placeAfterRebuild` turns the first two into a place.
+   */
+  const pendingReturn = useRef<{ sectionId: string; verb: string; index: number } | null>(null);
+  /**
+   * What the canvas should focus as soon as it is allowed to, and **«allowed to» is the whole
+   * reason this is a ref and not a line of code.**
+   *
+   * **A verb that changes how many sections a page has produces two documents, and the first one is
+   * thrown away.** It changes `html`, so the live frame's `srcDoc` is replaced and that document is
+   * wired; and it changes `chromeKey` — which is one character per section — so a buffered swap also
+   * opens, parses a *second* document in the other frame, wires that, and promotes it. A move
+   * changes neither count nor any section's `source`, so it never swaps, which is why moving worked
+   * and duplicate, delete and «convertir en página» did not.
+   *
+   * Instrumented rather than reasoned about, because the first explanation was wrong: the log
+   * showed focus **landing** on the right button (`took=true`, and the frame was not `inert`), then
+   * a second wiring with nothing pending, then focus on the body. The intent was being spent on the
+   * document that was about to be discarded.
+   *
+   * So the intent outlives a single wiring. `takeCanvasFocus` re-applies it on every document it is
+   * given and **clears it only when the document it landed in is the live one** — which the swap's
+   * incoming frame is not until after the commit, where the swap effect applies it once more.
+   */
+  const focusTarget = useRef<{ sectionId: string; verb: string } | null>(null);
+
+  /**
+   * Focus whatever `focusTarget` asks for, in the document given, and say nothing if it cannot.
+   *
+   * The chain is the same one `placeAfterRebuild`'s comment describes: the same verb on the section
+   * if it is still there and still usable, else the section itself. A disabled button is skipped
+   * rather than focused, because most engines refuse focus to one — which is precisely how focus
+   * ends up on the body, the outcome this whole arrangement exists to prevent.
+   */
+  function takeCanvasFocus(doc: Document | null | undefined) {
+    const want = focusTarget.current;
+    if (!want || !doc) return;
+    const section = doc.querySelector<HTMLElement>(`[data-section="${want.sectionId}"]`);
+    if (!section) {
+      // The section is not in this document at all, so there is nothing to wait for either.
+      focusTarget.current = null;
+      return;
+    }
+    const again = section.querySelector<HTMLButtonElement>(
+      `.rb-actions [data-action="${want.verb}"]`,
+    );
+    const target = again && !again.disabled ? again : section;
+    target.focus();
+    /*
+     * **Spent only once the document it landed in is going to stay.**
+     *
+     * «The live frame's document» is not that test, and the measurement is the reason. During the
+     * duplicate the log read `isLive=true buffered=1 frames=2`: the live frame's own `srcDoc` had
+     * already been replaced *and* a swap was in flight, so the document focus landed in was the
+     * live one and was discarded moments later anyway. Clearing there spent the intent on a corpse,
+     * which is how focus reached the body.
+     *
+     * So the condition is «no swap in flight», asked of the DOM rather than of `buffer`: this runs
+     * inside a closure that can be a render behind, and the buffered frame's presence is the same
+     * fact without the staleness. It reaches zero in the commit's own render, which is why the swap
+     * effect is where the intent is finally spent.
+     */
+    const settled =
+      doc === liveFrame()?.contentDocument &&
+      document.querySelectorAll("iframe[data-buffered]").length === 0;
+    if (settled && doc.activeElement === target) focusTarget.current = null;
+  }
   const compositionMenuOpen = useRef(false);
 
   /**
@@ -1260,7 +1333,22 @@ export function Editor({
      * three different components. A boolean here would be a fourth thing to keep in step.
      */
     if (document.querySelector('[aria-modal="true"]')) return;
-    liveFrame()?.focus();
+    /*
+     * **The verb's own place first, and the frame only if there is none.** A section count that
+     * changed is what sent this rebuild through the swap in the first place, so the verbs whose
+     * focus has furthest to travel are exactly the ones that arrive here. Focusing the frame
+     * instead would put the keyboard at the top of the page, which is the one outcome sprint 17
+     * day 4 exists to prevent.
+     */
+    const frame = liveFrame();
+    takeCanvasFocus(frame?.contentDocument);
+    if (focusTarget.current === null && frame?.contentDocument?.activeElement !== null) {
+      // Something inside the new document has focus — either the line above put it there, or the
+      // restore already succeeded while wiring. Either way the frame does not need it.
+      const inner = frame?.contentDocument?.activeElement as HTMLElement | null;
+      if (inner && inner !== frame?.contentDocument?.body) return;
+    }
+    frame?.focus();
   }, [buffer.live]);
 
   /**
@@ -1710,7 +1798,35 @@ export function Editor({
       iframeDoc.body.appendChild(legend);
     }
 
+    /**
+     * The verbs that replace the document, and therefore the ones with a focus to put back.
+     *
+     * `composition` and `fields` are left out on purpose: they **open** something — a menu and a
+     * panel — and nothing is rebuilt until a choice is made inside them, so recording a return here
+     * would leave a stale one waiting to hijack the next unrelated edit. Where the keyboard goes
+     * when those two open and close is day 5's, and it is a different question.
+     */
+    const REBUILDS = new Set([
+      "move-up",
+      "move-down",
+      "duplicate",
+      "to-page",
+      "delete",
+      "handmade",
+    ]);
+
+    /**
+     * One of the section's verbs, as a button.
+     *
+     * **`verb` is a name that survives the document, which is what sprint 17 day 4 needed.** Every
+     * one of these buttons is destroyed and built again on each edit — the whole frame is thrown
+     * away and parsed — so «put the focus back where it was» cannot mean «back on that element».
+     * The `data-action` is the handle: the same verb on the same section is findable in the
+     * document that replaced the one the person pressed it in. The `aria-label` could not do the
+     * job, being Spanish prose that a copy change would move.
+     */
     function action(
+      verb: string,
       label: string,
       variant: "move" | "delete",
       disabled: boolean,
@@ -1720,6 +1836,7 @@ export function Editor({
       const button = iframeDoc.createElement("button");
       button.type = "button";
       button.className = `rb-action rb-action-${variant}`;
+      button.dataset["action"] = verb;
       button.setAttribute("aria-label", label);
       button.disabled = disabled;
       button.innerHTML = svg;
@@ -1727,7 +1844,30 @@ export function Editor({
       // re-run select() on a section a move or a delete is about to displace or remove.
       button.addEventListener("click", (event) => {
         event.stopPropagation();
-        if (!disabled) onClick();
+        if (disabled) return;
+        /*
+         * **Remembered before the verb runs, because afterwards there is nothing to ask.** Four of
+         * these verbs replace the document, and two of them (delete, «convertir en página») take
+         * the section this button belongs to with it. The id, the index and the verb are everything
+         * `wireSelection` needs to put the keyboard back when the new document arrives.
+         *
+         * Recorded for a mouse click too, and that is deliberate rather than sloppy: a browser
+         * leaves focus on a button that was clicked, so a mouse user who has just pressed «subir»
+         * three times wants the fourth press to be in the same place as the first. One behaviour
+         * for both ways of pressing is also one behaviour to test.
+         */
+        /*
+         * The section and its index are read from the DOM rather than passed in, and that is the
+         * better answer rather than the convenient one: this helper is defined outside `select()`,
+         * so it has neither in scope, and threading two more arguments through eight call sites to
+         * tell a button something it is standing inside would be worse than asking.
+         */
+        const host = button.closest<HTMLElement>("[data-section]");
+        const hostId = host?.dataset["section"];
+        if (REBUILDS.has(verb) && host && hostId) {
+          pendingReturn.current = { sectionId: hostId, verb, index: sections.indexOf(host) };
+        }
+        onClick();
       });
       return button;
     }
@@ -1869,6 +2009,7 @@ export function Editor({
       actions.className = "rb-actions";
       actions.appendChild(
         action(
+          "move-up",
           es["editor.moveSectionUp"],
           "move",
           index <= 0,
@@ -1878,6 +2019,7 @@ export function Editor({
       );
       actions.appendChild(
         action(
+          "move-down",
           es["editor.moveSectionDown"],
           "move",
           index < 0 || index >= sections.length - 1,
@@ -1894,6 +2036,7 @@ export function Editor({
       if (compositions.length > 0) {
         actions.appendChild(
           action(
+            "composition",
             es["editor.composition.open"],
             "move",
             false,
@@ -1918,6 +2061,7 @@ export function Editor({
       if (designTools && !isHandDesigned(doc, sectionId)) {
         actions.appendChild(
           action(
+            "handmade",
             es["editor.section.escalate.yes"],
             "move",
             false,
@@ -1938,6 +2082,7 @@ export function Editor({
 
       actions.appendChild(
         action(
+          "duplicate",
           es["editor.duplicateSection"],
           "move",
           false,
@@ -1954,6 +2099,7 @@ export function Editor({
       if (canConvert(doc, sectionId)) {
         actions.appendChild(
           action(
+            "to-page",
             es["editor.sectionToPage"],
             "move",
             false,
@@ -1965,6 +2111,7 @@ export function Editor({
 
       actions.appendChild(
         action(
+          "fields",
           es["editor.fields.open"],
           "move",
           false,
@@ -1974,6 +2121,7 @@ export function Editor({
       );
       actions.appendChild(
         action(
+          "delete",
           es["editor.deleteSection"],
           "delete",
           false,
@@ -2023,23 +2171,21 @@ export function Editor({
       "keydown",
       (event) => {
         /*
-         * **Described by its shape and never by `instanceof`, and the first version of this line
-         * got it wrong in the one way that matters.** This handler closes over `iframeDoc` but runs
-         * in the *parent* window's realm, and the frame has a realm of its own: an element from
-         * inside it is **not** an instance of this window's `HTMLElement`. Measured in Chromium on
-         * 10 October 2026 — `section instanceof HTMLElement` is `false` from here and `true`
-         * against the frame's own constructor.
+         * **`at` is read from what has focus, not from the ref**, and that is the correction sprint
+         * 17 day 4 made. The ref says which section the keyboard *belongs* to, which is the right
+         * input for the roving `tabindex` and the wrong one for deciding whether a press is ours:
+         * a section's six verbs are buttons inside the section, so the ref still named the section
+         * while «bajar» had focus, and `Enter` was taken as «choose» instead of pressing the
+         * button. Asking the DOM settles text, buttons, links and «nothing at all» with one rule.
          *
-         * So `focused instanceof HTMLElement ? … : null` handed `sectionKeyAction` a `null` every
-         * single time, `keepsItsOwnUndo(null)` answered `false`, and **writing stopped winning**:
-         * an arrow pressed mid-word moved the keyboard to another section. The e2e walk «escribir
-         * gana» is what caught it, which is the walk that exists for precisely this.
-         *
-         * `FocusedElement` is a plain shape for this exact reason — the same reason `InputIntent`
-         * exists beside `InputEvent` — so reading two properties off it is not a workaround, it is
-         * the contract being used as intended.
+         * **Shape, never `instanceof`.** This handler closes over `iframeDoc` but runs in the
+         * *parent* window's realm, and the frame has a realm of its own: an element from inside it
+         * is not an instance of this window's `HTMLElement`. Measured in Chromium on 10 October
+         * 2026 — `false` from here, `true` against the frame's own constructor — and `wireEditing`
+         * carries two notes saying so.
          */
         const focused = iframeDoc.activeElement as HTMLElement | null;
+        const at = focused ? sections.findIndex((section) => section === focused) : -1;
         const action = sectionKeyAction(
           {
             key: event.key,
@@ -2048,10 +2194,7 @@ export function Editor({
             shiftKey: event.shiftKey,
             altKey: event.altKey,
           },
-          typeof focused?.tagName === "string"
-            ? { tagName: focused.tagName, isContentEditable: focused.isContentEditable === true }
-            : null,
-          { count: sections.length, at: keyboardIndex() },
+          { count: sections.length, at },
         );
         if (action.kind === "ignore") return;
         event.preventDefault();
@@ -2066,7 +2209,10 @@ export function Editor({
           return;
         }
         if (action.kind === "choose") {
-          const target = sections[keyboardIndex()];
+          // The focused section, not the remembered one: the two agree because `focusin` keeps the
+          // ref in step, and reading the same source the decision was made from is what stops them
+          // ever disagreeing in the one direction that matters.
+          const target = sections[at];
           if (target) select(target);
           return;
         }
@@ -2076,8 +2222,7 @@ export function Editor({
          * you were. Focus goes to the frame's own body, which is where it would be if nothing in
          * the canvas had ever been touched.
          */
-        const held = sections[keyboardIndex()];
-        held?.blur();
+        sections[at]?.blur();
         showKeyLegend(false);
       },
       true,
@@ -2130,6 +2275,52 @@ export function Editor({
         selectedSection.current = null;
         compositionMenuOpen.current = false;
       }
+    }
+
+    /**
+     * **Put the keyboard back after a verb, which is the whole of sprint 17 day 4.**
+     *
+     * Pressing «subir» throws the frame away and parses a new one. Before this, focus went nowhere
+     * — the element that had it no longer existed — so it fell to the new document's body, which is
+     * the top of the page. A keyboard user moved a section once and then had to walk all the way
+     * back down to move it again; somebody using a screen reader was simply told they were at the
+     * beginning of the site.
+     *
+     * Where it goes is `placeAfterRebuild`'s one rule: follow the section that was acted on, and if
+     * it is no longer on this page take whatever is now in its place. Then, inside that section,
+     * **the same verb again** if it is still there and still usable — so three presses of «subir»
+     * are three presses in one place, which is what a person does with a verb like that. The
+     * fallbacks are in order and each one is a real case: the button exists but is now disabled
+     * (the section reached the top), or the cluster is not drawn because the thing in this place is
+     * a different section (a delete). The section itself is always focusable, so the chain cannot
+     * end in nothing while a section exists.
+     */
+    const pending = pendingReturn.current;
+    if (pending) {
+      pendingReturn.current = null;
+      const place = placeAfterRebuild({
+        idIndex: sections.findIndex((section) => section.dataset.section === pending.sectionId),
+        wasAt: pending.index,
+        count: sections.length,
+      });
+      const target = place === null ? undefined : sections[place];
+      const targetId = target?.dataset["section"];
+      if (target && targetId) {
+        focusTarget.current = { sectionId: targetId, verb: pending.verb };
+      }
+    }
+
+    /*
+     * Applied on **every** wiring and not only on the one that read the pending verb, because a
+     * single verb can produce two documents and the first is discarded. Re-selecting here as well:
+     * the action cluster is what is being focused into, and after a delete the section now in that
+     * place was never chosen, so nothing has drawn one for it yet.
+     */
+    const wanted = focusTarget.current;
+    if (wanted) {
+      const host = sections.find((section) => section.dataset["section"] === wanted.sectionId);
+      if (host) select(host);
+      takeCanvasFocus(iframeDoc);
     }
   }
 
