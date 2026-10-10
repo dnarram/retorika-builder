@@ -71,6 +71,7 @@ import { measureOverflow } from "../editor/overflowCheck.ts";
 import { countPhotos, listPhotos, type PhotoState } from "../editor/photoInventory.ts";
 import { withPhotoUrls } from "../editor/previewDocument.ts";
 import { sectionFields } from "../editor/sectionFields.ts";
+import { rovingTabIndex, sectionKeyAction } from "../editor/sectionKeys.ts";
 import { offersMatching } from "../editor/sectionSearch.ts";
 import { keepsItsOwnUndo, shortcutFor } from "../editor/shortcuts.ts";
 import { insertedTextFor, liveFrameOf, offsetFor, textFrameOf } from "../editor/textEdits.ts";
@@ -816,6 +817,17 @@ export function Editor({
    * the frame finishes loading, which is outside React's render pass entirely.
    */
   const selectedSection = useRef<string | null>(null);
+  /**
+   * Which section the canvas's keyboard is on, by **id and not by index** (sprint 17 day 3).
+   *
+   * A ref and not state, for the reason the whole of `wireSelection` is: this has to survive the
+   * frame being replaced, and replacing the frame is what every edit does. An index would not
+   * survive it — a section deleted above the keyboard's place shifts every index below — so the id
+   * is kept and the index is looked up each time. `null` means «no section holds it», which is a
+   * real state and not an error: a frame just rebuilt has focus nowhere, and the roving tabindex
+   * still has to leave a door open on the first section.
+   */
+  const keyboardSection = useRef<string | null>(null);
   const compositionMenuOpen = useRef(false);
 
   /**
@@ -1585,6 +1597,119 @@ export function Editor({
   function wireSelection(iframeDoc: Document) {
     const sections = [...iframeDoc.querySelectorAll<HTMLElement>("[data-section]")];
 
+    /**
+     * The canvas becomes reachable: one Tab stop, arrows between the sections, Enter to choose.
+     *
+     * **`role="group"` and not a named `<section>`, which is David's correction and he was right.**
+     * `packages/renderer` emits `element("section", …)`, and a `<section>` with an accessible name
+     * is a `region` **landmark** — so naming five to nine of them would have added five to nine
+     * landmarks to the editor's accessibility tree, noise for anybody navigating by landmark and
+     * present only while editing. `group` overrides that implicit role, so the section gets its
+     * name without becoming a place.
+     *
+     * The name is `sectionDisplayName`, which is the Spanish the «Diseñada a mano» bar, the gap
+     * notice and three panels already use. One name per section across the whole interface, so a
+     * screen reader cannot come to call something what the panel beside it does not.
+     */
+    function describeForKeyboard() {
+      const names = sections.map((section) =>
+        sectionDisplayName(doc, section.dataset.section ?? ""),
+      );
+      for (const [index, section] of sections.entries()) {
+        section.setAttribute("role", "group");
+        section.setAttribute("aria-label", names[index] ?? "");
+      }
+      applyRovingTabIndex();
+    }
+
+    /** Where the keyboard is, as an index into `sections`, or `-1`. */
+    function keyboardIndex(): number {
+      const id = keyboardSection.current;
+      return id === null ? -1 : sections.findIndex((section) => section.dataset.section === id);
+    }
+
+    function applyRovingTabIndex() {
+      const indexes = rovingTabIndex(sections.length, keyboardIndex());
+      for (const [index, section] of sections.entries()) {
+        section.setAttribute("tabindex", String(indexes[index] ?? -1));
+      }
+    }
+
+    /**
+     * What the editor says out loud when a section is chosen.
+     *
+     * **Both halves, because they answer different questions**, and David's adjustment allowed
+     * either: `aria-current="true"` is the *state* — a reader arriving at this section later is
+     * told it is the chosen one, which matters because the chosen section is what the six action
+     * buttons act on — and the live region is the *event*, because choosing does not move focus and
+     * a reader that is already on the section would otherwise hear nothing happen.
+     *
+     * `true` and not `page`: `menu.ts` explains the distinction where it uses `page`, and a section
+     * is not a page. The region lives inside the frame rather than in the editor's chrome, because
+     * that is the document the focus is in.
+     */
+    function announceChoice(sectionId: string) {
+      for (const section of sections) {
+        if (section.dataset.section === sectionId) section.setAttribute("aria-current", "true");
+        else section.removeAttribute("aria-current");
+      }
+      let region = iframeDoc.querySelector<HTMLElement>(".rb-announce");
+      if (!region) {
+        region = iframeDoc.createElement("div");
+        region.className = "rb-announce";
+        region.setAttribute("role", "status");
+        region.setAttribute("aria-live", "polite");
+        iframeDoc.body.appendChild(region);
+      }
+      region.textContent = es["editor.canvasKeys.chosen"].replace(
+        "{section}",
+        sectionDisplayName(doc, sectionId),
+      );
+    }
+
+    /**
+     * The key map, in Spanish, on screen — and **on screen the moment it is useful**, which is the
+     * answer to where it goes rather than a way of hiding it.
+     *
+     * It is drawn inside the frame like every other piece of canvas chrome, and it appears when a
+     * section takes the keyboard. The alternative homes were measured and rejected: the 58px top bar
+     * has a right-hand group pinned at 673px with a browser-run guard over its widths, and the row
+     * that holds the canvas is a flex row whose width a `ResizeObserver` turns into the zoom factor.
+     * Putting a legend in either means changing a measured layout to document a keyboard.
+     *
+     * Appearing on arrival is not the hover trap `REVIEW.md` ruled against — «un control que solo
+     * aparece bajo un puntero no existe para quien no tiene puntero». This is the opposite case: it
+     * appears for the keyboard, it is not a control, and Tab is the universal gesture for «what is
+     * focusable here», so the thing that reveals it is the thing it documents.
+     *
+     * `pointer-events: none`, because a legend that can swallow a click is a bug with a reason.
+     */
+    function showKeyLegend(visible: boolean) {
+      let legend = iframeDoc.querySelector<HTMLElement>(".rb-keys");
+      if (!visible) {
+        legend?.remove();
+        return;
+      }
+      if (legend) return;
+      legend = iframeDoc.createElement("div");
+      legend.className = "rb-keys";
+      // `aria-hidden`: a screen reader is told the keys by the section's own role and label plus
+      // the live region, and reading a legend out on every arrow would be noise over the name of
+      // the section somebody just moved to.
+      legend.setAttribute("aria-hidden", "true");
+      for (const text of [
+        es["editor.canvasKeys.title"],
+        es["editor.canvasKeys.move"],
+        es["editor.canvasKeys.choose"],
+        es["editor.canvasKeys.release"],
+      ]) {
+        const row = iframeDoc.createElement("span");
+        row.textContent = text;
+        legend.appendChild(row);
+      }
+      iframeDoc.body.appendChild(legend);
+    }
+
     function action(
       label: string,
       variant: "move" | "delete",
@@ -1717,6 +1842,14 @@ export function Editor({
       const sectionId = target.dataset.section;
       if (!sectionId) return;
       selectedSection.current = sectionId;
+      /*
+       * Choosing with the mouse moves the keyboard's place too, so Tab-ing back into the canvas
+       * returns to the section somebody was just working on rather than to the top. One place, two
+       * ways of moving it.
+       */
+      keyboardSection.current = sectionId;
+      applyRovingTabIndex();
+      announceChoice(sectionId);
       /**
        * The «Diseño» panel follows the canvas: clicking a section is how you choose what to lay out.
        *
@@ -1848,19 +1981,131 @@ export function Editor({
           () => onDeleteSection(sectionId),
         ),
       );
-      target.appendChild(actions);
+      /*
+       * **First in the DOM, not last**, which is a change sprint 17 day 3 made on purpose and whose
+       * cost is worth stating. The cluster is `position: absolute`, so nothing moves on screen; what
+       * changes is Tab order. Appended, a keyboard had to walk through every `contenteditable` in
+       * the section before reaching the verbs — which for a cover is a headline, a subheadline, body
+       * copy and two buttons. Prepended, the verbs come first.
+       *
+       * The cost: a screen reader hears the chrome before the section's own words. In an editor that
+       * is the right order — you came here to act on this section, and what you can do to it is the
+       * news — but it is a judgement, and reverting it is moving one line.
+       */
+      target.prepend(actions);
     }
 
     for (const section of sections) {
       section.addEventListener("click", () => select(section));
+      /*
+       * Clicking into a section's text, or Tab-ing to it, moves the keyboard's place as well —
+       * otherwise the arrows would act on wherever the place last was, which is somewhere the
+       * person is not. `focusin` and not `focus`, because the thing receiving focus is usually a
+       * child: a paragraph being edited, or one of the action buttons.
+       */
+      section.addEventListener("focusin", () => {
+        const id = section.dataset.section;
+        if (!id || keyboardSection.current === id) return;
+        keyboardSection.current = id;
+        applyRovingTabIndex();
+      });
     }
+
+    /**
+     * The canvas's own keys. Every decision is `sectionKeys.ts`'s; this is the wiring.
+     *
+     * On the frame's document in the **capture** phase, so it is reached before anything inside a
+     * section can swallow it — and it still refuses every press that belongs to whoever has focus,
+     * because `sectionKeyAction` asks `keepsItsOwnUndo` first. Registered once per wired document,
+     * like the rest of this function.
+     */
+    iframeDoc.addEventListener(
+      "keydown",
+      (event) => {
+        /*
+         * **Described by its shape and never by `instanceof`, and the first version of this line
+         * got it wrong in the one way that matters.** This handler closes over `iframeDoc` but runs
+         * in the *parent* window's realm, and the frame has a realm of its own: an element from
+         * inside it is **not** an instance of this window's `HTMLElement`. Measured in Chromium on
+         * 10 October 2026 — `section instanceof HTMLElement` is `false` from here and `true`
+         * against the frame's own constructor.
+         *
+         * So `focused instanceof HTMLElement ? … : null` handed `sectionKeyAction` a `null` every
+         * single time, `keepsItsOwnUndo(null)` answered `false`, and **writing stopped winning**:
+         * an arrow pressed mid-word moved the keyboard to another section. The e2e walk «escribir
+         * gana» is what caught it, which is the walk that exists for precisely this.
+         *
+         * `FocusedElement` is a plain shape for this exact reason — the same reason `InputIntent`
+         * exists beside `InputEvent` — so reading two properties off it is not a workaround, it is
+         * the contract being used as intended.
+         */
+        const focused = iframeDoc.activeElement as HTMLElement | null;
+        const action = sectionKeyAction(
+          {
+            key: event.key,
+            metaKey: event.metaKey,
+            ctrlKey: event.ctrlKey,
+            shiftKey: event.shiftKey,
+            altKey: event.altKey,
+          },
+          typeof focused?.tagName === "string"
+            ? { tagName: focused.tagName, isContentEditable: focused.isContentEditable === true }
+            : null,
+          { count: sections.length, at: keyboardIndex() },
+        );
+        if (action.kind === "ignore") return;
+        event.preventDefault();
+
+        if (action.kind === "focus") {
+          const target = sections[action.index];
+          if (!target) return;
+          keyboardSection.current = target.dataset.section ?? null;
+          applyRovingTabIndex();
+          target.focus();
+          showKeyLegend(true);
+          return;
+        }
+        if (action.kind === "choose") {
+          const target = sections[keyboardIndex()];
+          if (target) select(target);
+          return;
+        }
+        /*
+         * Escape gives the keyboard back. The place is kept rather than cleared, so Tab returns to
+         * the same section instead of the top — letting go of the canvas is not forgetting where
+         * you were. Focus goes to the frame's own body, which is where it would be if nothing in
+         * the canvas had ever been touched.
+         */
+        const held = sections[keyboardIndex()];
+        held?.blur();
+        showKeyLegend(false);
+      },
+      true,
+    );
+
+    describeForKeyboard();
 
     // Anywhere else in the page closes the composition menu, the same way the insertion menu
     // closes. Registered on the frame's document rather than the body so a click on the padding
     // around the sections counts too.
     iframeDoc.addEventListener("click", (event) => {
-      const target = event.target;
-      if (target instanceof Element && target.closest(".rb-compositions, .rb-actions")) return;
+      /*
+       * **Duck-typed, and until sprint 17 day 3 this line was dead.** It read `target instanceof
+       * Element`, and this callback runs in the parent window's realm while the target belongs to
+       * the frame's — so the test was `false` for every click that ever reached it and the early
+       * return never happened. Found while fixing the same mistake one screen below, in a handler
+       * written the same day; the two notes at `wireEditing` already warned about exactly this,
+       * which is the part worth recording.
+       *
+       * Nothing depended on it, and that is measured rather than assumed: the full `e2e` suite was
+       * run with the condition working and stayed green. What actually keeps a click on the menu
+       * from closing the menu is `stopPropagation` in `action()` and in each composition choice, so
+       * this was belt over a working brace. It is fixed instead of deleted because a guard that
+       * reads as load-bearing and is not invites somebody to remove the thing that is.
+       */
+      const target = event.target as Element | null;
+      if (typeof target?.closest === "function" && target.closest(".rb-compositions, .rb-actions"))
+        return;
       for (const menu of iframeDoc.querySelectorAll(".rb-compositions")) menu.remove();
       compositionMenuOpen.current = false;
     });
@@ -3553,6 +3798,52 @@ export function Editor({
       '[contenteditable="true"]:hover, [contenteditable="true"]:focus { outline-color: #156FE7; }',
       "[data-section] { position: relative; cursor: pointer; }",
       "[data-section].rb-selected { outline: 2px solid #156FE7; outline-offset: -2px; }",
+      /*
+       * **The focus ring, and why it is not the selection outline** (sprint 17 day 3). Where the
+       * keyboard *is* and which section is *chosen* are two different facts that are often the same
+       * section and sometimes not: arrows move the keyboard without choosing anything, so somebody
+       * two sections down from their choice must be able to see both. The ring is inset and dashed
+       * against the solid selection outline, so the two read as different even in one colour.
+       *
+       * `:focus-visible` and not `:focus`: a mouse click on a section focuses it too, and drawing a
+       * keyboard ring for a mouse user is the noise `:focus-visible` exists to prevent. The ring is
+       * 3px at `#0F172A` — about 15:1 on white and the darkest ink the interface owns — because
+       * WCAG 1.4.11 asks 3:1 of anything whose appearance identifies a control, and the brand blue
+       * is already spoken for by the selection.
+       */
+      "[data-section]:focus-visible { outline: 3px dashed #0F172A; outline-offset: -5px; }",
+      /*
+       * **And the selection survives being focused**, which the first version of these two rules
+       * did not. It also carried `[data-section]:focus { outline: none; }` as a belt over the
+       * browser's default ring — unnecessary, because a modern engine draws that ring only for
+       * `:focus-visible` — and `[data-section]:focus` and `[data-section].rb-selected` have the
+       * same specificity, so the later one won: **clicking a section selected it and then erased
+       * its outline.** Day 2's own walk caught it, asserting `outlineWidth` is `2px` after a click,
+       * one day after it was written.
+       *
+       * The focus ring stays an `outline` and the selection becomes an inset `box-shadow` when the
+       * two coincide, in that order on purpose: a focus indicator has to survive forced-colors
+       * mode, where `box-shadow` is dropped and `outline` is kept. So the thing that must never
+       * disappear is the one drawn with the more robust property.
+       */
+      ".rb-selected:focus-visible { box-shadow: inset 0 0 0 2px #156FE7; }",
+      /*
+       * The live region that says which section was chosen. Off screen rather than `display: none`,
+       * which would stop a screen reader reading it at all, and clipped to a single pixel rather
+       * than moved to a negative offset, which would make the frame scrollable.
+       */
+      ".rb-announce { position: absolute; width: 1px; height: 1px; overflow: hidden;",
+      "  clip-path: inset(50%); white-space: nowrap; }",
+      /*
+       * The key map. Fixed to the frame's own viewport, so it stays in view while the canvas
+       * scrolls, and `pointer-events: none` so a legend can never eat a click. White on `#0F172A`
+       * is about 17:1.
+       */
+      ".rb-keys { position: fixed; left: 12px; bottom: 12px; z-index: 30; display: flex;",
+      "  flex-direction: column; gap: 2px; padding: 8px 11px; border-radius: 10px;",
+      "  background: #0F172A; color: #FFFFFF; pointer-events: none;",
+      `  font: 500 12px/1.45 ${UI_FONT}; box-shadow: ${CHROME_SCALE.shadow2}; }`,
+      ".rb-keys span:first-child { font-weight: 700; letter-spacing: 0.02em; }",
       // Inset within the section, not hung outside it like the corner handles: the cover is
       // the first section, with no room above it, and a button hanging above the top of the
       // page there would sit outside the iframe's own visible area — covered by whatever the

@@ -1079,3 +1079,118 @@ sangra. La regla se queda como guarda de la próxima pieza dibujada un píxel fu
 falta ahora; lo que la medición abre —que un `clip` ahí también tapa el desbordamiento del contenido
 **del propio dueño**, mientras el diálogo que lo mide usa su propio marco— queda en
 `docs/tasks/backlog.md` con su número al lado.
+
+### El lienzo se maneja con el teclado (10 de octubre de 2026, sprint 17 día 3)
+
+**Seis verbos que solo alcanzaba el ratón, y los botones nunca fueron el problema.** Subir, bajar,
+composición, duplicar, campos y borrar son `<button aria-label=…>` desde el sprint 2 y se usan
+perfectamente con el teclado. Lo que no podían hacer era **existir**: el grupo lo dibuja `select()`,
+y `select()` solo corría desde un `click`.
+
+**No hay panel donde ponerlo, y este mismo documento lo dice:** «There is no sections panel:
+`Secciones` *is* the canvas». Así que la ruta tenía que ser el lienzo, que es un `<iframe srcDoc>`
+cuyo documento escribe `packages/renderer`.
+
+**Lo adoptado:** `tabindex` móvil —`0` en la sección que tiene el teclado y `-1` en el resto, así
+que el lienzo es **una** parada de Tab y no cinco a nueve—, ↑/↓ entre secciones, Intro elige, Esc
+suelta.
+
+#### El ajuste de David, que me corrige, y por qué tenía razón
+
+Yo había propuesto `aria-label` sobre `[data-section]`. **Está mal y es comprobable:** el renderer
+emite `element("section", …)`, y un `<section>` **con nombre accesible es un landmark `region`**.
+Nombrar de cinco a nueve habría añadido de cinco a nueve regiones al árbol de accesibilidad del
+editor: ruido para quien navega por landmarks, y solo mientras se edita.
+
+Lo que entró: **`role="group"` con el nombre en español** de `sectionDisplayName` —el mismo que usan
+la barra de «Diseñada a mano», el aviso del hueco y tres paneles, así que un lector de pantalla no
+puede llamar a algo distinto de lo que lo llama el panel de al lado—. `group` anula el rol implícito
+de `region`, así que la sección se nombra sin convertirse en un sitio.
+
+**Medido el mismo día con axe, que es la otra mitad del ajuste.** Los landmarks del marco antes de
+tocar el teclado y después de elegir una sección son **idénticos**, y el sabotaje lo confirma: al
+quitar el `role="group"` la aserción se pone en rojo.
+
+#### Cómo se anuncia la sección elegida: las dos cosas, porque responden preguntas distintas
+
+David permitía `aria-current` **o** una región en vivo. Entran las dos, y la razón es que no hacen
+lo mismo:
+
+- **`aria-current="true"` es el estado.** Quien llega a esa sección más tarde oye que es la elegida,
+  y eso importa porque la sección elegida es sobre la que actúan los seis botones. `true` y no
+  `page`: `menu.ts` explica esa distinción donde usa `page`, y una sección no es una página.
+- **La región en vivo es el suceso.** Elegir no mueve el foco, así que quien ya estaba en la sección
+  no oiría nada ocurrir.
+
+#### El anillo de foco no es el contorno de selección
+
+Dónde **está** el teclado y qué sección está **elegida** son dos hechos distintos que a menudo
+coinciden y a veces no: las flechas mueven el teclado sin elegir nada. El anillo es `3px dashed`
+`#0F172A` —unos 15:1 sobre blanco, y la WCAG 1.4.11 pide 3:1 de lo que identifica un control—,
+hacia dentro y discontinuo contra el contorno sólido de la selección, así que los dos se distinguen
+incluso en un solo color. `:focus-visible` y no `:focus`, porque un clic de ratón también enfoca y
+dibujarle un anillo de teclado es el ruido que `:focus-visible` existe para evitar.
+
+**Y la selección sobrevive al foco, que la primera versión no lograba.** Llevaba además
+`[data-section]:focus { outline: none }` como cinturón sobre el anillo del navegador —innecesario,
+porque un motor moderno lo dibuja solo para `:focus-visible`— y `[data-section]:focus` y
+`[data-section].rb-selected` tienen la misma especificidad, así que ganaba la última: **al hacer
+clic en una sección se elegía y acto seguido se le borraba el contorno.** Lo cazó la caminata del
+día 2, que asevera que el `outlineWidth` es de `2px` tras un clic, un día después de escribirse.
+
+Cuando las dos cosas coinciden, el anillo de foco sigue siendo un `outline` y la selección pasa a
+ser un `box-shadow` hacia dentro. El orden es deliberado: un indicador de foco tiene que sobrevivir
+al modo de colores forzados, donde el `box-shadow` se descarta y el `outline` se conserva, así que lo
+que no puede desaparecer se dibuja con la propiedad más robusta.
+
+#### El mapa de teclas: dentro del lienzo, al llegar el teclado
+
+Las otras dos casas se midieron y se descartaron. La barra superior de 58px tiene el grupo derecho
+fijado en 673px con un guarda medido en navegador sobre sus anchos; la fila que sostiene el lienzo
+es un flex cuyo ancho un `ResizeObserver` convierte en el factor de zoom. Poner una leyenda en
+cualquiera de las dos es cambiar una maqueta medida para documentar un teclado.
+
+Así que se dibuja dentro del marco, como el resto del cromo, y aparece cuando una sección toma el
+teclado. **No es la trampa del hover que este documento ya rechazó** —«un control que solo aparece
+bajo un puntero no existe para quien no tiene puntero»—: es el caso contrario, aparece *para* el
+teclado, no es un control, y Tab es el gesto universal de «qué hay enfocable aquí», así que lo que
+lo revela es lo que documenta.
+
+#### El grupo de acciones pasa a ir primero en el DOM
+
+Es `position: absolute`, así que en pantalla no se mueve nada. Lo que cambia es el orden de Tab:
+añadido al final, el teclado tenía que recorrer cada `contenteditable` de la sección —en una portada,
+titular, subtitular, cuerpo y dos botones— antes de llegar a los verbos. **El coste, dicho:** un
+lector de pantalla oye el cromo antes de las palabras de la sección. En un editor es el orden
+correcto —vienes a actuar sobre esta sección y lo que puedes hacerle es la noticia— pero es un
+juicio, y revertirlo es mover una línea.
+
+#### Dos fallos de realm, y el proyecto ya lo sabía
+
+Mi primera versión preguntaba `focused instanceof HTMLElement` sobre un elemento del marco. **Este
+manejador cierra sobre el documento del marco pero corre en el realm de la ventana padre**, y el
+marco tiene el suyo: medido en Chromium, `false` desde aquí y `true` contra el constructor del
+propio marco. Así que la comprobación daba `null` siempre, `keepsItsOwnUndo(null)` respondía `false`
+y **escribir dejaba de ganar**: una flecha a media palabra movía el teclado a otra sección. Lo cazó
+la caminata «escribir gana», que existe exactamente para eso.
+
+Lo que hay que registrar es que **el propio fichero ya avisaba dos pantallas más arriba**, en dos
+comentarios de `wireEditing`. Y al arreglarlo apareció un tercero, preexistente: el cierre del menú
+de composiciones probaba `target instanceof Element` y por tanto **era código muerto desde que se
+escribió**. Nada dependía de él —medido: el `e2e` completo pasa con la guarda funcionando—, porque
+lo que de verdad impide que un clic en el menú cierre el menú es el `stopPropagation` de `action()` y
+de cada opción. Se arregla en vez de borrarse porque una guarda que parece sostener algo y no lo
+sostiene invita a quitar la que sí.
+
+#### Lo que axe encontró en el editor, mirándolo por primera vez
+
+`pnpm test:a11y` lleva verde desde el sprint 2 y «a11y en verde» se ha leído como si cubriera esta
+aplicación. No la cubre: la raíz de ese proyecto es `packages/renderer`, así que lo que escanea son
+**páginas publicadas**. El cromo con el que se edita no se había escaneado nunca.
+
+Con una sección elegida: **39 comprobaciones pasadas, cero violaciones serias o críticas**, y dos
+cosas por debajo de ese umbral que quedan anotadas en `docs/tasks/backlog.md` con su selector:
+`region` (moderada, ×3) sobre `.inline-flex`, `.pt-1\.5` y `.gap-3` —cromo del editor fuera de
+cualquier landmark, y la respuesta no es nombrar las secciones sino que el armazón tenga los suyos—
+y un `color-contrast` que axe **no pudo medir** sobre `.rb-sample`, el botón «Cambiar esta foto»
+dibujado encima de una fotografía.

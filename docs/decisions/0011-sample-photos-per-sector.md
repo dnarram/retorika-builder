@@ -54,8 +54,8 @@ our own use. A licence that stops at us fails the criterion.
   > **The promise it could not keep is kept elsewhere since 10 October 2026**, by
   > [ADR 0036](0036-the-three-cards-pick-their-photographs-together.md): the three cards are one
   > draw without replacement, and the rate is **0 of 2000** where it was 787. Built in sprint 17
-  > day 2, and **ADR 0036 is still `proposed`** — the code is in and the signature is David's to
-  > give.
+  > day 2 and accepted by David on 10 October 2026, in that order — which that ADR's own header
+  > records rather than smooths over.
 - **"Otro" gets a neutral set:** a workspace, a counter, a shop front with no signage.
 
 ### One image's record

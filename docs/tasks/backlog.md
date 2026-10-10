@@ -17,7 +17,8 @@ one thing ADR 0034 §5 scheduled by name and the last of phase 2's account work.
 owner's now goes to a private storage bucket when a web is saved, comes back when that web is opened
 anywhere, is reconciled after every accepted save, and leaves with the account when it is deleted.
 Seven things changed state in this file: the bank's resolution and its repetition both have ADRs
-(0035 accepted, 0036 proposed), `pnpm size` stopped being blind to a bank photograph, the 19 e2e
+(0035 and 0036 both accepted, the second on 10 October), `pnpm size` stopped being blind to a bank
+photograph, the 19 e2e
 walks that raced the bank now wait, the mechanism this file proposed for the «sprint 13 día 7» reds
 is **falsified** rather than unproven, `docs/tasks/copias.md` grew a second half it did not have,
 and the sweep that ends accounts stopped being pure SQL.
@@ -526,6 +527,44 @@ open survives.
   the rail: sprint 17's days 3 to 5. The other two were fixed in sprint 15: focus and Escape on the
   new screens, and the sample photograph that left a site permanently undownloadable.
 
+- **axe looked at the editor for the first time on 10 October 2026, and «a11y en verde» never meant
+  what it sounded like.** `pnpm test:a11y` has been green since sprint 2, and its project root is
+  `packages/renderer` — so what it has been scanning all along is **published pages**. The chrome
+  somebody edits with had never been scanned. The pass now lives in the `e2e` project, where there
+  is a real `next dev` and a real Chromium, and it runs with a section chosen by the keyboard.
+
+  **39 checks pass and there are no serious or critical violations.** Two things sit below that bar
+  and are recorded with their selectors rather than left for the next person to re-find:
+
+  - **`region`, moderate, three nodes:** `.inline-flex`, `.pt-1\.5` and `.gap-3` — editor chrome
+    outside any landmark. «All page content should be contained by landmarks», and the editor shell
+    has no `<main>`. Worth knowing that **the answer is not to name the sections**: that is what
+    David's `role="group"` correction refused, and for the right reason. It is the shell that wants
+    landmarks, which is a shell change and a design question about what the editor's regions are.
+  - **`color-contrast`, serious, one node axe could not measure:** `.rb-sample`, the «Cambiar esta
+    foto» button drawn on top of a photograph. axe cannot measure text over an image, and the
+    honest version of the question is what that button does over a photograph nobody has seen yet.
+    `packages/renderer`'s harness forces contrast to run and this pass deliberately does not, so
+    that one failure cannot appear in two places with two owners.
+
+- **A realm trap this repository has now fallen into three times, and had already written up twice.**
+  A handler registered on the preview frame's document still runs in the **parent window's realm**,
+  and the frame has its own: an element from inside it is not `instanceof` this window's
+  `HTMLElement`. Measured in Chromium on 10 October 2026 — `false` from the parent, `true` against
+  the frame's own constructor.
+
+  Two notes in `wireEditing` already said so, two screens above where the third instance was being
+  written. Sprint 17 day 3 added one (fixed before it shipped: it made `keepsItsOwnUndo` answer
+  `false` for everything, so an arrow pressed mid-word moved the keyboard to another section, and
+  the `e2e` walk «escribir gana» caught it) and **found one that had been dead since it was written**:
+  the composition menu's outside-click guard tested `target instanceof Element`, so its early return
+  never happened. Nothing depended on it, measured by running the full `e2e` with the guard working.
+
+  **No lint rule exists for this** and the shape is hard to catch generically — `instanceof` is
+  correct everywhere else in the application. What catches it is the habit: a handler that touches
+  the frame describes what it finds by shape, and `FocusedElement` is a plain object for this exact
+  reason.
+
 - **The preview's `overflow-x: clip` can show a tidier page than the one that gets published, and
   the number came out of withdrawing the handles.** That rule was added in sprint 8 because the
   corner handles bled 4px past a full-bleed section; with them gone the walk «no dibuja tiradores en
@@ -864,8 +903,11 @@ index to the first record nobody has, and wraps once; `generateVariants` became 
 them. **Re-measured the same way: 0 of 2000.** A lone `generate(answers, variant)` is byte-identical
 to before, which is what kept every call site still.
 
-**ADR 0036 is still `proposed`.** The code is in and the signature is David's — recorded here rather
-than smoothed over, because «un ADR una decisión» cuts both ways and development does not sign.
+**ADR 0036 was accepted on 10 October 2026**, the day after the code landed. Said in that order
+because it happened in that order: development built against a `proposed` ADR because the sprint
+plan said to, and David signed it the next morning with 0037 — «Firma los ADR 0036 y 0037 por mi».
+Development did not sign; it recorded a signature at his instruction, and both ADR headers say so,
+because a reader should be able to tell whose judgement a status line carries.
 
 The test asserts the property and not the percentage — three or more photographs, three different
 cards, over two hundred business names — because a number in a test goes stale the moment the bank

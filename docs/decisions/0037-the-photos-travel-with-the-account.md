@@ -1,8 +1,13 @@
 # 0037 — The photos travel with the account
 
-**Status:** **proposed** · **Date:** 2026-10-09 ·
+**Status:** **accepted** · **Date:** 2026-10-09 · **Accepted:** 2026-10-10 ·
 **Proposed by:** development, sprint 16 day 2, under the instruction ADR 0034 §5 left behind ·
-**Amends if accepted:** [ADR 0034](0034-the-account-arrives-at-the-end.md) §5 and §10
+**Accepted by:** **David, 10 October 2026** — «Firma los ADR 0036 y 0037 por mi», opening sprint 17
+day 3. **Recorded by development at his instruction, which is said out loud because the standing
+rule is that development does not sign.** The decision is his; the keystrokes are not, and anybody
+reading this later should be able to tell the difference without asking. ·
+**Amends:** [ADR 0034](0034-the-account-arrives-at-the-end.md) §5 and §10 ·
+**Built:** sprint 16 days 2 to 7, before the signature.
 
 ## Context
 
@@ -27,7 +32,7 @@ them says what that makes a bank photograph: «an upload the app made on the own
 account photograph is the same shape with a different source**, and nothing downstream needs a
 third case.
 
-## Decision (proposed)
+## Decision
 
 ### 1. Supabase Storage, one private bucket, not `bytea` in Postgres
 
