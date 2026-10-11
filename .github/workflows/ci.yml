@@ -55,6 +55,20 @@ jobs:
       # typecheck` never touches it. This is the same command render.yaml's buildCommand
       # runs, so a broken deploy fails here first, not on Render.
       - run: pnpm build:editor
+      # And the same command render.yaml's startCommand runs, for the same reason — with one
+      # outage behind it. On 12 October 2026 `next build` passed everywhere and `next start`
+      # failed on Render: it requires the compiled next.config with plain Node, which could not
+      # load a project `.ts` import, so the server bound no port and retried into the same wall.
+      # A build that passes and a server that starts are two different facts; this checks the
+      # second. `/` is prerendered, so a 200 here needs no database and no key.
+      - name: Start the built server and ask it for the landing
+        run: |
+          ./apps/editor/node_modules/.bin/next start apps/editor -p 4199 > start.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf -o /dev/null http://localhost:4199/; then echo "landing answered"; exit 0; fi
+            sleep 1
+          done
+          echo "the built server never answered /; its log:"; cat start.log; exit 1
 
   unit:
     name: unit
