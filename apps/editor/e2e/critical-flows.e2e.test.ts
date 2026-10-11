@@ -10163,3 +10163,374 @@ describe("sprint 17 día 6 — «+ Añadir sección aquí» abre con el cursor e
     }
   }, 180_000);
 });
+
+/**
+ * What has focus in the **editor's own** document, described by shape.
+ *
+ * The counterpart of `focus`, which reads the preview frame. A keyboard-only walk has to know
+ * where it is in both documents, and the two are read differently because they are two documents —
+ * which is the whole subject of sprint 17 day 5.
+ */
+function here(page: Page): Promise<{
+  tag: string;
+  type: string;
+  id: string;
+  name: string;
+  label: string;
+  value: string;
+  checked: boolean;
+  text: string;
+  near: string;
+}> {
+  return page.evaluate(() => {
+    const at = document.activeElement as HTMLInputElement | null;
+    const clean = (value: string | null | undefined) =>
+      (value ?? "").replace(/\s+/g, " ").trim().slice(0, 60);
+    return {
+      tag: at?.tagName ?? "none",
+      type: at?.getAttribute?.("type") ?? "",
+      id: at?.id ?? "",
+      name: at?.getAttribute?.("name") ?? "",
+      label: at?.getAttribute?.("aria-label") ?? "",
+      value: at?.value ?? "",
+      checked: at?.checked === true,
+      text: clean(at?.textContent),
+      /*
+       * **The wrapping `<label>`'s text**, which is the only place some controls carry their name.
+       * `CheckboxCard` and `ChoiceCard` are a `<label>` around a visually hidden `<input>` and a
+       * `<span>` with the words, so a focused checkbox reads as `value: "on"` and nothing else —
+       * which is exactly what the first version of this walk found itself standing on when it said
+       * «Tab never reached the Comidas service». The name is there; it is one node up.
+       */
+      near: clean(at?.closest?.("label")?.textContent),
+    };
+  });
+}
+
+/**
+ * Press Tab until the focused element in the editor's own document satisfies `want`.
+ *
+ * Bounded and loud: a keyboard walk that silently never arrives would assert the next thing against
+ * whatever it happened to be standing on, so the failure names what it was looking for and what it
+ * ended up on instead.
+ */
+async function tabUntil(
+  page: Page,
+  want: (at: Awaited<ReturnType<typeof here>>) => boolean,
+  what: string,
+  limit = 80,
+): Promise<void> {
+  for (let press = 0; press < limit; press += 1) {
+    if (want(await here(page))) return;
+    await page.keyboard.press("Tab");
+  }
+  const at = await here(page);
+  throw new Error(
+    `Tab never reached ${what} in ${limit} presses; it ended on ${JSON.stringify(at)}`,
+  );
+}
+
+/** Move within a radio group with the arrows until the checked one is the wanted value. */
+async function arrowToRadio(page: Page, group: string, value: string): Promise<void> {
+  await tabUntil(page, (at) => at.tag === "INPUT" && at.name === group, `the «${group}» radios`);
+  for (let press = 0; press < 24; press += 1) {
+    const at = await here(page);
+    if (at.value === value && at.checked) return;
+    await page.keyboard.press("ArrowDown");
+  }
+  throw new Error(`the arrows never reached «${value}» in the «${group}» radios`);
+}
+
+describe("sprint 17 día 7 — el recorrido entero sin tocar el ratón", () => {
+  /**
+   * **One walk, no pointer at all**, which is the sprint's own acceptance: «Monta una web, la
+   * edita, le da estilo y descarga el ZIP sin tocar el trackpad.»
+   *
+   * Everything the seven days built is on this path and nothing else is: Tab finds the canvas
+   * because the roving `tabindex` makes it one stop (day 3), the verbs exist because Enter chooses
+   * a section (day 3) and survive being pressed because the keyboard comes back after the rebuild
+   * (day 4), what they open answers the arrows and Escape (day 5), and the gate dialog can be left
+   * at all because it has a focus trap (day 1).
+   *
+   * **The claim is guarded rather than asserted by me**: `apps/editor/test/keyboardOnly.test.ts`
+   * reads the block between the two markers below and fails if it contains a pointer call, a
+   * `fill`, a `check` or a `selectOption`. A walk that typed with `fill` would be a walk that
+   * skipped the focus it is supposed to be proving.
+   */
+
+  // --- RECORRIDO SIN RATÓN: INICIO ---
+  it("monta una web, la edita, le da estilo y descarga el ZIP sin tocar el ratón", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    try {
+      await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+
+      // ---- the five questions, typed and arrowed ----
+      await tabUntil(page, (at) => at.id === "nombre", "the business name field");
+      await page.keyboard.type("Taberna Santo Domingo");
+      await tabUntil(page, (at) => at.text.startsWith("Siguiente"), "«Siguiente» on question 1");
+      await page.keyboard.press("Enter");
+
+      await arrowToRadio(page, "sector", "restaurante-bar");
+      await tabUntil(page, (at) => at.text.startsWith("Siguiente"), "«Siguiente» on question 2");
+      await page.keyboard.press("Enter");
+
+      // The services are toggle buttons rather than checkboxes, so Space is what presses one.
+      await tabUntil(page, (at) => at.near === "Comidas", "the «Comidas» service");
+      await page.keyboard.press("Space");
+      await tabUntil(page, (at) => at.text.startsWith("Siguiente"), "«Siguiente» on question 3");
+      await page.keyboard.press("Enter");
+
+      await tabUntil(page, (at) => at.id === "direccion", "the address field");
+      await page.keyboard.type("Cta. de Santo Domingo, 2, Ronda");
+      await tabUntil(page, (at) => at.text.startsWith("Siguiente"), "«Siguiente» on question 4");
+      await page.keyboard.press("Enter");
+
+      await arrowToRadio(page, "accion", "book");
+      await tabUntil(page, (at) => at.id === "enlace", "the booking link field");
+      await page.keyboard.type("https://reservas.example.com/taberna");
+      await tabUntil(page, (at) => at.text.startsWith("Crear mi web"), "«Crear mi web»");
+      await page.keyboard.press("Enter");
+
+      // ---- the three cards, and opening one at full size ----
+      await tabUntil(
+        page,
+        (at) => at.label.startsWith("Ver a tamaño real"),
+        "«Ver a tamaño real» on a card",
+      );
+      await page.keyboard.press("Enter");
+      const frame = page.frameLocator(PREVIEW).first();
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+      await waitForBankPhoto(frame);
+
+      // ---- editing it: into the canvas with Tab, and a verb pressed with the keyboard ----
+      await keyboardTo(page, "sec-services");
+      await page.keyboard.press("Enter");
+      await expect(frame.locator(".rb-actions")).toHaveCount(1);
+      const before = await order(page);
+      await tabToVerb(page, "move-down");
+      await page.keyboard.press("Enter");
+      await expect
+        .poll(async () => (await order(page)).indexOf("sec-services"))
+        .toBe(before.indexOf("sec-services") + 1);
+      // And the keyboard is still on the verb, which is what makes a second press possible.
+      await expect.poll(() => focusPlace(page)).toBe("sec-services/move-down");
+
+      // ---- giving it a style: the rail, then its first choice, both with the keyboard ----
+      await tabUntil(page, (at) => at.text.startsWith("Estilo"), "the «Estilo» rail item");
+      await page.keyboard.press("Enter");
+      await expect(page.getByText("El estilo de toda la web")).toBeVisible();
+
+      /*
+       * **A fingerprint rather than one colour**, because the panel's three groups change three
+       * different things: a palette changes the background, a type pair the family, a scale the
+       * sizes. The walk presses the first choice it reaches and asserts the rendered page moved,
+       * which is «le da estilo» without the walk having to know which group it landed in.
+       *
+       * And the choice is reached by shape rather than by name: these radios carry
+       * `name={useId()}`, so the group has no stable name to look for — the first version of this
+       * walk looked for `name="palette"` and Tab went round the whole page without finding it.
+       */
+      const styleOf = () =>
+        page.evaluate(() => {
+          const doc = document.querySelector<HTMLIFrameElement>(
+            "iframe:not([data-buffered])",
+          )?.contentDocument;
+          const cover = doc?.querySelector('[data-section="sec-cover"]');
+          const headline = doc?.querySelector('[data-id="el-headline"]');
+          if (!cover || !headline) return "no page";
+          const a = getComputedStyle(cover);
+          const b = getComputedStyle(headline);
+          return `${a.backgroundColor}|${b.fontFamily}|${b.fontSize}`;
+        });
+      const styleBefore = await styleOf();
+      expect(styleBefore, "the preview had no page to restyle").not.toBe("no page");
+      await tabUntil(
+        page,
+        (at) => at.tag === "INPUT" && at.type === "radio" && at.near !== "",
+        "the first style choice",
+      );
+      await page.keyboard.press("ArrowDown");
+      await expect
+        .poll(styleOf, { message: "the arrow changed nothing in the rendered page" })
+        .not.toBe(styleBefore);
+
+      // ---- downloading it, through the gate, and the ZIP ----
+      await tabUntil(page, (at) => at.text === "Descargar", "the «Descargar» button");
+      const dir = mkdtempSync(join(tmpdir(), "retorika-teclado-"));
+      await page.keyboard.press("Enter");
+
+      /*
+       * The gate opens because one photograph is still ours (ADR 0011's sample), and this is where
+       * day 1 earns its keep: the dialog has a focus trap, so the keyboard is already inside it and
+       * Tab cannot walk out of a dialog that claims the page is unavailable.
+       */
+      const dialog = page.locator('[role="dialog"], [role="alertdialog"]');
+      await expect(dialog.first()).toBeVisible();
+      const inside = await page.evaluate(
+        () =>
+          document.querySelector('[aria-modal="true"]')?.contains(document.activeElement) ?? false,
+      );
+      expect(inside, "the gate dialog did not take the keyboard").toBe(true);
+
+      await tabUntil(
+        page,
+        (at) => at.text.startsWith("Descargar igualmente"),
+        "«Descargar igualmente» inside the gate",
+      );
+      const [download] = await Promise.all([
+        page.waitForEvent("download"),
+        page.keyboard.press("Enter"),
+      ]);
+      const zipPath = join(dir, download.suggestedFilename());
+      await download.saveAs(zipPath);
+      expect(download.suggestedFilename()).toMatch(/\.zip$/);
+
+      /*
+       * **And the ZIP opens with a double click**, which is ADR 0001's own promise and the only
+       * thing on this path that no keyboard can prove: the assertion is that the page it contains
+       * is self-contained HTML with the business name in it and no reference to our own host.
+       */
+      const bytes = new Uint8Array(readFileSync(zipPath));
+      const html = new TextDecoder().decode(extractFileBytes(bytes, "index.html"));
+      expect(html).toContain("Taberna Santo Domingo");
+      expect(html).not.toContain("localhost:4173");
+      expect(html.startsWith("<!doctype html>") || html.startsWith("<!DOCTYPE html>")).toBe(true);
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+  // --- RECORRIDO SIN RATÓN: FIN ---
+});
+
+describe("sprint 17 día 7 — axe de cierre, con los diálogos abiertos", () => {
+  /**
+   * **The closing pass, and the one state day 3's could not reach.**
+   *
+   * Day 3 ran axe over the editor with a section chosen by the keyboard, which was the first time
+   * anything had scanned this application's own chrome — `pnpm test:a11y`'s root is
+   * `packages/renderer`, so what it has always scanned is published pages. What that pass could not
+   * see is a dialog, because a dialog needs a journey to open: the download gate needs a site with
+   * one of our photographs still in it, and the account offer needs an account to be configured.
+   *
+   * Two shapes rather than one, because they fail differently: an alert with buttons and a heading,
+   * and a form with labelled fields. Both carry `aria-modal`, both got their focus trap on day 1,
+   * and a trap is exactly the kind of thing that can be built correctly and still leave a control
+   * without a name.
+   */
+
+  const LANDMARKS_IN_PAGE = [
+    "nav",
+    "main",
+    "header",
+    "footer",
+    "aside",
+    "[role=navigation]",
+    "[role=main]",
+    "[role=banner]",
+    "[role=contentinfo]",
+    "[role=complementary]",
+    "[role=region]",
+    "[role=search]",
+    "[role=form]",
+    "section[aria-label]:not([role])",
+    "section[aria-labelledby]:not([role])",
+  ].join(",");
+
+  async function axeHere(page: Page, where: string): Promise<void> {
+    const results = await new AxeBuilder({ page }).analyze();
+    const serious = results.violations.filter(
+      (rule) => rule.impact === "serious" || rule.impact === "critical",
+    );
+    const lines = serious.flatMap((rule) =>
+      rule.nodes.map(
+        (node) => `  ${rule.id} (${rule.impact}) at ${node.target.join(" ")}: ${rule.help}`,
+      ),
+    );
+    expect(lines, `axe with ${where} open:\n${lines.join("\n")}`).toEqual([]);
+    expect(results.passes.length, `axe ran no checks with ${where} open`).toBeGreaterThan(0);
+  }
+
+  it("no tiene violaciones serias ni críticas con el aviso de descarga abierto", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+
+      // The landmarks of the editor's own document before anything is opened, so a dialog adding
+      // one is visible rather than merely possible.
+      const before = await page.evaluate(
+        (list) => [...document.querySelectorAll(list)].map((node) => node.tagName.toLowerCase()),
+        LANDMARKS_IN_PAGE,
+      );
+
+      await page.getByRole("button", { name: "Descargar", exact: true }).click();
+      const gate = page.locator('[role="dialog"], [role="alertdialog"]').first();
+      await expect(gate).toBeVisible();
+
+      await axeHere(page, "the download gate");
+
+      /*
+       * **A dialog must not add a landmark either**, which is the same correction David made about
+       * the sections on day 3: `aria-modal` already tells a screen reader the rest of the page is
+       * unavailable, so a `region` inside it would be a place to navigate to inside a place that
+       * claims to be the only place there is.
+       */
+      const after = await page.evaluate(
+        (list) => [...document.querySelectorAll(list)].map((node) => node.tagName.toLowerCase()),
+        LANDMARKS_IN_PAGE,
+      );
+      expect(after, "opening the gate added a landmark to the editor's tree").toEqual(before);
+
+      // And the dialog has a name, which is what `aria-modal` makes load-bearing: a modal with no
+      // accessible name is announced as «dialog» and nothing else.
+      const named = await gate.evaluate(
+        (node) =>
+          node.getAttribute("aria-label") !== null || node.getAttribute("aria-labelledby") !== null,
+      );
+      expect(named, "a modal dialog with no accessible name").toBe(true);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it("no tiene violaciones serias ni críticas con la oferta de cuenta abierta", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+
+      /*
+       * The other shape: a form in a modal. It is drawn only when an account is configured, which
+       * the e2e server arranges with placeholder credentials pointing at a host that refuses — so
+       * the form renders and no sign-in can appear to succeed.
+       */
+      await page.getByRole("button", { name: "Guardar en mi cuenta" }).click();
+      const offer = page.getByRole("dialog");
+      await expect(offer).toBeVisible();
+      await expect(page.locator("#account-email")).toBeFocused();
+
+      await axeHere(page, "the account offer");
+
+      // Every field in it has a name. A trap can be perfect and still leave an input unlabelled,
+      // which axe reports as serious — this says it out loud so a failure above is not a surprise.
+      const unnamed = await offer.locator("input").evaluateAll((nodes) =>
+        nodes
+          .filter((node) => {
+            const id = node.getAttribute("id");
+            const labelled =
+              node.getAttribute("aria-label") ??
+              node.getAttribute("aria-labelledby") ??
+              (id ? node.ownerDocument.querySelector(`label[for="${id}"]`) : null);
+            return labelled === null;
+          })
+          .map((node) => node.getAttribute("id") ?? node.getAttribute("type") ?? "an input"),
+      );
+      expect(unnamed, `inputs with no name: ${unnamed.join(", ")}`).toEqual([]);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+});
