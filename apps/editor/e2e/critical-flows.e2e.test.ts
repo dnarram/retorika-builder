@@ -10322,27 +10322,62 @@ describe("sprint 17 día 7 — el recorrido entero sin tocar el ratón", () => {
       await expect(page.getByText("El estilo de toda la web")).toBeVisible();
 
       /*
-       * **A fingerprint rather than one colour**, because the panel's three groups change three
-       * different things: a palette changes the background, a type pair the family, a scale the
-       * sizes. The walk presses the first choice it reaches and asserts the rendered page moved,
-       * which is «le da estilo» without the walk having to know which group it landed in.
+       * **A fingerprint of the eight tokens the renderer writes on `:root`**, because the panel's
+       * three groups move three different sets of them: a palette the colours, a type pair the two
+       * fonts, a scale the three sizes. The walk presses the first choice it reaches and asserts the
+       * rendered page moved, which is «le da estilo» without the walk having to know which group it
+       * landed in — and the choice is reached by shape rather than by name, since these radios carry
+       * `name={useId()}` and there is no stable group name to look for.
        *
-       * And the choice is reached by shape rather than by name: these radios carry
-       * `name={useId()}`, so the group has no stable name to look for — the first version of this
-       * walk looked for `name="palette"` and Tab went round the whole page without finding it.
+       * **The first version of this measured the wrong things and passed for a false reason.** It
+       * read the cover's `backgroundColor` — which is `rgba(0, 0, 0, 0)`, transparent, so a palette
+       * cannot move it — plus the headline's resolved `fontFamily` and `fontSize`. Locally it went
+       * green because Playfair Display finished loading between the first read and the poll, so the
+       * fingerprint changed by the clock and not by the arrow. CI, slower and with the face already
+       * loaded, reported «the arrow changed nothing in the rendered page», which was the truth. The
+       * tokens below are declared values, not rendered ones, so a font arriving late cannot move
+       * them; and `document.fonts.ready` is awaited first anyway, so nothing in this block depends
+       * on timing at all. The same measurement «critical flow 3» has used since sprint 3.
        */
       const styleOf = () =>
         page.evaluate(() => {
           const doc = document.querySelector<HTMLIFrameElement>(
             "iframe:not([data-buffered])",
           )?.contentDocument;
-          const cover = doc?.querySelector('[data-section="sec-cover"]');
-          const headline = doc?.querySelector('[data-id="el-headline"]');
-          if (!cover || !headline) return "no page";
-          const a = getComputedStyle(cover);
-          const b = getComputedStyle(headline);
-          return `${a.backgroundColor}|${b.fontFamily}|${b.fontSize}`;
+          /*
+           * **«no page» while the frame is between documents, so the poll retries instead of
+           * throwing.** Picking a palette replaces the frame's `srcDoc`, and for one sample after
+           * the arrow `contentDocument` is a document whose `documentElement` is `null` — measured
+           * three runs out of three, one null sample in two. `getComputedStyle(null)` throws
+           * «parameter 1 is not of type 'Element'», and `expect.poll` does not retry on a throw:
+           * it fails the test with that message, which is exactly what three local runs did.
+           *
+           * The first explanation written for that message was the realm trap, and it was wrong:
+           * Chromium's `getComputedStyle` accepts an element from another realm, the message was
+           * about `null`, and a trap that fires one run in four was never a realm. Recorded in
+           * `backlog.md` as a diagnosis retracted, not quietly edited away.
+           */
+          if (!doc?.defaultView || doc.documentElement === null) return "no page";
+          const root = doc.defaultView.getComputedStyle(doc.documentElement);
+          return [
+            "--color-ink",
+            "--color-primary",
+            "--color-surface",
+            "--font-body",
+            "--font-heading",
+            "--size-body",
+            "--size-heading",
+            "--size-subheading",
+          ]
+            .map((token) => `${token}:${root.getPropertyValue(token).trim()}`)
+            .join("|");
         });
+      await page.evaluate(() => {
+        const doc = document.querySelector<HTMLIFrameElement>(
+          "iframe:not([data-buffered])",
+        )?.contentDocument;
+        return doc?.fonts.ready;
+      });
       const styleBefore = await styleOf();
       expect(styleBefore, "the preview had no page to restyle").not.toBe("no page");
       await tabUntil(

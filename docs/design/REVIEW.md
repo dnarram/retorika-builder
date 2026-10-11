@@ -1399,10 +1399,25 @@ primera versión de la caminata:
    el lector de la caminata ahora mira el `<label>` que la envuelve.
 2. **Las paletas del panel «Estilo» usan `name={useId()}`.** No hay nombre de grupo estable que
    buscar, así que la caminata alcanza «la primera opción del panel» por forma y no por nombre.
-3. **Lo que cambia al pulsar una opción depende del grupo**: una paleta cambia el fondo, un par
-   tipográfico la familia, una escala los tamaños. La caminata compara una **huella** de los tres y
-   asevera que la página renderizada se movió, que es «le da estilo» sin tener que saber en qué grupo
-   aterrizó.
+3. **Lo que cambia al pulsar una opción depende del grupo**: una paleta cambia los colores, un par
+   tipográfico las fuentes, una escala los tamaños. La caminata compara una **huella** de los ocho
+   tokens que el renderer escribe en `:root` y asevera que se movió, que es «le da estilo» sin tener
+   que saber en qué grupo aterrizó.
+
+   **La primera huella medía lo equivocado y pasó por una razón falsa**, y lo cazó el CI el 12 de
+   octubre: leía el fondo de la portada —transparente, así que una paleta no lo mueve— y la familia y
+   el tamaño renderizados del titular. Localmente se puso verde porque Playfair terminó de cargarse
+   entre la lectura y la espera, así que la huella cambió por el reloj y no por la flecha. El CI, más
+   lento y con la fuente ya cargada, dijo «the arrow changed nothing in the rendered page», que era la
+   verdad. Los tokens de `:root` son valores declarados, no renderizados, y la caminata espera además
+   a `document.fonts.ready`, así que ya nada en ese bloque depende del tiempo.
+
+   Y una segunda cosa, encontrada al arreglar la primera y **mal diagnosticada antes de medirse**:
+   elegir una paleta reemplaza el `srcDoc` del marco, y durante una muestra el documento vivo no
+   tiene `documentElement`. `getComputedStyle(null)` lanza, y `expect.poll` no reintenta ante una
+   excepción. La primera explicación escrita fue «la trampa de realm por cuarta vez», y era falsa:
+   un realm no cambia entre ejecuciones y aquello fallaba una de cada cuatro. La medida —tres de
+   tres con una muestra nula— está en el backlog junto a la retractación.
 
 #### El axe de cierre llega a un estado que el del día 3 no podía ver
 
