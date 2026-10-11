@@ -415,6 +415,13 @@ open survives.
   consistent with «something about a full run» than with either walk's own setup. It does not say
   what, and the next step is unchanged: instrument *inside* a full run.
 
+  **A third walk of the same block, 12 October 2026 (sprint 18 day 1):** «takes a text edit typed
+  before the frame has finished loading» went red once in a clean full run (295 s, nothing else on
+  the machine) — the typed text never replaced the headline, with the element first seen without
+  `contenteditable` and then with it. Not a count of zero this time but the same family: an
+  interaction landing in the window where the preview looks ready and is not yet wired. Three
+  walks now, all in the block that exists to exercise that window; sprint 18 day 5 instruments it.
+
   Two things that narrow it:
 
   - **The failure is `toHaveCount` resolving to 0, not a timeout.** The cluster was never drawn, so

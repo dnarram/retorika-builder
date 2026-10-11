@@ -10534,3 +10534,65 @@ describe("sprint 17 día 7 — axe de cierre, con los diálogos abiertos", () =>
     }
   }, 180_000);
 });
+
+describe("sprint 18 día 1 — el producto avisa cuando se rompe, y hoy no avisa a nadie", () => {
+  /**
+   * **Inert means no request leaves the machine, and that is asserted rather than assumed.**
+   *
+   * Error reporting is wired (protocol Part 17) and switched off until direction accepts a third
+   * processor of personal data (ADR 0034 §14 names two). The e2e server starts the editor with no
+   * `NEXT_PUBLIC_SENTRY_DSN`, so this walk expects the SDK to do nothing — and it makes the SDK
+   * *want* to do something, by throwing an error nobody catches, so that «nothing was sent» is
+   * tested against an error and not against a quiet page.
+   *
+   * The sabotage is the same walk with a DSN in the server's environment: the SDK then tries to
+   * send an envelope to `*.sentry.io`, the host assertion goes red, and the route below aborts the
+   * request so a bogus key never actually reaches anybody's ingest endpoint.
+   */
+  it("no envía nada a ningún host ajeno, ni siquiera cuando algo se rompe", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    ).newPage();
+    try {
+      const hosts = new Set<string>();
+      const sentryBound: string[] = [];
+      await page.route("**/*sentry*/**", (route) => {
+        // Recorded, then refused: the assertion is that this never happens, and if it does the
+        // request must still not leave the machine.
+        sentryBound.push(route.request().url());
+        void route.abort();
+      });
+      page.on("request", (request) => {
+        hosts.add(new URL(request.url()).hostname);
+      });
+
+      await intoTheCanvas(page);
+
+      // An error the application does not catch, after the next tick so it reaches
+      // `window.onerror` the way a real one would — not the evaluate's own promise.
+      await page.evaluate(() => {
+        setTimeout(() => {
+          throw new Error("sprint 18 día 1: an error nobody catches");
+        }, 0);
+      });
+      // Long enough for an SDK that had a DSN to flush an envelope; short enough not to matter.
+      await page.waitForTimeout(1500);
+
+      // The page is still the page: an uncaught error in a tab must not take the editor with it.
+      await expect(
+        page.frameLocator(PREVIEW).first().locator('[data-section="sec-cover"]'),
+      ).toBeVisible();
+
+      /*
+       * `127.0.0.1` beside `localhost`: the e2e server points the Supabase client at a port that
+       * refuses, so an account probe may knock on that door and be turned away. That is a request
+       * to this machine. Anything else is a request to somebody else's.
+       */
+      const foreign = [...hosts].filter((host) => host !== "localhost" && host !== "127.0.0.1");
+      expect(foreign, `requests left the machine for: ${foreign.join(", ")}`).toEqual([]);
+      expect(sentryBound, "the SDK tried to report with no DSN configured").toEqual([]);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+});
