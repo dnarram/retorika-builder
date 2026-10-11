@@ -54,3 +54,11 @@ services:
         value: 24.21.0
       - key: NODE_ENV
         value: production
+      # Error reporting (protocol Part 17) is built and INERT: without this variable the editor
+      # sends nothing anywhere. Set it only after direction has accepted Sentry as a third
+      # processor of personal data — Sentry's DPA signed, EU data residency chosen — and the
+      # privacy notice (`account.save.privacy`) has gained its sentence, because ADR 0034 §14
+      # names Supabase and Render and nobody else. The DSN is public by design; `sync: false`
+      # keeps it out of this file all the same, like every other value set by hand.
+      # - key: NEXT_PUBLIC_SENTRY_DSN
+      #   sync: false

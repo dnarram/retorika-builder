@@ -415,6 +415,13 @@ open survives.
   consistent with «something about a full run» than with either walk's own setup. It does not say
   what, and the next step is unchanged: instrument *inside* a full run.
 
+  **A third walk of the same block, 12 October 2026 (sprint 18 day 1):** «takes a text edit typed
+  before the frame has finished loading» went red once in a clean full run (295 s, nothing else on
+  the machine) — the typed text never replaced the headline, with the element first seen without
+  `contenteditable` and then with it. Not a count of zero this time but the same family: an
+  interaction landing in the window where the preview looks ready and is not yet wired. Three
+  walks now, all in the block that exists to exercise that window; sprint 18 day 5 instruments it.
+
   Two things that narrow it:
 
   - **The failure is `toHaveCount` resolving to 0, not a timeout.** The cluster was never drawn, so
@@ -648,6 +655,18 @@ open survives.
   the `e2e` walk «escribir gana» caught it) and **found one that had been dead since it was written**:
   the composition menu's outside-click guard tested `target instanceof Element`, so its early return
   never happened. Nothing depended on it, measured by running the full `e2e` with the guard working.
+
+  **A diagnosis retracted, 12 October 2026 (sprint 18 day 1), and left here because the retraction
+  is the lesson.** A walk failed three runs out of three with «Failed to execute 'getComputedStyle'
+  on 'Window': parameter 1 is not of type 'Element'», and the first thing written down — here, in
+  this entry — was «the realm trap, a fourth time». It was not. Measured with a probe in the walk:
+  after a palette is picked the frame's `srcDoc` is replaced, and for one sample in two the live
+  `contentDocument` is a document whose **`documentElement` is `null`**. `getComputedStyle(null)`
+  throws that message; Chromium accepts a cross-realm element without complaint; and `expect.poll`
+  does not retry when the sampled function throws — it fails with the thrown message. The fix is
+  a `null` check that returns «no page» so the poll keeps polling. A trap that bit one run in four
+  was never a realm, because a realm does not change between runs; that is the test the first
+  diagnosis failed and the one to apply next time this message appears.
 
   **No lint rule exists for this** and the shape is hard to catch generically — `instanceof` is
   correct everywhere else in the application. What catches it is the habit: a handler that touches
