@@ -17,6 +17,7 @@
     "test:coverage": "vitest run --coverage",
     "e2e": "RETORIKA_E2E=1 vitest run --project e2e --maxWorkers 1",
     "test:db": "RETORIKA_DB=1 vitest run --project db-pg --maxWorkers 1",
+    "lighthouse": "RETORIKA_LIGHTHOUSE=1 vitest run --project lighthouse --maxWorkers 1",
     "typecheck": "tsc --build --force && tsc --noEmit -p apps/editor/tsconfig.json",
     "build:editor": "pnpm --filter @retorika/editor build",
     "lint": "biome check --max-diagnostics=500 .",
@@ -44,8 +45,10 @@
     "@types/node": "24.13.5",
     "@vitest/coverage-v8": "5.0.1",
     "axe-core": "4.13.0",
+    "chrome-launcher": "1.2.2",
     "fast-check": "4.10.1",
     "happy-dom": "20.14.5",
+    "lighthouse": "13.5.0",
     "typescript": "7.0.2",
     "vitest": "5.0.1"
   },

@@ -138,6 +138,33 @@ jobs:
       # contrast/fonts, and long text.
       - run: pnpm test:a11y
 
+  lighthouse:
+    name: lighthouse
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+
+      # The same cache block as a11y-size, verbatim: Lighthouse drives the Chromium Playwright
+      # installed, so one browser serves both jobs and the key is the same.
+      - name: Read the Playwright version
+        id: playwright
+        run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      - if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install --with-deps chromium
+      - if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm exec playwright install-deps chromium
+
+      # Protocol Part 8.5: performance and accessibility at 95 or more over a sample site, the
+      # three compositions, mobile preset. The four scores per composition are in the log.
+      - run: pnpm lighthouse
+
   e2e:
     name: e2e
     runs-on: ubuntu-latest

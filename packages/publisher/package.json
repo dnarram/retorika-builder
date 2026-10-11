@@ -13,5 +13,9 @@
     "@retorika/renderer": "workspace:*",
     "@fontsource/inter": "5.2.8",
     "@fontsource/playfair-display": "5.2.8"
+  },
+  "devDependencies": {
+    "@retorika/generator": "workspace:*",
+    "@retorika/photobank": "workspace:*"
   }
 }

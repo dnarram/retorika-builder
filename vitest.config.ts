@@ -108,8 +108,28 @@ export default defineConfig({
           name: "publisher",
           root: "./packages/publisher",
           environment: "node",
+          // The Lighthouse suite belongs to the "lighthouse" project below.
+          exclude: [...configDefaults.exclude, "**/*.browser.test.ts"],
         },
       },
+      // Protocol Part 8.5's Lighthouse floor, measured over a real bundle served from memory in a
+      // real Chrome. Declared only when RETORIKA_LIGHTHOUSE=1, which `pnpm lighthouse` sets — the
+      // same reason as "a11y", "e2e" and "db-pg": a plain `pnpm test` must not need a browser.
+      ...(process.env["RETORIKA_LIGHTHOUSE"] === "1"
+        ? [
+            {
+              test: {
+                name: "lighthouse",
+                root: "./packages/publisher",
+                include: ["test/**/*.browser.test.ts"],
+                environment: "node",
+                // One Chrome launch, then three audits of a page over a simulated slow network.
+                testTimeout: 120_000,
+                hookTimeout: 60_000,
+              },
+            },
+          ]
+        : []),
       {
         test: {
           name: "tokens",
