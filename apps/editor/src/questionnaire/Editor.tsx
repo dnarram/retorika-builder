@@ -842,7 +842,14 @@ export function Editor({
    * document it lived in. What survives is a name — the section's id, the index it held, and which
    * verb — and `placeAfterRebuild` turns the first two into a place.
    */
-  const pendingReturn = useRef<{ sectionId: string; within: string; index: number } | null>(null);
+  const pendingReturn = useRef<{
+    /** `null` for «there is no id to follow» — an insertion, where the section did not exist yet
+     * and the index is the whole answer. */
+    sectionId: string | null;
+    /** A selector inside the section, or absent for the section itself. */
+    within?: string;
+    index: number;
+  } | null>(null);
   /**
    * What the canvas should focus as soon as it is allowed to, and **«allowed to» is the whole
    * reason this is a ref and not a line of code.**
@@ -863,7 +870,7 @@ export function Editor({
    * given and **clears it only when the document it landed in is the live one** — which the swap's
    * incoming frame is not until after the commit, where the swap effect applies it once more.
    */
-  const focusTarget = useRef<{ sectionId: string; within: string } | null>(null);
+  const focusTarget = useRef<{ sectionId: string; within?: string } | null>(null);
 
   /**
    * Focus whatever `focusTarget` asks for, in the document given, and say nothing if it cannot.
@@ -889,7 +896,9 @@ export function Editor({
       focusTarget.current = null;
       return;
     }
-    const again = section.querySelector<HTMLButtonElement>(want.within);
+    // No `within` means the section itself, which is what an insertion wants: the thing that just
+    // appeared is the news, and it has no button worth landing on.
+    const again = want.within ? section.querySelector<HTMLButtonElement>(want.within) : null;
     const target = again && !again.disabled ? again : section;
     target.focus();
     /*
@@ -2441,14 +2450,23 @@ export function Editor({
     if (pending) {
       pendingReturn.current = null;
       const place = placeAfterRebuild({
-        idIndex: sections.findIndex((section) => section.dataset.section === pending.sectionId),
+        // `-1` whenever there is no id to follow, which `placeAfterRebuild` reads as «take whatever
+        // is in that place now» — the one rule that already served a delete and now serves an
+        // insertion without knowing it is one.
+        idIndex:
+          pending.sectionId === null
+            ? -1
+            : sections.findIndex((section) => section.dataset.section === pending.sectionId),
         wasAt: pending.index,
         count: sections.length,
       });
       const target = place === null ? undefined : sections[place];
       const targetId = target?.dataset["section"];
       if (target && targetId) {
-        focusTarget.current = { sectionId: targetId, within: pending.within };
+        focusTarget.current = {
+          sectionId: targetId,
+          ...(pending.within === undefined ? {} : { within: pending.within }),
+        };
       }
     }
 
@@ -2492,11 +2510,21 @@ export function Editor({
     const sections = [...iframeDoc.querySelectorAll<HTMLElement>("[data-section]")];
     if (sections.length === 0) return;
 
-    function closeMenus() {
+    /**
+     * Close any open insertion menu, and optionally give the keyboard back to what opened it.
+     *
+     * **`returnTo` is the half that was missing** (sprint 17 day 6). Escape and the visible «Cerrar»
+     * have closed this menu since it shipped, and both left focus on an element they had just
+     * removed from the document — so a keyboard user who escaped the menu landed on the body, at
+     * the top of the page. A click somewhere else deliberately passes nothing: the person has
+     * already chosen where they are going, and moving focus for them would be taking it back.
+     */
+    function closeMenus(returnTo?: HTMLElement) {
       for (const menu of iframeDoc.querySelectorAll(".rb-menu")) menu.remove();
+      if (returnTo?.isConnected) returnTo.focus();
     }
 
-    function menu(index: number): HTMLElement {
+    function menu(index: number, pill: HTMLElement): HTMLElement {
       const panel = iframeDoc.createElement("div");
       panel.className = "rb-menu";
       // Everything inside the menu is a click that must not reach the document-level handler that
@@ -2511,7 +2539,7 @@ export function Editor({
       panel.addEventListener("keydown", (event) => {
         if ((event as KeyboardEvent).key !== "Escape") return;
         event.stopPropagation();
-        closeMenus();
+        closeMenus(pill);
       });
 
       const header = iframeDoc.createElement("div");
@@ -2533,7 +2561,7 @@ export function Editor({
       close.textContent = es["editor.addSection.close"];
       close.addEventListener("click", (event) => {
         event.stopPropagation();
-        closeMenus();
+        closeMenus(pill);
       });
 
       header.append(title, close);
@@ -2568,6 +2596,17 @@ export function Editor({
         button.addEventListener("click", (event) => {
           event.stopPropagation();
           closeMenus();
+          /*
+           * **The keyboard lands on the section that just appeared.** A gap at index `i` inserts
+           * before whatever is at `i`, so after the rebuild the new section *is* `i` — and there is
+           * no id to follow, because it did not exist when the button was pressed. `sectionId: null`
+           * is how `placeAfterRebuild` is told to take whatever is in that place now, which is the
+           * same rule that already served a delete.
+           *
+           * No `within`: the section itself is the answer. The thing that appeared is the news, and
+           * landing on one of its verbs would be answering a question nobody asked.
+           */
+          pendingReturn.current = { sectionId: null, index };
           onInsertSection(offer.catalogId, index);
         });
         return button;
@@ -2615,7 +2654,21 @@ export function Editor({
         event.stopPropagation();
         const open = row.querySelector(".rb-menu");
         closeMenus();
-        if (!open) row.appendChild(menu(index));
+        if (open) return;
+        const panel = menu(index, pill);
+        row.appendChild(panel);
+        /*
+         * **It opens with the cursor already in the search field** (sprint 17 day 6), which is the
+         * day's own acceptance. The menu lists every section the catalog offers here and the field
+         * is how that list is narrowed, so typing is what somebody came to do: arriving with the
+         * caret anywhere else means a keyboard user Tabs past the way out and the way in before
+         * reaching it.
+         *
+         * The «Cerrar» button is still first in the DOM, and that stays deliberate — its own note
+         * explains why the way out comes before the way in — but first in the tab order is not the
+         * same as where the caret starts.
+         */
+        panel.querySelector<HTMLInputElement>(".rb-menu-search")?.focus();
       });
 
       const before = iframeDoc.createElement("span");
@@ -2631,7 +2684,11 @@ export function Editor({
 
     // Anywhere else closes an open menu, the same as any menu on the web. Not `capture`, so a
     // choice's own handler runs first and its `stopPropagation` keeps this from firing twice.
-    iframeDoc.addEventListener("click", closeMenus);
+    // Wrapped rather than passed, and the typechecker is why: `closeMenus` now takes the element to
+    // give the keyboard back to, and handing it the listener's own `Event` would be handing it
+    // something that is not an element at all. A click elsewhere passes nothing on purpose — the
+    // person has already chosen where they are going.
+    iframeDoc.addEventListener("click", () => closeMenus());
   }
 
   /**
