@@ -106,11 +106,11 @@ describe("listOwnPhotoSrcs", () => {
       base,
       page.id,
       page.sections.length,
-      blankSection(GALLERY_ID, "stacked", "sec-gallery"),
+      blankSection(GALLERY_ID, "stacked", "sec-gallery-2"),
     );
     const gallery = withGallery.pages
       .flatMap((candidate) => candidate.sections)
-      .find((section) => section.preset.catalogId === GALLERY_ID);
+      .find((section) => section.id === "sec-gallery-2");
     if (!gallery) throw new Error("the gallery was not inserted");
     // The fixture is only worth anything if the photograph really is nested: a walk over
     // `section.content` alone reaches none of a gallery's photographs.
@@ -140,7 +140,7 @@ describe("listOwnPhotoSrcs", () => {
       base,
       page.id,
       page.sections.length,
-      blankSection(GALLERY_ID, "stacked", "sec-gallery"),
+      blankSection(GALLERY_ID, "stacked", "sec-gallery-2"),
     );
     // Two different slots, one file: the cover and a gallery card.
     const doc = withUpload(

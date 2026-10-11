@@ -145,12 +145,16 @@ describe("a document with no bank photographs in it", () => {
   });
 
   it("does not name a photograph the owner uploaded, whose bytes are already stored", () => {
+    // On a filled sector the gallery's four stay the bank's (ADR 0039); what must disappear from
+    // the list is the one the owner replaced, and only that one.
     const doc = generated();
+    const before = listSampleRefs(doc);
     const page = doc.pages[0];
     const cover = page?.sections[0];
     if (!page || !cover) throw new Error("no cover");
     const image = cover.content.find((element) => element.value?.kind === "image");
-    if (!image) throw new Error("the cover has no image");
+    if (!image || image.value?.kind !== "image") throw new Error("the cover has no image");
+    const coverSrc = image.value.src;
     // `setElementImageSrc` strips `sample` as it writes — the field says the photograph is not the
     // owner's, and this is the moment it becomes theirs. That is what makes this assertion real
     // rather than incidental.
@@ -159,13 +163,17 @@ describe("a document with no bank photographs in it", () => {
       { sectionId: cover.id, elementId: image.id },
       "foto-sec-cover-el-image.jpg",
     );
-    expect(listSampleRefs(owned)).toEqual([]);
+    const after = listSampleRefs(owned);
+    expect(after).toHaveLength(before.length - 1);
+    expect(after.map((ref) => ref.src)).not.toContain("foto-sec-cover-el-image.jpg");
+    expect(after.map((ref) => ref.src)).not.toContain(coverSrc);
   });
 });
 
 describe("a document that does reference the bank", () => {
   it("names it once, with the id the route takes and the src everything else is keyed by", () => {
-    expect(listSampleRefs(withBankCover(generated()))).toEqual([
+    // Stamped onto a site with no bank, so the stamp is the only reference (the header above).
+    expect(listSampleRefs(withBankCover(generatedWithoutBank()))).toEqual([
       { id: "restaurante-bar.01", src: "muestra-restaurante-bar.01.webp" },
     ]);
   });
@@ -211,7 +219,7 @@ describe("a document that does reference the bank", () => {
     // Two elements can legitimately carry the same bank photograph once a sector holds fewer of
     // them than a gallery has cards. Fetching it twice would store the same bytes twice under the
     // same key; the deduplication is by src, which is what the store is keyed by.
-    const doc = withBankCover(generated());
+    const doc = withBankCover(generatedWithoutBank());
     const page = doc.pages[0];
     if (!page) throw new Error("no page");
     const twice = parseDocument({

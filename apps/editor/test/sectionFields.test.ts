@@ -416,14 +416,14 @@ describe("the slots of a line", () => {
       twoCards,
       "home",
       1,
-      blankSection(GALLERY_ID, "stacked", "sec-gallery"),
+      blankSection(GALLERY_ID, "stacked", "sec-gallery-2"),
     );
     const cleared = clearSlot(withGallery, {
-      sectionId: "sec-gallery",
+      sectionId: "sec-gallery-2",
       slot: "caption",
       item: { list: "photos", id: "item-1" },
     });
-    expect(itemRows(cleared, "sec-gallery")[0]?.lineName).toBe("Foto 1");
+    expect(itemRows(cleared, "sec-gallery-2")[0]?.lineName).toBe("Foto 1");
   });
 
   it("leaves out a line's photo, which has its own affordance", () => {
@@ -431,11 +431,11 @@ describe("the slots of a line", () => {
       twoCards,
       "home",
       1,
-      blankSection(GALLERY_ID, "stacked", "sec-gallery"),
+      blankSection(GALLERY_ID, "stacked", "sec-gallery-2"),
     );
     // `GALLERY_ITEM_SLOTS` is photo + caption; only the caption is a box a person can honestly type
     // in (ADR 0018 gives the photograph its own).
-    expect(itemRows(withGallery, "sec-gallery").map((row) => row.slot)).toEqual(["caption"]);
+    expect(itemRows(withGallery, "sec-gallery-2").map((row) => row.slot)).toEqual(["caption"]);
   });
 
   it("gives each row its own line's address", () => {

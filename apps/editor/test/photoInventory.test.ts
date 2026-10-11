@@ -1,5 +1,10 @@
 import { blankSection, GALLERY_ID, teaserSection } from "@retorika/catalog";
-import { EMPTY_ANSWERS, generateVariants, SECTOR_IDS } from "@retorika/generator";
+import {
+  EMPTY_ANSWERS,
+  GALLERY_SAMPLE_COUNT,
+  generateVariants,
+  SECTOR_IDS,
+} from "@retorika/generator";
 import { hasSamplePhotos } from "@retorika/photobank";
 import {
   insertSection,
@@ -51,7 +56,12 @@ function generatedWithoutBank(): RetorikaDocument {
   return first.document;
 }
 
-/** The same document with a gallery added to the home page, as the pill would. */
+/**
+ * The same document with a blank gallery added to the home page, as the pill would.
+ *
+ * `sec-gallery-2`, because since ADR 0039 a generated restaurante site already carries
+ * `sec-gallery` — the bank's own four photographs — and `insertSection` refuses a taken id.
+ */
 function withGallery(doc: RetorikaDocument): RetorikaDocument {
   const page = doc.pages[0];
   if (!page) throw new Error("no page");
@@ -59,7 +69,7 @@ function withGallery(doc: RetorikaDocument): RetorikaDocument {
     doc,
     page.id,
     page.sections.length,
-    blankSection(GALLERY_ID, "stacked", "sec-gallery"),
+    blankSection(GALLERY_ID, "stacked", "sec-gallery-2"),
   );
 }
 
@@ -81,10 +91,17 @@ describe("what a generated site has", () => {
     // was reachable only from a hand-written document. This is the first assertion that reaches it
     // the way an owner does.
     expect(hasSamplePhotos("restaurante-bar"), "the fixture sector lost its bank").toBe(true);
+    // Five since ADR 0039 (12 October 2026): the cover and the bank's gallery of four. Every one
+    // is a sample, and the warning before a download names each of them.
     const photos = listPhotos(generated());
-    expect(photos).toHaveLength(1);
-    expect(photos[0]?.state).toBe("sample");
-    expect(countPhotos(generated())).toEqual({ empty: 0, sample: 1, own: 0, total: 1 });
+    expect(photos).toHaveLength(1 + GALLERY_SAMPLE_COUNT);
+    expect(photos.every((photo) => photo.state === "sample")).toBe(true);
+    expect(countPhotos(generated())).toEqual({
+      empty: 0,
+      sample: 1 + GALLERY_SAMPLE_COUNT,
+      own: 0,
+      total: 1 + GALLERY_SAMPLE_COUNT,
+    });
   });
 
   it("says where that photograph is, in words the owner would recognise", () => {
@@ -99,14 +116,15 @@ describe("photographs inside a list", () => {
   it("finds a gallery's own, which live inside list items", () => {
     // The walk every other one in this repository has forgotten at least once — three defects in a
     // single day of sprint 5 came from stopping at `section.content`.
+    // The cover, the generated gallery's four, and the blank gallery's one.
     const photos = listPhotos(withGallery(generated()));
-    expect(photos).toHaveLength(2);
+    expect(photos).toHaveLength(2 + GALLERY_SAMPLE_COUNT);
     expect(photos[1]?.sectionName).toBe("Fotos de trabajos");
   });
 
   it("numbers them within their own list, not among everything in the section", () => {
     const doc = withGallery(generated());
-    const gallery = doc.pages[0]?.sections.find((s) => s.preset.catalogId === GALLERY_ID);
+    const gallery = doc.pages[0]?.sections.find((s) => s.id === "sec-gallery-2");
     const list = gallery?.content.find((el) => el.role === "list");
     if (!gallery || !list?.items) throw new Error("no gallery list");
 
@@ -146,7 +164,7 @@ describe("photographs inside a list", () => {
       ),
     });
 
-    const inGallery = listPhotos(grown).filter((p) => p.sectionName === "Fotos de trabajos");
+    const inGallery = listPhotos(grown).filter((p) => p.sectionId === "sec-gallery-2");
     expect(inGallery.map((p) => p.itemNumber)).toEqual([1, 2]);
   });
 });
@@ -155,7 +173,9 @@ describe("photographs on a page that is not the first", () => {
   it("finds them, and names the page they are on", () => {
     const makeTeaser = ({ sectionId, href }: { sectionId: string; href: string }) =>
       teaserSection(sectionId, href, "Ver más");
-    const doc = sectionToPage(withGallery(generated()), "sec-gallery", makeTeaser);
+    // The generated gallery itself, converted — the only gallery in the document, so the first
+    // photograph found under its name is on the page it made.
+    const doc = sectionToPage(generated(), "sec-gallery", makeTeaser);
 
     const photos = listPhotos(doc);
     const moved = photos.find((p) => p.sectionName === "Fotos de trabajos");
@@ -175,13 +195,20 @@ describe("whose photograph it is", () => {
       { sectionId: photo.sectionId, elementId: photo.elementId },
       "foto-sec-cover-el-image.jpg",
     );
-    expect(countPhotos(after)).toEqual({ empty: 0, sample: 0, own: 1, total: 1 });
+    expect(countPhotos(after)).toEqual({
+      empty: 0,
+      sample: GALLERY_SAMPLE_COUNT,
+      own: 1,
+      total: 1 + GALLERY_SAMPLE_COUNT,
+    });
   });
 
   it("tells a bank photograph from the grey marker", () => {
     // Two different things to say to an owner: one is a photograph of somebody else's business,
     // the other is a hole. The warning before a download says different sentences for each.
-    const doc = generated();
+    // Stamped onto a site whose sector has no bank, so the stamped cover is the only photograph
+    // and the count below is about the stamp rather than about the generated gallery.
+    const doc = generatedWithoutBank();
     const page = doc.pages[0];
     const section = page?.sections[0];
     const element = section?.content.find((el) => el.value?.kind === "image");
@@ -224,8 +251,9 @@ describe("whose photograph it is", () => {
 
 describe("a site with no photographs at all", () => {
   it("answers an empty list rather than throwing", () => {
-    // Reachable: a cover can be deleted, and nothing else a generated site carries holds an image.
-    const doc = generated();
+    // Reachable: a cover can be deleted, and nothing else a generated site of a sector with no
+    // bank carries holds an image (a filled sector's site carries a gallery too, ADR 0039).
+    const doc = generatedWithoutBank();
     const page = doc.pages[0];
     if (!page) throw new Error("no page");
     const withoutCover = parseDocument({

@@ -25,8 +25,12 @@ export type Placeholder = (typeof PLACEHOLDERS)[number];
  * thing about it that is sector-specific — «Nuestra carta» for hostelería, «Tarifas» elsewhere —
  * and a heading on a published page is exactly what this bank is for. The name in the editor's
  * menu stays «Precios» for everyone; the two are different things.
+ *
+ * `gallery` joined on 12 October 2026 (ADR 0039): a generated site of a sector whose photo bank is
+ * filled carries a gallery, and a gallery has a heading and an introduction that are published
+ * words. Its captions are not here — they are the bank record's own `alt`, reviewed under ADR 0011.
  */
-export const SECTIONS = ["cover", "services", "location", "contact", "prices"] as const;
+export const SECTIONS = ["cover", "services", "location", "contact", "prices", "gallery"] as const;
 
 const reviewSchema = z.object({
   status: z.literal("approved"),

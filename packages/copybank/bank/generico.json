@@ -82,6 +82,20 @@
       "slot": "headline",
       "text": "Tarifas",
       "placeholders": []
+    },
+    {
+      "id": "generico.gallery.headline.01",
+      "section": "gallery",
+      "slot": "headline",
+      "text": "Así trabajamos",
+      "placeholders": []
+    },
+    {
+      "id": "generico.gallery.intro.01",
+      "section": "gallery",
+      "slot": "intro",
+      "text": "Algunas imágenes de lo que hacemos en {negocio}.",
+      "placeholders": ["negocio"]
     }
   ],
   "suggestions": [],
