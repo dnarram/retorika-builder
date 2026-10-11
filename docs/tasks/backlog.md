@@ -368,6 +368,19 @@ open survives.
   seventeen minutes because several monitors had been left running beside the suite. The same walk
   then passed **four times out of four** on its own, immediately afterwards.
 
+  **And a second walk now shows the same signature, 11 October 2026 (sprint 17 day 6).** «folds the
+  page back into the section it came from, and offers that on no other page» timed out in a full
+  suite waiting 30 seconds for `[data-section="sec-services"] .rb-action[aria-label="Convertir esta
+  sección en página"]` — the action cluster never appeared, which is the same shape as the other
+  one: a click that produced no selection. Measured straight afterwards, **three runs of three
+  passed on the branch and three of three passed on `main`**, so it is neither new nor caused by
+  that day's work.
+
+  What that adds is that the subject is probably not one walk. Two different walks, in two different
+  blocks, both failing only inside a full run and both on «the cluster was never drawn», is more
+  consistent with «something about a full run» than with either walk's own setup. It does not say
+  what, and the next step is unchanged: instrument *inside* a full run.
+
   Two things that narrow it:
 
   - **The failure is `toHaveCount` resolving to 0, not a timeout.** The cluster was never drawn, so
@@ -843,6 +856,12 @@ open survives.
 ---
 
 ## What phase 1 is still waiting on
+
+> **The material for the acceptance ADR is written: [`fase-1-lo-que-prometimos.md`](fase-1-lo-que-prometimos.md)**
+> (11 October 2026, sprint 17 day 6). It holds the nine things the protocol promised with where each
+> one lives and what proves it, the measurements below, the three gaps that touch phase 1 with their
+> sources, and five questions for David — and **no judgement**, because ADR 0031 made the judgement
+> his written one. What is left here is the measurement, which is where it has always been.
 
 The acceptance criterion **has been measured twice**, and both came in under ten minutes:
 

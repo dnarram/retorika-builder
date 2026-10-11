@@ -10024,3 +10024,142 @@ describe("sprint 17 día 5 — lo que los verbos abren también responde al tecl
     }
   }, 180_000);
 });
+
+describe("sprint 17 día 6 — «+ Añadir sección aquí» abre con el cursor en su buscador", () => {
+  /**
+   * The last thing in the canvas a keyboard could reach and not use.
+   *
+   * Escape and a visible «Cerrar» have been in this menu since it shipped — its own note records
+   * why the way out comes before the way in — and both of them closed the menu while leaving focus
+   * on an element they had just removed from the document, which drops it on the body at the top of
+   * the page. And nothing ever put the caret in the search field, which is the control the menu
+   * exists around: it lists every section the catalog offers in this gap, and typing is how that
+   * list is narrowed.
+   */
+
+  /** Where focus is in the editor's own document, by shape, for the menu's own controls. */
+  function menuFocus(page: Page): Promise<string> {
+    return page.evaluate(() => {
+      const doc = document.querySelector<HTMLIFrameElement>(
+        "iframe:not([data-buffered])",
+      )?.contentDocument;
+      const active = doc?.activeElement as HTMLElement | null | undefined;
+      if (!active) return "none";
+      const inMenu = active.closest?.(".rb-menu") ? "in-menu " : "";
+      // The `data-id` as well as the class: the page's own elements carry no class of ours, so
+      // without it an assertion about the headline reads «H1.-» and matches nothing.
+      const id = active.dataset?.["id"] ? `#${active.dataset["id"]}` : "";
+      return `${inMenu}${active.tagName}.${active.className || "-"}${id}`;
+    });
+  }
+
+  it("abre con el cursor en el buscador, Esc cierra y el foco vuelve a la píldora", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+
+      // Reached with the mouse here on purpose: the pill is an ordinary button in the flow between
+      // two sections and Tab has always found it. What it did when it opened is the subject.
+      await frame.locator(".rb-pill").first().click();
+      await expect(frame.locator(".rb-menu")).toHaveCount(1);
+
+      // The caret is in the search field, which is the day's acceptance.
+      await expect.poll(() => menuFocus(page)).toBe("in-menu INPUT.rb-menu-search");
+
+      // Typing narrows the list rather than closing the menu, which is what the caret being here
+      // is for. («Contacto» is offered or explained in every gap; the point is that the list moves.)
+      const before = await frame.locator(".rb-menu-choice").count();
+      expect(before, "the menu offered nothing to narrow").toBeGreaterThan(1);
+      await page.keyboard.type("port");
+      await expect.poll(async () => frame.locator(".rb-menu-choice").count()).toBeLessThan(before);
+      await expect(frame.locator(".rb-menu")).toHaveCount(1);
+
+      // Escape closes it and gives the keyboard back to the pill, instead of to the body.
+      await page.keyboard.press("Escape");
+      await expect(frame.locator(".rb-menu")).toHaveCount(0);
+      await expect
+        .poll(() => menuFocus(page), { message: "Escape dropped the keyboard" })
+        .toBe("BUTTON.rb-pill");
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it("«Cerrar» devuelve el foco igual que Esc, y un clic fuera no lo roba", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+
+      await frame.locator(".rb-pill").first().click();
+      await expect(frame.locator(".rb-menu")).toHaveCount(1);
+      await frame.locator(".rb-menu-close").click();
+      await expect(frame.locator(".rb-menu")).toHaveCount(0);
+      await expect
+        .poll(() => menuFocus(page), { message: "«Cerrar» dropped the keyboard" })
+        .toBe("BUTTON.rb-pill");
+
+      /*
+       * And a click somewhere else closes it **without** moving focus. The person has already
+       * chosen where they are going; putting them back on the pill would be taking that back. The
+       * distinction is deliberate and is the reason `closeMenus` takes its return target as an
+       * argument rather than always knowing one.
+       */
+      await frame.locator(".rb-pill").first().click();
+      await expect(frame.locator(".rb-menu")).toHaveCount(1);
+      await frame.locator('[data-section="sec-cover"] [data-id="el-headline"]').click();
+      await expect(frame.locator(".rb-menu")).toHaveCount(0);
+      expect(await menuFocus(page), "a click elsewhere was overruled").toContain("el-headline");
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it("insertar una sección deja el teclado en la que acaba de aparecer", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      const before = await order(page);
+
+      /*
+       * The same «after the change» rule day 4 built, reaching the last verb that produces a
+       * section. A gap at index `i` inserts before whatever is at `i`, so the new section *is* `i`
+       * once the document is rebuilt — and there is no id to follow, because it did not exist when
+       * the button was pressed.
+       */
+      await frame.locator(".rb-pill").first().click();
+      await expect(frame.locator(".rb-menu")).toHaveCount(1);
+      const offer = frame.locator(".rb-menu-choice").first();
+      await offer.waitFor();
+      await offer.click();
+
+      await expect.poll(async () => (await order(page)).length).toBe(before.length + 1);
+      await expect
+        .poll(
+          async () => {
+            const at = await focus(page);
+            const list = await order(page);
+            if (at.tag === "BODY") return "focus fell to the body";
+            if (!at.onSection) return `focus is on ${at.tag}, not a section`;
+            if (before.includes(at.section ?? ""))
+              return "focus is on a section that was here before";
+            return list[0] === at.section
+              ? "on the section that appeared"
+              : `focused ${at.section}`;
+          },
+          { message: "inserting a section lost the keyboard" },
+        )
+        .toBe("on the section that appeared");
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+});
