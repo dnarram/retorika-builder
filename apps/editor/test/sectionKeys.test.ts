@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { placeAfterRebuild, rovingTabIndex, sectionKeyAction } from "../src/editor/sectionKeys.ts";
+import {
+  placeAfterRebuild,
+  popupKeyAction,
+  rovingTabIndex,
+  sectionKeyAction,
+} from "../src/editor/sectionKeys.ts";
 
 /**
  * The canvas's keyboard rules, which are the half that can be wrong in a way no walk would notice.
@@ -241,6 +246,98 @@ describe("where the keyboard lands after a verb rebuilt the document", () => {
     for (const wasAt of [-1, 0, 3]) {
       for (const idIndex of [-1, 0, 3]) {
         expect(placeAfterRebuild({ idIndex, wasAt, count: 0 })).toBe(null);
+      }
+    }
+  });
+});
+
+describe("the canvas's popups — the composition menu and the hand-design offer", () => {
+  it("moves between the choices with the arrows", () => {
+    expect(popupKeyAction(bare("ArrowDown"), { count: 3, at: 0 })).toEqual({
+      kind: "focus",
+      index: 1,
+    });
+    expect(popupKeyAction(bare("ArrowUp"), { count: 3, at: 1 })).toEqual({
+      kind: "focus",
+      index: 0,
+    });
+  });
+
+  it("wraps at both ends, unlike the sections", () => {
+    /**
+     * The contrast is the argument, and both halves are tested so neither can drift into the
+     * other: a page is a document with a top and a bottom, a popup is a ring of alternatives.
+     */
+    expect(popupKeyAction(bare("ArrowDown"), { count: 3, at: 2 })).toEqual({
+      kind: "focus",
+      index: 0,
+    });
+    expect(popupKeyAction(bare("ArrowUp"), { count: 3, at: 0 })).toEqual({
+      kind: "focus",
+      index: 2,
+    });
+    // And the sections still do not, which is the other half of the same decision.
+    expect(sectionKeyAction(bare("ArrowDown"), { count: 3, at: 2 })).toEqual({
+      kind: "focus",
+      index: 2,
+    });
+  });
+
+  it("enters at either end from a popup nothing has focused yet", () => {
+    expect(popupKeyAction(bare("ArrowDown"), { count: 3, at: -1 })).toEqual({
+      kind: "focus",
+      index: 0,
+    });
+    expect(popupKeyAction(bare("ArrowUp"), { count: 3, at: -1 })).toEqual({
+      kind: "focus",
+      index: 2,
+    });
+  });
+
+  it("closes on Escape, wherever focus is inside it", () => {
+    // Including a popup with nothing focusable in it at all, which is why the Escape branch comes
+    // before the count check: a popup somebody cannot leave is worse than one with no choices.
+    for (const at of [-1, 0, 2]) {
+      expect(popupKeyAction(bare("Escape"), { count: 3, at })).toEqual({ kind: "close" });
+    }
+    expect(popupKeyAction(bare("Escape"), { count: 0, at: -1 })).toEqual({ kind: "close" });
+  });
+
+  it("leaves Tab alone, which is the answer to what Escape means in a menu that is not modal", () => {
+    // Removing the popup from under a Tab would strand the focus Tab was computing. These are not
+    // modal: they are on screen, a click outside closes them, and Escape closes them by keyboard.
+    expect(popupKeyAction(bare("Tab"), { count: 3, at: 1 })).toEqual({ kind: "ignore" });
+  });
+
+  it("refuses every modifier, Escape included", () => {
+    // `Meta+Escape` and `Alt+Escape` are system gestures on the machine this is built on, and a
+    // popup that closed on them would be acting on a press that never reached it in spirit.
+    for (const modifier of ["metaKey", "ctrlKey", "shiftKey", "altKey"] as const) {
+      for (const key of ["ArrowDown", "ArrowUp", "Escape"]) {
+        expect(
+          popupKeyAction({ ...bare(key), [modifier]: true }, { count: 3, at: 1 }),
+          `${modifier}+${key}`,
+        ).toEqual({ kind: "ignore" });
+      }
+    }
+  });
+
+  it("ignores keys that are nobody's business in a popup", () => {
+    for (const key of ["ArrowLeft", "ArrowRight", "a", "Home", "PageDown"]) {
+      expect(popupKeyAction(bare(key), { count: 3, at: 1 }), key).toEqual({ kind: "ignore" });
+    }
+  });
+
+  it("never answers an index the caller cannot use", () => {
+    for (const count of [1, 2, 5]) {
+      for (const at of [-1, 0, 1, 4]) {
+        for (const key of ["ArrowDown", "ArrowUp"]) {
+          const action = popupKeyAction(bare(key), { count, at });
+          if (action.kind === "focus") {
+            expect(action.index, `${key} count ${count} at ${at}`).toBeGreaterThanOrEqual(0);
+            expect(action.index).toBeLessThan(count);
+          }
+        }
       }
     }
   });

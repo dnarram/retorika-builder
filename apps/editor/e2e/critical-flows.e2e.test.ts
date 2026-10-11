@@ -132,6 +132,167 @@ async function expectModalTrap(
   }
 }
 
+async function intoTheCanvas(page: Page): Promise<void> {
+  await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+  await page.fill("#nombre", "Taberna Santo Domingo");
+  await page.getByRole("button", { name: "Siguiente" }).click();
+  await page.getByText("Restaurante y bar", { exact: true }).click();
+  await page.getByRole("button", { name: "Siguiente" }).click();
+  await page.getByText("Comidas", { exact: true }).click();
+  await page.getByRole("button", { name: "Siguiente" }).click();
+  await page.fill("#direccion", "Cta. de Santo Domingo, 2, Ronda");
+  await page.getByRole("button", { name: "Siguiente" }).click();
+  await page.getByText("Que reserven", { exact: true }).click();
+  await page.fill("#enlace", "https://reservas.example.com/taberna");
+  await page.getByRole("button", { name: "Crear mi web" }).click();
+  await page.getByText("Ver a tamaño real →").first().click();
+  const frame = page.frameLocator(PREVIEW).first();
+  await frame.locator('[data-section="sec-cover"]').waitFor();
+  await waitForBankPhoto(frame);
+}
+
+/**
+ * Turn the design tools on and come back only once the preview is showing the **new** document.
+ *
+ * **Through `replacingTheDocument`, and the first version of this was the exact mistake that
+ * function's own comment describes.** It waited for `[data-section="sec-cover"]` and a blob
+ * photograph — both of which the **outgoing** document satisfies, because the swap is buffered and
+ * the live frame keeps its contents until the last moment. So a walk could Tab into a document that
+ * was about to be thrown away, arrow to a section in it, press Enter and draw a cluster there, and
+ * then lose all of it when the swap committed.
+ *
+ * That is what «Tab never reached the handmade button» was: intermittent, because it depended on
+ * whether the swap landed before or after those three keystrokes, and invisible in isolation
+ * because a probe that paused for a second after turning the tools on always won the race.
+ */
+async function studioToolsOn(page: Page): Promise<void> {
+  await replacingTheDocument(page, async () => {
+    await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
+    await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
+  });
+  await expect(page.getByRole("button", { name: "Diseño", exact: true })).toBeVisible();
+  await waitForBankPhoto(page.frameLocator(PREVIEW).first());
+}
+
+/**
+ * Everything about where focus is inside the preview, read by shape.
+ *
+ * Never `instanceof`: this runs in the top document's realm and the elements belong to the
+ * frame's, where that test is `false` for every one of them. Sprint 17 day 3 learned it the hard
+ * way and day 4 is not going to learn it again.
+ */
+function focus(page: Page): Promise<{
+  tag: string;
+  action: string | null;
+  section: string | null;
+  onSection: boolean;
+  disabled: boolean;
+}> {
+  return page.evaluate(() => {
+    const doc = document.querySelector<HTMLIFrameElement>(
+      "iframe:not([data-buffered])",
+    )?.contentDocument;
+    const active = doc?.activeElement as HTMLElement | null | undefined;
+    const host = active?.closest?.("[data-section]") as HTMLElement | null | undefined;
+    return {
+      tag: active?.tagName ?? "none",
+      action: active?.dataset?.["action"] ?? null,
+      // The section focus is *in*, which is what most assertions here want.
+      section: host?.dataset?.["section"] ?? null,
+      /*
+       * **Whether the section itself is what has focus**, which is a different question and the
+       * one the canvas's keyboard asks: a link or a paragraph inside a section owns its own keys,
+       * so the arrows do nothing from there. Added after a walk reported arriving at a section
+       * while focus was on a navigation link inside it — it then pressed arrows that were correctly
+       * ignored and an Enter that correctly went to the link, and failed three steps later with
+       * «Tab never reached the handmade button». Intermittent because the tab order into the canvas
+       * changes with the design tools on.
+       */
+      onSection: active?.dataset?.["section"] !== undefined,
+      disabled: (active as HTMLButtonElement | undefined)?.disabled ?? false,
+    };
+  });
+}
+
+/**
+ * The ids of the sections on the page right now, in order.
+ *
+ * Read through `page.evaluate` and not through a `FrameLocator`, because every verb here replaces
+ * the document and some of them remount the frame: a locator resolved a moment earlier throws
+ * «Frame was detached» mid-swap, which is what the first version of this walk did. Asking the page
+ * to find the live frame on each call cannot go stale, and it returns `[]` rather than throwing
+ * while there is no document — which is exactly what a poll wants to see.
+ */
+function order(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const doc = document.querySelector<HTMLIFrameElement>(
+      "iframe:not([data-buffered])",
+    )?.contentDocument;
+    if (!doc) return [];
+    return [...doc.querySelectorAll("[data-section]")].map(
+      (node) => node.getAttribute("data-section") ?? "",
+    );
+  });
+}
+
+/**
+ * Where focus is, as one string, for polling.
+ *
+ * **Polled and not read once, because the rebuild and the rewiring are two moments.** The new
+ * document appears in the frame, and `wireSelection` runs when the look-ahead notices it — which
+ * can be a frame later. A single read right after the section count changes caught the gap: the
+ * move happened to be slow enough to pass and the duplicate was not, which is the shape of a
+ * flake that would have landed in CI rather than here.
+ */
+function focusPlace(page: Page): Promise<string> {
+  return focus(page).then((at) => `${at.section ?? "-"}/${at.action ?? "-"}`);
+}
+
+/** Walk into the canvas with Tab alone, and stop on the named section with the arrows. */
+async function keyboardTo(page: Page, sectionId: string): Promise<void> {
+  // `onSection` and not `section`: the roving tabindex puts one **section** in the tab order, and
+  // the published page's own links and buttons are in it too. Stopping at the first thing that is
+  // merely *inside* a section lands on one of those, where the arrows are correctly not ours.
+  await page.keyboard.press("Tab");
+  for (let press = 1; press < 60 && !(await focus(page)).onSection; press += 1) {
+    await page.keyboard.press("Tab");
+  }
+  expect((await focus(page)).onSection, "Tab never reached a section element itself").toBe(true);
+  for (let step = 0; step < 20; step += 1) {
+    const at = await focus(page);
+    if (at.onSection && at.section === sectionId) return;
+    await page.keyboard.press("ArrowDown");
+  }
+  expect(await focus(page), `the arrows never reached ${sectionId}`).toMatchObject({
+    section: sectionId,
+    onSection: true,
+  });
+}
+
+/**
+ * Tab from the chosen section onto one of its verbs, by name, with Tab alone.
+ *
+ * **Waits for the cluster first**, which is a fix rather than caution: pressing Enter chooses the
+ * section and `select()` draws the buttons, and a walk that started Tabbing before they existed
+ * reported «Tab never reached the handmade button» — once, inside the full suite, after passing
+ * four times on its own. Three of the five walks happened to wait for `.rb-actions` for their own
+ * reasons and one did not, so the guard belongs here where every caller gets it.
+ */
+async function tabToVerb(page: Page, verb: string): Promise<void> {
+  await expect(page.frameLocator(PREVIEW).first().locator(".rb-actions")).toHaveCount(1);
+  await expect(
+    page.frameLocator(PREVIEW).first().locator(`.rb-actions [data-action="${verb}"]`),
+  ).toHaveCount(1);
+  for (let press = 0; press < 14; press += 1) {
+    const at = await focus(page);
+    if (at.action === verb) return;
+    await page.keyboard.press("Tab");
+  }
+  expect(await focus(page), `Tab never reached the «${verb}» button`).toMatchObject({
+    action: verb,
+  });
+}
+
 async function replacingTheDocument(page: Page, act: () => Promise<void>): Promise<void> {
   const stamped = await page.evaluate(() => {
     const doc = document.querySelector<HTMLIFrameElement>(
@@ -1807,6 +1968,27 @@ describe("sprint 8 — el modo estudio: encender, diseñar a mano, colocar, y vo
       await frame.locator(".rb-handmade-back").click();
       await dialog.getByRole("button", { name: "Volver a la original" }).click();
       await expect(frame.locator(".rb-handmade")).toHaveCount(0);
+
+      /*
+       * **And the keyboard is not left on the button that has just ceased to exist** (sprint 17
+       * day 5). `useFocusTrap` returns focus to whatever had it, which for a dialog opened from
+       * inside the preview is the `<iframe>` — so focusing it restores the element the frame's own
+       * document still holds, which is «Volver a la original» on the hand-design bar. That is right
+       * when the dialog is cancelled and wrong when it is confirmed: reverting puts the section back
+       * under the catalog and the bar goes with it. Reverting also flips the section's `source`,
+       * which changes `chromeKey` and sends the rebuild through the buffered swap, so the intent has
+       * to survive two documents.
+       */
+      await expect
+        .poll(
+          async () => {
+            const at = await focus(studio);
+            if (at.tag === "BODY") return "focus fell to the body";
+            return at.section === null ? `focus is on ${at.tag}` : "inside the section";
+          },
+          { message: "confirming a revert lost the keyboard" },
+        )
+        .toBe("inside the section");
       expect(await headline.textContent()).toBe(wordsBefore);
       // The panel is closed first, because it sits *beside* the canvas and narrows it — comparing a
       // box measured with it open against one measured with it shut would compare two viewport
@@ -9098,25 +9280,6 @@ describe("sprint 17 día 3 — el lienzo se maneja con el teclado", () => {
    * the whole corpus.
    */
 
-  async function intoTheCanvas(page: Page): Promise<void> {
-    await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
-    await page.fill("#nombre", "Taberna Santo Domingo");
-    await page.getByRole("button", { name: "Siguiente" }).click();
-    await page.getByText("Restaurante y bar", { exact: true }).click();
-    await page.getByRole("button", { name: "Siguiente" }).click();
-    await page.getByText("Comidas", { exact: true }).click();
-    await page.getByRole("button", { name: "Siguiente" }).click();
-    await page.fill("#direccion", "Cta. de Santo Domingo, 2, Ronda");
-    await page.getByRole("button", { name: "Siguiente" }).click();
-    await page.getByText("Que reserven", { exact: true }).click();
-    await page.fill("#enlace", "https://reservas.example.com/taberna");
-    await page.getByRole("button", { name: "Crear mi web" }).click();
-    await page.getByText("Ver a tamaño real →").first().click();
-    const frame = page.frameLocator(PREVIEW).first();
-    await frame.locator('[data-section="sec-cover"]').waitFor();
-    await waitForBankPhoto(frame);
-  }
-
   /**
    * Which section inside the preview holds focus right now, or `null`.
    *
@@ -9434,8 +9597,18 @@ describe("sprint 17 día 3 — axe sobre el documento del editor", () => {
 
       await frame.locator('[data-section="sec-cover"]').click();
       await expect(frame.locator(".rb-actions")).toHaveCount(1);
-      const after = await landmarksInFrame(page, LANDMARKS);
-      expect(after, "choosing a section added a landmark to the editor's tree").toEqual(before);
+      /*
+       * **Polled, not read once.** A single read failed here one run in three: the preview's
+       * document can be replaced while this walk is running — the bank photograph arriving is
+       * enough — and a read that lands between two documents comes back empty, which is not the
+       * same list and is not a landmark either. The assertion is unchanged in strength: a landmark
+       * genuinely added never matches, and the poll fails with both lists in the message.
+       */
+      await expect
+        .poll(async () => (await landmarksInFrame(page, LANDMARKS)).join(" | "), {
+          message: "choosing a section added a landmark to the editor's tree",
+        })
+        .toBe(before.join(" | "));
 
       // Every section is a `group`, which is what keeps the line above true rather than lucky.
       const roles = await frame
@@ -9485,116 +9658,6 @@ describe("sprint 17 día 4 — los verbos se usan con el teclado y sobreviven al
    * it still exists and is still usable. The arithmetic is unit-tested; what this walk adds is the
    * part no unit test can reach — **the document really being replaced**.
    */
-
-  async function intoTheCanvas(page: Page): Promise<void> {
-    await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
-    await page.fill("#nombre", "Taberna Santo Domingo");
-    await page.getByRole("button", { name: "Siguiente" }).click();
-    await page.getByText("Restaurante y bar", { exact: true }).click();
-    await page.getByRole("button", { name: "Siguiente" }).click();
-    await page.getByText("Comidas", { exact: true }).click();
-    await page.getByRole("button", { name: "Siguiente" }).click();
-    await page.fill("#direccion", "Cta. de Santo Domingo, 2, Ronda");
-    await page.getByRole("button", { name: "Siguiente" }).click();
-    await page.getByText("Que reserven", { exact: true }).click();
-    await page.fill("#enlace", "https://reservas.example.com/taberna");
-    await page.getByRole("button", { name: "Crear mi web" }).click();
-    await page.getByText("Ver a tamaño real →").first().click();
-    const frame = page.frameLocator(PREVIEW).first();
-    await frame.locator('[data-section="sec-cover"]').waitFor();
-    await waitForBankPhoto(frame);
-  }
-
-  /**
-   * Everything about where focus is inside the preview, read by shape.
-   *
-   * Never `instanceof`: this runs in the top document's realm and the elements belong to the
-   * frame's, where that test is `false` for every one of them. Sprint 17 day 3 learned it the hard
-   * way and day 4 is not going to learn it again.
-   */
-  function focus(page: Page): Promise<{
-    tag: string;
-    action: string | null;
-    section: string | null;
-    disabled: boolean;
-  }> {
-    return page.evaluate(() => {
-      const doc = document.querySelector<HTMLIFrameElement>(
-        "iframe:not([data-buffered])",
-      )?.contentDocument;
-      const active = doc?.activeElement as HTMLElement | null | undefined;
-      const host = active?.closest?.("[data-section]") as HTMLElement | null | undefined;
-      return {
-        tag: active?.tagName ?? "none",
-        action: active?.dataset?.["action"] ?? null,
-        section: host?.dataset?.["section"] ?? null,
-        disabled: (active as HTMLButtonElement | undefined)?.disabled ?? false,
-      };
-    });
-  }
-
-  /**
-   * The ids of the sections on the page right now, in order.
-   *
-   * Read through `page.evaluate` and not through a `FrameLocator`, because every verb here replaces
-   * the document and some of them remount the frame: a locator resolved a moment earlier throws
-   * «Frame was detached» mid-swap, which is what the first version of this walk did. Asking the page
-   * to find the live frame on each call cannot go stale, and it returns `[]` rather than throwing
-   * while there is no document — which is exactly what a poll wants to see.
-   */
-  function order(page: Page): Promise<string[]> {
-    return page.evaluate(() => {
-      const doc = document.querySelector<HTMLIFrameElement>(
-        "iframe:not([data-buffered])",
-      )?.contentDocument;
-      if (!doc) return [];
-      return [...doc.querySelectorAll("[data-section]")].map(
-        (node) => node.getAttribute("data-section") ?? "",
-      );
-    });
-  }
-
-  /**
-   * Where focus is, as one string, for polling.
-   *
-   * **Polled and not read once, because the rebuild and the rewiring are two moments.** The new
-   * document appears in the frame, and `wireSelection` runs when the look-ahead notices it — which
-   * can be a frame later. A single read right after the section count changes caught the gap: the
-   * move happened to be slow enough to pass and the duplicate was not, which is the shape of a
-   * flake that would have landed in CI rather than here.
-   */
-  function focusPlace(page: Page): Promise<string> {
-    return focus(page).then((at) => `${at.section ?? "-"}/${at.action ?? "-"}`);
-  }
-
-  /** Walk into the canvas with Tab alone, and stop on the named section with the arrows. */
-  async function keyboardTo(page: Page, sectionId: string): Promise<void> {
-    await page.keyboard.press("Tab");
-    for (let press = 1; press < 40 && (await focus(page)).section === null; press += 1) {
-      await page.keyboard.press("Tab");
-    }
-    const here = await focus(page);
-    expect(here.section, "Tab never reached a section").not.toBeNull();
-    for (let step = 0; step < 20; step += 1) {
-      if ((await focus(page)).section === sectionId) return;
-      await page.keyboard.press("ArrowDown");
-    }
-    expect(await focus(page), `the arrows never reached ${sectionId}`).toMatchObject({
-      section: sectionId,
-    });
-  }
-
-  /** Tab from the chosen section onto one of its verbs, by name, with Tab alone. */
-  async function tabToVerb(page: Page, verb: string): Promise<void> {
-    for (let press = 0; press < 14; press += 1) {
-      const at = await focus(page);
-      if (at.action === verb) return;
-      await page.keyboard.press("Tab");
-    }
-    expect(await focus(page), `Tab never reached the «${verb}» button`).toMatchObject({
-      action: verb,
-    });
-  }
 
   it("mueve una sección dos veces sin salir del botón, y nunca cae en el body", async () => {
     const page = await (
@@ -9748,4 +9811,216 @@ describe("sprint 17 día 4 — los verbos se usan con el teclado y sobreviven al
       await page.context().close();
     }
   }, 240_000);
+});
+
+describe("sprint 17 día 5 — lo que los verbos abren también responde al teclado", () => {
+  /**
+   * **Three things the six verbs open, and none of them answered a keyboard.**
+   *
+   * «Cambiar cómo se ve esta sección» and «Diseñar a mano» draw a popup over the section; «Campos
+   * de esta sección» opens a panel in the editor's *own* document, on the other side of the frame
+   * boundary. All three were reachable only by mouse — not because their contents are inaccessible,
+   * they are buttons and fields, but because nothing moved focus in, nothing moved it back, and
+   * Escape did nothing at all. A popup a keyboard can open and cannot leave is worse than one it
+   * cannot open.
+   *
+   * Neither popup is modal and neither gets a trap: they sit over the section, a click outside
+   * closes them, and `aria-modal` would claim the rest of the page is unavailable, which is false.
+   * So Escape is the key that means «I am done», and it is the only one — Tab leaves and the popup
+   * stays, because removing it from under a Tab would strand the focus Tab was computing.
+   */
+
+  /** Which choice inside the open popup has focus, as `index/total`, plus whether it is pressed. */
+  function popupFocus(page: Page): Promise<string> {
+    return page.evaluate(() => {
+      const doc = document.querySelector<HTMLIFrameElement>(
+        "iframe:not([data-buffered])",
+      )?.contentDocument;
+      const panel = doc?.querySelector(".rb-compositions");
+      if (!panel) return "no popup";
+      const choices = [...panel.querySelectorAll("button:not([disabled])")];
+      const active = doc?.activeElement as HTMLElement | null;
+      const at = active ? choices.indexOf(active) : -1;
+      return `${at}/${choices.length} pressed=${active?.getAttribute?.("aria-pressed") ?? "-"}`;
+    });
+  }
+
+  it("abre el menú de composición con el teclado, elige con las flechas y Esc devuelve el foco", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+
+      await keyboardTo(page, "sec-services");
+      await page.keyboard.press("Enter");
+      await expect(frame.locator(".rb-actions")).toHaveCount(1);
+      await tabToVerb(page, "composition");
+      await page.keyboard.press("Enter");
+
+      // The popup opened and **took the focus**, on the composition the section is already wearing.
+      await expect(frame.locator(".rb-compositions")).toHaveCount(1);
+      await expect.poll(() => popupFocus(page)).toMatch(/^\d+\/\d+ pressed=true$/);
+
+      // The arrows move inside it, and they wrap — a popup is a ring of alternatives, unlike the
+      // sections, which are a document with a top and a bottom.
+      const total = Number((await popupFocus(page)).split("/")[1]?.split(" ")[0] ?? 0);
+      expect(total, "a composition menu with fewer than two choices").toBeGreaterThan(1);
+      const seen = new Set<number>();
+      for (let step = 0; step < total + 1; step += 1) {
+        seen.add(Number((await popupFocus(page)).split("/")[0]));
+        await page.keyboard.press("ArrowDown");
+      }
+      expect(seen.size, "the arrows did not reach every choice").toBe(total);
+      // One more press than there are choices, so the cycle has been crossed and focus is still in.
+      expect(await popupFocus(page)).not.toBe("no popup");
+      expect(Number((await popupFocus(page)).split("/")[0])).toBeGreaterThanOrEqual(0);
+
+      // Escape closes it and gives the keyboard back to the button that opened it.
+      await page.keyboard.press("Escape");
+      await expect(frame.locator(".rb-compositions")).toHaveCount(0);
+      await expect
+        .poll(() => focusPlace(page), { message: "Escape lost the keyboard" })
+        .toBe("sec-services/composition");
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it("elegir una composición reabre el menú con el teclado dentro, en la elegida", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+
+      await keyboardTo(page, "sec-services");
+      await page.keyboard.press("Enter");
+      await tabToVerb(page, "composition");
+      await page.keyboard.press("Enter");
+      await expect.poll(() => popupFocus(page)).toMatch(/pressed=true$/);
+
+      /*
+       * **The menu is left open on purpose and that was already true for the mouse**: picking the
+       * composition in use is a no-op all the way down, and `compositionMenuOpen` brings the menu
+       * back after a real change «so the next try is one click». For a keyboard the next try has to
+       * be one *press*, which is only true if the keyboard is still inside the menu when it
+       * reappears — and on the choice now in use, which is also the answer to «what did that do».
+       */
+      await page.keyboard.press("ArrowDown");
+      const chosen = Number((await popupFocus(page)).split("/")[0]);
+      await page.keyboard.press("Enter");
+
+      await expect(frame.locator(".rb-compositions")).toHaveCount(1);
+      await expect
+        .poll(async () => Number((await popupFocus(page)).split("/")[0]), {
+          message: "choosing a composition lost the keyboard",
+        })
+        .toBe(chosen);
+      expect(await popupFocus(page), "the reopened menu does not mark the chosen one").toContain(
+        "pressed=true",
+      );
+
+      /*
+       * **And the menu that came back actually works**, which the first version of this walk did
+       * not test — a sabotage proved it. Removing the wiring from the reopened menu left the test
+       * green, because the focus arrives through the restore's own selector rather than through the
+       * wiring: focus sitting in a menu with no arrows and no Escape would have passed.
+       *
+       * The arrows and Escape are what make it a menu rather than a picture of one, so they are
+       * asserted on the reopened instance specifically.
+       */
+      await page.keyboard.press("ArrowDown");
+      await expect
+        .poll(async () => Number((await popupFocus(page)).split("/")[0]), {
+          message: "the reopened menu does not answer the arrows",
+        })
+        .not.toBe(chosen);
+      await page.keyboard.press("Escape");
+      await expect(frame.locator(".rb-compositions")).toHaveCount(0);
+      await expect
+        .poll(() => focusPlace(page), { message: "Escape in the reopened menu lost the keyboard" })
+        .toBe("sec-services/composition");
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it("la oferta de diseñar a mano responde a las flechas, y «No» devuelve el foco", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      /*
+       * The offer only exists with the design tools on: `Editor.tsx` draws it when
+       * `designTools && !isHandDesigned(…)`, because a section already designed by hand has the
+       * bar instead and two controls for one state is one too many. Turned on here rather than
+       * assumed, which is what the first version of this walk did before failing on «Tab never
+       * reached the handmade button».
+       */
+      await studioToolsOn(page);
+
+      await keyboardTo(page, "sec-services");
+      await page.keyboard.press("Enter");
+      await tabToVerb(page, "handmade");
+      await page.keyboard.press("Enter");
+
+      await expect(frame.locator(".rb-escalate")).toHaveCount(1);
+      await expect.poll(() => popupFocus(page)).toMatch(/^0\/2 /);
+      await page.keyboard.press("ArrowDown");
+      expect(await popupFocus(page)).toMatch(/^1\/2 /);
+
+      // «No» means what Escape means, so it leaves the keyboard in the same place. Without this a
+      // keyboard user who declined was left on a button that had just been removed.
+      await page.keyboard.press("Enter");
+      await expect(frame.locator(".rb-escalate")).toHaveCount(0);
+      await expect
+        .poll(() => focusPlace(page), { message: "«No» lost the keyboard" })
+        .toBe("sec-services/handmade");
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it("«Campos de esta sección» lleva el foco al otro documento, y Esc lo trae de vuelta", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+
+      await keyboardTo(page, "sec-services");
+      await page.keyboard.press("Enter");
+      await tabToVerb(page, "fields");
+      await page.keyboard.press("Enter");
+
+      /*
+       * **The boundary crossing**, and the one place in this sprint where the two documents make a
+       * difference rather than an inconvenience: the button is inside the iframe and the panel it
+       * opens is in the editor's own document. Focus has to leave one and arrive in the other.
+       */
+      const panel = page.locator("aside[aria-labelledby]");
+      await expect(panel).toBeVisible();
+      await expect(panel).toBeFocused();
+      // And it landed on the panel itself rather than its first field, so the heading — which says
+      // which section this is — has not been skipped past.
+      expect(await page.evaluate(() => document.activeElement?.tagName ?? "")).toBe("ASIDE");
+      // Nothing inside the frame holds it any more.
+      expect((await focus(page)).section).toBeNull();
+
+      // Escape closes it, and the keyboard comes back across the boundary to the button.
+      await page.keyboard.press("Escape");
+      await expect(panel).toHaveCount(0);
+      await expect
+        .poll(() => focusPlace(page), { message: "closing the panel lost the keyboard" })
+        .toBe("sec-services/fields");
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
 });

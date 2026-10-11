@@ -71,7 +71,12 @@ import { measureOverflow } from "../editor/overflowCheck.ts";
 import { countPhotos, listPhotos, type PhotoState } from "../editor/photoInventory.ts";
 import { withPhotoUrls } from "../editor/previewDocument.ts";
 import { sectionFields } from "../editor/sectionFields.ts";
-import { placeAfterRebuild, rovingTabIndex, sectionKeyAction } from "../editor/sectionKeys.ts";
+import {
+  placeAfterRebuild,
+  popupKeyAction,
+  rovingTabIndex,
+  sectionKeyAction,
+} from "../editor/sectionKeys.ts";
 import { offersMatching } from "../editor/sectionSearch.ts";
 import { keepsItsOwnUndo, shortcutFor } from "../editor/shortcuts.ts";
 import { insertedTextFor, liveFrameOf, offsetFor, textFrameOf } from "../editor/textEdits.ts";
@@ -837,7 +842,7 @@ export function Editor({
    * document it lived in. What survives is a name — the section's id, the index it held, and which
    * verb — and `placeAfterRebuild` turns the first two into a place.
    */
-  const pendingReturn = useRef<{ sectionId: string; verb: string; index: number } | null>(null);
+  const pendingReturn = useRef<{ sectionId: string; within: string; index: number } | null>(null);
   /**
    * What the canvas should focus as soon as it is allowed to, and **«allowed to» is the whole
    * reason this is a ref and not a line of code.**
@@ -858,15 +863,22 @@ export function Editor({
    * given and **clears it only when the document it landed in is the live one** — which the swap's
    * incoming frame is not until after the commit, where the swap effect applies it once more.
    */
-  const focusTarget = useRef<{ sectionId: string; verb: string } | null>(null);
+  const focusTarget = useRef<{ sectionId: string; within: string } | null>(null);
 
   /**
    * Focus whatever `focusTarget` asks for, in the document given, and say nothing if it cannot.
    *
-   * The chain is the same one `placeAfterRebuild`'s comment describes: the same verb on the section
-   * if it is still there and still usable, else the section itself. A disabled button is skipped
-   * rather than focused, because most engines refuse focus to one — which is precisely how focus
-   * ends up on the body, the outcome this whole arrangement exists to prevent.
+   * The chain is the same one `placeAfterRebuild`'s comment describes: the thing `within` names if
+   * it is still there and still usable, else the section itself. A disabled button is skipped rather
+   * than focused, because most engines refuse focus to one — which is precisely how focus ends up on
+   * the body, the outcome this whole arrangement exists to prevent.
+   *
+   * **`within` is a selector and not a verb**, since sprint 17 day 5. It started as «the same verb
+   * again» and the popups needed something the action cluster cannot express: after choosing a
+   * composition the menu reopens, and the place to come back to is the choice now marked
+   * `aria-pressed="true"` inside it, not the button that opened the menu. One field that names an
+   * element inside the section covers both, and the fallback to the section covers whatever it
+   * fails to find.
    */
   function takeCanvasFocus(doc: Document | null | undefined) {
     const want = focusTarget.current;
@@ -877,9 +889,7 @@ export function Editor({
       focusTarget.current = null;
       return;
     }
-    const again = section.querySelector<HTMLButtonElement>(
-      `.rb-actions [data-action="${want.verb}"]`,
-    );
+    const again = section.querySelector<HTMLButtonElement>(want.within);
     const target = again && !again.disabled ? again : section;
     target.focus();
     /*
@@ -984,7 +994,27 @@ export function Editor({
     setRevertFor({ sectionId, impact });
   }
 
+  /**
+   * Open or close «Campos de esta sección», and carry the keyboard across the frame boundary with
+   * it (sprint 17 day 5).
+   *
+   * The panel takes the focus itself on mount — it is a React component in the editor's own
+   * document and can. **Coming back is this function's job**, because the thing to come back to is
+   * a button `wireInteractions` drew inside the preview, and the panel knows nothing about it.
+   * Without this a keyboard user closed the panel and was left on a button that had just been
+   * unmounted, which is how focus reaches the body.
+   *
+   * `fieldsFor` is read before it is cleared, which is the only moment it still says which section
+   * the panel belongs to.
+   */
   function showFields(sectionId: string | null) {
+    if (sectionId === null && fieldsFor !== null) {
+      focusTarget.current = {
+        sectionId: fieldsFor,
+        within: '.rb-actions [data-action="fields"]',
+      };
+      takeCanvasFocus(liveFrame()?.contentDocument);
+    }
     setFieldsFor(sectionId);
     if (sectionId !== null) setRail("sections");
   }
@@ -1799,21 +1829,89 @@ export function Editor({
     }
 
     /**
+     * The keyboard for a popup the canvas draws: the composition menu and the offer to design a
+     * section by hand (sprint 17 day 5).
+     *
+     * Both were reachable only by mouse — not because their choices are inaccessible, they are
+     * `<button>`s, but because nothing moved focus into them, nothing moved it back, and Escape did
+     * nothing at all. A popup a keyboard can open and not leave is worse than one it cannot open.
+     *
+     * **Neither is modal and neither gets a trap.** They sit over the section, any click outside
+     * closes them, and `aria-modal` would be a claim that the rest of the page is unavailable —
+     * which is false and, as `useFocusTrap`'s own note says, worse than never claiming it. So Tab
+     * leaves and the popup stays: removing it from under a Tab would strand the focus that Tab was
+     * computing. Escape is the key that means «I am done here», and it is the only one.
+     *
+     * The focus goes in on the choice already in use where there is one — the composition the
+     * section is wearing, marked `aria-pressed="true"` — because that is where somebody reading the
+     * menu starts from, and it tells them what they have before offering what they could have.
+     */
+    /**
+     * Remember where the keyboard should come back to after this press rebuilds the document.
+     *
+     * The action buttons arm this themselves; the popups cannot, because what rebuilds is a button
+     * **inside** what they open, and the place to return to is not the thing that was pressed.
+     */
+    function armReturn(sectionId: string, within: string) {
+      pendingReturn.current = {
+        sectionId,
+        within,
+        index: sections.findIndex((section) => section.dataset["section"] === sectionId),
+      };
+    }
+
+    function wirePopup(panel: HTMLElement, opener: HTMLElement) {
+      const choices = () => [
+        ...panel.querySelectorAll<HTMLButtonElement>("button:not([disabled])"),
+      ];
+      const open = choices();
+      (open.find((choice) => choice.getAttribute("aria-pressed") === "true") ?? open[0])?.focus();
+
+      panel.addEventListener("keydown", (event) => {
+        const list = choices();
+        const active = iframeDoc.activeElement as HTMLElement | null;
+        const action = popupKeyAction(
+          {
+            key: event.key,
+            metaKey: event.metaKey,
+            ctrlKey: event.ctrlKey,
+            shiftKey: event.shiftKey,
+            altKey: event.altKey,
+          },
+          {
+            count: list.length,
+            at: active ? list.findIndex((choice) => choice === active) : -1,
+          },
+        );
+        if (action.kind === "ignore") return;
+        event.preventDefault();
+        if (action.kind === "focus") {
+          list[action.index]?.focus();
+          return;
+        }
+        panel.remove();
+        compositionMenuOpen.current = false;
+        // Back to the button that opened it, which is the half that makes Escape a way out rather
+        // than a way of losing your place. Guarded because a rebuild may have replaced it.
+        if (opener.isConnected) opener.focus();
+      });
+    }
+
+    /**
      * The verbs that replace the document, and therefore the ones with a focus to put back.
      *
-     * `composition` and `fields` are left out on purpose: they **open** something — a menu and a
-     * panel — and nothing is rebuilt until a choice is made inside them, so recording a return here
-     * would leave a stale one waiting to hijack the next unrelated edit. Where the keyboard goes
-     * when those two open and close is day 5's, and it is a different question.
+     * `composition`, `handmade` and `fields` are left out: they **open** something — two popups and
+     * a panel — and nothing is rebuilt until a choice is made inside them. Recording a return here
+     * would leave a stale one waiting to hijack the next unrelated edit, which is exactly what
+     * `handmade` did between day 4 and day 5: it was in this set, it rebuilds nothing on its own, so
+     * pressing it armed a return the next text edit would have spent. Found on day 5 by reading the
+     * three openers rather than by a failure, and this line is the fix.
+     *
+     * The returns for all three are armed from inside what they open, which is day 5's work: a
+     * composition choice comes back to the reopened menu, «Sí, diseñar a mano» to the section, and
+     * the fields panel to the button that opened it, across the frame boundary.
      */
-    const REBUILDS = new Set([
-      "move-up",
-      "move-down",
-      "duplicate",
-      "to-page",
-      "delete",
-      "handmade",
-    ]);
+    const REBUILDS = new Set(["move-up", "move-down", "duplicate", "to-page", "delete"]);
 
     /**
      * One of the section's verbs, as a button.
@@ -1831,7 +1929,9 @@ export function Editor({
       variant: "move" | "delete",
       disabled: boolean,
       svg: string,
-      onClick: () => void,
+      /** Handed the button it is attached to, which an opener needs: a popup has to know what to
+       * put the focus back on, and the only thing that knows is the thing that was pressed. */
+      onClick: (button: HTMLButtonElement) => void,
     ): HTMLButtonElement {
       const button = iframeDoc.createElement("button");
       button.type = "button";
@@ -1865,9 +1965,13 @@ export function Editor({
         const host = button.closest<HTMLElement>("[data-section]");
         const hostId = host?.dataset["section"];
         if (REBUILDS.has(verb) && host && hostId) {
-          pendingReturn.current = { sectionId: hostId, verb, index: sections.indexOf(host) };
+          pendingReturn.current = {
+            sectionId: hostId,
+            within: `.rb-actions [data-action="${verb}"]`,
+            index: sections.indexOf(host),
+          };
         }
-        onClick();
+        onClick(button);
       });
       return button;
     }
@@ -1900,6 +2004,15 @@ export function Editor({
         choice.appendChild(name);
         choice.addEventListener("click", (event) => {
           event.stopPropagation();
+          /*
+           * **Back into the menu, on the choice that is now in use** — not onto the button that
+           * opened it. Choosing a composition rebuilds the page and `compositionMenuOpen` brings
+           * the menu straight back, by design, «so the next try is one click». For a keyboard that
+           * means the next try should be one *press*, and the only way that is true is if the
+           * keyboard is still inside the menu when it reappears. The `aria-pressed="true"` choice
+           * is also the honest place: it is the answer to «what did that do».
+           */
+          armReturn(sectionId, '.rb-compositions .rb-menu-choice[aria-pressed="true"]');
           // Left open on purpose. Picking the composition already in use is a no-op all the way
           // down (`setVariant` hands back the same document), so the frame does not reload and
           // the menu would otherwise vanish for nothing; picking a different one reloads it, and
@@ -1951,6 +2064,13 @@ export function Editor({
       yes.textContent = es["editor.section.escalate.yes"];
       yes.addEventListener("click", (event) => {
         event.stopPropagation();
+        /*
+         * Back to the section's own cluster. The offer is gone once it is accepted — the section is
+         * hand-designed now — so there is nothing inside it to return to, and the `handmade` button
+         * may or may not still be drawn. `takeCanvasFocus` tries it and falls back to the section,
+         * which is the right answer either way: what changed is the section.
+         */
+        armReturn(sectionId, '.rb-actions [data-action="handmade"]');
         onEscalateSection(sectionId);
       });
       row.appendChild(yes);
@@ -1963,6 +2083,13 @@ export function Editor({
         event.stopPropagation();
         panel.remove();
         compositionMenuOpen.current = false;
+        /*
+         * «No» means the same thing Escape means, so it leaves the keyboard in the same place.
+         * Without this a keyboard user who declined the offer was left with focus on a button that
+         * had just been removed from the document, which is how focus reaches the body.
+         */
+        focusTarget.current = { sectionId, within: '.rb-actions [data-action="handmade"]' };
+        takeCanvasFocus(iframeDoc);
       });
       row.appendChild(no);
 
@@ -2041,15 +2168,17 @@ export function Editor({
             "move",
             false,
             '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M10 4v16"/></svg>',
-            () => {
+            (button) => {
               const open = target.querySelector(".rb-compositions");
               if (open) {
                 open.remove();
                 compositionMenuOpen.current = false;
                 return;
               }
-              target.appendChild(compositionMenu(sectionId, compositions));
+              const menu = compositionMenu(sectionId, compositions);
+              target.appendChild(menu);
               compositionMenuOpen.current = true;
+              wirePopup(menu, button);
             },
           ),
         );
@@ -2066,15 +2195,17 @@ export function Editor({
             "move",
             false,
             '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M3 9h18"/></svg>',
-            () => {
+            (button) => {
               const open = target.querySelector(".rb-escalate");
               if (open) {
                 open.remove();
                 compositionMenuOpen.current = false;
                 return;
               }
-              target.appendChild(escalateOffer(sectionId));
+              const offer = escalateOffer(sectionId);
+              target.appendChild(offer);
               compositionMenuOpen.current = true;
+              wirePopup(offer, button);
             },
           ),
         );
@@ -2266,7 +2397,18 @@ export function Editor({
         if (compositionMenuOpen.current) {
           const compositions = compositionsFor(doc, remembered);
           if (compositions.length > 0) {
-            target.appendChild(compositionMenu(remembered, compositions));
+            const menu = compositionMenu(remembered, compositions);
+            target.appendChild(menu);
+            /*
+             * **Wired here too, or the menu that comes back is the one nobody can use.** This is
+             * the reopening the mouse has had since the menu shipped — `compositionMenuOpen` brings
+             * it back after a choice «so the next try is one click» — and until sprint 17 day 5 it
+             * came back inert to a keyboard: no focus in it, no arrows, no Escape.
+             */
+            const opener = target.querySelector<HTMLElement>(
+              '.rb-actions [data-action="composition"]',
+            );
+            if (opener) wirePopup(menu, opener);
           } else {
             compositionMenuOpen.current = false;
           }
@@ -2306,7 +2448,7 @@ export function Editor({
       const target = place === null ? undefined : sections[place];
       const targetId = target?.dataset["section"];
       if (target && targetId) {
-        focusTarget.current = { sectionId: targetId, verb: pending.verb };
+        focusTarget.current = { sectionId: targetId, within: pending.within };
       }
     }
 
@@ -2319,7 +2461,14 @@ export function Editor({
     const wanted = focusTarget.current;
     if (wanted) {
       const host = sections.find((section) => section.dataset["section"] === wanted.sectionId);
-      if (host) select(host);
+      /*
+       * **Only when it is not already the chosen one**, and that `if` is a fix rather than a
+       * micro-optimisation: `select` clears `.rb-compositions` from every section, so calling it
+       * here destroyed the menu the restore above had just reopened — and with it the focus this
+       * block exists to place. The case it is actually for is a delete, where the section now in
+       * that place was never chosen and nothing has drawn a cluster for it.
+       */
+      if (host && selectedSection.current !== wanted.sectionId) select(host);
       takeCanvasFocus(iframeDoc);
     }
   }
@@ -4941,6 +5090,22 @@ export function Editor({
           }
           onCancel={() => setRevertFor(null)}
           onConfirm={(decisions) => {
+            /*
+             * **Where the keyboard goes after a revert, which the dialog cannot answer itself.**
+             * `useFocusTrap` returns focus to whatever had it, and what had it was the `<iframe>` —
+             * so focusing it restores the element the frame's own document still holds, which is
+             * «Volver a la original» on the hand-design bar. That works when the dialog is
+             * cancelled and is wrong when it is confirmed: reverting puts the section back under the
+             * catalog, the bar goes with it, and the button focus would return to no longer exists.
+             *
+             * Reverting also flips the section's `source`, which changes `chromeKey` and sends the
+             * rebuild through the buffered swap — so this has to be the intent that survives two
+             * documents rather than a `.focus()` here.
+             */
+            focusTarget.current = {
+              sectionId: revertFor.sectionId,
+              within: '.rb-actions [data-action="handmade"]',
+            };
             setRevertFor(null);
             onRevertSection(revertFor.sectionId, decisions);
           }}

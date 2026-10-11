@@ -1279,3 +1279,84 @@ exactamente lo que este día existe para evitar.
 Cada botón lleva `data-action`. Es el asidero: el mismo verbo sobre la misma sección se encuentra en
 el documento que reemplazó al que la persona pulsó. El `aria-label` no podía hacerlo, siendo prosa en
 español que un cambio de copia movería.
+
+### Lo que los verbos abren también responde al teclado (11 de octubre de 2026, sprint 17 día 5)
+
+Tres cosas que los seis verbos abren, y ninguna respondía a un teclado. No porque su contenido sea
+inaccesible —son botones y campos— sino porque nada movía el foco dentro, nada lo devolvía, y Escape
+no hacía nada. **Un popup que un teclado puede abrir y no puede abandonar es peor que uno que no
+puede abrir.**
+
+#### Qué significa Escape en un menú que no es modal
+
+Ni el menú de composición ni la oferta de diseñar a mano llevan trampa de foco, y la razón es la
+misma que da el propio `useFocusTrap`: `aria-modal` es la afirmación de que el resto de la página no
+está disponible, y aquí sería falsa. Están encima de la sección, cualquier clic fuera los cierra, y
+el teclado tiene que poder irse.
+
+Así que **Escape es la única tecla que significa «he terminado aquí»**, y Tab se deja en paz. Quitar
+el popup por debajo de un Tab dejaría huérfano el foco que ese Tab estaba calculando: el navegador
+decide su destino con el documento tal como está, y si el popup desaparece a mitad, el destino ya no
+existe. El popup se queda hasta un Escape o un clic, que es lo que ya hacía para el ratón.
+
+#### Las flechas sí dan la vuelta aquí, y entre secciones no
+
+La contradicción es aparente y las dos razones son distintas. Una página son secciones leídas de
+arriba abajo: responder «abajo» con «vuelta al principio» desorienta justo a quien no puede ver que
+ha pasado. Un popup es un anillo corto de alternativas sin arriba ni abajo —tres composiciones, o sí
+y no— y cualquier menú de cualquier plataforma cicla. Una regla cada uno, cada una por su motivo, en
+vez de una regla aplicada donde no encaja.
+
+#### El foco entra en la opción que ya está en uso
+
+La composición que la sección lleva puesta, marcada `aria-pressed="true"`. Es de donde parte quien
+lee el menú, y dice lo que tienes antes de ofrecer lo que podrías tener.
+
+#### Elegir una composición devuelve el teclado **dentro** del menú
+
+El menú se reabre tras elegir: eso ya era así para el ratón, porque `compositionMenuOpen` lo trae de
+vuelta «so the next try is one click». Para un teclado el siguiente intento tiene que ser una
+**pulsación**, y eso solo es cierto si el teclado sigue dentro del menú cuando reaparece —y sobre la
+opción ahora en uso, que además es la respuesta a «¿qué ha hecho eso?».
+
+Esto obligó a generalizar el destino del foco del día 4: era «el mismo verbo otra vez» y pasa a ser
+**un selector dentro de la sección**. El grupo de acciones no podía expresar «la opción marcada
+dentro del menú reabierto».
+
+Y destapó dos cosas al construirlo:
+
+- **El menú reabierto venía inerte para el teclado** desde que el menú existe. Se reabría en el
+  bloque de restauración sin cablearse: sin foco, sin flechas, sin Escape.
+- **Mi propia restauración lo destruía.** `select()` limpia `.rb-compositions` de todas las
+  secciones, así que llamarlo ahí borraba el menú que la restauración acababa de reabrir. Ahora solo
+  se llama cuando la sección no es ya la elegida, que es el caso para el que existía: un borrado,
+  donde la sección que ocupa ese sitio no se había elegido nunca.
+
+#### «Campos de esta sección» cruza la frontera de los dos documentos
+
+Es el único sitio de este sprint donde los dos documentos son una diferencia y no un inconveniente:
+el botón está **dentro** del iframe y el panel que abre está en el documento del editor. El panel
+toma el foco él mismo al montarse —es un componente de React y puede—, y **volver es trabajo del
+editor**, porque aquello a lo que hay que volver es un botón que `wireInteractions` dibujó dentro de
+la vista previa y el panel no sabe nada de él.
+
+El foco aterriza en el `<aside>` y no en su primer campo: un formulario que se abre con el cursor ya
+en una caja de texto se ha saltado su propio encabezado, y el encabezado es lo que dice de qué
+sección es esto. Escape lo cierra, sin trampa: Tab se va al lienzo y vuelve, y atrapar el teclado
+dentro de un formulario que alguien abrió para rellenar sería lo contrario de ayudar.
+
+#### El diálogo de revertir: confirmar y cancelar necesitan respuestas distintas
+
+`useFocusTrap` devuelve el foco a lo que lo tenía, y lo que lo tenía era el `<iframe>` —enfocarlo
+restaura el elemento que el documento del marco sigue teniendo, que es «Volver a la original» en la
+barra—. Eso es correcto al **cancelar** y falso al **confirmar**: revertir devuelve la sección al
+catálogo y la barra se va con ella. Revertir también cambia el `source` de la sección, así que el
+`chromeKey` cambia y la reconstrucción pasa por el intercambio con doble búfer: tiene que ser el
+intento que sobrevive a dos documentos, no un `.focus()` ahí mismo.
+
+#### Un fallo del día 4 que este día corrige
+
+`handmade` estaba en el conjunto de verbos que reconstruyen, y **no reconstruye nada por sí mismo**:
+solo abre la oferta. Pulsarlo armaba una vuelta que la siguiente edición de texto habría gastado.
+Encontrado leyendo los tres abridores, no por un fallo rojo. Las vueltas de los tres se arman ahora
+desde dentro de lo que abren, que es donde está la información.
