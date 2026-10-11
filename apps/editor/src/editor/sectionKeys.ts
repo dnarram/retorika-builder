@@ -166,3 +166,49 @@ export function placeAfterRebuild({
   // section leaves no index `wasAt` to take.
   return Math.min(Math.max(wasAt, 0), count - 1);
 }
+
+/**
+ * What a key press means inside one of the canvas's **popups** — the composition menu and the offer
+ * to design a section by hand.
+ *
+ * `close` is Escape, and the caller is expected to put focus back on the button that opened it.
+ */
+export type PopupKeyAction =
+  | { kind: "focus"; index: number }
+  | { kind: "close" }
+  | { kind: "ignore" };
+
+/**
+ * Where a press moves inside a popup, or whether it closes it.
+ *
+ * `at` is the index of the focused choice, or `-1` for focus that is inside the popup but not on a
+ * choice — the title and the note are not focusable, so in practice this is the state only between
+ * opening and the first move.
+ *
+ * **The ends wrap here, and they do not wrap between sections.** That is deliberate and the contrast
+ * is the argument: a page's sections are a document read top to bottom, so answering «down» with
+ * «back to the top» would disorient exactly the person who cannot see it happen. A popup is a short
+ * ring of alternatives with no up or down about it — three compositions, or yes and no — and every
+ * menu on every platform cycles. One rule each, each for its own reason, rather than one rule
+ * applied where it does not fit.
+ *
+ * **Tab is deliberately not handled.** A popup that removed itself from under a Tab would strand
+ * the focus that Tab was in the middle of computing, and these two are not modal: they sit on
+ * screen, any click outside closes them, and Escape closes them from the keyboard. So Tab leaves
+ * and the popup stays until one of those happens — which is the honest answer to «what does Escape
+ * mean in a menu that is not modal», and the answer is that Escape is the only key that means it.
+ */
+export function popupKeyAction(
+  press: KeyPress,
+  place: { readonly count: number; readonly at: number },
+): PopupKeyAction {
+  if (press.altKey || press.metaKey || press.ctrlKey || press.shiftKey) return { kind: "ignore" };
+  if (press.key === "Escape") return { kind: "close" };
+  if (place.count <= 0) return { kind: "ignore" };
+  const { count, at } = place;
+  if (press.key === "ArrowDown") return { kind: "focus", index: at < 0 ? 0 : (at + 1) % count };
+  if (press.key === "ArrowUp") {
+    return { kind: "focus", index: at < 0 ? count - 1 : (at - 1 + count) % count };
+  }
+  return { kind: "ignore" };
+}

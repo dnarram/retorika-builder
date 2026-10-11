@@ -361,6 +361,24 @@ open survives.
   window» from «a different walk's state leaks». Whose call: nobody's. The next step is instrumenting
   the walk *inside a full run* rather than on its own, which is the one condition no measurement so
   far has reproduced.
+
+  **It fired again on 11 October 2026, sprint 17 day 5, and the run was clean enough to be worth
+  recording.** One walk red out of 133 in a full suite that took 278 seconds, on a machine with
+  nothing else on it — not one of the overloaded runs where three unrelated walks timed out after
+  seventeen minutes because several monitors had been left running beside the suite. The same walk
+  then passed **four times out of four** on its own, immediately afterwards.
+
+  Two things that narrow it:
+
+  - **The failure is `toHaveCount` resolving to 0, not a timeout.** The cluster was never drawn, so
+    the click really was lost rather than merely late — which is the walk's own subject and rules
+    out «the assertion looked too early».
+  - **The direction of the rates has reversed since day 6.** That measurement had these two walks
+    failing «far more often alone than inside the full suite», about one isolated run in three. Today
+    it is the opposite: zero of four alone, one of one in the suite. Either the day-6 rates were
+    four-run noise — which that entry already says they could not distinguish — or something between
+    then and now changed which way it leans. Not resolved, and the figures are left side by side
+    rather than averaged, because averaging two measurements that disagree hides the disagreement.
 - **The rail is seven items, and the design-tools switch now sits in the bottom-left corner at 720px
   tall (3 October 2026, sprint 14 day 5).** The switch is placed directly under the rail's items
   rather than at the foot of the rail — deliberately, because sprint 8's walk found that `mt-auto` put
@@ -546,6 +564,16 @@ open survives.
     honest version of the question is what that button does over a photograph nobody has seen yet.
     `packages/renderer`'s harness forces contrast to run and this pass deliberately does not, so
     that one failure cannot appear in two places with two owners.
+
+- **`let page` at module scope in the e2e file means a walk can poll the wrong tab and still
+  compile.** Found on sprint 17 day 5: an assertion written as `focus(page)` inside a walk whose
+  own tab is called `studio` typechecked cleanly, because line 323 declares a `let page: Page` that
+  a different describe owns. It would have measured a tab that walk never opened.
+
+  Caught by reading the walk, not by `tsc`, and there is nothing a type can do about it: both are
+  `Page`. The habit that catches it is naming — a walk that calls its tab something other than
+  `page` should be read for `page` before it is trusted — and the alternative, renaming the
+  module-level one, is a change across every describe that uses it and is not this sprint's.
 
 - **A verb that changes how many sections a page has produces two documents, and the first one is
   discarded.** Found on sprint 17 day 4 and worth keeping, because it is the kind of thing that

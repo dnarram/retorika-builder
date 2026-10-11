@@ -98,8 +98,41 @@ export function FieldsPanel({
     });
   }
 
+  /**
+   * The keyboard follows the panel across the frame boundary (sprint 17 day 5).
+   *
+   * «Campos de esta sección» is pressed on a button drawn **inside** the preview iframe and opens
+   * a panel in the editor's own document. Nothing moved focus, so a keyboard user pressed the verb
+   * and stayed where they were, with a form they had no way of knowing had appeared — the one case
+   * in this sprint where the two documents make a difference rather than an inconvenience.
+   *
+   * Focused on open rather than on every render, so typing in a field cannot be interrupted by the
+   * panel re-rendering under it, which it does on every keystroke.
+   */
+  const panel = useRef<HTMLElement>(null);
+  useEffect(() => {
+    panel.current?.focus();
+  }, []);
+
   return (
     <aside
+      ref={panel}
+      // Focusable as a container, so the keyboard has somewhere to land that is the panel itself
+      // rather than its first field: a form that opens with the caret already in a text box has
+      // skipped past its own heading, and the heading is what says which section this is.
+      tabIndex={-1}
+      onKeyDown={(event) => {
+        /*
+         * **Escape closes it, and it is not a modal.** `useFocusTrap` is deliberately not used
+         * here: this panel claims nothing about the rest of the page, Tab leaves it for the canvas
+         * and comes back, and trapping the keyboard in a form somebody opened to fill in would be
+         * the opposite of helpful. What Escape owes is a way out, which is all it does.
+         *
+         * Not stopped from propagating: nothing above this listens for Escape, and a key this
+         * panel has finished with is not a key it should hide.
+         */
+        if (event.key === "Escape") onClose();
+      }}
       aria-labelledby={headingId}
       // Fixed to the right of the viewport rather than placed inside the canvas card: the card
       // narrows to 400px in the mobile device view, and a form docked inside it would leave the
