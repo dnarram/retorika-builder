@@ -1,6 +1,5 @@
 import { execSync } from "node:child_process";
 import type { NextConfig } from "next";
-import { resolveVersion, VERSION_VAR } from "./src/observability/version.ts";
 
 /**
  * The workspace packages ship TypeScript source, not compiled JavaScript: their `exports` point
@@ -10,21 +9,38 @@ import { resolveVersion, VERSION_VAR } from "./src/observability/version.ts";
  *
  * This is the one thing the whole application rests on, so it is proven by a build before
  * anything is built on top of it.
+ *
+ * **This file imports nothing from the project, and that is a rule with a production outage
+ * behind it.** On 12 October 2026 it imported `./src/observability/version.ts`. `next build`
+ * loaded it fine — the build's own loader resolves TypeScript imports — and `next start` did not:
+ * `next start` transpiles this file alone into `next.config.compiled.js` and then `require`s its
+ * relative imports as Node would, which cannot load a `.ts` file. Render ran the build, started the
+ * server, failed to load the config, bound no port, and retried into the same wall. Nothing in CI
+ * runs `next start`, so nothing saw it before a client could have. `test/nextConfig.test.ts` now
+ * refuses a relative import here, and CI starts the built server once and asks it for `/`.
  */
 
 /**
- * The short SHA of the checkout, for a build that is not on Render. `undefined` rather than a
- * throw when there is no repository — a tarball build is still a build, and `resolveVersion` says
- * «unknown» for it, which is the truthful label.
+ * The version every error report carries (protocol Part 17), resolved once here at build time
+ * and inlined into the client as a `NEXT_PUBLIC_` variable.
+ *
+ * The precedence is the one `src/observability/version.ts` states and tests — Render's commit
+ * SHA, then a local `git` answer, then «unknown» said plainly — **copied here rather than
+ * imported**, for the reason the note above gives. The two must agree, and the test that reads
+ * this file checks the three branches are present by their names.
  */
-function gitShortHead(): string | undefined {
+function appVersion(): string {
+  const render = process.env["RENDER_GIT_COMMIT"]?.trim();
+  if (render) return render.slice(0, 12);
   try {
-    return execSync("git rev-parse --short HEAD", { stdio: ["ignore", "pipe", "ignore"] })
+    const local = execSync("git rev-parse --short HEAD", { stdio: ["ignore", "pipe", "ignore"] })
       .toString()
       .trim();
+    if (local) return local;
   } catch {
-    return undefined;
+    // No repository under this build — a tarball, say. «unknown» is the truthful label.
   }
+  return "unknown";
 }
 
 const config: NextConfig = {
@@ -37,17 +53,8 @@ const config: NextConfig = {
     "@retorika/publisher",
     "@retorika/tokens",
   ],
-  /**
-   * The version every error report carries (protocol Part 17), resolved once here at build time
-   * and inlined into the client as a `NEXT_PUBLIC_` variable. Render sets `RENDER_GIT_COMMIT` on
-   * every deploy; a local build asks `git`; neither is in the renderer, whose determinism this
-   * cannot touch.
-   */
   env: {
-    [VERSION_VAR]: resolveVersion({
-      renderCommit: process.env["RENDER_GIT_COMMIT"],
-      gitShortHead: gitShortHead(),
-    }),
+    NEXT_PUBLIC_APP_VERSION: appVersion(),
   },
 };
 

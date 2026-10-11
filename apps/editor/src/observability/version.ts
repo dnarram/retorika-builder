@@ -11,8 +11,15 @@
  *    documentation on 12 October 2026, «The commit SHA for a service or deploy» — so a production
  *    error names the exact commit with no step anybody can forget.
  * 2. A short SHA the caller read from `git`, for a local build: `next.config.ts` runs
- *    `git rev-parse --short HEAD` and passes the answer in. Passed in rather than run here, so this
- *    stays a pure function the `editor` test project can cover without a repository.
+ *    `git rev-parse --short HEAD`. Passed in rather than run here, so this stays a pure function
+ *    the `editor` test project can cover without a repository.
+ *
+ * **`next.config.ts` carries a copy of this precedence rather than importing this function**, and
+ * that is not laziness: `next start` requires the compiled config with plain Node, which cannot
+ * load a `.ts` import, and on 12 October 2026 the import that was here took production down
+ * while every gate stayed green. `test/nextConfig.test.ts` refuses a relative import in the
+ * config and checks the three branches are still named there. This file stays the specification
+ * and the thing the tests exercise.
  * 3. `"unknown"`, said plainly. A version that is not known is still a fact worth attaching, and
  *    an exception at build time over a label would be the wrong trade.
  *
