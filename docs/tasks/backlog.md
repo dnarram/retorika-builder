@@ -12,22 +12,56 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 9 October 2026, **closing sprint 16 — «las fotos viajan con la cuenta», which is the
-one thing ADR 0034 §5 scheduled by name and the last of phase 2's account work.** A photograph of the
-owner's now goes to a private storage bucket when a web is saved, comes back when that web is opened
-anywhere, is reconciled after every accepted save, and leaves with the account when it is deleted.
-Seven things changed state in this file: the bank's resolution and its repetition both have ADRs
-(0035 and 0036 both accepted, the second on 10 October), `pnpm size` stopped being blind to a bank
-photograph, the 19 e2e
-walks that raced the bank now wait, the mechanism this file proposed for the «sprint 13 día 7» reds
-is **falsified** rather than unproven, `docs/tasks/copias.md` grew a second half it did not have,
-and the sweep that ends accounts stopped being pure SQL.
+Last reviewed: 11 October 2026, **closing sprint 17 — «el editor sin ratón».** The whole editor can
+now be driven from the keyboard, end to end: a walk builds a site, edits it, styles it and downloads
+a ZIP without a single pointer gesture, and a source-level test fails if anybody adds one to it.
+Eight things changed state in this file.
 
-**What this sprint found about the record itself, which is the eighth instance of the pattern this
-file names at its own head.** `README.md` still listed «accounts and persistence» among what is *not
-built* — a whole sprint after sprint 15 built them — and said «the browser tab is the only copy until
-it downloads», which stopped being true on 4 October. Found by re-reading it to update a different
-row. Nothing in CI reads prose, and that is now eight times.
+**What was owed and is now paid:**
+
+1. **The six `aria-modal` dialogs** take focus, cycle Tab, close on Escape and give focus back —
+   eight of them, not the five this file said. A guard fails if a ninth is written without it.
+2. **The four inert corner handles** are withdrawn, with the refusal and its four reasons in
+   `docs/design/REVIEW.md`. That closes one of sprint 14's two remaining appendix findings.
+3. **The six mouse-only section verbs** are reachable, pressable and survive being pressed: the
+   canvas is one Tab stop with a roving `tabindex`, each section carries `role="group"` with its
+   Spanish name, and the keyboard comes back to the same verb after the document is rebuilt. That
+   closes the other one.
+4. **What the verbs open** answers the keyboard too: the composition menu, the hand-design offer and
+   «Campos de esta sección», the last of those across the frame boundary.
+5. **«+ Añadir sección aquí»** opens with the caret in its search field and gives the keyboard back
+   on the way out.
+6. **The three variant cards** pick their photographs as one draw without replacement — 787 of 2000
+   business names repeated before, 0 of 2000 after (ADR 0036).
+7. **axe has looked at the editor**, twice: with a section chosen and with each of two dialogs open.
+   «a11y en verde» had never meant this application's own chrome, because `pnpm test:a11y`'s root is
+   `packages/renderer`.
+8. **The material for the Fase 1 acceptance ADR exists**:
+   [`fase-1-lo-que-prometimos.md`](fase-1-lo-que-prometimos.md), with no judgement in it, because
+   ADR 0031 made the judgement David's.
+
+**What this sprint found that nobody was looking for:**
+
+- **A realm trap, three times, already written up twice.** A handler on the preview frame's document
+  runs in the parent window's realm, so an element from inside the frame fails `instanceof`. It broke
+  «writing wins» on day 3 before shipping, and turned out to have left the composition menu's
+  outside-click guard dead since it was written.
+- **A verb that changes the section count produces two documents**, and the first is discarded — so
+  anything remembering something across a rebuild has to survive two wirings.
+- **The golden corpus never exercised `aria-current="page"`**, because every document renders its
+  home page and the menu omits the entry for the page you are on.
+- **A second `e2e` walk shows the known intermittent's signature**, which moves the subject from one
+  walk to something about a full run.
+
+**What this sprint found about the record itself, which is the tenth instance of the pattern this
+file names at its own head.** The dialog row said **five** and there were six: `PhotosFailedDialog`
+was committed on 4 October 2026, the same day as the focus-trap hook, in a different commit — so the
+count was taken before the last dialog existed and was stale by that evening. The same slip had this
+file saying «the four in `DownloadGateDialogs`» where there are five, and the account walk described
+as thirteen steps where its table has sixteen rows. Four records repeated «at least eight per sector,
+so the three variants do not repeat themselves», a reason ADR 0036 then showed had never held.
+Nothing in CI reads prose, and that is now ten times — which is why the dialog count is asserted by a
+test and the keyboard walk's own honesty is asserted by another.
 
 The review before that was 9 October 2026, **a sweep against the photo bank, which stopped being
 empty on 8 October.** `restaurante-bar` entered with nine approved photographs (PR #197), and the day after,

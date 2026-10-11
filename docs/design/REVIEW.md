@@ -1360,3 +1360,64 @@ intento que sobrevive a dos documentos, no un `.focus()` ahí mismo.
 solo abre la oferta. Pulsarlo armaba una vuelta que la siguiente edición de texto habría gastado.
 Encontrado leyendo los tres abridores, no por un fallo rojo. Las vueltas de los tres se arman ahora
 desde dentro de lo que abren, que es donde está la información.
+
+### El recorrido entero sin tocar el ratón, y el axe de cierre (11 de octubre de 2026, sprint 17 día 7)
+
+**Una caminata, sin un solo gesto de puntero**, que es la aceptación del sprint: «monta una web, la
+edita, le da estilo y descarga el ZIP sin tocar el trackpad». Todo lo que construyeron los siete días
+está en ese camino y nada más: Tab encuentra el lienzo porque el `tabindex` móvil lo hace una sola
+parada (día 3), los verbos existen porque Intro elige una sección (día 3) y sobreviven a pulsarse
+porque el teclado vuelve tras la reconstrucción (día 4), lo que abren responde a las flechas y a
+Escape (día 5), y el diálogo de la puerta de descarga se puede abandonar porque tiene trampa de foco
+(día 1).
+
+#### La afirmación está guardada, no aseverada por mí
+
+`apps/editor/test/keyboardOnly.test.ts` lee el bloque entre dos marcas del fichero de caminatas y
+falla si contiene una llamada de puntero. Nada en Playwright impide que alguien añada un `.click()`
+el día que la caminata se ponga roja: seguiría pasando, seguiría llamándose «sin ratón» y no probaría
+nada.
+
+**Y prohíbe también `fill`, `check` y `selectOption`**, que es la parte que merece explicación.
+Ninguno es un ratón. Los tres **se saltan el foco** que la caminata existe para demostrar: `fill`
+mete texto en un campo sin el Tab que llegó a él, `check` marca un radio sin la flecha que se movió
+hasta él. Una caminata que los usara sería «sin ratón» en el sentido literal y no probaría nada en el
+sentido que importa.
+
+La guarda corre en el `pnpm test` normal, sin navegador y sin servidor, así que falla en segundos y
+no al final de una suite de cuatro minutos. Tres sabotajes la ponen en rojo: un clic dentro del
+bloque, un `fill` en lugar de escribir, y la caminata vaciada a un muñón.
+
+#### Tres cosas que el recorrido descubrió sobre la propia interfaz
+
+Ninguna es un fallo; las tres son cómo están nombrados los controles, y las tres hicieron fallar la
+primera versión de la caminata:
+
+1. **Las casillas de los servicios no llevan nombre accesible propio.** `CheckboxCard` es un
+   `<label>` alrededor de un `<input>` visualmente oculto y un `<span>` con las palabras, así que una
+   casilla enfocada se lee como `value: "on"` y nada más. El nombre está ahí, un nodo más arriba, y
+   el lector de la caminata ahora mira el `<label>` que la envuelve.
+2. **Las paletas del panel «Estilo» usan `name={useId()}`.** No hay nombre de grupo estable que
+   buscar, así que la caminata alcanza «la primera opción del panel» por forma y no por nombre.
+3. **Lo que cambia al pulsar una opción depende del grupo**: una paleta cambia el fondo, un par
+   tipográfico la familia, una escala los tamaños. La caminata compara una **huella** de los tres y
+   asevera que la página renderizada se movió, que es «le da estilo» sin tener que saber en qué grupo
+   aterrizó.
+
+#### El axe de cierre llega a un estado que el del día 3 no podía ver
+
+El del día 3 escaneó el editor con una sección elegida con el teclado, y fue la primera vez que algo
+mirara el cromo de esta aplicación. Lo que ese pase no podía ver es **un diálogo**, porque un diálogo
+necesita un recorrido para abrirse: la puerta de descarga necesita una web con una de nuestras
+fotografías dentro, y la oferta de cuenta necesita que haya una cuenta configurada.
+
+Dos formas y no una, porque fallan distinto: una alerta con botones y un encabezado, y un formulario
+con campos etiquetados. Las dos llevan `aria-modal`, las dos recibieron su trampa de foco el día 1, y
+una trampa es exactamente la clase de cosa que puede estar bien construida y dejar un control sin
+nombre.
+
+**Resultado: cero violaciones serias o críticas con cada uno abierto.** Y dos aserciones más que no
+son de axe y que conviene que estén: **un diálogo tampoco añade un landmark** —la misma corrección
+que David hizo sobre las secciones el día 3, porque una `region` dentro de algo que dice ser el único
+sitio que existe es un sitio al que navegar dentro de ese sitio— y **todo campo del formulario tiene
+nombre**, dicho en voz alta para que un fallo de axe ahí no sea una sorpresa.
