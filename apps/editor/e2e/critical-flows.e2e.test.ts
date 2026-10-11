@@ -10589,7 +10589,7 @@ describe("sprint 18 día 1 — el producto avisa cuando se rompe, y hoy no avisa
       await browser.newContext({ viewport: { width: 1440, height: 900 } })
     ).newPage();
     try {
-      const hosts = new Set<string>();
+      const foreign = new Set<string>();
       const sentryBound: string[] = [];
       await page.route("**/*sentry*/**", (route) => {
         // Recorded, then refused: the assertion is that this never happens, and if it does the
@@ -10597,18 +10597,42 @@ describe("sprint 18 día 1 — el producto avisa cuando se rompe, y hoy no avisa
         sentryBound.push(route.request().url());
         void route.abort();
       });
+      /*
+       * Only a request with a network scheme can leave the machine. The preview shows the bank's
+       * photograph through a `blob:` URL, and Playwright reports a `blob:` fetch or image load as a
+       * request like any other — with an **empty** hostname, because `blob:` has no host. The first
+       * version of this listener kept hostnames alone and compared them to «localhost», so CI went
+       * red on 11 October 2026 with `requests left the machine for: ""` — a name that says nothing,
+       * which is the second thing fixed here: what is kept is the whole URL, so the next failure
+       * names the request. (Locally the walk had passed three times out of three: whether Chromium
+       * reports the photograph's load at all seems to depend on timing, and that is a guess, not a
+       * finding.)
+       *
+       * `127.0.0.1` beside `localhost`: the e2e server points the Supabase client at a port that
+       * refuses, so an account probe may knock on that door and be turned away. That is a request
+       * to this machine. Anything else with a network scheme is a request to somebody else's.
+       */
+      const NETWORK = new Set(["http:", "https:", "ws:", "wss:"]);
+      const HERE = new Set(["localhost", "127.0.0.1"]);
       page.on("request", (request) => {
-        hosts.add(new URL(request.url()).hostname);
+        const url = new URL(request.url());
+        if (NETWORK.has(url.protocol) && !HERE.has(url.hostname)) foreign.add(request.url());
       });
 
       await intoTheCanvas(page);
 
       // An error the application does not catch, after the next tick so it reaches
       // `window.onerror` the way a real one would — not the evaluate's own promise.
-      await page.evaluate(() => {
+      await page.evaluate(async () => {
         setTimeout(() => {
           throw new Error("sprint 18 día 1: an error nobody catches");
         }, 0);
+        // The page talking to itself, on purpose and on every run: a `blob:` fetch is reported as
+        // a request and must not count as one that left the machine, whether or not the
+        // photograph's own load happened to be reported this time.
+        const own = URL.createObjectURL(new Blob(["sprint 18 día 1"], { type: "text/plain" }));
+        await fetch(own);
+        URL.revokeObjectURL(own);
       });
       // Long enough for an SDK that had a DSN to flush an envelope; short enough not to matter.
       await page.waitForTimeout(1500);
@@ -10618,13 +10642,7 @@ describe("sprint 18 día 1 — el producto avisa cuando se rompe, y hoy no avisa
         page.frameLocator(PREVIEW).first().locator('[data-section="sec-cover"]'),
       ).toBeVisible();
 
-      /*
-       * `127.0.0.1` beside `localhost`: the e2e server points the Supabase client at a port that
-       * refuses, so an account probe may knock on that door and be turned away. That is a request
-       * to this machine. Anything else is a request to somebody else's.
-       */
-      const foreign = [...hosts].filter((host) => host !== "localhost" && host !== "127.0.0.1");
-      expect(foreign, `requests left the machine for: ${foreign.join(", ")}`).toEqual([]);
+      expect([...foreign], `requests left the machine: ${[...foreign].join(", ")}`).toEqual([]);
       expect(sentryBound, "the SDK tried to report with no DSN configured").toEqual([]);
     } finally {
       await page.context().close();
