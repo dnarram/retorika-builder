@@ -11,6 +11,7 @@ import {
   type Locator,
   type Page,
 } from "@playwright/test";
+import { GALLERY_SAMPLE_COUNT } from "@retorika/generator";
 import { afterAll, beforeAll, describe, it } from "vitest";
 import { NARROWEST_WIDTH } from "../src/editor/overflowCheck.ts";
 import { BASE_URL, QUESTIONNAIRE_URL, startEditorServer, stopEditorServer } from "./server.ts"; /**
@@ -67,6 +68,14 @@ const PREVIEW = "iframe:not([data-buffered])";
  */
 async function waitForBankPhoto(frame: FrameLocator): Promise<void> {
   await frame.locator('[data-section="sec-cover"] img[src^="blob:"]').first().waitFor();
+  // Since ADR 0039 a generated restaurante site also carries the bank's gallery of four, and the
+  // card writes its photographs in one batch, so the four are in the same document as the cover.
+  // Waited for anyway: if the batch ever splits, this is what says so, here and not three
+  // keystrokes later as a lost focus.
+  await expect(
+    frame.locator('[data-section="sec-gallery"] img[src^="blob:"]'),
+    "the generated gallery's four photographs",
+  ).toHaveCount(GALLERY_SAMPLE_COUNT);
 }
 
 /**
@@ -948,7 +957,8 @@ describe("día 7 — dos conversiones desde el editor, y el ZIP resultante abier
     // the sector grows. That there is exactly one, and that it is a sample rather than an upload,
     // is what this walk has to say.
     const samples = [...entries].filter((entry) => entry.startsWith("assets/muestra-"));
-    expect(samples).toHaveLength(1);
+    // Five since 12 October 2026: the cover and the bank's gallery of four (ADR 0039).
+    expect(samples).toHaveLength(1 + GALLERY_SAMPLE_COUNT);
 
     // Exactly the files this document should produce: no sitemap.xml (a download has no baseUrl,
     // ADR-settled since sprint 3), no stray page, nothing from an earlier fixture — and, since
@@ -984,6 +994,8 @@ describe("día 7 — dos conversiones desde el editor, y el ZIP resultante abier
       // estamos» the sections used to be, ahead of the untouched «Te esperamos» anchor.
       await expect(offlinePage.locator(".rb-nav-wide a")).toHaveText([
         "Nuestra carta",
+        // The bank's gallery (ADR 0039) is a section with a heading, so ADR 0023's menu lists it.
+        "Un vistazo a Taberna Santo Domingo",
         "Dónde estamos",
         "Te esperamos",
       ]);
@@ -1146,6 +1158,20 @@ describe("sprint 6 día 7 — fotos subidas desde el panel y desde el aviso, log
       // «Añadir sección aquí» menu was open and took the whole document with it.
       await waitForBankPhoto(frame);
       const fileInput = walkPage.locator('input[type="file"]:not(#logo)');
+
+      // Since ADR 0039 (12 October 2026) a generated restaurante site carries the bank's own
+      // gallery of four. This walk is about the two doors onto `replacePhoto` and the bytes that
+      // leave through them, over the one sample and the one marker it was written for — so the
+      // bank's gallery is deleted first, which ADR 0014 lets a walk do in one click, and the site
+      // is back to the shape every number below was counted on. The bank's gallery has its own
+      // walk (sprint 18 day 4).
+      // Clicked in its top-left corner: the section's middle is a photograph, and a click on a
+      // photograph opens the file picker rather than choosing the section.
+      await frame.locator('[data-section="sec-gallery"]').click({ position: { x: 8, y: 8 } });
+      await frame
+        .locator('[data-section="sec-gallery"] .rb-action[aria-label="Borrar esta sección"]')
+        .click();
+      await expect(frame.locator('[data-preset="gallery"]')).toHaveCount(0);
 
       // The search (day 6): "fotos" finds «Fotos de trabajos» among the offers and inserts it.
       await frame.getByRole("button", { name: "Añadir sección aquí" }).first().click();
@@ -1359,7 +1385,14 @@ describe("sprint 7 día 3 — deshacer una conversión desde «Páginas»", () =
         await frame
           .locator("[data-section]")
           .evaluateAll((els) => els.map((el) => el.getAttribute("data-section"))),
-      ).toEqual(["sec-cover", "sec-services", "sec-location", "sec-contact", "sec-footer"]);
+      ).toEqual([
+        "sec-cover",
+        "sec-services",
+        "sec-gallery",
+        "sec-location",
+        "sec-contact",
+        "sec-footer",
+      ]);
 
       // And the derived menu followed: «Qué ponemos» is an anchor on this page again rather than
       // an entry pointing at a file that no longer exists.
@@ -3811,6 +3844,16 @@ describe("sprint 12 día 7 — el recorrido completo del sprint", () => {
       // ---- the cover needs a real photograph, or there is no card to show at all --------------
       // The generator's cover is the grey marker: a `data:` URI whose payload is an SVG, which
       // ADR 0029 §4 refuses twice over. An owner's own JPEG is what makes `og:image` possible.
+      // The bank's gallery of four (ADR 0039, 12 October 2026) is deleted first: «todas las fotos
+      // son tuyas» below is the state this walk needs, and four more uploads would say nothing
+      // about the share card. The gallery has its own walk (sprint 18 day 4).
+      // Clicked in its top-left corner: the section's middle is a photograph, and a click on a
+      // photograph opens the file picker rather than choosing the section.
+      await frame.locator('[data-section="sec-gallery"]').click({ position: { x: 8, y: 8 } });
+      await frame
+        .locator('[data-section="sec-gallery"] .rb-action[aria-label="Borrar esta sección"]')
+        .click();
+      await expect(frame.locator('[data-preset="gallery"]')).toHaveCount(0);
       await walk.getByRole("button", { name: "Fotos", exact: true }).click();
       const photoRows = walk.locator('ul li:has(button:has-text("Cambiar"))');
       await photoRows.first().getByRole("button", { name: "Cambiar" }).click();
@@ -5760,7 +5803,7 @@ describe("sprint 14 día 6 — enlazar, avisar y desenlazar", () => {
       await page.getByRole("button", { name: "Listas" }).click();
       await expect(page.getByText("Todavía no tienes ninguna lista.")).toBeVisible();
       await page
-        .getByRole("button", { name: /Hacer una lista con las tarjetas de/ })
+        .getByRole("button", { name: /Hacer una lista con las tarjetas de «Qué hago»/ })
         .first()
         .click();
 
@@ -5783,7 +5826,7 @@ describe("sprint 14 día 6 — enlazar, avisar y desenlazar", () => {
       const frame = await withTools(page);
       await page.getByRole("button", { name: "Listas" }).click();
       await page
-        .getByRole("button", { name: /Hacer una lista con las tarjetas de/ })
+        .getByRole("button", { name: /Hacer una lista con las tarjetas de «Qué hago»/ })
         .first()
         .click();
       await expect(page.getByText("Guardado en este navegador")).toBeVisible();
@@ -5821,7 +5864,7 @@ describe("sprint 14 día 6 — enlazar, avisar y desenlazar", () => {
       const frame = await withTools(page);
       await page.getByRole("button", { name: "Listas" }).click();
       await page
-        .getByRole("button", { name: /Hacer una lista con las tarjetas de/ })
+        .getByRole("button", { name: /Hacer una lista con las tarjetas de «Qué hago»/ })
         .first()
         .click();
       await expect(page.getByText("Guardado en este navegador")).toBeVisible();
@@ -5834,7 +5877,7 @@ describe("sprint 14 día 6 — enlazar, avisar y desenlazar", () => {
       // Bind it to the list that already exists, from the panel's own offer.
       await page.getByRole("button", { name: "Listas" }).click();
       await page
-        .getByRole("button", { name: /Hacer una lista con las tarjetas de/ })
+        .getByRole("button", { name: /Hacer una lista con las tarjetas de «Qué hago»/ })
         .first()
         .click();
       await expect(page.getByText("Guardado en este navegador")).toBeVisible();
@@ -5858,7 +5901,7 @@ describe("sprint 14 día 6 — enlazar, avisar y desenlazar", () => {
       const frame = await withTools(page);
       await page.getByRole("button", { name: "Listas" }).click();
       await page
-        .getByRole("button", { name: /Hacer una lista con las tarjetas de/ })
+        .getByRole("button", { name: /Hacer una lista con las tarjetas de «Qué hago»/ })
         .first()
         .click();
       await expect(page.getByText("Guardado en este navegador")).toBeVisible();
@@ -5900,7 +5943,7 @@ describe("sprint 14 día 6 — enlazar, avisar y desenlazar", () => {
       const frame = await withTools(page);
       await page.getByRole("button", { name: "Listas" }).click();
       await page
-        .getByRole("button", { name: /Hacer una lista con las tarjetas de/ })
+        .getByRole("button", { name: /Hacer una lista con las tarjetas de «Qué hago»/ })
         .first()
         .click();
       await expect(page.getByText("Guardado en este navegador")).toBeVisible();
@@ -5979,7 +6022,9 @@ describe("sprint 14 día 7 — el recorrido completo del sprint", () => {
       );
 
       await walk.getByRole("button", { name: "Listas" }).click();
-      await walk.getByRole("button", { name: /Hacer una lista con las tarjetas de/ }).click();
+      await walk
+        .getByRole("button", { name: /Hacer una lista con las tarjetas de «Qué hago»/ })
+        .click();
       await expect(walk.getByText("Guardado en este navegador")).toBeVisible();
       await expect(cards).toHaveCount(3);
       expect(
@@ -6046,8 +6091,9 @@ describe("sprint 14 día 7 — el recorrido completo del sprint", () => {
       extractAll(zip, dir);
       const html = new TextDecoder().decode(extractFileBytes(zip, "index.html"));
 
-      // Twelve cards in the bytes, and the edited words in every place that shows them.
-      expect([...html.matchAll(/<li class="rb-item"/g)]).toHaveLength(12);
+      // Twelve cards in the bytes — plus the bank gallery's four (ADR 0039) — and the edited words
+      // in every place that shows them.
+      expect([...html.matchAll(/<li class="rb-item"/g)]).toHaveLength(12 + GALLERY_SAMPLE_COUNT);
       expect([...html.matchAll(/Comidas caseras/g)].length).toBeGreaterThanOrEqual(2);
 
       /**
@@ -6109,7 +6155,9 @@ describe("sprint 14 día 7 — la oferta que no se hace", () => {
       await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
 
       await page.getByRole("button", { name: "Listas" }).click();
-      await page.getByRole("button", { name: /Hacer una lista con las tarjetas de/ }).click();
+      await page
+        .getByRole("button", { name: /Hacer una lista con las tarjetas de «Qué hago»/ })
+        .click();
       await expect(page.getByText("Guardado en este navegador")).toBeVisible();
 
       // A section whose cards are made of other things entirely.
@@ -6523,7 +6571,10 @@ describe("sprint 16 día 6 — guardar en la cuenta sube la foto", () => {
       // is ours and `/api/muestras/[id]` already serves it to everybody. The canvas opens the
       // picker from the photograph itself — `wirePhotos` puts the listener on the `<img>` — rather
       // than from a button, which is what the «Cambiar esta foto» title on it says.
-      await expect(frame.locator(".rb-sample"), "the cover starts as the bank's").toHaveCount(1);
+      await expect(
+        frame.locator(".rb-sample"),
+        "the cover and the gallery's four start as the bank's",
+      ).toHaveCount(1 + GALLERY_SAMPLE_COUNT);
       await frame.locator('[data-section="sec-cover"] img').first().click();
       // The fixture the other upload walks use, rather than a hand-rolled JPEG: `preparePhoto`
       // decodes what it is given through `createImageBitmap`, and bytes that merely start like a
@@ -6534,8 +6585,9 @@ describe("sprint 16 día 6 — guardar en la cuenta sube la foto", () => {
         .locator('input[type="file"]:not(#logo)')
         .setInputFiles(join(import.meta.dirname, "fixtures/cover-photo.jpg"));
       // The «Foto de ejemplo» badge goes when the photograph stops being one, which is the
-      // product's own signal that the upload landed in the document.
-      await expect(frame.locator(".rb-sample")).toHaveCount(0);
+      // product's own signal that the upload landed in the document. The gallery's four keep
+      // theirs: they are still the bank's, and the assertion at the end is that they are not sent.
+      await expect(frame.locator(".rb-sample")).toHaveCount(GALLERY_SAMPLE_COUNT);
 
       await page.getByRole("button", { name: "Guardar en mi cuenta" }).click();
       const dialog = page.getByRole("dialog");
@@ -9589,6 +9641,27 @@ describe("sprint 17 día 3 — axe sobre el documento del editor", () => {
        * correction is about: the published page's own `nav`, `header` and `footer` are landmarks
        * and should be, while a chosen section must not become a sixth.
        */
+      /*
+       * Read once the keyboard chrome is on the document — every section carries `role="group"`
+       * (sprint 17 day 3), and the footer section is a `<footer>`, so the baseline legitimately
+       * reads `footer[role=group]`. A read that lands on a swapped-in document before `wireOnce`
+       * has stamped it reads a bare `footer`, and then the click below «adds» a landmark that was
+       * always going to be there: that is what failed one full run on 12 October 2026, the day
+       * the generated gallery made the document bigger, while passing alone.
+       */
+      await expect
+        .poll(() =>
+          page.evaluate(() => {
+            const doc = document.querySelector<HTMLIFrameElement>(
+              "iframe:not([data-buffered])",
+            )?.contentDocument;
+            if (!doc) return "no document";
+            const sections = doc.querySelectorAll("[data-section]").length;
+            const groups = doc.querySelectorAll('[data-section][role="group"]').length;
+            return sections > 0 && sections === groups ? "wired" : `${groups} of ${sections}`;
+          }),
+        )
+        .toBe("wired");
       const before = await landmarksInFrame(page, LANDMARKS);
       expect(
         before.length,
@@ -10380,10 +10453,22 @@ describe("sprint 17 día 7 — el recorrido entero sin tocar el ratón", () => {
       });
       const styleBefore = await styleOf();
       expect(styleBefore, "the preview had no page to restyle").not.toBe("no page");
+      /*
+       * 160 presses, where 80 was enough until 12 October 2026. Measured that day, press by
+       * press: from the design-tools switch, Tab enters the frame at its first link and walks
+       * **everything** in it — the four menu links, every pill, every editable text, every «Foto
+       * de ejemplo» badge, the floating toolbar's steps, and each gallery card's three line verbs —
+       * before it reaches the panel. The bank's gallery of four (ADR 0039) added 23 stops to that
+       * walk. The canvas as «one stop» (sprint 17 day 3) holds for a frame entered with the tools
+       * off; with them on, every text is a stop. Whether Tab should walk a section's insides
+       * before the section is chosen is a question for the keyboard, not for the gallery — filed
+       * in `docs/tasks/backlog.md`.
+       */
       await tabUntil(
         page,
         (at) => at.tag === "INPUT" && at.type === "radio" && at.near !== "",
         "the first style choice",
+        160,
       );
       await page.keyboard.press("ArrowDown");
       await expect

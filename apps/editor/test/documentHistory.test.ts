@@ -1045,6 +1045,7 @@ describe("sectionToPage, as one history step", () => {
     expect(doc?.pages[0]?.sections.map((s) => s.preset.catalogId)).toEqual([
       "cover",
       "teaser",
+      "gallery",
       "location",
       "contact",
       "footer",
@@ -1123,6 +1124,7 @@ describe("pageToSection, as one history step", () => {
     expect(doc?.pages[0]?.sections.map((s) => s.preset.catalogId)).toEqual([
       "cover",
       "services",
+      "gallery",
       "location",
       "contact",
       "footer",

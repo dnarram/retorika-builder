@@ -93,6 +93,12 @@ would report it.
   eight independent hashes. Nothing generates one today (a generated site carries exactly one
   photograph, on the cover), so this ADR does not build it; when a section does, `avoid` is already
   the shape it needs.
+  > **It does, since 12 October 2026:** [ADR 0039](0039-the-bank-fills-a-gallery-of-four.md)
+  > generates a gallery of **four**, folded through `avoid` exactly as this bullet foresaw, and
+  > «exactly one photograph» stopped being true that day — a generated site of a filled sector
+  > carries five. `generateVariants` became two passes so that no cover on the screen of three
+  > appears in any gallery; the covers themselves are where this ADR's fold put them, and a test
+  > says so.
 - The measurement is repeatable: the 39.4% came from 2000 business names, and the test that lands
   with this asserts the property instead — three or more photographs, three different cards — because
   a percentage in a test is a number that goes stale, and the property is what was actually promised.

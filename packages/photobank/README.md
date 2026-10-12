@@ -58,6 +58,11 @@ site carries exactly one photograph**, on the cover. The other four sections car
 sector either has every slot filled or every slot empty, and there is no mixed case for a sentence
 to straddle — which is why the two sentences are flat rather than conditional inside themselves.
 
+> **Five since 12 October 2026** ([ADR 0039](../../docs/decisions/0039-the-bank-fills-a-gallery-of-four.md)):
+> a generated site of a filled sector carries the cover and a gallery of four, every one a sample.
+> What stays true is the half the sentences rest on — a sector is still all-filled or all-empty,
+> because the gallery exists only where the bank does — so the wording above did not have to move.
+
 `apps/editor/src/editor/photoInventory.ts` tells the two states apart — `"sample"` is a bank
 photograph and `"empty"` is the marker — and the whole «Foto de ejemplo» half of the editor (the
 canvas badge, the chip in «Fotos», the ADR 0011 wording in the pre-download warning) was written on

@@ -1,5 +1,10 @@
 import { blankSection, GALLERY_ID } from "@retorika/catalog";
-import { EMPTY_ANSWERS, generateVariants, SECTOR_IDS } from "@retorika/generator";
+import {
+  EMPTY_ANSWERS,
+  GALLERY_SAMPLE_COUNT,
+  generateVariants,
+  SECTOR_IDS,
+} from "@retorika/generator";
 import { hasSamplePhotos } from "@retorika/photobank";
 import {
   flattenElements,
@@ -64,9 +69,10 @@ describe("photoSources", () => {
   it("asks the bank for a generated site, whether or not it is in the account", () => {
     const doc = generated("restaurante-bar");
     for (const fromAccount of [false, true]) {
+      // The cover and the gallery's four (ADR 0039), all the bank's.
       const sources = photoSources(doc, { fromAccount });
-      expect(sources, String(fromAccount)).toHaveLength(1);
-      expect(sources[0]?.kind).toBe("bank");
+      expect(sources, String(fromAccount)).toHaveLength(1 + GALLERY_SAMPLE_COUNT);
+      expect(sources.every((source) => source.kind === "bank")).toBe(true);
     }
   });
 
@@ -83,7 +89,9 @@ describe("photoSources", () => {
      * in IndexedDB, and asking a server for them would be asking for something nobody uploaded —
      * which would turn an ordinary anonymous session into a site that reports a failed photograph.
      */
-    const doc = withUpload(generated("restaurante-bar"), "foto-sec-cover-el-image.jpg");
+    // A sector with no bank, so the owner's upload is the only file-backed photograph; on a
+    // filled sector the gallery's four would still, rightly, be asked of the bank.
+    const doc = withUpload(generated(SECTOR_WITHOUT_BANK), "foto-sec-cover-el-image.jpg");
     expect(photoSources(doc, { fromAccount: false })).toEqual([]);
     expect(photoSources(doc, { fromAccount: true })).toEqual([
       { kind: "account", src: "foto-sec-cover-el-image.jpg" },
@@ -101,12 +109,13 @@ describe("photoSources", () => {
       base,
       page.id,
       page.sections.length,
-      blankSection(GALLERY_ID, "stacked", "sec-gallery"),
+      blankSection(GALLERY_ID, "stacked", "sec-gallery-2"),
     );
-    // The cover keeps the bank's photograph; a gallery card gets the owner's.
+    // The cover and the generated gallery keep the bank's photographs; a card of the added
+    // gallery gets the owner's.
     const gallery = withGallery.pages
       .flatMap((candidate) => candidate.sections)
-      .find((section) => section.preset.catalogId === GALLERY_ID);
+      .find((section) => section.id === "sec-gallery-2");
     if (!gallery) throw new Error("the gallery was not inserted");
     const slot = flattenElements(gallery.content).find(
       (element) => element.value?.kind === "image",
@@ -119,7 +128,9 @@ describe("photoSources", () => {
     );
 
     const sources = photoSources(doc, { fromAccount: true });
-    expect(sources.filter((source) => source.kind === "bank")).toHaveLength(1);
+    expect(sources.filter((source) => source.kind === "bank")).toHaveLength(
+      1 + GALLERY_SAMPLE_COUNT,
+    );
     expect(sources.filter((source) => source.kind === "account")).toEqual([
       { kind: "account", src: "foto-sec-gallery-el-item-1-photo.jpg" },
     ]);
@@ -142,7 +153,7 @@ describe("photoSources", () => {
       base,
       page.id,
       page.sections.length,
-      blankSection(GALLERY_ID, "stacked", "sec-gallery"),
+      blankSection(GALLERY_ID, "stacked", "sec-gallery-2"),
     );
     const doc = withUpload(withGallery, "foto-propia.jpg", 1);
 

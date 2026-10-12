@@ -3,12 +3,13 @@ import {
   COVER_ID,
   type CoverVariant,
   FOOTER_ID,
+  GALLERY_ID,
   LOCATION_ID,
   SERVICES_ID,
   type ServicesVariant,
 } from "@retorika/catalog";
 import { actionLabel, type Facts, suggestionsFor, textFor } from "@retorika/copybank";
-import { sampleImageFor } from "@retorika/photobank";
+import { hasSamplePhotos, sampleImageFor } from "@retorika/photobank";
 import type { ContentElement, Section } from "@retorika/schema";
 import type { Answers, SectorId } from "./answers.ts";
 import {
@@ -169,6 +170,88 @@ export function buildServices(
   return {
     id: "sec-services",
     preset: { catalogId: SERVICES_ID, variantId: variant },
+    source: "catalog",
+    layout: null,
+    content,
+  };
+}
+
+/**
+ * Four, not eight (ADR 0039).
+ *
+ * The catalog allows eight; four is the cap David set when he accepted the gallery, and the ADR
+ * carries the reason: every sample photograph that reaches a published page is one more occasion
+ * for a restaurateur to publish a dish that is not theirs as their own. Four gives the page the
+ * warmth three sessions asked for without turning it into a shop window of somebody else's food.
+ * With the cover that is **five** sample photographs per site, and the download warning names each.
+ */
+export const GALLERY_SAMPLE_COUNT = 4;
+
+/**
+ * The bank's gallery — **only for a sector whose bank is filled** (ADR 0039).
+ *
+ * `undefined` for the ten sectors with no photographs, and it has to be: a gallery born on the
+ * catalog's grey marker would publish four markers and four «Escribe aquí de qué es esta foto»,
+ * which is a page that looks broken rather than a page with one photograph missing. The cover is
+ * the one place a marker is tolerable, because a cover with no photograph is still a cover.
+ *
+ * **Four draws without replacement, folded through `avoid`** — the shape ADR 0036 said a gallery
+ * would need when it was written. `avoid` arrives holding the cover ids this card and its earlier
+ * siblings chose, and each draw adds its own, so the four never repeat each other and never repeat
+ * a cover on the screen of three. Sibling galleries may overlap (three cards want fifteen
+ * photographs from a bank of nine), and the ADR says so rather than pretending otherwise.
+ *
+ * **The caption is the record's `alt`**, the words a reviewer wrote for that photograph under ADR
+ * 0011, and not the catalog's marker four times over: four markers would publish four «Escribe aquí»
+ * and add four rows to the owner's list of things to fix for a section they did not ask for. An
+ * `alt` describes a scene («Terraza con mesas redondas…»); it is also the one text under a sample
+ * photograph that does not claim the photograph is of this business, which is the risk the ADR
+ * exists to treat.
+ *
+ * Seeds follow the cover's shape — business, sector, card, section, element — so `INV_5` holds and
+ * the same answers give the same four, in the same order, every time.
+ */
+export function buildGallery(
+  answers: Answers,
+  sector: SectorId,
+  variantId: string,
+  avoid: readonly string[] = [],
+): Section | undefined {
+  if (!hasSamplePhotos(sector)) return undefined;
+  const facts = factsFor(answers);
+  const headline = textFor(sector, "gallery", "headline", facts);
+  const intro = textFor(sector, "gallery", "intro", facts);
+  // The bank's generic file carries both, so this is a loader defect and not a sector's gap; it
+  // throws for the same reason an unknown section does — a gallery with no title gets published.
+  if (!headline) throw new Error(`buildGallery: no gallery headline in the bank for "${sector}"`);
+
+  const taken = [...avoid];
+  const items: { id: string; elements: ContentElement[] }[] = [];
+  for (let n = 1; n <= GALLERY_SAMPLE_COUNT; n += 1) {
+    const image = sampleImageFor(
+      sector,
+      `${answers.businessName}:${sector}:${variantId}:sec-gallery:item-${n}`,
+      { avoid: taken },
+    );
+    taken.push(image.sample);
+    items.push({
+      id: `item-${n}`,
+      elements: [
+        { id: `el-photo-${n}`, role: "image" as const, hidden: false, slot: "photo", value: image },
+        body(`el-caption-${n}`, "caption", image.alt),
+      ],
+    });
+  }
+
+  const content: ContentElement[] = [heading("el-gallery-headline", "headline", headline)];
+  if (intro) content.push(body("el-gallery-intro", "intro", intro));
+  content.push({ id: "el-gallery", role: "list", hidden: false, slot: "photos", items });
+
+  return {
+    id: "sec-gallery",
+    // One composition for the three cards: the cards already differ where it shows — the cover and
+    // the services — and a gallery's grid flows the same way under either title placement. ADR 0039.
+    preset: { catalogId: GALLERY_ID, variantId: "stacked" },
     source: "catalog",
     layout: null,
     content,

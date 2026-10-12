@@ -61,6 +61,20 @@
       "slot": "headline",
       "text": "Nuestra carta",
       "placeholders": []
+    },
+    {
+      "id": "restaurante-bar.gallery.headline.01",
+      "section": "gallery",
+      "slot": "headline",
+      "text": "Un vistazo a {negocio}",
+      "placeholders": ["negocio"]
+    },
+    {
+      "id": "restaurante-bar.gallery.intro.01",
+      "section": "gallery",
+      "slot": "intro",
+      "text": "La mesa, la barra y la cocina: lo que te espera cuando vengas.",
+      "placeholders": []
     }
   ],
   "suggestions": [

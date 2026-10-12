@@ -23,6 +23,7 @@ import {
   findSection,
   foldsInto,
   listAnchorsTo,
+  mintSectionId,
   type RetorikaDocument,
   type Section,
 } from "@retorika/schema";
@@ -683,6 +684,16 @@ export function Variants({
    * every edit, and a cleanup would revoke object URLs that are still the src of a photograph on
    * screen — the images would go blank on the next keystroke. These URLs live as long as the page,
    * which is exactly what `handlePickPhoto` already does with an upload's.
+   *
+   * **One `setPhotoUrls` per card, not one per photograph — since 12 October 2026 (ADR 0039).**
+   * The preview's `srcDoc` depends on `photoUrls`, so every write here replaces the document the
+   * owner is looking at. With one photograph per site that was one replacement; a generated
+   * restaurante site now names five, and five replacements in a row is exactly the mechanism
+   * `docs/tasks/backlog.md` has suspected since sprint 7 of eating a click or a keystroke — and
+   * the day the gallery landed, twenty `e2e` walks lost the keyboard or the document between the
+   * cover's arrival and the fourth gallery photograph's. So a card's photographs are fetched
+   * together, written together, and the document is replaced once. A failure stays per
+   * photograph: the four that arrived are written, the one that did not is reported.
    */
   const fetched = useRef(new Set<string>());
   /**
@@ -751,6 +762,10 @@ export function Variants({
 
     void (async () => {
       for (const [variant, history] of histories.entries()) {
+        // Checked here and nowhere else: `cancelled` stops this run from *starting* more work,
+        // and never stops it from finishing what it already started. See the note below.
+        if (cancelled) return;
+
         /**
          * **Two sources since ADR 0037, and the document says which.** A bank photograph comes
          * from `/api/muestras/<id>`, as it has since sprint 6. The owner's own comes from their
@@ -760,67 +775,88 @@ export function Variants({
          * A site from the account can need both at once: one saved before its owner replaced the
          * cover still names the bank photograph the generator chose, and that stays ours.
          */
-        for (const source of photoSources(history.present.document, {
+        const wanted = photoSources(history.present.document, {
           fromAccount: accountSiteId !== null,
-        })) {
-          // Checked here and nowhere else: `cancelled` stops this run from *starting* more work,
-          // and never stops it from finishing what it already started. See the note below.
-          if (cancelled) return;
-
+        }).filter((source) => {
           // The attempt number is part of the key, so «Volver a cargar las fotos» invalidates every
           // marker at once. See `sampleAttempt`.
           const key = `${sampleAttempt}:${variant}:${source.src}`;
-          if (fetched.current.has(key)) continue;
+          if (fetched.current.has(key)) return false;
           // Marked before the await, so two overlapping runs cannot both fetch the same photograph.
           fetched.current.add(key);
+          return true;
+        });
+        if (wanted.length === 0) continue;
 
-          try {
-            const bytes =
-              source.kind === "bank" ? await bankBytes(source.id) : await accountBytes(source.src);
-            // A failure stays marked: the source answered and said no, and asking again on every
-            // render would be a request loop over a photograph that is not coming.
-            if (!bytes) {
-              setFailedSamples((current) =>
-                current.includes(source.src) ? current : [...current, source.src],
-              );
-              continue;
+        const arrived = await Promise.all(
+          wanted.map(async (source) => {
+            try {
+              const bytes =
+                source.kind === "bank"
+                  ? await bankBytes(source.id)
+                  : await accountBytes(source.src);
+              // A failure stays marked: the source answered and said no, and asking again on
+              // every render would be a request loop over a photograph that is not coming.
+              return bytes ? { source, bytes } : { source, bytes: null };
+            } catch {
+              // Offline, or the source is not there. The marker stands in; see the note above —
+              // and this half was the other silent `continue`.
+              return { source, bytes: null };
             }
+          }),
+        );
 
-            // **An in-flight fetch always writes its result, even after this run was cancelled**,
-            // and that is the fix for the defect the browser walk found. The first version dropped
-            // the result on cancellation; combined with the ref, that permanently stranded the
-            // photograph — the second run skipped it as already fetched, and the first run threw
-            // its bytes away. React's development double-mount is exactly such a cancellation, and
-            // the first variant is the one fetched first, so it was the one in flight when the
-            // cleanup ran: two cards loaded, the first stayed broken, every single time.
-            //
-            // Writing anyway is safe because "cancelled" here does not mean unmounted — in the
-            // double-mount it is the same live component — and a `setState` on a genuinely
-            // unmounted one is a no-op in React 19, not a warning.
-            // The content type is the source's: the bank stores WebP and an owner's photograph is
-            // always the JPEG `preparePhoto` re-encoded. Neither is guessed from the name.
-            const url = URL.createObjectURL(
-              photoBlob(bytes, source.kind === "bank" ? "image/webp" : PHOTO_CONTENT_TYPE),
-            );
-            setPhotoUrls((current) => {
-              const next = new Map(current);
-              const forVariant = new Map(next.get(variant) ?? []);
-              forVariant.set(source.src, url);
-              next.set(variant, forVariant);
-              return next;
-            });
-            // Stored so a reload puts it back without asking the server again — and so that a
-            // session that goes offline still downloads a complete site. Under this editor's own
-            // scope, which for a site from the account is the site and not the card.
-            if (!(await savePhoto(photoScope(variant), source.src, bytes))) {
-              setSaveStatus("unsaved");
-            }
-          } catch {
-            // Offline, or the source is not there. The marker stands in; see the note above — and
-            // this half was the other silent `continue`.
-            setFailedSamples((current) =>
-              current.includes(source.src) ? current : [...current, source.src],
-            );
+        const failed = arrived.filter((photo) => photo.bytes === null).map((p) => p.source.src);
+        if (failed.length > 0) {
+          setFailedSamples((current) => [
+            ...current,
+            ...failed.filter((src) => !current.includes(src)),
+          ]);
+        }
+
+        // **An in-flight fetch always writes its result, even after this run was cancelled**,
+        // and that is the fix for the defect the browser walk found. The first version dropped
+        // the result on cancellation; combined with the ref, that permanently stranded the
+        // photograph — the second run skipped it as already fetched, and the first run threw
+        // its bytes away. React's development double-mount is exactly such a cancellation, and
+        // the first variant is the one fetched first, so it was the one in flight when the
+        // cleanup ran: two cards loaded, the first stayed broken, every single time.
+        //
+        // Writing anyway is safe because "cancelled" here does not mean unmounted — in the
+        // double-mount it is the same live component — and a `setState` on a genuinely
+        // unmounted one is a no-op in React 19, not a warning.
+        // The content type is the source's: the bank stores WebP and an owner's photograph is
+        // always the JPEG `preparePhoto` re-encoded. Neither is guessed from the name.
+        const landed = arrived.flatMap((photo) =>
+          photo.bytes === null
+            ? []
+            : [
+                {
+                  src: photo.source.src,
+                  bytes: photo.bytes,
+                  url: URL.createObjectURL(
+                    photoBlob(
+                      photo.bytes,
+                      photo.source.kind === "bank" ? "image/webp" : PHOTO_CONTENT_TYPE,
+                    ),
+                  ),
+                },
+              ],
+        );
+        if (landed.length === 0) continue;
+        setPhotoUrls((current) => {
+          const next = new Map(current);
+          const forVariant = new Map(next.get(variant) ?? []);
+          for (const photo of landed) forVariant.set(photo.src, photo.url);
+          next.set(variant, forVariant);
+          return next;
+        });
+        // Stored so a reload puts it back without asking the server again — and so that a
+        // session that goes offline still downloads a complete site. Under this editor's own
+        // scope, which for a site from the account is the site and not the card.
+        for (const photo of landed) {
+          if (!(await savePhoto(photoScope(variant), photo.src, photo.bytes))) {
+            setSaveStatus("unsaved");
           }
         }
       }
@@ -899,10 +935,14 @@ export function Variants({
   function sectionToInsert(catalogId: string, doc: RetorikaDocument): Section | undefined {
     if (catalogId === CONTACT_ID) return contactSection;
     if (catalogId === FOOTER_ID) return footerSectionFor(answers);
+    // Minted, not assumed free: a generated site of a sector with photographs already carries
+    // `sec-gallery` (ADR 0039), and `insertSection` refuses a taken id. Found on 12 October 2026
+    // by the generator's own tests, before any owner could — until then no generated section
+    // shared an id with one the pill offers, so `sec-${catalogId}` happened to be free every time.
     const section = blankSection(
       catalogId,
       variantForInsertion(doc, catalogId),
-      `sec-${catalogId}`,
+      mintSectionId(doc, `sec-${catalogId}`),
     );
     return withBankHeadline(catalogId, section);
   }

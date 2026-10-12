@@ -18,6 +18,7 @@ import {
   contactSectionFor,
   EMPTY_ANSWERS,
   footerSectionFor,
+  GALLERY_SAMPLE_COUNT,
   generate,
   generateVariants,
   SECTOR_IDS,
@@ -534,6 +535,144 @@ describe("the cover's photograph comes from the bank (ADR 0011)", () => {
         seeds.filter((seed) => seed.includes(`:${variant.id}:`)),
         `the seed names ${variant.id}`,
       ).toHaveLength(1);
+    }
+  });
+});
+
+describe("the bank's gallery (ADR 0039)", () => {
+  const RESTAURANT: Answers = answers({
+    businessName: "Taberna del Puerto",
+    sector: "restaurante-bar",
+    services: ["Comidas"],
+    address: "Muelle 3, Ronda",
+  });
+
+  function coverSample(document: RetorikaDocument): string | undefined {
+    const image = findSection(document, "cover").content.find((el) => el.role === "image");
+    if (image?.value?.kind !== "image") throw new Error("the cover has no image");
+    return image.value.sample;
+  }
+
+  function gallerySamples(document: RetorikaDocument): string[] {
+    const list = findSection(document, "gallery").content.find((el) => el.role === "list");
+    if (!list?.items) throw new Error("the gallery has no list");
+    return list.items.map((item) => {
+      const photo = item.elements.find((el) => el.slot === "photo");
+      if (photo?.value?.kind !== "image") throw new Error(`${item.id} has no photograph`);
+      if (photo.value.sample === undefined) throw new Error(`${item.id} is not a sample`);
+      return photo.value.sample;
+    });
+  }
+
+  it("exists if and only if the sector's bank is filled — never on the grey marker", () => {
+    const filled = SECTOR_IDS.filter((sector) => hasSamplePhotos(sector));
+    const empty = SECTOR_IDS.filter((sector) => !hasSamplePhotos(sector));
+    expect(filled.length, "no sector has photographs — this test proves half").toBeGreaterThan(0);
+    expect(empty.length, "every sector has photographs — delete this half").toBeGreaterThan(0);
+    for (const sector of filled) {
+      const has = sectionsOf(generate(answers({ ...RESTAURANT, sector })).document).some(
+        (section) => section.preset.catalogId === "gallery",
+      );
+      expect(has, `${sector} should carry a gallery`).toBe(true);
+    }
+    for (const sector of empty) {
+      const has = sectionsOf(generate(answers({ ...RESTAURANT, sector })).document).some(
+        (section) => section.preset.catalogId === "gallery",
+      );
+      expect(has, `${sector} must not carry a gallery`).toBe(false);
+    }
+  });
+
+  it("sits after services and before the address", () => {
+    const ids = sectionsOf(generate(RESTAURANT).document).map((section) => section.id);
+    expect(ids).toEqual(["sec-cover", "sec-services", "sec-gallery", "sec-location", "sec-footer"]);
+  });
+
+  it("carries four photographs, each a different sample, none of them the cover's", () => {
+    for (const variant of VARIANTS) {
+      const document = generate(RESTAURANT, variant).document;
+      const samples = gallerySamples(document);
+      expect(samples, variant.id).toHaveLength(GALLERY_SAMPLE_COUNT);
+      expect(new Set(samples).size, `${variant.id}: ${samples.join(", ")}`).toBe(
+        GALLERY_SAMPLE_COUNT,
+      );
+      expect(samples, `${variant.id} repeats its own cover`).not.toContain(coverSample(document));
+    }
+  });
+
+  it("never shows any of the three covers in any gallery, over two hundred business names", () => {
+    // Four draws folded through `avoid`, which `generateVariants` fills with every sibling's cover
+    // and `generate` with the card's own. The bank holds nine: three covers plus four is seven, so
+    // no draw is ever forced to repeat — and if the bank ever shrinks below that, this says so.
+    for (let n = 0; n < 200; n += 1) {
+      const sites = generateVariants(answers({ ...RESTAURANT, businessName: `Negocio ${n}` }));
+      const covers = sites.map((site) => coverSample(site.document));
+      for (const site of sites) {
+        for (const sample of gallerySamples(site.document)) {
+          expect(covers, `Negocio ${n}: a gallery repeats a cover`).not.toContain(sample);
+        }
+      }
+    }
+  });
+
+  it("leaves the three covers exactly where ADR 0036's fold put them", () => {
+    /**
+     * The second pass hands each card every sibling's cover, including the ones chosen after it.
+     * The comment on `generateVariants` argues that cannot move a cover; this is the argument
+     * checked, against the one-pass fold the ADR describes, over two hundred names.
+     */
+    for (let n = 0; n < 200; n += 1) {
+      const these = answers({ ...RESTAURANT, businessName: `Negocio ${n}` });
+      const fold: string[] = [];
+      for (const variant of VARIANTS) {
+        const chosen = coverSample(generate(these, variant, fold).document);
+        if (chosen !== undefined) fold.push(chosen);
+      }
+      expect(
+        generateVariants(these).map((site) => coverSample(site.document)),
+        `Negocio ${n}`,
+      ).toEqual(fold);
+    }
+  });
+
+  it("captions each photograph with the record's own reviewed words, never the marker", () => {
+    const list = findSection(generate(RESTAURANT).document, "gallery").content.find(
+      (el) => el.role === "list",
+    );
+    if (!list?.items) throw new Error("the gallery has no list");
+    for (const item of list.items) {
+      const photo = item.elements.find((el) => el.slot === "photo");
+      const caption = item.elements.find((el) => el.slot === "caption");
+      if (photo?.value?.kind !== "image") throw new Error(`${item.id} has no photograph`);
+      if (caption?.value?.kind !== "text") throw new Error(`${item.id} has no caption`);
+      expect(caption.value.text).toBe(photo.value.alt);
+      expect(caption.value.text).not.toMatch(/Escribe aquí/);
+      expect(caption.value.text.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("is the same four, in the same order, on every generation (INV_5)", () => {
+    expect(gallerySamples(generate(RESTAURANT).document)).toEqual(
+      gallerySamples(generate(RESTAURANT).document),
+    );
+  });
+
+  it("titles the gallery from the bank, not from a literal in this package", () => {
+    const section = findSection(generate(RESTAURANT).document, "gallery");
+    const headline = section.content.find((el) => el.slot === "headline");
+    if (headline?.value?.kind !== "text") throw new Error("the gallery has no headline");
+    expect(headline.value.text).toBe("Un vistazo a Taberna del Puerto");
+  });
+
+  it("names no absolute path and no URL, so the ZIP opens from disk (ADR 0001)", () => {
+    const list = findSection(generate(RESTAURANT).document, "gallery").content.find(
+      (el) => el.role === "list",
+    );
+    for (const item of list?.items ?? []) {
+      const photo = item.elements.find((el) => el.slot === "photo");
+      if (photo?.value?.kind !== "image") continue;
+      expect(photo.value.src.startsWith("/")).toBe(false);
+      expect(photo.value.src).not.toMatch(/^[a-z]+:\/\//);
     }
   });
 });

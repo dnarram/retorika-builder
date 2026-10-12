@@ -5,13 +5,21 @@ import {
   type Section,
 } from "@retorika/schema";
 import type { Answers, SectorId } from "./answers.ts";
-import { buildContact, buildCover, buildFooter, buildLocation, buildServices } from "./sections.ts";
+import {
+  buildContact,
+  buildCover,
+  buildFooter,
+  buildGallery,
+  buildLocation,
+  buildServices,
+} from "./sections.ts";
 import { themeFor } from "./theme.ts";
 import { VARIANTS, type VariantChoice } from "./variants.ts";
 
 export type { Answers, MainAction, SectorId } from "./answers.ts";
 export { EMPTY_ANSWERS, SECTOR_IDS } from "./answers.ts";
 export { hasLocationSection, LOCATION_SECTION_ID, visitAnchor } from "./destination.ts";
+export { GALLERY_SAMPLE_COUNT } from "./sections.ts";
 export type { VariantChoice } from "./variants.ts";
 export { VARIANTS } from "./variants.ts";
 
@@ -50,11 +58,23 @@ export function generate(
   const sector = effectiveSector(answers);
   const cover = buildCover(answers, sector, variant.cover, variant.id, avoid);
   const services = buildServices(answers, sector, variant.services);
+  // After services and before the address (ADR 0039): the page says what it does, shows it, then
+  // says where. The gallery avoids this card's own cover as well as the siblings' — the cover was
+  // built first, and reading its choice back out of the section is what `generateVariants` does.
+  const ownCover = coverSampleOf(cover);
+  const gallery = buildGallery(
+    answers,
+    sector,
+    variant.id,
+    ownCover === undefined ? avoid : [...avoid, ownCover],
+  );
   const location = buildLocation(answers, sector);
   const contact = buildContact(answers, sector);
   const footer = buildFooter(answers);
 
-  const sections = [cover, services, location, contact, footer].filter((s) => s !== undefined);
+  const sections = [cover, services, gallery, location, contact, footer].filter(
+    (s) => s !== undefined,
+  );
 
   const document: RetorikaDocument = {
     schemaVersion: SCHEMA_VERSION,
@@ -136,33 +156,49 @@ export function footerSectionFor(answers: Answers): Section {
  * same when the sector has three or more» rather than «eight is enough».
  */
 export function generateVariants(answers: Answers): GeneratedSite[] {
-  const taken: string[] = [];
-  return VARIANTS.map((variant) => {
-    const site = generate(answers, variant, taken);
-    const chosen = coverSampleOf(site.document);
-    if (chosen) taken.push(chosen);
-    return site;
-  });
+  /**
+   * **Two passes since ADR 0039, so that a gallery never shows a photograph that is a cover on
+   * any of the three cards** — not only on the cards built before it. The first pass is the fold
+   * ADR 0036 describes, over covers alone; the second builds each card with every sibling's cover
+   * in `avoid`, which `generate` extends with the card's own before the gallery draws.
+   *
+   * The covers do not move between the passes, and that is a property of the walk rather than
+   * luck: a card's cover walks forward from its hash to the first record not in `avoid`, so every
+   * record it stepped over was avoided — a cover chosen *earlier*. A cover chosen *later* avoided
+   * this one and so cannot be one of the records stepped over; adding it to `avoid` changes
+   * nothing. `generate.test.ts` pins this over two hundred business names rather than trusting
+   * the paragraph.
+   */
+  const sector = effectiveSector(answers);
+  const covers: string[] = [];
+  for (const variant of VARIANTS) {
+    const chosen = coverSampleOf(buildCover(answers, sector, variant.cover, variant.id, covers));
+    if (chosen !== undefined) covers.push(chosen);
+  }
+  return VARIANTS.map((variant, index) =>
+    generate(
+      answers,
+      variant,
+      covers.filter((_, at) => at !== index),
+    ),
+  );
 }
 
 /**
- * Which bank photograph this document's cover ended up with, or `undefined` for the placeholder.
+ * Which bank photograph this cover ended up with, or `undefined` for the placeholder.
  *
- * Read back out of the document rather than returned alongside it, because the document is what
- * actually shipped: a `GeneratedSite` field saying «and I chose this» could disagree with the
- * element, and then the fold would be avoiding an id no card is showing. `undefined` degrades to
- * no avoidance, which is this function's behaviour before ADR 0036 — the empty-bank case, where
- * the three placeholders are correct.
+ * Read back out of the section rather than returned alongside it, because the section is what
+ * actually ships: a field saying «and I chose this» could disagree with the element, and then the
+ * fold would be avoiding an id no card is showing. `undefined` degrades to no avoidance, which is
+ * the behaviour before ADR 0036 — the empty-bank case, where the three placeholders are correct.
  */
-function coverSampleOf(document: RetorikaDocument): string | undefined {
-  for (const section of document.pages[0]?.sections ?? []) {
-    if (section.preset.catalogId !== "cover") continue;
-    for (const element of section.content) {
-      // Asked of the value and not of the role: `value` is optional on a content element, and the
-      // `kind` discriminant is what actually proves there is a `sample` to read.
-      const value = element.value;
-      if (value?.kind === "image") return value.sample;
-    }
+function coverSampleOf(cover: Section): string | undefined {
+  if (cover.preset.catalogId !== "cover") return undefined;
+  for (const element of cover.content) {
+    // Asked of the value and not of the role: `value` is optional on a content element, and the
+    // `kind` discriminant is what actually proves there is a `sample` to read.
+    const value = element.value;
+    if (value?.kind === "image") return value.sample;
   }
   return undefined;
 }
