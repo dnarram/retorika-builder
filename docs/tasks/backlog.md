@@ -12,7 +12,52 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 11 October 2026, **closing sprint 17 — «el editor sin ratón».** The whole editor can
+Last reviewed: 13 October 2026, **closing sprint 18 — «casi comercial, sin cobrar».** The product
+can say when it breaks (and today tells nobody, by direction's silence rather than by accident),
+Lighthouse is a number instead of a sentence, a generated restaurant site carries five photographs
+that each say they are not yours, the intermittent this file has carried since sprint 7 has a
+mechanism read off the editor's own clock, and what stands between the product and the first euro
+is one file with every row sourced. Six rows changed state in this file: three added (Lighthouse,
+ADR 0039, the Tab walk), one found (the intermittent), two closed as stale (the fonts, `tsconfig.json`).
+
+**What was owed and is now paid:**
+
+1. **Error reporting exists** (Part 17), wired and inert; activating it is a question to direction
+   that the sprint asked on day 1 and had not been answered by day 7.
+2. **Lighthouse is measured**, 100 / 99 / 99 with five photographs; the 96 in best practices is the
+   favicon the bundle does not carry.
+3. **The bank fills a gallery of four** (ADR 0039, signed), with the risk David named treated in its
+   §2, and verified where the owner meets it.
+4. **Photographs below the first section load lazily**, a renderer attribute that moved three images
+   on two golden pages, reviewed.
+5. **The sprint-13 intermittent has its mechanism and its fix** — see its row below, which now ends
+   with the account instead of a hypothesis.
+6. **`docs/tasks/lo-que-falta-para-el-primer-euro.md`** exists, for David, without judgement.
+
+**What this sprint found that nobody was looking for:**
+
+- **`next start` could not load `next.config.ts`** with a project import, and no gate had ever
+  started the built server; production fell on the day-1 deploy. CI starts it now.
+- **The pill minted `sec-<catalogId>`** and would have thrown on «Fotos de trabajos» for every
+  restaurant site the day the generated gallery existed.
+- **`Variants.tsx` replaced the preview's document once per photograph**, five in a row with the
+  gallery; twenty walks fell and came back when a card writes its photographs once.
+- **Tab walks the whole canvas, text by text, with the design tools on** — about 75 stops on a
+  restaurant site; filed as a keyboard question, not changed.
+- **The development machine no longer gives a clean full `e2e` with any regularity**: four runs on
+  day 4 and five on day 5 hung on nine and ten different walks under a load average of 5 to 18,
+  with a `next start` of this project's own left running for eleven hours among the causes. Part
+  18's number is 16 GB and it is being spent on other things; that is David's, not the product's.
+
+**What this sprint found about the record itself — the eleventh, twelfth and thirteenth instances
+of the pattern this file names at its own head, and one correction of its own dates.** The fonts
+row said «not fixed» ten days after `362a93d` fixed it; the `tsconfig.json` row stood eleven days
+after `f4ec0c5` closed it; `el-recorrido-de-la-cuenta.md` said the handles and the verbs were open
+two sprints after sprint 17 closed both. And every record written on day 4 said «13 October» where
+`git` says the day's three PRs merged on the 12th — corrected on day 5 in the ADR 0039 signature,
+this file, a renderer fixture and two memories. Nothing in CI reads prose, still.
+
+The review before that was 11 October 2026, **closing sprint 17 — «el editor sin ratón».** The whole editor can
 now be driven from the keyboard, end to end: a walk builds a site, edits it, styles it and downloads
 a ZIP without a single pointer gesture, and a source-level test fails if anybody adds one to it.
 Eight things changed state in this file.
@@ -486,6 +531,15 @@ open survives.
   `ERR_NETWORK_IO_SUSPENDED` ×2, test timeouts ×4, a `dataset` of `null` in
   `replacingTheDocument` ×3 and one keyboard walk whose section count came back short — the last
   four being a document replaced mid-read, the same window seen from the other side.
+
+  **And one more red, of a different shape, the day the sprint closed (13 October 2026, CI on
+  PR #226):** «insertar una sección deja el teclado en la que acaba de aparecer» — `focus fell to
+  the body` after the insert rebuilt the document — on a runner, once, after passing in every full
+  run of the two days before (three on the fix, five on the loop) and three times alone afterwards.
+  Not this row's family on its face: the press was handled (the section appeared), and what was
+  lost is the focus the rebuild should have put back. No mechanism is claimed; the walk carries the
+  probe since that day, so the next red says which document was wired when and where `select`
+  ran. If it recurs, that is a row of its own.
 
   Two things that narrow it:
 
