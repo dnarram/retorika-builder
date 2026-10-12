@@ -70,6 +70,7 @@ import {
   scopeKey,
 } from "../editor/photos.ts";
 import { withPhotoUrls } from "../editor/previewDocument.ts";
+import { record } from "../editor/probe.ts";
 import es from "../locales/es.json" with { type: "json" };
 import { type DeleteToast, Editor, type SectionOffer } from "./Editor.tsx";
 import { Brand } from "./ui.tsx";
@@ -843,6 +844,7 @@ export function Variants({
                 },
               ],
         );
+        record("photos", { variant, landed: landed.length, failed: failed.length });
         if (landed.length === 0) continue;
         setPhotoUrls((current) => {
           const next = new Map(current);
