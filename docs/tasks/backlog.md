@@ -533,6 +533,14 @@ open survives.
   they come from, not a path to add. **It is recorded now because it was measured now**, and because
   the 404s it causes are what made the lost-click window as wide as it was.
   Whose call: nobody's yet. It costs nobody a published page — only the fidelity of the preview.
+  **Fixed on 3 October 2026 (sprint 14 day 2, `362a93d`), and this row said «not fixed» for ten
+  days after.** `apps/editor/src/app/fonts/[file]/route.ts` serves the four faces the renderer may
+  name, where the `srcDoc`'s relative `fonts/…` resolves; the `e2e` asserts
+  `document.fonts.check("Playfair Display")` inside the frame («sprint 14 día 2 — la vista previa
+  enseña la letra que envía»). The 404s this row blamed for the lost-click window are gone too,
+  which is part of why sprint 18 day 5 had to find that window somewhere else. Found while
+  planning sprint 18 on 11 October, corrected here on day 6: the eleventh instance of the pattern
+  the day-6 file names.
 - ~~**Four Spanish strings still live in `.ts` files, and `brand.name` sits unused beside them.**
   `ui.tsx:67` renders «Retorika Builder» inline while `apps/editor/src/locales/es.json` holds exactly
   that string unread; `layout.tsx` carries the page description; and the whole `/motor` route is
@@ -555,6 +563,13 @@ open survives.
   the one kind of step that gets forgotten on the day somebody is in a hurry. Whose call: nobody's,
   until it is. A `.gitattributes` entry or an ignore rule would end it; working out which is a small
   task nobody is waiting on.
+  **Measured on 13 October 2026 (sprint 18 day 6) and found closed since 2 October:** `f4ec0c5`
+  committed the `include` with `.next/types/**/*.ts` in it, and a `next dev` started today for
+  25 seconds leaves `git diff --exit-code apps/editor/tsconfig.json` clean. The row stood eleven
+  days after the thing it describes stopped happening; the «six occurrences» were all before that
+  commit. What `next dev` does still rewrite on every start is `apps/editor/next-env.d.ts` and the
+  agent block in `apps/editor/AGENTS.md`, both reverted before each commit and neither of them
+  this row's subject.
 
 ## Decided elsewhere, waiting on someone
 

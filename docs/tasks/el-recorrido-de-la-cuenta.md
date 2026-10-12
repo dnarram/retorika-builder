@@ -68,12 +68,17 @@
   pagan y el ADR 0034 eligió 0 €. Una vez por semana basta y el runbook §6 explica por qué «a partir
   del» es la palabra honesta mientras sea manual.
 
-## Lo que el barrido del sprint 14 dejó abierto y sigue abierto
+## Lo que el barrido del sprint 14 dejó abierto ~~y sigue abierto~~ — cerrado en el sprint 17
 
-Dos de los cuatro hallazgos, por tu propia decisión de reparto:
+~~Dos de los cuatro hallazgos, por tu propia decisión de reparto:~~
 
-- **Los cuatro tiradores de las esquinas no hacen nada.**
-- **Seis verbos de sección solo se alcanzan con ratón.**
+- ~~**Los cuatro tiradores de las esquinas no hacen nada.**~~ **Retirados el sprint 17, día 2
+  (PR #213)**: no se arreglaron, se quitaron, y el lienzo ya no dibuja tiradores en las esquinas.
+- ~~**Seis verbos de sección solo se alcanzan con ratón.**~~ **Con teclado desde el sprint 17, días
+  3 a 5 (PR #214–#216)**: Tab llega al lienzo, las flechas recorren las secciones, Intro saca los
+  seis verbos y cada uno responde. Esta nota decía «sigue abierto» hasta el 13 de octubre de 2026,
+  dos sprints después de cerrarse; corregida al encontrarla, no al cerrarse, que es el patrón que
+  el backlog cuenta.
 
 Los otros dos están hechos: el foco y Escape en las pantallas nuevas (días 3, 4 y 6) y el callejón
 de la foto de muestra (día 7). **Y los diálogos `aria-modal` antiguos ya tienen trampa de foco**,
