@@ -942,6 +942,17 @@ export async function openCombination(
 
   const response = await page.goto(`${ORIGIN}/`, { waitUntil: "load" });
   if (response?.status() !== 200) throw new Error(`${combination.id}: page did not load`);
+  // Photographs below the first section carry `loading="lazy"` since sprint 18 day 4, and a
+  // lazy image below the fold has not even been requested when `load` fires — so the check
+  // below read «did not load» for every gallery and team page whose cards sat under the fold,
+  // which CI found on 13 October 2026 and a local run would have too, had one been made. Each
+  // is scrolled into view and decoded first, then the page goes back to the top: the suites
+  // measure geometry and contrast, neither of which depends on when a byte arrived.
+  await page.evaluate(async () => {
+    for (const img of document.images) if (img.loading === "lazy") img.scrollIntoView();
+    await Promise.allSettled([...document.images].map((img) => img.decode()));
+    window.scrollTo(0, 0);
+  });
   // An image that silently failed would change both layout and contrast; fail instead.
   const broken = await page.evaluate(() =>
     [...document.images]
