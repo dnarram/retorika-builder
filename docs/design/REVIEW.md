@@ -1436,3 +1436,85 @@ son de axe y que conviene que estén: **un diálogo tampoco añade un landmark**
 que David hizo sobre las secciones el día 3, porque una `region` dentro de algo que dice ser el único
 sitio que existe es un sitio al que navegar dentro de ese sitio— y **todo campo del formulario tiene
 nombre**, dicho en voz alta para que un fallo de axe ahí no sea una sorpresa.
+
+## Sprint 18 — «casi comercial, sin cobrar» (12 y 13 de octubre de 2026)
+
+Siete días, siete PR (#219 a #225), con un arreglo bloqueante entre el primero y el segundo (#220).
+Lo que la interfaz ganó, día a día, y lo que los ADR deciden sobre ella.
+
+### El producto avisa cuando se rompe, y hoy no avisa a nadie (día 1, PR #219)
+
+Sentry cableado en el editor y en las rutas, con el número de versión en cada error y una limpieza
+que quita de todo evento el documento, las fotos y cualquier correo; **inerte** sin
+`NEXT_PUBLIC_SENTRY_DSN`, probado en el `e2e` contra un error real sin capturar. La pregunta a
+dirección —tercer encargado del tratamiento, residencia en la UE, su DPA y una frase nueva en el
+aviso de privacidad— va en el cuerpo de la PR y **sigue sin respuesta al cerrar el sprint**, así que
+el día 7 no lo activa y el aviso sigue nombrando a dos encargados, que es lo cierto.
+
+**El arreglo bloqueante (#220):** `next.config.ts` importaba un módulo del proyecto; `next build`
+lo resolvía y `next start` no, y producción cayó al desplegar. Reproducido en local antes de tocar
+nada; ahora el config no importa nada, una prueba lo prohíbe y CI arranca el servidor compilado y le
+pide la landing, cosa que ninguna puerta había hecho.
+
+### Lighthouse, medido por primera vez (día 2, PR #221)
+
+La Parte 8.5 pedía «95 o más» desde el sprint 2 y nadie lo había medido. `pnpm lighthouse`: un sitio
+generado de restaurante, servido desde memoria, auditado en el Chromium de Playwright, preset móvil,
+tres composiciones. **100 / 100 / 96 / 100** las tres; el 96 de buenas prácticas es un solo hecho,
+el `favicon.ico` que el navegador pide y el paquete no lleva, que `publisher.md` deja en fase 2.
+
+### La galería del banco (días 3 y 4, PR #222 y #223, ADR 0039)
+
+Una web generada de un sector con banco lleva una galería de **cuatro** fotos tras los servicios:
+sorteo sin reemplazo con el `avoid` del ADR 0036, ninguna portada de la pantalla de tres en ninguna
+galería, pies de foto con el `alt` revisado del registro. **La condición de David** —el riesgo de que
+un hostelero publique platos ajenos como propios— se trata en el §2 del ADR: tope de cuatro, insignia
+«Foto de ejemplo» sobre cada una, el aviso de descarga contándolas una a una y un pie que describe la
+escena en vez de reclamarla. Verificado el día 4 donde lo ve el dueño: cuatro insignias visibles,
+«5 de 5 fotos todavía no son tuyas», «Tu web tiene 5 fotos de ejemplo» con cinco «Cambiar», el ZIP
+con los cinco ficheros y la página abierta desde el disco sin una sola insignia.
+
+**Lo que la galería costó y se devolvió:** las cuatro fotos competían con la portada en 4G simulado
+y Lighthouse bajó a 96–97; toda foto fuera de la primera sección de su página lleva ahora
+`loading="lazy"` (nunca la primera, donde está el LCP), el corpus golden se movió en tres imágenes
+de dos páginas, y la medida volvió a **100 / 99 / 99**. Y dos defectos que el día encontró: la
+píldora acuñaba el id `sec-<catalogId>` y habría lanzado «already taken» al añadir una galería a una
+web de restaurante (acuña con `mintSectionId`); y `Variants.tsx` sustituía el documento de la vista
+previa una vez por foto, cinco veces seguidas con la galería (ahora una vez por tarjeta).
+
+**Una pregunta de contenido que el ADR nombra y no decide:** dos de las nueve fotos aprobadas son
+platos. Si el banco puede contener un plato reconocible es una regla para la lista del revisor, y
+es de David.
+
+### El intermitente del sprint 13 tiene mecanismo (día 5, PR #224)
+
+Una sonda inerte en el editor y las tres caminatas del bloque con la cuenta del editor en su mensaje
+de fallo. Seis fallos en una noche, **seis cuentas iguales**: las fotos del banco sustituían el
+`srcDoc` 13 ms después del primer documento, antes de que ese documento estuviera cableado; la
+búsqueda anticipada del segundo `html` cableaba el *primero* y paraba; el segundo llegaba sin cromo
+y esperaba a `load`. La corrección es una palabra en una función pura (`lookAheadStep`): cablear y
+**seguir mirando**. Dos ejecuciones completas limpias después, donde la noche anterior hubo una de
+cinco. No se consiguió forzar en una caminata determinista, y se dice.
+
+### Lo que falta para el primer euro, en un fichero (día 6, PR #225)
+
+`docs/tasks/lo-que-falta-para-el-primer-euro.md`, sin juicio: las seis preguntas de facturación, los
+tres documentos legales, los DPA, el precio, las copias, el plan de Render, el barrido, la producción
+de fotos (diez sectores vacíos, la exención que caduca el 1 de noviembre, dieciséis PNG en la raíz),
+las firmas, Google y el `noindex`, y una enmienda al ADR 0029 para el sitemap en el ZIP, redactada
+para firmar o rechazar. Tres registros obsoletos cerrados con fecha y con cuánto tiempo estuvieron
+mal.
+
+### El recorrido como un desconocido (día 7)
+
+Una caminata entra por `/`, pulsa «Empezar», responde las cinco preguntas, ve tres tarjetas con tres
+portadas distintas, abre el editor con la galería de cuatro insignias, edita un titular, cambia la
+paleta, guarda en una cuenta cuyo Supabase responde la propia prueba (y comprueba que las fotos del
+banco no se suben), pasa por el aviso que cuenta cinco y descarga: el ZIP lleva las cinco fotos, las
+caras y sus licencias, **y ningún `sitemap.xml`**, porque la enmienda no está firmada y la caminata
+asevera lo que es cierto; abierto desde el disco, cinco fotos decodificadas, la letra enviada
+utilizable, el titular editado, ninguna insignia, ninguna petición fallida y ninguna que saliera de
+la máquina en todo el viaje.
+
+**Lo que este sprint no activó, y por qué:** Sentry (la pregunta del día 1 sin respuesta) y el
+sitemap (la enmienda del día 6 sin firma). Las dos esperan en `lo-que-falta-para-el-primer-euro.md`.

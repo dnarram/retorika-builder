@@ -10957,3 +10957,219 @@ describe("sprint 18 día 4 — la galería del banco en el editor, contada una a
     }
   }, 120_000);
 });
+
+describe("sprint 18 día 7 — el recorrido como un desconocido, de la landing a un ZIP abierto sin red", () => {
+  /**
+   * **The closing walk of sprint 18, and nothing in it that a stranger could not do.** In through
+   * `/`, five answers, three cards with three different photographs (ADR 0036), the editor with
+   * the bank's gallery of four badged «Foto de ejemplo» (ADR 0039), a headline edited, a palette
+   * changed, the web saved to an account whose Supabase is answered by this test, the warning
+   * counting five sample photographs and letting the download through, and the ZIP opened from
+   * disk: five photographs decoded, the shipped face usable, the edit intact, **not one badge**,
+   * and **no `sitemap.xml`** — because the amendment to ADR 0029 that would put one there was
+   * drafted on day 6 and not signed, and the walk asserts what is true rather than what was
+   * proposed. Sentry stays inert for the same reason (day 1's question, unanswered), which day 1's
+   * own walk already proves; here the same listener says that nothing left the machine during the
+   * whole journey.
+   */
+  it("entra por la landing, monta, edita, guarda, descarga y abre sin red: cinco fotos, la letra, ningún sello, ningún sitemap", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    const owner = "33333333-3333-4333-8333-333333333333";
+    const site = "44444444-4444-4444-8444-444444444444";
+    const uploads: string[] = [];
+    const foreign = new Set<string>();
+    try {
+      // The account's Supabase, answered here (the shape «sprint 16 día 6» established).
+      await page.route("http://127.0.0.1:9/**", async (route) => {
+        const url = new URL(route.request().url());
+        const method = route.request().method();
+        if (url.pathname.startsWith("/auth/v1/user")) {
+          return route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({ id: owner, email: "desconocido@example.com" }),
+          });
+        }
+        if (url.pathname.startsWith("/auth/v1/signup")) {
+          return route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+              access_token: "token",
+              token_type: "bearer",
+              expires_in: 3600,
+              refresh_token: "refresh",
+              user: { id: owner, email: "desconocido@example.com" },
+            }),
+          });
+        }
+        if (url.pathname.startsWith("/rest/v1/sites")) {
+          if (method === "POST") {
+            return route.fulfill({
+              status: 201,
+              contentType: "application/json",
+              body: JSON.stringify({ id: site, version: 1 }),
+            });
+          }
+          return route.fulfill({ status: 200, contentType: "application/json", body: "[]" });
+        }
+        if (url.pathname.startsWith("/storage/v1/object")) {
+          uploads.push(url.pathname.replace("/storage/v1/object/", ""));
+          return route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({ Key: url.pathname }),
+          });
+        }
+        return route.fulfill({ status: 404, body: "" });
+      });
+      // Day 1's listener, over the whole journey: only a network scheme can leave the machine.
+      page.on("request", (request) => {
+        const url = new URL(request.url());
+        if (
+          ["http:", "https:", "ws:", "wss:"].includes(url.protocol) &&
+          !["localhost", "127.0.0.1"].includes(url.hostname)
+        )
+          foreign.add(request.url());
+      });
+
+      // In through the front door, as a stranger: the landing, then «Empezar».
+      await page.goto(BASE_URL, { waitUntil: "networkidle" });
+      await expect(
+        page.getByRole("heading", { name: "Tu web en cinco preguntas", level: 1 }),
+      ).toBeVisible();
+      await page.getByRole("link", { name: "Empezar" }).click();
+      await expect(page).toHaveURL(/\/empezar$/);
+
+      await page.fill("#nombre", "Taberna del Puerto");
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.getByText("Restaurante y bar", { exact: true }).click();
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.getByText("Comidas", { exact: true }).click();
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.fill("#direccion", "Muelle 3, Ronda");
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.getByText("Que reserven", { exact: true }).click();
+      await page.fill("#enlace", "https://reservas.example.com/taberna");
+      await page.getByRole("button", { name: "Crear mi web" }).click();
+
+      // Three cards, three different photographs on the covers (ADR 0036) — compared by the
+      // record's own `alt`, because a `blob:` URL is minted per card even for the same bytes.
+      const cards = page.locator(PREVIEW);
+      await expect(cards).toHaveCount(3);
+      const covers: string[] = [];
+      for (let n = 0; n < 3; n += 1) {
+        const img = cards.nth(n).contentFrame().locator('[data-section="sec-cover"] img');
+        await expect(img).toHaveAttribute("src", /^blob:/);
+        covers.push((await img.getAttribute("alt")) ?? "");
+      }
+      expect(new Set(covers).size, `three covers: ${covers.join(" | ")}`).toBe(3);
+
+      await page.getByText("Ver a tamaño real →").first().click();
+      const frame = page.frameLocator(PREVIEW).first();
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+      await waitForBankPhoto(frame);
+
+      // The bank's gallery, four photographs each saying it is not yours (ADR 0039 §2).
+      const gallery = frame.locator('[data-section="sec-gallery"]');
+      await expect(gallery.locator('img[src^="blob:"]')).toHaveCount(GALLERY_SAMPLE_COUNT);
+      await expect(gallery.locator(".rb-sample")).toHaveCount(GALLERY_SAMPLE_COUNT);
+
+      // One edit, the stranger's own words.
+      const headline = frame.locator('[data-id="el-headline"]');
+      await clickToEdit(frame, headline);
+      await page.keyboard.type("Taberna ZZQ");
+      await page.getByText("Haz clic en cualquier texto para cambiarlo").click();
+      await expect(headline).toHaveText("Taberna ZZQ");
+
+      // One style change, read off the page's own token rather than off the radio.
+      const primary = () =>
+        frame
+          .locator("body")
+          .evaluate(() =>
+            getComputedStyle(document.documentElement).getPropertyValue("--color-primary").trim(),
+          );
+      const before = await primary();
+      await page.getByRole("button", { name: "Estilo", exact: true }).click();
+      await page.getByRole("radio", { name: "Azul confianza" }).click();
+      await expect.poll(primary).not.toBe(before);
+
+      // Saved to an account: the document goes, the bank's photographs do not (ADR 0037).
+      await page.getByRole("button", { name: "Guardar en mi cuenta" }).click();
+      const offer = page.getByRole("dialog");
+      await offer.getByLabel(/Correo/).fill("desconocido@example.com");
+      await offer.getByLabel(/Contrase/).fill("una-contrasena-larga");
+      await offer.getByRole("button", { name: /Crear la cuenta y guardar/ }).click();
+      await expect(offer.getByText(/Guardada en tu cuenta/)).toBeVisible({ timeout: 15_000 });
+      expect(uploads.filter((path) => path.includes("muestra-"))).toEqual([]);
+      await page.keyboard.press("Escape");
+
+      // The warning counts the five, one row each, and lets the download through.
+      await page.getByRole("button", { name: "Descargar" }).click();
+      const warning = page.locator('[role="dialog"]', { hasText: "Antes de descargar" });
+      await expect(warning).toBeVisible();
+      const total = 1 + GALLERY_SAMPLE_COUNT;
+      await expect(warning.getByText(`Tu web tiene ${total} fotos de ejemplo`)).toBeVisible();
+      await expect(warning.locator('li:has(button:has-text("Cambiar"))')).toHaveCount(total);
+      const [download, response] = await Promise.all([
+        page.waitForEvent("download"),
+        page.waitForResponse((candidate) => candidate.url().includes("/api/download")),
+        warning.getByRole("button", { name: "Descargar igualmente" }).click(),
+      ]);
+      expect(response.status()).toBe(200);
+
+      const dir = mkdtempSync(join(tmpdir(), "retorika-e2e-s18d7-"));
+      const zipPath = join(dir, download.suggestedFilename());
+      await download.saveAs(zipPath);
+      const zip = new Uint8Array(readFileSync(zipPath));
+      const entries = listZipEntries(zip);
+      expect(entries.filter((entry) => entry.startsWith("assets/muestra-"))).toHaveLength(total);
+      expect(entries.filter((entry) => /^fonts\/.*\.woff2$/.test(entry)).length).toBeGreaterThan(0);
+      expect(entries.filter((entry) => /^fonts\/OFL-.*\.txt$/.test(entry)).length).toBeGreaterThan(
+        0,
+      );
+      // Not signed, so not there: the amendment of ADR 0029 is a paragraph in
+      // `docs/tasks/lo-que-falta-para-el-primer-euro.md`, and a download has no base URL.
+      expect(entries).not.toContain("sitemap.xml");
+      extractAll(zip, dir);
+
+      // Opened from disk, with no server and no network.
+      const offline = await (await browser.newContext()).newPage();
+      const failed: string[] = [];
+      offline.on("requestfailed", (request) => failed.push(request.url()));
+      try {
+        await offline.goto(`file://${join(dir, "index.html")}`, { waitUntil: "load" });
+        await expect(offline.locator("h1")).toHaveText("Taberna ZZQ");
+        await expect(offline.locator("img")).toHaveCount(total);
+        await offline.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+        await expect
+          .poll(() =>
+            offline
+              .locator("img")
+              .evaluateAll((images) =>
+                images.every(
+                  (image) =>
+                    image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0,
+                ),
+              ),
+          )
+          .toBe(true);
+        const face = await offline.evaluate(async () => {
+          await document.fonts.ready;
+          return document.fonts.check('400 16px "Playfair Display"');
+        });
+        expect(face, "the shipped face is usable from file://").toBe(true);
+        await expect(offline.locator(".rb-sample")).toHaveCount(0);
+        expect(await offline.content()).not.toContain("Foto de ejemplo");
+        expect(failed).toEqual([]);
+      } finally {
+        await offline.context().close();
+      }
+
+      expect([...foreign], `requests left the machine: ${[...foreign].join(", ")}`).toEqual([]);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+});
