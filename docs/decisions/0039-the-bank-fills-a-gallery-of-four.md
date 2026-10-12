@@ -1,9 +1,9 @@
 # 0039 — The bank fills a gallery of four, and every one of them says it is not yours
 
-**Status:** **accepted** · **Date:** 2026-10-12 · **Accepted:** 2026-10-13 ·
+**Status:** **accepted** · **Date:** 2026-10-12 · **Accepted:** 2026-10-12 ·
 **Proposed by:** development, sprint 18 day 3, at David's instruction when approving the sprint —
 with one condition he set, which is §2 below ·
-**Accepted by:** **David, 13 October 2026** — «Firma el ADR0039 por mí», opening sprint 18 day 4,
+**Accepted by:** **David, 12 October 2026** — «Firma el ADR0039 por mí», opening sprint 18 day 4,
 after reading the pull request that built it (#222) and the two bank sentences in its body.
 **Recorded by development at his instruction, which is said out loud because the standing rule is
 that development does not sign.** The decision is his; the keystrokes are not, and anybody reading
@@ -81,7 +81,7 @@ making the gallery smaller than it is useful:
   carries `sample`, inside list items as well as on the cover. Day 4 of this sprint verifies it on
   the four and makes the `e2e` say so; if the badge does not reach list items today, that is a
   defect against this ADR and not a gap in it.
-  > **Verified 13 October 2026 (day 4):** the badge reaches the four, each one visible; «Fotos»
+  > **Verified 12 October 2026 (day 4):** the badge reaches the four, each one visible; «Fotos»
   > says «5 de 5 fotos todavía no son tuyas»; the warning says «Tu web tiene 5 fotos de ejemplo»
   > with five «Cambiar» rows and offers «Descargar igualmente»; the ZIP carries the five files and
   > the page opened from disk shows five photographs and not one badge. The walk is «sprint 18

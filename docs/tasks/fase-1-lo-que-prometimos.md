@@ -100,7 +100,7 @@ no**. La columna de la derecha dice dónde está escrito, para que puedas compro
 | Hueco | Qué se sabe | Fuente |
 |---|---|---|
 | **La exención del banco de fotos caduca el 1 de noviembre de 2026** | Las nueve fotografías aprobadas de `restaurante-bar` miden 1024 px y el suelo del ADR 0035 son 1344 × 896. La exención está en el esquema con su fecha, y `bank.test.ts` la lee dentro del `pnpm test` normal: **desde ese día cualquier PR sale en rojo** hasta que se regeneren a 1600 × 1072. Es producción de contenido tuya, y el circuito es el del ADR 0011 | ADR 0035, `packages/photobank/src/schema.ts` |
-| **Un intermitente del `e2e` sigue abierto** | «selects a section clicked before the frame has finished loading» falla de vez en cuando. El mecanismo que el backlog propuso quedó **falsado** con medición el 9 de octubre: el documento que recibe el clic ya está cableado a 0, 300 y 800 ms de retraso de la foto. El 11 de octubre volvió a fallar en una ejecución completa limpia, y pasó cuatro de cuatro en aislamiento. La dirección de las tasas se ha invertido respecto a la medición del día 6 | `docs/tasks/backlog.md`, sección del intermitente |
+| ~~**Un intermitente del `e2e` sigue abierto**~~ **Encontrado y corregido el 13 de octubre de 2026 (sprint 18, día 5)** | «selects a section clicked before the frame has finished loading» falla de vez en cuando. El mecanismo que el backlog propuso quedó **falsado** con medición el 9 de octubre: el documento que recibe el clic ya está cableado a 0, 300 y 800 ms de retraso de la foto. El 11 de octubre volvió a fallar en una ejecución completa limpia, y pasó cuatro de cuatro en aislamiento. La dirección de las tasas se ha invertido respecto a la medición del día 6. **Lo que una sonda dentro del editor dijo seis veces de seis**: las fotos del banco sustituían el `srcDoc` unos 13 ms después del primer documento, antes de que ese documento estuviera cableado; la búsqueda anticipada del segundo `html` cableaba el *primero* y paraba, y el segundo esperaba a `load` sin cromo. La decisión es ahora una función pura (`lookAhead.ts`) y la regla cambió en una palabra: cablear y **seguir mirando**. No se consiguió forzar en una caminata determinista, y se dice | `docs/tasks/backlog.md`, sección del intermitente, con la cuenta de la sonda |
 | **Dos cosas que una sesión pidió y no están planificadas** | Formato dentro de un texto (negritas en medio de una frase) necesitaría cambiar el esquema y su propio ADR. Mover imágenes libremente **choca de frente con la regla 4** del modelo de documento | nota de la Fase 1 en `docs/protocolo.md` |
 
 ### No toca a la Fase 1, y está aquí para que no tengas que volver a deducirlo
@@ -152,9 +152,16 @@ Preguntas, no respuestas. Cada una con lo que haría falta para contestarla.
 2. **¿La exención del banco es un hueco de la Fase 1 o una tarea aparte con fecha?** Si es lo
    primero, la aceptación espera a que las nueve fotografías se regeneren. Si es lo segundo, el ADR
    puede decirlo y la fecha del 1 de noviembre sigue siendo una tarea tuya.
-3. **¿El intermitente del `e2e` bloquea una aceptación?** No está resuelto y nadie sabe aún si es
+3. **¿El intermitente del `e2e` bloquea una aceptación?** ~~No está resuelto y nadie sabe aún si es
    «una máquina más lenta ensancha otra ventana» o «el estado de otra caminata se filtra». El
-   siguiente paso escrito es instrumentar la caminata **dentro** de una ejecución completa.
+   siguiente paso escrito es instrumentar la caminata **dentro** de una ejecución completa.~~
+   **Instrumentado y encontrado el 13 de octubre de 2026 (sprint 18, día 5)**: era lo primero, una
+   máquina más lenta —o una ruta de fotos más caliente— ensanchaba la ventana entre el primer
+   documento y su cableado, y las fotos del banco la cruzaban. Corregido en la decisión de la
+   búsqueda anticipada (`apps/editor/src/editor/lookAhead.ts`); la cuenta entera está en el
+   backlog. Lo que queda abierto es otra cosa: la máquina de desarrollo, con 16 GB y la carga que
+   tiene, ya no da una ejecución completa limpia con regularidad, y eso es del protocolo (Parte 18),
+   no del producto.
 4. **¿Las dos cosas que una sesión pidió y no están planificadas quedan fuera por escrito?** El
    formato dentro de un texto necesita un ADR propio; mover imágenes libremente choca con la regla
    4, así que decidirlo sería enmendar el modelo de documento.

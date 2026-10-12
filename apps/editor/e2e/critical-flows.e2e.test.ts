@@ -5,6 +5,7 @@ import { inflateRawSync } from "node:zlib";
 import AxeBuilder from "@axe-core/playwright";
 import {
   type Browser,
+  type BrowserContext,
   chromium,
   expect,
   type FrameLocator,
@@ -1338,7 +1339,10 @@ describe("sprint 6 día 7 — fotos subidas desde el panel y desde el aviso, log
  */
 describe("sprint 7 día 3 — deshacer una conversión desde «Páginas»", () => {
   it("folds the page back into the section it came from, and offers that on no other page", async () => {
-    const walkPage = await (await browser.newContext()).newPage();
+    // Probed since sprint 18 day 5: this walk is the second of the intermittent's three.
+    const walkContext = await browser.newContext();
+    await probeOn(walkContext);
+    const walkPage = await walkContext.newPage();
     try {
       await walkPage.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
       await walkPage.fill("#nombre", "Taberna Santo Domingo");
@@ -1360,12 +1364,15 @@ describe("sprint 7 día 3 — deshacer una conversión desde «Páginas»", () =
       const tabs = walkPage.locator('[data-testid="page-tabs"] button');
       await expect(tabs).toHaveCount(1);
 
+      const atPress = await canvasSnapshot(walkPage, "sec-services");
       await frame.locator('[data-section="sec-services"]').click();
-      await frame
-        .locator(
-          '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
-        )
-        .click();
+      await withProbeOnFailure(walkPage, "sec-services", atPress, async () => {
+        await frame
+          .locator(
+            '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+          )
+          .click();
+      });
       await expect(tabs).toHaveCount(2);
       await expect(frame.locator('[data-preset="teaser"]')).toBeVisible();
 
@@ -4625,6 +4632,105 @@ describe("sprint 13 día 6 — las pantallas que faltaban, y los dos fallos sile
  * cluster is never drawn, which is the thirty-second timeout CI kept printing. A loaded runner makes
  * the window wider, which is the correlation the backlog could not account for.
  */
+/**
+ * The editor's probe (`apps/editor/src/editor/probe.ts`), switched on for one context, and what a
+ * walk reads back when a press it made produced nothing — sprint 18 day 5.
+ *
+ * Four occurrences of the same family since sprint 7, three walks, one block, never in isolation,
+ * and since 12 October 2026 one on CI. Every diagnosis so far was reasoned from outside the frame
+ * and two were retracted. These helpers put the editor's own account into the failure message —
+ * which document was wired when, by which path, which document the press was handled in and which
+ * one the assertion looked at — so the next red says what happened instead of inviting a guess.
+ *
+ * **The assertions do not change.** `probeOn` only sets a flag the probe reads; `probeReport` is
+ * read on failure and appended to the message. A green run costs one property read per record.
+ */
+async function probeOn(context: BrowserContext): Promise<void> {
+  await context.addInitScript(() => {
+    (window as unknown as { __rbProbe?: boolean }).__rbProbe = true;
+  });
+}
+
+/** What the canvas looks like from the editor's window, at this instant. */
+function canvasSnapshot(page: Page, sectionId: string) {
+  return page.evaluate((id) => {
+    const live = document.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])");
+    const doc = live?.contentDocument;
+    const section = doc?.querySelector<HTMLElement>(`[data-section="${id}"]`);
+    const box = section?.getBoundingClientRect();
+    const frameBox = live?.getBoundingClientRect();
+    // The point Playwright clicks: the section's centre, translated into the editor's coordinates.
+    const point =
+      box && frameBox
+        ? {
+            x: frameBox.left + box.left + box.width / 2,
+            y: frameBox.top + box.top + box.height / 2,
+          }
+        : null;
+    const hit = point ? document.elementFromPoint(point.x, point.y) : null;
+    const hitInFrame =
+      point && doc
+        ? doc.elementFromPoint(
+            box?.left ?? 0 + (box?.width ?? 0) / 2,
+            box?.top ?? 0 + (box?.height ?? 0) / 2,
+          )
+        : null;
+    return {
+      readyState: doc?.readyState ?? "no document",
+      wired: doc?.documentElement.dataset["rbWired"] ?? null,
+      serial: doc?.documentElement.dataset["rbSerial"] ?? null,
+      buffered: document.querySelectorAll("iframe[data-buffered]").length,
+      hitInEditor: hit
+        ? `${hit.tagName}${hit === live ? " (the live frame)" : hit.hasAttribute("data-buffered") ? " (a BUFFERED frame)" : ""}`
+        : null,
+      hitInFrame: hitInFrame
+        ? `${hitInFrame.tagName} in ${hitInFrame.closest("[data-section]")?.getAttribute("data-section") ?? "-"}`
+        : null,
+      selected: [...(doc?.querySelectorAll(".rb-selected") ?? [])].map((n) =>
+        n.getAttribute("data-section"),
+      ),
+      actionsIn: [...(doc?.querySelectorAll(".rb-actions") ?? [])].map((n) =>
+        n.closest("[data-section]")?.getAttribute("data-section"),
+      ),
+      imagesComplete: [...(doc?.images ?? [])].map((img) => img.complete),
+      sections: doc?.querySelectorAll("[data-section]").length ?? 0,
+    };
+  }, sectionId);
+}
+
+/** Everything the probe recorded, as one line per event, oldest first. */
+async function probeReport(page: Page): Promise<string> {
+  const events = await page.evaluate(
+    () =>
+      (window as unknown as { __rb?: { at: number; kind: string; data: unknown }[] }).__rb ?? [],
+  );
+  return events
+    .map((event) => `${event.at.toFixed(1)}ms ${event.kind} ${JSON.stringify(event.data)}`)
+    .join("\n");
+}
+
+/**
+ * Run `check`, and if it throws, rethrow with the editor's account appended: the snapshot taken
+ * at the press, one taken now, and the probe's events. Reads nothing on the green path.
+ */
+async function withProbeOnFailure<T>(
+  page: Page,
+  sectionId: string,
+  before: Awaited<ReturnType<typeof canvasSnapshot>> | null,
+  check: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await check();
+  } catch (error) {
+    const after = await canvasSnapshot(page, sectionId).catch(() => null);
+    const events = await probeReport(page).catch(() => "(probe unreadable)");
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `${message}\n\n--- at the press ---\n${JSON.stringify(before)}\n--- now ---\n${JSON.stringify(after)}\n--- the editor's account ---\n${events}`,
+    );
+  }
+}
+
 describe("sprint 13 día 7 — el clic que se perdía mientras la vista previa parecía lista", () => {
   /**
    * The window, widened on purpose and held open.
@@ -4692,7 +4798,9 @@ describe("sprint 13 día 7 — el clic que se perdía mientras la vista previa p
   }
 
   it("selects a section clicked before the frame has finished loading", async () => {
-    const page = await (await browser.newContext()).newPage();
+    const context = await browser.newContext();
+    await probeOn(context);
+    const page = await context.newPage();
     try {
       await withSlowFonts(page);
       const frame = await openedVariant(page);
@@ -4700,6 +4808,7 @@ describe("sprint 13 día 7 — el clic que se perdía mientras la vista previa p
       // The press happens while the frame is still loading — the state the old code was inert in.
       // Asserted rather than assumed, so a future change that makes `load` fire first turns this into
       // a test of nothing without saying so.
+      const atPress = await canvasSnapshot(page, "sec-services");
       await frame.locator('[data-section="sec-services"]').click();
       expect(
         await frame.locator("body").evaluate(() => document.readyState),
@@ -4707,11 +4816,17 @@ describe("sprint 13 día 7 — el clic que se perdía mientras la vista previa p
       ).not.toBe("complete");
 
       // And the press took effect: the section is selected and its action cluster is drawn. Against
-      // the old code both of these were zero, for as long as the fonts took.
-      await expect(frame.locator('[data-section="sec-services"].rb-selected')).toHaveCount(1);
-      await expect(
-        frame.locator('[data-section="sec-services"] .rb-action[aria-label="Borrar esta sección"]'),
-      ).toBeVisible();
+      // the old code both of these were zero, for as long as the fonts took. **The intermittent
+      // this suite has carried since sprint 7 fails here**, and when it does the editor's own
+      // account goes into the message (sprint 18 day 5).
+      await withProbeOnFailure(page, "sec-services", atPress, async () => {
+        await expect(frame.locator('[data-section="sec-services"].rb-selected')).toHaveCount(1);
+        await expect(
+          frame.locator(
+            '[data-section="sec-services"] .rb-action[aria-label="Borrar esta sección"]',
+          ),
+        ).toBeVisible();
+      });
     } finally {
       await page.context().close();
     }
@@ -4721,13 +4836,16 @@ describe("sprint 13 día 7 — el clic que se perdía mientras la vista previa p
     // The other half of the same window, and the other symptom CI printed: two captions typed into a
     // gallery came back as the placeholder. `wireEditing` is what makes anything `contenteditable`,
     // so until it ran there was nothing to type into and the keystrokes went nowhere.
-    const page = await (await browser.newContext()).newPage();
+    const context = await browser.newContext();
+    await probeOn(context);
+    const page = await context.newPage();
     try {
       await withSlowFonts(page);
       const frame = await openedVariant(page);
 
       const headline = frame.locator('[data-id="el-headline"]');
       const before = (await headline.textContent())?.trim() ?? "";
+      const atPress = await canvasSnapshot(page, "sec-cover");
       await headline.click();
       expect(await frame.locator("body").evaluate(() => document.readyState)).not.toBe("complete");
       // A string the generated page cannot already be saying, read back exactly. The first version of
@@ -4740,8 +4858,10 @@ describe("sprint 13 día 7 — el clic que se perdía mientras la vista previa p
       await page.keyboard.type("ZZQ");
       await page.getByText("Haz clic en cualquier texto para cambiarlo").click();
 
-      await expect(page.getByText("Guardado en este navegador")).toBeVisible();
-      await expect(headline).toHaveText("ZZQ");
+      await withProbeOnFailure(page, "sec-cover", atPress, async () => {
+        await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+        await expect(headline).toHaveText("ZZQ");
+      });
       expect(before, "the headline already said the typed text, so this asserts nothing").not.toBe(
         "ZZQ",
       );

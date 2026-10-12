@@ -67,9 +67,11 @@ import {
   type SaveStatus,
 } from "../editor/EditorShell.tsx";
 import { ACCEPTED_IMAGE_ACCEPT } from "../editor/imageBytes.ts";
+import { LOOK_AHEAD_DEADLINE_MS, lookAheadStep } from "../editor/lookAhead.ts";
 import { measureOverflow } from "../editor/overflowCheck.ts";
 import { countPhotos, listPhotos, type PhotoState } from "../editor/photoInventory.ts";
 import { withPhotoUrls } from "../editor/previewDocument.ts";
+import { record, serialOf } from "../editor/probe.ts";
 import { sectionFields } from "../editor/sectionFields.ts";
 import {
   placeAfterRebuild,
@@ -1305,7 +1307,7 @@ export function Editor({
         // and this is the only place it can run. `load` is what waits for the pictures, and the
         // pictures are what the renderer gives no dimensions to.
         onLoad={(event) => {
-          wireOnce(event.currentTarget);
+          wireOnce(event.currentTarget, "onload");
           settleReadingPosition(event.currentTarget);
         }}
         className={`absolute inset-0 h-full w-full border-0 ${
@@ -1390,6 +1392,14 @@ export function Editor({
     frame?.focus();
   }, [buffer.live]);
 
+  // The probe's view of the two things that put a new document in a frame (sprint 18 day 5).
+  useEffect(() => {
+    record("buffer", { live: buffer.live, liveKey: buffer.liveKey, pendingKey: buffer.pendingKey });
+  }, [buffer]);
+  useEffect(() => {
+    record("html", { length: html.length, chromeKey });
+  }, [html, chromeKey]);
+
   /**
    * Look for the new page every frame until it is there, and wire it the moment it is.
    *
@@ -1414,7 +1424,7 @@ export function Editor({
   // biome-ignore lint/correctness/useExhaustiveDependencies: see the note above this line
   useEffect(() => {
     let frame = 0;
-    const deadline = Date.now() + 1_000;
+    const deadline = Date.now() + LOOK_AHEAD_DEADLINE_MS;
     const look = () => {
       // **The frame being prepared, when there is one.** This look-ahead exists to wire a new
       // document the moment it is parsed, and during a swap the new document is in the buffered
@@ -1424,31 +1434,30 @@ export function Editor({
       const pending = buffer.pendingKey === null ? null : slotFrame(pendingSlot);
       const target = pending ?? liveFrame();
       const iframeDoc = target?.contentDocument;
-      if (
-        iframeDoc &&
-        iframeDoc !== wiredDoc.current &&
-        // **Parsed, not merely started.** `readyState` leaves `"loading"` at the frame's own
-        // `DOMContentLoaded`, which is exactly the moment every section exists and still long
-        // before `load` waits out the eight font requests nothing answers — so this closes the
-        // window this look-ahead was written for without opening a worse one.
-        //
-        // Without it the test was «has it got a section yet», and a streaming document has its
-        // first section long before its last. The chrome was then attached to a partial page: gaps
-        // for the sections parsed so far and none for the rest, with `onLoad` arriving later and
-        // doing nothing, because by then the document is already the wired one.
-        //
-        // Measured on 5 October 2026 with the fonts held 1.5s and the CPU throttled 20x, counting
-        // `.rb-gap` against `[data-section]` on a five-section page: 1 run in 6 wired a partial
-        // document on `main`, and 3 in 4 once the canvas started resizing itself on mount — which
-        // is how CI found it. The counts came out 5, 4 and 2 where 6 was right; CI printed 2.
-        iframeDoc.readyState !== "loading" &&
-        iframeDoc.querySelector("[data-section]") !== null
-      ) {
-        if (pending) promote(pending);
-        else wireOnce(target);
+      /*
+       * **Wiring does not end the walk — sprint 18 day 5, and the intermittent of sprint 7.**
+       * This used to `return` after `wireOnce`, and six probed failures showed what that cost:
+       * the bank's photographs replaced `srcDoc` a few milliseconds after the first document's
+       * `html`, before that document had been wired; this effect re-ran, found the *first*
+       * document still in the frame, wired it, and returned — so the *second* document, the one
+       * this `html` produced, arrived unwired and waited for `load`. The decision is a pure
+       * function now (`lookAheadStep`) and the rule is: wire, and keep looking until the
+       * deadline. The identity guard and the `data-rb-wired` mark make the extra ticks free.
+       */
+      const step = lookAheadStep({
+        document: iframeDoc !== null && iframeDoc !== undefined,
+        unwired: iframeDoc !== null && iframeDoc !== undefined && iframeDoc !== wiredDoc.current,
+        parsed: iframeDoc?.readyState !== "loading",
+        hasSection: iframeDoc?.querySelector("[data-section]") !== null,
+        pending: pending !== null,
+        withinDeadline: Date.now() < deadline,
+      });
+      if (step === "promote" && pending) {
+        promote(pending);
         return;
       }
-      if (Date.now() < deadline) frame = requestAnimationFrame(look);
+      if (step === "wire") wireOnce(target, "lookahead");
+      if (step !== "stop") frame = requestAnimationFrame(look);
     };
     look();
     return () => cancelAnimationFrame(frame);
@@ -2106,7 +2115,13 @@ export function Editor({
       return panel;
     }
 
-    function select(target: HTMLElement) {
+    function select(target: HTMLElement, via: "click" | "restore" | "return" | "other" = "other") {
+      record("select", {
+        sectionId: target.dataset.section ?? null,
+        via,
+        serial: serialOf(iframeDoc),
+        readyState: iframeDoc.readyState,
+      });
       for (const section of sections) {
         section.classList.remove("rb-selected");
         for (const el of section.querySelectorAll(".rb-actions, .rb-compositions")) {
@@ -2284,7 +2299,7 @@ export function Editor({
     }
 
     for (const section of sections) {
-      section.addEventListener("click", () => select(section));
+      section.addEventListener("click", () => select(section, "click"));
       /*
        * Clicking into a section's text, or Tab-ing to it, moves the keyboard's place as well —
        * otherwise the arrows would act on wherever the place last was, which is somewhere the
@@ -2402,7 +2417,7 @@ export function Editor({
     if (remembered) {
       const target = sections.find((section) => section.dataset.section === remembered);
       if (target) {
-        select(target);
+        select(target, "restore");
         if (compositionMenuOpen.current) {
           const compositions = compositionsFor(doc, remembered);
           if (compositions.length > 0) {
@@ -2486,7 +2501,7 @@ export function Editor({
        * block exists to place. The case it is actually for is a delete, where the section now in
        * that place was never chosen and nothing has drawn a cluster for it.
        */
-      if (host && selectedSection.current !== wanted.sectionId) select(host);
+      if (host && selectedSection.current !== wanted.sectionId) select(host, "return");
       takeCanvasFocus(iframeDoc);
     }
   }
@@ -4040,6 +4055,8 @@ export function Editor({
    * whole bookkeeping — there is no flag to reset and nothing to clear.
    */
   const wiredDoc = useRef<Document | null>(null);
+  /** One number per wired document, stamped on its root as `data-rb-serial` (sprint 18 day 5). */
+  const wireSerial = useRef(0);
 
   /**
    * Attach the canvas's chrome **as soon as the page is parsed**, and never twice.
@@ -4069,7 +4086,10 @@ export function Editor({
    * `onLoad` stays, as the backstop for anything this misses. It is the same call, and the document
    * identity above is what makes the second one free.
    */
-  function wireOnce(frame: HTMLIFrameElement | null | undefined) {
+  function wireOnce(
+    frame: HTMLIFrameElement | null | undefined,
+    via: "lookahead" | "onload" | "promote" = "onload",
+  ) {
     const iframeDoc = frame?.contentDocument;
     if (!iframeDoc || wiredDoc.current === iframeDoc) return;
     // **The document carries its own mark, and the mark is what «never twice» rests on.**
@@ -4091,6 +4111,16 @@ export function Editor({
     // clearing in `wireInsertion` and `wireHandmade` alone, each kept it at 6.
     if (iframeDoc.documentElement.dataset["rbWired"] === "1") return;
     iframeDoc.documentElement.dataset["rbWired"] = "1";
+    wireSerial.current += 1;
+    iframeDoc.documentElement.dataset["rbSerial"] = String(wireSerial.current);
+    record("wire", {
+      serial: wireSerial.current,
+      via,
+      readyState: iframeDoc.readyState,
+      sections: iframeDoc.querySelectorAll("[data-section]").length,
+      live: frame === liveFrame(),
+      buffered: document.querySelectorAll("iframe[data-buffered]").length,
+    });
     wiredDoc.current = iframeDoc;
     rememberCanvasBackground(iframeDoc);
     wireInteractions(iframeDoc);
@@ -4119,7 +4149,8 @@ export function Editor({
   function promote(frame: HTMLIFrameElement) {
     const arriving = buffer.pendingKey;
     if (arriving === null || frame !== slotFrame(pendingSlot) || !frame.contentDocument) return;
-    wireOnce(frame);
+    wireOnce(frame, "promote");
+    record("promote", { serial: serialOf(frame.contentDocument), arriving });
     syncHole(frame.contentDocument);
     syncGrid(frame.contentDocument, designOn ? designSectionId : null, placingElementId);
     // Read before the commit, because afterwards the frame it is asking about is gone. An
