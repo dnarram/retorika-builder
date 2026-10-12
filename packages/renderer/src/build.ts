@@ -88,6 +88,7 @@ function listNode(
   level: number,
   base: Record<string, string>,
   bound: Bound,
+  aboveTheFold: boolean,
 ): RenderNode | undefined {
   const binding = el.binding;
   if (binding && binding.field === undefined) {
@@ -106,7 +107,7 @@ function listNode(
     const cards: RenderNode[] = [];
     for (const entry of collection.entries) {
       const children = template.elements
-        .map((child) => elementNode(child, options, level + 1, { ...bound, entry }))
+        .map((child) => elementNode(child, options, level + 1, { ...bound, entry }, aboveTheFold))
         .filter((node) => node !== undefined);
       if (children.length === 0) continue;
       cards.push(
@@ -130,7 +131,7 @@ function listNode(
   const items: RenderNode[] = [];
   for (const item of el.items ?? []) {
     const children = item.elements
-      .map((child) => elementNode(child, options, level + 1, bound))
+      .map((child) => elementNode(child, options, level + 1, bound, aboveTheFold))
       .filter((node) => node !== undefined);
     if (children.length === 0) continue;
     items.push(element("li", { class: "rb-item", "data-item": item.id }, children));
@@ -195,6 +196,8 @@ function elementNode(
   options: ResolvedRenderOptions,
   level: number,
   bound: Bound,
+  /** Whether the section this element sits in is the first on its page. See the image case. */
+  aboveTheFold: boolean,
 ): RenderNode | undefined {
   if (el.hidden) return undefined;
 
@@ -204,7 +207,7 @@ function elementNode(
   const base = { "data-id": el.id, "data-role": el.role, "data-slot": el.slot };
 
   // A list holds items rather than a value, so it is handled before the value check.
-  if (el.role === "list") return listNode(el, options, level, base, bound);
+  if (el.role === "list") return listNode(el, options, level, base, bound, aboveTheFold);
 
   const value = boundValue(el, bound);
   if (!value) return undefined;
@@ -239,7 +242,27 @@ function elementNode(
       }
 
     case "image":
-      return element("img", { ...base, src: safeUrl(value.src), alt: value.alt });
+      /**
+       * `loading="lazy"` on every photograph below the first section of the page, and never on
+       * the first — sprint 18 day 4, measured rather than assumed. The bank's gallery (ADR 0039)
+       * put four photographs under the cover, and on Lighthouse's simulated slow 4G the four
+       * competed with the cover for the wire: LCP went from 1.35–1.65 s to 2.55–2.86 s and the
+       * performance score from 100 to 96–97, one or two points over protocol Part 8.5's floor.
+       * A browser given this hint fetches those four when they come near the viewport, so the
+       * cover — the largest contentful paint on every composition — has the wire to itself.
+       *
+       * The first section is exempt by position, not by preset: the cover is where the LCP is, and
+       * a page with no cover (a converted page) still opens on its first section. A lazy image
+       * above the fold would be the one thing worse than none — Lighthouse's own
+       * `lcp-discovery-insight` says so by name. Nothing here depends on a clock or on the
+       * viewport, so the output stays deterministic and the hint is only a hint.
+       */
+      return element("img", {
+        ...base,
+        src: safeUrl(value.src),
+        alt: value.alt,
+        ...(aboveTheFold ? {} : { loading: "lazy" }),
+      });
 
     case "link":
       return textElement(
@@ -384,7 +407,9 @@ function sectionNode(
   options: ResolvedRenderOptions,
   isH1: boolean,
   bound: Bound,
-  target?: TeaserTarget,
+  target: TeaserTarget | undefined,
+  /** The first section on its page: its photographs load eagerly, every other section's lazily. */
+  aboveTheFold: boolean,
 ): RenderNode {
   const preset = presetFor(section.preset.catalogId);
   const elements = section.content;
@@ -403,7 +428,7 @@ function sectionNode(
 
   const emitted: { el: ContentElement; node: RenderNode; placement: Placement | undefined }[] = [];
   for (const el of elements) {
-    const node = elementNode(el, options, level, bound);
+    const node = elementNode(el, options, level, bound, aboveTheFold);
     if (!node) continue;
 
     // **The accessible name of a teaser's link**, and the one thing on it that is not the owner's
@@ -533,16 +558,19 @@ export function buildTree(doc: RetorikaDocument, options: ResolvedRenderOptions)
     // where every page's structure is announced.
     ...menuNodes(doc, page),
     element("main", { class: "rb-page", "data-page": page.id }, [
-      ...page.sections.map((section) =>
+      ...page.sections.map((section, index) =>
         sectionNode(
           section,
           options,
           section.preset.catalogId === COVER_ID || section.id === fallbackH1Id,
           bound,
           section.preset.catalogId === TEASER_ID ? teaserTarget(doc, hrefOf(section)) : undefined,
+          index === 0,
         ),
       ),
-      ...borrowedFooter.map((section) => sectionNode(section, options, false, bound)),
+      ...borrowedFooter.map((section) =>
+        sectionNode(section, options, false, bound, undefined, false),
+      ),
     ]),
   ];
 }

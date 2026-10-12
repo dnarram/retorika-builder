@@ -10734,3 +10734,106 @@ describe("sprint 18 día 1 — el producto avisa cuando se rompe, y hoy no avisa
     }
   }, 180_000);
 });
+
+describe("sprint 18 día 4 — la galería del banco en el editor, contada una a una", () => {
+  /**
+   * ADR 0039 §2, verified where an owner would meet it. A generated restaurante site carries five
+   * sample photographs — the cover and the gallery's four — and every one of them has to say so:
+   * a «Foto de ejemplo» badge on the canvas, five rows in «Fotos», five rows in the warning before
+   * a download, and a ZIP that carries the five files and **no badge**, because the badge is the
+   * editor's and the published page is the owner's.
+   */
+  it("badges the four, counts five in the panel and the warning, and ships five with no badge", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+
+      // The four, each a bank photograph with its badge drawn over it — inside list items, which
+      // is the walk every photo code path in this repository has forgotten at least once.
+      const gallery = frame.locator('[data-section="sec-gallery"]');
+      await expect(gallery.locator('img[src^="blob:"]')).toHaveCount(GALLERY_SAMPLE_COUNT);
+      const badges = gallery.locator(".rb-sample");
+      await expect(badges).toHaveCount(GALLERY_SAMPLE_COUNT);
+      await expect(badges).toHaveText(Array(GALLERY_SAMPLE_COUNT).fill(/Foto de ejemplo/));
+      for (let n = 0; n < GALLERY_SAMPLE_COUNT; n += 1) {
+        await expect(badges.nth(n), `badge ${n + 1} is drawn where it can be seen`).toBeVisible();
+      }
+      // And the caption under each is the record's own words, never the marker.
+      const captions = gallery.locator('[data-slot="caption"]');
+      await expect(captions).toHaveCount(GALLERY_SAMPLE_COUNT);
+      for (const caption of await captions.allTextContents()) {
+        expect(caption.trim().length).toBeGreaterThan(0);
+        expect(caption).not.toMatch(/Escribe aquí/);
+      }
+
+      // «Fotos»: five, none of them the owner's yet.
+      await page.getByRole("button", { name: "Fotos", exact: true }).click();
+      const total = 1 + GALLERY_SAMPLE_COUNT;
+      await expect(
+        page.getByText(`${total} de ${total} fotos todavía no son tuyas.`),
+      ).toBeVisible();
+      await expect(page.locator('ul li:has(button:has-text("Cambiar"))')).toHaveCount(total);
+
+      // The warning before a download: the same five, one row each, and it warns rather than
+      // blocks — «Descargar igualmente» is there, which a dead link would not allow.
+      await page.getByRole("button", { name: "Descargar" }).click();
+      const dialog = page.locator('[role="dialog"]', { hasText: "Antes de descargar" });
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByText(`Tu web tiene ${total} fotos de ejemplo`)).toBeVisible();
+      await expect(dialog.locator('li:has(button:has-text("Cambiar"))')).toHaveCount(total);
+
+      const [download, response] = await Promise.all([
+        page.waitForEvent("download"),
+        page.waitForResponse((candidate) => candidate.url().includes("/api/download")),
+        dialog.getByRole("button", { name: "Descargar igualmente" }).click(),
+      ]);
+      expect(response.status()).toBe(200);
+      const dir = mkdtempSync(join(tmpdir(), "retorika-e2e-s18d4-"));
+      const zipPath = join(dir, download.suggestedFilename());
+      await download.saveAs(zipPath);
+      const zip = new Uint8Array(readFileSync(zipPath));
+      const entries = listZipEntries(zip);
+      expect(entries.filter((entry) => entry.startsWith("assets/muestra-"))).toHaveLength(total);
+      extractAll(zip, dir);
+
+      // Opened from disk: five photographs decoded, and not one badge — `render` never emits
+      // `sample`, so the published page has no way to say what the editor says.
+      const offline = await (await browser.newContext()).newPage();
+      const failed: string[] = [];
+      offline.on("requestfailed", (request) => failed.push(request.url()));
+      try {
+        await offline.goto(`file://${join(dir, "index.html")}`, { waitUntil: "load" });
+        await expect(offline.locator("img")).toHaveCount(total);
+        // The gallery's four carry `loading="lazy"` (sprint 18 day 4) and the cover does not, so
+        // they are fetched when they come near the viewport: scrolled to, as a visitor would.
+        await expect(
+          offline.locator('[data-section="sec-gallery"] img[loading="lazy"]'),
+        ).toHaveCount(GALLERY_SAMPLE_COUNT);
+        await expect(offline.locator('[data-section="sec-cover"] img[loading]')).toHaveCount(0);
+        await offline.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+        await expect
+          .poll(() =>
+            offline
+              .locator("img")
+              .evaluateAll((images) =>
+                images.every(
+                  (image) =>
+                    image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0,
+                ),
+              ),
+          )
+          .toBe(true);
+        await expect(offline.locator(".rb-sample")).toHaveCount(0);
+        expect(await offline.content()).not.toContain("Foto de ejemplo");
+        expect(failed).toEqual([]);
+      } finally {
+        await offline.context().close();
+      }
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+});
