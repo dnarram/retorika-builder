@@ -1,9 +1,13 @@
 # 0039 — The bank fills a gallery of four, and every one of them says it is not yours
 
-**Status:** **proposed** · **Date:** 2026-10-12 ·
+**Status:** **accepted** · **Date:** 2026-10-12 · **Accepted:** 2026-10-13 ·
 **Proposed by:** development, sprint 18 day 3, at David's instruction when approving the sprint —
 with one condition he set, which is §2 below ·
-**Accepted by:** — (David signs; development does not) ·
+**Accepted by:** **David, 13 October 2026** — «Firma el ADR0039 por mí», opening sprint 18 day 4,
+after reading the pull request that built it (#222) and the two bank sentences in its body.
+**Recorded by development at his instruction, which is said out loud because the standing rule is
+that development does not sign.** The decision is his; the keystrokes are not, and anybody reading
+this later should be able to tell the difference without asking. ·
 **Amends:** [ADR 0036](0036-the-three-cards-pick-their-photographs-together.md), the consequence
 that says «a generated site carries exactly one photograph»; and
 [ADR 0011](0011-sample-photos-per-sector.md), which gave every sector a cover photograph and
@@ -77,6 +81,11 @@ making the gallery smaller than it is useful:
   carries `sample`, inside list items as well as on the cover. Day 4 of this sprint verifies it on
   the four and makes the `e2e` say so; if the badge does not reach list items today, that is a
   defect against this ADR and not a gap in it.
+  > **Verified 13 October 2026 (day 4):** the badge reaches the four, each one visible; «Fotos»
+  > says «5 de 5 fotos todavía no son tuyas»; the warning says «Tu web tiene 5 fotos de ejemplo»
+  > with five «Cambiar» rows and offers «Descargar igualmente»; the ZIP carries the five files and
+  > the page opened from disk shows five photographs and not one badge. The walk is «sprint 18
+  > día 4» in `apps/editor/e2e/critical-flows.e2e.test.ts`.
 - **In «Fotos» and in the warning before a download.** The panel lists every photograph with its
   state; the pre-download warning says «Tu web tiene *N* fotos de ejemplo» and lists each with its
   own «Cambiar». Both already walk list items (`photoInventory.ts`, sprint 5's lesson). The warning
@@ -128,6 +137,10 @@ would know how to answer before seeing the page. The editor can delete three car
   274–335 KB gzipped in total (`pnpm size`, 12 October 2026). The bytes we author stay at 49 KB,
   under the 80 KB budget that number protects; photographs are reported and bounded by the bank's
   own 200 KB cap per record.
+  > **And the four cost Lighthouse one to two points of performance** on simulated slow 4G (100 →
+  > 96–97, LCP 1.35–1.65 s → 2.55–2.86 s), because they competed with the cover for the wire. Day 4
+  > gave every photograph outside the first section of its page `loading="lazy"` — the cover's
+  > never — and measured 100 / 99 / 99 after. Three images on two golden pages moved, reviewed.
 - `Variants.tsx` fetches a card's photographs **together and writes them once**, where it wrote
   once per photograph. Five replacements of the preview's document in a row was the mechanism the
   backlog has suspected since sprint 7, and the day the gallery landed twenty `e2e` walks lost the

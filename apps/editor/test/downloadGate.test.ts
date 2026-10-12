@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { GALLERY_PHOTOS } from "@retorika/catalog";
+import { EMPTY_ANSWERS, GALLERY_SAMPLE_COUNT, generate } from "@retorika/generator";
 import {
   MAX_PAGES,
   parseDocument,
@@ -20,7 +21,7 @@ import {
   EVERY_KIND_HAS_A_DIALOG,
   MAX_PHOTOS,
 } from "../src/editor/downloadGate.ts";
-import type { PhotoCounts } from "../src/editor/photoInventory.ts";
+import { countPhotos, type PhotoCounts } from "../src/editor/photoInventory.ts";
 
 /**
  * `downloadGateFor` — what pressing «Descargar» does, and `MAX_PHOTOS` — the number that used to
@@ -112,6 +113,20 @@ describe("downloadGateFor", () => {
 
   it("is ready when every photograph is already the owner's", () => {
     expect(downloadGateFor(counts({ own: 5, total: 5 }), plain)).toEqual({ kind: "ready" });
+  });
+
+  it("warns about the five a generated restaurante site carries, one row each (ADR 0039)", () => {
+    // Counted from a real generated site rather than written as a number: the cover and the
+    // bank's gallery of four, every one a sample, and the gate warns — it does not block — because
+    // the page works and the choice is the owner's.
+    const site = generate({
+      ...EMPTY_ANSWERS,
+      businessName: "Taberna del Puerto",
+      sector: "restaurante-bar",
+      services: ["Comidas"],
+    });
+    const gate = downloadGateFor(countPhotos(site.document), site.document);
+    expect(gate).toEqual({ kind: "warn", sample: 1 + GALLERY_SAMPLE_COUNT, empty: 0 });
   });
 
   it("warns about sample photographs alone", () => {
