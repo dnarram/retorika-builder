@@ -422,6 +422,17 @@ open survives.
   interaction landing in the window where the preview looks ready and is not yet wired. Three
   walks now, all in the block that exists to exercise that window; sprint 18 day 5 instruments it.
 
+  **The first walk again, in CI this time, 13 October 2026 (sprint 18 day 4, PR #223):** «selects
+  a section clicked before the frame has finished loading» — `[data-section="sec-services"]
+  .rb-selected` resolved to 0 elements fourteen times over five seconds, the original signature,
+  on a GitHub runner with nothing else on it (430 s for the suite, 139 of 140 green). The same
+  day, four full runs on the development machine hung nine *other* walks on timeouts under a load
+  average of 5–9, which is a different thing (the machine) and is kept apart from this row. This
+  row's count: four occurrences, three walks, one block, never in isolation, now seen on CI as
+  well as locally. Day 5 is next and nothing here changes its plan — except that the gallery's
+  one-batch photo write (PR #222) is now known **not** to be the whole mechanism, because this
+  run had it.
+
   Two things that narrow it:
 
   - **The failure is `toHaveCount` resolving to 0, not a timeout.** The cluster was never drawn, so
