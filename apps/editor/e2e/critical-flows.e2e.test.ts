@@ -10314,9 +10314,12 @@ describe("sprint 17 día 6 — «+ Añadir sección aquí» abre con el cursor e
   }, 180_000);
 
   it("insertar una sección deja el teclado en la que acaba de aparecer", async () => {
-    const page = await (
-      await browser.newContext({ viewport: { width: 1440, height: 900 } })
-    ).newPage();
+    // Probed since 13 October 2026: CI lost the keyboard here once («focus fell to the body»)
+    // on the sprint 18 closing PR, after passing every full run of the two days before. No
+    // mechanism is claimed; the editor's own account goes into the next red, as on day 5.
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    await probeOn(context);
+    const page = await context.newPage();
     try {
       await intoTheCanvas(page);
       const frame = page.frameLocator(PREVIEW).first();
@@ -10335,22 +10338,25 @@ describe("sprint 17 día 6 — «+ Añadir sección aquí» abre con el cursor e
       await offer.click();
 
       await expect.poll(async () => (await order(page)).length).toBe(before.length + 1);
-      await expect
-        .poll(
-          async () => {
-            const at = await focus(page);
-            const list = await order(page);
-            if (at.tag === "BODY") return "focus fell to the body";
-            if (!at.onSection) return `focus is on ${at.tag}, not a section`;
-            if (before.includes(at.section ?? ""))
-              return "focus is on a section that was here before";
-            return list[0] === at.section
-              ? "on the section that appeared"
-              : `focused ${at.section}`;
-          },
-          { message: "inserting a section lost the keyboard" },
-        )
-        .toBe("on the section that appeared");
+      const atPress = await canvasSnapshot(page, "sec-cover");
+      await withProbeOnFailure(page, "sec-cover", atPress, async () => {
+        await expect
+          .poll(
+            async () => {
+              const at = await focus(page);
+              const list = await order(page);
+              if (at.tag === "BODY") return "focus fell to the body";
+              if (!at.onSection) return `focus is on ${at.tag}, not a section`;
+              if (before.includes(at.section ?? ""))
+                return "focus is on a section that was here before";
+              return list[0] === at.section
+                ? "on the section that appeared"
+                : `focused ${at.section}`;
+            },
+            { message: "inserting a section lost the keyboard" },
+          )
+          .toBe("on the section that appeared");
+      });
     } finally {
       await page.context().close();
     }

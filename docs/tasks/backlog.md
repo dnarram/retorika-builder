@@ -532,6 +532,15 @@ open survives.
   `replacingTheDocument` ×3 and one keyboard walk whose section count came back short — the last
   four being a document replaced mid-read, the same window seen from the other side.
 
+  **And one more red, of a different shape, the day the sprint closed (13 October 2026, CI on
+  PR #226):** «insertar una sección deja el teclado en la que acaba de aparecer» — `focus fell to
+  the body` after the insert rebuilt the document — on a runner, once, after passing in every full
+  run of the two days before (three on the fix, five on the loop) and three times alone afterwards.
+  Not this row's family on its face: the press was handled (the section appeared), and what was
+  lost is the focus the rebuild should have put back. No mechanism is claimed; the walk carries the
+  probe since that day, so the next red says which document was wired when and where `select`
+  ran. If it recurs, that is a row of its own.
+
   Two things that narrow it:
 
   - **The failure is `toHaveCount` resolving to 0, not a timeout.** The cluster was never drawn, so
