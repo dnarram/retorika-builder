@@ -10612,6 +10612,33 @@ describe("sprint 17 día 7 — el recorrido entero sin tocar el ratón", () => {
        * Tab cannot walk out of a dialog that claims the page is unavailable.
        */
       const dialog = page.locator('[role="dialog"], [role="alertdialog"]');
+      /*
+       * **Thirty seconds, like the two other waits on this same gate (the photo-that-fails walk),
+       * and not Playwright's five.** CI went red here once on 13 October 2026 (PR #227, which
+       * touched nothing on this path): «Descargar» was reached and pressed, and no dialog within
+       * 5 s. What stands between the press and the dialog is `requestDownload`'s
+       * `measureOverflow`: it renders every page into a hidden 320 px frame and resolves on that
+       * frame's `load`, which waits for the fonts and the photographs the page names — served by
+       * `next dev` on a runner that had been working for six minutes. A hypothesis read off the
+       * code, not measured; if it is wrong, the account below says what the measurement frame was
+       * doing when the wait ran out, instead of «element(s) not found».
+       */
+      await expect
+        .poll(
+          async () => {
+            if ((await dialog.count()) > 0) return "open";
+            return page.evaluate(() => {
+              const measuring = document.querySelector<HTMLIFrameElement>(
+                'iframe[aria-hidden="true"][tabindex="-1"]',
+              );
+              return measuring
+                ? `measuring, frame readyState ${measuring.contentDocument?.readyState ?? "no document"}`
+                : "no dialog, and no measurement frame either";
+            });
+          },
+          { timeout: 30_000, message: "the gate did not open after Enter on «Descargar»" },
+        )
+        .toBe("open");
       await expect(dialog.first()).toBeVisible();
       const inside = await page.evaluate(
         () =>
