@@ -165,7 +165,7 @@ cierto.
 | Registros obsoletos | Tres filas corregidas hoy (fuentes, `tsconfig.json`, el barrido del sprint 14); las fechas del día 4 corregidas el día 5 |
 | La máquina de desarrollo | 16 GB y una carga media entre 3 y 9 con lo que tiene abierto: ya no da una ejecución completa del `e2e` limpia con regularidad. Es de la Parte 18, no del producto, y lo decides tú |
 | **Sprint 19 (13 de octubre):** el sitemap en el ZIP | **Hecho** (día 1), con tu firma de la enmienda al ADR 0029 |
-| **Sprint 19:** las colecciones, cinco promesas de cinco | **Hecho** (días 2 a 5): una página por ficha, ADR 0040 `proposed`, **tuyo de firmar** |
+| **Sprint 19:** las colecciones, cinco promesas de cinco | **Hecho** (días 2 a 5): una página por ficha, ADR 0040 **firmado por ti el 13 de octubre** («firma el ADR 0040 por mí», registrado por desarrollo a tu instrucción) |
 | **Sprint 19:** el circuito del banco como herramienta | **Hecho** (día 6): `pnpm photos:intake` y `pnpm photos:approve`; las fotos siguen siendo tuyas (§2.8) |
 
 ## 4. Las preguntas, juntas
