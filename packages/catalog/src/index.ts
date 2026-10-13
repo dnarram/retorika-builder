@@ -3,6 +3,7 @@ export type { ContactVariant } from "./contact.ts";
 export { CONTACT_ID, CONTACT_SLOTS, CONTACT_VARIANTS, contactPreset } from "./contact.ts";
 export type { CoverVariant } from "./cover.ts";
 export { COVER_ID, COVER_SLOTS, COVER_VARIANTS, coverPreset } from "./cover.ts";
+export { entryPageSection } from "./entryPage.ts";
 export type { FooterVariant } from "./footer.ts";
 export {
   FOOTER_ID,

@@ -1,4 +1,4 @@
-import { presetFor, teaserSection } from "@retorika/catalog";
+import { entryPageSection, presetFor, teaserSection } from "@retorika/catalog";
 import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
 import type {
   ElementAddress,
@@ -20,6 +20,7 @@ import type {
 } from "@retorika/schema";
 import {
   addCollection as addCollectionToDoc,
+  addEntryPage as addEntryPageToDoc,
   addEntry as addEntryToDoc,
   addItem as addItemToDoc,
   applyMark as applyMarkInDoc,
@@ -166,6 +167,9 @@ export type SnapshotCause =
   | { type: "collectionFromList"; sectionId: string; collectionId: string }
   | { type: "bindList"; sectionId: string; collectionId: string }
   | { type: "unbindList"; sectionId: string }
+  /** A page per entry created (ADR 0040): a page cause, like `sectionToPage`, because what appeared
+   * is a page the editor wants to open. Removing one is `deletePage`, the same as any page. */
+  | { type: "addEntryPage"; collectionId: string; pageId: string }
   | null;
 
 export interface Snapshot {
@@ -270,6 +274,15 @@ export type HistoryAction =
       toIndex: number;
     }
   | { type: "sectionToPage"; variant: number; sectionId: string }
+  | {
+      type: "addEntryPage";
+      variant: number;
+      collectionId: string;
+      titleField: string;
+      /** The template page's name — interface text composed by the caller from `es.json`, because
+       * it is read in the tabs and the «Páginas» panel and never published. */
+      title: string;
+    }
   | { type: "pageToSection"; variant: number; pageId: string }
   | { type: "renamePage"; variant: number; pageId: string; title: string }
   | { type: "movePage"; variant: number; pageId: string; toIndex: number }
@@ -886,6 +899,31 @@ function convertSection(history: History, sectionId: string): History {
 }
 
 /**
+ * A page per entry, in one step (ADR 0040 §6) — the second way a page is born.
+ *
+ * The section it is born with is the catalog's, like the avance in `convertSection`: a cover whose
+ * headline reads the title field, in the home cover's own composition so the ficha opens the way
+ * the site does. The page id is read back off the result, for the reason `convertSection` gives.
+ */
+function addEntryPage(
+  history: History,
+  collectionId: string,
+  titleField: string,
+  title: string,
+): History {
+  const present = history.present.document;
+  const homeCover = present.pages[0]?.sections.find(
+    (section) => section.preset.catalogId === "cover",
+  );
+  const document = addEntryPageToDoc(present, collectionId, titleField, title, (args) =>
+    entryPageSection({ ...args, ...(homeCover ? { variantId: homeCover.preset.variantId } : {}) }),
+  );
+  const pageId = document.pages.at(-1)?.id;
+  if (!pageId) throw new Error("addEntryPage: no page was produced");
+  return step(history, document, { type: "addEntryPage", collectionId, pageId });
+}
+
+/**
  * The conversion folded away, in one step — the other half of ADR 0022's «se puede deshacer».
  *
  * Symmetrical with `convertSection` and deliberately so: the sections come back, the avance goes,
@@ -1140,6 +1178,8 @@ function apply(history: History, action: HistoryAction): History {
       return moveItem(history, action.sectionId, action.slot, action.itemId, action.toIndex);
     case "sectionToPage":
       return convertSection(history, action.sectionId);
+    case "addEntryPage":
+      return addEntryPage(history, action.collectionId, action.titleField, action.title);
     case "pageToSection":
       return foldPage(history, action.pageId);
     case "renamePage":

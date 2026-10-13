@@ -302,6 +302,10 @@ function canConvert(doc: RetorikaDocument, sectionId: string): boolean {
   if (doc.pages.length >= MAX_PAGES) return false;
   const found = findSection(doc, sectionId);
   if (!found) return false;
+  // A section of a page drawn per entry reads that entry; on a page of its own it would read
+  // nothing (ADR 0040). `sectionToPage` refuses it by name, and this keeps the verb from being
+  // offered where it would.
+  if (found.page.binding) return false;
   return !UNCONVERTIBLE.has(found.section.preset.catalogId);
 }
 
@@ -499,6 +503,7 @@ export function Editor({
   onRenameCollection,
   onDeleteCollection,
   onAddEntry,
+  onAddEntryPage,
   onCollectionFromList,
   onBindList,
   onUnbindList,
@@ -605,6 +610,9 @@ export function Editor({
   onRenameCollection: (collectionId: string, name: string) => void;
   onDeleteCollection: (collectionId: string) => void;
   onAddEntry: (collectionId: string, fields: Record<string, EntryField>) => void;
+  /** A page per entry for a collection (ADR 0040 §6): one stored page, drawn once per entry. The
+   * title is composed here from `es.json`, because it is what the tabs and «Páginas» show. */
+  onAddEntryPage: (collectionId: string, titleField: string, title: string) => void;
   /** Make a list out of the cards a section already has — the lossless way in (ADR 0033). */
   onCollectionFromList: (sectionId: string, slot: string, name: string) => void;
   onBindList: (sectionId: string, slot: string, collectionId: string) => void;
@@ -1037,18 +1045,42 @@ export function Editor({
   // URL for its bytes instead. The document itself keeps the bundle-relative name, which is what
   // the ZIP needs — a relative path inside a `srcDoc` iframe resolves against the parent page's
   // URL and 404s, which is exactly why the placeholder is a data: URI and not a file.
+  /**
+   * Which entry a page drawn per entry is shown for, per page (ADR 0040): the owner's choice from
+   * «Viendo:» in the «Páginas» panel while the entry still exists, the collection's first otherwise.
+   * Derived against the document on every render rather than trusted, so removing the chosen entry
+   * falls back instead of asking the renderer for an entry it would refuse.
+   */
+  const [entryByPage, setEntryByPage] = useState<Record<string, string>>({});
+  function entryShown(forPageId: string | undefined): string | undefined {
+    const page = doc.pages.find((candidate) => candidate.id === (forPageId ?? doc.pages[0]?.id));
+    const binding = page?.binding;
+    if (!page || !binding) return undefined;
+    const collection = doc.collections.find((candidate) => candidate.id === binding.collectionId);
+    const chosen = entryByPage[page.id];
+    if (chosen !== undefined && collection?.entries.some((entry) => entry.id === chosen))
+      return chosen;
+    return collection?.entries[0]?.id;
+  }
+  const previewEntryId = entryShown(pageId);
+
   const html = useMemo(() => {
     // `entryHints` (ADR 0033 §10): each card drawn from a collection entry says which entry it is.
     // **Only here.** The document cannot supply it — a binding carries no entry id and every card
     // shares the template's `data-id` — and a published page must never carry it, which is why the
-    // option is off by default and `buildSite` does not pass it.
-    const options = { entryHints: true, ...(pageId === undefined ? {} : { pageId }) };
+    // option is off by default and `buildSite` does not pass it. `entryId` says which entry a page
+    // drawn per entry shows (ADR 0040), and is likewise the editor's business alone.
+    const options = {
+      entryHints: true,
+      ...(pageId === undefined ? {} : { pageId }),
+      ...(previewEntryId === undefined ? {} : { entryId: previewEntryId }),
+    };
     // `withPhotoUrls` since sprint 6 day 4, when this logic moved out of here and became shared.
     // It had been inline, and the three "elige por dónde empezar" cards rendered the raw document
     // instead — invisible for as long as a generated site's only image was the placeholder, and a
     // broken image on all three cards the moment the generator started asking the bank.
     return render(withPhotoUrls(doc, photoUrls), "html", options).html;
-  }, [doc, photoUrls, pageId]);
+  }, [doc, photoUrls, pageId, previewEntryId]);
 
   /**
    * What the canvas's chrome depends on but the rendered page does not — see the long note at the
@@ -4868,6 +4900,10 @@ export function Editor({
             onPageToSection={onPageToSection}
             canFold={(id) => canFoldPage(doc, id)}
             linksTo={(id) => listLinksTo(doc, id).length}
+            entryShown={entryShown}
+            onPreviewEntry={(id, entryId) =>
+              setEntryByPage((previous) => ({ ...previous, [id]: entryId }))
+            }
           />
         ) : effectiveRail === "style" ? (
           <StylePanel
@@ -4922,6 +4958,27 @@ export function Editor({
               }
             }}
             onAddEntry={onAddEntry}
+            // A page per entry (ADR 0040 §6). The title is interface text — what the tabs and
+            // «Páginas» call the template — composed here from the locale file, never published.
+            onAddEntryPage={(collectionId, titleField) =>
+              onAddEntryPage(
+                collectionId,
+                titleField,
+                es["editor.collections.entryPage.pageTitle"].replace(
+                  "{list}",
+                  doc.collections.find((collection) => collection.id === collectionId)?.name ?? "",
+                ),
+              )
+            }
+            onRemoveEntryPage={onDeletePage}
+            onShowPage={(id) => onSelectPage(doc.pages[0]?.id === id ? undefined : id)}
+            pagesFull={doc.pages.length >= MAX_PAGES}
+            // Which of a card's fields are headings, by the catalog: the one that names each page.
+            headingFieldsFor={(catalogId) =>
+              (presetFor(catalogId).itemSlots ?? [])
+                .filter((slot) => slot.role === "heading")
+                .map((slot) => slot.slot)
+            }
             onRenameCollection={onRenameCollection}
             onDeleteCollection={onDeleteCollection}
             onSetEntryField={onSetEntryField}

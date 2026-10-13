@@ -1526,3 +1526,95 @@ describe("setMark — bold and italic from the floating toolbar", () => {
     expect(wasSectionEverEdited(history, "sec-cover")).toBe(true);
   });
 });
+
+describe("addEntryPage — una página por ficha (ADR 0040)", () => {
+  /** A list made of the generated «Qué hago» cards, which is where an owner's page per entry
+   * starts: the lossless way in, then the page. */
+  function withList(): Histories {
+    return historiesReducer(start(), {
+      type: "collectionFromList",
+      variant: 0,
+      sectionId: "sec-services",
+      slot: "services",
+      name: "Qué hago",
+    });
+  }
+
+  it("creates one stored page bound to the list, slugs every ficha, and opens one step", () => {
+    const before = withList();
+    const collectionId = before[0]?.present.document.collections[0]?.id;
+    if (!collectionId) throw new Error("the list was not made");
+    const after = historiesReducer(before, {
+      type: "addEntryPage",
+      variant: 0,
+      collectionId,
+      titleField: "title",
+      title: "Ficha de Qué hago",
+    });
+    const document = after[0]?.present.document;
+    const page = document?.pages.at(-1);
+    expect(page?.binding).toEqual({ collectionId, titleField: "title" });
+    expect(page?.title).toBe("Ficha de Qué hago");
+    expect(document?.pages).toHaveLength(2);
+    // Born with a cover whose headline reads the title field, in the home cover's own composition.
+    expect(page?.sections[0]?.preset).toEqual({
+      catalogId: "cover",
+      variantId: document?.pages[0]?.sections[0]?.preset.variantId,
+    });
+    expect(
+      page?.sections[0]?.content.find((element) => element.slot === "headline")?.binding,
+    ).toEqual({ collectionId, field: "title" });
+    expect(document?.collections[0]?.entries.map((entry) => entry.slug)).toEqual([
+      "comidas",
+      "cenas",
+    ]);
+    expect(after[0]?.present.cause).toEqual({
+      type: "addEntryPage",
+      collectionId,
+      pageId: page?.id,
+    });
+    // One step: undo takes the page and the slugs back together.
+    const undone = historiesReducer(after, { type: "undo", variant: 0 });
+    expect(undone[0]?.present.document).toBe(before[0]?.present.document);
+  });
+
+  it("throws for a second page, which the panel never offers", () => {
+    const before = withList();
+    const collectionId = before[0]?.present.document.collections[0]?.id ?? "";
+    const once = historiesReducer(before, {
+      type: "addEntryPage",
+      variant: 0,
+      collectionId,
+      titleField: "title",
+      title: "Ficha",
+    });
+    expect(() =>
+      historiesReducer(once, {
+        type: "addEntryPage",
+        variant: 0,
+        collectionId,
+        titleField: "title",
+        title: "Otra",
+      }),
+    ).toThrow(/already has its page per entry/);
+  });
+
+  it("removes it with deletePage, the ordinary way, and the slugs stay with the fichas", () => {
+    const before = withList();
+    const collectionId = before[0]?.present.document.collections[0]?.id ?? "";
+    const made = historiesReducer(before, {
+      type: "addEntryPage",
+      variant: 0,
+      collectionId,
+      titleField: "title",
+      title: "Ficha",
+    });
+    const pageId = made[0]?.present.document.pages.at(-1)?.id ?? "";
+    const gone = historiesReducer(made, { type: "deletePage", variant: 0, pageId });
+    expect(gone[0]?.present.document.pages).toHaveLength(1);
+    expect(gone[0]?.present.document.collections[0]?.entries.map((entry) => entry.slug)).toEqual([
+      "comidas",
+      "cenas",
+    ]);
+  });
+});

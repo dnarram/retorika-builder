@@ -5,6 +5,8 @@ import {
   type CardinalityBlock,
   type Collection,
   type EntryField,
+  entryPageOf,
+  MAX_PAGES,
   type MarkRun,
   type RetorikaDocument,
   shiftMarks,
@@ -55,6 +57,11 @@ export function CollectionsPanel({
   onBindList,
   canBind,
   onAddEntry,
+  onAddEntryPage,
+  onRemoveEntryPage,
+  onShowPage,
+  pagesFull,
+  headingFieldsFor,
   onRenameCollection,
   onDeleteCollection,
   onSetEntryField,
@@ -92,6 +99,18 @@ export function CollectionsPanel({
   canBind: (sectionId: string, slot: string, collectionId: string) => boolean;
   /** `undefined` when this panel cannot know what a ficha is made of — see `addableFields`. */
   onAddEntry: (collectionId: string, fields: Record<string, EntryField>) => void;
+  /**
+   * «Una página por ficha» (ADR 0040 §6): one page, stored once and drawn once per entry, with the
+   * field that names each drawing. Offered beside a list that is shown somewhere, because that is
+   * where the link from a card comes from; the exit is removing the page, which loses nothing.
+   */
+  onAddEntryPage: (collectionId: string, titleField: string) => void;
+  onRemoveEntryPage: (pageId: string) => void;
+  onShowPage: (pageId: string) => void;
+  /** The page cap, asked before the control is drawn: the template is a stored page and counts. */
+  pagesFull: boolean;
+  /** Which of a card's slots are headings, by the catalog — the candidates for the title field. */
+  headingFieldsFor: (catalogId: string) => readonly string[];
   onRenameCollection: (collectionId: string, name: string) => void;
   onDeleteCollection: (collectionId: string) => void;
   onSetEntryField: (
@@ -204,6 +223,11 @@ export function CollectionsPanel({
                   doc={doc}
                   sectionName={sectionName}
                   onAddEntry={onAddEntry}
+                  onAddEntryPage={onAddEntryPage}
+                  onRemoveEntryPage={onRemoveEntryPage}
+                  onShowPage={onShowPage}
+                  pagesFull={pagesFull}
+                  headingFieldsFor={headingFieldsFor}
                   open={open === collection.id}
                   renaming={renaming === collection.id}
                   draft={draft}
@@ -244,6 +268,11 @@ function CollectionRow({
   doc,
   sectionName,
   onAddEntry,
+  onAddEntryPage,
+  onRemoveEntryPage,
+  onShowPage,
+  pagesFull,
+  headingFieldsFor,
   open,
   renaming,
   draft,
@@ -263,6 +292,11 @@ function CollectionRow({
   doc: RetorikaDocument;
   sectionName: (sectionId: string) => string;
   onAddEntry: (collectionId: string, fields: Record<string, EntryField>) => void;
+  onAddEntryPage: (collectionId: string, titleField: string) => void;
+  onRemoveEntryPage: (pageId: string) => void;
+  onShowPage: (pageId: string) => void;
+  pagesFull: boolean;
+  headingFieldsFor: (catalogId: string) => readonly string[];
   open: boolean;
   renaming: boolean;
   draft: string;
@@ -284,6 +318,13 @@ function CollectionRow({
   onMoveEntry: (collectionId: string, entryId: string, toIndex: number) => void;
 }) {
   const uses = usesOfCollection(doc, collection.id);
+  // The sections that show the cards; a page drawn per entry is a use too (kind `page`), but it is
+  // not a section the owner reads as «se muestra en», and it has its own paragraph below.
+  const listUses = uses.filter((use) => use.kind === "list");
+  const entryPage = entryPageOf(doc, collection.id);
+  const titleChoices = titleFieldChoices(collection, listUses, headingFieldsFor);
+  const [titleField, setTitleField] = useState<string | undefined>(undefined);
+  const chosenTitleField = titleField ?? titleChoices[0];
 
   /**
    * Removing one entry, asked **before** the control is drawn.
@@ -341,20 +382,25 @@ function CollectionRow({
       {/* Where it is shown, named by the catalog rather than by its section id — and this is also
           what makes the delete refusal below legible instead of technical. */}
       <p className="px-3 pb-1.5 text-[11px] leading-normal text-ui-muted">
-        {uses.length === 0
+        {listUses.length === 0
           ? es["editor.collections.unused"]
           : es["editor.collections.shownIn"].replace(
               "{sections}",
-              uses.map((use) => sectionName(use.sectionId)).join(", "),
+              listUses.map((use) => sectionName(use.sectionId)).join(", "),
             )}
       </p>
 
       <div className="flex flex-wrap items-center gap-1 border-t border-ui-border px-1.5 py-1">
         <SmallButton label={es["editor.collections.rename"]} onClick={onStartRename} />
         {/* **The delete refusal, said instead of pressed.** `deleteCollection` throws while anything
-            is bound to it (ADR 0033's amendment), so the control is not drawn at all and the reason
-            takes its place — naming the sections, which is what the owner has to act on. */}
-        {uses.length === 0 ? (
+            is bound to it (ADR 0033's amendment) and while its page per entry exists (ADR 0040), so
+            the control is not drawn at all and the reason takes its place — naming what the owner
+            has to act on. */}
+        {entryPage ? (
+          <span className="px-1.5 py-1 text-[11px] leading-normal text-ui-muted">
+            {es["editor.collections.cannotDeleteWithPage"]}
+          </span>
+        ) : uses.length === 0 ? (
           <SmallButton label={es["editor.collections.delete"]} onClick={onDelete} danger />
         ) : (
           <span className="px-1.5 py-1 text-[11px] leading-normal text-ui-muted">
@@ -362,6 +408,63 @@ function CollectionRow({
           </span>
         )}
       </div>
+
+      {/* **«Una página por ficha»** (ADR 0040 §6). Offered beside a list some section shows, which is
+          where the link from each card comes from; with the page made, the way over to it and the
+          way out, which loses nothing — the fichas and their words stay in the list. */}
+      {entryPage ? (
+        <div className="flex flex-col gap-1 border-t border-ui-border px-1.5 py-1.5">
+          <span className="px-1.5 text-[11px] leading-normal text-ui-muted">
+            {es["editor.collections.entryPage.has"].replace(
+              "{n}",
+              String(collection.entries.length),
+            )}
+          </span>
+          <div className="flex flex-wrap items-center gap-1">
+            <SmallButton
+              label={es["editor.collections.entryPage.show"]}
+              onClick={() => onShowPage(entryPage.id)}
+            />
+            <SmallButton
+              label={es["editor.collections.entryPage.remove"]}
+              onClick={() => onRemoveEntryPage(entryPage.id)}
+              danger
+            />
+          </div>
+        </div>
+      ) : listUses.length > 0 && chosenTitleField !== undefined ? (
+        <div className="flex flex-col gap-1 border-t border-ui-border px-1.5 py-1.5">
+          <span className="px-1.5 text-[11px] leading-normal text-ui-muted">
+            {es["editor.collections.entryPage.help"]}
+          </span>
+          {pagesFull ? (
+            <span className="px-1.5 text-[11px] leading-normal text-ui-muted">
+              {es["editor.collections.entryPage.full"].replace("{n}", String(MAX_PAGES))}
+            </span>
+          ) : (
+            <div className="flex flex-wrap items-center gap-1">
+              {titleChoices.length > 1 && (
+                <select
+                  aria-label={es["editor.collections.entryPage.titleField"]}
+                  value={chosenTitleField}
+                  onChange={(event) => setTitleField(event.target.value)}
+                  className="rounded-ui-sm border border-ui-border bg-white px-1.5 py-0.5 text-[12px] text-ui-ink"
+                >
+                  {titleChoices.map((field) => (
+                    <option key={field} value={field}>
+                      {slotLabel(field, listUses)}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <SmallButton
+                label={es["editor.collections.entryPage.create"]}
+                onClick={() => onAddEntryPage(collection.id, chosenTitleField)}
+              />
+            </div>
+          )}
+        </div>
+      ) : null}
 
       {open && (
         <>
@@ -437,6 +540,25 @@ function CollectionRow({
       )}
     </>
   );
+}
+
+/**
+ * The fields that could name each drawn page: the ones the catalog calls headings in the sections
+ * that show the cards, first; then, for a list made of anything else, every field the entries
+ * carry, so there is always one to offer. Empty only for a collection with no entries, whose page
+ * would be drawn for nobody.
+ */
+function titleFieldChoices(
+  collection: Collection,
+  uses: readonly { catalogId: string }[],
+  headingFieldsFor: (catalogId: string) => readonly string[],
+): string[] {
+  const carried = new Set(collection.entries.flatMap((entry) => Object.keys(entry.fields)));
+  if (carried.size === 0) return [];
+  const headings = uses
+    .flatMap((use) => headingFieldsFor(use.catalogId))
+    .filter((field, index, all) => carried.has(field) && all.indexOf(field) === index);
+  return headings.length > 0 ? headings : [...carried].sort();
 }
 
 /**
