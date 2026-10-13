@@ -6,6 +6,7 @@ import {
   PALETTES,
   RETORIKA_BRAND,
   SCALES,
+  STARTING_PALETTE_ID,
   TYPE_PAIRS,
 } from "../src/index.ts";
 
@@ -143,9 +144,20 @@ describe("theme", () => {
     expect(SCALES.some((s) => s.id === DEFAULT_SCALE_ID)).toBe(true);
   });
 
-  it("does not include RETORIKA_BRAND as an entry in PALETTES", () => {
-    for (const palette of PALETTES) {
-      expect(palette.colors).not.toEqual(RETORIKA_BRAND);
-    }
+  it("carries the brand's blue in exactly one palette, the neutral start, and nowhere else", () => {
+    // ADR 0015 kept Retorika's blue out of every client site; ADR 0041 (David, 13 October 2026)
+    // admits it in one place, the palette the proposals start in. One, named, and no more — a
+    // second would be the drift ADR 0015 warned about arriving quietly.
+    const withBrandBlue = PALETTES.filter(
+      (palette) => palette.colors["color.primary"] === RETORIKA_BRAND["blue"],
+    );
+    expect(withBrandBlue.map((palette) => palette.id)).toEqual([STARTING_PALETTE_ID]);
+    for (const palette of PALETTES) expect(palette.colors).not.toEqual(RETORIKA_BRAND);
+  });
+
+  it("names exactly one starting palette, and it is the one STARTING_PALETTE_ID says", () => {
+    expect(PALETTES.filter((palette) => palette.starting).map((palette) => palette.id)).toEqual([
+      STARTING_PALETTE_ID,
+    ]);
   });
 });

@@ -615,15 +615,16 @@ describe("critical flow 3 — cambio de paleta", () => {
         .trim()
         .toUpperCase();
 
-    // Taberna Santo Domingo is `restaurante-bar`, whose generated theme is `warm-terracotta` +
-    // `classic-display` (packages/generator/src/theme.ts) — so the panel opening with that
-    // palette already ticked is `identifyPalette` working end to end, not a fixture that happens
-    // to agree with itself.
+    // Taberna Santo Domingo is `restaurante-bar`, and since 13 October 2026 (ADR 0041) every
+    // proposal without a logo starts in the neutral palette — Retorika's blue, `#156FE7` — with
+    // the sector's `classic-display` (packages/generator/src/theme.ts). The panel opening with
+    // «Neutra» already ticked is `identifyPalette` working end to end, not a fixture that happens
+    // to agree with itself. It was `warm-terracotta`, `#9A3412`, until that day.
     const before = await primaryColor();
-    expect(before).toBe("#9A3412");
+    expect(before).toBe("#156FE7");
 
     await page.getByRole("button", { name: "Estilo", exact: true }).click();
-    const terracotta = page.getByRole("radio", { name: "Terracota cálida" });
+    const terracotta = page.getByRole("radio", { name: "Neutra", exact: true });
     const azul = page.getByRole("radio", { name: "Azul confianza" });
     await expect(terracotta).toBeChecked();
 
@@ -2775,11 +2776,11 @@ describe("sprint 9 día 7 — el recorrido completo del sprint", () => {
 
       await headline.click();
       await frame.locator('.rb-toolbar-swatch[data-ref="color.muted"]').click();
-      // #57534E — «peluquería y barbería» generates on `warm-terracotta`, not `classic-blue`, so
-      // this is that palette's own `color.muted` rather than the value most of this file's other
-      // walks reach for. Measured rather than assumed, which is the whole discipline this file
-      // exists to keep.
-      await expect(frame.locator('[data-id="el-headline"]')).toHaveCSS("color", "rgb(87, 83, 78)");
+      // #475569 — every proposal without a logo starts in the neutral palette since 13 October
+      // 2026 (ADR 0041), so this is that palette's own `color.muted`. It was `warm-terracotta`'s
+      // #57534E, «peluquería y barbería»'s sector default, until that day. Measured rather than
+      // assumed, which is the whole discipline this file exists to keep.
+      await expect(frame.locator('[data-id="el-headline"]')).toHaveCSS("color", "rgb(71, 85, 105)");
 
       // ---- day 1/5: the tools, and measures behind them ----
       await studio.getByRole("switch", { name: "Herramientas de diseño" }).click();

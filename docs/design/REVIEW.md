@@ -31,7 +31,10 @@ Checked one by one, not assumed:
   (ADR 0010).
 - **Question 5 feeds the main button** and asks for the data the action needs on the same screen.
 - **The palette comes from the logo** (mockup 06, and the dossier's own promise), and the logo is
-  optional.
+  optional. **Since 13 October 2026, without a logo's choice the three proposals start in the
+  neutral palette** — black and Retorika's blue — and the owner picks a colour afterwards in
+  «Estilo» ([ADR 0041](../decisions/0041-the-proposals-start-neutral-and-the-palette-is-chosen-afterwards.md));
+  the sector's default palette is no more.
 - **Sample photos** are placed by the generator, not asked for (ADR 0011).
 - **`Descargar` is the editor's primary action,** and there is no hosted destination anywhere
   (ADR 0008).
@@ -258,6 +261,7 @@ nobody inside can supply.
 
   | Code | Shown as | Where the name comes from |
   |---|---|---|
+  | `neutral` | **Neutra** | Added 13 October 2026 (ADR 0041), listed first: the palette every proposal starts in without a logo's choice — black ink, Retorika's blue, white surfaces |
   | `classic-blue` | **Azul confianza** | Mockup 13, unchanged |
   | `forest-emerald` | **Verde natural** | Mockup 13, unchanged |
   | `warm-terracotta` | **Terracota cálida** | The mockup's warm palette is `Coral cercano`, drawn around `#F2704B`. Ours is `#9A3412`, a deep brick. "Coral" would name a colour this palette does not contain |

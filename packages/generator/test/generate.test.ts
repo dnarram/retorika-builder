@@ -11,7 +11,7 @@ import {
   type RetorikaDocument,
   type Section,
 } from "@retorika/schema";
-import { PALETTES } from "@retorika/tokens";
+import { PALETTES, STARTING_PALETTE_ID } from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
 import {
   type Answers,
@@ -686,10 +686,11 @@ describe("the logo's palette (sprint 6 day 6)", () => {
     )?.id;
   }
 
-  it("uses the sector's palette when no logo chose one", () => {
-    // ADR 0010's «sin logo, la paleta por defecto del sector» — still the answer, and still the
-    // answer for every generated site that came before today.
-    expect(paletteOf(generate(MINIMAL).document)).toBe("dark-slate");
+  it("starts in the neutral palette when no logo chose one (ADR 0041)", () => {
+    // ADR 0010 said «sin logo, la paleta por defecto del sector» until 13 October 2026; since
+    // then the proposals start neutral and the owner picks a colour in «Estilo». The sector still
+    // decides the typography, and nothing else.
+    expect(paletteOf(generate(MINIMAL).document)).toBe(STARTING_PALETTE_ID);
   });
 
   it("uses the logo's palette instead, when the logo chose one", () => {
@@ -697,11 +698,11 @@ describe("the logo's palette (sprint 6 day 6)", () => {
     expect(paletteOf(document)).toBe("forest-emerald");
   });
 
-  it("falls back to the sector when the logo chose nothing", () => {
+  it("falls back to the neutral start when the logo chose nothing", () => {
     // `null` is what `paletteForLogo` answers for a logo with no colour in it, and for one whose
     // colour no palette is near. Both arrive here as the same thing, on purpose.
     const { document } = generate(answers({ ...MINIMAL, logoPaletteId: null }));
-    expect(paletteOf(document)).toBe("dark-slate");
+    expect(paletteOf(document)).toBe(STARTING_PALETTE_ID);
   });
 
   it("leaves the typography to the sector even when the logo chose the palette", () => {

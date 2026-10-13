@@ -8,7 +8,7 @@ export {
   relativeLuminance,
 } from "./contrast.ts";
 export type { ColorKey, Palette } from "./palettes.ts";
-export { PALETTES } from "./palettes.ts";
+export { PALETTES, STARTING_PALETTE_ID } from "./palettes.ts";
 
 export {
   identifyPalette,

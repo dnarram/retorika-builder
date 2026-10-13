@@ -7,7 +7,7 @@ import {
   type RetorikaDocument,
   type Theme,
 } from "@retorika/schema";
-import { buildTheme } from "@retorika/tokens";
+import { buildTheme, STARTING_PALETTE_ID } from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
 import {
   type Histories,
@@ -580,10 +580,11 @@ describe("setImage", () => {
 describe("setTheme", () => {
   /**
    * The verb behind Estilo. Built from real palette ids rather than a synthetic map, because that
-   * is what the panel will do — and because `restaurante-bar` generates `warm-terracotta` with
-   * `classic-display`, so "the palette this site already uses" is a case these can actually reach.
+   * is what the panel will do — and because a generated `restaurante-bar` starts in the neutral
+   * palette with `classic-display` (ADR 0041; it was `warm-terracotta` until 13 October 2026), so
+   * "the palette this site already uses" is a case these can actually reach.
    */
-  const OWN = { paletteId: "warm-terracotta", typePairId: "classic-display" };
+  const OWN = { paletteId: STARTING_PALETTE_ID, typePairId: "classic-display" };
   const OTHER = { paletteId: "classic-blue", typePairId: "modern-sans" };
 
   const restyle = (input: typeof OWN, variant = 0): HistoryAction => ({
