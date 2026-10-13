@@ -11451,3 +11451,169 @@ describe("sprint 19 día 5 — editar en la ficha, la puerta y el ZIP", () => {
     }
   }, 240_000);
 });
+
+/**
+ * Sprint 19 day 7 — the closing walk, as a stranger, with a page per entry and a sitemap.
+ *
+ * In through `/`, five answers, three cards, the editor with the bank's gallery, the design tools
+ * on, a list made from «Qué hago»'s cards, a page per entry created from «Listas», one ficha
+ * edited on its own page, an address declared in «Compartir», and the download: the ZIP carries
+ * `sitemap.xml` naming the fichas (ADR 0029, amended day 1), one file per ficha and none for the
+ * template (ADR 0040), the five sample photographs, the faces and their licences; opened from
+ * disk, a ficha has its `<h1>`, «Inicio», the shipped face, no badge, no `data-entry`, and the
+ * card's title on the home page really takes the visitor there. Nothing left the machine during
+ * the whole journey — the e2e server has no DSN, which is CI's state; production reports since
+ * day 1 and `editor-build` starts the server with a DSN since #230.
+ */
+describe("sprint 19 día 7 — el recorrido como un desconocido, con fichas y sitemap", () => {
+  it("entra por la landing, monta, hace una lista y una página por ficha, declara su dirección, descarga y abre sin red", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    const foreign = new Set<string>();
+    try {
+      page.on("request", (request) => {
+        const url = new URL(request.url());
+        if (
+          ["http:", "https:", "ws:", "wss:"].includes(url.protocol) &&
+          !["localhost", "127.0.0.1"].includes(url.hostname)
+        )
+          foreign.add(request.url());
+      });
+
+      // In through the front door, as a stranger.
+      await page.goto(BASE_URL, { waitUntil: "networkidle" });
+      await page.getByRole("link", { name: "Empezar" }).click();
+      await expect(page).toHaveURL(/\/empezar$/);
+      await page.fill("#nombre", "Taberna del Puerto");
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.getByText("Restaurante y bar", { exact: true }).click();
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      for (const service of ["Comidas", "Cenas", "Terraza"]) {
+        await page.getByText(service, { exact: true }).click();
+      }
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.fill("#direccion", "Muelle 3, Ronda");
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.getByText("Que reserven", { exact: true }).click();
+      await page.fill("#enlace", "https://reservas.example.com/taberna");
+      await page.getByRole("button", { name: "Crear mi web" }).click();
+      await expect(page.locator(PREVIEW)).toHaveCount(3);
+      await page.getByText("Ver a tamaño real →").first().click();
+      const frame = page.frameLocator(PREVIEW).first();
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+      await waitForBankPhoto(frame);
+      await expect(frame.locator('[data-section="sec-gallery"] .rb-sample')).toHaveCount(
+        GALLERY_SAMPLE_COUNT,
+      );
+
+      // The tools on, a list from the cards, and a page per entry — days 4 and 5 of this sprint.
+      await replacingTheDocument(page, async () => {
+        await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
+        await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
+      });
+      await page.getByRole("button", { name: "Listas" }).click();
+      await page
+        .getByRole("button", { name: /Hacer una lista con las tarjetas de «Qué hago»/ })
+        .first()
+        .click();
+      await expect(page.getByText("· 3 fichas")).toBeVisible();
+      await page.getByRole("button", { name: "Crear una página por ficha" }).click();
+      const tabs = page.getByTestId("page-tabs").getByRole("button");
+      await expect(tabs).toHaveCount(2);
+
+      // One ficha edited on its own page: the entry's words, read back on the card.
+      await page.getByRole("button", { name: "Ver sus páginas" }).click();
+      const headline = frame.locator('[data-section^="sec-ficha"] h1');
+      await expect(headline).toHaveText("Comidas");
+      await clickToEdit(frame, headline);
+      await page.keyboard.type("Comidas caseras");
+      await page.getByText("Haz clic en cualquier texto para cambiarlo").click();
+      await expect(headline).toHaveText("Comidas caseras");
+
+      // The address declared in «Compartir», which gives the ZIP its sitemap (ADR 0029, amended).
+      await page.getByRole("button", { name: "Compartir" }).click();
+      const domain = page.getByLabel("Dirección de tu web");
+      await domain.fill("tabernadelpuerto.es");
+      await domain.blur();
+      await expect(page.getByText("Se publicará como https://tabernadelpuerto.es")).toBeVisible();
+
+      // The gate: five samples and the template's one marker, and through.
+      await page.getByRole("button", { name: "Descargar" }).click();
+      const warning = page.locator('[role="dialog"]', { hasText: "Antes de descargar" });
+      await expect(warning).toBeVisible({ timeout: 30_000 });
+      await expect(warning.getByText(/Tu web tiene 5 fotos de ejemplo/)).toBeVisible();
+      await expect(warning.getByText(/1 hueco de foto sin rellenar/)).toBeVisible();
+      const [download, response] = await Promise.all([
+        page.waitForEvent("download"),
+        page.waitForResponse((candidate) => candidate.url().includes("/api/download")),
+        warning.getByRole("button", { name: "Descargar igualmente" }).click(),
+      ]);
+      expect(response.status()).toBe(200);
+
+      const dir = mkdtempSync(join(tmpdir(), "retorika-e2e-s19d7-"));
+      const zipPath = join(dir, download.suggestedFilename());
+      await download.saveAs(zipPath);
+      const zip = new Uint8Array(readFileSync(zipPath));
+      const entries = extractAll(zip, dir);
+      expect(entries.filter((entry) => entry.endsWith(".html")).sort()).toEqual([
+        "cenas.html",
+        "comidas.html",
+        "index.html",
+        "terraza.html",
+      ]);
+      expect(entries.filter((entry) => entry.startsWith("assets/muestra-"))).toHaveLength(
+        1 + GALLERY_SAMPLE_COUNT,
+      );
+      expect(entries.filter((entry) => /^fonts\/.*\.woff2$/.test(entry)).length).toBeGreaterThan(0);
+      expect(entries.filter((entry) => /^fonts\/OFL-.*\.txt$/.test(entry)).length).toBeGreaterThan(
+        0,
+      );
+      // Signed on 13 October 2026 and declared by this stranger: the sitemap, naming every ficha.
+      const sitemap = new TextDecoder().decode(extractFileBytes(zip, "sitemap.xml"));
+      for (const file of ["index.html", "comidas.html", "cenas.html", "terraza.html"]) {
+        expect(sitemap).toContain(`<loc>https://tabernadelpuerto.es/${file}</loc>`);
+      }
+      expect(sitemap).not.toContain("ficha-de-que-hago");
+      expect(new TextDecoder().decode(extractFileBytes(zip, "robots.txt"))).toContain(
+        "Sitemap: https://tabernadelpuerto.es/sitemap.xml",
+      );
+
+      // Opened from disk, with no server and no network.
+      const offline = await (await browser.newContext()).newPage();
+      const failed: string[] = [];
+      offline.on("requestfailed", (request) => failed.push(request.url()));
+      try {
+        await offline.goto(`file://${join(dir, "comidas.html")}`, { waitUntil: "load" });
+        await expect(offline.locator("h1")).toHaveText("Comidas caseras");
+        await expect(offline.locator('nav a[href="./index.html"]').first()).toHaveText("Inicio");
+        const content = await offline.content();
+        expect(content).not.toContain("data-entry");
+        expect(content).not.toContain("Foto de ejemplo");
+        await expect(offline.locator(".rb-sample")).toHaveCount(0);
+        const face = await offline.evaluate(async () => {
+          await document.fonts.ready;
+          return document.fonts.check('400 16px "Playfair Display"');
+        });
+        expect(face, "the shipped face is usable from file://").toBe(true);
+
+        await offline.goto(`file://${join(dir, "index.html")}`, { waitUntil: "load" });
+        await expect(offline.locator('[data-preset="gallery"] img')).toHaveCount(
+          GALLERY_SAMPLE_COUNT,
+        );
+        await expect(offline.locator('a.rb-entry-link[href="./comidas.html"]')).toHaveText(
+          "Comidas caseras",
+        );
+        await offline.locator('a.rb-entry-link[href="./comidas.html"]').click();
+        await expect(offline).toHaveURL(/comidas\.html$/);
+        await expect(offline.locator("h1")).toHaveText("Comidas caseras");
+        expect(failed).toEqual([]);
+      } finally {
+        await offline.context().close();
+      }
+
+      expect([...foreign], `requests left the machine: ${[...foreign].join(", ")}`).toEqual([]);
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+});

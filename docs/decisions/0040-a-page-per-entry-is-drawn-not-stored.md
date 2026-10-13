@@ -159,3 +159,19 @@ like any text, sees its tab, and downloads a ZIP that carries its files.
   page with the §6 warning, the exit, the gate, the walk.
 - ADR 0033 §4 and its first «does not decide» bullet; ADR 0022 and ADR 0023, each with the clause
   above as an amendment in their own file; `docs/document-rules.md` gains the section.
+
+## Amendment — the title link is unwrapped in the canvas (13 October 2026, sprint 19 day 5)
+
+David's second adjustment to the sprint plan asked that the card's title link be **inert inside the
+editor's canvas, with the click still opening the title's editing**. Building it found that inert
+by `preventDefault` was not enough: with the anchor left inside the `contentEditable` heading,
+focus selected the whole title (the field's contract), `End` did **not** collapse a selection that
+covers an anchor, and typing replaced the words — «Comidas» was committed as «del día», measured
+step by step in the DOM. So `wireEditing` unwraps `a.rb-entry-link` before the title becomes
+editable: in the canvas the title is the plain text it was before §5 existed, the click edits, and
+the link exists on the published page, drawn again from the slug on every render. A link the owner
+types by hand to a ficha is a different thing and moves the canvas to that ficha, the way a menu
+entry moves it to a page (`apps/editor/src/editor/canvasLinks.ts`).
+
+**§8, measured:** 4 KB per emitted page after the first, on 1.7 KB for a drawn page and 3.1 KB for
+the heaviest page of the generated sample.
