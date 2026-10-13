@@ -2704,7 +2704,9 @@ describe("sprint 9 día 6 — la revisión de contraste", () => {
   it("says both warnings, one after the other, and only then downloads", async () => {
     const studio = await studioWithTools();
     try {
-      // 3.95:1 — between the two thresholds, so it warns rather than blocks.
+      // #808080 on the neutral palette's white surface is 3.95:1 — between the two thresholds,
+      // so it warns rather than blocks; the dialog rounds it to «3,9». It measured 3.8 on
+      // forest-emerald's #F0FDF4, reformas' sector default, until ADR 0041 (13 October 2026).
       await paint(studio, "#808080");
       await studio.getByRole("button", { name: "Descargar", exact: true }).click();
 
@@ -2716,7 +2718,7 @@ describe("sprint 9 día 6 — la revisión de contraste", () => {
       // Then the contrast one, which used to be skipped entirely.
       const contrast = studio.getByRole("alertdialog");
       await expect(contrast.getByText("Un texto se lee justo")).toBeVisible();
-      await expect(contrast.getByText("3,8 de contraste")).toBeVisible();
+      await expect(contrast.getByText("3,9 de contraste")).toBeVisible();
 
       const [download] = await Promise.all([
         studio.waitForEvent("download"),
