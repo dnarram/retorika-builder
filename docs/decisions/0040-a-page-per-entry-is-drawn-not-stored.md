@@ -1,9 +1,14 @@
 # 0040 — A page per entry is drawn, not stored
 
-**Status:** **proposed** · **Date:** 2026-10-13 ·
+**Status:** **accepted** · **Date:** 2026-10-13 · **Accepted:** 2026-10-13 ·
 **Proposed by:** development, sprint 19 day 2, at David's instruction when choosing the sprint's
 direction on 13 October 2026 («Cerrar las colecciones») and approving its plan with three adjustments ·
-**Accepted by:** nobody yet — development does not sign ·
+**Accepted by:** **David, 13 October 2026** — «firma el ADR 0040 por mí», after merging the sprint's
+closing pull request (#235), having read the seven pull requests that built it (#229 to #235) and
+set the three adjustments the amendment below records. **Recorded by development at his
+instruction, which is said out loud because the standing rule is that development does not sign.**
+The decision is his; the keystrokes are not, and anybody reading this later should be able to tell
+the difference without asking — the same note ADR 0039 carries, for the same reason ·
 **Touches:** [ADR 0033](0033-reusable-content-and-the-template-that-is-one-item.md) (§4, where a
 bound leaf may live, and the first bullet of what it did not decide), [ADR 0022](0022-a-page-is-born-by-converting-a-section.md)
 (a second way a page is born, and the slug rule applied to entries), [ADR 0023](0023-the-menu-and-the-footer-are-derived-chrome.md)

@@ -1605,6 +1605,7 @@ por ficha y ninguno para la plantilla, cinco fotos, las caras y sus licencias; d
 ficha con su `<h1>`, «Inicio», la letra, ninguna insignia, y el titular de la tarjeta llevando de
 verdad al visitante a su ficha. Ninguna petición salió de la máquina.
 
-**Lo que este sprint deja a David:** firmar el ADR 0040; la opción de IP en el proyecto de Sentry
+**Lo que este sprint deja a David:** ~~firmar el ADR 0040~~ (firmado el 13 de octubre, por
+instrucción, tras fusionar #235); la opción de IP en el proyecto de Sentry
 y la lectura del primer evento real; las nueve fotos antes del 25 de octubre; los DPA de Supabase
 y Render, que siguen sin respuesta.
