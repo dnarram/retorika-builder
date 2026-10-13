@@ -696,6 +696,7 @@ export function EditorShell({
   onDesignToolsChange,
   panel,
   children,
+  overlay,
 }: {
   siteName: string;
   /** Every page of the open document, in document order, for the tabs. */
@@ -703,8 +704,15 @@ export function EditorShell({
   currentPageId: string | undefined;
   onSelectPage: (pageId: string) => void;
   onBack: () => void;
-  downloadState: "idle" | "downloading" | "error";
+  downloadState: "idle" | "preparing" | "downloading" | "error";
   onDownload: () => void;
+  /**
+   * The building screen, drawn **outside** the shell's root so the root can be `inert` beneath it
+   * (David, 13 October 2026): while the site is being built, nothing that could change the
+   * document is reachable with Tab. `children` would not do — they sit inside the scaled canvas
+   * box, which is also a containing block for `fixed`.
+   */
+  overlay?: React.ReactNode;
   device: "desktop" | "mobile";
   onDeviceChange: (device: "desktop" | "mobile") => void;
   canUndo: boolean;
@@ -862,8 +870,16 @@ export function EditorShell({
     device === "mobile" ? NARROWEST_WIDTH : Math.max(available, NARROWEST_DESKTOP);
   const zoom = available > 0 && layoutWidth > available ? available / layoutWidth : 1;
 
-  return (
-    <div className="flex h-screen flex-col bg-ui-bg">
+  const building = downloadState === "preparing" || downloadState === "downloading";
+
+  const shell = (
+    <div
+      className="flex h-screen flex-col bg-ui-bg"
+      // `inert` while the building screen is up: the keyboard cannot reach the rail, the tabs or
+      // the canvas, and a screen reader does not walk them. React 19 renders the boolean attribute.
+      inert={building}
+      data-building={building ? "true" : undefined}
+    >
       <div className="flex h-[58px] shrink-0 items-center border-b border-ui-border bg-ui-surface px-4">
         <button
           type="button"
@@ -1146,15 +1162,16 @@ export function EditorShell({
           <button
             type="button"
             onClick={onDownload}
-            disabled={downloadState === "downloading"}
+            disabled={building}
+            data-building-return="download"
             className={
               "ui-interactive flex h-9 items-center justify-center rounded-ui px-[18px] text-sm font-semibold text-white " +
-              (downloadState === "downloading"
+              (building
                 ? "bg-ui-brand opacity-65"
                 : "cursor-pointer bg-ui-brand hover:shadow-ui-2 active:scale-[0.98]")
             }
           >
-            {downloadState === "downloading" ? es["editor.downloading"] : es["editor.download"]}
+            {building ? es["editor.downloading"] : es["editor.download"]}
           </button>
         </div>
       </div>
@@ -1289,5 +1306,12 @@ export function EditorShell({
         </div>
       </div>
     </div>
+  );
+
+  return (
+    <>
+      {shell}
+      {overlay}
+    </>
   );
 }

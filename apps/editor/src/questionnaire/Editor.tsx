@@ -52,6 +52,8 @@ import {
   usesOfCollection,
 } from "@retorika/schema";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { BuildingScreen } from "../editor/BuildingScreen.tsx";
+import { holdFor } from "../editor/buildingScreen.ts";
 import { canvasLinkTarget } from "../editor/canvasLinks.ts";
 import { CHROME_SCALE, PILL_REST_BORDER } from "../editor/chromeScale.ts";
 import type { SwitchNotice } from "../editor/designTools.ts";
@@ -102,7 +104,9 @@ import { SharePanel } from "./SharePanel.tsx";
 import { StylePanel } from "./StylePanel.tsx";
 import { FieldError } from "./ui.tsx";
 
-type DownloadState = "idle" | "downloading" | "error";
+/** `preparing` is the overflow measurement and the gate; `downloading` the request and the hold.
+ * Both draw the building screen (`BuildingScreen.tsx`). */
+type DownloadState = "idle" | "preparing" | "downloading" | "error";
 
 /** One key for a (section, element) pair. A `Map` keyed by an object would compare by identity and
  * never hit, and the two ids together are what makes an address unique — element ids are unique
@@ -686,6 +690,8 @@ export function Editor({
   onBack: () => void;
 }) {
   const [state, setState] = useState<DownloadState>("idle");
+  /** When «Descargar» (or «Descargar igualmente») was pressed — what the minimum is measured from. */
+  const buildingStartedAt = useRef(0);
   // What `requestDownload` found the last time «Descargar» was pressed — `null` means neither
   // dialog is open. Recomputed fresh on every press rather than kept in sync with `doc`, because
   // a dialog open while the owner keeps editing behind it would go stale the moment they change
@@ -4743,6 +4749,8 @@ export function Editor({
   async function download() {
     setState("downloading");
     try {
+      // The screen is already up since `requestDownload`; a press that skipped the gate starts
+      // the clock here, which the measurement's own start already set.
       // Multipart since ADR 0018: the document as a field, each photo as a file named by the
       // src the document carries. The object URL is the handle to the bytes already in memory,
       // so nothing is re-read from storage to build this.
@@ -4757,6 +4765,10 @@ export function Editor({
       const response = await fetch("/api/download", { method: "POST", body: form });
       if (!response.ok) throw new Error(`download failed: ${response.status}`);
       const blob = await response.blob();
+      // The hold: the building screen stays up for David's minimum, measured from the press, and
+      // the ZIP is handed over the instant it ends — the screen and the file in the same frame.
+      const remaining = holdFor(buildingStartedAt.current, performance.now());
+      if (remaining > 0) await new Promise((resolve) => setTimeout(resolve, remaining));
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -4790,12 +4802,19 @@ export function Editor({
    * wrong exactly when it matters — after the owner has fixed the thing the dialog named.
    */
   async function requestDownload(accepted: ReadonlySet<AcceptedWarning> = new Set()) {
+    // The building screen from the press, so the measurement — the longest phase, and until
+    // 13 October 2026 the one with no signal at all — is covered too.
+    buildingStartedAt.current = performance.now();
+    setState("preparing");
     const overflow = await measureOverflow(doc, { hostDocument: window.document });
     const gate = downloadGateFor(countPhotos(doc), doc, accepted, overflow, failedSamples);
     if (gate.kind === "ready") {
       void download();
       return;
     }
+    // Back to idle **before** the dialog opens: the screen and the dialogs share `z-20`, and a
+    // veil over the dialog would hide «Descargar igualmente» behind it.
+    setState("idle");
     setAcceptedWarnings(accepted);
     setDownloadDialog(gate);
   }
@@ -4865,6 +4884,11 @@ export function Editor({
       onSelectPage={(id) => onSelectPage(doc.pages[0]?.id === id ? undefined : id)}
       onBack={onBack}
       downloadState={state}
+      overlay={
+        state === "preparing" || state === "downloading" ? (
+          <BuildingScreen returnFocusTo="download" />
+        ) : null
+      }
       // Wrapped, not passed by reference: React hands a click handler the event, and
       // `requestDownload`'s optional parameter would have received it as the set of accepted
       // warnings. `() => void` accepts `(accepted?: …) => void`, so the compiler could not see it,

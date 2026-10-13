@@ -11620,3 +11620,198 @@ describe("sprint 19 día 7 — el recorrido como un desconocido, con fichas y si
     }
   }, 240_000);
 });
+
+/**
+ * The building screen between «Descargar» and the ZIP (13 October 2026).
+ *
+ * Mockup 06 was not built because generation measured 0.12 ms and there was nothing to cover. Here
+ * there is: the overflow measurement, the photographs, the request, the ZIP — and then a hold of
+ * two seconds that David asked for «para que el momento se perciba», said as such in `REVIEW.md`.
+ * These walks assert what the screen is (a status, never over a dialog), what it says, that it
+ * moves and that it stops moving for somebody who asked for less motion, that the ZIP never comes
+ * before the minimum, and that the keyboard cannot reach the editor beneath it (`inert`, David's
+ * second adjustment). They also print the two real durations, so the record carries numbers.
+ */
+describe("la pantalla de construcción al descargar", () => {
+  const VIEWPORT = { width: 1440, height: 900 };
+
+  async function generated(page: Page): Promise<void> {
+    await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+    await page.fill("#nombre", "Taberna del Puerto");
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Restaurante y bar", { exact: true }).click();
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Comidas", { exact: true }).click();
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.fill("#direccion", "Muelle 3, Ronda");
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Que reserven", { exact: true }).click();
+    await page.fill("#enlace", "https://reservas.example.com/taberna");
+    await page.getByRole("button", { name: "Crear mi web" }).click();
+    await page.getByText("Ver a tamaño real →").first().click();
+    const frame = page.frameLocator(PREVIEW).first();
+    await frame.locator('[data-section="sec-cover"]').waitFor();
+    await waitForBankPhoto(frame);
+  }
+
+  /** Distinct opacities the rose block passes through over `ms`, sampled once per frame. */
+  function opacitiesOf(page: Page, selector: string, ms: number): Promise<string[]> {
+    return page.evaluate(
+      ([sel, duration]) =>
+        new Promise<string[]>((resolve) => {
+          const el = document.querySelector(sel as string);
+          const seen: string[] = [];
+          const until = performance.now() + (duration as number);
+          const tick = () => {
+            if (el) {
+              const value = Number(getComputedStyle(el).opacity).toFixed(2);
+              if (seen.at(-1) !== value) seen.push(value);
+            }
+            if (performance.now() < until) requestAnimationFrame(tick);
+            else resolve(seen);
+          };
+          requestAnimationFrame(tick);
+        }),
+      [selector, ms] as const,
+    );
+  }
+
+  it("aparece, dice su frase, se mueve, nunca tapa el aviso, y suelta el ZIP no antes del mínimo", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const page = await context.newPage();
+    try {
+      await generated(page);
+      const screen = page.getByTestId("building-screen");
+
+      // The first press: the screen covers the measurement, and is gone when the warning opens.
+      const pressed = Date.now();
+      await page.getByRole("button", { name: "Descargar", exact: true }).click();
+      const warning = page.locator('[role="dialog"]', { hasText: "Antes de descargar" });
+      await expect(warning).toBeVisible({ timeout: 30_000 });
+      const measured = Date.now() - pressed;
+      await expect(screen).toHaveCount(0);
+      await expect(page.locator('[data-building="true"]')).toHaveCount(0);
+
+      // The second press is the one that builds: the screen, its words, its role, and the hold.
+      const started = Date.now();
+      const [download, response] = await Promise.all([
+        page.waitForEvent("download"),
+        page.waitForResponse((candidate) => candidate.url().includes("/api/download")),
+        (async () => {
+          await warning.getByRole("button", { name: "Descargar igualmente" }).click();
+          await expect(screen).toBeVisible();
+          await expect(screen.getByRole("status")).toContainText("Estamos construyendo tu web");
+          await expect(screen.getByText(/Preparamos los archivos/)).toBeVisible();
+          await expect(page.locator('[data-building="true"]')).toHaveCount(1);
+          // No duration is promised, and mockup 06's words are not these.
+          expect(await screen.textContent()).not.toMatch(/segundos|no cierres/i);
+          await expect(page.getByText("Estamos montando tu web")).toHaveCount(0);
+          // It moves: the hammer is animated, and the rose block passes through several opacities.
+          const hammer = screen.locator('[data-part="hammer"]');
+          expect(await hammer.evaluate((el) => getComputedStyle(el).animationName)).toBe(
+            "ui-hammer",
+          );
+          const seen = await opacitiesOf(
+            page,
+            '[data-testid="building-screen"] [data-part="block-rose"]',
+            900,
+          );
+          expect(seen.length, `opacidades del bloque: ${seen.join(", ")}`).toBeGreaterThan(2);
+        })(),
+      ]);
+      const requested = Date.now() - started;
+      expect(response.status()).toBe(200);
+      // The ZIP never comes before the minimum, and the screen goes with it.
+      expect(requested, `del clic al ZIP: ${requested} ms`).toBeGreaterThanOrEqual(1_900);
+      await expect(screen).toHaveCount(0);
+      await expect(page.locator('[data-building="true"]')).toHaveCount(0);
+      // And the keyboard is back on the button, active again.
+      await expect(page.getByRole("button", { name: "Descargar", exact: true })).toBeEnabled();
+      await expect(page.getByRole("button", { name: "Descargar", exact: true })).toBeFocused();
+      console.log(
+        `building screen — overflow measurement ${measured} ms; press to ZIP ${requested} ms (hold floor 2000 ms); ` +
+          `response ${response.headers()["content-length"] ?? "?"} bytes`,
+      );
+
+      // The ZIP is the same ZIP as always.
+      const dir = mkdtempSync(join(tmpdir(), "retorika-building-"));
+      const zipPath = join(dir, download.suggestedFilename());
+      await download.saveAs(zipPath);
+      expect(listZipEntries(new Uint8Array(readFileSync(zipPath)))).toContain("index.html");
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("deja el editor inerte bajo el velo: Tab no alcanza nada que cambie la web", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const page = await context.newPage();
+    try {
+      await generated(page);
+      await page.getByRole("button", { name: "Descargar", exact: true }).click();
+      const warning = page.locator('[role="dialog"]', { hasText: "Antes de descargar" });
+      await expect(warning).toBeVisible({ timeout: 30_000 });
+      const screen = page.getByTestId("building-screen");
+      await Promise.all([
+        page.waitForEvent("download"),
+        (async () => {
+          await warning.getByRole("button", { name: "Descargar igualmente" }).click();
+          await expect(screen).toBeVisible();
+          // The card has the keyboard; a dozen Tabs later nothing beneath the veil has it.
+          for (let press = 0; press < 12; press += 1) {
+            await page.keyboard.press("Tab");
+            const where = await page.evaluate(() => {
+              const active = document.activeElement;
+              if (!active || active === document.body) return "body";
+              if (active.closest('[data-testid="building-screen"]')) return "screen";
+              if (active.closest('[data-building="true"]')) return "editor";
+              return active.tagName;
+            });
+            expect(where, `Tab ${press + 1} landed on ${where}`).not.toBe("editor");
+          }
+        })(),
+      ]);
+      await expect(screen).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("con movimiento reducido se ve igual, y la marca está quieta", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT, reducedMotion: "reduce" });
+    const page = await context.newPage();
+    try {
+      await generated(page);
+      await page.getByRole("button", { name: "Descargar", exact: true }).click();
+      const warning = page.locator('[role="dialog"]', { hasText: "Antes de descargar" });
+      await expect(warning).toBeVisible({ timeout: 30_000 });
+      const screen = page.getByTestId("building-screen");
+      await Promise.all([
+        page.waitForEvent("download"),
+        (async () => {
+          await warning.getByRole("button", { name: "Descargar igualmente" }).click();
+          await expect(screen).toBeVisible();
+          await expect(screen.getByRole("status")).toContainText("Estamos construyendo tu web");
+          const duration = await screen
+            .locator('[data-part="hammer"]')
+            .evaluate((el) => getComputedStyle(el).animationDuration);
+          expect(Number.parseFloat(duration), `animation-duration ${duration}`).toBeLessThan(1);
+          // At rest the mark is the logo: every block fully opaque and unscaled. «At rest» is
+          // after the 0.01 ms animations have run — read before the browser's first tick and the
+          // block still shows its opening keyframe, which is what a flaky run of this walk saw.
+          await screen.getByTestId("building-mark").evaluate(async (mark) => {
+            await Promise.all(mark.getAnimations({ subtree: true }).map((a) => a.finished));
+          });
+          for (const part of ["block-sky", "block-blue", "block-rose"]) {
+            const opacity = await screen
+              .locator(`[data-part="${part}"]`)
+              .evaluate((el) => getComputedStyle(el).opacity);
+            expect(opacity, part).toBe("1");
+          }
+        })(),
+      ]);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+});

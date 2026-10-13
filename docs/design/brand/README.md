@@ -27,6 +27,14 @@ delante o donde tiene que leerse pequeño.
 | La barra del editor | **marca sola** | Al lado va el nombre del negocio del cliente. Dos nombres juntos es uno de más |
 | La pestaña del navegador | **marca sola** | 32 píxeles: un wordmark ahí no se lee |
 
+## La marca animada
+
+`apps/editor/src/editor/BuildingMark.tsx` es un **trazado a ojo** del PNG de la marca, hecho el 13
+de octubre de 2026 para la pantalla de construcción al descargar, y se sustituirá por el vector
+oficial cuando Retorika lo entregue: se deja aquí junto a los originales, y el componente nombra los
+cinco grupos que ese SVG tendrá que exponer (`letter`, `hammer`, `block-sky`, `block-blue`,
+`block-rose`). Los colores son los del logotipo leídos del PNG, no los de la interfaz.
+
 ## Lo generado, que no se edita a mano
 
 - `apps/editor/public/brand/retorika-lockup.png`

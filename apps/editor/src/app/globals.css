@@ -274,6 +274,62 @@
 }
 
 /**
+ * **The mark at work** — the building screen's hammer and blocks (13 October 2026).
+ *
+ * One 1.6 s cycle shared by the two: the hammer rests, lifts, strikes, bounces once and rests;
+ * the blocks are gone until the strike and settle in afterwards, each a few frames after the one
+ * before (`animation-delay` on the element). The strike lands at 46 %, so the first block lands
+ * right after it. Under `prefers-reduced-motion` the block at the end of this file leaves each at
+ * one 0.01 ms iteration — the final keyframe, which is the logo at rest with its three blocks.
+ *
+ * `transform` and `opacity` only, like everything else here that moves.
+ */
+@keyframes ui-hammer {
+  0%,
+  20% {
+    transform: rotate(0deg);
+  }
+  38% {
+    transform: rotate(-16deg);
+  }
+  46% {
+    transform: rotate(0deg);
+  }
+  54% {
+    transform: rotate(-3deg);
+  }
+  62%,
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+@keyframes ui-block-settle {
+  0%,
+  42% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  58% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  68%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@utility ui-hammer {
+  animation: ui-hammer 1.6s var(--ui-ease-shape) infinite;
+}
+
+@utility ui-block {
+  animation: ui-block-settle 1.6s var(--ui-ease-shape) infinite;
+}
+
+/**
  * **A focus ring, which this application did not have.** `:focus-visible` appeared nowhere in
  * `apps/editor`, so a keyboard user got whatever the browser drew by default — which on the rail's
  * transparent buttons and the top bar's icon buttons is close to nothing.
