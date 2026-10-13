@@ -14,6 +14,58 @@ en `rgba(255,255,255,255)`. La aplicación dibuja su cabecera sobre `#F5F7FA`, a
 se vería como un recuadro blanco. `scripts/brand-assets.ts` quita ese fondo y escribe lo que se
 sirve; estos originales se quedan intactos como lo que de verdad se entregó.
 
+**Los dos vienen etiquetados Display P3** (`iCCP` «kCGColorSpaceDisplayP3», `cICP` 12/13/0/1): una
+exportación de Mac en gama amplia. Los bytes guardados no son el color que se ve —el azul de la
+marca está guardado como (81, 177, 244) y el navegador lo muestra como (6, 180, 250)—, y hasta el
+13 de octubre de 2026 `brand:assets` escribía los servidos sin la etiqueta, con lo que el navegador
+los leía como sRGB y la marca salía dieciséis niveles por canal más pálida, medido en Chromium.
+Hoy conserva los dos trozos y los servidos se muestran idénticos al original.
+
+## Los vectores, sacados de los PNG
+
+| Fichero | Qué es |
+|---|---|
+| `retorika-mark.svg` | La marca sola, 244×252, 18 KB |
+| `retorika-lockup.svg` | La marca más «Retorika Builder», 898×254, 44 KB |
+
+**No los entregó Retorika: los sacó `pnpm brand:vector` de los dos PNG**, el 13 de octubre de 2026,
+a petición de David y en lugar de esperar el original vectorial, que se pidió ese mismo día y se
+sustituiría aquí si llega. El trazador es `scripts/brand-vector.ts`, escrito para el repositorio sin
+dependencias nuevas (el `potrace` de npm arrastra un `jimp` de 2020 con cinco avisos de auditoría, y
+`pnpm security:audit` bloquea por eso), y se vuelve a correr si cambian los originales; los SVG no se
+editan a mano. Lo que hace, y lo que mide:
+
+- **Los contornos** salen del propio antialiasing del PNG: cada píxel dice cuánto lo cubre la forma,
+  la curva de nivel a medio recubrimiento se sigue a un octavo de píxel y se ajusta con cúbicas de
+  Bézier a una décima. La marca dentro del lockup es píxel a píxel la misma que la suelta, desplazada
+  (10, 4), comprobado antes de reutilizar el trazado.
+- **Los colores** son los del PNG tal como el navegador lo muestra (sRGB), leídos con Chromium:
+  «Retorika» plano `#021837`; «Builder» un degradado lineal horizontal de dieciséis paradas; cada
+  bloque, que a ojo es plano y a los píxeles un degradado corto, su degradado lineal. **La «R» no la
+  explica ningún degradado**: cian en la esquina, un azul más claro por el brazo y la cabeza del
+  martillo, el azul hondo por el tronco y el mango. El mejor lineal, a cualquier ángulo, deja 4,6
+  niveles de media por canal y bandas de veinte o treinta; con un velo radial o un segundo velo
+  encima, 4. Así que el color de la «R» se guarda como lo que es, el campo de color del PNG a un
+  cuarto de resolución (52×59 muestras, 3,4 KB), dibujado bajo el recorte vectorial; el navegador
+  interpola entre muestras y el campo no tiene nada más fino que perder. La **forma** es vector a
+  cualquier tamaño.
+- **Lo medido**, dibujando cada SVG con Chromium al tamaño del original y comparando píxel a píxel
+  con el PNG tal como se muestra: la marca, 1,00 niveles de media por canal, el 99 % de los píxeles a
+  28 o menos, el 0,17 % a más de 48 (el borde); el lockup, 1,40 de media, el 0,35 % a más de 48. Las
+  imágenes lado a lado quedan en `.scratch/brand-vector/` cada vez que corre.
+
+## La marca animada
+
+`apps/editor/src/editor/BuildingMark.tsx` dibuja la marca para la pantalla de construcción al
+descargar con lo que `pnpm brand:vector` escribe en `buildingMarkPaths.ts`: la «R» partida en
+**letra** y **martillo** por una línea trazada a mano por la muesca que separa la garra de la panza
+(`SEAM` en el script), las dos como recortes sobre el mismo campo de color, con lo que en reposo
+dibujan exactamente `retorika-mark.svg`; el pivote donde el eje del mango sale de la panza, hallado
+en las filas del propio mango; y los tres bloques con sus degradados. Los cinco grupos
+(`letter`, `hammer`, `block-sky`, `block-blue`, `block-rose`) son lo que la animación conoce: un
+vector oficial, si llega, sustituye lo de dentro y no la animación. Los colores son los del logotipo,
+no los de la interfaz.
+
 ## Cuál se usa dónde, y por qué
 
 **La regla, para que la próxima colocación no tenga que volver a decidirlo:** el **lockup** donde
@@ -27,24 +79,20 @@ delante o donde tiene que leerse pequeño.
 | La barra del editor | **marca sola** | Al lado va el nombre del negocio del cliente. Dos nombres juntos es uno de más |
 | La pestaña del navegador | **marca sola** | 32 píxeles: un wordmark ahí no se lee |
 
-## La marca animada
-
-`apps/editor/src/editor/BuildingMark.tsx` es un **trazado a ojo** del PNG de la marca, hecho el 13
-de octubre de 2026 para la pantalla de construcción al descargar, y se sustituirá por el vector
-oficial cuando Retorika lo entregue: se deja aquí junto a los originales, y el componente nombra los
-cinco grupos que ese SVG tendrá que exponer (`letter`, `hammer`, `block-sky`, `block-blue`,
-`block-rose`). Los colores son los del logotipo leídos del PNG, no los de la interfaz.
-
 ## Lo generado, que no se edita a mano
 
 - `apps/editor/public/brand/retorika-lockup.png`
 - `apps/editor/public/brand/retorika-mark.png`
 - `apps/editor/src/app/icon.png` — el favicon. Next sirve `app/icon.png` por convención, sin que
   haya que escribir ni una etiqueta.
+- `retorika-mark.svg` y `retorika-lockup.svg`, aquí mismo, y
+  `apps/editor/src/editor/buildingMarkPaths.ts` — los escribe `pnpm brand:vector`.
 
 ## Lo que falta, por si alguna vez importa
 
 Los servidos van **a su resolución nativa** y el lockup pesa 137 KB para dibujarse a unos 200px. No
 se redimensionan porque no hay librería de imagen en el repositorio y `sips` solo existe en macOS,
-así que un script que la usara se rompería en CI. Si alguna vez molesta, la salida es entregar el
-logo ya a la resolución que se va a usar.
+así que un script que la usara se rompería en CI. Desde el 13 de octubre de 2026 la salida limpia es
+otra: servir `retorika-lockup.svg` (44 KB) y `retorika-mark.svg` (18 KB) donde hoy van los PNG, que
+además escalan a cualquier densidad de pantalla. No se ha hecho todavía; cambia la cabecera, la
+landing y el favicon, y es una decisión aparte de sacar los vectores.

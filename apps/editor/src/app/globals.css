@@ -279,7 +279,9 @@
  * One 1.6 s cycle shared by the two: the hammer rests, lifts, strikes, bounces once and rests;
  * the blocks are gone until the strike and settle in afterwards, each a few frames after the one
  * before (`animation-delay` on the element). The strike lands at 46 %, so the first block lands
- * right after it. Under `prefers-reduced-motion` the block at the end of this file leaves each at
+ * right after it. The sign is the traced mark's: the hammer turns about the point where its handle
+ * leaves the bowl, and a positive angle there lifts the head up and to the right, away from the
+ * blocks; rest is the struck pose, which is the logo. Under `prefers-reduced-motion` the block at the end of this file leaves each at
  * one 0.01 ms iteration — the final keyframe, which is the logo at rest with its three blocks.
  *
  * `transform` and `opacity` only, like everything else here that moves.
@@ -290,13 +292,13 @@
     transform: rotate(0deg);
   }
   38% {
-    transform: rotate(-16deg);
+    transform: rotate(16deg);
   }
   46% {
     transform: rotate(0deg);
   }
   54% {
-    transform: rotate(-3deg);
+    transform: rotate(3deg);
   }
   62%,
   100% {
