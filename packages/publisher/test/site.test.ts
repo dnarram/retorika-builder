@@ -422,3 +422,73 @@ describe("the tags a shared link reads", () => {
     }
   });
 });
+
+describe("a page drawn per entry (ADR 0040)", () => {
+  const entry = () => {
+    const found = corpus.find((candidate) => candidate.name === "una-pagina-por-ficha");
+    if (!found) throw new Error("the twelve-entry fixture is missing from the corpus");
+    return found;
+  };
+
+  it("writes one file per entry, named after its slug, and none for the template itself", async () => {
+    const { document } = entry();
+    const bundle = buildSite(document, {
+      siteId: "fichas",
+      assets: assetsFor(document),
+      fonts: await fontsFor(document),
+    });
+    const pages = bundle.files.filter((file) => file.path.endsWith(".html")).map((f) => f.path);
+    expect(pages).toHaveLength(13);
+    expect(pages).toContain("index.html");
+    expect(pages).toContain("ensaladilla-rusa.html");
+    expect(pages).toContain("albondigas-de-la-abuela.html");
+    expect(pages).not.toContain("ficha-de-plato.html");
+    // Each file is drawn for its own entry, titled by it.
+    const pulpo = bundle.files.find((file) => file.path === "pulpo-a-la-gallega.html");
+    const html = new TextDecoder().decode(pulpo?.contents);
+    expect(html).toContain("<title>Pulpo a la gallega — Taberna del Puerto</title>");
+    expect(html).toContain("Sobre cama de patata");
+    expect(html).not.toContain("Ensaladilla rusa");
+    expect(html).not.toContain("data-entry");
+  });
+
+  it("lists every drawn file in the manifest and so in the sitemap, with the entry's title", async () => {
+    const { document } = entry();
+    const bundle = buildSite(document, {
+      siteId: "fichas",
+      baseUrl: "https://tabernadelpuerto.es",
+      assets: assetsFor(document),
+      fonts: await fontsFor(document),
+    });
+    expect(bundle.manifest.pages).toHaveLength(13);
+    expect(bundle.manifest.pages.find((page) => page.path === "jamon-iberico.html")).toEqual({
+      slug: "jamon-iberico",
+      path: "jamon-iberico.html",
+      title: "Jamón ibérico",
+    });
+    const sitemap = new TextDecoder().decode(
+      bundle.files.find((file) => file.path === "sitemap.xml")?.contents,
+    );
+    expect(sitemap).toContain("<loc>https://tabernadelpuerto.es/jamon-iberico.html</loc>");
+    expect(sitemap).not.toContain("ficha-de-plato");
+    expect([...sitemap.matchAll(/<loc>/g)]).toHaveLength(13);
+  });
+
+  it("refuses an entry with no slug, rather than inventing a file name", async () => {
+    const { document } = entry();
+    const unslugged = {
+      ...document,
+      collections: document.collections.map((collection) => ({
+        ...collection,
+        entries: collection.entries.map((e, index) => {
+          if (index !== 0) return e;
+          const { slug: _dropped, ...rest } = e;
+          return rest;
+        }),
+      })),
+    };
+    expect(() =>
+      buildSite(unslugged, { siteId: "fichas", assets: assetsFor(document), fonts: new Map() }),
+    ).toThrow(/has no slug to be drawn under/);
+  });
+});

@@ -104,6 +104,10 @@ export function menuEntries(doc: RetorikaDocument): MenuEntry[] {
   // and a page with no way in is worse than one at the end of the strip.
   for (const page of doc.pages.slice(1)) {
     if (pointedAt.has(page.id)) continue;
+    // A page drawn once per entry contributes nothing (ADR 0040 §5, amending ADR 0023): up to
+    // twelve files in a menu whose threshold is three would be the flood ADR 0033 named, and the
+    // cards' own titles are the way in.
+    if (page.binding) continue;
     entries.push({ kind: "page", label: page.title, slug: page.slug, pageId: page.id });
   }
 

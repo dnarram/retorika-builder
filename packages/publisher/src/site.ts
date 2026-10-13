@@ -78,20 +78,64 @@ export function assertSafePath(path: string): void {
   if (!SAFE_PATH.test(path)) throw new Error(`unsafe path "${path}" in site bundle`);
 }
 
-function pagePaths(doc: RetorikaDocument): { page: Page; path: string }[] {
+/**
+ * One file to write: a page, its path, and — for a page drawn once per entry (ADR 0040) — which
+ * entry, with the slug and title the manifest lists for that file.
+ */
+interface PageFile {
+  page: Page;
+  path: string;
+  slug: string;
+  title: string;
+  entryId?: string;
+}
+
+function pagePaths(doc: RetorikaDocument): PageFile[] {
   const seen = new Set<string>();
-  return doc.pages.map((page, i) => {
-    if (!SAFE_SLUG.test(page.slug)) {
-      throw new Error(`buildSite: unsafe slug "${page.slug}" (expected ${SAFE_SLUG.source})`);
+  const claim = (slug: string, path: string, i: number): void => {
+    if (!SAFE_SLUG.test(slug)) {
+      throw new Error(`buildSite: unsafe slug "${slug}" (expected ${SAFE_SLUG.source})`);
     }
-    // The first page is always the entry, whatever its slug. Any later page that would
-    // land on the same file, or reuse a slug, would make a link ambiguous.
-    const path = i === 0 ? ENTRY : `${page.slug}.html`;
-    if (seen.has(page.slug) || (i > 0 && path === ENTRY)) {
-      throw new Error(`buildSite: slug collision on "${page.slug}"`);
+    // The first page is always the entry, whatever its slug. Any later file that would land on
+    // the same name, or reuse a slug, would make a link ambiguous.
+    if (seen.has(slug) || (i > 0 && path === ENTRY)) {
+      throw new Error(`buildSite: slug collision on "${slug}"`);
     }
-    seen.add(page.slug);
-    return { page, path };
+    seen.add(slug);
+  };
+  return doc.pages.flatMap((page, i): PageFile[] => {
+    const binding = page.binding;
+    if (!binding) {
+      const path = i === 0 ? ENTRY : `${page.slug}.html`;
+      claim(page.slug, path, i);
+      return [{ page, path, slug: page.slug, title: page.title }];
+    }
+    // **A page per entry is one file per entry and no file of its own** (ADR 0040 §1): the
+    // template's slug names nothing on disk, so it is not claimed — a link to it is dead and
+    // `listDeadDestinations` says so. Each entry's slug is a file, titled by the entry's title
+    // field, in stored order.
+    const collection = doc.collections.find((candidate) => candidate.id === binding.collectionId);
+    if (!collection) {
+      throw new Error(
+        `buildSite: page "${page.id}" is drawn per entry of "${binding.collectionId}", which is not in the document`,
+      );
+    }
+    return collection.entries.map((entry): PageFile => {
+      if (entry.slug === undefined) {
+        throw new Error(
+          `buildSite: entry "${entry.id}" of "${collection.id}" has no slug to be drawn under`,
+        );
+      }
+      const path = `${entry.slug}.html`;
+      claim(entry.slug, path, i);
+      return {
+        page,
+        path,
+        slug: entry.slug,
+        title: entry.fields[binding.titleField]?.text ?? page.title,
+        entryId: entry.id,
+      };
+    });
   });
 }
 
@@ -203,12 +247,14 @@ export function buildSite(doc: RetorikaDocument, options: BuildSiteOptions): Sit
    * per-page collection would quietly become wrong the day they do not.
    */
   const fontFiles = new Set<string>();
-  const pageFiles = pages.map(({ page, path }): SiteFile => {
+  const pageFiles = pages.map(({ page, path, entryId }): SiteFile => {
     // `pagePath` is this file's own name, handed to the renderer rather than worked out there: one
     // authority for what a page is called, so `og:url` cannot disagree with the file beside it.
+    // `entryId` says which entry a page per entry is drawn for, file by file.
     const { html, assets, fonts } = render(rewrittenDoc, "html", {
       pageId: page.id,
       pagePath: path,
+      ...(entryId === undefined ? {} : { entryId }),
     });
     for (const file of fonts) fontFiles.add(file);
     // `collectAssets` walks the whole document, so this now checks the bundle holds every image
@@ -258,7 +304,7 @@ export function buildSite(doc: RetorikaDocument, options: BuildSiteOptions): Sit
     siteId: options.siteId,
     schemaVersion: doc.schemaVersion,
     entry: ENTRY,
-    pages: pages.map(({ page, path }) => ({ slug: page.slug, path, title: page.title })),
+    pages: pages.map(({ slug, path, title }) => ({ slug, path, title })),
     assets: [...assetFiles.keys()].sort(),
     fonts: fontBundleFiles.map((file) => file.path).sort(),
   };

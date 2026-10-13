@@ -314,3 +314,52 @@ describe("the footer on every page", () => {
     expect(footers).toHaveLength(1);
   });
 });
+
+describe("a page drawn per entry (ADR 0040)", () => {
+  it("contributes no entry, whatever the page count", () => {
+    const doc: RetorikaDocument = {
+      schemaVersion: "1.9.0",
+      id: "doc-ficha",
+      siteName: "Taberna",
+      theme,
+      collections: [
+        {
+          id: "col-carta",
+          name: "La carta",
+          entries: [
+            { id: "entry-1", slug: "ensaladilla", fields: { nombre: { text: "Ensaladilla" } } },
+          ],
+        },
+      ],
+      pages: [
+        {
+          id: "home",
+          slug: "index",
+          title: "Taberna",
+          sections: [
+            section("sec-cover", "cover", "Taberna"),
+            section("sec-services", "services", "Qué hacemos"),
+            section("sec-location", "location", "Dónde estamos"),
+            section("sec-contact", "contact", "Contacto"),
+          ],
+        },
+        {
+          id: "page-ficha-carta",
+          slug: "ficha",
+          title: "Ficha de plato",
+          binding: { collectionId: "col-carta", titleField: "nombre" },
+          sections: [section("sec-ficha", "cover", "Ensaladilla")],
+        },
+      ],
+    };
+    expect(menuEntries(doc).map((entry) => entry.label)).toEqual([
+      "Qué hacemos",
+      "Dónde estamos",
+      "Contacto",
+    ]);
+    const drawn = render(doc, "html", { pageId: "page-ficha-carta" }).html;
+    expect(drawn).toContain("Inicio");
+    expect(drawn).not.toMatch(/<a[^>]*aria-current=/);
+    expect(drawn).not.toContain("ficha.html");
+  });
+});

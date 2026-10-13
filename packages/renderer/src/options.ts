@@ -50,12 +50,26 @@ export interface RenderOptions {
    * the site was built, and ADR 0001's promise is that a published page is just HTML and CSS.
    */
   entryHints?: boolean;
+
+  /**
+   * Which entry a page bound to a collection is drawn for (ADR 0040).
+   *
+   * The page is stored once and drawn once per entry; this names the entry. Unset means the
+   * collection's first entry, which is what the editor's canvas shows until the owner picks
+   * another and what a caller that only wants *a* drawing gets. The publisher names every entry in
+   * turn. Refused with a throw — never a silent fallback — on a page that has no binding, and for
+   * an entry the collection does not carry, because either would publish the wrong page.
+   */
+  entryId?: string;
 }
 
 /** `allowEmbeds` resolved; `pageId` stays optional because "unset" is itself a meaningful value
  * (the first page) and not a gap to be filled in. */
-export type ResolvedRenderOptions = Omit<Required<RenderOptions>, "pageId" | "pagePath"> &
-  Pick<RenderOptions, "pageId" | "pagePath">;
+export type ResolvedRenderOptions = Omit<
+  Required<RenderOptions>,
+  "pageId" | "pagePath" | "entryId"
+> &
+  Pick<RenderOptions, "pageId" | "pagePath" | "entryId">;
 
 export const DEFAULT_RENDER_OPTIONS: ResolvedRenderOptions = {
   allowEmbeds: false,

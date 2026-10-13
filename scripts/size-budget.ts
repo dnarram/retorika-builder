@@ -53,6 +53,21 @@ const MAX_GZIP_BYTES = 60 * 1024;
  */
 const MAX_BUNDLE_GZIP_BYTES = 80 * 1024;
 
+/**
+ * What one more emitted page may add to the bundle (ADR 0040 §8), **measured on 13 October 2026**
+ * rather than chosen: a page drawn per entry of the twelve-entry fixture `una-pagina-por-ficha`
+ * gzips to 1.7 KB (22.6 KB of ours for 13 files, 2.4 of them the home page), and the heaviest
+ * page in the corpus and the generated sample — restaurante-bar on `image-left`, with the gallery
+ * and the menu — to 3.1 KB. Four kilobytes holds a drawn page of the heavier composition and
+ * nothing more. Every page re-inlines the stylesheet (ADR 0001's self-contained files), which is
+ * most of that figure; the fonts are counted once for the site, not per page.
+ *
+ * The 80 above keeps its meaning — our bytes for a one-page site — and the allowance grows by this
+ * per page actually emitted, counted off the bundle's `.html` files, so a page per entry with
+ * twelve entries is budgeted as thirteen pages and not as one.
+ */
+const PER_PAGE_GZIP_BYTES = 4 * 1024;
+
 const FIXTURES_DIR = join(import.meta.dirname, "..", "fixtures");
 const DOCUMENTS_DIR = join(FIXTURES_DIR, "documents");
 
@@ -90,6 +105,12 @@ function weigh(
   let bundleBytes = 0;
   let fontBytes = 0;
   let photoBytes = 0;
+  // **Every emitted page against the page budget, not only the home page.** Until 13 October 2026
+  // only `render(document, "html")` — the first page — was weighed, so a second page, let alone a
+  // page drawn once per entry (ADR 0040), was never seen by this number. The heaviest file is what
+  // the budget is held to, and it is named when it is not the home page.
+  let pages = 0;
+  let heaviest = { path: "index.html", bytes };
   for (const bundled of bundle.files) {
     const size = gzipSync(Buffer.from(bundled.contents)).length;
     bundleBytes += size;
@@ -97,11 +118,16 @@ function weigh(
     if (bundled.path.startsWith("assets/") && photoNames.has(basename(bundled.path))) {
       photoBytes += size;
     }
+    if (bundled.path.endsWith(".html")) {
+      pages += 1;
+      if (size > heaviest.bytes) heaviest = { path: bundled.path, bytes: size };
+    }
   }
   const ourBytes = bundleBytes - photoBytes;
+  const bundleBudget = MAX_BUNDLE_GZIP_BYTES + PER_PAGE_GZIP_BYTES * Math.max(0, pages - 1);
 
-  const over = bytes > MAX_GZIP_BYTES;
-  const overBundle = ourBytes > MAX_BUNDLE_GZIP_BYTES;
+  const over = heaviest.bytes > MAX_GZIP_BYTES;
+  const overBundle = ourBytes > bundleBudget;
   const withScript = scripts > 0;
   if (over || overBundle || withScript) failed = true;
 
@@ -111,11 +137,16 @@ function weigh(
     photoNames.size === 0
       ? "no photographs"
       : `${(photoBytes / 1024).toFixed(1)} KB in ${photoNames.size} photograph(s)`;
+  const pageNote =
+    pages > 1
+      ? ` (${pages} pages, heaviest ${heaviest.path} ${(heaviest.bytes / 1024).toFixed(1)} KB, ` +
+        `budget ${(bundleBudget / 1024).toFixed(0)} KB)`
+      : "";
   console.log(
     `${status.padEnd(4)} ${label.padEnd(38)} ${kb.padStart(6)} KB page   ` +
       `${(ourBytes / 1024).toFixed(1).padStart(6)} KB ours   ` +
       `${(bundleBytes / 1024).toFixed(1).padStart(6)} KB total   ` +
-      `${scripts} script tag(s)   ${fonts}   ${photos}`,
+      `${scripts} script tag(s)   ${fonts}   ${photos}${pageNote}`,
   );
 }
 
@@ -188,8 +219,9 @@ for (const sector of sectorsInBank().filter(hasSamplePhotos).sort()) {
 }
 
 console.log(
-  `\nBudget: ${MAX_GZIP_BYTES / 1024} KB gzipped per page and ` +
-    `${MAX_BUNDLE_GZIP_BYTES / 1024} KB of our own bytes per bundle, zero JavaScript.\n` +
+  `\nBudget: ${MAX_GZIP_BYTES / 1024} KB gzipped per emitted page and ` +
+    `${MAX_BUNDLE_GZIP_BYTES / 1024} KB of our own bytes per bundle, ` +
+    `plus ${PER_PAGE_GZIP_BYTES / 1024} KB per page after the first, zero JavaScript.\n` +
     "Photographs are reported, not budgeted here: the bank caps each approved one at " +
     "200 KB (`MAX_IMAGE_BYTES`), and an owner's own photo is the owner's.",
 );
