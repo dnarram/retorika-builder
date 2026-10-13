@@ -54,14 +54,26 @@ jobs:
       # noEmit: true so Next.js does its own type-checking during the build), so `pnpm
       # typecheck` never touches it. This is the same command render.yaml's buildCommand
       # runs, so a broken deploy fails here first, not on Render.
+      # Built and started **with a DSN in the environment, like production and unlike every
+      # other gate.** Since 13 October 2026 Render carries `NEXT_PUBLIC_SENTRY_DSN`, so
+      # `instrumentation.ts`'s `register()` really initialises the SDK at startup there — and
+      # Next's own guide says `register` «must complete before the server is ready to handle
+      # requests», which is exactly where a port would fail to open. The `e2e` job runs with no
+      # DSN on purpose (its walk proves the inert state), so this job is the one that starts the
+      # server the way production does. The host is `.invalid`, which never resolves, so nothing
+      # can leave the runner even if something throws; the key is sixteen zeroes and is nobody's.
       - run: pnpm build:editor
+        env:
+          NEXT_PUBLIC_SENTRY_DSN: https://00000000000000000000000000000000@o0.ingest.invalid/1
       # And the same command render.yaml's startCommand runs, for the same reason — with one
       # outage behind it. On 12 October 2026 `next build` passed everywhere and `next start`
       # failed on Render: it requires the compiled next.config with plain Node, which could not
       # load a project `.ts` import, so the server bound no port and retried into the same wall.
       # A build that passes and a server that starts are two different facts; this checks the
       # second. `/` is prerendered, so a 200 here needs no database and no key.
-      - name: Start the built server and ask it for the landing
+      - name: Start the built server, with a DSN set, and ask it for the landing
+        env:
+          NEXT_PUBLIC_SENTRY_DSN: https://00000000000000000000000000000000@o0.ingest.invalid/1
         run: |
           ./apps/editor/node_modules/.bin/next start apps/editor -p 4199 > start.log 2>&1 &
           for i in $(seq 1 30); do
