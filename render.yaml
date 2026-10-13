@@ -46,6 +46,17 @@ services:
     # through it — and a start path that needs the network is fragile by construction whether or
     # not it caused this. `next` is a production dependency of `apps/editor`, so pnpm writes this
     # binary during the build install and it survives `NODE_ENV=production`.
+    #
+    # **It happened again on 13 October 2026, on the first deploy after #229 — the same silence,
+    # fifteen minutes, no port.** It was also the first deploy with `NEXT_PUBLIC_SENTRY_DSN` set,
+    # and `instrumentation.ts`'s `register()` is the one thing that runs before the port opens
+    # and reads it. Reproduced before touching anything: `main` built locally and started with
+    # this exact command and a DSN in the environment answers `/` in two seconds and prints its
+    # banner, on the same Node 24.21.0. So no mechanism is claimed; what changed is that CI's
+    # editor-build job now builds and starts with a DSN, like production, so the one variable
+    # that separated production from every gate separates them no longer. If a redeploy of the
+    # same commit binds, it was the instance; if it does not and a deploy without the DSN does,
+    # it is the SDK at startup on Render's instance and the next step is the SDK's debug output.
     startCommand: ./apps/editor/node_modules/.bin/next start apps/editor -p $PORT
     envVars:
       # engine-strict is on and the root package.json asks for ^24.21.0. Render's own default is
