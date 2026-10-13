@@ -27,8 +27,9 @@ export interface HeadMeta {
  * `siteUrl` is the owner's answer to «where is this going to live», which is the only way a
  * downloaded site can carry an absolute URL — and absolute is not a preference: WhatsApp and every
  * other scraper refuse a relative `og:image`. It is **not** `buildSite`'s `baseUrl`, which says
- * where *this build* is served from and is omitted for a download; reading one as the other would
- * put a sitemap in a ZIP.
+ * where *this build* is served from — but since 13 October 2026 (ADR 0029, amended) the download
+ * route hands the owner's declaration over as that `baseUrl`, so a ZIP with a `siteUrl` carries a
+ * `sitemap.xml` built on it. The renderer still only reads `siteUrl`, for `og:url`.
  *
  * `pagePath` comes from the publisher rather than being computed here, and that is the day's one
  * real trap. The publisher decides what a page's file is called (`index.html`, then `<slug>.html`),

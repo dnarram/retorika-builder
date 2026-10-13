@@ -194,6 +194,34 @@ describe("POST /api/download", () => {
     expect(html).toContain("Edición Especial");
   });
 
+  describe("the sitemap, since the amendment to ADR 0029 (13 October 2026)", () => {
+    it("carries sitemap.xml on the owner's declared origin, and robots.txt names it", async () => {
+      const declared: RetorikaDocument = {
+        ...REAL_DOCUMENT,
+        siteUrl: "https://tabernadelpuerto.es",
+      };
+      const response = await POST(request({ document: declared }));
+      expect(response.status).toBe(200);
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      expect(fileNames(bytes)).toContain("sitemap.xml");
+      const sitemap = extractFile(bytes, "sitemap.xml");
+      expect(sitemap).toContain("<loc>https://tabernadelpuerto.es/index.html</loc>");
+      // The origin and nothing else: no `/index.html` served from somewhere this build is not.
+      expect(sitemap).not.toContain("localhost");
+      expect(extractFile(bytes, "robots.txt")).toContain(
+        "Sitemap: https://tabernadelpuerto.es/sitemap.xml",
+      );
+    });
+
+    it("carries none, and a robots.txt that names none, when no address was declared", async () => {
+      expect(REAL_DOCUMENT.siteUrl).toBeUndefined();
+      const response = await POST(request({ document: REAL_DOCUMENT }));
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      expect(fileNames(bytes)).not.toContain("sitemap.xml");
+      expect(extractFile(bytes, "robots.txt")).not.toMatch(/sitemap/i);
+    });
+  });
+
   it("is deterministic: the same document produces byte-identical ZIPs", async () => {
     const first = await POST(request({ document: REAL_DOCUMENT }));
     const second = await POST(request({ document: REAL_DOCUMENT }));

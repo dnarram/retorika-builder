@@ -340,7 +340,7 @@
   "editor.share.description.hint": "Si lo dejas vacío sale el subtítulo de tu portada, que es esto:",
   "editor.share.url.label": "Dirección de tu web",
   "editor.share.url.optional": "(opcional)",
-  "editor.share.url.help": "Si ya sabes la dirección de tu web, escríbela y al compartirla saldrá con foto. Si la cambias, vuelve a descargar.",
+  "editor.share.url.help": "Si ya sabes la dirección de tu web, escríbela: al compartirla saldrá con foto, y la descarga llevará un mapa del sitio para los buscadores con esa dirección. Si la cambias, vuelve a descargar.",
   "editor.share.url.placeholder": "midominio.es",
   "editor.share.url.saved": "Se publicará como {url}",
   "editor.share.url.insecure": "Tiene que empezar por https://. Escríbela sin http:// y la completamos.",

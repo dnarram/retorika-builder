@@ -961,8 +961,9 @@ describe("día 7 — dos conversiones desde el editor, y el ZIP resultante abier
     // Five since 12 October 2026: the cover and the bank's gallery of four (ADR 0039).
     expect(samples).toHaveLength(1 + GALLERY_SAMPLE_COUNT);
 
-    // Exactly the files this document should produce: no sitemap.xml (a download has no baseUrl,
-    // ADR-settled since sprint 3), no stray page, nothing from an earlier fixture — and, since
+    // Exactly the files this document should produce: no sitemap.xml (no «Dirección de tu web»
+    // was typed in this walk; with one there would be, ADR 0029 amended 13 October 2026), no stray
+    // page, nothing from an earlier fixture — and, since
     // sprint 11 day 6, the two faces this restaurant's type pair asks for **with the OFL text beside
     // them**, which is the condition rather than a detail.
     expect([...entries].filter((entry) => !entry.startsWith("assets/muestra-")).sort()).toEqual(
@@ -3526,8 +3527,9 @@ describe("sprint 11 día 7 — el recorrido completo del sprint", () => {
       const zip = new Uint8Array(readFileSync(zipPath));
       const entries = extractAll(zip, dir);
 
-      // Exactly the files a single-page site on classic-display produces: no sitemap.xml (a
-      // download has no baseUrl), nothing from an earlier fixture — and, since day 6, the two
+      // Exactly the files a single-page site on classic-display produces: no sitemap.xml (no
+      // address was declared in this walk; ADR 0029 amended 13 October 2026), nothing from an
+      // earlier fixture — and, since day 6, the two
       // faces this pair asks for **with the OFL text beside them**.
       expect([...entries].sort()).toEqual(
         [
@@ -3906,6 +3908,17 @@ describe("sprint 12 día 7 — el recorrido completo del sprint", () => {
       const named = new URL(ogImage?.[1] ?? "").pathname.replace(/^\//, "");
       expect(entries, `og:image names "${named}", which is not in the ZIP`).toContain(named);
 
+      // **And the sitemap, since 13 October 2026 (ADR 0029, amended, signed by David):** the same
+      // declaration that gave `og:url` its origin gives the ZIP a `sitemap.xml` built on it, and
+      // `robots.txt` names it. Read from the real files, the same way the head is.
+      expect(entries).toContain("sitemap.xml");
+      expect(new TextDecoder().decode(extractFileBytes(zip, "sitemap.xml"))).toContain(
+        "<loc>https://tabernadelpuerto.es/index.html</loc>",
+      );
+      expect(new TextDecoder().decode(extractFileBytes(zip, "robots.txt"))).toContain(
+        "Sitemap: https://tabernadelpuerto.es/sitemap.xml",
+      );
+
       // ---- and the promise every day 7 closes on ---------------------------------------------
       const offline = await (await browser.newContext()).newPage();
       const failed: string[] = [];
@@ -3944,6 +3957,8 @@ describe("sprint 12 día 7 — el recorrido completo del sprint", () => {
       expect(withoutDomain).toContain('<meta property="og:title"');
       expect(withoutDomain).not.toContain("og:image");
       expect(withoutDomain).not.toContain("og:url");
+      // No address, no sitemap either — the amendment's other half, asserted on the file list.
+      expect(listZipEntries(new Uint8Array(readFileSync(secondPath)))).not.toContain("sitemap.xml");
     } finally {
       await walk.context().close();
     }
@@ -10972,11 +10987,13 @@ describe("sprint 18 día 7 — el recorrido como un desconocido, de la landing a
    * changed, the web saved to an account whose Supabase is answered by this test, the warning
    * counting five sample photographs and letting the download through, and the ZIP opened from
    * disk: five photographs decoded, the shipped face usable, the edit intact, **not one badge**,
-   * and **no `sitemap.xml`** — because the amendment to ADR 0029 that would put one there was
-   * drafted on day 6 and not signed, and the walk asserts what is true rather than what was
-   * proposed. Sentry stays inert for the same reason (day 1's question, unanswered), which day 1's
-   * own walk already proves; here the same listener says that nothing left the machine during the
-   * whole journey.
+   * and **no `sitemap.xml`** — on 13 October 2026 because the amendment to ADR 0029 was not yet
+   * signed; since the same day, because this stranger declares no «Dirección de tu web», and
+   * without one there is nothing to build a sitemap on (the amendment is signed, and sprint 12's
+   * walk reads the sitemap back from a ZIP that has one). The walk asserts what is true rather than
+   * what was proposed. Sentry is off here because the e2e server has no DSN, which day 1's own walk
+   * already proves; here the same listener says that nothing left the machine during the whole
+   * journey.
    */
   it("entra por la landing, monta, edita, guarda, descarga y abre sin red: cinco fotos, la letra, ningún sello, ningún sitemap", async () => {
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
@@ -11135,8 +11152,9 @@ describe("sprint 18 día 7 — el recorrido como un desconocido, de la landing a
       expect(entries.filter((entry) => /^fonts\/OFL-.*\.txt$/.test(entry)).length).toBeGreaterThan(
         0,
       );
-      // Not signed, so not there: the amendment of ADR 0029 is a paragraph in
-      // `docs/tasks/lo-que-falta-para-el-primer-euro.md`, and a download has no base URL.
+      // Signed on 13 October 2026 (ADR 0029, amended) — and still not there, because this stranger
+      // typed no «Dirección de tu web»: without a declared origin there is nothing to build a
+      // sitemap on. The walk that declares one and reads the sitemap back is sprint 12's, above.
       expect(entries).not.toContain("sitemap.xml");
       extractAll(zip, dir);
 

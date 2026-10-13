@@ -129,6 +129,11 @@ tres cosas de arriba, no antes.
 
 ### 2.11 Una enmienda para firmar o rechazar: el `sitemap.xml` en el ZIP
 
+> **Firmada por ti el 13 de octubre de 2026** al planificar el sprint 19, y hecha el mismo día
+> (sprint 19, día 1): está en el ADR 0029 como enmienda, `/api/download` pasa el `siteUrl` como
+> `baseUrl`, la ayuda de «Compartir» lo dice, y las pruebas lo aseveran en los dos sentidos. Lo que
+> sigue es el texto tal como se te puso delante.
+
 El [ADR 0029](../decisions/0029-what-a-published-page-says-about-itself.md) dice que el `siteUrl`
 que el dueño escribe en «Compartir» **no** es el `baseUrl` que un sitemap necesita, y que
 confundirlos «pondría un sitemap en un ZIP». Un sitemap en el ZIP es lo que una web descargada y
@@ -170,4 +175,4 @@ cierto.
 10. ¿Escribes y firmas el ADR 0038? ¿Quién declara el producto vendible?
 11. ¿Se compra un dominio? (Es lo que saca a Google del modo de pruebas y lo que daría sentido a
     quitar el `noindex`.)
-12. ¿Firmas la enmienda del ADR 0029 (§2.11), o la rechazas?
+12. ~~¿Firmas la enmienda del ADR 0029 (§2.11), o la rechazas?~~ Firmada el 13 de octubre de 2026.
