@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DSN_VAR, reportingEnabled, sentryDsn } from "../src/observability/config.ts";
-import { initIfConfigured, type SdkLike } from "../src/observability/init.ts";
+import { DATA_COLLECTION_OFF, initIfConfigured, type SdkLike } from "../src/observability/init.ts";
 import { resolveVersion } from "../src/observability/version.ts";
 
 /**
@@ -42,7 +42,7 @@ describe("the DSN is optional, and absent means off", () => {
     expect(sdk.calls).toEqual([]);
   });
 
-  it("starts with a DSN, carrying the release, no PII, no tracing, and the scrubber", () => {
+  it("starts with a DSN, carrying the release, every collection category off, no tracing, and the scrubber", () => {
     const sdk = spy();
     const result = initIfConfigured(sdk, {
       env: { [DSN_VAR]: "https://k@o.ingest.de.sentry.io/1" },
@@ -55,7 +55,19 @@ describe("the DSN is optional, and absent means off", () => {
     expect(options["dsn"]).toBe("https://k@o.ingest.de.sentry.io/1");
     expect(options["release"]).toBe("abc1234");
     expect(options["environment"]).toBe("production");
-    expect(options["sendDefaultPii"]).toBe(false);
+    // SDK 11 has no `sendDefaultPii`; `dataCollection` is what governs, and every category that
+    // could carry a person is off by name — `userInfo` is the one that would otherwise put
+    // `{{auto}}` on sessions, which `beforeSend` never sees.
+    expect(options["sendDefaultPii"]).toBeUndefined();
+    expect(options["dataCollection"]).toEqual({
+      userInfo: false,
+      cookies: false,
+      httpHeaders: false,
+      httpBodies: [],
+      urlQueryParams: false,
+      stackFrameVariables: false,
+    });
+    expect(options["dataCollection"]).toBe(DATA_COLLECTION_OFF);
     expect(options["tracesSampleRate"]).toBe(0);
     // The scrubber is the function itself, not a copy: what the test file proves is what runs.
     expect(typeof options["beforeSend"]).toBe("function");

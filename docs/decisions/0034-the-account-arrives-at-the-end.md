@@ -295,6 +295,24 @@ David's adjustment, and it is the clause that makes the previous one real rather
 - **Accepting their data processing agreements is a direction task**, recorded here so it is tracked
   rather than assumed. No code waits on it; the notice's accuracy does.
 
+> **Amendment, 13 October 2026 (sprint 19 day 1) — decided by David when approving the sprint 19
+> plan.** **Sentry (Functional Software, Inc.) is the third processor**, for error reports only.
+> The project was created with EU data residency and its data processing agreement accepted, both
+> by David; the notice gained its sentence the same day, and `NEXT_PUBLIC_SENTRY_DSN` is set in
+> Render by him. What a report may carry is **what failed, in which release and from which browser
+> — never the document, the photographs, the email or the IP address**, and his condition on the
+> sentence was that it «no puede prometer más de lo que el conjunto, código más proyecto,
+> garantiza». So the guarantee is in three places and the notice is written against all three:
+> `apps/editor/src/observability/init.ts`, where every `dataCollection` category that could carry a
+> person is off by name (which also makes the SDK tell Sentry's ingest never to infer the IP from
+> the connection — the one path the scrubber could not reach, because sessions never pass through
+> `beforeSend`); `scrub.ts`; and the Sentry project's own «Prevent Storing of IP Addresses»
+> setting, belt and braces. **The browser clause is the one the code cannot prove**: Sentry's
+> server may derive browser and OS from the request that delivers the event, so the sentence names
+> it, and the first real event decides whether it stays — `docs/runbook.md` §8. **Supabase's and
+> Render's agreements are exactly as the bullet above leaves them**: this amendment names a third
+> processor and says nothing new about the first two.
+
 ### 15. The free plan's costs, named, and what triggers paying
 
 The application sleeps after ~15 minutes on Render's free plan and takes about a minute to wake —

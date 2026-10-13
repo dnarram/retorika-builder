@@ -1,12 +1,14 @@
 # Runbook
 
 What to do when something breaks, written before it happens (protocol Part 17). Part 17 names
-four foreseeable cases. **Three of them are here**, and **three more** have been added that Part 17
+four foreseeable cases. **Three of them are here**, and **five more** have been added that Part 17
 could not have named because the stack they belong to did not exist when it was written: a paused
-or unreachable database, an account deleted that should not have been, and running the sweep that
-ends accounts. **Six cases in total** — counted against the headings each time this file grows,
-because the first draft of this paragraph said "a fifth" when there were two, and the second said
-"five" the day a sixth was added.
+or unreachable database, an account deleted that should not have been, running the sweep that
+ends accounts, a saved web that opens without one of its photographs, and an error that Sentry
+reports. **Eight cases in total** — counted against the headings each time this file grows,
+because the first draft of this paragraph said "a fifth" when there were two, the second said
+"five" the day a sixth was added, and the third went on saying "six" after §7 arrived — found on
+13 October 2026, the day §8 was written, by counting the headings as this sentence asks.
 
 Case 6 is the odd one out and says so in its own words: it is not a failure to recover from but an
 operation somebody has to perform, and it is here because the code that needs it pointed at this
@@ -452,3 +454,65 @@ The object is there and the editor cannot read it. Two causes worth separating:
   owner's photographs readable by anybody holding a URL.
 - **Do not re-upload somebody's photograph on their behalf** from the dashboard. The document names
   the file and the owner is the only one who knows which picture belongs there.
+
+---
+
+## 8. Sentry reports an error
+
+Reporting is on since 13 October 2026 (ADR 0034 §14, amended). An error in the editor or in a
+route reaches the Sentry project, tagged with the release — the commit Render built, through
+`NEXT_PUBLIC_APP_VERSION` — and the environment. This case is about reading one honestly, and
+about keeping the privacy notice true while doing so.
+
+### The first question
+
+**Which release?** Every event carries it. `git show <release>` is the code that failed, and a
+release older than `main` means the deploy is behind, not that the bug is still there. Then the
+URL path and the stack, which are what an event is.
+
+### What an event carries, and what it never does
+
+An event is **a message, a stack, a URL path, a release and an environment.** That is the whole of
+it, and three things make it so:
+
+1. `apps/editor/src/observability/init.ts` turns off every `dataCollection` category that could
+   carry a person — user info (which is what would put the IP on events and on sessions, and what
+   tells Sentry's ingest to infer it from the connection), cookies, request headers (where the
+   browser SDK would put `User-Agent` and `Referer`), request bodies, query parameters, and local
+   variables in stack frames.
+2. `scrub.ts` runs on every event as `beforeSend`: a document, a photograph's bytes, an email
+   address, a `blob:` or `data:` URL, `user`, cookies and headers are removed whatever put them
+   there. Belt and braces over the first.
+3. **The Sentry project's «Prevent Storing of IP Addresses»**, in the project's Security & Privacy
+   settings, which overrules anything an SDK sends. David's, and the third layer.
+
+**What Sentry may add on its own**, and the code cannot prevent: its server can derive a browser
+and an operating system from the `User-Agent` of the HTTP request that delivers the event — not
+from the event, which no longer carries the header. **That is why the notice says «desde qué
+navegador»**: the sentence is written to the widest thing the whole system may store, so it cannot
+promise less than is true.
+
+### Verifying the notice against a real event — once, and after any SDK upgrade
+
+Open the first real event in the project and read its JSON:
+
+- `user` absent, or at least with no `ip_address`; `request.headers` and `request.cookies` absent;
+  no `contexts.device` with anything a person could be identified by.
+- `release` is a commit SHA and `environment` is `production`.
+- **Whether `contexts.browser` and `contexts.os` are there.** If they are, the notice is exact as
+  written. If they are not, the clause «y desde qué navegador» overstates what is stored and comes
+  out of `account.save.privacy` in a one-line pull request — the notice must not claim more data
+  than is kept either.
+
+Do the same after upgrading `@sentry/nextjs` across a major: the option that governs collection
+changed name between 10 and 11 and the old one went on type-checking as if it did something.
+
+### What not to touch
+
+- **Do not add `user` context** («so we know who hit it»), tracing, session replay or logs. Each is
+  a new category of data about people that the notice does not mention, and ADR 0034 §14 would need
+  amending first.
+- **Do not attach the document to an error «to help».** The scrubber removes it, and the attempt
+  is the thing to refuse in review.
+- **Do not set the DSN in `render.yaml` or in any file.** It is set in Render's dashboard;
+  `sync: false` is the line that keeps it there.

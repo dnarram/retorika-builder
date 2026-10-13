@@ -10612,6 +10612,33 @@ describe("sprint 17 día 7 — el recorrido entero sin tocar el ratón", () => {
        * Tab cannot walk out of a dialog that claims the page is unavailable.
        */
       const dialog = page.locator('[role="dialog"], [role="alertdialog"]');
+      /*
+       * **Thirty seconds, like the two other waits on this same gate (the photo-that-fails walk),
+       * and not Playwright's five.** CI went red here once on 13 October 2026 (PR #227, which
+       * touched nothing on this path): «Descargar» was reached and pressed, and no dialog within
+       * 5 s. What stands between the press and the dialog is `requestDownload`'s
+       * `measureOverflow`: it renders every page into a hidden 320 px frame and resolves on that
+       * frame's `load`, which waits for the fonts and the photographs the page names — served by
+       * `next dev` on a runner that had been working for six minutes. A hypothesis read off the
+       * code, not measured; if it is wrong, the account below says what the measurement frame was
+       * doing when the wait ran out, instead of «element(s) not found».
+       */
+      await expect
+        .poll(
+          async () => {
+            if ((await dialog.count()) > 0) return "open";
+            return page.evaluate(() => {
+              const measuring = document.querySelector<HTMLIFrameElement>(
+                'iframe[aria-hidden="true"][tabindex="-1"]',
+              );
+              return measuring
+                ? `measuring, frame readyState ${measuring.contentDocument?.readyState ?? "no document"}`
+                : "no dialog, and no measurement frame either";
+            });
+          },
+          { timeout: 30_000, message: "the gate did not open after Enter on «Descargar»" },
+        )
+        .toBe("open");
       await expect(dialog.first()).toBeVisible();
       const inside = await page.evaluate(
         () =>
@@ -10785,11 +10812,13 @@ describe("sprint 18 día 1 — el producto avisa cuando se rompe, y hoy no avisa
   /**
    * **Inert means no request leaves the machine, and that is asserted rather than assumed.**
    *
-   * Error reporting is wired (protocol Part 17) and switched off until direction accepts a third
-   * processor of personal data (ADR 0034 §14 names two). The e2e server starts the editor with no
-   * `NEXT_PUBLIC_SENTRY_DSN`, so this walk expects the SDK to do nothing — and it makes the SDK
-   * *want* to do something, by throwing an error nobody catches, so that «nothing was sent» is
-   * tested against an error and not against a quiet page.
+   * Error reporting is wired (protocol Part 17) and, since 13 October 2026, on in production
+   * (ADR 0034 §14, amended: Sentry is the third processor). The e2e server starts the editor with
+   * no `NEXT_PUBLIC_SENTRY_DSN`, so this walk tests **the inert state** — still the state of CI
+   * and of any machine without the variable — and says nothing about production, where an
+   * envelope does leave for `*.ingest.de.sentry.io` on an error. It expects the SDK to do nothing
+   * and makes the SDK *want* to do something, by throwing an error nobody catches, so that
+   * «nothing was sent» is tested against an error and not against a quiet page.
    *
    * The sabotage is the same walk with a DSN in the server's environment: the SDK then tries to
    * send an envelope to `*.sentry.io`, the host assertion goes red, and the route below aborts the

@@ -448,7 +448,7 @@
   "account.save.doneWithPhotos.many": "Guardada en tu cuenta, con sus {count} fotos.",
   "account.save.photosFailed.one": "Guardada en tu cuenta, pero 1 foto no se ha podido subir. Sigue en este navegador: vuelve a intentarlo desde el panel de Fotos.",
   "account.save.photosFailed.many": "Guardada en tu cuenta, pero {count} fotos no se han podido subir. Siguen en este navegador: vuelve a intentarlo desde el panel de Fotos.",
-  "account.save.privacy": "Al crear la cuenta guardamos tu correo para que puedas volver a entrar, y las fotos de tus webs para que aparezcan al abrirlas en otro ordenador. Nada m\u00e1s. Lo tratan Supabase (base de datos y fotos) y Render (servidor), los dos en la Uni\u00f3n Europea. Puedes borrar la cuenta cuando quieras y se borra de verdad, con tus fotos.",
+  "account.save.privacy": "Al crear la cuenta guardamos tu correo para que puedas volver a entrar, y las fotos de tus webs para que aparezcan al abrirlas en otro ordenador. Nada m\u00e1s. Lo tratan Supabase (base de datos y fotos) y Render (servidor), los dos en la Uni\u00f3n Europea. Si la aplicaci\u00f3n falla, el error se env\u00eda a Sentry (Functional Software, Inc., con los datos en la Uni\u00f3n Europea) para que podamos arreglarlo. Ese aviso no lleva tu web, tus fotos, tu correo ni tu direcci\u00f3n IP: solo qu\u00e9 ha fallado, en qu\u00e9 versi\u00f3n y desde qu\u00e9 navegador. Puedes borrar la cuenta cuando quieras y se borra de verdad, con tus fotos.",
   "account.save.stale": "Esta web se ha guardado desde otro sitio mientras la edit\u00e1bamos. No hemos sobrescrito nada: vuelve a abrirla para ver lo \u00faltimo.",
   "account.save.failed": "No hemos podido guardar la web. Vuelve a intentarlo.",
 

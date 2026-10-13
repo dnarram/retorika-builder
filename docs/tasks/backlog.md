@@ -541,6 +541,18 @@ open survives.
   probe since that day, so the next red says which document was wired when and where `select`
   ran. If it recurs, that is a row of its own.
 
+  **And a third shape, 13 October 2026, CI on PR #227 (sprint 19 day 1, a change that touches
+  nothing on the path):** «sprint 17 día 7 — el recorrido entero sin tocar el ratón» reached
+  «Descargar», pressed Enter, and saw no dialog within Playwright's 5 s; the same commit's twin
+  PR #228 ran the identical walk green minutes later. This one has a candidate mechanism in the
+  code rather than in the frame: `requestDownload` awaits `measureOverflow` before it opens any
+  dialog, and that measurement resolves on the `load` of a hidden 320 px frame — which waits for
+  the fonts and photographs the page names, served by `next dev`, on a runner six minutes into
+  the suite. The two other waits on this same gate (the photo-that-fails walk) already allow
+  30 s; the keyboard walk now does too, and if it still runs out it reports whether the
+  measurement frame existed and its `readyState`. Not measured, and said so; the next red
+  measures it.
+
   Two things that narrow it:
 
   - **The failure is `toHaveCount` resolving to 0, not a timeout.** The cluster was never drawn, so
