@@ -20,16 +20,27 @@ before creating its entry — there is nothing to wait for.
 
 ## Approving a draft
 
-1. Add the record to `drafts/<sector>.json`, with `review: { status: "draft", drafted: "YYYY-MM-DD" }`
-   and no `by` — nobody has approved it yet, so there is nobody to name.
-2. Have someone check it against the list below.
-3. `git mv` the record into `bank/<sector>.json`, change `review` to
-   `{ status: "approved", by: "<name>", date: "YYYY-MM-DD" }`, and move the file from
-   `drafts/photos/` to `bank/photos/`.
+Since 13 October 2026 (sprint 19 day 6) the circuit is two commands, in `tools/`:
+
+1. `pnpm photos:intake <file.png> --sector <sector> --alt "<alt in Spanish>" --checked YYYY-MM-DD [--generated YYYY-MM-DD]`
+   reads the dimensions and the generation off the PNG — the prompt, model and seed Draw Things
+   writes into the XMP, which is where the prompt comes from and nowhere else (commit `e485ffa`) —
+   flattens any alpha over white, downsizes to 1600 px on the longest side and **never enlarges**,
+   encodes a simple-VP8 WebP at quality 75, mints `<sector>.NN`, and writes `drafts/photos/<id>.webp`
+   and the record into `drafts/<sector>.json` with `review: { status: "draft", drafted: <today> }`.
+   It refuses, naming the reason: no XMP, a picture under the floor, a model whose licence is not in
+   `KNOWN_MODELS`, a WebP over 200 KB at quality 75 (the quality is not lowered in silence). The
+   `alt` and the licence date are yours: it derives neither.
+2. Have someone check the picture against the list below. The tool prints that list.
+3. `pnpm photos:approve <sector>.NN --by <name>` moves the record into `bank/<sector>.json` with
+   `review: { status: "approved", by, date: <today> }` and the file with `git mv`. It refuses to
+   leave a sector between one and seven photographs unless `--allow-partial`, which is for the one
+   transition that needs it: the nine of `restaurante-bar` leaving as nine new ones arrive (ADR 0035).
 
 That move is the review, the same act ADR 0009 names for a bank text. `draftImageRecordSchema`
 checks everything the approved schema does except the signature, so this step cannot fail on a
-rule nobody had already checked.
+rule nobody had already checked. The hand-written way — a record typed into `drafts/<sector>.json`,
+a `git mv` — still works and is what the tool automates.
 
 ### The first approved image changes what the editor says
 
@@ -93,7 +104,10 @@ the record of this list for anyone who needs to act on it without reading code f
 
 **The file.** WebP, longest side 1600px, quality around 75, EXIF and XMP removed. At most 200KB —
 and its declared `width`, `height` and `bytes` must match the file exactly; the schema checks both
-independently.
+independently. **And at least 1344 × 896, both numbers** — the full-width cover box at a 1440 px
+window on the default scale (ADR 0035, 9 October 2026; this list said only «longest side 1600px»
+for four days after that ADR, found on 13 October). The nine of `restaurante-bar` are exempt by id
+until 1 November 2026 and are being regenerated at 1600 × 1072.
 
 **How many.** At least eight per sector. A sector holds zero or at least eight, never something in
 between, and `bank.test.ts` enforces it.

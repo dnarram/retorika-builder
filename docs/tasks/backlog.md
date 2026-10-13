@@ -1123,6 +1123,12 @@ so these are not a checklist someone has to remember — they are a build failur
 
 - **WebP**, longest side **1600 px**, quality around **75**, with EXIF and XMP removed — the origin
   belongs in the record, not in the file.
+- **At least 1344 × 896, both numbers** (ADR 0035, 9 October 2026): the full-width cover box at a
+  1440 px window on the default scale. This list went on saying only «longest side 1600 px» for
+  four days after that ADR, found on 13 October 2026 when the intake tool was written against it.
+  The nine of `restaurante-bar` are exempt by id until 1 November 2026.
+- **Since 13 October 2026 the circuit is a tool**: `pnpm photos:intake` writes the draft from the
+  PNG's own XMP and `pnpm photos:approve` is the `git mv` — `packages/photobank/README.md`.
 - **At most 200 KB.** Two separate checks, and worth stating separately because the first version of
   this note fused them: the file must weigh **exactly what its record declares**, and it must
   **not exceed 200 KB**. A record that misstates its own size is wrong even when it is small.

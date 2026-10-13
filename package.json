@@ -34,7 +34,9 @@
     "security:audit": "node scripts/security-audit.ts",
     "security:secrets": "pre-commit run gitleaks --all-files",
     "fonts:generate": "node scripts/generate-font-data.ts",
-    "brand:assets": "node scripts/brand-assets.ts"
+    "brand:assets": "node scripts/brand-assets.ts",
+    "photos:intake": "node packages/photobank/tools/intake-cli.ts",
+    "photos:approve": "node packages/photobank/tools/approve-cli.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
