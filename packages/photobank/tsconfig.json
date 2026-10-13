@@ -4,7 +4,7 @@
     "rootDir": ".",
     "outDir": "./dist"
   },
-  "include": ["src/**/*.ts", "bank/**/*.json", "test/**/*.ts"],
+  "include": ["src/**/*.ts", "tools/**/*.ts", "bank/**/*.json", "test/**/*.ts"],
   "references": [
     {
       "path": "../catalog"
