@@ -11226,3 +11226,99 @@ describe("sprint 18 día 7 — el recorrido como un desconocido, de la landing a
     }
   }, 180_000);
 });
+
+/**
+ * Sprint 19 day 4 — «una página por ficha», reached through the interface for the first time
+ * (ADR 0040 §6, §9). The schema holds it since day 2 and the publisher draws it since day 3; this
+ * is the panel that makes it, the tab that shows it, the selector that says which ficha the canvas
+ * draws, and the two counts the «Páginas» panel keeps apart — pages stored against files written,
+ * which David asked for by name when approving the sprint.
+ */
+describe("sprint 19 día 4 — una página por ficha desde «Listas»", () => {
+  const VIEWPORT = { width: 1280, height: 900 };
+
+  /** The sprint-14 journey, one step further: a generated restaurant, the tools on, and «Qué hago»'s
+   * three cards made into a list — which is the state a page per entry is offered in. */
+  async function withToolsAndList(page: Page): Promise<FrameLocator> {
+    await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+    await page.fill("#nombre", "Taberna del Puerto");
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Restaurante y bar", { exact: true }).click();
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    for (const service of ["Comidas", "Cenas", "Terraza"]) {
+      await page.getByText(service, { exact: true }).click();
+    }
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.fill("#direccion", "Muelle 3, Ronda");
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Que reserven", { exact: true }).click();
+    await page.fill("#enlace", "https://reservas.example.com/taberna");
+    await page.getByRole("button", { name: "Crear mi web" }).click();
+    await page.getByText("Ver a tamaño real →").first().click();
+    const frame = page.frameLocator(PREVIEW).first();
+    await frame.locator('[data-section="sec-cover"]').waitFor();
+    await waitForBankPhoto(frame);
+    await replacingTheDocument(page, async () => {
+      await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
+      await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
+    });
+    await page.getByRole("button", { name: "Listas" }).click();
+    await page
+      .getByRole("button", { name: /Hacer una lista con las tarjetas de «Qué hago»/ })
+      .first()
+      .click();
+    await expect(page.getByText("· 3 fichas")).toBeVisible();
+    return frame;
+  }
+
+  it("crea la página, la enseña en su pestaña con «Viendo:», cuenta páginas y ficheros por separado, y quitarla se deshace", async () => {
+    const page = await (await browser.newContext({ viewport: VIEWPORT })).newPage();
+    try {
+      const frame = await withToolsAndList(page);
+      const tabs = page.getByTestId("page-tabs").getByRole("button");
+      await expect(tabs).toHaveCount(1);
+
+      // The offer sits beside the list, with its help line, and one press makes the page.
+      await expect(page.getByText(/Cada ficha puede tener su propia página/)).toBeVisible();
+      await page.getByRole("button", { name: "Crear una página por ficha" }).click();
+      await expect(tabs).toHaveCount(2);
+      await expect(tabs.nth(1)).toHaveText(/Ficha de Qué hago/);
+      await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+      // The row now says what it has, and the delete is refused with the right reason.
+      await expect(
+        page.getByText("Tiene página: al descargar saldrán 3 páginas, una por ficha."),
+      ).toBeVisible();
+      await expect(page.getByText(/primero quita su página de ficha/)).toBeVisible();
+      await expect(page.getByRole("button", { name: "Crear una página por ficha" })).toHaveCount(0);
+
+      // Over to it: the canvas draws the first ficha, as the publisher would.
+      await page.getByRole("button", { name: "Ver sus páginas" }).click();
+      const headline = frame.locator('[data-section^="sec-ficha"] h1');
+      await expect(headline).toHaveText("Comidas");
+      await expect(frame.locator("main")).toHaveAttribute("data-entry", /entry-1/);
+
+      // «Páginas»: the badge, the selector, and the two counts kept apart.
+      await page.getByRole("button", { name: "Páginas", exact: true }).click();
+      await expect(page.getByText("por ficha · 3")).toBeVisible();
+      await page.getByLabel("Viendo:").selectOption({ label: "Terraza" });
+      await expect(headline).toHaveText("Terraza");
+      await expect(page.getByText("2 de 5 páginas.")).toBeVisible();
+      await expect(
+        page.getByText("Al descargar saldrán 4 páginas: una por cada ficha de «Qué hago»."),
+      ).toBeVisible();
+      // No fold for a page that came from no section.
+      await expect(page.getByRole("button", { name: "Deshacer la conversión" })).toHaveCount(0);
+
+      // The exit loses nothing and one «Deshacer» brings the page back, tab and all.
+      await page.getByRole("button", { name: "Listas" }).click();
+      await page.getByRole("button", { name: "Quitar la página de ficha" }).click();
+      await expect(tabs).toHaveCount(1);
+      await expect(page.getByText("· 3 fichas")).toBeVisible();
+      await page.getByRole("button", { name: "Deshacer", exact: true }).click();
+      await expect(tabs).toHaveCount(2);
+      await expect(tabs.nth(1)).toHaveText(/Ficha de Qué hago/);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+});

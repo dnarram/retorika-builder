@@ -1,6 +1,6 @@
 "use client";
 
-import { MAX_PAGES, type RetorikaDocument } from "@retorika/schema";
+import { type Collection, MAX_PAGES, type RetorikaDocument } from "@retorika/schema";
 import { useEffect, useId, useRef, useState } from "react";
 import { PANEL_WIDTH, panelCard, panelRow, SmallButton } from "../editor/panelKit.tsx";
 import es from "../locales/es.json" with { type: "json" };
@@ -40,6 +40,8 @@ export function PagesPanel({
   onPageToSection,
   canFold,
   linksTo,
+  entryShown,
+  onPreviewEntry,
 }: {
   document: RetorikaDocument;
   currentPageId: string | undefined;
@@ -55,6 +57,10 @@ export function PagesPanel({
   /** How many visible links point at a page, counted from the document. Read *before* a delete,
    * which is the only moment it is worth saying — afterwards those links are merely dead. */
   linksTo: (pageId: string) => number;
+  /** Which entry a page drawn per entry is being shown for (ADR 0040), and the owner choosing
+   * another. The editor resolves the choice against the document; this only draws it. */
+  entryShown: (pageId: string) => string | undefined;
+  onPreviewEntry: (pageId: string, entryId: string) => void;
 }) {
   const headingId = useId();
   const [editing, setEditing] = useState<string | null>(null);
@@ -98,6 +104,7 @@ export function PagesPanel({
           const isEntry = index === 0;
           const current = page.id === (currentPageId ?? doc.pages[0]?.id);
           const pointing = linksTo(page.id);
+          const perEntry = perEntryOf(doc, page);
 
           return (
             <li key={page.id} className={panelRow}>
@@ -125,9 +132,38 @@ export function PagesPanel({
                     }`}
                   >
                     {page.title}
+                    {perEntry && (
+                      <span className="ml-1.5 font-normal text-ui-muted">
+                        {es["editor.pages.perEntry"].replace(
+                          "{n}",
+                          String(perEntry.collection.entries.length),
+                        )}
+                      </span>
+                    )}
                   </button>
                 )}
               </div>
+
+              {/* **Which entry the canvas draws this page for** (ADR 0040). The page is stored once;
+                  the canvas can only show one drawing of it, and this is where the owner picks which.
+                  The choice is the editor's, never the document's — nothing here is published. */}
+              {perEntry && perEntry.collection.entries.length > 0 && (
+                <label className="flex items-center gap-1.5 px-2.5 pb-1.5 text-[11px] text-ui-muted">
+                  <span>{es["editor.pages.viewing"]}</span>
+                  <select
+                    aria-label={es["editor.pages.viewing"]}
+                    value={entryShown(page.id) ?? ""}
+                    onChange={(event) => onPreviewEntry(page.id, event.target.value)}
+                    className="min-w-0 flex-1 rounded-ui-sm border border-ui-border bg-white px-1.5 py-0.5 text-[12px] text-ui-ink"
+                  >
+                    {perEntry.collection.entries.map((entry) => (
+                      <option key={entry.id} value={entry.id}>
+                        {entry.fields[perEntry.titleField]?.text || entry.id}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
 
               <div className="flex flex-wrap items-center gap-1 border-t border-ui-border px-1.5 py-1">
                 <SmallButton
@@ -212,6 +248,24 @@ export function PagesPanel({
         })}
       </ul>
 
+      {/* **Two counts, never one under the other's label** (David, approving sprint 19). The pages
+          the document stores are what the cap of five limits; the files a download writes can be
+          more, because a page drawn per entry is one stored page and N files (ADR 0040). */}
+      <p className="text-[12px] leading-snug text-ui-muted">
+        {es["editor.pages.stored"]
+          .replace("{n}", String(doc.pages.length))
+          .replace("{max}", String(MAX_PAGES))}
+      </p>
+      {doc.pages
+        .map((page) => perEntryOf(doc, page))
+        .filter((perEntry) => perEntry !== undefined)
+        .map((perEntry) => (
+          <p key={perEntry.collection.id} className="text-[12px] leading-snug text-ui-muted">
+            {es["editor.pages.downloaded"]
+              .replace("{n}", String(filesWritten(doc)))
+              .replace("{list}", perEntry.collection.name)}
+          </p>
+        ))}
       {/* Said rather than shown as a disabled control: there is nothing here to disable, because
           pages are made in the canvas. The number is the download route's and the schema's. */}
       <p className="text-[12px] leading-snug text-ui-muted">
@@ -221,4 +275,24 @@ export function PagesPanel({
       </p>
     </section>
   );
+}
+
+/** The collection a page is drawn per entry of, with the field that names each drawing. */
+function perEntryOf(
+  doc: RetorikaDocument,
+  page: RetorikaDocument["pages"][number],
+): { collection: Collection; titleField: string } | undefined {
+  const binding = page.binding;
+  if (!binding) return undefined;
+  const collection = doc.collections.find((candidate) => candidate.id === binding.collectionId);
+  return collection ? { collection, titleField: binding.titleField } : undefined;
+}
+
+/** How many `.html` files a download writes: every ordinary page once, a page per entry once per
+ * entry — the publisher's own arithmetic, restated here so the sentence can say the number. */
+function filesWritten(doc: RetorikaDocument): number {
+  return doc.pages.reduce((count, page) => {
+    const perEntry = perEntryOf(doc, page);
+    return count + (perEntry ? perEntry.collection.entries.length : 1);
+  }, 0);
 }

@@ -1246,6 +1246,12 @@ export function Variants({
             dismissToast();
             dispatch({ type: "collectionFromList", variant: openIndex, sectionId, slot, name });
           }}
+          // Like converting, this leaves the canvas where it is: a new tab appears, which is the
+          // visible proof, and «Ver sus páginas» in the panel is the way over.
+          onAddEntryPage={(collectionId, titleField, title) => {
+            dismissToast();
+            dispatch({ type: "addEntryPage", variant: openIndex, collectionId, titleField, title });
+          }}
           onBindList={(sectionId, slot, collectionId) => {
             dismissToast();
             dispatch({ type: "bindList", variant: openIndex, sectionId, slot, collectionId });
