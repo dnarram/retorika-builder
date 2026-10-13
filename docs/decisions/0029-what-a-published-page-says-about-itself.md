@@ -135,14 +135,36 @@ link blocks the download. A heavy photograph makes a slow preview card, not a br
 
 ## What this does not decide
 
-- **Nothing about hosted publishing.** ADR 0008 stands. `buildSite`'s own `baseUrl` is what a
+- **Nothing about hosted publishing.** ADR 0008 stands. ~~`buildSite`'s own `baseUrl` is what a
   sitemap needs and this field is **not** that and does not become it: one is where the site will
   live, the other is where this build is being served from. Conflating them would put a sitemap in a
-  ZIP.
+  ZIP.~~ **Struck on 13 October 2026 by the amendment below**: the two are still different things,
+  and the owner's declaration now feeds both.
 - **Nothing about structured data, `keywords`, or anything else in `<head>`.** The minimum is the
   minimum.
 - **Nothing about a preview image that is not the cover photo.** Choosing a different one is a field
   and a decision this does not take.
+
+## Amendment — the sitemap in the ZIP (13 October 2026, signed by David)
+
+> **Enmienda al ADR 0029, firmada por David el 13 de octubre de 2026 al planificar el sprint 19**
+> (drafted on 13 October in `docs/tasks/lo-que-falta-para-el-primer-euro.md` §2.11, sprint 18 day 6,
+> and put to him as «firmar o rechazar»): cuando el documento lleva un `siteUrl` validado como
+> origen `https://`, el ZIP incluye un `sitemap.xml` construido sobre ese origen, y la ayuda de
+> «Compartir» lo dice. Sin `siteUrl`, ningún sitemap, como hoy. El `siteUrl` sigue siendo la
+> dirección pública que el dueño declara, no la dirección desde la que se sirve esta compilación;
+> lo que cambia es que esa declaración vale para el sitemap además de para `og:url`.
+
+What it costs, counted: one spread in `apps/editor/src/app/api/download/route.ts` (`baseUrl:
+document.siteUrl` when present), because `buildSite` has emitted `sitemap.xml` and a `robots.txt`
+that names it whenever it is handed a `baseUrl` since sprint 3 (`packages/publisher/src/site.ts`,
+`metafiles.ts`) and nothing in the publisher changes; one sentence in `editor.share.url.help`; two
+tests on the route; and the assertions in the `e2e` that said «no sitemap.xml (a download has no
+baseUrl)», which now say why there is none *in that walk* — no address typed — rather than why
+there could never be one. The premise above («the download route does not pass it») is history,
+kept as written. What does **not** change: the field is still optional, still blocks nothing, and
+the schema still refuses anything but an `https://` origin, so the publisher's own `assertOrigin`
+is never the one that fails.
 
 ## Consequences
 

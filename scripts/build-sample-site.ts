@@ -15,7 +15,8 @@ import { parseDocument, type RetorikaDocument } from "@retorika/schema";
  * prototype's documents live in docs/design/prototype/, deliberately outside the golden corpus,
  * and each of its folders is self-contained.
  *
- * Built as a download: no baseUrl, so no sitemap, exactly what a client would receive.
+ * Built as a download with no `siteUrl` declared, so no baseUrl and no sitemap — exactly what a
+ * client who left «Dirección de tu web» empty receives (ADR 0029, amended 13 October 2026).
  */
 
 const REPO_ROOT = resolve(import.meta.dirname, "..");

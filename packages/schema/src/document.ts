@@ -301,9 +301,11 @@ export const documentSchema = z.strictObject({
    * The origin the owner says their site will be served from, which is what makes an absolute
    * `og:image` and `og:url` possible from a ZIP (ADR 0029).
    *
-   * **Not `buildSite`'s `baseUrl`, and the two must not be conflated.** That one says where *this
-   * build* is being served from and is omitted for a download; this one says where the owner is
-   * going to put the files. Reading one as the other would put a sitemap in a ZIP.
+   * **Not `buildSite`'s `baseUrl`, though it feeds it.** That one says where *this build* is being
+   * served from; this one says where the owner is going to put the files. Since 13 October 2026
+   * (ADR 0029, amended) the download route passes this declaration as the bundle's `baseUrl`, so a
+   * ZIP with a `siteUrl` carries a `sitemap.xml` on that origin — which is why it must be an origin
+   * and nothing else, checked here more strictly than the publisher checks its own option.
    */
   siteUrl: z
     .string()

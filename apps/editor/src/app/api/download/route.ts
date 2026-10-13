@@ -266,8 +266,19 @@ export async function POST(request: Request): Promise<Response> {
   // Empty for every site on `editorial-serif`, which is most of them — one Map allocation, no read.
   const fonts = readFontBundle(document);
 
+  // `siteUrl` is the owner's declared public address, and since 13 October 2026 (ADR 0029,
+  // amended) it is what the ZIP's `sitemap.xml` is built on — as well as `og:url`. It is already
+  // an `https://` origin and nothing else: `siteUrlIssue` guards the schema, which is stricter
+  // than the publisher's own `assertOrigin`. No address typed, no sitemap, exactly as before.
   const zip = new Uint8Array(
-    bundleToZip(buildSite(document, { siteId: document.id, assets, fonts })),
+    bundleToZip(
+      buildSite(document, {
+        siteId: document.id,
+        assets,
+        fonts,
+        ...(document.siteUrl === undefined ? {} : { baseUrl: document.siteUrl }),
+      }),
+    ),
   );
 
   return new Response(zip, {
