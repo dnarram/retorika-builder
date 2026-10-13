@@ -59,11 +59,15 @@ empiezan: la pregunta 1 les da contraparte y la 6 les da su cláusula más difí
 |---|---|---|---|
 | Supabase (UE) | El correo de la cuenta, el documento, las fotos del dueño | **Pendiente de aceptar**, tarea de dirección | ADR 0034 §14 |
 | Render (Frankfurt) | La aplicación que lo sirve | **Pendiente de aceptar**, tarea de dirección | ADR 0034 §14 |
-| Sentry (UE, si se aprueba) | Qué ha fallado y en qué versión; nunca la web, las fotos ni el correo | **Pregunta abierta desde la PR #219** (12 de octubre): proyecto en Sentry con residencia en la UE, su DPA, y una frase nueva en el aviso de privacidad, redactada allí y **no** metida en `es.json` | PR #219, cuerpo |
+| Sentry (UE) | Qué ha fallado, en qué versión y desde qué navegador; nunca la web, las fotos, el correo ni la IP | **Aceptado por ti el 13 de octubre de 2026** al planificar el sprint 19: proyecto en la UE, DPA aceptado, DSN en Render. La frase está en `account.save.privacy` desde ese día | ADR 0034 §14, enmienda; `docs/runbook.md` §8 |
 
-El código de Sentry está cableado e inerte: sin `NEXT_PUBLIC_SENTRY_DSN` no envía nada, y el `e2e`
-lo comprueba contra un error real. Activarlo es poner la variable en Render **después** de las
-tres cosas de arriba, no antes.
+Sentry está activo desde el 13 de octubre de 2026 (sprint 19, día 1). Lo que la frase del aviso
+promete lo sostienen tres cosas juntas —`init.ts` con cada categoría de recogida apagada por su
+nombre, `scrub.ts`, y la opción del proyecto de no guardar direcciones IP, que es tuya— y **tu
+comprobación con un evento real**, descrita en el runbook §8, decide si la cláusula «desde qué
+navegador» se queda. Sin `NEXT_PUBLIC_SENTRY_DSN` (CI, local) sigue sin enviar nada, y el `e2e` lo
+comprueba contra un error real. **Los DPA de Supabase y Render siguen como estaban**: no dijiste
+nada de ellos.
 
 ### 2.4 El precio
 
@@ -148,7 +152,7 @@ cierto.
 
 | Qué | Estado |
 |---|---|
-| El producto avisa cuando se rompe | Cableado e inerte (día 1); activar es tuyo (§2.3) |
+| El producto avisa cuando se rompe | Cableado e inerte (sprint 18, día 1); **activado el 13 de octubre de 2026** (sprint 19, día 1) con tu aceptación (§2.3) |
 | Lighthouse ≥ 95 medido | 100 / 99 / 99 con cinco fotos (días 2 y 4); el 96 de buenas prácticas es el favicon, fase 2 |
 | La galería del banco | Generada, contada y verificada (días 3 y 4) |
 | El intermitente del `e2e` | Mecanismo encontrado y corregido (día 5) |

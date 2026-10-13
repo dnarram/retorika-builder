@@ -10785,11 +10785,13 @@ describe("sprint 18 día 1 — el producto avisa cuando se rompe, y hoy no avisa
   /**
    * **Inert means no request leaves the machine, and that is asserted rather than assumed.**
    *
-   * Error reporting is wired (protocol Part 17) and switched off until direction accepts a third
-   * processor of personal data (ADR 0034 §14 names two). The e2e server starts the editor with no
-   * `NEXT_PUBLIC_SENTRY_DSN`, so this walk expects the SDK to do nothing — and it makes the SDK
-   * *want* to do something, by throwing an error nobody catches, so that «nothing was sent» is
-   * tested against an error and not against a quiet page.
+   * Error reporting is wired (protocol Part 17) and, since 13 October 2026, on in production
+   * (ADR 0034 §14, amended: Sentry is the third processor). The e2e server starts the editor with
+   * no `NEXT_PUBLIC_SENTRY_DSN`, so this walk tests **the inert state** — still the state of CI
+   * and of any machine without the variable — and says nothing about production, where an
+   * envelope does leave for `*.ingest.de.sentry.io` on an error. It expects the SDK to do nothing
+   * and makes the SDK *want* to do something, by throwing an error nobody catches, so that
+   * «nothing was sent» is tested against an error and not against a quiet page.
    *
    * The sabotage is the same walk with a DSN in the server's environment: the SDK then tries to
    * send an envelope to `*.sentry.io`, the host assertion goes red, and the route below aborts the
