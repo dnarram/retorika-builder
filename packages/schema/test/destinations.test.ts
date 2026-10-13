@@ -336,3 +336,65 @@ describe("listAnchorsTo", () => {
     expect(listAnchorsTo(doc, "sec-cover")).toHaveLength(2);
   });
 });
+
+describe("a page per entry (ADR 0040)", () => {
+  /** A home page with a button, a collection whose entries carry slugs, and the page drawn once
+   * per entry. The button's href is the subject. */
+  function withEntryPage(href: string): RetorikaDocument {
+    const doc = documentWith([action("el-cta", href)]);
+    const home = doc.pages[0];
+    if (!home) throw new Error("no page");
+    return {
+      ...doc,
+      collections: [
+        {
+          id: "col-servicios",
+          name: "Servicios",
+          entries: [
+            {
+              id: "entry-1",
+              slug: "chapa-y-pintura",
+              fields: { nombre: { text: "Chapa y pintura" } },
+            },
+            { id: "entry-2", slug: "mecanica", fields: { nombre: { text: "Mecánica" } } },
+          ],
+        },
+      ],
+      pages: [
+        home,
+        {
+          id: "page-ficha-servicios",
+          slug: "ficha",
+          title: "Ficha",
+          binding: { collectionId: "col-servicios", titleField: "nombre" },
+          sections: [
+            {
+              id: "sec-ficha",
+              preset: { catalogId: "cover", variantId: "image-right" },
+              source: "catalog",
+              layout: null,
+              content: [],
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  it("counts a link to an entry's file as live, with or without a fragment into the template", () => {
+    expect(listDeadDestinations(withEntryPage("./chapa-y-pintura.html"))).toEqual([]);
+    expect(listDeadDestinations(withEntryPage("./mecanica.html#sec-ficha"))).toEqual([]);
+  });
+
+  it("counts a link to the template's own slug as dead, because no file is ever written under it", () => {
+    // The template page is never emitted as itself; `./ficha.html` would be a 404 on disk.
+    expect(listDeadDestinations(withEntryPage("./ficha.html"))).toHaveLength(1);
+    // And a fragment into a section the template does not have is dead like on any page.
+    expect(listDeadDestinations(withEntryPage("./mecanica.html#sec-nada"))).toHaveLength(1);
+  });
+
+  it("lists links into any of its entries as links to the page, before it is deleted", () => {
+    expect(listLinksTo(withEntryPage("./mecanica.html"), "page-ficha-servicios")).toHaveLength(1);
+    expect(listLinksTo(withEntryPage("./otra.html"), "page-ficha-servicios")).toHaveLength(0);
+  });
+});

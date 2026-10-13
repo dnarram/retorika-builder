@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   addCollection,
   addEntry,
+  addEntryPage,
   bindElement,
   bindList,
   collectionFromList,
   deleteCollection,
+  type EntryPageSectionFactory,
+  entryPageOf,
   mintCollectionId,
   moveEntry,
   removeEntry,
@@ -17,6 +20,7 @@ import {
 } from "../src/collections.ts";
 import type { RetorikaDocument, Section } from "../src/document.ts";
 import { checkInvariants } from "../src/invariants.ts";
+import { deletePage } from "../src/pages.ts";
 import { parseDocument } from "../src/parse.ts";
 import { type Theme, TOKEN_KEYS } from "../src/tokens.ts";
 
@@ -137,7 +141,13 @@ describe("where a collection is used", () => {
       servicios(3),
     );
     expect(usesOfCollection(doc, "col-servicios")).toEqual([
-      { pageId: "home", sectionId: "sec-services", catalogId: "services", fields: ["nombre"] },
+      {
+        pageId: "home",
+        sectionId: "sec-services",
+        catalogId: "services",
+        kind: "list",
+        fields: ["nombre"],
+      },
     ]);
     expect(usesOfCollection(doc, "col-otra")).toEqual([]);
   });
@@ -705,5 +715,285 @@ describe("the exit: unbinding a section", () => {
   it("gives back the identical document for a list that was never bound", () => {
     const doc = docWith([servicesSection()], servicios(2));
     expect(unbindList(doc, "sec-services", "services")).toBe(doc);
+  });
+});
+
+describe("una página por ficha (ADR 0040)", () => {
+  /**
+   * **The page is stored once and drawn N times**, the way a bound list stores one card. What the
+   * schema holds is one page with a binding and one section whose leaves read the entry's fields;
+   * what the publisher emits is one file per entry, named after a slug minted here and held still.
+   */
+  const ficha: EntryPageSectionFactory = ({ sectionId, collectionId, titleField, fields }) => ({
+    id: sectionId,
+    preset: { catalogId: "cover", variantId: "image-right" },
+    source: "catalog",
+    layout: null,
+    content: [
+      {
+        id: `${sectionId}-headline`,
+        role: "heading",
+        hidden: false,
+        slot: "headline",
+        value: { kind: "text", text: "" },
+        binding: { collectionId, field: titleField },
+      },
+      ...fields
+        .filter((field) => field !== titleField)
+        .slice(0, 1)
+        .map((field) => ({
+          id: `${sectionId}-body`,
+          role: "body" as const,
+          hidden: false,
+          slot: "body",
+          value: { kind: "text" as const, text: "" },
+          binding: { collectionId, field },
+        })),
+    ],
+  });
+
+  const withPage = (count = 3) =>
+    addEntryPage(
+      docWith([servicesSection({ bound: "col-servicios", field: "nombre" })], servicios(count)),
+      "col-servicios",
+      "nombre",
+      "Ficha de servicio",
+      ficha,
+    );
+
+  it("creates one stored page bound to the collection, and every entry gets a slug", () => {
+    const doc = withPage();
+    const page = entryPageOf(doc, "col-servicios");
+    expect(page?.binding).toEqual({ collectionId: "col-servicios", titleField: "nombre" });
+    expect(page?.id).toBe("page-ficha-servicios");
+    expect(page?.slug).toBe("ficha-de-servicio");
+    expect(doc.pages.at(-1)).toBe(page);
+    expect(doc.collections[0]?.entries.map((entry) => entry.slug)).toEqual([
+      "servicio-1",
+      "servicio-2",
+      "servicio-3",
+    ]);
+    // The leaves read the entry, and the invariants accept them there without any list around.
+    expect(page?.sections[0]?.content.map((el) => el.binding)).toEqual([
+      { collectionId: "col-servicios", field: "nombre" },
+    ]);
+    expect(checkInvariants(doc, lookup)).toEqual([]);
+  });
+
+  it("reports the page's section as a use of kind «page», beside the list that shows the cards", () => {
+    const doc = withPage();
+    expect(usesOfCollection(doc, "col-servicios")).toEqual([
+      {
+        pageId: "home",
+        sectionId: "sec-services",
+        catalogId: "services",
+        kind: "list",
+        fields: ["nombre"],
+      },
+      {
+        pageId: "page-ficha-servicios",
+        sectionId: "sec-ficha",
+        catalogId: "cover",
+        kind: "page",
+        fields: ["nombre"],
+      },
+    ]);
+  });
+
+  it("gives a new entry its slug at birth, with a suffix when the title repeats", () => {
+    // «Al añadir una ficha, su página se crea y se enlaza sola»: nothing to do but add it.
+    const doc = addEntry(withPage(), "col-servicios", { nombre: { text: "Servicio 1" } }, lookup);
+    expect(doc.collections[0]?.entries.at(-1)?.slug).toBe("servicio-1-2");
+    expect(checkInvariants(doc, lookup)).toEqual([]);
+  });
+
+  it("holds an entry's slug still when its title changes, which is ADR 0022's rule for a page", () => {
+    const doc = setEntryField(withPage(), "col-servicios", "entry-1", "nombre", {
+      text: "Chapa y pintura",
+    });
+    expect(doc.collections[0]?.entries[0]?.slug).toBe("servicio-1");
+  });
+
+  it("requires the title field of a new entry once the page exists, even where no leaf reads it", () => {
+    const doc = addEntryPage(
+      docWith(
+        [servicesSection({ bound: "col-servicios", field: "nombre" })],
+        [
+          {
+            id: "col-servicios",
+            name: "Servicios",
+            entries: [
+              { id: "entry-1", fields: { nombre: { text: "Comidas" }, precio: { text: "12" } } },
+            ],
+          },
+        ],
+      ),
+      "col-servicios",
+      "precio",
+      "Ficha",
+      ({ sectionId, collectionId }) => ({
+        id: sectionId,
+        preset: { catalogId: "cover", variantId: "image-right" },
+        source: "catalog",
+        layout: null,
+        content: [
+          {
+            id: `${sectionId}-headline`,
+            role: "heading",
+            hidden: false,
+            slot: "headline",
+            value: { kind: "text", text: "" },
+            binding: { collectionId, field: "nombre" },
+          },
+        ],
+      }),
+    );
+    expect(() => addEntry(doc, "col-servicios", { nombre: { text: "Cenas" } }, lookup)).toThrow(
+      /has no "precio"/,
+    );
+  });
+
+  it("refuses a second page, a title field some entry lacks, and the page cap", () => {
+    const doc = withPage();
+    expect(() => addEntryPage(doc, "col-servicios", "nombre", "Otra", ficha)).toThrow(
+      /already has its page per entry, "page-ficha-servicios"/,
+    );
+    expect(() =>
+      addEntryPage(
+        docWith([servicesSection({ bound: "col-servicios", field: "nombre" })], servicios(3)),
+        "col-servicios",
+        "precio",
+        "Ficha",
+        ficha,
+      ),
+    ).toThrow(/"precio" would title the pages and 3 of 3 entries/);
+    const full = {
+      ...docWith([servicesSection({ bound: "col-servicios", field: "nombre" })], servicios(3)),
+    };
+    full.pages = [
+      ...full.pages,
+      ...[2, 3, 4, 5].map((n) => ({
+        id: `page-${n}`,
+        slug: `p-${n}`,
+        title: `P${n}`,
+        sections: [],
+      })),
+    ];
+    expect(() => addEntryPage(full, "col-servicios", "nombre", "Ficha", ficha)).toThrow(
+      /a site may have 5 pages/,
+    );
+  });
+
+  it("refuses to delete the collection while its page exists, and names the page", () => {
+    // Unbinding the sections is not enough any more: the page is a second thing standing on it.
+    expect(() => deleteCollection(withPage(), "col-servicios")).toThrow(
+      /page "page-ficha-servicios" is drawn once per entry/,
+    );
+  });
+
+  it("keeps the entries' slugs when the page goes, so a re-created page draws the same files", () => {
+    const without = deletePage(withPage(), "page-ficha-servicios");
+    expect(entryPageOf(without, "col-servicios")).toBeUndefined();
+    expect(without.collections[0]?.entries.map((entry) => entry.slug)).toEqual([
+      "servicio-1",
+      "servicio-2",
+      "servicio-3",
+    ]);
+    const again = addEntryPage(without, "col-servicios", "nombre", "Ficha de servicio", ficha);
+    expect(again.collections[0]?.entries.map((entry) => entry.slug)).toEqual([
+      "servicio-1",
+      "servicio-2",
+      "servicio-3",
+    ]);
+  });
+
+  describe("the invariants ADR 0040 adds", () => {
+    const raw = (pages: unknown[], collections: unknown[]): RetorikaDocument =>
+      ({
+        schemaVersion: "1.9.0",
+        id: "doc-1",
+        siteName: "Taberna del Puerto",
+        theme,
+        collections,
+        pages,
+      }) as unknown as RetorikaDocument;
+    const home = { id: "home", slug: "index", title: "Inicio", sections: [servicesSection()] };
+    const slugged = (count: number, slugs = true) =>
+      servicios(count).map((collection) => ({
+        ...collection,
+        entries: collection.entries.map((entry, index) => ({
+          ...entry,
+          ...(slugs ? { slug: `servicio-${index + 1}` } : {}),
+        })),
+      }));
+    const bound = (id: string, titleField = "nombre", sectionId = `sec-${id}`) => ({
+      id,
+      slug: id,
+      title: "Ficha",
+      binding: { collectionId: "col-servicios", titleField },
+      sections: [
+        ficha({ sectionId, collectionId: "col-servicios", titleField, fields: ["nombre"] }),
+      ],
+    });
+    const messages = (doc: RetorikaDocument) =>
+      checkInvariants(doc, lookup).map((violation) => violation.message);
+
+    it("passes a well-formed page per entry", () => {
+      expect(messages(raw([home, bound("ficha")], slugged(2)))).toEqual([]);
+    });
+
+    it("refuses the first page as a page per entry", () => {
+      expect(messages(raw([bound("ficha"), home], slugged(2)))).toContainEqual(
+        expect.stringContaining(
+          "the first page is the site's entry and cannot be drawn once per entry",
+        ),
+      );
+    });
+
+    it("refuses two pages for one collection", () => {
+      const doc = raw(
+        [home, bound("ficha"), bound("ficha-2", "nombre", "sec-ficha-2")],
+        slugged(2),
+      );
+      expect(messages(doc)).toContainEqual(
+        expect.stringContaining("is drawn per entry by more than one page"),
+      );
+      expect(() => parseDocument(doc)).toThrow(/rule 1/);
+    });
+
+    it("refuses a title field some entry does not carry, and an unknown collection", () => {
+      expect(messages(raw([home, bound("ficha", "precio")], slugged(2)))).toContainEqual(
+        expect.stringContaining('titles its entries by "precio", which 2 of the 2 entries'),
+      );
+      const orphan = { ...bound("ficha"), binding: { collectionId: "col-nada", titleField: "x" } };
+      expect(messages(raw([home, orphan], slugged(2)))).toContainEqual(
+        expect.stringContaining('page binding references unknown collection "col-nada"'),
+      );
+    });
+
+    it("refuses an entry with no slug under a page, and a slug another page already has", () => {
+      expect(messages(raw([home, bound("ficha")], slugged(2, false)))).toContainEqual(
+        expect.stringContaining("2 of its 2 entries have no slug"),
+      );
+      const clash = slugged(2).map((collection) => ({
+        ...collection,
+        entries: collection.entries.map((entry, index) =>
+          index === 0 ? { ...entry, slug: "ficha" } : entry,
+        ),
+      }));
+      expect(messages(raw([home, bound("ficha")], clash))).toContainEqual(
+        expect.stringContaining("entry slug \"ficha\" is already another page's or entry's"),
+      );
+    });
+
+    it("still refuses a bound leaf outside any list on an ordinary page", () => {
+      const loose = {
+        ...bound("ficha"),
+        binding: undefined,
+      };
+      expect(messages(raw([home, loose], slugged(2)))).toContainEqual(
+        expect.stringContaining("sits in no list bound to it and on no page drawn per its entry"),
+      );
+    });
   });
 });

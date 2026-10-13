@@ -50,7 +50,18 @@ function reachable(doc: RetorikaDocument): Reachable {
   const pageBySlug = new Map<string, string>();
   for (const page of doc.pages) {
     sectionsByPage.set(page.id, new Set(page.sections.map((section) => section.id)));
-    pageBySlug.set(page.slug, page.id);
+    // A page per entry is reached by its entries' slugs, never by its own (ADR 0040): each entry
+    // is a file named after its slug, holding the template's sections, and no file is ever
+    // written under the template's own slug — a link to it would be a 404 on disk.
+    const binding = page.binding;
+    if (!binding) {
+      pageBySlug.set(page.slug, page.id);
+      continue;
+    }
+    const collection = doc.collections.find((candidate) => candidate.id === binding.collectionId);
+    for (const entry of collection?.entries ?? []) {
+      if (entry.slug !== undefined) pageBySlug.set(entry.slug, page.id);
+    }
   }
   return { sectionsByPage, pageBySlug };
 }
@@ -160,7 +171,18 @@ export function listAnchorsTo(doc: RetorikaDocument, sectionId: string): DeadDes
 export function listLinksTo(doc: RetorikaDocument, pageId: string): DeadDestination[] {
   const page = doc.pages.find((candidate) => candidate.id === pageId);
   if (!page) throw new Error(`listLinksTo: no page "${pageId}"`);
-  return linksMatching(doc, (href) => INTERNAL_PAGE.exec(href)?.[1] === page.slug);
+  // A page per entry answers to every entry's slug (ADR 0040): deleting it kills every link into
+  // any of the files it would have been drawn as.
+  const slugs = new Set([page.slug]);
+  if (page.binding) {
+    const collection = doc.collections.find((c) => c.id === page.binding?.collectionId);
+    for (const entry of collection?.entries ?? [])
+      if (entry.slug !== undefined) slugs.add(entry.slug);
+  }
+  return linksMatching(doc, (href) => {
+    const slug = INTERNAL_PAGE.exec(href)?.[1];
+    return slug !== undefined && slugs.has(slug);
+  });
 }
 
 /** Every visible link whose trimmed href the predicate accepts. */

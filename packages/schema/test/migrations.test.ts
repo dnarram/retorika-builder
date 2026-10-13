@@ -986,3 +986,142 @@ describe("0009 — a collection entry's field carries marks", () => {
     expect(backInner?.["binding"]).toEqual({ collectionId: "col-servicios", field: "nombre" });
   });
 });
+
+describe("0010 — a page per entry", () => {
+  /** A 1.8.0 document with a collection and a bound list, which is the most a 1.8.0 document can
+   * say about collections; nothing in it is touched on the way up. */
+  function before(): Record<string, unknown> {
+    return {
+      schemaVersion: "1.8.0",
+      id: "doc-1",
+      siteName: "Taller",
+      theme,
+      collections: [
+        {
+          id: "col-servicios",
+          name: "Servicios",
+          entries: [{ id: "entry-1", fields: { nombre: { text: "Chapa" } } }],
+        },
+      ],
+      pages: [
+        {
+          id: "home",
+          slug: "index",
+          title: "Inicio",
+          sections: [
+            {
+              id: "sec-services",
+              preset: { catalogId: "services", variantId: "cards" },
+              source: "catalog",
+              layout: null,
+              content: [
+                {
+                  id: "el-list",
+                  role: "list",
+                  hidden: false,
+                  slot: "services",
+                  binding: { collectionId: "col-servicios" },
+                  items: [
+                    {
+                      id: "item-1",
+                      elements: [
+                        {
+                          id: "el-card-title",
+                          role: "heading",
+                          hidden: false,
+                          slot: "title",
+                          value: { kind: "text", text: "Chapa" },
+                          binding: { collectionId: "col-servicios", field: "nombre" },
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  /** The same document after a page per entry was made: a slug on the entry, a bound page whose
+   * leaf reads the collection outside any list. */
+  function after(): Record<string, unknown> {
+    const input = before();
+    const collections = input["collections"] as { entries: Record<string, unknown>[] }[];
+    const entry = collections[0]?.entries[0];
+    if (!entry) throw new Error("no entry");
+    entry["slug"] = "chapa";
+    (input["pages"] as unknown[]).push({
+      id: "page-ficha-servicios",
+      slug: "ficha",
+      title: "Ficha",
+      binding: { collectionId: "col-servicios", titleField: "nombre" },
+      sections: [
+        {
+          id: "sec-ficha",
+          preset: { catalogId: "cover", variantId: "image-right" },
+          source: "catalog",
+          layout: null,
+          content: [
+            {
+              id: "el-ficha-headline",
+              role: "heading",
+              hidden: false,
+              slot: "headline",
+              value: { kind: "text", text: "" },
+              binding: { collectionId: "col-servicios", field: "nombre" },
+            },
+          ],
+        },
+      ],
+    });
+    return { ...input, schemaVersion: "1.9.0" };
+  }
+
+  it("stamps the version and moves nothing, because the affected set is zero", () => {
+    const migrated = upTo(before(), "1.9.0");
+    expect(migrated).toEqual({ ...before(), schemaVersion: "1.9.0" });
+    expect(() => parseDocument(migrateToCurrent(before()))).not.toThrow();
+  });
+
+  it("is a round trip for a document that never had a page per entry", () => {
+    const down = step("1.9.0").down;
+    if (!down) throw new Error("0010 has no down");
+    expect(down(upTo(before(), "1.9.0"))).toEqual(before());
+  });
+
+  it("parses what a page per entry writes, and the corpus fixture with a collection still parses", () => {
+    expect(() => parseDocument(after())).not.toThrow();
+    const fixture = JSON.parse(
+      readFileSync(join(DOCUMENTS_DIR, "contenido-reutilizable.json"), "utf8"),
+    ) as Record<string, unknown>;
+    expect(() => parseDocument(migrateToCurrent(fixture))).not.toThrow();
+  });
+
+  it("drops the page's binding, the entries' slugs and the page-level leaf bindings on the way down, and keeps the list's", () => {
+    const down = step("1.9.0").down;
+    if (!down) throw new Error("0010 has no down");
+    const back = down(after());
+    expect(back["schemaVersion"]).toBe("1.8.0");
+    const pages = back["pages"] as Record<string, unknown>[];
+    const ficha = pages[1] as { sections: { content: Record<string, unknown>[] }[] } & Record<
+      string,
+      unknown
+    >;
+    expect(Object.hasOwn(ficha, "binding")).toBe(false);
+    expect(Object.hasOwn(ficha.sections[0]?.content[0] ?? {}, "binding")).toBe(false);
+    // The list on the home page is still bound, and so is the card's own leaf: 1.8.0 holds both.
+    const list = (pages[0] as { sections: { content: Record<string, unknown>[] }[] }).sections[0]
+      ?.content[0];
+    expect(list?.["binding"]).toEqual({ collectionId: "col-servicios" });
+    const items = list?.["items"] as { elements: Record<string, unknown>[] }[] | undefined;
+    const leaf = items?.[0]?.elements[0];
+    expect(leaf?.["binding"]).toEqual({ collectionId: "col-servicios", field: "nombre" });
+    const entries = (back["collections"] as { entries: Record<string, unknown>[] }[])[0]?.entries;
+    expect(Object.hasOwn(entries?.[0] ?? {}, "slug")).toBe(false);
+    // And what comes down is a 1.8.0 document the old chain would accept again.
+    expect(() => parseDocument(migrateToCurrent(back))).not.toThrow();
+  });
+});

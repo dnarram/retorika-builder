@@ -101,6 +101,14 @@ export function sectionToPage(
   if (UNCONVERTIBLE.has(catalogId)) {
     throw new Error(`sectionToPage: a "${catalogId}" section cannot become a page`);
   }
+  // A section of a page per entry is drawn once per entry and its leaves read that entry; moved
+  // to a page of its own it would read nothing (ADR 0040).
+  if (found.page.binding) {
+    throw new Error(
+      `sectionToPage: "${sectionId}" is on page "${found.page.id}", which is drawn once per entry ` +
+        `of "${found.page.binding.collectionId}"; its sections cannot become pages`,
+    );
+  }
   if (doc.pages.length >= MAX_PAGES) {
     throw new Error(`sectionToPage: a site may have ${MAX_PAGES} pages, and this one already does`);
   }

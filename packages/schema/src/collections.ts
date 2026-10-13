@@ -1,7 +1,9 @@
+import { MAX_PAGES } from "./conversion.ts";
 import type {
   Collection,
   ContentElement,
   EntryField,
+  Page,
   RetorikaDocument,
   Section,
 } from "./document.ts";
@@ -13,6 +15,9 @@ import type { ElementAddress } from "./fields.ts";
 // `PresetLookup` is declared there too, and deliberately once: `preset.ts` would be its natural home
 // but it already imports `Violation` from `invariants.ts`, so putting it there would make a cycle.
 import { flattenElements, type PresetLookup } from "./invariants.ts";
+import { parseDocument } from "./parse.ts";
+import { mintSectionId } from "./sections.ts";
+import { mintSlug } from "./slug.ts";
 
 /**
  * The verbs for «el contenido reutilizable» — a collection, its entries, and an element's binding to
@@ -35,7 +40,14 @@ export interface CollectionUse {
   pageId: string;
   sectionId: string;
   catalogId: string;
-  /** The fields the template's leaves read from each entry, in document order, without repeats. */
+  /**
+   * `list`: a bound list in this section draws one card per entry. `page`: the section sits on the
+   * collection's page per entry (ADR 0040) and its leaves read the entry the page is drawn for.
+   * A section on that page can be both at once — a bound list of «other entries» under a title
+   * that reads this entry's — and then it is reported twice, once per kind.
+   */
+  kind: "list" | "page";
+  /** The fields the leaves read from each entry, in document order, without repeats. */
   fields: string[];
 }
 
@@ -43,6 +55,7 @@ export interface CollectionUse {
 export function usesOfCollection(doc: RetorikaDocument, collectionId: string): CollectionUse[] {
   const out: CollectionUse[] = [];
   for (const page of doc.pages) {
+    const onItsPage = page.binding?.collectionId === collectionId;
     for (const section of page.sections) {
       const elements = flattenElements(section.content);
       const container = elements.find(
@@ -51,22 +64,40 @@ export function usesOfCollection(doc: RetorikaDocument, collectionId: string): C
           element.binding?.collectionId === collectionId &&
           element.binding.field === undefined,
       );
-      if (!container) continue;
-      const fields: string[] = [];
+      const insideList = new Set(
+        (container?.items ?? []).flatMap((item) =>
+          flattenElements(item.elements).map((element) => element.id),
+        ),
+      );
+      const listFields: string[] = [];
+      const pageFields: string[] = [];
       for (const element of elements) {
         const field = element.binding?.field;
         if (element.binding?.collectionId !== collectionId || field === undefined) continue;
-        if (!fields.includes(field)) fields.push(field);
+        const bucket = insideList.has(element.id) ? listFields : pageFields;
+        if (!bucket.includes(field)) bucket.push(field);
       }
-      out.push({
-        pageId: page.id,
-        sectionId: section.id,
-        catalogId: section.preset.catalogId,
-        fields,
-      });
+      const base = { pageId: page.id, sectionId: section.id, catalogId: section.preset.catalogId };
+      if (container) out.push({ ...base, kind: "list", fields: listFields });
+      if (onItsPage && pageFields.length > 0)
+        out.push({ ...base, kind: "page", fields: pageFields });
     }
   }
   return out;
+}
+
+/** The page drawn once per entry of this collection, if it has one (ADR 0040). */
+export function entryPageOf(doc: RetorikaDocument, collectionId: string): Page | undefined {
+  return doc.pages.find((page) => page.binding?.collectionId === collectionId);
+}
+
+/** Every slug a page or an entry already answers to, which is what a new one must not repeat. */
+function slugsTaken(doc: RetorikaDocument): Set<string> {
+  const taken = new Set(doc.pages.map((page) => page.slug));
+  for (const collection of doc.collections) {
+    for (const entry of collection.entries) if (entry.slug !== undefined) taken.add(entry.slug);
+  }
+  return taken;
 }
 
 /** Every field name any binding anywhere reads from this collection — the set an entry has to carry
@@ -76,6 +107,9 @@ function fieldsRead(doc: RetorikaDocument, collectionId: string): string[] {
   for (const use of usesOfCollection(doc, collectionId)) {
     for (const field of use.fields) fields.add(field);
   }
+  // The page per entry reads its title field even where no leaf does: it names the file.
+  const page = entryPageOf(doc, collectionId);
+  if (page?.binding) fields.add(page.binding.titleField);
   return [...fields].sort();
 }
 
@@ -264,6 +298,13 @@ export function renameCollection(
  */
 export function deleteCollection(doc: RetorikaDocument, collectionId: string): RetorikaDocument {
   findCollection(doc, collectionId, "deleteCollection");
+  const page = entryPageOf(doc, collectionId);
+  if (page) {
+    throw new Error(
+      `deleteCollection: page "${page.id}" is drawn once per entry of "${collectionId}". ` +
+        "Remove that page first (deletePage); the entries stay until then.",
+    );
+  }
   const uses = usesOfCollection(doc, collectionId);
   if (uses.length > 0) {
     const named = uses.map((use) => `"${use.sectionId}"`).join(", ");
@@ -318,12 +359,114 @@ export function addEntry(
     minted = `entry-${suffix}`;
   }
 
+  // «Al añadir una ficha, su página se crea y se enlaza sola» (ADR 0040): with a page per entry,
+  // the entry is born with the file name the page will be drawn under. The title field is in
+  // `required` above, so `fields[titleField]` is here by the time this runs.
+  const page = entryPageOf(doc, collectionId);
+  const slug =
+    page?.binding === undefined
+      ? undefined
+      : mintSlug(fields[page.binding.titleField]?.text ?? "", slugsTaken(doc));
+
   return replaceCollection(doc, collectionId, (found) =>
     collectionSchema.parse({
       ...found,
-      entries: [...found.entries, { id: minted, fields }],
+      entries: [...found.entries, { id: minted, fields, ...(slug ? { slug } : {}) }],
     }),
   );
+}
+
+/**
+ * What the caller must build: the one section the page per entry is born with. From the catalog,
+ * for the reason `TeaserFactory` gives — what a valid section looks like is the catalog's business
+ * and the arrow runs catalog → schema. The factory receives the fields it may bind leaves to, and
+ * the one that gives the page its title.
+ */
+export type EntryPageSectionFactory = (args: {
+  sectionId: string;
+  collectionId: string;
+  titleField: string;
+  /** Every field name the entries carry, sorted. */
+  fields: string[];
+}) => Section;
+
+/**
+ * **A page per entry, created** (ADR 0040): one stored page, bound to the collection, that the
+ * publisher draws once per entry.
+ *
+ * Born here rather than by conversion, and still never empty: it arrives with one section from the
+ * factory, whose leaves read the entry's fields. Every entry that has no slug yet gets one, minted
+ * from its title field's words and then held still, so the files the page is drawn under exist
+ * from this moment and do not move when an entry is renamed.
+ *
+ * Refuses, naming the thing to act on: a collection that already has its page; a title field some
+ * entry does not carry (a page titled by a hole is a hole); and the page cap, because the template
+ * is a stored page and counts as one of the five however many files it becomes.
+ */
+export function addEntryPage(
+  doc: RetorikaDocument,
+  collectionId: string,
+  titleField: string,
+  title: string,
+  makeSection: EntryPageSectionFactory,
+): RetorikaDocument {
+  const collection = findCollection(doc, collectionId, "addEntryPage");
+  const existing = entryPageOf(doc, collectionId);
+  if (existing) {
+    throw new Error(
+      `addEntryPage: "${collectionId}" already has its page per entry, "${existing.id}"`,
+    );
+  }
+  const field = titleField.trim();
+  if (field === "") throw new Error("addEntryPage: the title field needs a name");
+  const without = collection.entries.filter((entry) => entry.fields[field] === undefined);
+  if (without.length > 0) {
+    throw new Error(
+      `addEntryPage: "${field}" would title the pages and ${without.length} of ${collection.entries.length} ` +
+        `entries of "${collectionId}" do not carry it`,
+    );
+  }
+  if (doc.pages.length >= MAX_PAGES) {
+    throw new Error(`addEntryPage: a site may have ${MAX_PAGES} pages, and this one already does`);
+  }
+  const pageTitle = title.trim();
+  if (pageTitle === "") throw new Error("addEntryPage: the page needs a title");
+
+  const taken = slugsTaken(doc);
+  const entries = collection.entries.map((entry) => {
+    if (entry.slug !== undefined) return entry;
+    const slug = mintSlug(entry.fields[field]?.text ?? "", taken);
+    taken.add(slug);
+    return { ...entry, slug };
+  });
+
+  const slug = mintSlug(pageTitle, taken);
+  const usedIds = new Set(doc.pages.map((page) => page.id));
+  const root = `page-ficha-${collectionId.replace(/^col-/, "")}`;
+  let pageId = root;
+  for (let suffix = 2; usedIds.has(pageId); suffix += 1) pageId = `${root}-${suffix}`;
+
+  const fields = [
+    ...new Set(collection.entries.flatMap((entry) => Object.keys(entry.fields))),
+  ].sort();
+  const section = makeSection({
+    sectionId: mintSectionId(doc, "sec-ficha"),
+    collectionId,
+    titleField: field,
+    fields,
+  });
+  const page: Page = {
+    id: pageId,
+    slug,
+    title: pageTitle,
+    sections: [section],
+    binding: { collectionId, titleField: field },
+  };
+
+  return parseDocument({
+    ...replaceCollection(doc, collectionId, (found) => ({ ...found, entries })),
+    pages: [...doc.pages, page],
+  });
 }
 
 /** One field of one entry. The value is parsed rather than trusted, for the reason
