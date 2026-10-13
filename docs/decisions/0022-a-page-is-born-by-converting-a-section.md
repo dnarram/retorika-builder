@@ -68,6 +68,14 @@ screen that is wrong.
   its `<h1>`; the footer is chrome; converting an avance is converting a link to a page into a
   page.
 
+> **Amended 13 October 2026 by [ADR 0040](0040-a-page-per-entry-is-drawn-not-stored.md):** there is
+> a second way a page is born, and it keeps both halves of this decision. «Crear una página por
+> ficha» in the «Listas» panel creates a page bound to a collection, **with one section from the
+> catalog whose leaves read the entry** — never empty — and the publisher draws it once per entry.
+> The slug rule above applies to each entry as well: its slug is minted from the title field once
+> and then never changes. A section of such a page cannot be converted, because it is drawn once
+> per entry and reads that entry; `sectionToPage` refuses it by name.
+
 ## What this newly puts in the schema
 
 The rules that make a slug a file name lived in `packages/publisher/src/site.ts`, which is the last

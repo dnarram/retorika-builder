@@ -347,6 +347,35 @@ become ordinary cards, each carrying its own words and its own emphasis: what wa
 what the document holds. Per card it could not work — the card is a shared template, so unbinding one
 would change them all, which is the surprise the warning before the edit exists to prevent.
 
+### A page per entry: one stored page, drawn once per entry
+
+Sprint 19, schema 1.9.0, [ADR 0040](decisions/0040-a-page-per-entry-is-drawn-not-stored.md). The
+two promises of §7 that ADR 0033 left out — «su página se crea y se enlaza sola» and «los enlaces
+internos se mantienen solos» — built on the same shape as the list above, one level up.
+
+```
+pages: [ …, { id: "page-ficha-servicios", slug: "ficha", title: "Ficha de servicio",
+              binding: { collectionId: "col-servicios", titleField: "nombre" },
+              sections: [ one section whose leaves read the entry ] } ]
+collections[].entries[]: { id, fields, slug: "chapa-y-pintura" }
+```
+
+- **One page per collection, stored once, never emitted as itself.** The publisher draws it once
+  per entry, as `<slug>.html` beside `index.html`; no file is ever written under the template's own
+  slug, and a link to it is dead. It counts as one of the five pages. It is never the first page.
+- **Its leaves may read the entry**, with the same `{collectionId, field}` binding a card's leaves
+  carry — the amendment to «a bound leaf must sit inside a list bound to the same collection»: or on
+  a page bound to it, where «which entry?» has an answer.
+- **Every entry under a page has a slug, minted once and held still**, unique across every page
+  slug and entry slug. A slug outlives the page: unused is not invalid, and re-creating the page
+  gives the same files back.
+- **The title field names the pages** and must be carried by every entry (rule 5); `addEntry`
+  requires it once a page exists, even where no leaf reads it.
+- **What a drawn page knows about the collection: nothing** — the same bytes a hand-written page
+  would have, which is how it stays inside ADR 0001.
+- **A section of such a page cannot become a page**, and the page cannot be folded: it came from
+  no section and no avance points at it. The exit is `deletePage`.
+
 ## What a shared link reads
 
 Two optional fields on the document itself, and the only two that describe the site rather than a

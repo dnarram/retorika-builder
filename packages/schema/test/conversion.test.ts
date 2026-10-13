@@ -515,3 +515,33 @@ describe("foldsInto", () => {
     expect(foldsInto(base(), "nope")).toBeUndefined();
   });
 });
+
+describe("a section on a page per entry (ADR 0040)", () => {
+  it("cannot become a page, because it is drawn once per entry and reads that entry", () => {
+    const doc: RetorikaDocument = {
+      ...documentWith([section("sec-cover", "cover", [heading("el-headline", "Taberna")])]),
+      collections: [
+        {
+          id: "col-servicios",
+          name: "Servicios",
+          entries: [{ id: "entry-1", slug: "chapa", fields: { nombre: { text: "Chapa" } } }],
+        },
+      ],
+    };
+    doc.pages = [
+      ...doc.pages,
+      {
+        id: "page-ficha-servicios",
+        slug: "ficha",
+        title: "Ficha",
+        binding: { collectionId: "col-servicios", titleField: "nombre" },
+        sections: [
+          section("sec-ficha-prices", "prices", [heading("el-ficha-headline", "Precios")]),
+        ],
+      },
+    ];
+    expect(() => sectionToPage(doc, "sec-ficha-prices", makeTeaser)).toThrow(
+      /is on page "page-ficha-servicios", which is drawn once per entry/,
+    );
+  });
+});

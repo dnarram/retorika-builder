@@ -1,12 +1,18 @@
-export type { CardinalityBlock, CollectionUse } from "./collections.ts";
+export type {
+  CardinalityBlock,
+  CollectionUse,
+  EntryPageSectionFactory,
+} from "./collections.ts";
 export {
   addCollection,
   addEntry,
+  addEntryPage,
   bindElement,
   bindList,
   collectionFromList,
   deleteCollection,
   entryCountBlock,
+  entryPageOf,
   mintCollectionId,
   moveEntry,
   removeEntry,
@@ -28,11 +34,13 @@ export {
 export type {
   BreakpointPatch,
   Collection,
+  CollectionEntry,
   CollectionRef,
   ContentElement,
   ContentValue,
   EntryField,
   Page,
+  PageBinding,
   Placement,
   RetorikaDocument,
   Section,

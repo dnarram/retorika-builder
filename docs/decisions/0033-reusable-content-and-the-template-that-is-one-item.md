@@ -125,6 +125,11 @@ a field it does not use. Widening it costs nothing: no stored document has a bin
 
 ### 4. Bindings live only inside a bound list's template
 
+> **Amended 13 October 2026 by [ADR 0040](0040-a-page-per-entry-is-drawn-not-stored.md) §2:** or
+> **on a page bound to the same collection**, where the entry is the one the page is being drawn
+> for. The question «which entry?» has an answer there, which is the whole of why the amendment is
+> admissible and the clause below was not.
+
 A bound leaf **outside** a list reopens the question the shape cannot answer — «which entry?» — for
 any collection with more than one. This version does not admit it. If it is ever admitted it will be
 against a single-entry collection, and **«Cambiar solo aquí» is the exit that belongs to it**: an
@@ -213,7 +218,10 @@ with one.
 
 ## What this does not decide
 
-- **A page per entry, and the menu that would follow it.** §7's first and fourth promises — «su
+- ~~**A page per entry, and the menu that would follow it.**~~ **Decided on 13 October 2026 by
+  [ADR 0040](0040-a-page-per-entry-is-drawn-not-stored.md)**, sprint 19 — and the arithmetic
+  this bullet was written against had changed: a collection has at most twelve entries, by §8's
+  own cardinality, not forty. *Kept as written:* §7's first and fourth promises — «su
   página se crea y se enlaza sola» and «el menú y los enlaces internos se mantienen solos» — are one
   piece of work, and it needs the slugs, the derived menu of
   [ADR 0023](0023-the-menu-and-the-footer-are-derived-chrome.md) and the conversion of

@@ -10,7 +10,7 @@ import { type ElementStyle, elementStyleSchema, themeSchema } from "./tokens.ts"
  * role or a token is additive and bumps the minor; removing or renaming one breaks and
  * bumps the major.
  */
-export const SCHEMA_VERSION = "1.8.0";
+export const SCHEMA_VERSION = "1.9.0";
 
 const idSchema = z.string().min(1).max(128);
 
@@ -228,6 +228,21 @@ export const sectionSchema = z.strictObject({
 });
 export type Section = z.infer<typeof sectionSchema>;
 
+/**
+ * A page bound to a collection: **the template of a page per entry** (ADR 0040).
+ *
+ * The page is stored once and never emitted as itself; the publisher draws it once per entry, the
+ * way a bound list stores one card and the renderer draws one per entry (ADR 0033 §2). Its leaves
+ * may read the collection's fields the way a card's leaves do. `titleField` names the field that
+ * gives each drawn page its `<title>`, its `<h1>`'s words where a leaf reads it, and — once, when
+ * the entry's slug is minted — its file name.
+ */
+export const pageBindingSchema = z.strictObject({
+  collectionId: idSchema,
+  titleField: z.string().min(1),
+});
+export type PageBinding = z.infer<typeof pageBindingSchema>;
+
 export const pageSchema = z.strictObject({
   id: idSchema,
   /**
@@ -241,6 +256,9 @@ export const pageSchema = z.strictObject({
     .regex(SLUG_PATTERN, "a slug is lowercase letters, digits and hyphens, and starts with one"),
   title: z.string(),
   sections: z.array(sectionSchema),
+  /** Present on the one page a collection may have as its page per entry (ADR 0040). Never on the
+   * first page, and never on more than one page per collection — both are invariants. */
+  binding: pageBindingSchema.optional(),
 });
 export type Page = z.infer<typeof pageSchema>;
 
@@ -265,12 +283,30 @@ const entryFieldSchema = z
   .superRefine(withinText);
 export type EntryField = z.infer<typeof entryFieldSchema>;
 
+/**
+ * One entry, and the file name it gets the day its collection has a page per entry (ADR 0040).
+ *
+ * **`slug` is minted once and then held still**, which is ADR 0022's rule for a page applied to an
+ * entry: it comes from the title field's words at the moment the page is created or the entry is
+ * added, and renaming the entry afterwards does not move its file, so no link into it breaks on a
+ * whim. It stays with the entry even if the page is later removed — a slug nothing emits is unused,
+ * not invalid, and re-creating the page gives the same file names back. Unique across every page
+ * slug and every entry slug in the document, which `checkInvariants` enforces.
+ */
+export const collectionEntrySchema = z.strictObject({
+  id: idSchema,
+  fields: z.record(z.string(), entryFieldSchema),
+  slug: z
+    .string()
+    .regex(SLUG_PATTERN, "a slug is lowercase letters, digits and hyphens, and starts with one")
+    .optional(),
+});
+export type CollectionEntry = z.infer<typeof collectionEntrySchema>;
+
 export const collectionSchema = z.strictObject({
   id: idSchema,
   name: z.string().min(1),
-  entries: z.array(
-    z.strictObject({ id: idSchema, fields: z.record(z.string(), entryFieldSchema) }),
-  ),
+  entries: z.array(collectionEntrySchema),
 });
 export type Collection = z.infer<typeof collectionSchema>;
 

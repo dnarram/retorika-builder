@@ -184,7 +184,7 @@ export function checkInvariants(doc: RetorikaDocument, lookup?: PresetLookup): V
          * the schema accepts and the renderer refuses is the shape of failure ADR 0030 closed for the
          * tablet bucket: it could be built, stored and autosaved, and then fail at the download.
          */
-        if (binding.field !== undefined) {
+        if (binding.field !== undefined && page.binding?.collectionId !== binding.collectionId) {
           const container = elements.find(
             (candidate) =>
               candidate.role === "list" &&
@@ -200,7 +200,7 @@ export function checkInvariants(doc: RetorikaDocument, lookup?: PresetLookup): V
               path: `${at}.content#${element.id}`,
               message:
                 `reads "${binding.field}" of "${binding.collectionId}" but sits in no list ` +
-                "bound to it, so there is no entry to read it from",
+                "bound to it and on no page drawn per its entry, so there is no entry to read it from",
             });
             continue;
           }
@@ -259,6 +259,83 @@ export function checkInvariants(doc: RetorikaDocument, lookup?: PresetLookup): V
           });
         }
       }
+    }
+  }
+
+  /**
+   * **A page per entry** (ADR 0040): the page's binding, read like a leaf's.
+   *
+   * Rule 5 for the collection and the title field — a page titled by a field some entry lacks is a
+   * hole in a `<title>`; rule 1 for «one page per collection», the ambiguity `one template item`
+   * refuses, at page scale; and the first page is the site's entry (`index.html`) and is drawn
+   * exactly once, so it may not be the template. The entries' slugs are the other half: every
+   * entry of a collection with a page needs one, because the publisher names a file after it, and
+   * no slug may repeat another page's or entry's, because two files cannot share a name.
+   */
+  const pagesPerCollection = new Map<string, number>();
+  for (const [pageIndex, page] of doc.pages.entries()) {
+    const binding = page.binding;
+    if (!binding) continue;
+    const path = `pages[${pageIndex}]`;
+    if (pageIndex === 0) {
+      violations.push({
+        rule: 5,
+        path,
+        message: `the first page is the site's entry and cannot be drawn once per entry of "${binding.collectionId}"`,
+      });
+    }
+    const collection = byId.get(binding.collectionId);
+    if (!collection) {
+      violations.push({
+        rule: 5,
+        path,
+        message: `page binding references unknown collection "${binding.collectionId}"`,
+      });
+      continue;
+    }
+    const seen = (pagesPerCollection.get(binding.collectionId) ?? 0) + 1;
+    pagesPerCollection.set(binding.collectionId, seen);
+    if (seen === 2) {
+      violations.push({
+        rule: 1,
+        path,
+        message: `"${binding.collectionId}" is drawn per entry by more than one page`,
+      });
+    }
+    const untitled = collection.entries.filter(
+      (entry) => entry.fields[binding.titleField] === undefined,
+    );
+    if (untitled.length > 0) {
+      violations.push({
+        rule: 5,
+        path,
+        message:
+          `page "${page.id}" titles its entries by "${binding.titleField}", ` +
+          `which ${untitled.length} of the ${collection.entries.length} entries of "${binding.collectionId}" do not carry`,
+      });
+    }
+    const unslugged = collection.entries.filter((entry) => entry.slug === undefined);
+    if (unslugged.length > 0) {
+      violations.push({
+        rule: 5,
+        path,
+        message:
+          `"${binding.collectionId}" is drawn once per entry and ${unslugged.length} of its ` +
+          `${collection.entries.length} entries have no slug to be drawn under`,
+      });
+    }
+  }
+  for (const [collectionIndex, collection] of doc.collections.entries()) {
+    for (const [entryIndex, entry] of collection.entries.entries()) {
+      if (entry.slug === undefined) continue;
+      if (slugs.has(entry.slug)) {
+        violations.push({
+          rule: 5,
+          path: `collections[${collectionIndex}].entries[${entryIndex}]`,
+          message: `entry slug "${entry.slug}" is already another page's or entry's`,
+        });
+      }
+      slugs.add(entry.slug);
     }
   }
 

@@ -82,6 +82,18 @@ corpus is a record of what the renderer does, never a reason for it to do it.
 - The weight budget of ADR 0001 — 60 KB gzipped, zero JavaScript — is unaffected: a menu is a list
   of links and a `<details>`.
 
+## Amendment — pages drawn per entry stay out of the menu (13 October 2026, ADR 0040)
+
+[ADR 0040](0040-a-page-per-entry-is-drawn-not-stored.md) §5. A page bound to a collection — the
+template the publisher draws once per entry — **contributes no menu entry**: not as a page nothing
+points at, and never through an avance, because the conversion never makes one for it. Up to twelve
+files in a menu whose threshold is three would be the flood ADR 0033 named when it deferred this,
+and the menu stays purely derived. What links those files is not the menu: in a bound list whose
+collection has a page, the card's title is wrapped in a link to its entry's file when the page is
+drawn. On a drawn page the menu is the site's own, «Inicio» first, with no `aria-current`, because
+the page is in no menu. The threshold of three is untouched and still «a judgement with no evidence
+behind it».
+
 ## What would reopen this
 
 - **An owner wants a page kept out of the menu**, or the entries in an order the page order does
