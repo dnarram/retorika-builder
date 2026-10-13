@@ -16,7 +16,7 @@ import {
 import { cssAttributeValue, cssThemeValue, safeUrl } from "./escape.ts";
 import { fontFaceCss } from "./fonts.ts";
 import { menuNodes } from "./menu.ts";
-import { commentNode, element, type RenderNode } from "./nodes.ts";
+import { commentNode, element, inlineElement, type RenderNode } from "./nodes.ts";
 import type { ResolvedRenderOptions } from "./options.ts";
 import { textElement } from "./runs.ts";
 
@@ -64,8 +64,20 @@ function headingTag(level: number): string {
  */
 interface Bound {
   collections: readonly Collection[];
-  /** Set only while drawing the cards of a bound list. A leaf's binding is read against this. */
+  /** Set while drawing the cards of a bound list, and for the whole of a page bound to a
+   * collection (ADR 0040). A leaf's binding is read against this. */
   entry?: Collection["entries"][number];
+  /**
+   * Which collections have a page per entry, and the field that titles it — read off the
+   * document's pages once, so a bound list can link each card's title to its entry's file.
+   */
+  entryPages: ReadonlyMap<string, string>;
+  /**
+   * Set by `listNode` for the cards of a bound list whose collection has a page per entry: the
+   * leaf reading `field` is drawn as a link to `href` (ADR 0040 §5). Never set on the page
+   * itself, where a title linking to the page it is on would be a link to nowhere new.
+   */
+  titleLink?: { field: string; href: string };
 }
 
 /**
@@ -105,9 +117,24 @@ function listNode(
     if (!template) return undefined;
 
     const cards: RenderNode[] = [];
+    const titleField = bound.entryPages.get(collection.id);
     for (const entry of collection.entries) {
+      // «Los enlaces internos se mantienen solos» (ADR 0040 §5): with a page per entry, the card's
+      // title is the way in, derived here from the entry's slug and nothing stored.
+      const titleLink =
+        titleField !== undefined && entry.slug !== undefined
+          ? { field: titleField, href: `./${entry.slug}.html` }
+          : undefined;
       const children = template.elements
-        .map((child) => elementNode(child, options, level + 1, { ...bound, entry }, aboveTheFold))
+        .map((child) =>
+          elementNode(
+            child,
+            options,
+            level + 1,
+            { ...bound, entry, ...(titleLink ? { titleLink } : {}) },
+            aboveTheFold,
+          ),
+        )
         .filter((node) => node !== undefined);
       if (children.length === 0) continue;
       cards.push(
@@ -227,6 +254,24 @@ function elementNode(
       // trace. Hiding stays the document-level answer (rule 3) — this is the render-level one,
       // and neither removes anything.
       if (value.text.trim() === "") return undefined;
+      // The card's title, linked to its entry's page (ADR 0040 §5): the heading keeps its tag and
+      // its `data-*`, and the words go inside an `<a>`, split through the one path every text
+      // takes. No new colour: the link inherits, and the backlog's «link colour» row stays open.
+      if (bound.titleLink && el.binding?.field === bound.titleLink.field) {
+        const tag = el.role === "heading" ? headingTag(level) : "p";
+        return inlineElement(
+          tag,
+          el.role === "subheading" ? { ...base, class: "rb-subtitle" } : base,
+          [
+            textElement(
+              "a",
+              { href: bound.titleLink.href, class: "rb-entry-link" },
+              value.text,
+              value.marks,
+            ),
+          ],
+        );
+      }
       switch (el.role) {
         case "heading":
           return textElement(headingTag(level), base, value.text, value.marks);
@@ -521,12 +566,71 @@ export function resolvePage(doc: RetorikaDocument, pageId: string | undefined): 
   return page;
 }
 
+/**
+ * The entry a page bound to a collection is drawn for (ADR 0040): the one `entryId` names, or the
+ * collection's first. `undefined` for an ordinary page. Every refusal is a throw, because the
+ * alternative is a page drawn for nobody and published.
+ */
+export function resolveEntry(
+  doc: RetorikaDocument,
+  page: Page,
+  entryId: string | undefined,
+): Collection["entries"][number] | undefined {
+  const binding = page.binding;
+  if (!binding) {
+    if (entryId !== undefined) {
+      throw new Error(
+        `render: page "${page.id}" is not drawn per entry, but entry "${entryId}" was asked for`,
+      );
+    }
+    return undefined;
+  }
+  const collection = doc.collections.find((candidate) => candidate.id === binding.collectionId);
+  if (!collection) {
+    throw new Error(
+      `Page "${page.id}" is drawn per entry of "${binding.collectionId}", which this document does not carry`,
+    );
+  }
+  const entry =
+    entryId === undefined
+      ? collection.entries[0]
+      : collection.entries.find((candidate) => candidate.id === entryId);
+  if (!entry) {
+    throw new Error(
+      entryId === undefined
+        ? `Page "${page.id}" is drawn per entry of "${binding.collectionId}", which has no entries`
+        : `"${binding.collectionId}" has no entry "${entryId}" for page "${page.id}" to be drawn for`,
+    );
+  }
+  return entry;
+}
+
+/** The title a drawn page carries: the entry's title field on a page per entry, the page's own
+ * title otherwise. Shared with `index.ts`, which puts it in `<title>`. */
+export function pageTitleFor(
+  doc: RetorikaDocument,
+  page: Page,
+  entryId: string | undefined,
+): string {
+  const entry = resolveEntry(doc, page, entryId);
+  const titleField = page.binding?.titleField;
+  if (!entry || titleField === undefined) return page.title;
+  return entry.fields[titleField]?.text ?? page.title;
+}
+
 export function buildTree(doc: RetorikaDocument, options: ResolvedRenderOptions): RenderNode[] {
   const page = resolvePage(doc, options.pageId);
 
   // The collections, resolved once for the whole page rather than looked up per element: a bound
-  // list reads them and nothing else does, and a page with no binding never touches them.
-  const bound: Bound = { collections: doc.collections };
+  // list reads them and nothing else does, and a page with no binding never touches them. On a
+  // page bound to a collection the entry is fixed for the whole page (ADR 0040).
+  const entry = resolveEntry(doc, page, options.entryId);
+  const entryPages = new Map<string, string>();
+  for (const candidate of doc.pages) {
+    if (candidate.binding)
+      entryPages.set(candidate.binding.collectionId, candidate.binding.titleField);
+  }
+  const bound: Bound = { collections: doc.collections, entryPages, ...(entry ? { entry } : {}) };
 
   // Which section(s) get the h1. Unchanged for a page that has a cover: every section built on
   // the cover preset is h1, exactly as before — including a free section on that preset, which
@@ -557,21 +661,31 @@ export function buildTree(doc: RetorikaDocument, options: ResolvedRenderOptions)
     // Before `<main>`, so a keyboard or screen-reader user reaches the navigation first, which is
     // where every page's structure is announced.
     ...menuNodes(doc, page),
-    element("main", { class: "rb-page", "data-page": page.id }, [
-      ...page.sections.map((section, index) =>
-        sectionNode(
-          section,
-          options,
-          section.preset.catalogId === COVER_ID || section.id === fallbackH1Id,
-          bound,
-          section.preset.catalogId === TEASER_ID ? teaserTarget(doc, hrefOf(section)) : undefined,
-          index === 0,
+    element(
+      "main",
+      {
+        class: "rb-page",
+        "data-page": page.id,
+        // Which entry this drawing is of, for the editor only (ADR 0033 §10's rule, applied to
+        // the page): a published page does not know a collection existed.
+        ...(options.entryHints && entry ? { "data-entry": entry.id } : {}),
+      },
+      [
+        ...page.sections.map((section, index) =>
+          sectionNode(
+            section,
+            options,
+            section.preset.catalogId === COVER_ID || section.id === fallbackH1Id,
+            bound,
+            section.preset.catalogId === TEASER_ID ? teaserTarget(doc, hrefOf(section)) : undefined,
+            index === 0,
+          ),
         ),
-      ),
-      ...borrowedFooter.map((section) =>
-        sectionNode(section, options, false, bound, undefined, false),
-      ),
-    ]),
+        ...borrowedFooter.map((section) =>
+          sectionNode(section, options, false, bound, undefined, false),
+        ),
+      ],
+    ),
   ];
 }
 

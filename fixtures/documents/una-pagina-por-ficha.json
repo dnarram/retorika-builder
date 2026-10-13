@@ -1,0 +1,437 @@
+{
+  "schemaVersion": "1.9.0",
+  "id": "una-pagina-por-ficha",
+  "siteName": "Taberna del Puerto",
+  "theme": {
+    "color.primary": "#156FE7",
+    "color.secondary": "#105CB1",
+    "color.accent": "#FF3A72",
+    "color.surface": "#FFFFFF",
+    "color.ink": "#0F172A",
+    "color.muted": "#475569",
+    "font.heading": "Georgia, serif",
+    "font.body": "system-ui, sans-serif",
+    "size.heading": "2.5rem",
+    "size.subheading": "1.5rem",
+    "size.body": "1rem",
+    "space.xs": "4px",
+    "space.sm": "8px",
+    "space.md": "16px",
+    "space.lg": "24px",
+    "space.xl": "48px",
+    "radius.sm": "4px",
+    "radius.md": "8px",
+    "radius.lg": "16px"
+  },
+  "collections": [
+    {
+      "id": "col-carta",
+      "name": "La carta",
+      "entries": [
+        {
+          "id": "entry-1",
+          "slug": "ensaladilla-rusa",
+          "fields": {
+            "nombre": {
+              "text": "Ensaladilla rusa"
+            },
+            "detalle": {
+              "text": "Con atún, huevo y mayonesa casera.",
+              "marks": [
+                {
+                  "from": 0,
+                  "to": 8,
+                  "mark": "strong"
+                }
+              ]
+            },
+            "precio": {
+              "text": "6 €"
+            }
+          }
+        },
+        {
+          "id": "entry-2",
+          "slug": "tortilla-de-patatas",
+          "fields": {
+            "nombre": {
+              "text": "Tortilla de patatas"
+            },
+            "detalle": {
+              "text": "Jugosa, con cebolla pochada."
+            },
+            "precio": {
+              "text": "5 €"
+            }
+          }
+        },
+        {
+          "id": "entry-3",
+          "slug": "croquetas-de-jamon",
+          "fields": {
+            "nombre": {
+              "text": "Croquetas de jamón"
+            },
+            "detalle": {
+              "text": "Bechamel cremosa y jamón de bellota."
+            },
+            "precio": {
+              "text": "7 €"
+            }
+          }
+        },
+        {
+          "id": "entry-4",
+          "slug": "gambas-al-ajillo",
+          "fields": {
+            "nombre": {
+              "text": "Gambas al ajillo"
+            },
+            "detalle": {
+              "text": "Con guindilla y aceite de oliva virgen."
+            },
+            "precio": {
+              "text": "9 €"
+            }
+          }
+        },
+        {
+          "id": "entry-5",
+          "slug": "pulpo-a-la-gallega",
+          "fields": {
+            "nombre": {
+              "text": "Pulpo a la gallega"
+            },
+            "detalle": {
+              "text": "Sobre cama de patata y pimentón de la Vera."
+            },
+            "precio": {
+              "text": "12 €"
+            }
+          }
+        },
+        {
+          "id": "entry-6",
+          "slug": "calamares-a-la-romana",
+          "fields": {
+            "nombre": {
+              "text": "Calamares a la romana"
+            },
+            "detalle": {
+              "text": "Rebozado ligero, limón al lado."
+            },
+            "precio": {
+              "text": "8 €"
+            }
+          }
+        },
+        {
+          "id": "entry-7",
+          "slug": "boquerones-en-vinagre",
+          "fields": {
+            "nombre": {
+              "text": "Boquerones en vinagre"
+            },
+            "detalle": {
+              "text": "Marinados doce horas."
+            },
+            "precio": {
+              "text": "6 €"
+            }
+          }
+        },
+        {
+          "id": "entry-8",
+          "slug": "pimientos-de-padron",
+          "fields": {
+            "nombre": {
+              "text": "Pimientos de Padrón"
+            },
+            "detalle": {
+              "text": "Unos pican y otros no."
+            },
+            "precio": {
+              "text": "5 €"
+            }
+          }
+        },
+        {
+          "id": "entry-9",
+          "slug": "queso-manchego",
+          "fields": {
+            "nombre": {
+              "text": "Queso manchego"
+            },
+            "detalle": {
+              "text": "Curado seis meses, con membrillo."
+            },
+            "precio": {
+              "text": "7 €"
+            }
+          }
+        },
+        {
+          "id": "entry-10",
+          "slug": "jamon-iberico",
+          "fields": {
+            "nombre": {
+              "text": "Jamón ibérico"
+            },
+            "detalle": {
+              "text": "Cortado a cuchillo."
+            },
+            "precio": {
+              "text": "14 €"
+            }
+          }
+        },
+        {
+          "id": "entry-11",
+          "slug": "patatas-bravas",
+          "fields": {
+            "nombre": {
+              "text": "Patatas bravas"
+            },
+            "detalle": {
+              "text": "Con salsa brava de la casa."
+            },
+            "precio": {
+              "text": "5 €"
+            }
+          }
+        },
+        {
+          "id": "entry-12",
+          "slug": "albondigas-de-la-abuela",
+          "fields": {
+            "nombre": {
+              "text": "Albóndigas de la abuela"
+            },
+            "detalle": {
+              "text": "Receta de siempre, con tomate."
+            },
+            "precio": {
+              "text": "8 €"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "id": "home",
+      "slug": "index",
+      "title": "Taberna del Puerto",
+      "sections": [
+        {
+          "id": "sec-cover",
+          "preset": {
+            "catalogId": "cover",
+            "variantId": "image-right"
+          },
+          "source": "catalog",
+          "layout": null,
+          "content": [
+            {
+              "id": "el-headline",
+              "role": "heading",
+              "hidden": false,
+              "slot": "headline",
+              "value": {
+                "kind": "text",
+                "text": "Taller Hermanos Ruiz"
+              }
+            },
+            {
+              "id": "el-subheadline",
+              "role": "subheading",
+              "hidden": false,
+              "slot": "subheadline",
+              "value": {
+                "kind": "text",
+                "text": "Treinta años arreglando coches en Ronda."
+              }
+            },
+            {
+              "id": "el-image",
+              "role": "image",
+              "hidden": false,
+              "slot": "image",
+              "value": {
+                "kind": "image",
+                "src": "assets/barbershop.svg",
+                "alt": "El taller por dentro, con dos coches en el foso"
+              }
+            },
+            {
+              "id": "el-cover-link",
+              "role": "link",
+              "hidden": false,
+              "slot": "secondaryAction",
+              "value": {
+                "kind": "link",
+                "text": "Ver la ensaladilla",
+                "href": "./ensaladilla-rusa.html"
+              }
+            }
+          ]
+        },
+        {
+          "id": "sec-prices",
+          "preset": {
+            "catalogId": "prices",
+            "variantId": "stacked"
+          },
+          "source": "catalog",
+          "layout": null,
+          "content": [
+            {
+              "id": "el-prices-headline",
+              "role": "heading",
+              "hidden": false,
+              "slot": "headline",
+              "value": {
+                "kind": "text",
+                "text": "La carta"
+              }
+            },
+            {
+              "id": "el-prices",
+              "role": "list",
+              "hidden": false,
+              "slot": "lines",
+              "binding": {
+                "collectionId": "col-carta"
+              },
+              "items": [
+                {
+                  "id": "item-plantilla",
+                  "elements": [
+                    {
+                      "id": "el-line-name",
+                      "role": "heading",
+                      "hidden": false,
+                      "slot": "name",
+                      "binding": {
+                        "collectionId": "col-carta",
+                        "field": "nombre"
+                      },
+                      "value": {
+                        "kind": "text",
+                        "text": "Nombre del plato"
+                      }
+                    },
+                    {
+                      "id": "el-line-description",
+                      "role": "body",
+                      "hidden": false,
+                      "slot": "description",
+                      "binding": {
+                        "collectionId": "col-carta",
+                        "field": "detalle"
+                      },
+                      "value": {
+                        "kind": "text",
+                        "text": "En qué consiste"
+                      }
+                    },
+                    {
+                      "id": "el-line-price",
+                      "role": "body",
+                      "hidden": false,
+                      "slot": "price",
+                      "binding": {
+                        "collectionId": "col-carta",
+                        "field": "precio"
+                      },
+                      "value": {
+                        "kind": "text",
+                        "text": "0 €"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "page-ficha-carta",
+      "slug": "ficha-de-plato",
+      "title": "Ficha de plato",
+      "binding": {
+        "collectionId": "col-carta",
+        "titleField": "nombre"
+      },
+      "sections": [
+        {
+          "id": "sec-ficha",
+          "preset": {
+            "catalogId": "cover",
+            "variantId": "image-right"
+          },
+          "source": "catalog",
+          "layout": null,
+          "content": [
+            {
+              "id": "el-ficha-headline",
+              "role": "heading",
+              "hidden": false,
+              "slot": "headline",
+              "binding": {
+                "collectionId": "col-carta",
+                "field": "nombre"
+              },
+              "value": {
+                "kind": "text",
+                "text": "Nombre del plato"
+              }
+            },
+            {
+              "id": "el-ficha-body",
+              "role": "body",
+              "hidden": false,
+              "slot": "body",
+              "binding": {
+                "collectionId": "col-carta",
+                "field": "detalle"
+              },
+              "value": {
+                "kind": "text",
+                "text": "En qué consiste"
+              }
+            },
+            {
+              "id": "el-ficha-price",
+              "role": "subheading",
+              "hidden": false,
+              "slot": "subheadline",
+              "binding": {
+                "collectionId": "col-carta",
+                "field": "precio"
+              },
+              "value": {
+                "kind": "text",
+                "text": "0 €"
+              }
+            },
+            {
+              "id": "el-ficha-image",
+              "role": "image",
+              "hidden": false,
+              "slot": "image",
+              "value": {
+                "kind": "image",
+                "src": "assets/barbershop.svg",
+                "alt": "El taller por dentro, con dos coches en el foso"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

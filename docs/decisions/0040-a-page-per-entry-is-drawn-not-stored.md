@@ -117,8 +117,12 @@ refuses while the page exists and names it, as it refuses while a section is bou
 `pnpm size` checked the page budget against the home page only. From day 3 it checks **every
 emitted file** against the 60 KB-per-page budget, drawn pages included, and the bundle budget of
 «our own bytes» scales with the number of emitted pages by a constant **measured on a fixture of
-twelve entries**, not chosen. The measurement goes in the pull request and in the consequences
-below when it exists.
+twelve entries**, not chosen. **Measured on 13 October 2026:** a drawn page of
+`una-pagina-por-ficha` gzips to 1.7 KB (22.6 KB of ours across 13 files, 2.4 of them the home
+page); the heaviest page in the corpus and the generated sample, restaurante-bar on `image-left`
+with gallery and menu, to 3.1 KB. The constant is **4 KB per emitted page after the first**, which
+holds a drawn page of the heavier composition and nothing more; the 80 KB keeps its meaning as a
+one-page site's own bytes.
 
 ### 9. Behind the design-tools switch, like making a list
 

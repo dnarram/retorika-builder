@@ -1,5 +1,5 @@
 import { flattenElements, type RetorikaDocument } from "@retorika/schema";
-import { buildCss, buildTree, resolvePage } from "./build.ts";
+import { buildCss, buildTree, pageTitleFor, resolvePage } from "./build.ts";
 import { treeToFragment } from "./dom.ts";
 import { fontFilesFor } from "./fonts.ts";
 
@@ -70,7 +70,8 @@ export function render(
 
   const css = buildCss(doc);
   const page = resolvePage(doc, resolved.pageId);
-  const title = titleFor(page, doc.siteName);
+  // On a page drawn per entry the words are the entry's title field (ADR 0040 §4).
+  const title = titleFor({ title: pageTitleFor(doc, page, resolved.entryId) }, doc.siteName);
   return {
     html: pageToHtml(tree, css, title, headMetaOf(doc, title, resolved.pagePath)),
     css,
