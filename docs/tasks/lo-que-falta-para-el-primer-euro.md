@@ -164,18 +164,26 @@ cierto.
 | El intermitente del `e2e` | Mecanismo encontrado y corregido (día 5) |
 | Registros obsoletos | Tres filas corregidas hoy (fuentes, `tsconfig.json`, el barrido del sprint 14); las fechas del día 4 corregidas el día 5 |
 | La máquina de desarrollo | 16 GB y una carga media entre 3 y 9 con lo que tiene abierto: ya no da una ejecución completa del `e2e` limpia con regularidad. Es de la Parte 18, no del producto, y lo decides tú |
+| **Sprint 19 (13 de octubre):** el sitemap en el ZIP | **Hecho** (día 1), con tu firma de la enmienda al ADR 0029 |
+| **Sprint 19:** las colecciones, cinco promesas de cinco | **Hecho** (días 2 a 5): una página por ficha, ADR 0040 `proposed`, **tuyo de firmar** |
+| **Sprint 19:** el circuito del banco como herramienta | **Hecho** (día 6): `pnpm photos:intake` y `pnpm photos:approve`; las fotos siguen siendo tuyas (§2.8) |
 
 ## 4. Las preguntas, juntas
 
 1. Las seis de facturación (§2.1), una a una.
 2. ¿Quién escribe los tres documentos legales, y cuándo?
-3. ¿Aceptas los DPA de Supabase y Render? ¿Y Sentry: proyecto en la UE, DPA y la frase del aviso?
+3. ¿Aceptas los DPA de Supabase y Render? ~~¿Y Sentry: proyecto en la UE, DPA y la frase del aviso?~~
+   Sentry, aceptado y activo desde el 13 de octubre de 2026; queda **tu comprobación del primer
+   evento real** (runbook §8) y la opción de no guardar IP en el proyecto. Supabase y Render siguen
+   sin respuesta.
 4. ¿Cuál es el precio? (Dos sesiones dicen 50 €.)
 5. ¿Qué salida de copias: A, B o C? (Recomendada B; estado real C.)
 6. ¿Cuándo se mide el arranque en frío, y cuándo se deja el plan gratuito?
 7. ¿Cada cuánto corre el barrido, y desde dónde?
 8. ¿Quién produce las fotos de los diez sectores, y las nueve regeneradas antes del 1 de noviembre?
-   ¿Y los dieciséis PNG de la raíz?
+   ¿Y los dieciséis PNG de la raíz? **Respondido el 13 de octubre:** tú, antes del 25 de octubre,
+   con la herramienta del sprint 19 (§2.8); los dieciséis PNG son de 1024 px y no sirven para el
+   suelo.
 9. ¿Puede el banco contener un plato reconocible?
 10. ¿Escribes y firmas el ADR 0038? ¿Quién declara el producto vendible?
 11. ¿Se compra un dominio? (Es lo que saca a Google del modo de pruebas y lo que daría sentido a

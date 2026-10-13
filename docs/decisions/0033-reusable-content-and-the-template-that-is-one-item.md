@@ -273,4 +273,6 @@ words, because a refusal a caller cannot act on is one that gets worked around.
 - A new fixture and golden, so the resolved output is read as bytes rather than described.
 - **The editor is then closed on four of the five studio pillars**, with interactions the one left and
   no ADR for it yet. The sprint's closing pull request states that pillar by pillar, so the sprint
-  after this one does not have to come back and work it out.
+  after this one does not have to come back and work it out. **And on this pillar, five promises of
+  five since 13 October 2026**: [ADR 0040](0040-a-page-per-entry-is-drawn-not-stored.md) built the
+  two this file left out.

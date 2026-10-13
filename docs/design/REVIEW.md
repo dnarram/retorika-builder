@@ -1518,3 +1518,93 @@ la máquina en todo el viaje.
 
 **Lo que este sprint no activó, y por qué:** Sentry (la pregunta del día 1 sin respuesta) y el
 sitemap (la enmienda del día 6 sin firma). Las dos esperan en `lo-que-falta-para-el-primer-euro.md`.
+
+## Sprint 19 — «una página por ficha, y tres cosas que ya tienen respuesta» (13 de octubre de 2026)
+
+Siete días, nueve PR (#227 a #234, con #230 entre ellas por el despliegue), y una decisión de
+David al abrir el sprint: cerrar las colecciones. Lo que la interfaz ganó, día a día, y lo que los
+ADR deciden sobre ella.
+
+### Sentry activo y el sitemap en el ZIP (día 1, PR #227 y #228)
+
+Dos respuestas de David al planificar: Sentry aprobado con DSN, y la enmienda del ADR 0029
+firmada. **La condición sobre la frase del aviso —«no puede prometer más de lo que el conjunto,
+código más proyecto, garantiza»— encontró que el SDK instalado es la versión 11, donde
+`sendDefaultPii` ya no existe**: el código lo llevaba como una opción muerta y los valores por
+defecto de `dataCollection`, todos `true`, habrían pedido a Sentry que infiriera la IP y habrían
+mandado la IP en cada sesión sin pasar por el limpiador. Cada categoría apagada por su nombre, y la
+frase, en `account.save.privacy`: «Si la aplicación falla, el error se envía a Sentry (Functional
+Software, Inc., con los datos en la Unión Europea) para que podamos arreglarlo. Ese aviso no lleva
+tu web, tus fotos, tu correo ni tu dirección IP: solo qué ha fallado, en qué versión y desde qué
+navegador.» La cláusula del navegador espera al primer evento real (runbook §8). El sitemap costó
+una línea en la ruta de descarga: el publisher lo emitía desde el sprint 3 cuando recibía
+`baseUrl`. La ayuda de «Compartir» lo dice.
+
+**El despliegue que no abrió puerto (#230):** tras fusionar #229, `next start` estuvo quince
+minutos sin abrir puerto ni escribir una línea, la forma del 29 de septiembre. Reproducido en local
+con DSN: arranca en dos segundos. Un redespliegue del mismo commit abrió puerto: la instancia, dos
+de dos. Lo que se cerró fue un hueco: producción difería de todas las puertas en una variable, y
+ahora `editor-build` compila y arranca con un DSN cuyo host nunca resuelve.
+
+### El ADR 0040 y el esquema (día 2, PR #229)
+
+**Una página por ficha es derivada, nunca almacenada**: una colección puede tener una página
+enlazada, que vive en el documento, cuenta como una de las cinco y nunca se emite como ella misma;
+el publisher la dibuja una vez por entrada. El §2 del ADR 0033 aplicado a páginas, y «derived,
+never copied» del ADR 0022. La aritmética que el 0033 tenía delante había cambiado: por su propio
+§8 una colección tiene como mucho doce entradas, no cuarenta. Cada entrada gana un slug acuñado del
+campo titular una vez y para siempre, que sobrevive a borrar la página. Cinco invariantes,
+migración `0010` con conjunto afectado cero, y un hallazgo de la prueba: el slug propio de la
+plantilla nunca es un fichero, así que un enlace a él está muerto.
+
+### El renderer y el publisher dibujan N páginas (día 3, PR #231)
+
+La opción `entryId`; el `<title>` «<titular> — <sitio>»; las fichas fuera del menú (enmienda al
+0023) y **el titular de cada tarjeta enlazando a su ficha**, derivado del slug; `pagePaths`
+expandiendo la página enlazada; el sitemap listándolas. **`pnpm size` pesaba solo la portada**:
+ninguna segunda página había entrado nunca en el presupuesto de página. Ahora pesa cada fichero
+emitido y el paquete escala a 4 KB por página después de la primera, medidos: 1,7 KB una ficha
+dibujada, 3,1 KB la página más pesada de la muestra generada. Un fixture de doce fichas, un golden
+nuevo y ninguno movido.
+
+### El editor crea la página y la enseña (día 4, PR #232)
+
+«Crear una página por ficha» en «Listas», junto a una lista que alguna sección muestra, con la
+elección del campo titular solo cuando el catálogo llama titular a más de uno. La página nace con
+una portada cuyas hojas leen la ficha, en la composición de la portada de la web. «Ver sus
+páginas» y «Quitar la página de ficha». En «Páginas», «por ficha · N» y el selector **«Viendo:»**,
+que es elección del editor y nunca del documento. **Las dos cuentas por separado, el ajuste 3 de
+David**: «2 de 5 páginas.» es lo que limita el tope y «Al descargar saldrán 4 páginas: una por
+cada ficha de «Qué hago».» es lo que escribe la descarga.
+
+### Editar en la ficha, el enlace fuera del cursor, y el ZIP (día 5, PR #233)
+
+Escribir en un texto enlazado de la ficha edita la ficha, con «aparece en 2 sitios» delante.
+**Lo que la caminata encontró: el enlace del titular rompía el cursor dentro del lienzo**,
+medido en el DOM: al enfocar se selecciona todo el titular, `End` no colapsó una selección que
+cubre un ancla, y lo tecleado sustituyó las palabras: «Comidas» quedó como «del día». El ajuste 2
+de David tomado al pie de la letra: `wireEditing` desenvuelve el enlace antes de hacer el titular
+editable; en el lienzo es texto plano, el clic edita, y el enlace existe en la página publicada.
+`canvasLinks.ts` decide qué hace el lienzo con un enlace pulsado: una página mueve el lienzo, una
+ficha escrita a mano lo mueve a esa ficha, lo demás nada. La puerta cuenta una vez la foto de
+marcador de la plantilla. Lighthouse gana la ficha como cuarto sujeto.
+
+### El circuito del banco como herramienta (día 6, PR #234)
+
+`pnpm photos:intake` y `pnpm photos:approve`: el prompt leído del XMP del PNG (donde estaba
+desde siempre, `e485ffa`), el alfa aplanado sobre blanco (ajuste 3), nunca ampliar, WebP VP8
+simple a 75, los rechazos por su nombre, y la revisión como `git mv`. `sharp` solo en el paquete
+del banco. El README y el backlog aprenden el suelo de 1344 × 896 que les faltaba desde el 9 de
+octubre. **El 25 de octubre es de David**, comando a comando en el fichero del primer euro.
+
+### El recorrido como un desconocido, con fichas y sitemap (día 7)
+
+De `/` a un ZIP abierto sin red: lista, página por ficha, una ficha editada en su página, la
+dirección declarada en «Compartir», y el ZIP con `sitemap.xml` nombrando las fichas, un fichero
+por ficha y ninguno para la plantilla, cinco fotos, las caras y sus licencias; desde el disco, la
+ficha con su `<h1>`, «Inicio», la letra, ninguna insignia, y el titular de la tarjeta llevando de
+verdad al visitante a su ficha. Ninguna petición salió de la máquina.
+
+**Lo que este sprint deja a David:** firmar el ADR 0040; la opción de IP en el proyecto de Sentry
+y la lectura del primer evento real; las nueve fotos antes del 25 de octubre; los DPA de Supabase
+y Render, que siguen sin respuesta.
