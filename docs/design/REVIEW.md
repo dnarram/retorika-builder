@@ -1639,15 +1639,32 @@ tenía se desactiva; el resto del editor lleva `inert` mientras tanto, y al term
 vuelve a «Descargar», activo. El velo es la misma línea de los avisos de descarga y nunca se
 solapa con ellos: `requestDownload` lo retira antes de abrir un aviso, porque comparten capa.
 
-**La marca animada es un trazado del PNG, a ojo, y se sustituirá.** David ha pedido a Retorika el
-original vectorial; hasta que llegue, `apps/editor/src/editor/BuildingMark.tsx` es un trazado de
-`docs/design/brand/LogoOficialRetorikaBuilder.png` con los cinco grupos que el SVG oficial tendrá
-que exponer (la «R», el martillo, los tres bloques), para que el cambio sea sustituir trazados y no
-rehacer la animación. Colores del logotipo, no de la interfaz; el rosa es un bloque pequeño, que es
-el «accents only» que el ADR 0015 pide del fucsia; la marca sola, grande por un momento, es lo que
-ese ADR permite dentro del producto. Un ciclo de 1,6 s: el martillo se levanta y golpea, los
-bloques se asientan uno tras otro. Con movimiento reducido, la regla global deja cada animación en
-una iteración de 0,01 ms y la marca descansa en su estado final, que es el logotipo.
+**La marca animada es el logotipo trazado del PNG, medido, y no un dibujo a ojo.** El plan
+aprobado trazaba a mano hasta que llegara el vector de Retorika; esa misma tarde David pidió sacar
+el SVG de los dos PNG entregados, «muy fiel a esas dos imágenes», y así se hizo, con
+`pnpm brand:vector` (`scripts/brand-vector.ts`, sin dependencias nuevas: el `potrace` de npm arrastra
+un `jimp` de 2020 con cinco avisos de auditoría y el CI bloquea por eso). Lo que salió y lo que se
+midió está en `docs/design/brand/README.md`: los contornos a una décima de píxel; «Retorika» en su
+azul marino plano, «Builder» y los tres bloques con su degradado lineal; y el color de la «R», que
+ningún degradado explica —cian en la esquina, un azul claro por el brazo y la cabeza, el azul hondo
+por el tronco y el mango—, guardado como el propio campo de color del PNG a un cuarto de resolución
+bajo el recorte vectorial. Dibujado por Chromium al tamaño del original, el SVG de la marca queda a
+un nivel de media por canal del PNG tal como se muestra. `BuildingMark.tsx` toma todo de
+`buildingMarkPaths.ts`, que ese script escribe: la «R» partida en letra y martillo por una línea
+que pasa por la muesca de la garra, el pivote donde el mango sale de la panza, y los cinco grupos
+(`letter`, `hammer`, `block-sky`, `block-blue`, `block-rose`) que un vector oficial, si llega,
+sustituirá por dentro sin tocar la animación. Colores del logotipo tal como el navegador los
+muestra, no de la interfaz; el rosa es un bloque pequeño, que es el «accents only» que el ADR 0015
+pide del fucsia; la marca sola, grande por un momento, es lo que ese ADR permite dentro del
+producto. Un ciclo de 1,6 s: el martillo se levanta y golpea, los bloques se asientan uno tras
+otro. Con movimiento reducido, la regla global deja cada animación en una iteración de 0,01 ms y la
+marca descansa en su estado final, que es el logotipo.
+
+**Un hallazgo de paso, corregido:** los dos PNG entregados vienen etiquetados Display P3, y
+`brand:assets` escribía los servidos sin la etiqueta, así que el navegador los leía como sRGB: el
+azul de la marca en la cabecera del editor y en la landing era dieciséis niveles por canal más
+pálido que el entregado, medido en Chromium. Ahora el script conserva los trozos `iCCP` y `cICP` y
+los servidos se muestran idénticos al original (diferencia cero sobre la tinta).
 
 **Las caminatas** aseveran lo que se puede aseverar: el velo cubre la medida y no está cuando abre
 el aviso; la frase y el rol; el martillo animado y el bloque rosa pasando por varias opacidades; el
