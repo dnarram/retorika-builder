@@ -52,6 +52,7 @@ import {
   usesOfCollection,
 } from "@retorika/schema";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { canvasLinkTarget } from "../editor/canvasLinks.ts";
 import { CHROME_SCALE, PILL_REST_BORDER } from "../editor/chromeScale.ts";
 import type { SwitchNotice } from "../editor/designTools.ts";
 import { designRows, elementLabels, selectedRowId } from "../editor/designTree.ts";
@@ -1753,10 +1754,19 @@ export function Editor({
         // inside the editor. `./<slug>.html` is the published form, and the slug is the only part
         // of it anybody here needs.
         const href = anchor.getAttribute?.("href") ?? "";
-        const slug = /^\.\/([^#]+)\.html(?:#.*)?$/.exec(href.trim())?.[1];
-        if (slug === undefined) return;
-        const page = doc.pages.find((candidate) => candidate.slug === slug);
-        if (page) onSelectPage(doc.pages[0]?.id === page.id ? undefined : page.id);
+        const destination = canvasLinkTarget(doc, href);
+        // A card's title link never reaches here: `wireEditing` unwraps it, so the click edits the
+        // title (David's adjustment). What does reach here with an entry's slug is a link the owner
+        // typed by hand to a ficha, and that moves the canvas to the ficha, the way a menu entry
+        // moves it to a page. `canvasLinks.ts` makes the decision and is tested.
+        if (destination.kind === "none") return;
+        if (destination.kind === "entry") {
+          setEntryByPage((previous) => ({
+            ...previous,
+            [destination.pageId]: destination.entryId,
+          }));
+        }
+        onSelectPage(doc.pages[0]?.id === destination.pageId ? undefined : destination.pageId);
       },
       true,
     );
@@ -3646,6 +3656,22 @@ export function Editor({
       const sectionId = el.closest<HTMLElement>("[data-section]")?.dataset.section;
       if (!elementId || !sectionId) continue;
       const address: ElementAddress = { sectionId, elementId };
+
+      /**
+       * **The card's title link is unwrapped before the title becomes editable** (ADR 0040 §5, and
+       * David's adjustment to the sprint: the link is inert in the canvas and the click edits).
+       *
+       * Measured on 13 October 2026, sprint 19 day 5, with the anchor left in: focus selects the
+       * whole title, which is this field's contract, and `End` then did **not** collapse the
+       * selection — Chromium keeps a selection that covers an anchor — so typing replaced the
+       * words and «Comidas» was committed as «del día». An `<a>` inside a `contentEditable` is a
+       * caret trap, not a styling choice. So in the canvas the title is the plain text it was
+       * before the link existed, and the link exists only on the published page, where
+       * `rb-entry-link` is drawn again from the slug on every render.
+       */
+      for (const link of el.querySelectorAll("a.rb-entry-link")) {
+        link.replaceWith(...link.childNodes);
+      }
 
       el.contentEditable = "true";
       // Through `textFrameOf`, not a bare `.trim()`: it is the one place that also takes out the

@@ -1,10 +1,12 @@
+import { readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import { join } from "node:path";
 import { chromium } from "@playwright/test";
 import { EMPTY_ANSWERS, generate, VARIANTS } from "@retorika/generator";
 import { hasSamplePhotos, recordById } from "@retorika/photobank";
 import { readSampleBytes } from "@retorika/photobank/server";
-import { flattenElements } from "@retorika/schema";
+import { flattenElements, parseDocument } from "@retorika/schema";
 import { type LaunchedChrome, launch } from "chrome-launcher";
 import lighthouse from "lighthouse";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -89,6 +91,35 @@ function sampleSite(variant: (typeof VARIANTS)[number]): SiteBundle {
 }
 
 /** Serves one bundle from memory. `/` is `index.html`; anything the bundle lacks is a 404. */
+/**
+ * A page drawn per entry (ADR 0040), as a fourth subject: the twelve-entry fixture's site, audited
+ * on one of its drawn files rather than on the home page. No generated site has a page per entry,
+ * so without this the three compositions above would never measure one.
+ */
+function fichaSite(): { bundle: SiteBundle; path: string } {
+  const fixtures = join(import.meta.dirname, "..", "..", "..", "fixtures");
+  const document = parseDocument(
+    JSON.parse(readFileSync(join(fixtures, "documents", "una-pagina-por-ficha.json"), "utf8")),
+  );
+  const assets = new Map<string, Uint8Array>();
+  for (const page of document.pages) {
+    for (const section of page.sections) {
+      for (const el of flattenElements(section.content)) {
+        if (el.value?.kind !== "image" || el.value.src.startsWith("data:")) continue;
+        assets.set(el.value.src, readFileSync(join(fixtures, el.value.src)));
+      }
+    }
+  }
+  return {
+    bundle: buildSite(document, {
+      siteId: "lighthouse-ficha",
+      assets,
+      fonts: readFontBundle(document),
+    }),
+    path: "/ensaladilla-rusa.html",
+  };
+}
+
 function serve(bundle: SiteBundle): Promise<{ server: Server; origin: string }> {
   const files = new Map(bundle.files.map((file) => [`/${file.path}`, file]));
   const server = createServer((request, response) => {
@@ -126,11 +157,11 @@ afterAll(async () => {
   await chrome?.kill();
 });
 
-async function measure(label: string, bundle: SiteBundle): Promise<Measured> {
+async function measure(label: string, bundle: SiteBundle, path = "/"): Promise<Measured> {
   const { server, origin } = await serve(bundle);
   try {
     const started = performance.now();
-    const result = await lighthouse(`${origin}/`, {
+    const result = await lighthouse(`${origin}${path}`, {
       port: chrome.port,
       output: "json",
       logLevel: "error",
@@ -209,4 +240,18 @@ describe("Part 8.5 — Lighthouse over a sample site, the three compositions", (
       ).toBeGreaterThanOrEqual(FLOOR);
     }, 120_000);
   }
+
+  it(`a page drawn per entry: performance and accessibility at ${FLOOR * 100} or more`, async () => {
+    const { bundle, path } = fichaSite();
+    const measured = await measure(`una-pagina-por-ficha · ${path}`, bundle, path);
+    console.log(report(measured));
+    expect(
+      measured.scores["performance"],
+      `${measured.label}: performance below ${FLOOR * 100} — ${report(measured)}`,
+    ).toBeGreaterThanOrEqual(FLOOR);
+    expect(
+      measured.scores["accessibility"],
+      `${measured.label}: accessibility below ${FLOOR * 100} — ${report(measured)}`,
+    ).toBeGreaterThanOrEqual(FLOOR);
+  }, 120_000);
 });

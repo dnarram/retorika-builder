@@ -11234,42 +11234,42 @@ describe("sprint 18 día 7 — el recorrido como un desconocido, de la landing a
  * draws, and the two counts the «Páginas» panel keeps apart — pages stored against files written,
  * which David asked for by name when approving the sprint.
  */
+/** The sprint-14 journey, one step further: a generated restaurant, the tools on, and «Qué hago»'s
+ * three cards made into a list — which is the state a page per entry is offered in. */
+async function withToolsAndList(page: Page): Promise<FrameLocator> {
+  await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+  await page.fill("#nombre", "Taberna del Puerto");
+  await page.getByRole("button", { name: "Siguiente" }).click();
+  await page.getByText("Restaurante y bar", { exact: true }).click();
+  await page.getByRole("button", { name: "Siguiente" }).click();
+  for (const service of ["Comidas", "Cenas", "Terraza"]) {
+    await page.getByText(service, { exact: true }).click();
+  }
+  await page.getByRole("button", { name: "Siguiente" }).click();
+  await page.fill("#direccion", "Muelle 3, Ronda");
+  await page.getByRole("button", { name: "Siguiente" }).click();
+  await page.getByText("Que reserven", { exact: true }).click();
+  await page.fill("#enlace", "https://reservas.example.com/taberna");
+  await page.getByRole("button", { name: "Crear mi web" }).click();
+  await page.getByText("Ver a tamaño real →").first().click();
+  const frame = page.frameLocator(PREVIEW).first();
+  await frame.locator('[data-section="sec-cover"]').waitFor();
+  await waitForBankPhoto(frame);
+  await replacingTheDocument(page, async () => {
+    await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
+    await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
+  });
+  await page.getByRole("button", { name: "Listas" }).click();
+  await page
+    .getByRole("button", { name: /Hacer una lista con las tarjetas de «Qué hago»/ })
+    .first()
+    .click();
+  await expect(page.getByText("· 3 fichas")).toBeVisible();
+  return frame;
+}
+
 describe("sprint 19 día 4 — una página por ficha desde «Listas»", () => {
   const VIEWPORT = { width: 1280, height: 900 };
-
-  /** The sprint-14 journey, one step further: a generated restaurant, the tools on, and «Qué hago»'s
-   * three cards made into a list — which is the state a page per entry is offered in. */
-  async function withToolsAndList(page: Page): Promise<FrameLocator> {
-    await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
-    await page.fill("#nombre", "Taberna del Puerto");
-    await page.getByRole("button", { name: "Siguiente" }).click();
-    await page.getByText("Restaurante y bar", { exact: true }).click();
-    await page.getByRole("button", { name: "Siguiente" }).click();
-    for (const service of ["Comidas", "Cenas", "Terraza"]) {
-      await page.getByText(service, { exact: true }).click();
-    }
-    await page.getByRole("button", { name: "Siguiente" }).click();
-    await page.fill("#direccion", "Muelle 3, Ronda");
-    await page.getByRole("button", { name: "Siguiente" }).click();
-    await page.getByText("Que reserven", { exact: true }).click();
-    await page.fill("#enlace", "https://reservas.example.com/taberna");
-    await page.getByRole("button", { name: "Crear mi web" }).click();
-    await page.getByText("Ver a tamaño real →").first().click();
-    const frame = page.frameLocator(PREVIEW).first();
-    await frame.locator('[data-section="sec-cover"]').waitFor();
-    await waitForBankPhoto(frame);
-    await replacingTheDocument(page, async () => {
-      await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
-      await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
-    });
-    await page.getByRole("button", { name: "Listas" }).click();
-    await page
-      .getByRole("button", { name: /Hacer una lista con las tarjetas de «Qué hago»/ })
-      .first()
-      .click();
-    await expect(page.getByText("· 3 fichas")).toBeVisible();
-    return frame;
-  }
 
   it("crea la página, la enseña en su pestaña con «Viendo:», cuenta páginas y ficheros por separado, y quitarla se deshace", async () => {
     const page = await (await browser.newContext({ viewport: VIEWPORT })).newPage();
@@ -11321,4 +11321,133 @@ describe("sprint 19 día 4 — una página por ficha desde «Listas»", () => {
       await page.context().close();
     }
   }, 180_000);
+});
+
+/**
+ * Sprint 19 day 5 — editing on the drawn page, the gate, and the ZIP (ADR 0040 §§2, 5, 7, 8).
+ *
+ * The page exists in the editor since day 4; this is living with it. Three things the sprint
+ * promised and David's adjustment: writing in a bound text of the ficha edits the ficha with the
+ * §6 warning in front of it; the card's title link is **inert** in the canvas and the click edits
+ * the title; the download gate counts the template's one photograph once; and the ZIP carries a
+ * file per ficha that opens from disk, with the card's title really taking the visitor there.
+ */
+describe("sprint 19 día 5 — editar en la ficha, la puerta y el ZIP", () => {
+  const VIEWPORT = { width: 1280, height: 900 };
+
+  it("edita la ficha desde su página con el aviso, deja el enlace del titular inerte en el lienzo, cuenta una foto, y el ZIP lleva una página por ficha que abre desde disco", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const page = await context.newPage();
+    try {
+      const frame = await withToolsAndList(page);
+      const tabs = page.getByTestId("page-tabs").getByRole("button");
+
+      // Made from the keyboard, which is what sprint 17 promised of every control: Tab reaches it.
+      await tabUntil(
+        page,
+        (at) => at.text.startsWith("Crear una página por ficha"),
+        "«Crear una página por ficha»",
+        120,
+      );
+      await page.keyboard.press("Enter");
+      await expect(tabs).toHaveCount(2);
+
+      // ---- the card's title is a link on the published page, and plain text here (David's adjustment) ----
+      // The renderer wraps it in `a.rb-entry-link`; `wireEditing` unwraps it before the title is
+      // editable, because an anchor inside a contentEditable is a caret trap (measured: `End` did
+      // not collapse the selection and typing replaced the words). So the canvas shows no link
+      // here, the click edits, and the link is read back from the ZIP below.
+      const firstCard = frame.locator('[data-section="sec-services"] li.rb-item').first();
+      const cardTitle = firstCard.locator("h3[data-id]");
+      await expect(cardTitle).toHaveText("Comidas");
+      await expect(cardTitle.locator("a")).toHaveCount(0);
+      await clickToEdit(frame, cardTitle);
+      // Still the home page in the canvas: the click edited, it did not travel.
+      await expect(frame.locator('main[data-page="home"]')).toHaveCount(1);
+      await expect(tabs.first()).toHaveAttribute("aria-current", "page");
+      await expect(frame.locator(".rb-toolbar-notice")).toContainText("aparece en 2 sitios");
+      // Focus selects the whole title, which is this field's contract: the first keystroke replaces.
+      await page.keyboard.type("Comidas del día");
+      await page.getByText("Haz clic en cualquier texto para cambiarlo").click();
+      await expect(cardTitle).toHaveText("Comidas del día");
+
+      // ---- on the drawn page, the same text is the entry's, and editing it changes the card ----
+      await page.getByRole("button", { name: "Ver sus páginas" }).click();
+      const headline = frame.locator('[data-section^="sec-ficha"] h1');
+      await expect(headline).toHaveText("Comidas del día");
+      await clickToEdit(frame, headline);
+      await expect(frame.locator(".rb-toolbar-notice")).toContainText("aparece en 2 sitios");
+      await page.keyboard.type("Comidas del día y noche");
+      await page.getByText("Haz clic en cualquier texto para cambiarlo").click();
+      await expect(headline).toHaveText("Comidas del día y noche");
+      await tabs.first().click();
+      await expect(cardTitle).toHaveText("Comidas del día y noche");
+      // One «Deshacer» takes the ficha edit back everywhere it showed.
+      await page.getByRole("button", { name: "Deshacer", exact: true }).click();
+      await expect(cardTitle).toHaveText("Comidas del día");
+
+      // ---- axe over the editor with the drawn page on the canvas ----
+      await page.getByRole("button", { name: "Ver sus páginas" }).click();
+      await expect(headline).toHaveText("Comidas del día");
+      const results = await new AxeBuilder({ page }).analyze();
+      const serious = results.violations.filter(
+        (rule) => rule.impact === "serious" || rule.impact === "critical",
+      );
+      expect(
+        serious.flatMap((rule) =>
+          rule.nodes.map((node) => `${rule.id} at ${node.target.join(" ")}: ${rule.help}`),
+        ),
+      ).toEqual([]);
+
+      // ---- the gate: five sample photographs as before, and the template's one marker counted once ----
+      await page.getByRole("button", { name: "Descargar" }).click();
+      const warning = page.locator('[role="dialog"]', { hasText: "Antes de descargar" });
+      await expect(warning).toBeVisible({ timeout: 30_000 });
+      await expect(warning.getByText(/Tu web tiene 5 fotos de ejemplo/)).toBeVisible();
+      await expect(warning.getByText(/Tu web tiene 1 hueco de foto sin rellenar/)).toBeVisible();
+      const [download, response] = await Promise.all([
+        page.waitForEvent("download"),
+        page.waitForResponse((candidate) => candidate.url().includes("/api/download")),
+        warning.getByRole("button", { name: "Descargar igualmente" }).click(),
+      ]);
+      expect(response.status()).toBe(200);
+
+      // ---- the ZIP: a file per ficha, none for the template, every one opening from disk ----
+      const dir = mkdtempSync(join(tmpdir(), "retorika-s19d5-"));
+      const zipPath = join(dir, download.suggestedFilename());
+      await download.saveAs(zipPath);
+      const zip = new Uint8Array(readFileSync(zipPath));
+      const entries = extractAll(zip, dir);
+      const pages = entries.filter((entry) => entry.endsWith(".html")).sort();
+      expect(pages).toEqual(["cenas.html", "comidas.html", "index.html", "terraza.html"]);
+      expect(entries).not.toContain("ficha-de-que-hago.html");
+
+      const offline = await (await browser.newContext()).newPage();
+      const failed: string[] = [];
+      offline.on("requestfailed", (request) => failed.push(request.url()));
+      try {
+        await offline.goto(`file://${join(dir, "cenas.html")}`, { waitUntil: "load" });
+        await expect(offline.locator("h1")).toHaveText("Cenas");
+        expect(await offline.content()).not.toContain("data-entry");
+        expect(await offline.content()).not.toContain("col-que-hago");
+        await expect(offline.locator('nav a[href="./index.html"]').first()).toHaveText("Inicio");
+        const face = await offline.evaluate(async () => {
+          await document.fonts.ready;
+          return document.fonts.check('400 16px "Playfair Display"');
+        });
+        expect(face, "the shipped face is usable from file://").toBe(true);
+
+        // And the way in really works: from the home page, the card's title takes the visitor there.
+        await offline.goto(`file://${join(dir, "index.html")}`, { waitUntil: "load" });
+        await offline.locator('a.rb-entry-link[href="./cenas.html"]').click();
+        await expect(offline).toHaveURL(/cenas\.html$/);
+        await expect(offline.locator("h1")).toHaveText("Cenas");
+        expect(failed).toEqual([]);
+      } finally {
+        await offline.context().close();
+      }
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
 });
