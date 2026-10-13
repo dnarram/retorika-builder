@@ -235,6 +235,8 @@
   "editor.design.notFree": "Esta sección la coloca el catálogo. Si la diseñas a mano podrás mover y ensanchar cada elemento dentro de la rejilla. No se mueve nada al empezar, y puedes volver a la original cuando quieras.",
   "editor.download": "Descargar",
   "editor.downloading": "Descargando…",
+  "editor.building.title": "Estamos construyendo tu web",
+  "editor.building.body": "Preparamos los archivos. La descarga empieza sola en cuanto estén listos.",
   "app.error.title": "Algo ha fallado",
   "app.error.body": "La aplicaci\u00f3n se ha encontrado con un error que no esperaba. Tu web no se ha perdido: lo que ten\u00edas guardado sigue guardado. Vuelve a intentarlo y, si sigue pasando, cierra la pesta\u00f1a y entra de nuevo.",
   "app.error.retry": "Volver a intentarlo",

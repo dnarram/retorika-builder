@@ -1613,3 +1613,51 @@ verdad al visitante a su ficha. Ninguna petición salió de la máquina.
 instrucción, tras fusionar #235); la opción de IP en el proyecto de Sentry
 y la lectura del primer evento real; las nueve fotos antes del 25 de octubre; los DPA de Supabase
 y Render, que siguen sin respuesta.
+
+## La pantalla de construcción al descargar (13 de octubre de 2026)
+
+David, tras cerrar el sprint 19: al pulsar «Descargar», una animación derivada del logotipo
+—el martillo golpeando los bloques— que diga que se está construyendo la web, y que desaparezca
+cuando el archivo esté listo y se descargue. Dos decisiones suyas al aprobar: **un mínimo de unos dos
+segundos** aunque el ZIP esté antes, «para que el momento se perciba»; y el velo sobre todo el
+editor. Dos ajustes: pedir a Retorika el vector original antes de trazar a mano; y el contenedor del
+editor **inerte** bajo el velo, para que Tab no alcance nada que cambie la web mientras se construye.
+
+**Por qué esta pantalla sí y la maqueta 06 no.** La maqueta 06 no se construyó porque la
+generación mide 0,12 ms y no había nada que cubrir; aquí hay trabajo real entre la pulsación y el
+ZIP —la medida de desbordes, que hasta hoy corría con el botón activo y sin ninguna señal, las
+fotos reunidas, la petición y el ZIP— y la caminata lo mide e imprime cada vez que corre. **El
+mínimo de dos segundos es una espera añadida a propósito, por decisión de David, y se dice así.**
+Lo que la pantalla no hace es prometer una duración: ni «unos segundos» ni «no cierres esta
+ventana», las dos frases que las maquetas 06 y 11 enseñaron a cortar. Dice «Estamos construyendo
+tu web» y «Preparamos los archivos. La descarga empieza sola en cuanto estén listos», que es cierto
+en cada instante en que se lee.
+
+**Lo que es, y lo que no.** Un `role="status"` con `aria-live` y `aria-busy`, nunca un diálogo:
+no pregunta nada y no se cierra. La tarjeta toma el teclado al aparecer, porque el botón que lo
+tenía se desactiva; el resto del editor lleva `inert` mientras tanto, y al terminar el teclado
+vuelve a «Descargar», activo. El velo es la misma línea de los avisos de descarga y nunca se
+solapa con ellos: `requestDownload` lo retira antes de abrir un aviso, porque comparten capa.
+
+**La marca animada es un trazado del PNG, a ojo, y se sustituirá.** David ha pedido a Retorika el
+original vectorial; hasta que llegue, `apps/editor/src/editor/BuildingMark.tsx` es un trazado de
+`docs/design/brand/LogoOficialRetorikaBuilder.png` con los cinco grupos que el SVG oficial tendrá
+que exponer (la «R», el martillo, los tres bloques), para que el cambio sea sustituir trazados y no
+rehacer la animación. Colores del logotipo, no de la interfaz; el rosa es un bloque pequeño, que es
+el «accents only» que el ADR 0015 pide del fucsia; la marca sola, grande por un momento, es lo que
+ese ADR permite dentro del producto. Un ciclo de 1,6 s: el martillo se levanta y golpea, los
+bloques se asientan uno tras otro. Con movimiento reducido, la regla global deja cada animación en
+una iteración de 0,01 ms y la marca descansa en su estado final, que es el logotipo.
+
+**Las caminatas** aseveran lo que se puede aseverar: el velo cubre la medida y no está cuando abre
+el aviso; la frase y el rol; el martillo animado y el bloque rosa pasando por varias opacidades; el
+ZIP nunca antes de 1 900 ms desde la pulsación; el velo fuera y el foco en «Descargar» al llegar el
+ZIP; doce tabulaciones bajo el velo sin alcanzar nada del editor; y con movimiento reducido, la
+pantalla igual y la marca quieta. Las diecinueve descargas de las caminatas anteriores no cambian y
+la suite crece unos cuarenta segundos.
+
+**Lo medido**, en cinco pasadas locales de la caminata del restaurante el 13 de octubre de 2026: la
+medida de desbordes entre 144 y 842 ms; de la pulsación al ZIP entre 2 035 y 2 047 ms, es decir, el
+mínimo manda y el trabajo real cabe dentro; el ZIP, 259 800 bytes. Sin el mínimo, la pantalla duraría
+menos de un segundo en esta máquina y más en un portátil cargado o en el CI, que ya vio la medida
+pasar de cinco segundos: ese rango es exactamente lo que el mínimo iguala.
