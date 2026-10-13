@@ -58,7 +58,7 @@ which ADR 0009 forbids.
 
 | Answer | Becomes |
 |---|---|
-| 1 — the logo | an image in the site, and the source of the palette (dossier §4: "saca la paleta de su logo"). Without a logo, the sector's default palette |
+| 1 — the logo | an image in the site, and the source of the palette (dossier §4: "saca la paleta de su logo"). ~~Without a logo, the sector's default palette~~ Without a logo, **the neutral palette** since 13 October 2026 — [ADR 0041](0041-the-proposals-start-neutral-and-the-palette-is-chosen-afterwards.md): the owner picks a colour afterwards in «Estilo» |
 | 2 — the sector | which bank file is read: `bank/<sector>.json`. For "Otro", `bank/otro.json` plus the user's own words as a whole element |
 | 3 — the suggestions picked | the cards of "Qué hago": each card takes its title and description from the bank. A service the user types becomes a card with their title and no description (an item's description is 0..1) |
 | 4 — the place | the "Horario y ubicación" section, with the address or area shown whole, and `{ciudad}` when there is a town or city |

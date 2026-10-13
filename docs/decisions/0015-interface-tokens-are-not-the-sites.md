@@ -13,6 +13,13 @@ There are now two palettes in the project, and confusing them would be expensive
 direction: a client's site picking up Retorika's blue would make every generated site look like
 ours, which is the opposite of what the product sells.
 
+> **Amended 13 October 2026 by [ADR 0041](0041-the-proposals-start-neutral-and-the-palette-is-chosen-afterwards.md),
+> David's decision:** the neutral palette the three proposals start in carries Retorika's blue for
+> headings, buttons and links, by name and as the one exception — so the owner judges the structure
+> and picks a colour afterwards in «Estilo». The interface tokens below are still not the site's;
+> what changed is that one site palette, «Neutra», shares the blue. A site never restyled ships in
+> it, and ADR 0041 says so rather than pretending otherwise.
+
 ## Decision
 
 **The application's interface has its own tokens:**

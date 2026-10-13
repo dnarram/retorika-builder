@@ -24,9 +24,12 @@ Each is a real gap, decided with the product owner, not silently worked around:
   inline placeholder (`@retorika/catalog`'s `placeholder-image.ts`), the same one
   `docs/design/prototype/*/assets/foto-muestra.svg` used, because `packages/photobank` does not
   exist — ADR 0011 needs real photos, generated and reviewed like the text bank.
-- **The logo is captured, never analysed.** ADR 0010 says "sin logo, la paleta por defecto del
-  sector"; every generation uses that default (`theme.ts`), whether or not a logo was uploaded,
-  because colour extraction from an image is not built.
+- **The logo chooses the palette when it can, and otherwise the proposals start neutral.** Colour
+  extraction from the logo exists since sprint 6 day 6 (`apps/editor/src/editor/logoPalette.ts`);
+  without a logo, or with one whose colour no palette is near, the three proposals start in the
+  neutral palette (ADR 0041, 13 October 2026) and the owner picks a colour in «Estilo». The sector
+  decides the typography only (`theme.ts`). This bullet said the logo was «never analysed» and the
+  sector chose a palette for eleven days after both stopped being true.
 - **`{ciudad}` is never filled.** Question 4 collects one free-text address, never a separate
   city, so `factsFor()` always leaves it undefined and every text falls back to its city-less
   sibling — safe by construction, since ADR 0009 requires that sibling to exist.

@@ -205,7 +205,9 @@ export interface PaletteMatch {
  */
 export function nearestPalette(colour: Rgb): PaletteMatch | null {
   let best: PaletteMatch | null = null;
-  for (const palette of PALETTES) {
+  // The neutral start is not a colour a logo chooses (ADR 0041): a blue logo lands on
+  // `classic-blue`, never on the palette whose blue is Retorika's.
+  for (const palette of PALETTES.filter((candidate) => !candidate.starting)) {
     const distance = colourDistance(colour, parseHex(palette.colors["color.primary"]));
     // Strictly nearer, so a tie keeps the earlier palette and the answer does not depend on the
     // order `PALETTES` happens to be written in changing under it.

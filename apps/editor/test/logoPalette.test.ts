@@ -126,10 +126,13 @@ describe("the measured table the threshold was set from", () => {
 
   it.each(measured)("%s is nearest %s at ΔE %s", (hex, paletteId, distance) => {
     const colour = parseHex(hex);
-    const nearest = PALETTES.map((palette) => ({
-      id: palette.id,
-      d: colourDistance(colour, parseHex(palette.colors["color.primary"])),
-    })).sort((a, b) => a.d - b.d)[0];
+    // The starting palette is left out, as `nearestPalette` leaves it out (ADR 0041).
+    const nearest = PALETTES.filter((palette) => !palette.starting)
+      .map((palette) => ({
+        id: palette.id,
+        d: colourDistance(colour, parseHex(palette.colors["color.primary"])),
+      }))
+      .sort((a, b) => a.d - b.d)[0];
     expect(nearest?.id).toBe(paletteId);
     expect(nearest?.d).toBeCloseTo(distance, 1);
   });
@@ -177,11 +180,17 @@ describe("nearestPalette", () => {
     expect(nearestPalette(parseHex("#2563EB"))?.distance).toBeCloseTo(9.2, 1);
   });
 
-  it("matches every palette's own primary to itself, at zero", () => {
+  it("matches every palette's own primary to itself, at zero — except the neutral start", () => {
     // The strongest form of the rule: a logo in exactly a palette's colour must choose that
-    // palette, and no threshold or tie-break can get in the way of it.
+    // palette, and no threshold or tie-break can get in the way of it. The neutral start is the
+    // one exception (ADR 0041): it is not a colour a logo chooses, so its own blue lands on the
+    // nearest palette of colour instead.
     for (const palette of PALETTES) {
       const match = nearestPalette(parseHex(palette.colors["color.primary"]));
+      if (palette.starting) {
+        expect(match?.paletteId, palette.id).toBe("classic-blue");
+        continue;
+      }
       expect(match?.paletteId, palette.id).toBe(palette.id);
       expect(match?.distance).toBeCloseTo(0, 5);
     }
@@ -227,5 +236,12 @@ describe("colourDistance", () => {
     expect(colourDistance(blue, parseHex("#1D4ED8"))).toBeLessThan(
       colourDistance(blue, parseHex("#EAB308")),
     );
+  });
+});
+
+describe("the neutral start is not a colour a logo chooses (ADR 0041)", () => {
+  it("sends a logo in Retorika's own blue to classic-blue, never to the neutral palette", () => {
+    expect(nearestPalette(parseHex("#156FE7"))?.paletteId).toBe("classic-blue");
+    expect(paletteForLogo(solid("#156FE7", 16))).toBe("classic-blue");
   });
 });

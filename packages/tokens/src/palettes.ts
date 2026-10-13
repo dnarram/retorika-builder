@@ -8,9 +8,39 @@ export interface Palette {
   /** Shown in the style panel. Spanish lives in the locale file, not here. */
   nameKey: string;
   colors: Record<ColorKey, string>;
+  /**
+   * The palette a generated site starts with when no logo chose one (ADR 0041): offered in the
+   * panel like the others and ticked on opening, but **not a colour a logo chooses** — a blue logo
+   * lands on `classic-blue`, never here — and so skipped by `nearestPalette`.
+   */
+  starting?: true;
 }
 
+/** The id of the palette every proposal starts with when the logo chose none (ADR 0041). */
+export const STARTING_PALETTE_ID = "neutral";
+
 export const PALETTES: readonly Palette[] = [
+  {
+    /**
+     * «Neutra» — black ink, the brand's blue for headings, buttons and links, white surfaces.
+     * **The one palette that carries Retorika's blue, by David's decision of 13 October 2026**,
+     * which amends ADR 0015's warning about a client's site taking it: the three proposals are
+     * shown in it so that the owner judges the structure, not a colour nobody chose, and the
+     * palette is theirs to pick afterwards in «Estilo». A site left untouched ships in this blue;
+     * the ADR says so rather than pretending otherwise.
+     */
+    id: STARTING_PALETTE_ID,
+    nameKey: "palette.neutral",
+    starting: true,
+    colors: {
+      "color.primary": "#156FE7",
+      "color.secondary": "#105CB1",
+      "color.accent": "#FF3A72",
+      "color.surface": "#FFFFFF",
+      "color.ink": "#0F172A",
+      "color.muted": "#475569",
+    },
+  },
   {
     id: "classic-blue",
     nameKey: "palette.classicBlue",
