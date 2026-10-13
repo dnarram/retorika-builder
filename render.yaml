@@ -57,6 +57,8 @@ services:
     # that separated production from every gate separates them no longer. If a redeploy of the
     # same commit binds, it was the instance; if it does not and a deploy without the DSN does,
     # it is the SDK at startup on Render's instance and the next step is the SDK's debug output.
+    # **A redeploy of the same commit bound its port** (David, 13 October 2026): the instance,
+    # twice out of two, and the DSN is cleared of this one.
     startCommand: ./apps/editor/node_modules/.bin/next start apps/editor -p $PORT
     envVars:
       # engine-strict is on and the root package.json asks for ^24.21.0. Render's own default is
