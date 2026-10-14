@@ -68,3 +68,36 @@ export const CHROME_SCALE = {
  * `@media (hover: hover)` so a touch screen never gets the quiet version of anything.
  */
 export const PILL_REST_BORDER = CHROME_SCALE.brand;
+
+/**
+ * The section verbs' geometry: how big the round buttons in the canvas are, and how much bigger
+ * they get when a pointer or a keyboard arrives on one.
+ *
+ * **A decision rather than a transcription**, which is why it is its own export beside
+ * `PILL_REST_BORDER` instead of a row in the table above. Nothing in `globals.css` draws these —
+ * they exist only inside the preview iframe — so there is no `--ui-*` for them to agree with, and
+ * pretending otherwise would weaken what `CHROME_SCALE` promises.
+ *
+ * **Why 32 and not the 26 they were for eighteen sprints.** David, 14 October 2026: «los iconos se
+ * ven muy pequeños y no consigo diferenciarlos fácilmente». A 26px disc with a 13px glyph inside a
+ * 2px ring leaves about 11px of drawing — eight silhouettes that at a glance are eight grey marks.
+ * 32 with a 16px glyph is the smallest that reads as a picture; the growth on top is emphasis, and
+ * it is `transform` so a button swelling never pushes its neighbours sideways under the pointer
+ * that is reaching for it.
+ *
+ * The numbers live here rather than in the stylesheet string so that the walks can assert what the
+ * CSS declares instead of a second copy typed into a test — David's own condition when he approved
+ * the sprint.
+ */
+export const VERB_SCALE = {
+  /** The button's whole box, its 2px white ring included. */
+  size: 32,
+  /** The glyph inside it, interpolated into all eight SVG strings. */
+  icon: 16,
+  /** 36px of button, as a factor: hover and `:focus-visible` both. */
+  grow: 1.125,
+  /** Between two buttons. */
+  gap: 4,
+  /** From the section's own corner, which is where the cluster has always sat. */
+  inset: 8,
+} as const;

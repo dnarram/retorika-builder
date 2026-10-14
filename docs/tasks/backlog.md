@@ -575,6 +575,43 @@ open survives.
   probe since that day, so the next red says which document was wired when and where `select`
   ran. If it recurs, that is a row of its own.
 
+- **It recurred, and the probe said what it was asked to say (14 October 2026, CI on PR #240).**
+  «Insertar una sección deja el teclado en la que acaba de aparecer», `focus fell to the body`
+  again, on a change that touches nothing on this path — the section verbs' size and their words.
+  The account the walk has carried since the row above asked for it:
+
+  ```
+  2006.8ms buffer  {"live":0,"liveKey":"false|000000","pendingKey":"false|0000000"}
+  2022.4ms wire    {"serial":3,"via":"promote","readyState":"complete","sections":7,"live":false,"buffered":1}
+  2023.8ms select  {"sectionId":"sec-cover-2","via":"return","serial":3,"readyState":"complete"}
+  2029.7ms promote {"serial":3,"arriving":"false|0000000"}
+  2034.1ms wire    {"serial":4,"via":"onload","readyState":"complete","sections":7,"live":true,"buffered":1}
+  2035.2ms select  {"sectionId":"sec-cover-2","via":"restore","serial":4,"readyState":"complete"}
+  ```
+
+  **Read in order, it names a mechanism rather than a suspicion.** The document with the new
+  section was wired at serial 3 **while it was still the buffered frame** (`live: false,
+  buffered: 1`), and the `select` that carries the keyboard back — `via: "return"`, the one that
+  puts focus on the section that appeared — ran **in that frame, six milliseconds before the
+  promote**. The promote then made it the live frame, and a focus placed in a document that is
+  being swapped in does not survive the swap: the browser leaves the keyboard on the body. Eleven
+  milliseconds later the same document is wired again (`serial: 4`, `via: "onload"`, now `live`)
+  and `select` runs a second time as `via: "restore"` — which is why the end state the walk
+  reports is self-consistent and still wrong: `selected` and `actionsIn` are both `sec-cover-2`,
+  the cluster is drawn on the right section, and nothing holds the keyboard. **Restoring the
+  selection is not restoring the keyboard**, and only the `return` path ever had the focus.
+
+  So the race is not «did the press land» (it did, the section exists) but «which frame was live
+  when the return ran». It is intermittent because on a quiet machine the wiring that follows the
+  promote wins; here the promote arrived between the wiring and the focus.
+
+  **Not fixed, and why not here:** PR #240 is the day the verbs grew, the fix belongs to the
+  buffered-swap focus path, and it needs a walk of its own that forces the order rather than
+  waiting for a loaded runner to produce it. Named as the candidate: either the `return` select
+  defers until the frame it is acting on is the live one, or the `restore` that follows a promote
+  carries the pending return instead of dropping it. Whichever is chosen, the walk has to be able
+  to make it fail first.
+
   **And a third shape, 13 October 2026, CI on PR #227 (sprint 19 day 1, a change that touches
   nothing on the path):** «sprint 17 día 7 — el recorrido entero sin tocar el ratón» reached
   «Descargar», pressed Enter, and saw no dialog within Playwright's 5 s; the same commit's twin

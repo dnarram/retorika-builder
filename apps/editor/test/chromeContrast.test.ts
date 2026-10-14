@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { AA_NORMAL_TEXT, contrastRatio } from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
-import { CHROME_SCALE, PILL_REST_BORDER } from "../src/editor/chromeScale.ts";
+import { CHROME_SCALE, PILL_REST_BORDER, VERB_SCALE } from "../src/editor/chromeScale.ts";
 
 /**
  * The interface's own colours, measured.
@@ -64,6 +64,40 @@ const BORDER_STRONG = token("border-strong");
 
 /** WCAG 1.4.11: a boundary or a graphic that carries meaning. */
 const UI_COMPONENT = 3;
+
+/**
+ * Is this rule inside one of the canvas's `@media (hover: hover)` blocks?
+ *
+ * **It used to be «inside the first one», and that was a trap with a fuse in it.** The check read
+ * `indexOf("@media (hover: hover)")` and then looked 400 characters ahead for `.rb-pill:hover`, so
+ * it depended on the pill's block being the first such query in a 1500-line stylesheet built as an
+ * array of strings. The day a second control earned its own hover emphasis — the section verbs, 14
+ * October 2026 — the guard would have failed on the pill, which had not changed, and sent whoever
+ * was holding it looking in the wrong place. A test that breaks over the order of unrelated rules
+ * is a test that teaches people to move code to please it.
+ *
+ * Still positional within each block, because there is no CSS parser here and the stylesheet is a
+ * list of strings: every block is read whole, and a rule is behind the query if it is in one.
+ */
+/**
+ * A reference to the scale, written the way the stylesheet's source writes it.
+ *
+ * The canvas's CSS is built from template literals, so what these assertions match is the text
+ * `${CHROME_SCALE.brand}` a reader sees in `Editor.tsx` rather than the colour it stands for —
+ * which is the point: the guard is «this rule asks the scale», not «this rule is currently blue».
+ * Composed rather than typed, because a `${` inside a plain string is exactly what
+ * `noTemplateCurlyInString` exists to catch, and everywhere else in this repository it would be
+ * catching a real mistake.
+ */
+function reads(expression: string): string {
+  return `\${${expression}}`;
+}
+
+function behindHoverQuery(rule: string): boolean {
+  return [...CANVAS.matchAll(/@media \(hover: hover\)/g)].some((match) =>
+    CANVAS.slice(match.index ?? 0, (match.index ?? 0) + 400).includes(rule),
+  );
+}
 
 describe("the chrome's text", () => {
   const readable: [string, string, string][] = [
@@ -133,11 +167,90 @@ describe("«Añadir sección aquí», at rest", () => {
     // The other half of direction's instruction, and it cannot be measured as a ratio: a device
     // with no pointer must never be shown the quieter of two states. The hover rule is therefore
     // inside the query, and the resting rule outside it — which is what this reads.
-    const hover = CANVAS.indexOf("@media (hover: hover)");
-    expect(hover, "the pill's emphasis is not inside `@media (hover: hover)`").toBeGreaterThan(-1);
-    expect(CANVAS.slice(hover, hover + 400)).toContain(".rb-pill:hover");
+    expect(
+      behindHoverQuery(".rb-pill:hover"),
+      "the pill's emphasis is not inside `@media (hover: hover)`",
+    ).toBe(true);
     // And a keyboard, which has no pointer either, gets the same emphasis.
     expect(CANVAS).toContain(".rb-pill:focus-visible");
+  });
+});
+
+/**
+ * The eight round buttons on a chosen section, which nothing had ever measured.
+ *
+ * They are the oldest chrome in the canvas — sprint 2 — and the chrome redesign of sprint 15 went
+ * past them without touching them: the pills, the gap and the rule were rebuilt on the scale and
+ * these kept a size nobody chose, two blues typed by hand, and no focus ring at all.
+ *
+ * David, 14 October 2026: «los iconos se ven muy pequeños y no consigo diferenciarlos fácilmente y
+ * además es difícil saber qué hacen exactamente.» What follows is the three halves of that — big
+ * enough to tell apart, named, and visible before a pointer arrives.
+ */
+describe("the section's verbs", () => {
+  it("take their blue and their red from the scale, not from hexes typed beside them", () => {
+    expect(CANVAS).toContain(`.rb-action-move { background: ${reads("CHROME_SCALE.brand")}`);
+    expect(CANVAS).toContain(`.rb-action-delete { background: ${reads("CHROME_SCALE.danger")}`);
+    // And the two darker hover hexes are gone from the cluster, rather than left unused: they
+    // belonged to no scale, and the emphasis is size and depth now.
+    const cluster = CANVAS.slice(CANVAS.indexOf(".rb-actions {"), CANVAS.indexOf(".rb-hole {"));
+    expect(cluster, "the cluster still carries a hand-typed hover blue").not.toContain("#0E5BC4");
+    expect(cluster, "the cluster still carries a hand-typed hover red").not.toContain("#B91C1C");
+  });
+
+  it("are drawn from the one place their size is written down", () => {
+    // The CSS, the eight icons and the walks all read `VERB_SCALE`; a number typed twice is a
+    // number that will disagree with itself, which is the whole argument of `chromeScale.ts`.
+    expect(CANVAS).toContain(`width: ${reads("VERB_SCALE.size")}px`);
+    expect(CANVAS).toContain(`transform: scale(${reads("VERB_SCALE.grow")})`);
+    expect(CANVAS, "an icon is drawn at a size of its own").toContain(
+      `width="${reads("VERB_SCALE.icon")}"`,
+    );
+    expect(VERB_SCALE.size * VERB_SCALE.grow).toBe(36);
+    // Big enough for a pointer by WCAG 2.5.8, which the 26px they were cleared only by two.
+    expect(VERB_SCALE.size).toBeGreaterThanOrEqual(24);
+  });
+
+  it("have the focus ring they never had, and it is ink so it shows on the blue", () => {
+    expect(CANVAS).toContain(".rb-action:focus-visible");
+    // 2:1 would be invisible on the disc it rings. Ink on the brand blue is the one that shows.
+    expect(contrastRatio(CHROME_SCALE.ink, BRAND)).toBeGreaterThanOrEqual(UI_COMPONENT);
+    expect(contrastRatio(CHROME_SCALE.ink, DANGER)).toBeGreaterThanOrEqual(UI_COMPONENT);
+  });
+
+  it("grow behind `hover: hover` for a pointer, and outright for a keyboard", () => {
+    expect(
+      behindHoverQuery(".rb-action:hover"),
+      "the verbs' growth is not inside `@media (hover: hover)`",
+    ).toBe(true);
+    expect(behindHoverQuery(".rb-verb:hover .rb-tip")).toBe(true);
+    // The keyboard's half, outside the query: focus gets the same size and the same word.
+    expect(CANVAS).toContain(".rb-action:focus-visible + .rb-tip");
+  });
+
+  it("say their word in white on ink, which is readable text rather than a decoration", () => {
+    expect(contrastRatio("#FFFFFF", CHROME_SCALE.ink)).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
+  });
+
+  /**
+   * **A word hidden by opacity alone is still the page's text**, which is a defect CI found rather
+   * than a nicety: `innerText` of a cover came back with all seven words in front of the business
+   * name, and a reader's own Ctrl+F would have found «Duplicar» inside their restaurant. Measured
+   * in Chromium: `opacity: 0` is collected, `visibility: hidden` is not.
+   */
+  it("take their word out of the page while it is not being shown", () => {
+    const tip = CANVAS.slice(CANVAS.indexOf(".rb-tip {"));
+    expect(tip.slice(0, 400), "the word is hidden by opacity alone").toContain(
+      "visibility: hidden",
+    );
+    expect(CANVAS).toContain("visibility: visible");
+  });
+
+  it("are flattened for somebody who asked for less movement", () => {
+    const reduced = CANVAS.indexOf("prefers-reduced-motion");
+    const block = CANVAS.slice(reduced, reduced + 400);
+    expect(block, "the verbs still animate under reduced motion").toContain(".rb-action");
+    expect(block, "the word still fades under reduced motion").toContain(".rb-tip");
   });
 });
 

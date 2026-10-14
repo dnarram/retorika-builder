@@ -55,7 +55,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { BuildingScreen } from "../editor/BuildingScreen.tsx";
 import { holdFor } from "../editor/buildingScreen.ts";
 import { canvasLinkTarget } from "../editor/canvasLinks.ts";
-import { CHROME_SCALE, PILL_REST_BORDER } from "../editor/chromeScale.ts";
+import { CHROME_SCALE, PILL_REST_BORDER, VERB_SCALE } from "../editor/chromeScale.ts";
 import type { SwitchNotice } from "../editor/designTools.ts";
 import { designRows, elementLabels, selectedRowId } from "../editor/designTree.ts";
 import {
@@ -1992,13 +1992,15 @@ export function Editor({
     function action(
       verb: string,
       label: string,
+      /** One or two words, shown beside the button and never inside it — see the note above. */
+      word: string,
       variant: "move" | "delete",
       disabled: boolean,
       svg: string,
       /** Handed the button it is attached to, which an opener needs: a popup has to know what to
        * put the focus back on, and the only thing that knows is the thing that was pressed. */
       onClick: (button: HTMLButtonElement) => void,
-    ): HTMLButtonElement {
+    ): HTMLElement {
       const button = iframeDoc.createElement("button");
       button.type = "button";
       button.className = `rb-action rb-action-${variant}`;
@@ -2039,7 +2041,31 @@ export function Editor({
         }
         onClick(button);
       });
-      return button;
+
+      /*
+       * **The word is a sibling of the button, never a child of it**, and that placement is the
+       * decision rather than a detail of markup.
+       *
+       * Two things depend on it. The 320px sweep examines every `button` with text in it and
+       * measures whether its words stay inside its box; the verbs have always been skipped by it
+       * for being icon-only, and a word *inside* the button would newly put eight 32px discs into
+       * a test about text overflowing — failing, correctly, and for no reason anybody wanted. And
+       * `focus()` in the walks reads `dataset.action` off whatever holds focus, so the handle has
+       * to stay on the focusable element itself.
+       *
+       * `aria-hidden`, because the button's `aria-label` already says «Subir esta sección»: a
+       * screen reader that also read «Subir» would hear the same instruction twice, the second
+       * time shorter. This is for the eyes — the pair of them that cannot tell eight white glyphs
+       * apart, with a pointer or with a keyboard.
+       */
+      const wrapper = iframeDoc.createElement("span");
+      wrapper.className = "rb-verb";
+      const tip = iframeDoc.createElement("span");
+      tip.className = "rb-tip";
+      tip.setAttribute("aria-hidden", "true");
+      tip.textContent = word;
+      wrapper.append(button, tip);
+      return wrapper;
     }
 
     /**
@@ -2206,13 +2232,25 @@ export function Editor({
 
       const actions = iframeDoc.createElement("div");
       actions.className = "rb-actions";
+      /*
+       * **`group` and not `toolbar`.** The WAI-ARIA toolbar pattern promises a keyboard a
+       * particular contract: one Tab stop for the whole thing, and the arrows moving between the
+       * controls inside it. This cluster keeps neither — every verb is its own Tab stop, which is
+       * what sprint 17 day 4's walks are written against, and the arrows belong to the canvas for
+       * moving between sections. A role that announces a contract the keys do not honour is worse
+       * than a plain group with a name, which is all this needs: eight buttons a screen reader
+       * used to reach with nothing saying what they were eight of.
+       */
+      actions.setAttribute("role", "group");
+      actions.setAttribute("aria-label", es["editor.actions.label"]);
       actions.appendChild(
         action(
           "move-up",
           es["editor.moveSectionUp"],
+          es["editor.verb.moveUp"],
           "move",
           index <= 0,
-          '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg>',
+          `<svg width="${VERB_SCALE.icon}" height="${VERB_SCALE.icon}" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg>`,
           () => onMoveSection(sectionId, index - 1),
         ),
       );
@@ -2220,9 +2258,10 @@ export function Editor({
         action(
           "move-down",
           es["editor.moveSectionDown"],
+          es["editor.verb.moveDown"],
           "move",
           index < 0 || index >= sections.length - 1,
-          '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M6 13l6 6 6-6"/></svg>',
+          `<svg width="${VERB_SCALE.icon}" height="${VERB_SCALE.icon}" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M6 13l6 6 6-6"/></svg>`,
           () => onMoveSection(sectionId, index + 1),
         ),
       );
@@ -2237,9 +2276,10 @@ export function Editor({
           action(
             "composition",
             es["editor.composition.open"],
+            es["editor.verb.composition"],
             "move",
             false,
-            '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M10 4v16"/></svg>',
+            `<svg width="${VERB_SCALE.icon}" height="${VERB_SCALE.icon}" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M10 4v16"/></svg>`,
             (button) => {
               const open = target.querySelector(".rb-compositions");
               if (open) {
@@ -2264,9 +2304,10 @@ export function Editor({
           action(
             "handmade",
             es["editor.section.escalate.yes"],
+            es["editor.verb.handmade"],
             "move",
             false,
-            '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M3 9h18"/></svg>',
+            `<svg width="${VERB_SCALE.icon}" height="${VERB_SCALE.icon}" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M3 9h18"/></svg>`,
             (button) => {
               const open = target.querySelector(".rb-escalate");
               if (open) {
@@ -2287,9 +2328,10 @@ export function Editor({
         action(
           "duplicate",
           es["editor.duplicateSection"],
+          es["editor.verb.duplicate"],
           "move",
           false,
-          '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>',
+          `<svg width="${VERB_SCALE.icon}" height="${VERB_SCALE.icon}" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`,
           () => onDuplicateSection(sectionId),
         ),
       );
@@ -2304,9 +2346,10 @@ export function Editor({
           action(
             "to-page",
             es["editor.sectionToPage"],
+            es["editor.verb.toPage"],
             "move",
             false,
-            '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8"/><path d="M14 3v6h6"/><path d="M14 3l6 6"/><path d="M11 13h9"/><path d="M17 10l3 3-3 3"/></svg>',
+            `<svg width="${VERB_SCALE.icon}" height="${VERB_SCALE.icon}" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8"/><path d="M14 3v6h6"/><path d="M14 3l6 6"/><path d="M11 13h9"/><path d="M17 10l3 3-3 3"/></svg>`,
             () => onSectionToPage(sectionId),
           ),
         );
@@ -2316,9 +2359,10 @@ export function Editor({
         action(
           "fields",
           es["editor.fields.open"],
+          es["editor.verb.fields"],
           "move",
           false,
-          '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10"/><path d="M4 12h16"/><path d="M4 17h7"/><circle cx="18" cy="7" r="2"/><circle cx="15" cy="17" r="2"/></svg>',
+          `<svg width="${VERB_SCALE.icon}" height="${VERB_SCALE.icon}" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10"/><path d="M4 12h16"/><path d="M4 17h7"/><circle cx="18" cy="7" r="2"/><circle cx="15" cy="17" r="2"/></svg>`,
           () => showFields(sectionId),
         ),
       );
@@ -2326,9 +2370,10 @@ export function Editor({
         action(
           "delete",
           es["editor.deleteSection"],
+          es["editor.verb.delete"],
           "delete",
           false,
-          '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6 7l1 13h10l1-13"/></svg>',
+          `<svg width="${VERB_SCALE.icon}" height="${VERB_SCALE.icon}" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6 7l1 13h10l1-13"/></svg>`,
           () => onDeleteSection(sectionId),
         ),
       );
@@ -4340,13 +4385,103 @@ export function Editor({
       // the first section, with no room above it, and a button hanging above the top of the
       // page there would sit outside the iframe's own visible area — covered by whatever the
       // parent page draws above the iframe, and unclickable. Every section has room inside it.
-      ".rb-actions { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; }",
-      ".rb-action { width: 26px; height: 26px; display: flex; align-items: center;",
-      "  justify-content: center; border: 2px solid #FFFFFF; border-radius: 999px;",
-      `  cursor: pointer; box-shadow: ${CHROME_SCALE.shadow2}; }`,
-      ".rb-action-move { background: #156FE7; } .rb-action-move:hover { background: #0E5BC4; }",
-      ".rb-action-delete { background: #DC2626; } .rb-action-delete:hover { background: #B91C1C; }",
+      /**
+       * **The verbs, at the size David could actually tell apart.**
+       *
+       * They were 26px with a 13px glyph from sprint 2 until 14 October 2026, a number nothing
+       * decided — the mockups never drew this cluster, and 26 looks inherited from the text bar's
+       * square buttons, which have no 2px ring eating into them. «Los iconos se ven muy pequeños y
+       * no consigo diferenciarlos fácilmente», and measured he was plainly right: 26 minus the
+       * ring leaves 22, and a 13px glyph in it is eight silhouettes that read as eight grey marks.
+       *
+       * `VERB_SCALE` holds the numbers so the walks can assert against what the CSS declares.
+       *
+       * **The growth is `transform: scale`, never width.** A button that grew by changing its box
+       * would push its neighbours sideways — under a pointer that is already travelling towards
+       * one of them, which is how you press «Borrar» having aimed at «Campos». A transform grows
+       * the drawing and leaves the layout where it was.
+       *
+       * **`flex-wrap` with a `max-width`**, which is new and is a guard rather than a style: the
+       * 320px sweep's own note says that if this cluster ever escaped its section at that width
+       * nothing would measure it. Eight buttons 6px wider each is 48px more, so it stops being
+       * hypothetical; wrapping keeps it inside, and the walk now measures it.
+       *
+       * Blue and red come from `CHROME_SCALE` instead of the `#156FE7`/`#DC2626` typed here, which
+       * were the same values by luck rather than by reference. The two darker hover hexes go: the
+       * emphasis is size and depth now, so a colour that existed only to say «you are on this one»
+       * has nothing left to say.
+       */
+      /*
+       * **`z-index` because the sample badge was eating two of these buttons, measured.** At 320px
+       * on a cover the cluster is 212px wide and «Foto de ejemplo» is 116px at the opposite corner
+       * of the same strip: they overlap by **74px**, and the badge carries `z-index: 6` while the
+       * cluster carried none — so the badge painted over «Subir» and «Bajar» and took their clicks.
+       * Two dead controls, and they were dead before this day widened the overlap from about 38px.
+       *
+       * 10 puts the cluster over the badge and still under the menus it opens (20) and the text
+       * bar (30). The transient control somebody just summoned wins over the standing label; the
+       * badge keeps the half of itself nothing is standing on, and from tomorrow the cluster can
+       * simply be dragged off it, which is the whole of what David asked for.
+       */
+      `.rb-actions { position: absolute; top: ${VERB_SCALE.inset}px; right: ${VERB_SCALE.inset}px;`,
+      "  z-index: 10; display: flex; flex-wrap: wrap; justify-content: flex-end;",
+      `  gap: ${VERB_SCALE.gap}px; max-width: calc(100% - ${VERB_SCALE.inset * 2}px); }`,
+      // The button and its word, as one thing: the word is positioned against this, not against
+      // the section, so it follows its own button wherever the cluster sits.
+      ".rb-verb { position: relative; display: flex; }",
+      `.rb-action { width: ${VERB_SCALE.size}px; height: ${VERB_SCALE.size}px; display: flex;`,
+      "  align-items: center; justify-content: center; border: 2px solid #FFFFFF;",
+      `  border-radius: 999px; cursor: pointer; box-shadow: ${CHROME_SCALE.shadow2};`,
+      `  transition: transform ${CHROME_SCALE.fast} ${CHROME_SCALE.ease},`,
+      `    box-shadow ${CHROME_SCALE.fast} ${CHROME_SCALE.ease}; }`,
+      `.rb-action-move { background: ${CHROME_SCALE.brand}; }`,
+      `.rb-action-delete { background: ${CHROME_SCALE.danger}; }`,
       ".rb-action:disabled { background: #B9CDEA; cursor: not-allowed; }",
+      /*
+       * **A focus ring, which these eight buttons never had.** `globals.css` has drawn one for the
+       * application's own side since sprint 15 and the pills inside the frame got theirs the same
+       * day; the verbs were simply missed, so a keyboard got whatever Chromium draws by default on
+       * a blue disc — which is a faint ring on a dark ground. Ink rather than the brand blue,
+       * because the ring has to be seen *against* the brand blue on seven of the eight.
+       *
+       * The growth comes with it: a keyboard has no pointer to lead with, and the emphasis a
+       * pointer gets at rest is the same emphasis a keyboard has to get on arrival.
+       */
+      `.rb-action:focus-visible { outline: 2px solid ${CHROME_SCALE.ink}; outline-offset: 1px;`,
+      `  transform: scale(${VERB_SCALE.grow}); }`,
+      /*
+       * The word.
+       *
+       * **`visibility: hidden` under the opacity, and the pair of them is the whole of a defect CI
+       * found.** Hidden by opacity alone the word still counts as the section's rendered text:
+       * `innerText` of a cover came back with «Subir Bajar Aspecto A mano Duplicar Campos Borrar»
+       * glued in front of the business name, which is how the buffered-frame walk went red — and
+       * the same would be true of a reader's own Ctrl+F, which would find «Duplicar» inside their
+       * restaurant. Measured in Chromium on 14 October 2026: `opacity: 0` is collected by
+       * `innerText`, `visibility: hidden` is not.
+       *
+       * The delay is what keeps the fade: shown, visibility flips at once and the opacity carries
+       * the travel; hidden, visibility waits for the fade to finish before it takes the word out
+       * of the page. `pointer-events: none` so it can never eat a click meant for what it covers,
+       * and `aria-hidden` on the element itself, in `action()`.
+       */
+      `.rb-tip { position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%);`,
+      `  padding: 3px 8px; font: 600 12px/1.2 ${UI_FONT}; color: #FFFFFF;`,
+      `  background: ${CHROME_SCALE.ink}; border-radius: ${CHROME_SCALE.radiusSm};`,
+      "  white-space: nowrap; pointer-events: none; opacity: 0; visibility: hidden;",
+      `  transition: opacity ${CHROME_SCALE.fast} ${CHROME_SCALE.ease},`,
+      `    visibility 0s linear ${CHROME_SCALE.fast}; }`,
+      ".rb-action:focus-visible + .rb-tip { opacity: 1; visibility: visible;",
+      "  transition-delay: 0s; }",
+      /*
+       * **Emphasis inside `@media (hover: hover)`, the rule direction set for the pills.** A touch
+       * screen reports a permanent false hover on some engines and never hovers on others, so it
+       * is given the resting state always — which is why the resting state had to be the readable
+       * one first. The keyboard's half is outside the query, above.
+       */
+      `@media (hover: hover) { .rb-action:hover:not(:disabled) {`,
+      `  transform: scale(${VERB_SCALE.grow}); box-shadow: ${CHROME_SCALE.shadow3}; }`,
+      "  .rb-verb:hover .rb-tip { opacity: 1; visibility: visible; transition-delay: 0s; } }",
       // The hole a delete leaves, drawn as mockup 11 draws it — `2px dashed`, its own margin, the
       // name above and what happens next below. `UI_FONT` because it is the editor talking, not the
       // site: every other `rb-` node in this frame does the same.
@@ -4406,6 +4541,10 @@ export function Editor({
       // keeps on the other side of the boundary.
       "@media (prefers-reduced-motion: reduce) {",
       "  .rb-pill { transition-duration: 0.01ms; }",
+      "  .rb-action { transition-duration: 0.01ms; }",
+      // The delay goes with the duration: it is what holds the word in the page while it fades,
+      // and there is no fade left to wait for.
+      "  .rb-tip { transition-duration: 0.01ms; transition-delay: 0s; }",
       "  .rb-handmade-in { animation-duration: 0.01ms; } }",
       ".rb-menu { position: absolute; top: 60px; left: 50%; transform: translateX(-50%);",
       "  z-index: 20; width: 340px; max-width: calc(100% - 80px); box-sizing: border-box;",
@@ -4443,7 +4582,8 @@ export function Editor({
       // The composition menu: the insertion menu's card, anchored under the action cluster
       // instead of centred in a gap, because this one belongs to a section rather than to a
       // space between two. Narrower, since every choice is a short name with no description.
-      `.rb-compositions { font-family: ${UI_FONT}; position: absolute; top: 40px; right: 8px;`,
+      `.rb-compositions { font-family: ${UI_FONT}; position: absolute;`,
+      `  top: ${VERB_SCALE.inset + VERB_SCALE.size + VERB_SCALE.gap}px; right: ${VERB_SCALE.inset}px;`,
       "  z-index: 20; width: 240px; max-width: calc(100% - 16px); box-sizing: border-box;",
       "  padding: 12px; text-align: left; background: #FFFFFF; border: 1px solid #E5E9F0;",
       "  border-radius: 13px; box-shadow: 0 14px 38px rgba(15,23,42,0.18); display: flex;",
