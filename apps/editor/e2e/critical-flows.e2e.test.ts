@@ -12587,3 +12587,111 @@ describe("sprint 20 día 3 — la barra flotante se mueve, y recuerda el desplaz
     }
   }, 180_000);
 });
+
+/**
+ * Sprint 20 día 4 — la marca se sirve en vector.
+ *
+ * El lockup pesaba 137 KB de PNG para dibujarse a 190 o 232 píxeles de ancho, cuatro o cinco veces
+ * más píxeles que la caja donde se pinta, y la landing lo pedía `eager` en la página que menos
+ * paciencia tiene. Desde hoy se sirven los SVG que `pnpm brand:vector` trazó de esos mismos PNG: 21
+ * KB por el cable en vez de 137, y dibujados de formas en vez de de píxeles.
+ *
+ * **El favicon sigue siendo PNG, y eso es decisión y no olvido:** Safari no dibuja un favicon SVG, y
+ * 32 píxeles no es un tamaño donde un vector gane nada.
+ */
+describe("sprint 20 día 4 — la marca se sirve en vector", () => {
+  it("la landing, la cabecera del cuestionario y la barra del editor dibujan los SVG a su tamaño, y el icono de la pestaña sigue siendo PNG", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const walker = await context.newPage();
+    try {
+      // Lo que el servidor entrega, antes de mirar quién lo pide.
+      const lockup = await walker.request.get(`${BASE_URL}/brand/retorika-lockup.svg`);
+      expect(lockup.status()).toBe(200);
+      expect(lockup.headers()["content-type"]).toContain("image/svg+xml");
+      const mark = await walker.request.get(`${BASE_URL}/brand/retorika-mark.svg`);
+      expect(mark.status()).toBe(200);
+      expect(mark.headers()["content-type"]).toContain("image/svg+xml");
+      // Y los PNG que se servían ya no están, que es la otra mitad de «se sirve en vector».
+      expect((await walker.request.get(`${BASE_URL}/brand/retorika-lockup.png`)).status()).toBe(
+        404,
+      );
+      expect((await walker.request.get(`${BASE_URL}/brand/retorika-mark.png`)).status()).toBe(404);
+
+      /**
+       * **La landing**, que es donde más pesaba. Se pregunta por `complete` y por el tamaño
+       * natural, no solo por el atributo `src`: un fichero que no existe deja un `<img>` roto con
+       * exactamente la caja que su `width` y su `height` reservan, así que medir la caja no
+       * distinguiría una marca servida de una ausente.
+       */
+      await walker.goto(BASE_URL, { waitUntil: "networkidle" });
+      const landing = await walker
+        .locator('img[src="/brand/retorika-lockup.svg"]')
+        .evaluate((el) => {
+          const img = el as HTMLImageElement;
+          return {
+            complete: img.complete,
+            natural: img.naturalWidth,
+            drawn: Math.round(img.getBoundingClientRect().width),
+            priority: img.getAttribute("fetchpriority"),
+          };
+        });
+      expect(landing.complete, "el lockup de la landing no llegó a cargarse").toBe(true);
+      expect(landing.natural, "el lockup no trae su tamaño natural").toBe(898);
+      expect(landing.drawn).toBe(232);
+      expect(landing.priority, "la primera imagen de la landing no se pide con prioridad").toBe(
+        "high",
+      );
+
+      // **La cabecera del cuestionario**, el mismo fichero a otro tamaño.
+      await walker.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+      const header = await walker
+        .locator('img[src="/brand/retorika-lockup.svg"]')
+        .evaluate((el) => {
+          const img = el as HTMLImageElement;
+          return { complete: img.complete, drawn: Math.round(img.getBoundingClientRect().width) };
+        });
+      expect(header.complete).toBe(true);
+      expect(header.drawn).toBe(190);
+
+      /**
+       * **El icono de la pestaña sigue siendo de píxeles.** Next lo sirve por convención desde
+       * `app/icon.png` y no hay marcado que buscar en el código, así que se lee del `<link>` que
+       * la propia página escribe y se pide: es la única forma de preguntarlo sin suponer la ruta.
+       */
+      const icon = await walker.locator('link[rel~="icon"]').first().getAttribute("href");
+      expect(icon, "la página no declara ningún icono").not.toBeNull();
+      const served = await walker.request.get(new URL(icon ?? "", BASE_URL).toString());
+      expect(served.status()).toBe(200);
+      expect(served.headers()["content-type"], "el favicon dejó de ser PNG").toContain("image/png");
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("la barra del editor dibuja la marca sola, en vector y a treinta", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const walker = await context.newPage();
+    try {
+      await intoTheCanvas(walker);
+      const bar = await walker.locator('img[src="/brand/retorika-mark.svg"]').evaluate((el) => {
+        const img = el as HTMLImageElement;
+        const box = img.getBoundingClientRect();
+        return {
+          complete: img.complete,
+          natural: img.naturalWidth,
+          width: Math.round(box.width),
+          height: Math.round(box.height),
+          alt: img.getAttribute("alt"),
+        };
+      });
+      expect(bar.complete, "la marca de la barra no llegó a cargarse").toBe(true);
+      expect(bar.natural).toBe(244);
+      expect(bar.width).toBe(30);
+      expect(bar.height).toBe(30);
+      // Decorativa: el nombre del negocio va al lado y dos nombres juntos es uno de más.
+      expect(bar.alt).toBe("");
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+});

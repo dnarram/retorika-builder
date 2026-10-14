@@ -81,18 +81,36 @@ delante o donde tiene que leerse pequeño.
 
 ## Lo generado, que no se edita a mano
 
-- `apps/editor/public/brand/retorika-lockup.png`
-- `apps/editor/public/brand/retorika-mark.png`
-- `apps/editor/src/app/icon.png` — el favicon. Next sirve `app/icon.png` por convención, sin que
-  haya que escribir ni una etiqueta.
-- `retorika-mark.svg` y `retorika-lockup.svg`, aquí mismo, y
-  `apps/editor/src/editor/buildingMarkPaths.ts` — los escribe `pnpm brand:vector`.
+| Fichero | Quién lo escribe |
+|---|---|
+| `retorika-mark.svg` y `retorika-lockup.svg`, aquí mismo | `pnpm brand:vector`, de los dos PNG entregados |
+| `apps/editor/src/editor/buildingMarkPaths.ts` | `pnpm brand:vector` |
+| `apps/editor/public/brand/*.svg` | `pnpm brand:assets`, que **copia** los de aquí |
+| `apps/editor/src/app/icon.png` | `pnpm brand:assets`, del PNG entregado, quitándole el fondo |
 
-## Lo que falta, por si alguna vez importa
+**Un escritor por directorio, y es la regla que evita la deriva que este fichero avisa.**
+`brand-vector.ts` sabe qué *es* el logotipo y no sabe dónde guarda sus ficheros la aplicación;
+`brand-assets.ts` sabe dónde los guarda y no sabe trazar. Dos scripts escribiendo `public/` serían
+dos opiniones sobre el mismo logotipo.
 
-Los servidos van **a su resolución nativa** y el lockup pesa 137 KB para dibujarse a unos 200px. No
-se redimensionan porque no hay librería de imagen en el repositorio y `sips` solo existe en macOS,
-así que un script que la usara se rompería en CI. Desde el 13 de octubre de 2026 la salida limpia es
-otra: servir `retorika-lockup.svg` (44 KB) y `retorika-mark.svg` (18 KB) donde hoy van los PNG, que
-además escalan a cualquier densidad de pantalla. No se ha hecho todavía; cambia la cabecera, la
-landing y el favicon, y es una decisión aparte de sacar los vectores.
+## Lo que se sirve es el vector, desde el 15 de octubre de 2026
+
+Las tres colocaciones de la interfaz piden `.svg`: la landing (232 px de ancho), la cabecera de
+`Brand()` (190) y la barra del editor (la marca sola, a 30). **El lockup pasa de 137 KB a 44, que son
+21 por el cable**, y la marca de 41 a 18, que son 9. Se dibujan de formas, así que además son nítidos
+en cualquier densidad de pantalla; antes se enviaban cuatro o cinco veces más píxeles de los que la
+caja pinta.
+
+**El favicon sigue siendo PNG, y es decisión y no olvido:** Safari no dibuja un favicon SVG, y a 32
+píxeles no hay nada que un vector gane. Es lo único de este logotipo que la aplicación sirve en
+píxeles, y por eso `brand-assets.ts` conserva el recorte del fondo blanco.
+
+**Se sirven por `<img src>` y no en línea.** Un SVG cargado así es un documento cerrado que no pide
+nada —ni imágenes, ni hojas de estilo, ni letras—, lo cual importa aquí porque el color de la «R»
+viaja dentro como un `data:` URI; y además sus `clipPath` no entran en el DOM de la página, donde sus
+identificadores podrían chocar con los de cualquier otro. `apps/editor/test/brandAssets.test.ts` es
+lo que mantiene de acuerdo lo que se pide con lo que se sirve.
+
+El tamaño lo reserva el `<img>` con su `width` y su `height`, y los SVG traen los suyos: sin ellos un
+navegador dibujaría 300×150 hasta que el fichero llegara, y cualquier maqueta que solo dé un ancho se
+recolocaría al aterrizar.

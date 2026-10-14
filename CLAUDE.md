@@ -74,7 +74,8 @@ sounding like it predates something, check it against Part 2 rather than against
 | `pnpm e2e` | The critical flows against the real running app (`RETORIKA_E2E=1`, gated for the same reason) |
 | `pnpm lighthouse` | Protocol Part 8.5: Lighthouse performance and accessibility ≥ 95 over a generated sample site served from memory, three compositions, mobile preset (`RETORIKA_LIGHTHOUSE=1`, gated for the same reason). Prints the four scores per composition and what fell short of full marks |
 | `pnpm test:db` | The database's row-level security policies and the deletion sweep, against a real Postgres (`RETORIKA_DB=1`, gated for the same reason as `e2e` — and **no Docker**, which protocol Part 18 forbids on this machine) |
-| `pnpm brand:assets` | Rebuilds the served logo files from the originals in `docs/design/brand/`. The delivered PNGs have an opaque white background; this is what removes it |
+| `pnpm brand:assets` | Copies the traced vectors into `apps/editor/public/brand/` and writes the favicon from the delivered PNG, whose opaque white background it removes. The only writer of `public/` |
+| `pnpm brand:vector` | Traces the two delivered PNGs in `docs/design/brand/` into the SVGs beside them and into the building screen's animated mark, and measures both against the pixels in Chromium |
 | `pnpm accounts:purge` | Ends the accounts whose 30-day window has run out. **Deletes nothing without `--confirm`**, needs only `DATABASE_URL`, and nothing schedules it — see `docs/runbook.md` §6 |
 | `pnpm secrets:scope` | Protocol Part 15: walks `apps/editor`'s import graph and fails if a `"use client"` module can reach the database service key. In Next a module becomes client code by being imported from one, possibly four files away and silently |
 | `pnpm --filter @retorika/editor dev` | The editor's own dev server. No bare `pnpm dev` at the root — the editor is the only app that has one |

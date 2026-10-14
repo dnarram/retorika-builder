@@ -50,13 +50,21 @@ export default function Page() {
       >
         {/* The lockup, because this is the one page whose whole job is to say who this is — and
             it had no logo at all until the official one arrived. `eager`, since it is the first
-            thing above the fold on a page that already has a cold start to apologise for. */}
+            thing above the fold on a page that already has a cold start to apologise for, and
+            `fetchPriority` for the same reason: it is the thing this page is for.
+
+            **The vector since 15 October 2026.** The PNG was 137 KB to be drawn 232 across — four
+            times the pixels of the box — on the page with the least patience to spare. The SVG is
+            21 KB on the wire and is drawn from shapes, so it is also the first logo here that is
+            sharp on a dense screen. `width` and `height` stay: they are what reserves the space
+            before it loads, which is the whole of what the overflow walk measures. */}
         <img
-          src="/brand/retorika-lockup.png"
+          src="/brand/retorika-lockup.svg"
           alt={es["brand.name"]}
           width={232}
           height={66}
           loading="eager"
+          fetchPriority="high"
           style={{ display: "block", height: "auto", marginBottom: 4 }}
         />
         <h1
