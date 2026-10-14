@@ -577,42 +577,36 @@ open survives.
   probe since that day, so the next red says which document was wired when and where `select`
   ran. If it recurs, that is a row of its own.
 
-- **It recurred, and the probe said what it was asked to say (14 October 2026, CI on PR #240).**
-  «Insertar una sección deja el teclado en la que acaba de aparecer», `focus fell to the body`
-  again, on a change that touches nothing on this path — the section verbs' size and their words.
-  The account the walk has carried since the row above asked for it:
+- **~~It recurred, and the probe said what it was asked to say.~~ Found and fixed on 15 October
+  2026, after a third red (PR #242).** «Insertar una sección deja el teclado en la que acaba de
+  aparecer», `focus fell to the body`, on PR #226, #240 and #242 — every time on a change that
+  touches nothing on this path, and never once on a developer's machine.
 
-  ```
-  2006.8ms buffer  {"live":0,"liveKey":"false|000000","pendingKey":"false|0000000"}
-  2022.4ms wire    {"serial":3,"via":"promote","readyState":"complete","sections":7,"live":false,"buffered":1}
-  2023.8ms select  {"sectionId":"sec-cover-2","via":"return","serial":3,"readyState":"complete"}
-  2029.7ms promote {"serial":3,"arriving":"false|0000000"}
-  2034.1ms wire    {"serial":4,"via":"onload","readyState":"complete","sections":7,"live":true,"buffered":1}
-  2035.2ms select  {"sectionId":"sec-cover-2","via":"restore","serial":4,"readyState":"complete"}
-  ```
+  **Reproduced by throttling the CPU twenty-fold** and running the insertion in a loop: seven losses
+  in ninety-two attempts. With the editor's own account switched on, the mechanism turned out to be
+  three wrong questions in the swap, each hiding the next:
 
-  **Read in order, it names a mechanism rather than a suspicion.** The document with the new
-  section was wired at serial 3 **while it was still the buffered frame** (`live: false,
-  buffered: 1`), and the `select` that carries the keyboard back — `via: "return"`, the one that
-  puts focus on the section that appeared — ran **in that frame, six milliseconds before the
-  promote**. The promote then made it the live frame, and a focus placed in a document that is
-  being swapped in does not survive the swap: the browser leaves the keyboard on the body. Eleven
-  milliseconds later the same document is wired again (`serial: 4`, `via: "onload"`, now `live`)
-  and `select` runs a second time as `via: "restore"` — which is why the end state the walk
-  reports is self-consistent and still wrong: `selected` and `actionsIn` are both `sec-cover-2`,
-  the cluster is drawn on the right section, and nothing holds the keyboard. **Restoring the
-  selection is not restoring the keyboard**, and only the `return` path ever had the focus.
+  1. `promote` runs from a closure that can be a render behind, so `buffer.pendingKey` still reads
+     as pending after the commit and it runs **twice** for one arriving document. `wireOnce` made
+     the wiring idempotent; `refocusAfterSwap.current = …` was not, and the second pass re-read the
+     question and **turned the request off**. Every losing account had two `promote` records where
+     every winning one had a single. It is a latch now: asked, never withdrawn.
+  2. The question itself was «was the keyboard in the **live** frame», and by the time a swap
+     commits the keyboard is in the **arriving** one — `wireOnce(frame, "promote")` wires the
+     buffered document first and `placeAfterRebuild` puts the focus there. That frame is off screen
+     and never takes the browser's real focus, so the parent reports its own body and the honest
+     answer to the old question was «no». An unspent `focusTarget` is the form of the question that
+     fires.
+  3. The effect that puts the keyboard back then **took it away again**: its last resort,
+     `frame.focus()`, was skipped only when the intent had been *spent*, and `takeCanvasFocus`
+     declines to spend it while a swap is in flight — which is exactly when this runs. What matters
+     is where the keyboard is, not whether a ref has been tidied.
 
-  So the race is not «did the press land» (it did, the section exists) but «which frame was live
-  when the return ran». It is intermittent because on a quiet machine the wiring that follows the
-  promote wins; here the promote arrived between the wiring and the focus.
+  Forty throttled insertions passed with all three corrected, after seven losses in ninety-two
+  before. The walk runs its insertion throttled now — about one in thirteen on the broken code, so a
+  regression is found in days instead of weeks — and `record("swap", …)` and `record("focus", …)`
+  say, in the next red, whether the swap was asked and whether the focus landed.
 
-  **Not fixed, and why not here:** PR #240 is the day the verbs grew, the fix belongs to the
-  buffered-swap focus path, and it needs a walk of its own that forces the order rather than
-  waiting for a loaded runner to produce it. Named as the candidate: either the `return` select
-  defers until the frame it is acting on is the live one, or the `restore` that follows a promote
-  carries the pending return instead of dropping it. Whichever is chosen, the walk has to be able
-  to make it fail first.
 
   **And a third shape, 13 October 2026, CI on PR #227 (sprint 19 day 1, a change that touches
   nothing on the path):** «sprint 17 día 7 — el recorrido entero sin tocar el ratón» reached

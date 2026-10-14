@@ -1907,3 +1907,34 @@ través de» la barra se quedaba treinta segundos esperando a un elemento que ya
 foco salía de los textos; ahora pregunta a través del `body` y dice a las cuántas tabulaciones se
 cerró.
 
+### El teclado tras insertar una sección, que se perdía desde el sprint 17 (15 de octubre de 2026)
+
+Aparte de los días del sprint, porque es un aviso que bloquea y va en su propia rama: «insertar una
+sección deja el teclado en la que acaba de aparecer» se puso roja en CI por tercera vez —PR #226,
+#240 y #242—, siempre sobre cambios que no tocan ese camino y nunca en una máquina de desarrollo.
+
+**Se reprodujo frenando la CPU veinte veces** y repitiendo la inserción: siete pérdidas en noventa y
+dos intentos. Con la cuenta del propio editor encendida, lo que parecía una carrera resultó ser
+**tres preguntas mal hechas en el relevo de marcos**, cada una tapando a la siguiente — la segunda
+solo se vio al arreglar la primera, y la tercera al arreglar la segunda. El relato completo, con los
+números, está en `docs/tasks/backlog.md`; lo que importa para el registro del diseño es la forma de
+las tres:
+
+1. **Lo que se pide no se retira.** `promote` corre desde un cierre que puede ir un render por
+   detrás, así que se ejecuta dos veces para un mismo documento entrante; la segunda vez volvía a
+   preguntar y apagaba la petición de devolver el teclado. Ahora es un pestillo.
+2. **La pregunta era la equivocada.** «¿Estaba el teclado en el marco vivo?» — y cuando un relevo se
+   confirma, el teclado está en el **que entra**, que además está fuera de pantalla y nunca recibe el
+   foco de verdad del navegador. La forma honesta de la pregunta es si queda una intención sin
+   gastar.
+3. **Y lo que se devolvía se volvía a quitar.** El último recurso del efecto, `frame.focus()`, solo
+   se saltaba si la intención ya se había *gastado*, y `takeCanvasFocus` se niega a gastarla mientras
+   hay un relevo en vuelo, que es justo cuando ese efecto corre. Lo que importa es dónde está el
+   teclado, no si una referencia quedó ordenada.
+
+**La caminata que lo encontraba una vez al mes ahora corre su inserción con la CPU frenada**, donde
+el código roto fallaba una de cada trece veces. Es una guarda probabilística y se dice así; lo que
+cambia es que una regresión aquí se ve en días y no en semanas. Y el editor graba dos cosas más en su
+sonda —si el relevo llegó a pedir el teclado, y si el foco aterrizó—, que son exactamente las dos
+preguntas que costaron un día entero de no poder responder.
+

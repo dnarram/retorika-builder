@@ -10341,9 +10341,19 @@ describe("sprint 17 día 6 — «+ Añadir sección aquí» abre con el cursor e
   }, 180_000);
 
   it("insertar una sección deja el teclado en la que acaba de aparecer", async () => {
-    // Probed since 13 October 2026: CI lost the keyboard here once («focus fell to the body»)
-    // on the sprint 18 closing PR, after passing every full run of the two days before. No
-    // mechanism is claimed; the editor's own account goes into the next red, as on day 5.
+    /**
+     * Probed since 13 October 2026, and **throttled since the 15th**, which is what turned it from
+     * a monthly surprise into something a run can be expected to catch.
+     *
+     * It lost the keyboard on CI three times — PR #226, #240 and #242 — each on a change that
+     * touches nothing on this path, and never once on a developer's machine. The mechanism, found
+     * on 14 October by running this insertion forty times with the CPU throttled twenty-fold, is
+     * three questions the swap was asking wrongly; `promote` in `Editor.tsx` carries the account.
+     * Measured on the broken code with this same throttle: **seven losses in ninety-two
+     * insertions**, about one in thirteen, where unthrottled CI had found it three times in a
+     * month. It is a probabilistic guard and says so — but a regression here now shows up in days
+     * instead of weeks, and the cost is a couple of seconds in one walk.
+     */
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     await probeOn(context);
     const page = await context.newPage();
@@ -10351,6 +10361,8 @@ describe("sprint 17 día 6 — «+ Añadir sección aquí» abre con el cursor e
       await intoTheCanvas(page);
       const frame = page.frameLocator(PREVIEW).first();
       const before = await order(page);
+      const throttle = await context.newCDPSession(page);
+      await throttle.send("Emulation.setCPUThrottlingRate", { rate: 20 });
 
       /*
        * The same «after the change» rule day 4 built, reaching the last verb that produces a
@@ -10365,6 +10377,7 @@ describe("sprint 17 día 6 — «+ Añadir sección aquí» abre con el cursor e
       await offer.click();
 
       await expect.poll(async () => (await order(page)).length).toBe(before.length + 1);
+      await throttle.send("Emulation.setCPUThrottlingRate", { rate: 1 });
       const atPress = await canvasSnapshot(page, "sec-cover");
       await withProbeOnFailure(page, "sec-cover", atPress, async () => {
         await expect

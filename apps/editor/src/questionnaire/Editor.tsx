@@ -955,10 +955,15 @@ export function Editor({
    */
   function takeCanvasFocus(doc: Document | null | undefined) {
     const want = focusTarget.current;
-    if (!want || !doc) return;
+    if (!want) return;
+    if (!doc) {
+      record("focus", { want: want.sectionId, why: "no-doc" });
+      return;
+    }
     const section = doc.querySelector<HTMLElement>(`[data-section="${want.sectionId}"]`);
     if (!section) {
       // The section is not in this document at all, so there is nothing to wait for either.
+      record("focus", { want: want.sectionId, why: "no-section", serial: serialOf(doc) });
       focusTarget.current = null;
       return;
     }
@@ -984,6 +989,15 @@ export function Editor({
     const settled =
       doc === liveFrame()?.contentDocument &&
       document.querySelectorAll("iframe[data-buffered]").length === 0;
+    record("focus", {
+      want: want.sectionId,
+      within: want.within ?? null,
+      serial: serialOf(doc),
+      onLive: doc === liveFrame()?.contentDocument,
+      buffered: document.querySelectorAll("iframe[data-buffered]").length,
+      landed: doc.activeElement === target,
+      settled,
+    });
     if (settled && doc.activeElement === target) focusTarget.current = null;
   }
   const compositionMenuOpen = useRef(false);
@@ -1448,6 +1462,13 @@ export function Editor({
    */
   // biome-ignore lint/correctness/useExhaustiveDependencies: see the note above this line
   useEffect(() => {
+    record("swap", {
+      live: buffer.live,
+      asked: refocusAfterSwap.current,
+      want: focusTarget.current?.sectionId ?? null,
+      serial: serialOf(liveFrame()?.contentDocument),
+      buffered: document.querySelectorAll("iframe[data-buffered]").length,
+    });
     if (!refocusAfterSwap.current) return;
     refocusAfterSwap.current = false;
     /*
@@ -1471,12 +1492,23 @@ export function Editor({
      */
     const frame = liveFrame();
     takeCanvasFocus(frame?.contentDocument);
-    if (focusTarget.current === null && frame?.contentDocument?.activeElement !== null) {
-      // Something inside the new document has focus — either the line above put it there, or the
-      // restore already succeeded while wiring. Either way the frame does not need it.
-      const inner = frame?.contentDocument?.activeElement as HTMLElement | null;
-      if (inner && inner !== frame?.contentDocument?.body) return;
-    }
+    /*
+     * **Something inside the new document has focus, so the frame does not need it** — either the
+     * line above put it there, or the restore already succeeded while wiring.
+     *
+     * This used to ask that *and* that the intent had been spent (`focusTarget.current === null`),
+     * and the second half is what made the line take back what the first half had just given.
+     * `takeCanvasFocus` only spends the intent once no swap is in flight, and at this exact moment
+     * one still is — the buffered frame is removed in the commit this effect is running inside of.
+     * So on a slow machine the sequence read: place the keyboard on the section, decline to spend
+     * the intent because a frame is still buffered, fall through, and `frame.focus()` moved it to
+     * the body. Measured with the CPU throttled twenty-fold; it is the last of the three reasons
+     * «insertar una sección deja el teclado en la que acaba de aparecer» went red on CI.
+     *
+     * What matters is where the keyboard is, not whether a ref has been tidied up.
+     */
+    const inner = frame?.contentDocument?.activeElement as HTMLElement | null;
+    if (inner && inner !== frame?.contentDocument?.body) return;
     frame?.focus();
   }, [buffer.live]);
 
@@ -4708,9 +4740,46 @@ export function Editor({
     record("promote", { serial: serialOf(frame.contentDocument), arriving });
     syncHole(frame.contentDocument);
     syncGrid(frame.contentDocument, designOn ? designSectionId : null, placingElementId);
-    // Read before the commit, because afterwards the frame it is asking about is gone. An
-    // `<iframe>` is the parent document's `activeElement` whenever focus is anywhere inside it.
-    refocusAfterSwap.current = document.activeElement === liveFrame();
+    /*
+     * Read before the commit, because afterwards the frame it is asking about is gone. An
+     * `<iframe>` is the parent document's `activeElement` whenever focus is anywhere inside it.
+     *
+     * **Asked, never withdrawn — and that one word is a defect that reddened CI three times.**
+     * This function runs from a closure that can be a render behind, so `buffer.pendingKey` can
+     * still read as pending after the commit and `promote` runs a second time for the same
+     * arriving document. `wireOnce` makes the wiring idempotent; this line was not. The second
+     * pass re-read `document.activeElement`, found it was no longer the frame that had just been
+     * swapped away, and **turned the request off** — so the effect that puts the keyboard back
+     * returned at its first line and the focus stayed on the body.
+     *
+     * Measured on 14 October 2026 with the CPU throttled twenty-fold: the losing runs have two
+     * `promote` records for one arriving key where the winning ones have one. So the request is a
+     * latch — once anything in this swap has asked for the keyboard back, a later look cannot take
+     * the asking away — and the effect is what clears it, when it acts.
+     *
+     * **And it asks about both frames, which is the other half of the same defect.** The question
+     * «was the keyboard in the canvas» was being asked as «was it in the *live* frame», and by the
+     * time a swap commits the keyboard is usually in the **arriving** one: `wireOnce(frame,
+     * "promote")` wires the buffered document a few milliseconds earlier, and the focus that
+     * `placeAfterRebuild` puts back lands there. So on the runs where the latch had nothing to
+     * latch, the honest answer to the old question was «no» and the keyboard was dropped on purpose.
+     *
+     * «insertar una sección deja el teclado en la que acaba de aparecer» had failed this way on
+     * PR #226, #240 and #242, each time on a change that touches nothing on this path.
+     */
+    const keyboardWasInTheCanvas =
+      document.activeElement === liveFrame() || document.activeElement === frame;
+    /*
+     * **And «there is still an intent» counts as «the keyboard was here», which is the condition
+     * that actually fires.** `document.activeElement` is the parent's, and the focus that
+     * `placeAfterRebuild` puts back a few milliseconds earlier lands inside the **buffered**
+     * document — a frame that is off screen and never takes the browser's real focus, so the
+     * parent still reports its own body. Asking only about the frames answered «the keyboard was
+     * not in the canvas» on exactly the runs where it was about to be, and the swap dropped it on
+     * purpose. An unspent `focusTarget` is the honest form of the same question.
+     */
+    refocusAfterSwap.current =
+      refocusAfterSwap.current || keyboardWasInTheCanvas || focusTarget.current !== null;
     everSwapped.current = true;
     setBuffer({ live: pendingSlot, liveKey: arriving, pendingKey: null });
   }
