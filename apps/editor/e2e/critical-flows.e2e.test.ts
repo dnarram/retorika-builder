@@ -14,6 +14,7 @@ import {
 } from "@playwright/test";
 import { GALLERY_SAMPLE_COUNT } from "@retorika/generator";
 import { afterAll, beforeAll, describe, it } from "vitest";
+import { BAR_INSET, BAR_STEP } from "../src/editor/barPosition.ts";
 import { VERB_SCALE } from "../src/editor/chromeScale.ts";
 import { NARROWEST_WIDTH } from "../src/editor/overflowCheck.ts";
 import { BASE_URL, QUESTIONNAIRE_URL, startEditorServer, stopEditorServer } from "./server.ts"; /**
@@ -325,7 +326,14 @@ async function replacingTheDocument(page: Page, act: () => Promise<void>): Promi
         const doc = document.querySelector<HTMLIFrameElement>(
           "iframe:not([data-buffered])",
         )?.contentDocument;
-        if (!doc || doc.documentElement.dataset["outgoing"] === "1") return "outgoing";
+        // **`documentElement` can be null while `contentDocument` is not**, which is a frame
+        // caught between «replaced» and «parsed». `backlog.md` has counted this crash three times
+        // under «a `dataset` of `null` in `replacingTheDocument`»; asking for the element rather
+        // than assuming it is there turns a crash into one more turn of the poll, which is what
+        // the poll is for.
+        if (!doc?.documentElement || doc.documentElement.dataset["outgoing"] === "1") {
+          return "outgoing";
+        }
         return doc.querySelectorAll("[data-section]").length > 0 ? "arrived" : "parsing";
       }),
     )
@@ -12077,6 +12085,293 @@ describe("sprint 20 día 1 — los verbos crecen y dicen su nombre", () => {
       expect(at.word).toBe("Borrar");
       await expect.poll(() => verb(walker, "delete").then((v) => v.transform)).toBe(GROWN);
       await expect.poll(() => verb(walker, "delete").then((v) => v.wordOpacity)).toBe("1");
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+});
+
+/**
+ * Sprint 20 día 2 — el grupo de verbos se mueve, con un asa.
+ *
+ * «Que la barra flotante del editor sea arrastrable para moverla de posición cuando la posición
+ * actual oculta elementos visuales que el usuario quiere editar» (David, 14 de octubre de 2026). El
+ * día 1 ya encontró el caso en una medida: a 320 px el grupo y la chapa «Foto de ejemplo» se
+ * solapan 74 px. Esto es lo que lo resuelve sin tener que decidir por nadie quién gana la esquina.
+ *
+ * La regla de este repositorio es que un arrastre trae su equivalente de teclado el mismo sprint,
+ * así que el asidero es un botón: con el ratón se arrastra, con Intro va a la esquina siguiente,
+ * con las flechas se mueve a pasos y con Inicio vuelve. Los números —el paso, el margen— los lee el
+ * recorrido de `barPosition.ts`, nunca de una copia escrita aquí.
+ */
+describe("sprint 20 día 2 — el grupo de verbos se mueve, con un asa", () => {
+  const VIEWPORT = { width: 1440, height: 900 };
+
+  /** El grupo, su sección y dónde está puesto, leído dentro del marco de una vez. */
+  function placed(page: Page, sectionId = "sec-services") {
+    return page
+      .frameLocator(PREVIEW)
+      .first()
+      .locator(`[data-section="${sectionId}"]`)
+      .evaluate((section) => {
+        const bar = section.querySelector<HTMLElement>(".rb-actions");
+        if (!bar) return null;
+        return {
+          left: Math.round(bar.offsetLeft),
+          top: Math.round(bar.offsetTop),
+          styleLeft: bar.style.left,
+          low: bar.classList.contains("rb-actions-low"),
+          hostWidth: section.clientWidth,
+          hostHeight: section.clientHeight,
+          barWidth: bar.offsetWidth,
+          barHeight: bar.offsetHeight,
+          selection: section.ownerDocument.getSelection()?.toString() ?? "",
+        };
+      });
+  }
+
+  /** Tab hacia atrás hasta un verbo, que es como se vuelve al grupo desde el asa. */
+  async function backToVerb(page: Page, verb: string): Promise<void> {
+    for (let press = 0; press < 14; press += 1) {
+      if ((await focus(page)).action === verb) return;
+      await page.keyboard.press("Shift+Tab");
+    }
+    expect(await focus(page), `Shift+Tab nunca volvió a «${verb}»`).toMatchObject({ action: verb });
+  }
+
+  it("el asa es la última parada, Intro la lleva a la siguiente esquina, las flechas la mueven a pasos, y la posición es de esta sección y sobrevive a un verbo", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const walker = await context.newPage();
+    try {
+      await intoTheCanvas(walker);
+      const frame = walker.frameLocator(PREVIEW).first();
+      await keyboardTo(walker, "sec-services");
+      await walker.keyboard.press("Enter");
+      await expect(frame.locator(".rb-actions")).toHaveCount(1);
+
+      // **El asa va la última**, que es lo que deja intactos todos los recuentos de Tab del
+      // repositorio: se llega a ella con el mismo ayudante que a cualquier verbo.
+      await tabToVerb(walker, "grip");
+      const at = await focus(walker);
+      expect(at.tag, "el asidero no es un botón").toBe("BUTTON");
+      expect(at.action).toBe("grip");
+
+      const start = await placed(walker);
+      expect(start, "no hay grupo que medir").not.toBeNull();
+      expect(start?.styleLeft, "el grupo nace movido en vez de en su esquina").toBe("");
+
+      // Intro: la esquina siguiente. Nace arriba a la derecha, así que la siguiente es abajo a la
+      // derecha — las dos coordenadas salidas de la medida, no de una constante copiada.
+      await walker.keyboard.press("Enter");
+      const corner = {
+        left: (start?.hostWidth ?? 0) - (start?.barWidth ?? 0) - BAR_INSET,
+        top: (start?.hostHeight ?? 0) - (start?.barHeight ?? 0) - BAR_INSET,
+      };
+      await expect.poll(() => placed(walker).then((p) => p?.top)).toBe(corner.top);
+      expect((await placed(walker))?.left).toBe(corner.left);
+      // Y abajo del todo la palabra ya no cabe debajo: se pone encima.
+      expect((await placed(walker))?.low, "la palabra sigue debajo con la barra abajo").toBe(true);
+
+      // Las flechas, a pasos de `BAR_STEP`.
+      for (let press = 0; press < 3; press += 1) await walker.keyboard.press("ArrowLeft");
+      await expect.poll(() => placed(walker).then((p) => p?.left)).toBe(corner.left - 3 * BAR_STEP);
+
+      // Y se para en el borde en vez de salirse.
+      for (let press = 0; press < 10; press += 1) await walker.keyboard.press("ArrowDown");
+      expect((await placed(walker))?.top).toBe(corner.top);
+
+      // Inicio: a su esquina, y olvidado — lo dice el `style` vacío, no solo la coordenada.
+      await walker.keyboard.press("Home");
+      await expect.poll(() => placed(walker).then((p) => p?.styleLeft)).toBe("");
+      expect((await placed(walker))?.top).toBe(BAR_INSET);
+
+      // Movido otra vez, para preguntar lo que de verdad importa: si sobrevive.
+      for (let press = 0; press < 2; press += 1) await walker.keyboard.press("ArrowLeft");
+      const moved = await placed(walker);
+      expect(moved?.left).toBe((start?.left ?? 0) - 2 * BAR_STEP);
+
+      /**
+       * **Sobrevive a un verbo**, que es la pregunta de verdad: cada edición tira el marco entero y
+       * lo vuelve a construir, así que una posición que viviera en el elemento se perdería en la
+       * primera pulsación. Vive en el editor, por id de sección, y `select()` la vuelve a poner.
+       */
+      await backToVerb(walker, "move-down");
+      await replacingTheDocument(walker, async () => {
+        await walker.keyboard.press("Enter");
+      });
+      await expect.poll(() => placed(walker).then((p) => p?.left)).toBe(moved?.left);
+      await expect.poll(() => focusPlace(walker)).toBe("sec-services/move-down");
+      await expect(frame.locator(".rb-actions")).toHaveCount(1);
+
+      // **Y es de esta sección y no de todas.** Otra sección nace en su esquina; al volver, la
+      // primera sigue donde se dejó.
+      await frame.locator('[data-section="sec-cover"]').click();
+      await expect(frame.locator('[data-section="sec-cover"] .rb-actions')).toHaveCount(1);
+      expect((await placed(walker, "sec-cover"))?.styleLeft).toBe("");
+      await frame.locator('[data-section="sec-services"]').click();
+      await expect(frame.locator('[data-section="sec-services"] .rb-actions')).toHaveCount(1);
+      expect((await placed(walker))?.left).toBe(moved?.left);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("se arrastra con el ratón, se queda dentro de la sección, no roba la selección, y el menú de composiciones la sigue", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const walker = await context.newPage();
+    try {
+      await intoTheCanvas(walker);
+      const frame = walker.frameLocator(PREVIEW).first();
+      await frame.locator('[data-section="sec-services"]').click();
+      await expect(frame.locator(".rb-actions")).toHaveCount(1);
+      const before = await placed(walker);
+
+      const grab = async () => {
+        const box = await frame.locator('.rb-actions [data-action="grip"]').boundingBox();
+        expect(box, "el asa no tiene caja que agarrar").not.toBeNull();
+        return {
+          x: (box?.x ?? 0) + (box?.width ?? 0) / 2,
+          y: (box?.y ?? 0) + (box?.height ?? 0) / 2,
+        };
+      };
+
+      // Arrastrada 200 a la izquierda y 120 abajo: el grupo hace el mismo recorrido que la mano,
+      // no salta para ponerse bajo el puntero.
+      const from = await grab();
+      await walker.mouse.move(from.x, from.y);
+      await walker.mouse.down();
+      await walker.mouse.move(from.x - 200, from.y + 120, { steps: 8 });
+      await walker.mouse.up();
+      const after = await placed(walker);
+      expect(after?.left).toBe((before?.left ?? 0) - 200);
+      expect(after?.top).toBe((before?.top ?? 0) + 120);
+      // Y la selección que hubiera en la página es la misma: arrastrar no escribe ni selecciona.
+      expect(after?.selection).toBe(before?.selection);
+
+      // Muy lejos: se para dentro de la sección en vez de salirse de ella.
+      const again = await grab();
+      await walker.mouse.move(again.x, again.y);
+      await walker.mouse.down();
+      await walker.mouse.move(again.x - 4_000, again.y + 4_000, { steps: 6 });
+      await walker.mouse.up();
+      const clamped = await placed(walker);
+      expect(clamped?.left).toBe(BAR_INSET);
+      expect(clamped?.top).toBe((clamped?.hostHeight ?? 0) - (clamped?.barHeight ?? 0) - BAR_INSET);
+
+      /*
+       * Un clic sin recorrido no es un arrastre: es la esquina siguiente. Se pregunta por `top` y
+       * no por `left`, y eso lo enseñó esta misma caminata al fallar: viniendo de abajo a la
+       * izquierda, la siguiente es **arriba** a la izquierda, así que la esquina cambia y `left`
+       * sigue valiendo lo mismo. Medir la coordenada que no se mueve es no medir nada.
+       */
+      const press = await grab();
+      await walker.mouse.click(press.x, press.y);
+      await expect.poll(() => placed(walker).then((p) => p?.top)).toBe(BAR_INSET);
+      expect((await placed(walker))?.left).toBe(BAR_INSET);
+
+      /**
+       * **Y lo que el grupo abre va con él.** Un menú que se quedara en la esquina mientras su
+       * botón se ha ido al otro lado de la sección no pertenece a nada.
+       */
+      await frame.locator('.rb-action[aria-label="Cambiar cómo se ve esta sección"]').click();
+      await expect(frame.locator(".rb-compositions")).toHaveCount(1);
+      const anchored = await frame.locator('[data-section="sec-services"]').evaluate((section) => {
+        const bar = section.querySelector<HTMLElement>(".rb-actions");
+        const menu = section.querySelector<HTMLElement>(".rb-compositions");
+        if (!bar || !menu) return null;
+        const b = bar.getBoundingClientRect();
+        const m = menu.getBoundingClientRect();
+        const host = section.getBoundingClientRect();
+        return {
+          under: Math.round(m.top - b.bottom),
+          aligned: Math.round(m.right - b.right),
+          insideLeft: m.left >= host.left - 1,
+          insideRight: m.right <= host.right + 1,
+        };
+      });
+      expect(anchored, "no hay menú que medir").not.toBeNull();
+      /*
+       * Pegado al grupo y por debajo de él: entre cero y doce píxeles es «justo debajo» sin
+       * depender del número exacto. **Que cuelgue por debajo de la sección no se mide, y es
+       * deliberado:** este menú mide 230px dentro de una «Comidas» que mide 230, así que caber
+       * dentro de su sección nunca fue posible — y la hoja de estilos lleva desde el sprint 2
+       * dejándolo salir. La primera versión de esta caminata lo exigía dentro, y lo que consiguió
+       * fue que el menú se dibujara encima del botón que lo abre.
+       */
+      expect(
+        anchored?.under,
+        `el menú está a ${anchored?.under}px del grupo`,
+      ).toBeGreaterThanOrEqual(0);
+      expect(anchored?.under).toBeLessThanOrEqual(12);
+      expect(
+        Math.abs(anchored?.aligned ?? 99),
+        "el menú no se alinea con el grupo",
+      ).toBeLessThanOrEqual(2);
+      expect(anchored?.insideLeft, "el menú se sale por la izquierda").toBe(true);
+      expect(anchored?.insideRight, "el menú se sale por la derecha").toBe(true);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("bajo zoom el asa sigue al puntero, porque lo que se mide es el recorrido y no la posición", async () => {
+    // El lienzo se dibuja con `transform: scale(zoom)` cuando la ventana es estrecha, así que la
+    // posición de un puntero en pantalla y la misma posición dentro del marco son números
+    // distintos. El arrastre suma recorridos leídos los dos dentro del marco, con lo que la escala
+    // se cancela sola — esto es lo que lo comprueba en vez de darlo por supuesto.
+    const context = await browser.newContext({ viewport: { width: 1024, height: 820 } });
+    const walker = await context.newPage();
+    try {
+      await intoTheCanvas(walker);
+      const frame = walker.frameLocator(PREVIEW).first();
+      await walker.getByRole("button", { name: "Estilo", exact: true }).click();
+      await walker.waitForTimeout(500);
+      await expect(walker.getByRole("heading", { name: "El estilo de toda la web" })).toBeVisible();
+      // Subiendo por los antepasados hasta el que lleva la escala: no es el padre del marco, y la
+      // primera versión de esta caminata midió el padre, leyó 1 y se dio por buena sin haber
+      // probado nada de lo que dice su nombre.
+      const zoom = await walker.evaluate(() => {
+        let node = document.querySelector<HTMLElement>(
+          "iframe:not([data-buffered])",
+        )?.parentElement;
+        while (node) {
+          const found = /matrix\(([\d.]+)/.exec(getComputedStyle(node).transform);
+          if (found?.[1]) return Number(found[1]);
+          node = node.parentElement;
+        }
+        return 1;
+      });
+      console.log(`asa bajo zoom — el lienzo se dibuja a ${zoom}`);
+      expect(zoom, "el lienzo no está a escala: la caminata no probaría lo que dice").toBeLessThan(
+        1,
+      );
+
+      await frame.locator('[data-section="sec-services"]').click();
+      await expect(frame.locator(".rb-actions")).toHaveCount(1);
+      const before = await placed(walker);
+      const box = await frame.locator('.rb-actions [data-action="grip"]').boundingBox();
+      const from = {
+        x: (box?.x ?? 0) + (box?.width ?? 0) / 2,
+        y: (box?.y ?? 0) + (box?.height ?? 0) / 2,
+      };
+      await walker.mouse.move(from.x, from.y);
+      await walker.mouse.down();
+      await walker.mouse.move(from.x - 100, from.y + 60, { steps: 6 });
+      await walker.mouse.up();
+      const after = await placed(walker);
+
+      // Se movió hacia donde fue la mano y se quedó dentro de su sección, que es lo que se puede
+      // aseverar en los dos casos. Y con el lienzo a escala 1 el recorrido además coincide exacto.
+      expect(after?.left, "el grupo no fue hacia la izquierda").toBeLessThan(before?.left ?? 0);
+      expect(after?.top, "el grupo no bajó").toBeGreaterThan(before?.top ?? 0);
+      expect(after?.left).toBeGreaterThanOrEqual(BAR_INSET);
+      const grip = await frame.locator('.rb-actions [data-action="grip"]').boundingBox();
+      const offBy = Math.max(
+        Math.abs((grip?.x ?? 0) + (grip?.width ?? 0) / 2 - (from.x - 100)),
+        Math.abs((grip?.y ?? 0) + (grip?.height ?? 0) / 2 - (from.y + 60)),
+      );
+      console.log(`asa bajo zoom — el asa quedó a ${Math.round(offBy)}px del puntero`);
+      expect(offBy, `el asa quedó a ${Math.round(offBy)}px del puntero`).toBeLessThanOrEqual(4);
     } finally {
       await context.close();
     }

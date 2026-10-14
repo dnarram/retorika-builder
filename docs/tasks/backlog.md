@@ -563,7 +563,9 @@ open survives.
   3.7 and 18.7 — of those thirteen, three were this family with the account above (the other
   three of the six came from the block run alone), and the other ten were the machine:
   `ERR_NETWORK_IO_SUSPENDED` ×2, test timeouts ×4, a `dataset` of `null` in
-  `replacingTheDocument` ×3 and one keyboard walk whose section count came back short — the last
+  `replacingTheDocument` ×3 (**fixed on 14 October 2026**, sprint 20 day 2: the helper read
+  `doc.documentElement.dataset` without asking whether there was a `documentElement`, which a frame
+  caught between «replaced» and «parsed» has not — so the walk crashed instead of polling once more) and one keyboard walk whose section count came back short — the last
   four being a document replaced mid-read, the same window seen from the other side.
 
   **And one more red, of a different shape, the day the sprint closed (13 October 2026, CI on
