@@ -100,4 +100,12 @@ export const VERB_SCALE = {
   gap: 4,
   /** From the section's own corner, which is where the cluster has always sat. */
   inset: 8,
+  /**
+   * The grip's width — narrower than a verb, because it is not one.
+   *
+   * 24 and not the 20 that would look right beside eight discs: WCAG 2.5.8 asks 24 × 24 CSS pixels
+   * of a pointer target, and a handle somebody has to catch with a trembling hand is the last
+   * control to shave. It keeps the verbs' height, so the row stays level.
+   */
+  grip: 24,
 } as const;

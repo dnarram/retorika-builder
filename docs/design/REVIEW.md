@@ -1773,3 +1773,67 @@ la palabra sale de la página hasta que se enseña. Medido en Chromium el 14 de 
 `opacity: 0` lo recoge `innerText`, `visibility: hidden` no. Hay guarda unitaria y la caminata lo
 asevera en los dos sentidos: callada no está, enseñada sí.
 
+### El grupo de verbos se mueve, con un asa (día 2)
+
+El día 1 dejó el caso medido: a 320 px el grupo y la chapa «Foto de ejemplo» se solapan 74 px, y
+alguien tiene que perder la esquina. Esto es lo que lo resuelve sin decidirlo por nadie — el grupo
+se aparta, y lo aparta quien está mirando.
+
+**La posición es del editor y nunca del documento.** Vive en un `Map` por id de sección dentro de un
+`useRef`, se vuelve a aplicar en cada `select()` —que es lo que corre después de cada reconstrucción
+del marco— y muere al recargar. «Por sección, mientras editas», que es lo que pidió David. Escribirla
+en el proyecto habría hecho que el documento se volviera a serializar por algo que no forma parte de
+él (`INV_4`), habría viajado en el ZIP y habría metido un empujón de barra en el historial de
+deshacer al lado de las palabras del dueño. **No hay paso de historial**: mover una barra no es un
+cambio de la web.
+
+Se guarda **sin recortar** y se recorta al dibujar, así que una barra puesta a la derecha del todo en
+una ventana ancha vuelve a su sitio exacto después de un viaje por la vista móvil, donde hubo que
+dibujarla en mucho menos espacio.
+
+**Un asa, y no una barra que se arrastra entera.** Es la decisión que hace posible el teclado: una
+barra que se agarra por su fondo no se puede mover sin puntero, y una que se agarra por un botón se
+mueve con las teclas de ese botón — así la regla que este documento se puso a sí mismo, que un
+arrastre trae su equivalente de teclado el mismo sprint, es una línea de código y no un segundo
+diseño. Es además lo que impide que un arrastre empiece sobre un verbo: pulsar «Borrar» y mover un
+poco la mano tiene que seguir pulsando «Borrar».
+
+**El asa va la última de la fila**, y eso deja intactos todos los recuentos de Tab del repositorio:
+los catorce de `tabToVerb`, los ciento sesenta hasta «Estilo» del recorrido sin ratón, y las
+caminatas del sprint 17 que cuentan pulsaciones hasta un verbo con nombre. Delante los habría movido
+todos sin ganar nada. Los verbos son la noticia; un asidero es cromo sobre el cromo.
+
+**Tres maneras de moverla, un solo camino.** Un clic la manda a la esquina siguiente; las flechas la
+empujan dieciséis píxeles; `Inicio` la devuelve y olvida que se movió. Intro y espacio **no** son
+teclas que `gripKeyAction` conozca: en un `<button>` disparan un clic, que es el ciclo de esquinas,
+así que el ratón y el teclado recorren la misma implementación en vez de dos que haya que mantener
+de acuerdo.
+
+**El zoom resultó no ser una pregunta, y está medido.** El lienzo se dibuja con `transform: scale()`
+cuando la ventana es estrecha, así que la posición de un puntero en pantalla y la misma posición
+dentro del marco son números distintos. El arrastre suma **recorridos** —el de la mano, leído dentro
+del marco— a una posición también leída dentro del marco, con lo que la escala se cancela sola y
+nada en el código conoce el factor. La caminata abre «Estilo» a 1024 px, comprueba que el lienzo está
+de verdad a escala (**0,737864**) y mide cuánto se separa el asa del puntero: **0 px**. La primera
+versión de esa caminata leía la escala del padre del marco, encontraba 1 y se daba por buena sin
+haber probado nada de lo que su nombre dice; ahora sube por los antepasados hasta el que la lleva y
+**falla si el lienzo no está a escala**.
+
+**Lo que el grupo abre va con él**, o sería un menú suelto. Y ahí esta caminata corrigió a su propio
+autor: la primera versión encerraba el menú dentro de la sección en los dos ejes, como se encierra la
+barra. Medido, el menú de composiciones mide **230 px dentro de una «Comidas» que mide 230**, así que
+«dentro» significaba encima del botón que lo abre. Estos menús llevan desde el sprint 2 pudiendo
+colgar por debajo de su sección —la propia hoja de estilos lo hace— así que ahora solo se recorta el
+eje horizontal. Un menú sobre la sección siguiente es corriente; un menú sobre su propio botón es un
+defecto.
+
+**Dos cosas que las caminatas enseñaron al escribirlas.** La primera aseveraba que un clic en el asa
+cambiaba `left`; viniendo de abajo a la izquierda, la esquina siguiente es **arriba** a la izquierda,
+así que la esquina cambiaba y el número no. Medir la coordenada que no se mueve es no medir nada. Y
+la segunda: `replacingTheDocument`, el ayudante que todas las caminatas usan para esperar a que una
+edición rehaga el marco, leía `doc.documentElement.dataset` sin preguntar si había `documentElement`
+— un marco cogido entre «reemplazado» y «analizado» no lo tiene, y entonces la caminata no fallaba
+sino que **reventaba**. `backlog.md` lleva ese choque contado tres veces desde el sprint 18. Ahora
+pregunta, y lo que era un choque es una vuelta más del sondeo, que es justo para lo que está el
+sondeo.
+

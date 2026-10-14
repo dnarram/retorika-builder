@@ -53,6 +53,19 @@ import {
 } from "@retorika/schema";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BuildingScreen } from "../editor/BuildingScreen.tsx";
+import {
+  BAR_INSET,
+  type Bounds,
+  clampToHost,
+  cornerPoint,
+  dragged,
+  gripKeyAction,
+  isDrag,
+  nextCorner,
+  type Point,
+  stepped,
+  tipSide,
+} from "../editor/barPosition.ts";
 import { holdFor } from "../editor/buildingScreen.ts";
 import { canvasLinkTarget } from "../editor/canvasLinks.ts";
 import { CHROME_SCALE, PILL_REST_BORDER, VERB_SCALE } from "../editor/chromeScale.ts";
@@ -839,6 +852,24 @@ export function Editor({
    * the frame finishes loading, which is outside React's render pass entirely.
    */
   const selectedSection = useRef<string | null>(null);
+  /**
+   * Where each section's verbs have been dragged to, for as long as this session lasts.
+   *
+   * **Not in the document, and that is the decision rather than an implementation detail.** A
+   * toolbar's position changes nothing a visitor would ever see; writing it into the project would
+   * make the document re-serialise for a thing that is not part of it (`INV_4`), would travel in
+   * the ZIP, and would put a toolbar nudge in the undo history beside the owner's own words. David
+   * asked for «por sección, mientras editas», which is exactly this: a ref, keyed by section id,
+   * reapplied by `select()` after every rebuild, gone on reload.
+   *
+   * A ref and not state for the reason the rest of `wireSelection` is one: it has to survive the
+   * frame being replaced, and replacing the frame is what every edit does.
+   *
+   * Stored **unclamped**. The clamping happens when it is applied, so a bar placed far right on a
+   * wide editor comes back to exactly that place after a trip through the mobile view, where it
+   * had to be drawn somewhere much narrower.
+   */
+  const actionsPlace = useRef<Map<string, Point>>(new Map());
   /**
    * Which section the canvas's keyboard is on, by **id and not by index** (sprint 17 day 3).
    *
@@ -1886,6 +1917,7 @@ export function Editor({
         es["editor.canvasKeys.move"],
         es["editor.canvasKeys.choose"],
         es["editor.canvasKeys.release"],
+        es["editor.canvasKeys.bar"],
       ]) {
         const row = iframeDoc.createElement("span");
         row.textContent = text;
@@ -1979,6 +2011,93 @@ export function Editor({
      */
     const REBUILDS = new Set(["move-up", "move-down", "duplicate", "to-page", "delete"]);
 
+    /** The section the bar is inside, and the bar, both measured — what every rule here takes. */
+    const boundsOf = (bar: HTMLElement, host: HTMLElement): Bounds => ({
+      hostWidth: host.clientWidth,
+      hostHeight: host.clientHeight,
+      barWidth: bar.offsetWidth,
+      barHeight: bar.offsetHeight,
+    });
+
+    /** Where the bar is now, in its section's own coordinates — `[data-section]` is the
+     * `offsetParent`, which is what `position: relative` on it has been for since sprint 2. */
+    const pointOf = (bar: HTMLElement): Point => ({ x: bar.offsetLeft, y: bar.offsetTop });
+
+    /**
+     * Put a popup under the bar that opened it, wherever that bar has been dragged to.
+     *
+     * **Without this the menu stays in the corner and the bar does not**, which is worse than not
+     * being able to move the bar at all: a list of compositions floating away from the button that
+     * opened it belongs to nothing. It does nothing while the bar is where the stylesheet puts it,
+     * because the stylesheet already places the menu there — `style.left` is the honest test of
+     * «has this been moved», since that is the one property `placeActions` writes.
+     */
+    function anchorPopup(popup: HTMLElement, host: HTMLElement) {
+      const bar = host.querySelector<HTMLElement>(".rb-actions");
+      if (!bar || bar.style.left === "") return;
+      /*
+       * **Only the horizontal is clamped, and that is a correction this walk made.** The first
+       * version held the menu inside its section on both axes, the way the bar itself is held —
+       * and measured, the compositions menu is 230px tall inside a «Comidas» that is 230px tall,
+       * so «inside» meant on top of the button that opened it. These menus have always been
+       * allowed to hang past their section's bottom edge; the stylesheet's own `top` does it too.
+       * A menu over the section below is ordinary. A menu over its own opener is a bug.
+       */
+      const below = bar.offsetTop + bar.offsetHeight + VERB_SCALE.gap;
+      const above = bar.offsetTop - popup.offsetHeight - VERB_SCALE.gap;
+      // Above only when below would hang off the end of the page, where nothing can scroll to it —
+      // and never above when that would go off the top, which is the same trap upside down.
+      const page = host.ownerDocument.documentElement.scrollHeight;
+      const reachable = host.offsetTop + below + popup.offsetHeight <= page;
+      const y = reachable || above < 0 ? below : above;
+      const rightmost = Math.max(BAR_INSET, host.clientWidth - popup.offsetWidth - BAR_INSET);
+      const wanted = bar.offsetLeft + bar.offsetWidth - popup.offsetWidth;
+      popup.style.right = "auto";
+      popup.style.left = `${Math.min(Math.max(wanted, BAR_INSET), rightmost)}px`;
+      popup.style.top = `${y}px`;
+    }
+
+    /**
+     * Draw the bar where this section's own memory says, if it has one.
+     *
+     * Called from `select()` **after** the cluster is in the document, because a bar that is not in
+     * a document has no width to place. Does nothing when the section has never been moved: the
+     * stylesheet's corner is the default, and leaving it to CSS means one place decides it.
+     */
+    function placeActions(bar: HTMLElement, host: HTMLElement, sectionId: string) {
+      const kept = actionsPlace.current.get(sectionId);
+      if (!kept) return;
+      const bounds = boundsOf(bar, host);
+      const at = clampToHost(kept, bounds);
+      bar.style.right = "auto";
+      bar.style.left = `${at.x}px`;
+      bar.style.top = `${at.y}px`;
+      // The words go above the row once the bar is low enough that one below would be drawn past
+      // the section's own edge.
+      bar.classList.toggle("rb-actions-low", tipSide(at, bounds) === "above");
+      for (const popup of host.querySelectorAll<HTMLElement>(".rb-compositions, .rb-escalate")) {
+        anchorPopup(popup, host);
+      }
+    }
+
+    /** Remember where the bar was put, and put it there. The memory is this section's and this
+     * session's; nothing about it reaches the document. */
+    function moveActions(bar: HTMLElement, host: HTMLElement, sectionId: string, at: Point) {
+      actionsPlace.current.set(sectionId, at);
+      placeActions(bar, host, sectionId);
+    }
+
+    /** Back to the corner, and forget that it was ever moved — which is what makes `Home` a way
+     * out rather than a twentieth arrow press. */
+    function homeActions(bar: HTMLElement, host: HTMLElement, sectionId: string) {
+      actionsPlace.current.delete(sectionId);
+      bar.removeAttribute("style");
+      bar.classList.remove("rb-actions-low");
+      for (const popup of host.querySelectorAll<HTMLElement>(".rb-compositions, .rb-escalate")) {
+        popup.removeAttribute("style");
+      }
+    }
+
     /**
      * One of the section's verbs, as a button.
      *
@@ -1994,7 +2113,7 @@ export function Editor({
       label: string,
       /** One or two words, shown beside the button and never inside it — see the note above. */
       word: string,
-      variant: "move" | "delete",
+      variant: "move" | "delete" | "grip",
       disabled: boolean,
       svg: string,
       /** Handed the button it is attached to, which an opener needs: a popup has to know what to
@@ -2003,7 +2122,9 @@ export function Editor({
     ): HTMLElement {
       const button = iframeDoc.createElement("button");
       button.type = "button";
-      button.className = `rb-action rb-action-${variant}`;
+      // The grip stands in the same row and wears the same word, and is not a verb: its own class
+      // rather than a verb's with half its properties undone.
+      button.className = variant === "grip" ? "rb-grip" : `rb-action rb-action-${variant}`;
       button.dataset["action"] = verb;
       button.setAttribute("aria-label", label);
       button.disabled = disabled;
@@ -2065,6 +2186,118 @@ export function Editor({
       tip.setAttribute("aria-hidden", "true");
       tip.textContent = word;
       wrapper.append(button, tip);
+      return wrapper;
+    }
+
+    /**
+     * The handle the bar is moved by: last in the row, and the only part of it that drags.
+     *
+     * **Last and not first.** The verbs are the news — that is the argument sprint 17 day 3 made
+     * for putting the whole cluster first in the DOM — and a handle is chrome about chrome. Last
+     * also leaves every Tab count in this repository exactly as it was: `tabToVerb`'s fourteen, the
+     * hundred and sixty to «Estilo» in the mouse-free walk, and the sprint 17 walks that count
+     * presses to a named verb. A grip in front would have moved all of them for nothing.
+     *
+     * **One handle rather than a draggable bar**, which is the choice that makes the keyboard
+     * possible at all. A bar you drag by its background cannot be moved without a pointer; a bar
+     * you drag by a button can be moved by that button's own keys, and the rule this repository set
+     * for itself in `REVIEW.md` — a drag needs its keyboard equivalent the same sprint — is then a
+     * line of code rather than a second design. It is also what keeps a drag from starting on a
+     * verb: pressing «Borrar» and moving the hand a little must still press «Borrar».
+     *
+     * Three ways in, one path out. A click sends the bar to the next corner; the arrows nudge it
+     * sixteen pixels; `Home` puts it back and forgets. Enter and Space are *not* handled as keys —
+     * on a `<button>` they fire a click, which is the corner cycle, so the keyboard and the mouse
+     * share one implementation instead of two that have to be kept agreeing.
+     */
+    function gripFor(bar: HTMLElement, host: HTMLElement, sectionId: string): HTMLElement {
+      /*
+       * **A drag must not also cycle the corner.** `pointerup` after a real drag is followed by a
+       * `click`, and without this the bar would land where it was dropped and then jump to a
+       * corner. Cleared by the click it suppresses rather than on a timer: a flag that expires is
+       * a flag that expires at the wrong moment on a slow machine.
+       */
+      let justDragged = false;
+
+      const wrapper = action(
+        "grip",
+        es["editor.bar.grip"],
+        es["editor.verb.grip"],
+        "grip",
+        false,
+        `<svg width="${VERB_SCALE.icon}" height="${VERB_SCALE.icon}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="5" r="1.7"/><circle cx="15" cy="5" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="19" r="1.7"/><circle cx="15" cy="19" r="1.7"/></svg>`,
+        () => {
+          if (justDragged) {
+            justDragged = false;
+            return;
+          }
+          const bounds = boundsOf(bar, host);
+          moveActions(bar, host, sectionId, cornerPoint(nextCorner(pointOf(bar), bounds), bounds));
+        },
+      );
+
+      const grip = wrapper.querySelector("button") as HTMLButtonElement;
+
+      grip.addEventListener("keydown", (event) => {
+        const move = gripKeyAction(event);
+        if (move.kind === "ignore") return;
+        // Stopped as well as prevented: the canvas's own `keydown` listener is on the document in
+        // the capture phase, and an arrow that reached it would move between sections instead.
+        event.preventDefault();
+        event.stopPropagation();
+        if (move.kind === "home") {
+          homeActions(bar, host, sectionId);
+          return;
+        }
+        moveActions(bar, host, sectionId, stepped(pointOf(bar), move, boundsOf(bar, host)));
+      });
+
+      /*
+       * **Deltas between two events in this frame, which is what makes the zoom a non-question.**
+       * The editor scales the whole canvas card with `transform: scale(zoom)` when the window is
+       * narrow, so a pointer's position on the screen and the same pointer's position inside the
+       * frame are different numbers. Following the pointer's *travel* — `to` minus `from`, both
+       * read inside the frame — and adding it to a position also read inside the frame means the
+       * scale cancels: the bar stays under the hand at any zoom, with nothing here knowing the
+       * factor. The alternative, placing the bar at the pointer, would have needed it.
+       *
+       * No `preventDefault` on the press. It would suppress the compatibility mouse events, and
+       * with them the focus a click puts on the grip — which is worth having, since after cycling
+       * corners with the mouse the arrows are already in the right place. Text selection is held
+       * off by `user-select` on `.rb-dragging` instead, which is the narrower instrument.
+       */
+      let from: Point | null = null;
+      let start: Point = { x: 0, y: 0 };
+      let moving = false;
+
+      grip.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) return;
+        from = { x: event.clientX, y: event.clientY };
+        start = pointOf(bar);
+        moving = false;
+        // Captured, so a hand that outruns the bar keeps dragging it instead of dropping it the
+        // moment the pointer leaves a 24px target.
+        grip.setPointerCapture(event.pointerId);
+        iframeDoc.documentElement.classList.add("rb-dragging");
+      });
+
+      grip.addEventListener("pointermove", (event) => {
+        if (!from) return;
+        const now = { x: event.clientX, y: event.clientY };
+        if (!moving && !isDrag(from, now)) return;
+        moving = true;
+        justDragged = true;
+        moveActions(bar, host, sectionId, dragged(start, from, now, boundsOf(bar, host)));
+      });
+
+      const release = () => {
+        from = null;
+        iframeDoc.documentElement.classList.remove("rb-dragging");
+      };
+      grip.addEventListener("pointerup", release);
+      grip.addEventListener("pointercancel", release);
+      grip.addEventListener("lostpointercapture", release);
+
       return wrapper;
     }
 
@@ -2289,6 +2522,7 @@ export function Editor({
               }
               const menu = compositionMenu(sectionId, compositions);
               target.appendChild(menu);
+              anchorPopup(menu, target);
               compositionMenuOpen.current = true;
               wirePopup(menu, button);
             },
@@ -2317,6 +2551,7 @@ export function Editor({
               }
               const offer = escalateOffer(sectionId);
               target.appendChild(offer);
+              anchorPopup(offer, target);
               compositionMenuOpen.current = true;
               wirePopup(offer, button);
             },
@@ -2377,6 +2612,7 @@ export function Editor({
           () => onDeleteSection(sectionId),
         ),
       );
+      actions.appendChild(gripFor(actions, target, sectionId));
       /*
        * **First in the DOM, not last**, which is a change sprint 17 day 3 made on purpose and whose
        * cost is worth stating. The cluster is `position: absolute`, so nothing moves on screen; what
@@ -2389,6 +2625,8 @@ export function Editor({
        * news — but it is a judgement, and reverting it is moving one line.
        */
       target.prepend(actions);
+      // After the prepend, because a bar that is not in a document has no width to place.
+      placeActions(actions, target, sectionId);
     }
 
     for (const section of sections) {
@@ -2516,6 +2754,7 @@ export function Editor({
           if (compositions.length > 0) {
             const menu = compositionMenu(remembered, compositions);
             target.appendChild(menu);
+            anchorPopup(menu, target);
             /*
              * **Wired here too, or the menu that comes back is the one nobody can use.** This is
              * the reopening the mouse has had since the menu shipped — `compositionMenuOpen` brings
@@ -4429,14 +4668,33 @@ export function Editor({
       // The button and its word, as one thing: the word is positioned against this, not against
       // the section, so it follows its own button wherever the cluster sits.
       ".rb-verb { position: relative; display: flex; }",
-      `.rb-action { width: ${VERB_SCALE.size}px; height: ${VERB_SCALE.size}px; display: flex;`,
-      "  align-items: center; justify-content: center; border: 2px solid #FFFFFF;",
-      `  border-radius: 999px; cursor: pointer; box-shadow: ${CHROME_SCALE.shadow2};`,
+      // The box a verb and the grip share, so the row stays level and one transition is declared
+      // once. What differs between them is the width, the skin and what the cursor says.
+      `.rb-action, .rb-grip { height: ${VERB_SCALE.size}px; display: flex; align-items: center;`,
+      "  justify-content: center; border-radius: 999px; cursor: pointer;",
+      `  box-shadow: ${CHROME_SCALE.shadow2};`,
       `  transition: transform ${CHROME_SCALE.fast} ${CHROME_SCALE.ease},`,
       `    box-shadow ${CHROME_SCALE.fast} ${CHROME_SCALE.ease}; }`,
+      `.rb-action { width: ${VERB_SCALE.size}px; border: 2px solid #FFFFFF; }`,
       `.rb-action-move { background: ${CHROME_SCALE.brand}; }`,
       `.rb-action-delete { background: ${CHROME_SCALE.danger}; }`,
       ".rb-action:disabled { background: #B9CDEA; cursor: not-allowed; }",
+      /*
+       * **The handle, and it is deliberately not a verb.** Ink on white where the eight are white
+       * on colour, narrower than they are, and the cursor says what it is for: a thing to pick the
+       * bar up by rather than a ninth thing to press. `touch-action: none` so a finger dragging it
+       * drags the bar instead of scrolling the page underneath — the one line that makes this work
+       * on a tablet at all.
+       */
+      `.rb-grip { width: ${VERB_SCALE.grip}px; padding: 0; color: ${CHROME_SCALE.ink};`,
+      `  background: ${CHROME_SCALE.surface}; border: 1px solid ${CHROME_SCALE.borderStrong};`,
+      "  cursor: grab; touch-action: none; }",
+      /*
+       * While a drag is in flight, nothing underneath may be selected and every cursor is the
+       * closed hand — `!important` because the cursor is otherwise decided by whatever the pointer
+       * happens to be over, which during a drag is the client's own page.
+       */
+      ".rb-dragging, .rb-dragging * { user-select: none; cursor: grabbing !important; }",
       /*
        * **A focus ring, which these eight buttons never had.** `globals.css` has drawn one for the
        * application's own side since sprint 15 and the pills inside the frame got theirs the same
@@ -4447,7 +4705,8 @@ export function Editor({
        * The growth comes with it: a keyboard has no pointer to lead with, and the emphasis a
        * pointer gets at rest is the same emphasis a keyboard has to get on arrival.
        */
-      `.rb-action:focus-visible { outline: 2px solid ${CHROME_SCALE.ink}; outline-offset: 1px;`,
+      `.rb-action:focus-visible, .rb-grip:focus-visible {`,
+      `  outline: 2px solid ${CHROME_SCALE.ink}; outline-offset: 1px;`,
       `  transform: scale(${VERB_SCALE.grow}); }`,
       /*
        * The word.
@@ -4471,15 +4730,18 @@ export function Editor({
       "  white-space: nowrap; pointer-events: none; opacity: 0; visibility: hidden;",
       `  transition: opacity ${CHROME_SCALE.fast} ${CHROME_SCALE.ease},`,
       `    visibility 0s linear ${CHROME_SCALE.fast}; }`,
-      ".rb-action:focus-visible + .rb-tip { opacity: 1; visibility: visible;",
-      "  transition-delay: 0s; }",
+      ".rb-action:focus-visible + .rb-tip, .rb-grip:focus-visible + .rb-tip {",
+      "  opacity: 1; visibility: visible; transition-delay: 0s; }",
+      // Dragged low in its section, a word under the row would be drawn past the section's own
+      // edge, or over the top of the next one. `placeActions` decides the side; this draws it.
+      ".rb-actions-low .rb-tip { top: auto; bottom: calc(100% + 6px); }",
       /*
        * **Emphasis inside `@media (hover: hover)`, the rule direction set for the pills.** A touch
        * screen reports a permanent false hover on some engines and never hovers on others, so it
        * is given the resting state always — which is why the resting state had to be the readable
        * one first. The keyboard's half is outside the query, above.
        */
-      `@media (hover: hover) { .rb-action:hover:not(:disabled) {`,
+      `@media (hover: hover) { .rb-action:hover:not(:disabled), .rb-grip:hover {`,
       `  transform: scale(${VERB_SCALE.grow}); box-shadow: ${CHROME_SCALE.shadow3}; }`,
       "  .rb-verb:hover .rb-tip { opacity: 1; visibility: visible; transition-delay: 0s; } }",
       // The hole a delete leaves, drawn as mockup 11 draws it — `2px dashed`, its own margin, the
@@ -4541,7 +4803,7 @@ export function Editor({
       // keeps on the other side of the boundary.
       "@media (prefers-reduced-motion: reduce) {",
       "  .rb-pill { transition-duration: 0.01ms; }",
-      "  .rb-action { transition-duration: 0.01ms; }",
+      "  .rb-action, .rb-grip { transition-duration: 0.01ms; }",
       // The delay goes with the duration: it is what holds the word in the page while it fades,
       // and there is no fade left to wait for.
       "  .rb-tip { transition-duration: 0.01ms; transition-delay: 0s; }",
