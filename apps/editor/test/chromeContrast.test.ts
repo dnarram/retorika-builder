@@ -232,6 +232,20 @@ describe("the section's verbs", () => {
     expect(contrastRatio("#FFFFFF", CHROME_SCALE.ink)).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
   });
 
+  /**
+   * **A word hidden by opacity alone is still the page's text**, which is a defect CI found rather
+   * than a nicety: `innerText` of a cover came back with all seven words in front of the business
+   * name, and a reader's own Ctrl+F would have found «Duplicar» inside their restaurant. Measured
+   * in Chromium: `opacity: 0` is collected, `visibility: hidden` is not.
+   */
+  it("take their word out of the page while it is not being shown", () => {
+    const tip = CANVAS.slice(CANVAS.indexOf(".rb-tip {"));
+    expect(tip.slice(0, 400), "the word is hidden by opacity alone").toContain(
+      "visibility: hidden",
+    );
+    expect(CANVAS).toContain("visibility: visible");
+  });
+
   it("are flattened for somebody who asked for less movement", () => {
     const reduced = CANVAS.indexOf("prefers-reduced-motion");
     const block = CANVAS.slice(reduced, reduced + 400);

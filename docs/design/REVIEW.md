@@ -1762,3 +1762,14 @@ enseña a mover código para contentarla.**
 El menú de composiciones cuelga del grupo, que es 6 px más alto: su `top` se calcula desde
 `VERB_SCALE` y queda a 4 px del borde inferior del grupo, alineado a su derecha. Medido, no supuesto.
 
+**Y un tercer hallazgo, este lo encontró el CI y no yo.** La palabra se escondía con `opacity: 0`
+sola, y un elemento transparente **sigue siendo texto compuesto de la página**: `innerText` de una
+portada volvía con «Subir Bajar Aspecto A mano Duplicar Campos Borrar» pegado delante del nombre del
+negocio, que es como se puso roja una caminata que compara el texto de una sección antes y después
+de un relevo de marcos. Sacar la palabra del botón no bastaba: seguía dentro de la sección. Lo
+importante no es la caminata: **un Ctrl+F del propio dueño habría encontrado «Duplicar» dentro de su
+restaurante**. Con `visibility: hidden` debajo de la opacidad —y el retardo que mantiene el fundido—
+la palabra sale de la página hasta que se enseña. Medido en Chromium el 14 de octubre de 2026:
+`opacity: 0` lo recoge `innerText`, `visibility: hidden` no. Hay guarda unitaria y la caminata lo
+asevera en los dos sentidos: callada no está, enseñada sí.
+

@@ -4450,16 +4450,29 @@ export function Editor({
       `.rb-action:focus-visible { outline: 2px solid ${CHROME_SCALE.ink}; outline-offset: 1px;`,
       `  transform: scale(${VERB_SCALE.grow}); }`,
       /*
-       * The word. Hidden by opacity alone — not `display` or `visibility` — so it fades rather
-       * than blinks, and `pointer-events: none` so it can never eat the click meant for whatever
-       * it is drawn over. `aria-hidden` is set on the element itself, in `action()`.
+       * The word.
+       *
+       * **`visibility: hidden` under the opacity, and the pair of them is the whole of a defect CI
+       * found.** Hidden by opacity alone the word still counts as the section's rendered text:
+       * `innerText` of a cover came back with «Subir Bajar Aspecto A mano Duplicar Campos Borrar»
+       * glued in front of the business name, which is how the buffered-frame walk went red — and
+       * the same would be true of a reader's own Ctrl+F, which would find «Duplicar» inside their
+       * restaurant. Measured in Chromium on 14 October 2026: `opacity: 0` is collected by
+       * `innerText`, `visibility: hidden` is not.
+       *
+       * The delay is what keeps the fade: shown, visibility flips at once and the opacity carries
+       * the travel; hidden, visibility waits for the fade to finish before it takes the word out
+       * of the page. `pointer-events: none` so it can never eat a click meant for what it covers,
+       * and `aria-hidden` on the element itself, in `action()`.
        */
       `.rb-tip { position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%);`,
       `  padding: 3px 8px; font: 600 12px/1.2 ${UI_FONT}; color: #FFFFFF;`,
       `  background: ${CHROME_SCALE.ink}; border-radius: ${CHROME_SCALE.radiusSm};`,
-      "  white-space: nowrap; pointer-events: none; opacity: 0;",
-      `  transition: opacity ${CHROME_SCALE.fast} ${CHROME_SCALE.ease}; }`,
-      ".rb-action:focus-visible + .rb-tip { opacity: 1; }",
+      "  white-space: nowrap; pointer-events: none; opacity: 0; visibility: hidden;",
+      `  transition: opacity ${CHROME_SCALE.fast} ${CHROME_SCALE.ease},`,
+      `    visibility 0s linear ${CHROME_SCALE.fast}; }`,
+      ".rb-action:focus-visible + .rb-tip { opacity: 1; visibility: visible;",
+      "  transition-delay: 0s; }",
       /*
        * **Emphasis inside `@media (hover: hover)`, the rule direction set for the pills.** A touch
        * screen reports a permanent false hover on some engines and never hovers on others, so it
@@ -4468,7 +4481,7 @@ export function Editor({
        */
       `@media (hover: hover) { .rb-action:hover:not(:disabled) {`,
       `  transform: scale(${VERB_SCALE.grow}); box-shadow: ${CHROME_SCALE.shadow3}; }`,
-      "  .rb-verb:hover .rb-tip { opacity: 1; } }",
+      "  .rb-verb:hover .rb-tip { opacity: 1; visibility: visible; transition-delay: 0s; } }",
       // The hole a delete leaves, drawn as mockup 11 draws it — `2px dashed`, its own margin, the
       // name above and what happens next below. `UI_FONT` because it is the editor talking, not the
       // site: every other `rb-` node in this frame does the same.
@@ -4528,7 +4541,10 @@ export function Editor({
       // keeps on the other side of the boundary.
       "@media (prefers-reduced-motion: reduce) {",
       "  .rb-pill { transition-duration: 0.01ms; }",
-      "  .rb-action, .rb-tip { transition-duration: 0.01ms; }",
+      "  .rb-action { transition-duration: 0.01ms; }",
+      // The delay goes with the duration: it is what holds the word in the page while it fades,
+      // and there is no fade left to wait for.
+      "  .rb-tip { transition-duration: 0.01ms; transition-delay: 0s; }",
       "  .rb-handmade-in { animation-duration: 0.01ms; } }",
       ".rb-menu { position: absolute; top: 60px; left: 50%; transform: translateX(-50%);",
       "  z-index: 20; width: 340px; max-width: calc(100% - 80px); box-sizing: border-box;",

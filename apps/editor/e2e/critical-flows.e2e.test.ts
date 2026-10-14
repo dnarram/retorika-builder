@@ -11893,6 +11893,24 @@ describe("sprint 20 día 1 — los verbos crecen y dicen su nombre", () => {
       expect(resting.word).toBe("Duplicar");
       expect(resting.wordHidden, "la palabra repetiría lo que ya dice el aria-label").toBe("true");
 
+      /**
+       * **Y mientras no se enseña, la palabra no es texto de la sección.**
+       *
+       * `opacity: 0` no basta: un elemento transparente sigue siendo texto compuesto, así que
+       * `innerText` de una portada volvía con «Subir Bajar Aspecto A mano Duplicar Campos Borrar»
+       * pegado delante del nombre del negocio —así se puso roja en CI la caminata del marco
+       * oculto— y un Ctrl+F del propio dueño encontraría «Duplicar» dentro de su restaurante. Con
+       * `visibility: hidden` debajo, la palabra sale de la página hasta que se enseña.
+       */
+      const painted = await frame
+        .locator('[data-section="sec-services"]')
+        .evaluate((el) => (el as HTMLElement).innerText);
+      for (const word of ["Subir", "Bajar", "Duplicar", "Campos", "Borrar"]) {
+        expect(painted, `«${word}» es texto de la sección sin que nadie la enseñe`).not.toContain(
+          word,
+        );
+      }
+
       // Con el teclado encima: el mismo énfasis que recibe un puntero, porque un teclado no tiene
       // puntero con el que precederlo.
       await tabToVerb(walker, "move-down");
@@ -11907,6 +11925,15 @@ describe("sprint 20 día 1 — los verbos crecen y dicen su nombre", () => {
         "aria-label",
         "Bajar esta sección",
       );
+
+      // Y enseñada sí lo es: lo que se ve es lo que `innerText` cuenta, en los dos sentidos.
+      await expect
+        .poll(() =>
+          frame
+            .locator('[data-section="sec-services"]')
+            .evaluate((el) => (el as HTMLElement).innerText),
+        )
+        .toContain("Bajar");
     } finally {
       await context.close();
     }
