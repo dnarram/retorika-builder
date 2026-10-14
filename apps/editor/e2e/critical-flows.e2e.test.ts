@@ -14,7 +14,7 @@ import {
 } from "@playwright/test";
 import { GALLERY_SAMPLE_COUNT } from "@retorika/generator";
 import { afterAll, beforeAll, describe, it } from "vitest";
-import { BAR_INSET, BAR_STEP } from "../src/editor/barPosition.ts";
+import { BAR_INSET, BAR_STEP, TOOLBAR_GAP } from "../src/editor/barPosition.ts";
 import { VERB_SCALE } from "../src/editor/chromeScale.ts";
 import { NARROWEST_WIDTH } from "../src/editor/overflowCheck.ts";
 import { BASE_URL, QUESTIONNAIRE_URL, startEditorServer, stopEditorServer } from "./server.ts"; /**
@@ -12385,6 +12385,203 @@ describe("sprint 20 día 2 — el grupo de verbos se mueve, con un asa", () => {
       );
       console.log(`asa bajo zoom — el asa quedó a ${Math.round(offBy)}px del puntero`);
       expect(offBy, `el asa quedó a ${Math.round(offBy)}px del puntero`).toBeLessThanOrEqual(4);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+});
+
+/**
+ * Sprint 20 día 3 — la barra flotante del texto se mueve, y recuerda el desplazamiento por sección.
+ *
+ * La otra barra que flota sobre el lienzo, y la que más tapa: se dibuja justo encima de las palabras
+ * que edita, que es exactamente donde están las palabras de al lado. El asa es la misma idea del día
+ * 2 con una diferencia que importa: lo que se recuerda no es una posición sino **un desplazamiento**,
+ * porque esta barra se recalcula para cada texto que toca. «Más a la derecha y más abajo de donde
+ * iría» es una frase que sirve para el párrafo siguiente; «en 340, 96» no.
+ */
+describe("sprint 20 día 3 — la barra flotante se mueve, y recuerda el desplazamiento", () => {
+  const VIEWPORT = { width: 1440, height: 900 };
+  const HEADLINE = '[data-section="sec-cover"] [data-id="el-headline"]';
+  const SUBHEADLINE = '[data-section="sec-cover"] [data-id="el-subheadline"]';
+
+  /** La barra, el texto que la abrió y dónde está puesta — todo dentro del marco, de una vez. */
+  function bar(page: Page, selector: string) {
+    return page
+      .frameLocator(PREVIEW)
+      .first()
+      .locator(selector)
+      .evaluate((el) => {
+        const floating = el.ownerDocument.querySelector<HTMLElement>(".rb-toolbar");
+        if (!floating) return null;
+        const active = el.ownerDocument.activeElement;
+        return {
+          top: Math.round(floating.offsetTop),
+          left: Math.round(floating.offsetLeft),
+          elementTop: Math.round((el as HTMLElement).offsetTop),
+          elementHeight: (el as HTMLElement).offsetHeight,
+          barHeight: floating.offsetHeight,
+          focusedId: (active as HTMLElement | null)?.dataset?.["id"] ?? null,
+          selection: el.ownerDocument.getSelection()?.toString() ?? "",
+        };
+      });
+  }
+
+  /** La barra, sin preguntar de qué texto es: donde está puesta ahora mismo. */
+  function floating(page: Page) {
+    return page
+      .frameLocator(PREVIEW)
+      .first()
+      .locator(".rb-toolbar")
+      .evaluate((el) => ({
+        top: Math.round((el as HTMLElement).offsetTop),
+        left: Math.round((el as HTMLElement).offsetLeft),
+      }));
+  }
+
+  it("el asa la pasa al otro lado del texto, el desplazamiento vale para el siguiente texto de la sección y no para otra, y las flechas la mueven", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const walker = await context.newPage();
+    try {
+      await intoTheCanvas(walker);
+      const frame = walker.frameLocator(PREVIEW).first();
+      await frame.locator(HEADLINE).click();
+      await expect(frame.locator(".rb-toolbar")).toHaveCount(1);
+
+      // Nace encima de las palabras, que es lo que dice la aritmética que ahora vive en un módulo.
+      const start = await bar(walker, HEADLINE);
+      expect(start, "no hay barra que medir").not.toBeNull();
+      const aboveTheText = (start?.elementTop ?? 0) - (start?.barHeight ?? 0) - TOOLBAR_GAP;
+      const belowTheText = (start?.elementTop ?? 0) + (start?.elementHeight ?? 0) + TOOLBAR_GAP;
+      expect(start?.top).toBe(aboveTheText);
+
+      // El asa: al otro lado del texto, que es la única mudanza grande que esta barra tiene.
+      await frame.locator('.rb-toolbar [data-action="grip"]').click();
+      await expect.poll(() => bar(walker, HEADLINE).then((b) => b?.top)).toBe(belowTheText);
+
+      /**
+       * **Y aquí está la razón de que se guarde un desplazamiento y no una posición.** El
+       * subtitular está en otro sitio de la portada, así que su barra se calcula en otro sitio — y
+       * aun así hereda lo que la persona quiso decir: «en esta sección, por debajo del texto».
+       */
+      const nudge = belowTheText - aboveTheText;
+      await frame.locator(SUBHEADLINE).click();
+      await expect
+        .poll(async () => {
+          const at = await bar(walker, SUBHEADLINE);
+          if (!at) return null;
+          return at.top - (at.elementTop - at.barHeight - TOOLBAR_GAP);
+        })
+        .toBe(nudge);
+
+      // Y es de esta sección: un texto de otra abre donde siempre.
+      const OTHER = '[data-section="sec-services"] [data-id="el-services-headline"]';
+      await frame.locator(OTHER).click();
+      await expect
+        .poll(async () => {
+          const at = await bar(walker, OTHER);
+          if (!at) return null;
+          return at.top - (at.elementTop - at.barHeight - TOOLBAR_GAP);
+        })
+        .toBe(0);
+
+      /**
+       * **Una sola parada de Tab, y es el asa.**
+       *
+       * `role="toolbar"` lleva en esta barra desde el sprint 9 prometiendo exactamente eso, y no lo
+       * cumplía ni por la mitad: la barra se añadía al final de su sección, así que Tab desde un
+       * texto recorría los textos que quedaban, la chapa de la foto y la llamada a la acción antes
+       * de llegar — y no llegaba, porque el foco en la chapa es el foco fuera de las palabras y la
+       * barra se cierra ahí, con razón. Medido al escribir esta caminata: «la barra se cerró a las
+       * 3 tabulaciones». **Ninguno** de sus catorce controles se alcanzaba con el teclado, desde el
+       * sprint 9.
+       *
+       * Ahora la barra va al lado de las palabras y sus controles salen del orden de Tab: una
+       * parada, el asa, y el viaje de un teclado crece en uno en vez de en quince.
+       */
+      await frame.locator(HEADLINE).click();
+      await expect(frame.locator(".rb-toolbar")).toHaveCount(1);
+      await walker.keyboard.press("Tab");
+      const onTheGrip = await walker
+        .frameLocator(PREVIEW)
+        .first()
+        .locator("body")
+        .evaluate(() => {
+          const active = document.activeElement as HTMLElement | null;
+          return {
+            inToolbar: Boolean(active?.closest(".rb-toolbar")),
+            action: active?.dataset?.["action"] ?? null,
+          };
+        });
+      expect(onTheGrip.inToolbar, "una tabulación desde el texto no entró en la barra").toBe(true);
+      expect(onTheGrip.action, "la parada de la barra no es su asa").toBe("grip");
+
+      // Y la barra sigue siendo la del titular, que es lo que hace útil llegar: las flechas mueven
+      // la que estorba, no la de otro texto.
+      await walker.keyboard.press("ArrowUp");
+      await walker.keyboard.press("ArrowUp");
+      await expect
+        .poll(() => bar(walker, HEADLINE).then((b) => b?.top))
+        .toBe(belowTheText - 2 * BAR_STEP);
+
+      // Y `Inicio` lo olvida, para toda la sección.
+      await walker.keyboard.press("Home");
+      await expect.poll(() => bar(walker, HEADLINE).then((b) => b?.top)).toBe(aboveTheText);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("se arrastra sin soltar el texto ni las palabras elegidas, y vuelve al mismo sitio tras usar un botón", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const walker = await context.newPage();
+    try {
+      await intoTheCanvas(walker);
+      const frame = walker.frameLocator(PREVIEW).first();
+      await frame.locator(HEADLINE).click();
+      await expect(frame.locator(".rb-toolbar")).toHaveCount(1);
+      const before = await bar(walker, HEADLINE);
+      expect(before?.focusedId, "el titular no tiene el teclado antes de arrastrar").toBe(
+        "el-headline",
+      );
+      expect(before?.selection.length, "no hay palabras elegidas que poder perder").toBeGreaterThan(
+        0,
+      );
+
+      /**
+       * **Arrastrar no puede costar ni el foco ni la selección**, que es lo que haría inútil una
+       * barra de texto movible: se mueve para seguir escribiendo, no para empezar de nuevo. Lo que
+       * lo sostiene ya estaba ahí — el `mousedown` delegado de la barra impide el cambio de foco en
+       * cualquiera de sus botones — y esto es lo que lo asevera.
+       */
+      const box = await frame.locator('.rb-toolbar [data-action="grip"]').boundingBox();
+      expect(box, "el asa de la barra no tiene caja").not.toBeNull();
+      const from = {
+        x: (box?.x ?? 0) + (box?.width ?? 0) / 2,
+        y: (box?.y ?? 0) + (box?.height ?? 0) / 2,
+      };
+      await walker.mouse.move(from.x, from.y);
+      await walker.mouse.down();
+      await walker.mouse.move(from.x + 150, from.y + 40, { steps: 8 });
+      await walker.mouse.up();
+
+      const dragged = await bar(walker, HEADLINE);
+      expect(dragged?.left).toBe((before?.left ?? 0) + 150);
+      expect(dragged?.top).toBe((before?.top ?? 0) + 40);
+      expect(dragged?.focusedId, "arrastrar la barra le quitó el teclado al texto").toBe(
+        "el-headline",
+      );
+      expect(dragged?.selection, "arrastrar la barra se llevó las palabras elegidas").toBe(
+        before?.selection,
+      );
+
+      // Y usar un botón rehace el documento entero: la barra vuelve a abrirse donde se la dejó.
+      await replacingTheDocument(walker, async () => {
+        await frame.locator('.rb-toolbar-mark[data-mark="strong"]').click();
+      });
+      await expect.poll(() => bar(walker, HEADLINE).then((b) => b?.top)).toBe(dragged?.top);
+      expect((await bar(walker, HEADLINE))?.left).toBe(dragged?.left);
+      await expect(frame.locator(`${HEADLINE} strong`)).toHaveCount(1);
     } finally {
       await context.close();
     }

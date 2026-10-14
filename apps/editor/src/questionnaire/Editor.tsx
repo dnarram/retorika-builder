@@ -62,9 +62,13 @@ import {
   gripKeyAction,
   isDrag,
   nextCorner,
+  offsetBetween,
   type Point,
   stepped,
+  type ToolbarGeometry,
   tipSide,
+  toolbarPoint,
+  withOffset,
 } from "../editor/barPosition.ts";
 import { holdFor } from "../editor/buildingScreen.ts";
 import { canvasLinkTarget } from "../editor/canvasLinks.ts";
@@ -738,6 +742,20 @@ export function Editor({
    * looking and never to the site, so it is not in the document (`INV_4`).
    */
   const toolbarOn = useRef<ElementAddress | null>(null);
+  /**
+   * How far this section's floating text bar has been pushed from where it would otherwise go.
+   *
+   * **A displacement and not a position.** The bar is computed afresh for every element it opens
+   * on — it flips above or below, it clamps — so a remembered position would have to be
+   * re-dragged for each of a cover's five texts, and would freeze a bar whose whole job is to
+   * keep following the words. A displacement says what the person meant: in this section, keep it
+   * further over than it would otherwise be, and the same sentence applies to the next paragraph
+   * they touch.
+   *
+   * Same contract as the verbs' cluster: a ref, by section id, for this session, never the
+   * document, no history step.
+   */
+  const toolbarOffset = useRef<Map<string, Point>>(new Map());
 
   /**
    * The words that were chosen, so **using the bar does not cost you them**.
@@ -3316,6 +3334,103 @@ export function Editor({
       close();
     };
 
+    /**
+     * The handle on the text bar, wired the same three ways as the verbs' cluster.
+     *
+     * A click puts the bar on **the other side of the words** — which is the move a person wants
+     * when a bar is covering the line they came to edit, and the only big one this bar has, since
+     * it has no corners to walk. Pressed again it comes back; pressed where there is no other side
+     * — a headline with the section's padding and nothing else above it — it undoes whatever the
+     * arrows had done, so the press always means «put it where it belongs» and never nothing.
+     *
+     * The arrows nudge, `Home` forgets. Enter and Space are the button's own click, which is the
+     * flip, so the mouse and the keyboard share one implementation.
+     */
+    interface BarHandle {
+      readonly sectionId: string;
+      readonly geometry: () => ToolbarGeometry;
+      readonly bounds: () => Bounds;
+      /** Where the bar is drawn now, in its section's coordinates. */
+      readonly at: () => Point;
+      /** Draw it from whatever displacement this section is remembering. */
+      readonly place: () => void;
+    }
+
+    function wireBarGrip(grip: HTMLButtonElement, handle: BarHandle) {
+      /** Remember the place by what it is *away from*, so the next paragraph inherits the meaning. */
+      const remember = (wanted: Point) => {
+        const computed = toolbarPoint(handle.geometry()).point;
+        toolbarOffset.current.set(handle.sectionId, offsetBetween(computed, wanted));
+        handle.place();
+      };
+
+      grip.addEventListener("click", () => {
+        if (justDragged) {
+          justDragged = false;
+          return;
+        }
+        const geometry = handle.geometry();
+        const computed = toolbarPoint(geometry);
+        const other = toolbarPoint(geometry, computed.side === "above" ? "below" : "above");
+        const flipped = offsetBetween(computed.point, other.point);
+        const now = toolbarOffset.current.get(handle.sectionId);
+        const alreadyThere = now?.x === flipped.x && now?.y === flipped.y;
+        const nowhereElse = flipped.x === 0 && flipped.y === 0;
+        if (alreadyThere || nowhereElse) toolbarOffset.current.delete(handle.sectionId);
+        else toolbarOffset.current.set(handle.sectionId, flipped);
+        handle.place();
+      });
+
+      grip.addEventListener("keydown", (event) => {
+        const move = gripKeyAction(event);
+        if (move.kind === "ignore") return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (move.kind === "home") {
+          toolbarOffset.current.delete(handle.sectionId);
+          handle.place();
+          return;
+        }
+        // The step is clamped before it is remembered, so pressing against an edge does not pile up
+        // a displacement that would take twenty presses to walk back out of.
+        remember(stepped(handle.at(), move, handle.bounds()));
+      });
+
+      let from: Point | null = null;
+      let start: Point = { x: 0, y: 0 };
+      let moving = false;
+
+      grip.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) return;
+        from = { x: event.clientX, y: event.clientY };
+        start = handle.at();
+        moving = false;
+        grip.setPointerCapture(event.pointerId);
+        iframeDoc.documentElement.classList.add("rb-dragging");
+      });
+
+      grip.addEventListener("pointermove", (event) => {
+        if (!from) return;
+        const now = { x: event.clientX, y: event.clientY };
+        if (!moving && !isDrag(from, now)) return;
+        moving = true;
+        justDragged = true;
+        remember(dragged(start, from, now, handle.bounds()));
+      });
+
+      const release = () => {
+        from = null;
+        iframeDoc.documentElement.classList.remove("rb-dragging");
+      };
+      grip.addEventListener("pointerup", release);
+      grip.addEventListener("pointercancel", release);
+      grip.addEventListener("lostpointercapture", release);
+    }
+
+    /** A drag must not also flip the bar; cleared by the click it suppresses. Outside `open`
+     * because the bar is rebuilt on every edit and the pointer does not care. */
+    let justDragged = false;
+
     const open = (el: HTMLElement) => {
       close();
       const section = el.closest<HTMLElement>("[data-section]");
@@ -3856,9 +3971,77 @@ export function Editor({
         bar.appendChild(linkGroup);
       }
 
-      // Appended to the section, then measured, then placed: the height is not known until it is
-      // in the document, and the flip depends on the height.
-      section.appendChild(bar);
+      /*
+       * **The handle, in its own group so the dividers stay where they were.** `:last-child` is
+       * what takes the right border off the final group; a bare button appended after the groups
+       * would have left the previously-last one bordered and the grip floating beside it.
+       */
+      const gripGroup = iframeDoc.createElement("div");
+      gripGroup.className = "rb-toolbar-group";
+      const grip = iframeDoc.createElement("button");
+      grip.type = "button";
+      grip.className = "rb-toolbar-grip";
+      grip.dataset["action"] = "grip";
+      grip.setAttribute("aria-label", es["editor.bar.grip"]);
+      // `title` as well, which is this bar's own idiom for saying what an icon does — six of its
+      // controls already carry one. The cluster's word pill would be one thing too many in a bar
+      // that is already captioned.
+      grip.title = es["editor.bar.grip"];
+      grip.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="5" r="1.7"/><circle cx="15" cy="5" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="19" r="1.7"/><circle cx="15" cy="19" r="1.7"/></svg>`;
+      gripGroup.appendChild(grip);
+      bar.appendChild(gripGroup);
+
+      /**
+       * **Beside the words it acts on, and not at the end of the section — which is what makes a
+       * keyboard able to reach it at all.**
+       *
+       * It was `section.appendChild(bar)`, so the bar was the section's last child and Tab from a
+       * text walked every remaining text, the sample badge and the call to action before arriving.
+       * It never arrived: focus landing on the badge is focus leaving the words, and the deferred
+       * blur closes the bar then — correctly. Measured on 14 October 2026 writing the walk for the
+       * handle: «la barra se cerró a las 3 tabulaciones». So the whole bar, not only this sprint's
+       * grip, has been out of a keyboard's reach since sprint 9, and it is the Tab order and not
+       * the controls that did it.
+       *
+       * Inserted after the element's **branch** rather than after the element itself: a caption
+       * inside an `.rb-line` would otherwise make that line the bar's `offsetParent`, and every
+       * coordinate below is measured against the section. A direct child of the section keeps the
+       * section as the offsetParent, which is what the arithmetic assumes.
+       *
+       * Nothing moves on screen. The bar is `position: absolute`, so it is out of flow and not a
+       * grid item: it occupies no track in the section's twelve columns and displaces nothing,
+       * whichever child it sits beside. It was already a direct child; only its index changes.
+       */
+      /**
+       * **One Tab stop for the whole bar, and it is the handle.**
+       *
+       * `role="toolbar"` has been on this element since sprint 9 and promises a keyboard exactly
+       * this: one stop for the group, arrows between what is inside it. The bar kept neither half —
+       * and measured, it kept them so thoroughly that *none* of its controls could be reached by
+       * Tab at all, because the bar sat after everything in its section and closed as soon as focus
+       * left the words.
+       *
+       * Moving it beside the words fixes the reach and would cost fifteen presses every time
+       * somebody Tabs past a paragraph. So the controls are taken out of the tab order and the
+       * handle is left in: the journey grows by one stop, the drag gets the keyboard equivalent
+       * this repository requires of it, and the fourteen controls are no worse off than they were
+       * yesterday — they were unreachable then too, and a mouse still presses them exactly as
+       * before.
+       *
+       * **The other half of the contract is a day of its own**, and the backlog says why: arrows
+       * between these controls is the easy part, and what they act on is the hard one — «B» needs
+       * the words the person chose, and Tab-ing off a text collapses the selection that chose them.
+       */
+      for (const control of bar.querySelectorAll<HTMLElement>("button, select, input")) {
+        if (control !== grip) control.tabIndex = -1;
+      }
+
+      let branch: HTMLElement = el;
+      while (branch.parentElement && branch.parentElement !== section) {
+        branch = branch.parentElement;
+      }
+      if (branch.parentElement === section) branch.after(bar);
+      else section.appendChild(bar);
 
       /**
        * The element's offset from the section's own box, summed up the `offsetParent` chain.
@@ -3887,18 +4070,42 @@ export function Editor({
         left += node.offsetLeft;
       }
 
-      const above = top - bar.offsetHeight - 8;
-      // Below when there is no room above — the cover's headline under a tight scale, where the
-      // section's own padding is all the room there is. Mockup 08 puts the bar at `top: -52px`
-      // unconditionally, which for the first element of the page lands outside the iframe's visible
-      // area and cannot be clicked; mockup 17 draws this flip instead.
-      bar.style.top = above < 0 ? `${top + el.offsetHeight + 8}px` : `${above}px`;
-      // Clamped at both ends: `0` keeps it from starting left of the section, and the right clamp
-      // keeps a bar anchored to an element far across the grid from running off the other side.
-      // The `max-width` above is what handles a bar wider than the section; this is what handles a
-      // bar that merely starts too far right.
-      const rightmost = Math.max(section.clientWidth - bar.offsetWidth - 8, 0);
-      bar.style.left = `${Math.min(Math.max(left, 0), rightmost)}px`;
+      /*
+       * **The flip and the clamp now live in `barPosition.ts`**, unchanged, so that something can
+       * call them: four lines inside a four-hundred-line function had never been asked a question
+       * by anything but themselves, and the one time they were wrong — measuring the element
+       * against the page instead of against its section — two mistakes cancelled and a walk on the
+       * second section is what found it.
+       */
+      const geometry = (): ToolbarGeometry => ({
+        elementTop: top,
+        elementLeft: left,
+        elementHeight: el.offsetHeight,
+        barWidth: bar.offsetWidth,
+        barHeight: bar.offsetHeight,
+        hostWidth: section.clientWidth,
+      });
+      const bounds = (): Bounds => ({
+        hostWidth: section.clientWidth,
+        hostHeight: section.clientHeight,
+        barWidth: bar.offsetWidth,
+        barHeight: bar.offsetHeight,
+      });
+      const place = () => {
+        const computed = toolbarPoint(geometry()).point;
+        const nudge = toolbarOffset.current.get(sectionId) ?? { x: 0, y: 0 };
+        const at = withOffset(computed, nudge, bounds());
+        bar.style.top = `${at.y}px`;
+        bar.style.left = `${at.x}px`;
+      };
+      place();
+      wireBarGrip(grip, {
+        sectionId,
+        geometry,
+        bounds,
+        at: () => ({ x: bar.offsetLeft, y: bar.offsetTop }),
+        place,
+      });
     };
 
     for (const el of iframeDoc.querySelectorAll<HTMLElement>("[data-id]")) {
@@ -5142,6 +5349,17 @@ export function Editor({
       // `B` and `I`: square, because they are one glyph each and a padded pill would read as a
       // word. Drawn in the weight and slant they apply, which is what makes them legible without a
       // caption — the group still has one, for a screen reader.
+      /*
+       * The bar's own handle: ink on white like the cluster's, at the height of the bar's controls
+       * rather than the cluster's. 24 wide because WCAG 2.5.8 asks 24 of a pointer target, and the
+       * thing somebody has to catch to move a bar out of their way is the last one to shave.
+       */
+      `.rb-toolbar-grip { width: ${VERB_SCALE.grip}px; height: 26px; display: flex;`,
+      `  align-items: center; justify-content: center; padding: 0; color: ${CHROME_SCALE.ink};`,
+      `  background: ${CHROME_SCALE.surface}; border: 1px solid ${CHROME_SCALE.borderStrong};`,
+      "  border-radius: 999px; cursor: grab; touch-action: none; }",
+      `.rb-toolbar-grip:focus-visible { outline: 2px solid ${CHROME_SCALE.ink};`,
+      "  outline-offset: 1px; }",
       ".rb-toolbar-mark { width: 26px; height: 26px; padding: 0; font-size: 13px;",
       "  color: #334155; background: #FFFFFF; border: 1px solid #E3E8F0; border-radius: 7px; }",
       ".rb-toolbar-mark-strong { font-weight: 800; }",

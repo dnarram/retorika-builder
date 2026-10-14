@@ -238,3 +238,87 @@ export function dragged(start: Point, from: Point, to: Point, bounds: Bounds, in
 export function tipSide(point: Point, bounds: Bounds): "below" | "above" {
   return point.y + bounds.barHeight + TIP_ROOM > bounds.hostHeight ? "above" : "below";
 }
+
+/**
+ * Between the text being edited and the bar that acts on it.
+ *
+ * Eight, the same number the cluster is inset by, and a different meaning: this is the air between
+ * a bar and the words it belongs to, not a margin from the section's edge. Kept apart so that
+ * changing one never silently changes the other.
+ */
+export const TOOLBAR_GAP = 8;
+
+/** An element being edited, the bar that acts on it, and the section both are inside. */
+export interface ToolbarGeometry {
+  /** The element's offset inside its section, summed up the `offsetParent` chain. */
+  readonly elementTop: number;
+  readonly elementLeft: number;
+  readonly elementHeight: number;
+  readonly barWidth: number;
+  readonly barHeight: number;
+  readonly hostWidth: number;
+  readonly gap?: number;
+}
+
+/**
+ * Where the floating text bar goes: above the words it acts on, or below them when there is no room.
+ *
+ * **This arithmetic is not new — it is `wireToolbar`'s own, moved here so that something can ask it
+ * questions.** It has been four lines inside a 400-line function since sprint 9, and the one time it
+ * was wrong it was wrong in a way that read as right: the first version measured the element against
+ * the page instead of against its section, and the error pushed every bar into the flip branch,
+ * which pushed it back up by roughly the same amount. Two mistakes cancelling, found by a walk on
+ * the second section and not by anything that could be unit-tested, because there was nothing to
+ * call.
+ *
+ * `side` asks for one or lets the room decide. **An «above» with no room above comes back «below»**
+ * rather than drawn off the top of the frame: that is mockup 08's unconditional `top: -52px`, which
+ * for the first element of a page lands outside the iframe's visible area and cannot be clicked.
+ * Mockup 17 draws the flip this returns.
+ *
+ * The horizontal clamp keeps a bar anchored to an element far across the grid from running off the
+ * other side; `max-width` in the stylesheet is what handles a bar wider than its section, and this
+ * is what handles one that merely starts too far right.
+ */
+export function toolbarPoint(
+  geometry: ToolbarGeometry,
+  side: "auto" | "above" | "below" = "auto",
+): { point: Point; side: "above" | "below" } {
+  const gap = geometry.gap ?? TOOLBAR_GAP;
+  const above = geometry.elementTop - geometry.barHeight - gap;
+  const below = geometry.elementTop + geometry.elementHeight + gap;
+  const wanted = side === "auto" ? (above < 0 ? "below" : "above") : side;
+  const settled = wanted === "above" && above < 0 ? "below" : wanted;
+  const rightmost = Math.max(geometry.hostWidth - geometry.barWidth - gap, 0);
+  return {
+    point: {
+      x: Math.min(Math.max(geometry.elementLeft, 0), rightmost),
+      y: settled === "above" ? above : below,
+    },
+    side: settled,
+  };
+}
+
+/** How far one point is from another — what «the person moved it to here» is remembered as. */
+export function offsetBetween(computed: Point, placed: Point): Point {
+  return { x: placed.x - computed.x, y: placed.y - computed.y };
+}
+
+/**
+ * The computed place, plus whatever displacement this section is remembering.
+ *
+ * **A displacement and not a position, which is the decision this makes possible.** The text bar is
+ * computed afresh for every element it opens on — it flips, it clamps, it follows a different
+ * paragraph each time — so remembering «it was at 340, 96» would mean re-dragging it for each of a
+ * cover's five texts, and would freeze a bar that is supposed to keep flipping. A displacement says
+ * what the person actually meant: *in this section, keep it further right and lower down than it
+ * would otherwise go*, and the same words apply to the next text they touch.
+ *
+ * **An untouched bar is returned untouched**, deliberately: clamping a computed position that
+ * nobody has moved would change where the bar sits for everyone, including the people this feature
+ * is not for. Only a displaced one is held inside its section.
+ */
+export function withOffset(computed: Point, offset: Point, bounds: Bounds): Point {
+  if (offset.x === 0 && offset.y === 0) return computed;
+  return clampToHost({ x: computed.x + offset.x, y: computed.y + offset.y }, bounds);
+}

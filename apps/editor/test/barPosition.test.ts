@@ -12,9 +12,14 @@ import {
   isDrag,
   nearestCorner,
   nextCorner,
+  offsetBetween,
   type Point,
   stepped,
+  TOOLBAR_GAP,
+  type ToolbarGeometry,
   tipSide,
+  toolbarPoint,
+  withOffset,
 } from "../src/editor/barPosition.ts";
 
 /**
@@ -192,5 +197,96 @@ describe("which side the words go on", () => {
   it("above once the bar is low enough that a word under it would be drawn past the edge", () => {
     expect(tipSide(cornerPoint("bottom-right", SECTION), SECTION)).toBe("above");
     expect(tipSide(cornerPoint("bottom-left", SECTION), SECTION)).toBe("above");
+  });
+});
+
+/**
+ * The floating text bar's own placement, which until today was four lines inside a four-hundred
+ * line function and had never been called by anything but itself.
+ *
+ * A paragraph 120px down its section, 30px tall, with a 400 × 44 bar for it in a section 1200 wide.
+ */
+const TEXT: ToolbarGeometry = {
+  elementTop: 120,
+  elementLeft: 40,
+  elementHeight: 30,
+  barWidth: 400,
+  barHeight: 44,
+  hostWidth: 1200,
+};
+
+describe("where the floating text bar goes", () => {
+  it("sits above the words it acts on when there is room", () => {
+    expect(toolbarPoint(TEXT)).toEqual({
+      point: { x: TEXT.elementLeft, y: TEXT.elementTop - TEXT.barHeight - TOOLBAR_GAP },
+      side: "above",
+    });
+  });
+
+  /**
+   * The cover's headline under a tight scale, where the section's own padding is all the room there
+   * is. Mockup 08 puts the bar at `top: -52px` unconditionally, which there lands outside the
+   * iframe's own visible area and cannot be clicked; mockup 17 draws this flip.
+   */
+  it("flips below when there is no room above it", () => {
+    const tight: ToolbarGeometry = { ...TEXT, elementTop: 20 };
+    expect(toolbarPoint(tight)).toEqual({
+      point: { x: tight.elementLeft, y: 20 + tight.elementHeight + TOOLBAR_GAP },
+      side: "below",
+    });
+  });
+
+  it("gives the side it can when asked for one it cannot", () => {
+    const tight: ToolbarGeometry = { ...TEXT, elementTop: 20 };
+    expect(toolbarPoint(tight, "above").side).toBe("below");
+    // And obeys the ask where there is room for it.
+    expect(toolbarPoint(TEXT, "below")).toEqual({
+      point: { x: TEXT.elementLeft, y: TEXT.elementTop + TEXT.elementHeight + TOOLBAR_GAP },
+      side: "below",
+    });
+  });
+
+  it("clamps the left edge at both ends of the section", () => {
+    expect(toolbarPoint({ ...TEXT, elementLeft: -200 }).point.x).toBe(0);
+    expect(toolbarPoint({ ...TEXT, elementLeft: 5_000 }).point.x).toBe(
+      TEXT.hostWidth - TEXT.barWidth - TOOLBAR_GAP,
+    );
+  });
+
+  it("starts a bar wider than its section at zero rather than at a negative left", () => {
+    expect(toolbarPoint({ ...TEXT, barWidth: 2_000, elementLeft: 300 }).point.x).toBe(0);
+  });
+});
+
+describe("remembering where a bar was put, as a displacement", () => {
+  const BOUNDS: Bounds = { hostWidth: 1200, hostHeight: 600, barWidth: 400, barHeight: 44 };
+
+  it("leaves an untouched bar exactly where it was computed", () => {
+    const computed = toolbarPoint(TEXT).point;
+    expect(withOffset(computed, { x: 0, y: 0 }, BOUNDS)).toBe(computed);
+  });
+
+  it("comes back to where it was dropped", () => {
+    const computed = toolbarPoint(TEXT).point;
+    const placed: Point = { x: computed.x + 120, y: computed.y + 40 };
+    expect(withOffset(computed, offsetBetween(computed, placed), BOUNDS)).toEqual(placed);
+  });
+
+  /**
+   * The point of a displacement rather than a position: the same «further right and lower down»
+   * applies to the next text in the section, which is computed somewhere else entirely.
+   */
+  it("applies the same displacement to a different element's computed place", () => {
+    const first = toolbarPoint(TEXT).point;
+    const nudge = offsetBetween(first, { x: first.x + 120, y: first.y + 40 });
+    const second = toolbarPoint({ ...TEXT, elementTop: 300, elementLeft: 90 }).point;
+    expect(withOffset(second, nudge, BOUNDS)).toEqual({ x: second.x + 120, y: second.y + 40 });
+  });
+
+  it("holds a displacement that would take the bar out of its section", () => {
+    const computed = toolbarPoint(TEXT).point;
+    const far = withOffset(computed, { x: 9_000, y: 9_000 }, BOUNDS);
+    expect(far.x).toBe(BOUNDS.hostWidth - BOUNDS.barWidth - BAR_INSET);
+    expect(far.y).toBe(BOUNDS.hostHeight - BOUNDS.barHeight - BAR_INSET);
   });
 });
