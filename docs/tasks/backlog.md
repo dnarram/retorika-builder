@@ -841,6 +841,25 @@ open survives.
     `packages/renderer`'s harness forces contrast to run and this pass deliberately does not, so
     that one failure cannot appear in two places with two owners.
 
+- **The floating text bar kept half of `role="toolbar"` on 14 October 2026, and the other half is a
+  day of its own.** Until that day the bar was `section.appendChild(bar)`, so Tab from a text walked
+  every remaining text, the sample badge and the call to action before reaching it — and never did,
+  because focus on the badge is focus off the words and the deferred blur closes the bar there,
+  correctly. Measured while writing the walk for sprint 20 day 3: «la barra se cerró a las 3
+  tabulaciones». **None** of its fourteen controls had been reachable by Tab since sprint 9.
+
+  Sprint 20 day 3 moved the bar beside the words and took its controls out of the tab order, leaving
+  the handle as the group's one stop: that is the first half of what the role promises, and it is
+  what gives the drag the keyboard equivalent this repository requires. Leaving the controls in the
+  order instead would have cost fifteen presses every time somebody Tabs past a paragraph — measured
+  too: «el recorrido entero sin tocar el ratón» ran out of its eighty.
+
+  **What is still owed: arrows between the controls, and what they act on.** The arrows are the easy
+  half. The hard one is that «B», the colour and the size need the words the person chose, and
+  Tab-ing off a text collapses the selection that chose them — which is why this bar was born
+  mouse-first and why it cannot be finished in passing. Whoever takes it should decide what a
+  keyboard's «selection» is here before writing a single key handler.
+
 - **`let page` at module scope in the e2e file means a walk can poll the wrong tab and still
   compile.** Found on sprint 17 day 5: an assertion written as `focus(page)` inside a walk whose
   own tab is called `studio` typechecked cleanly, because line 323 declares a `let page: Page` that

@@ -1837,3 +1837,73 @@ sino que **reventaba**. `backlog.md` lleva ese choque contado tres veces desde e
 pregunta, y lo que era un choque es una vuelta más del sondeo, que es justo para lo que está el
 sondeo.
 
+### La barra flotante del texto se mueve, y recuerda un desplazamiento (día 3)
+
+La otra barra que flota sobre el lienzo, y la que más tapa: se dibuja justo encima de las palabras
+que edita, que es exactamente donde están las palabras de al lado. Mismo asa que el día 2, con una
+diferencia que importa.
+
+**Lo que se recuerda es un desplazamiento, no una posición.** Esta barra se calcula de nuevo para
+cada texto que toca —vuelca arriba o abajo, se recorta—, así que guardar «estaba en 340, 96»
+obligaría a arrastrarla otra vez en cada uno de los cinco textos de una portada, y congelaría una
+barra cuyo trabajo es seguir a las palabras. Un desplazamiento dice lo que la persona quiso decir:
+*en esta sección, más a la derecha y más abajo de donde iría*, y esa frase sirve para el párrafo
+siguiente. Medido en el navegador: el titular pasa de 28 a 135 con un clic en el asa, y el
+subtitular, que se calcula en 149, abre en 256 — el mismo desplazamiento de 107.
+
+**La aritmética del volteo sale de `wireToolbar` y pasa a `barPosition.ts`, sin cambiarla.** Eran
+cuatro líneas dentro de una función de cuatrocientas y **nadie las había llamado nunca** salvo ellas
+mismas; la única vez que estuvieron mal lo estuvieron de una forma que parecía bien —medían el
+elemento contra la página en vez de contra su sección, y el error empujaba cada barra a la rama del
+volteo, que la devolvía arriba más o menos lo mismo—. Dos errores anulándose, encontrados por una
+caminata en la segunda sección y no por nada que se pudiera llamar desde una prueba. Ahora se puede,
+y tiene seis.
+
+**El asa, tres maneras y un solo camino.** Un clic la pasa **al otro lado del texto**, que es la
+única mudanza grande que esta barra tiene —no hay esquinas que recorrer—; pulsado otra vez vuelve.
+Donde no hay otro lado —un titular con el relleno de la sección y nada más encima— el clic deshace
+lo que hubieran hecho las flechas, así que la pulsación siempre significa «ponla donde le toca» y
+nunca significa nada. Las flechas empujan, `Inicio` olvida, e Intro y espacio son el clic del propio
+botón.
+
+**Arrastrarla no cuesta ni el foco ni las palabras elegidas**, que es lo que la haría inútil: una
+barra de texto se mueve para seguir escribiendo, no para empezar de nuevo. Lo que lo sostiene ya
+estaba — el `mousedown` delegado de la barra impide el cambio de foco en cualquiera de sus botones —
+y ahora hay caminata que lo asevera, con las palabras elegidas intactas y la barra volviendo a su
+sitio después de que «negrita» rehaga el documento entero.
+
+**Un hallazgo que la caminata destapó, y que sí se arregla: la barra no la alcanzaba un teclado.**
+No el asa: **ninguno** de sus catorce controles, desde el sprint 9. La barra se añadía al final de su
+sección, así que Tab desde un texto recorría los textos que quedaban, la chapa de la foto y la
+llamada a la acción antes de llegar a ella — y no llegaba, porque el foco en la chapa es el foco
+fuera de las palabras y la barra se cierra ahí, con razón. Medido mientras se escribía la caminata:
+«la barra se cerró a las 3 tabulaciones». La regla de este repositorio dice que un arrastre trae su
+equivalente de teclado el mismo sprint, así que esto no se podía anotar y seguir.
+
+**Se arregla en dos movimientos y con una decisión.** La barra pasa a ir **al lado de las palabras**
+—detrás de la rama de la sección que contiene el texto, no detrás del elemento, porque un pie de foto
+dentro de una `.rb-line` convertiría esa línea en su `offsetParent` y toda la aritmética mide contra
+la sección—. Nada se mueve en pantalla: es `position: absolute`, no es un elemento del grid, no ocupa
+ninguna de las doce columnas y ya era hija directa de la sección; lo único que cambia es su índice, y
+con él el orden de Tab.
+
+Y la decisión: **una sola parada de Tab, que es el asa.** Ponerla al lado y dejar sus quince
+controles en el orden costaría quince pulsaciones cada vez que alguien pasa por un párrafo —medido
+también: la caminata del recorrido sin ratón se quedó sin sus ochenta—. `role="toolbar"` lleva en
+esta barra desde el sprint 9 prometiendo exactamente una parada y flechas por dentro, y no cumplía
+ninguna de las dos mitades. Ahora cumple la primera: el viaje de un teclado crece en **uno**, el
+arrastre tiene su equivalente, y los catorce controles no están peor que ayer —ayer tampoco se
+alcanzaban, y el ratón los pulsa igual—.
+
+**La otra mitad del contrato es un día entero y queda dicha.** Las flechas entre los controles son la
+parte fácil; la difícil es sobre qué actúan: «B» necesita las palabras que la persona eligió, y salir
+del texto con Tab deshace la selección que las eligió. Esa es la razón de que esta barra naciera
+siendo de ratón, y la razón de que no se resuelva de pasada en el día del arrastre.
+
+**Y dos cosas más que las caminatas enseñaron.** El tope también es la regla: la primera versión
+empujaba la barra hacia abajo desde el último texto de una portada, donde el recorte solo dejaba
+cuatro píxeles de los treinta y dos, y midió eso. Y un ayudante que preguntaba por el estado «a
+través de» la barra se quedaba treinta segundos esperando a un elemento que ya no existía cuando el
+foco salía de los textos; ahora pregunta a través del `body` y dice a las cuántas tabulaciones se
+cerró.
+
