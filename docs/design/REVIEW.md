@@ -1678,3 +1678,87 @@ medida de desbordes entre 144 y 842 ms; de la pulsación al ZIP entre 2 035 y 2 
 mínimo manda y el trabajo real cabe dentro; el ZIP, 259 800 bytes. Sin el mínimo, la pantalla duraría
 menos de un segundo en esta máquina y más en un portátil cargado o en el CI, que ya vio la medida
 pasar de cinco segundos: ese rango es exactamente lo que el mínimo iguala.
+
+## Sprint 20 — «Las barras se mueven, los verbos hablan y la marca es vector» (14 de octubre de 2026)
+
+David, tras fusionar el logotipo vectorial: dos encargos para el lienzo y una pregunta. Las barras
+flotantes —el grupo de verbos de la sección y la barra de texto— se podrán arrastrar cuando tapen
+algo que se quiere editar, recordando su sitio por sección mientras dura la sesión; los iconos
+azules y rojos del lienzo crecen y dicen qué hacen; y los SVG de la marca pasan a servirse en lugar
+de los PNG. Solo los iconos del lienzo: el raíl, la barra superior y los paneles no se tocan.
+
+### Los verbos crecen y dicen su nombre (día 1)
+
+«Los iconos se ven muy pequeños y no consigo diferenciarlos fácilmente y además es difícil saber qué
+hacen exactamente.» Medido, tenía razón dos veces. **26 px menos el aro blanco de 2 son 22, y dentro
+un glifo de 13**: ocho siluetas que de un vistazo son ocho marcas grises. Y ninguno decía su nombre
+en ningún sitio salvo el `aria-label`, que solo oye quien no mira.
+
+Ahora miden **32 px con el glifo a 16**, y al pasar el ratón o al llegar el teclado crecen a **36**
+y aparece una palabra debajo: Subir, Bajar, Aspecto, A mano, Duplicar, A página, Campos, Borrar. El
+tamaño nunca lo decidió nadie —las maquetas no dibujan este grupo, y el 26 parece heredado de los
+botones cuadrados de la barra de texto, que no llevan aro— así que ahora vive en `VERB_SCALE`
+(`chromeScale.ts`), de donde lo leen el CSS, los ocho iconos y las caminatas. **Una medida copiada a
+mano en una prueba es una medida que acabará dando por bueno lo que el producto ya no hace**, que es
+la condición que puso David al aprobar el sprint.
+
+**La palabra es hermana del botón, nunca hija**, y esa colocación es la decisión. El barrido de
+320 px examina cada `button` con texto y mide si sus palabras caben en su caja; estos ocho siempre
+se saltaron por ser solo icono, y una palabra *dentro* metería ocho discos de 32 px en una prueba
+sobre texto desbordado —fallando, con razón, y sin que nadie lo hubiera pedido—. Además `focus()`,
+en las caminatas, lee `data-action` de lo que tenga el foco: el asidero tiene que seguir en el
+elemento enfocable. Lleva `aria-hidden`, porque el botón ya dice «Subir esta sección» y un lector
+que además leyera «Subir» diría dos veces lo mismo, la segunda más corto. Es para los ojos.
+
+**El crecimiento es `transform`, nunca ancho.** Un botón que creciera cambiando su caja empujaría a
+sus vecinos de lado, justo bajo un puntero que ya va camino de uno de ellos: así se pulsa «Borrar»
+habiendo apuntado a «Campos».
+
+**El énfasis del ratón va dentro de `@media (hover: hover)`** y el del teclado fuera, que es la regla
+que dirección fijó para las píldoras: una pantalla táctil recibe siempre la versión visible, por lo
+que el reposo tenía que ser el legible primero. Y **los ocho ganan anillo de foco**, que no tenían:
+`globals.css` dibuja uno desde el sprint 15 y las píldoras del marco lo recibieron el mismo día; a
+estos se los saltó, así que un teclado se quedaba con lo que Chromium pinte por defecto sobre un
+disco azul. Es tinta y no azul de marca, porque el anillo tiene que verse *contra* el azul en siete
+de los ocho.
+
+El azul y el rojo salen de `CHROME_SCALE` en vez de los `#156FE7` y `#DC2626` escritos al lado, que
+eran los mismos valores por suerte y no por referencia. Los dos hex de hover más oscuros se van: con
+el tamaño y la sombra diciendo «estás en este», un color que solo servía para eso no tenía ya nada
+que decir.
+
+**`role="group"` con nombre, y no `role="toolbar"`.** El patrón WAI-ARIA de barra promete al teclado
+una parada de Tab para el conjunto y las flechas moviéndose entre sus controles. Aquí no se cumple
+ninguna de las dos: cada verbo es su parada —contra eso están escritas las caminatas del sprint 17
+día 4— y las flechas son del lienzo, para cambiar de sección. Un rol que anuncia un contrato que las
+teclas no honran es peor que un grupo con nombre, que es justo lo que faltaba: ocho botones que un
+lector alcanzaba sin que nada dijera de qué eran ocho. (`.rb-toolbar` sí lleva `toolbar` sin ese
+contrato; queda anotado en el backlog, no se toca hoy.)
+
+**Dos hallazgos que nadie buscaba, los dos medidos.**
+
+El primero, la sonda que faltaba y que este mismo documento pedía sin añadir: «si el grupo de iconos
+se saliera de su sección a 320 px, nada lo mediría». Ocho botones 6 px más anchos cada uno son 48 px
+más de grupo, así que dejó de ser hipotético. Con `flex-wrap` y un ancho máximo el grupo cabe —
+medido: sección 320 px, grupo 248— y ahora hay caminata que lo dice.
+
+El segundo lo encontró esa sonda al mirar la portada: **a 320 px el grupo mide 212 px y la chapa
+«Foto de ejemplo» 116 en la esquina contraria de la misma franja, y se solapan 74 px**. La chapa
+lleva `z-index: 6` y el grupo no llevaba ninguno, así que la chapa pintaba encima de «Subir» y
+«Bajar» **y se quedaba con sus clics**: dos botones muertos, y muertos ya antes de este día, cuando
+el solape era de unos 38. El grupo pasa a `z-index: 10` —encima de la chapa, debajo de los menús que
+él mismo abre (20) y de la barra de texto (30)— y la caminata pregunta por el punto y no por el
+número: `elementFromPoint` en el centro del primer verbo tiene que devolver el verbo. Lo que importa
+no es qué capa gana, sino qué recibe el dedo.
+
+**Y un guardián que se arregló en vez de esquivarse.** `chromeContrast.test.ts` comprobaba que el
+énfasis de la píldora estaba tras `@media (hover: hover)` buscando **la primera** aparición de esa
+consulta en el fichero y mirando 400 caracteres por delante. El día que un segundo control gana
+énfasis de hover —hoy— ese guardián habría fallado sobre la píldora, que no ha cambiado, mandando a
+quien lo leyera a buscar al sitio equivocado. Ahora lee todos los bloques y pregunta si la regla está
+en alguno. **Una prueba que se rompe por el orden de reglas que no le incumben es una prueba que
+enseña a mover código para contentarla.**
+
+El menú de composiciones cuelga del grupo, que es 6 px más alto: su `top` se calcula desde
+`VERB_SCALE` y queda a 4 px del borde inferior del grupo, alineado a su derecha. Medido, no supuesto.
+

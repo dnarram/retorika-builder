@@ -14,6 +14,7 @@ import {
 } from "@playwright/test";
 import { GALLERY_SAMPLE_COUNT } from "@retorika/generator";
 import { afterAll, beforeAll, describe, it } from "vitest";
+import { VERB_SCALE } from "../src/editor/chromeScale.ts";
 import { NARROWEST_WIDTH } from "../src/editor/overflowCheck.ts";
 import { BASE_URL, QUESTIONNAIRE_URL, startEditorServer, stopEditorServer } from "./server.ts"; /**
  * The preview frame, addressed as the one on screen rather than as «an iframe».
@@ -11810,6 +11811,245 @@ describe("la pantalla de construcción al descargar", () => {
           }
         })(),
       ]);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+});
+
+/**
+ * Sprint 20 día 1 — los verbos de una sección, al tamaño que David puede distinguir.
+ *
+ * «Dentro de la sección en la pantalla principal del editor los iconos se ven muy pequeños y no
+ * consigo diferenciarlos fácilmente y además es difícil saber qué hacen exactamente» (14 de octubre
+ * de 2026). Tres cosas, entonces: **más grandes**, **con su palabra**, y la palabra **fuera del
+ * botón** — que es lo que mantiene a estos ocho botones fuera del barrido de texto pintado, donde
+ * no pintan nada.
+ *
+ * Los números no se escriben aquí: salen de `VERB_SCALE`, que es también de donde los saca el CSS.
+ * Una medida copiada a mano en un test es una medida que acabará dando por bueno lo que el producto
+ * ya no hace (condición de David al aprobar el sprint).
+ */
+describe("sprint 20 día 1 — los verbos crecen y dicen su nombre", () => {
+  const VIEWPORT = { width: 1440, height: 900 };
+  const GROWN = `matrix(${VERB_SCALE.grow}, 0, 0, ${VERB_SCALE.grow}, 0, 0)`;
+
+  /** Everything about one verb and the word beside it, read inside the frame in one pass. */
+  function verb(page: Page, action: string) {
+    return page
+      .frameLocator(PREVIEW)
+      .first()
+      .locator(`.rb-actions [data-action="${action}"]`)
+      .evaluate((el) => {
+        const tip = el.nextElementSibling;
+        const svg = el.querySelector("svg");
+        return {
+          width: Math.round(el.getBoundingClientRect().width),
+          height: Math.round(el.getBoundingClientRect().height),
+          icon: svg ? Math.round(svg.getBoundingClientRect().width) : -1,
+          transform: getComputedStyle(el).transform,
+          transition: getComputedStyle(el).transitionDuration,
+          wordIsSibling: tip?.classList.contains("rb-tip") === true,
+          wordInsideButton: el.querySelector(".rb-tip") !== null,
+          word: tip?.textContent ?? null,
+          wordHidden: tip?.getAttribute("aria-hidden") ?? null,
+          wordOpacity: tip ? getComputedStyle(tip).opacity : null,
+        };
+      });
+  }
+
+  it("miden lo que dice la escala, crecen al enfocarse con el teclado, y dicen su palabra fuera del botón", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const walker = await context.newPage();
+    try {
+      await intoTheCanvas(walker);
+      const frame = walker.frameLocator(PREVIEW).first();
+      await keyboardTo(walker, "sec-services");
+      await walker.keyboard.press("Enter");
+      await expect(frame.locator(".rb-actions")).toHaveCount(1);
+
+      // **El grupo tiene nombre**, que es lo que no tenía: ocho botones que un lector de pantalla
+      // alcanzaba sin que nada dijera de qué eran ocho. `group` y no `toolbar`, porque las flechas
+      // son del lienzo y cada verbo es su propia parada de Tab.
+      await expect(frame.locator(".rb-actions")).toHaveAttribute("role", "group");
+      await expect(frame.locator(".rb-actions")).toHaveAttribute(
+        "aria-label",
+        "Acciones de esta sección",
+      );
+
+      // En reposo: la medida de la escala, el icono a su tamaño, y la palabra callada.
+      const resting = await verb(walker, "duplicate");
+      expect(resting.width, "el botón no mide lo que declara la escala").toBe(VERB_SCALE.size);
+      expect(resting.height).toBe(VERB_SCALE.size);
+      expect(resting.icon, "el icono no se dibuja al tamaño de la escala").toBe(VERB_SCALE.icon);
+      expect(resting.transform).toBe("none");
+      expect(resting.wordOpacity).toBe("0");
+
+      // **La palabra es hermana del botón, nunca hija.** Si entrara dentro, el barrido de texto
+      // pintado a 320px empezaría a medir ocho discos de 32px, y `focus()` leería el asidero de
+      // otro elemento.
+      expect(resting.wordIsSibling).toBe(true);
+      expect(resting.wordInsideButton, "la palabra se metió dentro del botón").toBe(false);
+      expect(resting.word).toBe("Duplicar");
+      expect(resting.wordHidden, "la palabra repetiría lo que ya dice el aria-label").toBe("true");
+
+      // Con el teclado encima: el mismo énfasis que recibe un puntero, porque un teclado no tiene
+      // puntero con el que precederlo.
+      await tabToVerb(walker, "move-down");
+      await expect.poll(() => verb(walker, "move-down").then((v) => v.transform)).toBe(GROWN);
+      const focused = await verb(walker, "move-down");
+      expect(focused.width, "enfocado no llega a los 36px").toBe(VERB_SCALE.size * VERB_SCALE.grow);
+      expect(focused.word).toBe("Bajar");
+      await expect.poll(() => verb(walker, "move-down").then((v) => v.wordOpacity)).toBe("1");
+
+      // Y el largo sigue siendo el largo: la palabra corta no sustituye a la frase del `aria-label`.
+      await expect(frame.locator('.rb-actions [data-action="move-down"]')).toHaveAttribute(
+        "aria-label",
+        "Bajar esta sección",
+      );
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("con el puntero encima crecen igual, y el grupo cabe en su sección a 320 px", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const walker = await context.newPage();
+    try {
+      await intoTheCanvas(walker);
+      const frame = walker.frameLocator(PREVIEW).first();
+      await frame.locator('[data-section="sec-services"]').click();
+      await expect(frame.locator(".rb-actions")).toHaveCount(1);
+
+      await frame.locator('.rb-action[aria-label="Duplicar esta sección"]').hover();
+      await expect.poll(() => verb(walker, "duplicate").then((v) => v.transform)).toBe(GROWN);
+      await expect.poll(() => verb(walker, "duplicate").then((v) => v.wordOpacity)).toBe("1");
+
+      /**
+       * **La sonda que el barrido de 320px dijo que faltaba**, con sus palabras: «si el grupo de
+       * iconos se saliera de su sección a 320px, nada lo mediría. Es otra sonda —caja contra
+       * contenedor, no texto contra su botón— y no la añado por mi cuenta.» Ocho botones 6px más
+       * anchos cada uno son 48px más de grupo, así que deja de ser hipotética.
+       */
+      await walker.getByRole("button", { name: "Ver en móvil" }).click();
+      // Esperando a que el lienzo se estreche de verdad, no a que el botón se pulse: la primera
+      // versión midió 1168px de sección en «móvil» y la sonda lo dijo en su primera pasada.
+      await expect
+        .poll(() =>
+          frame
+            .locator('[data-section="sec-services"]')
+            .evaluate((el) => Math.round(el.getBoundingClientRect().width)),
+        )
+        .toBeLessThan(400);
+      await frame.locator('[data-section="sec-services"]').click();
+      await expect(frame.locator(".rb-actions")).toHaveCount(1);
+
+      const narrow = await frame.locator('[data-section="sec-services"]').evaluate((section) => {
+        const cluster = section.querySelector(".rb-actions");
+        const last = section.querySelector(".rb-verb:last-child .rb-tip");
+        if (!cluster || !last) return null;
+        const host = section.getBoundingClientRect();
+        const box = cluster.getBoundingClientRect();
+        const word = last.getBoundingClientRect();
+        return {
+          sectionWidth: Math.round(host.width),
+          clusterWidth: Math.round(box.width),
+          overflowLeft: Math.round(host.left - box.left),
+          overflowRight: Math.round(box.right - host.right),
+          wordOverflowRight: Math.round(word.right - host.right),
+        };
+      });
+      expect(narrow, "no hay grupo que medir").not.toBeNull();
+      expect(narrow?.sectionWidth).toBeLessThan(400);
+      expect(
+        narrow?.overflowLeft,
+        `el grupo se sale por la izquierda: ${narrow?.overflowLeft}px`,
+      ).toBeLessThanOrEqual(0);
+      expect(
+        narrow?.overflowRight,
+        `el grupo se sale por la derecha: ${narrow?.overflowRight}px`,
+      ).toBeLessThanOrEqual(0);
+      expect(
+        narrow?.wordOverflowRight,
+        `la palabra del último verbo se sale ${narrow?.wordOverflowRight}px`,
+      ).toBeLessThanOrEqual(0);
+      console.log(
+        `verbos a 320 — sección ${narrow?.sectionWidth}px, grupo ${narrow?.clusterWidth}px`,
+      );
+
+      /**
+       * **Y que se puedan pulsar donde algo más ya estaba**, que es lo que esta sonda encontró el
+       * primer día que existió. En la portada a 320px el grupo mide 212px y la chapa «Foto de
+       * ejemplo» 116px en la esquina contraria de la misma franja: se solapan 74px, la chapa lleva
+       * `z-index: 6` y el grupo no llevaba ninguno, así que la chapa pintaba encima de «Subir» y
+       * «Bajar» y se quedaba con sus clics. Dos botones muertos, y muertos ya antes de este día.
+       *
+       * Se pregunta por el punto, no por el `z-index`: lo que importa no es qué número gana sino
+       * qué recibe el dedo.
+       */
+      await frame.locator('[data-section="sec-cover"]').click();
+      await expect(frame.locator('[data-section="sec-cover"] .rb-actions')).toHaveCount(1);
+      const pressable = await frame.locator('[data-section="sec-cover"]').evaluate((section) => {
+        const badge = section.querySelector(".rb-sample");
+        const cluster = section.querySelector(".rb-actions");
+        if (!badge || !cluster) return null;
+        const box = badge.getBoundingClientRect();
+        const first = cluster.querySelector(".rb-action");
+        if (!first) return null;
+        const at = first.getBoundingClientRect();
+        const over = Math.min(at.right, box.right) - Math.max(at.left, box.left);
+        const hit = section.ownerDocument.elementFromPoint(
+          at.left + at.width / 2,
+          at.top + at.height / 2,
+        );
+        return {
+          overlapsBadge: over > 0 && at.top < box.bottom && box.top < at.bottom,
+          hitIsTheVerb: hit?.closest(".rb-actions") !== null,
+          hit: hit?.className ?? null,
+        };
+      });
+      expect(pressable, "la portada no trae chapa de foto de ejemplo que medir").not.toBeNull();
+      expect(
+        pressable?.overlapsBadge,
+        "ya no se solapan: la sonda dejó de medir lo que medía",
+      ).toBe(true);
+      expect(
+        pressable?.hitIsTheVerb,
+        `el primer verbo no recibe su propio clic, lo recibe «${pressable?.hit}»`,
+      ).toBe(true);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("con movimiento reducido llegan al tamaño sin recorrido", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT, reducedMotion: "reduce" });
+    const walker = await context.newPage();
+    try {
+      await intoTheCanvas(walker);
+      const frame = walker.frameLocator(PREVIEW).first();
+      await keyboardTo(walker, "sec-services");
+      await walker.keyboard.press("Enter");
+      await expect(frame.locator(".rb-actions")).toHaveCount(1);
+      await tabToVerb(walker, "delete");
+
+      /*
+       * **El viaje se quita, el destino no**, y las dos mitades se preguntan por separado: la
+       * duración es lo que dice que no hay recorrido, y el estado final es lo que dice que llega.
+       *
+       * El destino se pregunta sondeando, y no por flojera: una transición de 0,01 ms sigue siendo
+       * una transición, y su primer valor calculado es el de partida — la primera versión de esta
+       * caminata leyó `matrix(1, 0, 0, 1, 0, 0)` en el mismo fotograma en que el foco aterrizó.
+       * Quien asevera que no hay viaje es la duración, que se lee una vez y no se sondea.
+       */
+      const at = await verb(walker, "delete");
+      expect(
+        Number.parseFloat(at.transition),
+        `la transición del verbo dura ${at.transition}`,
+      ).toBeLessThan(1);
+      expect(at.word).toBe("Borrar");
+      await expect.poll(() => verb(walker, "delete").then((v) => v.transform)).toBe(GROWN);
+      await expect.poll(() => verb(walker, "delete").then((v) => v.wordOpacity)).toBe("1");
     } finally {
       await context.close();
     }
