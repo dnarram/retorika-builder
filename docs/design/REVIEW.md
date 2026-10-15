@@ -2150,3 +2150,59 @@ menos el hueco de 12— que no se leen como «hay otra»; con el 80 % asoman 27.
 desplazamiento de WebKit, que el editor dibuja a propósito en sus paneles, no se dibuja bajo el
 carrusel: la vecina asomando ya dice que hay más, y la regla solo toca el pseudoelemento de WebKit,
 no `scrollbar-width`, que `scrollbar.test.ts` sigue manteniendo fuera.
+
+### El editor cabe en un móvil y en una tableta: la cabecera en filas, el raíl abajo, el lienzo en móvil (día 3)
+
+**Lo que había.** El grupo derecho de la cabecera —conmutador, deshacer, rehacer, la frase de
+guardado, «Guardar en mi cuenta», «Descargar»— medía 673px fijos, `shrink-0` a propósito desde el
+sprint 7 para que la frase del ADR 0012 no se recortara nunca. A 1280 eso deja 575px al resto y
+funciona; a 768 la página se abría a 821px, y a 390 a 822: «Descargar» fuera de la pantalla, el
+lienzo a escala 0,36, y «Guardar en mi cuenta» sin poder pulsarse porque otro elemento recibía el
+toque. El raíl de 80px se llevaba un cuarto de una pantalla de 320.
+
+**La cabecera, por clases de ancho (ADR 0042 §2).** Bajo 1024 el grupo derecho se disuelve
+(`display: contents`) y sus piezas pasan a ser hijas de la barra, que ahora puede partirse en
+filas con `order` y `basis`. En tableta cae solo el estado —la frase y «Guardar en mi cuenta»— a
+una segunda fila, alineado a la derecha; en teléfono la primera fila es la marca, deshacer, rehacer
+y «Descargar», la segunda las pestañas de páginas y el conmutador, y la tercera el estado, con
+«Guardar en mi cuenta» como botón de texto y la fila partiéndose en dos líneas cuando la frase
+lleva un recuento. Es la elección de David del día 15 frente a mudar la cuenta a «Compartir». Nada
+se oculta, nada se recorta: la frase se mueve y se parte. A 1024 y más la barra es la de siempre,
+58px y una fila, byte a byte en sus clases.
+
+**El cajón de campos lee la altura de la cabecera.** `FieldsPanel` es `fixed` y empezaba a 58px,
+que era verdad mientras la cabecera tuvo una fila; en tableta ahora tiene dos y el cajón habría
+tapado la fila de estado con «Guardar en mi cuenta» dentro. La concha mide su cabecera con un
+`ResizeObserver` y la publica como `--editor-header`, y el cajón empieza ahí: 58 en escritorio, 99
+en tableta. Medido, no supuesto, como el ancho del lienzo.
+
+**El raíl es una barra abajo en teléfono.** Fija al borde inferior, a todo el ancho, los mismos
+cinco botones en fila con icono y palabra, sobre el indicador de inicio (`viewport-fit: cover` ya
+estaba desde el día 1 para que `env(safe-area-inset-bottom)` no fuera cero). Nada se añade ni se
+quita con la mudanza: los dos elementos del estudio y el interruptor ya estaban ausentes bajo 1024
+por el ADR 0025 §5. La fila del lienzo le deja su sitio.
+
+**El lienzo abre en «Ver en móvil» en un teléfono**, decidido una vez al montar con `matchMedia`
+y no a través de `changeDevice`, que animaría el primer pintado como si fuera un cambio. A 320px
+de lienzo en los 374 que deja un teléfono de 390 la escala es 1: la página se ve como la verá el
+visitante, y la vista de escritorio sigue a una pulsación, escalada como siempre. La leyenda de
+teclas del lienzo no se dibuja donde no hay teclado (`hover: none` y `pointer: coarse`), y el aviso
+de borrado cabe en el ancho y se aparta de la barra.
+
+**Medido en Chromium emulando los dispositivos, con la frase de guardado ya en pantalla:** a 1280
+nada cambia (cabecera 1280×58, raíl 80, lienzo 1008 solo y 788 con «Estilo»); a 768 la cabecera
+mide 99, el lienzo 496 a 0,69 y 276 a 0,38 con «Estilo»; a 390 la cabecera mide 135, la barra
+390×57 pegada abajo, y el lienzo 320 a escala 1 en un área de 374; a 320 la cabecera mide 159 y el
+lienzo 304 a 0,95. Esa cabecera de 320 medía 203 en la primera pasada: la marca, con `basis: auto`,
+no se encogía sino que hacía saltar «Descargar» a una fila propia —una fila que se parte coloca
+primero cada pieza a su ancho máximo—, y ahora es `flex-1` hasta 150px. El editor pasa a `it` en
+tableta; en teléfono sigue como `it.fails` hasta mañana, porque con «Estilo» abierto el panel de
+340px deja al lienzo 10px —los paneles como hojas son el día 4.
+
+**Dos cosas que el recorrido necesitó, y que son suyas.** El lienzo vuelve a medir el sitio que le
+deja un panel un fotograma después de que el panel entre; una mirada tomada en ese fotograma ve el
+ancho viejo dentro del área nueva y canta un recorte que un fotograma después no existe. El
+recorrido espera a que la tarjeta quepa en su área antes de mirar, que es además lo que asevera. Y
+el indicador «N» de `next dev`, fijo abajo a la izquierda, tapaba «Secciones» en la barra: en
+producción no existe, así que se apaga solo cuando la suite dice que es la suite
+(`RETORIKA_E2E=1`), y quien desarrolla lo conserva.

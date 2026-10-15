@@ -295,7 +295,7 @@ function RailIcon({ icon, active }: { icon: keyof typeof RAIL_ICONS; active: boo
   return (
     <span
       className={
-        "ui-interactive flex h-[46px] w-[46px] items-center justify-center rounded-ui border " +
+        "ui-interactive flex h-[46px] w-[46px] items-center justify-center rounded-ui border phone:h-7 phone:w-10 " +
         "outline-2 outline-offset-2 outline-transparent group-focus-visible:outline-ui-brand " +
         (active
           ? "border-transparent bg-ui-brand-surface text-ui-brand shadow-ui-1"
@@ -366,7 +366,7 @@ function RailButton({
       // The global rule in `globals.css` would draw it around this button, which is 80px wide and
       // two lines tall — a rectangle across the whole rail that reads as a glitch. The icon square
       // takes it instead, two lines below, which is the shape the eye expects.
-      className={`group relative flex w-full cursor-pointer flex-col items-center gap-[5px] border-0 bg-transparent p-0 focus-visible:outline-none ${
+      className={`group relative flex w-full cursor-pointer flex-col items-center gap-[5px] border-0 bg-transparent p-0 focus-visible:outline-none phone:w-auto phone:flex-1 phone:gap-[3px] ${
         entersAfter === undefined ? "" : "ui-enter-up"
       }`}
       style={
@@ -394,7 +394,7 @@ function RailButton({
       <span
         aria-hidden="true"
         className={
-          "ui-interactive absolute top-1/2 left-0 h-7 w-[3px] -translate-y-1/2 rounded-full bg-ui-brand " +
+          "ui-interactive absolute top-1/2 left-0 h-7 w-[3px] -translate-y-1/2 rounded-full bg-ui-brand phone:hidden " +
           (active ? "opacity-100" : "opacity-0")
         }
       />
@@ -737,7 +737,8 @@ export function EditorShell({
    * Whether the design tools are on **for this viewport** — the stored preference already narrowed
    * by `effectiveDesignTools`. `undefined` means the window is too narrow to offer them at all, and
    * then no switch is drawn: ADR 0025 §5 chose "absent" over "disabled", because a disabled control
-   * invites someone to work out how to enable it and the honest answer is «use a bigger screen».
+   * invites someone to work out how to enable it and the honest answer is «the tools need a bigger
+   * screen» — the tools, not the editor, which since sprint 21 fits a phone (ADR 0042).
    */
   designTools: boolean | undefined;
   /** Whether this browser agreed to remember the switch — `false` only after a write it refused. */
@@ -777,6 +778,19 @@ export function EditorShell({
    */
   const canvasArea = useRef<HTMLDivElement>(null);
   const [available, setAvailable] = useState(0);
+
+  /**
+   * **The header's height, measured, for the one thing that is pinned under it.**
+   *
+   * The fields panel is `fixed` and starts where the header ends. That was a constant, 58, for as
+   * long as the header was one row; since sprint 21 day 3 it is two rows on a tablet and three on
+   * a phone, and a drawer that still started at 58 covered the status row — «Guardar en mi
+   * cuenta» included. So the shell publishes the height it actually has as `--editor-header`, read
+   * by `FieldsPanel`'s `top`, the way `available` is read rather than predicted. `offsetHeight`
+   * and not `contentRect`, because the border is part of where the header ends.
+   */
+  const header = useRef<HTMLDivElement>(null);
+  const [headerHeight, setHeaderHeight] = useState(58);
 
   /**
    * **Only pressing the device toggle animates the canvas, and the restriction is the design.**
@@ -864,6 +878,14 @@ export function EditorShell({
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    const bar = header.current;
+    if (!bar) return;
+    const observer = new ResizeObserver(() => setHeaderHeight(bar.offsetHeight));
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, []);
+
   // Before the first measurement `available` is 0, and the fallback is "no zoom": a card at its
   // natural width for one frame is a far better first paint than one scaled by a guess.
   const layoutWidth =
@@ -879,12 +901,25 @@ export function EditorShell({
       // so a shell that tall puts its bottom edge under the bar that is actually showing
       // (sprint 21 day 1, ADR 0042). The dynamic unit is the height there really is.
       className="flex h-dvh flex-col bg-ui-bg"
+      style={{ "--editor-header": `${headerHeight}px` } as React.CSSProperties}
       // `inert` while the building screen is up: the keyboard cannot reach the rail, the tabs or
       // the canvas, and a screen reader does not walk them. React 19 renders the boolean attribute.
       inert={building}
       data-building={building ? "true" : undefined}
     >
-      <div className="flex h-[58px] shrink-0 items-center border-b border-ui-border bg-ui-surface px-4">
+      {/* **One row at the studio width, two on a tablet, three on a phone (ADR 0042 §2).** Below
+          1024 the right-hand group dissolves (`display: contents`) and its pieces become the bar's
+          own children, so `order` and `basis` can put them in rows: on a tablet only the status —
+          the save sentence and «Guardar en mi cuenta» — drops to a second row; on a phone the
+          first row is the mark, undo, redo and «Descargar», the second the page tabs and the
+          device toggle, the third the status. Nothing is hidden and nothing truncated that was
+          not before: ADR 0012's sentence moves and wraps, which is what David chose on 15 October
+          over moving the account into «Compartir». Measured before this on a 390px phone, the
+          group's fixed 673px opened the whole page at 822 and put «Descargar» off the screen. */}
+      <div
+        ref={header}
+        className="flex h-[58px] shrink-0 items-center border-b border-ui-border bg-ui-surface px-4 phone:h-auto phone:flex-wrap phone:gap-x-2.5 phone:gap-y-2 phone:px-3 phone:py-2 tablet:h-auto tablet:flex-wrap tablet:gap-x-2.5 tablet:gap-y-2 tablet:py-2"
+      >
         <button
           type="button"
           onClick={onBack}
@@ -907,9 +942,13 @@ export function EditorShell({
            * are gone, and the spare space goes to the tabs, which is what the spare space is for.
            *
            * The ceiling lifts at 1600, where there is room for the whole business name *and* three
-           * tabs. Below that the name truncates, and that is the honest trade: the bar's right-hand
-           * group is a fixed 673px, so at 1280 there are 575px for the mark, the name and every tab
-           * together, and direction asked for the tabs to be the ones that fit.
+           * tabs. Below that the name truncates, and that is the honest trade: at the studio width
+           * the bar's right-hand group is a fixed 673px, so at 1280 there are 575px for the mark,
+           * the name and every tab together, and direction asked for the tabs to be the ones that
+           * fit. On a phone the floor goes and the button is `flex-1`: it takes what undo, redo and
+           * «Descargar» leave on the first row, up to 150px, and the name truncates inside it. With a
+           * `basis: auto` it did not shrink, it wrapped — a wrapping row places items at their
+           * max-content width first, so «Descargar» fell to a line of its own at 320.
            *
            * `overflow-hidden` on the button and not only `truncate` on the label: now that the
            * button has a ceiling, a long name really can reach past it, and the browser-run guard
@@ -917,7 +956,7 @@ export function EditorShell({
            * rectangle whatever the label does about it. Clipping at the button's own edge is what
            * makes «nothing is painted outside» true rather than merely invisible.
            */
-          className="ui-interactive group flex min-w-[132px] max-w-[180px] shrink cursor-pointer items-center gap-2.5 overflow-hidden rounded-ui px-1.5 py-1 text-left hover:bg-ui-bg min-[1600px]:max-w-[320px]"
+          className="ui-interactive group flex min-w-[132px] max-w-[180px] shrink cursor-pointer items-center gap-2.5 overflow-hidden rounded-ui px-1.5 py-1 text-left hover:bg-ui-bg min-[1600px]:max-w-[320px] phone:min-w-0 phone:max-w-[150px] phone:flex-1"
         >
           {/* The mark alone, never the lockup: the business's own name is the next element along,
               and two names side by side is one too many. See `Brand` in questionnaire/ui.tsx for
@@ -973,7 +1012,7 @@ export function EditorShell({
            * `justify-center` so one tab still sits in the middle of the bar rather than against the
            * mark.
            */
-          className="relative flex min-w-0 flex-auto items-center justify-center gap-1.5 overflow-x-auto"
+          className="relative flex min-w-0 flex-auto items-center justify-center gap-1.5 overflow-x-auto phone:order-2 phone:basis-[calc(100%-90px)] phone:justify-start"
         >
           {/* **The indicator that says which page the canvas is showing.**
               One element for the whole strip rather than one per tab, so moving between pages is a
@@ -1055,9 +1094,14 @@ export function EditorShell({
             already does for a gallery of eight photographs pushed into two columns — flex-shrink
             was splitting the leftover space evenly between this row and the tabs instead of
             letting the tabs give way to it, which at three pages left it 30px short of its own
-            content and the undo/redo buttons visibly compressed to two thirds their size. */}
-        <div className="flex shrink-0 items-center justify-end gap-2.5">
-          <DeviceToggle device={device} onChange={changeDevice} />
+            content and the undo/redo buttons visibly compressed to two thirds their size.
+
+            Below 1024 this group is `display: contents`: its children become the bar's own and
+            the rows above take over. The sentence still never shrinks — it gets a row. */}
+        <div className="flex shrink-0 items-center justify-end gap-2.5 phone:contents tablet:contents">
+          <div className="flex phone:order-2">
+            <DeviceToggle device={device} onChange={changeDevice} />
+          </div>
 
           <button
             type="button"
@@ -1065,7 +1109,7 @@ export function EditorShell({
             disabled={!canUndo}
             onClick={onUndo}
             className={
-              "ui-interactive flex h-[30px] w-[30px] items-center justify-center rounded-ui-sm " +
+              "ui-interactive flex h-[30px] w-[30px] items-center justify-center rounded-ui-sm phone:order-1 phone:ml-auto " +
               (canUndo
                 ? "cursor-pointer text-ui-ink hover:bg-ui-bg active:scale-95"
                 : "text-ui-muted opacity-40")
@@ -1092,7 +1136,7 @@ export function EditorShell({
             disabled={!canRedo}
             onClick={onRedo}
             className={
-              "ui-interactive flex h-[30px] w-[30px] items-center justify-center rounded-ui-sm " +
+              "ui-interactive flex h-[30px] w-[30px] items-center justify-center rounded-ui-sm phone:order-1 " +
               (canRedo
                 ? "cursor-pointer text-ui-ink hover:bg-ui-bg active:scale-95"
                 : "text-ui-muted opacity-40")
@@ -1114,58 +1158,63 @@ export function EditorShell({
             </svg>
           </button>
 
-          {saveStatus ? (
-            <span
-              className={
-                "inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] font-medium " +
-                (saveStatus === "saved" ? "text-ui-muted" : "text-ui-danger")
-              }
-            >
-              {saveStatus === "saved" ? (
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  className="text-ui-ok"
-                  strokeWidth={3}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M20 6L9 17l-5-5" />
-                </svg>
-              ) : null}
-              {/**
-               * **«· fotos solo en este navegador» went with ADR 0037**, and the plain sentence
-               * that replaced it now carries a count when it has one. The three states are three
-               * different claims and `accountSentence` is where they are kept apart.
-               */}
-              {saveStatus !== "saved"
-                ? es["editor.unsaved"]
-                : savedWhere === "account"
-                  ? accountSentence(photosMissing)
-                  : es["editor.saved"]}
-            </span>
-          ) : null}
+          {/* The status: the save sentence and the account, together because below 1024 they are
+              the row that drops under the rest — the whole row on a tablet, the third on a phone,
+              wrapping onto two lines at 320 when the sentence has a count in it. */}
+          <div className="flex items-center gap-2.5 phone:order-3 phone:basis-full phone:flex-wrap phone:justify-between phone:gap-y-1 tablet:order-last tablet:basis-full tablet:justify-end">
+            {saveStatus ? (
+              <span
+                className={
+                  "inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] font-medium " +
+                  (saveStatus === "saved" ? "text-ui-muted" : "text-ui-danger")
+                }
+              >
+                {saveStatus === "saved" ? (
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    className="text-ui-ok"
+                    strokeWidth={3}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M20 6L9 17l-5-5" />
+                  </svg>
+                ) : null}
+                {/**
+                 * **«· fotos solo en este navegador» went with ADR 0037**, and the plain sentence
+                 * that replaced it now carries a count when it has one. The three states are three
+                 * different claims and `accountSentence` is where they are kept apart.
+                 */}
+                {saveStatus !== "saved"
+                  ? es["editor.unsaved"]
+                  : savedWhere === "account"
+                    ? accountSentence(photosMissing)
+                    : es["editor.saved"]}
+              </span>
+            ) : null}
 
-          {onSaveToAccount ? (
-            <button
-              type="button"
-              onClick={onSaveToAccount}
-              /**
-               * **`border-ui-line` is not a token and never was**, so Tailwind emitted no colour for
-               * it and the bare `border` fell back to `currentColor` — this button has been drawing a
-               * near-black 1px outline, measured in Chromium as `rgb(15, 23, 42)`, where a hairline
-               * was meant. A class that silently resolves to nothing is the same failure mode as the
-               * missing `--color-ui-line`: no error anywhere, just the wrong thing on screen.
-               */
-              className="ui-interactive flex h-9 cursor-pointer items-center justify-center rounded-ui border border-ui-border px-[18px] text-sm font-semibold text-ui-ink hover:border-ui-border-strong hover:bg-ui-bg"
-            >
-              {es["account.save.open"]}
-            </button>
-          ) : null}
+            {onSaveToAccount ? (
+              <button
+                type="button"
+                onClick={onSaveToAccount}
+                /**
+                 * **`border-ui-line` is not a token and never was**, so Tailwind emitted no colour for
+                 * it and the bare `border` fell back to `currentColor` — this button has been drawing a
+                 * near-black 1px outline, measured in Chromium as `rgb(15, 23, 42)`, where a hairline
+                 * was meant. A class that silently resolves to nothing is the same failure mode as the
+                 * missing `--color-ui-line`: no error anywhere, just the wrong thing on screen.
+                 */
+                className="ui-interactive flex h-9 cursor-pointer items-center justify-center rounded-ui border border-ui-border px-[18px] text-sm font-semibold text-ui-ink hover:border-ui-border-strong hover:bg-ui-bg phone:h-auto phone:border-0 phone:px-0 phone:py-1 phone:text-ui-brand phone:underline"
+              >
+                {es["account.save.open"]}
+              </button>
+            ) : null}
+          </div>
 
           <button
             type="button"
@@ -1173,7 +1222,7 @@ export function EditorShell({
             disabled={building}
             data-building-return="download"
             className={
-              "ui-interactive flex h-9 items-center justify-center rounded-ui px-[18px] text-sm font-semibold text-white " +
+              "ui-interactive flex h-9 items-center justify-center rounded-ui px-[18px] text-sm font-semibold text-white phone:order-1 " +
               (building
                 ? "bg-ui-brand opacity-65"
                 : "cursor-pointer bg-ui-brand hover:shadow-ui-2 active:scale-[0.98]")
@@ -1184,7 +1233,9 @@ export function EditorShell({
         </div>
       </div>
 
-      <div className="flex flex-grow overflow-hidden">
+      {/* On a phone the rail is a bar fixed to the bottom, so this row leaves it room: its own
+          height plus the home indicator's inset, which `viewport-fit: cover` makes non-zero. */}
+      <div className="flex flex-grow overflow-hidden phone:pb-[calc(56px+env(safe-area-inset-bottom))]">
         {/* `overflow-y-auto`, for the reason `panelShell` above gives and measured the same way: the
             rail is as tall as this row and its items are not. Eight of them need 705px, so in a
             window 640px tall the last 65 were unreachable — and the last item is the design-tools
@@ -1192,7 +1243,11 @@ export function EditorShell({
             scroll. It has 15px to spare at 720. */}
         <div
           data-testid="rail"
-          className="flex w-20 shrink-0 flex-col items-center gap-3.5 overflow-y-auto border-r border-ui-border bg-ui-surface py-3.5"
+          // **A bottom bar on a phone (ADR 0042 §2):** fixed, full width, the five items in a
+          // row with icon and word, above the home indicator. The same five buttons — nothing is
+          // added or taken away by the move; the studio items and the switch are already absent
+          // below 1024 (ADR 0025 §5). An 80px rail took a quarter of a 320px screen.
+          className="flex w-20 shrink-0 flex-col items-center gap-3.5 overflow-y-auto border-r border-ui-border bg-ui-surface py-3.5 phone:fixed phone:inset-x-0 phone:bottom-0 phone:z-20 phone:h-auto phone:w-auto phone:flex-row phone:items-stretch phone:justify-around phone:gap-0 phone:overflow-visible phone:border-t phone:border-r-0 phone:pt-1 phone:pb-[calc(4px+env(safe-area-inset-bottom))]"
         >
           <RailButton
             icon="sections"
@@ -1269,7 +1324,12 @@ export function EditorShell({
             only squeeze the preview, so they go. */}
         <div
           data-testid="canvas-and-panel"
-          className={`flex flex-grow gap-6 overflow-hidden pt-6 ${panel ? "px-6" : "px-6 sm:px-24"}`}
+          // `tablet:`/`studio:` where this said `sm:`: the wide gutters start at 721 instead of
+          // 640, and on a phone the row keeps 8px a side so the 320px mobile canvas sits at zoom 1
+          // from a 336px window up.
+          className={`flex flex-grow gap-6 overflow-hidden pt-6 phone:px-2 phone:pt-3 ${
+            panel ? "px-6" : "px-6 tablet:px-24 studio:px-24"
+          }`}
         >
           <div
             ref={canvasArea}
