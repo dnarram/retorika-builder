@@ -64,7 +64,10 @@ export function PhotosFailedDialog({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="w-full max-w-[460px] rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.28)]"
+        // `max-h-full overflow-y-auto`, like `RevertDialog`: the body's length depends on how
+        // many photographs failed, and at 320×568 three or four lines of translated sentences
+        // plus the two buttons can ask for more height than the screen leaves.
+        className="max-h-full w-full max-w-[460px] overflow-y-auto rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.28)]"
       >
         <h2 id={titleId} className="m-0 text-[17px] font-bold text-ui-ink">
           {es["editor.download.photosFailed.title"]}
@@ -124,7 +127,7 @@ export function TooManyPhotosDialog({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="w-full max-w-[440px] rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.28)]"
+        className="max-h-full w-full max-w-[440px] overflow-y-auto rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.28)]"
       >
         <h2 id={titleId} className="m-0 text-[17px] font-bold text-ui-ink">
           {es["editor.download.tooManyPhotos.title"]}
@@ -223,7 +226,11 @@ export function DownloadWarningDialog({
           ) : null}
         </div>
 
-        <ul className="mt-4 flex flex-col gap-1.5 overflow-y-auto">
+        {/* `min-h-0` is the half of this `overflow-y-auto` that was missing: without it a flex
+            item will not shrink below its content's own height, so the list never actually gave
+            way to the dialog's `max-h-[85vh]` cap — found measuring this dialog at 320×568 for
+            sprint 21 day 4, next to the two sibling dialogs below that already had it. */}
+        <ul className="mt-4 flex min-h-0 flex-col gap-1.5 overflow-y-auto">
           {photos.map((photo) => {
             const address = { sectionId: photo.sectionId, elementId: photo.elementId };
             const where = photo.itemNumber

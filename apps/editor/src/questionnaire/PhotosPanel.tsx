@@ -2,7 +2,7 @@
 
 import type { ElementAddress, RetorikaDocument } from "@retorika/schema";
 import { useId } from "react";
-import { PANEL_WIDTH, panelCard, panelRow } from "../editor/panelKit.tsx";
+import { PANEL_WIDTH, PanelClose, panelCard, panelRow } from "../editor/panelKit.tsx";
 import { countPhotos, listPhotos, type PhotoState } from "../editor/photoInventory.ts";
 import es from "../locales/es.json" with { type: "json" };
 
@@ -25,6 +25,7 @@ export function PhotosPanel({
   onGoToPhoto,
   photoUrls,
   photosMissing = null,
+  onClose,
 }: {
   document: RetorikaDocument;
   /** Open the file picker for this image. `Editor` owns the one hidden input the canvas already
@@ -49,6 +50,10 @@ export function PhotosPanel({
    * in.
    */
   photosMissing?: number | null | undefined;
+  /** Added on sprint 21 day 4, for the reason `PagesPanel`'s own note gives: below 720 this panel
+   * is a sheet over the canvas and the rail is the bar underneath it, unreachable without a close
+   * of its own. */
+  onClose: () => void;
 }) {
   const headingId = useId();
   const photos = listPhotos(doc);
@@ -61,9 +66,12 @@ export function PhotosPanel({
 
   return (
     <section aria-labelledby={headingId} className={`${PANEL_WIDTH} gap-4 p-5 ${panelCard}`}>
-      <h2 id={headingId} className="text-[13px] font-bold text-ui-ink">
-        {es["editor.photos.title"]}
-      </h2>
+      <div className="flex items-start justify-between gap-3">
+        <h2 id={headingId} className="text-[13px] font-bold text-ui-ink">
+          {es["editor.photos.title"]}
+        </h2>
+        <PanelClose onClick={onClose} label={es["editor.photos.close"]} />
+      </div>
 
       {photos.length === 0 ? (
         // Reachable: a cover can be deleted, and nothing else a generated site carries holds an

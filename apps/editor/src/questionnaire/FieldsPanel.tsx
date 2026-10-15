@@ -10,6 +10,7 @@ import {
   shiftMarks,
 } from "@retorika/schema";
 import { useEffect, useId, useRef } from "react";
+import { PanelClose } from "../editor/panelKit.tsx";
 import { type FieldRow, fieldCommitFor, groupedFields } from "../editor/sectionFields.ts";
 import { fieldEditFor } from "../editor/textEdits.ts";
 import es from "../locales/es.json" with { type: "json" };
@@ -138,7 +139,15 @@ export function FieldsPanel({
       // narrows to 400px in the mobile device view, and a form docked inside it would leave the
       // page it is meant to be editing a sliver wide. `top` is the header's measured height
       // (`--editor-header`, set by the shell): 58 at the studio width, two rows on a tablet.
-      className="fixed top-[var(--editor-header,58px)] right-0 bottom-0 z-20 flex w-[340px] flex-col gap-4 overflow-y-auto border-l border-ui-border bg-ui-surface p-5 shadow-[-8px_0_24px_rgba(15,23,42,0.08)]"
+      //
+      // **On a phone it is a sheet from the bottom, not the right** (ADR 0042 §2, sprint 21 day
+      // 4): there is no "right of the canvas" on a 320px screen, and docking there is what made
+      // the mobile device view 400px wide in the first place — a card so narrow the page it edits
+      // had nowhere left to be. `phone:` repeats `panelKit`'s own sheet numbers rather than
+      // importing them, because this panel was `fixed` before that file existed and a shared
+      // `panelCard` string would also hand it `panelShell`'s desktop `max-h-full self-start`,
+      // which this `fixed` element does not want.
+      className="fixed top-[var(--editor-header,58px)] right-0 bottom-0 z-20 flex w-[340px] flex-col gap-4 overflow-y-auto border-l border-ui-border bg-ui-surface p-5 shadow-[-8px_0_24px_rgba(15,23,42,0.08)] phone:inset-x-0 phone:top-auto phone:bottom-[calc(56px+env(safe-area-inset-bottom))] phone:z-20 phone:w-auto phone:max-h-[70dvh] phone:rounded-t-ui-lg phone:border-l-0 phone:border-t phone:shadow-[0_-8px_24px_rgba(15,23,42,0.08)]"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-col gap-1">
@@ -147,25 +156,7 @@ export function FieldsPanel({
           </h2>
           <p className="m-0 text-[12px] leading-snug text-ui-muted">{es["editor.fields.help"]}</p>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label={es["editor.fields.close"]}
-          className="shrink-0 cursor-pointer border-0 bg-transparent text-ui-muted"
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            strokeLinecap="round"
-            aria-hidden="true"
-          >
-            <path d="M6 6l12 12M18 6L6 18" />
-          </svg>
-        </button>
+        <PanelClose onClick={onClose} label={es["editor.fields.close"]} />
       </div>
 
       {rows.length === 0 ? (
@@ -345,7 +336,7 @@ function FieldRowInputs({
           anchor.current = { marks: row.marks ?? [], text: event.target.value, anchored: true };
         }}
         onBlur={(event) => onCommit(row, event.target.value, row.href ?? "", anchoredMarks())}
-        className="h-9 w-full rounded-lg border border-ui-border bg-white px-2.5 text-[13px] text-ui-ink"
+        className="h-9 w-full rounded-lg border border-ui-border bg-white px-2.5 text-[13px] phone:text-base text-ui-ink"
       />
       {row.kind === "link" ? (
         <>
@@ -359,7 +350,7 @@ function FieldRowInputs({
             defaultValue={row.href ?? ""}
             placeholder={es["editor.fields.destinationHint"]}
             onBlur={(event) => onCommit(row, row.text, event.target.value)}
-            className={`h-9 w-full rounded-lg border bg-white px-2.5 text-[13px] text-ui-ink ${
+            className={`h-9 w-full rounded-lg border bg-white px-2.5 text-[13px] phone:text-base text-ui-ink ${
               row.dead ? "border-[#DC2626]" : "border-ui-border"
             }`}
           />

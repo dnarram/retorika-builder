@@ -362,7 +362,7 @@ function CollectionRow({
               if (event.key === "Enter") onCommitRename();
               if (event.key === "Escape") onCancelRename();
             }}
-            className="min-w-0 flex-1 rounded-ui-sm border border-ui-brand px-2 py-1 text-[13px] text-ui-ink"
+            className="min-w-0 flex-1 rounded-ui-sm border border-ui-brand px-2 py-1 text-[13px] phone:text-base text-ui-ink"
           />
         ) : (
           <button
@@ -448,7 +448,7 @@ function CollectionRow({
                   aria-label={es["editor.collections.entryPage.titleField"]}
                   value={chosenTitleField}
                   onChange={(event) => setTitleField(event.target.value)}
-                  className="rounded-ui-sm border border-ui-border bg-white px-1.5 py-0.5 text-[12px] text-ui-ink"
+                  className="rounded-ui-sm border border-ui-border bg-white px-1.5 py-0.5 text-[12px] phone:text-base text-ui-ink"
                 >
                   {titleChoices.map((field) => (
                     <option key={field} value={field}>
@@ -651,7 +651,7 @@ function EntryFieldRow({
           if (event.key === "Enter") onCommit(draft);
           if (event.key === "Escape") setDraft(value.text);
         }}
-        className="w-full rounded-ui-sm border border-ui-border px-2 py-1 text-[13px] text-ui-ink"
+        className="w-full rounded-ui-sm border border-ui-border px-2 py-1 text-[13px] phone:text-base text-ui-ink"
       />
     </label>
   );

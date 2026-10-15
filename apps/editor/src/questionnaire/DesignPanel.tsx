@@ -17,7 +17,7 @@ import {
   selectedRowId,
   stepTo,
 } from "../editor/designTree.ts";
-import { PANEL_WIDTH, panelCard } from "../editor/panelKit.tsx";
+import { PANEL_WIDTH, PanelClose, panelCard } from "../editor/panelKit.tsx";
 import es from "../locales/es.json" with { type: "json" };
 
 /**
@@ -316,25 +316,7 @@ export function DesignPanel({
             <p className="m-0 truncate text-[12px] text-ui-muted">{sectionName}</p>
           ) : null}
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label={es["editor.design.close"]}
-          className="shrink-0 cursor-pointer border-0 bg-transparent text-ui-muted"
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            strokeLinecap="round"
-            aria-hidden="true"
-          >
-            <path d="M18 6L6 18M6 6l12 12" />
-          </svg>
-        </button>
+        <PanelClose onClick={onClose} label={es["editor.design.close"]} />
       </div>
 
       {state === "noSection" ? (
