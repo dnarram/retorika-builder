@@ -103,6 +103,37 @@
    */
   --ui-ease-shape: cubic-bezier(0.4, 0, 0.2, 1);
   --ui-slow: 260ms;
+
+  /**
+   * ## Stagger: the one gap between two things arriving
+   *
+   * A list that reveals itself all at once is a flash; one that reveals itself at 150ms a card is
+   * a queue the eye has to wait in. 40ms is a frame and a half at 60Hz — enough to read as an
+   * order, short enough that a ten-card grid is finished before anybody could have reached it.
+   *
+   * It is a token rather than a number in each caller because the callers multiply it: a card's
+   * delay is `calc(var(--ui-stagger) * n)`, so the rhythm of the whole application is this one
+   * line. `test/motionBudget.test.ts` holds the total any screen may spend.
+   */
+  --ui-stagger: 40ms;
+
+  /**
+   * ## The palette's own secondary, promoted to a token
+   *
+   * `#105CB1` is not a new colour: the dossier gives it as «Azul oscuro — títulos y estados
+   * pulsados» and ADR 0041 §3 puts it in the «Neutra» palette beside the brand blue. It was
+   * already in this application three times over — the landing's «Ya tengo cuenta», the
+   * proposals' «Elegida» pill, «Volver a empezar» — each time as a hex typed beside the thing
+   * that needed it, because brand blue measured 4.39:1 on the app background and failed.
+   *
+   * Measured here with `packages/tokens`' own arithmetic, the same way every other token in this
+   * file is: **6.14:1** on `--ui-bg`, **6.59:1** on `--ui-surface`, **5.79:1** on
+   * `--ui-brand-surface`. So it is the brand's blue for text on all three surfaces the interface
+   * uses, where `--ui-brand` is readable on white only — which is the whole reason it exists as a
+   * token now rather than as three hexes that agreed by luck. `test/chromeContrast.test.ts`
+   * measures it.
+   */
+  --ui-brand-deep: #105cb1;
 }
 
 /**
@@ -120,6 +151,7 @@
   --color-ui-muted: var(--ui-muted);
   --color-ui-brand: var(--ui-brand);
   --color-ui-brand-surface: var(--ui-brand-surface);
+  --color-ui-brand-deep: var(--ui-brand-deep);
   --color-ui-ok: var(--ui-ok);
   --color-ui-danger: var(--ui-danger);
   --color-ui-border-strong: var(--ui-border-strong);
@@ -348,6 +380,115 @@
 
 @utility ui-block {
   animation: ui-block-settle 1.6s var(--ui-ease-shape) infinite;
+}
+
+/**
+ * **A surface arriving, for the three screens before the editor** (sprint 22).
+ *
+ * The landing, the five questions and the three proposals had no transition and no animation
+ * between them — not an omission in the mockups either: «la maqueta 08 no tiene ni una regla
+ * `:hover` ni una `transition`. Ninguna de las diecinueve las tiene» (`docs/design/REVIEW.md`).
+ * So this is the same kind of motion the chrome already got, named the same way, rather than a
+ * second vocabulary beside it.
+ *
+ * `opacity` and `translateY(6px)`: neither touches layout, so nothing below an entering card
+ * moves while it arrives, and six pixels is a direction rather than a journey — the point is to
+ * say «this came from somewhere», not to make anybody watch it travel.
+ *
+ * **`backwards`, and never `forwards` or `both`, which is the bug this comment exists to
+ * prevent.** A filling animation keeps the properties it names under animation control *after it
+ * ends*, and animations beat ordinary declarations in the cascade. With `both`, a card that also
+ * wears `ui-lift` would reveal itself correctly and then refuse to lift, because the finished
+ * entrance would still own `transform` — a hover that silently does nothing, on exactly the
+ * elements this sprint is adding a hover to. `backwards` fills only *before* the animation, which
+ * is the half that is actually needed: it holds the card invisible through its stagger delay
+ * instead of showing it and then hiding it for a frame.
+ *
+ * The delay comes from the caller, because the position in the queue is the caller's: it is
+ * `calc(var(--ui-stagger) * n)`, never a hand-written millisecond.
+ */
+@keyframes ui-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@utility ui-reveal {
+  animation: ui-reveal var(--ui-slow) var(--ui-ease-shape) backwards;
+  /* After the shorthand, which resets `animation-delay` to 0 whatever was declared before it. */
+  animation-delay: var(--ui-reveal-delay, 0ms);
+}
+
+/**
+ * **A control answering a pointer by rising a pixel.**
+ *
+ * One pixel and a shadow, not four pixels and a scale: the thing being pointed at is a choice in
+ * a questionnaire or a proposal card, and the job is to say «this one is under your hand», which
+ * a pixel does. It rides on `ui-interactive`, which is where the duration and the curve live, so
+ * an element wears both — `ui-interactive ui-lift` — and this file keeps one motion system.
+ *
+ * **Behind `@media (hover: hover)`**, for the reason the canvas's pills are: a touch screen
+ * resolves `:hover` by sticking it to whatever was last tapped, so a lifted card would stay
+ * lifted after a tap and read as selected. The same query, for the same reason, as
+ * `test/chromeContrast.test.ts` already checks for the section verbs.
+ *
+ * `:active` returns it to the surface rather than pushing it below: a press is the gesture
+ * arriving, and the shallower shadow is what makes it read as contact.
+ */
+@utility ui-lift {
+  @media (hover: hover) {
+    &:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: var(--ui-shadow-2);
+    }
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: var(--ui-shadow-1);
+  }
+}
+
+/**
+ * **One ring, once, on the one thing worth pointing at.**
+ *
+ * A ring that repeats is an advertisement; a ring that happens once as the screen settles is a
+ * sentence — «this is the button», «this is the one we chose». It is allowed on exactly one
+ * element per screen (`test/motionBudget.test.ts` holds the budget, `docs/design/REVIEW.md`
+ * writes it down) and on none in the questionnaire, where the thing under the pointer should be
+ * whatever the person is answering.
+ *
+ * **Two shadows in both keyframes, because a `box-shadow` list only interpolates against a list
+ * of the same length.** The second is the element's resting shadow, handed in by the caller
+ * through `--ui-ring-rest` — the proposals' chosen card rests on `0 0 0 3px` of brand tint, and a
+ * one-shadow `from` growing into a two-shadow `to` would have made the browser give up and swap
+ * discretely at the halfway point instead of growing.
+ *
+ * **`backwards` for the same reason `ui-reveal` is**: with `forwards` the finished ring would keep
+ * `box-shadow` under animation control for the life of the page, and `ui-lift`'s hover shadow —
+ * on the same card — would never be drawn. Before the delay the `from` keyframe is a ring of zero
+ * spread, which is to say the card's own resting shadow and nothing else.
+ *
+ * The delay is 500ms so that the ring begins after the entrance it belongs to has landed: a card
+ * cannot be pointed at while it is still arriving.
+ */
+@keyframes ui-ring-once {
+  from {
+    box-shadow:
+      0 0 0 0 color-mix(in srgb, var(--ui-brand) 45%, transparent),
+      var(--ui-ring-rest, 0 0 0 0 transparent);
+  }
+
+  to {
+    box-shadow:
+      0 0 0 14px transparent,
+      var(--ui-ring-rest, 0 0 0 0 transparent);
+  }
+}
+
+@utility ui-ring-once {
+  animation: ui-ring-once 700ms var(--ui-ease-shape) 500ms 1 backwards;
 }
 
 /**

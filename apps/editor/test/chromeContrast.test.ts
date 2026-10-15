@@ -59,6 +59,7 @@ const INK = token("ink");
 const MUTED = token("muted");
 const BRAND = token("brand");
 const BRAND_SURFACE = token("brand-surface");
+const BRAND_DEEP = token("brand-deep");
 const DANGER = token("danger");
 const BORDER_STRONG = token("border-strong");
 
@@ -106,6 +107,11 @@ describe("the chrome's text", () => {
     ["muted on a panel", MUTED, SURFACE],
     ["muted on the app background", MUTED, BG],
     ["danger on a panel", DANGER, SURFACE],
+    // The palette's own secondary, which is the brand's blue *as text*: it has to be readable on
+    // all three surfaces the interface uses, which is the entire reason it is a token (sprint 22).
+    ["brand-deep on a panel", BRAND_DEEP, SURFACE],
+    ["brand-deep on the app background", BRAND_DEEP, BG],
+    ["brand-deep on the tinted surface", BRAND_DEEP, BRAND_SURFACE],
   ];
 
   for (const [what, fg, bg] of readable) {
@@ -133,6 +139,25 @@ describe("the chrome's text", () => {
 
   it("brand blue on a white panel is readable, which is where it is allowed", () => {
     expect(contrastRatio(BRAND, SURFACE)).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
+  });
+
+  /**
+   * **And the token that exists because of the line above.**
+   *
+   * `--ui-brand-deep` is what brand text uses where `--ui-brand` cannot be used: the landing's
+   * «Ya tengo cuenta» on the grey, the proposals' «Elegida» pill on its own tint. Each of those
+   * was a `#105CB1` typed beside the thing that needed it until sprint 22; the point of measuring
+   * it here is that it is now *one* colour with three ratios on record rather than three hexes
+   * that happened to agree.
+   *
+   * Measured, not hoped for: 6.59:1 on a panel, 6.14:1 on the app background, 5.79:1 on the tint —
+   * where the brand blue is 4.71, 4.39 and 4.14. The three `readable` rows above are the gate;
+   * this one records the margin, so a future adjustment that erodes it is visible as a number.
+   */
+  it("the deep blue is readable where the brand blue is not, and by how much", () => {
+    expect(contrastRatio(BRAND_DEEP, BG)).toBeGreaterThan(contrastRatio(BRAND, BG));
+    expect(contrastRatio(BRAND_DEEP, BRAND_SURFACE)).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
+    expect(contrastRatio(BRAND, BRAND_SURFACE)).toBeLessThan(AA_NORMAL_TEXT);
   });
 });
 

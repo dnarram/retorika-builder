@@ -364,6 +364,64 @@ async function axeSerious(page: Page, where: string): Promise<void> {
 }
 
 /**
+ * Waits until nothing on the screen is still moving.
+ *
+ * **The lesson of ADR 0042, applied before it bites rather than after.** Sprint 21's own notes say
+ * it: «any "settled" poll must check all four edges and wait for the entering panel to stop
+ * moving» — found the hard way, measuring a panel that was still travelling. Sprint 22 gives the
+ * landing, the five questions and the three proposals entrance animations, so from now on every
+ * geometry probe in this file is measuring a screen that may still be arriving. A card read at
+ * 130ms of a 260ms reveal is six pixels above where it will be and a fraction of its opacity.
+ *
+ * `document.getAnimations()` is the browser's own answer to «what is in flight», which is better
+ * than any timeout: it covers animations this file does not know about and it returns immediately
+ * when there are none.
+ *
+ * **The infinite ones are filtered out, and that is the whole subtlety.** The landing's background
+ * orbs loop for ever, so their `finished` promise never resolves and awaiting it would hang the
+ * walk until the test timed out — a guard that turns a passing screen into a 300-second failure.
+ * An endless animation is also, by definition, never «settled», so waiting for it is the wrong
+ * question: what the caller needs to know is that everything with an end has reached it.
+ */
+async function motionSettled(page: Page): Promise<void> {
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
+        .map((animation) => animation.finished),
+    ),
+  );
+}
+
+/**
+ * Waits for an `<img>` to have finished loading before anything asks it a question.
+ *
+ * **A flake found by running the whole file under load, 15 October 2026**, and left here rather
+ * than only fixed: «la barra del editor dibuja la marca sola» read `img.complete` on the frame it
+ * arrived and got `false` — then passed on its own, which is the signature of a measurement racing
+ * a load rather than of a defect in the thing measured. Three assertions in that walk had the same
+ * shape: `networkidle` is the page's network going quiet, which is not the same as this element
+ * having decoded, and a vector the size of the lockup is decoded late enough for the difference to
+ * show on a loaded machine.
+ *
+ * `naturalWidth > 0` as well as `complete`, because a *broken* image is also «complete»: that is
+ * the distinction the walk below exists to draw, so the wait has to honour it too.
+ */
+async function imageLoaded(image: Locator): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        image.evaluate((el) => {
+          const img = el as HTMLImageElement;
+          return img.complete && img.naturalWidth > 0;
+        }),
+      { timeout: 10_000 },
+    )
+    .toBe(true);
+}
+
+/**
  * The painted text of every button in the top document, measured against the button's own box.
  *
  * Written for «el texto de un botón nunca sale del botón» (5 October 2026) and lifted to module
@@ -12681,6 +12739,7 @@ describe("sprint 20 día 4 — la marca se sirve en vector", () => {
        * distinguiría una marca servida de una ausente.
        */
       await walker.goto(BASE_URL, { waitUntil: "networkidle" });
+      await imageLoaded(walker.locator('img[src="/brand/retorika-lockup.svg"]'));
       const landing = await walker
         .locator('img[src="/brand/retorika-lockup.svg"]')
         .evaluate((el) => {
@@ -12701,6 +12760,7 @@ describe("sprint 20 día 4 — la marca se sirve en vector", () => {
 
       // **La cabecera del cuestionario**, el mismo fichero a otro tamaño.
       await walker.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+      await imageLoaded(walker.locator('img[src="/brand/retorika-lockup.svg"]'));
       const header = await walker
         .locator('img[src="/brand/retorika-lockup.svg"]')
         .evaluate((el) => {
@@ -12730,6 +12790,7 @@ describe("sprint 20 día 4 — la marca se sirve en vector", () => {
     const walker = await context.newPage();
     try {
       await intoTheCanvas(walker);
+      await imageLoaded(walker.locator('img[src="/brand/retorika-mark.svg"]'));
       const bar = await walker.locator('img[src="/brand/retorika-mark.svg"]').evaluate((el) => {
         const img = el as HTMLImageElement;
         const box = img.getBoundingClientRect();
@@ -13141,6 +13202,10 @@ describe("nada sobresale en un móvil", () => {
 
   /** Everything wrong with the screen as it is now, as lines; empty is the only passing answer. */
   async function problems(page: Page, width: number, where: string): Promise<string[]> {
+    // Before anything is measured, because from sprint 22 these screens arrive rather than appear
+    // — see `motionSettled`. One place rather than at every call site: every probe below reads a
+    // box, and a box that is still moving is not the box that will be there.
+    await motionSettled(page);
     const seen = await fit(page, width);
     const out: string[] = [];
     const at = `${where} @ ${width}px`;
