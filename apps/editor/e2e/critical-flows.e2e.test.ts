@@ -4045,7 +4045,10 @@ describe("sprint 12 día 7 — el recorrido completo del sprint", () => {
       await expect(walk.getByText("Todas las fotos de tu web son tuyas.")).toBeVisible();
 
       // ---- day 5: the two fields, and the address normalising in front of the owner -----------
-      await walk.getByRole("button", { name: "Compartir" }).click();
+      // `exact: true` since sprint 21 day 4: `SharePanel` gained its own close button, labelled
+      // «Cerrar cómo se ve al compartir», which a substring match for «Compartir» now also hits
+      // once the panel below is already open — found here, where it stays open across two clicks.
+      await walk.getByRole("button", { name: "Compartir", exact: true }).click();
       const shareText = walk.getByLabel("Frase que acompaña al enlace");
       // The placeholder is the cover's subheadline — what publishes if this is left alone.
       await expect(shareText).toHaveAttribute("placeholder", "Comer, beber y quedarse un rato");
@@ -4111,7 +4114,7 @@ describe("sprint 12 día 7 — el recorrido completo del sprint", () => {
       }
 
       // ---- the other half of ADR 0029: no address, no picture, and the sentence stays ---------
-      await walk.getByRole("button", { name: "Compartir" }).click();
+      await walk.getByRole("button", { name: "Compartir", exact: true }).click();
       const clearDomain = walk.getByLabel("Dirección de tu web");
       await clearDomain.fill("");
       await clearDomain.blur();
@@ -11603,7 +11606,7 @@ describe("sprint 19 día 7 — el recorrido como un desconocido, con fichas y si
       await expect(headline).toHaveText("Comidas caseras");
 
       // The address declared in «Compartir», which gives the ZIP its sitemap (ADR 0029, amended).
-      await page.getByRole("button", { name: "Compartir" }).click();
+      await page.getByRole("button", { name: "Compartir", exact: true }).click();
       const domain = page.getByLabel("Dirección de tu web");
       await domain.fill("tabernadelpuerto.es");
       await domain.blur();
