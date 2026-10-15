@@ -133,7 +133,7 @@ export function Brand() {
       }}
     >
       <img
-        src="/brand/retorika-lockup.png"
+        src="/brand/retorika-lockup.svg"
         alt={es["brand.name"]}
         width={190}
         height={54}

@@ -918,8 +918,12 @@ export function EditorShell({
           {/* The mark alone, never the lockup: the business's own name is the next element along,
               and two names side by side is one too many. See `Brand` in questionnaire/ui.tsx for
               the rule. */}
+          {/* 30 × 30 of a mark that is 244 × 252, which squashes it by three per cent — the same
+              three per cent the PNG was squashed by here, kept rather than quietly corrected: the
+              top bar's widths have their own walk, and «the logo is now one pixel taller» is not a
+              change worth making inside the one that swaps the file format. */}
           <img
-            src="/brand/retorika-mark.png"
+            src="/brand/retorika-mark.svg"
             alt=""
             width={30}
             height={30}

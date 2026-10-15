@@ -1938,3 +1938,37 @@ cambia es que una regresión aquí se ve en días y no en semanas. Y el editor g
 sonda —si el relevo llegó a pedir el teclado, y si el foco aterrizó—, que son exactamente las dos
 preguntas que costaron un día entero de no poder responder.
 
+### La marca se sirve en vector (día 4)
+
+La pregunta de David al abrir el sprint —«¿es mejor servir los SVG o seguir con los PNG?»— con la
+respuesta hecha. El lockup pesaba **137 KB para dibujarse a 190 o 232 píxeles**, cuatro o cinco veces
+más píxeles de los que la caja pinta, y la landing lo pedía `eager` en la página que menos paciencia
+tiene porque ya tiene un arranque en frío que disculpar. Ahora son **21 KB por el cable**, y la marca
+de la barra del editor 9 en vez de 41. Se dibujan de formas, así que además dejan de verse blandos en
+una pantalla densa.
+
+**El favicon se queda en píxeles**, y es decisión y no olvido: Safari no dibuja un favicon SVG, y 32
+píxeles no es un tamaño donde un vector gane nada. Es lo único de este logotipo que la aplicación
+sirve ya en PNG, y por eso `brand-assets.ts` conserva el recorte del fondo blanco que necesitaba.
+
+**Un escritor por directorio.** `brand-vector.ts` sabe qué *es* el logotipo y no sabe dónde guarda la
+aplicación sus ficheros; `brand-assets.ts` sabe dónde los guarda y no sabe trazar. El segundo copia
+los vectores que el primero escribió, y nada más. Dos scripts escribiendo `public/` serían dos
+opiniones sobre el mismo logotipo, que es exactamente la deriva contra la que el README de la marca
+avisa.
+
+**Lo que no se tocó, dicho:** la marca de la barra del editor se dibuja a 30×30 siendo 244×252, un
+tres por ciento de aplastamiento que ya tenía el PNG. Corregirlo cambia el ancho de la barra
+superior, que tiene su propia caminata, y «el logotipo mide ahora un píxel más» no es un cambio que
+quepa dentro del que cambia el formato del fichero.
+
+**Y una guarda que no existía.** Las tres colocaciones viven en tres ficheros distintos y los
+ficheros que nombran los escribe un script; entre unas y otros solo había la costumbre de mantenerlos
+de acuerdo. Una cuarta colocación escrita el mes que viene contra el nombre viejo daría 404 en
+producción **sin que nada lo dijera**: la caminata de desbordes mide rectángulos, y una imagen que
+falta sigue teniendo el que su `width` y su `height` reservan. `brandAssets.test.ts` pregunta ahora
+si lo que se pide es lo que se sirve, si cada SVG trae el tamaño del que un `<img>` reserva su caja,
+y si alguno pide algo de fuera — porque un SVG cargado por `<img>` es un documento cerrado y el color
+de la «R» viaja dentro como `data:` URI; un `href` a cualquier otro sitio dibujaría un agujero en el
+logotipo en todas las pantallas menos en la que se probó.
+
