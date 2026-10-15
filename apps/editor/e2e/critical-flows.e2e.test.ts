@@ -1904,6 +1904,11 @@ describe("sprint 7 día 7 — dos hallazgos de esta semana, cerrados", () => {
 
       const grid = walkPage.locator("fieldset").first();
       const warning = walkPage.getByText(/Todavía no tenemos textos ni fotos preparados/);
+      // Since sprint 22 day 3 the eleven sector cards arrive in a ripple. The `fieldset` measured
+      // here is not what moves — a card's `translateY` touches no layout — but this reads a box
+      // one frame after a click, which is exactly the shape of measurement the ADR 0042 lesson is
+      // about, so it waits rather than relying on that remaining true.
+      await motionSettled(walkPage);
       const before = await grid.boundingBox();
 
       // A covered sector: the warning stays hidden and the grid does not move.
@@ -7349,6 +7354,13 @@ describe("sprint 22 día 2 — el héroe de la landing", () => {
     }
   }, 120_000);
 
+  /**
+   * **Sprint 22 día 3 — la landing respira, y las preguntas entran sin estorbar.**
+   *
+   * Lo que se cuida aquí es el presupuesto de contención, que es la mitad del encargo que se degrada
+   * sola: «sin abusar para no distraer al usuario». Cuatro afirmaciones, y las cuatro son medibles.
+   */
+
   it("no se mueve sola para quien ha pedido menos movimiento", async () => {
     const context = await browser.newContext({ reducedMotion: "reduce" });
     const visitor = await context.newPage();
@@ -7366,6 +7378,173 @@ describe("sprint 22 día 2 — el héroe de la landing", () => {
       // Y el botón sigue siendo la forma de verlo en móvil.
       await visitor.getByRole("button", { name: "Ver en móvil" }).click();
       await expect(slot).toHaveAttribute("data-hero-device", "phone");
+    } finally {
+      await context.close();
+    }
+  }, 120_000);
+});
+
+describe("sprint 22 día 3 — la landing respira y las preguntas entran", () => {
+  it("construye la marca una sola vez y la deja hecha", async () => {
+    const visitor = await (await browser.newContext()).newPage();
+    try {
+      await visitor.goto(BASE_URL, { waitUntil: "networkidle" });
+      const mark = visitor.locator('[data-testid="building-mark"]');
+      await expect(mark).toHaveCount(1);
+
+      // El martillo y los tres bloques, con una sola iteración: en la pantalla de descarga el
+      // ciclo se repite porque algo se está escribiendo de verdad; en una landing sería un adorno
+      // pidiendo atención.
+      const parts = await mark.evaluate((el) =>
+        [...el.querySelectorAll("[data-part]")]
+          .filter((part) => getComputedStyle(part).animationName !== "none")
+          .map((part) => ({
+            part: (part as HTMLElement).dataset.part,
+            name: getComputedStyle(part).animationName,
+            iterations: getComputedStyle(part).animationIterationCount,
+            fill: getComputedStyle(part).animationFillMode,
+          })),
+      );
+      expect(parts.length, "la marca no anima nada").toBe(4);
+      for (const part of parts) {
+        expect(part.iterations, `${part.part} se repite`).toBe("1");
+        expect(part.fill, `${part.part} no se queda en su último fotograma`).toBe("both");
+      }
+
+      // Y termina: dos segundos después no queda nada en marcha dentro de la marca, y lo que se
+      // ve es el logotipo entregado.
+      await expect
+        .poll(
+          () =>
+            mark.evaluate((el) =>
+              el.getAnimations({ subtree: true }).every((a) => a.playState === "finished"),
+            ),
+          { timeout: 10_000 },
+        )
+        .toBe(true);
+    } finally {
+      await visitor.context().close();
+    }
+  }, 120_000);
+
+  it("deja girar dos orbes, y ninguno se sale de la página", async () => {
+    const visitor = await (await browser.newContext()).newPage();
+    try {
+      await visitor.goto(BASE_URL, { waitUntil: "networkidle" });
+      const orbs = visitor.locator("main > .ui-drift");
+      await expect(orbs).toHaveCount(2);
+
+      // El único bucle que el presupuesto le da a esta pantalla.
+      const loops = await orbs.evaluateAll((els) =>
+        els.map((el) => ({
+          name: getComputedStyle(el).animationName,
+          iterations: getComputedStyle(el).animationIterationCount,
+          duration: getComputedStyle(el).animationDuration,
+          blur: getComputedStyle(el).filter,
+        })),
+      );
+      for (const loop of loops) {
+        expect(loop.name).toBe("ui-drift");
+        expect(loop.iterations).toBe("infinite");
+        expect(loop.duration).toBe("24s");
+        // Un disco de 520px con `blur` sería repintarlo sesenta veces por segundo en un teléfono.
+        expect(loop.blur, "un orbe lleva filtro").toBe("none");
+      }
+
+      // Y la razón por la que sus posiciones están escritas como están: el recorrido de desbordes
+      // delata cualquier caja que se salga, así que se muestrean a lo largo del viaje.
+      for (let sample = 0; sample < 8; sample += 1) {
+        const outside = await orbs.evaluateAll((els) => {
+          const page = (els[0] as HTMLElement).closest("main")?.getBoundingClientRect();
+          return els
+            .map((el) => el.getBoundingClientRect())
+            .filter(
+              (box) =>
+                box.left < -0.5 ||
+                box.right > window.innerWidth + 0.5 ||
+                (page !== undefined &&
+                  (box.top < page.top - 0.5 || box.bottom > page.bottom + 0.5)),
+            ).length;
+        });
+        expect(outside, "un orbe se sale de la página").toBe(0);
+        await visitor.waitForTimeout(400);
+      }
+    } finally {
+      await visitor.context().close();
+    }
+  }, 120_000);
+
+  /**
+   * **El presupuesto dicho como una prueba: en el cuestionario no se mueve nada mientras alguien
+   * contesta.** Las tarjetas entran al montarse la pregunta y ahí acaba; escribir no dispara nada,
+   * y elegir un sector cambia colores y un tick que se funde, no una posición.
+   */
+  it("no mueve nada mientras se contesta una pregunta", async () => {
+    const visitor = await (await browser.newContext()).newPage();
+    try {
+      await visitor.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+      await motionSettled(visitor);
+
+      const running = () =>
+        visitor.evaluate(
+          () =>
+            document
+              .getAnimations()
+              .filter((a) => a.constructor.name === "CSSAnimation" && a.playState === "running")
+              .length,
+        );
+
+      await visitor.fill("#nombre", "Taberna Santo Domingo");
+      expect(await running(), "algo se anima mientras se escribe").toBe(0);
+
+      // El paso 2: las once tarjetas entran una tras otra y después se quedan quietas.
+      await visitor.getByRole("button", { name: "Siguiente" }).click();
+      await visitor.getByText("Restaurante y bar", { exact: true }).waitFor();
+      await motionSettled(visitor);
+      expect(await running(), "la rejilla sigue animándose cuando ya ha llegado").toBe(0);
+
+      /**
+       * Y filtrar, que es la otra forma de escribir en el paso 2, tampoco anima nada: la rejilla
+       * se queda con las tarjetas que coinciden y ya está.
+       *
+       * **Lo que sí se mueve, y no es de este sprint.** Medido el 15 de octubre de 2026 a 1280 ×
+       * 720: al escribir «rest» la rejilla pasa de 263px de alto a 56, y como `Shell` centra la
+       * tarjeta en vertical, **el propio campo donde se está escribiendo baja 7,9px** (302,13 →
+       * 310,02). Es anterior a este sprint —lo causa el centrado, no una animación— y tiene su
+       * fila en el backlog con esta medida. La primera versión de esta prueba aseveraba que la
+       * rejilla no se movía, que es sencillamente falso; lo que se afirma aquí es lo que el
+       * presupuesto promete de verdad.
+       */
+      const grid = visitor.locator("fieldset").first();
+      const tall = (await grid.boundingBox())?.height ?? 0;
+      await visitor.fill("#buscar", "rest");
+      await motionSettled(visitor);
+      expect(await running(), "filtrar anima algo").toBe(0);
+      expect((await grid.boundingBox())?.height, "el filtro no recortó la rejilla").toBeLessThan(
+        tall,
+      );
+    } finally {
+      await visitor.context().close();
+    }
+  }, 120_000);
+
+  it("deja la landing entera quieta para quien ha pedido menos movimiento", async () => {
+    const context = await browser.newContext({ reducedMotion: "reduce" });
+    const visitor = await context.newPage();
+    try {
+      await visitor.goto(BASE_URL, { waitUntil: "networkidle" });
+      // La regla global deja cada animación en una iteración de 0,01 ms — incluidos los orbes,
+      // que por eso sí terminan aquí y nunca en una visita normal.
+      await expect
+        .poll(() => visitor.evaluate(() => document.getAnimations().length > 0), {
+          timeout: 10_000,
+        })
+        .toBe(true);
+      await expect
+        .poll(() =>
+          visitor.evaluate(() => document.getAnimations().every((a) => a.playState === "finished")),
+        )
+        .toBe(true);
     } finally {
       await context.close();
     }

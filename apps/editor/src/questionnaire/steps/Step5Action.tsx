@@ -102,7 +102,7 @@ export function Step5Action({
         >
           {es["questionnaire.step5.fieldset.label"]}
         </legend>
-        {ACTIONS.map(({ id, labelKey }) => (
+        {ACTIONS.map(({ id, labelKey }, position) => (
           <ChoiceCard
             key={id}
             name="accion"
@@ -110,12 +110,17 @@ export function Step5Action({
             label={es[labelKey]}
             selected={answers.mainAction === id}
             onSelect={() => update({ mainAction: id })}
+            index={position}
           />
         ))}
       </fieldset>
 
       {answers.mainAction === "book" ? (
         <div
+          /* This one legitimately makes the card taller, so it fades in rather than appearing: the
+             height change is the honest part and the fade is what keeps it from reading as a jump.
+             Opacity only — the block is in the flow and moving it would move «Siguiente». */
+          className="ui-fade-in"
           style={{
             padding: 20,
             background: "#F8FAFC",

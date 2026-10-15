@@ -72,12 +72,13 @@ export function Step3Services({
           >
             {es["questionnaire.step3.fieldset.label"]}
           </legend>
-          {suggestions.map((suggestion) => (
+          {suggestions.map((suggestion, position) => (
             <CheckboxCard
               key={suggestion.id}
               label={suggestion.title}
               checked={answers.services.includes(suggestion.title)}
               onChange={(checked) => toggle(suggestion.title, checked)}
+              index={position}
             />
           ))}
         </fieldset>

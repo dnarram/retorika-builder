@@ -119,6 +119,9 @@ export function Questionnaire() {
       {rejected && step === 1 ? (
         <div
           role="status"
+          /* It arrives with the card rather than appearing fully formed above it — the one notice
+             on these screens that is news, so it is worth reading as having just arrived. */
+          className="ui-reveal"
           style={{
             boxSizing: "border-box",
             width: "100%",

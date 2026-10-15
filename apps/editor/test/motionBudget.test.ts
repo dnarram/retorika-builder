@@ -230,6 +230,28 @@ describe("the budget on each screen", () => {
     expect(classes.filter((name) => name === "ui-ring-once").length).toBeLessThanOrEqual(1);
   });
 
+  /**
+   * **The hole the test above had, and the reason a class scan is not enough** (sprint 22 day 3).
+   *
+   * The landing's logo animates through a component: `BuildingMark` carries `ui-hammer` and
+   * `ui-block`, which are two of the three names allowed to loop, and the class names are in *that*
+   * file rather than in `page.tsx`. So the scan above reads a landing with no loops in it while the
+   * page renders two — finite only because `once` is passed. Drop that one word and the landing
+   * hammers for ever, with every assertion in this file still green.
+   *
+   * The browser walk measures the real iteration count (`e2e`, sprint 22 day 3). This is the cheap
+   * half that runs on every pull request without one.
+   */
+  it("builds the landing's mark once, never in a loop", () => {
+    const source = readStripped(EDITOR_SRC, "app", "page.tsx");
+    if (!source.includes("<BuildingMark")) return; // the landing may stop drawing it at all
+    const tag = source.slice(source.indexOf("<BuildingMark"));
+    expect(
+      tag.slice(0, tag.indexOf("/>")),
+      "the landing renders BuildingMark without `once`, so its mark loops for ever",
+    ).toContain("once");
+  });
+
   it("the three proposals loop nothing, and pulse only the one that was chosen", () => {
     const classes = classesOf(EDITOR_SRC, "questionnaire", "Variants.tsx");
     for (const loop of LOOPS) expect(classes).not.toContain(loop);
