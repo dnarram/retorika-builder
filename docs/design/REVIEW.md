@@ -1972,3 +1972,51 @@ y si alguno pide algo de fuera — porque un SVG cargado por `<img>` es un docum
 de la «R» viaja dentro como `data:` URI; un `href` a cualquier otro sitio dibujaría un agujero en el
 logotipo en todas las pantallas menos en la que se probó.
 
+### El cierre: lo que las dos barras movidas dejan igual (día 5)
+
+Los días 2 y 3 hicieron que las barras del lienzo se aparten. Este pregunta qué queda cuando alguien
+las ha apartado de verdad.
+
+**El recorrido entero sin tocar el ratón mueve la barra**, y eso es la mitad que este repositorio le
+exige a cualquier arrastre: el paso está **dentro de las marcas** del recorrido, donde
+`keyboardOnly.test.ts` falla si aparece un gesto de puntero. Tab hasta el asa, Intro para la esquina
+siguiente, una flecha para el paso, y sigue hasta «Estilo» como siempre.
+
+**axe con las dos barras movidas** no encuentra nada serio ni crítico, y el árbol de landmarks es el
+mismo antes y después: mover cromo no añade sitios a los que navegar. (De paso, el ayudante de axe
+deja de estar copiado: eran tres copias con tres redacciones distintas del mismo fallo, que es
+exactamente el tercer uso en el que la regla de la casa dice que se extrae.)
+
+**El grupo movido sobrevive al viaje a móvil y vuelve a su sitio exacto.** Es lo que demuestra la
+decisión del día 2 de guardar la posición **sin recortar** y recortarla al dibujar: en móvil la
+posición ancha no cabe y se dibuja donde quepa; al volver se dibuja la que se guardó. Si se hubiera
+guardado recortada, el viaje de ida habría borrado el sitio.
+
+**Y con un dedo**, que pidió David al aprobar el sprint: un toque en el asa cambia de esquina y un
+arrastre mueve las dos barras, el mismo recorrido que hizo la mano, sin llevarse las palabras
+elegidas del texto. Lo hace posible una línea —`touch-action: none` en las dos asas—, y ahora hay dos
+caminatas que lo notarían si desapareciera. Lo que no cubren, dicho: un aparato de verdad, y dos
+dedos a la vez.
+
+**Lo que la caminata táctil encontró de paso, y no es de este sprint.** Encadenar las dos barras en
+una sola página falla, y al medirlo resultó no tener nada que ver con el dedo: **elegir una sección,
+hacer clic después en un texto de otra y pulsar cualquier botón de la barra flotante tira el foco al
+`body` y cierra la barra** — «B» no pone negrita y la barra desaparece bajo el puntero. Reproducido
+con ratón, y reproducido también contra el editor **anterior al día 3**, así que es viejo y no de
+aquí; ninguna caminata lo había visto porque todas pulsan el texto primero. Está en
+`docs/tasks/backlog.md` con lo medido y con lo que queda descartado, y la caminata que lo encontraría
+en una línea está escrita allí para quien lo tome.
+
+### Lo que este sprint deja a David
+
+Nada que firmar. Cinco días: los verbos crecen y dicen su nombre, el grupo se aparta con un asa, la
+barra del texto también y además un teclado por fin la alcanza, la marca se sirve en vector, y el
+cierre. Fuera de los días, un sexto cambio que tuvo que ir aparte porque bloqueaba: el relevo de
+marcos dejó de perder el teclado que le pedían llevar, un intermitente de tres rojos de CI con su
+mecanismo por fin medido.
+
+Queda en el backlog, con sus números: la otra mitad de `role="toolbar"` (las flechas entre los
+controles, y qué hacen cuando Tab ha deshecho la selección), el defecto de arriba, y servir los SVG
+donde todavía no se sirven —que es ninguno, porque el día 4 los sirvió todos salvo el favicon, que se
+queda en píxeles a propósito.
+

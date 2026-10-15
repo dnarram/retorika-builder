@@ -14,7 +14,7 @@ import {
 } from "@playwright/test";
 import { GALLERY_SAMPLE_COUNT } from "@retorika/generator";
 import { afterAll, beforeAll, describe, it } from "vitest";
-import { BAR_INSET, BAR_STEP, TOOLBAR_GAP } from "../src/editor/barPosition.ts";
+import { BAR_INSET, BAR_STEP, type Point, TOOLBAR_GAP } from "../src/editor/barPosition.ts";
 import { VERB_SCALE } from "../src/editor/chromeScale.ts";
 import { NARROWEST_WIDTH } from "../src/editor/overflowCheck.ts";
 import { BASE_URL, QUESTIONNAIRE_URL, startEditorServer, stopEditorServer } from "./server.ts"; /**
@@ -338,6 +338,29 @@ async function replacingTheDocument(page: Page, act: () => Promise<void>): Promi
       }),
     )
     .toBe("arrived");
+}
+
+/**
+ * axe over whatever the page is showing, failing on serious and critical findings only.
+ *
+ * Three walks had written their own copy of this by the time sprint 20 closed, each with its own
+ * wording for the answer; this is the one the house rule asks for at the third. The bar is «serious
+ * or critical» rather than «anything» because the moderate findings this application has are a
+ * known list in `docs/tasks/backlog.md`, and a guard that fails on a recorded finding is a guard
+ * somebody turns off.
+ */
+async function axeSerious(page: Page, where: string): Promise<void> {
+  const results = await new AxeBuilder({ page }).analyze();
+  const lines = results.violations
+    .filter((rule) => rule.impact === "serious" || rule.impact === "critical")
+    .flatMap((rule) =>
+      rule.nodes.map(
+        (node) => `  ${rule.id} (${rule.impact}) at ${node.target.join(" ")}: ${rule.help}`,
+      ),
+    );
+  expect(lines, `axe with ${where}:\n${lines.join("\n")}`).toEqual([]);
+  // A guard on the guard: axe has to have actually examined something.
+  expect(results.passes.length, `axe ran no checks with ${where}`).toBeGreaterThan(0);
 }
 
 /**
@@ -8040,9 +8063,11 @@ describe("lo que el cromo del editor dibuja dentro del lienzo, y el aviso del in
        * Lo que sí hace falta es la precondición: el ofrecimiento de escalar, el menú de
        * composiciones y la barra de «Diseñada a mano» solo existen a partir de aquí.
        *
-       * **Lo que queda sin vigilar, dicho en vez de callado:** si el grupo de iconos se saliera de
-       * su sección a 320px, nada lo mediría. Es otra sonda —caja contra contenedor, no texto contra
-       * su botón— y no la añado por mi cuenta.
+       * **~~Lo que queda sin vigilar~~, y ya no:** esto decía que si el grupo de iconos se saliera
+       * de su sección a 320px nada lo mediría, por ser otra sonda —caja contra contenedor, no texto
+       * contra su botón—. El sprint 20 día 1 la añadió al ensanchar los botones, que es cuando dejó
+       * de ser hipotética: está en «los verbos crecen y dicen su nombre», con sección y grupo
+       * medidos.
        */
       const select = async () => {
         await frame.locator('[data-section="sec-services"]').click();
@@ -10555,6 +10580,29 @@ describe("sprint 17 día 7 — el recorrido entero sin tocar el ratón", () => {
       // And the keyboard is still on the verb, which is what makes a second press possible.
       await expect.poll(() => focusPlace(page)).toBe("sec-services/move-down");
 
+      /**
+       * **Y la barra que estorba se aparta, también sin ratón** (sprint 20 día 2).
+       *
+       * Es la mitad que este repositorio le exige a cualquier arrastre: un asidero que solo
+       * responde a un puntero no existe para quien no tiene puntero. El asa es la última parada del
+       * grupo, Intro la manda a la esquina siguiente y una flecha la mueve a pasos — y que esto
+       * esté **dentro de las marcas** es lo que lo asevera, porque `keyboardOnly.test.ts` falla si
+       * aparece un gesto de puntero entre ellas.
+       */
+      const barLeft = () =>
+        frame.locator(".rb-actions").evaluate((el) => Math.round((el as HTMLElement).offsetLeft));
+      await tabToVerb(page, "grip");
+      await page.keyboard.press("Enter");
+      await expect
+        .poll(() =>
+          frame.locator(".rb-actions").evaluate((el) => (el as HTMLElement).style.left !== ""),
+        )
+        .toBe(true);
+      const corner = await barLeft();
+      await page.keyboard.press("ArrowLeft");
+      await expect.poll(barLeft).toBe(corner - BAR_STEP);
+      await expect(frame.locator(".rb-actions")).toHaveCount(1);
+
       // ---- giving it a style: the rail, then its first choice, both with the keyboard ----
       await tabUntil(page, (at) => at.text.startsWith("Estilo"), "the «Estilo» rail item");
       await page.keyboard.press("Enter");
@@ -10750,19 +10798,7 @@ describe("sprint 17 día 7 — axe de cierre, con los diálogos abiertos", () =>
     "section[aria-labelledby]:not([role])",
   ].join(",");
 
-  async function axeHere(page: Page, where: string): Promise<void> {
-    const results = await new AxeBuilder({ page }).analyze();
-    const serious = results.violations.filter(
-      (rule) => rule.impact === "serious" || rule.impact === "critical",
-    );
-    const lines = serious.flatMap((rule) =>
-      rule.nodes.map(
-        (node) => `  ${rule.id} (${rule.impact}) at ${node.target.join(" ")}: ${rule.help}`,
-      ),
-    );
-    expect(lines, `axe with ${where} open:\n${lines.join("\n")}`).toEqual([]);
-    expect(results.passes.length, `axe ran no checks with ${where} open`).toBeGreaterThan(0);
-  }
+  const axeHere = (page: Page, where: string) => axeSerious(page, `${where} open`);
 
   it("no tiene violaciones serias ni críticas con el aviso de descarga abierto", async () => {
     const page = await (
@@ -12690,6 +12726,245 @@ describe("sprint 20 día 4 — la marca se sirve en vector", () => {
       expect(bar.height).toBe(30);
       // Decorativa: el nombre del negocio va al lado y dos nombres juntos es uno de más.
       expect(bar.alt).toBe("");
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+});
+
+/**
+ * Sprint 20 día 5 — el cierre: lo que las dos barras movidas dejan igual.
+ *
+ * Los días 2 y 3 hicieron que las barras del lienzo se puedan apartar. Este pregunta lo que queda
+ * cuando alguien las ha apartado de verdad: si el árbol de accesibilidad sigue siendo el mismo, si
+ * el grupo sigue dentro de su sección al pasar a móvil y volver, y si un dedo —que no es ni un ratón
+ * ni un teclado— puede hacer lo mismo que ellos.
+ */
+describe("sprint 20 día 5 — el cierre, con las dos barras movidas", () => {
+  const VIEWPORT = { width: 1440, height: 900 };
+  const HEADLINE = '[data-section="sec-cover"] [data-id="el-headline"]';
+
+  /** El grupo de verbos de una sección, donde esté puesto ahora. */
+  function cluster(page: Page, sectionId = "sec-services") {
+    return page
+      .frameLocator(PREVIEW)
+      .first()
+      .locator(`[data-section="${sectionId}"]`)
+      .evaluate((section) => {
+        const bar = section.querySelector<HTMLElement>(".rb-actions");
+        if (!bar) return null;
+        const host = section.getBoundingClientRect();
+        const box = bar.getBoundingClientRect();
+        return {
+          left: Math.round(bar.offsetLeft),
+          top: Math.round(bar.offsetTop),
+          styleLeft: bar.style.left,
+          insideLeft: Math.round(box.left - host.left),
+          insideRight: Math.round(host.right - box.right),
+          sectionWidth: Math.round(host.width),
+        };
+      });
+  }
+
+  /** Arrastra un asa con el puntero, por su centro. */
+  async function dragBy(page: Page, selector: string, dx: number, dy: number): Promise<void> {
+    const box = await page.frameLocator(PREVIEW).first().locator(selector).boundingBox();
+    expect(box, `no hay caja que agarrar en ${selector}`).not.toBeNull();
+    const from = {
+      x: (box?.x ?? 0) + (box?.width ?? 0) / 2,
+      y: (box?.y ?? 0) + (box?.height ?? 0) / 2,
+    };
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(from.x + dx, from.y + dy, { steps: 8 });
+    await page.mouse.up();
+  }
+
+  it("no tiene violaciones serias ni críticas con las dos barras movidas, y no añade ningún landmark", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const walker = await context.newPage();
+    try {
+      await intoTheCanvas(walker);
+      const frame = walker.frameLocator(PREVIEW).first();
+
+      // El árbol antes de mover nada, para que un landmark añadido se vea en vez de suponerse.
+      const landmarks = () =>
+        walker.evaluate(() =>
+          [
+            ...document.querySelectorAll(
+              "nav,main,header,footer,aside,[role=navigation],[role=main],[role=banner],[role=contentinfo],[role=complementary],[role=region],[role=search],[role=form]",
+            ),
+          ].map((node) => node.tagName.toLowerCase()),
+        );
+      const before = await landmarks();
+
+      // El grupo de verbos, a la esquina de abajo a la izquierda.
+      await frame.locator('[data-section="sec-services"]').click();
+      await expect(frame.locator(".rb-actions")).toHaveCount(1);
+      for (let press = 0; press < 2; press += 1) {
+        await frame.locator('.rb-actions [data-action="grip"]').click();
+      }
+      await expect.poll(() => cluster(walker).then((at) => at?.styleLeft !== "")).toBe(true);
+
+      // Y la barra del texto, arrastrada con el ratón.
+      await frame.locator(HEADLINE).click();
+      await expect(frame.locator(".rb-toolbar")).toHaveCount(1);
+      await dragBy(walker, '.rb-toolbar [data-action="grip"]', 120, 60);
+
+      await axeSerious(walker, "las dos barras del lienzo movidas");
+      expect(await landmarks(), "mover una barra añadió un landmark").toEqual(before);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("el grupo movido sigue dentro de su sección al pasar a móvil, y vuelve a su sitio exacto al volver", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const walker = await context.newPage();
+    try {
+      await intoTheCanvas(walker);
+      const frame = walker.frameLocator(PREVIEW).first();
+      await frame.locator('[data-section="sec-services"]').click();
+      await expect(frame.locator(".rb-actions")).toHaveCount(1);
+
+      // Movido muy a la izquierda en una ventana ancha: una posición que en móvil no cabe.
+      await dragBy(walker, '.rb-actions [data-action="grip"]', -600, 90);
+      const wide = await cluster(walker);
+      expect(wide?.left, "el grupo no se movió").toBeLessThan(400);
+
+      /**
+       * **Se guarda sin recortar y se recorta al dibujar**, que es lo que hace posible este viaje:
+       * en móvil la posición ancha no cabe y se dibuja donde quepa, y al volver se vuelve a dibujar
+       * la que se guardó. Si se hubiera guardado recortada, el viaje de ida habría borrado el sitio.
+       */
+      await walker.getByRole("button", { name: "Ver en móvil" }).click();
+      await expect
+        .poll(() => cluster(walker).then((at) => at?.sectionWidth ?? 9_999))
+        .toBeLessThan(400);
+      await frame.locator('[data-section="sec-services"]').click();
+      const narrow = await cluster(walker);
+      expect(
+        narrow?.insideLeft,
+        `el grupo se sale por la izquierda en móvil`,
+      ).toBeGreaterThanOrEqual(0);
+      expect(
+        narrow?.insideRight,
+        `el grupo se sale por la derecha en móvil`,
+      ).toBeGreaterThanOrEqual(0);
+
+      await walker.getByRole("button", { name: "Ver en ordenador" }).click();
+      await expect
+        .poll(() => cluster(walker).then((at) => at?.sectionWidth ?? 0))
+        .toBeGreaterThan(400);
+      await frame.locator('[data-section="sec-services"]').click();
+      await expect.poll(() => cluster(walker).then((at) => at?.left)).toBe(wide?.left);
+      expect((await cluster(walker))?.top).toBe(wide?.top);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  /**
+   * **Con un dedo** (David, al aprobar el sprint): un toque en el asa pasa a la esquina siguiente y
+   * un arrastre táctil mueve las barras.
+   *
+   * Es la tercera manera de usar esto y la única que no se había probado. Lo que la hace posible es
+   * una línea — `touch-action: none` en las dos asas —, sin la cual el dedo desplaza la página por
+   * debajo en vez de mover la barra. Lo que la hace necesaria es que un `pointerdown` de dedo no es
+   * un `mousedown`: los `preventDefault` que protegen la selección en la barra de texto son de
+   * ratón, así que «¿se lleva el dedo las palabras elegidas?» no tiene la misma respuesta por
+   * construcción.
+   *
+   * **Una barra por caminata, y eso es un hallazgo y no una comodidad.** Encadenar las dos en una
+   * sola página tropieza con un defecto que esto encontró y que no es de este sprint: elegir una
+   * sección, tocar después un texto de otra y pulsar **cualquier** botón de la barra flotante tira
+   * el foco al `body` y cierra la barra. Medido, reproducido con ratón y con dedo, y reproducido
+   * también contra el editor anterior al día 3. Está en `docs/tasks/backlog.md` con sus números.
+   */
+  const FINGER = { width: 1440, height: 900, hasTouch: true } as const;
+
+  /** Un dedo que se mueve va por CDP: `page.touchscreen` solo sabe tocar. */
+  async function finger(
+    context: BrowserContext,
+    page: Page,
+    from: Point,
+    to: Point,
+  ): Promise<void> {
+    const touch = await context.newCDPSession(page);
+    const send = (type: "touchStart" | "touchMove" | "touchEnd", at?: Point) =>
+      touch.send("Input.dispatchTouchEvent", {
+        type,
+        touchPoints: at ? [{ x: at.x, y: at.y }] : [],
+      });
+    await send("touchStart", from);
+    for (let step = 1; step <= 6; step += 1) {
+      await send("touchMove", {
+        x: from.x + ((to.x - from.x) * step) / 6,
+        y: from.y + ((to.y - from.y) * step) / 6,
+      });
+    }
+    await send("touchEnd");
+  }
+
+  /** El centro de un asa, en coordenadas de la página. */
+  async function centreOf(page: Page, selector: string): Promise<Point> {
+    const box = await page.frameLocator(PREVIEW).first().locator(selector).boundingBox();
+    expect(box, `no hay caja que tocar en ${selector}`).not.toBeNull();
+    return { x: (box?.x ?? 0) + (box?.width ?? 0) / 2, y: (box?.y ?? 0) + (box?.height ?? 0) / 2 };
+  }
+
+  it("con un dedo: un toque en el asa cambia de esquina y un arrastre mueve el grupo de verbos", async () => {
+    const context = await browser.newContext(FINGER);
+    const walker = await context.newPage();
+    try {
+      await intoTheCanvas(walker);
+      const frame = walker.frameLocator(PREVIEW).first();
+      await frame.locator('[data-section="sec-services"]').click();
+      await expect(frame.locator(".rb-actions")).toHaveCount(1);
+      const start = await cluster(walker);
+
+      const grip = await centreOf(walker, '.rb-actions [data-action="grip"]');
+      await walker.touchscreen.tap(grip.x, grip.y);
+      await expect.poll(() => cluster(walker).then((at) => at?.styleLeft !== "")).toBe(true);
+      const tapped = await cluster(walker);
+      expect(tapped?.top, "un toque no movió el grupo de esquina").not.toBe(start?.top);
+
+      const again = await centreOf(walker, '.rb-actions [data-action="grip"]');
+      await finger(context, walker, again, { x: again.x - 120, y: again.y - 60 });
+      const dragged = await cluster(walker);
+      expect(dragged?.left, "el dedo no arrastró el grupo").toBe((tapped?.left ?? 0) - 120);
+      expect(dragged?.top).toBe((tapped?.top ?? 0) - 60);
+      // Y sigue dentro de su sección, que es lo mismo que se le pide a un ratón.
+      expect(dragged?.insideLeft).toBeGreaterThanOrEqual(0);
+      expect(dragged?.insideRight).toBeGreaterThanOrEqual(0);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("con un dedo: un arrastre mueve la barra del texto sin llevarse las palabras elegidas", async () => {
+    const context = await browser.newContext(FINGER);
+    const walker = await context.newPage();
+    try {
+      await intoTheCanvas(walker);
+      const frame = walker.frameLocator(PREVIEW).first();
+      await frame.locator(HEADLINE).click();
+      await expect(frame.locator(".rb-toolbar")).toHaveCount(1);
+
+      const words = () =>
+        frame.locator(HEADLINE).evaluate((el) => el.ownerDocument.getSelection()?.toString() ?? "");
+      const chosen = await words();
+      expect(chosen.length, "no hay palabras elegidas que poder perder").toBeGreaterThan(0);
+
+      const barAt = () =>
+        frame.locator(".rb-toolbar").evaluate((el) => Math.round((el as HTMLElement).offsetTop));
+      const before = await barAt();
+      const grip = await centreOf(walker, '.rb-toolbar [data-action="grip"]');
+      await finger(context, walker, grip, { x: grip.x, y: grip.y + 48 });
+
+      await expect.poll(barAt).toBe(before + 48);
+      expect(await words(), "arrastrar con el dedo se llevó las palabras elegidas").toBe(chosen);
+      await expect(frame.locator(".rb-toolbar")).toHaveCount(1);
     } finally {
       await context.close();
     }

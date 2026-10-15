@@ -12,7 +12,33 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 13 October 2026, **closing sprint 19 — «una página por ficha, y tres cosas que ya
+Last reviewed: 15 October 2026, **closing sprint 20 — «las barras se mueven, los verbos hablan y la
+marca es vector».** The two floating bars over the canvas can be moved out of the way of whatever
+they are covering, by hand or by keyboard, remembering where they were put for as long as the
+session lasts and writing nothing into the document for it. The eight section verbs are 32px with a
+word each, where they were 26px of silent glyph. The brand is served as the vectors traced from the
+delivered PNGs, 137 KB down to 21 on the wire, with the favicon left as pixels on purpose.
+
+**What this sprint found that nobody was looking for:**
+
+1. **Two dead controls at 320px**, and dead before the sprint touched them: the verbs cluster and the
+   «Foto de ejemplo» badge overlap by 74px on a cover, the badge carried `z-index: 6` and the cluster
+   none, so it took «Subir» and «Bajar»'s clicks. Fixed on day 1, and the walk asks `elementFromPoint`
+   rather than asking which layer wins.
+2. **The floating text bar had never been reachable by a keyboard** — not the handle, none of its
+   fourteen controls, since sprint 9. It sat after everything in its section and closed as soon as
+   focus left the words. Fixed on day 3 by moving it beside them and leaving one Tab stop, which is
+   the first half of what `role="toolbar"` has promised all along.
+3. **The swap dropped the keyboard it was asked to carry**, three CI reds across three weeks, now
+   measured with the CPU throttled twenty-fold and fixed in its own PR. Its row below carries the
+   three wrong questions.
+4. **A word hidden by opacity is still the page's text**: `innerText` of a cover came back with all
+   seven verb words in front of the business name, and a reader's Ctrl+F would have found «Duplicar»
+   inside their restaurant.
+5. **The floating text bar closes and does nothing** if a section was chosen before the text was —
+   older than this sprint, found by the touch walk, measured, not fixed. Its row is below.
+
+The review before that was 13 October 2026, **closing sprint 19 — «una página por ficha, y tres cosas que ya
 tienen respuesta».** The collections are five promises of five: a collection may have a page
 stored once and drawn once per entry (ADR 0040, accepted the same day), the cards' titles link to those pages,
 and the publisher writes a file per ficha — twelve at most, by ADR 0033's own cardinality, not the
@@ -853,6 +879,47 @@ open survives.
   Tab-ing off a text collapses the selection that chose them — which is why this bar was born
   mouse-first and why it cannot be finished in passing. Whoever takes it should decide what a
   keyboard's «selection» is here before writing a single key handler.
+
+- **A finger works on both floating bars, and nobody had tried one.** Sprint 20 day 5, at David's
+  asking. A tap on a handle sends its bar to the next corner; a finger drag moves it, exactly as far
+  as the finger went, and the text bar keeps the words that were chosen. The line that makes it
+  possible is `touch-action: none` on the two handles — without it the finger scrolls the page
+  underneath instead of moving the bar — and there are now two walks that would notice if it went.
+
+  Two things they do **not** cover, said rather than implied: a real device (this is Chromium's touch
+  emulation through `Input.dispatchTouchEvent`, because `page.touchscreen` only taps), and two
+  fingers at once, which nothing in this editor has an answer for.
+
+- **The floating text bar closes, and does nothing, if a section was chosen before the text was.**
+  Found on 15 October 2026 while writing sprint 20's touch walk, which is the only reason anybody
+  chained those two gestures in one page. Measured, reproduced, and **not fixed** — it is not that
+  sprint's subject and the cause is not found.
+
+  The sequence, every step with an ordinary mouse:
+
+  1. Click a section (its verbs appear).
+  2. Click a text in **another** section: the floating text bar opens, correctly, above the words.
+  3. Press any button on that bar — «B», the colour, the handle, anything.
+
+  On the `mousedown`, focus leaves the text for the document's `body`, the deferred blur then closes
+  the bar, and the press does nothing: **«B» applies no bold and the bar vanishes under the
+  pointer.** Without step 1 the same press keeps the focus on the text and works, which is why no
+  walk had seen it: every walk that drives this bar clicks the text first.
+
+  What was measured, and what it rules out:
+
+  - **Not the handle and not sprint 20.** «B» fails identically, and so does the whole sequence
+    against `apps/editor/src/questionnaire/Editor.tsx` as it stood **before** day 3 moved the bar
+    (checked out at that commit and run).
+  - **Not touch.** It reproduces with `page.mouse` alone; the finger was only how it was found.
+  - **Not a rebuilt bar.** The element pressed is the same node that was opened — tagged with a
+    `data-` attribute after opening and still carrying it at the press — and there is exactly one.
+  - The bar's own delegated `mousedown` → `preventDefault()` on anything inside a `button` is the
+    thing that should hold the focus, and it is present, duck-typed and matching. Why it does not
+    hold in this sequence is the open question.
+
+  Whoever takes it: the walk to write first is the three clicks above asserting the focus stays on
+  the text, because that fails today in one line.
 
 - **`let page` at module scope in the e2e file means a walk can poll the wrong tab and still
   compile.** Found on sprint 17 day 5: an assertion written as `focus(page)` inside a walk whose
