@@ -14,6 +14,7 @@ import {
 } from "@playwright/test";
 import { GALLERY_SAMPLE_COUNT } from "@retorika/generator";
 import { afterAll, beforeAll, describe, it } from "vitest";
+import { HERO_DEMO, HERO_PAGE, HERO_PHONE_WIDTH } from "../src/app/landingHero.ts";
 import { BAR_INSET, BAR_STEP, type Point, TOOLBAR_GAP } from "../src/editor/barPosition.ts";
 import { VERB_SCALE } from "../src/editor/chromeScale.ts";
 import { NARROWEST_WIDTH, PHONE_BREAKPOINT } from "../src/editor/overflowCheck.ts";
@@ -7200,6 +7201,177 @@ describe("sprint 15 día 5 — la landing, y el camino de vuelta", () => {
   }, 120_000);
 });
 
+/**
+ * **Sprint 22 día 2 — la landing enseña una web de verdad.**
+ *
+ * El héroe es la salida del propio producto: `generate()` y `render()` sobre «Taberna del Puerto»,
+ * dentro de un marco que pasa de ordenador a móvil y vuelve, una vez. Lo que estas pruebas cuidan
+ * no es que se mueva, que se ve, sino las cuatro cosas que no se ven:
+ *
+ * 1. Que la página de dentro **es de verdad** y trae sus fotos del banco por la ruta pública — un
+ *    nombre relativo dentro de un `srcDoc` se resolvería contra `/` y daría cinco imágenes rotas.
+ * 2. Que el iframe **no está en el HTML servido**, porque se monta tras la primera pintura: es lo
+ *    que impide que el titular y «Empezar» esperen a la web de muestra.
+ * 3. Que la demostración **se para** y que un clic la cancela en vez de que un temporizador
+ *    sobrescriba a la persona.
+ * 4. Que con `prefers-reduced-motion` **no se mueve sola**. La regla global aplana la transición,
+ *    pero una página que se reorganiza sin que nadie lo pida sigue siendo lo que esa preferencia
+ *    pide no hacer: aplanada, solo sería instantánea.
+ */
+describe("sprint 22 día 2 — el héroe de la landing", () => {
+  it("enseña una web generada de verdad, con sus fotos servidas por la ruta pública", async () => {
+    const visitor = await (await browser.newContext()).newPage();
+    try {
+      await visitor.goto(BASE_URL, { waitUntil: "networkidle" });
+      const frame = visitor.frameLocator('iframe[title^="Ejemplo de web"]');
+      // La portada del sitio de muestra, dentro del marco: el titular es el nombre del negocio,
+      // que es lo que prueba que esto ha pasado por el generador y no por una captura.
+      await expect(frame.locator('[data-section="sec-cover"] h1')).toHaveText(
+        "Taberna del Puerto",
+        { timeout: 30_000 },
+      );
+      // Y la foto, cargada: `naturalWidth` es lo único que distingue una imagen servida de un
+      // `<img>` roto con exactamente la caja que su `width` reserva.
+      const photo = frame.locator('[data-section="sec-cover"] img').first();
+      await expect(photo).toHaveAttribute("src", /^\/api\/muestras\//);
+      await expect
+        .poll(() => photo.evaluate((el) => (el as HTMLImageElement).naturalWidth), {
+          timeout: 30_000,
+        })
+        .toBeGreaterThan(0);
+    } finally {
+      await visitor.context().close();
+    }
+  }, 120_000);
+
+  it("no pone la web de muestra en el HTML servido, que es lo que adelanta la primera pintura", async () => {
+    // Leído del servidor, sin navegador: lo que llega por el cable antes de que corra nada.
+    const served = await fetch(BASE_URL);
+    const html = await served.text();
+    expect(html).toContain("Tu web en cinco preguntas");
+    // El marco sí está —su hueco se reserva con `aspect-ratio`, así que nada salta— y el iframe no.
+    expect(html).toContain("data-hero-state");
+    expect(html).not.toContain("<iframe");
+  }, 120_000);
+
+  it("hace su demostración una vez, cruza el salto de 720 por el medio, y se para", async () => {
+    const visitor = await (await browser.newContext()).newPage();
+    try {
+      await visitor.goto(BASE_URL, { waitUntil: "networkidle" });
+      const slot = visitor.locator("[data-hero-state]");
+      const inside = visitor.frameLocator('iframe[title^="Ejemplo de web"]');
+
+      // **El ancho que se mide es el de la página, no el del marco.** La caja del `<iframe>` está
+      // dentro de un `transform: scale()`, así que su rectángulo es el tamaño dibujado — 680px en
+      // un escritorio — y no dice nada del diseño que la página está usando. Lo que decide eso es
+      // su propio `innerWidth`, que es lo que ve su `@media (max-width: 720px)`.
+      const pageWidth = () => inside.locator("body").evaluate(() => window.innerWidth);
+
+      // Empieza quieta y en ordenador, y la página de dentro está en su diseño de escritorio.
+      await expect(slot).toHaveAttribute("data-hero-device", "desktop");
+      await expect.poll(pageWidth, { timeout: 30_000 }).toBe(HERO_PAGE.width);
+
+      // Pasa a móvil sola, y la página de dentro queda exactamente en 390 — por debajo del salto
+      // del renderizador, que es lo que la reorganiza de verdad.
+      await expect(slot).toHaveAttribute("data-hero-device", "phone", { timeout: 10_000 });
+      await expect.poll(pageWidth, { timeout: 10_000 }).toBe(HERO_PHONE_WIDTH);
+      expect(HERO_PHONE_WIDTH).toBeLessThan(PHONE_BREAKPOINT);
+
+      // Y vuelve, y entonces dice que ha terminado. `rest` es lo que espera el recorrido del
+      // móvil antes de medir nada en esta página.
+      await expect(slot).toHaveAttribute("data-hero-device", "desktop", { timeout: 10_000 });
+      await expect(slot).toHaveAttribute("data-hero-state", "rest", { timeout: 10_000 });
+      await motionSettled(visitor);
+
+      // Y se queda quieta: cinco segundos después sigue en ordenador, sin un segundo viaje.
+      await visitor.waitForTimeout(5_000);
+      await expect(slot).toHaveAttribute("data-hero-device", "desktop");
+      await expect(slot).toHaveAttribute("data-hero-state", "rest");
+    } finally {
+      await visitor.context().close();
+    }
+  }, 180_000);
+
+  it("obedece al botón, y el botón cancela lo que el temporizador iba a hacer", async () => {
+    const visitor = await (await browser.newContext()).newPage();
+    try {
+      await visitor.goto(BASE_URL, { waitUntil: "networkidle" });
+      const slot = visitor.locator("[data-hero-state]");
+      const inside = visitor.frameLocator('iframe[title^="Ejemplo de web"]');
+      const toggle = visitor.getByRole("button", { name: /Ver en/ });
+
+      // Pulsado antes de que la demostración empiece, que es el caso que una vez estuvo mal: los
+      // temporizadores seguían vivos y a los 4500ms devolvían el marco a ordenador, deshaciendo
+      // la elección de la persona.
+      await expect(toggle).toHaveAttribute("aria-pressed", "false");
+      await toggle.click();
+      await expect(slot).toHaveAttribute("data-hero-device", "phone");
+      await expect(toggle).toHaveAttribute("aria-pressed", "true");
+      await visitor.waitForTimeout(HERO_DEMO.restMs);
+      await expect(slot, "un temporizador deshizo la elección de la persona").toHaveAttribute(
+        "data-hero-device",
+        "phone",
+      );
+
+      /**
+       * **Y la medición que justifica todo el héroe: la página cruza el salto por el medio.**
+       *
+       * Es la misma comprobación que el lienzo del editor pasó el 7 de octubre, cuando se cambió
+       * la curva: con una curva decisiva la vista previa hacía 1168 → 1059 → 777 en tres
+       * fotogramas y ya había cruzado los 720 antes de que el ojo empezara a seguirla. Aquí se
+       * dispara con el botón y no con la demostración, para que el muestreo no compita con un
+       * temporizador.
+       */
+      const widths: number[] = [];
+      await toggle.click();
+      for (let i = 0; i < 12; i += 1) {
+        widths.push(await inside.locator("body").evaluate(() => window.innerWidth));
+        await visitor.waitForTimeout(25);
+      }
+      const travelling = widths.filter((w) => w > HERO_PHONE_WIDTH && w < HERO_PAGE.width);
+      expect(
+        travelling.length,
+        `la página salta en vez de viajar: ${widths.join(" ")}`,
+      ).toBeGreaterThan(1);
+      expect(
+        travelling.some((w) => w > PHONE_BREAKPOINT),
+        `no se vio ningún fotograma antes del salto: ${widths.join(" ")}`,
+      ).toBe(true);
+      expect(
+        travelling.some((w) => w < PHONE_BREAKPOINT),
+        `no se vio ningún fotograma después del salto: ${widths.join(" ")}`,
+      ).toBe(true);
+
+      await expect(slot).toHaveAttribute("data-hero-device", "desktop");
+      await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    } finally {
+      await visitor.context().close();
+    }
+  }, 120_000);
+
+  it("no se mueve sola para quien ha pedido menos movimiento", async () => {
+    const context = await browser.newContext({ reducedMotion: "reduce" });
+    const visitor = await context.newPage();
+    try {
+      await visitor.goto(BASE_URL, { waitUntil: "networkidle" });
+      const slot = visitor.locator("[data-hero-state]");
+      // En reposo desde el primer momento, y en ordenador: no hay demostración que esperar.
+      await expect(slot).toHaveAttribute("data-hero-state", "rest");
+      await visitor.waitForTimeout(HERO_DEMO.restMs);
+      await expect(slot).toHaveAttribute("data-hero-device", "desktop");
+      // La web de muestra sí llega — lo que se retira es el movimiento, no el contenido.
+      await expect(
+        visitor.frameLocator('iframe[title^="Ejemplo de web"]').locator("h1").first(),
+      ).toHaveText("Taberna del Puerto", { timeout: 30_000 });
+      // Y el botón sigue siendo la forma de verlo en móvil.
+      await visitor.getByRole("button", { name: "Ver en móvil" }).click();
+      await expect(slot).toHaveAttribute("data-hero-device", "phone");
+    } finally {
+      await context.close();
+    }
+  }, 120_000);
+});
+
 describe("sprint 15 día 6 — la pantalla de la cuenta", () => {
   /**
    * What «borrar de verdad» looks like from outside, as far as it can be walked without a session.
@@ -13248,6 +13420,14 @@ describe("nada sobresale en un móvil", () => {
 
       it("la landing y las cinco preguntas", async () => {
         await walker.goto(BASE_URL, { waitUntil: "networkidle" });
+        // **El héroe hace su viaje a móvil y vuelve antes de que aquí se mida nada** (sprint 22
+        // día 2). `motionSettled` dentro de `look` espera lo que esté en vuelo, pero entre los
+        // 1500ms y los 4500ms no hay nada en vuelo y el marco está *quieto en móvil*: medir ahí
+        // mediría una landing que en un segundo va a ser otra. Es la lección del ADR 0042 en el
+        // único sitio donde este sprint anima un ancho a propósito.
+        await expect(walker.locator('[data-hero-state="rest"]')).toHaveCount(1, {
+          timeout: 30_000,
+        });
         await look("landing");
         // axe at one phone width, the one an iPhone actually has. The other two walk the same
         // markup; what differs between widths is geometry, which `look` already measures.

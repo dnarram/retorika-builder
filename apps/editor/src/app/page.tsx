@@ -1,5 +1,7 @@
 import Link from "next/link";
 import es from "@/locales/es.json" with { type: "json" };
+import { LandingHero } from "./LandingHero.tsx";
+import { landingSampleHtml } from "./landingSample.ts";
 
 /**
  * The landing. Minimal, which is what David asked for, and deliberately **inert**.
@@ -18,6 +20,12 @@ import es from "@/locales/es.json" with { type: "json" };
  * There is no mockup for this screen — `protocolo.md:971` makes the mockups the interface
  * specification and none was ever drawn for a landing — so ADR 0034 §20 makes the ADR and this
  * file the specification instead. The Spanish lives in `locales/es.json` like everything else.
+ *
+ * **The hero, since sprint 22 day 2, does not change any of that.** `landingSampleHtml()` is the
+ * generator and the renderer run at build time on a sample business, which reads no session and no
+ * database — so this page is still prerendered, and still movable to a static site. `LandingHero`
+ * is a client island that receives the finished string and mounts it after the first paint, so the
+ * headline and «Empezar» never wait for a sample site to arrive.
  */
 export const metadata = {
   title: es["landing.title"],
@@ -138,10 +146,21 @@ export default function Page() {
           {/* The brand blue is for white text on it and for black-ink pages; as 15px text on this
               grey it measures 4.39:1. `#105CB1` is the palette's own secondary (ADR 0041 §3), 6.14
               here. Same day, same first run of axe on this page. */}
-          <Link href="/entrar" style={{ fontSize: 15, color: "#105CB1", marginTop: 8 }}>
+          <Link
+            href="/entrar"
+            style={{ fontSize: 15, color: "var(--ui-brand-deep)", marginTop: 8 }}
+          >
             {es["landing.enter"]}
           </Link>
         </div>
+      </div>
+
+      {/* **A real web, built by the thing this page is selling.** It goes here, under the sentence
+          that promises a finished site and above the list that explains how, because this is the
+          one place on the page where «te devuelve una web terminada» can be shown instead of
+          claimed. Its own `maxWidth` matches the text above it, so the page keeps one column. */}
+      <div style={{ width: "100%", maxWidth: 680 }}>
+        <LandingHero html={landingSampleHtml()} />
       </div>
 
       <section style={{ maxWidth: 680, width: "100%" }}>
