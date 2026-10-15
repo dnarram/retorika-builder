@@ -128,10 +128,17 @@ export default function Page() {
           >
             {es["landing.start"]}
           </Link>
-          <span style={{ fontSize: 14, color: "#64748B", textAlign: "center" }}>
+          {/* `#5B6B82`, not the mockups' `#64748B`: on this page's `#F5F7FA` the latter is 4.43:1
+              and the former 5.06, the same correction `questionnaire/ui.tsx` made on sprint 1 day
+              2 and this page missed — found by sprint 21 day 5, the first time axe ran on the
+              landing at all. */}
+          <span style={{ fontSize: 14, color: "#5B6B82", textAlign: "center" }}>
             {es["landing.startHint"]}
           </span>
-          <Link href="/entrar" style={{ fontSize: 15, color: "#156FE7", marginTop: 8 }}>
+          {/* The brand blue is for white text on it and for black-ink pages; as 15px text on this
+              grey it measures 4.39:1. `#105CB1` is the palette's own secondary (ADR 0041 §3), 6.14
+              here. Same day, same first run of axe on this page. */}
+          <Link href="/entrar" style={{ fontSize: 15, color: "#105CB1", marginTop: 8 }}>
             {es["landing.enter"]}
           </Link>
         </div>

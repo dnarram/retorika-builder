@@ -7439,21 +7439,27 @@ describe("el texto de un botón nunca sale del botón", () => {
 
       /**
        * **Scoped to the dialog**, and the first version of this was not — it measured the whole
-       * page and reported the editor's own top bar at 768px, which is below the 1024px the editor
-       * declares as its minimum (`MIN_STUDIO_WIDTH`, ADR 0025 §5). Measuring an unsupported width
-       * and calling the result a defect is how a guard starts being ignored.
+       * page and reported the editor's own top bar at 768px. When this was written that was called
+       * an unsupported width, with `MIN_STUDIO_WIDTH` (ADR 0025 §5) as the reason; it never was the
+       * reason. That constant decides whether the *design tools* are offered, and the editor itself
+       * had simply never been measured below 1024 — the top bar at 768 really was 53px wider than
+       * the screen, as sprint 21 found on its first day and fixed on its third (ADR 0042). So the
+       * widths below now start at 320, and the scope stays on the dialog only because the editor's
+       * chrome has its own loop after it.
        *
        * The dialog is a card like any other, and «Crear la cuenta y guardar» and «Usar mi cuenta
        * de Google» are among the longest labels anywhere in the application.
        */
-      for (const width of [768, 1024, 1280]) {
+      for (const width of [320, 390, 768, 1024, 1280]) {
         await walker.setViewportSize({ width, height: 900 });
         expect(await overflowing(walker, '[role="dialog"]'), `diálogo @ ${width}px`).toEqual([]);
       }
 
-      // And the editor's own chrome, at the widths it actually claims to support.
+      // And the editor's own chrome, at every width class of ADR 0042: phone, tablet and studio.
+      // «Nada sobresale en un móvil» walks the first two under `isMobile`; this is the same chrome
+      // in a plain desktop window resized down, which is how a laptop user ends up at 768.
       await walker.keyboard.press("Escape");
-      for (const width of [1024, 1280, 1600]) {
+      for (const width of [320, 390, 768, 1024, 1280, 1600]) {
         await walker.setViewportSize({ width, height: 900 });
         expect(await overflowing(walker), `editor @ ${width}px`).toEqual([]);
       }
@@ -7926,8 +7932,9 @@ describe("lo que el cromo del editor dibuja dentro del lienzo, y el aviso del in
      * **Los ejes son ventana × modo de dispositivo, no una lista de anchos**, y eso corrige lo que
      * yo mismo propuse. `designToolsFor` devuelve `undefined` por debajo de `MIN_STUDIO_WIDTH =
      * 1024`, así que a 320 o 768 de ventana las herramientas **no se ofrecen** y medirlas ahí sería
-     * medir un editor que por diseño no las tiene — el mismo razonamiento que ya está escrito en
-     * este fichero sobre el diálogo a 768px. Y el lienzo de escritorio es
+     * medir un editor que por diseño no las tiene. Solo las herramientas: el editor sin ellas sí
+     * cabe en esos anchos desde el sprint 21 (ADR 0042), y lo mide «nada sobresale en un móvil»
+     * con el cromo que allí existe. Y el lienzo de escritorio es
      * `max(disponible, NARROWEST_DESKTOP)` con el suelo en 721: por debajo **se escala, no se
      * estrecha**. A un lienzo de 320 solo se llega con el conmutador de móvil.
      *
@@ -13177,11 +13184,15 @@ describe("nada sobresale en un móvil", () => {
       it("la landing y las cinco preguntas", async () => {
         await walker.goto(BASE_URL, { waitUntil: "networkidle" });
         await look("landing");
+        // axe at one phone width, the one an iPhone actually has. The other two walk the same
+        // markup; what differs between widths is geometry, which `look` already measures.
+        if (device.width === 390) await axeSerious(walker, "la landing a 390");
         await walker.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
         await look("paso 1");
         await walker.fill("#nombre", "Taberna Santo Domingo");
         await walker.getByRole("button", { name: "Siguiente" }).click();
         await look("paso 2");
+        if (device.width === 390) await axeSerious(walker, "el paso 2 a 390");
         await walker.getByText("Restaurante y bar", { exact: true }).click();
         await walker.getByRole("button", { name: "Siguiente" }).click();
         await look("paso 3");
@@ -13205,6 +13216,7 @@ describe("nada sobresale en un móvil", () => {
         await walker.getByRole("button", { name: "Crear mi web" }).click();
         await walker.getByText("Ver a tamaño real →").first().waitFor();
         await look("las tres propuestas");
+        if (device.width === 390) await axeSerious(walker, "las tres propuestas a 390");
         expect(found, found.join("\n")).toEqual([]);
       }, 300_000);
 
@@ -13225,6 +13237,7 @@ describe("nada sobresale en un móvil", () => {
         // and found it fitting, while the deployed one, given three seconds, opened at 821.
         await expect(walker.getByText("Guardado en este navegador")).toBeVisible();
         await look("editor");
+        if (device.width === 390) await axeSerious(walker, "el editor a 390, en vista de móvil");
         // The canvas card re-measures the room a panel leaves through a `ResizeObserver`, one
         // frame after the panel has entered; a look taken in that frame sees the old width inside
         // the new area and reports a cut that is not there a frame later. So each panel is given
@@ -13283,6 +13296,9 @@ describe("nada sobresale en un móvil", () => {
           await walker.getByRole("button", { name: panel, exact: true }).click();
           await expect.poll(settled, { timeout: 5_000 }).toBe(true);
           await look(`editor con «${panel}»`);
+          if (device.width === 390 && panel === "Estilo") {
+            await axeSerious(walker, "el editor a 390 con la hoja de «Estilo» abierta");
+          }
         }
         await walker.getByRole("button", { name: "Secciones", exact: true }).click();
 
