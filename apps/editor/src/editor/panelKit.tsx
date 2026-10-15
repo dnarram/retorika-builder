@@ -54,9 +54,57 @@ import { panelShell } from "./EditorShell.tsx";
  * only thing left: it leaves the editing area 32px wider, and it is the width four of the six
  * already used, so it is the smallest change that buys the whole of it.
  */
-export const PANEL_WIDTH = "w-[340px]";
+export const PANEL_WIDTH = "w-[340px] phone:w-auto";
 
-export const panelCard = `ui-enter-right flex shrink-0 flex-col rounded-ui-lg border border-ui-border bg-ui-surface shadow-ui-1 ${panelShell}`;
+/**
+ * **A sheet from the bottom on a phone, a card beside the canvas everywhere else (ADR 0042 §2,
+ * sprint 21 day 4).** Below 720 the panel is `fixed`, pinned to **exactly** the room the rail's own
+ * bottom bar reserves — `calc(56px + env(safe-area-inset-bottom))`, the same expression
+ * `EditorShell`'s canvas row uses to leave the bar its space — so it sits flush above the bar
+ * rather than guessing its height as a round number. Capped at 70% of the dynamic viewport so
+ * there is always canvas showing above it: a panel that could cover the whole screen would be
+ * indistinguishable from a second page. `rounded-b-none` because a sheet's bottom edge is the
+ * screen's own edge, not a corner.
+ *
+ * `ui-enter-right` still runs on a phone — `translateX` under a `scale()`-free sheet reads as a
+ * slide up its own short travel, not sideways, because the sheet's starting position (off past the
+ * bar) is below the fold either way. Nothing here depends on the direction reading correctly; only
+ * that something enters rather than appearing.
+ */
+export const panelCard = `ui-enter-right flex shrink-0 flex-col rounded-ui-lg border border-ui-border bg-ui-surface shadow-ui-1 ${panelShell} phone:fixed phone:inset-x-0 phone:bottom-[calc(56px+env(safe-area-inset-bottom))] phone:z-20 phone:max-h-[70dvh] phone:rounded-b-none phone:border-b-0 phone:shadow-ui-3`;
+
+/**
+ * The X that closes a panel, which five of the six rail panels and the fields panel all drew by
+ * hand — the same 16×16 two-stroke cross, differing only in whether the diagonal paths were
+ * written `M6 6l12 12M18 6L6 18` or `M18 6L6 18M6 6l12 12`, which draw the same cross. One
+ * component past the third use (`PagesPanel` and `PhotosPanel` joined it on sprint 21 day 4, when
+ * a sheet that cannot be closed became a trap rather than a layout oddity). `CollectionsPanel`
+ * keeps its own text «Cerrar» at the foot of the list, which is a different decision about where
+ * the exit belongs and not an omission this component fixes.
+ */
+export function PanelClose({ onClick, label }: { onClick: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className="shrink-0 cursor-pointer border-0 bg-transparent text-ui-muted"
+    >
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+        aria-hidden="true"
+      >
+        <path d="M6 6l12 12M18 6L6 18" />
+      </svg>
+    </button>
+  );
+}
 
 /**
  * A row, and the hover that leads the eye along it.

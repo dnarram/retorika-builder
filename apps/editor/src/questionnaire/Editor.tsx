@@ -5638,6 +5638,7 @@ export function Editor({
               onSelectPage(doc.pages[0]?.id === photo.pageId ? undefined : photo.pageId);
               selectedSection.current = photo.sectionId;
             }}
+            onClose={() => showRail("sections")}
           />
         ) : effectiveRail === "pages" ? (
           <PagesPanel
@@ -5654,6 +5655,7 @@ export function Editor({
             onPreviewEntry={(id, entryId) =>
               setEntryByPage((previous) => ({ ...previous, [id]: entryId }))
             }
+            onClose={() => showRail("sections")}
           />
         ) : effectiveRail === "style" ? (
           <StylePanel
@@ -5839,8 +5841,16 @@ export function Editor({
         // be the containing block the buffered frame is positioned against: the canvas card is
         // only a containing block while it happens to be scaled, which is not something to rest
         // on.
-        className="relative w-full flex-grow"
-        style={{ minHeight: "60vh" }}
+        //
+        // **`phone:min-h-0` (sprint 21 day 4).** 60vh is a floor for the ordinary case, where the
+        // card's own height is whatever the row leaves it. On a phone, `EditorShell` instead gives
+        // the card an exact, compensated height — `${100/zoom}%`, chosen so the scaled result fills
+        // the row to the pixel — and a `vh` floor on a child inside it answers to the *window*, not
+        // to that budget: at 320×568 it asked for 341px in a card that had 187 left after its own
+        // hint strip, and `canvas-card`'s `overflow-hidden` clipped 146px of the live preview with
+        // nothing on screen to say so. The floor was never wrong on a desktop window large enough
+        // that it never bound; a phone is exactly where it does.
+        className="relative w-full flex-grow min-h-[60vh] phone:min-h-0"
       >
         {previewFrame(0)}
         {previewFrame(1)}

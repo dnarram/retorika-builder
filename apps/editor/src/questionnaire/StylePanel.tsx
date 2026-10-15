@@ -12,7 +12,13 @@ import {
 } from "@retorika/tokens";
 import tokensEs from "@retorika/tokens/locales/es" with { type: "json" };
 import { useId } from "react";
-import { PANEL_WIDTH, panelCard, panelRow, panelRowSelected } from "../editor/panelKit.tsx";
+import {
+  PANEL_WIDTH,
+  PanelClose,
+  panelCard,
+  panelRow,
+  panelRowSelected,
+} from "../editor/panelKit.tsx";
 import es from "../locales/es.json" with { type: "json" };
 
 /**
@@ -113,25 +119,7 @@ export function StylePanel({
           </h2>
           <p className="m-0 text-[12px] leading-snug text-ui-muted">{es["editor.style.help"]}</p>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label={es["editor.style.close"]}
-          className="shrink-0 cursor-pointer border-0 bg-transparent text-ui-muted"
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            strokeLinecap="round"
-            aria-hidden="true"
-          >
-            <path d="M6 6l12 12M18 6L6 18" />
-          </svg>
-        </button>
+        <PanelClose onClick={onClose} label={es["editor.style.close"]} />
       </div>
 
       <fieldset className="m-0 flex flex-col gap-[9px] border-0 p-0">

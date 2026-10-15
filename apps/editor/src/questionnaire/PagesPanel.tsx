@@ -2,7 +2,7 @@
 
 import { type Collection, MAX_PAGES, type RetorikaDocument } from "@retorika/schema";
 import { useEffect, useId, useRef, useState } from "react";
-import { PANEL_WIDTH, panelCard, panelRow, SmallButton } from "../editor/panelKit.tsx";
+import { PANEL_WIDTH, PanelClose, panelCard, panelRow, SmallButton } from "../editor/panelKit.tsx";
 import es from "../locales/es.json" with { type: "json" };
 
 /**
@@ -42,6 +42,7 @@ export function PagesPanel({
   linksTo,
   entryShown,
   onPreviewEntry,
+  onClose,
 }: {
   document: RetorikaDocument;
   currentPageId: string | undefined;
@@ -61,6 +62,14 @@ export function PagesPanel({
    * another. The editor resolves the choice against the document; this only draws it. */
   entryShown: (pageId: string) => string | undefined;
   onPreviewEntry: (pageId: string, entryId: string) => void;
+  /**
+   * Added on sprint 21 day 4: this panel sits beside the canvas on a desktop, where the rail
+   * itself is always reachable to switch away from it, but below 720 it covers the canvas as a
+   * sheet and the rail is the bar *underneath* it — so without its own close, there was no way
+   * back to «Secciones» except a browser back button this product does not have. `PhotosPanel`
+   * had the identical gap, for the identical reason.
+   */
+  onClose: () => void;
 }) {
   const headingId = useId();
   const [editing, setEditing] = useState<string | null>(null);
@@ -95,9 +104,12 @@ export function PagesPanel({
 
   return (
     <section aria-labelledby={headingId} className={`${PANEL_WIDTH} gap-4 p-5 ${panelCard}`}>
-      <h2 id={headingId} className="text-[13px] font-bold text-ui-ink">
-        {es["editor.pages.title"]}
-      </h2>
+      <div className="flex items-start justify-between gap-3">
+        <h2 id={headingId} className="text-[13px] font-bold text-ui-ink">
+          {es["editor.pages.title"]}
+        </h2>
+        <PanelClose onClick={onClose} label={es["editor.pages.close"]} />
+      </div>
 
       <ul className="flex flex-col gap-1.5">
         {doc.pages.map((page, index) => {
@@ -120,7 +132,7 @@ export function PagesPanel({
                       if (event.key === "Enter") commitRename(page.id);
                       if (event.key === "Escape") setEditing(null);
                     }}
-                    className="min-w-0 flex-1 rounded-ui-sm border border-ui-brand px-2 py-1 text-[13px] text-ui-ink"
+                    className="min-w-0 flex-1 rounded-ui-sm border border-ui-brand px-2 py-1 text-[13px] phone:text-base text-ui-ink"
                   />
                 ) : (
                   <button
@@ -154,7 +166,7 @@ export function PagesPanel({
                     aria-label={es["editor.pages.viewing"]}
                     value={entryShown(page.id) ?? ""}
                     onChange={(event) => onPreviewEntry(page.id, event.target.value)}
-                    className="min-w-0 flex-1 rounded-ui-sm border border-ui-border bg-white px-1.5 py-0.5 text-[12px] text-ui-ink"
+                    className="min-w-0 flex-1 rounded-ui-sm border border-ui-border bg-white px-1.5 py-0.5 text-[12px] phone:text-base text-ui-ink"
                   >
                     {perEntry.collection.entries.map((entry) => (
                       <option key={entry.id} value={entry.id}>

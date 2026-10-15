@@ -8,7 +8,7 @@ import {
   shareImageOf,
 } from "@retorika/schema";
 import { useEffect, useId, useState } from "react";
-import { PANEL_WIDTH, panelCard } from "../editor/panelKit.tsx";
+import { PANEL_WIDTH, PanelClose, panelCard } from "../editor/panelKit.tsx";
 import es from "../locales/es.json" with { type: "json" };
 
 /**
@@ -95,25 +95,11 @@ export function SharePanel({
           </h2>
           <p className="m-0 text-[12px] leading-snug text-ui-muted">{es["editor.share.help"]}</p>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label={es["editor.fields.close"]}
-          className="shrink-0 cursor-pointer border-0 bg-transparent text-ui-muted"
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            strokeLinecap="round"
-            aria-hidden="true"
-          >
-            <path d="M6 6l12 12M18 6L6 18" />
-          </svg>
-        </button>
+        {/* `editor.share.close`, not `editor.fields.close` — this button announced «Cerrar los
+            campos» until sprint 21 day 4 found it while extracting the shared close button, which
+            is what reading five near-identical copies side by side is good for. Nobody had heard
+            it: a sighted press never reaches the label. */}
+        <PanelClose onClick={onClose} label={es["editor.share.close"]} />
       </div>
 
       <div className="flex flex-col gap-1.5">
@@ -130,7 +116,7 @@ export function SharePanel({
           // sentences and neither of them in charge.
           placeholder={fallback ?? ""}
           onBlur={(event) => onSetDescription(event.target.value)}
-          className="h-9 w-full rounded-lg border border-ui-border bg-white px-2.5 text-[13px] text-ui-ink"
+          className="h-9 w-full rounded-lg border border-ui-border bg-white px-2.5 text-[13px] phone:text-base text-ui-ink"
         />
         {fallback ? (
           <p className="m-0 text-[12px] leading-snug text-ui-muted">
@@ -146,13 +132,19 @@ export function SharePanel({
             {es["editor.share.url.optional"]}
           </span>
         </label>
+        {/* `phone:text-base`, here and on every text field and `<select>` the rail's six panels
+            and the fields drawer draw (sprint 21 day 4, ADR 0042 §7): Safari on iOS zooms the
+            whole page into a focused field whose text is under 16px, and 13px — this row's own
+            desktop size — is what the day's phone walk caught it on. `text-[13px]` stays for the
+            studio and tablet classes; a field that read comfortably at 340px desktop was never
+            the one that needed the floor. */}
         <input
           id={urlId}
           type="text"
           defaultValue={doc.siteUrl ?? ""}
           placeholder={es["editor.share.url.placeholder"]}
           onBlur={(event) => commitUrl(event.target.value)}
-          className={`h-9 w-full rounded-lg border bg-white px-2.5 text-[13px] text-ui-ink ${
+          className={`h-9 w-full rounded-lg border bg-white px-2.5 text-[13px] phone:text-base text-ui-ink ${
             urlIssue ? "border-ui-danger" : "border-ui-border"
           }`}
         />

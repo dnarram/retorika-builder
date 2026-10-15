@@ -2206,3 +2206,68 @@ recorrido espera a que la tarjeta quepa en su área antes de mirar, que es adem�
 el indicador «N» de `next dev`, fijo abajo a la izquierda, tapaba «Secciones» en la barra: en
 producción no existe, así que se apaga solo cuando la suite dice que es la suite
 (`RETORIKA_E2E=1`), y quien desarrolla lo conserva.
+
+### Los paneles son hojas, el lienzo se asienta de verdad, y los campos no amplían Safari (día 4)
+
+**Lo que quedaba en rojo tras el día 3:** con «Estilo» abierto a 320/390, el panel de 340px se
+dibujaba junto al lienzo y le dejaba 10px de ancho. Los seis paneles del raíl y el cajón de campos
+pasan a ser **hojas desde el borde inferior** en la clase teléfono: `fixed`, a todo el ancho,
+ancladas exactamente al hueco que la barra inferior reserva —`calc(56px + env(safe-area-inset-bottom))`,
+la misma expresión que ya usaba la fila del lienzo, no un número redondeado aparte—, con tope de
+70% de la altura dinámica para que siempre se vea lienzo por encima. En tableta y escritorio no
+cambia nada: siguen siendo la tarjeta de 340px junto al lienzo.
+
+**Dos paneles no se podían cerrar.** «Páginas» y «Fotos» no tenían `onClose`: en escritorio el
+raíl siempre está a mano para cambiar de herramienta, pero en teléfono el raíl es la barra que la
+hoja tapa, así que no había forma de volver a «Secciones» salvo recargar. Los dos ganan su cierre.
+Y de paso, un botón de cierre repetido a mano cinco veces —tres paneles ya lo tenían, cada uno con
+su propio SVG— se extrae a `PanelClose` en `panelKit`, que ahora usan los seis. Al juntarlos
+apareció un error de verdad: el de «Compartir» anunciaba «Cerrar los campos», la etiqueta del
+cajón de campos, copiada y nunca corregida. Nadie lo había oído, porque una pulsación con vista no
+llega nunca a esa etiqueta.
+
+**Lo que el arnés real encontró, en tres capas, cada una real y no supuesta:**
+
+1. **El arnés no sabía que `position: fixed` escapa del recorte de un ancestro sin `transform`.**
+   La primera pasada marcó los seis paneles como «cortados» por `canvas-and-panel`, que tiene
+   `overflow-hidden`. Las capturas, a la vez, mostraban las hojas enteras y sin recortar. El
+   recorte de `overflow` sigue la cadena de bloque contenedor, y un elemento `fixed` sin ningún
+   `transform`/`filter`/`perspective` de por medio rompe esa cadena y ancla contra el viewport
+   directamente —exactamente por qué las hojas se dibujan sobre el lienzo en vez de dentro de su
+   rendija. El arnés deja de atribuir recorte en cuanto cruza un `fixed`.
+2. **Un hueco real en el lienzo, no del arnés.** Con la vista móvil abriéndose sola a una ventana
+   de 320, la tarjeta del lienzo necesita a veces escalarse por debajo de 1 incluso en su propio
+   modo móvil —algo que antes del día 3 nunca pasaba, porque nadie abría el editor a ese ancho. El
+   envoltorio de la vista previa pedía un suelo de `60vh` pensado para la ventana de escritorio;
+   en una tarjeta ya comprimida ese suelo pedía más alto del que había, y `overflow-hidden`
+   recortaba en silencio **146px** de la web real. `phone:min-h-0` deja que la tarjeta decida su
+   propio alto, como ya hacía para el ancho.
+3. **El propio recorrido necesitaba esperar a dos cosas que no esperaba.** Cambiar de dispositivo
+   anima el ancho y la transformación en 260ms (`ui-reflow`) pero el alto —un simple porcentaje—
+   salta al instante: medido una vez, 769px de tarjeta en un área de 342. Y abrir un panel lo
+   anima con `translateX(14px)` a `none` en 180ms, que no mueve nada del lienzo y por tanto nada
+   que la primera versión de «asentado» comprobara: medido exactamente a esos 14px, la cifra que
+   apareció como «fuera de la pantalla». La comprobación de asentado ahora mira los cuatro bordes
+   de la tarjeta, no solo los dos horizontales, y espera además a que el panel deje de moverse,
+   con el mismo criterio de «dos lecturas seguidas e iguales» que el cambio de dispositivo ya usa
+   en otra caminata del repositorio.
+
+**Los campos de los paneles ampliaban Safari.** Siete cajas de texto y dos `<select>` —el
+renombrado de página y de lista, la URL y la frase de «Compartir», los dos campos del cajón,
+titular y página de una ficha— estaban a 13 o 12px, el tamaño pensado para 340px de escritorio.
+`phone:text-base` los lleva a 16 solo en la clase teléfono; a partir de tableta quedan como
+estaban. Es la cuarta comprobación del ADR 0042 §7, y el arnés la hace en cada campo visible.
+
+**Revisado por lectura, no recorrido en vivo:** los cinco diálogos de la descarga
+(`DownloadGateDialogs.tsx`). Dos no tenían ni `max-h-full` ni `overflow-y-auto`; se les añade,
+como ya tenía `RevertDialog`. Y el de la advertencia de fotos tenía el error contrario: declaraba
+`overflow-y-auto` en su lista pero le faltaba `min-h-0`, sin el cual un hijo flexible no cede
+altura aunque el padre la tenga topada —así que esa lista nunca llegaba a desplazarse de verdad
+por debajo de los 85vh que el diálogo se permite. Los otros dos diálogos, los de contraste y
+desborde, ya tenían el patrón correcto y sirvieron de referencia. Generar el documento que
+dispara cada uno de los cinco no entraba en el día; la corrección es la misma que el arnés sí
+comprobó en los seis paneles, aplicada por lectura cuidadosa del mismo patrón.
+
+**El recorrido «nada sobresale en un móvil» queda verde en los tres dispositivos, sin ningún
+`it.fails`.** `pnpm typecheck`, `pnpm lint`, `pnpm test` (129 ficheros), invariantes y golden sin
+cambios.

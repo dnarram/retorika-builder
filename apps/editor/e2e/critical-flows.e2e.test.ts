@@ -4045,7 +4045,10 @@ describe("sprint 12 día 7 — el recorrido completo del sprint", () => {
       await expect(walk.getByText("Todas las fotos de tu web son tuyas.")).toBeVisible();
 
       // ---- day 5: the two fields, and the address normalising in front of the owner -----------
-      await walk.getByRole("button", { name: "Compartir" }).click();
+      // `exact: true` since sprint 21 day 4: `SharePanel` gained its own close button, labelled
+      // «Cerrar cómo se ve al compartir», which a substring match for «Compartir» now also hits
+      // once the panel below is already open — found here, where it stays open across two clicks.
+      await walk.getByRole("button", { name: "Compartir", exact: true }).click();
       const shareText = walk.getByLabel("Frase que acompaña al enlace");
       // The placeholder is the cover's subheadline — what publishes if this is left alone.
       await expect(shareText).toHaveAttribute("placeholder", "Comer, beber y quedarse un rato");
@@ -4111,7 +4114,7 @@ describe("sprint 12 día 7 — el recorrido completo del sprint", () => {
       }
 
       // ---- the other half of ADR 0029: no address, no picture, and the sentence stays ---------
-      await walk.getByRole("button", { name: "Compartir" }).click();
+      await walk.getByRole("button", { name: "Compartir", exact: true }).click();
       const clearDomain = walk.getByLabel("Dirección de tu web");
       await clearDomain.fill("");
       await clearDomain.blur();
@@ -11603,7 +11606,7 @@ describe("sprint 19 día 7 — el recorrido como un desconocido, con fichas y si
       await expect(headline).toHaveText("Comidas caseras");
 
       // The address declared in «Compartir», which gives the ZIP its sitemap (ADR 0029, amended).
-      await page.getByRole("button", { name: "Compartir" }).click();
+      await page.getByRole("button", { name: "Compartir", exact: true }).click();
       const domain = page.getByLabel("Dirección de tu web");
       await domain.fill("tabernadelpuerto.es");
       await domain.blur();
@@ -13062,8 +13065,24 @@ describe("nada sobresale en un móvil", () => {
 
           let left = own.left;
           let right = own.right;
-          for (let node = el.parentElement; node; node = node.parentElement) {
+          /**
+           * **A `position: fixed` box — itself, or an ancestor between it and here — escapes the
+           * ordinary clipping chain, and sprint 21 day 4 is why this matters now.** `overflow:
+           * hidden` clips a descendant only while that descendant's containing block traces back
+           * through the clipping box; `position: fixed` breaks that trace and anchors straight to
+           * the viewport, *unless* something in between carries `transform`, `filter`,
+           * `perspective`, `will-change: transform` or a layout-affecting `contain` — none of
+           * which this chrome's ancestors above a panel ever set. The first version of this walk
+           * did not know that and reported every phone sheet as «cortado» by `canvas-and-panel`'s
+           * own `overflow-hidden` — measured as a false alarm: a screenshot at the same width
+           * shows the sheet sitting whole above the bottom bar, not clipped to the 10px sliver the
+           * row-flow math would predict. So the walk stops attributing clipping the moment it
+           * crosses a `fixed` box, which is the same boundary the browser itself stops at.
+           */
+          let fixedBoundary = style.position === "fixed";
+          for (let node = el.parentElement; node && !fixedBoundary; node = node.parentElement) {
             const owner = getComputedStyle(node);
+            if (owner.position === "fixed") fixedBoundary = true;
             if (owner.overflowX === "visible" && owner.overflowY === "visible") continue;
             const box = node.getBoundingClientRect();
             const scrolls =
@@ -13190,85 +13209,129 @@ describe("nada sobresale en un móvil", () => {
       }, 300_000);
 
       /**
-       * Verde en tableta desde el día 3 del sprint 21 (la cabecera en dos filas, el lienzo asentado
-       * tras abrir un panel); en teléfono, `it.fails` hasta el día 4, que convierte los paneles en
-       * hojas. Lo que lo tenía en rojo a 768: la página se abría a 821px por el grupo derecho de la
-       * cabecera, y con «Estilo» abierto el lienzo quedaba cortado por su área.
+       * Verde en los tres dispositivos desde el día 4 del sprint 21. A tableta lo puso el día 3
+       * (la cabecera en dos filas, el lienzo asentado tras abrir un panel); a teléfono, los seis
+       * paneles y el cajón de campos convertidos en hojas desde el borde inferior — antes el panel
+       * de 340px se dibujaba junto al lienzo y lo dejaba 10px de ancho.
        */
-      const editorFits = device.width > PHONE_BREAKPOINT ? it : it.fails;
-      editorFits(
-        "el editor, sus paneles, una sección y un texto elegidos, y los dos dispositivos",
-        async () => {
-          found.length = 0;
-          await walker.getByText("Ver a tamaño real →").first().click();
-          const frame = walker.frameLocator(PREVIEW).first();
-          await frame.locator('[data-section="sec-cover"]').waitFor();
-          await waitForBankPhoto(frame);
-          // The save sentence arrives half a second after the editor does, and it is 200px of the
-          // header this walk exists to measure: the first run measured a header without it at 768
-          // and found it fitting, while the deployed one, given three seconds, opened at 821.
-          await expect(walker.getByText("Guardado en este navegador")).toBeVisible();
-          await look("editor");
-          // The canvas card re-measures the room a panel leaves through a `ResizeObserver`, one
-          // frame after the panel has entered; a look taken in that frame sees the old width inside
-          // the new area and reports a cut that is not there a frame later. So each panel is given
-          // until the card fits its area, which is also the thing being asserted.
-          const settled = () =>
-            walker.evaluate(() => {
+      it("el editor, sus paneles, una sección y un texto elegidos, y los dos dispositivos", async () => {
+        found.length = 0;
+        await walker.getByText("Ver a tamaño real →").first().click();
+        const frame = walker.frameLocator(PREVIEW).first();
+        await frame.locator('[data-section="sec-cover"]').waitFor();
+        await waitForBankPhoto(frame);
+        // The save sentence arrives half a second after the editor does, and it is 200px of the
+        // header this walk exists to measure: the first run measured a header without it at 768
+        // and found it fitting, while the deployed one, given three seconds, opened at 821.
+        await expect(walker.getByText("Guardado en este navegador")).toBeVisible();
+        await look("editor");
+        // The canvas card re-measures the room a panel leaves through a `ResizeObserver`, one
+        // frame after the panel has entered; a look taken in that frame sees the old width inside
+        // the new area and reports a cut that is not there a frame later. So each panel is given
+        // until the card fits its area, which is also the thing being asserted.
+        //
+        // **All four edges, not only left and right.** The first version checked width alone,
+        // because only width ever moved for a panel opening — it is wrong for a device toggle,
+        // which this same check was asked to cover on sprint 21 day 4. `EditorShell`'s `ui-reflow`
+        // transitions `width` and `transform` over 260ms but never `height`, which is a plain
+        // percentage of the area and jumps to its *final* value the instant React re-renders. For
+        // part of that 260ms the card is the right width at the wrong scale, so its *pre-transform*
+        // height — already sized for the zoom that has not arrived yet — comes out through a
+        // transform that has not caught up: measured once at 769px tall in a 342px area, the width
+        // already correct and the height more than double. Waiting on height too is what a toggle
+        // needs that a panel never did.
+        /**
+         * **A third thing to settle, found the same way the first two were: measured, not
+         * assumed.** A panel arrives by `ui-enter-right` — `translateX(14px)` to `none` over
+         * `--ui-base` (180ms), opacity and transform only, so it costs nothing in layout and the
+         * canvas never sees it. Costing nothing in layout is exactly why `settled`'s own check
+         * cannot see it either: the card fits its area the instant the panel mounts, while the
+         * panel itself is still 14px into its own arrival — measured once at exactly that offset,
+         * on the first poll after the click. So a panel still animating holds this closure's own
+         * `lastPanelLeft` away from `null`, and `settled` only answers «yes» once two consecutive
+         * reads of its left edge agree — the same «stopped moving» idiom the device toggle below
+         * already uses for the canvas, here applied to the one animation `settled` cannot see.
+         */
+        let lastPanelLeft: number | null = null;
+        const settled = () =>
+          walker
+            .evaluate(() => {
               const area = document
                 .querySelector('[data-testid="canvas-area"]')
                 ?.getBoundingClientRect();
               const card = document
                 .querySelector('[data-testid="canvas-card"]')
                 ?.getBoundingClientRect();
-              return (
-                !!area && !!card && card.right <= area.right + 0.5 && card.left >= area.left - 0.5
-              );
+              const panel = document.querySelector(".ui-enter-right");
+              return {
+                fits:
+                  !!area &&
+                  !!card &&
+                  card.right <= area.right + 0.5 &&
+                  card.left >= area.left - 0.5 &&
+                  card.bottom <= area.bottom + 0.5 &&
+                  card.top >= area.top - 0.5,
+                panelLeft: panel ? panel.getBoundingClientRect().left : null,
+              };
+            })
+            .then(({ fits, panelLeft }) => {
+              const stopped = panelLeft === null || panelLeft === lastPanelLeft;
+              lastPanelLeft = panelLeft;
+              return fits && stopped;
             });
-          for (const panel of ["Estilo", "Páginas", "Compartir", "Fotos"]) {
-            await walker.getByRole("button", { name: panel, exact: true }).click();
-            await expect.poll(settled, { timeout: 5_000 }).toBe(true);
-            await look(`editor con «${panel}»`);
-          }
-          await walker.getByRole("button", { name: "Secciones", exact: true }).click();
+        for (const panel of ["Estilo", "Páginas", "Compartir", "Fotos"]) {
+          await walker.getByRole("button", { name: panel, exact: true }).click();
+          await expect.poll(settled, { timeout: 5_000 }).toBe(true);
+          await look(`editor con «${panel}»`);
+        }
+        await walker.getByRole("button", { name: "Secciones", exact: true }).click();
 
-          await frame.locator('[data-section="sec-cover"]').click({ position: { x: 12, y: 12 } });
-          await expect(frame.locator(".rb-actions")).toHaveCount(1);
-          await look("editor con una sección elegida");
-          const inside = await spillingInsideTheCanvas(walker);
-          for (const spill of inside.found) {
-            found.push(`lienzo @ ${device.width}px: ${spill.what} ${spill.text}`);
-          }
-          await frame.locator('[data-section="sec-cover"] h1').first().click();
-          await expect(frame.locator(".rb-toolbar")).toHaveCount(1);
-          await look("editor con un texto elegido");
+        await frame.locator('[data-section="sec-cover"]').click({ position: { x: 12, y: 12 } });
+        await expect(frame.locator(".rb-actions")).toHaveCount(1);
+        await look("editor con una sección elegida");
+        const inside = await spillingInsideTheCanvas(walker);
+        for (const spill of inside.found) {
+          found.push(`lienzo @ ${device.width}px: ${spill.what} ${spill.text}`);
+        }
+        await frame.locator('[data-section="sec-cover"] h1').first().click();
+        await expect(frame.locator(".rb-toolbar")).toHaveCount(1);
+        await look("editor con un texto elegido");
 
-          await walker.getByRole("button", { name: "Ver en ordenador" }).click();
-          await look("editor en vista de ordenador");
-          await walker.getByRole("button", { name: "Ver en móvil" }).click();
-          await look("editor en vista de móvil");
+        // `settled` again: the device toggle animates the card's width over `--ui-slow`
+        // (`ui-reflow`, `EditorShell.tsx`), and a `look` taken the instant after the click reads
+        // the geometry mid-transition — canvas-card briefly 769px of a 342px area on the way back
+        // to mobile, found measuring this walk on sprint 21 day 4. The toggle itself does not wait
+        // for anything, so the walk does.
+        await walker.getByRole("button", { name: "Ver en ordenador" }).click();
+        await expect.poll(settled, { timeout: 5_000 }).toBe(true);
+        await look("editor en vista de ordenador");
+        await walker.getByRole("button", { name: "Ver en móvil" }).click();
+        await expect.poll(settled, { timeout: 5_000 }).toBe(true);
+        await look("editor en vista de móvil");
 
-          // A click that cannot land is a finding, not a crash: at 320 and 390 the first run died
-          // here with «another element receives pointer events» and took the list above with it.
-          // The button sits in the part of the header that opens past the screen, and something
-          // in front of it takes the tap — recorded, so the day that fixes the header sees it.
-          try {
-            await walker
-              .getByRole("button", { name: "Guardar en mi cuenta" })
-              .click({ timeout: 10_000 });
-            await expect(walker.getByRole("dialog")).toBeVisible();
-            await look("el diálogo de la cuenta");
-            await walker.keyboard.press("Escape");
-          } catch (error) {
-            const why = error instanceof Error ? error.message.split("\n")[0] : String(error);
-            found.push(
-              `editor @ ${device.width}px: «Guardar en mi cuenta» no se puede pulsar — ${why}`,
-            );
-          }
-          expect(found, found.join("\n")).toEqual([]);
-        },
-        300_000,
-      );
+        // A click that cannot land is a finding, not a crash: at 320 and 390 the first run died
+        // here with «another element receives pointer events» and took the list above with it.
+        // The button sits in the part of the header that opens past the screen, and something
+        // in front of it takes the tap — recorded, so the day that fixes the header sees it.
+        try {
+          await walker
+            .getByRole("button", { name: "Guardar en mi cuenta" })
+            .click({ timeout: 10_000 });
+          await expect(walker.getByRole("dialog")).toBeVisible();
+          // The dialog opening can itself nudge the canvas's available width by a few pixels (a
+          // scrollbar, a focus trap) before the card's own `ResizeObserver` catches up — the same
+          // one-frame gap the panel loop above already waits out.
+          await expect.poll(settled, { timeout: 5_000 }).toBe(true);
+          await look("el diálogo de la cuenta");
+          await walker.keyboard.press("Escape");
+        } catch (error) {
+          const why = error instanceof Error ? error.message.split("\n")[0] : String(error);
+          found.push(
+            `editor @ ${device.width}px: «Guardar en mi cuenta» no se puede pulsar — ${why}`,
+          );
+        }
+        expect(found, found.join("\n")).toEqual([]);
+      }, 300_000);
     });
   }
 });
