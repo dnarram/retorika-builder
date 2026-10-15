@@ -429,7 +429,7 @@ export function ChoiceCard({
       style={{
         display: "flex",
         alignItems: "center",
-        gap: selected ? 10 : 0,
+        gap: 10,
         // `minHeight`, never `height`: on a 390px phone «Que me manden un correo» needs three
         // lines, and a box that cannot grow paints two of them outside itself (sprint 21 day 1).
         minHeight: 56,
@@ -464,7 +464,22 @@ export function ChoiceCard({
       >
         {label}
       </span>
-      {selected ? checkmark : null}
+      {/* The tick's room is reserved whether or not it shows, the way `Step2Sector`'s warning
+          reserves its own. Once the box could grow (`minHeight`), a tick that appeared only on
+          selection took 28px from the label, wrapped «Restaurante y bar» onto a second line, and
+          made the chosen card — and the whole centred step — taller by a line: CI's grid walk
+          caught the card moving 6.5px under the pointer on sprint 21 day 1. Now choosing changes
+          colours and nothing that measures. */}
+      <span
+        aria-hidden="true"
+        style={{
+          display: "inline-flex",
+          flexShrink: 0,
+          visibility: selected ? "visible" : "hidden",
+        }}
+      >
+        {checkmark}
+      </span>
     </label>
   );
 }

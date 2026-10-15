@@ -2088,6 +2088,14 @@ fuera. `NavRow` estaba exenta por nombre «por fiel a las maquetas»: una maquet
 no es razón para recortar a otro. Los títulos pasan a `clamp()`; los cinco campos del paso 5 y el
 del paso 3 que pedían 15px pasan a 16, y `TextField` aplica el suelo pida lo que pida quien lo use.
 
+**Lo que CI encontró en la PR, que en local no se había corrido:** la caminata del sprint 7 que
+exige que elegir un sector no mueva la rejilla la vio moverse **6,5px**. `Shell` centra la tarjeta
+en vertical, así que cualquier cambio de alto la recoloca; el `height: 56` fijo lo impedía por la
+fuerza, y con `minHeight` la tarjeta elegida —que añadía su hueco de 10px y su marca de 18px solo al
+elegirse— pasaba «Restaurante y bar» a dos líneas y crecía una. La marca reserva ahora su sitio
+siempre, con `visibility`, igual que el aviso de ese mismo paso. Y de paso la aritmética: con 180px
+de mínimo entraban **cuatro** columnas en los 816px interiores de la tarjeta, no tres; son 200.
+
 **Lo que queda en su sitio y por qué:** `MIN_STUDIO_WIDTH` y el ADR 0025 §5 (las herramientas
 siguen ausentes bajo 1024: el editor de teléfono es el editor sencillo); la frase del ADR 0012, que
 no se recorta ni se oculta en ningún ancho; el renderer y los goldens, que no cambian un byte, y
