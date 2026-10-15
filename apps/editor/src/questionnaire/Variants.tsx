@@ -71,8 +71,21 @@ import {
 } from "../editor/photos.ts";
 import { withPhotoUrls } from "../editor/previewDocument.ts";
 import { record } from "../editor/probe.ts";
+import { useMediaQuery } from "../editor/viewport.ts";
 import es from "../locales/es.json" with { type: "json" };
 import { type DeleteToast, Editor, type SectionOffer } from "./Editor.tsx";
+import {
+  carouselGutter,
+  centredScrollLeft,
+  DESKTOP_THUMBNAIL_SCALE,
+  nearestCard,
+  RECOMMENDED_INDEX,
+  THREE_COLUMNS_FROM,
+  THUMBNAIL_BORDER,
+  THUMBNAIL_PAGE,
+  thumbnailHeight,
+  thumbnailScale,
+} from "./proposalsRow.ts";
 import { Brand } from "./ui.tsx";
 
 /** The catalog's own Spanish name for a section, e.g. `section.cover.name` → "Portada" —
@@ -140,32 +153,149 @@ const CAPTIONS: readonly { titleKey: keyof typeof es; captionKey: keyof typeof e
   { titleKey: "variants.v3.title", captionKey: "variants.v3.caption" },
 ];
 
+/**
+ * The real page, drawn small enough to fit the card it is in — **measured, not assumed**.
+ *
+ * The scale was a constant, 0.28, which is what a 358px card in the mockup's 1180px row needs and
+ * what every other width got too: on a 390px phone the card was 60px wide and the box, with a
+ * fixed height and `overflow: hidden`, showed the top-left 17 % of the proposal (sprint 21 day 2;
+ * ADR 0042). A `ResizeObserver` on the box, as the editor's canvas already does, gives the width
+ * the card actually has, and the height follows from it — so the box is always exactly the shrunk
+ * page, whatever the row around it is doing. `srcDoc` never changes with the scale, so the frame
+ * is not reloaded when the window is resized.
+ */
 function ThumbnailFrame({ html, title }: { html: string; title: string }) {
-  const width = 1280;
-  const height = 900;
-  const scale = 0.28;
+  const box = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(DESKTOP_THUMBNAIL_SCALE);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width;
+      if (width !== undefined) setScale(thumbnailScale(width));
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
   return (
     <div
+      ref={box}
       style={{
         width: "100%",
-        height: height * scale,
+        height: thumbnailHeight(scale),
         overflow: "hidden",
         borderRadius: 8,
-        border: "1px solid #EDF1F6",
+        border: `${THUMBNAIL_BORDER}px solid #EDF1F6`,
         background: "#FFFFFF",
       }}
     >
-      <div style={{ width, height, transform: `scale(${scale})`, transformOrigin: "top left" }}>
+      <div
+        style={{
+          width: THUMBNAIL_PAGE.width,
+          height: THUMBNAIL_PAGE.height,
+          transform: `scale(${scale})`,
+          transformOrigin: "top left",
+        }}
+      >
         <iframe
           title={title}
           srcDoc={html}
           scrolling="no"
-          style={{ width, height, border: 0, pointerEvents: "none" }}
+          style={{
+            width: THUMBNAIL_PAGE.width,
+            height: THUMBNAIL_PAGE.height,
+            border: 0,
+            pointerEvents: "none",
+          }}
           tabIndex={-1}
           aria-hidden="true"
         />
       </div>
     </div>
+  );
+}
+
+/**
+ * The three cards side by side, or — under `THREE_COLUMNS_FROM` — one at a time with the next
+ * peeking, snapping card to card (David's choice of 15 October 2026 over a vertical stack; ADR
+ * 0042 §6). The row opens on the recommended one and three dots below say which is in view; the
+ * dots are decoration, because the list itself is still the structure a reader walks.
+ */
+function ProposalsRow({ count, children }: { count: number; children: React.ReactNode }) {
+  const carousel = !useMediaQuery(`(min-width: ${THREE_COLUMNS_FROM}px)`);
+  const row = useRef<HTMLDivElement>(null);
+  const [current, setCurrent] = useState(RECOMMENDED_INDEX);
+
+  // `offsetLeft` against the row, which is `position: relative` for exactly this reading, and
+  // set directly rather than with `scrollIntoView`, which would also scroll the page vertically.
+  useEffect(() => {
+    const el = row.current;
+    if (!carousel || !el) return;
+    const card = el.children.item(RECOMMENDED_INDEX);
+    if (!(card instanceof HTMLElement)) return;
+    el.scrollLeft = centredScrollLeft(card.offsetLeft, card.offsetWidth, el.clientWidth);
+  }, [carousel]);
+
+  const onScroll = () => {
+    const el = row.current;
+    const first = el?.children.item(0);
+    const second = el?.children.item(1);
+    if (!el || !(first instanceof HTMLElement) || !(second instanceof HTMLElement)) return;
+    setCurrent(nearestCard(el.scrollLeft, second.offsetLeft - first.offsetLeft, count));
+  };
+
+  return (
+    <>
+      <div
+        ref={row}
+        className={carousel ? "ui-carousel" : undefined}
+        onScroll={carousel ? onScroll : undefined}
+        style={
+          carousel
+            ? {
+                width: "100%",
+                position: "relative",
+                display: "grid",
+                gridAutoFlow: "column",
+                // The whole content box, which the gutters below have already brought down to
+                // `CAROUSEL_CARD_SHARE` of the row; a percentage here would shrink it twice.
+                gridAutoColumns: "100%",
+                gap: 12,
+                overflowX: "auto",
+                scrollSnapType: "x mandatory",
+                // The gutter is what lets the first and the last card be centred like the one
+                // between them, and the block padding is room for the chosen card's ring.
+                padding: `4px ${carouselGutter()}`,
+              }
+            : {
+                width: "100%",
+                maxWidth: 1180,
+                display: "grid",
+                gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                gap: 20,
+              }
+        }
+      >
+        {children}
+      </div>
+      {carousel ? (
+        <div aria-hidden="true" style={{ display: "flex", justifyContent: "center", gap: 8 }}>
+          {Array.from({ length: count }, (_, index) => (
+            <span
+              // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length, never reordered
+              key={index}
+              style={{
+                width: index === current ? 22 : 8,
+                height: 8,
+                borderRadius: 4,
+                background: index === current ? "#156FE7" : "#CBD5E1",
+                transition: "width var(--ui-base) var(--ui-ease)",
+              }}
+            />
+          ))}
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -1379,7 +1509,8 @@ export function Variants({
         style={{
           flexGrow: 1,
           boxSizing: "border-box",
-          padding: "0 40px 40px 40px",
+          // Fluid, like `Shell`'s: a flat 40px each side left a 390px phone 310 for three cards.
+          padding: "0 clamp(16px, 6vw, 40px) 40px",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
@@ -1398,7 +1529,7 @@ export function Variants({
           <h1
             style={{
               margin: 0,
-              fontSize: 32,
+              fontSize: "clamp(24px, 6.5vw, 32px)",
               lineHeight: 1.2,
               fontWeight: 700,
               letterSpacing: "-0.02em",
@@ -1420,15 +1551,7 @@ export function Variants({
           </p>
         </div>
 
-        <div
-          style={{
-            width: "100%",
-            maxWidth: 1180,
-            display: "grid",
-            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-            gap: 20,
-          }}
-        >
+        <ProposalsRow count={histories.length}>
           {histories.map((history, index) => {
             const caption = CAPTIONS[index];
             if (!caption) return null;
@@ -1453,6 +1576,8 @@ export function Variants({
                   flexDirection: "column",
                   gap: 12,
                   padding: 14,
+                  minWidth: 0,
+                  scrollSnapAlign: "center",
                   background: "#FFFFFF",
                   border: highlighted ? "2px solid #156FE7" : "1px solid #E5E9F0",
                   boxShadow: highlighted ? "0 0 0 3px #E8F1FE" : undefined,
@@ -1540,7 +1665,7 @@ export function Variants({
               </div>
             );
           })}
-        </div>
+        </ProposalsRow>
 
         <button
           type="button"

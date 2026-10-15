@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { PHONE_BREAKPOINT } from "./overflowCheck.ts";
 
 /**
@@ -18,4 +19,24 @@ export const PHONE_MEDIA = `(max-width: ${PHONE_BREAKPOINT}px)`;
 
 export function isPhoneViewport(): boolean {
   return typeof window !== "undefined" && window.matchMedia(PHONE_MEDIA).matches;
+}
+
+/**
+ * A media query as React state: true while it matches, updated by the browser's own `change`
+ * event rather than by a `resize` listener comparing numbers. The proposals row reads its
+ * three-columns threshold through this (sprint 21 day 2); the editor's first device is the second
+ * reader. `false` on the server, where nothing is drawn and the first client render corrects it.
+ */
+export function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(
+    () => typeof window !== "undefined" && window.matchMedia(query).matches,
+  );
+  useEffect(() => {
+    const list = window.matchMedia(query);
+    const update = () => setMatches(list.matches);
+    update();
+    list.addEventListener("change", update);
+    return () => list.removeEventListener("change", update);
+  }, [query]);
+  return matches;
 }
