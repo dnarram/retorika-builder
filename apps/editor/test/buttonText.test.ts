@@ -69,7 +69,7 @@ describe("every shared button style", () => {
 });
 
 describe("the screens that have no mockup use the shared styles and not their own", () => {
-  it("has no hand-rolled fixed-height button left in the account or auth code", async () => {
+  it("has no hand-rolled fixed-height button left in the account, auth or questionnaire code", async () => {
     const { readFileSync, readdirSync, statSync } = await import("node:fs");
     const { join } = await import("node:path");
 
@@ -83,7 +83,17 @@ describe("the screens that have no mockup use the shared styles and not their ow
       return out;
     }
 
-    const roots = ["account", "auth"].map((d) => join(import.meta.dirname, "..", "src", d));
+    /**
+     * The questionnaire joined the scan on sprint 21 day 1. Its own kit (`ChoiceCard`,
+     * `CheckboxCard`, `NavRow`) and the proposals' «Usar esta» were the five remaining fixed heights
+     * in the application — measured on a 390px phone, «Que me manden un correo» wrapped to three
+     * lines inside a 56px box and painted two of them outside it. `NavRow` was exempted here by
+     * name once, for being faithful to the mockups; a mockup drawn at one width is not a reason to
+     * clip at another.
+     */
+    const roots = ["account", "auth", "questionnaire"].map((d) =>
+      join(import.meta.dirname, "..", "src", d),
+    );
     const offenders: string[] = [];
     for (const root of roots) {
       for (const file of files(root)) {
@@ -99,8 +109,13 @@ describe("the screens that have no mockup use the shared styles and not their ow
          */
         for (const match of source.matchAll(/(?<![A-Za-z])height: (\d+)/g)) {
           const at = match.index ?? 0;
-          const around = source.slice(Math.max(0, at - 240), at + 240);
-          if (/cursor: "pointer"|textDecoration: "none"/.test(around)) {
+          // A square — `width: 18, height: 18` — is an icon or a native checkbox, never a label's
+          // box; the first scan of the questionnaire reported two of those and missed three real
+          // buttons whose `cursor` sat past the window, so the window is wider and the square is
+          // out. `cursor: primaryEnabled ? "pointer" : …` counts as a pointer too.
+          if (/width: (\d+), $/.test(source.slice(Math.max(0, at - 24), at))) continue;
+          const around = source.slice(Math.max(0, at - 400), at + 400);
+          if (/cursor: [^\n]*"pointer"|textDecoration: "none"/.test(around)) {
             offenders.push(`${file.slice(file.indexOf("apps/editor"))}: height: ${match[1]}`);
           }
         }

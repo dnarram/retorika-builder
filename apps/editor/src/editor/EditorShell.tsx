@@ -874,7 +874,11 @@ export function EditorShell({
 
   const shell = (
     <div
-      className="flex h-screen flex-col bg-ui-bg"
+      data-testid="editor-shell"
+      // `h-dvh`, not `h-screen`: `100vh` on a phone is the height with the browser's bars hidden,
+      // so a shell that tall puts its bottom edge under the bar that is actually showing
+      // (sprint 21 day 1, ADR 0042). The dynamic unit is the height there really is.
+      className="flex h-dvh flex-col bg-ui-bg"
       // `inert` while the building screen is up: the keyboard cannot reach the rail, the tabs or
       // the canvas, and a screen reader does not walk them. React 19 renders the boolean attribute.
       inert={building}

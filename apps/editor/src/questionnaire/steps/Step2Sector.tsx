@@ -191,7 +191,13 @@ export function Step2Sector({
           padding: 0,
           border: 0,
           display: "grid",
-          gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+          // As many 200px columns as fit — three in the 920px card, which is what the mockup
+          // draws, two at 768 and one on a phone — rather than three at every width: at 320px
+          // three columns are 90px each, and «Peluquería y barbería» painted outside its box
+          // (sprint 21 day 1, ADR 0042). 200 and not 180 because the card's inner width is 816
+          // and four 180s fit in it; that is arithmetic the first version got wrong. No
+          // breakpoint, nothing to pin.
+          gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 200px), 1fr))",
           gap: 13,
         }}
       >

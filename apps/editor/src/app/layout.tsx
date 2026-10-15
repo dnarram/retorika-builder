@@ -22,9 +22,16 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+/**
+ * `viewportFit: "cover"` since sprint 21: without it `env(safe-area-inset-bottom)` is zero on a
+ * phone with a home indicator, and the editor's bottom bar (ADR 0042) sits under it. No
+ * `maximumScale` and no `userScalable: false` — the way to stop Safari zooming into a field is to
+ * give the field 16px of text, which the harness checks, not to take the pinch away from everyone.
+ */
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

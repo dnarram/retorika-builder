@@ -56,7 +56,8 @@ export function Step3Services({
             padding: 0,
             border: 0,
             display: "grid",
-            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+            // Two columns in the card, one on a phone; see `Step2Sector` for why it is not a count.
+            gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 270px), 1fr))",
             gap: 12,
           }}
         >
@@ -138,12 +139,15 @@ export function Step3Services({
         </ul>
       ) : null}
 
-      <div style={{ display: "flex", gap: 12 }}>
+      {/* `flexWrap`, and `minWidth: 0` on the field: an `<input>` will not shrink below its own
+          intrinsic width (about 180px for `size=20`), so at 320px this row measured 370 and opened
+          the whole page that wide — the first thing the phone walk found (sprint 21 day 1). Now the
+          field gives way, and when even that is not enough «Añadir» drops to a second line. */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
         <TextField
           id="propio"
           label={es["questionnaire.step3.own.label"]}
           height={54}
-          fontSize={15}
           variant="muted"
           placeholder={es["questionnaire.step3.own.placeholder"]}
           value={ownService}
@@ -154,14 +158,14 @@ export function Step3Services({
               addOwnService();
             }
           }}
-          style={{ flexGrow: 1, width: "auto" }}
+          style={{ flexGrow: 1, width: "auto", minWidth: 0 }}
         />
         <button
           type="button"
           onClick={addOwnService}
           style={{
-            height: 54,
-            padding: "0 22px",
+            minHeight: 54,
+            padding: "12px 22px",
             fontFamily: "var(--font-inter), system-ui, sans-serif",
             fontSize: 15,
             fontWeight: 600,

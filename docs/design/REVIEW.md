@@ -2020,3 +2020,91 @@ controles, y qué hacen cuando Tab ha deshecho la selección), el defecto de arr
 donde todavía no se sirven —que es ninguno, porque el día 4 los sirvió todos salvo el favicon, que se
 queda en píxeles a propósito.
 
+
+## Sprint 21 — «La aplicación cabe en un móvil» (15 de octubre de 2026)
+
+David, tras fusionar el cierre del sprint 20: «quiero que al abrir la aplicación web de Retorika
+esta se adapte al tamaño de pantalla… que ningún elemento de la landing sobresale, ningún texto
+sobresale de su botón y ningún elemento termina cortado por la pantalla», y eso para las preguntas,
+las tres propuestas y el editor entero —cabecera con «Descargar», raíl, paneles, barras flotantes,
+verbos de sección, lienzo. Su ejemplo: las tres propuestas «se acortan tanto para ajustar la
+pantalla que no permite que se vean las previsualizaciones». Es la aplicación, no el sitio
+publicado: el renderer pasa el desborde a 320, 768 y 1280 desde el sprint 2 y no se toca.
+
+**Medido antes de planificar, en la aplicación desplegada, con Chromium emulando un móvil:**
+
+| Pantalla | 390 (iPhone 13) | 320 | 768 |
+|---|---|---|---|
+| Landing | cabe | cabe | — |
+| Las cinco preguntas | rejillas de tres columnas con `height: 56`: «Que me manden un correo» pinta tres líneas, dos fuera de la caja | «Peluquería y barbería» se sale | cabe |
+| Las tres propuestas | cada tarjeta 60px; la miniatura enseña el **17 %** de la web | 37px, el **10 %** | 186px, el 52 % |
+| El editor | el grupo derecho de la cabecera mide 673px fijos y la página se abre a **822px**: «Descargar» y «Guardar en mi cuenta» fuera, el lienzo a escala 0,36 | igual, 0,27 | la cabecera 53px más ancha que la pantalla; lo demás a 0,69 |
+| El editor con «Estilo» | el lienzo 257px fuera por la izquierda | igual | cabe |
+
+Y la razón: `apps/editor` no tenía **ni una** media query de ancho. Lo único que respondía al
+tamaño era `MIN_STUDIO_WIDTH = 1024`, escrito para no ofrecer las herramientas de diseño (ADR 0025
+§5), y un comentario del e2e que llamaba «no soportado» a todo lo que hubiera por debajo. Nadie había
+decidido eso. El ADR 0042 lo decide: tres clases —teléfono ≤ 720, tableta 721–1023, estudio
+≥ 1024— con los dos números que ya existían, el del renderer y el del ADR 0025, y ninguno nuevo.
+
+Dos elecciones de David entre opciones puestas delante: las propuestas pasan a **carrusel** en un
+móvil (una tarjeta al 85 %, la siguiente asomando) en lugar de apilarse, y la cabecera del editor
+pasa a **tres filas** en lugar de mudar «Guardar en mi cuenta» al panel «Compartir». Dos añadidos al
+aprobar: **todo campo con letra de 16px o más** en la clase teléfono, para que Safari no amplíe al
+enfocar, y una lista corta al final para recorrer la aplicación en un iPhone de verdad.
+
+### El arnés, los números y las cinco preguntas (día 1)
+
+**El arnés primero.** «Nada sobresale en un móvil», en el e2e: tres dispositivos emulados (320×568,
+390×844, 768×1024, cada uno con `isMobile`, dedo y densidad 2) y un recorrido por cada uno desde la
+landing hasta el diálogo de la cuenta, pasando por las cinco preguntas, las tres propuestas, el
+editor con cada panel abierto, una sección y un texto elegidos y las dos vistas. En cada pantalla
+cuatro cosas: la página se abre al ancho del dispositivo y no se desplaza en horizontal; ningún
+elemento visible queda fuera; ningún texto se sale de su botón (el sondeo por `Range` de octubre,
+izado a ámbito de módulo junto con el del lienzo); y **ningún elemento queda cortado** por un
+ancestro que no se pueda desplazar. La cuarta es la que faltaba: la miniatura de una propuesta
+recortada por su caja no sobresale de nada y no saca texto de ningún botón, y enseña el 17 % de la
+web. En la clase teléfono, además, todo `input`, `textarea` y `select` visible con letra computada
+≥ 16px. Las propuestas y el editor están como `it.fails` con el día que los arregla escrito al lado,
+de modo que CI no se relaja y cada día convierte exactamente uno en `it`.
+
+**Lo que el arnés encontró en su primera pasada, que la medida de la mañana no había visto:** a
+320, en el paso 3, la fila del servicio propio con su botón «Añadir» medía **370px** y abría la
+página entera a ese ancho, porque un `<input>` no se encoge por debajo de su ancho intrínseco
+(unos 180px). `minWidth: 0` en el campo y `flexWrap` en la fila. Y a 768 el editor pasó entero en la
+primera pasada cuando por la mañana había medido 821: la frase «Guardado en este navegador» llega
+medio segundo después que el editor, y el recorrido medía antes. Ahora la espera, porque es 200px
+de la cabecera que mide.
+
+**Las preguntas, sin un solo breakpoint.** Las rejillas de opciones dejan de ser «tres columnas» y
+pasan a «tantas columnas de 180px como quepan» (220 en el paso 5, por «Que me manden un correo»;
+270 en el paso 3): tres en la tarjeta, una en un móvil, y nada que pinzar en un test. `ChoiceCard`,
+`CheckboxCard`, el botón de «Siguiente», el de subir el logo, el de «Añadir» y «Usar esta» de las
+propuestas tenían `height` fijo: **seis cajas** que el escáner de `buttonText.test.ts`, extendido
+al cuestionario, marca en rojo contra `main` y en verde ahora. La primera versión del escáner
+extendido pilló dos cuadrados —un icono de 18 y una casilla de 19— y se dejó tres botones cuyo
+`cursor` quedaba fuera de su ventana de 240 caracteres; la ventana es de 400 y los cuadrados quedan
+fuera. `NavRow` estaba exenta por nombre «por fiel a las maquetas»: una maqueta dibujada a un ancho
+no es razón para recortar a otro. Los títulos pasan a `clamp()`; los cinco campos del paso 5 y el
+del paso 3 que pedían 15px pasan a 16, y `TextField` aplica el suelo pida lo que pida quien lo use.
+
+**Lo que CI encontró en la PR, que en local no se había corrido:** la caminata del sprint 7 que
+exige que elegir un sector no mueva la rejilla la vio moverse **6,5px**. `Shell` centra la tarjeta
+en vertical, así que cualquier cambio de alto la recoloca; el `height: 56` fijo lo impedía por la
+fuerza, y con `minHeight` la tarjeta elegida —que añadía su hueco de 10px y su marca de 18px solo al
+elegirse— pasaba «Restaurante y bar» a dos líneas y crecía una. La marca reserva ahora su sitio
+siempre, con `visibility`, igual que el aviso de ese mismo paso. Y de paso la aritmética: con 180px
+de mínimo entraban **cuatro** columnas en los 816px interiores de la tarjeta, no tres; son 200.
+
+**Lo que queda en su sitio y por qué:** `MIN_STUDIO_WIDTH` y el ADR 0025 §5 (las herramientas
+siguen ausentes bajo 1024: el editor de teléfono es el editor sencillo); la frase del ADR 0012, que
+no se recorta ni se oculta en ningún ancho; el renderer y los goldens, que no cambian un byte, y
+`pnpm test:golden` lo dice. La raíz del editor pasa de `h-screen` a `h-dvh` y la meta `viewport`
+gana `viewport-fit: cover`, sin `maximum-scale` ni `user-scalable=no`: la forma de que Safari no
+amplíe un campo es darle 16px, no quitarle el pellizco a todo el mundo.
+
+**Lo que el ADR dice del lienzo:** los textos de la vista previa son del sitio, a la escala
+tipográfica del sitio, y el editor no los cambia para acomodarse a sí mismo. Una línea de cuerpo de
+14px seguirá siendo de 14px y en un iPhone tocarla puede ampliar la página; titular, subtítulo y
+botones están por encima del umbral en todas las escalas. Queda nombrado, va en la lista del iPhone
+del último día, y lo que David mida allí va al backlog con su número.

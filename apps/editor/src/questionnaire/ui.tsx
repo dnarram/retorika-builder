@@ -63,8 +63,9 @@ export function VisuallyHiddenLabel({
  * - **`inline-flex` with both axes centred**, so one line and three lines are both centred rather
  *   than one centred and the other starting at the top.
  *
- * `NavRow`'s own buttons are deliberately left alone: they are faithful to the approved mockups,
- * and they do not have this defect — they grow sideways instead of clipping.
+ * `NavRow`'s own buttons were left alone for being faithful to the approved mockups, which grow
+ * sideways instead of clipping — until sprint 21 day 1 measured them on a phone, where there is no
+ * sideways to grow into. They hold their `minHeight` now like everything else.
  */
 const buttonBase = {
   display: "inline-flex",
@@ -225,7 +226,8 @@ export function TitleBlock({
       <h1
         style={{
           margin: 0,
-          fontSize: 36,
+          // Fluid between a phone and the mockups' 36px, so a question never breaks mid-word.
+          fontSize: "clamp(26px, 7vw, 36px)",
           lineHeight: 1.15,
           fontWeight: 700,
           letterSpacing: "-0.03em",
@@ -269,6 +271,13 @@ export function Card({
     </div>
   );
 }
+
+/**
+ * The smallest text a field may have, in pixels, on any screen. 16 is the size below which Safari on
+ * iOS zooms into a focused field (ADR 0042); it is applied everywhere rather than only on a phone
+ * because a field that reads at 16 on a desktop was never too big.
+ */
+export const FIELD_FONT_FLOOR = 16;
 
 const fieldBase: CSSProperties = {
   boxSizing: "border-box",
@@ -335,7 +344,10 @@ export function TextField({
         style={{
           ...fieldBase,
           height,
-          fontSize,
+          // Never below the floor, whatever a caller asks for: Safari on iOS zooms the whole page
+          // into any field whose text is smaller than 16px, and un-zooming is on the owner. The
+          // mobile harness measures the computed size of every visible field (ADR 0042).
+          fontSize: Math.max(FIELD_FONT_FLOOR, fontSize),
           border: borderByVariant[variant],
           background: backgroundByVariant[variant],
           ...style,
@@ -417,10 +429,12 @@ export function ChoiceCard({
       style={{
         display: "flex",
         alignItems: "center",
-        gap: selected ? 10 : 0,
-        height: 56,
+        gap: 10,
+        // `minHeight`, never `height`: on a 390px phone «Que me manden un correo» needs three
+        // lines, and a box that cannot grow paints two of them outside itself (sprint 21 day 1).
+        minHeight: 56,
         boxSizing: "border-box",
-        padding: "0 16px",
+        padding: "10px 16px",
         gridColumn: fullWidth ? "1 / -1" : undefined,
         background: selected ? "#F1F7FE" : "#FFFFFF",
         border: selected
@@ -450,7 +464,22 @@ export function ChoiceCard({
       >
         {label}
       </span>
-      {selected ? checkmark : null}
+      {/* The tick's room is reserved whether or not it shows, the way `Step2Sector`'s warning
+          reserves its own. Once the box could grow (`minHeight`), a tick that appeared only on
+          selection took 28px from the label, wrapped «Restaurante y bar» onto a second line, and
+          made the chosen card — and the whole centred step — taller by a line: CI's grid walk
+          caught the card moving 6.5px under the pointer on sprint 21 day 1. Now choosing changes
+          colours and nothing that measures. */}
+      <span
+        aria-hidden="true"
+        style={{
+          display: "inline-flex",
+          flexShrink: 0,
+          visibility: selected ? "visible" : "hidden",
+        }}
+      >
+        {checkmark}
+      </span>
     </label>
   );
 }
@@ -470,9 +499,9 @@ export function CheckboxCard({
         display: "flex",
         alignItems: "center",
         gap: 12,
-        height: 58,
+        minHeight: 58,
         boxSizing: "border-box",
-        padding: "0 17px",
+        padding: "10px 17px",
         background: "#FFFFFF",
         border: "1px solid #E3E8F0",
         borderRadius: 11,
@@ -511,8 +540,10 @@ export function NavRow({
     <div
       style={{
         display: "flex",
+        flexWrap: "wrap",
         alignItems: "center",
         justifyContent: "space-between",
+        gap: 12,
         paddingTop: 10,
       }}
     >
@@ -563,8 +594,8 @@ export function NavRow({
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
-            height: 50,
-            padding: "0 34px",
+            minHeight: 50,
+            padding: "12px 34px",
             background: primaryEnabled ? "#156FE7" : "#B9CDEA",
             color: "#FFFFFF",
             fontSize: 15,
