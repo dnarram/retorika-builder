@@ -85,18 +85,26 @@ const buttonBase = {
 } as const;
 
 /** The affirmative one: «Entrar», «Crear la cuenta y guardar». */
-export const primaryButton = { ...buttonBase, background: "#156FE7", color: "#FFFFFF" } as const;
+export const primaryButton = {
+  ...buttonBase,
+  background: "var(--ui-brand)",
+  color: "var(--ui-surface)",
+} as const;
 
 /** Everything else: «Cerrar», «Volver», «Usar mi cuenta de Google». */
 export const secondaryButton = {
   ...buttonBase,
-  background: "#FFFFFF",
+  background: "var(--ui-surface)",
   color: "#1F2937",
   border: "1px solid #D4DCE7",
 } as const;
 
 /** The one that destroys something, and reads like it. */
-export const dangerButton = { ...buttonBase, background: "#BE123C", color: "#FFFFFF" } as const;
+export const dangerButton = {
+  ...buttonBase,
+  background: "#BE123C",
+  color: "var(--ui-surface)",
+} as const;
 
 /** Sized to its own text rather than stretched — for a button sitting in a row beside others. */
 export const compactButton = {
@@ -150,7 +158,7 @@ export function Shell({ caption, children }: { caption?: string; children: React
       style={{
         minHeight: "100vh",
         boxSizing: "border-box",
-        background: "#F5F7FA",
+        background: "var(--ui-bg)",
         display: "flex",
         flexDirection: "column",
       }}
@@ -179,7 +187,9 @@ export function Shell({ caption, children }: { caption?: string; children: React
       >
         {children}
         {caption ? (
-          <span style={{ fontSize: 15, color: "#5B6B82", textAlign: "center" }}>{caption}</span>
+          <span style={{ fontSize: 15, color: "var(--ui-muted)", textAlign: "center" }}>
+            {caption}
+          </span>
         ) : null}
       </div>
     </div>
@@ -192,11 +202,17 @@ export function ProgressDots({ current }: { current: number }) {
       {[1, 2, 3, 4, 5].map((step) => (
         <span
           key={step}
+          /* `ui-slide` carries the width and the colour: the dots were the one thing on these five
+             screens that already changed between steps and did it by redrawing. The bar for the
+             step just left shrinks from 30 to 22 while the new one grows, which is the progress
+             the row is for. `width` here reflows nothing — the dots are a flex row of five spans
+             and the row's own size is fixed by the widest arrangement. */
+          className="ui-slide"
           style={{
             width: step === current ? 30 : 22,
             height: 5,
             borderRadius: 3,
-            background: step <= current ? "#156FE7" : "#DCE3ED",
+            background: step <= current ? "var(--ui-brand)" : "#DCE3ED",
           }}
         />
       ))}
@@ -221,7 +237,7 @@ export function TitleBlock({
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
       {step ? (
-        <span style={{ fontSize: 14, fontWeight: 500, color: "#5B6B82" }}>{step}</span>
+        <span style={{ fontSize: 14, fontWeight: 500, color: "var(--ui-muted)" }}>{step}</span>
       ) : null}
       <h1
         style={{
@@ -231,7 +247,7 @@ export function TitleBlock({
           lineHeight: 1.15,
           fontWeight: 700,
           letterSpacing: "-0.03em",
-          color: "#0F172A",
+          color: "var(--ui-ink)",
           textAlign: "center",
         }}
       >
@@ -259,7 +275,7 @@ export function Card({
         boxSizing: "border-box",
         // The other half: see `Shell` above. 52px on a desktop, 16px on a phone.
         padding: "34px clamp(16px, 5vw, 52px) 28px",
-        background: "#FFFFFF",
+        background: "var(--ui-surface)",
         borderRadius: 20,
         boxShadow: "0 1px 3px rgba(15,23,42,0.06)",
         display: "flex",
@@ -270,6 +286,29 @@ export function Card({
       {children}
     </div>
   );
+}
+
+/**
+ * **How far down a staggered queue the delay keeps growing** (sprint 22).
+ *
+ * A grid reveals itself card by card at `--ui-stagger` apart, which reads as an order instead of a
+ * flash. Unbounded, that is a queue: the eleven sectors of step 2 would put the last card 440ms
+ * behind the first, and somebody who already knows which one they want would watch it arrive.
+ *
+ * Capped at seven, so the longest wait in the application is `7 × 40ms` and every screen is at
+ * rest inside 600ms of mounting — the number `test/motionBudget.test.ts` holds and
+ * `docs/design/REVIEW.md` writes down. Past the cap the cards share the last slot, which nobody
+ * can tell apart from their own position in a queue they are not watching.
+ */
+export const REVEAL_STAGGER_CAP = 7;
+
+/**
+ * The delay a card at position `index` waits before revealing itself, as the CSS the caller hands
+ * to `--ui-reveal-delay`. `calc` on the token rather than arithmetic on 40, so the rhythm of the
+ * whole application stays the one line in `globals.css` that declares it.
+ */
+export function revealDelay(index: number): string {
+  return `calc(var(--ui-stagger) * ${Math.min(index, REVEAL_STAGGER_CAP)})`;
 }
 
 /**
@@ -284,7 +323,7 @@ const fieldBase: CSSProperties = {
   padding: "0 20px",
   fontFamily: "var(--font-inter), system-ui, sans-serif",
   fontWeight: 500,
-  color: "#0F172A",
+  color: "var(--ui-ink)",
   borderRadius: 12,
   outline: "none",
   width: "100%",
@@ -320,12 +359,12 @@ export function TextField({
   ...props
 }: TextFieldProps) {
   const borderByVariant: Record<string, string> = {
-    primary: "2px solid #156FE7",
+    primary: "2px solid var(--ui-brand)",
     muted: "1px solid #E3E8F0",
     error: "2px solid #E11D48",
   };
   const backgroundByVariant: Record<string, string> = {
-    primary: "#FFFFFF",
+    primary: "var(--ui-surface)",
     muted: "#F6F8FB",
     error: "#FFF9F9",
   };
@@ -426,6 +465,12 @@ export function ChoiceCard({
 }) {
   return (
     <label
+      /* **The hover and the press, which no mockup drew** — «la maqueta 08 no tiene ni una regla
+         `:hover` ni una `transition`. Ninguna de las diecinueve las tiene» (`REVIEW.md`). A pixel
+         of lift and a shadow, behind `@media (hover: hover)` so a tap does not leave a card
+         looking chosen. `transform` touches no layout, so the grid walk that caught a card moving
+         6.5px under the pointer on sprint 21 day 1 measures exactly what it measured then. */
+      className="ui-interactive ui-lift"
       style={{
         display: "flex",
         alignItems: "center",
@@ -436,9 +481,9 @@ export function ChoiceCard({
         boxSizing: "border-box",
         padding: "10px 16px",
         gridColumn: fullWidth ? "1 / -1" : undefined,
-        background: selected ? "#F1F7FE" : "#FFFFFF",
+        background: selected ? "#F1F7FE" : "var(--ui-surface)",
         border: selected
-          ? "2px solid #156FE7"
+          ? "2px solid var(--ui-brand)"
           : dashed
             ? "1px dashed #C9D4E2"
             : "1px solid #E3E8F0",
@@ -459,7 +504,7 @@ export function ChoiceCard({
           flexGrow: 1,
           fontSize: 15,
           fontWeight: selected ? 600 : 500,
-          color: selected ? "#156FE7" : "#334155",
+          color: selected ? "var(--ui-brand)" : "#334155",
         }}
       >
         {label}
@@ -495,6 +540,7 @@ export function CheckboxCard({
 }) {
   return (
     <label
+      className="ui-interactive ui-lift"
       style={{
         display: "flex",
         alignItems: "center",
@@ -502,7 +548,7 @@ export function CheckboxCard({
         minHeight: 58,
         boxSizing: "border-box",
         padding: "10px 17px",
-        background: "#FFFFFF",
+        background: "var(--ui-surface)",
         border: "1px solid #E3E8F0",
         borderRadius: 11,
         cursor: "pointer",
@@ -512,7 +558,7 @@ export function CheckboxCard({
         type="checkbox"
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
-        style={{ width: 19, height: 19, margin: 0, accentColor: "#156FE7" }}
+        style={{ width: 19, height: 19, margin: 0, accentColor: "var(--ui-brand)" }}
       />
       <span style={{ fontSize: 15, fontWeight: 500, color: "#334155" }}>{label}</span>
     </label>
@@ -551,11 +597,18 @@ export function NavRow({
         <button
           type="button"
           onClick={onBack}
+          /**
+           * The colour lives in the classes rather than in `style`, because this is the one place
+           * in this file where it has to *change*: an inline `color` wins over any rule, so a
+           * `:hover` written as CSS would transition nothing and the transition would be a lie.
+           * `hover:` is already behind `@media (hover: hover)` in Tailwind v4, for the same reason
+           * `ui-lift` is.
+           */
+          className="ui-interactive text-ui-muted hover:text-ui-ink"
           style={{
             font: "inherit",
             fontSize: 15,
             fontWeight: 500,
-            color: "#5B6B82",
             background: "none",
             border: 0,
             padding: 0,
@@ -565,18 +618,18 @@ export function NavRow({
           {backLabel}
         </button>
       ) : (
-        <span style={{ fontSize: 15, fontWeight: 500, color: "#5B6B82" }}>{backLabel}</span>
+        <span style={{ fontSize: 15, fontWeight: 500, color: "var(--ui-muted)" }}>{backLabel}</span>
       )}
       <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
         {onSkip ? (
           <button
             type="button"
             onClick={onSkip}
+            className="ui-interactive text-ui-muted hover:text-ui-ink"
             style={{
               font: "inherit",
               fontSize: 15,
               fontWeight: 500,
-              color: "#5B6B82",
               background: "none",
               border: 0,
               padding: 0,
@@ -590,14 +643,18 @@ export function NavRow({
           type="button"
           onClick={onPrimary}
           disabled={!primaryEnabled}
+          /* `:not(:disabled)` inside `ui-lift` is what keeps «Siguiente» still while it is not
+             answerable: a disabled button that rises to the pointer is an invitation it cannot
+             honour. */
+          className="ui-interactive ui-lift"
           style={{
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
             minHeight: 50,
             padding: "12px 34px",
-            background: primaryEnabled ? "#156FE7" : "#B9CDEA",
-            color: "#FFFFFF",
+            background: primaryEnabled ? "var(--ui-brand)" : "#B9CDEA",
+            color: "var(--ui-surface)",
             fontSize: 15,
             fontWeight: 600,
             border: 0,

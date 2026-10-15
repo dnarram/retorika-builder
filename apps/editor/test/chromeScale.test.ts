@@ -235,6 +235,17 @@ describe("the canvas's copy of the scale", () => {
     // into the flow and arrives the way the rail's items do, with the same curve. So it is carried
     // now, and the exception it used to have is gone rather than left to go stale.
     "slow",
+    // The gap between two things arriving in a queue (sprint 22). It paces the landing's sections,
+    // a step's choice cards and the three proposals — all of which are the application's own
+    // screens. The preview holds one document and it arrives whole, with `ui-fade-in`; there is no
+    // list inside it that reveals itself a row at a time, so there is nothing here to pace.
+    "stagger",
+    // The palette's secondary blue, for brand text on the application's grey and on its tint.
+    // **It must not reach the canvas, and that is ADR 0015's boundary rather than an oversight:**
+    // every colour inside the preview comes from the client's own palette in `packages/tokens`,
+    // and the one blue that is Retorika's rather than theirs is the one colour that may never be
+    // painted into their page.
+    "brand-deep",
   ];
 
   it("transcribes every token the stylesheet declares, apart from the ones named here", () => {
