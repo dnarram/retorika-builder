@@ -135,6 +135,25 @@
 }
 
 /**
+ * The three widths the application itself answers to (ADR 0042).
+ *
+ * **`phone` ends where the published site's own breakpoint does**, so a window that is a phone to
+ * the editor is a window in which the owner's site would be showing its phone layout: 720 is
+ * `PHONE_BREAKPOINT` in `src/editor/overflowCheck.ts`, restated here because CSS cannot import a
+ * constant, and `test/canvasZoom.test.ts` reads this file and fails if the two drift. **`studio`
+ * starts where ADR 0025 §5 does**: 1024 is `MIN_STUDIO_WIDTH`, below which the design tools are not
+ * offered, pinned by the same test. `tablet` is what lies between.
+ *
+ * Named variants rather than `max-md:` — Tailwind's `md` is 768, which is nobody's number here —
+ * and rather than `max-[720px]:` in a dozen files, which is the same number written a dozen times.
+ * Not `--breakpoint-*` either: those sort among Tailwind's rem-based defaults, and `sm:px-24`
+ * already uses one of them, so a px breakpoint among them would have an order nothing declares.
+ */
+@custom-variant phone (@media (width <= 720px));
+@custom-variant tablet (@media (720px < width < 1024px));
+@custom-variant studio (@media (width >= 1024px));
+
+/**
  * The one transition every interactive control in the chrome wears.
  *
  * Named rather than written out, because the list of properties is the decision: colour, border,

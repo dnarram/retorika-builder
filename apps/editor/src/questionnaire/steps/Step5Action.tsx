@@ -85,7 +85,9 @@ export function Step5Action({
           padding: 0,
           border: 0,
           display: "grid",
-          gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+          // Three columns in the card, one on a phone; see `Step2Sector` for why it is not a count.
+          // 220 because «Que me manden un correo» is the longest label and fits one line in it.
+          gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 220px), 1fr))",
           gap: 13,
         }}
       >
@@ -131,7 +133,6 @@ export function Step5Action({
             id="enlace"
             label={es["questionnaire.step5.booking.label"]}
             height={52}
-            fontSize={15}
             variant={destinationMissing ? "error" : "muted"}
             placeholder={es["questionnaire.step5.booking.placeholder"]}
             value={answers.bookingLink}
@@ -155,7 +156,6 @@ export function Step5Action({
               id="telefono-reserva"
               label={es["questionnaire.step5.phone.label"]}
               height={52}
-              fontSize={15}
               variant="muted"
               placeholder={es["questionnaire.step5.phone.placeholder"]}
               value={answers.phone}
@@ -172,7 +172,6 @@ export function Step5Action({
             id="telefono"
             label={es["questionnaire.step5.phone.label"]}
             height={54}
-            fontSize={15}
             variant={destinationMissing ? "error" : "primary"}
             placeholder={es["questionnaire.step5.phone.placeholder"]}
             value={answers.phone}
@@ -190,7 +189,6 @@ export function Step5Action({
             id="whatsapp"
             label={es["questionnaire.step5.whatsapp.label"]}
             height={54}
-            fontSize={15}
             variant={destinationMissing ? "error" : "primary"}
             placeholder={es["questionnaire.step5.whatsapp.placeholder"]}
             value={answers.whatsapp}
@@ -209,7 +207,6 @@ export function Step5Action({
             type="email"
             label={es["questionnaire.step5.email.label"]}
             height={54}
-            fontSize={15}
             variant={destinationMissing ? "error" : "primary"}
             placeholder={es["questionnaire.step5.email.placeholder"]}
             value={answers.email}

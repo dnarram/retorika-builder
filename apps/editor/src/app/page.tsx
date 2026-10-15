@@ -70,7 +70,9 @@ export default function Page() {
         <h1
           style={{
             margin: 0,
-            fontSize: 44,
+            // Fluid between a phone and the mockup's 44px: the landing already fit at 320, but a
+            // 44px «Tu web, hecha en diez minutos» broke mid-word there (sprint 21 day 1).
+            fontSize: "clamp(30px, 9vw, 44px)",
             lineHeight: 1.1,
             fontWeight: 700,
             letterSpacing: "-0.03em",

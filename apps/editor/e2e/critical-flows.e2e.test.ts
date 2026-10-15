@@ -16,7 +16,7 @@ import { GALLERY_SAMPLE_COUNT } from "@retorika/generator";
 import { afterAll, beforeAll, describe, it } from "vitest";
 import { BAR_INSET, BAR_STEP, type Point, TOOLBAR_GAP } from "../src/editor/barPosition.ts";
 import { VERB_SCALE } from "../src/editor/chromeScale.ts";
-import { NARROWEST_WIDTH } from "../src/editor/overflowCheck.ts";
+import { NARROWEST_WIDTH, PHONE_BREAKPOINT } from "../src/editor/overflowCheck.ts";
 import { BASE_URL, QUESTIONNAIRE_URL, startEditorServer, stopEditorServer } from "./server.ts"; /**
  * The preview frame, addressed as the one on screen rather than as «an iframe».
  *
@@ -361,6 +361,146 @@ async function axeSerious(page: Page, where: string): Promise<void> {
   expect(lines, `axe with ${where}:\n${lines.join("\n")}`).toEqual([]);
   // A guard on the guard: axe has to have actually examined something.
   expect(results.passes.length, `axe ran no checks with ${where}`).toBeGreaterThan(0);
+}
+
+/**
+ * The painted text of every button in the top document, measured against the button's own box.
+ *
+ * Written for «el texto de un botón nunca sale del botón» (5 October 2026) and lifted to module
+ * scope on sprint 21 day 1, when the phone walk became its third caller after that describe and the
+ * account dialog. The reasoning stays with the describe that owns it; this is only the probe.
+ */
+async function overflowing(page: Page, within = "body"): Promise<string[]> {
+  return page.evaluate((scope: string) => {
+    const out: string[] = [];
+    const root = document.querySelector(scope);
+    if (!root) return [`el ámbito "${scope}" no existe`];
+    for (const el of root.querySelectorAll<HTMLElement>(
+      'button, a, [role="button"], input[type="submit"]',
+    )) {
+      const style = getComputedStyle(el);
+      if (style.display === "none" || style.visibility === "hidden") continue;
+      if (el.offsetParent === null && style.position !== "fixed") continue;
+      // Visually-hidden helpers are outside their own box on purpose — that is the technique.
+      if (style.clip !== "auto" || style.clipPath !== "none") continue;
+      if ((el.textContent ?? "").trim() === "") continue;
+
+      /**
+       * **Anything that hides its overflow is skipped, and that is not a loophole.**
+       *
+       * A `Range` reports the text's natural rectangle even when the element clips it, so the
+       * editor's own site-name button — which carries `truncate`, an unbounded business name and
+       * an ellipsis — was reported as spilling 2px while showing a perfectly tidy «Taberna
+       * Santo…». Text that cannot be seen outside the box is the opposite of the defect being
+       * guarded against: clipping is the fix, not the fault. Checked up the ancestors, because
+       * the box that clips is usually a parent.
+       */
+      let clipped = false;
+      for (let node: HTMLElement | null = el; node; node = node.parentElement) {
+        const owner = getComputedStyle(node);
+        if (owner.overflowX !== "visible" || owner.overflowY !== "visible") {
+          clipped = true;
+          break;
+        }
+      }
+      if (clipped) continue;
+
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const text = range.getBoundingClientRect();
+      if (text.width === 0 && text.height === 0) continue;
+      const box = el.getBoundingClientRect();
+
+      const spill = Math.max(
+        box.top - text.top,
+        text.bottom - box.bottom,
+        box.left - text.left,
+        text.right - box.right,
+      );
+      // A pixel of tolerance for subpixel text metrics; anything more is visible.
+      if (spill > 1) {
+        out.push(
+          `"${(el.textContent ?? "").trim().slice(0, 40)}" se sale ${Math.round(spill)}px ` +
+            `(caja ${Math.round(box.height)}px, texto ${Math.round(text.height)}px)`,
+        );
+      }
+    }
+    return out;
+  }, within);
+}
+
+/**
+ * The same measurement inside the preview frame, where the canvas chrome lives. Hoisted on sprint
+ * 21 day 1 for the phone walk; its owner is «lo que el cromo del editor dibuja dentro del lienzo».
+ */
+/**
+ * One finding. `what` is the key and `text` is the evidence: the key has to survive a change of
+ * fixture copy, and the words are what makes a failure readable.
+ */
+type CanvasSpill = { what: string; text: string; spill: number };
+
+async function spillingInsideTheCanvas(
+  page: Page,
+): Promise<{ examined: number; markers: string[]; found: CanvasSpill[] }> {
+  return page.evaluate(() => {
+    const doc = document.querySelector<HTMLIFrameElement>(
+      "iframe:not([data-buffered])",
+    )?.contentDocument;
+    if (!doc) return { examined: 0, markers: [], found: [] };
+    const out: { what: string; text: string; spill: number }[] = [];
+    // Which pieces of chrome the walk actually looked at. Without this, «examined > 0» only says
+    // it found *a* button — it cannot say it reached the one the state was set up for, and a
+    // walk that re-measures the same two pills in eight states would pass every assertion.
+    const markers = new Set<string>();
+    let examined = 0;
+    for (const el of doc.querySelectorAll<HTMLElement>("button, [role='button'], .rb-pill")) {
+      const style = getComputedStyle(el);
+      if (style.display === "none" || style.visibility === "hidden") continue;
+      if ((el.textContent ?? "").trim() === "") continue;
+      /**
+       * **Only the element's own overflow, and that is the correction this helper needed.**
+       *
+       * The editor-side walk skips anything with a *clipping ancestor*, because there the box
+       * that clips is usually a parent. Inside the preview that rule excludes everything: the
+       * chrome injects `html, body { overflow-x: clip; }`, so every button in the document has a
+       * clipping ancestor and the first version of this walk examined **nothing** while passing
+       * green. Removing the fix it was written for did not fail it.
+       *
+       * A pill that hides its own overflow is still skipped — clipping is the fix, not the fault
+       * — but nothing else gets to borrow `body`'s.
+       */
+      if (style.overflowX !== "visible" || style.overflowY !== "visible") continue;
+      examined += 1;
+      for (const name of el.classList) if (name.startsWith("rb-")) markers.add(name);
+
+      const range = doc.createRange();
+      range.selectNodeContents(el);
+      const text = range.getBoundingClientRect();
+      if (text.width === 0 && text.height === 0) continue;
+      const box = el.getBoundingClientRect();
+      const spill = Math.max(
+        box.top - text.top,
+        text.bottom - box.bottom,
+        box.left - text.left,
+        text.right - box.right,
+      );
+      if (spill > 1) {
+        // The `rb-` class is the key, because the fixture's wording is not a contract and a
+        // key built from it would go stale the first time a label is reworded.
+        const marker = [...el.classList].find((name) => name.startsWith("rb-"));
+        out.push({
+          what: marker ?? el.tagName.toLowerCase(),
+          text:
+            `"${(el.textContent ?? "").trim().slice(0, 30)}" se sale ${Math.round(spill)}px ` +
+            `(caja ${Math.round(box.height)}px, texto ${Math.round(text.height)}px)`,
+          spill: Math.round(spill),
+        });
+      }
+    }
+    // A walk that looked at nothing is not a walk that found nothing, and the two are
+    // indistinguishable from an empty array. The caller asserts on this before anything else.
+    return { examined, markers: [...markers], found: out };
+  });
 }
 
 /**
@@ -7211,65 +7351,6 @@ describe("el texto de un botón nunca sale del botón", () => {
    */
   const WIDTHS = [320, 375, 768, 1280];
 
-  async function overflowing(page: Page, within = "body"): Promise<string[]> {
-    return page.evaluate((scope: string) => {
-      const out: string[] = [];
-      const root = document.querySelector(scope);
-      if (!root) return [`el ámbito "${scope}" no existe`];
-      for (const el of root.querySelectorAll<HTMLElement>(
-        'button, a, [role="button"], input[type="submit"]',
-      )) {
-        const style = getComputedStyle(el);
-        if (style.display === "none" || style.visibility === "hidden") continue;
-        if (el.offsetParent === null && style.position !== "fixed") continue;
-        // Visually-hidden helpers are outside their own box on purpose — that is the technique.
-        if (style.clip !== "auto" || style.clipPath !== "none") continue;
-        if ((el.textContent ?? "").trim() === "") continue;
-
-        /**
-         * **Anything that hides its overflow is skipped, and that is not a loophole.**
-         *
-         * A `Range` reports the text's natural rectangle even when the element clips it, so the
-         * editor's own site-name button — which carries `truncate`, an unbounded business name and
-         * an ellipsis — was reported as spilling 2px while showing a perfectly tidy «Taberna
-         * Santo…». Text that cannot be seen outside the box is the opposite of the defect being
-         * guarded against: clipping is the fix, not the fault. Checked up the ancestors, because
-         * the box that clips is usually a parent.
-         */
-        let clipped = false;
-        for (let node: HTMLElement | null = el; node; node = node.parentElement) {
-          const owner = getComputedStyle(node);
-          if (owner.overflowX !== "visible" || owner.overflowY !== "visible") {
-            clipped = true;
-            break;
-          }
-        }
-        if (clipped) continue;
-
-        const range = document.createRange();
-        range.selectNodeContents(el);
-        const text = range.getBoundingClientRect();
-        if (text.width === 0 && text.height === 0) continue;
-        const box = el.getBoundingClientRect();
-
-        const spill = Math.max(
-          box.top - text.top,
-          text.bottom - box.bottom,
-          box.left - text.left,
-          text.right - box.right,
-        );
-        // A pixel of tolerance for subpixel text metrics; anything more is visible.
-        if (spill > 1) {
-          out.push(
-            `"${(el.textContent ?? "").trim().slice(0, 40)}" se sale ${Math.round(spill)}px ` +
-              `(caja ${Math.round(box.height)}px, texto ${Math.round(text.height)}px)`,
-          );
-        }
-      }
-      return out;
-    }, within);
-  }
-
   /**
    * A button that looks like a button needs room inside it, checked on the computed style.
    *
@@ -7713,7 +7794,7 @@ describe("la barra superior reparte su ancho entre el logo y las pestañas", () 
   async function strip(page: Page) {
     return page.evaluate(() => {
       const tabs = document.querySelector('[data-testid="page-tabs"]');
-      const shell = document.querySelector('[data-testid="rail"]')?.closest("div.flex.h-screen");
+      const shell = document.querySelector('[data-testid="editor-shell"]');
       const back = shell?.firstElementChild?.querySelector("button");
       if (!tabs || !back) return { error: "no bar" } as const;
       return {
@@ -7811,76 +7892,6 @@ describe("lo que el cromo del editor dibuja dentro del lienzo, y el aviso del in
    * and the canvas chrome lives in another one, inside the iframe. So the second test below crosses
    * that boundary, which nothing did before.
    */
-  /**
-   * One finding. `what` is the key and `text` is the evidence: the key has to survive a change of
-   * fixture copy, and the words are what makes a failure readable.
-   */
-  type CanvasSpill = { what: string; text: string; spill: number };
-
-  async function spillingInsideTheCanvas(
-    page: Page,
-  ): Promise<{ examined: number; markers: string[]; found: CanvasSpill[] }> {
-    return page.evaluate(() => {
-      const doc = document.querySelector<HTMLIFrameElement>(
-        "iframe:not([data-buffered])",
-      )?.contentDocument;
-      if (!doc) return { examined: 0, markers: [], found: [] };
-      const out: { what: string; text: string; spill: number }[] = [];
-      // Which pieces of chrome the walk actually looked at. Without this, «examined > 0» only says
-      // it found *a* button — it cannot say it reached the one the state was set up for, and a
-      // walk that re-measures the same two pills in eight states would pass every assertion.
-      const markers = new Set<string>();
-      let examined = 0;
-      for (const el of doc.querySelectorAll<HTMLElement>("button, [role='button'], .rb-pill")) {
-        const style = getComputedStyle(el);
-        if (style.display === "none" || style.visibility === "hidden") continue;
-        if ((el.textContent ?? "").trim() === "") continue;
-        /**
-         * **Only the element's own overflow, and that is the correction this helper needed.**
-         *
-         * The editor-side walk skips anything with a *clipping ancestor*, because there the box
-         * that clips is usually a parent. Inside the preview that rule excludes everything: the
-         * chrome injects `html, body { overflow-x: clip; }`, so every button in the document has a
-         * clipping ancestor and the first version of this walk examined **nothing** while passing
-         * green. Removing the fix it was written for did not fail it.
-         *
-         * A pill that hides its own overflow is still skipped — clipping is the fix, not the fault
-         * — but nothing else gets to borrow `body`'s.
-         */
-        if (style.overflowX !== "visible" || style.overflowY !== "visible") continue;
-        examined += 1;
-        for (const name of el.classList) if (name.startsWith("rb-")) markers.add(name);
-
-        const range = doc.createRange();
-        range.selectNodeContents(el);
-        const text = range.getBoundingClientRect();
-        if (text.width === 0 && text.height === 0) continue;
-        const box = el.getBoundingClientRect();
-        const spill = Math.max(
-          box.top - text.top,
-          text.bottom - box.bottom,
-          box.left - text.left,
-          text.right - box.right,
-        );
-        if (spill > 1) {
-          // The `rb-` class is the key, because the fixture's wording is not a contract and a
-          // key built from it would go stale the first time a label is reworded.
-          const marker = [...el.classList].find((name) => name.startsWith("rb-"));
-          out.push({
-            what: marker ?? el.tagName.toLowerCase(),
-            text:
-              `"${(el.textContent ?? "").trim().slice(0, 30)}" se sale ${Math.round(spill)}px ` +
-              `(caja ${Math.round(box.height)}px, texto ${Math.round(text.height)}px)`,
-            spill: Math.round(spill),
-          });
-        }
-      }
-      // A walk that looked at nothing is not a walk that found nothing, and the two are
-      // indistinguishable from an empty array. The caller asserts on this before anything else.
-      return { examined, markers: [...markers], found: out };
-    });
-  }
-
   /**
    * **Lo que desborda hoy, y la lista solo puede encoger.**
    *
@@ -12969,4 +12980,266 @@ describe("sprint 20 día 5 — el cierre, con las dos barras movidas", () => {
       await context.close();
     }
   }, 180_000);
+});
+
+describe("nada sobresale en un móvil", () => {
+  /**
+   * **Sprint 21, día 1: la aplicación entera medida en un teléfono, por primera vez.**
+   *
+   * David, el 15 de octubre de 2026: «quiero que al abrir la aplicación web de Retorika esta se
+   * adapte al tamaño de pantalla… que ningún elemento sobresale, ningún texto sobresale de su botón
+   * y ningún elemento termina cortado por la pantalla». Medido ese día en la aplicación desplegada,
+   * a 390 y a 320: las rejillas de opciones en tres columnas pintaban «Que me manden un correo»
+   * fuera de su caja; cada una de las tres propuestas medía 60px y enseñaba el 17 % de su
+   * miniatura; y el grupo derecho de la cabecera del editor, de 673px fijos, abría la página a
+   * 822px, con «Descargar» fuera de la pantalla y el lienzo a escala 0,36. ADR 0042 es la decisión;
+   * esto es la medida.
+   *
+   * **Tres anchos, cada uno con su propio contexto `isMobile`.** No es `setViewportSize` sobre una
+   * ventana de escritorio: un móvil emulado tiene la meta `viewport` activa, pantalla táctil y
+   * densidad 2, y es en ese modo donde una página más ancha que el dispositivo **se abre más ancha**
+   * en vez de desplazarse — por eso lo primero que se asevera es `innerWidth === width`, que es el
+   * detector de ese hinchado, y el ancho del dispositivo viaja desde Node en lugar de leerse dentro.
+   *
+   * **Tres cosas por pantalla, y la tercera es la que faltaba.** (1) Nada fuera de la pantalla:
+   * cada elemento visible, recortado por sus ancestros con desplazamiento —una tira de pestañas,
+   * una hoja que hace scroll— queda entre 0 y `width`. (2) Ningún texto fuera de su botón: el
+   * sondeo por `Range` de octubre, no `scrollWidth`, que en un botón con `overflow: visible` no
+   * mide nada. (3) **Nada cortado**: un elemento dentro de un ancestro con `overflow: hidden` o
+   * `clip` —que no se puede desplazar— tiene que caber entero en él. Es lo que las dos primeras
+   * no ven y lo que David vio: la miniatura de una propuesta recortada por su caja no sobresale de
+   * la pantalla ni saca texto de un botón, y aun así enseña el 17 % de la web. Un `truncate` no
+   * cuenta: recorta su propio texto, no un elemento.
+   *
+   * **Y una cuarta en la clase teléfono (≤ 720):** todo `input`, `textarea` y `select` visible
+   * tiene letra computada de al menos 16px, porque Safari en iOS amplía la página entera al enfocar
+   * un campo más pequeño y deshacerlo queda a cargo de quien edita. Los textos del lienzo son del
+   * sitio, no del editor, y el ADR dice qué pasa con ellos.
+   *
+   * **Un `it` por pantalla, y los hallazgos se juntan antes de aseverar.** Cada pantalla navega
+   * primero y asevera al final, de modo que un rojo en las propuestas no deja al editor sin camino
+   * por el que llegar. Las pantallas que arreglan los días 2, 3 y 4 están como `it.fails` con el
+   * día escrito al lado: CI no se relaja, y cada día convierte exactamente una en `it`.
+   */
+  const DEVICES = [
+    { width: 320, height: 568 },
+    { width: 390, height: 844 },
+    { width: 768, height: 1024 },
+  ] as const;
+
+  type Fit = {
+    innerWidth: number;
+    scrollWidth: number;
+    outside: string[];
+    cut: string[];
+    smallFields: string[];
+  };
+
+  async function fit(page: Page, width: number): Promise<Fit> {
+    // The phone class of ADR 0042 is the renderer's own breakpoint, imported rather than written
+    // again — and passed in, because the browser side of `evaluate` cannot see a module constant.
+    return page.evaluate(
+      ({ expected, phone }: { expected: number; phone: number }) => {
+        const describe = (el: Element) => {
+          const tag = el.tagName.toLowerCase();
+          const id = (el as HTMLElement).dataset.testid;
+          const label = el.getAttribute("aria-label") ?? (el.textContent ?? "").trim().slice(0, 36);
+          return `${tag}${id ? `[${id}]` : ""} «${label}»`;
+        };
+        const outside: string[] = [];
+        const cut: string[] = [];
+        const small: string[] = [];
+        const fields = 'input, textarea, select, [contenteditable="true"]';
+        const decorative = ["radio", "checkbox", "file", "color", "range", "hidden"];
+
+        for (const el of document.querySelectorAll<HTMLElement>("body *")) {
+          const style = getComputedStyle(el);
+          if (style.display === "none" || style.visibility === "hidden") continue;
+          // Visually-hidden helpers are outside their own box on purpose — that is the technique.
+          if (style.clip !== "auto" || style.clipPath !== "none") continue;
+          const own = el.getBoundingClientRect();
+          if (own.width === 0 || own.height === 0) continue;
+
+          let left = own.left;
+          let right = own.right;
+          for (let node = el.parentElement; node; node = node.parentElement) {
+            const owner = getComputedStyle(node);
+            if (owner.overflowX === "visible" && owner.overflowY === "visible") continue;
+            const box = node.getBoundingClientRect();
+            const scrolls =
+              owner.overflowX === "auto" ||
+              owner.overflowX === "scroll" ||
+              owner.overflowY === "auto" ||
+              owner.overflowY === "scroll";
+            if (scrolls) {
+              // Reachable by scrolling: only the visible part is held to the screen's edges.
+              left = Math.max(left, box.left);
+              right = Math.min(right, box.right);
+            } else if (
+              own.left < box.left - 0.5 ||
+              own.right > box.right + 0.5 ||
+              own.top < box.top - 0.5 ||
+              own.bottom > box.bottom + 0.5
+            ) {
+              // `hidden` or `clip`, with no scrollbar to reach the rest: whatever is past the box
+              // is gone for good. That is «cortado».
+              cut.push(
+                `${describe(el)} (${Math.round(own.width)}×${Math.round(own.height)}) recortado por ` +
+                  `${describe(node)} (${Math.round(box.width)}×${Math.round(box.height)})`,
+              );
+              break;
+            }
+          }
+          if (right - left > 0 && (left < -0.5 || right > expected + 0.5)) {
+            outside.push(`${describe(el)} ocupa ${Math.round(left)}–${Math.round(right)}`);
+          }
+
+          if (expected <= phone && el.matches(fields)) {
+            const type = el.getAttribute("type") ?? "";
+            if (decorative.includes(type)) continue;
+            const px = Number.parseFloat(style.fontSize);
+            if (px < 16) small.push(`${describe(el)} con letra de ${px}px`);
+          }
+        }
+        return {
+          innerWidth: window.innerWidth,
+          scrollWidth: document.documentElement.scrollWidth,
+          outside,
+          cut,
+          smallFields: small,
+        };
+      },
+      { expected: width, phone: PHONE_BREAKPOINT },
+    );
+  }
+
+  /** Everything wrong with the screen as it is now, as lines; empty is the only passing answer. */
+  async function problems(page: Page, width: number, where: string): Promise<string[]> {
+    const seen = await fit(page, width);
+    const out: string[] = [];
+    const at = `${where} @ ${width}px`;
+    if (seen.innerWidth !== width) {
+      out.push(`${at}: la página se abre a ${seen.innerWidth}px en un dispositivo de ${width}`);
+    }
+    if (seen.scrollWidth > width) {
+      out.push(`${at}: la página se desplaza en horizontal (${seen.scrollWidth}px)`);
+    }
+    for (const line of seen.outside) out.push(`${at}: fuera de la pantalla — ${line}`);
+    for (const line of seen.cut) out.push(`${at}: cortado — ${line}`);
+    for (const line of seen.smallFields) out.push(`${at}: Safari lo ampliaría — ${line}`);
+    for (const line of await overflowing(page))
+      out.push(`${at}: texto fuera de su botón — ${line}`);
+    return out;
+  }
+
+  for (const device of DEVICES) {
+    describe(`en un dispositivo de ${device.width}×${device.height}`, () => {
+      let context: BrowserContext;
+      let walker: Page;
+      const found: string[] = [];
+      const look = async (where: string) => {
+        found.push(...(await problems(walker, device.width, where)));
+      };
+
+      beforeAll(async () => {
+        context = await browser.newContext({
+          viewport: { width: device.width, height: device.height },
+          isMobile: true,
+          hasTouch: true,
+          deviceScaleFactor: 2,
+        });
+        walker = await context.newPage();
+      });
+
+      afterAll(async () => {
+        await context?.close();
+      });
+
+      it("la landing y las cinco preguntas", async () => {
+        await walker.goto(BASE_URL, { waitUntil: "networkidle" });
+        await look("landing");
+        await walker.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+        await look("paso 1");
+        await walker.fill("#nombre", "Taberna Santo Domingo");
+        await walker.getByRole("button", { name: "Siguiente" }).click();
+        await look("paso 2");
+        await walker.getByText("Restaurante y bar", { exact: true }).click();
+        await walker.getByRole("button", { name: "Siguiente" }).click();
+        await look("paso 3");
+        await walker.getByText("Comidas", { exact: true }).click();
+        await walker.getByRole("button", { name: "Siguiente" }).click();
+        await look("paso 4");
+        await walker.fill("#direccion", "Cta. de Santo Domingo, 2, Ronda");
+        await walker.getByRole("button", { name: "Siguiente" }).click();
+        await look("paso 5");
+        await walker.getByText("Que reserven", { exact: true }).click();
+        await walker.fill("#enlace", "https://reservas.example.com/taberna");
+        await look("paso 5 con enlace");
+        expect(found, found.join("\n")).toEqual([]);
+      }, 300_000);
+
+      // Día 2 del sprint 21: la miniatura de cada propuesta se escala al ancho que tiene.
+      it.fails("las tres propuestas", async () => {
+        found.length = 0;
+        await walker.getByRole("button", { name: "Crear mi web" }).click();
+        await walker.getByText("Ver a tamaño real →").first().waitFor();
+        await look("las tres propuestas");
+        expect(found, found.join("\n")).toEqual([]);
+      }, 300_000);
+
+      // Días 3 y 4 del sprint 21: la cabecera en filas, la barra abajo, los paneles como hojas.
+      it.fails("el editor, sus paneles, una sección y un texto elegidos, y los dos dispositivos", async () => {
+        found.length = 0;
+        await walker.getByText("Ver a tamaño real →").first().click();
+        const frame = walker.frameLocator(PREVIEW).first();
+        await frame.locator('[data-section="sec-cover"]').waitFor();
+        await waitForBankPhoto(frame);
+        // The save sentence arrives half a second after the editor does, and it is 200px of the
+        // header this walk exists to measure: the first run measured a header without it at 768
+        // and found it fitting, while the deployed one, given three seconds, opened at 821.
+        await expect(walker.getByText("Guardado en este navegador")).toBeVisible();
+        await look("editor");
+        for (const panel of ["Estilo", "Páginas", "Compartir", "Fotos"]) {
+          await walker.getByRole("button", { name: panel, exact: true }).click();
+          await look(`editor con «${panel}»`);
+        }
+        await walker.getByRole("button", { name: "Secciones", exact: true }).click();
+
+        await frame.locator('[data-section="sec-cover"]').click({ position: { x: 12, y: 12 } });
+        await expect(frame.locator(".rb-actions")).toHaveCount(1);
+        await look("editor con una sección elegida");
+        const inside = await spillingInsideTheCanvas(walker);
+        for (const spill of inside.found) {
+          found.push(`lienzo @ ${device.width}px: ${spill.what} ${spill.text}`);
+        }
+        await frame.locator('[data-section="sec-cover"] h1').first().click();
+        await expect(frame.locator(".rb-toolbar")).toHaveCount(1);
+        await look("editor con un texto elegido");
+
+        await walker.getByRole("button", { name: "Ver en ordenador" }).click();
+        await look("editor en vista de ordenador");
+        await walker.getByRole("button", { name: "Ver en móvil" }).click();
+        await look("editor en vista de móvil");
+
+        // A click that cannot land is a finding, not a crash: at 320 and 390 the first run died
+        // here with «another element receives pointer events» and took the list above with it.
+        // The button sits in the part of the header that opens past the screen, and something
+        // in front of it takes the tap — recorded, so the day that fixes the header sees it.
+        try {
+          await walker
+            .getByRole("button", { name: "Guardar en mi cuenta" })
+            .click({ timeout: 10_000 });
+          await expect(walker.getByRole("dialog")).toBeVisible();
+          await look("el diálogo de la cuenta");
+          await walker.keyboard.press("Escape");
+        } catch (error) {
+          const why = error instanceof Error ? error.message.split("\n")[0] : String(error);
+          found.push(
+            `editor @ ${device.width}px: «Guardar en mi cuenta» no se puede pulsar — ${why}`,
+          );
+        }
+        expect(found, found.join("\n")).toEqual([]);
+      }, 300_000);
+    });
+  }
 });
