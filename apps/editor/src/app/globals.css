@@ -459,36 +459,44 @@
  * writes it down) and on none in the questionnaire, where the thing under the pointer should be
  * whatever the person is answering.
  *
- * **Two shadows in both keyframes, because a `box-shadow` list only interpolates against a list
- * of the same length.** The second is the element's resting shadow, handed in by the caller
- * through `--ui-ring-rest` — the proposals' chosen card rests on `0 0 0 3px` of brand tint, and a
- * one-shadow `from` growing into a two-shadow `to` would have made the browser give up and swap
- * discretely at the halfway point instead of growing.
+ * **It rings on `::after`, and the first version did not — which cost the chosen proposal its
+ * entrance.** An element can carry one `animation` property, so a card wearing `ui-reveal` *and*
+ * `ui-ring-once` got whichever utility the stylesheet emitted last, and that was the ring: the
+ * recommended card appeared instantly while its two neighbours slid in, with nothing in the
+ * markup to suggest why. Measured in Chromium on 15 October 2026 — `animationName` read
+ * `ui-ring-once` on the middle card and `ui-reveal` on the others.
  *
- * **`backwards` for the same reason `ui-reveal` is**: with `forwards` the finished ring would keep
- * `box-shadow` under animation control for the life of the page, and `ui-lift`'s hover shadow —
- * on the same card — would never be drawn. Before the delay the `from` keyframe is a ring of zero
- * spread, which is to say the card's own resting shadow and nothing else.
+ * On a pseudo-element the two compose: the card keeps its own entrance and the ring is a second
+ * box that arrives, expands and goes. It also stops the ring fighting `ui-lift` for `box-shadow`
+ * on an element that wears both, which «Empezar» on the landing does.
  *
- * The delay is 500ms so that the ring begins after the entrance it belongs to has landed: a card
- * cannot be pointed at while it is still arriving.
+ * `position: relative` on the host, because the ring is `position: absolute` and has to be
+ * anchored to the thing it is pointing at. `border-radius: inherit` so it rings the shape rather
+ * than a rectangle, and `pointer-events: none` so it is never in the way of the press it is
+ * inviting. The delay is 500ms, so the ring begins after the entrance it belongs to has landed: a
+ * card cannot be pointed at while it is still arriving.
  */
 @keyframes ui-ring-once {
   from {
-    box-shadow:
-      0 0 0 0 color-mix(in srgb, var(--ui-brand) 45%, transparent),
-      var(--ui-ring-rest, 0 0 0 0 transparent);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--ui-brand) 45%, transparent);
   }
 
   to {
-    box-shadow:
-      0 0 0 14px transparent,
-      var(--ui-ring-rest, 0 0 0 0 transparent);
+    box-shadow: 0 0 0 14px transparent;
   }
 }
 
 @utility ui-ring-once {
-  animation: ui-ring-once 700ms var(--ui-ease-shape) 500ms 1 backwards;
+  position: relative;
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    animation: ui-ring-once 700ms var(--ui-ease-shape) 500ms 1 backwards;
+  }
 }
 
 /**
@@ -537,6 +545,42 @@
 .ui-steps li::marker {
   color: var(--ui-brand-deep);
   font-weight: 700;
+}
+
+/**
+ * **The thumbnail's edge, and the arrow, answering the card they are in** (sprint 22 day 4).
+ *
+ * Two rules rather than two more class names on the elements themselves, because what they react
+ * to is the *card's* hover, not their own: a pointer anywhere on a proposal lights that proposal's
+ * preview and leans its «Ver a tamaño real» arrow out a couple of pixels. CSS can say «while my
+ * ancestor is hovered»; an inline style cannot say anything at all.
+ *
+ * **Behind `@media (hover: hover)`, and nothing here scales.** A `transform` on the box above a
+ * live `<iframe>` makes Chromium re-raster that frame every frame — three generated sites at once,
+ * on the screen the dossier calls the most important in the product. A border colour and two
+ * pixels of text cost nothing.
+ */
+.ui-thumb {
+  /* The resting edge of a proposal's preview. Here rather than inline so the hover rule below can
+     win: an inline `border` beats every stylesheet rule, whatever its specificity — measured, in
+     the first version of this, as an edge that stayed `#EDF1F6` under the pointer. */
+  border-color: #edf1f6;
+}
+
+.ui-arrow {
+  /* `transform` does not apply to a non-replaced inline box, which an arrow in a line of text is
+     by default. `inline-block` is what makes the two pixels below happen at all. */
+  display: inline-block;
+}
+
+@media (hover: hover) {
+  .ui-lift:hover .ui-thumb {
+    border-color: var(--ui-brand);
+  }
+
+  .ui-lift:hover .ui-arrow {
+    transform: translateX(2px);
+  }
 }
 
 /**
