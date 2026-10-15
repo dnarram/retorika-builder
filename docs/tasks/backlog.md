@@ -807,6 +807,26 @@ open survives.
 
 ## No home but this one
 
+- **The field you are typing in moves 7.9px while you filter the sectors.** Measured 15 October
+  2026 (sprint 22 day 3) at 1280 × 720: typing «rest» into step 2's search takes the grid from
+  263px of height to 56, and because `Shell` centres the card vertically, everything above the
+  grid rides down with it — **the search field itself goes from y 302.13 to 310.02 under the
+  fingers that are typing into it.** Twelve labels become three; empty the field and it goes back.
+
+  **It is not an animation and it is not new.** It is the vertical centring meeting a card that
+  legitimately changes height, and it predates every animation this sprint added — measured with
+  `document.getAnimations()` reporting zero running in all three states. Found because a sprint 22
+  e2e asserted the grid did not move while typing, which is simply false; that assertion now
+  checks what the motion budget actually promises (nothing animates) and this row holds what was
+  found instead.
+
+  **Why it is a row and not a fix.** The cause is `justifyContent: "center"` in `Shell`, which
+  places every one of the five questions and the three sign-in screens. Changing it moves all of
+  them, against mockups that draw them centred — a decision about the questionnaire's layout, not
+  a correction to make in passing on a day about motion. The cheaper shapes, if it is taken up: a
+  `min-height` on the grid that holds the tallest arrangement, or centring the card only when it
+  is shorter than the window.
+
 - ~~**Accounts and persistence with Supabase, and charging — deferred, not scheduled.**~~ **This
   row was one row and should have been two, which is exactly what let it sit untouched for a
   sprint.** Split on 4 October 2026, closing sprint 15.

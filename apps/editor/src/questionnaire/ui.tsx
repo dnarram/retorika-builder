@@ -269,6 +269,11 @@ export function Card({
 }) {
   return (
     <div
+      /* **The card arrives, once per question.** `Questionnaire.tsx` renders one step at a time,
+         so a new card is mounted on every «Siguiente» and the entrance plays for each question
+         rather than once for the whole flow. `ui-reveal` fills `backwards`, so it holds nothing
+         after it lands — see `globals.css`. */
+      className="ui-reveal"
       style={{
         width,
         maxWidth: "100%",
@@ -303,12 +308,18 @@ export function Card({
 export const REVEAL_STAGGER_CAP = 7;
 
 /**
- * The delay a card at position `index` waits before revealing itself, as the CSS the caller hands
- * to `--ui-reveal-delay`. `calc` on the token rather than arithmetic on 40, so the rhythm of the
- * whole application stays the one line in `globals.css` that declares it.
+ * A card's place in the queue, as the style object the caller spreads into its own.
+ *
+ * `calc` on the token rather than arithmetic on 40, so the rhythm of the whole application stays
+ * the one line in `globals.css` that declares it. And a **style object** rather than a string
+ * because a custom property in an inline `style` is not in React's `CSSProperties`: every call
+ * site would otherwise need `as React.CSSProperties`, which is a cast repeated for a reason that
+ * has nothing to do with the call site. Spread, the cast lives here once.
  */
-export function revealDelay(index: number): string {
-  return `calc(var(--ui-stagger) * ${Math.min(index, REVEAL_STAGGER_CAP)})`;
+export function reveal(index: number): CSSProperties {
+  return {
+    "--ui-reveal-delay": `calc(var(--ui-stagger) * ${Math.min(index, REVEAL_STAGGER_CAP)})`,
+  } as CSSProperties;
 }
 
 /**
@@ -401,6 +412,11 @@ export function TextField({
 export function FieldError({ children }: { children: ReactNode }) {
   return (
     <span
+      /* **Opacity only, which is the whole reason this is `ui-fade-in` and not `ui-reveal`.** An
+         error takes its space the instant it appears — that is honest, and it is what the e2e
+         «el aviso reserva su sitio» measures — so only its ink arrives late. A `translateY` here
+         would move a message somebody is already reading. */
+      className="ui-fade-in"
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -454,6 +470,7 @@ export function ChoiceCard({
   onSelect,
   dashed = false,
   fullWidth = false,
+  index = 0,
 }: {
   name: string;
   value: string;
@@ -462,6 +479,8 @@ export function ChoiceCard({
   onSelect: () => void;
   dashed?: boolean;
   fullWidth?: boolean;
+  /** Its place in the grid, which is its place in the queue of arrivals. */
+  index?: number;
 }) {
   return (
     <label
@@ -470,8 +489,9 @@ export function ChoiceCard({
          of lift and a shadow, behind `@media (hover: hover)` so a tap does not leave a card
          looking chosen. `transform` touches no layout, so the grid walk that caught a card moving
          6.5px under the pointer on sprint 21 day 1 measures exactly what it measured then. */
-      className="ui-interactive ui-lift"
+      className="ui-reveal ui-interactive ui-lift"
       style={{
+        ...reveal(index),
         display: "flex",
         alignItems: "center",
         gap: 10,
@@ -517,6 +537,11 @@ export function ChoiceCard({
           colours and nothing that measures. */}
       <span
         aria-hidden="true"
+        /* `key` so React mounts a new span when the state flips, which is what makes a keyframe
+           entrance play at all — an element that was already there has no mount to animate on.
+           The reserved `visibility` box above is untouched, so nothing that measures changes. */
+        key={selected ? "on" : "off"}
+        className={selected ? "ui-fade-in" : undefined}
         style={{
           display: "inline-flex",
           flexShrink: 0,
@@ -533,15 +558,19 @@ export function CheckboxCard({
   label,
   checked,
   onChange,
+  index = 0,
 }: {
   label: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
+  /** Its place in the list, which is its place in the queue of arrivals. */
+  index?: number;
 }) {
   return (
     <label
-      className="ui-interactive ui-lift"
+      className="ui-reveal ui-interactive ui-lift"
       style={{
+        ...reveal(index),
         display: "flex",
         alignItems: "center",
         gap: 12,

@@ -38,8 +38,21 @@ import {
  * The classes `ui-hammer` and `ui-block` carry the keyframes (`globals.css`); under
  * `prefers-reduced-motion` the global rule leaves each animation at one 0.01 ms iteration, so the
  * mark rests in its final state — which is the logo, still.
+ *
+ * **`once` builds the mark a single time and leaves it built** (sprint 22 day 3), which is what the
+ * landing needs: the logo assembling itself as the page arrives, not a loop. On the building screen
+ * the cycle repeats because something is genuinely still being written; on a landing a repeating
+ * hammer would be an ornament tapping for attention, which the restraint budget spends elsewhere.
+ *
+ * **It is two inline properties rather than a `ui-once` utility, and that is deliberate.** A
+ * utility would have to beat `ui-hammer`'s own `animation` shorthand, and which of two custom
+ * utilities wins depends on the order Tailwind happens to emit them in — a thing that works until
+ * somebody reorders this file's blocks. An inline style beats both, always, and says so where it
+ * is read. `both` holds the final keyframe: the hammer at rest and the three blocks in place,
+ * which is the logo.
  */
-export function BuildingMark({ size = 120 }: { size?: number }) {
+export function BuildingMark({ size = 120, once = false }: { size?: number; once?: boolean }) {
+  const single = once ? { animationIterationCount: 1, animationFillMode: "both" as const } : {};
   return (
     <svg
       viewBox={`0 0 ${MARK_WIDTH} ${MARK_HEIGHT}`}
@@ -85,6 +98,7 @@ export function BuildingMark({ size = 120 }: { size?: number }) {
         style={{
           transformOrigin: `${HAMMER_PIVOT.x}px ${HAMMER_PIVOT.y}px`,
           transformBox: "view-box",
+          ...single,
         }}
       >
         <image {...MARK_COLOUR} preserveAspectRatio="none" clipPath="url(#rb-mark-hammer)" />
@@ -102,6 +116,7 @@ export function BuildingMark({ size = 120 }: { size?: number }) {
             transformOrigin: "50% 100%",
             transformBox: "fill-box",
             animationDelay: `${index * 90}ms`,
+            ...single,
           }}
         />
       ))}

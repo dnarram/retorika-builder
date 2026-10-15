@@ -492,6 +492,54 @@
 }
 
 /**
+ * **Colour that moves, and the one thing on the landing allowed to loop.**
+ *
+ * Two soft discs of the brand's own blues, drifting 24px right and 18px up over 24 seconds and
+ * back. It is the «colores en movimiento» of this sprint's brief answered at the slowest speed
+ * that still reads as alive: at 24s nothing on screen appears to move while you look at it, and a
+ * page left open for a minute is never quite the same page. The restraint budget gives the landing
+ * exactly one looping animation and this spends it (`test/motionBudget.test.ts`).
+ *
+ * **`translate3d` and nothing else.** No `filter: blur`, which is the most expensive thing CSS can
+ * ask of a phone and would be repainting a 560px disc sixty times a second; a radial gradient is
+ * rasterised once and then only composited. `will-change: transform` is what buys the disc its own
+ * layer so the 24s loop costs no repaint of the text above it — measured as two composited layers
+ * and nothing else promoted.
+ *
+ * The discs are `aria-hidden`, `pointer-events: none`, and sized and placed so they stay inside
+ * their container at **every** keyframe, which is not decoration: the overflow walk at 320/390/768
+ * reports anything whose box leaves the screen or is cut by an `overflow: hidden` ancestor, and a
+ * disc that drifted past the edge would be a real finding about a thing nobody can see.
+ */
+@keyframes ui-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+
+  50% {
+    transform: translate3d(24px, -18px, 0);
+  }
+}
+
+@utility ui-drift {
+  animation: ui-drift 24s linear infinite;
+  will-change: transform;
+}
+
+/**
+ * The numerals of «Cómo funciona», in the palette's secondary rather than in the ink.
+ *
+ * A rule rather than an inline style because `::marker` is a pseudo-element and `style` cannot
+ * reach one — the same reason the focus ring lives here. Scoped to the class so it is the landing's
+ * list and not every `<ol>` the application might grow.
+ */
+.ui-steps li::marker {
+  color: var(--ui-brand-deep);
+  font-weight: 700;
+}
+
+/**
  * **A focus ring, which this application did not have.** `:focus-visible` appeared nowhere in
  * `apps/editor`, so a keyboard user got whatever the browser drew by default — which on the rail's
  * transparent buttons and the top bar's icon buttons is close to nothing.

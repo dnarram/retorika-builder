@@ -212,7 +212,7 @@ export function Step2Sector({
         >
           {es["questionnaire.step2.fieldset.label"]}
         </legend>
-        {visible.map((id) => (
+        {visible.map((id, position) => (
           <ChoiceCard
             key={id}
             name="sector"
@@ -220,6 +220,7 @@ export function Step2Sector({
             label={es[`questionnaire.sector.${id}` as keyof typeof es]}
             selected={answers.sector === id}
             onSelect={() => update({ sector: id })}
+            index={position}
           />
         ))}
         <ChoiceCard
@@ -230,6 +231,9 @@ export function Step2Sector({
           onSelect={() => update({ sector: "otro" as SectorId })}
           dashed
           fullWidth={answers.sector === "otro"}
+          /* Last in the queue however many sectors the search left visible — «Otro sector» is
+             always the card after the ones that matched. */
+          index={visible.length}
         />
       </fieldset>
 
