@@ -7551,6 +7551,181 @@ describe("sprint 22 día 3 — la landing respira y las preguntas entran", () =>
   }, 120_000);
 });
 
+/**
+ * **Sprint 22 día 4 — las tres propuestas llegan, y la elegida lo dice una vez.**
+ *
+ * El dossier llama a esta «la pantalla más importante del producto: aquí es donde el usuario decide
+ * si sigue o se va a Canva», así que lo que se cuida aquí no es que haya movimiento, sino que el
+ * movimiento no le quite nada a la decisión:
+ *
+ * 1. Las tres **llegan en orden** y se quedan quietas, muy por debajo de los 2000 ms que la prueba
+ *    de la maqueta 06 permite entre la quinta respuesta y tres webs montadas.
+ * 2. La elegida **suena una vez** y no pierde su tinte de reposo al terminar.
+ * 3. Al pasar el ratón, la tarjeta se eleva y el borde de su miniatura se enciende — **y el marco
+ *    de la vista previa no se toca**, que es la razón por la que no se escala la miniatura.
+ */
+describe("sprint 22 día 4 — las tres propuestas llegan", () => {
+  /** Las cinco respuestas y «Crear mi web», sin entrar en el editor. */
+  async function toTheProposals(page: Page): Promise<number> {
+    await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+    await page.fill("#nombre", "Taberna Santo Domingo");
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Restaurante y bar", { exact: true }).click();
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Comidas", { exact: true }).click();
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.fill("#direccion", "Cta. de Santo Domingo, 2, Ronda");
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Que reserven", { exact: true }).click();
+    await page.fill("#enlace", "https://reservas.example.com/taberna");
+    const started = Date.now();
+    await page.getByRole("button", { name: "Crear mi web" }).click();
+    await page.getByText("Ver a tamaño real →").first().waitFor();
+    return Date.now() - started;
+  }
+
+  const CARDS = "div.ui-reveal.ui-lift";
+
+  it("llegan una tras otra, y están quietas enseguida", async () => {
+    const visitor = await (
+      await browser.newContext({ viewport: { width: 1280, height: 950 } })
+    ).newPage();
+    try {
+      const built = await toTheProposals(visitor);
+      const cards = visitor.locator(CARDS);
+      await expect(cards).toHaveCount(3);
+
+      // Cada una un escalón por detrás de la anterior, en el ritmo que `--ui-stagger` declara.
+      const entrances = await cards.evaluateAll((els) =>
+        els.map((el) => {
+          const style = getComputedStyle(el);
+          return { name: style.animationName, delay: style.animationDelay };
+        }),
+      );
+      expect(entrances.map((e) => e.name)).toEqual(["ui-reveal", "ui-reveal", "ui-reveal"]);
+      expect(entrances.map((e) => e.delay)).toEqual(["0s", "0.04s", "0.08s"]);
+
+      // Y la llegada entera cabe de sobra en lo que la maqueta 06 permite: la última tarjeta
+      // descansa a 80ms + 260 de recorrido, sobre un montaje que mide decenas de milisegundos.
+      await motionSettled(visitor);
+      expect(built, "las propuestas tardaron más de lo que la maqueta 06 permite").toBeLessThan(
+        2_000,
+      );
+      expect(
+        await visitor.evaluate(
+          () => document.getAnimations().filter((a) => a.playState === "running").length,
+        ),
+      ).toBe(0);
+    } finally {
+      await visitor.context().close();
+    }
+  }, 180_000);
+
+  it("la elegida suena una vez, en su propia sombra, y se queda con su tinte", async () => {
+    const visitor = await (
+      await browser.newContext({ viewport: { width: 1280, height: 950 } })
+    ).newPage();
+    try {
+      await toTheProposals(visitor);
+      const cards = visitor.locator(CARDS);
+
+      /**
+       * **El anillo vive en un `::after`, y esa es la corrección que esta prueba guarda.**
+       *
+       * Un elemento solo lleva una propiedad `animation`, así que una tarjeta con `ui-reveal` y
+       * `ui-ring-once` se quedaba con la utilidad que la hoja de estilos emitiera la última — el
+       * anillo — y **la tarjeta recomendada aparecía de golpe mientras sus dos vecinas entraban
+       * deslizándose**, sin nada en el marcado que lo explicara. Medido en Chromium el 15 de
+       * octubre de 2026. En un pseudoelemento las dos se componen.
+       */
+      const rings = await cards.evaluateAll((els) =>
+        els.map((el) => {
+          const after = getComputedStyle(el, "::after");
+          return { name: after.animationName, iterations: after.animationIterationCount };
+        }),
+      );
+      expect(rings.map((r) => r.name)).toEqual(["none", "ui-ring-once", "none"]);
+      expect(rings[1]?.iterations, "el anillo se repite").toBe("1");
+
+      // Y cuando ha pasado, la tarjeta elegida conserva los 3px de tinte que la marcan: el anillo
+      // no se lleva por delante la sombra de reposo, porque nunca fue la misma propiedad.
+      await motionSettled(visitor);
+      expect(await cards.nth(1).evaluate((el) => getComputedStyle(el).boxShadow)).toContain(
+        "0px 0px 0px 3px",
+      );
+      // Una sola pulsación en toda la pantalla, que es lo que el presupuesto permite.
+      expect(rings.filter((r) => r.name === "ui-ring-once").length).toBe(1);
+    } finally {
+      await visitor.context().close();
+    }
+  }, 180_000);
+
+  it("se eleva y enciende su miniatura al pasar el ratón, sin tocar el marco de la vista previa", async () => {
+    const visitor = await (
+      await browser.newContext({ viewport: { width: 1280, height: 950 } })
+    ).newPage();
+    try {
+      await toTheProposals(visitor);
+      await motionSettled(visitor);
+      const card = visitor.locator(CARDS).first();
+      const probe = () =>
+        card.evaluate((el) => ({
+          card: getComputedStyle(el).transform,
+          thumb: getComputedStyle(el.querySelector(".ui-thumb") as Element).borderTopColor,
+          arrow: getComputedStyle(el.querySelector(".ui-arrow") as Element).transform,
+          // El contenedor que escala la página: lo que **no** puede moverse.
+          frame: getComputedStyle(
+            (el.querySelector("iframe") as HTMLElement).parentElement as Element,
+          ).transform,
+        }));
+
+      const rest = await probe();
+      expect(rest.card).toBe("none");
+      expect(rest.arrow).toBe("none");
+
+      await card.hover();
+      await visitor.waitForTimeout(260);
+      const hovered = await probe();
+      expect(hovered.card, "la tarjeta no se eleva").toBe("matrix(1, 0, 0, 1, 0, -1)");
+      expect(hovered.thumb, "el borde de la miniatura no se enciende").toBe("rgb(21, 111, 231)");
+      expect(hovered.arrow, "la flecha no se asoma").toBe("matrix(1, 0, 0, 1, 2, 0)");
+
+      /**
+       * **La aserción por la que la miniatura no se escala.** Un `transform` sobre el ancestro de
+       * un `<iframe>` vivo hace que Chromium vuelva a rasterizar la capa de ese marco en cada
+       * fotograma: tres documentos de verdad, sesenta veces por segundo, en la pantalla donde se
+       * decide si el producto sirve. Lo que se mueve es la tarjeta; el marco se queda igual.
+       */
+      expect(hovered.frame, "el marco de la vista previa se ha transformado").toBe(rest.frame);
+    } finally {
+      await visitor.context().close();
+    }
+  }, 180_000);
+
+  it("no mueve nada para quien ha pedido menos movimiento", async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 950 },
+      reducedMotion: "reduce",
+    });
+    const visitor = await context.newPage();
+    try {
+      await toTheProposals(visitor);
+      // La regla global deja cada animación en una iteración de 0,01 ms: las tres tarjetas están
+      // en su sitio y el anillo ha terminado antes de que nadie pueda verlo.
+      await expect
+        .poll(() =>
+          visitor.evaluate(() => document.getAnimations().every((a) => a.playState === "finished")),
+        )
+        .toBe(true);
+      await expect(visitor.locator(CARDS)).toHaveCount(3);
+      // Y la pantalla sigue diciendo cuál es la elegida, que es información y no movimiento.
+      await expect(visitor.getByText("Elegida")).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+});
+
 describe("sprint 15 día 6 — la pantalla de la cuenta", () => {
   /**
    * What «borrar de verdad» looks like from outside, as far as it can be walked without a session.

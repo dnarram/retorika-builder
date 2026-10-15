@@ -86,7 +86,7 @@ import {
   thumbnailHeight,
   thumbnailScale,
 } from "./proposalsRow.ts";
-import { Brand } from "./ui.tsx";
+import { Brand, reveal } from "./ui.tsx";
 
 /** The catalog's own Spanish name for a section, e.g. `section.cover.name` → "Portada" —
  * what the delete toast (ADR 0014) names, since "Has borrado la sección «sec-cover»" would not
@@ -180,13 +180,26 @@ function ThumbnailFrame({ html, title }: { html: string; title: string }) {
   return (
     <div
       ref={box}
+      /**
+       * **The border is what answers the pointer here, and that is a decision rather than a
+       * preference.** A scale on the thumbnail would be a `transform` on the ancestor of a live
+       * `<iframe>`, which makes Chromium re-raster that frame's layer every frame — three real
+       * documents, sixty times a second, on the screen the dossier calls the most important in
+       * the product. The card lifts, the edge lights up, and nothing above the frame moves.
+       */
+      className="ui-interactive ui-thumb"
       style={{
         width: "100%",
         height: thumbnailHeight(scale),
         overflow: "hidden",
         borderRadius: 8,
-        border: `${THUMBNAIL_BORDER}px solid #EDF1F6`,
-        background: "#FFFFFF",
+        /* The width stays here, because `thumbnailHeight` adds exactly these two hairlines back.
+           The **colour** lives in `.ui-thumb` (`globals.css`): an inline `border` would win over
+           the hover rule and the edge would never light up — measured, in the first version of
+           this, as a border that stayed `#EDF1F6` under the pointer. */
+        borderWidth: THUMBNAIL_BORDER,
+        borderStyle: "solid",
+        background: "var(--ui-surface)",
       }}
     >
       <div
@@ -1574,15 +1587,30 @@ export function Variants({
                 // all three carry the same document id, so that would not distinguish them.
                 // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length, never reordered
                 key={index}
+                /**
+                 * **The three arrive one after the other, and the chosen one says so once.**
+                 *
+                 * The dossier calls this «la pantalla más importante del producto: aquí es donde
+                 * el usuario decide si sigue o se va a Canva», so the order they arrive in is the
+                 * order they should be read in — left to right, 40ms apart, the last at rest
+                 * inside 340ms. That is far enough under the 2000ms the mockup-06 guard allows
+                 * between the fifth answer and three built sites that nothing here can turn the
+                 * «nothing to wait for» claim into a wait.
+                 *
+                 * `ui-reveal` fills `backwards`, so a landed card owns nothing and `ui-lift` can
+                 * still move it — the defect that rule exists to prevent, on exactly these cards.
+                 */
+                className={`ui-reveal ui-interactive ui-lift${highlighted ? " ui-ring-once" : ""}`}
                 style={{
+                  ...reveal(index),
                   display: "flex",
                   flexDirection: "column",
                   gap: 12,
                   padding: 14,
                   minWidth: 0,
                   scrollSnapAlign: "center",
-                  background: "#FFFFFF",
-                  border: highlighted ? "2px solid #156FE7" : "1px solid #E5E9F0",
+                  background: "var(--ui-surface)",
+                  border: highlighted ? "2px solid var(--ui-brand)" : "1px solid #E5E9F0",
                   boxShadow: highlighted ? "0 0 0 3px #E8F1FE" : undefined,
                   borderRadius: 14,
                 }}
@@ -1590,17 +1618,18 @@ export function Variants({
                 <div
                   style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}
                 >
-                  <span style={{ fontSize: 15, fontWeight: 600, color: "#0F172A" }}>
+                  <span style={{ fontSize: 15, fontWeight: 600, color: "var(--ui-ink)" }}>
                     {es[caption.titleKey]}
                   </span>
                   {highlighted ? (
                     <span
                       style={{
                         padding: "3px 9px",
-                        background: "#E8F1FE",
+                        background: "var(--ui-brand-surface)",
                         // The palette's secondary (ADR 0041 §3): the brand blue on this tint is
-                        // 4.14:1 at 11px, the secondary 5.79. Same first axe run, same day.
-                        color: "#105CB1",
+                        // 4.14:1 at 11px, the secondary 5.79. Same first axe run, same day — and
+                        // a token rather than a hex since sprint 22 day 1.
+                        color: "var(--ui-brand-deep)",
                         fontSize: 11,
                         fontWeight: 700,
                         borderRadius: 999,
@@ -1633,10 +1662,11 @@ export function Variants({
                 <button
                   type="button"
                   onClick={() => setOpenIndex(index)}
+                  className="ui-interactive"
                   style={{
                     fontSize: 12,
                     fontWeight: 600,
-                    color: "#156FE7",
+                    color: "var(--ui-brand-deep)",
                     background: "none",
                     border: 0,
                     padding: 0,
@@ -1644,20 +1674,28 @@ export function Variants({
                     textAlign: "left",
                   }}
                 >
-                  {es["variants.viewFull"]} →
+                  {es["variants.viewFull"]}{" "}
+                  {/* The arrow leans out a couple of pixels while the card is under the pointer —
+                      the smallest way to say «this opens something». It is inside the card and
+                      inside no `overflow: hidden`, so two pixels of travel are invisible to the
+                      walk that measures where boxes are. */}
+                  <span className="ui-slide ui-arrow" aria-hidden="true">
+                    →
+                  </span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setOpenIndex(index)}
+                  className="ui-interactive ui-lift"
                   style={{
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     minHeight: 46,
                     padding: "10px 12px",
-                    background: highlighted ? "#156FE7" : "#FFFFFF",
-                    color: highlighted ? "#FFFFFF" : "#334155",
+                    background: highlighted ? "var(--ui-brand)" : "var(--ui-surface)",
+                    color: highlighted ? "var(--ui-surface)" : "#334155",
                     fontSize: 14,
                     fontWeight: 600,
                     border: highlighted ? 0 : "1px solid #E5E9F0",
@@ -1680,12 +1718,13 @@ export function Variants({
             void clearPhotos();
             onRestart();
           }}
+          className="ui-interactive"
           style={{
             font: "inherit",
             fontSize: 14,
             fontWeight: 600,
             // Secondary blue on the page's grey, 6.14:1; the brand blue measured 4.39 here.
-            color: "#105CB1",
+            color: "var(--ui-brand-deep)",
             background: "none",
             border: 0,
             padding: 0,
