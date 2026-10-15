@@ -12,7 +12,48 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 15 October 2026, **closing sprint 20 — «las barras se mueven, los verbos hablan y la
+Last reviewed: 15 October 2026, **closing sprint 21 — «la aplicación cabe en un móvil».** The
+application's own chrome — not the published site, which has fitted a phone since sprint 2 — now
+answers to three width classes written down in ADR 0042 with the two numbers that already existed:
+phone ≤ 720 (the renderer's breakpoint), studio ≥ 1024 (`MIN_STUDIO_WIDTH`), tablet between. The
+five questions are fluid with no breakpoint; the three proposals are a carousel on a phone with the
+thumbnail scaled to the card it has; the editor's header is three rows on a phone and two on a
+tablet, its rail a bottom bar, its six panels and the fields drawer sheets from the bottom, and its
+canvas opens in the mobile view at zoom 1. Every field is 16px on a phone, so Safari does not zoom.
+The guard is a walk, «nada sobresale en un móvil», at 320, 390 and 768 under `isMobile`, green on
+all three with axe at 390.
+
+**What this sprint found that nobody was looking for:**
+
+1. **The header's 673px group opened the page at 822px on a 390 phone**, «Descargar» off-screen,
+   and nobody had decided the editor was desktop-only — a test comment had, citing an ADR that
+   decides something else. ADR 0042 is the decision that was missing.
+2. **A `<input>` will not shrink below its intrinsic width**, so the own-service row of step 3
+   opened the whole page at 370px on a 320 phone. `minWidth: 0`, and the row wraps.
+3. **`SharePanel`'s close button announced «Cerrar los campos»**, the fields drawer's label, copied
+   and never corrected; found putting five hand-drawn close buttons side by side to extract one.
+4. **`minHeight: 60vh` on the preview wrapper clipped 146px of the live page** at a 320 window,
+   silently, behind the card's own `overflow-hidden` — a desktop-era floor that never bound until
+   the editor opened its mobile view at a window narrower than 336.
+5. **Three things the harness itself did not know**: that a `position: fixed` box escapes a
+   non-transformed ancestor's clip; that the device toggle animates width and transform but not
+   height; that a panel's own 180ms arrival moves nothing the canvas check can see. Each was
+   measured as a false alarm against a screenshot before the walk was taught it.
+6. **`next dev`'s badge sits where the bottom bar's first item now is**, and took the walk's taps
+   on «Secciones»; off only under `RETORIKA_E2E=1`.
+7. **The landing had never met axe**: its hint under «Empezar» was 4.43:1 and «Ya tengo cuenta»
+   4.39:1 on the page's grey, found the first time axe ran on it (day 5, at 390). Now 5.06 and 6.14.
+   The proposals screen had three of the same kind — subtitle, «Elegida» pill, «Volver a empezar» —
+   fixed with the same two colours.
+
+**What this sprint leaves open:** ADR 0042 is `proposed` — David has not signed it; the
+real-iPhone Safari checklist in PR #250 (zoom on focus, the bottom bar and the home indicator,
+`dvh` against the browser's bar, the carousel, the ZIP download), whose findings come here with
+their measurement; the five download-gate dialogs, fixed by reading and not walked live; and the
+canvas texts below 16px, which are the site's own type scale and may zoom an iPhone when tapped
+(ADR 0042 §7 names it).
+
+The review before that was 15 October 2026, **closing sprint 20 — «las barras se mueven, los verbos hablan y la
 marca es vector».** The two floating bars over the canvas can be moved out of the way of whatever
 they are covering, by hand or by keyboard, remembering where they were put for as long as the
 session lasts and writing nothing into the document for it. The eight section verbs are 32px with a

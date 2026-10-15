@@ -2271,3 +2271,59 @@ comprobó en los seis paneles, aplicada por lectura cuidadosa del mismo patrón.
 **El recorrido «nada sobresale en un móvil» queda verde en los tres dispositivos, sin ningún
 `it.fails`.** `pnpm typecheck`, `pnpm lint`, `pnpm test` (129 ficheros), invariantes y golden sin
 cambios.
+
+### El cierre: axe a 390, los comentarios que mentían, y la lista del iPhone (día 5)
+
+**axe en la clase teléfono.** El recorrido «nada sobresale en un móvil» pasa axe a 390 —el ancho
+que un iPhone tiene de verdad— en la landing, el paso 2, las tres propuestas, el editor en vista de
+móvil y el editor con la hoja de «Estilo» abierta. A 320 y 768 camina el mismo marcado; lo que
+cambia entre anchos es la geometría, y eso ya lo mide cada mirada.
+
+**Y la primera pasada encontró dos contrastes en la landing**, que nunca había tenido axe a ningún
+ancho: la frase bajo «Empezar» a 4,43:1 (`#64748B`, el gris de las maquetas que el cuestionario ya
+cambió en el sprint 1 por este mismo motivo y esta página no) y el enlace «Ya tengo cuenta» a
+4,39:1 (el azul de marca como texto de 15px sobre el gris de la página). Pasan a `#5B6B82` (5,06)
+y al azul secundario de la paleta, `#105CB1` (6,14; ADR 0041 §3). Y tres más en las tres
+propuestas, que tampoco habían visto axe: el subtítulo a 4,43, la píldora «Elegida» a 4,14 (azul de
+marca sobre su tinte) y «Volver a empezar» a 4,39; los mismos dos colores los dejan en 5,06, 5,79
+y 6,14. Los pies de tarjeta sobre blanco ya daban 4,76 y se quedan. Medidos, no supuestos, y ahora
+axe los vigila a 390 en cada ejecución.
+
+**Dos comentarios del e2e decían que el editor no soportaba menos de 1024, y citaban el ADR 0025
+§5 como razón.** Nunca fue la razón: ese umbral decide si se ofrecen las herramientas de diseño,
+no si el editor cabe. Reescritos los dos, y los bucles de anchos que se escudaban en ellos —el
+diálogo de la cuenta y el cromo del editor en una ventana de escritorio encogida— empiezan ahora en
+320 en vez de en 768 y 1024. Son la misma barra que el recorrido del móvil mide bajo `isMobile`,
+medida además como la ve quien estrecha la ventana de un portátil.
+
+**Lo que no se decide hoy, nombrado:** el ADR 0042 sigue `proposed` hasta que David lo firme; los
+textos del lienzo por debajo de 16px son del sitio y pueden ampliar un iPhone al tocarlos (§7 del
+ADR), y lo que David mida en el teléfono va al backlog con su número.
+
+### Lo que este sprint deja a David
+
+**Una firma:** el ADR 0042, «la aplicación cabe en un móvil», con las dos elecciones que tomó el
+día 15 —carrusel y cabecera en tres filas— y los dos añadidos al aprobar el plan, los campos de
+16px y esta lista.
+
+**Un recorrido en un iPhone de verdad, con Safari**, que Chromium emulando un móvil no puede
+hacer por él. Cinco cosas, y lo que encuentre va al backlog con la medida:
+
+1. **El zoom al enfocar**: tocar cada campo de las cinco preguntas, del diálogo de la cuenta y de
+   los paneles «Compartir» y «Páginas»; ninguno debería ampliar la página. Tocar después un texto
+   de cuerpo del lienzo: ese sí puede, y es lo que §7 del ADR dice.
+2. **La barra inferior y el indicador de inicio**: los cinco botones enteros por encima de la
+   franja del sistema, con «Secciones» y «Fotos» pulsables en las esquinas.
+3. **`dvh` contra la barra del navegador**: desplazar el lienzo para que la barra de Safari se
+   esconda y aparezca; la cabecera del editor y la barra inferior no deberían dar un salto ni dejar
+   una franja.
+4. **El carrusel de las tres propuestas**: abre en «Con foto grande», se desliza con el dedo
+   encajando tarjeta a tarjeta, los tres puntos siguen el dedo, y «Usar esta» responde.
+5. **La descarga del ZIP** desde «Descargar» en el editor: Safari lo guarda en Archivos, y el
+   `index.html` de dentro abre desde ahí.
+
+Queda en el backlog, con sus números: los cinco diálogos de la descarga, corregidos por lectura y
+no recorridos en vivo; la fila de «Fotos» que a 320 parte su etiqueta en cinco líneas, que es la
+regla de «se parte, no se recorta» funcionando en menos sitio del que se dibujó para ella; y el
+indicador de `next dev`, apagado solo para la suite.
+

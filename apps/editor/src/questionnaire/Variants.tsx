@@ -1539,7 +1539,10 @@ export function Variants({
           >
             {es["variants.title"]}
           </h1>
-          <p style={{ margin: 0, fontSize: 16, color: "#64748B", textAlign: "center" }}>
+          {/* `#5B6B82` on the page's grey (5.06:1) where `#64748B` measured 4.43 — found by the
+              first axe run this screen ever had, sprint 21 day 5. The captions inside the white
+              cards keep `#64748B`: on white it is 4.76. */}
+          <p style={{ margin: 0, fontSize: 16, color: "#5B6B82", textAlign: "center" }}>
             {/* Two sentences because the screen shows two different things, and saying either one
                 of them for both cases is a claim the cards disprove. Measured on 8 October 2026:
                 a generated site carries exactly one photograph, on the cover, and the other four
@@ -1595,7 +1598,9 @@ export function Variants({
                       style={{
                         padding: "3px 9px",
                         background: "#E8F1FE",
-                        color: "#156FE7",
+                        // The palette's secondary (ADR 0041 §3): the brand blue on this tint is
+                        // 4.14:1 at 11px, the secondary 5.79. Same first axe run, same day.
+                        color: "#105CB1",
                         fontSize: 11,
                         fontWeight: 700,
                         borderRadius: 999,
@@ -1679,7 +1684,8 @@ export function Variants({
             font: "inherit",
             fontSize: 14,
             fontWeight: 600,
-            color: "#156FE7",
+            // Secondary blue on the page's grey, 6.14:1; the brand blue measured 4.39 here.
+            color: "#105CB1",
             background: "none",
             border: 0,
             padding: 0,
