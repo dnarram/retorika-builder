@@ -56,6 +56,15 @@ const config: NextConfig = {
   env: {
     NEXT_PUBLIC_APP_VERSION: appVersion(),
   },
+  /**
+   * **No dev badge under the e2e walk.** `next dev` draws its «N» indicator fixed to the bottom
+   * left, and since sprint 21 day 3 the bottom left of a phone-wide editor is the «Secciones»
+   * item of the rail turned bottom bar: the badge took the walk's taps (`<nextjs-portal>
+   * intercepts pointer events`) on a control that is perfectly reachable in production, where
+   * there is no badge. Off only when the suite says it is the suite — a developer keeps the
+   * badge, and whichever corner it covers on a narrow window is theirs to drag it out of.
+   */
+  ...(process.env["RETORIKA_E2E"] === "1" ? { devIndicators: false as const } : {}),
 };
 
 export default config;

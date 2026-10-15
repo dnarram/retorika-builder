@@ -136,8 +136,9 @@ export function FieldsPanel({
       aria-labelledby={headingId}
       // Fixed to the right of the viewport rather than placed inside the canvas card: the card
       // narrows to 400px in the mobile device view, and a form docked inside it would leave the
-      // page it is meant to be editing a sliver wide.
-      className="fixed top-[58px] right-0 bottom-0 z-20 flex w-[340px] flex-col gap-4 overflow-y-auto border-l border-ui-border bg-ui-surface p-5 shadow-[-8px_0_24px_rgba(15,23,42,0.08)]"
+      // page it is meant to be editing a sliver wide. `top` is the header's measured height
+      // (`--editor-header`, set by the shell): 58 at the studio width, two rows on a tablet.
+      className="fixed top-[var(--editor-header,58px)] right-0 bottom-0 z-20 flex w-[340px] flex-col gap-4 overflow-y-auto border-l border-ui-border bg-ui-surface p-5 shadow-[-8px_0_24px_rgba(15,23,42,0.08)]"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-col gap-1">

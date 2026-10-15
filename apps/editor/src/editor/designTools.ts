@@ -68,7 +68,9 @@ export function saveDesignTools(on: boolean): boolean {
  * **Three states, not two.** «Off» and «not offered» must not collapse into one `false`, because
  * they are different screens: off draws a switch somebody can press, not offered draws nothing.
  * ADR 0025 §5 chose absent over disabled — a greyed switch invites working out how to enable it,
- * and the honest answer is «use a bigger screen», which a disabled control cannot say.
+ * and the honest answer is «the tools need a bigger screen», which a disabled control cannot say.
+ * The tools, not the editor: since sprint 21 the editor itself fits a phone (ADR 0042), and what
+ * this threshold guards is only whether the studio is offered.
  *
  * The stored value is never rewritten by a narrow window: widening it again brings the tools back
  * exactly as they were. A switch that forgot itself because somebody resized a window would be a

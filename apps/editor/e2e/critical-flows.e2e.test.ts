@@ -13189,59 +13189,86 @@ describe("nada sobresale en un móvil", () => {
         expect(found, found.join("\n")).toEqual([]);
       }, 300_000);
 
-      // Días 3 y 4 del sprint 21: la cabecera en filas, la barra abajo, los paneles como hojas.
-      it.fails("el editor, sus paneles, una sección y un texto elegidos, y los dos dispositivos", async () => {
-        found.length = 0;
-        await walker.getByText("Ver a tamaño real →").first().click();
-        const frame = walker.frameLocator(PREVIEW).first();
-        await frame.locator('[data-section="sec-cover"]').waitFor();
-        await waitForBankPhoto(frame);
-        // The save sentence arrives half a second after the editor does, and it is 200px of the
-        // header this walk exists to measure: the first run measured a header without it at 768
-        // and found it fitting, while the deployed one, given three seconds, opened at 821.
-        await expect(walker.getByText("Guardado en este navegador")).toBeVisible();
-        await look("editor");
-        for (const panel of ["Estilo", "Páginas", "Compartir", "Fotos"]) {
-          await walker.getByRole("button", { name: panel, exact: true }).click();
-          await look(`editor con «${panel}»`);
-        }
-        await walker.getByRole("button", { name: "Secciones", exact: true }).click();
+      /**
+       * Verde en tableta desde el día 3 del sprint 21 (la cabecera en dos filas, el lienzo asentado
+       * tras abrir un panel); en teléfono, `it.fails` hasta el día 4, que convierte los paneles en
+       * hojas. Lo que lo tenía en rojo a 768: la página se abría a 821px por el grupo derecho de la
+       * cabecera, y con «Estilo» abierto el lienzo quedaba cortado por su área.
+       */
+      const editorFits = device.width > PHONE_BREAKPOINT ? it : it.fails;
+      editorFits(
+        "el editor, sus paneles, una sección y un texto elegidos, y los dos dispositivos",
+        async () => {
+          found.length = 0;
+          await walker.getByText("Ver a tamaño real →").first().click();
+          const frame = walker.frameLocator(PREVIEW).first();
+          await frame.locator('[data-section="sec-cover"]').waitFor();
+          await waitForBankPhoto(frame);
+          // The save sentence arrives half a second after the editor does, and it is 200px of the
+          // header this walk exists to measure: the first run measured a header without it at 768
+          // and found it fitting, while the deployed one, given three seconds, opened at 821.
+          await expect(walker.getByText("Guardado en este navegador")).toBeVisible();
+          await look("editor");
+          // The canvas card re-measures the room a panel leaves through a `ResizeObserver`, one
+          // frame after the panel has entered; a look taken in that frame sees the old width inside
+          // the new area and reports a cut that is not there a frame later. So each panel is given
+          // until the card fits its area, which is also the thing being asserted.
+          const settled = () =>
+            walker.evaluate(() => {
+              const area = document
+                .querySelector('[data-testid="canvas-area"]')
+                ?.getBoundingClientRect();
+              const card = document
+                .querySelector('[data-testid="canvas-card"]')
+                ?.getBoundingClientRect();
+              return (
+                !!area && !!card && card.right <= area.right + 0.5 && card.left >= area.left - 0.5
+              );
+            });
+          for (const panel of ["Estilo", "Páginas", "Compartir", "Fotos"]) {
+            await walker.getByRole("button", { name: panel, exact: true }).click();
+            await expect.poll(settled, { timeout: 5_000 }).toBe(true);
+            await look(`editor con «${panel}»`);
+          }
+          await walker.getByRole("button", { name: "Secciones", exact: true }).click();
 
-        await frame.locator('[data-section="sec-cover"]').click({ position: { x: 12, y: 12 } });
-        await expect(frame.locator(".rb-actions")).toHaveCount(1);
-        await look("editor con una sección elegida");
-        const inside = await spillingInsideTheCanvas(walker);
-        for (const spill of inside.found) {
-          found.push(`lienzo @ ${device.width}px: ${spill.what} ${spill.text}`);
-        }
-        await frame.locator('[data-section="sec-cover"] h1').first().click();
-        await expect(frame.locator(".rb-toolbar")).toHaveCount(1);
-        await look("editor con un texto elegido");
+          await frame.locator('[data-section="sec-cover"]').click({ position: { x: 12, y: 12 } });
+          await expect(frame.locator(".rb-actions")).toHaveCount(1);
+          await look("editor con una sección elegida");
+          const inside = await spillingInsideTheCanvas(walker);
+          for (const spill of inside.found) {
+            found.push(`lienzo @ ${device.width}px: ${spill.what} ${spill.text}`);
+          }
+          await frame.locator('[data-section="sec-cover"] h1').first().click();
+          await expect(frame.locator(".rb-toolbar")).toHaveCount(1);
+          await look("editor con un texto elegido");
 
-        await walker.getByRole("button", { name: "Ver en ordenador" }).click();
-        await look("editor en vista de ordenador");
-        await walker.getByRole("button", { name: "Ver en móvil" }).click();
-        await look("editor en vista de móvil");
+          await walker.getByRole("button", { name: "Ver en ordenador" }).click();
+          await look("editor en vista de ordenador");
+          await walker.getByRole("button", { name: "Ver en móvil" }).click();
+          await look("editor en vista de móvil");
 
-        // A click that cannot land is a finding, not a crash: at 320 and 390 the first run died
-        // here with «another element receives pointer events» and took the list above with it.
-        // The button sits in the part of the header that opens past the screen, and something
-        // in front of it takes the tap — recorded, so the day that fixes the header sees it.
-        try {
-          await walker
-            .getByRole("button", { name: "Guardar en mi cuenta" })
-            .click({ timeout: 10_000 });
-          await expect(walker.getByRole("dialog")).toBeVisible();
-          await look("el diálogo de la cuenta");
-          await walker.keyboard.press("Escape");
-        } catch (error) {
-          const why = error instanceof Error ? error.message.split("\n")[0] : String(error);
-          found.push(
-            `editor @ ${device.width}px: «Guardar en mi cuenta» no se puede pulsar — ${why}`,
-          );
-        }
-        expect(found, found.join("\n")).toEqual([]);
-      }, 300_000);
+          // A click that cannot land is a finding, not a crash: at 320 and 390 the first run died
+          // here with «another element receives pointer events» and took the list above with it.
+          // The button sits in the part of the header that opens past the screen, and something
+          // in front of it takes the tap — recorded, so the day that fixes the header sees it.
+          try {
+            await walker
+              .getByRole("button", { name: "Guardar en mi cuenta" })
+              .click({ timeout: 10_000 });
+            await expect(walker.getByRole("dialog")).toBeVisible();
+            await look("el diálogo de la cuenta");
+            await walker.keyboard.press("Escape");
+          } catch (error) {
+            const why = error instanceof Error ? error.message.split("\n")[0] : String(error);
+            found.push(
+              `editor @ ${device.width}px: «Guardar en mi cuenta» no se puede pulsar — ${why}`,
+            );
+          }
+          expect(found, found.join("\n")).toEqual([]);
+        },
+        300_000,
+      );
     });
   }
 });

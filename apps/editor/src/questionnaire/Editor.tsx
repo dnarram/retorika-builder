@@ -103,6 +103,7 @@ import { offersMatching } from "../editor/sectionSearch.ts";
 import { keepsItsOwnUndo, shortcutFor } from "../editor/shortcuts.ts";
 import { insertedTextFor, liveFrameOf, offsetFor, textFrameOf } from "../editor/textEdits.ts";
 import { hasAnyControl, toolbarFor } from "../editor/textToolbar.ts";
+import { isPhoneViewport } from "../editor/viewport.ts";
 import es from "../locales/es.json" with { type: "json" };
 import { CollectionsPanel } from "./CollectionsPanel.tsx";
 import { DesignPanel } from "./DesignPanel.tsx";
@@ -723,7 +724,14 @@ export function Editor({
    * so closing a dialog and pressing «Descargar» again asks every question over.
    */
   const [acceptedWarnings, setAcceptedWarnings] = useState<ReadonlySet<AcceptedWarning>>(new Set());
-  const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
+  // On a phone the editor opens in the mobile view, which at 320px sits at zoom 1 in the room a
+  // phone has, where the desktop page would be a 0.5 scale nobody can read (ADR 0042 §2). The
+  // desktop view stays a press away and scales, as it always has. Decided once, on first render:
+  // this never runs on the server, and setting it through `changeDevice` would animate the first
+  // paint as a change.
+  const [device, setDevice] = useState<"desktop" | "mobile">(() =>
+    isPhoneViewport() ? "mobile" : "desktop",
+  );
   /**
    * **Two slots, and neither ever moves.** An `<iframe>` reloads when its node is removed from the
    * document and re-inserted, and React's keyed reconciliation implements a reorder as exactly
@@ -4891,6 +4899,9 @@ export function Editor({
        * scrolls, and `pointer-events: none` so a legend can never eat a click. White on `#0F172A`
        * is about 17:1.
        */
+      // The key legend is for a keyboard; on a screen that is touched and never hovered there is
+      // none, and a fixed box in the corner of a 320px canvas covers what it would explain.
+      "@media (hover: none) and (pointer: coarse) { .rb-keys { display: none; } }",
       ".rb-keys { position: fixed; left: 12px; bottom: 12px; z-index: 30; display: flex;",
       "  flex-direction: column; gap: 2px; padding: 8px 11px; border-radius: 10px;",
       "  background: #0F172A; color: #FFFFFF; pointer-events: none;",
@@ -5852,7 +5863,7 @@ export function Editor({
         />
       ) : null}
       {toast ? (
-        <div className="fixed bottom-[34px] left-1/2 z-10 flex -translate-x-1/2 items-center gap-5 rounded-[13px] bg-[#0F172A] py-3.5 pr-3.5 pl-5 shadow-[0_10px_30px_rgba(15,23,42,0.28)]">
+        <div className="fixed bottom-[34px] left-1/2 z-10 flex max-w-[calc(100vw-32px)] -translate-x-1/2 flex-wrap items-center gap-5 rounded-[13px] bg-[#0F172A] py-3.5 pr-3.5 pl-5 shadow-[0_10px_30px_rgba(15,23,42,0.28)] phone:bottom-[calc(72px+env(safe-area-inset-bottom))]">
           <span className="inline-flex items-center gap-2.5 text-[15px] font-medium text-white">
             <svg
               width="18"
