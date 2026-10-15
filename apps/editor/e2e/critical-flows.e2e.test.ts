@@ -13178,8 +13178,10 @@ describe("nada sobresale en un móvil", () => {
         expect(found, found.join("\n")).toEqual([]);
       }, 300_000);
 
-      // Día 2 del sprint 21: la miniatura de cada propuesta se escala al ancho que tiene.
-      it.fails("las tres propuestas", async () => {
+      // Verde desde el día 2 del sprint 21: la miniatura se escala al ancho que tiene, y bajo
+      // 900px la fila es un carrusel. El hallazgo que lo puso en rojo: a 390 cada tarjeta medía
+      // 60px y la miniatura enseñaba el 17 % de la web.
+      it("las tres propuestas", async () => {
         found.length = 0;
         await walker.getByRole("button", { name: "Crear mi web" }).click();
         await walker.getByText("Ver a tamaño real →").first().waitFor();

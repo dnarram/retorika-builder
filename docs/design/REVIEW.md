@@ -2108,3 +2108,45 @@ tipográfica del sitio, y el editor no los cambia para acomodarse a sí mismo. U
 14px seguirá siendo de 14px y en un iPhone tocarla puede ampliar la página; titular, subtítulo y
 botones están por encima del umbral en todas las escalas. Queda nombrado, va en la lista del iPhone
 del último día, y lo que David mida allí va al backlog con su número.
+
+### Las tres propuestas caben, y se comparan (día 2)
+
+El ejemplo de David al abrir el sprint: «cuando se proponen al usuario las 3 propuestas de web
+estas se acortan tanto para ajustar la pantalla que no permite que se vean las previsualizaciones».
+Medido el día 1: a 390 cada tarjeta medía 60px y la miniatura enseñaba el **17 %** de la web; a
+320, el 10 %; a 768, el 52 %. La causa eran dos constantes: tres columnas a cualquier ancho, y una
+miniatura que dibujaba la web a 1280×900 y la encogía siempre a 0,28 —lo que una tarjeta de 358px
+necesita en la fila de 1180 de la maqueta, y nada más— dentro de una caja de alto fijo con
+`overflow: hidden`. La caja recortaba lo que no cabía, y lo que no cabía era la web.
+
+**La miniatura se mide.** Un `ResizeObserver` sobre la caja —el mismo patrón que el lienzo del
+editor— da el ancho que la tarjeta tiene de verdad, la escala es ese ancho entre 1280 y el alto
+sale de ahí: la caja es siempre exactamente la web encogida, más sus dos filos de 1px. `srcDoc` no
+cambia con la escala, así que redimensionar no recarga el marco. En la fila de la maqueta la escala
+medida es la de siempre (0,27 para 348px a 1280 de ventana), y el escritorio no se mueve.
+
+**Bajo 900px la fila es un carrusel** —elección de David del día 15 frente a apilarlas: la
+tarjeta ocupa el 80 % de la fila, la siguiente asoma por el borde, y el desplazamiento encaja
+tarjeta a tarjeta (`scroll-snap`). Abre en «Con foto grande», la marcada «Elegida», centrada; tres
+puntos debajo dicen cuál está a la vista, `aria-hidden` porque la lista sigue siendo la estructura
+que un lector recorre. Los laterales del 10 % son lo que permite centrar también la primera y la
+última. Por encima de 900 las tres columnas de la maqueta, intactas. El umbral se lee con
+`matchMedia` a través de `viewport.ts`, el único sitio donde la aplicación pregunta por su ancho,
+y la aritmética —escala, alto, centrado, qué punto encender— está en `proposalsRow.ts`, puro y con
+su test, para que una constante mal puesta falle en milisegundos y no tras cuatro minutos de e2e.
+
+**Medido, no supuesto, en Chromium emulando los tres dispositivos:** a 390, tarjeta de 274px en
+una fila de 343 (el 80 %), miniatura entera a 0,19; a 768, tarjeta de 550 y miniatura a 0,41; a
+320, tarjeta de 225. En los tres, el marco interior mide exactamente la caja menos sus filos, que
+es lo que el arnés del día 1 exige con «nada cortado». La fila de 1280 sigue en tres columnas de
+350. El `it.fails` de las propuestas pasa a `it` en los tres dispositivos; quedan en rojo esperado
+los tres del editor, que son de los días 3 y 4.
+
+**Dos correcciones sobre la marcha, las dos medidas.** La primera cuota de tarjeta decía 85 % y
+dibujaba el 64 %: el porcentaje se aplicaba a la caja de contenido de la fila, que los laterales ya
+habían estrechado, así que encogía dos veces. La tarjeta es ahora la caja de contenido entera y los
+laterales son lo que deja. Y con el 85 % asomaban 14px de la siguiente a 390 —un lateral del 7,5 %
+menos el hueco de 12— que no se leen como «hay otra»; con el 80 % asoman 27. La barra de
+desplazamiento de WebKit, que el editor dibuja a propósito en sus paneles, no se dibuja bajo el
+carrusel: la vecina asomando ya dice que hay más, y la regla solo toca el pseudoelemento de WebKit,
+no `scrollbar-width`, que `scrollbar.test.ts` sigue manteniendo fuera.

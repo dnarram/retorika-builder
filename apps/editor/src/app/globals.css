@@ -470,3 +470,16 @@ body {
 *::-webkit-scrollbar-corner {
   background: transparent;
 }
+
+/**
+ * The proposals carousel draws no scrollbar lane (sprint 21 day 2).
+ *
+ * The rule above makes Safari draw a 10px lane on every scroller, which is right for a panel that
+ * needs to say it scrolls and wrong under a row of cards on a phone, where the next card peeking
+ * is the sign there is more and the lane would sit between the cards and their dots. Hidden for
+ * WebKit's own pseudo-element only — `scrollbar-width` stays out of this file for the reason the
+ * block above gives, and `test/scrollbar.test.ts` keeps it out.
+ */
+.ui-carousel::-webkit-scrollbar {
+  display: none;
+}
