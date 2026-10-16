@@ -86,7 +86,15 @@ describe("the stylesheet's motion budget", () => {
   it("lets nothing loop but the mark at work and the landing's background", () => {
     const looping = [...CSS.matchAll(/animation:\s*([\w-]+)[^;]*infinite/g)].map((m) => m[1]);
     expect(looping.length).toBeGreaterThan(0); // the mark, or this regex has stopped matching
-    for (const name of looping) expect(MAY_LOOP).toContain(name);
+    for (const name of looping) {
+      expect(
+        MAY_LOOP,
+        `«${name}» loops for ever, and the budget allows ${MAY_LOOP.length} animations to: ` +
+          `${MAY_LOOP.join(", ")}. A fourth is a decision about how distracting this application ` +
+          "is, and it belongs in the budget in docs/design/REVIEW.md, sprint 22 — not in a pull " +
+          "request that adds a keyframe.",
+      ).toContain(name);
+    }
   });
 
   it("declares no infinite iteration count anywhere outside those", () => {

@@ -2327,3 +2327,229 @@ no recorridos en vivo; la fila de «Fotos» que a 320 parte su etiqueta en cinco
 regla de «se parte, no se recorta» funcionando en menos sitio del que se dibujó para ella; y el
 indicador de `next dev`, apagado solo para la suite.
 
+
+## Sprint 22 — «Se mueve lo justo» (16 de octubre de 2026)
+
+David, tras fusionar el cierre del sprint 21: «una mejora visual de la landing page, de las páginas
+de cuestionario para el usuario y de la página donde se muestran las 3 propuestas. La idea es dar
+apariencia de movimiento y modernidad con los colores de Retorika **pero sin abusar para no
+distraer al usuario**… que dé un aspecto moderno de página creada en 2026. Explora imágenes en
+movimiento, bucles estéticos, pulsómetros, sensación de movimiento al pasar el ratón o hacer hover,
+colores en movimiento. Siempre con lógica, aplicando la paleta de Retorika y acorde a los objetivos
+del proyecto.»
+
+**Medido antes de planificar.** Las tres pantallas previas al editor no tenían **ni una transición
+ni una animación**, salvo el punto del carrusel que el sprint 21 dejó. Tampoco es un olvido de las
+maquetas: ninguna de las diecinueve tiene una regla `:hover` ni una `transition` — «son dibujos, no
+especificaciones de interacción», como ya se escribió el 5 de octubre al darle al cromo del editor
+su sistema. Y van casi enteras en `style={{}}` con hexes literales: los tokens `--ui-*` existían y
+apenas los consumían.
+
+**Tres elecciones de David entre opciones puestas delante, el 15 de octubre:**
+
+1. **El héroe de la landing es una web real**, generada por nuestro propio renderer, en un marco de
+   dispositivo que pasa de ordenador a móvil — la transición del editor que dirección señaló.
+2. **El fucsia solo donde ya estaba**: el bloque rosa de la marca. Ningún elemento nuevo lo usa, que
+   es el «nunca en fondos amplios» del dossier.
+3. **En las propuestas, la tarjeta se eleva y el borde de la miniatura se enciende**, sin transformar
+   el iframe ni desplazar la página de dentro.
+
+Y tres ajustes al aprobar el plan: medir la landing **antes y después** del héroe con Lighthouse
+móvil; montar el iframe **después de la primera pintura**; y nada de snapshot por hash del HTML de
+muestra, que fallaría con cualquier cambio legítimo del renderer.
+
+### El vocabulario, y el presupuesto que lo sujeta
+
+Cinco piezas con nombre en `globals.css`, encima de los estilos en línea que ya había. Sin
+librería, sin `filter: blur`, sin animar maquetación.
+
+| Pieza | Qué | Tiempo |
+|---|---|---|
+| `ui-reveal` | una superficie que llega: opacidad y `translateY(6px)`, escalonada por `--ui-reveal-delay` | `--ui-slow` 260 ms |
+| `ui-lift` | un píxel de subida y `--ui-shadow-2` bajo el puntero, tras `@media (hover: hover)` | sobre `ui-interactive`, 120 ms |
+| `ui-ring-once` | un anillo que crece desde el azul de marca y se apaga, en un `::after`, **una iteración** | 700 ms, retardo 500 |
+| `ui-drift` | dos discos radiales derivando 24 px a la derecha y 18 arriba | 24 s, infinito |
+| `--ui-stagger` | el único hueco entre dos cosas que llegan, con tope de siete escalones | 40 ms |
+
+**El presupuesto de contención, que es la mitad del encargo que se degrada sola:**
+
+- Bucles infinitos: landing **uno**; cuestionario **cero**; propuestas **cero**.
+- Pulsos de una vez: **uno por pantalla** como máximo, y **ninguno** en el cuestionario, donde lo
+  que debe tener la atención es la pregunta.
+- Nada anima la maquetación. Ninguna transición pasa de 200 ms. Ninguna pantalla tarda más de
+  600 ms en estar en reposo.
+- `prefers-reduced-motion` retira el movimiento, nunca el contenido.
+
+`test/motionBudget.test.ts` lo guarda con diecinueve aserciones, mitad sobre la hoja de estilos y
+mitad sobre los componentes de cada pantalla. Un cuarto nombre en la lista de lo que puede girar en
+bucle es una decisión sobre cuánto distrae esta aplicación, y pasa por este documento.
+
+**Dos tokens nuevos, ninguno un color nuevo.** `--ui-brand-deep: #105CB1` es el azul oscuro que el
+dossier ya daba para «títulos y estados pulsados» y que el ADR 0041 §3 pone en la paleta «Neutra»:
+estaba escrito a mano en tres sitios porque el azul de marca mide 4,39:1 sobre el fondo de la app y
+falla. Medido con la aritmética de `packages/tokens`: **6,59:1** sobre panel, **6,14** sobre el
+fondo, **5,79** sobre el tinte. `--ui-stagger` es el ritmo. Ninguno llega al lienzo: la copia de la
+escala que vive dentro de la vista previa los excusa por nombre, porque el único azul que es de
+Retorika y no del cliente no puede pintarse en la página del cliente (ADR 0015).
+
+### El vocabulario: una entrada, una elevación, un anillo (día 1)
+
+Las tres piezas, el token y la guarda. `questionnaire/ui.tsx` deja de repetir la paleta en hexes
+—dieciocho literales pasan a sus tokens— y los controles responden: el botón primario de `NavRow`,
+cada tarjeta de elección y cada casilla se elevan; los puntos de progreso deslizan su ancho;
+«Volver» y «Saltar» toman su color de clases y no de `style`, porque **un `color` en línea gana a
+cualquier regla y una transición que no puede repintar es una transición que miente**.
+
+**`backwards`, nunca `both`, y esa es la decisión del día.** Una animación que rellena mantiene bajo
+su control las propiedades que nombra *después de terminar*, y una animación gana a cualquier
+declaración normal. Con `both`, una tarjeta se revelaría bien y después **se negaría a elevarse bajo
+el puntero**, en silencio, justo en los elementos a los que este sprint añade hover.
+
+Medido en Chromium a 1280: cero animaciones en marcha con el foco en un campo; el punto de progreso
+transicionando a 180 ms y a 0,00001 s con movimiento reducido; una tarjeta elevándose a
+`matrix(1, 0, 0, 1, 0, -1)`; y el alto de la rejilla **idéntico** con el puntero encima, 263 px,
+que es lo que garantiza que nada de esto mueve lo que el recorrido de desbordes mide.
+
+### La landing enseña una web de verdad que pasa de PC a móvil (día 2)
+
+El héroe es `generate()` y `render()` al construir, sobre «Taberna del Puerto» — el negocio de
+muestra que ya pesa el presupuesto y ya audita Lighthouse, para que haya **un** sitio de muestra en
+este repositorio y no tres que mantener plausibles. La página de dentro no se cambia ni se vuelve a
+renderizar: se estrecha su ventana, así que su propio `max-width: 720px` salta a mitad de camino.
+Medido, el `innerWidth` de la página cada 22 ms durante un viaje:
+
+```
+1271 1172 1055 762 655 517 443 420 395 391 390
+```
+
+Once fotogramas distintos, con el salto de 720 cruzado **entre 762 y 655**: por el medio del
+recorrido, donde hay alguien mirando. Reutiliza `ui-reflow`, que ya era «ancho y transform, curva
+simétrica, 260 ms», escrito para el lienzo haciendo esto mismo.
+
+La landing **sigue prerenderizada**: `landingSample.ts` no lee sesión ni base de datos. El iframe se
+monta tras la primera pintura, así que el titular y «Empezar» no esperan, y la cadena de 12,9 KB
+(3,2 comprimidos) **no aparece en el HTML servido** — viaja una vez en los datos que React ya manda
+en lugar de dos, la segunda escapada dentro de un atributo. Un `IntersectionObserver` retiene la
+carga y la demostración hasta que un tercio del marco se ve.
+
+**La medición antes y después, que David pidió.** Lighthouse móvil sobre `/`, cuatro builds del
+mismo commit; accesibilidad **1,00 en las cuatro**:
+
+| | rendimiento | CLS | LCP | bytes | peticiones |
+|---|---|---|---|---|---|
+| sin héroe | 0,95 | 0 | 2789 ms | 784 KB | 25 |
+| héroe, demostración al cargar | 0,90–0,93 | 0,144 | 2121–2788 ms | 1128 KB | 32 |
+| héroe, sin demostración | 0,98 | 0,008 | 2135 ms | 1128 KB | 32 |
+| **héroe, demostración al entrar en vista (lo que va)** | **0,90** | **0,145** | 2799 ms | 1128 KB | 32 |
+
+La última fila sale igual que la segunda porque Lighthouse emula un teléfono de **823 px de alto**,
+donde el héroe entero cabe en pantalla al cargar: el filtro es correcto para un teléfono real y no
+cambia la auditoría. **Todo ese 0,144 es la demostración**, y la mayor parte no es el marco
+moviéndose: son las secciones de la muestra recolocándose dentro, que es el efecto. En la landing no
+se mueve nada más, porque el alto del marco no cambia nunca. El LCP está entre 2,1 y 2,8 s también
+sin héroe: es de la landing, no suyo.
+
+**La palanca queda escrita y es de David:** quitar la demostración automática y dejar el botón
+recupera **0,136 de CLS y unos siete puntos de rendimiento**, con el viaje intacto al pulsar. Eligió
+movimiento al llegar cuando eligió este héroe, así que eso es lo que va. La Parte 8.5 pone el 95
+sobre el sitio publicado del cliente, no sobre la aplicación, que no tiene presupuesto escrito: esto
+es un número registrado, no una puerta cruzada.
+
+Un hallazgo: el borde de 1 px del marco dejaba la página de dentro a **1276** píxeles en vez de 1280
+y a 386 en vez de 390, porque todas las cajas son `border-box`. Lo encontró el e2e pidiendo 1280
+exacto. Ahora es una sombra interior, que no ocupa maquetación.
+
+### Los orbes, la marca que se asienta, y las preguntas que llegan (día 3)
+
+**Dos discos de color de marca** derivan tras la página en 24 segundos: el único bucle de esta
+pantalla. Necesitaron **cuatro paradas de color y no dos**: `transparent 70%` deja una pendiente
+constante contra una plana, que es donde el ojo inventa un borde, y una captura a cuatro aumentos
+enseñaba un anillo perfectamente circular cruzando el titular. Se vio mirando, no deduciendo.
+
+**La marca se construye una vez.** Lo que está en pantalla sigue siendo el lockup entregado —mismo
+fichero, mismo ancho, mismo `alt`—, pero su mitad izquierda se oculta con `clip-path` y
+`BuildingMark` se dibuja exactamente ahí. Funciona porque las dos trazas son el mismo dibujo diez y
+cuatro píxeles aparte: `M178.5 113.68` en la marca y `M188.5 117.68` en el lockup, Béziers
+idénticas. Medido a 232 de ancho: la marca cae a 63,03 × 65,09 contra 63,04 × 65,10 de aritmética y
+el offset es exacto; contra el lockup liso, 2,15 % de píxeles distintos, todo antialiasing, y uno al
+lado del otro son indistinguibles. Cuesta que el recorrido de desbordes salte ese `<img>`, porque
+ignora todo lo que lleva `clip-path`; está dicho donde se lee.
+
+`once` son dos propiedades en línea y no una utilidad: cuál de dos utilidades propias gana depende
+del orden en que Tailwind las emita, y un estilo en línea gana siempre.
+
+Las cinco preguntas: la tarjeta de cada una llega y sus opciones la siguen en onda, con tope de
+siete escalones — once sectores terminan a 0,28 s + 0,26 de recorrido, dentro del presupuesto. El
+tick se funde sin tocar su hueco reservado. **Nada gira ni pulsa mientras se contesta.**
+
+**Anotado y no arreglado:** al filtrar en el paso 2, la rejilla pasa de 263 px de alto a 56 y, como
+`Shell` centra la tarjeta, **el propio campo donde se escribe baja 7,9 px** (302,13 → 310,02). No es
+una animación y es anterior a este sprint: cero animaciones en marcha en los tres estados. Tiene su
+fila en el backlog. Tocarlo mueve las cinco preguntas y las tres pantallas de entrar contra unas
+maquetas que las dibujan centradas.
+
+### Las tres propuestas llegan, y la elegida lo dice una vez (día 4)
+
+Llegan de izquierda a derecha, 40 ms aparte, la última en reposo a 340 ms, sobre un montaje de
+**72 ms** — los 2000 ms de la maqueta 06 siguen intactos. La elegida suena una vez y conserva sus
+3 px de tinte. Al pasar el ratón, la tarjeta se eleva, el borde de su vista previa se enciende y la
+flecha de «Ver a tamaño real» se asoma dos píxeles.
+
+**Nada se escala, y es la decisión del día.** Un `transform` sobre la caja que hay encima de un
+`<iframe>` vivo hace que Chromium vuelva a rasterizar ese marco en cada fotograma: tres sitios
+generados a la vez, en la pantalla que el dossier llama la más importante del producto. El e2e
+asevera que el `transform` del contenedor es **idéntico** antes y después del hover.
+
+Dos defectos que solo aparecieron midiendo en el navegador. **La tarjeta elegida no hacía su
+entrada**: un elemento lleva una sola propiedad `animation`, así que `ui-ring-once` pisaba a
+`ui-reveal` y la recomendada aparecía de golpe mientras sus vecinas se deslizaban. El anillo pasa a
+un `::after`, donde las dos se componen. Y **el borde de la miniatura no se encendía**: el `border`
+en línea le ganaba a la regla de hover, que es el mismo trampolín que el día 1 ya había documentado
+para otro control.
+
+### El cierre: teclado, axe, las medidas y el registro (día 5)
+
+axe corre a 390 sobre la landing, el paso 2 y las tres propuestas dentro de «nada sobresale en un
+móvil», sin hallazgos serios ni críticos — y las cuatro auditorías de Lighthouse del día 2 dan
+accesibilidad 1,00.
+
+**El hallazgo del día, que axe no puede ver.** Una tarjeta de sector es un `<label>` con un radio
+visualmente oculto dentro, que es lo que permite que la tarjeta entera sea el control. El anillo de
+foco se dibujaba sobre ese radio, y medido con Tab en Chromium el radio reporta una caja de **1 × 1**:
+dos píxeles de anillo alrededor de uno, detrás de un `clip` que lo esconde de todas formas. **Quien
+recorriera los once sectores con el teclado no podía ver en cuál estaba** — WCAG 2.4.7, anterior a
+este sprint, e invisible para axe, que no evalúa qué aspecto tiene un anillo.
+`.ui-choice:has(:focus-visible)` lo pone sobre la tarjeta; la prueba mide **la caja además del
+anillo**, porque «hay un outline» era verdad antes también.
+
+El resto del recorrido pasa: en la landing, «Empezar», «Ya tengo cuenta» y el conmutador del héroe
+en ese orden, los tres con su anillo, y Enter acciona el conmutador; en las propuestas, cada control
+con el anillo sobre una caja de verdad — una elevación es un `transform`, que no recorta un
+`outline`.
+
+**Las medidas que deja el sprint:**
+
+| | |
+|---|---|
+| Landing, documento comprimido | 28,4 KB — la tabla del día 2 tiene el antes y el después, medidos sobre el cable |
+| Landing en reposo, 10 s | 6 recálculos de estilo, **0 maquetaciones**, 0,015 s de CPU |
+| Paso 2, la última de once tarjetas | 0,28 s + 0,26 de recorrido |
+| Propuestas, de «Crear mi web» a tres vistas previas | 72 ms |
+| Propuestas, tarjetas en reposo / anillo terminado | 340 ms / 1260 ms |
+
+Los dos orbes no cuestan **ninguna maquetación** en diez segundos, que es lo que `transform` sobre
+una capa propia compra y la razón por la que no hay `blur` en ninguna parte.
+
+### Lo que este sprint deja a David
+
+**Ninguna firma nueva.** No cambian los colores de marca ni el modelo de documento, y el ADR 0015
+delega el cromo en este documento; `--ui-brand-deep` es un color que la paleta ya poseía (ADR 0041
+§3), registrado arriba como promoción a token con sus tres ratios medidos.
+
+**Una decisión, con el número delante:** la demostración automática del héroe cuesta 0,145 de CLS y
+unos siete puntos de rendimiento en Lighthouse móvil sobre la landing. Quitarla y dejar el botón los
+recupera, con el viaje intacto al pulsar. Es una decisión de producto sobre la puerta de entrada
+pública, y es suya.
+
+**Y lo de antes, que sigue ahí:** el ADR 0042 del sprint 21 continúa `proposed`, sin firmar, y la
+lista del iPhone de verdad sigue sin recorrerse.

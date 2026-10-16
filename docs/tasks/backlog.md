@@ -12,7 +12,53 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 15 October 2026, **closing sprint 21 — «la aplicación cabe en un móvil».** The
+Last reviewed: 16 October 2026, **closing sprint 22 — «se mueve lo justo».** The three screens
+before the editor — the landing, the five questions and the three proposals — had no transition and
+no animation at all, and now have a named vocabulary of five: a surface arriving, a control lifting
+a pixel under the pointer, one ring that sounds once per screen, two discs of brand colour drifting
+behind the landing, and one stagger token that paces every queue in the application. The landing's
+hero is the product's own output — «Taberna del Puerto», generated and rendered at build time —
+inside a frame that travels from a desktop viewport to a phone's and back, once, with the page
+inside genuinely re-laying-out on the way. The budget is a test: one loop on the landing, none in
+the questionnaire, none on the proposals, one pulse per screen at most and never while somebody is
+answering, nothing animating layout, every screen at rest inside 600ms, and
+`prefers-reduced-motion` taking away the movement and never the content. The record is
+`docs/design/REVIEW.md`, sprint 22.
+
+**What this sprint found that nobody was looking for:**
+
+1. **The focus ring in the five questions was two pixels around one pixel.** A sector card is a
+   `<label>` with a visually hidden radio inside, and the ring was drawn on the radio — measured
+   with Tab in Chromium as a box of **1 × 1**, behind a `clip` that hides it anyway. Somebody
+   walking the eleven sectors by keyboard could not see where they were. WCAG 2.4.7, older than
+   this sprint, and invisible to axe, which does not evaluate what a ring looks like.
+   `.ui-choice:has(:focus-visible)` puts it on the card; the test measures the box as well as the
+   ring, because «there is an outline» was true before too.
+2. **An entrance that fills forwards makes the thing it revealed refuse to move.** A filling
+   animation keeps its properties under animation control after it ends and outranks every ordinary
+   declaration, so a card with `ui-reveal` written as `both` would reveal correctly and then ignore
+   its own hover, silently. Everything this sprint added fills `backwards`.
+3. **An element carries one `animation`, so two utilities on one element is one too many.** The
+   recommended proposal wore `ui-reveal` and `ui-ring-once` and performed only the ring: it
+   appeared instantly while its two neighbours slid in. The ring moved to a `::after`.
+4. **An inline style beats the rule that was supposed to change it**, twice: «Volver»/«Saltar»
+   could not repaint their colour on hover, and the thumbnail's edge never lit up because its
+   `border` was inline. Both are now classes.
+5. **A gradient that stops fading is an edge.** The landing's discs faded linearly to
+   `transparent 70%` and drew a perfectly circular ring across the headline — Mach banding, seen in
+   a screenshot at four times size, not deduced. Four stops now, easing to nothing.
+6. **The field you are typing in moves 7.9px while you filter the sectors** — its own row below,
+   measured and not fixed.
+7. **A 1px border cost the hero's page four of its own pixels.** Every box is `border-box`, so the
+   frame's content box was 2px narrower and the page inside laid out at 1276 instead of 1280, and
+   386 instead of 390. Found by an e2e asking for exactly 1280. The edge is an inset shadow now.
+
+**What this sprint leaves open:** **the hero's automatic demonstration costs 0.145 of CLS and some
+seven points of Lighthouse performance on the landing** — dropping it and keeping the toggle
+recovers both, with the travel intact on a press, and that is David's decision with the four
+measurements in REVIEW.md; the 7.9px row below; and everything sprint 21 left, which has not moved.
+
+The review before that was 15 October 2026, **closing sprint 21 — «la aplicación cabe en un móvil».** The
 application's own chrome — not the published site, which has fitted a phone since sprint 2 — now
 answers to three width classes written down in ADR 0042 with the two numbers that already existed:
 phone ≤ 720 (the renderer's breakpoint), studio ≥ 1024 (`MIN_STUDIO_WIDTH`), tablet between. The
@@ -806,6 +852,25 @@ open survives.
 | **The price — still two answers, and still a coincidence.** Two sessions answered it and they overlap at 50 €. **The third session was the one that could have made that a price rather than a coincidence, and the answer was not recorded.** The question was the fifth of the five and it is blank. | [`docs/design/HANDOFF.md`](../design/HANDOFF.md), the open-questions table, and [the session](../sessions/2026-09-30-taller.md) |
 
 ## No home but this one
+
+- **Three visual ideas this sprint measured and turned down, so the next one does not re-propose
+  them from scratch** (16 October 2026, sprint 22).
+
+  **A blurred gradient mesh behind the hero.** `filter: blur` is the most expensive thing CSS can
+  ask of a phone — a 520px disc repainted sixty times a second — and the landing is the page with
+  a cold start to apologise for already. The two drifting discs are radial gradients instead:
+  rasterised once, composited after that, and measured at **zero layouts and 0.015s of CPU over
+  ten idle seconds**.
+
+  **Scaling a proposal's thumbnail on hover.** Each thumbnail is a live `<iframe>` of a generated
+  site; a `transform` on its ancestor makes Chromium re-raster that frame's layer every frame,
+  three documents at once, on the screen the dossier calls the most important in the product. The
+  card lifts and the preview's edge lights instead, and the e2e pins the frame's transform as
+  unchanged through the hover so this cannot come back by accident.
+
+  **A thumbnail that scrolls itself under the pointer**, to show the page continues below the
+  cover. David turned it down when it was put to him on 15 October; it would also have needed
+  JavaScript driving a live frame, which is the same cost as the row above.
 
 - **The field you are typing in moves 7.9px while you filter the sectors.** Measured 15 October
   2026 (sprint 22 day 3) at 1280 × 720: typing «rest» into step 2's search takes the grid from
