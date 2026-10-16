@@ -7586,12 +7586,30 @@ describe("sprint 22 día 4 — las tres propuestas llegan", () => {
 
   const CARDS = "div.ui-reveal.ui-lift";
 
+  /**
+   * **Un contexto y un viaje para los tres recorridos que solo leen esta pantalla**, que es la
+   * disposición que «nada sobresale en un móvil» ya usa. No es ahorro por ahorro: el sprint 22
+   * añadió dieciséis pruebas a este fichero y el trabajo `e2e` tocó su límite de quince minutos
+   * en CI —cancelado a los 15m05s con los 186 tests ya en verde—, así que contestar cinco
+   * preguntas cuatro veces para mirar la misma pantalla es un gasto que ya no es gratis. El de
+   * movimiento reducido mantiene el suyo, porque es otro contexto de navegador.
+   */
+  let context: BrowserContext;
+  let visitor: Page;
+  let built = 0;
+
+  beforeAll(async () => {
+    context = await browser.newContext({ viewport: { width: 1280, height: 950 } });
+    visitor = await context.newPage();
+    built = await toTheProposals(visitor);
+  }, 180_000);
+
+  afterAll(async () => {
+    await context?.close();
+  });
+
   it("llegan una tras otra, y están quietas enseguida", async () => {
-    const visitor = await (
-      await browser.newContext({ viewport: { width: 1280, height: 950 } })
-    ).newPage();
-    try {
-      const built = await toTheProposals(visitor);
+    {
       const cards = visitor.locator(CARDS);
       await expect(cards).toHaveCount(3);
 
@@ -7608,6 +7626,7 @@ describe("sprint 22 día 4 — las tres propuestas llegan", () => {
       // Y la llegada entera cabe de sobra en lo que la maqueta 06 permite: la última tarjeta
       // descansa a 80ms + 260 de recorrido, sobre un montaje que mide decenas de milisegundos.
       await motionSettled(visitor);
+      // `built` lo mide `beforeAll`, que es quien hace el viaje una sola vez.
       expect(built, "las propuestas tardaron más de lo que la maqueta 06 permite").toBeLessThan(
         2_000,
       );
@@ -7616,17 +7635,11 @@ describe("sprint 22 día 4 — las tres propuestas llegan", () => {
           () => document.getAnimations().filter((a) => a.playState === "running").length,
         ),
       ).toBe(0);
-    } finally {
-      await visitor.context().close();
     }
   }, 180_000);
 
   it("la elegida suena una vez, en su propia sombra, y se queda con su tinte", async () => {
-    const visitor = await (
-      await browser.newContext({ viewport: { width: 1280, height: 950 } })
-    ).newPage();
-    try {
-      await toTheProposals(visitor);
+    {
       const cards = visitor.locator(CARDS);
 
       /**
@@ -7655,17 +7668,11 @@ describe("sprint 22 día 4 — las tres propuestas llegan", () => {
       );
       // Una sola pulsación en toda la pantalla, que es lo que el presupuesto permite.
       expect(rings.filter((r) => r.name === "ui-ring-once").length).toBe(1);
-    } finally {
-      await visitor.context().close();
     }
   }, 180_000);
 
   it("se eleva y enciende su miniatura al pasar el ratón, sin tocar el marco de la vista previa", async () => {
-    const visitor = await (
-      await browser.newContext({ viewport: { width: 1280, height: 950 } })
-    ).newPage();
-    try {
-      await toTheProposals(visitor);
+    {
       await motionSettled(visitor);
       const card = visitor.locator(CARDS).first();
       const probe = () =>
@@ -7697,8 +7704,10 @@ describe("sprint 22 día 4 — las tres propuestas llegan", () => {
        * decide si el producto sirve. Lo que se mueve es la tarjeta; el marco se queda igual.
        */
       expect(hovered.frame, "el marco de la vista previa se ha transformado").toBe(rest.frame);
-    } finally {
-      await visitor.context().close();
+
+      // El puntero se retira: esta página la comparten los recorridos de arriba, y una tarjeta
+      // dejada en hover es estado que el siguiente no ha pedido.
+      await visitor.mouse.move(0, 0);
     }
   }, 180_000);
 

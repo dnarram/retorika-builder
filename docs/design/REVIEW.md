@@ -2527,6 +2527,16 @@ en ese orden, los tres con su anillo, y Enter acciona el conmutador; en las prop
 con el anillo sobre una caja de verdad — una elevación es un `transform`, que no recorta un
 `outline`.
 
+**Y lo que el propio sprint le hizo a CI, que solo se vio al final.** Las dieciséis caminatas que
+estos cinco días añadieron a `critical-flows.e2e.test.ts` llevaron el trabajo `e2e` a su límite: la
+PR del cierre lo vio **cancelado a los 15m05s con los 186 tests ya en verde**, el resumen impreso y
+el paso muerto durante la limpieza, que `gh pr checks` presenta como un fallo. No había nada roto;
+la suite se había quedado sin presupuesto. Se arregló primero la mitad barata —los tres recorridos
+del día 4 que solo leen la misma pantalla comparten ahora un viaje en vez de contestar las cinco
+preguntas cuatro veces, de 20,5 s a 11,4— y después se le dio al trabajo el presupuesto que
+necesita: 20 minutos, con la medición escrita en el propio `ci.yml`. En local el fichero entero
+pasó de 471 s antes del sprint a 778 durante él.
+
 **Las medidas que deja el sprint:**
 
 | | |
