@@ -2,15 +2,17 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  HERO_ASPECT,
   HERO_BAR,
-  HERO_BAR_SHARE,
   HERO_DEMO,
   HERO_FRAME_WIDTH,
-  HERO_PAGE,
-  HERO_PAGE_SHARE,
+  HERO_PAGE_WIDTH,
   HERO_PHONE_WIDTH,
+  HERO_RESERVED_ASPECT,
+  HERO_TALLEST,
+  HERO_WINDOW,
+  heroFrameHeight,
   heroInnerWidth,
+  heroReservedHeight,
   heroScale,
 } from "../src/app/landingHero.ts";
 import { PHONE_BREAKPOINT } from "../src/editor/overflowCheck.ts";
@@ -38,31 +40,56 @@ describe("the landing hero's geometry", () => {
    */
   it("puts the phone state inside the renderer's phone layout", () => {
     expect(HERO_PHONE_WIDTH).toBeLessThan(PHONE_BREAKPOINT);
-    expect(HERO_PAGE.width).toBeGreaterThan(PHONE_BREAKPOINT);
+    expect(HERO_PAGE_WIDTH).toBeGreaterThan(PHONE_BREAKPOINT);
   });
 
   it("narrows the frame by exactly as much as the page narrows", () => {
     // What makes the page land on 390 of its own pixels: the share is the ratio, not a round number
     // somebody liked.
     const share = Number(HERO_FRAME_WIDTH.phone.replace("%", "")) / 100;
-    expect(share).toBeCloseTo(HERO_PHONE_WIDTH / HERO_PAGE.width, 4);
+    expect(share).toBeCloseTo(HERO_PHONE_WIDTH / HERO_PAGE_WIDTH, 4);
     expect(HERO_FRAME_WIDTH.desktop).toBe("100%");
   });
 
-  it("reserves its height before any JavaScript runs", () => {
-    // `aspect-ratio` on the slot, bar included, so the frame's box is the right size at first
-    // paint and the deferred iframe arrives into a space that is already open.
-    expect(HERO_ASPECT).toBe(`${HERO_PAGE.width} / ${HERO_PAGE.height + HERO_BAR}`);
-    const bar = Number(HERO_BAR_SHARE.replace("%", ""));
-    const page = Number(HERO_PAGE_SHARE.replace("%", ""));
-    expect(bar + page).toBeCloseTo(100, 6);
+  /**
+   * **The two windows are measurements, and this is the arithmetic half of keeping them honest.**
+   *
+   * `test/heroWindow.browser.test.ts` is the half that opens the real sample and checks that the
+   * cover and its button fall inside them. This one only holds the shape: each state shows enough
+   * of the page to be worth showing, and the desktop one shows more than the 800 that cut the
+   * cover's own button off by 91 pixels (16 October 2026).
+   */
+  it("shows more of the page than the number that cut the button off", () => {
+    expect(HERO_WINDOW.desktop).toBeGreaterThan(891);
+    expect(HERO_WINDOW.phone).toBeGreaterThan(616);
+    expect(HERO_TALLEST).toBe(Math.max(HERO_WINDOW.desktop, HERO_WINDOW.phone));
+  });
+
+  it("reserves the taller state's height before any JavaScript runs", () => {
+    // `aspect-ratio` on the slot, bar included, so the space is open at first paint — and it is the
+    // *tallest* state, because the slot must not grow when the demonstration switches device.
+    expect(HERO_RESERVED_ASPECT).toBe(`${HERO_PAGE_WIDTH} / ${HERO_TALLEST + HERO_BAR}`);
+  });
+
+  /**
+   * **The box and the drawing come from the same two numbers**, which is the fix for «el marco
+   * ampliado sin contenido». Before, the box came from one `aspect-ratio` in CSS and the drawing
+   * from the scale in JavaScript, and nothing derived one from the other.
+   */
+  it("gives the frame exactly the height of what it is showing", () => {
+    const scale = heroScale(680);
+    expect(heroFrameHeight(scale, "desktop")).toBeCloseTo((HERO_BAR + 1040) * scale, 6);
+    expect(heroFrameHeight(scale, "phone")).toBeCloseTo((HERO_BAR + 844) * scale, 6);
+    // The frame is never taller than the slot that reserves room for it.
+    expect(heroFrameHeight(scale, "desktop")).toBeLessThanOrEqual(heroReservedHeight(scale));
+    expect(heroFrameHeight(scale, "phone")).toBeLessThanOrEqual(heroReservedHeight(scale));
   });
 
   it("scales the page to the slot, and holds the iframe back until it knows the slot", () => {
     expect(heroScale(1280)).toBe(1);
     expect(heroScale(680)).toBeCloseTo(0.53125, 5);
-    // Zero rather than a guess: there is no sensible first value for a slot that is 680px on a
-    // desktop and about 342 on a phone, and the component reads zero as «not measured yet».
+    // Zero rather than a guess. The component never feeds it a zero width — a `ResizeObserver`
+    // entry of zero used to unmount the iframe and leave the frame standing empty.
     expect(heroScale(0)).toBe(0);
   });
 

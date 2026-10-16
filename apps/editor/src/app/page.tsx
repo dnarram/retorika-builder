@@ -73,9 +73,16 @@ function Orbs() {
       "transparent 86%)",
     ].join(" ");
 
+  /**
+   * **The second disc is anchored to the bottom, and that is a consequence of the two columns**
+   * (sprint 23 day 1). It used to sit at `top: 760`, which needed `<main>` to be some 1280 tall;
+   * with the headline and the mock-up side by side the page is about 1080 at 1440, so a fixed
+   * `top` put the disc through the bottom edge — and the walk that samples eight times across the
+   * drift would have said so. `bottom` holds whatever the page's height turns out to be.
+   */
   const discs = [
-    { left: 0, top: 150, tint: disc("var(--ui-brand)"), delay: "0s" },
-    { right: 32, top: 760, tint: disc("#06b4fa"), delay: "-12s" },
+    { left: 0, top: 150, bottom: undefined, tint: disc("var(--ui-brand)"), delay: "0s" },
+    { right: 32, top: undefined, bottom: 40, tint: disc("#06b4fa"), delay: "-12s" },
   ];
   return (
     <>
@@ -89,6 +96,7 @@ function Orbs() {
             left: item.left,
             right: item.right,
             top: item.top,
+            bottom: item.bottom,
             width: "min(58vw, 520px)",
             height: "min(58vw, 520px)",
             borderRadius: 999,
@@ -186,17 +194,25 @@ export default function Page() {
       }}
     >
       <Orbs />
-      <div
-        style={{
-          position: "relative",
-          maxWidth: 680,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 20,
-        }}
-      >
-        {/* The lockup, because this is the one page whose whole job is to say who this is — and
+
+      {/**
+       * **The headline and the mock-up, side by side on a wide screen** (sprint 23 day 1, David:
+       * «debería aparecer en el lado derecho junto al texto cuando la pantalla es amplia»). One
+       * column below 1024 — the `studio` class of ADR 0042, the same number the editor uses to
+       * decide it has room for the design tools — and two above it.
+       *
+       * **A grid, and the markup is not reordered.** The keyboard walk pins the order «Empezar»,
+       * «Ya tengo cuenta», «Ver en móvil», which is the order of the DOM; putting the hero first
+       * in the source to get it on the right would move the toggle ahead of the two links for
+       * everybody navigating by keyboard or listening to the page. A grid places it without
+       * touching that.
+       */}
+      <div className="relative grid w-full max-w-[1180px] items-center gap-12 studio:grid-cols-[minmax(0,1fr)_minmax(0,45%)] studio:gap-16">
+        <div
+          className="flex flex-col items-center gap-5 text-center studio:items-start studio:text-left"
+          style={{ position: "relative", maxWidth: 680 }}
+        >
+          {/* The lockup, because this is the one page whose whole job is to say who this is — and
             it had no logo at all until the official one arrived. `eager`, since it is the first
             thing above the fold on a page that already has a cold start to apologise for, and
             `fetchPriority` for the same reason: it is the thing this page is for.
@@ -208,148 +224,143 @@ export default function Page() {
             before it loads, which is the whole of what the overflow walk measures.
 
             **Since sprint 22 day 3 its mark half builds itself, once** — see `Brand` above. */}
-        <div className="ui-reveal">
-          <Brand />
-        </div>
-        <h1
-          className="ui-reveal"
-          style={{
-            ...reveal(1),
-            margin: 0,
-            // Fluid between a phone and the mockup's 44px: the landing already fit at 320, but a
-            // 44px «Tu web, hecha en diez minutos» broke mid-word there (sprint 21 day 1).
-            fontSize: "clamp(30px, 9vw, 44px)",
-            lineHeight: 1.1,
-            fontWeight: 700,
-            letterSpacing: "-0.03em",
-            textAlign: "center",
-          }}
-        >
-          {es["landing.title"]}
-        </h1>
-        <p
-          className="ui-reveal"
-          style={{
-            ...reveal(2),
-            margin: 0,
-            fontSize: 19,
-            lineHeight: 1.5,
-            color: "#475569",
-            textAlign: "center",
-          }}
-        >
-          {es["landing.lede"]}
-        </p>
-
-        <div
-          className="ui-reveal"
-          style={{
-            ...reveal(3),
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 10,
-            marginTop: 8,
-          }}
-        >
-          <Link
-            href="/empezar"
-            /**
-             * `minHeight` and real padding, like every other button in the application — see
-             * `primaryButton` in `questionnaire/ui.tsx`. Not that style itself, because this one
-             * is sized to its own text rather than stretched across a card, and it is the one
-             * button on a page that has no card.
-             *
-             * **The one ring on this screen** (sprint 22 day 3). It fires at 500ms, after the
-             * entrance above it has landed, says «this is the button» once, and never repeats —
-             * the restraint budget allows one per screen and `test/motionBudget.test.ts` counts
-             * them. The lift and the press come from the same two utilities every control in the
-             * five questions wears.
-             */
-            className="ui-interactive ui-lift ui-ring-once"
+          <div className="ui-reveal">
+            <Brand />
+          </div>
+          <h1
+            className="ui-reveal"
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              textAlign: "center",
-              minHeight: 56,
-              padding: "14px 40px",
-              borderRadius: 12,
-              background: "var(--ui-brand)",
-              color: "var(--ui-surface)",
-              fontSize: 18,
-              fontWeight: 600,
-              lineHeight: 1.25,
-              textDecoration: "none",
+              ...reveal(1),
+              margin: 0,
+              // Fluid between a phone and the mockup's 44px: the landing already fit at 320, but a
+              // 44px «Tu web, hecha en diez minutos» broke mid-word there (sprint 21 day 1).
+              fontSize: "clamp(30px, 9vw, 44px)",
+              lineHeight: 1.1,
+              fontWeight: 700,
+              letterSpacing: "-0.03em",
             }}
           >
-            {es["landing.start"]}
-          </Link>
-          {/* `#5B6B82`, not the mockups' `#64748B`: on this page's `#F5F7FA` the latter is 4.43:1
+            {es["landing.title"]}
+          </h1>
+          <p
+            className="ui-reveal"
+            style={{
+              ...reveal(2),
+              margin: 0,
+              fontSize: 19,
+              lineHeight: 1.5,
+              color: "#475569",
+            }}
+          >
+            {es["landing.lede"]}
+          </p>
+
+          <div
+            className="ui-reveal flex flex-col items-center gap-2.5 studio:items-start"
+            style={{ ...reveal(3), marginTop: 8 }}
+          >
+            <Link
+              href="/empezar"
+              /**
+               * `minHeight` and real padding, like every other button in the application — see
+               * `primaryButton` in `questionnaire/ui.tsx`. Not that style itself, because this one
+               * is sized to its own text rather than stretched across a card, and it is the one
+               * button on a page that has no card.
+               *
+               * **The one ring on this screen** (sprint 22 day 3). It fires at 500ms, after the
+               * entrance above it has landed, says «this is the button» once, and never repeats —
+               * the restraint budget allows one per screen and `test/motionBudget.test.ts` counts
+               * them. The lift and the press come from the same two utilities every control in the
+               * five questions wears.
+               */
+              className="ui-interactive ui-lift ui-ring-once"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                textAlign: "center",
+                minHeight: 56,
+                padding: "14px 40px",
+                borderRadius: 12,
+                background: "var(--ui-brand)",
+                color: "var(--ui-surface)",
+                fontSize: 18,
+                fontWeight: 600,
+                lineHeight: 1.25,
+                textDecoration: "none",
+              }}
+            >
+              {es["landing.start"]}
+            </Link>
+            {/* `#5B6B82`, not the mockups' `#64748B`: on this page's `#F5F7FA` the latter is 4.43:1
               and the former 5.06, the same correction `questionnaire/ui.tsx` made on sprint 1 day
               2 and this page missed — found by sprint 21 day 5, the first time axe ran on the
               landing at all. */}
-          <span style={{ fontSize: 14, color: "var(--ui-muted)", textAlign: "center" }}>
-            {es["landing.startHint"]}
-          </span>
-          {/* The brand blue is for white text on it and for black-ink pages; as 15px text on this
+            <span style={{ fontSize: 14, color: "var(--ui-muted)" }}>
+              {es["landing.startHint"]}
+            </span>
+            {/* The brand blue is for white text on it and for black-ink pages; as 15px text on this
               grey it measures 4.39:1. `#105CB1` is the palette's own secondary (ADR 0041 §3), 6.14
               here. Same day, same first run of axe on this page. */}
-          <Link
-            href="/entrar"
-            className="ui-interactive"
-            style={{ fontSize: 15, color: "var(--ui-brand-deep)", marginTop: 8 }}
-          >
-            {es["landing.enter"]}
-          </Link>
+            <Link
+              href="/entrar"
+              className="ui-interactive"
+              style={{ fontSize: 15, color: "var(--ui-brand-deep)", marginTop: 8 }}
+            >
+              {es["landing.enter"]}
+            </Link>
+          </div>
+        </div>
+
+        {/* **A real web, built by the thing this page is selling.** Beside the sentence that
+          promises a finished site on a wide screen, under it on a narrow one — this is the one
+          place on the page where «te devuelve una web terminada» can be shown instead of claimed. */}
+        <div className="ui-reveal" style={{ ...reveal(4), width: "100%", maxWidth: 680 }}>
+          <LandingHero html={landingSampleHtml()} />
         </div>
       </div>
 
-      {/* **A real web, built by the thing this page is selling.** It goes here, under the sentence
-          that promises a finished site and above the list that explains how, because this is the
-          one place on the page where «te devuelve una web terminada» can be shown instead of
-          claimed. Its own `maxWidth` matches the text above it, so the page keeps one column. */}
-      <div className="ui-reveal" style={{ ...reveal(4), width: "100%", maxWidth: 680 }}>
-        <LandingHero html={landingSampleHtml()} />
-      </div>
-
-      <section className="ui-reveal" style={{ ...reveal(5), maxWidth: 680, width: "100%" }}>
-        <h2 style={{ margin: "0 0 14px", fontSize: 22, fontWeight: 700 }}>
-          {es["landing.how.title"]}
-        </h2>
-        <ol
-          /* `ui-steps` is what lets the numerals be the palette's secondary: `::marker` is a
+      {/* The two sections below share the hero row's width, so on a wide screen their left
+          edge is the headline's rather than the middle of the page. */}
+      <div className="flex w-full max-w-[1180px] flex-col items-center gap-12 studio:items-start">
+        <section className="ui-reveal" style={{ ...reveal(5), maxWidth: 680, width: "100%" }}>
+          <h2 style={{ margin: "0 0 14px", fontSize: 22, fontWeight: 700 }}>
+            {es["landing.how.title"]}
+          </h2>
+          <ol
+            /* `ui-steps` is what lets the numerals be the palette's secondary: `::marker` is a
              pseudo-element and an inline `style` cannot reach one (`globals.css`). */
-          className="ui-steps"
-          style={{
-            margin: 0,
-            paddingLeft: 24,
-            display: "flex",
-            flexDirection: "column",
-            gap: 8,
-            fontSize: 16,
-            lineHeight: 1.5,
-            color: "#334155",
-          }}
-        >
-          <li>{es["landing.how.one"]}</li>
-          <li>{es["landing.how.two"]}</li>
-          <li>{es["landing.how.three"]}</li>
-          <li>{es["landing.how.four"]}</li>
-        </ol>
-      </section>
+            className="ui-steps"
+            style={{
+              margin: 0,
+              paddingLeft: 24,
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+              fontSize: 16,
+              lineHeight: 1.5,
+              color: "#334155",
+            }}
+          >
+            <li>{es["landing.how.one"]}</li>
+            <li>{es["landing.how.two"]}</li>
+            <li>{es["landing.how.three"]}</li>
+            <li>{es["landing.how.four"]}</li>
+          </ol>
+        </section>
 
-      {/* The download promise, which is ADR 0001 said in the owner's own terms rather than ours.
+        {/* The download promise, which is ADR 0001 said in the owner's own terms rather than ours.
           It belongs on the landing because it is the thing that makes Retorika different from the
           products this one is competing with, and because it is true. */}
-      <section className="ui-reveal" style={{ ...reveal(6), maxWidth: 680, width: "100%" }}>
-        <h2 style={{ margin: "0 0 10px", fontSize: 22, fontWeight: 700 }}>
-          {es["landing.yours.title"]}
-        </h2>
-        <p style={{ margin: 0, fontSize: 16, lineHeight: 1.6, color: "#334155" }}>
-          {es["landing.yours.body"]}
-        </p>
-      </section>
+        <section className="ui-reveal" style={{ ...reveal(6), maxWidth: 680, width: "100%" }}>
+          <h2 style={{ margin: "0 0 10px", fontSize: 22, fontWeight: 700 }}>
+            {es["landing.yours.title"]}
+          </h2>
+          <p style={{ margin: 0, fontSize: 16, lineHeight: 1.6, color: "#334155" }}>
+            {es["landing.yours.body"]}
+          </p>
+        </section>
+      </div>
     </main>
   );
 }
