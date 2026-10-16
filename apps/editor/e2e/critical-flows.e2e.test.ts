@@ -7586,12 +7586,30 @@ describe("sprint 22 día 4 — las tres propuestas llegan", () => {
 
   const CARDS = "div.ui-reveal.ui-lift";
 
+  /**
+   * **Un contexto y un viaje para los tres recorridos que solo leen esta pantalla**, que es la
+   * disposición que «nada sobresale en un móvil» ya usa. No es ahorro por ahorro: el sprint 22
+   * añadió dieciséis pruebas a este fichero y el trabajo `e2e` tocó su límite de quince minutos
+   * en CI —cancelado a los 15m05s con los 186 tests ya en verde—, así que contestar cinco
+   * preguntas cuatro veces para mirar la misma pantalla es un gasto que ya no es gratis. El de
+   * movimiento reducido mantiene el suyo, porque es otro contexto de navegador.
+   */
+  let context: BrowserContext;
+  let visitor: Page;
+  let built = 0;
+
+  beforeAll(async () => {
+    context = await browser.newContext({ viewport: { width: 1280, height: 950 } });
+    visitor = await context.newPage();
+    built = await toTheProposals(visitor);
+  }, 180_000);
+
+  afterAll(async () => {
+    await context?.close();
+  });
+
   it("llegan una tras otra, y están quietas enseguida", async () => {
-    const visitor = await (
-      await browser.newContext({ viewport: { width: 1280, height: 950 } })
-    ).newPage();
-    try {
-      const built = await toTheProposals(visitor);
+    {
       const cards = visitor.locator(CARDS);
       await expect(cards).toHaveCount(3);
 
@@ -7608,6 +7626,7 @@ describe("sprint 22 día 4 — las tres propuestas llegan", () => {
       // Y la llegada entera cabe de sobra en lo que la maqueta 06 permite: la última tarjeta
       // descansa a 80ms + 260 de recorrido, sobre un montaje que mide decenas de milisegundos.
       await motionSettled(visitor);
+      // `built` lo mide `beforeAll`, que es quien hace el viaje una sola vez.
       expect(built, "las propuestas tardaron más de lo que la maqueta 06 permite").toBeLessThan(
         2_000,
       );
@@ -7616,17 +7635,11 @@ describe("sprint 22 día 4 — las tres propuestas llegan", () => {
           () => document.getAnimations().filter((a) => a.playState === "running").length,
         ),
       ).toBe(0);
-    } finally {
-      await visitor.context().close();
     }
   }, 180_000);
 
   it("la elegida suena una vez, en su propia sombra, y se queda con su tinte", async () => {
-    const visitor = await (
-      await browser.newContext({ viewport: { width: 1280, height: 950 } })
-    ).newPage();
-    try {
-      await toTheProposals(visitor);
+    {
       const cards = visitor.locator(CARDS);
 
       /**
@@ -7655,17 +7668,11 @@ describe("sprint 22 día 4 — las tres propuestas llegan", () => {
       );
       // Una sola pulsación en toda la pantalla, que es lo que el presupuesto permite.
       expect(rings.filter((r) => r.name === "ui-ring-once").length).toBe(1);
-    } finally {
-      await visitor.context().close();
     }
   }, 180_000);
 
   it("se eleva y enciende su miniatura al pasar el ratón, sin tocar el marco de la vista previa", async () => {
-    const visitor = await (
-      await browser.newContext({ viewport: { width: 1280, height: 950 } })
-    ).newPage();
-    try {
-      await toTheProposals(visitor);
+    {
       await motionSettled(visitor);
       const card = visitor.locator(CARDS).first();
       const probe = () =>
@@ -7697,8 +7704,10 @@ describe("sprint 22 día 4 — las tres propuestas llegan", () => {
        * decide si el producto sirve. Lo que se mueve es la tarjeta; el marco se queda igual.
        */
       expect(hovered.frame, "el marco de la vista previa se ha transformado").toBe(rest.frame);
-    } finally {
-      await visitor.context().close();
+
+      // El puntero se retira: esta página la comparten los recorridos de arriba, y una tarjeta
+      // dejada en hover es estado que el siguiente no ha pedido.
+      await visitor.mouse.move(0, 0);
     }
   }, 180_000);
 
@@ -7724,6 +7733,153 @@ describe("sprint 22 día 4 — las tres propuestas llegan", () => {
       await context.close();
     }
   }, 180_000);
+});
+
+/**
+ * **Sprint 22 día 5 — el cierre: las tres pantallas, solo con teclado.**
+ *
+ * El sprint ha añadido movimiento a la landing, a las cinco preguntas y a las tres propuestas. Lo
+ * que esta caminata comprueba es lo que ese movimiento no puede haberse llevado por delante: que
+ * se llega a todo sin ratón, y que **se ve dónde estás**.
+ *
+ * axe ya corre a 390 sobre las tres pantallas dentro de «nada sobresale en un móvil», y axe no
+ * evalúa esto: no sabe qué aspecto tiene un anillo de foco, solo si hay contraste y nombres. El
+ * hallazgo de abajo es exactamente de los que se le escapan.
+ */
+describe("sprint 22 día 5 — las tres pantallas con el teclado", () => {
+  /** Lo que el navegador está dibujando alrededor de lo que tiene el foco, y sobre qué caja. */
+  function focusRing(page: Page): Promise<{ ring: string; box: string; name: string } | null> {
+    return page.evaluate(() => {
+      const el = document.activeElement;
+      if (!el || el === document.body) return null;
+      // El anillo puede estar en el propio elemento o en la tarjeta que lo envuelve, que es como
+      // se resuelve un control visualmente oculto dentro de un `<label>`.
+      const card = el.closest(".ui-choice");
+      const painted = (card ?? el) as HTMLElement;
+      const style = getComputedStyle(painted);
+      const box = painted.getBoundingClientRect();
+      return {
+        ring: `${style.outlineStyle} ${style.outlineWidth} ${style.outlineColor}`,
+        box: `${Math.round(box.width)}x${Math.round(box.height)}`,
+        name: (el.getAttribute("aria-label") ?? el.textContent ?? "").trim().slice(0, 30),
+      };
+    });
+  }
+
+  const VISIBLE_RING = "solid 2px rgb(21, 111, 231)";
+
+  it("recorre la landing con Tab, y el conmutador del héroe se acciona con Enter", async () => {
+    const visitor = await (
+      await browser.newContext({ viewport: { width: 1280, height: 950 } })
+    ).newPage();
+    try {
+      await visitor.goto(BASE_URL, { waitUntil: "networkidle" });
+      await expect(visitor.locator('[data-hero-state="rest"]')).toHaveCount(1, {
+        timeout: 30_000,
+      });
+
+      const stops: string[] = [];
+      for (let step = 0; step < 3; step += 1) {
+        await visitor.keyboard.press("Tab");
+        const seen = await focusRing(visitor);
+        expect(seen, `la parada ${step + 1} no tiene foco`).not.toBeNull();
+        expect(seen?.ring, `${seen?.name} no dibuja su anillo`).toBe(VISIBLE_RING);
+        stops.push(seen?.name ?? "");
+      }
+      // El orden de la página: la llamada, la vuelta, y el conmutador del héroe.
+      expect(stops).toEqual(["Empezar", "Ya tengo cuenta", "Ver en móvil"]);
+
+      // Y se acciona: una demostración que solo responde al ratón no serviría de nada aquí.
+      await visitor.keyboard.press("Enter");
+      await expect(visitor.getByRole("button", { name: /Ver en/ })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+      await expect(visitor.locator("[data-hero-device]")).toHaveAttribute(
+        "data-hero-device",
+        "phone",
+      );
+    } finally {
+      await visitor.context().close();
+    }
+  }, 180_000);
+
+  /**
+   * **El hallazgo de este día, que ninguna otra prueba podía ver.**
+   *
+   * Una tarjeta de sector es un `<label>` con un radio visualmente oculto dentro — la técnica que
+   * permite que la tarjeta entera sea el control. El anillo de foco se dibujaba sobre ese radio,
+   * y medido con Tab en Chromium el radio reporta una caja de **1 × 1**: dos píxeles de anillo
+   * alrededor de uno, detrás de un `clip` que lo esconde de todas formas. Quien recorriera los
+   * once sectores con el teclado no podía ver en cuál estaba. Es WCAG 2.4.7, es anterior a este
+   * sprint, y axe no lo ve porque axe no mira qué aspecto tiene un anillo.
+   *
+   * `.ui-choice:has(:focus-visible)` lo pone donde se ve. Esta prueba mide la caja además del
+   * anillo, porque «hay un outline» era verdad antes también.
+   */
+  it("enseña en qué sector estás, sobre la tarjeta y no sobre un píxel", async () => {
+    const visitor = await (
+      await browser.newContext({ viewport: { width: 1280, height: 950 } })
+    ).newPage();
+    try {
+      await visitor.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+      await visitor.fill("#nombre", "Taberna Santo Domingo");
+      await visitor.getByRole("button", { name: "Siguiente" }).click();
+      await visitor.getByText("Restaurante y bar", { exact: true }).waitFor();
+      await motionSettled(visitor);
+
+      await visitor.locator("#buscar").focus();
+      await visitor.keyboard.press("Tab");
+
+      const seen = await focusRing(visitor);
+      expect(seen?.ring, "la tarjeta del sector no dibuja su anillo").toBe(VISIBLE_RING);
+      const [width, height] = (seen?.box ?? "0x0").split("x").map(Number);
+      expect(width, `el anillo se dibuja sobre una caja de ${seen?.box}`).toBeGreaterThan(100);
+      expect(height, `el anillo se dibuja sobre una caja de ${seen?.box}`).toBeGreaterThan(40);
+
+      // Y se elige con el teclado, que es lo que la tarjeta es.
+      await visitor.keyboard.press("Space");
+      await expect(visitor.getByRole("button", { name: "Siguiente" })).toBeEnabled();
+    } finally {
+      await visitor.context().close();
+    }
+  }, 180_000);
+
+  it("recorre las tres propuestas con Tab, con el anillo sobre controles de verdad", async () => {
+    const visitor = await (
+      await browser.newContext({ viewport: { width: 1280, height: 950 } })
+    ).newPage();
+    try {
+      await visitor.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+      await visitor.fill("#nombre", "Taberna Santo Domingo");
+      await visitor.getByRole("button", { name: "Siguiente" }).click();
+      await visitor.getByText("Restaurante y bar", { exact: true }).click();
+      await visitor.getByRole("button", { name: "Siguiente" }).click();
+      await visitor.getByText("Comidas", { exact: true }).click();
+      await visitor.getByRole("button", { name: "Siguiente" }).click();
+      await visitor.fill("#direccion", "Cta. de Santo Domingo, 2, Ronda");
+      await visitor.getByRole("button", { name: "Siguiente" }).click();
+      await visitor.getByText("Que reserven", { exact: true }).click();
+      await visitor.fill("#enlace", "https://reservas.example.com/taberna");
+      await visitor.getByRole("button", { name: "Crear mi web" }).click();
+      await visitor.getByText("Ver a tamaño real →").first().waitFor();
+      await motionSettled(visitor);
+
+      await visitor.locator("body").press("Tab");
+      for (let step = 0; step < 4; step += 1) {
+        const seen = await focusRing(visitor);
+        expect(seen, `la parada ${step + 1} no tiene foco`).not.toBeNull();
+        expect(seen?.ring, `${seen?.name} no dibuja su anillo`).toBe(VISIBLE_RING);
+        // Una elevación es un `transform`, que no recorta un `outline`: el anillo se ve igual
+        // sobre una tarjeta levantada que sobre una en reposo.
+        const [width] = (seen?.box ?? "0x0").split("x").map(Number);
+        expect(width, `${seen?.name} dibuja su anillo sobre ${seen?.box}`).toBeGreaterThan(40);
+        await visitor.keyboard.press("Tab");
+      }
+    } finally {
+      await visitor.context().close();
+    }
+  }, 240_000);
 });
 
 describe("sprint 15 día 6 — la pantalla de la cuenta", () => {

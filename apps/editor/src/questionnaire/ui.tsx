@@ -489,7 +489,7 @@ export function ChoiceCard({
          of lift and a shadow, behind `@media (hover: hover)` so a tap does not leave a card
          looking chosen. `transform` touches no layout, so the grid walk that caught a card moving
          6.5px under the pointer on sprint 21 day 1 measures exactly what it measured then. */
-      className="ui-reveal ui-interactive ui-lift"
+      className="ui-choice ui-reveal ui-interactive ui-lift"
       style={{
         ...reveal(index),
         display: "flex",
@@ -568,7 +568,7 @@ export function CheckboxCard({
 }) {
   return (
     <label
-      className="ui-reveal ui-interactive ui-lift"
+      className="ui-choice ui-reveal ui-interactive ui-lift"
       style={{
         ...reveal(index),
         display: "flex",

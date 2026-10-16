@@ -180,7 +180,15 @@ jobs:
   e2e:
     name: e2e
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # 20 since 16 October 2026, and the number is a measurement rather than a round-up. Sprint 22
+    # added sixteen walks to `critical-flows.e2e.test.ts` and this job was **cancelled at 15m05s
+    # on its own limit with all 186 tests already green** — the summary printed, the step killed
+    # during cleanup, and `gh pr checks` reporting it as a failure. Nothing was wrong with the
+    # suite; it had simply outgrown its budget. The cheap half was fixed first, by giving the
+    # sprint's proposals walks one shared journey instead of four, so this is slack and not a
+    # ceiling raised to cover waste: the run that overran measured 866s of tests, and the local
+    # full suite went 471s → 778s across the sprint.
+    timeout-minutes: 20
     # Protocol Part 9.2: "El job `e2e` se limita a los pull request porque los minutos de
     # Actions son finitos y Playwright es lo más lento de todo." A push straight to main skips
     # it — every push that matters had a pull request first, which already ran this.

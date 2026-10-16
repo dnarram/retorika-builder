@@ -604,6 +604,27 @@
     outline-offset: 2px;
     border-radius: inherit;
   }
+
+  /**
+   * **A card whose control is one pixel wide has to wear its own focus ring** (sprint 22 day 5).
+   *
+   * The rule above draws on the element that *has* focus. In the five questions that element is a
+   * radio or a checkbox inside the card's `<label>`, and the radio is visually hidden — the
+   * technique that lets a whole card be the control. Measured in Chromium while walking the
+   * questionnaire with nothing but Tab: the focused element reported a box of **1 × 1**, so the
+   * ring was two pixels around one pixel, behind a `clip` that hides it anyway. Somebody moving
+   * through the eleven sectors by keyboard could not see where they were — WCAG 2.4.7, and axe
+   * cannot see it because axe does not evaluate what a focus ring looks like.
+   *
+   * `:has(:focus-visible)` rather than `:focus-within`: focus follows a mouse press too, and a
+   * ring that appears after a click is the thing `:focus-visible` exists to prevent.
+   *
+   * The hidden control keeps its own ring and loses nothing by it — `clip` already hides it.
+   */
+  .ui-choice:has(:focus-visible) {
+    outline: 2px solid var(--ui-brand);
+    outline-offset: 2px;
+  }
 }
 
 /**
