@@ -1228,14 +1228,23 @@ describe("día 7 — dos conversiones desde el editor, y el ZIP resultante abier
       await offlinePage.goto(`file://${join(dir, "index.html")}`, { waitUntil: "load" });
       await expect(offlinePage).toHaveTitle("Taberna Santo Domingo");
       await expect(offlinePage.locator("h1")).toHaveText(HEADLINE_EDIT);
-      // The rule ADR 0023 exists for: converting moved nothing in the strip. «Nuestra carta»
-      // (the renamed page) and «Dónde estamos» sit exactly where «Qué ponemos» and «Dónde
-      // estamos» the sections used to be, ahead of the untouched «Te esperamos» anchor.
-      await expect(offlinePage.locator(".rb-nav-wide a")).toHaveText([
+      /**
+       * **Two menus since ADR 0043, and what each one keeps.** Until sprint 23 this was one strip
+       * and the claim was ADR 0023's: converting a section moved nothing in it. Pages and anchors
+       * are two lists now, so the entry a conversion makes moves from one to the other — that is
+       * what the split gave up, and the ADR says so.
+       *
+       * What is still true, and is what these two assertions pin: the two pages keep the order
+       * their avances have on the home page, and the two sections that were not converted keep
+       * theirs.
+       */
+      await expect(offlinePage.locator('.rb-nav-wide nav[aria-label="Páginas"] a')).toHaveText([
         "Nuestra carta",
-        // The bank's gallery (ADR 0039) is a section with a heading, so ADR 0023's menu lists it.
-        "Un vistazo a Taberna Santo Domingo",
         "Dónde estamos",
+      ]);
+      await expect(offlinePage.locator('.rb-nav-wide nav[aria-label="Secciones"] a')).toHaveText([
+        // The bank's gallery (ADR 0039) is a section with a heading, so the menu lists it.
+        "Un vistazo a Taberna Santo Domingo",
         "Te esperamos",
       ]);
       // No «Inicio» on the page it would link to — a link that reloads the page you are on.

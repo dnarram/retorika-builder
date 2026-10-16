@@ -122,12 +122,12 @@ describe("axe — contrast (every palette, every type pair, one composition)", (
  * inspecting CSS: the snapshot is the tree a screen reader is handed, which is the thing the claim
  * is actually about.
  */
-describe("the menu is announced once, whatever the width", () => {
+describe("the menu is announced the same way, whatever the width", () => {
   const withMenu = geometryCombinations().filter((c) => c.catalogId === "teaser");
 
   for (const c of withMenu) {
     for (const width of WIDTHS) {
-      it(`${c.id} @ ${width}px has one navigation landmark`, async () => {
+      it(`${c.id} @ ${width}px announces the same landmarks`, async () => {
         const page = await openCombination(browser, c, width);
         try {
           // The disclosure is opened first at the narrow width: a closed `<details>` hides its own
@@ -148,9 +148,26 @@ describe("the menu is announced once, whatever the width", () => {
               .filter((el) => el.checkVisibility())
               .map((el) => el.getAttribute("aria-label") ?? ""),
           );
-          expect(announced, `${c.id} @ ${width}px announced ${announced.length}`).toEqual([
-            "Secciones",
-          ]);
+          /**
+           * **«Exactly one» until ADR 0043, and now an identity instead — which is stronger.**
+           * One element served both widths while there was one menu; with two, the thing that has
+           * to hold is that the narrow disclosure announces *the same* menus and not a second copy
+           * of the ones the wide bar was already showing. So the labels are compared against the
+           * document's own, read once, rather than against a literal per width.
+           *
+           * Each name appears once, which is what axe's `landmark-unique` asks of two landmarks
+           * of the same role — and the reason the two menus have names at all.
+           */
+          expect(announced.length, `${c.id} @ ${width}px announced nothing`).toBeGreaterThan(0);
+          expect(new Set(announced).size, `${c.id} @ ${width}px repeats a landmark`).toBe(
+            announced.length,
+          );
+          for (const label of announced) expect(["Páginas", "Secciones"]).toContain(label);
+          // One disclosure on a phone, however many menus it holds: two rows of chrome above the
+          // content is what the single `<details>` exists to avoid.
+          expect(
+            await page.evaluate(() => document.querySelectorAll("details.rb-nav-narrow").length),
+          ).toBe(1);
 
           // And the one announced is the one the width calls for.
           const visible = await page.evaluate(() => ({

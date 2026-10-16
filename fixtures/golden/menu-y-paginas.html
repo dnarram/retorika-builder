@@ -81,8 +81,11 @@ body { margin: 0; font-family: var(--font-body); color: var(--color-ink);
   background: var(--color-surface); border-radius: var(--radius-lg); pointer-events: none; }
 .rb-panel ~ :not(img) { z-index: 2; }
 
-.rb-nav { display: flex; flex-wrap: wrap; gap: var(--space-md);
+.rb-nav-wide { display: flex; flex-wrap: wrap; gap: var(--space-xl);
   padding: var(--space-md) var(--space-xl); background: var(--color-surface); }
+.rb-nav { display: flex; flex-wrap: wrap; gap: var(--space-md); }
+.rb-nav + .rb-nav { padding-left: var(--space-xl);
+  border-left: 1px solid var(--color-muted); }
 .rb-nav-wide, .rb-nav-narrow { border-bottom: 1px solid var(--color-muted); }
 .rb-nav a { color: var(--color-primary); font-family: var(--font-heading);
   font-size: var(--size-body); text-decoration: none; }
@@ -94,6 +97,8 @@ body { margin: 0; font-family: var(--font-body); color: var(--color-ink);
   font-size: var(--size-body); cursor: pointer; }
 .rb-nav-narrow .rb-nav { flex-direction: column; gap: var(--space-sm);
   padding: var(--space-md) 0 0; }
+.rb-nav-narrow .rb-nav + .rb-nav { padding-left: 0; border-left: 0;
+  border-top: 1px solid var(--color-muted); margin-top: var(--space-md); }
 
 @media (max-width: 720px) {
   .rb-section { grid-template-columns: 1fr; padding: var(--space-lg); }
@@ -110,28 +115,34 @@ body { margin: 0; font-family: var(--font-body); color: var(--color-ink);
 </style>
 </head>
 <body>
-<nav aria-label="Secciones" class="rb-nav rb-nav-wide">
-  <a href="./que-ponemos.html">
-    Qué ponemos
-  </a>
-  <a href="./donde-estamos.html">
-    Dónde estamos
-  </a>
-  <a href="#sec-contact">
-    Te esperamos
-  </a>
-</nav>
-<details class="rb-nav-narrow">
-  <summary>
-    Menú
-  </summary>
-  <nav aria-label="Secciones" class="rb-nav">
+<div class="rb-nav-wide">
+  <nav aria-label="Páginas" class="rb-nav">
     <a href="./que-ponemos.html">
       Qué ponemos
     </a>
     <a href="./donde-estamos.html">
       Dónde estamos
     </a>
+  </nav>
+  <nav aria-label="Secciones" class="rb-nav">
+    <a href="#sec-contact">
+      Te esperamos
+    </a>
+  </nav>
+</div>
+<details class="rb-nav-narrow">
+  <summary>
+    Menú
+  </summary>
+  <nav aria-label="Páginas" class="rb-nav">
+    <a href="./que-ponemos.html">
+      Qué ponemos
+    </a>
+    <a href="./donde-estamos.html">
+      Dónde estamos
+    </a>
+  </nav>
+  <nav aria-label="Secciones" class="rb-nav">
     <a href="#sec-contact">
       Te esperamos
     </a>

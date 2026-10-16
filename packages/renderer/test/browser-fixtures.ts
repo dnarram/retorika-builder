@@ -378,7 +378,14 @@ const PRESET_CASES: Record<
   [TEASER_ID]: {
     variants: TEASER_VARIANTS,
     texts: ["standard", "long"],
-    sections: (cover) => [cover, ...teaserSections()],
+    /**
+     * **A headed section joins the avances since ADR 0043**, so this case announces both menus.
+     * A cover plus three avances has three pages and *no* sections menu — the cover carries the
+     * h1 and an avance lends no anchor — so the matrix would only ever see one landmark and the
+     * claim it exists to check, that two are announced the same at both widths, would never be
+     * exercised. One contact section gives it the second.
+     */
+    sections: (cover, variantId) => [cover, ...teaserSections(), contactSection("stacked")],
     extraPages: teaserPages,
   },
   [CONTACT_ID]: {

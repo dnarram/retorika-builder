@@ -365,6 +365,14 @@ nobody inside can supply.
     strip. The menu is derived from sections and pages, and the booking button is neither — it is a
     slot inside the contact section. Putting it in the menu would mean the menu knowing about one
     particular slot of one particular preset, which is the opposite of deriving.
+  - **Dos tiras donde la maqueta dibuja una, desde el 16 de octubre de 2026** (sprint 23,
+    [ADR 0043](../decisions/0043-the-menu-splits-in-two-and-the-owner-chooses.md)). Las páginas del
+    sitio y las secciones de la página que se está viendo son dos menús, con sus dos nombres,
+    «Páginas» y «Secciones». **En un sitio de una sola página el visitante no nota nada**, porque
+    el menú de páginas no se dibuja cuando no hay a dónde ir: la división solo aparece el día que
+    existe una segunda página. Fue elección de David entre cuatro opciones puestas delante, con lo
+    que se entrega a cambio escrito en el ADR — y lo principal que se entrega es que convertir una
+    sección deja de ser invisible para el visitante, porque su entrada se muda de una tira a otra.
 
 - **Not implemented, and not planned: mockup 13's «Avanzado: colores exactos y tamaños».** The row
   at the foot of the style panel opens a free colour picker and size controls. There is no such
