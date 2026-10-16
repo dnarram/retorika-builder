@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { parseDocument } from "@retorika/schema";
 import { describe, expect, it } from "vitest";
 import { render } from "../src/index.ts";
-import { menuEntries } from "../src/menu.ts";
+import { pageMenuEntries } from "../src/menu.ts";
 import { DOCUMENTS_DIR } from "./corpus.ts";
 
 /**
@@ -74,7 +74,8 @@ describe("a page drawn per entry", () => {
 
 describe("what links the drawn pages, since they are in no menu", () => {
   it("leaves the page per entry out of the menu, so twelve files do not flood a strip of three", () => {
-    expect(menuEntries(doc()).map((entry) => entry.kind)).not.toContain("page");
+    // Since ADR 0043 the pages are their own menu, which makes the claim a plain emptiness.
+    expect(pageMenuEntries(doc())).toEqual([]);
     const home = render(doc(), "html").html;
     expect(home).not.toContain("ficha-de-plato.html");
   });

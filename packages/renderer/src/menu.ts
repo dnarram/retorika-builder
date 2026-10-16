@@ -1,10 +1,12 @@
 import { COVER_ID, FOOTER_ID, TEASER_ID } from "@retorika/catalog";
 import type { Page, RetorikaDocument } from "@retorika/schema";
+import { h1SectionIds } from "./headings.ts";
 import es from "./locales/es.json" with { type: "json" };
 import { element, type RenderNode } from "./nodes.ts";
 
 /**
- * The menu that writes itself — the concept dossier §6, and [ADR 0023].
+ * The menu that writes itself — the concept dossier §6, [ADR 0023], and since sprint 23
+ * [ADR 0043], which split it in two.
  *
  * > «El menú se escribe solo. Refleja las secciones de la portada y las páginas que existan. El
  * > usuario nunca ve ni escribe una dirección web.»
@@ -14,9 +16,21 @@ import { element, type RenderNode } from "./nodes.ts";
  * page, and the day a page is renamed it is wrong on all of them at once. A person who never sees
  * a URL cannot be asked to maintain a list of them.
  *
- * The one thing to hold on to while reading this file: **the entries are a property of the site,
- * computed once from the home page, and only the hrefs depend on which page is being drawn.** That
- * is what makes the menu identical everywhere, which is what a menu is for.
+ * ## Two menus since ADR 0043, and what that changed
+ *
+ * **The pages of the site, and the sections of the page you are on.** Until sprint 23 both lived
+ * in one strip, which is what the dossier's sentence describes; David chose the split on 16
+ * October 2026 with the costs written in front of him, and the ADR records them. The two shapes
+ * the split is worth understanding by:
+ *
+ * - **The pages menu is a property of the document**, identical on every page — which is what a
+ *   menu is for — with «Inicio» first when the visitor is somewhere else.
+ * - **The sections menu is a property of the page being drawn.** It used to be the *home* page's
+ *   sections wherever you were, which is why an anchor had to be written `./index.html#sec-x` away
+ *   from home. Every anchor is now local, and that rewriting is gone from the published output.
+ *
+ * **For a site with one page nothing changes for the visitor**: there is nowhere to navigate
+ * between, so no pages menu is drawn and the sections menu is the strip that was always there.
  */
 
 /** The file the publisher gives the first page, whatever that page is slugged
@@ -30,16 +44,30 @@ const ENTRY_FILE = "./index.html";
  * Fewer than three is not navigation, it is two links above a page that already scrolls. The number
  * was deliberately not decided by the fact that a lower one moves more of the golden corpus: a test
  * corpus is a record of what the renderer does, never a reason for it to do it.
+ *
+ * **It counts both menus together, and that is ADR 0043's arithmetic rather than a convenience.**
+ * Three *per menu* is a rule no real site survives: the only multi-page fixture in the corpus has
+ * two pages and one headed section, and a site built by converting two sections of a generated one
+ * has two and two — both would publish three pages with no way between them. Counting what a
+ * visitor could be offered keeps the answer identical to what it was before the split for every
+ * document, which is why eighteen goldens hold still.
  */
 export const MENU_MIN_ENTRIES = 3;
 
-export type MenuEntry =
-  | { kind: "anchor"; label: string; sectionId: string }
-  | { kind: "page"; label: string; slug: string; pageId: string };
+export interface PageEntry {
+  label: string;
+  slug: string;
+  pageId: string;
+}
+
+export interface SectionEntry {
+  label: string;
+  sectionId: string;
+}
 
 /** The heading a section is called by in the menu, or undefined when it has none to lend. */
-function headingOf(page: Page["sections"][number]): string | undefined {
-  const heading = page.content.find(
+function headingOf(section: Page["sections"][number]): string | undefined {
+  const heading = section.content.find(
     (el) =>
       !el.hidden &&
       el.role === "heading" &&
@@ -58,108 +86,142 @@ function destinationOf(doc: RetorikaDocument, section: Page["sections"][number])
 }
 
 /**
- * Every entry the menu holds, in the home page's own order.
+ * Every page the menu offers, in the order the home page gives them.
  *
- * The rule that makes converting a section invisible to a visitor: **an avance contributes the
- * entry of the page it points at, in the place the converted section used to occupy.** So the entry
- * that said `#nuestra-carta` becomes `./nuestra-carta.html` and stays exactly where it was in the
- * strip. Nothing moves, nothing disappears, and the visitor arrives at the same content.
+ * **An avance still decides where its page sits.** It no longer holds the converted section's slot
+ * in one combined strip — that is what the split gave up, and ADR 0043 says so — but the pages a
+ * conversion made keep the relative order of their avances on the home page, and the pages nothing
+ * points at are still appended. The first page is not here: it is «Inicio», added by `linkNodes`
+ * and only where it leads somewhere.
  *
- * The cover contributes nothing — it is the top of the page, which is where a visitor already is —
- * and neither does the footer, which is chrome. A section with no visible heading contributes
- * nothing either: there is no honest word to call it by, and inventing one is the thing this whole
- * file exists to avoid.
+ * A page drawn once per entry contributes nothing (ADR 0040 §5): up to twelve files in a menu
+ * whose threshold is three would be the flood ADR 0033 named, and the cards' own titles are the
+ * way in.
  */
-export function menuEntries(doc: RetorikaDocument): MenuEntry[] {
+export function pageMenuEntries(doc: RetorikaDocument): PageEntry[] {
   const home = doc.pages[0];
   if (!home) return [];
 
-  const entries: MenuEntry[] = [];
+  const entries: PageEntry[] = [];
   const pointedAt = new Set<string>();
 
   for (const section of home.sections) {
-    const catalogId = section.preset.catalogId;
-    if (catalogId === COVER_ID || catalogId === FOOTER_ID) continue;
-
-    if (catalogId === TEASER_ID) {
-      const destination = destinationOf(doc, section);
-      // A teaser whose page is gone contributes nothing rather than a broken entry. The link
-      // itself is already dead, `listDeadDestinations` catches it and the download is refused.
-      if (!destination) continue;
-      pointedAt.add(destination.id);
-      entries.push({
-        kind: "page",
-        label: destination.title,
-        slug: destination.slug,
-        pageId: destination.id,
-      });
-      continue;
-    }
-
-    const label = headingOf(section);
-    if (label) entries.push({ kind: "anchor", label, sectionId: section.id });
+    if (section.preset.catalogId !== TEASER_ID) continue;
+    const destination = destinationOf(doc, section);
+    // A teaser whose page is gone contributes nothing rather than a broken entry. The link itself
+    // is already dead, `listDeadDestinations` catches it and the download is refused.
+    if (!destination || destination.binding) continue;
+    // **Marked before anything else, so two avances to one page cannot publish the same words
+    // twice** — the duplicate-link problem ADR 0022 already solved for «Ver más» — and so the
+    // append loop below never re-adds a page an avance has already placed.
+    if (pointedAt.has(destination.id)) continue;
+    pointedAt.add(destination.id);
+    entries.push({
+      label: destination.title,
+      slug: destination.slug,
+      pageId: destination.id,
+    });
   }
 
   // Pages nothing points at, appended. An owner may delete an avance and keep its page (ADR 0022),
   // and a page with no way in is worse than one at the end of the strip.
   for (const page of doc.pages.slice(1)) {
-    if (pointedAt.has(page.id)) continue;
-    // A page drawn once per entry contributes nothing (ADR 0040 §5, amending ADR 0023): up to
-    // twelve files in a menu whose threshold is three would be the flood ADR 0033 named, and the
-    // cards' own titles are the way in.
-    if (page.binding) continue;
-    entries.push({ kind: "page", label: page.title, slug: page.slug, pageId: page.id });
+    if (pointedAt.has(page.id) || page.binding) continue;
+    entries.push({ label: page.title, slug: page.slug, pageId: page.id });
   }
 
   return entries;
 }
 
-/** Whether this document has enough structure to be worth a menu at all. */
-export function hasMenu(doc: RetorikaDocument): boolean {
-  return menuEntries(doc).length >= MENU_MIN_ENTRIES;
+/**
+ * Every section of **this page** the menu offers, in the page's own order.
+ *
+ * Four kinds of section lend nothing, and each for its own reason:
+ *
+ * - **The section carrying the page's `<h1>`** — the top of the page, which is where a visitor
+ *   already is. On a home page that is the cover; on a converted page it is whatever was
+ *   converted, which is why the rule asks `headings.ts` rather than asking for a cover. Without
+ *   it, a one-section converted page would publish a strip holding one link whose words are its
+ *   own headline and whose destination is the top of the page you are reading.
+ * - **The footer**, which is chrome.
+ * - **An avance**, whose words are borrowed from a page that is already in the other menu. Listing
+ *   it here would put the same words in two landmarks, two clicks apart, for one destination.
+ * - **A section with no visible heading**: there is no honest word to call it by, and inventing
+ *   one is the thing this whole file exists to avoid.
+ */
+export function sectionMenuEntries(page: Page): SectionEntry[] {
+  const h1Ids = h1SectionIds(page);
+  const entries: SectionEntry[] = [];
+
+  for (const section of page.sections) {
+    const catalogId = section.preset.catalogId;
+    if (catalogId === FOOTER_ID || catalogId === TEASER_ID) continue;
+    if (h1Ids.has(section.id) || catalogId === COVER_ID) continue;
+    const label = headingOf(section);
+    if (label) entries.push({ label, sectionId: section.id });
+  }
+
+  return entries;
 }
 
 /**
- * One entry's href, which is the only part of the menu that depends on which page is being drawn.
+ * Whether this document has enough structure to be worth a menu at all.
  *
- * An anchor to a home-page section has to leave the page it is written on when that page is not the
- * home page — `#sec-contact` would resolve to nothing on `nuestra-carta.html`, and on a static file
- * with no error state a fragment that resolves to nothing is indistinguishable from a broken site.
+ * **Counted on the home page, so the answer is the same on every page of the site**: a menu that
+ * appears on one page and not on another is not a menu. See `MENU_MIN_ENTRIES` for why the two
+ * menus are counted together rather than separately.
  */
-function hrefFor(entry: MenuEntry, onHome: boolean): string {
-  if (entry.kind === "page") return `./${entry.slug}.html`;
-  return onHome ? `#${entry.sectionId}` : `${ENTRY_FILE}#${entry.sectionId}`;
+export function hasMenu(doc: RetorikaDocument): boolean {
+  const home = doc.pages[0];
+  if (!home) return false;
+  return pageMenuEntries(doc).length + sectionMenuEntries(home).length >= MENU_MIN_ENTRIES;
 }
 
-function linkNodes(doc: RetorikaDocument, current: Page): RenderNode[] {
+/** The two menus of one page, as `<nav>` nodes — empty ones left out rather than announced. */
+function navsFor(doc: RetorikaDocument, current: Page): RenderNode[] {
   const home = doc.pages[0];
   const onHome = home?.id === current.id;
 
-  // **«Inicio», and only when the visitor is not already there.** ADR 0023 describes the set of
-  // entries and says nothing about what the menu looks like from another page; this is what makes
-  // it work there. Without it a home page whose every section has been converted offers, from one
-  // of those pages, a strip of other pages and no way back — reachable only by the browser's back
-  // button, which is not navigation the site provides. On the home page it is left out rather than
-  // pointed at `./index.html`, because a link that reloads the page you are on is worse than no
-  // link. Mockup 08 draws «Inicio» on a home page too; that divergence is in `REVIEW.md`.
-  const homeEntry: RenderNode[] = onHome
-    ? []
-    : [element("a", { href: ENTRY_FILE }, [es["nav.home"]])];
+  // **«Inicio», and only when the visitor is not already there.** Without it a home page whose
+  // every section has been converted offers, from one of those pages, a strip of other pages and
+  // no way back — reachable only by the browser's back button, which is not navigation the site
+  // provides. On the home page it is left out rather than pointed at `./index.html`, because a
+  // link that reloads the page you are on is worse than no link. Mockup 08 draws «Inicio» on a
+  // home page too; that divergence is in `REVIEW.md`.
+  const pages: RenderNode[] = [
+    ...(onHome ? [] : [element("a", { href: ENTRY_FILE }, [es["nav.home"]])]),
+    ...pageMenuEntries(doc).map((entry) =>
+      element(
+        "a",
+        {
+          href: `./${entry.slug}.html`,
+          // `aria-current="page"` and not `aria-current="true"`: the entry names the page the
+          // visitor is on, which is exactly what the `page` token is for. It belongs here and
+          // nowhere else — every anchor in the sections menu points at the page you are on, so
+          // marking them would mark all of them and say nothing.
+          ...(entry.pageId === current.id ? { "aria-current": "page" } : {}),
+        },
+        [entry.label],
+      ),
+    ),
+  ];
+
+  const sections = sectionMenuEntries(current).map((entry) =>
+    element("a", { href: `#${entry.sectionId}` }, [entry.label]),
+  );
 
   return [
-    ...homeEntry,
-    ...menuEntries(doc).map((entry) => {
-      const attributes: Record<string, string> = { href: hrefFor(entry, onHome) };
-      // `aria-current="page"` and not `aria-current="true"`: the entry names the page the visitor
-      // is on, which is exactly what the `page` token is for.
-      if (entry.kind === "page" && entry.pageId === current.id) attributes["aria-current"] = "page";
-      return element("a", attributes, [entry.label]);
-    }),
+    ...(pages.length > 0
+      ? [element("nav", { class: "rb-nav", "aria-label": es["nav.pages"] }, pages)]
+      : []),
+    ...(sections.length > 0
+      ? [element("nav", { class: "rb-nav", "aria-label": es["nav.sections"] }, sections)]
+      : []),
   ];
 }
 
 /**
- * The menu as markup: **two versions, one of which the stylesheet hides at any given width.**
+ * The menus as markup: **two versions, one of which the stylesheet hides at any given width.**
  *
  * The approved fallback, taken deliberately. A single `<details>` kept open on wide screens depends
  * on `::details-content`, which our Chromium 153 does support — measured, not assumed — but which
@@ -168,11 +230,14 @@ function linkNodes(doc: RetorikaDocument, current: Page): RenderNode[] {
  * customers happen to run. On an older Safari the whole menu would sit collapsed behind a click on
  * a desktop, which is a real degradation of the published site.
  *
- * So a plain `<nav>` for wide screens and a `<details>` for narrow ones, alternated by a media
- * query with `display: none` — which takes the one that does not apply **out of the accessibility
- * tree** rather than leaving two menus announced. The a11y matrix asserts exactly one navigation
- * landmark at each width; that is the check that separates "two menus alternated" from "two menus
- * announced".
+ * So a plain strip for wide screens and a `<details>` for narrow ones, alternated by a media query
+ * with `display: none` — which takes the one that does not apply **out of the accessibility tree**
+ * rather than leaving two menus announced.
+ *
+ * **Since ADR 0043 `rb-nav-wide` names a box holding both menus rather than the menu itself, and
+ * the narrow version keeps exactly one disclosure.** Two `<details>` stacked would put two rows of
+ * chrome above the content on a 390px phone before a word of the site appears; one holds both
+ * lists, which is also what somebody opening a menu expects to find.
  *
  * The `<input type="checkbox">` toggle is not an option: ADR 0016 left the `field` role unused
  * precisely so that no orphan `<input>` reaches a published page, and this would put one there by
@@ -180,12 +245,13 @@ function linkNodes(doc: RetorikaDocument, current: Page): RenderNode[] {
  */
 export function menuNodes(doc: RetorikaDocument, current: Page): RenderNode[] {
   if (!hasMenu(doc)) return [];
-  const links = linkNodes(doc, current);
+  const wide = navsFor(doc, current);
+  if (wide.length === 0) return [];
   return [
-    element("nav", { class: "rb-nav rb-nav-wide", "aria-label": es["nav.label"] }, links),
+    element("div", { class: "rb-nav-wide" }, wide),
     element("details", { class: "rb-nav-narrow" }, [
       element("summary", {}, [es["nav.menu"]]),
-      element("nav", { class: "rb-nav", "aria-label": es["nav.label"] }, linkNodes(doc, current)),
+      ...navsFor(doc, current),
     ]),
   ];
 }
