@@ -11,8 +11,8 @@
  * transiciona de vista pc a vista móvil» — shown on the landing with nothing simulated.
  */
 
-/** The viewport the page is laid out at in the desktop state, and the height both states show. */
-export const HERO_PAGE = { width: 1280, height: 800 } as const;
+/** The viewport the page is laid out at in the desktop state. */
+export const HERO_PAGE_WIDTH = 1280;
 
 /**
  * The phone state's viewport, in the page's own pixels: 390, which is what an iPhone has and the
@@ -21,22 +21,50 @@ export const HERO_PAGE = { width: 1280, height: 800 } as const;
  */
 export const HERO_PHONE_WIDTH = 390;
 
+/** The viewport each state lays the page out at. */
+export const HERO_VIEWPORT = { desktop: HERO_PAGE_WIDTH, phone: HERO_PHONE_WIDTH } as const;
+
+export type HeroDevice = keyof typeof HERO_VIEWPORT;
+
 /**
- * The browser bar above the page, in the page's own pixels so that it scales with it.
+ * **How much of the page each state shows, and these two numbers are measurements** (sprint 23
+ * day 1).
  *
- * It is drawn as a percentage of the frame rather than a pixel height for one reason: the frame's
- * height has to be reserved **before any JavaScript runs**, which `aspect-ratio` does and a
- * measured pixel cannot. A bar of a fixed 40px would make the frame's total height depend on the
- * scale, and the aspect ratio would then be circular.
+ * They were one number, 800, for both states, and that was the defect David reported: «se corta en
+ * extremo hasta el punto de que prácticamente lo único que se ve es parte de la imagen de portada
+ * sin visualizar un botón o texto». Measured in Chromium on 16 October 2026 against the real
+ * sample, in the page's own pixels:
+ *
+ * | | alto total | la portada acaba en | «Reservar mesa» acaba en |
+ * |---|---|---|---|
+ * | escritorio (1280) | 2137 | 939 | **891** |
+ * | móvil (390) | 2880 | 640 | 616 |
+ *
+ * So at 800 the desktop state cut the cover's own button off by **91 pixels** — the photograph and
+ * nothing else — while the phone state had 160 pixels to spare. One number could not serve both.
+ *
+ * **What each one is chosen to show: the cover whole, its button included, and a slice of the
+ * section below it** so the frame reads as the top of a page rather than as a picture. Desktop
+ * 1040 leaves 101 pixels of «Qué ponemos»; phone 844 leaves 204 — and 844 is also exactly an
+ * iPhone 13's viewport height, so the phone state is a real phone screen rather than a crop.
+ *
+ * `test/heroWindow.browser.test.ts` re-measures both against the sample and fails if the cover or
+ * its button ever falls outside, which is what keeps these from going stale the next time the
+ * renderer or the photo bank moves.
  */
+export const HERO_WINDOW = { desktop: 1040, phone: 844 } as const;
+
+/** The browser bar above the page, in the page's own pixels, so it scales with it. */
 export const HERO_BAR = 40;
 
-/** The frame's aspect ratio, bar included — what reserves its space at first paint. */
-export const HERO_ASPECT = `${HERO_PAGE.width} / ${HERO_PAGE.height + HERO_BAR}`;
+/** The taller of the two states, which is what the slot reserves while nobody has asked for one. */
+export const HERO_TALLEST = Math.max(HERO_WINDOW.desktop, HERO_WINDOW.phone);
 
-/** The bar's and the page's shares of the frame's height, as CSS percentages. */
-export const HERO_BAR_SHARE = `${(100 * HERO_BAR) / (HERO_PAGE.height + HERO_BAR)}%`;
-export const HERO_PAGE_SHARE = `${(100 * HERO_PAGE.height) / (HERO_PAGE.height + HERO_BAR)}%`;
+/**
+ * The aspect ratio the slot reserves **before any JavaScript runs** — the tallest state, bar
+ * included. `aspect-ratio` can do that against a width CSS already knows; a measured pixel cannot.
+ */
+export const HERO_RESERVED_ASPECT = `${HERO_PAGE_WIDTH} / ${HERO_TALLEST + HERO_BAR}`;
 
 /**
  * The frame's width in each state, as a share of the slot it sits in.
@@ -47,16 +75,16 @@ export const HERO_PAGE_SHARE = `${(100 * HERO_PAGE.height) / (HERO_PAGE.height +
  */
 export const HERO_FRAME_WIDTH = {
   desktop: "100%",
-  phone: `${Math.round((10_000 * HERO_PHONE_WIDTH) / HERO_PAGE.width) / 100}%`,
+  phone: `${Math.round((10_000 * HERO_PHONE_WIDTH) / HERO_PAGE_WIDTH) / 100}%`,
 } as const;
 
 /**
  * The demonstration: one trip to the phone and back, and then it stops.
  *
- * **Once, not in a loop**, which is the budget of this sprint said in the one place it would be
- * most tempting to break: a frame that keeps flipping is an advertisement on the page it is
- * supposed to be explaining, and the restraint budget in `docs/design/REVIEW.md` gives the landing
- * one looping animation, which the background orbs already spend.
+ * **Once, not in a loop**, which is the budget of sprint 22 said in the one place it would be most
+ * tempting to break: a frame that keeps flipping is an advertisement on the page it is supposed to
+ * be explaining, and the restraint budget in `docs/design/REVIEW.md` gives the landing one looping
+ * animation, which the background orbs already spend.
  *
  * 1500ms before it starts, so somebody arriving reads the headline and sees a still page first and
  * the movement is an answer to «what does this do» rather than the first thing that happens.
@@ -90,15 +118,35 @@ export const HERO_IN_VIEW = 0.35;
 export const REDUCED_MOTION_MEDIA = "(prefers-reduced-motion: reduce)";
 
 /**
- * The scale that draws the page at `HERO_PAGE.width` inside a slot this wide.
+ * The scale that draws the page at `HERO_PAGE_WIDTH` inside a slot this wide.
  *
  * Zero until the slot has been measured, and zero is the signal the component uses to hold the
- * iframe back: there is no sensible first guess here, because the slot is 680px on a desktop and
- * about 342 on a phone, and guessing one would mean drawing the page at the wrong size for a frame
- * before correcting it.
+ * iframe back: there is no sensible first guess here, because the slot is some 560px in two
+ * columns and about 342 on a phone, and guessing one would mean drawing the page at the wrong size
+ * for a frame before correcting it. **The component never feeds it a zero width** — see its
+ * `ResizeObserver`, and the defect that taught it.
  */
 export function heroScale(slotWidth: number): number {
-  return slotWidth > 0 ? slotWidth / HERO_PAGE.width : 0;
+  return slotWidth > 0 ? slotWidth / HERO_PAGE_WIDTH : 0;
+}
+
+/**
+ * The drawn height of the frame in one state: the bar plus that state's window, shrunk.
+ *
+ * **This is the fix for «el marco ampliado sin contenido».** Before, the frame's height came from
+ * CSS (one `aspect-ratio`, both states) while the page's drawn height came from JavaScript (the
+ * scale), and nothing derived one from the other — so the two agreed only while
+ * `scale === slotWidth / 1280` and disagreed visibly the moment anything made them drift. Now the
+ * box and the drawing come from the same two numbers, the way `thumbnailHeight` already does it
+ * for a proposal's preview: «la caja es siempre exactamente la página encogida».
+ */
+export function heroFrameHeight(scale: number, device: HeroDevice): number {
+  return (HERO_BAR + HERO_WINDOW[device]) * scale;
+}
+
+/** The slot's reserved height while nobody has chosen a state: the taller of the two. */
+export function heroReservedHeight(scale: number): number {
+  return (HERO_BAR + HERO_TALLEST) * scale;
 }
 
 /**

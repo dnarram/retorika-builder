@@ -4,14 +4,15 @@ import { useEffect, useRef, useState } from "react";
 import { useMediaQuery } from "../editor/viewport.ts";
 import es from "../locales/es.json" with { type: "json" };
 import {
-  HERO_ASPECT,
-  HERO_BAR_SHARE,
+  HERO_BAR,
   HERO_DEMO,
   HERO_FRAME_WIDTH,
   HERO_IN_VIEW,
-  HERO_PAGE,
-  HERO_PAGE_SHARE,
+  HERO_RESERVED_ASPECT,
+  HERO_WINDOW,
+  heroFrameHeight,
   heroInnerWidth,
+  heroReservedHeight,
   heroScale,
   REDUCED_MOTION_MEDIA,
 } from "./landingHero.ts";
@@ -46,6 +47,8 @@ export function LandingHero({ html }: { html: string }) {
   const [seen, setSeen] = useState(false);
   const [device, setDevice] = useState<"desktop" | "phone">("desktop");
   const [demonstrating, setDemonstrating] = useState(false);
+  /** Whether the visitor has asked for a state themselves — see the slot's own comment. */
+  const [chosen, setChosen] = useState(false);
   const reduced = useMediaQuery(REDUCED_MOTION_MEDIA);
 
   // The slot's width, which is the page's scale. A `ResizeObserver` rather than one reading of
@@ -56,7 +59,17 @@ export function LandingHero({ html }: { html: string }) {
     if (!el) return;
     const observer = new ResizeObserver((entries) => {
       const width = entries[0]?.contentRect.width;
-      if (width !== undefined) setScale(heroScale(width));
+      /**
+       * **A width of zero is not a measurement, and taking it as one is what left «el marco
+       * ampliado sin contenido»** (David, 16 October 2026). `heroScale(0)` is 0, the render gate
+       * below is `scale > 0`, and a `ResizeObserver` reports zero whenever the slot is momentarily
+       * unlaid-out — a device-emulation toggle, an ancestor hidden and shown. One such entry
+       * unmounted the iframe while the slot kept its full reserved height, and nothing remounted it
+       * until another resize happened to arrive. The last good scale is kept instead: before the
+       * first real measurement there is nothing to draw anyway, and after it there is always
+       * something better than nothing.
+       */
+      if (width !== undefined && width > 0) setScale(heroScale(width));
     });
     observer.observe(el);
     return () => observer.disconnect();
@@ -166,6 +179,7 @@ export function LandingHero({ html }: { html: string }) {
     for (const timer of timers.current) clearTimeout(timer);
     timers.current = [];
     setDemonstrating(false);
+    setChosen(true);
     // A press is attention, which is the same thing the observer above waits for: somebody who
     // reaches the button before the frame has been judged «in view» gets the page, not an
     // empty box changing width.
@@ -174,6 +188,37 @@ export function LandingHero({ html }: { html: string }) {
   };
 
   const phone = device === "phone";
+  /**
+   * **The frame always hugs what it is showing; the slot around it reserves until somebody asks.**
+   *
+   * David's rule, on approving this sprint: «el marco se ajusta siempre a la maqueta, pero durante
+   * la demostración automática el hueco reserva el alto mayor de los dos estados, para que el
+   * contenido de debajo no salte sin que el visitante haya hecho nada. Cuando el visitante pulsa
+   * el conmutador, el hueco puede ajustarse.»
+   *
+   * It is the distinction the metric itself makes: a layout shift within half a second of an
+   * interaction is not counted as an unexpected one, because the person watching asked for it.
+   * Before anybody asks, the page below the hero must not move for a demonstration it did not
+   * request; after they press, the frame and its slot may fit the state they chose.
+   *
+   * **Measured, both ways, on 16 October 2026**, at three widths where the section below the hero
+   * is on screen — the unprompted layout shift across one whole demonstration:
+   *
+   * | | hueco reservado | hueco siempre ajustado |
+   * |---|---|---|
+   * | 1280 × 900 | **0,0747** | 0,1530 |
+   * | 900 × 1300 | **0,1313** | 0,1698 |
+   * | 768 × 1400 | **0,1324** | 0,1724 |
+   *
+   * Traced at 900 × 1300: reserved, the slot holds 574 and «Cómo funciona» holds 1212 through the
+   * whole trip; fitted, they go 574 → 470 → 574 and 1212 → 1108 → 1212. A hundred and four pixels,
+   * twice, for a demonstration nobody asked for.
+   *
+   * `undefined` until the slot has been measured — the aspect ratio below reserves the space in
+   * the meantime, with no JavaScript at all.
+   */
+  const frameHeight = scale > 0 ? heroFrameHeight(scale, device) : undefined;
+  const slotHeight = chosen ? frameHeight : scale > 0 ? heroReservedHeight(scale) : undefined;
 
   return (
     <section
@@ -199,7 +244,14 @@ export function LandingHero({ html }: { html: string }) {
          */
         data-hero-state={demonstrating ? "demo" : "rest"}
         data-hero-device={device}
-        style={{ width: "100%", aspectRatio: HERO_ASPECT }}
+        data-hero-slot={chosen ? "fitted" : "reserved"}
+        style={
+          slotHeight === undefined
+            ? // Before the first measurement: the tallest state's proportion, which CSS can reserve
+              // against a width it already knows.
+              { width: "100%", aspectRatio: HERO_RESERVED_ASPECT }
+            : { width: "100%", height: slotHeight }
+        }
       >
         <div
           /**
@@ -211,7 +263,9 @@ export function LandingHero({ html }: { html: string }) {
           className="ui-reflow"
           style={{
             width: HERO_FRAME_WIDTH[device],
-            height: "100%",
+            // The frame is exactly the bar plus the window this state shows, shrunk — never the
+            // slot's height, which is what used to leave it standing empty.
+            height: frameHeight ?? "100%",
             margin: "0 auto",
             overflow: "hidden",
             borderRadius: "var(--ui-radius-lg)",
@@ -236,7 +290,8 @@ export function LandingHero({ html }: { html: string }) {
           <div
             aria-hidden="true"
             style={{
-              height: HERO_BAR_SHARE,
+              height: scale > 0 ? HERO_BAR * scale : undefined,
+              flexShrink: 0,
               display: "flex",
               alignItems: "center",
               gap: 5,
@@ -259,12 +314,14 @@ export function LandingHero({ html }: { html: string }) {
             ))}
           </div>
 
-          <div style={{ height: HERO_PAGE_SHARE, overflow: "hidden" }}>
+          <div style={{ height: HERO_WINDOW[device] * scale, overflow: "hidden" }}>
             {painted && seen && scale > 0 ? (
               <div
                 style={{
                   width: heroInnerWidth(scale),
-                  height: HERO_PAGE.height,
+                  // The window this state shows, in the page's own pixels. Drawn at `scale`, it is
+                  // exactly the box above — the box and the drawing from the same two numbers.
+                  height: HERO_WINDOW[device],
                   transform: `scale(${scale})`,
                   transformOrigin: "top left",
                 }}

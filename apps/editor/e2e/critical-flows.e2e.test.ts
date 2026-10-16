@@ -14,7 +14,12 @@ import {
 } from "@playwright/test";
 import { GALLERY_SAMPLE_COUNT } from "@retorika/generator";
 import { afterAll, beforeAll, describe, it } from "vitest";
-import { HERO_DEMO, HERO_PAGE, HERO_PHONE_WIDTH } from "../src/app/landingHero.ts";
+import {
+  HERO_DEMO,
+  HERO_PAGE_WIDTH,
+  HERO_PHONE_WIDTH,
+  HERO_WINDOW,
+} from "../src/app/landingHero.ts";
 import { BAR_INSET, BAR_STEP, type Point, TOOLBAR_GAP } from "../src/editor/barPosition.ts";
 import { VERB_SCALE } from "../src/editor/chromeScale.ts";
 import { NARROWEST_WIDTH, PHONE_BREAKPOINT } from "../src/editor/overflowCheck.ts";
@@ -7274,7 +7279,7 @@ describe("sprint 22 día 2 — el héroe de la landing", () => {
 
       // Empieza quieta y en ordenador, y la página de dentro está en su diseño de escritorio.
       await expect(slot).toHaveAttribute("data-hero-device", "desktop");
-      await expect.poll(pageWidth, { timeout: 30_000 }).toBe(HERO_PAGE.width);
+      await expect.poll(pageWidth, { timeout: 30_000 }).toBe(HERO_PAGE_WIDTH);
 
       // Pasa a móvil sola, y la página de dentro queda exactamente en 390 — por debajo del salto
       // del renderizador, que es lo que la reorganiza de verdad.
@@ -7333,7 +7338,7 @@ describe("sprint 22 día 2 — el héroe de la landing", () => {
         widths.push(await inside.locator("body").evaluate(() => window.innerWidth));
         await visitor.waitForTimeout(25);
       }
-      const travelling = widths.filter((w) => w > HERO_PHONE_WIDTH && w < HERO_PAGE.width);
+      const travelling = widths.filter((w) => w > HERO_PHONE_WIDTH && w < HERO_PAGE_WIDTH);
       expect(
         travelling.length,
         `la página salta en vez de viajar: ${widths.join(" ")}`,
@@ -7353,13 +7358,6 @@ describe("sprint 22 día 2 — el héroe de la landing", () => {
       await visitor.context().close();
     }
   }, 120_000);
-
-  /**
-   * **Sprint 22 día 3 — la landing respira, y las preguntas entran sin estorbar.**
-   *
-   * Lo que se cuida aquí es el presupuesto de contención, que es la mitad del encargo que se degrada
-   * sola: «sin abusar para no distraer al usuario». Cuatro afirmaciones, y las cuatro son medibles.
-   */
 
   it("no se mueve sola para quien ha pedido menos movimiento", async () => {
     const context = await browser.newContext({ reducedMotion: "reduce" });
@@ -7384,6 +7382,157 @@ describe("sprint 22 día 2 — el héroe de la landing", () => {
   }, 120_000);
 });
 
+/**
+ * **Sprint 23 día 1 — el héroe cabe, se pone al lado y nunca queda vacío.**
+ *
+ * Tres defectos que David reportó, y las tres pruebas son las medidas que los definen:
+ *
+ * 1. **Se cortaba en extremo**: la ventana eran 800 píxeles de página en los dos estados, y la
+ *    portada de la muestra mide 939 a 1280 de ancho con su botón acabando en **891**. Se veía la
+ *    foto y nada más. Ahora cada estado tiene su ventana, medida.
+ * 2. **El marco quedaba ampliado y vacío**: su alto salía de un `aspect-ratio` en CSS mientras el
+ *    dibujo salía de la escala en JavaScript, y nada derivaba uno del otro.
+ * 3. **Debía ponerse al lado del texto** en una pantalla amplia.
+ */
+describe("sprint 23 día 1 — el héroe de la landing cabe y se pone al lado", () => {
+  /** Lo que de verdad se ve de la página, medido dentro del marco y en sus propios píxeles. */
+  async function showing(
+    page: Page,
+  ): Promise<{ window: number; coverEnd: number; buttonEnd: number }> {
+    const inside = page.frameLocator('iframe[title^="Ejemplo de web"]');
+    return inside.locator("body").evaluate(() => {
+      const bottom = (el: Element | null | undefined) =>
+        el ? Math.round(el.getBoundingClientRect().bottom + window.scrollY) : -1;
+      const cover = document.querySelector('[data-section="sec-cover"]');
+      return {
+        window: Math.round(document.documentElement.clientHeight),
+        coverEnd: bottom(cover),
+        buttonEnd: bottom(cover?.querySelector("a")),
+      };
+    });
+  }
+
+  it("enseña la portada entera, con su botón, en los dos estados", async () => {
+    const visitor = await (
+      await browser.newContext({ viewport: { width: 1280, height: 1000 } })
+    ).newPage();
+    try {
+      await visitor.goto(BASE_URL, { waitUntil: "networkidle" });
+      await expect(visitor.locator('[data-hero-state="rest"]')).toHaveCount(1, { timeout: 30_000 });
+
+      const desktop = await showing(visitor);
+      expect(desktop.window, "la ventana de escritorio no es la declarada").toBe(
+        HERO_WINDOW.desktop,
+      );
+      expect(
+        desktop.buttonEnd,
+        `el botón de la portada acaba en ${desktop.buttonEnd} y la ventana son ${desktop.window}`,
+      ).toBeLessThanOrEqual(desktop.window);
+      expect(desktop.coverEnd, "la portada no cabe entera").toBeLessThanOrEqual(desktop.window);
+      // Y se ve que la página sigue: queda sitio por debajo de la portada.
+      expect(desktop.window - desktop.coverEnd).toBeGreaterThan(40);
+
+      await visitor.getByRole("button", { name: "Ver en móvil" }).click();
+      await visitor.waitForTimeout(500);
+      const phone = await showing(visitor);
+      expect(phone.window).toBe(HERO_WINDOW.phone);
+      expect(phone.buttonEnd).toBeLessThanOrEqual(phone.window);
+      expect(phone.coverEnd).toBeLessThanOrEqual(phone.window);
+      expect(phone.window - phone.coverEnd).toBeGreaterThan(40);
+    } finally {
+      await visitor.context().close();
+    }
+  }, 180_000);
+
+  it("ciñe el marco a lo que enseña, y reserva el hueco hasta que alguien elige", async () => {
+    const visitor = await (
+      await browser.newContext({ viewport: { width: 1280, height: 1000 } })
+    ).newPage();
+    try {
+      await visitor.goto(BASE_URL, { waitUntil: "networkidle" });
+      await expect(visitor.locator('[data-hero-state="rest"]')).toHaveCount(1, { timeout: 30_000 });
+
+      const boxes = () =>
+        visitor.locator("[data-hero-state]").evaluate((slot) => {
+          const frame = slot.querySelector(".ui-reflow") as HTMLElement;
+          const sheet = frame.querySelector("iframe")?.parentElement as HTMLElement | undefined;
+          return {
+            slot: Math.round(slot.getBoundingClientRect().height),
+            frame: Math.round(frame.getBoundingClientRect().height),
+            drawn: sheet ? Math.round(sheet.getBoundingClientRect().bottom) : -1,
+            frameBottom: Math.round(frame.getBoundingClientRect().bottom),
+            mode: slot.getAttribute("data-hero-slot"),
+          };
+        });
+
+      /**
+       * **Nada de marco vacío:** el borde inferior de la página dibujada y el del marco coinciden.
+       * Antes el marco salía de un `aspect-ratio` y el dibujo de la escala, y bastaba una medición
+       * de ancho cero del `ResizeObserver` para desmontar el iframe dejando el marco en pie.
+       */
+      const atRest = await boxes();
+      expect(
+        atRest.frameBottom - atRest.drawn,
+        "sobra marco por debajo de la maqueta",
+      ).toBeLessThan(2);
+
+      // Antes de que nadie elija, el hueco reserva el estado más alto: la landing de debajo no se
+      // mueve por una demostración que el visitante no ha pedido (regla de David).
+      expect(atRest.mode).toBe("reserved");
+      expect(atRest.slot).toBeGreaterThanOrEqual(atRest.frame);
+
+      // Y en cuanto pulsa, el hueco se ajusta a lo que ha pedido.
+      await visitor.getByRole("button", { name: "Ver en móvil" }).click();
+      await visitor.waitForTimeout(500);
+      const chosen = await boxes();
+      expect(chosen.mode).toBe("fitted");
+      expect(chosen.slot - chosen.frame, "el hueco no se ciñe tras elegir").toBeLessThan(2);
+      expect(chosen.frameBottom - chosen.drawn).toBeLessThan(2);
+    } finally {
+      await visitor.context().close();
+    }
+  }, 180_000);
+
+  it("se pone al lado del texto en una pantalla amplia, y debajo en una pequeña", async () => {
+    const places = async (width: number, height: number) => {
+      const context = await browser.newContext({ viewport: { width, height } });
+      try {
+        const visitor = await context.newPage();
+        await visitor.goto(BASE_URL, { waitUntil: "networkidle" });
+        await expect(visitor.locator('[data-hero-state="rest"]')).toHaveCount(1, {
+          timeout: 30_000,
+        });
+        // **Awaited before returning, which is not a style choice.** `finally` runs the moment
+        // the return expression is evaluated, so handing back an unawaited promise closes the
+        // context out from under it — «Target page, context or browser has been closed».
+        const placed = await visitor.evaluate(() => {
+          const h1 = document.querySelector("h1") as HTMLElement;
+          const slot = document.querySelector("[data-hero-state]") as HTMLElement;
+          const a = h1.getBoundingClientRect();
+          const b = slot.getBoundingClientRect();
+          return { beside: b.left >= a.right - 1, align: getComputedStyle(h1).textAlign };
+        });
+        return placed;
+      } finally {
+        await context.close();
+      }
+    };
+
+    // 1024 es la clase `studio` del ADR 0042, el mismo número con el que el editor decide que
+    // tiene sitio para las herramientas de diseño.
+    expect(await places(1440, 1000)).toEqual({ beside: true, align: "left" });
+    expect(await places(1024, 900)).toEqual({ beside: true, align: "left" });
+    expect(await places(900, 1000)).toEqual({ beside: false, align: "center" });
+    expect(await places(390, 844)).toEqual({ beside: false, align: "center" });
+  }, 240_000);
+});
+
+/**
+ * **Sprint 22 día 3 — la landing respira, y las preguntas entran sin estorbar.**
+ *
+ * Lo que se cuida aquí es el presupuesto de contención, que es la mitad del encargo que se degrada
+ * sola: «sin abusar para no distraer al usuario». Cuatro afirmaciones, y las cuatro son medibles.
+ */
 describe("sprint 22 día 3 — la landing respira y las preguntas entran", () => {
   it("construye la marca una sola vez y la deja hecha", async () => {
     const visitor = await (await browser.newContext()).newPage();
