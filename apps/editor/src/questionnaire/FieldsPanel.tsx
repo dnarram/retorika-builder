@@ -44,6 +44,17 @@ export interface FieldsPanelProps {
    * anchored, or absent for the diff fallback — the same contract the canvas has (ADR 0027 §4b). */
   onEditText: (address: ElementAddress, text: string, marks?: readonly MarkRun[]) => void;
   onClose: () => void;
+  /**
+   * The words this section would be called by in the menu, or `undefined` when it lends no entry
+   * at all — a cover, a footer, an avance, a section with no visible heading, or the one carrying
+   * the page's `<h1>`. The switch is **absent** rather than disabled in that case, which is the
+   * rule «Convertir esta sección en página» already follows: a control that cannot do anything is
+   * worse than no control.
+   */
+  menuLabel?: string | undefined;
+  /** What the document says today. `undefined` is «nobody has decided», which shows as in. */
+  inMenu?: boolean | undefined;
+  onSetInMenu: (sectionId: string, inMenu: boolean) => void;
 }
 
 /** What a row's two boxes become in the document. A link keeps both halves together: changing a
@@ -62,6 +73,9 @@ export function FieldsPanel({
   onClear,
   onEditText,
   onClose,
+  menuLabel,
+  inMenu,
+  onSetInMenu,
 }: FieldsPanelProps) {
   const headingId = useId();
 
@@ -158,6 +172,35 @@ export function FieldsPanel({
         </div>
         <PanelClose onClick={onClose} label={es["editor.fields.close"]} />
       </div>
+
+      {/**
+       * **Whether this section is in the menu** (ADR 0043 §3) — in its own block, above the
+       * fields and ruled off from them, because it is not a field: the fields are what the
+       * section says, and this is where it is announced.
+       *
+       * **The words the menu would use are shown beside it.** A derived menu is the one thing
+       * the owner cannot otherwise see the wording of — it is their own heading, read when the
+       * page is drawn — and this is the single place in the application where that becomes
+       * visible.
+       */}
+      {menuLabel === undefined ? null : (
+        <label className="ui-interactive flex items-start gap-2.5 rounded-ui border border-ui-border bg-ui-bg p-3">
+          <input
+            type="checkbox"
+            checked={inMenu !== false}
+            onChange={(event) => onSetInMenu(sectionId, event.target.checked)}
+            className="mt-0.5 h-[18px] w-[18px] shrink-0 accent-[var(--ui-brand)]"
+          />
+          <span className="flex flex-col gap-0.5">
+            <span className="text-[13px] font-semibold text-ui-ink">
+              {es["editor.menu.toggle"]}
+            </span>
+            <span className="text-[12px] leading-snug text-ui-muted">
+              {es["editor.menu.as"].replace("{label}", menuLabel)}
+            </span>
+          </span>
+        </label>
+      )}
 
       {rows.length === 0 ? (
         <p className="m-0 text-[13px] text-ui-muted">{es["editor.fields.none"]}</p>

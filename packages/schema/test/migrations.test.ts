@@ -1125,3 +1125,101 @@ describe("0010 — a page per entry", () => {
     expect(() => parseDocument(migrateToCurrent(back))).not.toThrow();
   });
 });
+
+/**
+ * `0011` — a section and a page may say whether they appear in the menu (ADR 0043).
+ *
+ * The same four questions every migration here is asked: that `up` moves nothing, that a document
+ * which never curated round-trips exactly, that what curation writes parses, and that `down`
+ * leaves a document the old chain would accept again.
+ */
+describe("1.10.0 — the menu is curated", () => {
+  /** A plain two-page document, with nothing decided about the menu. */
+  function before(): Record<string, unknown> {
+    return {
+      schemaVersion: "1.9.0",
+      id: "doc-menu",
+      siteName: "Taberna",
+      theme,
+      collections: [],
+      pages: [
+        {
+          id: "home",
+          slug: "index",
+          title: "Taberna",
+          sections: [
+            {
+              id: "sec-cover",
+              preset: { catalogId: "cover", variantId: "image-right" },
+              source: "catalog",
+              layout: null,
+              content: [],
+            },
+            {
+              id: "sec-location",
+              preset: { catalogId: "location", variantId: "stacked" },
+              source: "catalog",
+              layout: null,
+              content: [],
+            },
+          ],
+        },
+        {
+          id: "p2",
+          slug: "carta",
+          title: "Nuestra carta",
+          sections: [
+            {
+              id: "sec-carta",
+              preset: { catalogId: "prices", variantId: "stacked" },
+              source: "catalog",
+              layout: null,
+              content: [],
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  /** The same document after an owner decided: one section out, one page out, one kept on purpose. */
+  function after(): Record<string, unknown> {
+    const input = before();
+    const pages = input["pages"] as Record<string, unknown>[];
+    const home = pages[0] as { sections: Record<string, unknown>[] };
+    const location = home.sections[1];
+    if (!location) throw new Error("no section to curate");
+    location["inMenu"] = false;
+    (home.sections[0] as Record<string, unknown>)["inMenu"] = true;
+    (pages[1] as Record<string, unknown>)["inMenu"] = false;
+    return { ...input, schemaVersion: "1.10.0" };
+  }
+
+  it("stamps the version and moves nothing, because the affected set is zero", () => {
+    const migrated = upTo(before(), "1.10.0");
+    expect(migrated).toEqual({ ...before(), schemaVersion: "1.10.0" });
+    expect(() => parseDocument(migrateToCurrent(before()))).not.toThrow();
+  });
+
+  it("is a round trip for a document whose owner never touched the menu", () => {
+    const down = step("1.10.0").down;
+    if (!down) throw new Error("0011 has no down");
+    expect(down(upTo(before(), "1.10.0"))).toEqual(before());
+  });
+
+  it("parses what curating writes, including an explicit «yes»", () => {
+    // `inMenu: true` is not redundant with absence: the key's presence is what says somebody
+    // decided, which is what lets the threshold of three step aside (ADR 0043 §5).
+    expect(() => parseDocument(after())).not.toThrow();
+  });
+
+  it("drops every choice on the way down, and keeps every word", () => {
+    const down = step("1.10.0").down;
+    if (!down) throw new Error("0011 has no down");
+    const back = down(after());
+    expect(back["schemaVersion"]).toBe("1.9.0");
+    expect(back).toEqual(before());
+    // 1.9.0's objects are strict, so a surviving `inMenu` would be refused rather than ignored.
+    expect(() => parseDocument(migrateToCurrent(back))).not.toThrow();
+  });
+});

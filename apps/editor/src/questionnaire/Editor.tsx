@@ -11,7 +11,7 @@ import {
   variantsFor,
 } from "@retorika/catalog";
 import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
-import { render } from "@retorika/renderer";
+import { render, sectionMenuEntries } from "@retorika/renderer";
 import {
   bindList,
   canFoldPage,
@@ -231,6 +231,27 @@ function looseListOf(doc: RetorikaDocument, sectionId: string): string | undefin
   return found.section.content.find(
     (element) => element.role === "list" && !element.binding && (element.items ?? []).length > 0,
   )?.slot;
+}
+
+/**
+ * The words the menu would call this section by, or `undefined` when it lends no entry at all.
+ *
+ * **Asked of the renderer rather than re-derived here.** Which sections lend an anchor is a rule
+ * with five clauses — the cover, the footer, an avance, a heading that is missing, the section
+ * carrying the page's `<h1>` — and a second copy of it in the editor would drift the first time
+ * one of them changed. The section is asked about **as if it were in the menu**, so one the owner
+ * has taken out still shows its switch, which is the only way to put it back.
+ */
+function menuLabelFor(doc: RetorikaDocument, sectionId: string): string | undefined {
+  const found = findSection(doc, sectionId);
+  if (!found) return undefined;
+  const asIfIn = {
+    ...found.page,
+    sections: found.page.sections.map((section) =>
+      section.id === sectionId ? { ...section, inMenu: true } : section,
+    ),
+  };
+  return sectionMenuEntries(asIfIn).find((entry) => entry.sectionId === sectionId)?.label;
 }
 
 function sectionDisplayName(doc: RetorikaDocument, sectionId: string): string {
@@ -509,6 +530,7 @@ export function Editor({
   onPickPhoto,
   onFillSlot,
   onClearSlot,
+  onSetSectionInMenu,
   onSetSiteDescription,
   onSetSiteUrl,
   onSetVariant,
@@ -575,6 +597,9 @@ export function Editor({
   onPickPhoto: (address: ElementAddress, file: File) => void;
   onFillSlot: (fill: SlotFill) => void;
   onClearSlot: (address: SlotAddress) => void;
+  /** A section in or out of the menu (ADR 0043). Not a content edit: nothing the section says
+   * changes, only whether it is announced. */
+  onSetSectionInMenu: (sectionId: string, inMenu: boolean) => void;
   /** What a shared link says about the whole site (ADR 0029). Site-wide like the theme, so neither
    * names a section. */
   onSetSiteDescription: (text: string) => void;
@@ -5864,6 +5889,9 @@ export function Editor({
           itemSlotOrder={itemSlotOrderOf(doc, fieldsFor)}
           onFill={onFillSlot}
           onClear={onClearSlot}
+          menuLabel={menuLabelFor(doc, fieldsFor)}
+          inMenu={findSection(doc, fieldsFor)?.section.inMenu}
+          onSetInMenu={onSetSectionInMenu}
           // The panel commits a words-only change through the very same callback the canvas does,
           // and since sprint 12 day 3 it anchors that change in the range the browser is replacing
           // too — so the marks arrive measured rather than guessed, exactly as they do from the

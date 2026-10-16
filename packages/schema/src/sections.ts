@@ -26,6 +26,42 @@ export function findSection(
 }
 
 /**
+ * Whether this section appears in the menu (ADR 0043 §3).
+ *
+ * **It takes the section out of the menu and does nothing else.** The section stays on the page,
+ * keeps its id, keeps its heading and keeps its anchor — so a link written at it, by an avance or
+ * by hand, is still a live destination and the download is not refused. That distinction is the
+ * whole of what this verb means, and `test/menu-visibility.test.ts` holds it.
+ *
+ * Writes the boolean and never deletes the key: its **presence** is the record that somebody
+ * decided, which is what lets the threshold of three step aside. Returns the same document when
+ * nothing would change — and `undefined !== true`, so stamping the default *is* a change.
+ */
+export function setSectionInMenu(
+  doc: RetorikaDocument,
+  sectionId: string,
+  inMenu: boolean,
+): RetorikaDocument {
+  const found = findSection(doc, sectionId);
+  if (!found) throw new Error(`setSectionInMenu: no section "${sectionId}"`);
+  if (found.section.inMenu === inMenu) return doc;
+
+  return parseDocument({
+    ...doc,
+    pages: doc.pages.map((page) =>
+      page.id !== found.page.id
+        ? page
+        : {
+            ...page,
+            sections: page.sections.map((section) =>
+              section.id === sectionId ? { ...section, inMenu } : section,
+            ),
+          },
+    ),
+  });
+}
+
+/**
  * Real deletion, not a hide: ADR 0003 settled that there is no trash inside the document, and
  * ADR 0014 settled that this runs immediately, with no confirmation — the undo history the
  * editor already keeps (day 2) is the safety net, not a dialog. Throws on an unknown id rather

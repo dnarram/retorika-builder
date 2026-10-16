@@ -230,6 +230,36 @@ describe("the sections of the page you are on", () => {
     ]);
   });
 
+  /**
+   * **The one exclusion that is a decision rather than a rule** (ADR 0043 §3). It changes the menu
+   * and nothing else: `packages/schema/test/menu-visibility.test.ts` is where that half is held —
+   * the section keeps its id and a link at it stays alive — and this is the half the renderer owes.
+   */
+  it("leaves out a section the owner took out, and only that one", () => {
+    const doc = documentWith([
+      section("sec-cover", "cover", "Taberna"),
+      { ...section("sec-location", "location", "Dónde estamos"), inMenu: false },
+      section("sec-contact", "contact", "Te esperamos"),
+    ]);
+    const home = doc.pages[0] as NonNullable<(typeof doc.pages)[0]>;
+    expect(sectionMenuEntries(home).map((entry) => entry.label)).toEqual(["Te esperamos"]);
+    // And the section is still on the page, with its heading and its anchor.
+    const drawn = draw(doc);
+    expect(drawn.querySelector('[data-section="sec-location"]')).not.toBeNull();
+    expect(drawn.querySelector('[data-section="sec-location"] h2')?.textContent?.trim()).toBe(
+      "Dónde estamos",
+    );
+  });
+
+  it("counts an explicit «yes» as in, the same as never having been asked", () => {
+    const doc = documentWith([
+      section("sec-cover", "cover", "Taberna"),
+      { ...section("sec-location", "location", "Dónde estamos"), inMenu: true },
+    ]);
+    const home = doc.pages[0] as NonNullable<(typeof doc.pages)[0]>;
+    expect(sectionMenuEntries(home).map((entry) => entry.label)).toEqual(["Dónde estamos"]);
+  });
+
   it("leaves out an avance, whose words belong to a page in the other menu", () => {
     const doc = documentWith(
       [

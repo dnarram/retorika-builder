@@ -1252,6 +1252,10 @@ export function Variants({
             dismissToast();
             dispatch({ type: "clearSlot", variant: openIndex, address });
           }}
+          onSetSectionInMenu={(sectionId, inMenu) => {
+            dismissToast();
+            dispatch({ type: "setSectionInMenu", variant: openIndex, sectionId, inMenu });
+          }}
           onSetSiteDescription={(text) => {
             dismissToast();
             dispatch({ type: "setSiteDescription", variant: openIndex, text });

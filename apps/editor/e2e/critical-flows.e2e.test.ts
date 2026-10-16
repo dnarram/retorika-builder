@@ -7392,6 +7392,72 @@ describe("sprint 22 día 2 — el héroe de la landing", () => {
 });
 
 /**
+ * **Sprint 23 día 3 — el dueño quita una sección del menú.**
+ *
+ * Lo que esta caminata comprueba es la distinción entera del día: **fuera del menú no es fuera de
+ * la web**. La sección se queda donde estaba, con su título, y lo único que cambia es que deja de
+ * anunciarse. Y es un paso del historial, así que se deshace como cualquier otra edición.
+ */
+describe("sprint 23 día 3 — quitar una sección del menú", () => {
+  it("la quita del menú, la deja en la página, y se deshace", async () => {
+    const visitor = await (
+      await browser.newContext({ viewport: { width: 1440, height: 950 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(visitor);
+      const frame = visitor.frameLocator(PREVIEW).first();
+      const sections = frame.locator('.rb-nav-wide nav[aria-label="Secciones"] a');
+      await expect(sections).toHaveText([
+        "Qué ponemos",
+        "Un vistazo a Taberna Santo Domingo",
+        "Dónde estamos",
+        "Te esperamos",
+      ]);
+
+      // Abrir los campos de «Dónde estamos», que es donde vive el interruptor.
+      await frame.locator('[data-section="sec-location"]').click();
+      await frame.getByRole("button", { name: /Campos de esta sección/ }).click();
+      const toggle = visitor
+        .locator("aside label", { hasText: "Aparece en el menú" })
+        .locator("input");
+      await expect(toggle).toBeChecked();
+      // El panel dice las palabras que el menú usaría, que es lo único que el dueño no puede ver
+      // de un menú que se escribe solo.
+      await expect(visitor.locator("aside label", { hasText: "Aparece en el menú" })).toContainText(
+        "«Dónde estamos»",
+      );
+
+      await toggle.uncheck();
+      await expect(sections).toHaveText([
+        "Qué ponemos",
+        "Un vistazo a Taberna Santo Domingo",
+        "Te esperamos",
+      ]);
+
+      /**
+       * **Y la sección sigue ahí.** Esta es la aserción que separa «fuera del menú» de «fuera de
+       * la web», y la que David pidió por escrito al aprobar el sprint: la sección conserva su
+       * sitio, su título y su id, así que un enlace apuntado a ella sigue vivo y la descarga no se
+       * niega. El lado del esquema lo sujeta `packages/schema/test/menu-visibility.test.ts`.
+       */
+      await expect(frame.locator('[data-section="sec-location"]')).toHaveCount(1);
+      await expect(frame.locator('[data-section="sec-location"] h2')).toHaveText("Dónde estamos");
+
+      // Un paso del historial como cualquier otro.
+      await visitor.getByRole("button", { name: "Deshacer" }).click();
+      await expect(sections).toHaveText([
+        "Qué ponemos",
+        "Un vistazo a Taberna Santo Domingo",
+        "Dónde estamos",
+        "Te esperamos",
+      ]);
+    } finally {
+      await visitor.context().close();
+    }
+  }, 240_000);
+});
+
+/**
  * **Sprint 23 día 1 — el héroe cabe, se pone al lado y nunca queda vacío.**
  *
  * Tres defectos que David reportó, y las tres pruebas son las medidas que los definen:

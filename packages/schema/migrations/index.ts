@@ -9,6 +9,7 @@ import anExactLengthIsPixels from "./0007-an-exact-length-is-pixels.ts";
 import typographyPerElement from "./0008-typography-per-element.ts";
 import aCollectionEntryCarriesMarks from "./0009-a-collection-entry-carries-marks.ts";
 import aPagePerEntry from "./0010-a-page-per-entry.ts";
+import theMenuIsCurated from "./0011-the-menu-is-curated.ts";
 
 export interface Migration {
   version: string;
@@ -29,6 +30,7 @@ export const MIGRATIONS: readonly Migration[] = [
   typographyPerElement,
   aCollectionEntryCarriesMarks,
   aPagePerEntry,
+  theMenuIsCurated,
 ];
 
 /** `1.2.0` → `[1, 2, 0]`, for comparing two versions without a dependency. A missing or

@@ -59,6 +59,7 @@ import {
   setEntryField as setEntryFieldInDoc,
   setMobilePatch as setMobilePatchInDoc,
   setPlacement as setPlacementInDoc,
+  setSectionInMenu as setSectionInMenuInDoc,
   setTheme as setThemeInDoc,
   setVariant as setVariantInDoc,
   unbindList as unbindListInDoc,
@@ -92,6 +93,9 @@ export type SnapshotCause =
   | { type: "fillSlot"; sectionId: string }
   | { type: "clearSlot"; sectionId: string }
   | { type: "setVariant"; sectionId: string }
+  /** Taking a section out of the menu, or putting it back (ADR 0043). It names a section and is
+   * not a content cause: nothing the section says changes, only where it is announced. */
+  | { type: "setSectionInMenu"; sectionId: string }
   /** The two halves of the escalation (ADR 0025). Both name a section and neither is a content
    * cause: the first copies the catalog's layout into it, the second puts it back, and no element
    * moves either way. */
@@ -215,6 +219,7 @@ export type HistoryAction =
   | { type: "setImage"; variant: number; address: ElementAddress; src: string; alt: string }
   | { type: "fillSlot"; variant: number; fill: SlotFill }
   | { type: "clearSlot"; variant: number; address: SlotAddress }
+  | { type: "setSectionInMenu"; variant: number; sectionId: string; inMenu: boolean }
   | { type: "setTheme"; variant: number; theme: Theme }
   | { type: "setSiteDescription"; variant: number; text: string }
   | { type: "setSiteUrl"; variant: number; url: string | undefined }
@@ -554,6 +559,25 @@ function clearSlot(history: History, address: SlotAddress): History {
     document,
     cause: { type: "clearSlot", sectionId: address.sectionId },
   };
+  return {
+    past: [...history.past, history.present].slice(-LIMIT),
+    present,
+    future: [],
+    amendable: false,
+  };
+}
+
+/**
+ * A section in or out of the menu — one step, and one that changes no word of the site.
+ *
+ * Guarded on identity like every other verb here: `setSectionInMenu` in the schema hands back the
+ * very same document when the answer is already the one asked for, so a switch pressed twice adds
+ * no step and the undo arrow does not light up for a step that would undo to itself.
+ */
+function setSectionInMenu(history: History, sectionId: string, inMenu: boolean): History {
+  const document = setSectionInMenuInDoc(history.present.document, sectionId, inMenu);
+  if (document === history.present.document) return history;
+  const present: Snapshot = { document, cause: { type: "setSectionInMenu", sectionId } };
   return {
     past: [...history.past, history.present].slice(-LIMIT),
     present,
@@ -1146,6 +1170,8 @@ function apply(history: History, action: HistoryAction): History {
       return fillSlot(history, action.fill);
     case "clearSlot":
       return clearSlot(history, action.address);
+    case "setSectionInMenu":
+      return setSectionInMenu(history, action.sectionId, action.inMenu);
     case "setTheme":
       return setTheme(history, action.theme);
     case "setSiteDescription":
