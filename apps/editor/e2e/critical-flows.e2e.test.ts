@@ -13,6 +13,7 @@ import {
   type Page,
 } from "@playwright/test";
 import { GALLERY_SAMPLE_COUNT } from "@retorika/generator";
+import type { NodeResult } from "axe-core";
 import { afterAll, beforeAll, describe, it } from "vitest";
 import {
   HERO_DEMO,
@@ -347,6 +348,30 @@ async function replacingTheDocument(page: Page, act: () => Promise<void>): Promi
 }
 
 /**
+ * **The numbers behind a contrast finding**, when axe has them: the ratio it measured, the one it
+ * wanted, and the two colours.
+ *
+ * Added on sprint 23 day 5, after a `color-contrast (serious) at .text-ui-danger` arrived with no
+ * numbers at all and the first move had to be computing ratios by hand to guess which background
+ * axe had used. The `packages/renderer` a11y matrix has printed this since sprint 4; this copy
+ * never did.
+ */
+function measured(node: NodeResult): string {
+  const data = node.any.find((check) => check.id === "color-contrast")?.data as
+    | {
+        contrastRatio?: number;
+        expectedContrastRatio?: string;
+        fgColor?: string;
+        bgColor?: string;
+        fontSize?: string;
+        fontWeight?: string;
+      }
+    | undefined;
+  if (!data?.contrastRatio) return "";
+  return ` — ratio ${data.contrastRatio} (needs ${data.expectedContrastRatio}), ${data.fgColor} on ${data.bgColor}, ${data.fontSize} ${data.fontWeight}`;
+}
+
+/**
  * axe over whatever the page is showing, failing on serious and critical findings only.
  *
  * Three walks had written their own copy of this by the time sprint 20 closed, each with its own
@@ -361,7 +386,8 @@ async function axeSerious(page: Page, where: string): Promise<void> {
     .filter((rule) => rule.impact === "serious" || rule.impact === "critical")
     .flatMap((rule) =>
       rule.nodes.map(
-        (node) => `  ${rule.id} (${rule.impact}) at ${node.target.join(" ")}: ${rule.help}`,
+        (node) =>
+          `  ${rule.id} (${rule.impact}) at ${node.target.join(" ")}: ${rule.help}${measured(node)}`,
       ),
     );
   expect(lines, `axe with ${where}:\n${lines.join("\n")}`).toEqual([]);
@@ -7559,6 +7585,62 @@ describe("sprint 23 día 4 — las páginas en el menú y el umbral curado", () 
       // Un paso del historial como cualquier otro: el menú vuelve con su único destino.
       await visitor.getByRole("button", { name: "Deshacer" }).click();
       await expect(sections).toHaveText(["Te esperamos"]);
+
+      /**
+       * **axe a 390 sobre las dos palancas que el sprint añadió** (día 5, y una laguna que el
+       * cierre encontró). El recorrido móvil general audita el editor y la hoja de «Estilo» a 390,
+       * pero **nunca abre estos dos**: la portada no presta entrada al menú, así que su cajón de
+       * campos no dibuja el interruptor, y en un documento de una sola página la fila de «Páginas»
+       * no tiene casilla. Aquí existen las dos, porque esta caminata ha convertido una sección.
+       *
+       * Se abren a 1440 —donde el lienzo es cómodo de pulsar— y se mide tras estrechar la
+       * ventana: un panel abierto es estado, no maquetación, así que sigue abierto y a 390 es una
+       * hoja desde el borde inferior.
+       */
+      /**
+       * **Stopped moving *and* fully opaque**, which is the half this first got wrong.
+       *
+       * Waiting on geometry alone let axe measure the sheet at about 0.90 opacity, and it reported
+       * three serious contrast failures against colours that are not in the stylesheet at all:
+       * `#6a788d`, `#df3a3a` and `#2a7ce9`, which are `--ui-muted`, `--ui-danger` and `--ui-brand`
+       * blended with the white underneath. At rest those three measure 5.43, 4.83 and 4.71 to one
+       * against this panel and pass; at 0.90 they measure 4.38, 4.30 and 4.03 and do not.
+       *
+       * So the finding was mine, not the product's — but it is worth knowing that **two of those
+       * three clear 4.5 by a hair**, and that any opacity put on them drops them under it. There is
+       * a backlog row for that.
+       */
+      const panelReady = async (what: Locator) => {
+        let last = "";
+        await expect
+          .poll(
+            async () => {
+              const seen = await what.evaluate((el) => {
+                const box = el.getBoundingClientRect();
+                return `${Math.round(box.y)}x${Math.round(box.height)}@${getComputedStyle(el).opacity}`;
+              });
+              const same = seen === last && seen.endsWith("@1");
+              last = seen;
+              return same;
+            },
+            { timeout: 5_000 },
+          )
+          .toBe(true);
+      };
+
+      // El cajón de «Te esperamos» sigue abierto desde el paso anterior — deshacer no cierra un
+      // panel — así que no hay que volver a pulsar nada para medirlo.
+      await expect(sectionToggle).toBeChecked();
+      await visitor.setViewportSize({ width: 390, height: 844 });
+      await panelReady(visitor.locator("aside"));
+      await axeSerious(visitor, "el interruptor del menú en los campos, a 390");
+      await visitor.setViewportSize({ width: 1440, height: 950 });
+      await closeFields();
+
+      await visitor.getByRole("button", { name: "Páginas", exact: true }).click();
+      await visitor.setViewportSize({ width: 390, height: 844 });
+      await panelReady(panel);
+      await axeSerious(visitor, "la casilla «En el menú» de una fila de «Páginas», a 390");
     } finally {
       await visitor.context().close();
     }
