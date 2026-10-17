@@ -5068,7 +5068,10 @@ export function Editor({
       `  border-radius: ${CHROME_SCALE.radius}; display: flex;`,
       "  flex-direction: column; align-items: center; gap: 6px; }",
       ".rb-hole-was { font-size: 15px; font-weight: 600; color: #475569; }",
-      ".rb-hole-fate { font-size: 13px; color: #94A3B8; text-align: center; }",
+      // `#5B6B82` and not the mockups' `#94A3B8`: on this panel's `#f5f7fa` the latter measures
+      // **2.39:1** against 4.5 for text, and the former 5.06 — the substitution sprint 1 day 2
+      // already made in the components and this stylesheet never heard about.
+      ".rb-hole-fate { font-size: 13px; color: #5B6B82; text-align: center; }",
       /**
        * The gap between sections: mockup 08 draws a dashed rule broken by a pill, and the rule is
        * the part that changes. `2px dashed #B9CDEA` measured **1.62:1** against the white this gap
@@ -5379,7 +5382,11 @@ export function Editor({
       ".rb-toolbar-group { display: flex; align-items: center; gap: 4px; padding: 0 7px;",
       "  border-right: 1px solid #EDF1F6; }",
       ".rb-toolbar-group:last-child { border-right: 0; }",
-      ".rb-toolbar-caption { font-size: 11px; font-weight: 600; color: #94A3B8; }",
+      // Same substitution, same reason: 11px of `#94A3B8` on this bar's white measured
+      // **2.56:1**, and `#5B6B82` measures 5.43. axe caught it on 17 October 2026 only because
+      // a bar that had moved happened to land over white — over a photograph it reads as
+      // «not measured» and says nothing. `chromeContrast.test.ts` is where it cannot hide.
+      ".rb-toolbar-caption { font-size: 11px; font-weight: 600; color: #5B6B82; }",
       // Re-enabled here rather than only on the specific classes below, because it is the one
       // property every interactive element in the bar needs and the failure mode of missing it on
       // any one of them is silent — a control sitting over a swallowed click, indistinguishable
@@ -5949,6 +5956,10 @@ export function Editor({
               type="button"
               onClick={onDismissToast}
               aria-label={es["editor.toast.dismiss"]}
+              // `#94A3B8` stays **here** and nowhere else on a light surface: this toast paints
+              // `#0F172A`, where the stroke measures **6.96:1** against the 3:1 a non-text graphic
+              // answers to (WCAG 1.4.11). The same value on white is 2.56 and clears neither
+              // threshold, which is what `ui.tsx`'s note used to get wrong.
               className="cursor-pointer border-0 bg-transparent text-[#94A3B8]"
             >
               <svg

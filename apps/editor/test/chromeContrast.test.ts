@@ -298,3 +298,76 @@ describe("the chrome's boundaries and states", () => {
     expect(contrastRatio(BRAND, BG)).toBeGreaterThanOrEqual(UI_COMPONENT);
   });
 });
+
+/**
+ * **The two greys the mockups use and this product does not** — `#94A3B8` and `#A3AEC0`.
+ *
+ * Sprint 1 day 2 measured them at **2.56:1** and **2.08:1** and replaced both with `#5B6B82`,
+ * «one tone instead of two thresholds to track». That substitution happened in the questionnaire's
+ * components and was written down as a note in `ui.tsx`. **It never reached the stylesheet injected
+ * into the preview iframe**, where `#94A3B8` sat on two text rules for fourteen sprints, nor a
+ * dialog's close icon on white.
+ *
+ * Nothing found it because nothing was looking in those places: this file checks named selectors,
+ * `pnpm test:a11y` checks the renderer's output rather than the application's chrome, and axe's
+ * contrast rule **only measures text**, so an icon-only button is invisible to it. The one that
+ * did surface — a toolbar caption — surfaced by luck: a bar the walk had dragged happened to land
+ * over white, and over a photograph axe reports «not measured» and says nothing at all.
+ *
+ * So the note becomes a refusal. The exception it describes survives in exactly one place, and it
+ * is proved here rather than asserted in prose.
+ */
+describe("the greys the mockups use and the product refuses", () => {
+  const MOCKUP_GREYS = ["#94A3B8", "#A3AEC0"] as const;
+
+  it("measures why they are refused, on both surfaces the canvas paints", () => {
+    for (const grey of MOCKUP_GREYS) {
+      for (const surface of [CHROME_SCALE.surface, CHROME_SCALE.bg]) {
+        expect(contrastRatio(grey, surface), `${grey} on ${surface}`).toBeLessThan(AA_NORMAL_TEXT);
+      }
+    }
+    // And the tone that replaced them clears it on both, which is the whole of sprint 1's claim.
+    expect(contrastRatio(MUTED, CHROME_SCALE.surface)).toBeGreaterThan(AA_NORMAL_TEXT);
+    expect(contrastRatio(MUTED, CHROME_SCALE.bg)).toBeGreaterThan(AA_NORMAL_TEXT);
+  });
+
+  it("carries neither as a text colour anywhere in the canvas stylesheet", () => {
+    // A refusal rather than a convention: this is the assertion that would have caught both rules
+    // the day they were written, and the one that catches the next.
+    for (const grey of MOCKUP_GREYS) {
+      const found = [...CANVAS.matchAll(/color:\s*(#[0-9a-fA-F]{3,8})/g)]
+        .map((match) => (match[1] ?? "").toUpperCase())
+        .filter((value) => value === grey);
+      expect(found, `${grey} is a text colour in the injected stylesheet`).toEqual([]);
+    }
+  });
+
+  it("keeps the one exception on the one surface where it clears 3:1, and nowhere else", () => {
+    // The persistent toast's dismiss icon, on `#0F172A`. A non-text graphic answers to 1.4.11's
+    // 3:1, and the same stroke on white measures 2.56 — which is why «icon strokes are untouched»
+    // was true of this one and false as a general claim.
+    expect(contrastRatio("#94A3B8", INK)).toBeGreaterThan(UI_COMPONENT);
+    expect(contrastRatio("#94A3B8", SURFACE)).toBeLessThan(UI_COMPONENT);
+
+    const toast = readFileSync(
+      join(import.meta.dirname, "..", "src", "questionnaire", "Editor.tsx"),
+      "utf8",
+    );
+    expect(
+      [...toast.matchAll(/text-\[#94A3B8\]/g)],
+      "`#94A3B8` is used as a colour class more than once; only the dark toast may",
+    ).toHaveLength(1);
+
+    // **The class syntax and not the bare hex**, because both files now explain the refusal in
+    // prose and a guard that reads prose is a guard that fails on its own documentation. The
+    // header above makes the opposite mistake's case; this is the same lesson from the other side.
+    const dialogs = readFileSync(
+      join(import.meta.dirname, "..", "src", "questionnaire", "DownloadGateDialogs.tsx"),
+      "utf8",
+    );
+    expect(
+      [...dialogs.matchAll(/text-\[#94A3B8\]/g)],
+      "a dialog paints white, so it cannot carry that grey",
+    ).toEqual([]);
+  });
+});
