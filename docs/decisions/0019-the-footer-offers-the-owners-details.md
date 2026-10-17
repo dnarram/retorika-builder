@@ -1,6 +1,6 @@
 # 0019 — The footer offers the owner's details, and never requires them
 
-**Status:** **accepted** · **Date:** 2026-09-27 · **Proposed by:** development · **Accepted by:** the CEO, 2026-09-28 · **Amends:** protocol Part 15
+**Status:** **accepted** · **Date:** 2026-09-27 · **Proposed by:** development · **Accepted by:** the CEO, 2026-09-28 · **Amends:** protocol Part 15 · **Amended by:** [ADR 0044](0044-the-editor-stops-advising-about-the-owners-identity.md) (proposed, 2026-10-17) — the warning is removed
 
 > **What was decided.** Retorika takes no position on compliance and declines the responsibility
 > the warning's wording already declined: the footer offers the owner's details and never
@@ -106,6 +106,12 @@ Retorika stores none of them.**
 - The warning is a warning in the editor only. Nothing about it reaches the published page.
 
 ## What would reopen this
+
+> **One of these was spent on 17 October 2026, and not by being met.** David asked for the warning to
+> be removed, so its wording changed without the CEO deciding to take a position on compliance.
+> [ADR 0044](0044-the-editor-stops-advising-about-the-owners-identity.md) is that decision; it is
+> `proposed` and waiting for the signature of whoever signed this one. **Until it is signed, this ADR
+> is what the product does** — the pull request removing the warning is open and unmerged.
 
 - **The CEO decides Retorika should take a position on compliance** — either by requiring the
   fields, or by saying in the interface what is needed. Then the warning's wording is the first

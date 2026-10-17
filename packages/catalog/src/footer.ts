@@ -10,8 +10,12 @@ import { resolvePlacements, type SlotPlacement, unknownVariant } from "./layout.
  *
  * Which is why only `businessName` is 1..1, and it comes from question 1, the one answer the
  * questionnaire insists on. Everything else starts absent and is filled through the editor's
- * field panel, or not at all. An owner who leaves them empty gets a warning in the editor and a
- * ZIP that downloads perfectly.
+ * field panel, or not at all, and the ZIP downloads perfectly either way.
+ *
+ * **The editor used to warn when all four were empty, and since 17 October 2026 it does not**
+ * (ADR 0044, David's request). What carries «offered, never required» to the person now is the
+ * word «(opcional)» in each of those four labels — which is true because of the `min: 0` below,
+ * rather than being a reassurance somebody wrote.
  *
  * **No slot here holds a link, deliberately.** A footer says who you are; the contact section is
  * where a visitor acts. It is also what makes "warns and never blocks" true rather than nearly
