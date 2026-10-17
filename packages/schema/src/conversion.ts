@@ -119,7 +119,20 @@ export function sectionToPage(
     doc.pages.map((page) => page.slug),
   );
   const pageId = mintPageId(doc, slug);
-  const newPage: Page = { id: pageId, slug, title, sections: [found.section] };
+  const newPage: Page = {
+    id: pageId,
+    slug,
+    title,
+    sections: [found.section],
+    /**
+     * **The section's own answer about the menu travels with it** (ADR 0043). Without this,
+     * converting a section the owner had taken out of the menu would put the destination back in
+     * as a page: a visibility choice undone by a verb that has nothing to do with it, and the kind
+     * of defect nobody reports because nobody can reproduce it. `pageToSection` needs no such
+     * clause — the page is deleted and the section comes back carrying its own copy.
+     */
+    ...(found.section.inMenu !== undefined ? { inMenu: found.section.inMenu } : {}),
+  };
 
   const href = hrefForPage(newPage);
   // **The section keeps its own id and the avance gets a new one.** The other way round was tried

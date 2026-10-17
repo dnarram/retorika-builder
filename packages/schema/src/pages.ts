@@ -41,6 +41,37 @@ export function renamePage(doc: RetorikaDocument, pageId: string, title: string)
 }
 
 /**
+ * Whether this page appears in the menu (ADR 0043 §3).
+ *
+ * **Refuses the two pages that have no entry to govern**, the way `movePage` refuses the first
+ * page: the entry page is «Inicio», which is not curatable — hiding the way home is a trap rather
+ * than a choice — and a page drawn per entry is in no menu at all (ADR 0040 §5). An editor cannot
+ * reach either switch, and this is what keeps a document from storing a decision that means
+ * nothing.
+ *
+ * Writes the boolean and never deletes the key: its **presence** is the record that somebody
+ * decided, which is what the threshold reads. Returns the same document when nothing would change,
+ * so a history built on reference equality opens no step — and note that `undefined !== true`, so
+ * stamping the default *is* a change, which is the point.
+ */
+export function setPageInMenu(
+  doc: RetorikaDocument,
+  pageId: string,
+  inMenu: boolean,
+): RetorikaDocument {
+  const at = indexOfPage(doc, pageId);
+  if (at < 0) throw new Error(`setPageInMenu: no page "${pageId}"`);
+  if (at === 0) throw new Error("setPageInMenu: the entry page is «Inicio» and is not in the menu");
+  if (doc.pages[at]?.binding)
+    throw new Error("setPageInMenu: a page drawn per entry is in no menu");
+  if (doc.pages[at]?.inMenu === inMenu) return doc;
+  return withPages(
+    doc,
+    doc.pages.map((page, index) => (index === at ? { ...page, inMenu } : page)),
+  );
+}
+
+/**
  * A page moved to another position, which is also the order the menu reads in.
  *
  * Refuses to move the first page or to move anything into its place, for the reason at the top of

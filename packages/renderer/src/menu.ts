@@ -148,6 +148,10 @@ export function pageMenuEntries(doc: RetorikaDocument): PageEntry[] {
  *   it here would put the same words in two landmarks, two clicks apart, for one destination.
  * - **A section with no visible heading**: there is no honest word to call it by, and inventing
  *   one is the thing this whole file exists to avoid.
+ * - **A section the owner took out** — `inMenu: false` (ADR 0043 §3). It is the only one of the
+ *   four that is a decision rather than a rule, and it changes the menu and nothing else: the
+ *   section keeps its place on the page, its heading and its id, so an anchor written at it still
+ *   lands.
  */
 export function sectionMenuEntries(page: Page): SectionEntry[] {
   const h1Ids = h1SectionIds(page);
@@ -155,6 +159,7 @@ export function sectionMenuEntries(page: Page): SectionEntry[] {
 
   for (const section of page.sections) {
     const catalogId = section.preset.catalogId;
+    if (section.inMenu === false) continue;
     if (catalogId === FOOTER_ID || catalogId === TEASER_ID) continue;
     if (h1Ids.has(section.id) || catalogId === COVER_ID) continue;
     const label = headingOf(section);

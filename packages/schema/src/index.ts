@@ -101,7 +101,7 @@ export {
   shiftMarks,
   textEditBetween,
 } from "./marks.ts";
-export { deletePage, movePage, renamePage } from "./pages.ts";
+export { deletePage, movePage, renamePage, setPageInMenu } from "./pages.ts";
 export { DocumentValidationError, parseDocument, safeParseDocument } from "./parse.ts";
 export type { PresetShape, PresetSlot } from "./preset.ts";
 export { checkAgainstPreset } from "./preset.ts";
@@ -123,6 +123,7 @@ export {
   moveItem,
   moveSection,
   removeItem,
+  setSectionInMenu,
   setVariant,
 } from "./sections.ts";
 export {

@@ -10,7 +10,7 @@ import { type ElementStyle, elementStyleSchema, themeSchema } from "./tokens.ts"
  * role or a token is additive and bumps the minor; removing or renaming one breaks and
  * bumps the major.
  */
-export const SCHEMA_VERSION = "1.9.0";
+export const SCHEMA_VERSION = "1.10.0";
 
 const idSchema = z.string().min(1).max(128);
 
@@ -225,6 +225,20 @@ export const sectionSchema = z.strictObject({
   content: z.array(contentElementSchema),
   /** null means "use the catalog preset's layout". */
   layout: sectionLayoutSchema.nullable(),
+  /**
+   * Whether this destination appears in the menu (ADR 0043).
+   *
+   * **Absent means it appears**, which is what absent meant before the key existed — so no stored
+   * document and no golden changes, and a menu that writes itself is still what somebody who never
+   * opened the switch gets.
+   *
+   * **The presence of the key is the record that the owner decided, whatever its value.** That is
+   * what tells a curated document from one nobody has touched, which is how the threshold of three
+   * knows to step aside (ADR 0043 §5). So `inMenu: true` is not redundant with absence: it says «I
+   * looked at this and I want it», which is a different fact from «nobody has looked». The verbs
+   * write the boolean and never delete the key.
+   */
+  inMenu: z.boolean().optional(),
 });
 export type Section = z.infer<typeof sectionSchema>;
 
@@ -259,6 +273,20 @@ export const pageSchema = z.strictObject({
   /** Present on the one page a collection may have as its page per entry (ADR 0040). Never on the
    * first page, and never on more than one page per collection — both are invariants. */
   binding: pageBindingSchema.optional(),
+  /**
+   * Whether this destination appears in the menu (ADR 0043).
+   *
+   * **Absent means it appears**, which is what absent meant before the key existed — so no stored
+   * document and no golden changes, and a menu that writes itself is still what somebody who never
+   * opened the switch gets.
+   *
+   * **The presence of the key is the record that the owner decided, whatever its value.** That is
+   * what tells a curated document from one nobody has touched, which is how the threshold of three
+   * knows to step aside (ADR 0043 §5). So `inMenu: true` is not redundant with absence: it says «I
+   * looked at this and I want it», which is a different fact from «nobody has looked». The verbs
+   * write the boolean and never delete the key.
+   */
+  inMenu: z.boolean().optional(),
 });
 export type Page = z.infer<typeof pageSchema>;
 
