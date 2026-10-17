@@ -10,8 +10,15 @@ import es from "../locales/es.json" with { type: "json" };
  * on `#F5F7FA`, measure 2.56:1 and 2.08:1 — both fail WCAG AA's 4.5:1 for normal text, caught by
  * axe on this build (not part of día 2's planned scope, checked anyway since the tooling was
  * already running). `#5B6B82` replaces both: 5.43:1 and 5.06:1 on the same two backgrounds, one
- * tone instead of two thresholds to track. Icon strokes at `#94A3B8` are untouched — non-text
- * graphics answer to a 3:1 rule, which that value already clears.
+ * tone instead of two thresholds to track.
+ *
+ * **The note used to end «icon strokes at `#94A3B8` are untouched — non-text graphics answer to a
+ * 3:1 rule, which that value already clears», and that last clause was wrong.** On white it
+ * measures 2.56:1 and clears neither 4.5 nor 3. It clears 3:1 only on a dark surface, which is
+ * where the one remaining use of it lives: the persistent toast's dismiss icon on `#0F172A`, at
+ * 6.96:1. Corrected 17 October 2026, when the same value turned up failing in two canvas text
+ * rules and in a dialog's close icon on white; `chromeContrast.test.ts` now refuses it instead of
+ * describing it.
  */
 
 const visuallyHidden: CSSProperties = {

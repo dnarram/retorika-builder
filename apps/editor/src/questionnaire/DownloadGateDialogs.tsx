@@ -203,7 +203,11 @@ export function DownloadWarningDialog({
             type="button"
             onClick={onCancel}
             aria-label={es["editor.toast.dismiss"]}
-            className="shrink-0 cursor-pointer border-0 bg-transparent text-[#94A3B8]"
+            // The muted token, not the mockups' `#94A3B8`: this dialog paints white, where that
+            // value measures **2.56:1** and fails even the 3:1 a non-text graphic answers to
+            // (WCAG 1.4.11). axe never caught it because the button holds an icon and no text, and
+            // axe's contrast rule only measures text. `#5B6B82` measures 5.43 here.
+            className="shrink-0 cursor-pointer border-0 bg-transparent text-ui-muted"
           >
             {closeIcon}
           </button>
