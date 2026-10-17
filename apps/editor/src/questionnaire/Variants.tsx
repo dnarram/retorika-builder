@@ -1256,6 +1256,10 @@ export function Variants({
             dismissToast();
             dispatch({ type: "setSectionInMenu", variant: openIndex, sectionId, inMenu });
           }}
+          onSetPageInMenu={(pageId, inMenu) => {
+            dismissToast();
+            dispatch({ type: "setPageInMenu", variant: openIndex, pageId, inMenu });
+          }}
           onSetSiteDescription={(text) => {
             dismissToast();
             dispatch({ type: "setSiteDescription", variant: openIndex, text });

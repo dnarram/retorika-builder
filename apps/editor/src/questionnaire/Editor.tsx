@@ -88,6 +88,7 @@ import {
 } from "../editor/EditorShell.tsx";
 import { ACCEPTED_IMAGE_ACCEPT } from "../editor/imageBytes.ts";
 import { LOOK_AHEAD_DEADLINE_MS, lookAheadStep } from "../editor/lookAhead.ts";
+import { menuStateFor } from "../editor/menuState.ts";
 import { measureOverflow } from "../editor/overflowCheck.ts";
 import { countPhotos, listPhotos, type PhotoState } from "../editor/photoInventory.ts";
 import { withPhotoUrls } from "../editor/previewDocument.ts";
@@ -531,6 +532,7 @@ export function Editor({
   onFillSlot,
   onClearSlot,
   onSetSectionInMenu,
+  onSetPageInMenu,
   onSetSiteDescription,
   onSetSiteUrl,
   onSetVariant,
@@ -600,6 +602,8 @@ export function Editor({
   /** A section in or out of the menu (ADR 0043). Not a content edit: nothing the section says
    * changes, only whether it is announced. */
   onSetSectionInMenu: (sectionId: string, inMenu: boolean) => void;
+  /** The page half of the same decision (ADR 0043 §3), dispatched from «Páginas». */
+  onSetPageInMenu: (pageId: string, inMenu: boolean) => void;
   /** What a shared link says about the whole site (ADR 0029). Site-wide like the theme, so neither
    * names a section. */
   onSetSiteDescription: (text: string) => void;
@@ -5674,6 +5678,8 @@ export function Editor({
             onMovePage={onMovePage}
             onDeletePage={onDeletePage}
             onPageToSection={onPageToSection}
+            onSetPageInMenu={onSetPageInMenu}
+            menu={menuStateFor(doc, pageId)}
             canFold={(id) => canFoldPage(doc, id)}
             linksTo={(id) => listLinksTo(doc, id).length}
             entryShown={entryShown}
@@ -5892,6 +5898,7 @@ export function Editor({
           menuLabel={menuLabelFor(doc, fieldsFor)}
           inMenu={findSection(doc, fieldsFor)?.section.inMenu}
           onSetInMenu={onSetSectionInMenu}
+          menu={menuStateFor(doc, pageId)}
           // The panel commits a words-only change through the very same callback the canvas does,
           // and since sprint 12 day 3 it anchors that change in the range the browser is replacing
           // too — so the marks arrive measured rather than guessed, exactly as they do from the

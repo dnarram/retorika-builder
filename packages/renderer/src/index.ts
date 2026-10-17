@@ -11,13 +11,23 @@ import { type RenderOptions, withDefaults } from "./options.ts";
 
 export { escapeHtml, NEUTRALISED_URL, safeUrl } from "./escape.ts";
 /**
- * **What the menu would call a section**, for the one place in the editor that has to show it:
- * the switch that takes a section out of the menu (ADR 0043 §3). Exported rather than re-derived
- * there, because which sections lend an anchor is a rule with five clauses and a second copy of it
- * would drift the first time one changed.
+ * **What the menu would call a section, and how much of a menu is left**, for the places in the
+ * editor that have to show it: the switch that takes a section out (ADR 0043 §3), the one per page
+ * row beside it, and the count said out loud next to both.
+ *
+ * Exported rather than re-derived there. Which sections lend an anchor is a rule with five clauses,
+ * and whether a menu is drawn at all is now three questions in a particular order — two copies of
+ * either would drift the first time one changed, and the copy in the editor is the one that would
+ * be telling somebody a number while they decide.
  */
-export type { SectionEntry } from "./menu.ts";
-export { sectionMenuEntries } from "./menu.ts";
+export type { PageEntry, SectionEntry } from "./menu.ts";
+export {
+  hasMenu,
+  MENU_MIN_ENTRIES,
+  menuIsCurated,
+  pageMenuEntries,
+  sectionMenuEntries,
+} from "./menu.ts";
 export type { RenderOptions } from "./options.ts";
 export { DEFAULT_RENDER_OPTIONS } from "./options.ts";
 

@@ -7458,6 +7458,114 @@ describe("sprint 23 día 3 — quitar una sección del menú", () => {
 });
 
 /**
+ * **Sprint 23 día 4 — las páginas en el menú, y el umbral que lo decide el dueño** (ADR 0043 §5).
+ *
+ * Una sola caminata, porque las tres reglas del día son una sola conversación con el documento:
+ * una página sale del menú, el menú baja del umbral y se dibuja igual porque el dueño lo ha
+ * tocado, y cuando no queda nada no se emite ningún `<nav>`. Lo que la caminata comprueba que no
+ * pasa es lo contrario de cada una: que la página desaparezca de la web, que el menú se borre por
+ * ser corto, y que quede un punto de referencia vacío anunciado como «navegación».
+ */
+describe("sprint 23 día 4 — las páginas en el menú y el umbral curado", () => {
+  it("quita una página, baja del umbral, y se queda sin menú solo cuando no queda nada", async () => {
+    const visitor = await (
+      await browser.newContext({ viewport: { width: 1440, height: 950 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(visitor);
+      const frame = visitor.frameLocator(PREVIEW).first();
+
+      // Convertir «Qué ponemos» en página es lo que hace aparecer el segundo menú: hasta aquí no
+      // hay a dónde ir, y la tira de páginas no se dibuja.
+      await expect(frame.locator('.rb-nav-wide nav[aria-label="Páginas"]')).toHaveCount(0);
+      await frame.locator('[data-section="sec-services"]').click();
+      await frame
+        .locator(
+          '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+        )
+        .click();
+      const pages = frame.locator('.rb-nav-wide nav[aria-label="Páginas"] a');
+      const sections = frame.locator('.rb-nav-wide nav[aria-label="Secciones"] a');
+      await expect(pages).toHaveText(["Qué ponemos"]);
+
+      // **El interruptor de la fila**, en «Páginas» — el otro lado del que vive en los campos de
+      // una sección. La primera fila no lo tiene: es «Inicio», y esconder el camino a casa es una
+      // trampa, no una decisión.
+      await visitor.getByRole("button", { name: "Páginas", exact: true }).click();
+      const panel = visitor.getByRole("region", { name: "Páginas de tu web" });
+      const rows = panel.locator("li");
+      await expect(rows).toHaveCount(2);
+      await expect(rows.first().locator('input[type="checkbox"]')).toHaveCount(0);
+      const pageToggle = rows.nth(1).locator('input[type="checkbox"]');
+      await expect(pageToggle).toBeChecked();
+      await pageToggle.uncheck();
+
+      /**
+       * **La tira de páginas se va, y la página no.** En la portada no queda ninguna otra página
+       * que ofrecer, así que no se dibuja una tira vacía; el avance que la anuncia sigue en su
+       * sitio con sus palabras, que es la diferencia entre «fuera del menú» y «fuera de la web».
+       */
+      await expect(frame.locator('.rb-nav-wide nav[aria-label="Páginas"]')).toHaveCount(0);
+      await expect(frame.locator('[data-preset="teaser"]')).toContainText("Qué ponemos");
+      await expect(panel).toContainText("En el menú no queda ninguna página.");
+      // Tres secciones siguen en el menú, así que la web sigue por encima del umbral y no hay nada
+      // que decirle al dueño sobre ello.
+      await expect(sections).toHaveCount(3);
+      await expect(panel).not.toContainText("lo has decidido tú");
+
+      /**
+       * Y ahora las secciones, de una en una. **El panel de campos se cierra entre cada una**: es
+       * un `aside` fijo de 340 px sobre el borde derecho, y con él abierto el clic en la sección
+       * siguiente del lienzo aterriza en el panel. Un «subtree intercepts pointer events» que, con
+       * el bucle que lo ignoraba, tardaba treinta y seis segundos en reintentar hasta rendirse.
+       */
+      const sectionToggle = visitor
+        .locator("aside label", { hasText: "Aparece en el menú" })
+        .locator("input");
+      const openFields = async (id: string) => {
+        await frame.locator(`[data-section="${id}"]`).click();
+        await frame.getByRole("button", { name: /Campos de esta sección/ }).click();
+      };
+      const closeFields = () => visitor.getByRole("button", { name: "Cerrar los campos" }).click();
+
+      await openFields("sec-gallery");
+      await sectionToggle.uncheck();
+      // La cuenta, viva, donde se toma la decisión.
+      await expect(visitor.locator("aside")).toContainText("quedan 2 secciones");
+      await closeFields();
+
+      /**
+       * **El umbral se aparta, y la interfaz dice de quién es la decisión.** Un destino está por
+       * debajo de los tres del ADR 0023, y el menú se dibuja igual porque el dueño lo ha tocado —
+       * su propia regla: «se queda si el dueño lo ha tocado». Callarlo dejaría una web que se
+       * comporta distinto de todas las demás sin explicar por qué.
+       */
+      await openFields("sec-location");
+      await sectionToggle.uncheck();
+      await expect(sections).toHaveText(["Te esperamos"]);
+      await expect(visitor.locator("aside")).toContainText("lo has decidido tú");
+      await closeFields();
+
+      /**
+       * **Y con nada, nada** — la cláusula que David añadió al aprobar el sprint. Ni `<nav>`, ni
+       * `<details>`, ni un desplegable que se abre sobre el vacío.
+       */
+      await openFields("sec-contact");
+      await sectionToggle.uncheck();
+      await expect(frame.locator(".rb-nav-wide")).toHaveCount(0);
+      await expect(frame.locator("details.rb-nav-narrow")).toHaveCount(0);
+      await expect(visitor.locator("aside")).toContainText("Sin ningún enlace no hay menú");
+
+      // Un paso del historial como cualquier otro: el menú vuelve con su único destino.
+      await visitor.getByRole("button", { name: "Deshacer" }).click();
+      await expect(sections).toHaveText(["Te esperamos"]);
+    } finally {
+      await visitor.context().close();
+    }
+  }, 240_000);
+});
+
+/**
  * **Sprint 23 día 1 — el héroe cabe, se pone al lado y nunca queda vacío.**
  *
  * Tres defectos que David reportó, y las tres pruebas son las medidas que los definen:

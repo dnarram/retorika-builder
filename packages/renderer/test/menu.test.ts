@@ -2,7 +2,13 @@ import { teaserSection } from "@retorika/catalog";
 import { type RetorikaDocument, type Section, type Theme, TOKEN_KEYS } from "@retorika/schema";
 import { describe, expect, it } from "vitest";
 import { render } from "../src/index.ts";
-import { hasMenu, MENU_MIN_ENTRIES, pageMenuEntries, sectionMenuEntries } from "../src/menu.ts";
+import {
+  hasMenu,
+  MENU_MIN_ENTRIES,
+  menuIsCurated,
+  pageMenuEntries,
+  sectionMenuEntries,
+} from "../src/menu.ts";
 
 /**
  * The menu that writes itself (ADR 0023, concept dossier §6), in the two halves ADR 0043 split it
@@ -180,6 +186,46 @@ describe("the pages of the site", () => {
    * colon. It could not happen while the append loop was the only other source; with the teaser
    * loop collecting, it could.
    */
+  /**
+   * **The page half of ADR 0043 §3, and the avance is the reason it is worth a test of its own.**
+   * Taking a page out of the menu leaves everything else exactly where it was: the page is still
+   * published, the section that announces it still carries its words and its link, and a visitor
+   * reaches it the way the owner meant them to. «Fuera del menú» is not «fuera de la web» for a
+   * page either.
+   */
+  it("leaves out a page the owner took out, and keeps the avance that announces it", () => {
+    const doc = converted();
+    const out = { ...(doc.pages[1] as NonNullable<(typeof doc.pages)[1]>), inMenu: false };
+    const curated = { ...doc, pages: [doc.pages[0], out] } as typeof doc;
+    expect(pageMenuEntries(curated)).toEqual([]);
+    // The avance is untouched: same section, same words, same destination.
+    const drawn = draw(curated);
+    const avance = drawn.querySelector('[data-section="sec-avance"] a');
+    expect(avance?.getAttribute("href")).toBe("./que-ponemos.html");
+    expect(avance?.textContent?.trim()).toBe("Ver más");
+  });
+
+  it("leaves out a page nothing points at when the owner took it out", () => {
+    // The appended half: a page with no avance is still a page the owner can prune.
+    const doc = documentWith(
+      [
+        section("sec-cover", "cover", "Taberna"),
+        section("sec-location", "location", "Dónde estamos"),
+      ],
+      [{ id: "p2", slug: "carta", title: "Nuestra carta" }],
+    );
+    const out = { ...(doc.pages[1] as NonNullable<(typeof doc.pages)[1]>), inMenu: false };
+    expect(pageMenuEntries({ ...doc, pages: [doc.pages[0], out] } as typeof doc)).toEqual([]);
+  });
+
+  it("counts an explicit «yes» as in, the same as never having been asked", () => {
+    const doc = converted();
+    const kept = { ...(doc.pages[1] as NonNullable<(typeof doc.pages)[1]>), inMenu: true };
+    expect(
+      pageMenuEntries({ ...doc, pages: [doc.pages[0], kept] } as typeof doc).map((e) => e.label),
+    ).toEqual(["Qué ponemos"]);
+  });
+
   it("gives a page one entry however many avances point at it", () => {
     const doc = documentWith(
       [
@@ -370,6 +416,152 @@ describe("the threshold of three", () => {
     for (const pageId of ["home", "p2", "p3"]) {
       expect(draw(doc, pageId).querySelectorAll(".rb-nav-wide nav").length).toBeGreaterThan(0);
     }
+  });
+});
+
+/**
+ * **Once the owner has curated, the threshold steps aside** (ADR 0043 §5) — David's own rule, in
+ * his words: «se queda si el dueño lo ha tocado».
+ *
+ * The threshold of three is a judgement about documents nobody has looked at: a generated site
+ * with two headed sections is not a site somebody decided should have two. The moment somebody
+ * does decide, the judgement has nothing left to be about, and overruling them would be the
+ * product telling an owner their own navigation is too short.
+ */
+describe("the curated threshold", () => {
+  /** Cover, two ordinary sections and a third the owner took out: one destination left, curated. */
+  const curatedToOne = () =>
+    documentWith([
+      section("sec-cover", "cover", "Taberna"),
+      { ...section("sec-location", "location", "Dónde estamos"), inMenu: false },
+      section("sec-contact", "contact", "Te esperamos"),
+    ]);
+
+  it("keeps the threshold while nobody has decided anything", () => {
+    const doc = documentWith([
+      section("sec-cover", "cover", "Taberna"),
+      section("sec-services", "services", "Qué ponemos"),
+      section("sec-contact", "contact", "Te esperamos"),
+    ]);
+    expect(menuIsCurated(doc)).toBe(false);
+    expect(hasMenu(doc)).toBe(false);
+  });
+
+  it("draws a menu of one destination once the owner has curated down to it", () => {
+    const doc = curatedToOne();
+    const home = doc.pages[0] as NonNullable<(typeof doc.pages)[0]>;
+    expect(menuIsCurated(doc)).toBe(true);
+    expect(sectionMenuEntries(home)).toHaveLength(1);
+    expect(sectionMenuEntries(home).length).toBeLessThan(MENU_MIN_ENTRIES);
+    expect(hasMenu(doc)).toBe(true);
+    expect(strip(draw(doc))).toEqual([
+      { label: "Te esperamos", href: "#sec-contact", current: false },
+    ]);
+  });
+
+  /**
+   * **Curation is the presence of the key, not its value**, which is the clause that decides what
+   * happens when somebody changes their mind. Turning a switch off and back on leaves the document
+   * curated, so the menu they were just looking at does not vanish on them — a menu that
+   * disappeared when an owner undid their own decision would read as the editor losing their work.
+   */
+  it("stays curated when a switch is turned off and back on", () => {
+    const doc = documentWith([
+      section("sec-cover", "cover", "Taberna"),
+      { ...section("sec-location", "location", "Dónde estamos"), inMenu: true },
+      section("sec-contact", "contact", "Te esperamos"),
+    ]);
+    const home = doc.pages[0] as NonNullable<(typeof doc.pages)[0]>;
+    expect(menuIsCurated(doc)).toBe(true);
+    expect(sectionMenuEntries(home)).toHaveLength(2);
+    expect(hasMenu(doc)).toBe(true);
+  });
+
+  it("notices a decision made on any page, because a menu is drawn for the whole site", () => {
+    // Two destinations, under the threshold, and the only decision was made away from home.
+    const doc = documentWith(
+      [
+        section("sec-cover", "cover", "Taberna"),
+        teaserSection("sec-avance", "./carta.html", "Ver más"),
+        section("sec-contact", "contact", "Te esperamos"),
+      ],
+      [
+        {
+          id: "p2",
+          slug: "carta",
+          title: "Nuestra carta",
+          sections: [
+            section("sec-carta", "prices", "Nuestra carta"),
+            { ...section("sec-extra", "services", "Para llevar"), inMenu: false },
+          ],
+        },
+      ],
+    );
+    const home = doc.pages[0] as NonNullable<(typeof doc.pages)[0]>;
+    expect(pageMenuEntries(doc).length + sectionMenuEntries(home).length).toBe(
+      MENU_MIN_ENTRIES - 1,
+    );
+    expect(menuIsCurated(doc)).toBe(true);
+    expect(hasMenu(doc)).toBe(true);
+  });
+
+  /**
+   * **David's own clause, added on approving the sprint: with nothing left, nothing is emitted.**
+   * Not an empty `<nav>`, not a `<details>` with an empty list inside it. A landmark announced as
+   * navigation to somebody who cannot see it, holding nothing, is worse than no landmark — and the
+   * narrow version would be a disclosure that opens onto nothing at all.
+   */
+  it("emits no nav and no details when the owner has taken everything out", () => {
+    const doc = documentWith([
+      section("sec-cover", "cover", "Taberna"),
+      { ...section("sec-location", "location", "Dónde estamos"), inMenu: false },
+    ]);
+    const home = doc.pages[0] as NonNullable<(typeof doc.pages)[0]>;
+    expect(menuIsCurated(doc)).toBe(true);
+    expect(pageMenuEntries(doc).length + sectionMenuEntries(home).length).toBe(0);
+    expect(hasMenu(doc)).toBe(false);
+    const drawn = draw(doc);
+    expect(drawn.querySelectorAll("nav")).toHaveLength(0);
+    expect(drawn.querySelectorAll("details")).toHaveLength(0);
+  });
+});
+
+/**
+ * **The pages strip has a floor of two visible pages, and «Inicio» is what makes it asymmetric**
+ * (ADR 0043 §5). A strip is drawn only when it holds a link to somewhere the visitor is not.
+ */
+describe("the pages strip and its floor", () => {
+  /** Three headed sections, so the sections menu carries the site past the threshold, and one
+   * other page the owner took out of the menu. */
+  const oneVisiblePage = () => {
+    const doc = documentWith(
+      [
+        section("sec-cover", "cover", "Taberna"),
+        section("sec-services", "services", "Qué ponemos"),
+        section("sec-location", "location", "Dónde estamos"),
+        section("sec-contact", "contact", "Te esperamos"),
+      ],
+      [{ id: "p2", slug: "carta", title: "Nuestra carta" }],
+    );
+    const out = { ...(doc.pages[1] as NonNullable<(typeof doc.pages)[1]>), inMenu: false };
+    return { ...doc, pages: [doc.pages[0], out] } as typeof doc;
+  };
+
+  it("draws no pages strip on the home page when there is no other page to offer", () => {
+    const drawn = draw(oneVisiblePage(), "home");
+    expect(drawn.querySelector('.rb-nav-wide nav[aria-label="Páginas"]')).toBeNull();
+    expect(strip(drawn, "Secciones")).toHaveLength(3);
+  });
+
+  /**
+   * **And keeps the way back**, which is the half the floor must not take away. On the page the
+   * owner pruned, «Inicio» is a link to somewhere the visitor is not, so the strip is drawn with
+   * it alone — the same thing that keeps a page drawn per entry from being a dead end.
+   */
+  it("still offers «Inicio» from the page the owner took out", () => {
+    expect(strip(draw(oneVisiblePage(), "p2"), "Páginas")).toEqual([
+      { label: "Inicio", href: "./index.html", current: false },
+    ]);
   });
 });
 
