@@ -67,6 +67,13 @@ with the section it names is the thing ADR 0023's «se escribe solo» exists to 
 that is not the page's order is a menu that lies about where things are. Both stay refused, and
 this clause does not reopen them.
 
+**Converting carries the answer; folding back does not spread it.** `sectionToPage` stamps the
+section's answer onto the page it makes, so a destination the owner pruned does not reappear as a
+page. The other direction has no honest equivalent: a page holds any number of sections, so one
+page's answer cannot be spread over them without hiding sections nobody decided about. What comes
+back says what each section says — and a section's own answer is never lost, because the section
+object itself travels into the page and out of it carrying its `inMenu`.
+
 ### 4. The threshold of three counts both menus together
 
 Fewer than three destinations is still not navigation. **What is counted is what a visitor could be
@@ -86,15 +93,29 @@ dueño lo ha tocado». Curation is read from the *presence* of the key, not its 
 switch off and on again leaves the document curated. That is the smaller surprise, and it is the
 one the owner caused on purpose.
 
-**Two bounds on it, and they are not symmetric:**
+**Asked of the whole site, not of one page.** Whether a menu is drawn is one answer for the whole
+site — the count is taken on the home page precisely so it cannot differ page to page — so the
+permission to draw a small one is site-wide too. An owner who pruned the menu while standing on
+page three has decided about *the menu*, and there is only one of those.
+
+**Three bounds on it, and the third is why they are not symmetric:**
 
 - **With zero visible destinations nothing is emitted** — no `<nav>`, no `<details>`, no empty
   disclosure. An empty landmark announced to somebody who cannot see it is worse than none.
 - **One destination still draws the menu**, when the owner curated down to it. It is their site and
   their decision; what the interface owes them is the count in front of them while they make it,
-  not a refusal. The pages menu has its own floor of two visible pages whatever the curation,
-  because a strip holding one link to the page you are already on is furniture rather than a way
-  anywhere.
+  not a refusal.
+- **The pages menu asks one more question of itself: it is drawn only when it holds a link to
+  somewhere the visitor is not.** On the home page that means at least one other visible page,
+  which is the floor of two — a strip of no pages is not navigation. Away from home «Inicio» is
+  always such a link, which is how a page drawn per entry, and a page the owner took out of the
+  menu, keep their way back.
+
+  *Reworded on day 4, when the rule met the code.* The first wording said «a strip holding one link
+  to the page you are already on is furniture»: that strip cannot be built, because away from home
+  «Inicio» is always in front of it and on the home page the entries never include home. Read
+  literally it would also have removed «Inicio» from exactly the pages it is the only way back
+  from. The decision is unchanged; the sentence now says what it does.
 
 ## What is preserved
 
@@ -158,6 +179,10 @@ somebody who has decided for themselves.
   two groups. Two locale keys where there were one and a half.
 - `packages/schema`: `inMenu` on a section and on a page, `SCHEMA_VERSION` 1.9.0 → 1.10.0, one
   migration with its round trip.
-- `apps/editor`: a switch where the section's fields are, and one per row in «Páginas».
-- The golden corpus moves twice: once for the split, once for the fixture that records curation.
+- `apps/editor`: a switch where the section's fields are, and one per row in «Páginas», plus
+  `menuState.ts` — one object answering «how much menu is left» for both panels, every number of it
+  asked of the renderer so the editor cannot promise a menu the published page does not have.
+- The golden corpus moves once, for the split. **Curation moves no existing golden**: it only adds
+  `menu-curado`, the fixture that records it, which is itself the proof that `inMenu` is absent by
+  default and no stored document changed.
 - Day by day in `docs/design/REVIEW.md`, sprint 23.

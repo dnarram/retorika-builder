@@ -91,7 +91,7 @@ function destinationOf(doc: RetorikaDocument, section: Page["sections"][number])
  * **An avance still decides where its page sits.** It no longer holds the converted section's slot
  * in one combined strip — that is what the split gave up, and ADR 0043 says so — but the pages a
  * conversion made keep the relative order of their avances on the home page, and the pages nothing
- * points at are still appended. The first page is not here: it is «Inicio», added by `linkNodes`
+ * points at are still appended. The first page is not here: it is «Inicio», added by `navsFor`
  * and only where it leads somewhere.
  *
  * A page drawn once per entry contributes nothing (ADR 0040 §5): up to twelve files in a menu
@@ -111,6 +111,12 @@ export function pageMenuEntries(doc: RetorikaDocument): PageEntry[] {
     // A teaser whose page is gone contributes nothing rather than a broken entry. The link itself
     // is already dead, `listDeadDestinations` catches it and the download is refused.
     if (!destination || destination.binding) continue;
+    // **The owner took this page out of the menu** (ADR 0043 §3) — and the avance that pointed at
+    // it stays exactly where it is, with its words and its link. That is the whole shape of the
+    // decision: the page is still published, still reachable from the section that announces it,
+    // and merely absent from the strip. Skipped before `pointedAt` is marked, so a later avance
+    // to the same page is skipped by this same line rather than by the duplicate guard.
+    if (destination.inMenu === false) continue;
     // **Marked before anything else, so two avances to one page cannot publish the same words
     // twice** — the duplicate-link problem ADR 0022 already solved for «Ver más» — and so the
     // append loop below never re-adds a page an avance has already placed.
@@ -126,7 +132,7 @@ export function pageMenuEntries(doc: RetorikaDocument): PageEntry[] {
   // Pages nothing points at, appended. An owner may delete an avance and keep its page (ADR 0022),
   // and a page with no way in is worse than one at the end of the strip.
   for (const page of doc.pages.slice(1)) {
-    if (pointedAt.has(page.id) || page.binding) continue;
+    if (pointedAt.has(page.id) || page.binding || page.inMenu === false) continue;
     entries.push({ label: page.title, slug: page.slug, pageId: page.id });
   }
 
@@ -170,16 +176,53 @@ export function sectionMenuEntries(page: Page): SectionEntry[] {
 }
 
 /**
+ * Whether anybody has decided what this menu shows — **read from the presence of `inMenu`, not
+ * from its value** (ADR 0043 §5).
+ *
+ * `inMenu: true` is therefore not the same fact as no `inMenu` at all, which is the distinction
+ * the whole threshold waiver rests on. Absence is «nobody has looked at this»; `true` is «I looked
+ * and I want it». So a switch turned off and turned back on leaves the document curated, and the
+ * threshold stays out of the way. That is the smaller of the two surprises available here: the
+ * alternative is a menu that disappears the moment somebody undoes their own decision, which they
+ * would read as the editor losing their work rather than as a rule reasserting itself.
+ *
+ * **Asked of the whole site, not of one page.** Whether a menu is drawn is one answer for the
+ * whole site — `hasMenu` is counted on the home page precisely so it cannot differ page to page —
+ * so the permission to draw a small one has to be site-wide too. An owner who pruned the menu
+ * while standing on page three has decided about *the menu*, and there is only one of those.
+ */
+export function menuIsCurated(doc: RetorikaDocument): boolean {
+  return doc.pages.some(
+    (page) =>
+      page.inMenu !== undefined || page.sections.some((section) => section.inMenu !== undefined),
+  );
+}
+
+/**
  * Whether this document has enough structure to be worth a menu at all.
  *
  * **Counted on the home page, so the answer is the same on every page of the site**: a menu that
  * appears on one page and not on another is not a menu. See `MENU_MIN_ENTRIES` for why the two
  * menus are counted together rather than separately.
+ *
+ * Three questions in order, and the order is the decision (ADR 0043 §4 and §5):
+ *
+ * 1. **No destinations, no menu** — whatever anybody decided. A landmark announced as «navigation»
+ *    to somebody who cannot see it, holding nothing, is worse than no landmark at all. This is
+ *    David's own clause, added when the sprint was approved.
+ * 2. **Curated, so the threshold steps aside**: one destination is enough. It is their site, they
+ *    can count, and the count is in front of them in the editor while they decide. A refusal here
+ *    would be the product overruling somebody about their own navigation.
+ * 3. **Otherwise the threshold**, unchanged since ADR 0023 — which is what keeps every document
+ *    nobody has curated answering exactly what it answered before this field existed.
  */
 export function hasMenu(doc: RetorikaDocument): boolean {
   const home = doc.pages[0];
   if (!home) return false;
-  return pageMenuEntries(doc).length + sectionMenuEntries(home).length >= MENU_MIN_ENTRIES;
+  const destinations = pageMenuEntries(doc).length + sectionMenuEntries(home).length;
+  if (destinations === 0) return false;
+  if (menuIsCurated(doc)) return true;
+  return destinations >= MENU_MIN_ENTRIES;
 }
 
 /** The two menus of one page, as `<nav>` nodes — empty ones left out rather than announced. */
@@ -215,6 +258,17 @@ function navsFor(doc: RetorikaDocument, current: Page): RenderNode[] {
     element("a", { href: `#${entry.sectionId}` }, [entry.label]),
   );
 
+  // **An empty strip is left out rather than announced** — ADR 0043 §5's first bound, which David
+  // added on approving the sprint. A landmark announced as «navigation» to somebody who cannot see
+  // it, holding nothing, is worse than no landmark.
+  //
+  // That is also the pages menu's floor of two visible pages, and it needs no arithmetic of its
+  // own. On the home page the strip is exactly the visible pages *other than* home, so a site with
+  // one visible page leaves it empty and nothing is drawn. Away from home «Inicio» is always in it,
+  // and «Inicio» leads somewhere the visitor is not — which is how a page drawn per entry, and a
+  // page the owner took out of the menu, keep their way back. The one strip the floor forbids, a
+  // single link to the page you are already standing on, cannot be built at all: it would need the
+  // home page to appear among its own entries.
   return [
     ...(pages.length > 0
       ? [element("nav", { class: "rb-nav", "aria-label": es["nav.pages"] }, pages)]

@@ -10,6 +10,7 @@ import {
   shiftMarks,
 } from "@retorika/schema";
 import { useEffect, useId, useRef } from "react";
+import { type MenuState, menuNoteText, sectionsLeftText } from "../editor/menuState.ts";
 import { PanelClose } from "../editor/panelKit.tsx";
 import { type FieldRow, fieldCommitFor, groupedFields } from "../editor/sectionFields.ts";
 import { fieldEditFor } from "../editor/textEdits.ts";
@@ -55,6 +56,15 @@ export interface FieldsPanelProps {
   /** What the document says today. `undefined` is «nobody has decided», which shows as in. */
   inMenu?: boolean | undefined;
   onSetInMenu: (sectionId: string, inMenu: boolean) => void;
+  /**
+   * How much menu is left, said out loud beside the switch (ADR 0043 §5).
+   *
+   * **The count belongs where the decision is made**, which is here. A derived menu gives the
+   * owner nothing else to look at: they cannot see the strip from this panel, and the published
+   * page is the first place the result would otherwise appear. Computed once in `menuState.ts` and
+   * read identically by «Páginas», so the two panels cannot tell them different numbers.
+   */
+  menu: MenuState;
 }
 
 /** What a row's two boxes become in the document. A link keeps both halves together: changing a
@@ -75,11 +85,13 @@ export function FieldsPanel({
   onClose,
   menuLabel,
   inMenu,
+  menu,
   onSetInMenu,
 }: FieldsPanelProps) {
   const headingId = useId();
 
   const { sectionRows, lines } = groupedFields(rows);
+  const note = menuNoteText(menu);
 
   function commit(row: FieldRow, text: string, href: string, anchored?: readonly MarkRun[]) {
     // A line's row carries its own address, and the order a created slot is placed by is the
@@ -184,22 +196,41 @@ export function FieldsPanel({
        * visible.
        */}
       {menuLabel === undefined ? null : (
-        <label className="ui-interactive flex items-start gap-2.5 rounded-ui border border-ui-border bg-ui-bg p-3">
-          <input
-            type="checkbox"
-            checked={inMenu !== false}
-            onChange={(event) => onSetInMenu(sectionId, event.target.checked)}
-            className="mt-0.5 h-[18px] w-[18px] shrink-0 accent-[var(--ui-brand)]"
-          />
-          <span className="flex flex-col gap-0.5">
-            <span className="text-[13px] font-semibold text-ui-ink">
-              {es["editor.menu.toggle"]}
+        <div className="flex flex-col gap-1.5 rounded-ui border border-ui-border bg-ui-bg p-3">
+          <label className="ui-interactive flex items-start gap-2.5">
+            <input
+              type="checkbox"
+              checked={inMenu !== false}
+              onChange={(event) => onSetInMenu(sectionId, event.target.checked)}
+              className="mt-0.5 h-[18px] w-[18px] shrink-0 accent-[var(--ui-brand)]"
+            />
+            <span className="flex flex-col gap-0.5">
+              <span className="text-[13px] font-semibold text-ui-ink">
+                {es["editor.menu.toggle"]}
+              </span>
+              <span className="text-[12px] leading-snug text-ui-muted">
+                {es["editor.menu.as"].replace("{label}", menuLabel)}
+              </span>
             </span>
-            <span className="text-[12px] leading-snug text-ui-muted">
-              {es["editor.menu.as"].replace("{label}", menuLabel)}
-            </span>
-          </span>
-        </label>
+          </label>
+
+          {/**
+           * The count of what is left, and then — only when there is one — the sentence about the
+           * site's own menu: that it is not drawn yet, or that it is drawn small because this
+           * owner decided so. Said rather than implied, which is the half of «nada de interfaz que
+           * prometa más de lo que hay» that cuts the other way: a switch beside a count, on a site
+           * publishing no menu at all, promises a strip nobody will see.
+           *
+           * **Outside the `<label>`, deliberately.** Everything inside a label is the control's
+           * accessible name, and these sentences are about the site rather than about this switch.
+           * Left in, the name read aloud on focus would be four sentences long and would change
+           * every time another section left the menu.
+           */}
+          <p className="m-0 text-[12px] leading-snug text-ui-muted">{sectionsLeftText(menu)}</p>
+          {note === undefined ? null : (
+            <p className="m-0 text-[12px] leading-snug text-ui-muted">{note}</p>
+          )}
+        </div>
       )}
 
       {rows.length === 0 ? (

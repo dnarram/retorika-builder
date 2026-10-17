@@ -937,6 +937,54 @@ describe("the page verbs", () => {
     expect(state[0]?.future).toHaveLength(0);
   });
 
+  it("takes a page out of the menu in one step, and undo puts it back", () => {
+    const state = run(threePages(), {
+      type: "setPageInMenu",
+      variant: 0,
+      pageId: "p2",
+      inMenu: false,
+    });
+    expect(state[0]?.present.document.pages[1]?.inMenu).toBe(false);
+    expect(state[0]?.past).toHaveLength(1);
+    expect(
+      run(state, { type: "undo", variant: 0 })[0]?.present.document.pages[1]?.inMenu,
+    ).toBeUndefined();
+  });
+
+  it("adds no step for an answer the page already gives", () => {
+    const once = run(threePages(), {
+      type: "setPageInMenu",
+      variant: 0,
+      pageId: "p2",
+      inMenu: false,
+    });
+    expect(run(once, { type: "setPageInMenu", variant: 0, pageId: "p2", inMenu: false })).toBe(
+      once,
+    );
+  });
+
+  /**
+   * **Stamping the default is a change**, because `undefined !== true`: absence is «nobody has
+   * looked at this» and `true` is «I looked and I want it». That is the fact the curated threshold
+   * reads (ADR 0043 §5), so the step has to open for it.
+   */
+  it("opens a step for an explicit «yes» on a page nobody had decided about", () => {
+    const state = run(threePages(), {
+      type: "setPageInMenu",
+      variant: 0,
+      pageId: "p2",
+      inMenu: true,
+    });
+    expect(state[0]?.present.document.pages[1]?.inMenu).toBe(true);
+    expect(state[0]?.past).toHaveLength(1);
+  });
+
+  it("refuses the entry page, which is «Inicio» rather than an entry", () => {
+    expect(() =>
+      run(threePages(), { type: "setPageInMenu", variant: 0, pageId: "home", inMenu: false }),
+    ).toThrow(/Inicio/);
+  });
+
   it("counts as having edited no section at all, because a page is not one", () => {
     // `sectionOf` answers `undefined` for a cause that names a page, so renaming one cannot keep a
     // delete toast alive on a section nobody touched.

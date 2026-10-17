@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { listDeadDestinations } from "../src/destinations.ts";
 import type { RetorikaDocument, Section } from "../src/document.ts";
-import { setPageInMenu, setSectionInMenu } from "../src/index.ts";
+import { pageToSection, sectionToPage, setPageInMenu, setSectionInMenu } from "../src/index.ts";
 import { type Theme, TOKEN_KEYS } from "../src/tokens.ts";
 
 /**
@@ -153,5 +153,59 @@ describe("taking a page out of the menu", () => {
       ],
     };
     expect(() => setPageInMenu(bound, "p2", false)).toThrow(/per entry/);
+  });
+});
+
+/**
+ * **The conversion, there and back** — reachable only since the owner can prune a page at all
+ * (sprint 23 day 4), and two different questions that look like one.
+ */
+describe("the conversion, there and back", () => {
+  const teaser = ({ sectionId, href }: { sectionId: string; href: string }): Section => ({
+    id: sectionId,
+    preset: { catalogId: "teaser", variantId: "stacked" },
+    source: "catalog",
+    layout: null,
+    content: [
+      {
+        id: "el-link",
+        role: "link",
+        hidden: false,
+        slot: "link",
+        value: { kind: "link", text: "Ver más", href },
+      },
+    ],
+  });
+
+  /**
+   * **A pruned section comes back pruned**, and not because anything carries it: the section object
+   * itself travels into the page and back out with its own `inMenu` on it. The page's copy, which
+   * `sectionToPage` stamps so the destination does not reappear as a page, is a second record of
+   * the same decision — and this is the test that says the first one is not lost on the way home.
+   */
+  it("brings a pruned section back pruned", () => {
+    const hidden = setSectionInMenu(documentWithALinkToTheSection(), "sec-location", false);
+    const asPage = sectionToPage(hidden, "sec-location", teaser);
+    const made = asPage.pages.at(-1);
+    expect(made?.inMenu).toBe(false);
+
+    const back = pageToSection(asPage, made?.id ?? "");
+    expect(back.pages[0]?.sections.find((s) => s.id === "sec-location")?.inMenu).toBe(false);
+  });
+
+  /**
+   * **A page's own choice goes with the page, and is not spread over its sections.** The other
+   * direction has no honest answer: a page holds any number of sections, so stamping one page's
+   * answer onto all of them would hide sections nobody decided about — and stamping it onto the
+   * first would be arbitrary. The sections come back saying what each of them says, which for a
+   * section nobody has pruned is nothing at all.
+   */
+  it("drops a page's own choice with the page rather than spreading it", () => {
+    const asPage = sectionToPage(documentWithALinkToTheSection(), "sec-location", teaser);
+    const pageId = asPage.pages.at(-1)?.id ?? "";
+    const hiddenPage = setPageInMenu(asPage, pageId, false);
+
+    const back = pageToSection(hiddenPage, pageId);
+    expect(back.pages[0]?.sections.find((s) => s.id === "sec-location")?.inMenu).toBeUndefined();
   });
 });

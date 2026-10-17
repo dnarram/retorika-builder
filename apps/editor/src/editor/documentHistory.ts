@@ -58,6 +58,7 @@ import {
   setElementText,
   setEntryField as setEntryFieldInDoc,
   setMobilePatch as setMobilePatchInDoc,
+  setPageInMenu as setPageInMenuInDoc,
   setPlacement as setPlacementInDoc,
   setSectionInMenu as setSectionInMenuInDoc,
   setTheme as setThemeInDoc,
@@ -137,6 +138,9 @@ export type SnapshotCause =
   | { type: "pageToSection"; pageId: string }
   | { type: "renamePage"; pageId: string }
   | { type: "movePage"; pageId: string }
+  /** A page in or out of the menu. Names the page and not a section, and it is not a content
+   * cause: it writes no word into any section, the same as renaming one. */
+  | { type: "setPageInMenu"; pageId: string }
   | { type: "deletePage"; pageId: string }
   /** The first cause that names no section, because a theme belongs to none of them: it restyles
    * every section at once, hand-designed ones included. `sectionOf` is what keeps that honest. */
@@ -291,6 +295,7 @@ export type HistoryAction =
   | { type: "pageToSection"; variant: number; pageId: string }
   | { type: "renamePage"; variant: number; pageId: string; title: string }
   | { type: "movePage"; variant: number; pageId: string; toIndex: number }
+  | { type: "setPageInMenu"; variant: number; pageId: string; inMenu: boolean }
   | { type: "deletePage"; variant: number; pageId: string }
   | { type: "addCollection"; variant: number; name: string }
   | { type: "renameCollection"; variant: number; collectionId: string; name: string }
@@ -977,6 +982,19 @@ function movePage(history: History, pageId: string, toIndex: number): History {
   return step(history, document, { type: "movePage", pageId });
 }
 
+/**
+ * A page in or out of the menu — the page half of `setSectionInMenu`, and one step like it.
+ *
+ * Guarded on identity the same way, so the switch pressed twice opens no step. The schema's verb
+ * throws for the entry page and for a page drawn per entry; «Páginas» draws no switch for either,
+ * so a throw here would mean something dispatched an action the interface never offered.
+ */
+function setPageInMenu(history: History, pageId: string, inMenu: boolean): History {
+  const document = setPageInMenuInDoc(history.present.document, pageId, inMenu);
+  if (document === history.present.document) return history;
+  return step(history, document, { type: "setPageInMenu", pageId });
+}
+
 function deletePage(history: History, pageId: string): History {
   return step(history, deletePageFromDoc(history.present.document, pageId), {
     type: "deletePage",
@@ -1212,6 +1230,8 @@ function apply(history: History, action: HistoryAction): History {
       return renamePage(history, action.pageId, action.title);
     case "movePage":
       return movePage(history, action.pageId, action.toIndex);
+    case "setPageInMenu":
+      return setPageInMenu(history, action.pageId, action.inMenu);
     case "deletePage":
       return deletePage(history, action.pageId);
     case "addCollection":
