@@ -57,8 +57,10 @@ describe("the Pie de página preset", () => {
     }
   });
 
-  it("names the four details the editor warns about, and leaves the business name out", () => {
-    // Warning about the business name would be warning about question 1, which is required.
+  it("names the four details ADR 0019 offers, and leaves the business name out", () => {
+    // Until ADR 0044 these were «the four the editor warns about»; the warning is gone and the
+    // four are what «(opcional)» now marks. Marking the business name would contradict question 1,
+    // which is the one answer the questionnaire insists on.
     expect([...FOOTER_IDENTITY_SLOTS]).toEqual(["owner", "taxId", "address", "email"]);
     expect(FOOTER_IDENTITY_SLOTS).not.toContain("businessName");
   });
@@ -158,9 +160,43 @@ describe("interface language", () => {
     }
   });
 
-  it("names the details the way a person would, not the way a form would", () => {
-    expect(es["section.footer.slot.taxId"]).toBe("NIF o CIF");
-    expect(es["section.footer.slot.owner"]).toBe("Titular");
-    expect(es["section.footer.slot.address"]).toBe("Domicilio");
+  /**
+   * **The human name, and then the one word a form is allowed.**
+   *
+   * «NIF o CIF» rather than «Identificación fiscal», «Titular» rather than «Razón social»: the
+   * details are named the way the person filling them in would name them, which is what this test
+   * has always been about.
+   *
+   * **«(opcional)» joined them on 17 October 2026** (sprint 24 day 1, ADR 0044), when the editor's
+   * advisory — «Las webs de negocios suelen identificar a su titular…» — was removed at David's
+   * request. That sentence was the only place the product said these four fields exist and may be
+   * left empty; the word carries the second half of it, in the panel where they are filled, and
+   * `min: 0` in `FOOTER_SLOTS` is what makes it true rather than reassuring.
+   *
+   * It is also read aloud: the label is the input's accessible name, so a screen reader now says
+   * the field is optional instead of leaving somebody to guess.
+   */
+  it("names the details the way a person would, and says they are optional", () => {
+    expect(es["section.footer.slot.taxId"]).toBe("NIF o CIF (opcional)");
+    expect(es["section.footer.slot.owner"]).toBe("Titular (opcional)");
+    expect(es["section.footer.slot.address"]).toBe("Domicilio (opcional)");
+    expect(es["section.footer.slot.email"]).toBe("Correo de contacto (opcional)");
+
+    // The four ADR 0019 is about, and only those: `businessName` comes from question 1 and is the
+    // one slot here the questionnaire insists on, so it carries no qualifier.
+    expect(es["section.footer.slot.businessName"]).toBe("Nombre del negocio");
+    for (const slot of FOOTER_SLOTS) {
+      const label = es[`section.footer.slot.${slot.slot}` as keyof typeof es];
+      expect(label.endsWith("(opcional)"), slot.slot).toBe(
+        FOOTER_IDENTITY_SLOTS.includes(slot.slot),
+      );
+    }
+  });
+
+  /** And the word is not decoration: the four it marks are the four the preset admits zero of. */
+  it("marks exactly the slots the preset makes optional", () => {
+    for (const slot of FOOTER_SLOTS) {
+      expect(slot.min === 0, slot.slot).toBe(FOOTER_IDENTITY_SLOTS.includes(slot.slot));
+    }
   });
 });

@@ -10492,10 +10492,24 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
       const tabs = walker.locator('[data-testid="page-tabs"] button');
       await expect(tabs).toHaveCount(2);
 
-      // De vuelta a la primera y abajo, para que haya algo que conservar o perder.
+      /**
+       * De vuelta a la primera y abajo, para que haya algo que conservar o perder.
+       *
+       * **Las dos cifras de abajo tenían que estar de acuerdo y no estaban atadas.** El objetivo
+       * eran 240 y la guarda pedía «más de 240» de recorrido en la página de destino, dos números
+       * que coincidían por costumbre: el 17 de octubre de 2026 la tira de avisos del editor perdió
+       * una línea —se fue el aviso del titular, ADR 0044—, el lienzo quedó unos catorce píxeles más
+       * alto, el recorrido bajó a **226** y la guarda se disparó sobre una prueba que no tenía nada
+       * roto.
+       *
+       * Así que el objetivo es una constante y **la guarda compara contra lo que se midió de
+       * verdad**, no contra lo que se pidió. La relación queda escrita en el código y no puede
+       * volver a desalinearse: lo único ajustable es el objetivo, y tiene holgura de sobra.
+       */
+      const SCROLL_TO = 160;
       await tabs.first().click();
       await expect(frame.locator('[data-section="sec-cover"]')).toBeVisible();
-      const reading = await scrolledPreview(walker, { to: 240 });
+      const reading = await scrolledPreview(walker, { to: SCROLL_TO });
       expect(
         reading,
         "la vista previa no se desplazó: la prueba no distinguiría nada",
@@ -10522,8 +10536,8 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
       });
       expect(
         room,
-        "la página de destino no se puede desplazar: la prueba sería vacua",
-      ).toBeGreaterThan(240);
+        `la página de destino solo se desplaza ${room}px y la primera se dejó en ${reading}: no podría conservar esa posición, así que el 0 de abajo no distinguiría nada`,
+      ).toBeGreaterThanOrEqual(reading);
 
       await expect
         .poll(async () =>
