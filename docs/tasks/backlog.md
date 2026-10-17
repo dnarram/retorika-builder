@@ -12,7 +12,47 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 16 October 2026, **closing sprint 22 — «se mueve lo justo».** The three screens
+Last reviewed: 17 October 2026, **closing sprint 23 — «el héroe cabe y el menú lo decides tú».**
+Two defects David reported and one question of judgement he asked. The landing's hero now sits beside
+the text from 1024 by grid placement, shows the sample's cover **with its button** — the window was
+800 pixels of page in both states against a cover that is 939 tall with its button ending at 891 —
+and the frame can no longer stand enlarged and empty, because its height and its drawing now come
+from the same two numbers and a zero-width measurement is no longer treated as a measurement. And
+**the menu is the owner's**: `inMenu`, one optional boolean per destination, on sections and on
+pages, with a switch in a section's fields and one per row in «Páginas», the count of what is left
+said out loud beside both. The menu is **two** menus since this sprint — the pages of the site and
+the sections of the page you are on — which was David's choice among four options with the costs in
+front of him. The record is `docs/design/REVIEW.md`, sprint 23, and the decision is
+[ADR 0043](../decisions/0043-the-menu-splits-in-two-and-the-owner-chooses.md).
+
+**What this sprint found that nobody was looking for:**
+
+1. **A `git checkout HEAD -- .` to check whether a lint failure predated the day's work reverted all
+   of it.** Only the two untracked files survived; everything else had to be redone from the
+   transcript. Never with uncommitted work — to compare against `main`, commit first.
+2. **The mobile axe walk never opens the two panels this sprint changed.** It audits the editor and
+   the «Estilo» sheet at 390, but a cover lends no menu entry so its fields drawer draws no switch,
+   and a one-page document gives a «Páginas» row no checkbox. Both are audited now, inside the walk
+   that has converted a section.
+3. **axe measured a panel at 0.90 opacity and reported three serious contrast failures against
+   colours that are in no stylesheet** — `#6a788d`, `#df3a3a`, `#2a7ce9`, which are `--ui-muted`,
+   `--ui-danger` and `--ui-brand` blended with the white under them. The measurement was wrong; what
+   it leaves behind is true and has its own row below. `axeSerious` now prints the ratio and the two
+   colours, which the renderer's own matrix has done since sprint 4.
+4. **Editing a file while `pnpm e2e` runs fails walks that have nothing to do with the edit.** It
+   serves the app with `next dev`, so a one-word comment fix recompiled the editor mid-suite and two
+   long journeys died on a navigation. Finish editing, then measure.
+5. **The published site's SEO score on the landing is 0.54 by design.** `is-crawlable` fails because
+   `layout.tsx` sets `noindex` on purpose — the deployment URL is public and shows a half-built
+   product with Retorika's name on it. Worth knowing before somebody «fixes» it.
+
+**What this sprint leaves open:** **two signatures**, because ADR 0043 diverges from dossier §6 and
+from ADR 0023 — and ADR 0042 from sprint 21 is still unsigned; the landing's «Empezar» link text,
+which Lighthouse's Spanish blocklist calls non-descriptive and which is a copy decision about the
+public front door; the two brand colours that clear 4.5:1 by a hair; and everything the two sprints
+before left, which has not moved.
+
+The review before that was 16 October 2026, **closing sprint 22 — «se mueve lo justo».** The three screens
 before the editor — the landing, the five questions and the three proposals — had no transition and
 no animation at all, and now have a named vocabulary of five: a surface arriving, a control lifting
 a pixel under the pointer, one ring that sounds once per screen, two discs of brand colour drifting
@@ -871,6 +911,26 @@ open survives.
   **A thumbnail that scrolls itself under the pointer**, to show the page continues below the
   cover. David turned it down when it was put to him on 15 October; it would also have needed
   JavaScript driving a live frame, which is the same cost as the row above.
+
+- **Two of the application's own colours clear 4.5:1 by a hair, so any opacity on them fails.**
+  Measured 17 October 2026 (sprint 23 day 5) against the panel's white: `--ui-brand` `#156fe7` is
+  **4.71:1** and `--ui-danger` `#dc2626` is **4.83:1**, both passing; at 0.90 opacity they are 4.03
+  and 4.30 and both fail. `--ui-muted` `#5b6b82` has more room at 5.43. This is not a violation —
+  a 180ms fade is not a rendered state, and axe only saw it because a test measured mid-animation —
+  but it means **the panels' own entrance animation spends its duration below the threshold**, and
+  that any future hover or disabled state that reaches for opacity on brand or danger text lands
+  under it. Whose call: a design decision about two tokens, so David's. The cheap version is a
+  darker brand and danger for *text* only, leaving the fills alone: `#105cb1` already exists as
+  `--ui-brand-deep` and measures **6.59:1** on the panel's white (6.14 on the landing's grey, which
+  is why sprint 21 day 5 reached for it there), and `#b91c1c` measures **6.47** on white. Both would
+  still clear 4.5 at 0.90 opacity, which is the property the current two lack.
+
+- **The landing's «Empezar» is on Lighthouse's list of non-descriptive link texts**, in Spanish.
+  Measured 17 October 2026 (sprint 23 day 5): mobile Lighthouse on `/` scores SEO 0.54, and the two
+  audits that fail are `is-crawlable` — which is the deliberate `noindex`, not a defect — and
+  `link-text`, whose only item is `Empezar` → `/empezar` with `textLang: "es"`. It matters the day
+  the page is indexed and not before. Whose call: David's, because it is the copy of the primary
+  call to action on the public front door; «Empezar mi web» or an `aria-label` would satisfy it.
 
 - **The field you are typing in moves 7.9px while you filter the sectors.** Measured 15 October
   2026 (sprint 22 day 3) at 1280 × 720: typing «rest» into step 2's search takes the grid from

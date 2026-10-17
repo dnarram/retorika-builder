@@ -2571,3 +2571,250 @@ pública, y es suya.
 
 **Y lo de antes, que sigue ahí:** el ADR 0042 del sprint 21 continúa `proposed`, sin firmar, y la
 lista del iPhone de verdad sigue sin recorrerse.
+
+## Sprint 23 — «El héroe cabe y el menú lo decides tú» (16 y 17 de octubre de 2026)
+
+David, tras fusionar el cierre del sprint 22, con dos problemas y una pregunta de criterio:
+
+> «1. En la landing page la maqueta de web que cambia de pc a móvil **debería aparecer en el lado
+> derecho junto al texto** cuando la pantalla es amplia y debería adaptarse cuando es pequeña. He
+> visto que la maqueta aparece demasiado cortada — no me importa que se corte, pero **se corta en
+> extremo** hasta el punto de que prácticamente lo único que se ve es parte de la imagen de portada
+> sin visualizar un botón o texto. Luego, cuando la maqueta pasa de pc a móvil y viceversa, a veces
+> **se queda el marco que la contiene ampliado sin que tenga contenido**. El marco siempre debe
+> estar ajustado a la maqueta que se muestra.
+>
+> 2. El menú de la página en creación **debería ser editable por el usuario**. El usuario debería
+> ser capaz de decidir si una sección no debería aparecer en ese menú. Además me gustaría que como
+> experto des soluciones a los menús híbridos: ¿un menú igual, solo las páginas, solo las secciones
+> de la página actual, o dos menús distintos?»
+
+**Las tres causas, medidas antes de planificar.** Ninguna se dedujo:
+
+1. **El recorte era un número contra otro.** La ventana del héroe eran **800 píxeles de página en
+   los dos estados**, y la portada de la muestra mide **939** de alto a 1280 de ancho, con su botón
+   «Reservar mesa» acabando en **891**. Se cortaba 91 píxeles antes del botón: la foto y nada más,
+   exactamente como él lo describió. En móvil la portada acaba en 640 y sobraban 160, que es por qué
+   una captura del sprint 22 parecía correcta.
+2. **El marco vacío tenía dos mecanismos.** El alto del marco salía de un `aspect-ratio` en CSS y el
+   tamaño dibujado de la escala en JavaScript, y **nada derivaba uno del otro**: coincidían solo
+   mientras `scale === anchoDelHueco / 1280`. Y `heroScale` devuelve 0 ante un ancho de cero con la
+   puerta de render en `scale > 0`, así que **una sola entrada del `ResizeObserver` con ancho cero
+   desmontaba el iframe** mientras el hueco conservaba su alto reservado. Eso es, literalmente, «el
+   marco ampliado sin contenido».
+3. **La columna única estaba escrita en cuatro sitios** y `page.tsx` no tenía **ni una** media query.
+
+**Y el menú, antes de tocarlo:** no es una sección y no está en el documento. Es cromo derivado
+(ADR 0023, dossier §6: «el menú se escribe solo»). El editor **no tenía ninguna interfaz de menú**:
+la única manera de quitar una sección de él era dejarla sin encabezado, que también lo borra de la
+web — un efecto colateral que nadie adivinaría. El propio ADR 0023 nombraba esta reapertura: «an
+owner wants a page kept out of the menu… which is a different decision, with a place in the document
+to store it».
+
+**Las cuatro decisiones de David, el 16 de octubre.** Entre opciones puestas delante:
+
+1. **El marco se ajusta siempre a la maqueta y la página de debajo se mueve**, sabiendo que el
+   contenido inferior salta cuando el marco cambia de estado.
+2. **Dos menús: uno entre páginas y otro dentro de la página.** Se le recomendó lo contrario — un
+   solo menú híbrido, que es lo que ya existía — y eligió la división con los costes delante. Están
+   escritos en el ADR 0043 y resumidos abajo.
+3. **El dueño decide solo si un destino aparece o no**, sin nombre propio y sin reordenar.
+4. **El umbral de tres se queda si no lo ha tocado; en cuanto lo toca, el menú se dibuja con los
+   destinos que haya.**
+
+**Y tres ajustes al aprobar el plan**, los tres en el producto final: durante la demostración
+automática el hueco reserva el alto mayor y se ajusta solo cuando el visitante pulsa, con **el CLS
+medido de las dos formas**; con **cero destinos no se emite ningún `<nav>`**; y una prueba que
+asevere que `inMenu: false` no cambia el id de la sección ni hace que `listDeadDestinations` marque
+como roto un enlace que apunte a ella.
+
+### El héroe se pone al lado, enseña la portada entera y nunca queda vacío (día 1, PR #256)
+
+Ventanas nuevas, una por estado y las dos medidas: **1040 en escritorio y 844 en móvil** — la
+portada entera con su botón, más una franja de «Qué ponemos» para que el marco se lea como el
+principio de una página y no como una foto. 844 es además el alto de la ventana de un iPhone 13.
+`heroWindow` no tiene red de seguridad aritmética, así que una prueba de navegador vuelve a medir la
+portada y su botón contra las dos ventanas y falla si alguno se sale.
+
+Dos columnas desde 1024 — la clase `studio` del ADR 0042, el mismo número con el que el editor
+decide que tiene sitio para las herramientas de diseño — **por colocación en rejilla, nunca
+reordenando el marcado**, porque el recorrido con teclado pinza el orden «Empezar», «Ya tengo
+cuenta», «Ver en móvil», que es el orden del DOM. El alto del hueco sale ahora de los mismos dos
+números que dibujan la página, como `thumbnailHeight` ya hacía en las propuestas, y un ancho de cero
+deja de ser una medición: se conserva la última escala buena.
+
+**La regla del hueco, medida de las dos formas** — desplazamiento sin interacción, una demostración
+entera:
+
+| | hueco reservado (lo que va) | hueco siempre ajustado |
+|---|---|---|
+| 1280 × 900 | **0,0747** | 0,1530 |
+| 900 × 1300 | **0,1313** | 0,1698 |
+| 768 × 1400 | **0,1324** | 0,1724 |
+
+Trazado a 900 × 1300: con reserva el hueco se queda en 574 y «Cómo funciona» en 1212 todo el viaje;
+sin ella van 574 → 470 → 574 y 1212 → 1108 → 1212. Ciento cuatro píxeles, dos veces, por una
+demostración que nadie ha pedido. La regla lo parte por la mitad.
+
+Dos consecuencias atendidas: el centrado del titular pasó de estilos en línea a clases, porque un
+`text-align` en línea gana a la regla que tiene que cambiarlo; y el segundo orbe se ancla por abajo,
+porque dos columnas llevan la página de **1611 a 1091** píxeles a 1440 y un `top: 760` fijo lo habría
+empujado fuera del borde inferior.
+
+### El menú se parte en dos (día 2, PR #257, y el ADR 0043)
+
+- **El menú de páginas** es propiedad del documento: la misma lista en todas las páginas, en el orden
+  que dan los avances de la portada, con las páginas que nadie señala al final, «Inicio» delante solo
+  donde el visitante no está ya en casa y `aria-current` en la que está. Una página por ficha no
+  aporta nada (ADR 0040 §5).
+- **El menú de secciones** es propiedad de la página que se dibuja, donde antes era la de la portada
+  estuvieras donde estuvieras. **Así toda ancla es local**, y `./index.html#sec-x` — una forma que
+  existía solo porque una tira tenía que servir a todas las páginas — desaparece de la salida
+  publicada.
+
+Tres reglas que la división sacó a la luz: **la sección que lleva el `<h1>` no presta ancla** (sin
+ella, una página convertida de una sola sección publicaría una tira con un enlace cuyas palabras son
+su propio titular y cuyo destino es el principio de la página que estás leyendo), `headings.ts` es
+nuevo y es el único sitio que decide cuál es esa sección; **dos avances a la misma página dan una
+entrada**; y **el umbral cuenta los dos menús juntos**, porque tres *por menú* es una regla que
+ningún sitio real sobrevive — el único fixture multipágina del corpus tiene dos páginas y una
+sección con título.
+
+En estrecho se conserva **un solo `<details>`** con las dos listas dentro: dos desplegables apilados
+pondrían dos filas de cromo encima del contenido en un teléfono de 390 antes de la primera palabra
+del sitio. La matriz de accesibilidad cambió su aserción de «exactamente un punto de navegación» a
+**la identidad** «los mismos puntos a los dos anchos, cada nombre una vez, un solo desplegable»,
+que es más fuerte que contar hasta uno.
+
+**Lo que se entrega a cambio, escrito y no descubierto después:** convertir una sección deja de ser
+invisible para el visitante, porque su entrada se muda de una tira a la otra; hay dos puntos de
+referencia de navegación donde el ADR 0023 decidió que habría exactamente uno; y **diverge del
+dossier §6**, que describe un menú reflejando las dos cosas. Por esa divergencia el ADR 0043 necesita
+la firma de David y no el juicio de desarrollo.
+
+### El documento sabe qué sale en el menú (día 3, PR #258)
+
+`inMenu?: boolean` en **secciones** y en **páginas**, opcional en las dos, en una sola migración.
+Ausente significa que aparece, que es lo que significaba antes de que la clave existiera: por eso
+ningún documento guardado cambió y **ningún golden se movió**, que es a su vez la comprobación de
+que el campo es de verdad opcional. `SCHEMA_VERSION` 1.9.0 → **1.10.0** con la migración `0011` y
+sus cuatro preguntas de ida y vuelta.
+
+**Que la clave esté presente es el registro de que alguien decidió, sea cual sea su valor.**
+`inMenu: true` no es redundante con la ausencia: dice «he mirado esto y lo quiero», que es un hecho
+distinto de «nadie lo ha mirado». Eso es lo que lee el umbral del día 4, así que los verbos escriben
+el booleano y nunca borran la clave. `setPageInMenu` se niega en las dos páginas que no tienen
+entrada que gobernar — la de inicio, que es «Inicio», y una dibujada por ficha — igual que `movePage`
+se niega con la primera página.
+
+**La prueba que David pidió al aprobar**, y la línea de la que va todo esto: `inMenu: false` no
+cambia el id de la sección y no hace que `listDeadDestinations` marque como roto un enlace que apunte
+a ella. Una sección fuera del menú sigue en la página, sigue respondiendo a su ancla y sigue siendo
+un destino vivo, así que la descarga no se niega. Saboteada apuntando el enlace a un ancla
+inexistente.
+
+El interruptor vive en los campos de la sección, en bloque aparte encima de ellos porque no es un
+campo, y **enseña las palabras que el menú usaría**: «En el menú se lee «Dónde estamos», que es su
+título». Un menú que se escribe solo es lo único cuyo texto el dueño no puede ver en ningún otro
+sitio.
+
+### Las páginas obedecen, y el umbral se aparta (día 4, PR #259)
+
+`hasMenu` pasa a ser tres preguntas en un orden, y el orden es la decisión: **sin destinos no hay
+menú**, lo haya decidido quien lo haya decidido; **curado, uno basta**; si no, **el umbral de tres**
+intacto desde el ADR 0023, que es lo que mantiene idéntica la respuesta para todo documento que nadie
+ha tocado. «Tocado» se lee de la **presencia** de la clave en cualquier página o sección del sitio,
+no de su valor, así que apagar un interruptor y volver a encenderlo deja el documento curado: un menú
+que desapareciera justo cuando alguien deshace su propia decisión se leería como que el editor ha
+perdido su trabajo.
+
+**El suelo de dos páginas visibles no necesitó aritmética.** En la portada la tira de páginas son
+exactamente las otras páginas visibles, así que con una sola queda vacía y no se dibuja; fuera de la
+portada «Inicio» siempre está, y «Inicio» lleva a donde el visitante no está — así es como una página
+por ficha, y una página que el dueño quitó del menú, conservan su camino de vuelta. **La única tira
+que el suelo prohibía no se puede construir**, porque necesitaría que la portada apareciera entre sus
+propias entradas. La frase del ADR 0043 §5 se reescribió ahí: leída al pie de la letra quitaba
+«Inicio» justo de las páginas de las que es el único camino de vuelta. La decisión no cambió.
+
+**La cuenta en voz alta**, desde un solo objeto (`menuState.ts`) que leen los dos paneles, con cada
+número preguntado al renderizador. Dice cuántas secciones le quedan a esta página, cuántas páginas le
+quedan al menú, y —solo cuando hay algo que decir— que todavía no se muestra, que no habrá ninguno, o
+**que es corto porque lo ha decidido el dueño**. La prueba que sujeta la promesa compara lo que el
+editor afirma con el HTML publicado en cinco documentos y en las dos polaridades: un editor con su
+propia copia de una regla de tres cláusulas seguiría prometiendo un menú después de que el
+renderizador dejara de dibujarlo.
+
+**Convertir se lleva la respuesta; deshacer la conversión no la reparte.** `sectionToPage` sella la
+respuesta de la sección en la página que crea, para que un destino podado no reaparezca como página.
+La dirección contraria no tiene equivalente honesto: una página contiene cualquier número de
+secciones, así que una sola respuesta no se puede repartir entre ellas sin esconder secciones que
+nadie decidió esconder. Lo que vuelve dice lo que diga cada sección.
+
+### El cierre: el teclado sobre los dos menús, y una laguna de axe (día 5)
+
+**Los dos menús publicados, con teclado y nada más.** Cuatro pruebas en Chromium real sobre el
+fixture de tres páginas: el orden de tabulación recorre las páginas y después las secciones de esta
+página; **la copia que el ancho no pide no está en el orden de tabulación**; el `<details>` del
+teléfono se abre con Enter y da los mismos destinos; y un sitio curado ofrece su único destino y nada
+más. La segunda es la que necesita un navegador: una copia oculta cuyos enlaces siguieran siendo
+enfocables daría a quien navega con teclado una ristra de paradas invisibles antes de la primera
+palabra del sitio, y se vería perfecta en el marcado y en cualquier snapshot. Sustituido `display:
+none` por «invisible pero presente», **tres de las cuatro caen**.
+
+**Y una laguna que el cierre encontró:** el recorrido móvil audita con axe el editor y la hoja de
+«Estilo» a 390, pero **nunca abre los dos paneles que este sprint cambió**. La portada no presta
+entrada al menú, así que su cajón de campos no dibuja el interruptor; y en un documento de una sola
+página la fila de «Páginas» no tiene casilla. Los dos se auditan ahora dentro de la caminata del día
+4, que sí ha convertido una sección.
+
+**El hallazgo del día es un error de medición mío, y deja algo sabido.** La primera versión de esa
+auditoría esperaba a que el panel dejara de moverse, y axe lo midió a **0,90 de opacidad**: reportó
+tres fallos serios de contraste contra colores que no están en ninguna hoja de estilos —`#6a788d`,
+`#df3a3a` y `#2a7ce9`, que son `--ui-muted`, `--ui-danger` y `--ui-brand` mezclados con el blanco de
+debajo. En reposo esos tres miden **5,43**, **4,83** y **4,71** contra el panel y pasan; a 0,90 miden
+4,38, 4,30 y 4,03 y no. El fallo era mío, pero **dos de los tres pasan 4,5 por un pelo**, y cualquier
+opacidad sobre ellos los hunde — fila del backlog. Y `axeSerious` imprime desde hoy la razón medida y
+los dos colores, como la matriz del renderizador hace desde el sprint 4: el primer movimiento no debe
+volver a ser calcular ratios a mano para adivinar qué fondo usó axe.
+
+**Las medidas que deja el sprint:**
+
+| | |
+|---|---|
+| Sitio publicado de tres páginas con los dos menús | **2,9 KB** por página, presupuesto 88 KB |
+| El mismo sitio curado a un destino | 2,8 KB por página |
+| Las tres composiciones de muestra | 3,1–3,2 KB por página, presupuesto 60 KB |
+| Lighthouse móvil, sitio publicado v1 / v2 / v3 | rendimiento **100 / 99 / 99**, accesibilidad **100** en los tres |
+| LCP y CLS de los tres | 1,65 s / 2,18 s / 2,18 s · **0,002 / 0,000 / 0,002** |
+| Una página por ficha | 100 de rendimiento, LCP 0,90 s, CLS 0,000 |
+| Landing móvil, hoy | rendimiento 0,70 · accesibilidad **1,00** · CLS **0,1565** · LCP 7,3 s |
+| Landing móvil, antes del día 1 (`main`) | CLS 0,1442 — el héroe nuevo cuesta **+0,012** por enseñar el botón |
+| El trabajo `e2e` de CI | 14m25s el día 3, **16m01s** el día 4, sobre un límite de 20 |
+
+El CLS de la landing **no se ha movido desde el día 1** (0,1566 entonces, 0,1565 hoy), lo que
+confirma que los días 2 a 4 no le hicieron nada, aunque el héroe muestre lo que el renderizador
+emite. El LCP de 7,3 s es de esta máquina: `main` mide lo mismo, contra 2,8 s del sprint 22 en una
+más tranquila.
+
+**El SEO de la landing marca 0,54 y no es un defecto.** Las dos auditorías que caen son
+`is-crawlable`, que es el `<meta name="robots" content="noindex, nofollow">` que `layout.tsx` pone
+**a propósito** y con su razón escrita — la URL de despliegue es pública y enseña un producto a medio
+hacer con el nombre de Retorika —, y `link-text` por el enlace «Empezar», que la lista de textos
+genéricos de Lighthouse trae en español. Lo segundo solo importa el día que la página se indexe, y
+cambiar ese texto es una decisión de copia sobre la puerta de entrada pública: fila del backlog, no
+un arreglo de hoy.
+
+### Lo que este sprint deja a David
+
+**Dos firmas.** El **ADR 0043** está `proposed` y las necesita porque diverge de dos documentos
+aprobados: el dossier §6, que describe un menú reflejando secciones **y** páginas, y el ADR 0023, que
+decidió «exactamente un punto de navegación a cada ancho». El día 4 reescribió además la frase del
+suelo de su §5 —sin cambiar la decisión— y añadió la regla del pliegue; las dos cosas están marcadas
+en el propio ADR. Y el **ADR 0042** del sprint 21 sigue sin firmar.
+
+**Una decisión que sigue siendo suya, con el número delante:** la demostración automática del héroe
+cuesta 0,145 de CLS y unos siete puntos de rendimiento en Lighthouse móvil sobre la landing.
+Quitarla y dejar el botón los recupera, con el viaje intacto al pulsar.
+
+**Y lo de antes, que no se ha movido:** la lista del iPhone de verdad del sprint 21, y los 7,9 px que
+el campo se desplaza al filtrar sectores.
