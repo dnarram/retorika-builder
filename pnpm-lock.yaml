@@ -418,6 +418,9 @@ importers:
       '@retorika/photobank':
         specifier: workspace:*
         version: link:../photobank
+      '@retorika/tokens':
+        specifier: workspace:*
+        version: link:../tokens
 
   packages/renderer:
     dependencies:

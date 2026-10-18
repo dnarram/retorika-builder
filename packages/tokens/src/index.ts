@@ -11,10 +11,12 @@ export type { ColorKey, Palette } from "./palettes.ts";
 export { PALETTES, STARTING_PALETTE_ID } from "./palettes.ts";
 
 export {
+  identifyFamily,
   identifyPalette,
   identifyScale,
   identifyTypePair,
   RENDERED_COLOR_KEYS,
+  withFamily,
   withPalette,
   withScale,
   withTypePair,
@@ -23,5 +25,5 @@ export type { RadiusKey, Scale, SizeKey, SpaceKey } from "./scales.ts";
 export { DEFAULT_SCALE_ID, SCALES } from "./scales.ts";
 export type { BuildThemeInput } from "./theme.ts";
 export { buildTheme } from "./theme.ts";
-export type { FontContrast, FontKey, TypePair } from "./typography.ts";
-export { familiesOf, TYPE_PAIRS } from "./typography.ts";
+export type { FontContrast, FontKey, GalleryFamily, TypePair } from "./typography.ts";
+export { familiesOf, GALLERY_FAMILIES, TYPE_PAIRS } from "./typography.ts";

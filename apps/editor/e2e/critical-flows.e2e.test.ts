@@ -14826,3 +14826,265 @@ describe("nada sobresale en un móvil", () => {
     });
   }
 });
+
+/**
+ * **Sprint 24 día 6 — la letra se elige por su nombre, y el ZIP la lleva.**
+ *
+ * Día 5 made eight families travel; this is the day an owner can reach them. What the walk holds is
+ * the whole road: the group is folded away until it is wanted, opening it is what fetches the eight
+ * faces, every family this product ships is offered, the two halves are chosen **separately**, the
+ * canvas changes under both, and the download carries four faces and two licences — opened from
+ * `file://` with no network, which is the promise ADR 0001 rests on.
+ *
+ * **The assertion that would have caught the one real trap** is `facesLoaded`. The renderer emits
+ * `url("fonts/…")`, relative, because that is right for a published page and for a ZIP on a
+ * stranger's disk. The panel is a page at `/mis-webs/<id>`, where that same URL asks for
+ * `/mis-webs/fonts/…` and 404s — and a specimen whose face did not arrive silently draws in a
+ * system letter and looks fine. The one thing a specimen is for is being what you are going to get,
+ * so this reads `document.fonts` rather than the screenshot.
+ */
+describe("sprint 24 día 6 — la letra se elige por su nombre", () => {
+  const VIEWPORT = { width: 1440, height: 900 };
+
+  const SHIPPED = [
+    "Bitter",
+    "DM Sans",
+    "EB Garamond",
+    "Figtree",
+    "Inter",
+    "Libre Baskerville",
+    "Spectral",
+    "Work Sans",
+  ];
+
+  /**
+   * Which of the gallery's faces this document has actually loaded, by family.
+   *
+   * **Deduplicated, and never read as «nothing is loaded».** The editor's own interface is set in
+   * Inter through `next/font`, so this page has «Inter» and «Inter Fallback» loaded before anybody
+   * opens anything — found by asserting the empty list and watching it come back with two. So
+   * laziness is held by the requests to the route below, and this answers the other question: is
+   * the specimen drawn in the face the ZIP will carry.
+   */
+  async function facesLoaded(page: Page): Promise<string[]> {
+    return page.evaluate(() =>
+      [
+        ...new Set(
+          [...document.fonts]
+            .filter((face) => face.status === "loaded")
+            .map((face) => face.family.replace(/['"]/g, "")),
+        ),
+      ].sort(),
+    );
+  }
+
+  /** The family a node is actually set in, as the browser resolved it. */
+  function fontOf(frame: FrameLocator, selector: string): Promise<string> {
+    return frame
+      .locator(selector)
+      .evaluate((node) => getComputedStyle(node as HTMLElement).fontFamily);
+  }
+
+  it("offers every family it ships, sets the two halves apart, and downloads both whole", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const studio = await context.newPage();
+    try {
+      // Every answer the editor's own `fonts/[file]` route gives, by file name. The canvas asks it
+      // for the faces **this document** names, which is why laziness cannot be «no requests at
+      // all»: it is about the families the document does not use.
+      const served = new Map<string, number>();
+      studio.on("response", (response) => {
+        const path = new URL(response.url()).pathname;
+        if (path.startsWith("/fonts/") && path.endsWith(".woff2")) {
+          served.set(path.slice("/fonts/".length), response.status());
+        }
+      });
+
+      await intoTheCanvas(studio);
+      const frame = studio.frameLocator(PREVIEW).first();
+
+      // ---- folded away, and the seven letters nobody asked for stay where they are ----
+      await studio.getByRole("button", { name: "Estilo", exact: true }).click();
+      const unfold = studio.getByRole("button", { name: /Elegir la familia exacta/ });
+      await expect(unfold).toHaveAttribute("aria-expanded", "false");
+      expect(
+        served.has("spectral-latin-400-normal.woff2"),
+        "a shut group must not drag a family in just in case",
+      ).toBe(false);
+      // **Not `document.fonts.check`**, which answers «can this text be rendered» and so returns
+      // true for a family nobody declared — the system letter can always render it. `status` is the
+      // question: a face is «loaded» only once its bytes arrived.
+      expect(await facesLoaded(studio)).not.toContain("Spectral");
+
+      // ---- opening it is what fetches them, and the route answers for every row ----
+      await unfold.click();
+      await expect(unfold).toHaveAttribute("aria-expanded", "true");
+      await studio.evaluate(() => document.fonts.ready.then(() => undefined));
+      for (const family of SHIPPED) {
+        const file = `${family.toLowerCase().replace(/ /g, "-")}-latin-400-normal.woff2`;
+        expect(served.get(file), `${family} was never served`).toBe(200);
+      }
+      // And the specimen is genuinely set in it, which a 404 would leave looking fine: a face that
+      // did not arrive draws in a system letter.
+      const loaded = await facesLoaded(studio);
+      for (const family of SHIPPED) expect(loaded, `${family}'s specimen`).toContain(family);
+
+      // ---- ADR 0046's condition, in the panel itself: every row is offered, in both columns ----
+      const headings = studio.getByRole("group", { name: "TITULARES" });
+      const body = studio.getByRole("group", { name: "TEXTO" });
+      for (const group of [headings, body]) {
+        await expect(group.getByRole("radio")).toHaveCount(SHIPPED.length);
+      }
+      for (const family of SHIPPED) {
+        await expect(headings.getByRole("radio", { name: family, exact: true })).toHaveCount(1);
+        await expect(body.getByRole("radio", { name: family, exact: true })).toHaveCount(1);
+      }
+
+      // ---- the two halves, chosen one at a time ----
+      // Clicked by its label, like «Clásica y seria» a few walks up: the radio itself is visually
+      // hidden, and the label is what an owner presses.
+      await headings.getByText("Spectral", { exact: true }).click();
+      await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
+      await expect(headings.getByRole("radio", { name: "Spectral", exact: true })).toBeChecked();
+      expect(await fontOf(frame, '[data-section="sec-cover"] [data-id="el-headline"]')).toContain(
+        "Spectral",
+      );
+
+      await body.getByText("Figtree", { exact: true }).click();
+      await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
+      await expect(body.getByRole("radio", { name: "Figtree", exact: true })).toBeChecked();
+      // Read on `body` and not on the cover's tagline: `p.rb-subtitle` is set in the **heading**
+      // font, which is exactly the kind of thing a walk asserts wrongly once and then trusts.
+      expect(await fontOf(frame, "body")).toContain("Figtree");
+      // And the headings kept theirs: one choice must not decide the other.
+      expect(await fontOf(frame, '[data-section="sec-cover"] [data-id="el-headline"]')).toContain(
+        "Spectral",
+      );
+
+      // ---- what the panel says about it, which is how an owner takes it back ----
+      await expect(
+        studio.getByText("Spectral en los titulares y Figtree en el texto."),
+      ).toBeVisible();
+      await expect(
+        studio.getByText("Has elegido la letra por su nombre, en la lista de abajo."),
+      ).toBeVisible();
+
+      // ---- the ZIP: four faces, two licences, and the right text beside each ----
+      await studio.getByRole("button", { name: "Cerrar el estilo" }).click();
+      await studio.getByRole("button", { name: "Descargar", exact: true }).click();
+      const anyway = studio.getByRole("button", { name: "Descargar igualmente" });
+      await anyway.waitFor();
+      const [download, response] = await Promise.all([
+        studio.waitForEvent("download"),
+        studio.waitForResponse((candidate) => candidate.url().includes("/api/download")),
+        anyway.click(),
+      ]);
+      expect(response.status()).toBe(200);
+
+      const dir = mkdtempSync(join(tmpdir(), "retorika-e2e-sprint24-dia6-"));
+      const zipPath = join(dir, download.suggestedFilename());
+      await download.saveAs(zipPath);
+      const entries = extractAll(new Uint8Array(readFileSync(zipPath)), dir);
+
+      expect(entries.filter((path) => path.endsWith(".woff2")).sort()).toEqual([
+        "fonts/figtree-latin-400-normal.woff2",
+        "fonts/figtree-latin-700-normal.woff2",
+        "fonts/spectral-latin-400-normal.woff2",
+        "fonts/spectral-latin-700-normal.woff2",
+      ]);
+      expect(entries.filter((path) => path.startsWith("fonts/OFL-")).sort()).toEqual([
+        "fonts/OFL-Figtree.txt",
+        "fonts/OFL-Spectral.txt",
+      ]);
+      for (const [file, holder] of [
+        ["OFL-Figtree.txt", "Figtree"],
+        ["OFL-Spectral.txt", "Spectral"],
+      ]) {
+        const licence = readFileSync(join(dir, "fonts", file ?? ""), "utf8");
+        expect(licence, file).toContain("SIL OPEN FONT LICENSE Version 1.1");
+        expect(licence, file).toContain(holder ?? "");
+        // No family this product ships reserves its name (ADR 0045), so no ZIP can carry one —
+        // **read on the copyright line and not in the body**, because every OFL's own §3 contains
+        // the phrase and a search of the whole text says yes about every font in existence. That
+        // mistake was made once on día 4 and caught before anything was written down; this is the
+        // second time, caught by this walk going red.
+        const copyright = licence.slice(0, licence.indexOf("This Font Software is licensed"));
+        expect(copyright, file).not.toContain("Reserved Font Name");
+      }
+
+      // ---- and the site, opened from a stranger's disk with no network at all ----
+      const offline = await (await browser.newContext()).newPage();
+      const failed: string[] = [];
+      offline.on("requestfailed", (request) => failed.push(request.url()));
+      try {
+        await offline.goto(`file://${join(dir, "index.html")}`, { waitUntil: "load" });
+        await offline.evaluate(() => document.fonts.ready.then(() => undefined));
+        expect(failed, failed.join("\n")).toEqual([]);
+        // No interface font here — this is the owner's page on a stranger's disk — so the list is
+        // exactly the two families chosen, both of them arriving from the ZIP's own `fonts/`.
+        expect(await facesLoaded(offline)).toEqual(["Figtree", "Spectral"]);
+        expect(
+          await offline
+            .locator("h1")
+            .first()
+            .evaluate((h) => getComputedStyle(h).fontFamily),
+        ).toContain("Spectral");
+      } finally {
+        await offline.close();
+      }
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+
+  it("names the chosen family in the floating toolbar, and keeps the role word", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const studio = await context.newPage();
+    try {
+      await intoTheCanvas(studio);
+      await studioToolsOn(studio);
+
+      // The two «Letra» buttons only exist with the design tools on (ADR 0032), so the choice is
+      // made first and read afterwards.
+      await studio.getByRole("button", { name: "Estilo", exact: true }).click();
+      await studio.getByRole("button", { name: /Elegir la familia exacta/ }).click();
+      await studio
+        .getByRole("group", { name: "TITULARES" })
+        .getByText("Libre Baskerville", { exact: true })
+        .click();
+      await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
+      await studio.getByRole("button", { name: "Cerrar el estilo" }).click();
+
+      const frame = studio.frameLocator(PREVIEW).first();
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      await headline.click();
+      // «Titular (Libre Baskerville)» in the name, «Titular» on the face of the button: the bar has
+      // the width a section gives it, and the role word is also what tells this control from the
+      // «Texto» colour swatch one group over.
+      const button = frame.getByRole("button", { name: "Letra — Titular (Libre Baskerville)" });
+      await expect(button).toBeVisible();
+      await expect(button).toHaveText("Titular");
+      await expect(frame.getByRole("button", { name: "Letra — Texto" })).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("is a sheet on a phone, with nothing spilling sideways", async () => {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const studio = await context.newPage();
+    try {
+      await intoTheCanvas(studio);
+      await studio.getByRole("button", { name: "Estilo", exact: true }).click();
+      await studio.getByRole("button", { name: /Elegir la familia exacta/ }).click();
+      await expect(studio.getByRole("group", { name: "TITULARES" }).getByRole("radio")).toHaveCount(
+        SHIPPED.length,
+      );
+      // Sixteen rows inside a sheet capped at 70% of the viewport: the sheet scrolls, and the one
+      // thing that must not happen is a row pushing the page sideways (ADR 0042).
+      expect(await overflowing(studio), "something spills at 390").toEqual([]);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+});

@@ -22,6 +22,7 @@
   },
   "devDependencies": {
     "@retorika/generator": "workspace:*",
-    "@retorika/photobank": "workspace:*"
+    "@retorika/photobank": "workspace:*",
+    "@retorika/tokens": "workspace:*"
   }
 }

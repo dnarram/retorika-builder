@@ -4,6 +4,8 @@ import {
   buildTheme,
   contrastRatio,
   DEFAULT_SCALE_ID,
+  GALLERY_FAMILIES,
+  identifyFamily,
   identifyPalette,
   identifyScale,
   identifyTypePair,
@@ -11,6 +13,7 @@ import {
   RENDERED_COLOR_KEYS,
   SCALES,
   TYPE_PAIRS,
+  withFamily,
   withPalette,
   withScale,
   withTypePair,
@@ -82,6 +85,82 @@ describe("withTypePair", () => {
 
   it("refuses an unknown pair", () => {
     expect(() => withTypePair(start, "poppins")).toThrow(/Unknown typePairId/);
+  });
+});
+
+describe("withFamily", () => {
+  it("replaces one font stack and leaves the other, which is the point of two choices", () => {
+    const next = withFamily(start, "font.heading", "Spectral");
+    expect(next["font.heading"]).toMatch(/^Spectral,/);
+    for (const key of TOKEN_KEYS) {
+      if (key !== "font.heading") expect(next[key], key).toBe(start[key]);
+    }
+  });
+
+  it("sets the text face without touching the headings", () => {
+    const next = withFamily(start, "font.body", "Figtree");
+    expect(next["font.body"]).toMatch(/^Figtree,/);
+    expect(next["font.heading"]).toBe(start["font.heading"]);
+  });
+
+  it("composes: a pair, then a family over one half of it", () => {
+    const next = withFamily(withTypePair(start, "classic-display"), "font.body", "Work Sans");
+    expect(next["font.heading"]).toMatch(/^'EB Garamond'/);
+    expect(next["font.body"]).toMatch(/^'Work Sans',/);
+  });
+
+  it("refuses a family the gallery does not ship", () => {
+    // A silent fallback would write a stack whose first family no renderer row matches, and the
+    // site would publish naming a face nobody sends.
+    expect(() => withFamily(start, "font.heading", "Playfair Display")).toThrow(
+      /Unknown gallery family/,
+    );
+    expect(() => withFamily(start, "font.heading", "inter")).toThrow(/Unknown gallery family/);
+  });
+
+  it("leaves a theme a type pair still recognises when the family is the one it already had", () => {
+    // Choosing from the gallery the very family a document already has must not un-tick the pair
+    // in the panel: the letter did not change, so neither does the token. This is what
+    // `GalleryFamily.stack` reusing a pair's own stack buys, and it is asserted rather than hoped.
+    const classic = withTypePair(start, "classic-display");
+    expect(withFamily(classic, "font.heading", "EB Garamond")).toEqual(classic);
+    const modern = withTypePair(start, "modern-sans");
+    expect(withFamily(modern, "font.heading", "Inter")).toEqual(modern);
+  });
+});
+
+describe("identifyFamily", () => {
+  it("names the family a gallery choice wrote, for either key", () => {
+    for (const row of GALLERY_FAMILIES) {
+      expect(
+        identifyFamily(withFamily(start, "font.heading", row.family), "font.heading")?.family,
+      ).toBe(row.family);
+      expect(identifyFamily(withFamily(start, "font.body", row.family), "font.body")?.family).toBe(
+        row.family,
+      );
+    }
+  });
+
+  it("answers undefined for a stack whose first family this product does not send", () => {
+    // `editorial-serif` heads in Georgia, which is nobody's shipped face. The honest answer is that
+    // no gallery row is chosen, not the nearest one.
+    const editorial = withTypePair(start, "editorial-serif");
+    expect(identifyFamily(editorial, "font.heading")).toBeUndefined();
+    expect(identifyFamily(editorial, "font.body")).toBeUndefined();
+  });
+
+  it("reads the first family only, never one further down the stack", () => {
+    // Every serif stack in the gallery ends in Georgia and three of them pass through it; a theme
+    // that merely falls back to a shipped family has not chosen it.
+    expect(
+      identifyFamily({ ...start, "font.heading": "Georgia, Spectral, serif" }, "font.heading"),
+    ).toBeUndefined();
+  });
+
+  it("matches a quoted family, which is how a two-word one is written", () => {
+    expect(identifyFamily(withFamily(start, "font.body", "DM Sans"), "font.body")?.family).toBe(
+      "DM Sans",
+    );
   });
 });
 

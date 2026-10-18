@@ -155,3 +155,73 @@ export const TYPE_PAIRS: readonly TypePair[] = [
     },
   },
 ];
+
+/**
+ * A family the owner may choose **by its real name**, because this product ships its faces
+ * (ADR 0046).
+ *
+ * The rule the Estilo panel has followed since sprint 4 is that letters are named by character and
+ * never by font, and the reason was never taste: a stack is a list of wishes, so a label reading
+ * «Inter» promised a face that might never arrive. ADR 0028 removed that reason for the faces we
+ * send, and ADR 0046 turns the removal into eight of them. **Sending the face is what makes naming
+ * it honest**, and the three pairs above stay exactly where they are, first, for the owner who wants
+ * one click and no questions.
+ */
+export interface GalleryFamily {
+  /**
+   * The family's name, spelled **exactly** as `SHIPPABLE_FAMILIES` spells it in the renderer, which
+   * is what makes the face travel: that table ships a face only when a stack's first family matches
+   * a row by exact equality. `packages/renderer/test/fonts.test.ts` holds the two level.
+   */
+  family: string;
+  /**
+   * Which species it is, and it earns its place in the data rather than in a comment: the stack has
+   * to end in the matching generic keyword, so that a visitor whose browser fetched no face at all
+   * still gets a serif where a serif was chosen. Asserted over every row.
+   */
+  kind: "sans" | "serif";
+  /**
+   * The stack a theme carries when this family is chosen — the family first, then the fallbacks.
+   *
+   * **Where a pair above already names this family first, the stack here is that pair's own,
+   * verbatim.** Otherwise choosing from the gallery the very family a document already has would
+   * rewrite the token to an equivalent-but-different string, and the pair's tick in the panel would
+   * vanish for a choice that changed nothing a visitor can see. Asserted, so the two cannot part.
+   */
+  stack: string;
+}
+
+/** Everything after the chosen family, by species. Two chains and not eight: with the face shipped
+ * for every row, these run only when the file did not arrive, so what they owe is the species and
+ * not a character. The sans chain is `modern-sans`'s own body stack and the serif one
+ * `editorial-serif`'s own heading stack, minus its first family. */
+const SANS_FALLBACK = "system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+const SERIF_FALLBACK = "Georgia, Cambria, 'Times New Roman', Times, serif";
+
+/**
+ * The gallery, **alphabetical**, which is the order the owner reads and the order the renderer's own
+ * table is in.
+ *
+ * Four sans and four serifs: an owner matching a brand needs a geometric and a grotesque to be
+ * different things, and the weights are in ADR 0046 with the licence reading that admitted each one.
+ */
+export const GALLERY_FAMILIES: readonly GalleryFamily[] = [
+  { family: "Bitter", kind: "serif", stack: `Bitter, ${SERIF_FALLBACK}` },
+  { family: "DM Sans", kind: "sans", stack: `'DM Sans', ${SANS_FALLBACK}` },
+  {
+    family: "EB Garamond",
+    kind: "serif",
+    // `classic-display`'s heading stack, verbatim — see `GalleryFamily.stack`.
+    stack: "'EB Garamond', Garamond, Baskerville, 'Big Caslon', Georgia, 'Times New Roman', serif",
+  },
+  { family: "Figtree", kind: "sans", stack: `Figtree, ${SANS_FALLBACK}` },
+  {
+    family: "Inter",
+    kind: "sans",
+    // `modern-sans`'s heading stack, verbatim — see `GalleryFamily.stack`.
+    stack: "Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+  },
+  { family: "Libre Baskerville", kind: "serif", stack: `'Libre Baskerville', ${SERIF_FALLBACK}` },
+  { family: "Spectral", kind: "serif", stack: `Spectral, ${SERIF_FALLBACK}` },
+  { family: "Work Sans", kind: "sans", stack: `'Work Sans', ${SANS_FALLBACK}` },
+];

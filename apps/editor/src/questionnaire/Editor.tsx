@@ -50,6 +50,7 @@ import {
   type TextEdit,
   usesOfCollection,
 } from "@retorika/schema";
+import type { FontKey } from "@retorika/tokens";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BuildingScreen } from "../editor/BuildingScreen.tsx";
 import {
@@ -86,6 +87,7 @@ import {
   type SaveStatus,
 } from "../editor/EditorShell.tsx";
 import { ACCEPTED_IMAGE_ACCEPT } from "../editor/imageBytes.ts";
+import { toolbarFamilyLabel } from "../editor/letterGallery.ts";
 import { LOOK_AHEAD_DEADLINE_MS, lookAheadStep } from "../editor/lookAhead.ts";
 import { menuStateFor } from "../editor/menuState.ts";
 import { measureOverflow } from "../editor/overflowCheck.ts";
@@ -565,6 +567,7 @@ export function Editor({
   onMoveItem,
   onPickPalette,
   onPickTypePair,
+  onPickFamily,
   onPickScale,
   onSetElementStyle,
   onSetMark,
@@ -693,6 +696,10 @@ export function Editor({
    * business, the same division as every other verb here. */
   onPickPalette: (paletteId: string) => void;
   onPickTypePair: (typePairId: string) => void;
+  /** One letter from the gallery, by its real name, for the headings or for the text (ADR 0046).
+   * Writes one font token where a pair writes both, which is what makes the two halves separate
+   * choices. */
+  onPickFamily: (key: FontKey, family: string) => void;
   onPickScale: (scaleId: string) => void;
   /** One property of one element's own style, from the floating toolbar (rule 6). `undefined`
    * takes the property away and lets the site's own rule show through again. Available with the
@@ -3790,10 +3797,18 @@ export function Editor({
        * from the other side: five spacing steps as buttons would make a bar nobody can read at the
        * width a section gives it, and two fit the way three sizes fit.
        *
-       * **Named «Titular» and «Texto», by what the family is for and never by the font.** A heading
-       * face is EB Garamond on one type pair and Inter on another, so a button reading «EB Garamond» would
-       * be wrong on two pairs out of three; issue #9 settled that vocabulary for the whole product
-       * and the `Estilo` panel has followed it since sprint 4.
+       * **Labelled «Titular» and «Texto», by what the family is for and never by the font.** A
+       * heading face is EB Garamond on one type pair and Inter on another, so a button reading
+       * «EB Garamond» would be wrong on two pairs out of three; issue #9 settled that vocabulary for
+       * the whole product and the `Estilo` panel has followed it since sprint 4.
+       *
+       * **The family joins the accessible name since the gallery exists** (ADR 0046, sprint 24
+       * día 6): with eight families choosable by their real names, the question an owner asks of
+       * these two buttons is which letter they are about to apply. The visible label stays the role
+       * word — this bar has the width a section gives it, and «Titular (Libre Baskerville)» is not a
+       * button that fits — so the name and the tooltip carry it, and only when the family is one we
+       * send. `toolbarFamilyLabel` composes both, and a theme heading in Georgia still gets the role
+       * word alone.
        */
       if (controls.family) {
         const families = group(es["editor.toolbar.family"]);
@@ -3818,8 +3833,9 @@ export function Editor({
            * give no way to tell the colour from the family. Naming the newcomer rather than renaming
            * the swatch: the swatch is in the mockup, this is not.
            */
-          button.setAttribute("aria-label", `${es["editor.toolbar.family"]} — ${label}`);
-          button.title = `${es["editor.toolbar.family"]} — ${label}`;
+          const name = toolbarFamilyLabel(doc.theme, ref);
+          button.setAttribute("aria-label", name);
+          button.title = name;
           // Pressing the one already chosen takes it off, like the size steps. With two buttons and
           // no exact arm it is the only way back to the family the site's type pair gives this role,
           // and a «quitar» for a control of two would be half the group again.
@@ -5756,6 +5772,7 @@ export function Editor({
             theme={doc.theme}
             onPickPalette={onPickPalette}
             onPickTypePair={onPickTypePair}
+            onPickFamily={onPickFamily}
             onPickScale={onPickScale}
             // `=== true` rather than truthiness, and the panel's prop is a plain boolean: the
             // three states of `designTools` matter to the rail, which has to keep the «Diseño»

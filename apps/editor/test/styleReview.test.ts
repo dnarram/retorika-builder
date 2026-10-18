@@ -8,7 +8,7 @@ import {
   type Theme,
   TOKEN_KEYS,
 } from "@retorika/schema";
-import { contrastRatio, PALETTES } from "@retorika/tokens";
+import { contrastRatio, PALETTES, withFamily } from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
 import {
   CONTRAST_BLOCKS_BELOW,
@@ -175,6 +175,28 @@ describe("what the review looks at", () => {
   it("says nothing about a document with no style at all", () => {
     // Every document this product has ever produced. The review must be silent for all of them.
     expect(reviewStyle(docWith())).toEqual({ blocking: [], warning: [] });
+  });
+
+  it("says nothing about a letter chosen from the gallery, which is a reference and not an exception", () => {
+    /**
+     * **The download gate of ADR 0046, as a test rather than as a claim in a plan.** A family
+     * chosen by name writes a **theme token**, not an element's own style, so rule 6 has no
+     * exception to report and the gate has nothing to warn about. The review would have to invent
+     * a rule nobody has stated to say otherwise — the same mistake the padding case above refuses.
+     */
+    const plain = docWith();
+    const both = {
+      ...plain,
+      theme: withFamily(
+        withFamily(plain.theme, "font.heading", "Spectral"),
+        "font.body",
+        "Figtree",
+      ),
+    };
+    expect(reviewStyle(both)).toEqual({ blocking: [], warning: [] });
+    // And it is the same answer as before the choice, which is the point: choosing a letter cannot
+    // make a document any more or less publishable.
+    expect(reviewStyle(both)).toEqual(reviewStyle(plain));
   });
 
   it("reports several, and separates them by level", () => {

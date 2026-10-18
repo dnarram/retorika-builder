@@ -2,7 +2,14 @@ import { type Theme, TOKEN_KEYS } from "@retorika/schema";
 import { type ColorKey, PALETTES, type Palette } from "./palettes.ts";
 import type { RadiusKey, Scale, SizeKey, SpaceKey } from "./scales.ts";
 import { SCALES } from "./scales.ts";
-import { type FontKey, TYPE_PAIRS, type TypePair } from "./typography.ts";
+import {
+  type FontKey,
+  familiesOf,
+  GALLERY_FAMILIES,
+  type GalleryFamily,
+  TYPE_PAIRS,
+  type TypePair,
+} from "./typography.ts";
 
 /**
  * Editing a theme that already exists, which is what the Estilo panel does — as opposed to
@@ -101,6 +108,44 @@ export function withPalette(theme: Theme, paletteId: string): Theme {
 /** The same theme with this pair's two typefaces in place of its own. */
 export function withTypePair(theme: Theme, typePairId: string): Theme {
   return { ...theme, ...typePairById(typePairId).fonts };
+}
+
+function galleryFamilyByName(family: string): GalleryFamily {
+  const row = GALLERY_FAMILIES.find((candidate) => candidate.family === family);
+  if (!row) {
+    const known = GALLERY_FAMILIES.map((f) => f.family).join(", ");
+    throw new Error(`Unknown gallery family "${family}". Known: ${known}`);
+  }
+  return row;
+}
+
+/**
+ * The same theme with **one** font token set to a gallery family's stack (ADR 0046).
+ *
+ * The fourth verb of this file, and the first that writes a single key rather than a group. That is
+ * the shape of the choice: headings and text are chosen separately, so an owner can put Figtree over
+ * Spectral without the product deciding the other half for them.
+ *
+ * It throws on a family the gallery does not have, like the three verbs above throw on an unknown id.
+ * A silent fallback would write a stack whose first family no renderer row matches, and the site
+ * would publish naming a face nobody sends — the state ADR 0028 exists to prevent.
+ */
+export function withFamily(theme: Theme, key: FontKey, family: string): Theme {
+  return { ...theme, [key]: galleryFamilyByName(family).stack };
+}
+
+/**
+ * Which gallery family this theme's stack for `key` begins with, or `undefined` if none.
+ *
+ * **The first family only**, which is the same test the renderer applies when it decides whether to
+ * ship a face: everything after the first exists to be used when the first is missing. So this
+ * answers «which letter did the owner choose» rather than «which stack is this», and a theme
+ * carrying `editorial-serif`'s Georgia heading gets `undefined` — honestly, because Georgia is not a
+ * family this product sends.
+ */
+export function identifyFamily(theme: Theme, key: FontKey): GalleryFamily | undefined {
+  const first = familiesOf(theme[key])[0];
+  return GALLERY_FAMILIES.find((candidate) => candidate.family === first);
 }
 
 /**

@@ -508,6 +508,17 @@ nobody inside can supply.
   is the one style property with no exact arm, in the type as well as at runtime — so there is no rule
   for a later control to remember.
 
+  **Answered on 18 October 2026, in the one form that reason allows** —
+  [ADR 0046](../decisions/0046-the-gallery-ships-the-faces-so-the-letter-can-be-named.md), sprint 24
+  día 6. The `Estilo` panel now offers **eight families by their real names**, folded away under the
+  three pairs, with headings and text chosen separately and each specimen drawn in the very file the
+  ZIP will carry. This is not the struck card coming back: a family the owner **types** is still
+  unexpressible, and nothing above changes. What changed is that there is now a third possibility the
+  card did not consider — **a closed gallery whose faces we send** — so «una letra que el visitante
+  puede no ver nunca» is not true of these eight. The floating toolbar's two buttons keep their role
+  words and name the chosen family in their accessible name only. The sprint's full entry is below,
+  under sprint 24.
+
   **The switch is this file's business and is recorded as an open question rather than as a reading of
   the drawing.** Mockup 17 puts typography in «lo que no lleva», not in the «Encendido» half, so there
   was no drawing to follow; it went behind the switch because [ADR 0026](../decisions/0026-the-switch-is-the-line-between-references-and-exact-values.md)

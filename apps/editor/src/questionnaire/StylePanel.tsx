@@ -2,6 +2,7 @@
 
 import type { Theme } from "@retorika/schema";
 import {
+  type FontKey,
   identifyPalette,
   identifyScale,
   identifyTypePair,
@@ -11,7 +12,14 @@ import {
   TYPE_PAIRS,
 } from "@retorika/tokens";
 import tokensEs from "@retorika/tokens/locales/es" with { type: "json" };
-import { useId } from "react";
+import { useId, useState } from "react";
+import {
+  chosenFamilyText,
+  galleryFaceCss,
+  galleryRows,
+  galleryStartsOpen,
+  typePairNoteText,
+} from "../editor/letterGallery.ts";
 import {
   PANEL_WIDTH,
   PanelClose,
@@ -36,22 +44,26 @@ import es from "../locales/es.json" with { type: "json" };
  *   is not contrast-tested cannot ship", and the protocol puts it more strongly still — a palette
  *   with bad contrast cannot even be declared. A picker is a machine for producing exactly that.
  *   It is the same warn-or-block line the rest of the product draws, applied to colour.
- * - **The typefaces are named by character, never by font.** The mockup labels them `Inter`,
- *   `Poppins` and `Source Serif`. Issue #9: Inter and EB Garamond fall back to something else
- *   on a machine that lacks them, and ADR 0001 forbids downloading either — so a label saying
- *   "Inter" promises a font that may never arrive. "Moderna y neutra" is true whichever font
- *   resolves. The `Aa` specimen is rendered in the actual stack, so what it shows *is* what the
- *   owner will get, fallback included.
+ * - **The three pairs are named by character, and the gallery under them by font.** The mockup
+ *   labels its three rows `Inter`, `Poppins` and `Source Serif`; ours are «Editorial y serena» and
+ *   the rest, because issue #9 found that a label saying "Inter" promised a font that might never
+ *   arrive, while "Moderna y neutra" is true whichever font resolves. **ADR 0046 removed that
+ *   reason for eight families by sending their faces**, so the group below the pairs names them
+ *   outright — and its specimens are drawn in the very file the ZIP will carry, served by the
+ *   editor's own `fonts/[file]` route. The pairs' own `Aa` is still rendered in the stack, so what
+ *   it shows is what the owner will get, fallback included.
  * - **Five swatches, but not the mockup's five.** Ours are the five colours the stylesheet
  *   actually paints with; `color.accent` is left out because no rule reads it and its contrast is
  *   asserted nowhere. See `RENDERED_COLOR_KEYS`.
  *
  * **A third group, `MEDIDAS`, appears only with the design tools on** (sprint 9). That is the
  * advanced dossier §4's own line: apagado the panel offers «Paletas y parejas tipográficas»,
- * encendido it «Añade el sistema y tipografías propias». This delivers the first half of that
- * sentence and not the second — «tipografías propias» waits for issue #9, because a font the
- * visitor may never receive is a promise this product does not make, and ADR 0026 says so by name
- * rather than leaving the omission to be noticed later.
+ * encendido it «Añade el sistema y tipografías propias». **Both halves are delivered since sprint 24
+ * día 6**: «tipografías propias» waited for issue #9 — a font the visitor may never receive is a
+ * promise this product does not make — and the gallery answers it by sending the file rather than by
+ * hoping. It is offered to everybody and not gated behind the design tools, for the reason the
+ * floating toolbar's two references are not: choosing a letter is the owner's own branding, not a
+ * professional's tool (advanced dossier §4, «Apagado»).
  *
  * **The dossier's word is «el sistema» and the legend says «MEDIDAS».** Not a divergence from an
  * approved screen — mockup 13 draws no such group at all, and mockup 17, which does, labels it
@@ -61,15 +73,25 @@ import es from "../locales/es.json" with { type: "json" };
  * change. The help line under the legend says which three — el tamaño del texto, el aire entre
  * las cosas y las esquinas.
  *
- * Nothing here holds state. Which palette is ticked is *deduced* from the document's own theme,
- * because a theme keeps values and not identities — see `identifyPalette`. That is why the tick
- * cannot go stale: there is no second copy of the answer to drift.
+ * Nothing here holds an **answer**. Which palette is ticked is *deduced* from the document's own
+ * theme, because a theme keeps values and not identities — see `identifyPalette`. That is why the
+ * tick cannot go stale: there is no second copy of the answer to drift. The one `useState` in this
+ * file is whether the gallery is unfolded, which is about this panel on this screen and says nothing
+ * about the site; its starting value is deduced too (`galleryStartsOpen`).
  */
 
 export interface StylePanelProps {
   theme: Theme;
   onPickPalette: (paletteId: string) => void;
   onPickTypePair: (typePairId: string) => void;
+  /**
+   * One family, by its real name, for one of the two font tokens (ADR 0046).
+   *
+   * Separate from `onPickTypePair` because it is a separate choice and writes a single key: headings
+   * and text are chosen one at a time, so an owner can put Figtree over Spectral without the product
+   * deciding the other half for them.
+   */
+  onPickFamily: (key: FontKey, family: string) => void;
   onPickScale: (scaleId: string) => void;
   /**
    * Whether the design tools are on for the person looking — nothing about the site.
@@ -87,10 +109,27 @@ function nameOf(nameKey: string): string {
   return tokensEs[nameKey as keyof typeof tokensEs] ?? nameKey;
 }
 
+/**
+ * The two choices the gallery offers, and the legend each one carries (ADR 0046).
+ *
+ * Headings first, because that is the order a visitor reads them in, and two and not three: there is
+ * no `font.accent`, decided in sprint 24 — a third slot would be a new key in a `strictObject` that
+ * demands all of them, so a migration, a version bump and nineteen goldens moving, plus a third
+ * family in the ZIP of whoever used it.
+ */
+const FAMILY_CHOICES: readonly {
+  key: FontKey;
+  legendKey: "editor.style.familyHeadings" | "editor.style.familyText";
+}[] = [
+  { key: "font.heading", legendKey: "editor.style.familyHeadings" },
+  { key: "font.body", legendKey: "editor.style.familyText" },
+];
+
 export function StylePanel({
   theme,
   onPickPalette,
   onPickTypePair,
+  onPickFamily,
   onPickScale,
   designTools,
   onClose,
@@ -98,7 +137,10 @@ export function StylePanel({
   const headingId = useId();
   const paletteGroup = useId();
   const typeGroup = useId();
+  const familyGroup = useId();
+  const galleryId = useId();
   const scaleGroup = useId();
+  const [galleryOpen, setGalleryOpen] = useState(() => galleryStartsOpen(theme));
   const current = identifyPalette(theme);
   const currentType = identifyTypePair(theme);
   const currentScale = identifyScale(theme);
@@ -180,9 +222,7 @@ export function StylePanel({
           {es["editor.style.typography"]}
         </legend>
         {currentType === undefined ? (
-          <p className="m-0 text-[12px] leading-snug text-ui-muted">
-            {es["editor.style.noTypePair"]}
-          </p>
+          <p className="m-0 text-[12px] leading-snug text-ui-muted">{typePairNoteText(theme)}</p>
         ) : null}
         {TYPE_PAIRS.map((pair) => {
           const selected = currentType?.id === pair.id;
@@ -223,6 +263,96 @@ export function StylePanel({
           );
         })}
       </fieldset>
+
+      {/**
+       * The gallery of letters (ADR 0046): eight families the owner may choose **by name**, because
+       * this product sends their faces.
+       *
+       * **Folded away until it is wanted, and not gated.** The three pairs above are the answer for
+       * an owner who wants one click; sixteen more rows above the fold would turn a style panel into
+       * a font list. But it is offered to everybody — the design tools gate `MEDIDAS` and nothing
+       * else here, because a letter is the owner's own branding and not a professional's tool.
+       */}
+      <div className="flex flex-col gap-2">
+        <button
+          type="button"
+          aria-expanded={galleryOpen}
+          aria-controls={galleryId}
+          onClick={() => setGalleryOpen(!galleryOpen)}
+          className="ui-interactive flex items-center justify-between gap-3 rounded-ui border border-ui-border bg-ui-surface px-4 py-2.5 text-left hover:border-ui-border-strong"
+        >
+          <span className="flex flex-col gap-0.5">
+            <span className="text-[13px] font-semibold text-ui-ink">
+              {es["editor.style.exactFamily"]}
+            </span>
+            {/* Said whether the group is open or shut: a choice nobody can see is a choice nobody
+                can take back. */}
+            <span className="text-[12px] leading-snug text-ui-muted">
+              {chosenFamilyText(theme)}
+            </span>
+          </span>
+          <span aria-hidden="true" className="shrink-0 text-[15px] leading-none text-ui-muted">
+            {galleryOpen ? "\u2212" : "+"}
+          </span>
+        </button>
+
+        {galleryOpen ? (
+          <div id={galleryId} className="flex flex-col gap-3">
+            {/* The eight faces, from the editor's own `fonts/[file]` route, mounted with the group
+                and not with the panel. A declared `@font-face` downloads nothing until something is
+                drawn in it, and the specimens below are the only things that are — so opening this
+                group is what fetches them, which is «cargada solo al abrir el grupo» honoured by
+                construction rather than by a loader. */}
+            <style>{galleryFaceCss()}</style>
+            <p className="m-0 text-[12px] leading-snug text-ui-muted">
+              {es["editor.style.exactFamilyHelp"]}
+            </p>
+            {FAMILY_CHOICES.map(({ key, legendKey }) => (
+              <fieldset key={key} className="m-0 flex flex-col gap-1.5 border-0 p-0">
+                <legend className="mb-1 p-0 text-[11px] font-bold tracking-[0.09em] text-ui-muted">
+                  {es[legendKey]}
+                </legend>
+                {galleryRows(theme, key).map((row) => (
+                  <label
+                    key={row.family}
+                    className={
+                      "relative flex h-12 cursor-pointer items-center gap-3.5 px-4 " +
+                      (row.chosen ? panelRowSelected : panelRow)
+                    }
+                  >
+                    <input
+                      type="radio"
+                      name={`${familyGroup}-${key}`}
+                      checked={row.chosen}
+                      onChange={() => onPickFamily(key, row.family)}
+                      // Visually hidden rather than `display: none`, like the three groups above:
+                      // a hidden input leaves the tab order and the group, and arrow keys stop.
+                      className="absolute h-px w-px opacity-0"
+                    />
+                    {/* Drawn in the face the ZIP will carry, which is the whole reason this row may
+                        say the family's name out loud. */}
+                    <span
+                      aria-hidden="true"
+                      className="w-8 shrink-0 text-center text-[20px] leading-none text-ui-ink"
+                      style={{ fontFamily: `'${row.family}'` }}
+                    >
+                      {es["editor.style.specimen"]}
+                    </span>
+                    <span
+                      className={
+                        "text-[14px] " +
+                        (row.chosen ? "font-semibold text-ui-ink" : "font-medium text-ui-ink")
+                      }
+                    >
+                      {row.family}
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+            ))}
+          </div>
+        ) : null}
+      </div>
 
       {designTools ? (
         <fieldset className="m-0 flex flex-col gap-[9px] border-0 p-0">
