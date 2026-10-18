@@ -11,7 +11,7 @@ import {
 } from "@retorika/schema";
 import { useEffect, useId, useRef } from "react";
 import { type MenuState, menuNoteText, sectionsLeftText } from "../editor/menuState.ts";
-import { PanelClose } from "../editor/panelKit.tsx";
+import { PANEL_WIDTH, PanelClose, panelCard } from "../editor/panelKit.tsx";
 import { type FieldRow, fieldCommitFor, groupedFields } from "../editor/sectionFields.ts";
 import { fieldEditFor } from "../editor/textEdits.ts";
 import es from "../locales/es.json" with { type: "json" };
@@ -161,19 +161,29 @@ export function FieldsPanel({
         if (event.key === "Escape") onClose();
       }}
       aria-labelledby={headingId}
-      // Fixed to the right of the viewport rather than placed inside the canvas card: the card
-      // narrows to 400px in the mobile device view, and a form docked inside it would leave the
-      // page it is meant to be editing a sliver wide. `top` is the header's measured height
-      // (`--editor-header`, set by the shell): 58 at the studio width, two rows on a tablet.
-      //
-      // **On a phone it is a sheet from the bottom, not the right** (ADR 0042 §2, sprint 21 day
-      // 4): there is no "right of the canvas" on a 320px screen, and docking there is what made
-      // the mobile device view 400px wide in the first place — a card so narrow the page it edits
-      // had nowhere left to be. `phone:` repeats `panelKit`'s own sheet numbers rather than
-      // importing them, because this panel was `fixed` before that file existed and a shared
-      // `panelCard` string would also hand it `panelShell`'s desktop `max-h-full self-start`,
-      // which this `fixed` element does not want.
-      className="fixed top-[var(--editor-header,58px)] right-0 bottom-0 z-20 flex w-[340px] flex-col gap-4 overflow-y-auto border-l border-ui-border bg-ui-surface p-5 shadow-[-8px_0_24px_rgba(15,23,42,0.08)] phone:inset-x-0 phone:top-auto phone:bottom-[calc(56px+env(safe-area-inset-bottom))] phone:z-20 phone:w-auto phone:max-h-[70dvh] phone:rounded-t-ui-lg phone:border-l-0 phone:border-t phone:shadow-[0_-8px_24px_rgba(15,23,42,0.08)]"
+      /**
+       * **Beside the canvas, not over it** (sprint 24 día 3, David's own words: «el menú desplegado
+       * tras pulsar "Campos" debería seguir la misma lógica que todas las herramientas de diseño
+       * avanzadas y **no ocultar elementos que van a ser editados**»).
+       *
+       * This was the last panel `fixed` to the viewport. It painted 340 pixels of itself across the
+       * page being edited at every window width, which is the one thing a panel for editing a
+       * section must not do. It is now in `EditorShell`'s own `panel` slot, like the six rail
+       * panels and like `SharePanel` before it: a flex sibling of the canvas area, so the preview
+       * narrows, re-measures through the `ResizeObserver` that already exists, and stays visible.
+       * No geometry is written here — losing `fixed` is what buys all of it.
+       *
+       * **The objection this used to carry has dissolved with the move.** It said a `panelCard`
+       * would hand it `panelShell`'s desktop `max-h-full self-start`, «which this `fixed` element
+       * does not want». In the row it does want them: that is how the other six size themselves
+       * against a scrolling column. And the reason given for being fixed — that the canvas card
+       * narrows to 400px in the mobile device view, so a form docked **inside the card** would
+       * leave the page a sliver — was always about the card and never about the row.
+       *
+       * On a phone `panelCard` is the sheet from the bottom that ADR 0042 §2 asks for, and it is
+       * now the same sheet as the other six rather than a second transcription of its numbers.
+       */
+      className={`${PANEL_WIDTH} gap-4 p-5 ${panelCard}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-col gap-1">

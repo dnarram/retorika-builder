@@ -1049,11 +1049,13 @@ export function Editor({
    */
   function showRail(item: RailItemId) {
     setRail(item);
-    // Any rail item that opens a panel closes the fields panel: both are fixed over the right edge
-    // and the second would cover the first. It used to name `style` alone, which was complete when
-    // `style` was the only panel — `pages` arrived in sprint 5 and could already be covered, and
-    // `photos` would have made three. `sections` is the one that does not, because the fields panel
-    // *is* its panel.
+    // Any rail item that opens a panel closes the fields panel: **the row has one panel slot**, so
+    // the second would replace the first. Until sprint 24 día 3 the reason was that both were
+    // `fixed` over the right edge and the second covered the first; the rule is the same and its
+    // reason is now structural. It used to name `style` alone, which was complete when `style` was
+    // the only panel — `pages` arrived in sprint 5 and could already be covered, and `photos` would
+    // have made three. `sections` is the one that does not, because the fields panel *is* its
+    // panel.
     if (item !== "sections") setFieldsFor(null);
     // Going anywhere answers the question by walking away from it, which is an answer. Leaving it
     // hanging over a panel that just opened would be the only modal thing in this editor.
@@ -1457,6 +1459,43 @@ export function Editor({
   }
 
   /** Open a slot for the new chrome, or close one that is no longer wanted. */
+  /**
+   * **Put the person back where they were reading when the preview is re-laid-out at a new width**
+   * (sprint 24 día 3), and **it is the panel closing that needs it, not the panel opening.**
+   *
+   * David asked for «Campos» to stop covering the section being edited, and moving it into the row
+   * does that — but not covering is only half, and he said so: «al abrir baja el zoom y, con el
+   * mismo `scrollTop`, la sección editada se desplaza en vertical». The panel takes 340 pixels plus
+   * a 24-pixel gap, so the card gets a narrower `layoutWidth`, the preview re-flows at that width
+   * and gets taller, and a fixed `scrollY` then points somewhere else.
+   *
+   * **Measured, and the two directions are not symmetric — which is the whole reason this exists
+   * in the shape it does.**
+   *
+   * - **Opening moves nothing**, at 1024, 1280 or 1600: the browser's own scroll anchoring
+   *   (`overflow-anchor`, `auto` because nothing here turns it off) pins content near the top edge
+   *   when something above it grows. The repair for the open case was already in the browser.
+   * - **Closing moved the section 253 pixels at 1024** — from 151 to 404 — because the page gets
+   *   *wider and shorter*, the scroll offset ends up past the new maximum, and the browser clamps
+   *   it. Scroll anchoring does not save that: the content moves because the scroll position did.
+   *
+   * So this was written, deleted, and written again. Deleted because a first version of the walk
+   * below passed without it and fifty-nine lines that change nothing observable have no business
+   * shipping; written again when the walk was tightened from «stays in view» to «does not move»
+   * and failed on the close. **Both facts are recorded because the second one is only interesting
+   * next to the first.**
+   *
+   * The mechanism is the one this file already has for «the document changed under somebody who
+   * was reading it»: `wireReadingPosition` records the section at the top of the viewport on every
+   * scroll, and `restoreReadingPosition` puts it back. Here it runs for a change of **width**.
+   *
+   * **Width only.** The card's height changes for reasons that do not re-flow the page — a line
+   * arriving in the hint strip above it, for one — and re-anchoring then would move the page under
+   * somebody for nothing.
+   *
+   * **And not on the first measurement**, which is the mount: the restore for a new document is
+   * `wireOnce`'s, and doing it twice would fight it.
+   */
   useEffect(() => {
     if (chromeKey === buffer.liveKey) {
       if (buffer.pendingKey !== null) setBuffer((b) => ({ ...b, pendingKey: null }));
@@ -3977,9 +4016,16 @@ export function Editor({
         // A second door, not a second mechanism: it opens the panel that already owns
         // destinations, on this section. Editing an href in the frame would be a second place a
         // destination can be written, and `listDeadDestinations` would have two sources to chase.
+        //
+        // **Through `showFields` and not `setFieldsFor`, which is a defect this sprint found**
+        // (día 3). Calling the setter straight skipped the half of that function that sends the
+        // rail back to «Secciones», so selecting a word with «Estilo» open and pressing «Enlace»
+        // left **both** side surfaces mounted — and while the drawer was `fixed` it simply covered
+        // the other one. Nothing tested it. In the row they would now compete for one slot, so a
+        // door that bypasses the rule is a door that loses the panel it opened.
         button.addEventListener("click", () => {
           dismiss();
-          setFieldsFor(sectionId);
+          showFields(sectionId);
         });
         linkGroup.appendChild(button);
         bar.appendChild(linkGroup);
@@ -5631,7 +5677,40 @@ export function Editor({
         onDesignToolsChange(on);
       }}
       panel={
-        effectiveRail === "share" ? (
+        /**
+         * **The fields drawer is the first branch, and it is in this slot at all since sprint 24
+         * día 3.** It used to be rendered among `children` — inside the canvas card — and `fixed`
+         * to the viewport's right edge, which painted 340 pixels of itself over the section being
+         * edited. David's words: «no ocultar elementos que van a ser editados». In the row it
+         * narrows the preview instead, through the `ResizeObserver` the shell already has.
+         *
+         * First because the slot holds one node and the two can only be open together by a bug:
+         * `showFields` sends the rail back to «Secciones» and `showRail` closes the drawer, so the
+         * rule «as most one side surface at a time» is enforced at both doors. Being first keeps
+         * the drawer winning if a third door ever appears, which is what the fixed version did by
+         * covering the other.
+         */
+        fieldsFor && findSection(doc, fieldsFor) ? (
+          <FieldsPanel
+            sectionId={fieldsFor}
+            sectionName={sectionDisplayName(doc, fieldsFor)}
+            rows={sectionFields(doc, fieldsFor)}
+            slotOrder={slotOrderOf(doc, fieldsFor)}
+            itemSlotOrder={itemSlotOrderOf(doc, fieldsFor)}
+            onFill={onFillSlot}
+            onClear={onClearSlot}
+            menuLabel={menuLabelFor(doc, fieldsFor)}
+            inMenu={findSection(doc, fieldsFor)?.section.inMenu}
+            onSetInMenu={onSetSectionInMenu}
+            menu={menuStateFor(doc, pageId)}
+            // The panel commits a words-only change through the very same callback the canvas
+            // does, and since sprint 12 day 3 it anchors that change in the range the browser is
+            // replacing too — so the marks arrive measured rather than guessed, exactly as they do
+            // from the canvas. Absent still means the diff, the documented floor (ADR 0027 §4b).
+            onEditText={onEditText}
+            onClose={() => showFields(null)}
+          />
+        ) : effectiveRail === "share" ? (
           <SharePanel
             doc={doc}
             photoUrls={photoUrls}
@@ -5867,27 +5946,6 @@ export function Editor({
         {previewFrame(0)}
         {previewFrame(1)}
       </div>
-      {fieldsFor && findSection(doc, fieldsFor) ? (
-        <FieldsPanel
-          sectionId={fieldsFor}
-          sectionName={sectionDisplayName(doc, fieldsFor)}
-          rows={sectionFields(doc, fieldsFor)}
-          slotOrder={slotOrderOf(doc, fieldsFor)}
-          itemSlotOrder={itemSlotOrderOf(doc, fieldsFor)}
-          onFill={onFillSlot}
-          onClear={onClearSlot}
-          menuLabel={menuLabelFor(doc, fieldsFor)}
-          inMenu={findSection(doc, fieldsFor)?.section.inMenu}
-          onSetInMenu={onSetSectionInMenu}
-          menu={menuStateFor(doc, pageId)}
-          // The panel commits a words-only change through the very same callback the canvas does,
-          // and since sprint 12 day 3 it anchors that change in the range the browser is replacing
-          // too — so the marks arrive measured rather than guessed, exactly as they do from the
-          // canvas. Absent still means the diff, which is the documented floor (ADR 0027 §4b).
-          onEditText={onEditText}
-          onClose={() => showFields(null)}
-        />
-      ) : null}
       {toast ? (
         <div className="fixed bottom-[34px] left-1/2 z-10 flex max-w-[calc(100vw-32px)] -translate-x-1/2 flex-wrap items-center gap-5 rounded-[13px] bg-[#0F172A] py-3.5 pr-3.5 pl-5 shadow-[0_10px_30px_rgba(15,23,42,0.28)] phone:bottom-[calc(72px+env(safe-area-inset-bottom))]">
           <span className="inline-flex items-center gap-2.5 text-[15px] font-medium text-white">
