@@ -1,11 +1,23 @@
 # 0044 — The editor stops advising about the owner's identity
 
-**Status:** proposed · **Date:** 2026-10-17 · **Requested by:** David, 17 de octubre de 2026, al
+**Status:** **accepted** · **Date:** 2026-10-17 · **Requested by:** David, 17 de octubre de 2026, al
 abrir el sprint 24, en sus propias palabras: «**Elimina el texto** "Las webs de negocios suelen
-identificar a su titular. Si tienes dudas, consúltalo con tu gestoría."» · **Recorded by development
-at his instruction, with the standing note that development does not sign.** · **Needs the signature
-of the CEO**, who accepted [ADR 0019](0019-the-footer-offers-the-owners-details.md) on 28 September
-2026 · **Amends:** ADR 0019 · **Touches:** `apps/editor`, `packages/catalog`
+identificar a su titular. Si tienes dudas, consúltalo con tu gestoría."» · **Accepted by: David, 18
+de octubre de 2026 — not the CEO** · **Amends:** [ADR 0019](0019-the-footer-offers-the-owners-details.md)
+· **Touches:** `apps/editor`, `packages/catalog`
+
+> **Who accepted this, and what that does not mean.** This ADR was written needing the signature of
+> **the CEO**, who accepted ADR 0019 on 28 September 2026 and whose decision this amends. That is not
+> what happened: **David accepted it himself** on 18 October 2026, in one instruction — «firma el
+> ADR» — and the merge of the pull request that removed the warning was his act.
+>
+> It is written here in the same words [ADR 0026](0026-the-switch-is-the-line-between-references-and-exact-values.md)
+> already uses about itself, and for the same reason: an accepted ADR gets cited later, and nobody
+> should be able to read «accepted» here as «the CEO agreed». **The CEO has not seen it.**
+>
+> Development does not sign, and did not: what is recorded above is the instruction David gave, on
+> the date he gave it. What is still open is whether the person who took the original position wants
+> to be told it has been withdrawn — and that is his to decide, not this file's.
 
 ## Context
 
@@ -120,9 +132,10 @@ compliance, which is ADR 0019's decision and stands.
 
 ## What would reopen this
 
-- **The CEO declines to sign it.** Then the sentence comes back, and the pull request that removed it
-  is closed rather than merged — which is why that pull request waits for the signature instead of
-  merging ahead of it.
+- **The CEO reads it and disagrees.** Then the sentence comes back. This was written expecting that
+  question to be asked before the code shipped; it shipped first, on David's instruction, so the
+  question is now asked of something already live. That is a worse order to ask it in, and it is
+  recorded as what happened rather than tidied.
 - **An owner asks why the footer wants their tax number**, which is the question the removed sentence
   answered before it was asked. The answer would be new copy, and it would be a new decision about how
   much Retorika says.

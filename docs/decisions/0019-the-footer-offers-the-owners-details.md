@@ -109,9 +109,13 @@ Retorika stores none of them.**
 
 > **One of these was spent on 17 October 2026, and not by being met.** David asked for the warning to
 > be removed, so its wording changed without the CEO deciding to take a position on compliance.
-> [ADR 0044](0044-the-editor-stops-advising-about-the-owners-identity.md) is that decision; it is
-> `proposed` and waiting for the signature of whoever signed this one. **Until it is signed, this ADR
-> is what the product does** — the pull request removing the warning is open and unmerged.
+> [ADR 0044](0044-the-editor-stops-advising-about-the-owners-identity.md) is that decision, and as of
+> **18 October 2026 it is accepted — by David, not by the CEO**, who accepted this one and has not
+> seen that one. The warning is gone from the product.
+>
+> So this ADR's decision about the footer's fields still stands in full — offered, never required —
+> and **its sentence does not**. ADR 0044 is the authority on what the editor says; this one remains
+> the authority on what the footer is.
 
 - **The CEO decides Retorika should take a position on compliance** — either by requiring the
   fields, or by saying in the interface what is needed. Then the warning's wording is the first
