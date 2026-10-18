@@ -11,10 +11,15 @@ import { cssFontFamilyName, cssFontSrc } from "./escape.ts";
  * package travels to the client's site. And it cannot be derived from the document, which is the whole
  * safety property — **a document may *choose* a row from this table and can never *name* a file.**
  *
- * So the table is a second copy of two family names, and that is the cost. It is a small one and it is
- * guarded: `fonts.test.ts` checks the names against the stacks the tokens declare, so the copies
- * cannot drift apart silently. The alternative — comparing the theme's whole stack string against a
- * copy of every stack — would have been a far larger copy of exactly the thing day 4 just changed.
+ * So the table is a second copy of eight family names, and that is the cost. It is guarded from the
+ * direction that still holds: `fonts.test.ts` asserts that every family a type pair asks for first is
+ * a row here — a pair naming a face nobody ships is the defect ADR 0028 exists to prevent — and that
+ * every row is reachable by a document and brings exactly its own faces.
+ *
+ * **What it no longer asserts is the other direction**, that every row is named by a pair. Until
+ * sprint 24 the table was two rows and both came from a pair, so "shipped but unnamed" meant bytes
+ * nobody could ever see. The gallery (ADR 0046) is the decision that a family may be shipped for the
+ * owner to choose by its real name, which is exactly a row no pair names first.
  */
 
 export interface ShippableFace {
@@ -23,10 +28,12 @@ export interface ShippableFace {
   /**
    * The file's name inside `fonts/`. Chosen here; never read from a document.
    *
-   * **Spelled exactly as `@fontsource` ships it**, `-normal` and all, so that the name in a published
-   * ZIP says out loud what the licence requires: the file is the package's file, unmodified. Playfair
-   * Display carries a Reserved Font Name, and the OFL only lets the name travel with an unchanged
-   * face — so a shortened name here would be the first step towards a file nobody could check.
+   * **Spelled exactly as `@fontsource` ships it**, `-normal` and all, so the name in a published ZIP
+   * says out loud which file it is and `fonts.test.ts` can compare the bytes against the package's
+   * own. A shortened name here would be the first step towards a file nobody could check.
+   *
+   * The latin slice is a *Modified Version* under the OFL, so no family in this table may declare a
+   * Reserved Font Name (ADR 0045); the condition is asserted over every row rather than remembered.
    */
   file: string;
 }
@@ -44,10 +51,42 @@ export interface ShippableFamily {
  * Shipping only 700 would leave every tagline synthesising a lighter weight from the bold file, which
  * browsers do badly; shipping only 400 would have them synthesise the bold, which they do worse.
  *
- * Only the two faces a type pair asks for **first** appear here. A family further down a stack is a
+ * Only the face a stack asks for **first** is shipped for it. A family further down a stack is a
  * fallback, and a fallback that we ship is not a fallback — it is the choice, under another name.
+ *
+ * **Alphabetical by family**, because from ADR 0046 on this is a gallery the owner reads and not a
+ * list of two: the order a published page emits its faces in is this one, which is why it is a
+ * decision rather than the order the rows were added in.
  */
 export const SHIPPABLE_FAMILIES: readonly ShippableFamily[] = [
+  {
+    family: "Bitter",
+    faces: [
+      { weight: 400, file: "bitter-latin-400-normal.woff2" },
+      { weight: 700, file: "bitter-latin-700-normal.woff2" },
+    ],
+  },
+  {
+    family: "DM Sans",
+    faces: [
+      { weight: 400, file: "dm-sans-latin-400-normal.woff2" },
+      { weight: 700, file: "dm-sans-latin-700-normal.woff2" },
+    ],
+  },
+  {
+    family: "EB Garamond",
+    faces: [
+      { weight: 400, file: "eb-garamond-latin-400-normal.woff2" },
+      { weight: 700, file: "eb-garamond-latin-700-normal.woff2" },
+    ],
+  },
+  {
+    family: "Figtree",
+    faces: [
+      { weight: 400, file: "figtree-latin-400-normal.woff2" },
+      { weight: 700, file: "figtree-latin-700-normal.woff2" },
+    ],
+  },
   {
     family: "Inter",
     faces: [
@@ -56,22 +95,24 @@ export const SHIPPABLE_FAMILIES: readonly ShippableFamily[] = [
     ],
   },
   {
-    /**
-     * **EB Garamond, and it replaced Playfair Display on 18 October 2026** (sprint 24 día 4, ADR
-     * 0045). Not a change of taste: Playfair Display is published «with Reserved Font Name "Playfair
-     * Display"», and what this product ships is the latin slice of four in woff2 — glyphs deleted
-     * and format changed, which OFL 1.1 defines as a Modified Version twice over, and §3 does not
-     * let a Modified Version carry the reserved name. The measurement and the three exits are in the
-     * ADR; David chose to replace it.
-     *
-     * EB Garamond's copyright line reserves no name, so a latin woff2 of it may travel under its own
-     * name. It also costs 48.0 KB against Playfair's 44.0, which is the whole of what the change
-     * costs a client's ZIP.
-     */
-    family: "EB Garamond",
+    family: "Libre Baskerville",
     faces: [
-      { weight: 400, file: "eb-garamond-latin-400-normal.woff2" },
-      { weight: 700, file: "eb-garamond-latin-700-normal.woff2" },
+      { weight: 400, file: "libre-baskerville-latin-400-normal.woff2" },
+      { weight: 700, file: "libre-baskerville-latin-700-normal.woff2" },
+    ],
+  },
+  {
+    family: "Spectral",
+    faces: [
+      { weight: 400, file: "spectral-latin-400-normal.woff2" },
+      { weight: 700, file: "spectral-latin-700-normal.woff2" },
+    ],
+  },
+  {
+    family: "Work Sans",
+    faces: [
+      { weight: 400, file: "work-sans-latin-400-normal.woff2" },
+      { weight: 700, file: "work-sans-latin-700-normal.woff2" },
     ],
   },
 ];

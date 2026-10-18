@@ -170,7 +170,25 @@ importers:
 
   .:
     dependencies:
+      '@fontsource/bitter':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/dm-sans':
+        specifier: 5.3.0
+        version: 5.3.0
       '@fontsource/eb-garamond':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/figtree':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/libre-baskerville':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/spectral':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/work-sans':
         specifier: 5.3.0
         version: 5.3.0
       '@retorika/db':
@@ -363,12 +381,30 @@ importers:
 
   packages/publisher:
     dependencies:
+      '@fontsource/bitter':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/dm-sans':
+        specifier: 5.3.0
+        version: 5.3.0
       '@fontsource/eb-garamond':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/figtree':
         specifier: 5.3.0
         version: 5.3.0
       '@fontsource/inter':
         specifier: 5.2.8
         version: 5.2.8
+      '@fontsource/libre-baskerville':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/spectral':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/work-sans':
+        specifier: 5.3.0
+        version: 5.3.0
       '@retorika/renderer':
         specifier: workspace:*
         version: link:../renderer
@@ -507,11 +543,29 @@ packages:
   '@emnapi/runtime@1.11.3':
     resolution: {integrity: sha512-Xz4Tpyki7XyrpbUK1jR1AhdAdaXyhhY4lZ3neLodmhpuWfy2PAQN5B46sAiU4liOXGLkHypn/qU+jvfWSCYYLA==}
 
+  '@fontsource/bitter@5.3.0':
+    resolution: {integrity: sha512-RYfrDnaja7v6FO8AwknA5aw/BuVgLBJvwLIShkS42XUIxMbvi/yp47Ax/Xnn9OTVIGFiTXCbVsH0O9HhTTDtqA==}
+
+  '@fontsource/dm-sans@5.3.0':
+    resolution: {integrity: sha512-lYJtMXXO28q1z+yz+z8XKd0s4hXaa9QdkETzkyD760sidCv5heI86weYA0sx0Nc4pAMAQTUuyf4gO44cYKKS9g==}
+
   '@fontsource/eb-garamond@5.3.0':
     resolution: {integrity: sha512-VplwHpB8FLuzl+4G5LDci1b3Z4SghiuXH8XEgaxjnOb5aue5mEt1njmDKeO6iyLeGa73LffU7PC7hzncLRx0ZA==}
 
+  '@fontsource/figtree@5.3.0':
+    resolution: {integrity: sha512-/iTcTXL1eRBGhvD7NN9dnKzXzWqDLVZVEUFI9xIxAC1G/hXU8tCyYeXCAuPOuvSYPInFUP7H6KLGgygmDfy1SA==}
+
   '@fontsource/inter@5.2.8':
     resolution: {integrity: sha512-P6r5WnJoKiNVV+zvW2xM13gNdFhAEpQ9dQJHt3naLvfg+LkF2ldgSLiF4T41lf1SQCM9QmkqPTn4TH568IRagg==}
+
+  '@fontsource/libre-baskerville@5.3.0':
+    resolution: {integrity: sha512-IA6OLq36/JWMX70Fha15sri2qWsijFh7hgdDXCRZHjKUHtWarLQoiGilvm7iMqm7HiYFEv9acF3+IuRHO9kUiA==}
+
+  '@fontsource/spectral@5.3.0':
+    resolution: {integrity: sha512-2TL5WWGOZj4SIsBmPFEzKeA60tXXd1Qp1OqaaVEWkJL8IfSGLk6YmiusmC441iFkdJDIuFelu1r8lhCmQUU3mw==}
+
+  '@fontsource/work-sans@5.3.0':
+    resolution: {integrity: sha512-3cKV28+bEiLGdyOl0VgEGCFWE1XdZJu/K+nH4Jt76XC3T//XrRtm2EF7jA61GSMIy8sYp6ZFTE01nD3lLaBV9A==}
 
   '@formatjs/ecma402-abstract@2.3.6':
     resolution: {integrity: sha512-HJnTFeRM2kVFVr5gr5kH1XP6K0JcJtE7Lzvtr3FS/so5f1kpsqqqxy5JF+FRaO6H2qmcMfAUIox7AJteieRtVw==}
@@ -2639,9 +2693,21 @@ snapshots:
       tslib: 2.8.1
     optional: true
 
+  '@fontsource/bitter@5.3.0': {}
+
+  '@fontsource/dm-sans@5.3.0': {}
+
   '@fontsource/eb-garamond@5.3.0': {}
 
+  '@fontsource/figtree@5.3.0': {}
+
   '@fontsource/inter@5.2.8': {}
+
+  '@fontsource/libre-baskerville@5.3.0': {}
+
+  '@fontsource/spectral@5.3.0': {}
+
+  '@fontsource/work-sans@5.3.0': {}
 
   '@formatjs/ecma402-abstract@2.3.6':
     dependencies:

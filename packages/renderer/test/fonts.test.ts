@@ -38,18 +38,36 @@ function withFont(key: "font.heading" | "font.body", stack: string): RetorikaDoc
 const rulesIn = (css: string) => [...css.matchAll(/@font-face \{[^}]*\}/g)].map((m) => m[0]);
 
 describe("the table does not drift from the stacks the tokens declare", () => {
-  it("names only families a type pair actually asks for first", () => {
-    // The table is a second copy of two family names, because the dependency allowlist stops this
-    // package importing `@retorika/tokens` at runtime. This is what stops the copies parting: a face
-    // shipped for a family no pair names first would be bytes nobody can ever see.
-    const firstFamilies = new Set(
-      TYPE_PAIRS.flatMap((pair) => [
-        familiesOf(pair.fonts["font.heading"])[0],
-        familiesOf(pair.fonts["font.body"])[0],
-      ]),
-    );
-    for (const { family } of SHIPPABLE_FAMILIES) {
-      expect(firstFamilies, `${family} is shipped but no pair asks for it first`).toContain(family);
+  it("every row is reachable by a document, and brings exactly its own faces", () => {
+    // **This replaces the guard that said every row must be named by a type pair** (sprint 24 día 5).
+    // That held while the table was the two families the pairs used, where a row no pair named meant
+    // bytes nobody could ever see. The gallery is the decision that a family is shipped for the owner
+    // to choose it by its real name (ADR 0046), so six of the eight rows are named by no pair.
+    //
+    // What replaces it is stronger over the rows it keeps: for every row there is a stack a document
+    // can carry that selects it, and selecting it brings that row's faces and nothing else. A row with
+    // a name no document could match — a typo, an accent, a family renamed upstream — fails here.
+    for (const { family, faces } of SHIPPABLE_FAMILIES) {
+      const doc = withFont("font.heading", `'${family}', serif`);
+      expect(fontFilesFor(doc), family).toEqual(faces.map((face) => face.file));
+    }
+  });
+
+  it("spells every file after its own family, so a typo in either half shows", () => {
+    // **The test above cannot catch a misspelled family**, and that was found by sabotaging one: it
+    // builds the document out of the table's own name, so a row named "Figtre" is selected by a
+    // document asking for "Figtre" and the row looks fine. Here the two halves check each other —
+    // `@fontsource` names its files after the family, kebab-cased — so a typo in the name no longer
+    // agrees with the file, and a typo in the file no longer agrees with the name.
+    //
+    // The row's name is also checked against the package's own `metadata.json` in
+    // `packages/publisher/test/fonts.test.ts`, which is the only place that can read it: the renderer
+    // may not import anything outside schema and catalog, because it all travels to the client's site.
+    for (const { family, faces } of SHIPPABLE_FAMILIES) {
+      const slug = family.toLowerCase().replace(/ /g, "-");
+      for (const { weight, file } of faces) {
+        expect(file, family).toBe(`${slug}-latin-${weight}-normal.woff2`);
+      }
     }
   });
 
@@ -157,7 +175,21 @@ describe("a document selects a row; it can never name a file", () => {
       },
     };
     expect(fontFilesFor(headingInter)).toEqual(fontFilesFor(bodyInter));
-    expect(fontFilesFor(headingInter)[0]).toBe("inter-latin-400-normal.woff2");
+
+    // Asked of the table rather than written out: the order is the table's own, and with eight rows
+    // that is alphabetical, so EB Garamond comes before Inter whichever token named it. A literal
+    // here would be a third copy of the ordering, and it is what went stale when the table grew.
+    const tableOrder = SHIPPABLE_FAMILIES.flatMap((f) => f.faces.map((face) => face.file));
+    const files = fontFilesFor(headingInter);
+    expect(files).toEqual([...files].sort((a, b) => tableOrder.indexOf(a) - tableOrder.indexOf(b)));
+    expect(new Set(files)).toEqual(
+      new Set([
+        "eb-garamond-latin-400-normal.woff2",
+        "eb-garamond-latin-700-normal.woff2",
+        "inter-latin-400-normal.woff2",
+        "inter-latin-700-normal.woff2",
+      ]),
+    );
   });
 
   it("is deterministic: the same document twice gives identical bytes", () => {

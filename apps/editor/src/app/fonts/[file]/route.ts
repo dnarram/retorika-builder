@@ -37,7 +37,8 @@ export const runtime = "nodejs";
  * Every face a published page may name, from the renderer's own table.
  *
  * Built once at module load, and **a `Set` rather than a scan** because this is asked for on every
- * render of every preview. Four entries today — two families, two weights each.
+ * render of every preview. Sixteen entries today — the gallery's eight families, two weights each
+ * (ADR 0046) — and it grows with the table rather than beside it, which is the point of deriving it.
  */
 const SERVABLE: ReadonlySet<string> = new Set(
   SHIPPABLE_FAMILIES.flatMap((family) => family.faces.map((face) => face.file)),
