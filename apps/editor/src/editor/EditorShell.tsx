@@ -34,8 +34,11 @@ import { NARROWEST_DESKTOP, NARROWEST_WIDTH } from "./overflowCheck.ts";
  * that fix — Chrome included. Reported against Safari on 5 October 2026 because that is where it
  * was being looked at.
  *
- * `SharePanel` and `FieldsPanel` are deliberately not on this list: they are `fixed` to the
- * viewport rather than placed in the row, so they pin their own height and already scroll.
+ * **Every panel is on this list now.** `SharePanel` and `FieldsPanel` were once exempted here,
+ * «`fixed` to the viewport rather than placed in the row, so they pin their own height and already
+ * scroll» — true of both when it was written, and of neither since: `SharePanel` moved into the row
+ * on sprint 22 and `FieldsPanel` on sprint 24 día 3, both for the same reason, that a panel drawn
+ * over the page being edited hides what is being edited.
  */
 export const panelShell = "max-h-full self-start overflow-y-auto";
 

@@ -4054,9 +4054,13 @@ describe("sprint 12 día 7 — el recorrido completo del sprint", () => {
       await frame.locator('.rb-toolbar-mark[data-mark="strong"]').click();
       await expect(cardDescription.locator("strong")).toHaveText("pan");
 
-      // The panel never closed: it is a fixed aside, and the canvas stayed clickable underneath the
-      // whole time. Re-opening it here is what the first attempt did, and the button never settled
-      // — the canvas re-renders after a mark, so a click on chrome inside the frame is a race.
+      // The panel never closed, so the field is still there to read. Re-opening it here is what the
+      // first attempt did, and the button never settled — the canvas re-renders after a mark, so a
+      // click on chrome inside the frame is a race.
+      //
+      // It used to say «it is a fixed aside, and the canvas stayed clickable underneath»: as of
+      // sprint 24 día 3 it is a card beside the canvas, and the canvas is clickable because it is
+      // not covered rather than in spite of being covered.
       const marked = walk.getByLabel("Descripción");
       await expect(marked).toHaveValue("pan y pan y aceite de la tierra");
       await marked.click();
@@ -7545,6 +7549,11 @@ describe("sprint 23 día 4 — las páginas en el menú y el umbral curado", () 
        * un `aside` fijo de 340 px sobre el borde derecho, y con él abierto el clic en la sección
        * siguiente del lienzo aterriza en el panel. Un «subtree intercepts pointer events» que, con
        * el bucle que lo ignoraba, tardaba treinta y seis segundos en reintentar hasta rendirse.
+       *
+       * **Y desde el sprint 24 día 3 el panel ya no tapa el lienzo**, así que el baile se ha
+       * quitado: se pasa de una sección a la siguiente con el cajón abierto. Que esto funcione
+       * **es** la demostración de lo que David pidió — «no ocultar elementos que van a ser
+       * editados» —, medida por el camino más corto que hay: antes el clic no llegaba.
        */
       const sectionToggle = visitor
         .locator("aside label", { hasText: "Aparece en el menú" })
@@ -7559,7 +7568,6 @@ describe("sprint 23 día 4 — las páginas en el menú y el umbral curado", () 
       await sectionToggle.uncheck();
       // La cuenta, viva, donde se toma la decisión.
       await expect(visitor.locator("aside")).toContainText("quedan 2 secciones");
-      await closeFields();
 
       /**
        * **El umbral se aparta, y la interfaz dice de quién es la decisión.** Un destino está por
@@ -7567,11 +7575,11 @@ describe("sprint 23 día 4 — las páginas en el menú y el umbral curado", () 
        * su propia regla: «se queda si el dueño lo ha tocado». Callarlo dejaría una web que se
        * comporta distinto de todas las demás sin explicar por qué.
        */
+      // Sin cerrar nada: el cajón sigue abierto y el clic en la sección siguiente llega.
       await openFields("sec-location");
       await sectionToggle.uncheck();
       await expect(sections).toHaveText(["Te esperamos"]);
       await expect(visitor.locator("aside")).toContainText("lo has decidido tú");
-      await closeFields();
 
       /**
        * **Y con nada, nada** — la cláusula que David añadió al aprobar el sprint. Ni `<nav>`, ni
@@ -8746,6 +8754,10 @@ describe("un panel que no cabe se puede desplazar hasta el final", () => {
 
       // A `fixed` panel is laid out against the viewport, and an ancestor's `overflow: hidden`
       // does not clip it — so the box it has to fit inside is the window, not the row.
+      //
+      // **Still live, and only on a phone.** Every panel sat in the row on a desktop as of sprint
+      // 24 día 3, when «Campos» was the last one `fixed`; at 720 and below `panelCard` makes all of
+      // them sheets with `phone:fixed`, which is the case this branch is for now.
       let box: { top: number; bottom: number };
       if (getComputedStyle(panel).position === "fixed") {
         box = { top: 0, bottom: window.innerHeight };
@@ -8910,7 +8922,7 @@ describe("abrir un panel no tapa la página ni la convierte en otra", () => {
     });
   }
 
-  it("en los seis paneles del raíl, a 1024, 1280 y 1600", async () => {
+  it("en los seis paneles del raíl y en «Campos», a 1024, 1280 y 1600", async () => {
     const walker = await (await browser.newContext()).newPage();
     try {
       await walker.setViewportSize({ width: 1280, height: 800 });
@@ -8934,8 +8946,35 @@ describe("abrir un panel no tapa la página ni la convierte en otra", () => {
       let lastCanvasWidth = -1;
       for (const width of [1024, 1280, 1600]) {
         await walker.setViewportSize({ width, height: 800 });
-        for (const name of ["Estilo", "Páginas", "Compartir", "Fotos", "Diseño", "Listas"]) {
-          await walker.getByRole("button", { name, exact: true }).first().click();
+        /**
+         * **«Campos» entra en esta guarda el 18 de octubre de 2026** (sprint 24 día 3), y hasta
+         * entonces era el único panel que no medía — justamente el que estaba `fixed` sobre la
+         * página. No está aquí por simetría: David reportó que «el menú desplegado tras pulsar
+         * Campos oculta parte de la sección a editar», y `coversCanvasPx` es el número que lo dice.
+         *
+         * Se abre distinto, y por eso cada panel trae su propia puerta: los seis del raíl son un
+         * botón del raíl, y «Campos» es un verbo dibujado **dentro** de la vista previa, sobre una
+         * sección elegida. Abrir el siguiente del raíl lo cierra solo, porque `showRail` limpia el
+         * cajón — así que no hace falta cerrarlo a mano entre vueltas.
+         */
+        const doors: { name: string; open: () => Promise<void> }[] = [
+          ...["Estilo", "Páginas", "Compartir", "Fotos", "Diseño", "Listas"].map((name) => ({
+            name,
+            open: async () => {
+              await walker.getByRole("button", { name, exact: true }).first().click();
+            },
+          })),
+          {
+            name: "Campos",
+            open: async () => {
+              const frame = walker.frameLocator(PREVIEW).first();
+              await frame.locator('[data-section="sec-cover"]').click();
+              await frame.getByRole("button", { name: /Campos de esta sección/ }).click();
+            },
+          },
+        ];
+        for (const { name, open } of doors) {
+          await open();
           /**
            * **Polled until the canvas stops moving, rather than waited out.**
            *
@@ -9006,6 +9045,144 @@ describe("abrir un panel no tapa la página ni la convierte en otra", () => {
        */
       const everyWidth = new Set(Object.values(widths).flat());
       expect(everyWidth.size, `los paneles no comparten ancho: ${JSON.stringify(widths)}`).toBe(1);
+    } finally {
+      await walker.context().close();
+    }
+  }, 300_000);
+
+  /**
+   * **No tapar no basta, y cuánto se mueve depende del navegador que lo dibuje** (sprint 24 día 3).
+   *
+   * David puso la condición: «al abrir "Campos" baja el zoom y, con el mismo `scrollTop`, la
+   * sección editada se desplaza en vertical **y puede salir de la vista**. Tras el reescalado, la
+   * sección elegida queda anclada.» El razonamiento es correcto: poner el panel en la fila
+   * estrecha la vista previa, y una página más estrecha se vuelve a maquetar más alta.
+   *
+   * **Cuánto se mueve, medido, y no es el mismo número en las dos máquinas:**
+   *
+   * | | macOS (Chromium local) | Linux (el CI) |
+   * |---|---|---|
+   * | al **abrir** el panel | 0 px | **174 px** |
+   * | al **cerrarlo**, a 1024 | 164 px | — |
+   *
+   * En macOS el **anclaje de desplazamiento del propio navegador** (`overflow-anchor`, que vale
+   * `auto` porque nadie lo desactiva) fija el contenido cercano al borde superior y la apertura no
+   * mueve nada; en el Linux del CI no lo hace, y se van 174 px. Es la misma clase de diferencia que
+   * el ADR 0028 ya registró para las tipografías: **las métricas no son las mismas, así que la
+   * maquetación tampoco**, y una afirmación medida en una sola máquina no es una afirmación.
+   *
+   * Y el cierre mueve en las dos, porque la página se ensancha y por tanto se acorta: el
+   * desplazamiento que había deja de corresponder al mismo sitio.
+   *
+   * **Así que esta prueba asevera lo único que es verdad en todas partes y es lo que David pedía:
+   * la sección no se va de la vista**, ni al abrir ni al cerrar, a los tres anchos. Lo que **no**
+   * asevera es cuánto se mueve: una aserción de «no se mueve» pasó en local y tiró el CI, que es
+   * exactamente cómo se descubrió esto.
+   *
+   * Y no se añadió ningún mecanismo. Escribí dos veces un `ResizeObserver` que volvía a anclar la
+   * posición de lectura —la segunda con la foto tomada antes del cambio y una pasada extra en el
+   * siguiente fotograma— y **medía peor en el cierre: 187 px contra 164**. Las dos fuera. La fila
+   * del backlog lleva los números y lo que ya se ha descartado, para que el siguiente no repita el
+   * camino y para que lo que se intente se mida **en las dos plataformas**.
+   */
+  it("la sección editada no se va de la vista al abrir «Campos» ni al cerrarlo", async () => {
+    const walker = await (await browser.newContext()).newPage();
+    try {
+      await walker.setViewportSize({ width: 1280, height: 800 });
+      await intoTheCanvas(walker);
+      const frame = walker.frameLocator(PREVIEW).first();
+
+      /** Si la sección cae dentro de la ventana del propio marco, que es lo que se ve. */
+      const inView = (section: string) =>
+        walker.evaluate((id) => {
+          const doc = document.querySelector<HTMLIFrameElement>(
+            "iframe:not([data-buffered])",
+          )?.contentDocument;
+          const win = doc?.defaultView;
+          const el = doc?.querySelector(`[data-section="${id}"]`);
+          if (!doc || !win || !el) return null;
+          const box = el.getBoundingClientRect();
+          return {
+            visible: box.bottom > 0 && box.top < win.innerHeight,
+            top: Math.round(box.top),
+            bottom: Math.round(box.bottom),
+            viewport: win.innerHeight,
+          };
+        }, section);
+
+      /**
+       * **Esperar a que el lienzo deje de moverse antes de desplazar, no después.**
+       *
+       * Cambiar el tamaño de la ventana vuelve a medir la tarjeta y dispara el mismo anclaje que
+       * esta prueba está comprobando, que es asíncrono. La primera versión desplazaba justo
+       * después de redimensionar y el anclaje aterrizaba encima, devolviendo la vista a la
+       * posición anterior: a 1280 la sección acabó en 735 con una ventana de 674. El desplazamiento
+       * de la prueba va cuando el ancho ya ha dejado de cambiar.
+       */
+      let lastWidth = -1;
+      const settled = async () => {
+        await expect
+          .poll(
+            async () => {
+              const now = await walker.evaluate(() =>
+                Math.round(
+                  document.querySelector('[data-testid="canvas-card"]')?.getBoundingClientRect()
+                    .width ?? -1,
+                ),
+              );
+              const stable = now === lastWidth;
+              lastWidth = now;
+              return stable;
+            },
+            { timeout: 5_000, intervals: [100] },
+          )
+          .toBe(true);
+      };
+
+      for (const width of [1024, 1280, 1600]) {
+        await walker.setViewportSize({ width, height: 800 });
+        await settled();
+        /**
+         * **Una sección con sitio por debajo, y eso es parte de la prueba.**
+         *
+         * La primera versión usaba `sec-contact`, que es la penúltima: con el panel cerrado la
+         * página es más ancha y por tanto más corta, y subir esa sección hasta donde estaba
+         * **no es alcanzable** — el documento se acaba antes. Se movía de 151 a 427 y la aserción
+         * culpaba al editor de la geometría. `sec-location` tiene dos secciones debajo, así que
+         * «no se mueve» es exigible.
+         */
+        await scrolledPreview(walker, { section: "sec-location" });
+        const before = await inView("sec-location");
+        expect(before, `@${width}: no encuentro la sección`).not.toBeNull();
+        expect(before?.visible, `@${width}: la sección no estaba a la vista antes de abrir`).toBe(
+          true,
+        );
+
+        await frame.locator('[data-section="sec-location"]').click();
+        await frame.getByRole("button", { name: /Campos de esta sección/ }).click();
+        await expect(walker.locator("aside[aria-labelledby]")).toBeVisible();
+        await settled();
+
+        const opened = await inView("sec-location");
+        expect(
+          opened?.visible,
+          `@${width}: al abrir «Campos» la sección se fue de la vista (top ${opened?.top}, alto de ventana ${opened?.viewport})`,
+        ).toBe(true);
+        // Aquí no se exige que no se mueva: en macOS no se movía y en el Linux del CI se fue
+        // 174 px, así que el número es del navegador y no del editor. Ver la nota de arriba.
+
+        await walker.getByRole("button", { name: "Cerrar los campos" }).click();
+        await expect(walker.locator("aside[aria-labelledby]")).toHaveCount(0);
+        await settled();
+
+        const closed = await inView("sec-location");
+        expect(
+          closed?.visible,
+          `@${width}: al cerrar «Campos» la sección se fue de la vista (top ${closed?.top}, alto de ventana ${closed?.viewport})`,
+        ).toBe(true);
+        // Y aquí no se exige que no se mueva: el cierre ensancha la página y la acorta, así que
+        // los 164 px medidos a 1024 son geometría y no un anclaje que falte. Fila del backlog.
+      }
     } finally {
       await walker.context().close();
     }
@@ -14567,6 +14744,41 @@ describe("nada sobresale en un móvil", () => {
         await frame.locator('[data-section="sec-cover"]').click({ position: { x: 12, y: 12 } });
         await expect(frame.locator(".rb-actions")).toHaveCount(1);
         await look("editor con una sección elegida");
+
+        /**
+         * **Y el cajón de campos, que esta caminata decía cubrir y no abría** (sprint 24 día 3).
+         *
+         * La cabecera de este `describe` promete «el cajón de campos convertido en hojas desde el
+         * borde inferior» desde el sprint 21, y el bucle de arriba solo abre los cuatro paneles del
+         * raíl: «Campos» no es un elemento del raíl, es un verbo dibujado dentro de la vista previa.
+         * Así que ni se medía su desborde ni pasaba por axe a 390 — justo el panel que acaba de
+         * mudarse a la fila.
+         */
+        /**
+         * **Y la barra de texto fuera antes de pulsar el verbo**, que es lo que el CI enseñó y esta
+         * máquina no.
+         *
+         * A 768 el clic de arriba —`position: { x: 12, y: 12 }` sobre la sección— aterriza **dentro
+         * del titular**, porque la portada reparte texto a la izquierda e imagen a la derecha; a 320
+         * y a 390 la columna es única y cae en el relleno. Con el titular enfocado se dibuja la
+         * barra flotante del texto, que se coloca sobre el grupo de verbos y se come el clic:
+         * «`rb-toolbar-grip` … subtree intercepts pointer events», cincuenta y seis reintentos.
+         *
+         * Escape la retira sin tocar la selección de la sección, que es justo lo que hace falta.
+         */
+        await frame.locator("body").press("Escape");
+        await expect(frame.locator(".rb-toolbar")).toHaveCount(0);
+        await expect(frame.locator(".rb-actions")).toHaveCount(1);
+        await expect.poll(settled, { timeout: 5_000 }).toBe(true);
+        await frame.getByRole("button", { name: /Campos de esta sección/ }).click();
+        await expect.poll(settled, { timeout: 5_000 }).toBe(true);
+        await look("editor con «Campos»");
+        if (device.width === 390) {
+          await axeSerious(walker, "el editor a 390 con la hoja de «Campos» abierta");
+        }
+        await walker.getByRole("button", { name: "Cerrar los campos" }).click();
+        await expect.poll(settled, { timeout: 5_000 }).toBe(true);
+
         const inside = await spillingInsideTheCanvas(walker);
         for (const spill of inside.found) {
           found.push(`lienzo @ ${device.width}px: ${spill.what} ${spill.text}`);

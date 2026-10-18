@@ -912,6 +912,34 @@ open survives.
   cover. David turned it down when it was put to him on 15 October; it would also have needed
   JavaScript driving a live frame, which is the same cost as the row above.
 
+- **Opening or closing a side panel moves the page under the person editing it, and how much
+  depends on the browser.** Measured 18 October 2026 (sprint 24 día 3) on the section being edited:
+
+  | | macOS Chromium | Linux, on CI |
+  |---|---|---|
+  | **opening** «Campos» | 0 px | **174 px** |
+  | **closing** it, at 1024 | 164 px | — |
+
+  The preview re-flows at the new width: narrower and taller on open, wider and shorter on close,
+  and a fixed scroll offset stops meaning the same place. On macOS the browser's own scroll
+  anchoring (`overflow-anchor`, left at `auto`) absorbs the open entirely; on CI's Linux it does
+  not. **That difference is the finding**: an assertion of «does not move» passed locally and
+  failed CI, which is how it was found, and it is the same class of platform difference ADR 0028
+  already recorded for typefaces.
+
+  **Two repairs were written and both were deleted, which is why this row exists.** A
+  `ResizeObserver` that re-anchored the reading position: once plainly, which the walk passed
+  without, and once with the snapshot taken *before* the width change — so the browser's own scroll
+  clamp could not overwrite it — plus a second pass on the next frame. **That version measured
+  worse on close: 187 px against 164.** The e2e asserts only what holds on both machines: the
+  section never leaves the view.
+
+  Whose call: nobody's yet, and it is recorded so the next person sees the numbers instead of
+  re-deriving them. If it is worth fixing, the shape that has not been tried is holding the
+  *scroll fraction* rather than the anchor across the re-flow, or keeping the panel's width out of
+  the preview's layout width altogether. **Whatever is tried has to be measured on both
+  platforms**, because one of them hides the problem.
+
 - **Two of the application's own colours clear 4.5:1 by a hair, so any opacity on them fails.**
   Measured 17 October 2026 (sprint 23 day 5) against the panel's white: `--ui-brand` `#156fe7` is
   **4.71:1** and `--ui-danger` `#dc2626` is **4.83:1**, both passing; at 0.90 opacity they are 4.03
