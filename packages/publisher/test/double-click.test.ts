@@ -200,7 +200,7 @@ function multiPageDocument(base: RetorikaDocument): RetorikaDocument {
 const corpus = loadCorpus();
 const barbershop = corpus.find((entry) => entry.name === "barbershop-cover")?.document;
 /** The one fixture whose type pair names a face that has to be shipped — `classic-display`, which asks
- * for Playfair Display. Every other fixture is on `editorial-serif` and carries no font bytes at all. */
+ * for EB Garamond. Every other fixture is on `editorial-serif` and carries no font bytes at all. */
 const classicDisplay = corpus.find((entry) => entry.name === "menu-y-paginas")?.document;
 if (!barbershop) throw new Error("fixture barbershop-cover is missing");
 if (!classicDisplay) throw new Error("fixture menu-y-paginas is missing");

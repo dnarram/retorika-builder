@@ -104,11 +104,11 @@ describe("a document selects a row; it can never name a file", () => {
     ]);
   });
 
-  it("emits both faces for a theme whose heading asks for Playfair Display", () => {
-    const doc = withFont("font.heading", "'Playfair Display', Didot, Georgia, serif");
+  it("emits both faces for a theme whose heading asks for EB Garamond", () => {
+    const doc = withFont("font.heading", "'EB Garamond', Garamond, Georgia, serif");
     expect(fontFilesFor(doc)).toEqual([
-      "playfair-display-latin-400-normal.woff2",
-      "playfair-display-latin-700-normal.woff2",
+      "eb-garamond-latin-400-normal.woff2",
+      "eb-garamond-latin-700-normal.woff2",
     ]);
   });
 
@@ -145,14 +145,14 @@ describe("a document selects a row; it can never name a file", () => {
       theme: {
         ...base.theme,
         "font.heading": "Inter, sans-serif",
-        "font.body": "'Playfair Display', serif",
+        "font.body": "'EB Garamond', serif",
       },
     };
     const bodyInter = {
       ...base,
       theme: {
         ...base.theme,
-        "font.heading": "'Playfair Display', serif",
+        "font.heading": "'EB Garamond', serif",
         "font.body": "Inter, sans-serif",
       },
     };
@@ -178,8 +178,8 @@ describe("what a theme cannot talk its way into", () => {
     "../../../etc/passwd",
     "inter",
     "INTER",
-    "Playfair",
-    "Playfair Display Bold",
+    "EB",
+    "EB Garamond Bold",
     "",
   ];
 

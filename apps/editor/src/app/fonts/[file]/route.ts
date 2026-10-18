@@ -9,7 +9,7 @@ import { SHIPPABLE_FAMILIES } from "@retorika/renderer";
  * — relative, which is right for the ZIP and right for `file://`. The canvas is an `<iframe srcDoc>`,
  * so a relative URL there resolves against *the editor's* origin, where nothing answered: eight
  * requests per render, all 404, and the page fell back to the stack. So the owner chose «Clásica y
- * seria», edited in Georgia, and downloaded Playfair Display. The one thing a preview is for is being
+ * seria», edited in Georgia, and downloaded the serif we ship. The one thing a preview is for is being
  * what you are going to get.
  *
  * Serving them here fixes it with **no change to the renderer at all**, which is why this route
@@ -74,7 +74,7 @@ export async function GET(
       "Content-Type": "font/woff2",
       "Content-Length": String(bytes.byteLength),
       // Immutable, and that is a fact about the file rather than a hope: the name carries the family,
-      // the subset, the weight and the style, and the OFL only lets Playfair Display's reserved name
+      // the subset, the weight and the style, and a face that is not byte-for-byte the package's is a face
       // travel with an *unmodified* face — so a changed face would be a changed name. Worth caching
       // hard: the canvas asks for these on every reload, and every edit is a reload.
       "Cache-Control": "public, max-age=31536000, immutable",

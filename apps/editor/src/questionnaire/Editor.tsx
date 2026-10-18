@@ -3791,7 +3791,7 @@ export function Editor({
        * width a section gives it, and two fit the way three sizes fit.
        *
        * **Named «Titular» and «Texto», by what the family is for and never by the font.** A heading
-       * face is Playfair on one type pair and Inter on another, so a button reading «Playfair» would
+       * face is EB Garamond on one type pair and Inter on another, so a button reading «EB Garamond» would
        * be wrong on two pairs out of three; issue #9 settled that vocabulary for the whole product
        * and the `Estilo` panel has followed it since sprint 4.
        */

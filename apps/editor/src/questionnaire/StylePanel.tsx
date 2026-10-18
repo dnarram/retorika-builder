@@ -37,7 +37,7 @@ import es from "../locales/es.json" with { type: "json" };
  *   with bad contrast cannot even be declared. A picker is a machine for producing exactly that.
  *   It is the same warn-or-block line the rest of the product draws, applied to colour.
  * - **The typefaces are named by character, never by font.** The mockup labels them `Inter`,
- *   `Poppins` and `Source Serif`. Issue #9: Inter and Playfair Display fall back to something else
+ *   `Poppins` and `Source Serif`. Issue #9: Inter and EB Garamond fall back to something else
  *   on a machine that lacks them, and ADR 0001 forbids downloading either — so a label saying
  *   "Inter" promises a font that may never arrive. "Moderna y neutra" is true whichever font
  *   resolves. The `Aa` specimen is rendered in the actual stack, so what it shows *is* what the

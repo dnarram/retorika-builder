@@ -16,10 +16,14 @@ import { buildSite } from "../src/site.ts";
  * 2. **Every ZIP with a face carries the OFL text of that face.**
  * 3. **The `woff2` travel exactly as `@fontsource` ships them** — no subsetting, no rewriting.
  *
- * The third is also a licence requirement rather than only tidiness, which is the part worth knowing:
- * Playfair Display is published **with Reserved Font Name "Playfair Display"**, and the OFL §3 lets
- * that name travel only with an unmodified face. Subsetting would force a rename, in the renderer's
- * table, in the theme stacks and in the editor's specimen.
+ * The third used to be explained as a licence requirement: «Playfair Display is published with
+ * Reserved Font Name "Playfair Display", and the OFL §3 lets that name travel only with an unmodified
+ * face». **That reasoning was wrong and the family is gone** (18 October 2026, ADR 0045): what we
+ * ship is the latin slice of four in woff2, which OFL 1.1 calls a Modified Version twice over, so §3
+ * applied to us whether or not we subsetted further. Condition 3 survives as what it always was —
+ * tidiness, reproducibility, and not inventing a font pipeline — and the licence question is now
+ * answered by a filter instead: **no family this product ships may reserve its name**, asserted
+ * below over every row rather than argued about one.
  */
 
 const FIXTURES_DIR = join(import.meta.dirname, "..", "..", "..", "fixtures");
@@ -116,11 +120,11 @@ describe("condition 1 — only the weights the pairs use, and only the latin sub
 
 describe("condition 2 — a face never travels without its licence", () => {
   it("puts the OFL text beside every face, under the names agreed", async () => {
-    const bundle = await bundleFor(withHeading(plain(), "'Playfair Display', Georgia, serif"));
+    const bundle = await bundleFor(withHeading(plain(), "'EB Garamond', Georgia, serif"));
     const paths = bundle.files.map((file) => file.path).sort();
-    expect(paths).toContain("fonts/OFL-PlayfairDisplay.txt");
-    expect(paths).toContain("fonts/playfair-display-latin-400-normal.woff2");
-    expect(paths).toContain("fonts/playfair-display-latin-700-normal.woff2");
+    expect(paths).toContain("fonts/OFL-EBGaramond.txt");
+    expect(paths).toContain("fonts/eb-garamond-latin-400-normal.woff2");
+    expect(paths).toContain("fonts/eb-garamond-latin-700-normal.woff2");
   });
 
   it("uses the Inter licence for Inter", async () => {
@@ -168,34 +172,43 @@ describe("condition 2 — a face never travels without its licence", () => {
     expect(text).toContain("Copyright");
   });
 
-  it("records that Playfair Display reserves its name and Inter does not", async () => {
-    /**
-     * The thing worth knowing about these two licences, and the reason condition 3 is a licence
-     * matter: the OFL §3 forbids using a Reserved Font Name for a **Modified Version**. Shipping the
-     * file unchanged is what lets the family keep the name the theme stacks, the renderer's table and
-     * the editor's specimen all spell.
-     */
-    const bytes = readFontBundle(
-      withHeading(
-        { ...plain(), theme: { ...plain().theme, "font.body": "Inter, sans-serif" } },
-        "'Playfair Display', serif",
-      ),
-    );
-    const playfair = new TextDecoder().decode(bytes.get("fonts/OFL-PlayfairDisplay.txt"));
-    const inter = new TextDecoder().decode(bytes.get("fonts/OFL-Inter.txt"));
+  /**
+   * **The filter, as a refusal over every row** (ADR 0045): no family this product ships may declare
+   * a Reserved Font Name.
+   *
+   * This replaces an assertion that recorded the opposite — «Playfair Display reserves its name and
+   * Inter does not» — written while we shipped a family that did. The reasoning beside it was that
+   * shipping `@fontsource`'s file unmodified let the reserved name travel; the licence's test is
+   * against the Original Version, and ours is one subset of four in woff2. So the question is
+   * answered by not shipping such a family at all, and this is where that becomes impossible to
+   * forget rather than a thing somebody has to remember when adding the next one.
+   *
+   * **The copyright line and not the licence body.** Every OFL's own §3 contains the phrase, so a
+   * search of the whole text says yes about every font in existence — which is the mistake made
+   * first, and caught before anything was written down.
+   */
+  it("ships no family that reserves its name, over every face in the table", () => {
+    const read = createRequire(import.meta.url);
+    const packages = new Set(Object.values(FONT_SOURCES).map((source) => source.package));
+    expect(packages.size, "the table ships no families at all").toBeGreaterThan(0);
 
-    expect(playfair).toContain('with Reserved Font Name "Playfair Display"');
-    // Inter's copyright line declares none. The phrase still appears further down, because the OFL's
-    // own definitions section explains the term — so the assertion is about the copyright line.
-    const interCopyright = inter.slice(0, inter.indexOf("This Font Software is licensed"));
-    expect(interCopyright).not.toContain("Reserved Font Name");
+    for (const pkg of packages) {
+      const licence = readFileSync(
+        join(dirname(read.resolve(`${pkg}/package.json`)), "LICENSE"),
+        "utf8",
+      );
+      const copyright = licence.slice(0, licence.indexOf("This Font Software is licensed"));
+      expect(copyright, `${pkg} declares a Reserved Font Name`).not.toContain("Reserved Font Name");
+      // And it is an OFL at all, which is the other half of what lets a client redistribute it.
+      expect(licence, `${pkg} is not under the OFL`).toContain("SIL OPEN FONT LICENSE Version 1.1");
+    }
   });
 
   it("derives the licence list from the faces, so neither can be forgotten", () => {
     expect(licencesFor(["inter-latin-400-normal.woff2"])).toEqual(["fonts/OFL-Inter.txt"]);
     expect(
-      licencesFor(["inter-latin-400-normal.woff2", "playfair-display-latin-700-normal.woff2"]),
-    ).toEqual(["fonts/OFL-Inter.txt", "fonts/OFL-PlayfairDisplay.txt"]);
+      licencesFor(["inter-latin-400-normal.woff2", "eb-garamond-latin-700-normal.woff2"]),
+    ).toEqual(["fonts/OFL-EBGaramond.txt", "fonts/OFL-Inter.txt"]);
     expect(() => licencesFor(["not-a-face.woff2"])).toThrow(/no source for font file/);
   });
 });
@@ -291,62 +304,5 @@ describe("the bundle and the stylesheet agree", () => {
       "fonts/inter-latin-400-normal.woff2",
       "fonts/inter-latin-700-normal.woff2",
     ]);
-  });
-});
-
-/**
- * **What the licence question actually rests on, as facts rather than as a sentence** (sprint 24
- * día 4).
- *
- * This file used to carry the claim that shipping `@fontsource`'s file «whole» was «the cheap path
- * *and* the compliant one» for Playfair Display's Reserved Font Name. The premise was that *we* do
- * not modify the package's file, which is true; the licence's test is against the **Original
- * Version**, which is a different thing. These assertions pin the three facts the question turns on
- * so that neither the claim nor its correction can drift back into prose nobody re-reads.
- *
- * They assert nothing about what should be done — that is a backlog row and David's call.
- */
-describe("the facts the Reserved Font Name question turns on", () => {
-  const read = createRequire(import.meta.url);
-  const metadata = (pkg: string) =>
-    JSON.parse(
-      readFileSync(join(dirname(read.resolve(`${pkg}/package.json`)), "metadata.json"), "utf8"),
-    ) as {
-      subsets: string[];
-      license: { attribution: string };
-    };
-
-  it("ships one slice of a family the package splits four ways", () => {
-    const playfair = metadata("@fontsource/playfair-display");
-    // Four subsets declared, so the complete face is four files and the latin one is a part of it:
-    // «deleting… any of the components of the Original Version», in OFL 1.1's own words.
-    expect(playfair.subsets.length).toBeGreaterThan(1);
-    expect(playfair.subsets).toContain("latin");
-    for (const [name, source] of Object.entries(FONT_SOURCES)) {
-      // And the file names say which slice, which is what makes this checkable rather than argued.
-      expect(name, `${name} does not name a subset`).toContain("-latin-");
-      expect(source.file).toBe(name);
-    }
-  });
-
-  it("names the one family whose copyright line reserves its name, and the one that does not", () => {
-    // The phrase appears in every OFL's own §3, so the declaration is in the copyright line and
-    // nowhere else. Checking the licence body would say yes about every font in existence.
-    const reserves = (pkg: string) =>
-      metadata(pkg).license.attribution.includes("Reserved Font Name");
-    expect(reserves("@fontsource/playfair-display")).toBe(true);
-    expect(reserves("@fontsource/inter")).toBe(false);
-  });
-
-  it("quotes the two clauses out of the licence we ship, not out of memory", () => {
-    const licence = readFileSync(
-      join(dirname(read.resolve("@fontsource/playfair-display/package.json")), "LICENSE"),
-      "utf8",
-    );
-    // «Modified Version» covers both of the things we do to it: one subset, and woff2.
-    expect(licence).toContain("adding to, deleting");
-    expect(licence).toContain("by changing formats");
-    // And §3's escape hatch, which is one of the three exits on the table.
-    expect(licence).toContain("unless explicit written permission is granted");
   });
 });

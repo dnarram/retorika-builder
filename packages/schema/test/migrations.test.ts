@@ -1223,3 +1223,80 @@ describe("1.10.0 — the menu is curated", () => {
     expect(() => parseDocument(migrateToCurrent(back))).not.toThrow();
   });
 });
+
+describe("1.11.0 — the serif reserves no name", () => {
+  const PLAYFAIR =
+    "'Playfair Display', Didot, 'Bodoni MT', 'Big Caslon', Georgia, 'Times New Roman', serif";
+  const GARAMOND =
+    "'EB Garamond', Garamond, Baskerville, 'Big Caslon', Georgia, 'Times New Roman', serif";
+
+  /** A site made with «Clásica y seria» before this version: the stack is resolved in its bytes. */
+  function before(heading = PLAYFAIR): Record<string, unknown> {
+    return {
+      schemaVersion: "1.10.0",
+      id: "doc-classic",
+      siteName: "Taberna",
+      theme: { ...theme, "font.heading": heading },
+      collections: [],
+      pages: [
+        {
+          id: "home",
+          slug: "index",
+          title: "Taberna",
+          sections: [
+            {
+              id: "sec-cover",
+              preset: { catalogId: "cover", variantId: "image-right" },
+              source: "catalog",
+              layout: null,
+              content: [],
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  it("is registered, and it is the one the chain ends at", () => {
+    // `step` throws when nothing produces that version, which is the whole assertion.
+    expect(step("1.11.0").version).toBe("1.11.0");
+    expect(SCHEMA_VERSION).toBe("1.11.0");
+  });
+
+  it("swaps the heading stack it knows and stamps the version", () => {
+    const after = migrateToCurrent(before());
+    expect((after["theme"] as Theme)["font.heading"]).toBe(GARAMOND);
+    expect(after["schemaVersion"]).toBe("1.11.0");
+    expect(() => parseDocument(after)).not.toThrow();
+  });
+
+  /**
+   * **Every other token untouched**, which is the whole of what a value migration owes: the body
+   * face, the palette and the sizes are not this decision's business.
+   */
+  it("touches nothing else in the theme", () => {
+    const after = migrateToCurrent(before());
+    const was = before()["theme"] as Theme;
+    const now = after["theme"] as Theme;
+    for (const key of TOKEN_KEYS) {
+      if (key === "font.heading") continue;
+      expect(now[key], key).toBe(was[key]);
+    }
+  });
+
+  /**
+   * **A stack it does not know is left exactly alone.** Sixteen of the nineteen corpus fixtures say
+   * `Georgia, serif`, and a site on «Moderna y neutra» names Inter — nothing here may touch either.
+   */
+  it("leaves a document that never named Playfair Display alone", () => {
+    const other = "Georgia, serif";
+    const after = migrateToCurrent(before(other));
+    expect((after["theme"] as Theme)["font.heading"]).toBe(other);
+  });
+
+  it("goes back down to the stack 1.10.0 would have produced", () => {
+    const down = step("1.11.0").down;
+    expect(down, "1.11.0 has no `down`").toBeDefined();
+    expect(down?.(migrateToCurrent(before()))).toEqual(before());
+  });
+});
