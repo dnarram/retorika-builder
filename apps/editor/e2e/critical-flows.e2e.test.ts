@@ -16,6 +16,7 @@ import { GALLERY_SAMPLE_COUNT } from "@retorika/generator";
 import type { NodeResult } from "axe-core";
 import { afterAll, beforeAll, describe, it } from "vitest";
 import {
+  HERO_COLUMN_MAX,
   HERO_DEMO,
   HERO_PAGE_WIDTH,
   HERO_PHONE_WIDTH,
@@ -7789,6 +7790,84 @@ describe("sprint 23 día 1 — el héroe de la landing cabe y se pone al lado", 
     expect(await places(1024, 900)).toEqual({ beside: true, align: "left" });
     expect(await places(900, 1000)).toEqual({ beside: false, align: "center" });
     expect(await places(390, 844)).toEqual({ beside: false, align: "center" });
+  }, 240_000);
+
+  /**
+   * **Y a qué altura, que es la mitad que faltaba** (sprint 24 día 2).
+   *
+   * La prueba de arriba asevera `beside` y `textAlign` y **nada vertical**, así que el 17 de
+   * octubre de 2026 David reportó que «la maqueta está demasiado arriba y descompensa la landing»
+   * con toda la suite en verde. La causa era una línea: la rejilla centraba verticalmente dos
+   * columnas de alturas muy distintas —548 el héroe contra 371 el texto a 1440— y el borde
+   * superior de la maqueta quedaba **89 px por encima del titular**.
+   *
+   * Dos aserciones, y la segunda es la que él pidió por escrito:
+   *
+   * 1. **Los topes están alineados**: la maqueta no empieza por encima del titular.
+   * 2. **«De un pantallazo»**, que es una restricción de pliegue y no de alturas iguales: el fondo
+   *    de **las dos** columnas cae dentro de la ventana. Solo a partir de `studio`, porque por
+   *    debajo la landing es una columna y es más alta que la ventana a propósito.
+   *
+   * Lo que no se asevera es la igualdad de alturas. Es inalcanzable: la columna del héroe lleva
+   * 100 px de cromo que no escalan, así que igualar pediría un marco de 321 y a ese tamaño el
+   * estado de móvil mide 98 px de ancho y deja de leerse como un teléfono. El tope de 420 es ese
+   * suelo, y deja 83 px de saliente — **ninguno por encima del titular**, que es lo que se reportó.
+   */
+  it("alinea los dos topes y deja las dos columnas dentro de la ventana", async () => {
+    const balance = async (width: number, height: number) => {
+      const context = await browser.newContext({ viewport: { width, height } });
+      try {
+        const visitor = await context.newPage();
+        await visitor.goto(BASE_URL, { waitUntil: "networkidle" });
+        await expect(visitor.locator('[data-hero-state="rest"]')).toHaveCount(1, {
+          timeout: 30_000,
+        });
+        // Awaited before returning, for the reason the walk above gives.
+        const read = await visitor.evaluate(() => {
+          const grid = [...document.querySelectorAll("main > div")].find(
+            (el) => getComputedStyle(el).display === "grid",
+          );
+          const [text, hero] = [...(grid?.children ?? [])] as HTMLElement[];
+          if (!text || !hero) return null;
+          const a = text.getBoundingClientRect();
+          const b = hero.getBoundingClientRect();
+          return {
+            heroStartsAbove: Math.round(b.top) < Math.round(a.top),
+            bottom: Math.round(Math.max(a.bottom, b.bottom)),
+            viewport: window.innerHeight,
+            frame: Math.round(
+              document.querySelector("[data-hero-device]")?.getBoundingClientRect().width ?? 0,
+            ),
+          };
+        });
+        return read;
+      } finally {
+        await context.close();
+      }
+    };
+
+    for (const [width, height] of [
+      [1024, 900],
+      [1280, 720],
+      [1440, 900],
+      [1680, 1050],
+    ] as const) {
+      const read = await balance(width, height);
+      expect(read, `${width}x${height}: no encuentro las dos columnas`).not.toBeNull();
+      expect(
+        read?.heroStartsAbove,
+        `${width}x${height}: la maqueta empieza por encima del titular`,
+      ).toBe(false);
+      expect(
+        read?.bottom,
+        `${width}x${height}: el fondo de las dos columnas cae en ${read?.bottom} y la ventana mide ${read?.viewport}`,
+      ).toBeLessThanOrEqual(read?.viewport ?? 0);
+      // Y el marco no se cae por debajo del suelo de legibilidad, que es de donde sale el 420:
+      // el estado de móvil es el 30,47 % de este ancho y a 420 mide 128 px.
+      expect(read?.frame, `${width}x${height}: el marco bajó del suelo`).toBeGreaterThanOrEqual(
+        HERO_COLUMN_MAX,
+      );
+    }
   }, 240_000);
 });
 

@@ -54,6 +54,36 @@ export type HeroDevice = keyof typeof HERO_VIEWPORT;
  */
 export const HERO_WINDOW = { desktop: 1040, phone: 844 } as const;
 
+/**
+ * **How wide the hero's column is allowed to be, and the floor is the decision** (sprint 24 día 2).
+ *
+ * David reported the mock-up «demasiado arriba», and the cause was one line: the landing's grid
+ * centres its two columns vertically and the hero is much the taller of the two. Measured in
+ * Chromium at 1280, 1440 and 1680 — all three identical, because the grid is capped at 1180:
+ *
+ * | | alto | desfase del tope |
+ * |---|---|---|
+ * | columna de texto | 371 | — |
+ * | columna del héroe, al 45 % (531 de marco) | 548 | **89 px por encima del titular** |
+ *
+ * So the two columns are aligned at the top instead, and the hero's column is narrowed until the
+ * two weigh something like the same. **Equal they cannot be**: the column carries 100 pixels of
+ * chrome that do not scale — 12 of gap, a 41-pixel switch, 8 more and a two-line caption — so
+ * matching 371 would need a frame of **321**, and at 321 the phone state is 98 pixels wide and
+ * stops reading as a phone.
+ *
+ * **420 is that floor, and the phone state is why.** The phone frame is 30.47 % of this number
+ * (`HERO_FRAME_WIDTH`), so 420 keeps it at **128 pixels** — small, still a telephone. At the floor
+ * the hero's column measures 454 against the text's 371: **83 pixels of overhang, none of it above
+ * the headline**, and the page drops from 1067 to 973, so more of «Cómo funciona» is in the first
+ * screenful. David chose that over a bigger mock-up floating 89 pixels high.
+ *
+ * **The number is a Tailwind arbitrary value in `page.tsx`**, which cannot read a constant, so
+ * `test/landingHero.test.ts` reads the class out of that file and asserts it matches this — the
+ * same thing `canvasZoom.test.ts` does for the renderer's own breakpoint.
+ */
+export const HERO_COLUMN_MAX = 420;
+
 /** The browser bar above the page, in the page's own pixels, so it scales with it. */
 export const HERO_BAR = 40;
 
