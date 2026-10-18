@@ -170,6 +170,9 @@ importers:
 
   .:
     dependencies:
+      '@fontsource/eb-garamond':
+        specifier: 5.3.0
+        version: 5.3.0
       '@retorika/db':
         specifier: workspace:*
         version: link:packages/db
@@ -199,9 +202,6 @@ importers:
         specifier: 2.5.14
         version: 2.5.14
       '@fontsource/inter':
-        specifier: 5.2.8
-        version: 5.2.8
-      '@fontsource/playfair-display':
         specifier: 5.2.8
         version: 5.2.8
       '@playwright/test':
@@ -363,10 +363,10 @@ importers:
 
   packages/publisher:
     dependencies:
+      '@fontsource/eb-garamond':
+        specifier: 5.3.0
+        version: 5.3.0
       '@fontsource/inter':
-        specifier: 5.2.8
-        version: 5.2.8
-      '@fontsource/playfair-display':
         specifier: 5.2.8
         version: 5.2.8
       '@retorika/renderer':
@@ -507,11 +507,11 @@ packages:
   '@emnapi/runtime@1.11.3':
     resolution: {integrity: sha512-Xz4Tpyki7XyrpbUK1jR1AhdAdaXyhhY4lZ3neLodmhpuWfy2PAQN5B46sAiU4liOXGLkHypn/qU+jvfWSCYYLA==}
 
+  '@fontsource/eb-garamond@5.3.0':
+    resolution: {integrity: sha512-VplwHpB8FLuzl+4G5LDci1b3Z4SghiuXH8XEgaxjnOb5aue5mEt1njmDKeO6iyLeGa73LffU7PC7hzncLRx0ZA==}
+
   '@fontsource/inter@5.2.8':
     resolution: {integrity: sha512-P6r5WnJoKiNVV+zvW2xM13gNdFhAEpQ9dQJHt3naLvfg+LkF2ldgSLiF4T41lf1SQCM9QmkqPTn4TH568IRagg==}
-
-  '@fontsource/playfair-display@5.2.8':
-    resolution: {integrity: sha512-fUEhib70SszNhQVsGbUMSsWJhr7Je0rdeuZdtGpDNu0GKF1xJM8QhpI/y0pckU25GcChXm9TLOmeZupkvvZo2g==}
 
   '@formatjs/ecma402-abstract@2.3.6':
     resolution: {integrity: sha512-HJnTFeRM2kVFVr5gr5kH1XP6K0JcJtE7Lzvtr3FS/so5f1kpsqqqxy5JF+FRaO6H2qmcMfAUIox7AJteieRtVw==}
@@ -2639,9 +2639,9 @@ snapshots:
       tslib: 2.8.1
     optional: true
 
-  '@fontsource/inter@5.2.8': {}
+  '@fontsource/eb-garamond@5.3.0': {}
 
-  '@fontsource/playfair-display@5.2.8': {}
+  '@fontsource/inter@5.2.8': {}
 
   '@formatjs/ecma402-abstract@2.3.6':
     dependencies:

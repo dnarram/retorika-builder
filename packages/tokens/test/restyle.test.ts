@@ -68,7 +68,7 @@ describe("withPalette", () => {
 describe("withTypePair", () => {
   it("replaces the two font stacks and nothing else", () => {
     const next = withTypePair(start, "classic-display");
-    expect(next["font.heading"]).toMatch(/^'Playfair Display'/);
+    expect(next["font.heading"]).toMatch(/^'EB Garamond'/);
     for (const key of TOKEN_KEYS) {
       if (!key.startsWith("font.")) expect(next[key], key).toBe(start[key]);
     }
@@ -77,7 +77,7 @@ describe("withTypePair", () => {
   it("composes with a palette change, so both choices survive", () => {
     const next = withTypePair(withPalette(start, "warm-terracotta"), "classic-display");
     expect(next["color.primary"]).toBe("#9A3412");
-    expect(next["font.heading"]).toMatch(/^'Playfair Display'/);
+    expect(next["font.heading"]).toMatch(/^'EB Garamond'/);
   });
 
   it("refuses an unknown pair", () => {
@@ -112,7 +112,7 @@ describe("withScale", () => {
       "compact",
     );
     expect(next["color.primary"]).toBe("#9A3412");
-    expect(next["font.heading"]).toMatch(/^'Playfair Display'/);
+    expect(next["font.heading"]).toMatch(/^'EB Garamond'/);
     expect(next["size.heading"]).toBe("2rem");
   });
 
@@ -275,11 +275,11 @@ describe("the Spanish names", () => {
   });
 
   it("names a typeface by its character and never by a font that may not arrive", () => {
-    // Issue #9: Inter and Playfair Display fall back on machines without them, and ADR 0001
+    // Issue #9: Inter and EB Garamond fall back on machines without them, and ADR 0001
     // forbids downloading either. "Inter" as a label would be a promise the page cannot keep;
     // "Moderna y neutra" is true whichever font resolves.
     const names = TYPE_PAIRS.map((t) => es[t.nameKey as keyof typeof es]);
-    for (const forbidden of ["Inter", "Playfair", "Georgia", "Poppins", "Source Serif"]) {
+    for (const forbidden of ["Inter", "Garamond", "Georgia", "Poppins", "Source Serif"]) {
       for (const name of names) expect(name, forbidden).not.toContain(forbidden);
     }
   });

@@ -28,7 +28,7 @@ const MAX_GZIP_BYTES = 60 * 1024;
  * **Chosen from the measurement rather than invented.** Measured on 1 October 2026 across the corpus:
  * a site on `editorial-serif` comes to **1.8–2.5 KB** and carries no font at all; the one on
  * `classic-display` comes to **52.7 KB**, of which 43.9 KB is the two `woff2` and 2.0 KB the licence
- * the OFL requires beside them. Inter's pair is within a kilobyte of Playfair's, so the worst case for
+ * the OFL requires beside them. Inter's pair and EB Garamond's are within four kilobytes, so the worst case for
  * either is about the same. 80 KB is roughly 1.5× that worst case: loose enough not to fail on a
  * rounding, tight enough that a third family or an uncompressed asset cannot slip in unseen.
  *

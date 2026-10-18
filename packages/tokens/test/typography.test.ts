@@ -30,9 +30,9 @@ const body = (id: string) => {
 
 describe("familiesOf", () => {
   it("splits a stack into unquoted families, in order", () => {
-    expect(familiesOf("'Playfair Display', Didot, Georgia, serif")).toEqual([
-      "Playfair Display",
-      "Didot",
+    expect(familiesOf("'EB Garamond', Garamond, Georgia, serif")).toEqual([
+      "EB Garamond",
+      "Garamond",
       "Georgia",
       "serif",
     ]);
@@ -97,7 +97,7 @@ describe("a `generic` pair holds on a platform nobody has measured", () => {
 describe("a `named` pair keeps two different faces for two different jobs", () => {
   it("names a different family first, and a different one second", () => {
     // Second as well as first: if only the first differed, one missing face would collapse the pair,
-    // which is precisely the state `classic-display` was in — Playfair absent, both sides Georgia.
+    // which is precisely the state `classic-display` was in — its serif absent, both sides Georgia.
     for (const pair of TYPE_PAIRS.filter((p) => p.contrast === "named")) {
       const h = familiesOf(pair.fonts["font.heading"]);
       const b = familiesOf(pair.fonts["font.body"]);
@@ -107,8 +107,8 @@ describe("a `named` pair keeps two different faces for two different jobs", () =
   });
 
   it("is what classic-display is, with a display serif over a text serif", () => {
-    expect(heading("classic-display")[0]).toBe("Playfair Display");
-    expect(heading("classic-display")[1]).toBe("Didot");
+    expect(heading("classic-display")[0]).toBe("EB Garamond");
+    expect(heading("classic-display")[1]).toBe("Garamond");
     expect(body("classic-display")[0]).toBe("Charter");
     expect(body("classic-display")[1]).toBe("Iowan Old Style");
   });

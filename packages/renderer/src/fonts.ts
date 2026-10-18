@@ -56,10 +56,22 @@ export const SHIPPABLE_FAMILIES: readonly ShippableFamily[] = [
     ],
   },
   {
-    family: "Playfair Display",
+    /**
+     * **EB Garamond, and it replaced Playfair Display on 18 October 2026** (sprint 24 día 4, ADR
+     * 0045). Not a change of taste: Playfair Display is published «with Reserved Font Name "Playfair
+     * Display"», and what this product ships is the latin slice of four in woff2 — glyphs deleted
+     * and format changed, which OFL 1.1 defines as a Modified Version twice over, and §3 does not
+     * let a Modified Version carry the reserved name. The measurement and the three exits are in the
+     * ADR; David chose to replace it.
+     *
+     * EB Garamond's copyright line reserves no name, so a latin woff2 of it may travel under its own
+     * name. It also costs 48.0 KB against Playfair's 44.0, which is the whole of what the change
+     * costs a client's ZIP.
+     */
+    family: "EB Garamond",
     faces: [
-      { weight: 400, file: "playfair-display-latin-400-normal.woff2" },
-      { weight: 700, file: "playfair-display-latin-700-normal.woff2" },
+      { weight: 400, file: "eb-garamond-latin-400-normal.woff2" },
+      { weight: 700, file: "eb-garamond-latin-700-normal.woff2" },
     ],
   },
 ];

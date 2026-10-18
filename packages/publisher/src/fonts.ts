@@ -69,15 +69,15 @@ export const FONT_SOURCES: Readonly<Record<string, FontSource>> = {
     file: "inter-latin-700-normal.woff2",
     licencePath: "fonts/OFL-Inter.txt",
   },
-  "playfair-display-latin-400-normal.woff2": {
-    package: "@fontsource/playfair-display",
-    file: "playfair-display-latin-400-normal.woff2",
-    licencePath: "fonts/OFL-PlayfairDisplay.txt",
+  "eb-garamond-latin-400-normal.woff2": {
+    package: "@fontsource/eb-garamond",
+    file: "eb-garamond-latin-400-normal.woff2",
+    licencePath: "fonts/OFL-EBGaramond.txt",
   },
-  "playfair-display-latin-700-normal.woff2": {
-    package: "@fontsource/playfair-display",
-    file: "playfair-display-latin-700-normal.woff2",
-    licencePath: "fonts/OFL-PlayfairDisplay.txt",
+  "eb-garamond-latin-700-normal.woff2": {
+    package: "@fontsource/eb-garamond",
+    file: "eb-garamond-latin-700-normal.woff2",
+    licencePath: "fonts/OFL-EBGaramond.txt",
   },
 };
 

@@ -112,11 +112,18 @@ export const TYPE_PAIRS: readonly TypePair[] = [
      * body both resolved to Georgia, so «Clásica y seria» rendered as one serif at two sizes and the
      * display letterform the owner picked was simply absent.
      *
-     * The heading now names faces that stand in for Playfair's didone character where they exist, and
-     * the body names a text serif that is **not** the heading's next fallback. Chosen from what is
-     * actually installed, measured on this machine on 1 October 2026 rather than assumed — `Bodoni
-     * MT`, `Palatino Linotype`, `Book Antiqua`, `Constantia` and `Garamond` all came back absent on
-     * macOS and are kept only as Windows fallbacks:
+     * **The heading face is EB Garamond since 18 October 2026** (sprint 24 día 4, ADR 0045), where it
+     * was Playfair Display. A licence matter rather than a change of taste: Playfair Display is
+     * published «with Reserved Font Name "Playfair Display"» and what we ship is a latin slice in
+     * woff2, which OFL 1.1 calls a Modified Version twice over. EB Garamond reserves no name. Both
+     * are shipped faces, so the owner gets the letter they chose either way; what changed is which
+     * classical serif it is, and the pair's name never promised a particular one.
+     *
+     * The heading names faces of the heading's own character where they exist, and the body names a
+     * text serif that is **not** the heading's next fallback. Chosen from what is actually installed,
+     * measured on this machine on 1 October 2026 rather than assumed — `Bodoni MT`, `Palatino
+     * Linotype`, `Book Antiqua`, `Constantia` and `Garamond` all came back absent on macOS and are
+     * kept only as Windows fallbacks:
      *
      * ```
      *   present on macOS : Didot, Big Caslon, Baskerville, Hoefler Text, Palatino, Charter,
@@ -125,10 +132,14 @@ export const TYPE_PAIRS: readonly TypePair[] = [
      *                      Constantia, Cambria, Garamond
      * ```
      *
-     * So on macOS the heading lands on **Didot** and the body on **Charter** — a didone over a text
-     * serif, which is the shape of the pair the name promises. Windows is **not measured here** and is
-     * the platform most of a neighbourhood site's visitors use; `fixtures/font-check.html` is the
-     * procedure for checking it by hand, and ADR 0028 carries the result.
+     * So with the face shipped the heading lands on **EB Garamond** everywhere, and the body on
+     * **Charter** on macOS — a Garamond over a transitional text serif, which is the shape of the
+     * pair the name promises. **Without** our file the heading would fall to `Garamond` (absent on
+     * macOS) and then `Baskerville`, which that same measurement found present and which is the same
+     * family of letterform: the fallback chain degrades in character rather than collapsing onto the
+     * body's serif. Windows is **not measured here** and is the platform most of a neighbourhood
+     * site's visitors use; `fixtures/font-check.html` is the procedure for checking it by hand, and
+     * ADR 0028 carries the result.
      *
      * **This kind is `named`, so it is best-effort and says so.** Both stacks end in `serif`, so on a
      * platform that has none of the named faces the two collapse together again. That is the floor
@@ -138,7 +149,7 @@ export const TYPE_PAIRS: readonly TypePair[] = [
     contrast: "named",
     fonts: {
       "font.heading":
-        "'Playfair Display', Didot, 'Bodoni MT', 'Big Caslon', Georgia, 'Times New Roman', serif",
+        "'EB Garamond', Garamond, Baskerville, 'Big Caslon', Georgia, 'Times New Roman', serif",
       "font.body":
         "Charter, 'Iowan Old Style', Palatino, 'Palatino Linotype', Georgia, Cambria, 'Times New Roman', Times, serif",
     },

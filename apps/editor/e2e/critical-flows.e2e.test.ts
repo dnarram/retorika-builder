@@ -1233,9 +1233,9 @@ describe("día 7 — dos conversiones desde el editor, y el ZIP resultante abier
     expect([...entries].filter((entry) => !entry.startsWith("assets/muestra-")).sort()).toEqual(
       [
         "donde-estamos.html",
-        "fonts/OFL-PlayfairDisplay.txt",
-        "fonts/playfair-display-latin-400-normal.woff2",
-        "fonts/playfair-display-latin-700-normal.woff2",
+        "fonts/OFL-EBGaramond.txt",
+        "fonts/eb-garamond-latin-400-normal.woff2",
+        "fonts/eb-garamond-latin-700-normal.woff2",
         "index.html",
         "que-ponemos.html",
         "robots.txt",
@@ -3813,17 +3813,18 @@ describe("sprint 11 día 7 — el recorrido completo del sprint", () => {
       // faces this pair asks for **with the OFL text beside them**.
       expect([...entries].sort()).toEqual(
         [
-          "fonts/OFL-PlayfairDisplay.txt",
-          "fonts/playfair-display-latin-400-normal.woff2",
-          "fonts/playfair-display-latin-700-normal.woff2",
+          "fonts/OFL-EBGaramond.txt",
+          "fonts/eb-garamond-latin-400-normal.woff2",
+          "fonts/eb-garamond-latin-700-normal.woff2",
           "index.html",
           "robots.txt",
         ].sort(),
       );
 
-      const licence = readFileSync(join(dir, "fonts", "OFL-PlayfairDisplay.txt"), "utf8");
+      const licence = readFileSync(join(dir, "fonts", "OFL-EBGaramond.txt"), "utf8");
       expect(licence).toContain("SIL OPEN FONT LICENSE Version 1.1");
-      expect(licence).toContain('Reserved Font Name "Playfair Display"');
+      // EB Garamond reserves no name — which is why it is the serif this product ships (ADR 0045).
+      expect(licence).not.toContain('Reserved Font Name "EB Garamond"');
 
       const filePath = join(dir, "index.html");
       const offlinePage = await (await browser.newContext()).newPage();
@@ -3855,7 +3856,7 @@ describe("sprint 11 día 7 — el recorrido completo del sprint", () => {
         );
         expect(faces.length).toBeGreaterThan(0);
         for (const face of faces) {
-          expect(face, face).toContain("Playfair Display");
+          expect(face, face).toContain("EB Garamond");
           expect(face, face).toContain("loaded");
         }
 
@@ -4585,7 +4586,7 @@ describe("sprint 13 día 5 — el «Aa» de la barra", () => {
   it("names the two by their role, and never by the font they resolve to", async () => {
     // Issue #9's rule for the whole product — «Typefaces are named by character, never by font» —
     // and the reason it is not a matter of taste: `font.heading` is Georgia on one type pair, Inter
-    // on another and Playfair on a third, so a button reading «Georgia» would be wrong on two pairs
+    // on another and EB Garamond on a third, so a button reading «Georgia» would be wrong on two pairs
     // out of three. The `Estilo` panel has named them this way since sprint 4.
     const { studio, frame } = await onTheCover(true);
     try {
@@ -4600,7 +4601,7 @@ describe("sprint 13 día 5 — el «Aa» de la barra", () => {
       await expect(frame.locator(".rb-toolbar-select")).toHaveCount(2);
 
       const words = (await frame.locator(".rb-toolbar").innerText()).toLowerCase();
-      for (const face of ["georgia", "inter", "playfair", "system-ui", "serif"]) {
+      for (const face of ["georgia", "inter", "garamond", "system-ui", "serif"]) {
         expect(words, `the bar names a font: ${face}`).not.toContain(face);
       }
     } finally {
@@ -5597,7 +5598,7 @@ describe("sprint 13 día 7 — el recorrido completo del sprint", () => {
        * **And no per-element rule ever names a family outright**, which is what having no exact arm
        * buys at the level of the published bytes.
        *
-       * Scoped to the element rules, and the first version of this was not: `not.toMatch(/Playfair|
+       * Scoped to the element rules, and the first version of this was not: `not.toMatch(/Garamond|
        * Inter/)` over the whole page fails on a correct page, because the `@font-face` blocks name
        * the family and have to — that is how sprint 11 ships the faces at all. An assertion that
        * cannot be satisfied by working code is not a strict assertion, it is a broken one.
@@ -5619,7 +5620,7 @@ describe("sprint 13 día 7 — el recorrido completo del sprint", () => {
       expect(html).toContain("padding: var(--space-lg)");
       expect(html).toContain("border-radius: 9px");
       // The faces this pair asks for travel, with their licence — sprint 11's promise, unbroken.
-      expect(entries).toContain("fonts/OFL-PlayfairDisplay.txt");
+      expect(entries).toContain("fonts/OFL-EBGaramond.txt");
 
       const offline = await (await browser.newContext()).newPage();
       const failed: string[] = [];
@@ -5656,7 +5657,7 @@ describe("sprint 13 día 7 — el recorrido completo del sprint", () => {
  * The renderer emits `@font-face` with `url("fonts/<file>")` — relative, which is right for the ZIP
  * and right for `file://`. The canvas is an `<iframe srcDoc>`, so inside it that relative URL resolves
  * against the editor's own origin, where nothing answered: eight 404s per render and a page set in the
- * fallback stack. So an owner chose «Clásica y seria», edited in Georgia, and downloaded Playfair
+ * fallback stack. So an owner chose «Clásica y seria», edited in Georgia, and downloaded the serif
  * Display. Measured on sprint 13 day 7 while chasing the lost click, and left standing as the last
  * consequence of that root cause.
  *
@@ -5694,8 +5695,8 @@ describe("sprint 14 día 2 — la vista previa enseña la letra que envía", () 
       for (const file of [
         "inter-latin-400-normal.woff2",
         "inter-latin-700-normal.woff2",
-        "playfair-display-latin-400-normal.woff2",
-        "playfair-display-latin-700-normal.woff2",
+        "eb-garamond-latin-400-normal.woff2",
+        "eb-garamond-latin-700-normal.woff2",
       ]) {
         const response = await page.request.get(`${BASE_URL}/fonts/${file}`);
         expect(response.status(), file).toBe(200);
@@ -5754,24 +5755,24 @@ describe("sprint 14 día 2 — la vista previa enseña la letra que envía", () 
     try {
       const frame = await openedVariant(page);
 
-      // `restaurante-bar` is on `classic-display`, whose heading stack starts with Playfair Display
+      // `restaurante-bar` is on `classic-display`, whose heading stack starts with EB Garamond
       // — the one pair that genuinely lost everything when the file was missing, because both of its
       // stacks end in `serif` and collapsed onto Georgia together (ADR 0028).
       const heading = frame.locator("h1").first();
       const declared = await heading.evaluate((el) => getComputedStyle(el).fontFamily);
-      expect(declared).toContain("Playfair Display");
+      expect(declared).toContain("EB Garamond");
 
       /**
        * **The used face, which is the assertion that was impossible before this route existed.**
        * `document.fonts.check` answers whether the browser can actually set this text in that family
        * — it was `false` for every render of this editor until today, and the stylesheet above said
-       * «Playfair Display» the whole time. That gap is the whole defect.
+       * «EB Garamond» the whole time. That gap is the whole defect.
        */
       const usable = await frame.locator("body").evaluate(async () => {
         await document.fonts.ready;
         return {
-          regular: document.fonts.check('400 16px "Playfair Display"'),
-          bold: document.fonts.check('700 16px "Playfair Display"'),
+          regular: document.fonts.check('400 16px "EB Garamond"'),
+          bold: document.fonts.check('700 16px "EB Garamond"'),
           loaded: [...document.fonts].map((face) => `${face.family}:${face.weight}:${face.status}`),
         };
       });
@@ -12064,7 +12065,7 @@ describe("sprint 17 día 7 — el recorrido entero sin tocar el ratón", () => {
        * **The first version of this measured the wrong things and passed for a false reason.** It
        * read the cover's `backgroundColor` — which is `rgba(0, 0, 0, 0)`, transparent, so a palette
        * cannot move it — plus the headline's resolved `fontFamily` and `fontSize`. Locally it went
-       * green because Playfair Display finished loading between the first read and the poll, so the
+       * green because the serif finished loading between the first read and the poll, so the
        * fingerprint changed by the clock and not by the arrow. CI, slower and with the face already
        * loaded, reported «the arrow changed nothing in the rendered page», which was the truth. The
        * tokens below are declared values, not rendered ones, so a font arriving late cannot move
@@ -12716,7 +12717,7 @@ describe("sprint 18 día 7 — el recorrido como un desconocido, de la landing a
           .toBe(true);
         const face = await offline.evaluate(async () => {
           await document.fonts.ready;
-          return document.fonts.check('400 16px "Playfair Display"');
+          return document.fonts.check('400 16px "EB Garamond"');
         });
         expect(face, "the shipped face is usable from file://").toBe(true);
         await expect(offline.locator(".rb-sample")).toHaveCount(0);
@@ -12939,7 +12940,7 @@ describe("sprint 19 día 5 — editar en la ficha, la puerta y el ZIP", () => {
         await expect(offline.locator('nav a[href="./index.html"]').first()).toHaveText("Inicio");
         const face = await offline.evaluate(async () => {
           await document.fonts.ready;
-          return document.fonts.check('400 16px "Playfair Display"');
+          return document.fonts.check('400 16px "EB Garamond"');
         });
         expect(face, "the shipped face is usable from file://").toBe(true);
 
@@ -13098,7 +13099,7 @@ describe("sprint 19 día 7 — el recorrido como un desconocido, con fichas y si
         await expect(offline.locator(".rb-sample")).toHaveCount(0);
         const face = await offline.evaluate(async () => {
           await document.fonts.ready;
-          return document.fonts.check('400 16px "Playfair Display"');
+          return document.fonts.check('400 16px "EB Garamond"');
         });
         expect(face, "the shipped face is usable from file://").toBe(true);
 

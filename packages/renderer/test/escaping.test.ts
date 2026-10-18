@@ -192,7 +192,7 @@ describe("cssThemeValue — theme values inside <style>", () => {
       "Georgia, Cambria, 'Times New Roman', Times, serif",
       "system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
       "Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
-      "'Playfair Display', Georgia, 'Times New Roman', serif",
+      "'EB Garamond', Georgia, 'Times New Roman', serif",
       // scale: default
       "2.5rem",
       "1.5rem",
