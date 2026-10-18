@@ -207,7 +207,15 @@ export default function Page() {
        * everybody navigating by keyboard or listening to the page. A grid places it without
        * touching that.
        */}
-      <div className="relative grid w-full max-w-[1180px] items-center gap-12 studio:grid-cols-[minmax(0,1fr)_minmax(0,45%)] studio:gap-16">
+      {/* **Los dos topes alineados, y la columna del héroe topada en 420** (sprint 24 día 2).
+        Medido a 1280, 1440 y 1680: con `items-center` y la columna al 45 % el héroe medía 548 de
+        alto contra 371 del texto, así que su borde superior flotaba **89 px por encima del
+        titular** — lo que David reportó. `studio:items-start` lo pega al titular y el tope de 420
+        recorta el saliente de 177 a 83 sin que la maqueta deje de leerse: el estado de móvil es el
+        30,47 % de ese ancho, o sea 128 px. El porqué del 420 y los números están en
+        `HERO_COLUMN_MAX`. `items-center` se queda por debajo de `studio`, donde no hay dos
+        columnas que alinear. */}
+      <div className="relative grid w-full max-w-[1180px] items-center gap-12 studio:grid-cols-[minmax(0,1fr)_minmax(0,420px)] studio:items-start studio:gap-16">
         <div
           className="flex flex-col items-center gap-5 text-center studio:items-start studio:text-left"
           style={{ position: "relative", maxWidth: 680 }}

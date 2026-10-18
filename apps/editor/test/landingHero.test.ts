@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   HERO_BAR,
+  HERO_COLUMN_MAX,
   HERO_DEMO,
   HERO_FRAME_WIDTH,
   HERO_PAGE_WIDTH,
@@ -114,5 +115,56 @@ describe("the landing hero's one demonstration", () => {
    */
   it("reports rest only after the return trip has finished moving", () => {
     expect(HERO_DEMO.restMs).toBeGreaterThan(HERO_DEMO.toDesktopMs + ms("slow"));
+  });
+});
+
+/**
+ * **The floor the hero's column is narrowed to, and the one number it is derived from.**
+ *
+ * Sprint 24 día 2. David reported the mock-up «demasiado arriba»; the cause was `items-center` on
+ * a grid whose two columns measured 548 and 371. The columns are aligned at the top now and the
+ * hero's is capped, and the cap is a floor rather than a taste: below it the phone state stops
+ * reading as a telephone.
+ *
+ * Equal heights were asked for and are unreachable — the column carries 100 pixels of chrome that
+ * do not scale, so matching 371 needs a frame of 321 — which is why what the e2e asserts is the
+ * top edge and the fold, not the heights. The numbers are in `HERO_COLUMN_MAX`'s own comment.
+ */
+describe("the landing hero's column", () => {
+  const PAGE = readFileSync(join(import.meta.dirname, "..", "src", "app", "page.tsx"), "utf8");
+
+  /**
+   * **The cap and the top alignment, asserted as one fragment on purpose.**
+   *
+   * A Tailwind arbitrary value is a string in a `className`, so the constant and the page have to
+   * be tied by a test — the arrangement `canvasZoom.test.ts` uses to tie the canvas floor to the
+   * renderer's own breakpoint. Without it the comment would be the only thing keeping them in step.
+   *
+   * **Together, because apart one of them was satisfied by a different element.** The first version
+   * asked for `studio:items-start` anywhere in the file, and passed under sabotage: the block of
+   * sections below the two columns carries that same class for its own reasons. A guard answered by
+   * the wrong element is a guard that is not watching anything.
+   */
+  it("caps the column and aligns the tops, on the grid itself", () => {
+    expect(
+      PAGE,
+      "the landing's grid does not cap the hero's column at HERO_COLUMN_MAX and align its tops",
+    ).toContain(
+      `studio:grid-cols-[minmax(0,1fr)_minmax(0,${HERO_COLUMN_MAX}px)] studio:items-start`,
+    );
+    // And `items-center` stays for the stacked layout, where there are no two columns to align.
+    expect(PAGE).toContain("items-center");
+  });
+
+  /**
+   * **Why 420 and not less**, as arithmetic rather than as a sentence. The phone state is a share
+   * of the frame's width (`HERO_FRAME_WIDTH.phone`, 390/1280), so the floor is whatever keeps that
+   * share above the width at which a phone stops looking like one.
+   */
+  it("keeps the phone state wide enough to read as a telephone", () => {
+    const share = Number.parseFloat(HERO_FRAME_WIDTH.phone) / 100;
+    expect(Math.round(HERO_COLUMN_MAX * share)).toBeGreaterThanOrEqual(128);
+    // And the equality that was asked for would not: 321 is what matching the text column needs.
+    expect(Math.round(321 * share)).toBeLessThan(100);
   });
 });
