@@ -47,11 +47,46 @@ const MAX_GZIP_BYTES = 60 * 1024;
  * that meaning: raising it to swallow a photograph would have retired the only number here that
  * protects anything.
  *
+ * **Since sprint 24 día 5 that number is 20 and not 80**, because the faces it was sized around now
+ * answer to `MAX_FONT_GZIP_BYTES` below. The paragraphs above are the history of the 80, kept because
+ * they are why the split was made this way rather than by raising it; the number they describe is the
+ * sum of the two that replaced it.
+ *
  * **What bounds the photographs is the bank's own cap**, `MAX_IMAGE_BYTES` (200 KB per approved
  * photograph), enforced where it belongs in `packages/photobank`. This script's job is that the part
  * we author stays small and that the whole download is visible.
  */
-const MAX_BUNDLE_GZIP_BYTES = 80 * 1024;
+const MAX_BUNDLE_GZIP_BYTES = 20 * 1024;
+
+/**
+ * **The faces have their own line since sprint 24 día 5** (ADR 0046), and the split is what keeps
+ * the number above meaning something.
+ *
+ * Until the gallery, a site could ship one family and the 80 KB that `MAX_BUNDLE_GZIP_BYTES` used to
+ * hold covered both the page and that family at about 1.5× the worst case. The gallery lets a theme
+ * name a shipped face for the heading **and** for the body, so the worst case doubles. Raising one
+ * number to swallow that would have retired the only guard here that protects the part we author —
+ * our own bytes would have been 7 KB inside a budget of 120, and nothing could ever have fired it.
+ *
+ * So there are two numbers, and each is sized from its own measurement. **Measured gzipped on 18
+ * October 2026**, which is how this script weighs, not from the files on disk:
+ *
+ * - **115 KB of faces.** A bundle can carry **at most two families**, because the schema holds
+ *   exactly two font tokens and the renderer ships a face only for a token's first family — and
+ *   sprint 24 decided against a third slot. The heaviest pair the gallery can produce is **EB
+ *   Garamond and Inter: 98.7 KB**, faces and both licences. 115 leaves 16.3 KB over that, and the
+ *   heaviest single family is 50.0 KB, which is what every site on «Clásica y seria» measures today.
+ *   A family heavier than any in the table fails here, and so does a third one unless all three are
+ *   among the lightest — the structural bound is the two tokens; this is the weight bound.
+ * - **20 KB of everything else we author**, where the heaviest one-page-per-section bundle in the
+ *   corpus measures 7.1 KB of ours (57.1 total, 50.0 of it faces). That is roughly 2.8× the worst
+ *   case, tight enough that an uncompressed asset or a second stylesheet fires it, where the old 80
+ *   could not.
+ *
+ * The per-page allowance below still grows the second number and not this one: a face is counted
+ * once for the site, however many pages name it.
+ */
+const MAX_FONT_GZIP_BYTES = 115 * 1024;
 
 /**
  * What one more emitted page may add to the bundle (ADR 0040 §8), **measured on 13 October 2026**
@@ -62,9 +97,9 @@ const MAX_BUNDLE_GZIP_BYTES = 80 * 1024;
  * nothing more. Every page re-inlines the stylesheet (ADR 0001's self-contained files), which is
  * most of that figure; the fonts are counted once for the site, not per page.
  *
- * The 80 above keeps its meaning — our bytes for a one-page site — and the allowance grows by this
- * per page actually emitted, counted off the bundle's `.html` files, so a page per entry with
- * twelve entries is budgeted as thirteen pages and not as one.
+ * The 20 above keeps its meaning — our bytes **other than the faces**, for a one-page site — and the
+ * allowance grows by this per page actually emitted, counted off the bundle's `.html` files, so a
+ * page per entry with twelve entries is budgeted as thirteen pages and not as one.
  */
 const PER_PAGE_GZIP_BYTES = 4 * 1024;
 
@@ -123,15 +158,18 @@ function weigh(
       if (size > heaviest.bytes) heaviest = { path: bundled.path, bytes: size };
     }
   }
-  const ourBytes = bundleBytes - photoBytes;
+  // **Our bytes no longer include the faces**, which is the whole of the split: they answer to
+  // `MAX_FONT_GZIP_BYTES` on their own line, and this number is the part we actually write.
+  const ourBytes = bundleBytes - photoBytes - fontBytes;
   const bundleBudget = MAX_BUNDLE_GZIP_BYTES + PER_PAGE_GZIP_BYTES * Math.max(0, pages - 1);
 
   const over = heaviest.bytes > MAX_GZIP_BYTES;
   const overBundle = ourBytes > bundleBudget;
+  const overFonts = fontBytes > MAX_FONT_GZIP_BYTES;
   const withScript = scripts > 0;
-  if (over || overBundle || withScript) failed = true;
+  if (over || overBundle || overFonts || withScript) failed = true;
 
-  const status = over || overBundle || withScript ? "FAIL" : "ok";
+  const status = over || overBundle || overFonts || withScript ? "FAIL" : "ok";
   const fonts = fontBytes === 0 ? "no fonts" : `${(fontBytes / 1024).toFixed(1)} KB of fonts`;
   const photos =
     photoNames.size === 0
@@ -219,9 +257,10 @@ for (const sector of sectorsInBank().filter(hasSamplePhotos).sort()) {
 }
 
 console.log(
-  `\nBudget: ${MAX_GZIP_BYTES / 1024} KB gzipped per emitted page and ` +
-    `${MAX_BUNDLE_GZIP_BYTES / 1024} KB of our own bytes per bundle, ` +
-    `plus ${PER_PAGE_GZIP_BYTES / 1024} KB per page after the first, zero JavaScript.\n` +
+  `\nBudget: ${MAX_GZIP_BYTES / 1024} KB gzipped per emitted page, ` +
+    `${MAX_BUNDLE_GZIP_BYTES / 1024} KB of our own bytes per bundle — faces excluded — ` +
+    `plus ${PER_PAGE_GZIP_BYTES / 1024} KB per page after the first, ` +
+    `and ${MAX_FONT_GZIP_BYTES / 1024} KB of faces on their own line. Zero JavaScript.\n` +
     "Photographs are reported, not budgeted here: the bank caps each approved one at " +
     "200 KB (`MAX_IMAGE_BYTES`), and an owner's own photo is the owner's.",
 );

@@ -204,6 +204,52 @@ describe("condition 2 — a face never travels without its licence", () => {
     }
   });
 
+  /**
+   * **The four filters of ADR 0046, read from each package's own `metadata.json`** rather than from
+   * anything written here. That file declares the family name, the subsets, the weights and the
+   * licence — including its copyright line — so it is where the gallery's conditions can be checked
+   * against the thing they are conditions about.
+   *
+   * **It is also the only place a wrong family name can be caught.** The renderer's own test builds a
+   * document out of the table's name and selects the row with it, so a row misspelled in both halves
+   * looks right there — found by sabotaging one. Here the name is compared against the package.
+   */
+  it("every row satisfies the gallery's four filters, read from the package", () => {
+    const read = createRequire(import.meta.url);
+    expect(SHIPPABLE_FAMILIES.length, "the gallery ships no families at all").toBeGreaterThan(0);
+
+    for (const { family, faces } of SHIPPABLE_FAMILIES) {
+      // Found through the face the renderer would ask for, which is the same key the ZIP is written
+      // by: a row whose files have no source is a row that publishes a name and ships no bytes.
+      const pkg = FONT_SOURCES[faces[0]?.file ?? ""]?.package;
+      expect(pkg, `${family} is in the renderer's table and in no source`).toBeDefined();
+      const meta = JSON.parse(
+        readFileSync(join(dirname(read.resolve(`${pkg}/package.json`)), "metadata.json"), "utf8"),
+      );
+
+      // 1. The name the renderer emits is the family the package declares — not a near miss, and not
+      //    a name we invented. This is the assertion the renderer cannot make about itself.
+      expect(meta.family, `${pkg} calls itself ${meta.family}`).toBe(family);
+      // 2. The licence is the OFL, from the package's own declaration as well as from its text.
+      expect(meta.license?.type, `${pkg} is not declared OFL-1.1`).toBe("OFL-1.1");
+      // 3. No Reserved Font Name, on the copyright line the package carries in its attribution.
+      expect(
+        String(meta.license?.attribution ?? ""),
+        `${pkg} declares a Reserved Font Name`,
+      ).not.toContain("Reserved Font Name");
+      // 4. Latin, and real 400 and 700 — not weights the browser would have to synthesise.
+      expect(meta.subsets, `${pkg} has no latin subset`).toContain("latin");
+      for (const { weight } of faces) {
+        expect(meta.weights, `${pkg} has no real ${weight}`).toContain(weight);
+      }
+      // And the family name is one the stylesheet can actually emit: `escape.ts`'s pattern admits no
+      // apostrophe, no hyphen and no accent, which is why it is a filter and not a preference.
+      expect(family, `${family} does not match the pattern a stack may carry`).toMatch(
+        /^[A-Za-z][A-Za-z0-9]*(?: [A-Za-z0-9]+)*$/,
+      );
+    }
+  });
+
   it("derives the licence list from the faces, so neither can be forgotten", () => {
     expect(licencesFor(["inter-latin-400-normal.woff2"])).toEqual(["fonts/OFL-Inter.txt"]);
     expect(

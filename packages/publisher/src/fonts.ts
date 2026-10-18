@@ -45,7 +45,12 @@
  */
 
 export interface FontSource {
-  /** The npm package the bytes come from, pinned in the root `package.json`. */
+  /**
+   * The npm package the bytes come from, pinned exactly — never a range — in **this package's own
+   * `package.json` and in the root's**: the publisher's, because `test/fonts.test.ts` resolves these
+   * packages from here; the root's, because `scripts/generate-font-data.ts` resolves them from there.
+   * A range would let a different face in under the same licence reading, and the reading is dated.
+   */
   package: string;
   /** The file inside that package's `files/`, which is also the name used in `fonts/`. */
   file: string;
@@ -59,15 +64,25 @@ export interface FontSource {
  * publisher, and nothing in `packages/renderer` may read a file — so one guarded seam is the floor.
  */
 export const FONT_SOURCES: Readonly<Record<string, FontSource>> = {
-  "inter-latin-400-normal.woff2": {
-    package: "@fontsource/inter",
-    file: "inter-latin-400-normal.woff2",
-    licencePath: "fonts/OFL-Inter.txt",
+  "bitter-latin-400-normal.woff2": {
+    package: "@fontsource/bitter",
+    file: "bitter-latin-400-normal.woff2",
+    licencePath: "fonts/OFL-Bitter.txt",
   },
-  "inter-latin-700-normal.woff2": {
-    package: "@fontsource/inter",
-    file: "inter-latin-700-normal.woff2",
-    licencePath: "fonts/OFL-Inter.txt",
+  "bitter-latin-700-normal.woff2": {
+    package: "@fontsource/bitter",
+    file: "bitter-latin-700-normal.woff2",
+    licencePath: "fonts/OFL-Bitter.txt",
+  },
+  "dm-sans-latin-400-normal.woff2": {
+    package: "@fontsource/dm-sans",
+    file: "dm-sans-latin-400-normal.woff2",
+    licencePath: "fonts/OFL-DMSans.txt",
+  },
+  "dm-sans-latin-700-normal.woff2": {
+    package: "@fontsource/dm-sans",
+    file: "dm-sans-latin-700-normal.woff2",
+    licencePath: "fonts/OFL-DMSans.txt",
   },
   "eb-garamond-latin-400-normal.woff2": {
     package: "@fontsource/eb-garamond",
@@ -78,6 +93,56 @@ export const FONT_SOURCES: Readonly<Record<string, FontSource>> = {
     package: "@fontsource/eb-garamond",
     file: "eb-garamond-latin-700-normal.woff2",
     licencePath: "fonts/OFL-EBGaramond.txt",
+  },
+  "figtree-latin-400-normal.woff2": {
+    package: "@fontsource/figtree",
+    file: "figtree-latin-400-normal.woff2",
+    licencePath: "fonts/OFL-Figtree.txt",
+  },
+  "figtree-latin-700-normal.woff2": {
+    package: "@fontsource/figtree",
+    file: "figtree-latin-700-normal.woff2",
+    licencePath: "fonts/OFL-Figtree.txt",
+  },
+  "inter-latin-400-normal.woff2": {
+    package: "@fontsource/inter",
+    file: "inter-latin-400-normal.woff2",
+    licencePath: "fonts/OFL-Inter.txt",
+  },
+  "inter-latin-700-normal.woff2": {
+    package: "@fontsource/inter",
+    file: "inter-latin-700-normal.woff2",
+    licencePath: "fonts/OFL-Inter.txt",
+  },
+  "libre-baskerville-latin-400-normal.woff2": {
+    package: "@fontsource/libre-baskerville",
+    file: "libre-baskerville-latin-400-normal.woff2",
+    licencePath: "fonts/OFL-LibreBaskerville.txt",
+  },
+  "libre-baskerville-latin-700-normal.woff2": {
+    package: "@fontsource/libre-baskerville",
+    file: "libre-baskerville-latin-700-normal.woff2",
+    licencePath: "fonts/OFL-LibreBaskerville.txt",
+  },
+  "spectral-latin-400-normal.woff2": {
+    package: "@fontsource/spectral",
+    file: "spectral-latin-400-normal.woff2",
+    licencePath: "fonts/OFL-Spectral.txt",
+  },
+  "spectral-latin-700-normal.woff2": {
+    package: "@fontsource/spectral",
+    file: "spectral-latin-700-normal.woff2",
+    licencePath: "fonts/OFL-Spectral.txt",
+  },
+  "work-sans-latin-400-normal.woff2": {
+    package: "@fontsource/work-sans",
+    file: "work-sans-latin-400-normal.woff2",
+    licencePath: "fonts/OFL-WorkSans.txt",
+  },
+  "work-sans-latin-700-normal.woff2": {
+    package: "@fontsource/work-sans",
+    file: "work-sans-latin-700-normal.woff2",
+    licencePath: "fonts/OFL-WorkSans.txt",
   },
 };
 
