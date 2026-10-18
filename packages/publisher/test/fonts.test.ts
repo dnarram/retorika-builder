@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fontFilesFor, render, SHIPPABLE_FAMILIES } from "@retorika/renderer";
 import { flattenElements, parseDocument, type RetorikaDocument } from "@retorika/schema";
+import { GALLERY_FAMILIES, withFamily } from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
 import { readFontBundle } from "../src/fontBytes.ts";
 import { FONT_DATA_KEYS, fontDataFor } from "../src/fontData.ts";
@@ -136,6 +137,68 @@ describe("condition 2 — a face never travels without its licence", () => {
     const bundle = await bundleFor(withHeading(plain(), "Inter, sans-serif"));
     const licences = bundle.files.filter((file) => file.path.startsWith("fonts/OFL-"));
     expect(licences).toHaveLength(1);
+  });
+
+  it("carries four faces and two licences when the two halves are different families", async () => {
+    /**
+     * **The download gate of the gallery** (ADR 0046, sprint 24 día 6): an owner who sets the
+     * headings in one shipped family and the text in another gets both, whole.
+     *
+     * Built through `withFamily`, the very verb the Estilo panel calls, rather than by writing two
+     * stacks here: what is being checked is the road from a click to a ZIP, and a hand-written stack
+     * would be checking a copy of it. Two **different** families is the case that could not happen
+     * before today — until the gallery, a theme's two tokens came from one pair.
+     */
+    const theme = withFamily(
+      withFamily(plain().theme, "font.heading", "Spectral"),
+      "font.body",
+      "Figtree",
+    );
+    const bundle = await bundleFor({ ...plain(), theme });
+    const paths = bundle.files.map((file) => file.path).sort();
+
+    expect(paths.filter((path) => path.endsWith(".woff2"))).toEqual([
+      "fonts/figtree-latin-400-normal.woff2",
+      "fonts/figtree-latin-700-normal.woff2",
+      "fonts/spectral-latin-400-normal.woff2",
+      "fonts/spectral-latin-700-normal.woff2",
+    ]);
+    expect(paths.filter((path) => path.startsWith("fonts/OFL-"))).toEqual([
+      "fonts/OFL-Figtree.txt",
+      "fonts/OFL-Spectral.txt",
+    ]);
+    // And each licence is the right one: two faces with one family's text beside both would satisfy
+    // a count and not the OFL.
+    for (const [path, holder] of [
+      ["fonts/OFL-Figtree.txt", "Figtree"],
+      ["fonts/OFL-Spectral.txt", "Spectral"],
+    ] as const) {
+      const file = bundle.files.find((candidate) => candidate.path === path);
+      expect(new TextDecoder().decode(file?.contents), path).toContain(holder);
+    }
+  });
+
+  it("brings both halves whole for every pairing an owner could ask for", async () => {
+    // Not every pair of the eight — that would be 28 ZIPs — but every family in each role once,
+    // against a different one in the other, so no row can be the one that loses its licence.
+    for (const [index, { family }] of GALLERY_FAMILIES.entries()) {
+      const other = GALLERY_FAMILIES[(index + 1) % GALLERY_FAMILIES.length]?.family ?? "";
+      const theme = withFamily(
+        withFamily(plain().theme, "font.heading", family),
+        "font.body",
+        other,
+      );
+      const bundle = await bundleFor({ ...plain(), theme });
+      const paths = bundle.files.map((file) => file.path);
+      expect(
+        paths.filter((path) => path.endsWith(".woff2")),
+        family,
+      ).toHaveLength(4);
+      expect(
+        paths.filter((path) => path.startsWith("fonts/OFL-")),
+        family,
+      ).toHaveLength(2);
+    }
   });
 
   it("**fails to build a bundle with a face and no licence**", () => {

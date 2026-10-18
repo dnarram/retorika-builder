@@ -1,5 +1,5 @@
 import { type RetorikaDocument, TOKEN_KEYS } from "@retorika/schema";
-import { familiesOf, TYPE_PAIRS } from "@retorika/tokens";
+import { familiesOf, GALLERY_FAMILIES, TYPE_PAIRS } from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
 import { cssFontFamilyName, cssFontSrc, cssThemeValue } from "../src/escape.ts";
 import { fontFaceCss, fontFilesFor, SHIPPABLE_FAMILIES } from "../src/fonts.ts";
@@ -84,6 +84,43 @@ describe("the table does not drift from the stacks the tokens declare", () => {
           first,
         );
       }
+    }
+  });
+
+  it("the gallery the editor offers and the table that ships are the same eight families", () => {
+    // Two copies of eight names, in two packages that cannot import each other: the renderer may not
+    // reach `@retorika/tokens` (everything here travels to the client's site) and the gallery's
+    // stacks are the tokens' business. This is the seam, and ADR 0046's condition — the editor must
+    // offer every row — is this equality read from the editor's side.
+    expect(GALLERY_FAMILIES.map((f) => f.family).toSorted()).toEqual(
+      SHIPPABLE_FAMILIES.map((f) => f.family).toSorted(),
+    );
+  });
+
+  it("every gallery stack brings that family's faces, and only those", () => {
+    // The property that makes the gallery honest: what the owner picks is what the ZIP carries. Each
+    // stack is fed to the renderer as a document's own theme value, which is the only way a family
+    // can reach it at all.
+    for (const { family, stack } of GALLERY_FAMILIES) {
+      const row = SHIPPABLE_FAMILIES.find((candidate) => candidate.family === family);
+      expect(row, family).toBeDefined();
+      expect(fontFilesFor(withFont("font.heading", stack)), family).toEqual(
+        row?.faces.map((face) => face.file),
+      );
+      // And from the body token too, because a family can be chosen for either half.
+      expect(fontFilesFor(withFont("font.body", stack)), family).toHaveLength(2);
+    }
+  });
+
+  it("every gallery stack ends in the generic keyword its species promises", () => {
+    // What the fallbacks owe is the species: a visitor whose browser fetched no face must still get
+    // a serif where a serif was chosen. `kind` is in the data so this can be asserted rather than
+    // described.
+    for (const { family, kind, stack } of GALLERY_FAMILIES) {
+      const last = familiesOf(stack).at(-1);
+      expect(last, family).toBe(kind === "serif" ? "serif" : "sans-serif");
+      // And the family it names first is itself, which is what makes the face travel.
+      expect(familiesOf(stack)[0], family).toBe(family);
     }
   });
 

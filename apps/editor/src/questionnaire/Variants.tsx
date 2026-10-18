@@ -27,7 +27,7 @@ import {
   type RetorikaDocument,
   type Section,
 } from "@retorika/schema";
-import { withPalette, withScale, withTypePair } from "@retorika/tokens";
+import { withFamily, withPalette, withScale, withTypePair } from "@retorika/tokens";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { loadAccountDesignTools, saveAccountDesignTools } from "../account/designTools.ts";
 import {
@@ -1349,6 +1349,18 @@ export function Variants({
               type: "setTheme",
               variant: openIndex,
               theme: withTypePair(history.present.document.theme, typePairId),
+            });
+          }}
+          // One letter from the gallery (ADR 0046), and it travels the same road as the three
+          // choices around it: `setTheme` on the open document, so undo, redo and autosave come
+          // for nothing. `withFamily` writes **one** font token and leaves the other, which is
+          // what lets an owner set the headings without the product deciding the text for them.
+          onPickFamily={(key, family) => {
+            dismissToast();
+            dispatch({
+              type: "setTheme",
+              variant: openIndex,
+              theme: withFamily(history.present.document.theme, key, family),
             });
           }}
           // The third choice of the Estilo panel, and the only one the panel hides until the design
