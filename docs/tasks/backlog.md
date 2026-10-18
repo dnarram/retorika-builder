@@ -912,6 +912,43 @@ open survives.
   cover. David turned it down when it was put to him on 15 October; it would also have needed
   JavaScript driving a live frame, which is the same cost as the row above.
 
+- **Playfair Display's Reserved Font Name travels with a face we have modified, and the decision
+  between three exits is David's.** Found 18 October 2026 (sprint 24 día 4), checking a claim before
+  building on it.
+
+  **The facts, measured.** `@fontsource/playfair-display` declares four subsets, and the complete
+  400-normal face is four files — cyrillic 11.2 KB, latin 21.3, latin-ext 12.0, vietnamese 5.5; the
+  package's own `400.css` carries four `@font-face` rules with four `unicode-range`s. We ship the
+  latin slice, in woff2. OFL 1.1 defines a «Modified Version» as «any derivative made by adding to,
+  **deleting**, or substituting — in part or in whole — any of the components of the Original Version,
+  **by changing formats** or by porting the Font Software to a new environment», and §3 says «No
+  Modified Version of the Font Software may use the Reserved Font Name(s) **unless explicit written
+  permission is granted** by the corresponding Copyright Holder. This restriction only applies to the
+  primary font name as presented to the users.» The renderer presents `font-family: 'Playfair
+  Display'`. **Inter is unaffected**: its copyright line declares no reserved name.
+
+  **What `packages/publisher/src/fonts.ts` used to claim**, and it was the reason nobody looked:
+  «the file is the package's file, unmodified… Shipping it whole is the cheap path *and* the compliant
+  one.» The premise is about *our* not modifying the package's file. The licence's test is against the
+  Original Version. The comment now carries the measurement instead, and three assertions in
+  `packages/publisher/test/fonts.test.ts` pin the facts.
+
+  **The three exits, costed:**
+
+  | | cost |
+  |---|---|
+  | **Rename** the family we present | `SHIPPABLE_FAMILIES`, the theme stacks, the editor's specimen, **and every stored document whose theme names it first** — so a schema migration and the goldens move. Machines with Playfair installed stop using their own copy. |
+  | **Ask for the written permission** §3 provides for | zero bytes; an email to the authors (`github.com/clauseggers/Playfair-Display`) and a wait. The licence names this exit itself. |
+  | **Replace it** with a serif that declares no reserved name | fits the direction the gallery is going anyway; costs the `classic-display` pair its current letter. |
+
+  **And the exit that looks obvious is not one.** Shipping «the whole face» — all four subsets per
+  weight — costs **+58.9 KB** (107.4 against today's 48.5), which busts the 80 KB bundle budget on its
+  own, **and is still a format conversion**, so it does not cure §3 at all. The only unmodified
+  Original Version is the upstream TTF, which is not a web format this product uses.
+
+  Whose call: **David's**, and nothing was changed while it waits — dropping the face today would
+  break the `classic-display` pair on every site already using it, for a question not yet answered.
+
 - **Opening or closing a side panel moves the page under the person editing it, and how much
   depends on the browser.** Measured 18 October 2026 (sprint 24 día 3) on the section being edited:
 
