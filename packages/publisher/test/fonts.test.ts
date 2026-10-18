@@ -293,3 +293,60 @@ describe("the bundle and the stylesheet agree", () => {
     ]);
   });
 });
+
+/**
+ * **What the licence question actually rests on, as facts rather than as a sentence** (sprint 24
+ * día 4).
+ *
+ * This file used to carry the claim that shipping `@fontsource`'s file «whole» was «the cheap path
+ * *and* the compliant one» for Playfair Display's Reserved Font Name. The premise was that *we* do
+ * not modify the package's file, which is true; the licence's test is against the **Original
+ * Version**, which is a different thing. These assertions pin the three facts the question turns on
+ * so that neither the claim nor its correction can drift back into prose nobody re-reads.
+ *
+ * They assert nothing about what should be done — that is a backlog row and David's call.
+ */
+describe("the facts the Reserved Font Name question turns on", () => {
+  const read = createRequire(import.meta.url);
+  const metadata = (pkg: string) =>
+    JSON.parse(
+      readFileSync(join(dirname(read.resolve(`${pkg}/package.json`)), "metadata.json"), "utf8"),
+    ) as {
+      subsets: string[];
+      license: { attribution: string };
+    };
+
+  it("ships one slice of a family the package splits four ways", () => {
+    const playfair = metadata("@fontsource/playfair-display");
+    // Four subsets declared, so the complete face is four files and the latin one is a part of it:
+    // «deleting… any of the components of the Original Version», in OFL 1.1's own words.
+    expect(playfair.subsets.length).toBeGreaterThan(1);
+    expect(playfair.subsets).toContain("latin");
+    for (const [name, source] of Object.entries(FONT_SOURCES)) {
+      // And the file names say which slice, which is what makes this checkable rather than argued.
+      expect(name, `${name} does not name a subset`).toContain("-latin-");
+      expect(source.file).toBe(name);
+    }
+  });
+
+  it("names the one family whose copyright line reserves its name, and the one that does not", () => {
+    // The phrase appears in every OFL's own §3, so the declaration is in the copyright line and
+    // nowhere else. Checking the licence body would say yes about every font in existence.
+    const reserves = (pkg: string) =>
+      metadata(pkg).license.attribution.includes("Reserved Font Name");
+    expect(reserves("@fontsource/playfair-display")).toBe(true);
+    expect(reserves("@fontsource/inter")).toBe(false);
+  });
+
+  it("quotes the two clauses out of the licence we ship, not out of memory", () => {
+    const licence = readFileSync(
+      join(dirname(read.resolve("@fontsource/playfair-display/package.json")), "LICENSE"),
+      "utf8",
+    );
+    // «Modified Version» covers both of the things we do to it: one subset, and woff2.
+    expect(licence).toContain("adding to, deleting");
+    expect(licence).toContain("by changing formats");
+    // And §3's escape hatch, which is one of the three exits on the table.
+    expect(licence).toContain("unless explicit written permission is granted");
+  });
+});
