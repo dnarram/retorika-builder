@@ -816,6 +816,19 @@ describe("critical flow 2 — edición de un texto y recarga", () => {
     // of ("Qué hacemos", "Dónde estamos", "Te esperamos" are all headlines too), so the bare
     // slot selector matches four elements on a generated page, not one.
     const headline = frame.locator('[data-section="sec-cover"] [data-slot="headline"]');
+    /**
+     * **Wait for the bank's photograph before editing**, which this walk never did and now must.
+     *
+     * `waitForBankPhoto`'s own note says three call sites took this wait inline and «the remaining
+     * walks that choose «Restaurante y bar» still inline their own steps and do not wait» — filed
+     * in `docs/tasks/backlog.md`. The photograph's bytes arrive after the editor opens and replace
+     * `srcDoc`, so an edit typed across that moment is lost.
+     *
+     * It was survivable while one click did everything; **two clicks double the window** (ADR 0047),
+     * and the full suite failed here twice in a row while the five flows passed alone in eleven
+     * seconds. Waiting is what the helper is for.
+     */
+    await waitForBankPhoto(frame);
     await intoWriting(headline);
     // The field selects its own contents on focus (Editor.tsx), so typing replaces rather than
     // appends — the same behaviour a real click-to-edit session relies on.
@@ -5516,6 +5529,10 @@ describe("sprint 13 día 7 — el recorrido completo del sprint", () => {
       await walk.getByText("Ver a tamaño real →").first().click();
       const frame = walk.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
+      // The same wait flow 2 now takes, for the same reason: this sector has photographs, their
+      // bytes arrive after the editor opens and replace `srcDoc`, and an edit typed across that
+      // moment is lost. Two clicks into writing make the window twice as wide (ADR 0047).
+      await waitForBankPhoto(frame);
 
       // ---- day 3c: B and I are not drawn without a selection, which is what mockup 18 says ----
       const sub = frame.locator('[data-id="el-subheadline"]');
@@ -15307,6 +15324,226 @@ describe("sprint 24 día 7 — un texto se elige antes de escribir en él", () =
       await page.keyboard.press("Enter");
       await expect(page.getByText("Guardado en este navegador")).toBeVisible();
       await expect(frame.getByText("Cocina de mercado").first()).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+});
+
+/**
+ * **Sprint 24 día 8 — el primer arrastre del editor sobre el documento** (ADR 0048).
+ *
+ * The two drags that came before move chrome: the verbs' cluster and the text bar, neither of which
+ * writes anything into the page. This one moves an element, lands it in the section's own grid, and
+ * is one step of history.
+ *
+ * **Driven by what the page says, not by numbers written here.** The placements are read from the
+ * elements' own inline `grid-column` / `grid-row` — which is what the renderer emits — so the walk
+ * aims at a cell it has measured as free, or at one it has measured as taken, rather than at a
+ * column somebody hoped was empty. A fixture guess is how a drag test passes while snapping to the
+ * wrong cell.
+ */
+describe("sprint 24 día 8 — un elemento se arrastra a su celda", () => {
+  const VIEWPORT = { width: 1440, height: 900 };
+
+  interface Placed {
+    id: string;
+    column: number;
+    columnSpan: number;
+    row: number;
+    rowSpan: number;
+  }
+
+  /** Every placed element of a section, from the inline style the renderer wrote. */
+  function placedIn(frame: FrameLocator, sectionId: string): Promise<Placed[]> {
+    return frame.locator(`[data-section="${sectionId}"] > [data-id]`).evaluateAll((nodes) =>
+      nodes.map((node) => {
+        const el = node as HTMLElement;
+        const read = (value: string): [number, number] => {
+          const [start, span] = value.split("/");
+          return [
+            Number.parseInt(start ?? "1", 10),
+            Number.parseInt((span ?? "span 1").replace("span", "").trim(), 10),
+          ];
+        };
+        const [column, columnSpan] = read(el.style.gridColumn || "1/span 1");
+        const [row, rowSpan] = read(el.style.gridRow || "1/span 1");
+        return { id: el.dataset["id"] ?? "", column, columnSpan, row, rowSpan };
+      }),
+    );
+  }
+
+  /** One column's step in pixels — width plus gap — measured from the section itself. */
+  function columnStep(frame: FrameLocator, sectionId: string): Promise<number> {
+    return frame.locator(`[data-section="${sectionId}"]`).evaluate((node) => {
+      const section = node as HTMLElement;
+      const style = getComputedStyle(section);
+      const gap = Number.parseFloat(style.columnGap) || 0;
+      const inner =
+        section.getBoundingClientRect().width -
+        (Number.parseFloat(style.paddingLeft) || 0) -
+        (Number.parseFloat(style.paddingRight) || 0);
+      return (inner - gap * 11) / 12 + gap;
+    });
+  }
+
+  /** Drag from the middle of an element by this many pixels, with the pointer. */
+  async function dragElementBy(page: Page, target: Locator, dx: number, dy: number): Promise<void> {
+    const box = await target.boundingBox();
+    expect(box, "no hay caja que arrastrar").not.toBeNull();
+    const from = {
+      x: (box?.x ?? 0) + (box?.width ?? 0) / 2,
+      y: (box?.y ?? 0) + (box?.height ?? 0) / 2,
+    };
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    // More than three pixels on the first move, so the drag is armed; then in steps, because a
+    // single jump gives the ghost one sample and a real hand gives it many.
+    await page.mouse.move(from.x + dx, from.y + dy, { steps: 10 });
+  }
+
+  it("se arrastra a la celda más cercana, se deshace, y una celda ocupada se rechaza", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      await studioToolsOn(page);
+      const frame = page.frameLocator(PREVIEW).first();
+
+      // ---- a section the catalog draws: the drag asks instead of moving (ADR 0048 §6) ----
+      const cover = frame.locator('[data-section="sec-cover"]');
+      await cover.click();
+      const headline = cover.locator('[data-id="el-headline"]');
+      // Chosen first, because it is a text: that is the precondition ADR 0047 exists for.
+      await headline.click();
+      await expect(headline).toHaveClass(/rb-chosen/);
+      const beforeOffer = await placedIn(frame, "sec-cover");
+      await dragElementBy(page, headline, 200, 0);
+      // The offer, and nothing moved while it was being asked — «nada se mueve al empezar».
+      await expect(frame.getByText("Esta sección la coloca el catálogo")).toBeVisible();
+      await page.mouse.up();
+      expect(await placedIn(frame, "sec-cover")).toEqual(beforeOffer);
+
+      // ---- accept it, and the section becomes one with placements of its own ----
+      await replacingTheDocument(page, async () => {
+        await frame.locator(".rb-escalate-yes").click();
+      });
+      await waitForBankPhoto(frame);
+      const placed = await placedIn(frame, "sec-cover");
+      expect(placed.length, "la sección escalada no trajo colocaciones").toBeGreaterThan(1);
+
+      // ---- the drag that lands: one column to the right of an element with room beside it ----
+      const step = await columnStep(frame, "sec-cover");
+      const taken = (column: number, row: number) =>
+        placed.some(
+          (other) =>
+            column < other.column + other.columnSpan &&
+            other.column <= column &&
+            row < other.row + other.rowSpan &&
+            other.row <= row,
+        );
+      const mover = placed.find(
+        (element) =>
+          element.column + element.columnSpan <= 12 &&
+          !taken(element.column + element.columnSpan, element.row),
+      );
+      expect(mover, "ninguna colocación tiene sitio libre a su derecha").toBeDefined();
+
+      const subject = frame.locator(`[data-id="${mover?.id}"]`);
+      // **A text is chosen first and an image is not**, asked of the element rather than assumed:
+      // which element has room beside it is read from the page, so the walk cannot know in advance
+      // which kind it got. The precondition only applies where the ambiguity is (ADR 0047).
+      const isText = (await subject.getAttribute("data-rb-text")) === "1";
+      if (isText) {
+        await subject.click();
+        await expect(subject).toHaveClass(/rb-chosen/);
+      }
+      await dragElementBy(page, subject, step, 0);
+      // **The ghost, before anybody lets go** — and it is the free kind, not the refusal.
+      const ghost = frame.locator(".rb-ghost");
+      await expect(ghost).toBeVisible();
+      await expect(ghost).not.toHaveClass(/rb-ghost-no/);
+      // The stripes of rule 4 are up while the drag is in the air, with the panel shut.
+      await expect(cover).toHaveClass(/rb-grid-live/);
+      await page.mouse.up();
+
+      await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+      // **It moved one column, and the overlap with its own cells did not refuse it** — David's
+      // own case, measured in a browser rather than in a fixture.
+      const after = await placedIn(frame, "sec-cover");
+      expect(after.find((element) => element.id === mover?.id)).toEqual({
+        ...mover,
+        column: (mover?.column ?? 1) + 1,
+      });
+      // And the ghost is gone the moment the hand is.
+      await expect(frame.locator(".rb-ghost")).toHaveCount(0);
+      await expect(cover).not.toHaveClass(/rb-grid-live/);
+
+      // ---- one drag, one step of history ----
+      await page.getByRole("button", { name: "Deshacer", exact: true }).click();
+      await expect
+        .poll(
+          async () => (await placedIn(frame, "sec-cover")).find((e) => e.id === mover?.id)?.column,
+        )
+        .toBe(mover?.column);
+
+      // ---- and a cell another element holds is refused, with the ghost saying why ----
+      const others = (await placedIn(frame, "sec-cover")).filter((e) => e.id !== mover?.id);
+      const neighbour = others[0];
+      expect(neighbour, "la sección no tiene un segundo elemento que ocupar").toBeDefined();
+      const onto = frame.locator(`[data-id="${neighbour?.id}"]`);
+      const ontoBox = await onto.boundingBox();
+      const subjectBox = await subject.boundingBox();
+      const before = await placedIn(frame, "sec-cover");
+      /**
+       * **No click this time, and that is the finding rather than an omission.**
+       *
+       * A text stays chosen after a drag, so clicking it again is the *second* click — which
+       * starts writing (ADR 0047), and writing wins over dragging. The walk pressed it, got a
+       * caret, and no drag ever armed. Dragging straight from the chosen state is what a hand
+       * does anyway.
+       */
+      if (isText) await expect(subject).toHaveClass(/rb-chosen/);
+      await dragElementBy(
+        page,
+        subject,
+        (ontoBox?.x ?? 0) - (subjectBox?.x ?? 0),
+        (ontoBox?.y ?? 0) - (subjectBox?.y ?? 0),
+      );
+      await expect(frame.locator(".rb-ghost-no")).toBeVisible();
+      await expect(frame.locator(".rb-ghost")).toHaveText("Aquí ya hay otro elemento");
+      await page.mouse.up();
+      // Nothing moved, and nothing was written: a refusal is not an edit.
+      expect(await placedIn(frame, "sec-cover")).toEqual(before);
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+
+  it("no arranca sobre un texto que no está elegido, que es donde el arrastre chocaba", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      await studioToolsOn(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      const cover = frame.locator('[data-section="sec-cover"]');
+      await cover.click();
+      await replacingTheDocument(page, async () => {
+        await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
+        await frame.locator(".rb-escalate-yes").click();
+      });
+      await waitForBankPhoto(frame);
+
+      // A text nobody has chosen: the drag must not arm, because that gesture is a text selection
+      // (ADR 0047). No ghost, no stripes, and the placement is where it was.
+      const headline = cover.locator('[data-id="el-headline"]');
+      const before = await placedIn(frame, "sec-cover");
+      await dragElementBy(page, headline, 300, 0);
+      await expect(frame.locator(".rb-ghost")).toHaveCount(0);
+      await expect(cover).not.toHaveClass(/rb-grid-live/);
+      await page.mouse.up();
+      expect(await placedIn(frame, "sec-cover")).toEqual(before);
     } finally {
       await context.close();
     }
