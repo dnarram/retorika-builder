@@ -31,6 +31,7 @@ import {
   type MobilePatchEdit,
   marksAfterTrim,
   marksFor,
+  type Placement,
   type PlacementEdit,
   type PresetShape,
   type RetorikaDocument,
@@ -80,6 +81,7 @@ import {
   type DownloadGate,
   downloadGateFor,
 } from "../editor/downloadGate.ts";
+import { type Drop, dropAt, type GridMetrics, rectOf } from "../editor/dragGrid.ts";
 import {
   EditorShell,
   type RailItemId,
@@ -796,6 +798,15 @@ export function Editor({
    * new document is a different node with the same address.
    */
   const chosenText = useRef<ElementAddress | null>(null);
+  /**
+   * How the drag opens the «Diseñar a mano» offer that `wireSelection` draws (ADR 0048 §6).
+   *
+   * A ref and not a second copy of the popup: the offer, its anchoring, its keyboard and its
+   * «no» are forty lines inside `wireSelection`'s closure, and a drag that opened its own version
+   * would be a second door with its own bugs. Re-assigned on every wiring, like everything else
+   * that lives per document.
+   */
+  const openEscalateOffer = useRef<((sectionId: string, opener: HTMLElement) => void) | null>(null);
   /**
    * How far this section's floating text bar has been pushed from where it would otherwise go.
    *
@@ -2542,6 +2553,25 @@ export function Editor({
       panel.appendChild(row);
       return panel;
     }
+
+    /**
+     * The same door, for a drag that landed in a section the catalog draws (ADR 0048 §6).
+     *
+     * ADR 0025 §7 is not amended: **the escalation is offered and never done on its own.** So a
+     * drag there moves nothing at all and asks the question instead — «nada se mueve al empezar» is
+     * the offer's own promise, and a drag that silently rewrote a preset's layout would break it.
+     */
+    openEscalateOffer.current = (sectionId, opener) => {
+      const target = iframeDoc.querySelector<HTMLElement>(
+        `[data-section="${CSS.escape(sectionId)}"]`,
+      );
+      if (!target || compositionMenuOpen.current) return;
+      const offer = escalateOffer(sectionId);
+      target.appendChild(offer);
+      anchorPopup(offer, target);
+      compositionMenuOpen.current = true;
+      wirePopup(offer, opener);
+    };
 
     function select(target: HTMLElement, via: "click" | "restore" | "return" | "other" = "other") {
       record("select", {
@@ -4972,6 +5002,273 @@ export function Editor({
     startWriting(text);
   }
 
+  /**
+   * The grid of one section, measured in the browser rather than assumed (ADR 0048).
+   *
+   * **The rows are read and not computed, and that is the whole reason this function exists.**
+   * `.rb-section` is twelve `1fr` columns, so a column's width is arithmetic; its rows are
+   * **implicit and sized by their content**, so there is nothing to compute — `grid-template-rows`
+   * resolves to the used pixel heights, which is the only place that answer lives. A module that
+   * assumed uniform rows would snap to the wrong one on every section whose first row is a headline
+   * and whose second is a photograph.
+   *
+   * Everything is in the frame's own coordinates, which is also what `event.clientX` arrives in, so
+   * nothing here crosses the frame boundary and no zoom factor is involved.
+   */
+  function gridMetricsOf(section: HTMLElement): GridMetrics {
+    const view = section.ownerDocument.defaultView;
+    const box = section.getBoundingClientRect();
+    const style = view?.getComputedStyle(section) ?? null;
+    const px = (value: string | undefined): number => {
+      const parsed = Number.parseFloat(value ?? "");
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+    const padLeft = px(style?.paddingLeft);
+    const padRight = px(style?.paddingRight);
+    const padTop = px(style?.paddingTop);
+    const rows = (style?.gridTemplateRows ?? "")
+      .split(" ")
+      .map((value) => Number.parseFloat(value))
+      .filter((value) => Number.isFinite(value));
+    return {
+      left: box.left + padLeft,
+      top: box.top + padTop,
+      width: box.width - padLeft - padRight,
+      columnGap: px(style?.columnGap),
+      rowGap: px(style?.rowGap),
+      rows,
+    };
+  }
+
+  /**
+   * The ghost: where the element would land, drawn before anybody lets go — **including when the
+   * answer is no** (ADR 0048 §4, David's own requirement).
+   *
+   * Inside the section and `position: absolute`, so it rides the section's own scroll and cannot
+   * leave it; `pointer-events: none`, because a preview that can swallow the pointer mid-drag would
+   * end the drag it is previewing.
+   */
+  function drawGhost(section: HTMLElement, metrics: GridMetrics, drop: Drop) {
+    const iframeDoc = section.ownerDocument;
+    let ghost = section.querySelector<HTMLElement>(".rb-ghost");
+    if (!ghost) {
+      ghost = iframeDoc.createElement("div");
+      ghost.className = "rb-ghost";
+      ghost.setAttribute("aria-hidden", "true");
+      section.appendChild(ghost);
+    }
+    const rect = rectOf(drop.at, metrics);
+    const box = section.getBoundingClientRect();
+    ghost.style.left = `${Math.round(rect.left - box.left)}px`;
+    ghost.style.top = `${Math.round(rect.top - box.top)}px`;
+    ghost.style.width = `${Math.round(rect.width)}px`;
+    ghost.style.height = `${Math.round(rect.height)}px`;
+    ghost.classList.toggle("rb-ghost-no", drop.kind === "refuse");
+    ghost.textContent =
+      drop.kind === "refuse"
+        ? drop.why === "occupied"
+          ? es["editor.drag.occupied"]
+          : es["editor.drag.rows"]
+        : "";
+  }
+
+  /**
+   * **The first drag this editor has ever had over the document** (ADR 0048).
+   *
+   * The two drags that existed before move *chrome* — the verbs' cluster and the text bar — and
+   * write nothing into the page. This one moves an element and is a history step.
+   *
+   * **What it rests on, and why it could not have come sooner:** until yesterday every text in the
+   * canvas was permanently `contentEditable`, so a drag over one selected words and there was no
+   * gesture to spare (ADR 0047). The states are the precondition, and they are applied where the
+   * ambiguity actually is — a text must be **chosen** first, an image has no competing gesture and
+   * drags straight away.
+   *
+   * **The element does not follow the pointer; a ghost shows where it would land.** That is a
+   * decision rather than a shortcut: an element's rendered width *is* its column span's width, so
+   * one dragged under the pointer would be drawn at the size it has rather than the size it would
+   * get, and a preview that lies about the result is worse than none. The ghost is drawn at the
+   * destination's real rectangle.
+   *
+   * **Written on `pointerup` and never on `pointermove`.** One drag is one step of history, which
+   * is the product answer — and there is a technical one underneath it: every edit replaces the
+   * whole `srcDoc`, which destroys the injected chrome, the listeners of this very drag included.
+   */
+  function wireDragging(iframeDoc: Document) {
+    // A placement is a design-tools idea: the four «Colocación» arrows live behind the same switch
+    // (ADR 0025), and this is the same question asked with a pointer.
+    if (designTools !== true) return;
+
+    /**
+     * **The browser's own drag-and-drop must not appear** (ADR 0048 §2).
+     *
+     * An image and a link are what a browser drags by itself, and it would turn a gesture about
+     * position into a copy of an image or a shortcut to a URL — over a canvas where neither means
+     * anything.
+     */
+    for (const node of iframeDoc.querySelectorAll<HTMLElement>("img, a")) {
+      node.addEventListener("dragstart", (event) => event.preventDefault());
+      node.draggable = false;
+    }
+
+    /** A pointer that was dragging has not clicked, whatever the browser says next. */
+    let justDragged = false;
+    /**
+     * **Cleared by the next gesture, so a swallow cannot outlive the drag that armed it.**
+     *
+     * The flag is set at `pointerup` and the click of that same gesture follows immediately, before
+     * any new `pointerdown` — so a flag still standing here belongs to a gesture whose click never
+     * came, and leaving it would eat somebody else's. One swallowed click is the whole budget.
+     */
+    iframeDoc.addEventListener("pointerdown", () => {
+      justDragged = false;
+    });
+    iframeDoc.addEventListener(
+      "click",
+      (event) => {
+        if (!justDragged) return;
+        justDragged = false;
+        // The capture phase, so it never reaches a photograph's «Cambiar foto» or a text's own
+        // click: a drag that ended on a photo must not also open the picker.
+        event.stopPropagation();
+        event.preventDefault();
+      },
+      true,
+    );
+
+    for (const el of iframeDoc.querySelectorAll<HTMLElement>("[data-id]")) {
+      const elementId = el.dataset.id;
+      const section = el.closest<HTMLElement>("[data-section]");
+      const sectionId = section?.dataset.section;
+      if (!elementId || !section || !sectionId) continue;
+
+      let from: Point | null = null;
+      let grab: Point = { x: 0, y: 0 };
+      let moving: Placement | null = null;
+      let moved = false;
+      let outcome: Drop | null = null;
+      /**
+       * What this gesture can do: move the element, or **ask** whether the section may be designed
+       * by hand — and «ask» is decided at `pointerdown` and acted on only once the hand has actually
+       * travelled.
+       *
+       * **Opening the offer at `pointerdown` was a defect that broke editing**, found by the full
+       * suite: in a section the catalog draws — which is most of them — a plain click on a text
+       * opened the offer and the swallowed click never chose the text. So with the design tools on,
+       * no text could be written in at all. A drag asks the question; a click is still a click.
+       */
+      let gesture: "none" | "move" | "ask" = "none";
+      let asked = false;
+
+      const clear = () => {
+        from = null;
+        moving = null;
+        moved = false;
+        outcome = null;
+        gesture = "none";
+        asked = false;
+        section.classList.remove("rb-grid-live");
+        el.classList.remove("rb-moving");
+        iframeDoc.documentElement.classList.remove("rb-dragging");
+        for (const ghost of iframeDoc.querySelectorAll(".rb-ghost")) ghost.remove();
+      };
+
+      el.addEventListener("pointerdown", (event) => {
+        // Touch is the next day's: a long press, and `touch-action` on the one element rather than
+        // on the canvas, so one finger keeps scrolling the page.
+        if (event.pointerType === "touch") return;
+        // Writing wins: inside a text being written in, a drag selects words (ADR 0047).
+        if (el.isContentEditable) return;
+        // And a text has to be chosen first — the precondition día 7 exists for. An image has no
+        // competing gesture, so it needs none.
+        const chosen =
+          chosenText.current?.sectionId === sectionId &&
+          chosenText.current?.elementId === elementId;
+        if (EDITABLE_TAGS.has(el.tagName) && !chosen) return;
+
+        const layout = findSection(doc, sectionId)?.section.layout ?? null;
+        if (layout === null) {
+          // Nothing happens yet: a section the catalog draws has no placements to move, and whether
+          // this gesture is a drag is not known until the hand moves.
+          gesture = "ask";
+          from = { x: event.clientX, y: event.clientY };
+          return;
+        }
+        const found = layout.placements.find((placement) => placement.elementId === elementId);
+        // A nested element — a gallery card, a line of a list — has no placement of its own and
+        // moves with its list. The drag does not start there, which `setPlacement` would also
+        // refuse, and refusing here means nothing happens rather than a throw nobody asked for.
+        if (!found) return;
+
+        moving = found;
+        gesture = "move";
+        from = { x: event.clientX, y: event.clientY };
+        const rect = el.getBoundingClientRect();
+        // Where inside the element the hand took hold, so the ghost follows the corner the person
+        // is moving rather than jumping to put the pointer at the element's top-left.
+        grab = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+        el.setPointerCapture(event.pointerId);
+      });
+
+      el.addEventListener("pointermove", (event) => {
+        if (!from) return;
+        const now = { x: event.clientX, y: event.clientY };
+        // The same three pixels the bar's grip uses: below that a hand has not moved, it has
+        // trembled — and here it means a click, which belongs to the two states.
+        if (!isDrag(from, now) && !moved) return;
+
+        if (gesture === "ask") {
+          if (asked) return;
+          asked = true;
+          openEscalateOffer.current?.(sectionId, el);
+          /**
+           * **And the click that follows is swallowed**, which the walk found by watching the offer
+           * appear and vanish in the same breath: `wireSelection` closes any open popup on a click
+           * outside it — correctly — and a `pointerup` still produces one. So the gesture that
+           * asked the question also dismissed it. A drag is not a click, even when all it did was
+           * ask.
+           */
+          justDragged = true;
+          return;
+        }
+        if (!moving) return;
+        if (!moved) {
+          moved = true;
+          section.classList.add("rb-grid-live");
+          el.classList.add("rb-moving");
+          iframeDoc.documentElement.classList.add("rb-dragging");
+        }
+        const metrics = gridMetricsOf(section);
+        const placements = findSection(doc, sectionId)?.section.layout?.placements ?? [];
+        outcome = dropAt({
+          metrics,
+          at: { x: now.x - grab.x, y: now.y - grab.y },
+          moving,
+          placements,
+        });
+        drawGhost(section, metrics, outcome);
+      });
+
+      const release = () => {
+        if (!from) return;
+        const wasMoved = moved && gesture === "move";
+        const drop = outcome;
+        clear();
+        if (!wasMoved) return;
+        // A drag is not a click, even where the browser sends one afterwards.
+        justDragged = true;
+        // A refusal is not an edit: nothing moved, nothing is written, and the ghost has already
+        // said why while the hand was still holding it.
+        if (drop?.kind === "place") {
+          onSetPlacement(sectionId, elementId, { column: drop.at.column, row: drop.at.row });
+        }
+      };
+      el.addEventListener("pointerup", release);
+      el.addEventListener("pointercancel", release);
+      el.addEventListener("lostpointercapture", release);
+    }
+  }
+
   function wireHandmade(iframeDoc: Document) {
     // Which sections carry a bar in *this* document, so the set can be replaced rather than added
     // to: a section that has been reverted has to be able to arrive again if it is escalated twice.
@@ -5649,9 +5946,36 @@ export function Editor({
       // A pseudo-element rather than an injected node, because the toggle then costs one class and
       // needs no re-wiring — see `syncGrid`. `position: absolute` keeps it out of the grid, which is
       // the lesson the bar above had to learn the hard way. One twelfth is 8.3333%.
-      '.rb-designing::before { content: ""; position: absolute; inset: 0; z-index: 0;',
-      "  pointer-events: none; background: repeating-linear-gradient(90deg,",
+      //
+      // **`.rb-grid-live` is the same stripes while a drag is in the air** (ADR 0048). Two togglers
+      // and one rule: the panel's own class answers «where will this land» for the element whose
+      // numbers are on screen, and a drag needs the same answer for the element under the hand —
+      // including when the Diseño panel is not open at all, which is most of the time. A second
+      // class rather than borrowing the first, because `syncGrid` owns that one and runs on every
+      // render: a drag that set it would have it taken away mid-gesture.
+      '.rb-designing::before, .rb-grid-live::before { content: ""; position: absolute; inset: 0;',
+      "  z-index: 0; pointer-events: none; background: repeating-linear-gradient(90deg,",
       "    rgba(21,111,231,0.16) 0 1px, transparent 1px 8.3333%); }",
+      /*
+       * **The ghost: where the element would land, drawn before anybody lets go.**
+       *
+       * Brand blue and dashed for a destination that is free; `--ui-danger` and a word for one that
+       * is refused, because «nothing happened» is the one answer a drag must never give silently.
+       * `pointer-events: none` — a preview that can swallow the pointer would end the drag it is
+       * previewing — and `z-index: 9`, under the verbs' cluster (10) and the text bar (30) and over
+       * the stripes (0).
+       */
+      ".rb-ghost { position: absolute; z-index: 9; pointer-events: none; display: flex;",
+      "  align-items: center; justify-content: center; text-align: center;",
+      `  border: 2px dashed ${CHROME_SCALE.brand}; border-radius: 6px;`,
+      "  background: rgba(21,111,231,0.10); color: #FFFFFF;",
+      `  font: 600 12px/1.3 ${UI_FONT}; }`,
+      `.rb-ghost-no { border-color: ${CHROME_SCALE.danger}; border-style: solid;`,
+      "  background: rgba(220,38,38,0.12); color: #7F1D1D; }",
+      // The element being moved, while it is being moved: dimmed, so the ghost is what the eye
+      // follows. It keeps its place in the grid — see `wireDragging` on why it does not follow the
+      // pointer — so this is the only sign that it is the subject.
+      ".rb-moving { opacity: 0.45; }",
       // The element the panel is stepping, outlined the way mockup 16 draws it, so the numbers in
       // the panel and the thing on the page are visibly the same subject.
       ".rb-designing .rb-placing { outline: 2px solid #156FE7; outline-offset: 2px;",
@@ -5850,6 +6174,9 @@ export function Editor({
     wireEditing(iframeDoc);
     // After `wireEditing`, which is what makes an element focusable in the first place.
     wireToolbar(iframeDoc);
+    // After both: the drag asks `wireEditing`'s state whether a text is chosen, and it must not be
+    // armed on an element the editing layer has not finished wiring.
+    wireDragging(iframeDoc);
     wireHandmade(iframeDoc);
     wireReadingPosition(iframeDoc);
     // Last, and on the load rather than only on a render: a delete reloads this frame, so the render

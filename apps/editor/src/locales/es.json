@@ -402,6 +402,8 @@
   "editor.unsaved": "No guardado",
   "editor.deleteSection": "Borrar esta sección",
   "editor.duplicateSection": "Duplicar esta sección",
+  "editor.drag.occupied": "Aquí ya hay otro elemento",
+  "editor.drag.rows": "La sección no crece más hacia abajo",
   "editor.canvas.chosenHint": "Doble clic o Intro para escribir",
   "editor.canvasKeys.title": "Teclas del lienzo",
   "editor.canvasKeys.move": "\u2191 \u2193 cambiar de secci\u00f3n",
