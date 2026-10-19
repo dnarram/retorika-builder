@@ -12,7 +12,24 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 17 October 2026, **closing sprint 23 — «el héroe cabe y el menú lo decides tú».**
+Last reviewed: 19 October 2026, **closing sprint 24 — «la letra se elige, el elemento se arrastra y el
+panel no tapa».** David's five requests, all five delivered: the owner's-identity warning is gone with
+an ADR naming the LSSI-CE article whose risk now passes to the client; «Campos» sits beside the canvas
+like the other six panels and the edited section stays in view; the landing's two columns share a top
+and fit in one screen at three sizes, with a measured legibility floor and a ±24 px tolerance he fixed
+before the work began; **the letter is chosen by its real name** from a closed gallery of eight
+families whose faces travel with the site; and **any visual element is dragged without handles**, with
+a magnet to the section's own grid, a ghost that shows the result before the hand lets go, one history
+step per drag, the arrows as its keyboard equal and an announcement that lives outside the canvas
+because every arrow replaces it.
+
+Five ADRs came out of it (0045–0049) and all five are `proposed`. Two things were found by measuring
+rather than by supposing, and both changed what shipped: **Playfair Display's reserved name was
+travelling with a face we had modified** — the latin slice in woff2 is a Modified Version twice over —
+and **a fourteen-sprint-old contrast defect** in the canvas chrome, `#94A3B8` on white at 2.8:1, in
+two strings nobody had measured because the mockup's greys had been copied as text colours.
+
+The review before that: 17 October 2026, **closing sprint 23 — «el héroe cabe y el menú lo decides tú».**
 Two defects David reported and one question of judgement he asked. The landing's hero now sits beside
 the text from 1024 by grid placement, shows the sample's cover **with its button** — the window was
 800 pixels of page in both states against a cover that is 939 tall with its button ending at 891 —
@@ -46,11 +63,34 @@ front of him. The record is `docs/design/REVIEW.md`, sprint 23, and the decision
    `layout.tsx` sets `noindex` on purpose — the deployment URL is public and shows a half-built
    product with Retorika's name on it. Worth knowing before somebody «fixes» it.
 
-**What this sprint leaves open:** **two signatures**, because ADR 0043 diverges from dossier §6 and
-from ADR 0023 — and ADR 0042 from sprint 21 is still unsigned; the landing's «Empezar» link text,
-which Lighthouse's Spanish blocklist calls non-descriptive and which is a copy decision about the
-public front door; the two brand colours that clear 4.5:1 by a hair; and everything the two sprints
-before left, which has not moved.
+**What sprint 24 leaves open**, each with the number it was measured with:
+
+1. **Five signatures** — ADR 0045, 0046, 0047, 0048 and 0049, all `proposed`. **And the 0044 needs the
+   CEO's**, not David's: it amends an ADR the CEO signed, and it is the one that moves the LSSI-CE
+   article 10 risk to the client. ADR 0042 (sprint 21) and 0043 (sprint 23) are still unsigned.
+2. **A key press that arrives while the canvas is being rebuilt is lost**, so holding an arrow down
+   does not walk an element across the grid. Named in ADR 0049 §4 as the cost of ADR 0001's
+   architecture rather than hidden: the fix is a canvas that does not lose its document on every
+   edit, which is the same bigger change the undo row below has been pointing at since sprint 12.
+3. **A section element cannot be reached by Tab once focus is inside it**, which is the roving
+   `tabindex` being moved by `focusin` from the children: the moment a text or a photograph takes
+   focus, its section becomes the one stop and Tab has already gone past it. `Shift+Tab` from inside
+   reaches it. Measured on 19 October with the design tools on — `-1,-1,-1,-1,-1,0` before entering
+   and `0,-1,-1,-1,-1,-1` the moment a child had focus — after sixty presses of `keyboardTo` found
+   nothing. **It belongs to the open question below** about whether Tab should walk a section's
+   insides at all before the section is chosen, which now carries one more stop per placed element.
+4. **Asking Playfair Display's authors for the written permission OFL §3 provides for.** David
+   declined it as the *remedy* — the family was replaced instead — and did not refuse it as a request.
+   It costs no bytes and would bring the family back as one gallery row among eight.
+5. **The landing's «Empezar» link text**, which Lighthouse's Spanish blocklist calls non-descriptive
+   and which is a copy decision about the public front door; **the two brand colours that clear 4.5:1
+   by a hair**; **the 164 px the page shifts when a panel closes** (two repairs measured worse than
+   the shift); and **the 7,9 px the field moves when sectors are filtered**. None has moved.
+
+The sprint before left: **two signatures**, because ADR 0043 diverges from dossier §6 and from ADR
+0023 — and ADR 0042 from sprint 21 was already unsigned; the landing's «Empezar» link text; the two
+brand colours that clear 4.5:1 by a hair; and everything the two sprints before that left, which has
+not moved.
 
 The review before that was 16 October 2026, **closing sprint 22 — «se mueve lo justo».** The three screens
 before the editor — the landing, the five questions and the three proposals — had no transition and
@@ -1325,7 +1365,7 @@ open survives.
   controls, and the obvious candidate — the cover's subheadline — is a sentence written to be read on
   the page rather than in a search result. Whose call: the copy question is direction's; emitting the
   tags once that is settled is a day.
-- **«Tipografías propias» — letting the owner choose a typeface — is still unbuilt, and now unblocked.**
+- ~~**«Tipografías propias» — letting the owner choose a typeface — is still unbuilt, and now unblocked.**~~
   ADR 0028 put it after option A in as many words («Not «tipografías propias». Letting the owner pick a
   typeface comes after A, never before, and is its own decision»), and A shipped on 1 October 2026. So
   the reason it was refused — that offering a typeface while fonts fall back promises a letterform the
@@ -1344,6 +1384,26 @@ open survives.
   at runtime, so there is no shape a typed family could take. So the decision this row asks for is
   only «a third shipped pair?», which is ADR 0028's territory and costs bytes in every client's ZIP.
   `docs/document-rules.md` is the current authority and has said so since sprint 13's closeout.
+
+  **Closed on 19 October 2026, sprint 24 — and the answer to «a third shipped pair?» turned out to be
+  «eight shipped families, chosen by name».**
+
+  David asked for «la fuente de letra exacta para la página y/o cualquier texto» and chose, among
+  three ways of answering it, **a gallery of faces we send**
+  ([ADR 0046](../decisions/0046-the-gallery-ships-the-faces-so-the-letter-can-be-named.md)). So the
+  question this row had been holding — a third pair, or a free field — is answered by neither: the
+  faces travel, so the family can be **named**, and the free field stays unexpressible exactly as ADR
+  0032 §2 left it. Eight families, four filters read from each package's own `metadata.json`, two
+  separate choices (headings and text), a specimen drawn in the very file the ZIP will carry, and the
+  weight budget split in two with both numbers measured. The row's own premise — «an owner picking
+  Bodoni gets whatever their visitor's machine has» — is still true and is still why the gallery is
+  closed.
+
+  **And the sentence this row carried about Playfair Display was wrong, which is how the day started.**
+  It said shipping `@fontsource`'s file untouched made the reserved name compliant. The licence's test
+  is against the **Original Version**, and the latin slice in woff2 is a Modified Version twice over
+  ([ADR 0045](../decisions/0045-the-serif-this-product-ships-reserves-no-name.md)): the family is gone,
+  EB Garamond took its place, and migration `0012` moved the documents that already named it.
 - ~~**A second undo pressed immediately after the first can be lost, while the canvas re-renders.**
   Found by measuring the shortcut that sprint 12 day 3 built, not by supposing: undoing replaces the
   canvas `<iframe>`'s document, and with it the `keydown` listener `wireInteractions` installs on

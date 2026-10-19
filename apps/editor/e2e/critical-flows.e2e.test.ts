@@ -14841,6 +14841,20 @@ describe("nada sobresale en un móvil", () => {
           await look(`editor con «${panel}»`);
           if (device.width === 390 && panel === "Estilo") {
             await axeSerious(walker, "el editor a 390 con la hoja de «Estilo» abierta");
+            /**
+             * **Y con la galería desplegada, que es la mitad del panel que axe no veía** (sprint 24
+             * día 10, ADR 0046).
+             *
+             * Las ocho familias están plegadas por defecto, así que una pasada sobre «Estilo»
+             * medía el panel sin dieciséis filas, cada una con su radio oculto y su especimen
+             * `aria-hidden`. En una hoja de 390 es justo donde un radio sin nombre accesible o un
+             * contraste flojo se esconderían.
+             */
+            await walker.getByRole("button", { name: /Elegir la familia exacta/ }).click();
+            await expect(walker.getByRole("group", { name: "TITULARES" })).toBeVisible();
+            await expect.poll(settled, { timeout: 5_000 }).toBe(true);
+            await look("editor con la galería de letras");
+            await axeSerious(walker, "el editor a 390 con la galería de letras abierta");
           }
         }
         await walker.getByRole("button", { name: "Secciones", exact: true }).click();
@@ -15867,4 +15881,245 @@ describe("sprint 24 día 9 — el teclado lo mueve y lo dice", () => {
       await context.close();
     }
   }, 240_000);
+});
+
+/**
+ * **Sprint 24 día 10 — el cierre: lo que este sprint añadió, también sin ratón.**
+ *
+ * The sprint's own acceptance has been «sin tocar el trackpad» since sprint 17, and this sprint added
+ * two things to that promise: a letter chosen **by its real name** (ADR 0046) and an element moved
+ * **cell by cell with the arrows** (ADR 0049). Neither is proved by the walk that came before them.
+ *
+ * **Its own marked region rather than a tail on sprint 17's walk.** That one has measured its Tab
+ * counts since the day it was written, and turning the design tools on halfway through would shift
+ * every one of them — `keyboardOnly.test.ts` now guards **every** marked region for exactly this
+ * reason, so a second journey costs a marker pair and nothing else.
+ */
+describe("sprint 24 día 10 — el cierre, sin ratón", () => {
+  /** What the keyboard is on **inside the canvas**, by shape, for a Tab that has to land in there. */
+  function inFrame(page: Page): Promise<{ id: string; classes: string; tag: string }> {
+    return page.evaluate(() => {
+      const doc = document.querySelector<HTMLIFrameElement>(
+        "iframe:not([data-buffered])",
+      )?.contentDocument;
+      const at = doc?.activeElement as HTMLElement | null | undefined;
+      return {
+        id: at?.dataset?.["id"] ?? "",
+        classes: at?.className ?? "",
+        tag: at?.tagName ?? "none",
+      };
+    });
+  }
+
+  /** Press Tab until something inside the canvas satisfies `want`. Bounded and loud, like `tabUntil`. */
+  async function tabInFrameUntil(
+    page: Page,
+    want: (at: Awaited<ReturnType<typeof inFrame>>) => boolean,
+    what: string,
+    limit = 30,
+  ): Promise<void> {
+    for (let press = 0; press < limit; press += 1) {
+      if (want(await inFrame(page))) return;
+      await page.keyboard.press("Tab");
+    }
+    throw new Error(
+      `Tab never reached ${what} in ${limit} presses; it ended on ${JSON.stringify(
+        await inFrame(page),
+      )}`,
+    );
+  }
+
+  // --- RECORRIDO SIN RATÓN: INICIO ---
+  it("elige una letra por su nombre y mueve un elemento de celda en celda, sin ratón", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    try {
+      await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+
+      // ---- the five questions, typed and arrowed ----
+      await tabUntil(page, (at) => at.id === "nombre", "el campo del nombre");
+      await page.keyboard.type("Taberna Santo Domingo");
+      await tabUntil(page, (at) => at.text.startsWith("Siguiente"), "«Siguiente» en la 1");
+      await page.keyboard.press("Enter");
+      await arrowToRadio(page, "sector", "restaurante-bar");
+      await tabUntil(page, (at) => at.text.startsWith("Siguiente"), "«Siguiente» en la 2");
+      await page.keyboard.press("Enter");
+      await tabUntil(page, (at) => at.near === "Comidas", "el servicio «Comidas»");
+      await page.keyboard.press("Space");
+      await tabUntil(page, (at) => at.text.startsWith("Siguiente"), "«Siguiente» en la 3");
+      await page.keyboard.press("Enter");
+      await tabUntil(page, (at) => at.id === "direccion", "el campo de la dirección");
+      await page.keyboard.type("Cta. de Santo Domingo, 2, Ronda");
+      await tabUntil(page, (at) => at.text.startsWith("Siguiente"), "«Siguiente» en la 4");
+      await page.keyboard.press("Enter");
+      await arrowToRadio(page, "accion", "book");
+      await tabUntil(page, (at) => at.id === "enlace", "el enlace de reservas");
+      await page.keyboard.type("https://reservas.example.com/taberna");
+      await tabUntil(page, (at) => at.text.startsWith("Crear mi web"), "«Crear mi web»");
+      await page.keyboard.press("Enter");
+
+      await tabUntil(
+        page,
+        (at) => at.label.startsWith("Ver a tamaño real"),
+        "«Ver a tamaño real» de una tarjeta",
+      );
+      await page.keyboard.press("Enter");
+      const frame = page.frameLocator(PREVIEW).first();
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+      await waitForBankPhoto(frame);
+
+      /**
+       * **La letra, elegida por su nombre y con el teclado** (ADR 0046).
+       *
+       * The gallery is folded away, so this is three presses: open «Estilo», open the group, and
+       * arrow inside the radios — which is where a radio group does the choosing for you.
+       */
+      const styleOf = () =>
+        page.evaluate(() => {
+          const doc = document.querySelector<HTMLIFrameElement>(
+            "iframe:not([data-buffered])",
+          )?.contentDocument;
+          if (!doc?.defaultView || doc.documentElement === null) return "no page";
+          return doc.defaultView
+            .getComputedStyle(doc.documentElement)
+            .getPropertyValue("--font-heading")
+            .trim();
+        });
+      await tabUntil(page, (at) => at.text === "Estilo", "el panel «Estilo» del raíl");
+      await page.keyboard.press("Enter");
+      await tabUntil(
+        page,
+        (at) => at.text.startsWith("Elegir la familia exacta"),
+        "la galería de letras",
+      );
+      await page.keyboard.press("Enter");
+      /**
+       * **The group by its name, not the family by its own**, which is radio-group semantics rather
+       * than a preference: Tab enters a group **at the checked one** and skips the rest, so aiming
+       * at «Bitter» walked straight past TITULARES — where this theme already has EB Garamond
+       * checked — and landed in TEXTO, where nothing is. The instrumented run said so in one line:
+       * `name: "_r_3_-font.body"`, `near: "AaBitter"`.
+       *
+       * So the walk asks for the heading group and lets the arrow do the choosing from wherever the
+       * group's own state put the keyboard — which is what a person gets too.
+       */
+      await tabUntil(
+        page,
+        (at) => at.tag === "INPUT" && at.type === "radio" && at.name.endsWith("-font.heading"),
+        "la galería de los titulares",
+      );
+      await page.keyboard.press("ArrowDown");
+      // Alphabetical, so the one after «EB Garamond» is «Figtree» (ADR 0046 §2).
+      await expect
+        .poll(styleOf, { message: "la flecha no cambió la letra de los titulares" })
+        .toMatch(/Figtree/);
+      await tabUntil(page, (at) => at.label === "Cerrar el estilo", "el cierre del panel");
+      await page.keyboard.press("Enter");
+
+      /**
+       * **Las herramientas de diseño, encendidas con el teclado**, porque una colocación es cosa
+       * suya (ADR 0026) y el arrastre y sus flechas viven detrás del mismo interruptor.
+       */
+      await tabUntil(page, (at) => at.label === "Herramientas de diseño", "el interruptor");
+      await page.keyboard.press("Space");
+      await tabUntil(page, (at) => at.text.startsWith("Sí, enciéndelas"), "la confirmación");
+      await page.keyboard.press("Enter");
+      await expect(page.getByRole("button", { name: "Diseño", exact: true })).toBeVisible();
+      await waitForBankPhoto(page.frameLocator(PREVIEW).first());
+
+      /**
+       * **Into the canvas, and then *backwards* onto the section — which is a finding rather than a
+       * trick.**
+       *
+       * The roving `tabindex` is moved by `focusin` **from a section's children**, so the moment Tab
+       * lands on a text or a photograph inside a section, that section becomes the one stop… and Tab
+       * has already gone past it. Going forward it is never reached again: the stop keeps moving to
+       * where the keyboard just was. `Shift+Tab` from inside is what reaches it, because by then it
+       * really is focusable.
+       *
+       * Measured here press by press, with the design tools on: `-1,-1,-1,-1,-1,0` before entering,
+       * `0,-1,-1,-1,-1,-1` the moment a child took focus. Sixty presses of `keyboardTo` found
+       * nothing, and so would six hundred. It is written in `docs/tasks/backlog.md` beside the
+       * question it belongs to — whether Tab should walk a section's insides at all before the
+       * section is chosen.
+       */
+      let presses = 0;
+      while (presses < 160 && (await focus(page)).section === null) {
+        await page.keyboard.press("Tab");
+        presses += 1;
+      }
+      expect(
+        (await focus(page)).section,
+        `Tab no llegó al interior de ninguna sección en ${presses} pulsaciones`,
+      ).not.toBeNull();
+      for (let back = 0; back < 20 && !(await focus(page)).onSection; back += 1) {
+        await page.keyboard.press("Shift+Tab");
+      }
+      expect(await focus(page), "Mayús+Tab no llegó a la sección desde dentro").toMatchObject({
+        onSection: true,
+      });
+      const sectionId = (await focus(page)).section ?? "";
+      expect(sectionId, "la sección enfocada no tiene id").not.toBe("");
+      await page.keyboard.press("Enter");
+      await expect(page.frameLocator(PREVIEW).first().locator(".rb-actions")).toHaveCount(1);
+      await tabToVerb(page, "handmade");
+      await page.keyboard.press("Enter");
+      await expect(
+        page.frameLocator(PREVIEW).first().getByText("Esta sección la coloca el catálogo"),
+      ).toBeVisible();
+      await replacingTheDocument(page, async () => {
+        await tabInFrameUntil(
+          page,
+          (at) => at.classes.includes("rb-escalate-yes"),
+          "«Diseñar a mano» de la oferta",
+        );
+        await page.keyboard.press("Enter");
+      });
+      const live = page.frameLocator(PREVIEW).first();
+      await waitForBankPhoto(live);
+
+      /**
+       * **Y un elemento movido de celda en celda, oyendo lo que dice** (ADR 0049).
+       *
+       * Tab lands **on** an element rather than inside an editable one (ADR 0047), so arriving is
+       * choosing — and the arrows are then the keyboard's half of the drag.
+       */
+      /**
+       * **The lowest element, because the cell below it is the only one guaranteed free.**
+       *
+       * An arrow onto a cell another element holds is refused, by the same rule the drag follows
+       * (ADR 0048 §4) — so a walk that moved whatever Tab happened to land on would be asserting
+       * this cover's layout rather than the keyboard. Downwards from the bottom the section grows.
+       */
+      const lowest = (await placedIn(live, sectionId)).toSorted(
+        (a, b) => b.row + b.rowSpan - (a.row + a.rowSpan),
+      )[0];
+      expect(lowest, "la sección escalada no trajo colocaciones").toBeDefined();
+      await tabInFrameUntil(
+        page,
+        (at) => at.id === lowest?.id && at.classes.includes("rb-chosen"),
+        `el elemento más bajo (${lowest?.id}) elegido`,
+      );
+      const chosen = (await inFrame(page)).id;
+      const rowOf = async () =>
+        (await placedIn(live, sectionId)).find((element) => element.id === chosen)?.row;
+      const startedAt = await rowOf();
+      expect(startedAt, "el elemento elegido no tiene colocación").toBeDefined();
+
+      await page.keyboard.press("ArrowDown");
+      await expect
+        .poll(rowOf, { message: "la flecha no movió el elemento" })
+        .toBe((startedAt ?? 1) + 1);
+      // **Lo dice en el documento del editor**, que es lo que sobrevive a la reconstrucción que
+      // cada flecha provoca — la corrección de David al aprobar el sprint.
+      await expect(page.locator('p[role="status"]')).toHaveText(/Columna \d+ de 12, fila \d+/);
+
+      // Esc devuelve el teclado a la sección, que es de donde vino.
+      await page.keyboard.press("Escape");
+      await expect(live.locator(".rb-chosen")).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+  // --- RECORRIDO SIN RATÓN: FIN ---
 });

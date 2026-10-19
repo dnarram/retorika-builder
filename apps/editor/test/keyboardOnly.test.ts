@@ -44,36 +44,73 @@ const FORBIDDEN = [
 
 const source = readFileSync(WALK, "utf8");
 
-describe("the keyboard-only walk uses no pointer", () => {
-  it("has its markers, exactly once each, so the check cannot be vacuous", () => {
+/**
+ * Every marked region, in order — **plural since sprint 24 día 10**.
+ *
+ * There was one walk and one pair of markers, and the first version of this file asserted that each
+ * marker appeared exactly once. That was the right guard for one walk and the wrong shape for two:
+ * the keyboard half of the drag (ADR 0049) is its own journey — tools on, a section designed by
+ * hand, an element moved cell by cell — and bolting it onto the end of the first walk would have
+ * shifted every Tab count that walk has measured since sprint 17.
+ *
+ * So the rule becomes «every marked region», and the vacuity guard moves with it: the markers must
+ * pair up, there must be at least two of them, and each region is checked on its own.
+ */
+function regions(): string[] {
+  const found: string[] = [];
+  let at = 0;
+  for (;;) {
+    const start = source.indexOf(START, at);
+    if (start === -1) break;
+    const end = source.indexOf(END, start);
+    expect(end, "a start marker with no end marker after it").toBeGreaterThan(start);
+    found.push(source.slice(start, end));
+    at = end + END.length;
+  }
+  return found;
+}
+
+describe("the keyboard-only walks use no pointer", () => {
+  it("has its markers in pairs, so no check below can be vacuous", () => {
     // The failure this guards against is the one that makes every assertion below pass for free: a
-    // renamed marker, a deleted walk, or a second copy of either marker.
-    expect(source.split(START).length - 1, "the start marker").toBe(1);
-    expect(source.split(END).length - 1, "the end marker").toBe(1);
-    expect(source.indexOf(START)).toBeLessThan(source.indexOf(END));
+    // renamed marker, a deleted walk, or a start with no end.
+    const starts = source.split(START).length - 1;
+    const ends = source.split(END).length - 1;
+    expect(starts, "start markers").toBe(ends);
+    expect(
+      starts,
+      "there are two keyboard-only walks since sprint 24 día 10",
+    ).toBeGreaterThanOrEqual(2);
+    expect(regions()).toHaveLength(starts);
   });
 
-  it("holds a walk of a reasonable size between them", () => {
+  it("holds walks of a reasonable size between them", () => {
     // A block that shrank to nothing would satisfy every «contains no pointer» check below while
-    // demonstrating nothing. The number is a floor and not a measurement: the walk is some two
-    // hundred lines, and anything under forty means it has been gutted rather than edited.
-    const block = source.slice(source.indexOf(START), source.indexOf(END));
-    expect(block.split("\n").length, "the walk between the markers").toBeGreaterThan(40);
+    // demonstrating nothing. The number is a floor and not a measurement: anything under forty
+    // lines means a walk has been gutted rather than edited.
+    for (const [index, block] of regions().entries()) {
+      expect(block.split("\n").length, `the walk in region ${index + 1}`).toBeGreaterThan(40);
+    }
   });
 
   it.each(FORBIDDEN)("does not use %s", (call) => {
-    const block = source.slice(source.indexOf(START), source.indexOf(END));
-    expect(
-      block.includes(call),
-      `the keyboard-only walk uses ${call}. Sprint 17's acceptance is that the whole journey runs ` +
-        "without a trackpad, and a pointer call — or a fill, a check or a selectOption, which skip " +
-        "the focus the walk exists to prove — makes that claim false while leaving it green.",
-    ).toBe(false);
+    for (const [index, block] of regions().entries()) {
+      expect(
+        block.includes(call),
+        `keyboard-only walk ${index + 1} uses ${call}. Sprint 17's acceptance is that the whole ` +
+          "journey runs without a trackpad, and a pointer call — or a fill, a check or a " +
+          "selectOption, which skip the focus the walk exists to prove — makes that claim false " +
+          "while leaving it green.",
+      ).toBe(false);
+    }
   });
 
-  it("does press keys, so it is a keyboard walk and not merely a mouseless one", () => {
-    const block = source.slice(source.indexOf(START), source.indexOf(END));
-    expect(block, "no key is pressed at all").toContain("keyboard.press(");
-    expect(block, "nothing is typed at all").toContain("keyboard.type(");
+  it("does press keys, so these are keyboard walks and not merely mouseless ones", () => {
+    for (const [index, block] of regions().entries()) {
+      expect(block, `no key is pressed at all in region ${index + 1}`).toContain("keyboard.press(");
+    }
+    // Typing belongs to the first journey, which fills the questionnaire; the second one moves an
+    // element that is already there, so it presses and never types.
+    expect(regions()[0], "nothing is typed at all").toContain("keyboard.type(");
   });
 });
