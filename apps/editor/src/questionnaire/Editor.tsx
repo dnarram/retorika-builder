@@ -105,6 +105,7 @@ import { offersMatching } from "../editor/sectionSearch.ts";
 import { keepsItsOwnUndo, shortcutFor } from "../editor/shortcuts.ts";
 import { insertedTextFor, liveFrameOf, offsetFor, textFrameOf } from "../editor/textEdits.ts";
 import { hasAnyControl, toolbarFor } from "../editor/textToolbar.ts";
+import { chosenHintText, clickAction, textKeyAction } from "../editor/twoStates.ts";
 import { isPhoneViewport } from "../editor/viewport.ts";
 import es from "../locales/es.json" with { type: "json" };
 import { CollectionsPanel } from "./CollectionsPanel.tsx";
@@ -785,6 +786,16 @@ export function Editor({
    * looking and never to the site, so it is not in the document (`INV_4`).
    */
   const toolbarOn = useRef<ElementAddress | null>(null);
+  /**
+   * Which text is **chosen** in the canvas, across the frame reloads every edit causes (ADR 0047,
+   * sprint 24 día 7).
+   *
+   * A ref for the reason `toolbarOn` above is one: nothing on the React side renders from it, and
+   * it belongs to the person looking rather than to the site. It is also what makes «Esc stops
+   * writing and leaves the text chosen» survive the rebuild a commit causes — the element in the
+   * new document is a different node with the same address.
+   */
+  const chosenText = useRef<ElementAddress | null>(null);
   /**
    * How far this section's floating text bar has been pushed from where it would otherwise go.
    *
@@ -4252,6 +4263,75 @@ export function Editor({
     }
   }
 
+  /**
+   * Draw «chosen» on one text and take it off whatever had it (ADR 0047).
+   *
+   * **The chrome is three things and each has a reason.** The solid outline says which text is the
+   * one — dashed on hover means «you could», solid means «this is it», the same pair the sections
+   * have used since sprint 17. `tabindex` arrives only while chosen, which is what keeps the canvas
+   * **one** Tab stop when nothing is and still lets Intro reach the text that is. And the hint is
+   * the element's own `aria-describedby`, not a decoration with `aria-hidden`: a screen reader
+   * arriving at a chosen text is told how to start writing in it, which is the same sentence the
+   * eye gets.
+   *
+   * `el` of `null` means nothing is chosen, and that is a real state — a press of Escape, or a
+   * click on the page around the sections.
+   */
+  function markChosen(iframeDoc: Document, el: HTMLElement | null) {
+    for (const had of iframeDoc.querySelectorAll<HTMLElement>(".rb-chosen")) {
+      if (had === el) continue;
+      had.classList.remove("rb-chosen");
+      had.removeAttribute("aria-describedby");
+    }
+    for (const hint of iframeDoc.querySelectorAll(".rb-hint")) hint.remove();
+    if (!el) {
+      chosenText.current = null;
+      return;
+    }
+    const section = el.closest<HTMLElement>("[data-section]");
+    const sectionId = section?.dataset.section;
+    const elementId = el.dataset.id;
+    if (!section || !sectionId || !elementId) return;
+    chosenText.current = { sectionId, elementId };
+    el.classList.add("rb-chosen");
+    const hint = iframeDoc.createElement("div");
+    hint.className = "rb-hint";
+    hint.id = "rb-hint";
+    hint.textContent = chosenHintText();
+    section.appendChild(hint);
+    el.setAttribute("aria-describedby", hint.id);
+  }
+
+  /**
+   * Start writing in a text: the attribute arrives, and the caret with it.
+   *
+   * **Two lines, and deliberately nothing else.** The element's own `focus` listener in
+   * `wireEditing` does the rest — it reads the marks, starts the capture and selects the whole
+   * field — so this is callable from anywhere that needs to put somebody into a text, including
+   * `focusLineAfterChange` when a new line appears. The order matters: the attribute is set first,
+   * so that listener can tell writing from being merely chosen by asking the element.
+   */
+  function startWriting(el: HTMLElement) {
+    el.contentEditable = "true";
+    el.focus({ preventScroll: true });
+  }
+
+  /**
+   * Stop writing: the attribute leaves, and **nothing else**.
+   *
+   * **It used to re-draw «chosen» here, and that made Escape-from-chosen impossible.** Releasing
+   * moves focus to the section, which blurs the text, which came back through this function and
+   * marked it chosen again — so the outline survived the very press that was meant to take it off.
+   * The walk caught it by reading focus and the class together: focus had gone to the section and
+   * the class was still on the text.
+   *
+   * Who re-draws it instead, in each case that needs it: the revert path, which has not moved
+   * anywhere; and the restoration at the end of `wireEditing`, for the rebuild a commit causes.
+   */
+  function stopWriting(el: HTMLElement) {
+    el.removeAttribute("contenteditable");
+  }
+
   function wireEditing(iframeDoc: Document) {
     for (const el of iframeDoc.querySelectorAll<HTMLElement>("[data-id]")) {
       if (!EDITABLE_TAGS.has(el.tagName)) continue;
@@ -4278,7 +4358,38 @@ export function Editor({
         link.replaceWith(...link.childNodes);
       }
 
-      el.contentEditable = "true";
+      /**
+       * **Marked as a text, not made editable** (ADR 0047, sprint 24 día 7).
+       *
+       * `el.contentEditable = "true"` stood here from sprint 2 until today, and it is what made one
+       * gesture mean two things: a click placed a caret and a drag selected words, so there was no
+       * gesture left for «move this» — and no threshold could tell the two apart, because selecting
+       * text by dragging passes any threshold a drag would use.
+       *
+       * The attribute now arrives in `startWriting` and leaves in `stopWriting`. This marker is what
+       * takes over everything the attribute was doing besides editing: the hover affordance that
+       * says a text can be changed, the walks that find an editable text, and
+       * `focusLineAfterChange`'s search for the words in a line that has just appeared.
+       */
+      el.dataset["rbText"] = "1";
+      /**
+       * **Focusable, exactly as it was before today.**
+       *
+       * A `contentEditable` element is in the tab order by default, so every text in this canvas has
+       * been a Tab stop since sprint 2 — which is how somebody with no mouse reaches one at all.
+       * Taking the attribute away would have taken that with it and left «escribir sin ratón»
+       * impossible, which is the half of this change that nothing would have gone red over.
+       *
+       * So the stop stays and what changes is what arriving means: Tab lands **on** a chosen text
+       * instead of **inside** an editable one, and Intro starts the edit. That is also safer than
+       * what it replaces — a stray keystroke on arrival used to replace a whole heading, because
+       * the field selected all of itself on focus.
+       *
+       * (Whether Tab should walk a section's insides before the section is chosen is the question
+       * `docs/tasks/backlog.md` has open. This day neither answers it nor makes it worse: the stops
+       * are the same ones, and from here they can be taken away in one line.)
+       */
+      el.tabIndex = 0;
       // Through `textFrameOf`, not a bare `.trim()`: it is the one place that also takes out the
       // non-breaking spaces `contentEditable` invents, which otherwise reach the document and the
       // owner's ZIP. `original` is compared against `next` to decide whether anything changed, so
@@ -4304,19 +4415,85 @@ export function Editor({
       let liveText = "";
       let anchored = true;
 
+      /**
+       * Everything writing needs to begin: the capture started, and the whole field selected.
+       *
+       * **A function and not the body of the `focus` listener, because entering writing does not
+       * always fire `focus`** — and that is a defect this would have shipped. One click chooses a
+       * text, which focuses it; the second click turns `contentEditable` on and calls `focus()`
+       * again on the element that already has it, and the browser fires nothing. So the capture
+       * would never have started and the field would never have been selected: typing would append
+       * to the heading instead of replacing it, and the marks would be read from a text that had
+       * already moved. The keyboard path is the same shape — Tab chooses, Intro writes — which is
+       * where the walk found it.
+       *
+       * Idempotent on purpose: the paths that *do* fire `focus` run it twice, and re-reading the
+       * marks and re-selecting the field costs nothing.
+       */
+      const beginWriting = () => {
+        liveMarks = marksFor(doc, address) ?? [];
+        liveText = liveFrameOf(el.textContent ?? "").text;
+        anchored = true;
+        // The hint's instruction has been followed, so it stops being advice and becomes clutter.
+        // `aria-describedby` goes with it: a description pointing at a removed node is a broken
+        // reference, which is worse than no description.
+        for (const hint of iframeDoc.querySelectorAll(".rb-hint")) hint.remove();
+        el.removeAttribute("aria-describedby");
+        /**
+         * **The select-all is deferred by one microtask, and that is the fix for a measured race.**
+         *
+         * A click's default action — placing the caret where the pointer is — runs **after** the
+         * listeners, inside the same task. Until today the element was already editable when the
+         * pointer went down, so the browser placed its caret on `mousedown` and this select-all,
+         * running afterwards, won. Now the attribute arrives during the `click` listener, so the
+         * caret placement is the *last* thing to happen and it collapses the selection.
+         *
+         * Measured as a heading that read `UNODOSTCUATRORESCINCO` after five edits that each
+         * should have replaced it, and as «escribir lo sustituye» quietly becoming «escribir añade
+         * donde pinchaste» — which is also the promise `rbFresh` and `focusLineAfterChange` rest on.
+         *
+         * A microtask and not a timer: the queue is drained after the current task's synchronous
+         * work, which is exactly after the default action, so the order is defined rather than
+         * raced. The guard re-reads the element because a commit can replace the document in
+         * between.
+         */
+        queueMicrotask(() => {
+          if (!el.isContentEditable || !iframeDoc.contains(el)) return;
+          const selection = iframeDoc.getSelection();
+          if (!selection) return;
+          const range = iframeDoc.createRange();
+          range.selectNodeContents(el);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        });
+      };
+
+      /** Into writing from this element, however the gesture arrived. */
+      const write = () => {
+        startWriting(el);
+        beginWriting();
+      };
+
       // Select the whole field the moment it gains focus, the same as clicking into a
       // pre-filled name field: the first keystroke replaces the placeholder text rather
       // than landing mid-word wherever the click happened to fall.
       el.addEventListener("focus", () => {
-        liveMarks = marksFor(doc, address) ?? [];
-        liveText = liveFrameOf(el.textContent ?? "").text;
-        anchored = true;
-        const selection = iframeDoc.getSelection();
-        if (!selection) return;
-        const range = iframeDoc.createRange();
-        range.selectNodeContents(el);
-        selection.removeAllRanges();
-        selection.addRange(range);
+        /**
+         * **Arriving at a text chooses it; only writing in it starts the capture.**
+         *
+         * Reached by Tab or by a click, focus means «this is the one» — so the outline and the hint
+         * are drawn here as well as in the click handler, which is what makes the keyboard's route
+         * into the two states the same route the pointer takes.
+         *
+         * Everything below belongs to writing. Selecting a whole field for somebody who has not
+         * asked to type in it would be the flash `wireToolbar`'s restoration note argues against,
+         * and starting the capture would be recording an edit nobody is making.
+         */
+        if (!el.isContentEditable) {
+          markChosen(iframeDoc, el);
+          return;
+        }
+        beginWriting();
       });
 
       /**
@@ -4450,6 +4627,44 @@ export function Editor({
         else anchored = false;
       });
 
+      /**
+       * **One click chooses; a second one writes** (ADR 0047).
+       *
+       * The second click is David's mitigation and not a flourish: the two states cost the main
+       * audience — a pyme with no tutorials — one click more than before, so two clicks of any
+       * speed have to arrive at writing. The browser's own double click *is* this sequence, which
+       * is why there is no `dblclick` listener here: the first click chooses, the second writes,
+       * and `dblclick` arrives afterwards to a text that is already being written in, where its
+       * default — selecting the word under the pointer — is exactly what it should do.
+       *
+       * A click while writing is a caret and nothing else.
+       */
+      /**
+       * Which text was chosen when this gesture **started**.
+       *
+       * **Read at `pointerdown`, and that is a correction the walk forced.** A focusable element is
+       * focused by the browser on `mousedown`, before `click` — and arriving at a text chooses it,
+       * so by the time the click ran, every first click looked like a second one and one click went
+       * straight to writing. The two states existed and no gesture could reach the first.
+       *
+       * Measured as `<h1 tabindex="0" class="rb-chosen" contenteditable="true">` after a single
+       * click, which is both states at once.
+       */
+      let chosenWhenPressed: ElementAddress | null = null;
+      el.addEventListener("pointerdown", () => {
+        chosenWhenPressed = chosenText.current;
+      });
+
+      el.addEventListener("click", () => {
+        if (el.isContentEditable) return;
+        if (clickAction(chosenWhenPressed, address) === "write") {
+          write();
+          return;
+        }
+        markChosen(iframeDoc, el);
+        el.focus({ preventScroll: true });
+      });
+
       // A field that still holds exactly what the editor put in it keeps all of it selected,
       // however somebody arrives at it — see `focusLineAfterChange`. Ordinary editing is untouched:
       // the mark only exists between a line being added and its first keystroke.
@@ -4467,20 +4682,89 @@ export function Editor({
       // cursor must not also navigate the preview away.
       if (el.tagName === "A") el.addEventListener("click", (event) => event.preventDefault());
 
+      /**
+       * The keys of the two states, decided by `textKeyAction` and wired here (ADR 0047).
+       *
+       * **Intro and Escape each mean two things now**, and that is the whole gain of having two
+       * states: Intro writes in a text that is chosen and commits a text being written in; Escape
+       * puts the original words back while writing and stops being chosen when not. Every arrow
+       * and every modifier is left alone — `Shift+Arrow` is a selection gesture everywhere, and
+       * the bare arrows are día 8's, which is a reason to leave them rather than to take them now.
+       *
+       * The canvas's own capture listener has already had this press and refused it: it reads
+       * `activeElement`, and a chosen text is not a section, so `at` is `-1` and the canvas takes
+       * nothing. One rule, in one place, and the states fit inside it rather than beside it.
+       */
       el.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") {
+        const state = el.isContentEditable
+          ? "writing"
+          : chosenText.current?.sectionId === address.sectionId &&
+              chosenText.current?.elementId === address.elementId
+            ? "chosen"
+            : "idle";
+        const action = textKeyAction(
+          {
+            key: event.key,
+            metaKey: event.metaKey,
+            ctrlKey: event.ctrlKey,
+            shiftKey: event.shiftKey,
+            altKey: event.altKey,
+          },
+          state,
+        );
+        if (action.kind === "ignore") return;
+        if (action.kind === "write") {
           event.preventDefault();
-          el.blur();
-        } else if (event.key === "Escape") {
+          write();
+          return;
+        }
+        if (action.kind === "release") {
+          event.preventDefault();
+          markChosen(iframeDoc, null);
+          // Back to the section, so the arrows go back to meaning «the next section» — which is
+          // where the keyboard came from and the only place that has somewhere to go today.
+          el.closest<HTMLElement>("[data-section]")?.focus({ preventScroll: true });
+          return;
+        }
+        event.preventDefault();
+        if (action.kind === "revert") {
           el.textContent = original;
           // A programmatic reset no `beforeinput` ever reported, so the captured marks now describe
-          // a text that is gone. The blur below commits nothing, since the text is back to
-          // `original` — but leaving stale offsets behind would be a trap for whoever reads them.
+          // a text that is gone. Nothing is committed — the text is back to `original` — but
+          // leaving stale offsets behind would be a trap for whoever reads them.
           liveMarks = marksFor(doc, address) ?? [];
           liveText = liveFrameOf(el.textContent ?? "").text;
           anchored = true;
-          el.blur();
+          /**
+           * **Escape ends the edit without blurring**, which is the difference between «stop
+           * writing» and «stop being here».
+           *
+           * Until today Escape blurred, because being focused *was* being editable and there was
+           * no other way to stop. Now there is a state to come back to, and blurring would leave
+           * the keyboard on the document body with the text still outlined — stranded for exactly
+           * the person who cannot see where focus went. The walk caught it: after Escape the text
+           * was chosen and nothing was focused.
+           *
+           * Nothing is lost by not blurring: the commit listener would have returned at its own
+           * `next === original` guard, and the floating bar stays open on a text that is still
+           * chosen, which is where it belongs.
+           */
+          stopWriting(el);
+          markChosen(iframeDoc, el);
+          /**
+           * **And the keyboard stays on the text**, which needs saying out loud: taking
+           * `contenteditable` off the focused element removes the editing host under it, and
+           * Chromium drops focus to the body. Measured — the walk pressed Escape twice and the
+           * second press reached the document instead of the text, so «Escape leaves the choice»
+           * did nothing and the outline stayed on screen.
+           *
+           * The element is focusable in its own right (`tabindex`), so asking for it back is one
+           * line and it is the line that makes the state a place rather than a look.
+           */
+          el.focus({ preventScroll: true });
+          return;
         }
+        el.blur();
       });
 
       el.addEventListener("blur", () => {
@@ -4550,6 +4834,41 @@ export function Editor({
         }
         onEditText(address, next, anchoredMarks);
       });
+
+      /**
+       * **The attribute leaves on blur, whichever way the edit ended** (ADR 0047).
+       *
+       * A separate listener rather than a line inside the one above, because that one returns early
+       * three times — a link emptied, a text unchanged, a bound field written to the list — and
+       * «stop being editable» is true of all of them. Registered after it, so the commit has
+       * already read the words.
+       *
+       * The text stays **chosen**: Escape and Intro end the edit, they do not deselect. When the
+       * commit rebuilds the frame this node is gone a moment later and the restoration at the end
+       * of this function draws the state again on the new one.
+       */
+      el.addEventListener("blur", () => stopWriting(el));
+    }
+
+    /**
+     * Draw «chosen» again after an edit rebuilt the frame.
+     *
+     * **Without focusing**, which is the difference from `wireToolbar`'s restoration one function
+     * up: that one puts the bar and the person's own selection back, and this one is only the
+     * outline and the hint. Focus in a frame that has just been parsed belongs to nobody, and
+     * taking it here would steal it from whatever the person pressed to cause the rebuild — a
+     * swatch in the toolbar, a verb in the cluster.
+     *
+     * Gone means the text was deleted or hidden while it was chosen; forget it rather than keep a
+     * pointer to something nobody can see, which is `toolbarOn`'s own rule.
+     */
+    const stillChosen = chosenText.current;
+    if (stillChosen) {
+      const el = iframeDoc
+        .querySelector(`[data-section="${CSS.escape(stillChosen.sectionId)}"]`)
+        ?.querySelector<HTMLElement>(`[data-id="${CSS.escape(stillChosen.elementId)}"]`);
+      if (el && EDITABLE_TAGS.has(el.tagName)) markChosen(iframeDoc, el);
+      else chosenText.current = null;
     }
   }
 
@@ -4623,8 +4942,10 @@ export function Editor({
         ? items[items.length - 1]
         : (items[want.index] ?? items[want.index - 1]);
     // Asked of the document rather than worked out from the tag, because `wireEditing` has already
-    // run by the time this does and it is the one that decides what is editable.
-    const text = line?.querySelector<HTMLElement>('[contenteditable="true"]');
+    // run by the time this does and it is the one that decides what is editable. **The marker and
+    // not the attribute since ADR 0047**: nothing is editable until somebody writes in it, and a
+    // line that has just appeared is exactly the case where the editor does that for them.
+    const text = line?.querySelector<HTMLElement>("[data-rb-text]");
     if (!text) return;
     /**
      * **Marked as still holding what we put there, and this is a defect the suite caught on me.**
@@ -4644,7 +4965,11 @@ export function Editor({
      * person's own words, and selecting all of those on a click would be the opposite of helpful.
      */
     if (want.kind === "added") text.dataset["rbFresh"] = "1";
-    text.focus({ preventScroll: true });
+    // **Writing and not merely chosen.** Somebody who just pressed «Añadir» is about to type, and
+    // asking them for a second click on a line the editor itself put there would be the two states
+    // charging for a choice nobody made.
+    markChosen(iframeDoc, text);
+    startWriting(text);
   }
 
   function wireHandmade(iframeDoc: Document) {
@@ -4921,9 +5246,46 @@ export function Editor({
        * by spec — this iframe's own vertical scroll must stay exactly what it already is.
        */
       "html, body { overflow-x: clip; }",
-      '[contenteditable="true"] { cursor: text; border-radius: 3px;',
+      /*
+       * **The affordance hangs on the marker, not on the attribute** (ADR 0047, sprint 24 día 7).
+       *
+       * These two rules used to select `[contenteditable="true"]`, which every text in the canvas
+       * was from the moment the frame was wired. Nothing is, now, until somebody writes in it — so
+       * selecting the attribute would mean a page of texts with no sign that any of them can be
+       * changed, which is the affordance this editor is built on.
+       *
+       * Three states, three looks, and the pair is the one the sections already use: **dashed on
+       * hover** means «you could», **solid** means «this is the one». Writing keeps the solid
+       * outline and adds the caret and the selection, which is what distinguishes it — and the hint
+       * in the corner disappears, because its instruction has been followed.
+       */
+      "[data-rb-text] { cursor: text; border-radius: 3px;",
       "  outline: 2px dashed transparent; outline-offset: 3px; }",
-      '[contenteditable="true"]:hover, [contenteditable="true"]:focus { outline-color: #156FE7; }',
+      "[data-rb-text]:hover { outline-color: #156FE7; }",
+      "[data-rb-text].rb-chosen { outline-style: solid; outline-color: #156FE7; }",
+      '[data-rb-text][contenteditable="true"] { outline-style: solid; outline-color: #156FE7; }',
+      /*
+       * The focus ring of a chosen text, for the same reason a section has one that is not its
+       * selection outline: where the keyboard is and what is chosen are two facts, and `#0F172A` at
+       * 3px is the darkest ink the interface owns — WCAG 1.4.11 asks 3:1 of anything whose
+       * appearance identifies a control, and the brand blue is spoken for by the choice itself.
+       */
+      "[data-rb-text]:focus-visible { outline: 3px dashed #0F172A; outline-offset: 3px; }",
+      /*
+       * The hint, in the section's own chrome and at the bottom of it — away from the verbs' cluster
+       * at the top right and from the floating text bar, which opens over the words themselves.
+       * `pointer-events: none`, because a line of advice that can eat a click is a bug with a
+       * reason. It is **not** `aria-hidden`: the chosen text points at it with `aria-describedby`,
+       * so a screen reader reading the text is told how to start writing in it.
+       */
+      `.rb-hint { position: absolute; left: ${VERB_SCALE.inset}px; bottom: ${VERB_SCALE.inset}px;`,
+      "  z-index: 10; padding: 5px 9px; border-radius: 999px; pointer-events: none;",
+      `  background: ${CHROME_SCALE.ink}; color: #FFFFFF;`,
+      `  font: 600 12px/1.3 ${UI_FONT}; box-shadow: ${CHROME_SCALE.shadow2}; }`,
+      // Touched screens have no hover and no double click worth the name; the hint still says what
+      // to do, and the key legend is the thing that hides there (see `.rb-keys`).
+      "@media (hover: none) and (pointer: coarse) { [data-rb-text]:hover { outline-color:",
+      "  transparent; } }",
       "[data-section] { position: relative; cursor: pointer; }",
       "[data-section].rb-selected { outline: 2px solid #156FE7; outline-offset: -2px; }",
       /*
