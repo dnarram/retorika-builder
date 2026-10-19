@@ -3447,6 +3447,38 @@ describe("sprint 9 día 7 — colchón: la barra no traga un clic que era para o
  * clicked twice and hoped: the whole point of the two states is that they are distinguishable, and
  * a helper that just double-clicked would pass over a canvas where the first click did nothing.
  */
+/**
+ * Every placed element of a section, from the inline style the renderer wrote.
+ *
+ * Shared by the two days that read placements — the drag and its keyboard — because a second copy
+ * would be a second parser of `grid-column` to keep level with the first.
+ */
+interface Placed {
+  id: string;
+  column: number;
+  columnSpan: number;
+  row: number;
+  rowSpan: number;
+}
+
+function placedIn(frame: FrameLocator, sectionId: string): Promise<Placed[]> {
+  return frame.locator(`[data-section="${sectionId}"] > [data-id]`).evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const el = node as HTMLElement;
+      const read = (value: string): [number, number] => {
+        const [start, span] = value.split("/");
+        return [
+          Number.parseInt(start ?? "1", 10),
+          Number.parseInt((span ?? "span 1").replace("span", "").trim(), 10),
+        ];
+      };
+      const [column, columnSpan] = read(el.style.gridColumn || "1/span 1");
+      const [row, rowSpan] = read(el.style.gridRow || "1/span 1");
+      return { id: el.dataset["id"] ?? "", column, columnSpan, row, rowSpan };
+    }),
+  );
+}
+
 async function clickToEdit(frame: FrameLocator, target: Locator): Promise<void> {
   await expect(target).toHaveAttribute("data-rb-text", "1");
   await target.click();
@@ -15346,33 +15378,6 @@ describe("sprint 24 día 7 — un texto se elige antes de escribir en él", () =
 describe("sprint 24 día 8 — un elemento se arrastra a su celda", () => {
   const VIEWPORT = { width: 1440, height: 900 };
 
-  interface Placed {
-    id: string;
-    column: number;
-    columnSpan: number;
-    row: number;
-    rowSpan: number;
-  }
-
-  /** Every placed element of a section, from the inline style the renderer wrote. */
-  function placedIn(frame: FrameLocator, sectionId: string): Promise<Placed[]> {
-    return frame.locator(`[data-section="${sectionId}"] > [data-id]`).evaluateAll((nodes) =>
-      nodes.map((node) => {
-        const el = node as HTMLElement;
-        const read = (value: string): [number, number] => {
-          const [start, span] = value.split("/");
-          return [
-            Number.parseInt(start ?? "1", 10),
-            Number.parseInt((span ?? "span 1").replace("span", "").trim(), 10),
-          ];
-        };
-        const [column, columnSpan] = read(el.style.gridColumn || "1/span 1");
-        const [row, rowSpan] = read(el.style.gridRow || "1/span 1");
-        return { id: el.dataset["id"] ?? "", column, columnSpan, row, rowSpan };
-      }),
-    );
-  }
-
   /** One column's step in pixels — width plus gap — measured from the section itself. */
   function columnStep(frame: FrameLocator, sectionId: string): Promise<number> {
     return frame.locator(`[data-section="${sectionId}"]`).evaluate((node) => {
@@ -15548,4 +15553,318 @@ describe("sprint 24 día 8 — un elemento se arrastra a su celda", () => {
       await context.close();
     }
   }, 180_000);
+});
+
+/**
+ * **Sprint 24 día 9 — el teclado lo mueve y lo dice, y el dedo no bloquea el lienzo** (ADR 0049).
+ *
+ * A pointer gesture with no keyboard equivalent does not exist for whoever has no pointer, and
+ * WCAG 2.1.1 says so with a number. These walks hold the three halves the drag was missing: the
+ * arrows with their announcement **outside the canvas**, a finger that still scrolls the page, and
+ * the phone, where rule 7 turns the same gesture into reordering.
+ *
+ * **The assertion that matters most is «three arrows, three movements, without choosing again».**
+ * Every arrow is an edit and every edit replaces the frame, so a lost focus would make the second
+ * press do nothing — and a walk that pressed once would never see it.
+ */
+describe("sprint 24 día 9 — el teclado lo mueve y lo dice", () => {
+  const VIEWPORT = { width: 1440, height: 900 };
+  const FINGER = { ...VIEWPORT, hasTouch: true } as const;
+
+  /** Un dedo que se mueve va por CDP: `page.touchscreen` solo sabe tocar. */
+  async function finger(
+    context: BrowserContext,
+    page: Page,
+    from: Point,
+    to: Point,
+  ): Promise<void> {
+    const touch = await context.newCDPSession(page);
+    const send = (type: "touchStart" | "touchMove" | "touchEnd", at?: Point) =>
+      touch.send("Input.dispatchTouchEvent", {
+        type,
+        touchPoints: at ? [{ x: at.x, y: at.y }] : [],
+      });
+    await send("touchStart", from);
+    for (let step = 1; step <= 6; step += 1) {
+      await send("touchMove", {
+        x: from.x + ((to.x - from.x) * step) / 6,
+        y: from.y + ((to.y - from.y) * step) / 6,
+      });
+    }
+    await send("touchEnd");
+  }
+
+  /** A hand-designed cover, which is where a placement exists to be moved at all. */
+  async function handDesignedCover(page: Page): Promise<FrameLocator> {
+    await intoTheCanvas(page);
+    await studioToolsOn(page);
+    const frame = page.frameLocator(PREVIEW).first();
+    await frame.locator('[data-section="sec-cover"]').click();
+    await replacingTheDocument(page, async () => {
+      await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
+      await frame.locator(".rb-escalate-yes").click();
+    });
+    await waitForBankPhoto(frame);
+    return frame;
+  }
+
+  /** The element whose own placement has a free cell to its right, read from the page. */
+  function withRoomToTheRight(placed: Placed[]): Placed | undefined {
+    const taken = (column: number, row: number) =>
+      placed.some(
+        (other) =>
+          column < other.column + other.columnSpan &&
+          other.column <= column &&
+          row < other.row + other.rowSpan &&
+          other.row <= row,
+      );
+    return placed.find(
+      (element) =>
+        element.column + element.columnSpan <= 12 &&
+        !taken(element.column + element.columnSpan, element.row),
+    );
+  }
+
+  it("tres flechas dan tres movimientos sin volver a elegir, y lo dice fuera del lienzo", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const page = await context.newPage();
+    try {
+      const frame = await handDesignedCover(page);
+      const placed = await placedIn(frame, "sec-cover");
+      /**
+       * **The lowest element, moved downwards**, and the direction is the walk having learnt
+       * something: sideways there is room for *one* step — the first version asked for three and got
+       * two, because the cell after the next belongs to the photograph. Downwards the section grows
+       * (ADR 0048 §4), so three presses are three movements and the assertion is about the keyboard
+       * rather than about this cover's layout.
+       */
+      const mover = placed.toSorted((a, b) => b.row + b.rowSpan - (a.row + a.rowSpan))[0];
+      expect(mover, "la portada no trajo colocaciones").toBeDefined();
+
+      const subject = frame.locator(`[data-id="${mover?.id}"]`);
+      // Chosen with one click if it is a text; a photograph is chosen by the focus Tab gives it,
+      // which is what arrived today so the arrows could reach one at all.
+      if ((await subject.getAttribute("data-rb-text")) === "1") {
+        await subject.click();
+      } else {
+        await subject.focus();
+      }
+      await expect(subject).toHaveClass(/rb-chosen/);
+
+      const rowOf = async () =>
+        (await placedIn(frame, "sec-cover")).find((element) => element.id === mover?.id)?.row;
+      const started = await rowOf();
+      expect(started).toBe(mover?.row);
+
+      /**
+       * **Three presses, three movements, and the element is never chosen again.**
+       *
+       * This is the assertion David asked for when he approved the sprint, and it is the only way
+       * to see the defect it guards: the first arrow moves the element and the edit replaces the
+       * frame, so without handing the keyboard back the second and third presses reach a document
+       * body that does nothing with them — three presses, one movement, and a walk that pressed
+       * once would call that a pass.
+       */
+      for (const step of [1, 2, 3]) {
+        await page.keyboard.press("ArrowDown");
+        await expect
+          .poll(rowOf, { message: `la flecha ${step} no movió nada` })
+          .toBe((started ?? 1) + step);
+        /**
+         * **And the keyboard is back before the next press.**
+         *
+         * The document is in place before the frame is wired, so a press that arrives in that gap
+         * reaches a body that does nothing with it — true for a hand holding the key down too, and
+         * named in ADR 0049 as the cost of ADR 0001's architecture. The walk waits for the focus
+         * rather than pressing into the gap, which is what a hand does by being slower.
+         */
+        await expect
+          .poll(
+            () =>
+              page.evaluate(() => {
+                const doc = document.querySelector<HTMLIFrameElement>(
+                  "iframe:not([data-buffered])",
+                )?.contentDocument;
+                return (doc?.activeElement as HTMLElement | null)?.dataset?.["id"] ?? "";
+              }),
+            { message: "el teclado no volvió al elemento" },
+          )
+          .toBe(mover?.id);
+      }
+
+      // **And it says where it went, in the editor's own document rather than in the canvas.** A
+      // region inside the frame would be a freshly created one after every edit, and a screen
+      // reader does not announce those.
+      const said = page.locator('p[role="status"]');
+      await expect(said).toHaveText(
+        new RegExp(`Columna ${mover?.column} de 12, fila ${(started ?? 1) + 3}`),
+      );
+      expect(
+        await page.locator(`${PREVIEW}`).count(),
+        "la vista previa dejó de ser un iframe",
+      ).toBeGreaterThan(0);
+
+      /**
+       * **Shift narrows it**, which is the other half of the keys and a different sentence.
+       *
+       * Narrowing and not widening, and the walk learnt the difference: this cover's lowest element
+       * is the photograph at columns 7–12, so `Shift+ArrowRight` is correctly refused — a
+       * thirteenth column does not exist. A walk asserting widening would be asserting this one
+       * layout. Widening into a free cell, and its refusal at the edge, are both unit-tested where
+       * the geometry can be chosen instead of read.
+       */
+      const spanOf = async () =>
+        (await placedIn(frame, "sec-cover")).find((element) => element.id === mover?.id)
+          ?.columnSpan;
+      const wasWide = await spanOf();
+      expect(wasWide ?? 0, "el elemento más bajo ya era de una columna").toBeGreaterThan(1);
+      await page.keyboard.press("Shift+ArrowLeft");
+      await expect.poll(spanOf).toBe((wasWide ?? 2) - 1);
+      await expect(said).toHaveText(/Ancho \d+ de 12 columnas/);
+
+      // Escape gives the keyboard back to the section, as it did before any of this.
+      await page.keyboard.press("Escape");
+      await expect(frame.locator(".rb-chosen")).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+
+  it("con un dedo el lienzo sigue desplazándose, y el elemento elegido se arrastra", async () => {
+    const context = await browser.newContext(FINGER);
+    const page = await context.newPage();
+    try {
+      const frame = await handDesignedCover(page);
+
+      /**
+       * **One finger still scrolls the canvas**, which is the assertion that keeps
+       * `touch-action: none` from being drawn across the page. It is applied to the chosen element
+       * and to nothing else, so a drag anywhere else is a scroll exactly as it was.
+       */
+      const scrollTop = () =>
+        frame.locator("body").evaluate(() => document.scrollingElement?.scrollTop ?? 0);
+      const before = await scrollTop();
+      await finger(context, page, { x: 720, y: 700 }, { x: 720, y: 300 });
+      await expect
+        .poll(scrollTop, { message: "un dedo dejó de desplazar el lienzo" })
+        .toBeGreaterThan(before);
+
+      /**
+       * **Back to the top before tapping**, which the first version of this walk forgot: the scroll
+       * it had just proved pushed the cover off the top of the frame, so the tap landed on whatever
+       * had taken its place and chose nothing.
+       */
+      await frame.locator("body").evaluate(() => {
+        if (document.scrollingElement) document.scrollingElement.scrollTop = 0;
+      });
+      // And the chosen element moves with a finger: tap to choose, then drag.
+      const placed = await placedIn(frame, "sec-cover");
+      const mover = withRoomToTheRight(placed);
+      expect(mover).toBeDefined();
+      const subject = frame.locator(`[data-id="${mover?.id}"]`);
+      /**
+       * **`locator.tap()` and not `touchscreen.tap(x, y)`**, which the first version used and which
+       * never reached the element: the coordinate kind is the same, but a bare tap does not scroll
+       * anything into view, and the element it was aiming at was below the fold. The instrumented
+       * run showed exactly one `pointerdown` — the scroll's — and none for the tap.
+       */
+      await subject.tap();
+      await expect(subject).toHaveClass(/rb-chosen/);
+      await subject.scrollIntoViewIfNeeded();
+      const box = await subject.boundingBox();
+      const centre = {
+        x: (box?.x ?? 0) + (box?.width ?? 0) / 2,
+        y: (box?.y ?? 0) + (box?.height ?? 0) / 2,
+      };
+      const step = await frame.locator('[data-section="sec-cover"]').evaluate((node) => {
+        const section = node as HTMLElement;
+        const style = getComputedStyle(section);
+        const gap = Number.parseFloat(style.columnGap) || 0;
+        const inner =
+          section.getBoundingClientRect().width -
+          (Number.parseFloat(style.paddingLeft) || 0) -
+          (Number.parseFloat(style.paddingRight) || 0);
+        return (inner - gap * 11) / 12 + gap;
+      });
+      await finger(context, page, centre, { x: centre.x + step, y: centre.y });
+      await expect
+        .poll(
+          async () =>
+            (await placedIn(frame, "sec-cover")).find((element) => element.id === mover?.id)
+              ?.column,
+        )
+        .toBe((mover?.column ?? 1) + 1);
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+
+  it("en la vista de móvil el mismo gesto reordena, y a los lados no hace nada", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const page = await context.newPage();
+    try {
+      const frame = await handDesignedCover(page);
+      await page.getByRole("button", { name: "Ver en móvil" }).click();
+      await waitForBankPhoto(frame);
+
+      /** The reading order a phone shows, top to bottom. */
+      const order = () =>
+        frame.locator('[data-section="sec-cover"] > [data-id]').evaluateAll((nodes) =>
+          nodes
+            .map((node) => ({
+              id: (node as HTMLElement).dataset["id"] ?? "",
+              top: node.getBoundingClientRect().top,
+            }))
+            .sort((a, b) => a.top - b.top)
+            .map((row) => row.id),
+        );
+      const before = await order();
+      expect(before.length, "la portada no tiene dos elementos que reordenar").toBeGreaterThan(1);
+
+      // The second element dragged above its own box trades places with the first — rule 7's
+      // «reordenar», which is the only one of its three a drag can mean.
+      const second = frame.locator(`[data-id="${before[1]}"]`);
+      // Into view first: a `page.mouse` gesture is coordinates, and coordinates below the fold are
+      // somebody else's element — the same trap the touch walk fell into.
+      await second.scrollIntoViewIfNeeded();
+      const box = await second.boundingBox();
+      const centre = {
+        x: (box?.x ?? 0) + (box?.width ?? 0) / 2,
+        y: (box?.y ?? 0) + (box?.height ?? 0) / 2,
+      };
+      if ((await second.getAttribute("data-rb-text")) === "1") await second.click();
+      else await second.focus();
+      await page.mouse.move(centre.x, centre.y);
+      await page.mouse.down();
+      await page.mouse.move(centre.x, centre.y - (box?.height ?? 0) - 40, { steps: 10 });
+      // The ghost is drawn over the element it would trade places with, and the stripes stay away:
+      // there is one column on a phone, so they would answer a question nobody asked.
+      await expect(frame.locator(".rb-ghost")).toBeVisible();
+      await expect(frame.locator('[data-section="sec-cover"]')).not.toHaveClass(/rb-grid-live/);
+      await page.mouse.up();
+
+      await expect
+        .poll(order, { message: "el orden de lectura no cambió" })
+        .toEqual([before[1], before[0], ...before.slice(2)]);
+
+      // Sideways does nothing, because rule 7 admits no column to move between on a phone.
+      const settled = await order();
+      const first = frame.locator(`[data-id="${settled[0]}"]`);
+      await first.scrollIntoViewIfNeeded();
+      const firstBox = await first.boundingBox();
+      const at = {
+        x: (firstBox?.x ?? 0) + (firstBox?.width ?? 0) / 2,
+        y: (firstBox?.y ?? 0) + (firstBox?.height ?? 0) / 2,
+      };
+      if ((await first.getAttribute("data-rb-text")) === "1") await first.click();
+      else await first.focus();
+      await page.mouse.move(at.x, at.y);
+      await page.mouse.down();
+      await page.mouse.move(at.x + 300, at.y, { steps: 10 });
+      await page.mouse.up();
+      expect(await order()).toEqual(settled);
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
 });

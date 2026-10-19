@@ -81,7 +81,16 @@ import {
   type DownloadGate,
   downloadGateFor,
 } from "../editor/downloadGate.ts";
-import { type Drop, dropAt, type GridMetrics, rectOf } from "../editor/dragGrid.ts";
+import {
+  announceText,
+  arrowAction,
+  arrowDrop,
+  type Drop,
+  dropAt,
+  type GridMetrics,
+  rectOf,
+  reorderAt,
+} from "../editor/dragGrid.ts";
 import {
   EditorShell,
   type RailItemId,
@@ -798,6 +807,47 @@ export function Editor({
    * new document is a different node with the same address.
    */
   const chosenText = useRef<ElementAddress | null>(null);
+  /**
+   * What the editor says out loud about a move, **in its own document** (ADR 0049).
+   *
+   * **The region cannot live inside the canvas**, which is David's correction and a defect it would
+   * have shipped: every arrow is an edit, every edit replaces the frame's whole `srcDoc`, so a
+   * region in there would be a freshly created one on every move — and a screen reader does not
+   * announce the contents of a region that has just appeared. This document survives the rebuild.
+   */
+  const [announcement, setAnnouncement] = useState("");
+  /**
+   * A counter that makes the **same** sentence audible twice.
+   *
+   * An `aria-live` region announces a change, so «Aquí ya hay otro elemento» twice in a row would be
+   * read once. The parity of this counter appends a zero-width space — invisible, and nothing a
+   * screen reader reads out — so the second refusal is a change like any other.
+   */
+  const announcements = useRef(0);
+  /**
+   * Whether the chosen element should have the keyboard back after the rebuild this edit causes.
+   *
+   * **Only a keyboard move asks for it**, which is the whole reason it is a flag rather than a rule:
+   * the restoration deliberately does not focus anything, because an edit made by pressing a swatch
+   * or a verb must leave the keyboard where the hand was. But an arrow that moves an element and
+   * then loses the focus makes the *second* arrow do nothing — three presses, one movement — and
+   * David asked for exactly that assertion when he approved the sprint.
+   */
+  const keepChosenFocus = useRef(false);
+  /**
+   * Which device view is on **right now**, for the listeners that outlive the render that wired them.
+   *
+   * **A ref because the switch does not rebuild the document**, which is a stale-closure trap the
+   * walk caught: turning the design tools on replaces the frame, so a gate read at wiring time stays
+   * true; switching to the phone only changes the canvas card's width, so `wireDragging`'s listeners
+   * kept the `device` they were created with and drew the twelve stripes on a one-column page.
+   */
+  const deviceNow = useRef(device);
+  deviceNow.current = device;
+  const announce = (text: string) => {
+    announcements.current += 1;
+    setAnnouncement(announcements.current % 2 === 0 ? `${text}\u200B` : text);
+  };
   /**
    * How the drag opens the «Diseñar a mano» offer that `wireSelection` draws (ADR 0048 §6).
    *
@@ -4324,10 +4374,34 @@ export function Editor({
     if (!section || !sectionId || !elementId) return;
     chosenText.current = { sectionId, elementId };
     el.classList.add("rb-chosen");
+
+    /**
+     * **What the hint says depends on what this element can actually do** (ADR 0049).
+     *
+     * «Doble clic o Intro para escribir» is true of a text and false of a photograph, and a
+     * photograph is choosable from today so that the arrows can reach it. And «Flechas para
+     * moverlo» is true only where a placement exists and the design tools are on — a section the
+     * catalog draws has no placements, and offering keys that do nothing is the dead control this
+     * repository keeps refusing to draw.
+     *
+     * Both halves can be true at once: a text in a hand-designed section can be written in **and**
+     * moved. Neither being true means no hint rather than an empty one.
+     */
+    const movable =
+      designTools === true &&
+      (findSection(doc, sectionId)?.section.layout?.placements ?? []).some(
+        (placement) => placement.elementId === elementId,
+      );
+    const says = [
+      el.dataset["rbText"] === "1" ? chosenHintText() : "",
+      movable ? es["editor.canvas.moveHint"] : "",
+    ].filter((part) => part !== "");
+    if (says.length === 0) return;
+
     const hint = iframeDoc.createElement("div");
     hint.className = "rb-hint";
     hint.id = "rb-hint";
-    hint.textContent = chosenHintText();
+    hint.textContent = says.join(" · ");
     section.appendChild(hint);
     el.setAttribute("aria-describedby", hint.id);
   }
@@ -4897,7 +4971,16 @@ export function Editor({
       const el = iframeDoc
         .querySelector(`[data-section="${CSS.escape(stillChosen.sectionId)}"]`)
         ?.querySelector<HTMLElement>(`[data-id="${CSS.escape(stillChosen.elementId)}"]`);
-      if (el && EDITABLE_TAGS.has(el.tagName)) markChosen(iframeDoc, el);
+      /**
+       * **Any element that is still there, not only a text** (ADR 0049).
+       *
+       * This asked `EDITABLE_TAGS` because when it was written only a text could be chosen. A
+       * photograph can be from today — that is what lets the arrows reach one — and the check was
+       * then quietly *clearing* the choice on every rebuild: the first arrow moved the image and
+       * the second had nothing chosen to act on. Three presses, one movement, which is exactly the
+       * assertion David asked for.
+       */
+      if (el) markChosen(iframeDoc, el);
       else chosenText.current = null;
     }
   }
@@ -5142,11 +5225,28 @@ export function Editor({
       const sectionId = section?.dataset.section;
       if (!elementId || !section || !sectionId) continue;
 
+      /**
+       * **Anything placed is focusable, not only a text** (ADR 0049).
+       *
+       * A photograph could be dragged from the first day of this drag and reached by no keyboard at
+       * all: `wireEditing` makes a *text* focusable, and nothing made an image one. So the arrows
+       * had nothing to act on and WCAG 2.1.1 was met only through the panel.
+       *
+       * A click on a photograph still opens «Cambiar foto», untouched: what arrives today is Tab
+       * and the choosing that focus means, which is the same rule a text follows.
+       */
+      if (!EDITABLE_TAGS.has(el.tagName)) {
+        el.tabIndex = 0;
+        el.addEventListener("focus", () => markChosen(iframeDoc, el));
+      }
+
       let from: Point | null = null;
       let grab: Point = { x: 0, y: 0 };
       let moving: Placement | null = null;
       let moved = false;
       let outcome: Drop | null = null;
+      /** On a phone, which element would trade places with this one — see the move listener. */
+      let mobileSwap: string | null = null;
       /**
        * What this gesture can do: move the element, or **ask** whether the section may be designed
        * by hand — and «ask» is decided at `pointerdown` and acted on only once the hand has actually
@@ -5165,6 +5265,7 @@ export function Editor({
         moving = null;
         moved = false;
         outcome = null;
+        mobileSwap = null;
         gesture = "none";
         asked = false;
         section.classList.remove("rb-grid-live");
@@ -5174,16 +5275,27 @@ export function Editor({
       };
 
       el.addEventListener("pointerdown", (event) => {
-        // Touch is the next day's: a long press, and `touch-action` on the one element rather than
-        // on the canvas, so one finger keeps scrolling the page.
-        if (event.pointerType === "touch") return;
         // Writing wins: inside a text being written in, a drag selects words (ADR 0047).
         if (el.isContentEditable) return;
-        // And a text has to be chosen first — the precondition día 7 exists for. An image has no
-        // competing gesture, so it needs none.
         const chosen =
           chosenText.current?.sectionId === sectionId &&
           chosenText.current?.elementId === elementId;
+        /**
+         * **On touch, only the element already chosen drags** (ADR 0049).
+         *
+         * David offered two shapes — «arranca con pulsación larga, **o** solo sobre el elemento ya
+         * elegido» — and this is the second, because the first cannot be made honest in a browser:
+         * a touch's gesture is decided at `touchstart`, so a `touch-action` set when a long press
+         * fires arrives after the page has already agreed to scroll. Declaring it on the chosen
+         * element instead (`.rb-chosen { touch-action: none }`) makes the gesture unambiguous from
+         * the first move — **on that element and nowhere else**, so one finger keeps scrolling the
+         * canvas everywhere a walk can reach.
+         *
+         * A tap is what chooses, so touch needs no new gesture at all: tap once, then drag.
+         */
+        if (event.pointerType === "touch" && !chosen) return;
+        // And with a pointer, a text has to be chosen first — the precondition día 7 exists for.
+        // An image has no competing gesture there, so it needs none.
         if (EDITABLE_TAGS.has(el.tagName) && !chosen) return;
 
         const layout = findSection(doc, sectionId)?.section.layout ?? null;
@@ -5234,10 +5346,49 @@ export function Editor({
         if (!moving) return;
         if (!moved) {
           moved = true;
-          section.classList.add("rb-grid-live");
+          // The twelve stripes answer «which column will this land in», and on a phone there is
+          // only one column: drawing them there would be answering a question nobody asked.
+          if (deviceNow.current !== "mobile") section.classList.add("rb-grid-live");
           el.classList.add("rb-moving");
           iframeDoc.documentElement.classList.add("rb-dragging");
         }
+        if (deviceNow.current === "mobile") {
+          /**
+           * **On a phone the same gesture reorders** (ADR 0049, rule 7).
+           *
+           * There is no column to move between — the renderer collapses a section to one — and rule
+           * 7 admits only hiding, reordering and narrowing. So the drag means the one of the three
+           * it can mean, and the ghost is drawn over the element it would trade places with rather
+           * than over a cell that does not exist here.
+           */
+          const rows = [...section.querySelectorAll<HTMLElement>("[data-id]")]
+            .filter((node) => node.parentElement === section)
+            .map((node) => {
+              const box = node.getBoundingClientRect();
+              return { elementId: node.dataset["id"] ?? "", top: box.top, bottom: box.bottom };
+            })
+            .sort((a, b) => a.top - b.top);
+          const swap = reorderAt({ rows, moving: elementId, y: now.y });
+          mobileSwap = swap.kind === "moveUp" ? swap.elementId : null;
+          const target = rows.find((row) => row.elementId === mobileSwap);
+          const host = section.getBoundingClientRect();
+          let ghost = section.querySelector<HTMLElement>(".rb-ghost");
+          if (!ghost) {
+            ghost = iframeDoc.createElement("div");
+            ghost.className = "rb-ghost";
+            ghost.setAttribute("aria-hidden", "true");
+            section.appendChild(ghost);
+          }
+          const over = target ?? rows.find((row) => row.elementId === elementId);
+          ghost.style.left = "0px";
+          ghost.style.width = `${Math.round(host.width)}px`;
+          ghost.style.top = `${Math.round((over?.top ?? host.top) - host.top)}px`;
+          ghost.style.height = `${Math.round((over?.bottom ?? host.top) - (over?.top ?? host.top))}px`;
+          ghost.classList.toggle("rb-ghost-no", mobileSwap === null);
+          ghost.textContent = mobileSwap === null ? es["editor.drag.order"] : "";
+          return;
+        }
+
         const metrics = gridMetricsOf(section);
         const placements = findSection(doc, sectionId)?.section.layout?.placements ?? [];
         outcome = dropAt({
@@ -5253,19 +5404,121 @@ export function Editor({
         if (!from) return;
         const wasMoved = moved && gesture === "move";
         const drop = outcome;
+        const swapWith = mobileSwap;
         clear();
         if (!wasMoved) return;
         // A drag is not a click, even where the browser sends one afterwards.
         justDragged = true;
         // A refusal is not an edit: nothing moved, nothing is written, and the ghost has already
         // said why while the hand was still holding it.
-        if (drop?.kind === "place") {
+        if (swapWith !== null) {
+          // The phone's answer: one swap, one history step, through the verb the document has.
+          onMoveUpOnMobile(sectionId, swapWith);
+        } else if (drop?.kind === "place") {
           onSetPlacement(sectionId, elementId, { column: drop.at.column, row: drop.at.row });
         }
       };
       el.addEventListener("pointerup", release);
       el.addEventListener("pointercancel", release);
       el.addEventListener("lostpointercapture", release);
+
+      /**
+       * **The keyboard's half of the same gesture** (ADR 0049, WCAG 2.1.1).
+       *
+       * A pointer gesture with no keyboard equivalent does not exist for whoever has no pointer, and
+       * this repository has applied that to every handle it has ever drawn. The arrows move the
+       * chosen element one cell at a time; `Shift` with a sideways arrow widens or narrows it.
+       *
+       * **In this function and not in `wireEditing`**, so the pointer and the keyboard share one
+       * refusal — `arrowDrop` and `dropAt` answer in the same words — and one gate, because a
+       * placement is a design-tools idea. `textKeyAction` returns «ignore» for every arrow, which is
+       * what leaves them free here: ADR 0047 left them alone so this day could take them.
+       */
+      el.addEventListener("keydown", (event) => {
+        // Writing owns every key, the arrows included: there they move the caret.
+        if (el.isContentEditable) return;
+        const isChosen =
+          chosenText.current?.sectionId === sectionId &&
+          chosenText.current?.elementId === elementId;
+        if (!isChosen) return;
+        /**
+         * **Escape releases anything chosen, not only a text** (ADR 0049).
+         *
+         * `wireEditing` gives a text its way out — Escape ends the writing and a second Escape hands
+         * the keyboard back to the section (ADR 0047) — and it wires no photograph, so until today a
+         * chosen image had no exit at all: the outline stayed and the arrows kept it. **Only for the
+         * elements that function does not wire**, because a text's Escape already means two things
+         * there and a second handler would turn «stop writing» into «stop being chosen».
+         */
+        if (event.key === "Escape" && !EDITABLE_TAGS.has(el.tagName)) {
+          event.preventDefault();
+          markChosen(iframeDoc, null);
+          section.focus({ preventScroll: true });
+          return;
+        }
+
+        const action = arrowAction({
+          key: event.key,
+          metaKey: event.metaKey,
+          ctrlKey: event.ctrlKey,
+          shiftKey: event.shiftKey,
+          altKey: event.altKey,
+        });
+        if (action.kind === "none") return;
+
+        const layout = findSection(doc, sectionId)?.section.layout ?? null;
+        // A section the catalog draws has nothing to move. The pointer's door to the offer is a
+        // drag; the keyboard's is the section's own «A mano» verb, so there is none to open here.
+        if (layout === null) return;
+        const placement = layout.placements.find((candidate) => candidate.elementId === elementId);
+        if (!placement) return;
+
+        // Taken from the page rather than left to scroll it: an arrow that means something here
+        // must not also move the view.
+        event.preventDefault();
+        const drop = arrowDrop({ moving: placement, placements: layout.placements, action });
+        if (drop.kind === "none") return;
+        if (drop.kind === "refuse") {
+          announce(es["editor.drag.occupied"]);
+          return;
+        }
+        // The rebuild is about to throw this node away; the next wiring gives the keyboard back to
+        // whatever takes its place.
+        keepChosenFocus.current = true;
+        onSetPlacement(
+          sectionId,
+          elementId,
+          action.kind === "move"
+            ? { column: drop.at.column, row: drop.at.row }
+            : { columnSpan: drop.at.columnSpan },
+        );
+        announce(announceText(drop.at, action.kind));
+      });
+    }
+
+    /**
+     * **The keyboard comes back to the element it was moving** (ADR 0049).
+     *
+     * Every arrow is an edit and every edit replaces the frame, so the node that had the keyboard is
+     * gone by the time this runs. Without this, three presses produce one movement: the first moves
+     * the element and loses the focus, and the next two reach a document body that does nothing with
+     * them. The walk asserts the three, which is the only way to see it.
+     *
+     * Guarded by a flag that only an arrow sets, so an edit made with a swatch or a verb still
+     * leaves the keyboard where the hand was.
+     */
+    if (keepChosenFocus.current) {
+      keepChosenFocus.current = false;
+      const chosen = chosenText.current;
+      const back = chosen
+        ? iframeDoc
+            .querySelector(`[data-section="${CSS.escape(chosen.sectionId)}"]`)
+            ?.querySelector<HTMLElement>(`[data-id="${CSS.escape(chosen.elementId)}"]`)
+        : null;
+      if (back) {
+        markChosen(iframeDoc, back);
+        back.focus({ preventScroll: true });
+      }
     }
   }
 
@@ -5976,6 +6229,16 @@ export function Editor({
       // follows. It keeps its place in the grid — see `wireDragging` on why it does not follow the
       // pointer — so this is the only sign that it is the subject.
       ".rb-moving { opacity: 0.45; }",
+      /*
+       * **`touch-action: none` on the chosen element and on nothing else** (ADR 0049).
+       *
+       * A finger's gesture is decided at `touchstart`, so this has to be declared before the touch
+       * begins rather than when a long press fires — which is why the drag on touch asks for an
+       * element that is **already chosen** instead of a long press. One element is the whole of the
+       * cost: everywhere else one finger scrolls the canvas exactly as it did, which the mobile
+       * walk measures rather than assumes.
+       */
+      ".rb-chosen { touch-action: none; }",
       // The element the panel is stepping, outlined the way mockup 16 draws it, so the numbers in
       // the panel and the thing on the page are visibly the same subject.
       ".rb-designing .rb-placing { outline: 2px solid #156FE7; outline-offset: 2px;",
@@ -6587,6 +6850,13 @@ export function Editor({
           </p>
         ) : null}
         <p className="m-0 text-[13px] text-ui-muted">{es["editor.editHint"]}</p>
+        {/* Where a moved element says where it went. `role="status"` with `aria-live="polite"`, so
+            two quick presses do not queue two interruptions, and `sr-only` because this is for a
+            screen reader: the eye already sees the element move. It is **outside the canvas** on
+            purpose — see `announce`. */}
+        <p role="status" aria-live="polite" className="sr-only">
+          {announcement}
+        </p>
       </div>
       <input
         ref={fileInputRef}
