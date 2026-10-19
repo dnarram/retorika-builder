@@ -816,12 +816,12 @@ describe("critical flow 2 — edición de un texto y recarga", () => {
     // of ("Qué hacemos", "Dónde estamos", "Te esperamos" are all headlines too), so the bare
     // slot selector matches four elements on a generated page, not one.
     const headline = frame.locator('[data-section="sec-cover"] [data-slot="headline"]');
-    await headline.click();
+    await intoWriting(headline);
     // The field selects its own contents on focus (Editor.tsx), so typing replaces rather than
     // appends — the same behaviour a real click-to-edit session relies on.
     await page.keyboard.type(HEADLINE_EDIT);
     // Blur by clicking the hint text above the canvas: anywhere outside the editable field.
-    await page.getByText("Haz clic en cualquier texto para cambiarlo").click();
+    await editHint(page).click();
 
     await expect(frame.getByText(HEADLINE_EDIT)).toBeVisible();
     // The tick says a save has happened at some point; **it does not say this edit is in it** — see
@@ -848,10 +848,10 @@ describe("critical flow 2 — edición de un texto y recarga", () => {
     const subheadline = frame.locator('[data-section="sec-cover"] [data-slot="subheadline"]');
     await expect(subheadline).toBeVisible();
 
-    await subheadline.click();
+    await intoWriting(subheadline);
     await page.keyboard.press("ControlOrMeta+a");
     await page.keyboard.press("Delete");
-    await page.getByText("Haz clic en cualquier texto para cambiarlo").click();
+    await editHint(page).click();
 
     // Gone from the page rather than left as an empty paragraph taking its own gap.
     await expect(subheadline).toHaveCount(0);
@@ -1091,9 +1091,9 @@ describe("regression — the preview is a canvas, not a browsable site", () => {
     const action = frame
       .locator('[data-section="sec-contact"] [data-slot="primaryAction"]')
       .first();
-    await action.click();
+    await intoWriting(action);
     await page.keyboard.type("Reserva tu mesa");
-    await page.getByText("Haz clic en cualquier texto para cambiarlo").click();
+    await editHint(page).click();
     await expect(frame.getByText("Reserva tu mesa")).toBeVisible();
   });
 });
@@ -2036,7 +2036,7 @@ describe("sprint 7 día 7 — el recorrido completo del sprint", () => {
       await frame.locator('[data-preset="gallery"]').waitFor();
 
       const captions = frame.locator('[data-preset="gallery"] [data-slot="caption"]');
-      const blur = () => walkPage.getByText("Haz clic en cualquier texto para cambiarlo").click();
+      const blur = () => editHint(walkPage).click();
       await clickToEdit(frame, captions.first());
       await walkPage.keyboard.type("Primera foto");
       await blur();
@@ -3426,10 +3426,58 @@ describe("sprint 9 día 7 — colchón: la barra no traga un clic que era para o
  * toolbar proves the click actually selected it. The second is the idiom this file already uses
  * where it waits for `.rb-toolbar` after clicking an `h3`.
  */
+/**
+ * Into writing: **two clicks**, because a text is chosen before it is written in (ADR 0047).
+ *
+ * The first click chooses — solid outline, the hint in the section's corner, the floating bar — and
+ * the second turns `contentEditable` on and puts the caret in. Asserted at each step rather than
+ * clicked twice and hoped: the whole point of the two states is that they are distinguishable, and
+ * a helper that just double-clicked would pass over a canvas where the first click did nothing.
+ */
 async function clickToEdit(frame: FrameLocator, target: Locator): Promise<void> {
-  await expect(target).toHaveAttribute("contenteditable", "true");
+  await expect(target).toHaveAttribute("data-rb-text", "1");
   await target.click();
+  await expect(target).toHaveClass(/rb-chosen/);
+  await writing(target);
   await frame.locator(".rb-toolbar").waitFor();
+}
+
+/**
+ * Click until the text is being written in — **once if it was already chosen, twice if not**.
+ *
+ * **Not «click twice», which is the mistake this replaces.** A text that was chosen before the
+ * gesture starts goes to writing on the first click, so a blind second click lands *inside* an
+ * editable text and does what a click there does: it puts the caret where the pointer is, undoing
+ * the select-all that makes «escribir lo sustituye» true. Measured as a heading reading
+ * `UNODOSTCUATRORESCINCO` after five edits that each should have replaced it — a text stays chosen
+ * after a commit, so every pass of that loop but the first began already chosen.
+ */
+async function writing(target: Locator): Promise<void> {
+  if ((await target.getAttribute("contenteditable")) !== "true") await target.click();
+  await expect(target).toHaveAttribute("contenteditable", "true");
+}
+
+/**
+ * Into writing, without caring whether a floating bar exists for this role (ADR 0047).
+ *
+ * `clickToEdit` above is the same two clicks plus the bar; this is for the walks that only want to
+ * type — a role with no toolbar, or a step where the bar is not what is being measured.
+ */
+async function intoWriting(target: Locator): Promise<void> {
+  await target.click();
+  await writing(target);
+}
+
+/**
+ * The line under the canvas that tells an owner how to change a text — and the walks' own way of
+ * clicking **off** a text to commit it.
+ *
+ * One helper because sixteen walks clicked it by its words, and those words changed the day a text
+ * started needing two clicks (ADR 0047). A locator by a sentence is a locator that breaks when the
+ * sentence is corrected; this way the correction lands in one place.
+ */
+function editHint(page: Page): Locator {
+  return page.getByText("Haz doble clic en cualquier texto para cambiarlo");
 }
 
 async function selectWord(locator: Locator, word: string): Promise<void> {
@@ -3517,13 +3565,13 @@ describe("sprint 10 día 7 — el recorrido completo del sprint", () => {
 
       // ---- day 5: both marks on the same word, which is what the third session's owner asked
       //      for by naming cursiva and negrita together (docs/sessions/2026-09-30-taller.md) ----
-      await subheadline.click();
+      await intoWriting(subheadline);
       await selectWord(subheadline, "beber");
       await frame.locator('.rb-toolbar-mark[data-mark="strong"]').click();
       await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
       await expect(subheadline.locator("strong")).toHaveText("beber");
 
-      await subheadline.click();
+      await intoWriting(subheadline);
       await selectWord(subheadline, "beber");
       await frame.locator('.rb-toolbar-mark[data-mark="em"]').click();
       await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
@@ -3533,7 +3581,7 @@ describe("sprint 10 día 7 — el recorrido completo del sprint", () => {
       // ---- ADR 0027 §3-4: the boundary is asymmetric, and both halves are tested live ----
       // Typing right at the END of the run makes it continue — and this is where the <script>
       // ADR 0024 was built against goes in, so the whole pipeline carries it to the ZIP.
-      await subheadline.click();
+      await intoWriting(subheadline);
       await caretAt(subheadline, "beber", "end");
       await studio.keyboard.type(" <script>bad()</script>");
       await studio.keyboard.press("Enter");
@@ -3541,7 +3589,7 @@ describe("sprint 10 día 7 — el recorrido completo del sprint", () => {
       await expect(subheadline.locator("strong em")).toHaveText("beber <script>bad()</script>");
 
       // Typing right at the START of the run does not — the same asymmetry, the other edge.
-      await subheadline.click();
+      await intoWriting(subheadline);
       await caretAt(subheadline, "beber", "start");
       await studio.keyboard.type("Muy ");
       await studio.keyboard.press("Enter");
@@ -3709,7 +3757,7 @@ describe("sprint 11 día 7 — el recorrido completo del sprint", () => {
 
       // A controlled string rather than whatever the generator wrote, so every offset below is
       // exact and the reader can check the arithmetic against the text on the page.
-      await subheadline.click();
+      await intoWriting(subheadline);
       await studio.keyboard.press("ControlOrMeta+a");
       await studio.keyboard.type("Solomillo al whisky");
       await studio.keyboard.press("Enter");
@@ -3717,7 +3765,7 @@ describe("sprint 11 día 7 — el recorrido completo del sprint", () => {
       await expect(subheadline).toHaveText("Solomillo al whisky");
 
       // Bold on "Solomillo", [0,9) — the mark every step below moves.
-      await subheadline.click();
+      await intoWriting(subheadline);
       await selectWord(subheadline, "Solomillo");
       await frame.locator('.rb-toolbar-mark[data-mark="strong"]').click();
       await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
@@ -3725,7 +3773,7 @@ describe("sprint 11 día 7 — el recorrido completo del sprint", () => {
 
       // ---- row 1: typing INSIDE the run grows it ----
       // Caret after "Solo" (offset 4, strictly inside [0,9)) · +"XX" → mark [0,11).
-      await subheadline.click();
+      await intoWriting(subheadline);
       await caretAt(subheadline, "Solo", "end");
       await studio.keyboard.type("XX");
       await studio.keyboard.press("Enter");
@@ -3735,7 +3783,7 @@ describe("sprint 11 día 7 — el recorrido completo del sprint", () => {
 
       // ---- row 2: typing right AT THE END of the run continues it ----
       // Caret at offset 11, which equals the run's own `to` · +"YY" → mark [0,13).
-      await subheadline.click();
+      await intoWriting(subheadline);
       await caretAt(subheadline, "SoloXXmillo", "end");
       await studio.keyboard.type("YY");
       await studio.keyboard.press("Enter");
@@ -3747,7 +3795,7 @@ describe("sprint 11 día 7 — el recorrido completo del sprint", () => {
       // Caret at offset 0, which equals the run's own `from` · +"Hoy: " (5 chars) pushes the run
       // along to [5,18) without taking the inserted text in — the one asymmetry the whole table
       // rests on.
-      await subheadline.click();
+      await intoWriting(subheadline);
       await caretAt(subheadline, "SoloXXmilloYY", "start");
       await studio.keyboard.type("Hoy: ");
       await studio.keyboard.press("Enter");
@@ -3757,7 +3805,7 @@ describe("sprint 11 día 7 — el recorrido completo del sprint", () => {
 
       // ---- row 4: deleting PART of the run shrinks it ----
       // "XX" sits entirely inside [5,18) · removing it leaves the run at [5,16).
-      await subheadline.click();
+      await intoWriting(subheadline);
       await selectWord(subheadline, "XX");
       await studio.keyboard.press("Backspace");
       await studio.keyboard.press("Enter");
@@ -3766,7 +3814,7 @@ describe("sprint 11 día 7 — el recorrido completo del sprint", () => {
       await expect(subheadline).toHaveText("Hoy: SolomilloYY al whisky");
 
       // ---- row 5: deleting ALL of the run removes it, leaving no empty run behind ----
-      await subheadline.click();
+      await intoWriting(subheadline);
       await selectWord(subheadline, "SolomilloYY");
       await studio.keyboard.press("Backspace");
       await studio.keyboard.press("Enter");
@@ -3783,7 +3831,7 @@ describe("sprint 11 día 7 — el recorrido completo del sprint", () => {
       //      text an owner types, and the one thing that must never change is that a <script>
       //      typed into a field stays text on the page ----
       const headline = frame.locator('[data-id="el-headline"]');
-      await headline.click();
+      await intoWriting(headline);
       await studio.keyboard.press("ControlOrMeta+a");
       await studio.keyboard.type("Reformas Vega <script>alert(1)</script>");
       await studio.keyboard.press("Enter");
@@ -3910,12 +3958,12 @@ describe("sprint 12 día 3 — el input anclado y el atajo de deshacer", () => {
       const frame = studio.frameLocator(PREVIEW).first();
       const sub = frame.locator('[data-id="el-subheadline"]');
 
-      await sub.click();
+      await intoWriting(sub);
       await studio.keyboard.type("pan y pan y aceite");
       await studio.keyboard.press("Enter");
       await expect(sub).toHaveText("pan y pan y aceite");
 
-      await sub.click();
+      await intoWriting(sub);
       await selectWord(sub, "pan");
       await frame.locator('.rb-toolbar-mark[data-mark="strong"]').click();
       await expect(sub.locator("strong")).toHaveText("pan");
@@ -4050,7 +4098,7 @@ describe("sprint 12 día 7 — el recorrido completo del sprint", () => {
 
       // ---- day 3a: a mark on it, then an edit from the panel that the diff would have broken --
       const cardDescription = card.locator("p").first();
-      await cardDescription.click();
+      await intoWriting(cardDescription);
       await selectWord(cardDescription, "pan");
       await frame.locator('.rb-toolbar-mark[data-mark="strong"]').click();
       await expect(cardDescription.locator("strong")).toHaveText("pan");
@@ -4117,10 +4165,15 @@ describe("sprint 12 día 7 — el recorrido completo del sprint", () => {
       await walk.keyboard.press("Control+y");
       await expect(cardDescription).toHaveText("pan y aceite de la tierra");
 
-      // Inside a text being edited the browser keeps its own undo, which is the condition the
-      // shortcut was written under: taking it would mean correcting a word costs the sentence.
+      // Inside a text **being written in** the browser keeps its own undo, which is the condition
+      // the shortcut was written under: taking it would mean correcting a word costs the sentence.
+      //
+      // **Two clicks since ADR 0047**, and the change is the point rather than an adjustment: with
+      // the text merely *chosen* the guard does not apply and `Meta+Z` is the document's undo —
+      // correctly, because chosen is not editing. This walk means «while writing», so it now has to
+      // say so, and the state it was relying on has a name.
       const headline = frame.locator('[data-id="el-headline"]');
-      await headline.click();
+      await intoWriting(headline);
       await walk.keyboard.press("Meta+z");
       await walk.keyboard.press("Escape");
       await expect(headline).toHaveText("Taberna del Puerto");
@@ -4458,7 +4511,7 @@ describe("sprint 13 día 3 — lo que solo informaba", () => {
     const { studio, frame } = await studioOnCover();
     try {
       const sub = frame.locator('[data-id="el-subheadline"]');
-      await sub.click();
+      await intoWriting(sub);
       await frame.locator(".rb-toolbar").waitFor();
       // Focus selects the whole element, so the marks are there to start with.
       await expect(frame.locator(".rb-toolbar-mark").first()).toBeVisible();
@@ -4794,9 +4847,9 @@ describe("sprint 13 día 6 — las pantallas que faltaban, y los dos fallos sile
 
       // Touch it first: that is what makes the toast persistent.
       const heading = frame.locator('[data-section="sec-services"] [data-id]').first();
-      await heading.click();
+      await intoWriting(heading);
       await page.keyboard.type(" y más");
-      await page.getByText("Haz clic en cualquier texto para cambiarlo").click();
+      await editHint(page).click();
       await expect(page.getByText("Guardado en este navegador")).toBeVisible();
 
       await frame.locator('[data-section="sec-services"]').click();
@@ -5149,17 +5202,20 @@ describe("sprint 13 día 7 — el clic que se perdía mientras la vista previa p
       const headline = frame.locator('[data-id="el-headline"]');
       const before = (await headline.textContent())?.trim() ?? "";
       const atPress = await canvasSnapshot(page, "sec-cover");
-      await headline.click();
+      await intoWriting(headline);
+      // **Asserted at the moment of typing, not before the gesture** — which is stronger than the
+      // version this replaces. Writing now takes two clicks (ADR 0047), so the state that matters
+      // is the one the keystrokes land in: the frame must still be loading *then*.
       expect(await frame.locator("body").evaluate(() => document.readyState)).not.toBe("complete");
       // A string the generated page cannot already be saying, read back exactly. The first version of
       // this test typed « del Puerto» and asserted `/del Puerto/`, which the business name already
       // satisfied — so it passed against the broken code and proved nothing. The sabotage is what
       // said so.
       //
-      // It **replaces** rather than appends, and that is the editor's own behaviour: focusing a text
-      // selects the whole of it, which is why the toolbar draws `B`/`I` the moment a click lands.
+      // It **replaces** rather than appends, and that is the editor's own behaviour: entering
+      // writing selects the whole field, which is why the toolbar draws `B`/`I` on arrival.
       await page.keyboard.type("ZZQ");
-      await page.getByText("Haz clic en cualquier texto para cambiarlo").click();
+      await editHint(page).click();
 
       await withProbeOnFailure(page, "sec-cover", atPress, async () => {
         await expect(page.getByText("Guardado en este navegador")).toBeVisible();
@@ -5298,7 +5354,7 @@ describe("la ficha nueva nace con el cursor dentro, y quitar una no lo tira al s
       // Sin un solo clic más: el foco tiene que haber llegado solo a la ficha nueva.
       await expect.poll(async () => (await focusedLine(page)).at).toBe(3);
       await page.keyboard.type("Paella de la casa");
-      await page.getByText("Haz clic en cualquier texto para cambiarlo").click();
+      await editHint(page).click();
 
       // Sustituido, no añadido: eso solo pasa si el marcador estaba seleccionado al llegar el foco.
       await expect(cards.nth(3)).toContainText("Paella de la casa");
@@ -5334,14 +5390,14 @@ describe("la ficha nueva nace con el cursor dentro, y quitar una no lo tira al s
       await expect.poll(async () => (await focusedLine(page)).at).toBe(3);
 
       // El clic que rompía esto: el campo ya tiene el foco, así que no habrá un segundo `focus`.
-      const fresh = cards.nth(3).locator('[contenteditable="true"]').first();
+      const fresh = cards.nth(3).locator("[data-rb-text]").first();
       const placeholder = (await fresh.innerText()).trim();
       expect(placeholder.length, "la ficha nueva llegó sin marcador que sustituir").toBeGreaterThan(
         0,
       );
-      await fresh.click();
+      await intoWriting(fresh);
       await page.keyboard.type("Menú del día");
-      await page.getByText("Haz clic en cualquier texto para cambiarlo").click();
+      await editHint(page).click();
 
       const after = (await fresh.innerText()).trim();
       expect(after, `quedó «${after}» en vez de sustituir «${placeholder}»`).toBe("Menú del día");
@@ -5463,7 +5519,7 @@ describe("sprint 13 día 7 — el recorrido completo del sprint", () => {
 
       // ---- day 3c: B and I are not drawn without a selection, which is what mockup 18 says ----
       const sub = frame.locator('[data-id="el-subheadline"]');
-      await sub.click();
+      await intoWriting(sub);
       await frame.locator(".rb-toolbar").waitFor();
       await expect(frame.locator(".rb-toolbar-mark").first()).toBeVisible();
       await walk.keyboard.press("ArrowRight");
@@ -5490,7 +5546,7 @@ describe("sprint 13 día 7 — el recorrido completo del sprint", () => {
       await expect(walk.getByText("Guardado en este navegador")).toBeVisible();
 
       // ---- day 2b: an exact size goes into the field, and not into the headline ---------------
-      await headline.click();
+      await intoWriting(headline);
       const exactSize = frame.locator('.rb-toolbar-exact[aria-label^="Tamaño"]');
       await exactSize.click();
       await walk.keyboard.type("43");
@@ -5500,7 +5556,7 @@ describe("sprint 13 día 7 — el recorrido completo del sprint", () => {
       await expect(walk.getByText("Guardado en este navegador")).toBeVisible();
 
       // ---- day 3a: an exact measurement shows in the select and cannot be chosen from it ------
-      await headline.click();
+      await intoWriting(headline);
       const corners = frame.locator('.rb-toolbar-exact[aria-label^="Esquinas"]');
       await corners.click();
       await walk.keyboard.type("9");
@@ -6257,7 +6313,7 @@ describe("sprint 14 día 6 — enlazar, avisar y desenlazar", () => {
       // Click into the first card's title, in the canvas, with a real press.
       const title = frame.locator('[data-section="sec-services"] li.rb-item h3').first();
       const was = (await title.textContent())?.trim() ?? "";
-      await title.click();
+      await intoWriting(title);
       await frame.locator(".rb-toolbar").waitFor();
 
       // **The notice is there before anything is typed** — one section shows it, so it says where
@@ -6265,7 +6321,7 @@ describe("sprint 14 día 6 — enlazar, avisar y desenlazar", () => {
       await expect(frame.locator(".rb-toolbar-notice")).toHaveText(/viene de la lista/);
 
       await page.keyboard.type("Chapa y pintura");
-      await page.getByText("Haz clic en cualquier texto para cambiarlo").click();
+      await editHint(page).click();
       await expect(page.getByText("Guardado en este navegador")).toBeVisible();
 
       // The card shows it, and so does the **list**: the edit went to the entry.
@@ -6469,12 +6525,12 @@ describe("sprint 14 día 7 — el recorrido completo del sprint", () => {
 
       // ---- days 5 and 6: one edit, both sections ------------------------------------------------
       const first = frame.locator('[data-preset="services"] li.rb-item h3').first();
-      await first.click();
+      await intoWriting(first);
       await frame.locator(".rb-toolbar").waitFor();
       // The warning, before a character is typed, and now naming the count.
       await expect(frame.locator(".rb-toolbar-notice")).toHaveText(/2 sitios/);
       await walk.keyboard.type("Comidas caseras");
-      await walk.getByText("Haz clic en cualquier texto para cambiarlo").click();
+      await editHint(walk).click();
       await expect(walk.getByText("Guardado en este navegador")).toBeVisible();
       await expect(frame.getByText("Comidas caseras")).toHaveCount(2);
 
@@ -6658,9 +6714,9 @@ describe("sprint 14 día 7 — colchón: el segundo deshacer", () => {
       // Five history steps on one element, so five undos are individually visible — and typing them
       // at all is the first half of the measurement: with the old wiring, three of these are lost.
       for (const text of ["UNO", "DOS", "TRES", "CUATRO", "CINCO"]) {
-        await headline.click();
+        await intoWriting(headline);
         await page.keyboard.type(text);
-        await page.getByText("Haz clic en cualquier texto para cambiarlo").click();
+        await editHint(page).click();
         await expect(page.getByText("Guardado en este navegador")).toBeVisible();
       }
       await expect(headline, "an edit was lost before the undos were even pressed").toHaveText(
@@ -10450,7 +10506,7 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
       const subheadline = frame.locator('[data-id="el-subheadline"]');
       await expect(subheadline).toHaveText("Comer, beber y quedarse un rato");
 
-      await subheadline.click();
+      await intoWriting(subheadline);
       await selectWord(subheadline, "beber");
       await frame.locator('.rb-toolbar-mark[data-mark="strong"]').click();
       await expect(subheadline.locator("strong")).toHaveText("beber");
@@ -10694,12 +10750,10 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
       ).toBeGreaterThan(80);
 
       // Una edición en la sección que se está leyendo, con el ratón y el teclado.
-      const target = frame
-        .locator('[data-section="sec-services"] [contenteditable="true"]')
-        .first();
-      await target.click();
+      const target = frame.locator('[data-section="sec-services"] [data-rb-text]').first();
+      await intoWriting(target);
       await walker.keyboard.type("Cocina");
-      await walker.getByText("Haz clic en cualquier texto para cambiarlo").click();
+      await editHint(walker).click();
       await expect(frame.getByText("Cocina").first()).toBeVisible();
       await expect(walker.getByText("Guardado en este navegador")).toBeVisible();
 
@@ -11137,7 +11191,7 @@ describe("sprint 17 día 3 — el lienzo se maneja con el teclado", () => {
        * to cause.
        */
       const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
-      await headline.click();
+      await intoWriting(headline);
       expect(await focusedElementId(page)).toBe("el-headline");
 
       const before = await focusedSection(page);
@@ -12639,7 +12693,7 @@ describe("sprint 18 día 7 — el recorrido como un desconocido, de la landing a
       const headline = frame.locator('[data-id="el-headline"]');
       await clickToEdit(frame, headline);
       await page.keyboard.type("Taberna ZZQ");
-      await page.getByText("Haz clic en cualquier texto para cambiarlo").click();
+      await editHint(page).click();
       await expect(headline).toHaveText("Taberna ZZQ");
 
       // One style change, read off the page's own token rather than off the radio.
@@ -12875,7 +12929,7 @@ describe("sprint 19 día 5 — editar en la ficha, la puerta y el ZIP", () => {
       await expect(frame.locator(".rb-toolbar-notice")).toContainText("aparece en 2 sitios");
       // Focus selects the whole title, which is this field's contract: the first keystroke replaces.
       await page.keyboard.type("Comidas del día");
-      await page.getByText("Haz clic en cualquier texto para cambiarlo").click();
+      await editHint(page).click();
       await expect(cardTitle).toHaveText("Comidas del día");
 
       // ---- on the drawn page, the same text is the entry's, and editing it changes the card ----
@@ -12885,7 +12939,7 @@ describe("sprint 19 día 5 — editar en la ficha, la puerta y el ZIP", () => {
       await clickToEdit(frame, headline);
       await expect(frame.locator(".rb-toolbar-notice")).toContainText("aparece en 2 sitios");
       await page.keyboard.type("Comidas del día y noche");
-      await page.getByText("Haz clic en cualquier texto para cambiarlo").click();
+      await editHint(page).click();
       await expect(headline).toHaveText("Comidas del día y noche");
       await tabs.first().click();
       await expect(cardTitle).toHaveText("Comidas del día y noche");
@@ -13034,7 +13088,7 @@ describe("sprint 19 día 7 — el recorrido como un desconocido, con fichas y si
       await expect(headline).toHaveText("Comidas");
       await clickToEdit(frame, headline);
       await page.keyboard.type("Comidas caseras");
-      await page.getByText("Haz clic en cualquier texto para cambiarlo").click();
+      await editHint(page).click();
       await expect(headline).toHaveText("Comidas caseras");
 
       // The address declared in «Compartir», which gives the ZIP its sitemap (ADR 0029, amended).
@@ -14020,7 +14074,7 @@ describe("sprint 20 día 3 — la barra flotante se mueve, y recuerda el desplaz
     try {
       await intoTheCanvas(walker);
       const frame = walker.frameLocator(PREVIEW).first();
-      await frame.locator(HEADLINE).click();
+      await intoWriting(frame.locator(HEADLINE));
       await expect(frame.locator(".rb-toolbar")).toHaveCount(1);
       const before = await bar(walker, HEADLINE);
       expect(before?.focusedId, "el titular no tiene el teclado antes de arrastrar").toBe(
@@ -14397,7 +14451,7 @@ describe("sprint 20 día 5 — el cierre, con las dos barras movidas", () => {
     try {
       await intoTheCanvas(walker);
       const frame = walker.frameLocator(PREVIEW).first();
-      await frame.locator(HEADLINE).click();
+      await intoWriting(frame.locator(HEADLINE));
       await expect(frame.locator(".rb-toolbar")).toHaveCount(1);
 
       const words = () =>
@@ -15083,6 +15137,176 @@ describe("sprint 24 día 6 — la letra se elige por su nombre", () => {
       // Sixteen rows inside a sheet capped at 70% of the viewport: the sheet scrolls, and the one
       // thing that must not happen is a row pushing the page sideways (ADR 0042).
       expect(await overflowing(studio), "something spills at 390").toEqual([]);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+});
+
+/**
+ * **Sprint 24 día 7 — un texto se elige antes de escribir en él** (ADR 0047).
+ *
+ * `contentEditable` stopped being permanent, which is the biggest-radius change of the sprint: until
+ * today every text in the canvas was editable from the moment the frame was wired, so one gesture
+ * meant two things and there was none left for «move this». These two walks hold the model itself —
+ * the states, the gestures into and out of them, and the chrome that says which one you are in —
+ * with the pointer and with the keyboard alone.
+ *
+ * **The keyboard half is not decoration.** A text was reachable by Tab before today *because* it
+ * was editable; taking the attribute away would have taken that with it and left «escribir sin
+ * ratón» impossible, and nothing in the suite would have gone red. It also found a defect that
+ * would have shipped: entering writing from a text that already has focus fires no `focus` event,
+ * so the capture never started and the field was never selected — typing appended instead of
+ * replacing.
+ */
+describe("sprint 24 día 7 — un texto se elige antes de escribir en él", () => {
+  const VIEWPORT = { width: 1440, height: 900 };
+  const HEADLINE = '[data-section="sec-cover"] [data-id="el-headline"]';
+
+  /** What the canvas's focus is in, as the two states see it. */
+  function textFocus(page: Page): Promise<{
+    id: string | null;
+    text: string | null;
+    chosen: boolean;
+    writing: boolean;
+    describedBy: string | null;
+  }> {
+    return page.evaluate(() => {
+      const doc = document.querySelector<HTMLIFrameElement>(
+        "iframe:not([data-buffered])",
+      )?.contentDocument;
+      const active = doc?.activeElement as HTMLElement | null | undefined;
+      return {
+        id: active?.dataset?.["id"] ?? null,
+        text: active?.dataset?.["rbText"] ?? null,
+        chosen: active?.classList?.contains("rb-chosen") ?? false,
+        writing: active?.getAttribute?.("contenteditable") === "true",
+        describedBy: active?.getAttribute?.("aria-describedby") ?? null,
+      };
+    });
+  }
+
+  it("un clic elige, el segundo escribe, y Esc vuelve a elegido", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      const headline = frame.locator(HEADLINE);
+      const original = (await headline.innerText()).trim();
+      expect(original.length, "the cover came with no headline to edit").toBeGreaterThan(0);
+
+      // ---- nothing is editable until somebody says so ----
+      await expect(headline).toHaveAttribute("data-rb-text", "1");
+      await expect(headline).not.toHaveAttribute("contenteditable", "true");
+
+      // ---- one click: chosen ----
+      await headline.click();
+      await expect(headline).toHaveClass(/rb-chosen/);
+      await expect(headline).not.toHaveAttribute("contenteditable", "true");
+      const hint = frame.locator(".rb-hint");
+      await expect(hint).toHaveText("Doble clic o Intro para escribir");
+      // The hint is the text's own description, so it is not advice only the eye gets.
+      expect(await textFocus(page)).toMatchObject({
+        id: "el-headline",
+        chosen: true,
+        writing: false,
+        describedBy: "rb-hint",
+      });
+
+      // **And typing does not reach the page**, which is the whole of what the first state buys:
+      // the gesture that used to place a caret now means «this one», so a drag is free to mean
+      // «move it» from día 8 — and a stray keystroke on arrival no longer replaces a heading.
+      await page.keyboard.type("NO");
+      await expect(headline).toHaveText(original);
+
+      // ---- the second click: writing, with the field selected so typing replaces ----
+      await headline.click();
+      await expect(headline).toHaveAttribute("contenteditable", "true");
+      await expect(frame.locator(".rb-hint")).toHaveCount(0);
+      await page.keyboard.type("Taberna del Puerto");
+      await expect(headline).toHaveText("Taberna del Puerto");
+
+      // ---- Escape: the words come back, and the text stays chosen rather than deselected ----
+      await page.keyboard.press("Escape");
+      await expect(headline).toHaveText(original);
+      await expect(headline).not.toHaveAttribute("contenteditable", "true");
+      await expect(headline).toHaveClass(/rb-chosen/);
+      await expect(frame.locator(".rb-hint")).toHaveCount(1);
+
+      // ---- Intro commits, and the choice survives the rebuild every edit causes ----
+      await headline.click();
+      await expect(headline).toHaveAttribute("contenteditable", "true");
+      await page.keyboard.type("Taberna Santo Domingo");
+      await page.keyboard.press("Enter");
+      await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+
+      const after = frame.locator(HEADLINE);
+      await expect(after).toHaveText("Taberna Santo Domingo");
+      await expect(after).toHaveClass(/rb-chosen/);
+      await expect(after).not.toHaveAttribute("contenteditable", "true");
+
+      // ---- and Escape from chosen gives the keyboard back to the section ----
+      await after.click();
+      await expect(after).toHaveAttribute("contenteditable", "true");
+      await page.keyboard.press("Escape");
+      await expect(after).toHaveClass(/rb-chosen/);
+      // Still on the text, which is what makes «chosen» a place the keyboard can be rather than a
+      // look: the press that ends an edit must not strand focus on the document body.
+      expect(await textFocus(page)).toMatchObject({ id: "el-headline", chosen: true });
+      await page.keyboard.press("Escape");
+      await expect(frame.locator(".rb-chosen")).toHaveCount(0);
+      await expect(frame.locator(".rb-hint")).toHaveCount(0);
+      expect(await focus(page)).toMatchObject({ section: "sec-cover", onSection: true });
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("llega a los dos estados y escribe sin tocar el ratón", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+
+      // Into the canvas and onto a section, with Tab and the arrows — the route sprint 17 built.
+      await keyboardTo(page, "sec-cover");
+      // And from the section into its own text: the same Tab stops a text has had since sprint 2,
+      // because it was editable then and is focusable now.
+      let presses = 0;
+      while (presses < 12 && (await textFocus(page)).text === null) {
+        await page.keyboard.press("Tab");
+        presses += 1;
+      }
+      const arrived = await textFocus(page);
+      expect(arrived.text, `Tab never reached a text in ${presses} presses`).toBe("1");
+      // **Arriving chooses it**, which is what makes the keyboard's route the same route the
+      // pointer takes rather than a second model beside it.
+      expect(arrived.chosen, "arriving at a text did not choose it").toBe(true);
+      expect(arrived.writing, "Tab landed inside an editable field").toBe(false);
+
+      const target = frame.locator(`[data-id="${arrived.id}"]`).first();
+      const original = (await target.innerText()).trim();
+
+      // Intro writes. This is the case that fires no `focus` event — the text already has the
+      // keyboard — so it is the one that proves the capture starts anyway.
+      await page.keyboard.press("Enter");
+      expect((await textFocus(page)).writing, "Intro did not start writing").toBe(true);
+      await page.keyboard.type("Cocina de mercado");
+      await expect(target).toHaveText("Cocina de mercado");
+
+      // Escape puts the words back and leaves the text chosen, with no mouse anywhere.
+      await page.keyboard.press("Escape");
+      await expect(target).toHaveText(original);
+      expect(await textFocus(page)).toMatchObject({ chosen: true, writing: false });
+
+      // And Intro again, then Intro to commit: the edit lands in the document.
+      await page.keyboard.press("Enter");
+      await page.keyboard.type("Cocina de mercado");
+      await page.keyboard.press("Enter");
+      await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+      await expect(frame.getByText("Cocina de mercado").first()).toBeVisible();
     } finally {
       await context.close();
     }
