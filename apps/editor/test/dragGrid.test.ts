@@ -1,13 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { MAX_ROW } from "../src/editor/designTree.ts";
 import {
+  announceText,
+  arrowAction,
+  arrowDrop,
   cellAt,
   columnWidth,
   dropAt,
   type GridMetrics,
   overlaps,
   rectOf,
+  reorderAt,
 } from "../src/editor/dragGrid.ts";
+import type { KeyPress } from "../src/editor/shortcuts.ts";
 
 /**
  * Where a dragged element lands and whether it may (ADR 0048, sprint 24 día 8).
@@ -241,5 +246,194 @@ describe("rectOf", () => {
     const rect = rectOf({ column: 1, columnSpan: 2, row: 4, rowSpan: 1 }, metrics);
     expect(rect.top).toBeCloseTo(rowTop(3) + 44 + metrics.rowGap, 1);
     expect(rect.height).toBe(44);
+  });
+});
+
+describe("arrowAction", () => {
+  const press = (key: string, modifiers: Partial<KeyPress> = {}): KeyPress => ({
+    key,
+    altKey: false,
+    metaKey: false,
+    ctrlKey: false,
+    shiftKey: false,
+    ...modifiers,
+  });
+
+  it("moves one cell per bare arrow, in both axes", () => {
+    expect(arrowAction(press("ArrowLeft"))).toEqual({ kind: "move", column: -1, row: 0 });
+    expect(arrowAction(press("ArrowRight"))).toEqual({ kind: "move", column: 1, row: 0 });
+    expect(arrowAction(press("ArrowUp"))).toEqual({ kind: "move", column: 0, row: -1 });
+    expect(arrowAction(press("ArrowDown"))).toEqual({ kind: "move", column: 0, row: 1 });
+  });
+
+  it("widens and narrows with Shift, sideways only", () => {
+    // **This is the clause that amends ADR 0047 §1**, and only in the chosen state: there is no
+    // caret there, so «Shift+Arrow is a selection gesture everywhere» does not apply.
+    expect(arrowAction(press("ArrowRight", { shiftKey: true }))).toEqual({
+      kind: "span",
+      columns: 1,
+    });
+    expect(arrowAction(press("ArrowLeft", { shiftKey: true }))).toEqual({
+      kind: "span",
+      columns: -1,
+    });
+    // Vertical with Shift does nothing: a row's height is its content's, and `rowSpan` belongs to
+    // the panel's own stepper. Half a pair here would read as the other half being broken.
+    expect(arrowAction(press("ArrowDown", { shiftKey: true }))).toEqual({ kind: "none" });
+    expect(arrowAction(press("ArrowUp", { shiftKey: true }))).toEqual({ kind: "none" });
+  });
+
+  it("takes nothing with Alt, Meta or Control, nor any other key", () => {
+    for (const modifier of ["altKey", "metaKey", "ctrlKey"] as const) {
+      expect(arrowAction(press("ArrowRight", { [modifier]: true })), modifier).toEqual({
+        kind: "none",
+      });
+    }
+    for (const key of ["Enter", "Escape", "a", "Tab", " "]) {
+      expect(arrowAction(press(key)), key).toEqual({ kind: "none" });
+    }
+  });
+});
+
+describe("arrowDrop", () => {
+  const headline = place("el-headline", 1, 4, 1, 1);
+  const photo = place("el-photo", 9, 4, 1, 2);
+  const section = [headline, photo];
+
+  it("moves one cell, keeping the spans", () => {
+    expect(
+      arrowDrop({
+        moving: headline,
+        placements: section,
+        action: { kind: "move", column: 1, row: 0 },
+      }),
+    ).toEqual({ kind: "place", at: { column: 2, columnSpan: 4, row: 1, rowSpan: 1 } });
+  });
+
+  it("refuses the cell another element holds, with the same word the drag uses", () => {
+    // One vocabulary and one refusal for the hand and the keyboard: otherwise the arrows would
+    // quietly do what the drag is told it may not (ADR 0048 §4).
+    const against = place("el-headline", 8, 4, 1, 1);
+    expect(
+      arrowDrop({
+        moving: against,
+        placements: [against, photo],
+        action: { kind: "move", column: 1, row: 0 },
+      }),
+    ).toMatchObject({ kind: "refuse", why: "occupied" });
+  });
+
+  it("does nothing at the edges, rather than clamping a deliberate press", () => {
+    expect(
+      arrowDrop({
+        moving: headline,
+        placements: section,
+        action: { kind: "move", column: -1, row: 0 },
+      }),
+    ).toEqual({ kind: "none" });
+    expect(
+      arrowDrop({
+        moving: headline,
+        placements: section,
+        action: { kind: "move", column: 0, row: -1 },
+      }),
+    ).toEqual({ kind: "none" });
+    // Nine columns wide starting at nine would reach seventeen.
+    expect(
+      arrowDrop({ moving: photo, placements: section, action: { kind: "span", columns: 1 } }),
+    ).toEqual({ kind: "none" });
+    // And one column cannot become none.
+    const thin = place("el-thin", 1, 1, 6, 1);
+    expect(
+      arrowDrop({ moving: thin, placements: [thin], action: { kind: "span", columns: -1 } }),
+    ).toEqual({ kind: "none" });
+  });
+
+  it("refuses past the interface's own floor on rows", () => {
+    const low = place("el-low", 1, 2, MAX_ROW, 1);
+    expect(
+      arrowDrop({ moving: low, placements: [low], action: { kind: "move", column: 0, row: 1 } }),
+    ).toEqual({ kind: "none" });
+  });
+
+  it("widens into free cells and refuses widening into a taken one", () => {
+    const narrow = place("el-narrow", 1, 4, 1, 1);
+    expect(
+      arrowDrop({
+        moving: narrow,
+        placements: [narrow, photo],
+        action: { kind: "span", columns: 1 },
+      }),
+    ).toEqual({ kind: "place", at: { column: 1, columnSpan: 5, row: 1, rowSpan: 1 } });
+    const wide = place("el-wide", 1, 8, 1, 1);
+    expect(
+      arrowDrop({ moving: wide, placements: [wide, photo], action: { kind: "span", columns: 1 } }),
+    ).toMatchObject({ kind: "refuse", why: "occupied" });
+  });
+
+  it("answers none to none, so a key nobody mapped changes nothing", () => {
+    expect(arrowDrop({ moving: headline, placements: section, action: { kind: "none" } })).toEqual({
+      kind: "none",
+    });
+  });
+});
+
+describe("announceText", () => {
+  it("says where it went, in the words the owner's language uses", () => {
+    expect(announceText({ column: 3, columnSpan: 4, row: 2, rowSpan: 1 }, "move")).toBe(
+      "Columna 3 de 12, fila 2",
+    );
+  });
+
+  it("says how wide it is when the width is what changed", () => {
+    // Two sentences for two acts: a move that said «ancho 4» every time would bury the number that
+    // changed under one that did not.
+    expect(announceText({ column: 3, columnSpan: 5, row: 2, rowSpan: 1 }, "span")).toBe(
+      "Ancho 5 de 12 columnas, desde la columna 3",
+    );
+  });
+});
+
+describe("reorderAt", () => {
+  // Three elements stacked as a phone shows them, with a gap between each.
+  const rows = [
+    { elementId: "el-headline", top: 0, bottom: 60 },
+    { elementId: "el-photo", top: 80, bottom: 380 },
+    { elementId: "el-cta", top: 400, bottom: 444 },
+  ];
+
+  it("moves an element up when it is dragged above its own box", () => {
+    expect(reorderAt({ rows, moving: "el-photo", y: -20 })).toEqual({
+      kind: "moveUp",
+      elementId: "el-photo",
+    });
+  });
+
+  it("moves the neighbour below up when the element is dragged under its own box", () => {
+    // Dragging down **is** the one below moving up: one verb, one history step, and no second
+    // function in the schema to keep level with the first.
+    expect(reorderAt({ rows, moving: "el-photo", y: 500 })).toEqual({
+      kind: "moveUp",
+      elementId: "el-cta",
+    });
+  });
+
+  it("does nothing while the finger is still inside the element's own box", () => {
+    // Which is also «sideways does nothing», because only `y` is read: rule 7 admits hiding,
+    // reordering and narrowing, and there is no column on a phone to move between.
+    // Inside **its own** box, which is 80 to 380 — not 0, which is the headline's own top edge and
+    // is therefore «dragged above itself», as the first version of this list wrongly asserted.
+    for (const y of [80, 200, 380]) {
+      expect(reorderAt({ rows, moving: "el-photo", y }), String(y)).toEqual({ kind: "none" });
+    }
+  });
+
+  it("does nothing at the ends, where there is nothing to trade places with", () => {
+    expect(reorderAt({ rows, moving: "el-headline", y: -100 })).toEqual({ kind: "none" });
+    expect(reorderAt({ rows, moving: "el-cta", y: 900 })).toEqual({ kind: "none" });
+  });
+
+  it("does nothing for an element the page is not showing", () => {
+    expect(reorderAt({ rows, moving: "el-hidden", y: 900 })).toEqual({ kind: "none" });
   });
 });
