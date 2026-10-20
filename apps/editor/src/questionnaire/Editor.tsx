@@ -62,9 +62,11 @@ import {
   type Bounds,
   clampToHost,
   cornerPoint,
+  DRAG_THRESHOLD,
   dragged,
   gripKeyAction,
   isDrag,
+  isDragBeyond,
   nextCorner,
   offsetBetween,
   type Point,
@@ -77,7 +79,6 @@ import {
 import { holdFor } from "../editor/buildingScreen.ts";
 import { canvasLinkTarget } from "../editor/canvasLinks.ts";
 import { CHROME_SCALE, PILL_REST_BORDER, VERB_SCALE } from "../editor/chromeScale.ts";
-import { toCoarse, toFine } from "../editor/coarseBoundary.ts";
 import type { SwitchNotice } from "../editor/designTools.ts";
 import {
   designRows,
@@ -97,7 +98,6 @@ import {
   type Drop,
   dropAt,
   type GridMetrics,
-  rectOf,
   reorderAt,
 } from "../editor/dragGrid.ts";
 import {
@@ -842,8 +842,8 @@ export function Editor({
   /**
    * A counter that makes the **same** sentence audible twice.
    *
-   * An `aria-live` region announces a change, so «Aquí ya hay otro elemento» twice in a row would be
-   * read once. The parity of this counter appends a zero-width space — invisible, and nothing a
+   * An `aria-live` region announces a change, so «La sección no crece más hacia abajo» twice in a
+   * row would be read once. The parity of this counter appends a zero-width space — invisible, and nothing a
    * screen reader reads out — so the second refusal is a change like any other.
    */
   const announcements = useRef(0);
@@ -5206,78 +5206,67 @@ export function Editor({
       return Number.isFinite(parsed) ? parsed : 0;
     };
     const padLeft = px(style?.paddingLeft);
-    const padRight = px(style?.paddingRight);
     const padTop = px(style?.paddingTop);
     const tracks = (value: string | undefined) =>
       (value ?? "")
         .split(" ")
         .map((entry) => Number.parseFloat(entry))
         .filter((entry) => Number.isFinite(entry));
-    const rows = tracks(style?.gridTemplateRows);
-    // A free section has no `column-gap`: its eleven gutters are tracks of their own, the ninth
-    // and every ninth after it (ADR 0050, `fineTemplateColumns`). The twelve-column arithmetic
-    // below still describes the fine grid to the pixel once it is given that gutter as its gap.
-    const columns = tracks(style?.gridTemplateColumns);
-    const gutter = columns.length === FINE_TRACKS ? (columns[FINE_PER_COLUMN] ?? 0) : null;
     return {
       left: box.left + padLeft,
       top: box.top + padTop,
-      width: box.width - padLeft - padRight,
-      columnGap: gutter ?? px(style?.columnGap),
-      rowGap: px(style?.rowGap),
-      rows,
+      // Both axes as the browser resolved them — the fine grid's 107 column tracks, gutters
+      // included, and every row the grid has. Nothing is recomputed from a width and a gap: see
+      // `dragGrid.ts` for why the rows cannot be, and why the columns should not be either.
+      columns: tracks(style?.gridTemplateColumns),
+      rows: tracks(style?.gridTemplateRows),
     };
   }
 
   /**
-   * The ghost: where the element would land, drawn before anybody lets go — **including when the
-   * answer is no** (ADR 0048 §4, David's own requirement).
+   * The canvas's zoom, read off the frame itself — **what turns a threshold in screen pixels into
+   * one in the frame's** (ADR 0050 §6, David's adjustment 3).
    *
-   * Inside the section and `position: absolute`, so it rides the section's own scroll and cannot
-   * leave it; `pointer-events: none`, because a preview that can swallow the pointer mid-drag would
-   * end the drag it is previewing.
+   * The card is scaled by a `transform` outside the iframe, so everything inside it is in the
+   * document's own pixels: three of them are 2.2 on screen at a zoom of 0.74, and a gesture that
+   * armed at three frame pixels would arm sooner than a hand means it. Dividing the threshold by
+   * this is what keeps «three pixels» the same three pixels at every window width.
+   *
+   * Read rather than passed, and from two numbers the frame itself has: its own box, which is
+   * scaled, against its viewport's width, which is not. A `1` for a frame with no view yet is the
+   * honest fallback — no zoom is the state the shell starts in.
    */
-  function drawGhost(section: HTMLElement, metrics: GridMetrics, drop: Drop) {
-    const iframeDoc = section.ownerDocument;
-    let ghost = section.querySelector<HTMLElement>(".rb-ghost");
-    if (!ghost) {
-      ghost = iframeDoc.createElement("div");
-      ghost.className = "rb-ghost";
-      ghost.setAttribute("aria-hidden", "true");
-      section.appendChild(ghost);
-    }
-    const rect = rectOf(drop.at, metrics);
-    const box = section.getBoundingClientRect();
-    ghost.style.left = `${Math.round(rect.left - box.left)}px`;
-    ghost.style.top = `${Math.round(rect.top - box.top)}px`;
-    ghost.style.width = `${Math.round(rect.width)}px`;
-    ghost.style.height = `${Math.round(rect.height)}px`;
-    ghost.classList.toggle("rb-ghost-no", drop.kind === "refuse");
-    ghost.textContent =
-      drop.kind === "refuse"
-        ? drop.why === "occupied"
-          ? es["editor.drag.occupied"]
-          : es["editor.drag.rows"]
-        : "";
+  function zoomOf(iframeDoc: Document): number {
+    const view = iframeDoc.defaultView;
+    const frame = view?.frameElement as HTMLElement | null | undefined;
+    const inner = view?.innerWidth ?? 0;
+    const width = frame?.getBoundingClientRect().width ?? 0;
+    return inner > 0 && width > 0 ? width / inner : 1;
   }
 
   /**
-   * **The first drag this editor has ever had over the document** (ADR 0048).
+   * **The element follows the hand and stays where it is let go** (ADR 0050 §6, sprint 25 día 3).
    *
-   * The two drags that existed before move *chrome* — the verbs' cluster and the text bar — and
-   * write nothing into the page. This one moves an element and is a history step.
+   * This is the sprint's own request: «quiero que al arrastrar un elemento visual este se quede en
+   * la posición donde se deja», and three of sprint 24's decisions change shape for it.
    *
-   * **What it rests on, and why it could not have come sooner:** until yesterday every text in the
-   * canvas was permanently `contentEditable`, so a drag over one selected words and there was no
-   * gesture to spare (ADR 0047). The states are the precondition, and they are applied where the
-   * ambiguity actually is — a text must be **chosen** first, an image has no competing gesture and
-   * drags straight away.
+   * - **No ghost.** The element itself travels, on a `transform` — cromo, never the document, the
+   *   same way the floating bar moves. Yesterday's ghost existed because a twelve-column snap moved
+   *   the element somewhere else on release, so the honest preview was the destination's rectangle
+   *   rather than the element under the hand. With a unit of nine pixels the destination *is* where
+   *   the hand is, within four or five, so the element is the preview — and a second thing on screen
+   *   saying the same would be noise. (Amends ADR 0048 §5.)
+   * - **Overlapping is allowed**, so nothing is refused for being occupied and the stacking order is
+   *   the document's own. (Amends ADR 0048 §4.)
+   * - **A held click drags, whether or not the element was chosen first.** Yesterday a text had to
+   *   be chosen before it could be dragged, because a drag over a text selects words; movement is
+   *   what tells the two apart, and it is the thing the browser can be asked about. A click that
+   *   does not move still chooses, a second click still writes, and **inside a text being written
+   *   in, a drag still selects words** — which is the one place the ambiguity is real. (Amends
+   *   ADR 0047 §1 and ADR 0048 §8.)
    *
-   * **The element does not follow the pointer; a ghost shows where it would land.** That is a
-   * decision rather than a shortcut: an element's rendered width *is* its column span's width, so
-   * one dragged under the pointer would be drawn at the size it has rather than the size it would
-   * get, and a preview that lies about the result is worse than none. The ghost is drawn at the
-   * destination's real rectangle.
+   * On a phone the gesture still reorders (ADR 0049 §7), and in a section the catalog draws it still
+   * asks (ADR 0048 §7): neither of those is about where a pixel lands.
    *
    * **Written on `pointerup` and never on `pointermove`.** One drag is one step of history, which
    * is the product answer — and there is a technical one underneath it: every edit replaces the
@@ -5374,8 +5363,9 @@ export function Editor({
         mobileSwap = null;
         gesture = "none";
         asked = false;
-        section.classList.remove("rb-grid-live");
         el.classList.remove("rb-moving");
+        // The displacement is chrome and lives on the element for exactly as long as the hand does.
+        el.style.transform = "";
         iframeDoc.documentElement.classList.remove("rb-dragging");
         for (const ghost of iframeDoc.querySelectorAll(".rb-ghost")) ghost.remove();
       };
@@ -5400,9 +5390,21 @@ export function Editor({
          * A tap is what chooses, so touch needs no new gesture at all: tap once, then drag.
          */
         if (event.pointerType === "touch" && !chosen) return;
-        // And with a pointer, a text has to be chosen first — the precondition día 7 exists for.
-        // An image has no competing gesture there, so it needs none.
-        if (EDITABLE_TAGS.has(el.tagName) && !chosen) return;
+        /**
+         * **With a pointer nothing has to be chosen first** (ADR 0050 §6, amending ADR 0047 §1 and
+         * ADR 0048 §8).
+         *
+         * A text used to need choosing before it could be dragged, because a drag over a text
+         * selects words and the two gestures start identically. What tells them apart is movement,
+         * which the browser can be asked about — three screen pixels of travel is a drag and
+         * anything less is a click — so the precondition was protecting against an ambiguity that
+         * had already been resolved by the time it mattered. «Clic mantenido sobre el elemento
+         * arrastra» is David's own sentence for this sprint, and a held click that first has to be
+         * a released click is not that.
+         *
+         * The one place the ambiguity is real is **inside a text being written in**, and that is
+         * the line above: there every drag selects words, as it does in Word.
+         */
 
         const layout = findSection(doc, sectionId)?.section.layout ?? null;
         if (layout === null) {
@@ -5431,9 +5433,11 @@ export function Editor({
       el.addEventListener("pointermove", (event) => {
         if (!from) return;
         const now = { x: event.clientX, y: event.clientY };
-        // The same three pixels the bar's grip uses: below that a hand has not moved, it has
-        // trembled — and here it means a click, which belongs to the two states.
-        if (!isDrag(from, now) && !moved) return;
+        // The same three pixels the bar's grip uses — below that a hand has not moved, it has
+        // trembled, and here it means a click, which belongs to the two states — **but three
+        // pixels of the screen** (David's adjustment 3): inside the frame everything is in the
+        // document's own pixels, which the canvas's zoom scales on the way out.
+        if (!isDragBeyond(from, now, DRAG_THRESHOLD / zoomOf(iframeDoc)) && !moved) return;
 
         if (gesture === "ask") {
           if (asked) return;
@@ -5452,11 +5456,20 @@ export function Editor({
         if (!moving) return;
         if (!moved) {
           moved = true;
-          // The twelve stripes answer «which column will this land in», and on a phone there is
-          // only one column: drawing them there would be answering a question nobody asked.
-          if (deviceNow.current !== "mobile") section.classList.add("rb-grid-live");
+          // `.rb-moving` carries the `z-index` for as long as the gesture lasts (David's adjustment
+          // 5): a `transform` makes the element its own stacking context, and without a layer of
+          // its own it would travel *under* the siblings that come after it in the document.
           el.classList.add("rb-moving");
           iframeDoc.documentElement.classList.add("rb-dragging");
+          /**
+           * **And whatever the browser had started selecting is dropped.**
+           *
+           * Dragging over a text that is not being written in is a native selection, and until this
+           * sprint the precondition above is what kept the two apart. `user-select: none` on
+           * `.rb-dragging` stops it from growing; the range the first few pixels already made has
+           * to be taken away, or the gesture ends with half a headline highlighted.
+           */
+          iframeDoc.getSelection()?.removeAllRanges();
         }
         if (deviceNow.current === "mobile") {
           /**
@@ -5495,17 +5508,20 @@ export function Editor({
           return;
         }
 
-        const metrics = gridMetricsOf(section);
-        const placements = findSection(doc, sectionId)?.section.layout?.placements ?? [];
-        // The drag still snaps to the catalog's twelve columns until día 3; the document is in
-        // the fine grid's units (ADR 0050). `coarseBoundary.ts` is the only place the two meet.
+        /**
+         * **The element travels with the hand**, by the distance the hand has travelled — not to
+         * where the pointer is, which would snatch the element's corner under the cursor the
+         * instant the drag began. The same decision `barPosition`'s own drag made, for the same
+         * reason: a hand expects whatever it has picked up to keep the grip it took.
+         */
+        el.style.transform = `translate(${now.x - from.x}px, ${now.y - from.y}px)`;
+        // And where that would land, kept for the release. Read every move rather than once,
+        // because a row can grow under the hand while something above it reflows.
         outcome = dropAt({
-          metrics,
+          metrics: gridMetricsOf(section),
           at: { x: now.x - grab.x, y: now.y - grab.y },
-          moving: toCoarse(moving),
-          placements: placements.map(toCoarse),
+          moving,
         });
-        drawGhost(section, metrics, outcome);
       });
 
       const release = () => {
@@ -5517,15 +5533,35 @@ export function Editor({
         if (!wasMoved) return;
         // A drag is not a click, even where the browser sends one afterwards.
         justDragged = true;
-        // A refusal is not an edit: nothing moved, nothing is written, and the ghost has already
-        // said why while the hand was still holding it.
         if (swapWith !== null) {
           // The phone's answer: one swap, one history step, through the verb the document has.
           onMoveUpOnMobile(sectionId, swapWith);
-        } else if (drop?.kind === "place") {
-          const at = toFine(drop.at);
-          onSetPlacement(sectionId, elementId, { column: at.column, row: at.row });
+          return;
         }
+        /**
+         * **A refusal is not an edit, and with no ghost it has to be said.**
+         *
+         * The only refusal left is the floor on rows — four hundred of them, so a drag can only
+         * reach it in a section taller than anything anybody designs — and with the ghost gone
+         * there is nothing on screen to carry the sentence. «Nothing happened» is the one answer a
+         * drag must never give silently (ADR 0048 §4's principle, which outlived its refusal), so
+         * the live region says it.
+         */
+        if (drop?.kind === "refuse") {
+          announce(es["editor.drag.rows"]);
+          return;
+        }
+        if (drop?.kind !== "place") return;
+        /**
+         * **And the element it dropped is the chosen one**, which is what Canva and Word both do
+         * and what makes the gesture finish rather than stop: the outline says what moved, the
+         * arrows carry on from there, and día 4's edges have something to take hold of without a
+         * click nobody would think to make. A text chosen this way is one click from being written
+         * in, which is the two states exactly as ADR 0047 drew them.
+         */
+        markChosen(iframeDoc, el);
+        keepChosenFocus.current = true;
+        onSetPlacement(sectionId, elementId, { column: drop.at.column, row: drop.at.row });
       };
       el.addEventListener("pointerup", release);
       el.addEventListener("pointercancel", release);
@@ -5585,27 +5621,23 @@ export function Editor({
         // Taken from the page rather than left to scroll it: an arrow that means something here
         // must not also move the view.
         event.preventDefault();
-        // In the catalog's twelve columns until día 3, through the same boundary as the drag.
-        const drop = arrowDrop({
-          moving: toCoarse(placement),
-          placements: layout.placements.map(toCoarse),
-          action,
-        });
+        // In the fine grid's own units, one catalog column per press until día 6 (`ARROW_UNITS`).
+        // No occupancy refusal any more: what the pointer may drop on, the keyboard may walk onto.
+        const drop = arrowDrop({ moving: placement, action });
         if (drop.kind === "none") return;
         if (drop.kind === "refuse") {
-          announce(es["editor.drag.occupied"]);
+          announce(es["editor.drag.rows"]);
           return;
         }
         // The rebuild is about to throw this node away; the next wiring gives the keyboard back to
         // whatever takes its place.
         keepChosenFocus.current = true;
-        const at = toFine(drop.at);
         onSetPlacement(
           sectionId,
           elementId,
           action.kind === "move"
-            ? { column: at.column, row: at.row }
-            : { columnSpan: at.columnSpan },
+            ? { column: drop.at.column, row: drop.at.row }
+            : { columnSpan: drop.at.columnSpan },
         );
         announce(announceText(drop.at, action.kind));
       });
@@ -6317,13 +6349,13 @@ export function Editor({
       // needs no re-wiring — see `syncGrid`. `position: absolute` keeps it out of the grid, which is
       // the lesson the bar above had to learn the hard way. One twelfth is 8.3333%.
       //
-      // **`.rb-grid-live` is the same stripes while a drag is in the air** (ADR 0048). Two togglers
-      // and one rule: the panel's own class answers «where will this land» for the element whose
-      // numbers are on screen, and a drag needs the same answer for the element under the hand —
-      // including when the Diseño panel is not open at all, which is most of the time. A second
-      // class rather than borrowing the first, because `syncGrid` owns that one and runs on every
-      // render: a drag that set it would have it taken away mid-gesture.
-      '.rb-designing::before, .rb-grid-live::before { content: ""; position: absolute; inset: 0;',
+      // **And only when the panel is open, since sprint 25 día 3.** The stripes used to come up
+      // during a drag as well, to answer «which column will this land in». With ninety-six units
+      // the answer is «where your hand is» — the element itself travels there now — and stripes
+      // every 8.3333% would be marking twelve of the section's twelve *bands* while the hand works
+      // in ninths of one. The bands are still real (they are where the gutters are), which is why
+      // the panel's own class keeps them.
+      '.rb-designing::before { content: ""; position: absolute; inset: 0;',
       "  z-index: 0; pointer-events: none; background: repeating-linear-gradient(90deg,",
       "    rgba(21,111,231,0.16) 0 1px, transparent 1px 8.3333%); }",
       /*
@@ -6345,7 +6377,11 @@ export function Editor({
       // The element being moved, while it is being moved: dimmed, so the ghost is what the eye
       // follows. It keeps its place in the grid — see `wireDragging` on why it does not follow the
       // pointer — so this is the only sign that it is the subject.
-      ".rb-moving { opacity: 0.45; }",
+      // The element being carried: **a layer of its own and a shadow**, where it used to be dimmed
+      // behind a ghost. `transform` makes it a stacking context, so without the `z-index` it would
+      // travel under every sibling that comes after it in the document (David's adjustment 5); the
+      // shadow is what says «picked up» now that nothing else on screen does.
+      `.rb-moving { z-index: 5; box-shadow: ${CHROME_SCALE.shadow2}; }`,
       /*
        * **`touch-action: none` on the chosen element and on nothing else** (ADR 0049).
        *

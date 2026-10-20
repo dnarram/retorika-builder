@@ -1,44 +1,65 @@
+import { FINE_COLUMNS, FINE_PER_COLUMN, fineTrack, GRID_COLUMNS } from "@retorika/schema";
 import { describe, expect, it } from "vitest";
 import { MAX_ROW } from "../src/editor/designTree.ts";
 import {
+  ARROW_UNITS,
   announceText,
   arrowAction,
   arrowDrop,
   cellAt,
-  columnWidth,
   dropAt,
+  fineColumnAt,
   type GridMetrics,
   overlaps,
-  rectOf,
   reorderAt,
+  rowAt,
 } from "../src/editor/dragGrid.ts";
 import type { KeyPress } from "../src/editor/shortcuts.ts";
 
 /**
- * Where a dragged element lands and whether it may (ADR 0048, sprint 24 día 8).
+ * Where a dragged element lands on the fine grid (ADR 0050, sprint 25 día 3).
  *
- * The numbers below are a real section's: a 1040px canvas with `var(--space-xl)` padding either
- * side and `var(--space-md)` gaps, which is 944px of content, a 24px gap and so a 58.67px column.
- * Rows are three of the heights a cover actually has — a headline, a photograph, a button.
+ * **The numbers are a measured section's**, not invented: the editor's canvas at a window of 1440
+ * with no panel open gives a section of 1168 px, 1072 of content, a gutter of 16 and therefore a
+ * unit of (1072 − 11·16) / 96 = 9.333 px — the ADR's own table, read off Chromium on 20 October
+ * 2026. The rows are the ones the probe printed for an escalated cover: a headline of 52, two empty
+ * rows of eight, a tagline of 31, and so on. A module that divided `y` by eight would answer row 7
+ * where this says row 2, which is the whole of David's adjustment 1.
  */
+
+const UNIT = (1072 - 11 * 16) / FINE_COLUMNS;
+const GUTTER = 16;
+
+/** The 107 tracks a free section resolves to: eight units, a gutter, eight units … */
+function fineTracks(unit: number, gutter: number): number[] {
+  const tracks: number[] = [];
+  for (let group = 0; group < GRID_COLUMNS; group += 1) {
+    for (let step = 0; step < FINE_PER_COLUMN; step += 1) tracks.push(unit);
+    if (group < GRID_COLUMNS - 1) tracks.push(gutter);
+  }
+  return tracks;
+}
+
+/** A cover as the editor measures it after escalating: content rows and the empty ones between. */
+const ROWS = [52, 8, 8, 31, 8, 8, 20, 8, 8, 36, 8, 8, 8, 8, 8, 8];
 
 const metrics: GridMetrics = {
   left: 48,
   top: 48,
-  width: 944,
-  columnGap: 24,
-  rowGap: 24,
-  rows: [56, 320, 44],
+  columns: fineTracks(UNIT, GUTTER),
+  rows: ROWS,
 };
 
-/** The left edge of a column, in frame coordinates — the arithmetic the module does backwards. */
-const columnLeft = (column: number) =>
-  metrics.left + (column - 1) * (columnWidth(metrics) + metrics.columnGap);
+/** The left edge of a fine unit, in frame coordinates — the arithmetic the module does backwards. */
+function unitLeft(column: number): number {
+  const tracks = metrics.columns.slice(0, fineTrack(column) - 1);
+  return metrics.left + tracks.reduce((total, width) => total + width, 0);
+}
 
 /** The top edge of a row, in frame coordinates. */
-const rowTop = (row: number) =>
-  metrics.top +
-  metrics.rows.slice(0, row - 1).reduce((total, height) => total + height + metrics.rowGap, 0);
+function rowTop(row: number): number {
+  return metrics.top + ROWS.slice(0, row - 1).reduce((total, height) => total + height, 0);
+}
 
 const place = (
   elementId: string,
@@ -48,204 +69,161 @@ const place = (
   rowSpan: number,
 ) => ({ elementId, column, columnSpan, row, rowSpan });
 
-describe("columnWidth", () => {
-  it("takes the eleven gaps out before dividing by twelve", () => {
-    // 944 - 11×24 = 680, over twelve.
-    expect(columnWidth(metrics)).toBeCloseTo(56.67, 1);
+describe("fineColumnAt", () => {
+  it("answers the unit whose own left edge the point is on", () => {
+    for (const column of [1, 2, 8, 9, 48, 89, 96]) {
+      expect(fineColumnAt(unitLeft(column), metrics), `unit ${column}`).toBe(column);
+    }
   });
 
-  it("never goes negative on a section narrower than its own gaps", () => {
-    expect(columnWidth({ ...metrics, width: 40 })).toBe(0);
+  it("pulls to the nearest unit, which is what «se queda donde se suelta» means at this size", () => {
+    // A third of the way into unit 36 is still unit 36; two thirds is unit 37. With a unit of
+    // 9.3px that is never more than five pixels from where the hand actually let go.
+    expect(fineColumnAt(unitLeft(36) + UNIT * 0.3, metrics)).toBe(36);
+    expect(fineColumnAt(unitLeft(36) + UNIT * 0.7, metrics)).toBe(37);
+    // **Inside a group of eight.** Unit 40 is the last of its group, so its neighbour is a gutter
+    // away: two thirds into it is still nearer 40 than 41, which is the gutter doing its job and
+    // not a rounding this function gets wrong.
+    expect(fineColumnAt(unitLeft(40) + UNIT * 0.7, metrics)).toBe(40);
+  });
+
+  it("falls to the nearer unit either side of a gutter, because no placement starts on one", () => {
+    // The gutter between units 8 and 9 is sixteen pixels wide. Its first third belongs to 8 and
+    // its last third to 9 — the document never names the gutter itself (`fineGrid.ts`).
+    const gutterStart = unitLeft(8) + UNIT;
+    expect(fineColumnAt(gutterStart + 2, metrics)).toBe(8);
+    expect(fineColumnAt(gutterStart + GUTTER - 2, metrics)).toBe(9);
+  });
+
+  it("clamps rather than inventing a ninety-seventh unit or a zeroth", () => {
+    expect(fineColumnAt(metrics.left - 400, metrics)).toBe(1);
+    expect(fineColumnAt(metrics.left + 100_000, metrics)).toBe(FINE_COLUMNS);
+  });
+});
+
+describe("rowAt", () => {
+  it("walks the rows the browser resolved, which is not `y / 8`", () => {
+    // **David's adjustment 1, as one assertion.** The first row of this cover is 52px tall because
+    // a headline lives in it, so a point 50px down is still inside it and the nearest edge below is
+    // row 2. Divided by eight, the same point would answer row 7 — four rows and 48 pixels wrong,
+    // in every document the migration converted.
+    expect(rowAt(metrics.top + 50, metrics)).toBe(2);
+    expect(Math.round(50 / 8) + 1).toBe(7);
+  });
+
+  it("answers the row whose own top edge the point is on", () => {
+    for (const row of [1, 2, 4, 7, 10]) {
+      expect(rowAt(rowTop(row), metrics), `row ${row}`).toBe(row);
+    }
+  });
+
+  it("pulls to the nearest row edge", () => {
+    // Row 4 starts at 68 (52 + 8 + 8) and is 31 tall: 80 is nearer its own edge, 96 is nearer the
+    // next one.
+    expect(rowAt(metrics.top + 80, metrics)).toBe(4);
+    expect(rowAt(metrics.top + 96, metrics)).toBe(5);
+  });
+
+  it("extrapolates below the last row, because that is how a section grows", () => {
+    const below = ROWS.reduce((total, height) => total + height, 0);
+    expect(rowAt(metrics.top + below, metrics)).toBe(ROWS.length + 1);
+    expect(rowAt(metrics.top + below + 24, metrics)).toBe(ROWS.length + 4);
+  });
+
+  it("clamps at the interface's own floor and at the first row", () => {
+    expect(rowAt(metrics.top - 500, metrics)).toBe(1);
+    expect(rowAt(metrics.top + 1_000_000, metrics)).toBe(MAX_ROW);
+  });
+
+  it("puts everything in the first row of a section with nothing in it", () => {
+    const empty: GridMetrics = { ...metrics, rows: [] };
+    expect(rowAt(metrics.top, empty)).toBe(1);
+    // Row 1 is the only one there is, so 500px below the top is sixty-three rows of eight further
+    // down than row 1 — the section growing into the space, which is the honest answer here.
+    expect(rowAt(metrics.top + 500, empty)).toBe(64);
   });
 });
 
 describe("cellAt", () => {
-  it("lands on the column and row whose corner the point is on", () => {
-    for (const column of [1, 2, 7, 12]) {
-      for (const row of [1, 2, 3]) {
-        expect(
-          cellAt({ x: columnLeft(column), y: rowTop(row) }, metrics),
-          `${column}/${row}`,
-        ).toEqual({ column, row });
-      }
-    }
-  });
-
-  it("pulls to the nearest column, which is what «imán» means", () => {
-    const step = columnWidth(metrics) + metrics.columnGap;
-    // A third of the way into column 3's band is still column 3 …
-    expect(cellAt({ x: columnLeft(3) + step * 0.3, y: rowTop(1) }, metrics).column).toBe(3);
-    // … and two thirds of the way is column 4. Flooring would answer 3 to both, which reads as the
-    // drag resisting the hand.
-    expect(cellAt({ x: columnLeft(3) + step * 0.7, y: rowTop(1) }, metrics).column).toBe(4);
-  });
-
-  it("pulls to the nearest row, with rows of their own measured heights", () => {
-    // Row 2 is 320px tall. A quarter of the way down it is still row 2; past the middle it is row 3.
-    expect(cellAt({ x: columnLeft(1), y: rowTop(2) + 80 }, metrics).row).toBe(2);
-    expect(cellAt({ x: columnLeft(1), y: rowTop(2) + 300 }, metrics).row).toBe(3);
-  });
-
-  it("answers the row after the last one for a point below the section's content", () => {
-    // How a section grows: three rows, so a drop under them is row 4. Whether it is allowed is
-    // `dropAt`'s question, not this one's.
-    expect(cellAt({ x: columnLeft(1), y: rowTop(3) + 400 }, metrics).row).toBe(4);
-  });
-
-  it("clamps rather than inventing a thirteenth column or a row zero", () => {
-    expect(cellAt({ x: 10_000, y: rowTop(1) }, metrics).column).toBe(12);
-    expect(cellAt({ x: -500, y: -500 }, metrics)).toEqual({ column: 1, row: 1 });
-    // A point far below a three-row section is **row four**, not row twenty-four: the rows that
-    // exist are the only ones to be near, and the one after them is how a section grows. The clamp
-    // below is the backstop, and it needs a section deep enough to reach it.
-    expect(cellAt({ x: columnLeft(1), y: 1_000_000 }, metrics).row).toBe(4);
-    const deep = { ...metrics, rows: Array.from({ length: MAX_ROW + 6 }, () => 40) };
-    expect(cellAt({ x: columnLeft(1), y: 1_000_000 }, deep).row).toBe(MAX_ROW);
-  });
-
-  it("puts everything in the first cell of a section with nothing in it", () => {
-    const empty = { ...metrics, rows: [] };
-    expect(cellAt({ x: columnLeft(1), y: metrics.top + 500 }, empty)).toEqual({
-      column: 1,
-      row: 1,
-    });
+  it("is the two answers together", () => {
+    expect(cellAt({ x: unitLeft(25), y: rowTop(4) }, metrics)).toEqual({ column: 25, row: 4 });
   });
 });
 
 describe("overlaps", () => {
   it("is true only when the two rectangles share a cell", () => {
-    const a = place("a", 1, 6, 1, 1);
-    expect(overlaps(a, place("b", 7, 6, 1, 1))).toBe(false); // beside it
-    expect(overlaps(a, place("b", 1, 6, 2, 1))).toBe(false); // under it
-    expect(overlaps(a, place("b", 6, 6, 1, 1))).toBe(true); // one column into it
-    expect(overlaps(a, place("b", 1, 12, 1, 3))).toBe(true); // over all of it
+    const a = place("a", 1, 8, 1, 2);
+    expect(overlaps(a, place("b", 8, 8, 1, 1))).toBe(true);
+    expect(overlaps(a, place("b", 9, 8, 1, 1))).toBe(false);
+    expect(overlaps(a, place("b", 1, 8, 3, 1))).toBe(false);
   });
 
   it("touching edges do not overlap, in either direction", () => {
-    // The cell after the last one a span covers: 1+6 = 7, so column 7 is free.
-    expect(overlaps(place("a", 1, 6, 1, 2), place("b", 7, 1, 1, 1))).toBe(false);
-    expect(overlaps(place("a", 1, 6, 1, 2), place("b", 1, 1, 3, 1))).toBe(false);
+    const a = place("a", 1, 8, 1, 1);
+    expect(overlaps(a, place("b", 9, 8, 1, 1))).toBe(false);
+    expect(overlaps(a, place("b", 1, 8, 2, 1))).toBe(false);
   });
 });
 
 describe("dropAt", () => {
-  /**
-   * Four columns of headline on the left and four of photograph on the right, with **four free in
-   * between** — which is what the self-overlap case needs: an element with nowhere to go cannot
-   * show that moving it one column is allowed, it can only show that the cell beside it is taken.
-   * The first fixture here had the photograph at column 7 and proved the wrong thing.
-   */
-  const headline = place("el-headline", 1, 4, 1, 1);
-  const photo = place("el-photo", 9, 4, 1, 2);
-  const section = [headline, photo];
+  const moving = place("el-headline", 1, 48, 1, 7);
 
-  it("**moves an element one column right over its own cells, and accepts it**", () => {
-    /**
-     * David's own case, given when he approved the plan: «Moverlo una columna a la derecha solapa
-     * sus propias celdas y no debe rechazarse.» The exclusion is by element id and happens inside
-     * `dropAt`, so a caller cannot forget it — and this is the commonest drag there is.
-     */
-    const step = columnWidth(metrics) + metrics.columnGap;
+  it("lands on the unit and row nearest the corner it was let go at", () => {
     const drop = dropAt({
       metrics,
-      at: { x: columnLeft(1) + step, y: rowTop(1) },
-      moving: headline,
-      placements: section,
+      at: { x: unitLeft(13), y: rowTop(4) },
+      moving,
     });
-    expect(drop).toEqual({ kind: "place", at: { column: 2, columnSpan: 4, row: 1, rowSpan: 1 } });
-  });
-
-  it("**refuses a partial overlap with another element, and says why**", () => {
-    // The second of the two cases David asked for. Column 8 with a span of 4 reaches column 11, and
-    // the photograph holds 9 to 12: three cells in common, which is enough.
-    const drop = dropAt({
-      metrics,
-      at: { x: columnLeft(8), y: rowTop(1) },
-      moving: headline,
-      placements: section,
-    });
-    expect(drop.kind).toBe("refuse");
-    expect(drop).toMatchObject({ why: "occupied" });
-    // And the refusal still carries the cell it was aiming at, because the ghost has to draw the
-    // result it is refusing — not disappear and leave the element to come back unexplained.
-    expect(drop.at).toEqual({ column: 8, columnSpan: 4, row: 1, rowSpan: 1 });
+    expect(drop).toEqual({ kind: "place", at: { column: 13, columnSpan: 48, row: 4, rowSpan: 7 } });
   });
 
   it("keeps the element's spans: a drag moves it, it never resizes it", () => {
+    const drop = dropAt({ metrics, at: { x: unitLeft(20), y: rowTop(2) }, moving });
+    expect(drop.at.columnSpan).toBe(48);
+    expect(drop.at.rowSpan).toBe(7);
+  });
+
+  /**
+   * **Overlapping is allowed, which is the amendment of ADR 0048 §4.**
+   *
+   * Sprint 24 refused a drop onto a cell another element held and put the element back. With a unit
+   * of nine pixels almost every drop touches something, so the rule that protected the gesture
+   * became the thing that made it impossible — and `dropAt` no longer even takes the other
+   * placements, which is the strongest way to say it cannot refuse for that reason.
+   */
+  it("drops onto another element's own cell, stacking instead of refusing", () => {
     const drop = dropAt({
       metrics,
-      at: { x: columnLeft(1), y: rowTop(3) },
-      moving: photo,
-      placements: section,
+      // Exactly where a neighbour at unit 49 row 1 would be.
+      at: { x: unitLeft(49), y: rowTop(1) },
+      moving,
     });
-    expect(drop).toEqual({ kind: "place", at: { column: 1, columnSpan: 4, row: 3, rowSpan: 2 } });
+    expect(drop.kind).toBe("place");
+    expect(drop.at.column).toBe(49);
+    expect(overlaps(drop.at, place("el-photo", 49, 48, 1, 7))).toBe(true);
   });
 
   it("clamps at the right edge instead of refusing, because overshooting means «as far as it goes»", () => {
-    const drop = dropAt({
-      metrics,
-      at: { x: 10_000, y: rowTop(3) },
-      moving: headline,
-      placements: section,
-    });
-    // 13 − 4 = 9 is where a four-column element may still start.
-    expect(drop).toEqual({ kind: "place", at: { column: 9, columnSpan: 4, row: 3, rowSpan: 1 } });
+    const drop = dropAt({ metrics, at: { x: unitLeft(96) + 400, y: rowTop(1) }, moving });
+    // 48 units wide, so the furthest it can start is 49.
+    expect(drop).toMatchObject({ kind: "place", at: { column: FINE_COLUMNS - 48 + 1 } });
   });
 
   it("lets a section grow by a row, which is what dropping under it means", () => {
-    const drop = dropAt({
-      metrics,
-      at: { x: columnLeft(1), y: rowTop(3) + 400 },
-      moving: headline,
-      placements: section,
-    });
-    expect(drop).toEqual({ kind: "place", at: { column: 1, columnSpan: 4, row: 4, rowSpan: 1 } });
+    const below = ROWS.reduce((total, height) => total + height, 0);
+    const drop = dropAt({ metrics, at: { x: unitLeft(1), y: metrics.top + below + 40 }, moving });
+    expect(drop.kind).toBe("place");
+    expect(drop.at.row).toBe(ROWS.length + 6);
   });
 
   it("refuses past the interface's own floor rather than clamping into it", () => {
-    // A tall section: `MAX_ROW` rows already, so there is no row after them for a one-row element.
-    const deep: GridMetrics = { ...metrics, rows: Array.from({ length: MAX_ROW }, () => 40) };
+    const tall: GridMetrics = { ...metrics, rows: Array.from({ length: MAX_ROW }, () => 8) };
     const drop = dropAt({
-      metrics: deep,
-      at: { x: columnLeft(1), y: 1_000_000 },
-      moving: place("el-headline", 1, 6, 1, 2),
-      placements: [place("el-headline", 1, 6, 1, 2)],
+      metrics: tall,
+      at: { x: unitLeft(1), y: metrics.top + MAX_ROW * 8 },
+      moving,
     });
     expect(drop).toMatchObject({ kind: "refuse", why: "rows" });
-  });
-
-  it("drops into a free cell beside an element without touching it", () => {
-    const drop = dropAt({
-      metrics,
-      at: { x: columnLeft(1), y: rowTop(2) },
-      moving: headline,
-      placements: section,
-    });
-    expect(drop).toEqual({ kind: "place", at: { column: 1, columnSpan: 4, row: 2, rowSpan: 1 } });
-  });
-});
-
-describe("rectOf", () => {
-  it("draws a one-cell area over that cell", () => {
-    const rect = rectOf({ column: 2, columnSpan: 1, row: 2, rowSpan: 1 }, metrics);
-    expect(rect.left).toBeCloseTo(columnLeft(2), 1);
-    expect(rect.top).toBeCloseTo(rowTop(2), 1);
-    expect(rect.width).toBeCloseTo(columnWidth(metrics), 1);
-    expect(rect.height).toBe(320);
-  });
-
-  it("adds the gaps a span swallows, in both directions", () => {
-    const rect = rectOf({ column: 1, columnSpan: 6, row: 1, rowSpan: 2 }, metrics);
-    // Six columns and the five gaps between them.
-    expect(rect.width).toBeCloseTo(columnWidth(metrics) * 6 + metrics.columnGap * 5, 1);
-    // Two rows and the gap between them: 56 + 24 + 320.
-    expect(rect.height).toBe(400);
-  });
-
-  it("gives the row a section would grow by the height of the last one it has", () => {
-    const rect = rectOf({ column: 1, columnSpan: 2, row: 4, rowSpan: 1 }, metrics);
-    expect(rect.top).toBeCloseTo(rowTop(3) + 44 + metrics.rowGap, 1);
-    expect(rect.height).toBe(44);
   });
 });
 
@@ -296,91 +274,93 @@ describe("arrowAction", () => {
 });
 
 describe("arrowDrop", () => {
-  const headline = place("el-headline", 1, 4, 1, 1);
-  const photo = place("el-photo", 9, 4, 1, 2);
-  const section = [headline, photo];
+  // In the fine grid's units: a headline across the first four catalog columns, a photograph
+  // across the last four but one.
+  const headline = place("el-headline", 1, 32, 1, 1);
+  const photo = place("el-photo", 65, 32, 1, 2);
 
-  it("moves one cell, keeping the spans", () => {
-    expect(
-      arrowDrop({
-        moving: headline,
-        placements: section,
-        action: { kind: "move", column: 1, row: 0 },
-      }),
-    ).toEqual({ kind: "place", at: { column: 2, columnSpan: 4, row: 1, rowSpan: 1 } });
+  it("moves one catalog column per press, keeping the spans", () => {
+    // `ARROW_UNITS` until día 6, which makes a bare press one unit and `Shift` eight — the two
+    // halves of David's condition arrive together there, with the accumulated run.
+    expect(arrowDrop({ moving: headline, action: { kind: "move", column: 1, row: 0 } })).toEqual({
+      kind: "place",
+      at: { column: 1 + ARROW_UNITS, columnSpan: 32, row: 1, rowSpan: 1 },
+    });
+    expect(ARROW_UNITS).toBe(FINE_PER_COLUMN);
   });
 
-  it("refuses the cell another element holds, with the same word the drag uses", () => {
-    // One vocabulary and one refusal for the hand and the keyboard: otherwise the arrows would
-    // quietly do what the drag is told it may not (ADR 0048 §4).
-    const against = place("el-headline", 8, 4, 1, 1);
+  it("moves one row per vertical press, because a row is the vertical unit", () => {
     expect(
-      arrowDrop({
-        moving: against,
-        placements: [against, photo],
-        action: { kind: "move", column: 1, row: 0 },
-      }),
-    ).toMatchObject({ kind: "refuse", why: "occupied" });
+      arrowDrop({ moving: headline, action: { kind: "move", column: 0, row: 1 } }),
+    ).toMatchObject({ at: { row: 2, rowSpan: 1 } });
+  });
+
+  /**
+   * **And it walks onto the cell another element holds** (ADR 0050 §6, amending ADR 0048 §4).
+   *
+   * One vocabulary and one permission for the hand and the keyboard: what the pointer may drop on
+   * top of, the arrows may walk onto. `arrowDrop` no longer takes the section's other placements at
+   * all, which is the strongest way to say it cannot refuse for that reason.
+   */
+  it("walks onto an occupied cell instead of refusing", () => {
+    const against = place("el-headline", 57, 32, 1, 1);
+    const drop = arrowDrop({ moving: against, action: { kind: "move", column: 1, row: 0 } });
+    expect(drop).toMatchObject({ kind: "place", at: { column: 65 } });
+    expect(drop.kind === "place" && overlaps(drop.at, photo)).toBe(true);
   });
 
   it("does nothing at the edges, rather than clamping a deliberate press", () => {
-    expect(
-      arrowDrop({
-        moving: headline,
-        placements: section,
-        action: { kind: "move", column: -1, row: 0 },
-      }),
-    ).toEqual({ kind: "none" });
-    expect(
-      arrowDrop({
-        moving: headline,
-        placements: section,
-        action: { kind: "move", column: 0, row: -1 },
-      }),
-    ).toEqual({ kind: "none" });
-    // Nine columns wide starting at nine would reach seventeen.
-    expect(
-      arrowDrop({ moving: photo, placements: section, action: { kind: "span", columns: 1 } }),
-    ).toEqual({ kind: "none" });
-    // And one column cannot become none.
-    const thin = place("el-thin", 1, 1, 6, 1);
-    expect(
-      arrowDrop({ moving: thin, placements: [thin], action: { kind: "span", columns: -1 } }),
-    ).toEqual({ kind: "none" });
+    expect(arrowDrop({ moving: headline, action: { kind: "move", column: -1, row: 0 } })).toEqual({
+      kind: "none",
+    });
+    expect(arrowDrop({ moving: headline, action: { kind: "move", column: 0, row: -1 } })).toEqual({
+      kind: "none",
+    });
+    // Thirty-two units from unit 65 reaches 96 exactly, so one column more does not fit.
+    expect(arrowDrop({ moving: photo, action: { kind: "span", columns: 1 } })).toEqual({
+      kind: "none",
+    });
+    // And a span of one catalog column cannot become none.
+    const thin = place("el-thin", 1, ARROW_UNITS, 6, 1);
+    expect(arrowDrop({ moving: thin, action: { kind: "span", columns: -1 } })).toEqual({
+      kind: "none",
+    });
   });
 
   it("refuses past the interface's own floor on rows", () => {
-    const low = place("el-low", 1, 2, MAX_ROW, 1);
-    expect(
-      arrowDrop({ moving: low, placements: [low], action: { kind: "move", column: 0, row: 1 } }),
-    ).toEqual({ kind: "none" });
+    const low = place("el-low", 1, 16, MAX_ROW, 1);
+    expect(arrowDrop({ moving: low, action: { kind: "move", column: 0, row: 1 } })).toEqual({
+      kind: "none",
+    });
   });
 
-  it("widens into free cells and refuses widening into a taken one", () => {
-    const narrow = place("el-narrow", 1, 4, 1, 1);
-    expect(
-      arrowDrop({
-        moving: narrow,
-        placements: [narrow, photo],
-        action: { kind: "span", columns: 1 },
-      }),
-    ).toEqual({ kind: "place", at: { column: 1, columnSpan: 5, row: 1, rowSpan: 1 } });
-    const wide = place("el-wide", 1, 8, 1, 1);
-    expect(
-      arrowDrop({ moving: wide, placements: [wide, photo], action: { kind: "span", columns: 1 } }),
-    ).toMatchObject({ kind: "refuse", why: "occupied" });
+  it("widens by a catalog column, into a taken cell as readily as a free one", () => {
+    const narrow = place("el-narrow", 1, 32, 1, 1);
+    expect(arrowDrop({ moving: narrow, action: { kind: "span", columns: 1 } })).toEqual({
+      kind: "place",
+      at: { column: 1, columnSpan: 32 + ARROW_UNITS, row: 1, rowSpan: 1 },
+    });
+    const wide = place("el-wide", 1, 64, 1, 1);
+    expect(arrowDrop({ moving: wide, action: { kind: "span", columns: 1 } })).toMatchObject({
+      kind: "place",
+      at: { columnSpan: 72 },
+    });
   });
 
   it("answers none to none, so a key nobody mapped changes nothing", () => {
-    expect(arrowDrop({ moving: headline, placements: section, action: { kind: "none" } })).toEqual({
-      kind: "none",
-    });
+    expect(arrowDrop({ moving: headline, action: { kind: "none" } })).toEqual({ kind: "none" });
   });
 });
 
 describe("announceText", () => {
+  /**
+   * **In catalog columns, from the fine unit** — because that is what one press moves
+   * (`ARROW_UNITS`). «Columna 25 de 96» would be arithmetically true and useless: nobody counts in
+   * ninety-sixths, and a press lands exactly on a twelfth. Día 6 replaces the sentence with pixels,
+   * which is what David asked for once a press is worth one unit.
+   */
   it("says where it went, in the words the owner's language uses", () => {
-    expect(announceText({ column: 3, columnSpan: 4, row: 2, rowSpan: 1 }, "move")).toBe(
+    expect(announceText({ column: 17, columnSpan: 32, row: 2, rowSpan: 1 }, "move")).toBe(
       "Columna 3 de 12, fila 2",
     );
   });
@@ -388,7 +368,7 @@ describe("announceText", () => {
   it("says how wide it is when the width is what changed", () => {
     // Two sentences for two acts: a move that said «ancho 4» every time would bury the number that
     // changed under one that did not.
-    expect(announceText({ column: 3, columnSpan: 5, row: 2, rowSpan: 1 }, "span")).toBe(
+    expect(announceText({ column: 17, columnSpan: 40, row: 2, rowSpan: 1 }, "span")).toBe(
       "Ancho 5 de 12 columnas, desde la columna 3",
     );
   });

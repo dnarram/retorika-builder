@@ -406,7 +406,6 @@
   "editor.canvas.width": "Ancho {span} de {columns} columnas, desde la columna {column}",
   "editor.canvas.moveHint": "Flechas para moverlo, Mayús+flechas para ensancharlo",
   "editor.drag.order": "Arrastra arriba o abajo para cambiar el orden",
-  "editor.drag.occupied": "Aquí ya hay otro elemento",
   "editor.drag.rows": "La sección no crece más hacia abajo",
   "editor.canvas.chosenHint": "Doble clic o Intro para escribir",
   "editor.canvasKeys.title": "Teclas del lienzo",

@@ -1,46 +1,60 @@
-import { GRID_COLUMNS, type Placement } from "@retorika/schema";
+import {
+  FINE_COLUMNS,
+  FINE_PER_COLUMN,
+  fineTrack,
+  GRID_COLUMNS,
+  type Placement,
+  ROW_STEP_PX,
+} from "@retorika/schema";
 import es from "../locales/es.json" with { type: "json" };
 import type { Point } from "./barPosition.ts";
 import { MAX_ROW } from "./designTree.ts";
 import type { KeyPress } from "./shortcuts.ts";
 
 /**
- * **Where a dragged element lands, and whether it is allowed to** — decided without a DOM
- * (ADR 0048, sprint 24 día 8).
+ * **Where a dragged element lands — the unit nearest to where the hand let go** (ADR 0050, sprint
+ * 25 día 3), decided without a DOM.
  *
- * **Rule 4 is not amended, and this drag is the reason it does not need to be.** An element is let
- * go anywhere and lands in the nearest of the section's twelve columns and the nearest of its rows:
- * «la colocación libre siempre ocurre dentro de la rejilla de la sección, nunca sobre coordenadas
- * absolutas» (advanced dossier §6). Nothing here produces an `x` or a `y` for the document — it
- * produces a column and a row, which is all `setPlacement` will accept.
+ * David's whole request for this sprint was that an element «se quede en la posición donde se
+ * deja». Sprint 24 snapped it to the nearest of twelve columns, which is a jump of 75–100 px where
+ * somebody drags: the gesture read as the page resisting the hand. The grid is ninety-six units and
+ * eight-pixel rows now, so the nearest unit is within four or five pixels of the pointer — under
+ * what anybody notices, which is what makes «se queda donde se suelta» true rather than a promise.
  *
- * **The columns are arithmetic and the rows are measured.** `.rb-section` is
- * `grid-template-columns: repeat(12, 1fr)` with `gap: var(--space-md)`, so a column's width is the
- * same everywhere and can be computed. Its **rows are implicit and sized by their content**, so
- * there is no row height to compute: `grid-template-rows` resolves to the used pixel heights in the
- * browser, and that list is what arrives here. A module that assumed uniform rows would snap an
- * element to the wrong one on every section whose first row is a headline and whose second is a
- * photograph — which is most of them.
+ * **Both axes are read off the resolved tracks, not computed from a width.** `getComputedStyle`
+ * resolves `grid-template-columns` to 107 used pixel widths and `grid-template-rows` to the rows the
+ * grid actually has, implicit ones included — so this module measures what the browser did instead
+ * of re-deriving it. For the rows that is David's own correction while approving the sprint: with
+ * `minmax(8px, auto)` a row holding a text taller than its span **grows**, so `y / 8` is not the row
+ * it looks like and anything that assumed it would snap an element to the wrong one in every
+ * migrated document. For the columns it is what keeps the gutters exactly where `fineGrid.ts` put
+ * them, since the track list is walked through `fineTrack` rather than through a copy of its rule.
+ *
+ * **Nothing here produces an `x` or a `y` for the document** — it produces a unit and a row, which
+ * is all `setPlacement` accepts. Rule 4 stands, finer.
  *
  * The judgement is a pure function and the wiring is in `Editor.tsx`, the split `barPosition.ts`
  * and `twoStates.ts` already use.
  */
 
-/** The part of a placement that is geometry: no element id, because overlap is about rectangles. */
+/** The part of a placement that is geometry: no element id, because a cell is about rectangles. */
 export type GridArea = Pick<Placement, "column" | "columnSpan" | "row" | "rowSpan">;
 
 export interface GridMetrics {
   /** The section's content box, in the frame's own coordinates. */
   readonly left: number;
   readonly top: number;
-  readonly width: number;
-  readonly columnGap: number;
-  readonly rowGap: number;
   /**
-   * The used height of each of the grid's rows, in order, as `grid-template-rows` resolves it.
+   * The used width of every column track, in order, as `grid-template-columns` resolves it: for a
+   * hand-designed section the 107 of the fine grid — ninety-six units and the eleven gutters.
+   */
+  readonly columns: readonly number[];
+  /**
+   * The used height of every row the grid has, in order, as `grid-template-rows` resolves it.
    *
    * Empty is a real state — a section with nothing placed — and then the first row is the only
-   * target there is.
+   * target there is. Past the last one the section grows, and a point below them all is as many
+   * `ROW_STEP_PX` rows further down as it is pixels.
    */
   readonly rows: readonly number[];
 }
@@ -50,97 +64,82 @@ export interface Cell {
   readonly row: number;
 }
 
-/** One column's width, from the section's own box: the gaps come out first. */
-export function columnWidth(metrics: GridMetrics): number {
-  const gaps = metrics.columnGap * (GRID_COLUMNS - 1);
-  return Math.max(0, (metrics.width - gaps) / GRID_COLUMNS);
-}
-
-/** Where each row starts, measured from the grid's top, plus one past the last row. */
-function rowEdges(metrics: GridMetrics): number[] {
-  const edges = [0];
+/** Where each track starts, measured from the grid's own origin, plus one past the last. */
+function edges(tracks: readonly number[]): number[] {
+  const out = [0];
   let at = 0;
-  for (const height of metrics.rows) {
-    at += height + metrics.rowGap;
-    edges.push(at);
+  for (const size of tracks) {
+    at += size;
+    out.push(at);
   }
-  return edges;
+  return out;
 }
 
 /**
- * The cell a point falls in — **the nearest one, which is what «imán» means.**
+ * The fine unit whose left edge is nearest to `x` — **nearest, which is what «se queda donde se
+ * suelta» means at this size**: an element let go in the middle of a unit goes to the nearer of its
+ * two edges, and with a unit of 7–10 px that is never more than five pixels from the hand.
  *
- * Nearest and not «the band the point is inside», and that is the decision rather than the easier
- * arithmetic: David chose «arrastrar con imán a la rejilla», and a magnet pulls to the closest
- * line, so an element let go in the right half of a column's band snaps to the next one. Flooring
- * instead would mean an element that never moves as far right as the hand put it, which reads as
- * the drag resisting.
- *
- * **A point past the last row is the row after it**, which is how a section grows (`dropAt` is what
- * decides whether it may).
+ * A point over a gutter falls to the nearer of the units either side of it, because a placement
+ * cannot start on a gutter — the document never names one (`fineGrid.ts`).
  */
-export function cellAt(at: Point, metrics: GridMetrics): Cell {
-  const width = columnWidth(metrics);
-  const step = width + metrics.columnGap;
-  const column = step > 0 ? Math.round((at.x - metrics.left) / step) + 1 : 1;
-
-  const edges = rowEdges(metrics);
-  const y = at.y - metrics.top;
-  let row = 1;
-  let best = Number.POSITIVE_INFINITY;
-  for (const [index, edge] of edges.entries()) {
-    const distance = Math.abs(y - edge);
-    if (distance < best) {
-      best = distance;
-      row = index + 1;
+export function fineColumnAt(x: number, metrics: GridMetrics): number {
+  const offsets = edges(metrics.columns);
+  const local = x - metrics.left;
+  let best = 1;
+  let distance = Number.POSITIVE_INFINITY;
+  for (let column = 1; column <= FINE_COLUMNS; column += 1) {
+    // Through `fineTrack`, so the gutters' pattern lives in one place and this cannot disagree
+    // with what the renderer emitted.
+    const offset = offsets[fineTrack(column) - 1];
+    if (offset === undefined) break;
+    const to = Math.abs(local - offset);
+    if (to < distance) {
+      distance = to;
+      best = column;
     }
   }
-
-  return {
-    column: Math.min(Math.max(column, 1), GRID_COLUMNS),
-    row: Math.min(Math.max(row, 1), MAX_ROW),
-  };
+  return best;
 }
 
 /**
- * The pixel rectangle of a grid area, for the ghost that shows where the element would land.
+ * The row whose top edge is nearest to `y`, **by walking the resolved rows** (David's adjustment 1).
  *
- * A row the grid does not have yet — the one a section would grow by — is drawn with the height of
- * the last row it does have, because there is nothing else to go on and a ghost of no height would
- * be a ghost nobody can see. 64px when the section is empty, which is about one line of body text.
+ * Past the last row the grid grows downwards in steps of `ROW_STEP_PX`, so a point below everything
+ * is extrapolated rather than clamped: that is how a section gets taller, and `dropAt` is what
+ * decides whether it may.
  */
-export function rectOf(
-  area: GridArea,
-  metrics: GridMetrics,
-): { left: number; top: number; width: number; height: number } {
-  const width = columnWidth(metrics);
-  const step = width + metrics.columnGap;
-  const edges = rowEdges(metrics);
-  const spare = metrics.rows.at(-1) ?? 64;
-
-  const top =
-    edges[area.row - 1] ??
-    (edges.at(-1) ?? 0) + (area.row - 1 - metrics.rows.length) * (spare + metrics.rowGap);
-  let height = 0;
-  for (let index = 0; index < area.rowSpan; index += 1) {
-    height += (metrics.rows[area.row - 1 + index] ?? spare) + metrics.rowGap;
+export function rowAt(y: number, metrics: GridMetrics): number {
+  const offsets = edges(metrics.rows);
+  const local = y - metrics.top;
+  const last = offsets.at(-1) ?? 0;
+  if (local > last) {
+    return Math.min(MAX_ROW, offsets.length + Math.round((local - last) / ROW_STEP_PX));
   }
+  let best = 1;
+  let distance = Number.POSITIVE_INFINITY;
+  for (const [index, offset] of offsets.entries()) {
+    const to = Math.abs(local - offset);
+    if (to < distance) {
+      distance = to;
+      best = index + 1;
+    }
+  }
+  return Math.min(Math.max(best, 1), MAX_ROW);
+}
 
-  return {
-    left: metrics.left + (area.column - 1) * step,
-    top: metrics.top + top,
-    width: width * area.columnSpan + metrics.columnGap * (area.columnSpan - 1),
-    height: Math.max(0, height - metrics.rowGap),
-  };
+/** The cell a point falls in: the nearest unit and the nearest row. */
+export function cellAt(at: Point, metrics: GridMetrics): Cell {
+  return { column: fineColumnAt(at.x, metrics), row: rowAt(at.y, metrics) };
 }
 
 /**
  * Whether two grid areas share any cell.
  *
- * **The whole rectangle on both sides** — column, span, row, span — which is David's own definition,
- * given exactly because a looser one would have made the ordinary move impossible: «Moverlo una
- * columna a la derecha solapa sus propias celdas y no debe rechazarse.» That case is handled by
- * leaving the dragged element out of the comparison (`dropAt`), not by weakening this.
+ * **Not a refusal any more** (ADR 0050, amending ADR 0048 §4): overlapping is allowed, as it is in
+ * Canva and Word, and the stacking order is the document's own. Kept because the download review
+ * asks a related question — two *texts* on top of each other are illegible and worth a warning,
+ * which día 5 builds in `packages/schema` where the document can be asked.
  */
 export function overlaps(a: GridArea, b: GridArea): boolean {
   return (
@@ -154,63 +153,52 @@ export function overlaps(a: GridArea, b: GridArea): boolean {
 /**
  * What letting go here would do.
  *
- * - `place` — the element goes to this column and row, keeping both of its spans.
- * - `refuse` — nothing moves, and `why` is what the ghost says instead of leaving somebody to guess:
- *   `occupied` for a cell another element already holds, `rows` for a drop past the interface's own
- *   floor of the section.
+ * - `place` — the element goes to this unit and row, keeping both of its spans.
+ * - `refuse` — nothing moves, and `why` says which floor was hit. **Only one reason is left**:
+ *   `rows`, the interface's own floor on how far down a section may grow. «Occupied» is gone with
+ *   the refusal it belonged to.
  */
 export type Drop =
   | { readonly kind: "place"; readonly at: GridArea }
-  | { readonly kind: "refuse"; readonly why: "occupied" | "rows"; readonly at: GridArea };
+  | { readonly kind: "refuse"; readonly why: "rows"; readonly at: GridArea };
 
 /**
- * **Refuse and return, which is David's decision and is stricter than the document.**
+ * **It stays where it is let go, and overlapping is allowed** (ADR 0050 §6, amending ADR 0048 §4).
  *
- * `setPlacement`'s own note says two elements may end up in the same cell and that it is allowed —
- * CSS grid stacks them and overlapping on purpose is a real technique. So this is an **interface**
- * rule: a drag is a gesture about position, and a gesture that silently stacks two things is a
- * gesture whose result nobody can see. Stacking on purpose stays available, through the four
- * «Colocación» buttons, which are also what gives this drag its single-pointer alternative
- * (WCAG 2.5.7).
+ * Sprint 24 refused a drop onto a cell another element held and put the element back. With a unit
+ * of nine pixels almost any drop touches something, so the rule that protected the gesture became
+ * the thing that made it impossible — and the document has always allowed two elements in one cell,
+ * because CSS grid stacks them and overlapping on purpose is a real technique. David decided it:
+ * the later element in the document paints on top, and there is no «bring to front» this sprint.
  *
- * The dragged element is excluded **here**, by id, rather than left to the caller: the one case that
- * has to work — moving something one column right, where the new rectangle overlaps the old — is the
- * case a forgotten exclusion breaks, and it is the commonest drag there is.
+ * `at` is the element's **top-left corner**, not the pointer: the hand keeps hold of the element
+ * where it took it, which is what `barPosition`'s own drag learned and what any hand expects of
+ * something it has picked up.
  */
 export function dropAt(args: {
   readonly metrics: GridMetrics;
-  /** Where the element's top-left corner has been dragged to, in frame coordinates. */
   readonly at: Point;
   readonly moving: Placement;
-  /** Every placement in the section, the dragged one included; it is excluded by id. */
-  readonly placements: readonly Placement[];
 }): Drop {
-  const { metrics, at, moving, placements } = args;
+  const { metrics, at, moving } = args;
   const cell = cellAt(at, metrics);
 
-  // Rule 4's own coupling, the same one `boundsFor` applies to the arrows: an element keeps its
-  // span, so how far right it may start is what still fits inside the twelve columns. Clamped
+  // Rule 4's own coupling, the same one `boundsFor` applies to the panel's arrows: an element keeps
+  // its span, so how far right it may start is what still fits inside the ninety-six units. Clamped
   // rather than refused — a hand that overshoots the right edge means «as far right as it goes».
-  const column = Math.min(cell.column, GRID_COLUMNS - moving.columnSpan + 1);
   const target: GridArea = {
-    column: Math.max(1, column),
+    column: Math.max(1, Math.min(cell.column, FINE_COLUMNS - moving.columnSpan + 1)),
     columnSpan: moving.columnSpan,
     row: cell.row,
     rowSpan: moving.rowSpan,
   };
 
   // Rows have no limit in the document model — a grid grows downwards — so this is the interface's
-  // own floor (`MAX_ROW`), and past it the honest answer is no rather than a clamp that would put
-  // the element somewhere nobody asked for.
+  // own floor (`MAX_ROW`, four hundred rows of eight pixels), and past it the honest answer is no
+  // rather than a clamp that would put the element somewhere nobody asked for.
   if (target.row + target.rowSpan - 1 > MAX_ROW) {
     return { kind: "refuse", why: "rows", at: target };
   }
-
-  for (const other of placements) {
-    if (other.elementId === moving.elementId) continue;
-    if (overlaps(target, other)) return { kind: "refuse", why: "occupied", at: target };
-  }
-
   return { kind: "place", at: target };
 }
 
@@ -219,18 +207,20 @@ export function dropAt(args: {
  *
  * A pointer gesture with no keyboard equivalent does not exist for whoever has no pointer — the rule
  * this repository has applied to every handle it ever drew — and WCAG 2.1.1 says the same thing with
- * a number. So with an element chosen, the arrows move it one cell at a time and `Shift` with a
- * sideways arrow widens or narrows it.
+ * a number. So with an element chosen, the arrows move it and `Shift` with a sideways arrow widens
+ * or narrows it.
  *
- * **This amends [ADR 0047] §1 in one clause and only in one state.** That decision refuses every
- * modifier, Shift included, because «Shift+Arrow is a selection gesture everywhere» — true where
- * there is a caret, and there is none in «chosen». While **writing**, every modifier still goes
- * straight to the browser, untouched.
+ * **One press is one catalog column of eight units, until día 6 makes it one unit with `Shift` for
+ * eight.** A press worth a ninety-sixth of the section would be a control nobody could use to cross
+ * one, and día 6 is where the accumulated run and the announcement in pixels arrive together — the
+ * two halves of David's own condition. Today's model change is the pointer's, and it travels alone.
  *
  * **Vertical only moves; it never resizes.** `Shift+ArrowDown` would be «one row taller», which is a
  * different kind of change — a row's height is its content's — and the panel's own stepper already
  * owns `rowSpan`. Offering half of a pair here would read as the other half being broken.
  */
+export const ARROW_UNITS = FINE_PER_COLUMN;
+
 export type ArrowAction =
   | { readonly kind: "move"; readonly column: number; readonly row: number }
   | { readonly kind: "span"; readonly columns: number }
@@ -254,72 +244,69 @@ export function arrowAction(press: KeyPress): ArrowAction {
 /**
  * What an arrow press would do, in the same words a drop gets.
  *
- * **One vocabulary for the pointer and the keyboard, and one refusal.** The arrows *on the element*
- * are the drag's equivalent, so a cell another element holds is refused here exactly as it is there
- * (ADR 0048 §4) — otherwise the keyboard would quietly do what the hand is told it may not. The four
- * «Colocación» buttons in the panel stay the way to stack on purpose, which is the same split.
- *
- * `none` is «the press changes nothing»: an element already against the left edge, or already one
- * column wide. Silence is the honest answer there — announcing a position nobody moved to would
- * teach a screen reader's user that the press worked.
+ * **One vocabulary for the pointer and the keyboard, and now one permission too**: the pointer may
+ * drop an element on top of another, so the arrows may walk one there. The refusal that is left is
+ * the same for both — the floor on rows — and `none` is «the press changes nothing»: an element
+ * already against the left edge, or already one unit wide. Silence is the honest answer there;
+ * announcing a position nobody moved to would teach a screen reader's user that the press worked.
  */
 export function arrowDrop(args: {
   readonly moving: Placement;
-  readonly placements: readonly Placement[];
   readonly action: ArrowAction;
 }): Drop | { readonly kind: "none" } {
-  const { moving, placements, action } = args;
+  const { moving, action } = args;
   if (action.kind === "none") return NO_DROP;
 
   const target: GridArea =
     action.kind === "move"
       ? {
-          column: moving.column + action.column,
+          column: moving.column + action.column * ARROW_UNITS,
           columnSpan: moving.columnSpan,
           row: moving.row + action.row,
           rowSpan: moving.rowSpan,
         }
       : {
           column: moving.column,
-          columnSpan: moving.columnSpan + action.columns,
+          columnSpan: moving.columnSpan + action.columns * ARROW_UNITS,
           row: moving.row,
           rowSpan: moving.rowSpan,
         };
 
-  // Rule 4's coupling, the same arithmetic `boundsFor` gives the panel's arrows: a column that
-  // still fits the span, a span that still fits from the column, and the interface's own floor on
-  // rows. Outside any of them the press is refused rather than clamped — a clamp would answer a
+  // Rule 4's coupling, the same arithmetic `boundsFor` gives the panel's arrows: a unit that still
+  // fits the span, a span that still fits from the unit, and the interface's own floor on rows.
+  // Outside any of them the press is refused rather than clamped — a clamp would answer a
   // deliberate press with a move nobody asked for.
-  if (target.column < 1 || target.column + target.columnSpan - 1 > GRID_COLUMNS) return NO_DROP;
+  if (target.column < 1 || target.column + target.columnSpan - 1 > FINE_COLUMNS) return NO_DROP;
   if (target.columnSpan < 1) return NO_DROP;
   if (target.row < 1 || target.row + target.rowSpan - 1 > MAX_ROW) return NO_DROP;
 
-  for (const other of placements) {
-    if (other.elementId === moving.elementId) continue;
-    if (overlaps(target, other)) return { kind: "refuse", why: "occupied", at: target };
-  }
   return { kind: "place", at: target };
 }
 
 /**
  * What the editor says out loud when an element moves, **in the parent document's live region**.
  *
- * David's correction while approving the sprint, and it is a defect that would have shipped: every
+ * David's correction while approving sprint 24, and it is a defect that would have shipped: every
  * arrow is an edit, every edit replaces the canvas's whole `srcDoc`, so a region inside the frame
  * would be a **freshly created** region on every move — and a screen reader does not announce the
  * contents of a region that has just appeared. The region lives in the editor's own document, which
  * survives the rebuild.
  *
- * Two sentences for two acts: where it went, or how wide it is now. A move that says «ancho 4» every
- * time would bury the number that changed under one that did not.
+ * **In catalog columns, because that is what one press moves** (`ARROW_UNITS`). Saying «columna 25
+ * de 96» would be arithmetically true and useless: nobody counts in ninety-sixths, and a press
+ * lands exactly on a twelfth. Día 6 replaces the whole sentence with pixels, which is what David
+ * asked for once the arrows move by one unit.
+ *
+ * Two sentences for two acts: where it went, or how wide it is now. A move that said «ancho 4»
+ * every time would bury the number that changed under one that did not.
  */
 export function announceText(area: GridArea, kind: "move" | "span"): string {
   const key = kind === "move" ? "editor.canvas.at" : "editor.canvas.width";
   return es[key]
-    .replace("{column}", String(area.column))
+    .replace("{column}", String(Math.floor((area.column - 1) / FINE_PER_COLUMN) + 1))
     .replace("{columns}", String(GRID_COLUMNS))
     .replace("{row}", String(area.row))
-    .replace("{span}", String(area.columnSpan));
+    .replace("{span}", String(Math.round(area.columnSpan / FINE_PER_COLUMN)));
 }
 
 /**
