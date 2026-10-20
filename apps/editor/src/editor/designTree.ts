@@ -147,6 +147,29 @@ export interface StepperBounds {
  */
 export const MAX_ROW = 400;
 
+/**
+ * The first row below everything a section places — where the editor's own grid chrome belongs.
+ *
+ * **A fine grid has empty rows between its elements, and CSS auto-placement finds them** (ADR
+ * 0050). A chrome child with no row of its own and `grid-column: 1 / -1` — «+ Añadir línea», and
+ * the sentence that replaces it once a list is full — takes the first row where the full width is
+ * free, which on the catalog's content rows meant «after the content» and on eight-pixel rows means
+ * «the first gap», above the very list it belongs to. It then makes that row as tall as itself and
+ * pushes everything below it down: measured at 33 px on «Qué hago» the day the measured escalation
+ * landed, which is also what made it visible — the walk compares the section with itself.
+ *
+ * `undefined` for a section the catalog draws: its rows are content-sized and sized by what is in
+ * them, so auto-placement lands after the last one, which is where this chrome wants to be anyway.
+ */
+export function rowBelowPlacements(doc: RetorikaDocument, sectionId: string): number | undefined {
+  const layout = findSection(doc, sectionId)?.section.layout;
+  if (!layout) return undefined;
+  return layout.placements.reduce(
+    (below, placement) => Math.max(below, placement.row + placement.rowSpan),
+    1,
+  );
+}
+
 export function boundsFor(
   placement: Placement,
 ): Record<keyof Omit<Placement, "elementId">, StepperBounds> {

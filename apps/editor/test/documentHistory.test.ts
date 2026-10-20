@@ -3,6 +3,7 @@ import { EMPTY_ANSWERS, generateVariants } from "@retorika/generator";
 import { recordById } from "@retorika/photobank";
 import {
   type ElementAddress,
+  type MeasuredBox,
   parseDocument,
   type RetorikaDocument,
   type Theme,
@@ -14,6 +15,7 @@ import {
   type HistoryAction,
   historiesReducer,
   initHistories,
+  wasPlacementEverMoved,
   wasSectionEverEdited,
 } from "../src/editor/documentHistory.ts";
 
@@ -262,6 +264,61 @@ describe("deleteSection", () => {
 
   it("throws on a section id the document does not have", () => {
     expect(() => historiesReducer(start(), del("no-such-section"))).toThrow(/no section/);
+  });
+});
+
+/**
+ * Whether anybody laid a section out by hand — the question the return dialog asks and the document
+ * can no longer answer (ADR 0050, sprint 25 día 2: escalation measures the live page, so a fresh
+ * layout equals no re-derivation of the catalog's drawing).
+ */
+describe("wasPlacementEverMoved", () => {
+  const escalate = (sectionId = "sec-cover"): HistoryAction => ({
+    type: "escalateSection",
+    variant: 0,
+    sectionId,
+  });
+  const firstPlaced = (state: Histories, sectionId = "sec-cover") =>
+    state[0]?.present.document.pages[0]?.sections.find((s) => s.id === sectionId)?.layout
+      ?.placements[0]?.elementId as string;
+  const move = (state: Histories, sectionId = "sec-cover"): HistoryAction => ({
+    type: "setPlacement",
+    variant: 0,
+    sectionId,
+    elementId: firstPlaced(state, sectionId),
+    edit: { column: 9 },
+  });
+
+  it("is false for a section fresh from the generator", () => {
+    expect(wasPlacementEverMoved(start()[0] as Histories[number], "sec-cover")).toBe(false);
+  });
+
+  it("is false for a section escalated and left alone, which is what makes the return silent", () => {
+    const state = run(start(), escalate());
+    expect(wasPlacementEverMoved(state[0] as Histories[number], "sec-cover")).toBe(false);
+  });
+
+  it("is true once an element has been moved in it", () => {
+    const free = run(start(), escalate());
+    const moved = run(free, move(free));
+    expect(wasPlacementEverMoved(moved[0] as Histories[number], "sec-cover")).toBe(true);
+  });
+
+  it("is false for another section, and for one whose content was merely edited", () => {
+    const free = run(start(), escalate());
+    const moved = run(free, move(free));
+    expect(wasPlacementEverMoved(moved[0] as Histories[number], "sec-services")).toBe(false);
+    const typed = run(start(), edit("Nuevo titular"));
+    expect(wasPlacementEverMoved(typed[0] as Histories[number], "sec-cover")).toBe(false);
+  });
+
+  it("stays true after the move is undone, which is the safe side of the only wrong answer", () => {
+    // The dialog warns about work that was done; undoing one move does not make the section one
+    // nobody laid out. Over-warning costs a click, under-warning costs the work.
+    const free = run(start(), escalate());
+    const moved = run(free, move(free));
+    const undone = historiesReducer(moved, { type: "undo", variant: 0 });
+    expect(wasPlacementEverMoved(undone[0] as Histories[number], "sec-cover")).toBe(true);
   });
 });
 
@@ -1352,10 +1409,15 @@ describe("designing a section by hand, and taking it back", () => {
    * escalada como cualquier otro cambio» — which is only true if it pushes a snapshot like every
    * other verb in this stack.
    */
-  const escalate = (sectionId = "sec-cover", variant = 0): HistoryAction => ({
+  const escalate = (
+    sectionId = "sec-cover",
+    variant = 0,
+    boxes?: readonly MeasuredBox[],
+  ): HistoryAction => ({
     type: "escalateSection",
     variant,
     sectionId,
+    ...(boxes ? { boxes } : {}),
   });
 
   const revert = (sectionId = "sec-cover", variant = 0): HistoryAction => ({
@@ -1421,6 +1483,32 @@ describe("designing a section by hand, and taking it back", () => {
 
   it("throws naming the section when asked for one the document does not have", () => {
     expect(() => run(start(), escalate("sec-nope"))).toThrow(/no section "sec-nope"/);
+  });
+
+  /**
+   * **What the canvas measured reaches the document** (ADR 0050 §3, sprint 25 día 2).
+   *
+   * The arithmetic is `packages/schema`'s and tested there; what this stack has to get right is
+   * that the boxes travel — the canvas reads them, `Variants` puts them on the action and the
+   * reducer hands them to the verb. A reducer that dropped them would still escalate, still open
+   * one step, and silently go back to deriving the rows from the theme, which is the kind of
+   * regression nothing else here would notice.
+   */
+  it("writes the rows from the boxes the canvas measured", () => {
+    const state = run(
+      start(),
+      escalate("sec-cover", 0, [{ elementId: "el-headline", top: 160, height: 96 }]),
+    );
+    const placements = state[0]?.present.document.pages[0]?.sections.find(
+      (s) => s.id === "sec-cover",
+    )?.layout?.placements;
+    expect(placements?.find((p) => p.elementId === "el-headline")).toMatchObject({
+      row: 21,
+      rowSpan: 12,
+    });
+    // And an element nobody measured keeps the rhythm's answer rather than landing in row 1.
+    expect(placements?.every((placement) => placement.row >= 1)).toBe(true);
+    expect(placements?.length ?? 0).toBeGreaterThan(1);
   });
 
   describe("and then moving something inside its grid", () => {

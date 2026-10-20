@@ -70,6 +70,7 @@ export {
   setElementImageSrc,
   setElementText,
 } from "./fields.ts";
+export type { MeasuredBox } from "./fineGrid.ts";
 export {
   coarseToFine,
   FINE_TRACKS,
@@ -79,6 +80,7 @@ export {
   fineTrack,
   fineTrackSpan,
   gapRowsFor,
+  measuredToFine,
 } from "./fineGrid.ts";
 export type { PresetLookup, Violation } from "./invariants.ts";
 export { checkInvariants, flattenElements } from "./invariants.ts";

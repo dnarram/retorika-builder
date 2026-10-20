@@ -146,6 +146,58 @@ export function gapRowsFor(spaceMd: unknown): number {
  * when it escalates a section, and the migration, which has no page to measure, accepts the
  * difference and the ADR names it.
  */
+/**
+ * A placed element's box as the editor measured it on the live page, in CSS pixels.
+ *
+ * `top` is relative to the top of the section's **content** box — the padding is out — and both
+ * numbers are the frame's own pixels, which is what the eight-pixel rows are in. The canvas zoom
+ * scales the card from outside the frame, so a difference between two boxes read inside it needs no
+ * dividing (unlike a pointer threshold, which is screen pixels: ADR 0050 §6).
+ */
+export interface MeasuredBox {
+  readonly elementId: string;
+  readonly top: number;
+  readonly height: number;
+}
+
+/**
+ * A catalog placement written in the fine grid's units **from the box the element actually had**
+ * (ADR 0050 §3, sprint 25 día 2) — which is what makes «no se mueve nada al empezar» true to within
+ * four pixels instead of approximately.
+ *
+ * Sideways is still the exact conversion, not a measurement: column `c` is unit `(c − 1) · 8 + 1`
+ * and the track arithmetic puts it on the line it was on, so measuring the left edge would
+ * introduce an error where there is none. Only the vertical is measured, because only the vertical
+ * cannot be derived: the catalog's rows are content-sized and a free section's are eight pixels.
+ *
+ * **The row rounds and the span ceils, and the asymmetry is the decision.** A row is the nearest
+ * eight-pixel line to where the element's top was, so the worst error is four pixels — half a row,
+ * below what anybody sees. A span of `round(height / 8)` would be up to four pixels *shorter* than
+ * its content, and a grid row that cannot hold what sits in it **grows**: every element below would
+ * then be pushed down, and the pushes would add up down the section. `ceil` leaves the area at most
+ * seven pixels taller than the content, which is invisible — a grid area has no border — and keeps
+ * every row at its eight-pixel minimum, so a top measured here is a top on the page.
+ */
+export function measuredToFine(
+  placement: Placement,
+  box: Omit<MeasuredBox, "elementId">,
+): Placement {
+  if (!Number.isFinite(box.top) || !Number.isFinite(box.height) || box.height < 0) {
+    throw new Error(
+      `measuredToFine: a measured box must be finite pixels with a height of at least 0, not ${JSON.stringify(box)}`,
+    );
+  }
+  return {
+    elementId: placement.elementId,
+    column: (placement.column - 1) * FINE_PER_COLUMN + 1,
+    columnSpan: placement.columnSpan * FINE_PER_COLUMN,
+    // Clamped at the first row: a negative top would be an element drawn above its own section,
+    // which a negative margin can do and which the grid has no row for.
+    row: Math.max(1, Math.round(box.top / ROW_STEP_PX) + 1),
+    rowSpan: Math.max(1, Math.ceil(box.height / ROW_STEP_PX)),
+  };
+}
+
 export function coarseToFine(placement: Placement, gapRows: number): Placement {
   if (!Number.isInteger(gapRows) || gapRows < 0) {
     throw new Error(`coarseToFine: gapRows must be a whole number of at least 0, not ${gapRows}`);

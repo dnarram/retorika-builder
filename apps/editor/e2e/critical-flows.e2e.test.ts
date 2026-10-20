@@ -2256,9 +2256,14 @@ describe("sprint 8 — el modo estudio: encender, diseñar a mano, colocar, y vo
           return now && { x: now.x, w: now.w, h: now.h };
         })
         .toEqual(placeBefore && { x: placeBefore.x, w: placeBefore.w, h: placeBefore.h });
-      expect((await placeInSection())?.y ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(
-        placeBefore?.y ?? 0,
-      );
+      // **And the vertical too, within half a row** — the narrowing of día 1 undone by día 2: the
+      // escalation measures the live section now instead of deriving its rows from the theme's
+      // spacing, so the headline the catalog had centred in a row taller than itself stays where it
+      // was rather than rising to the top of it (ADR 0050 §3).
+      expect(
+        Math.abs(((await placeInSection())?.y ?? 0) - (placeBefore?.y ?? 0)),
+        "el titular se movió en vertical al escalar",
+      ).toBeLessThanOrEqual(4);
 
       // The panel: collapsed on open, because encendiendo las herramientas «añade una puerta, no
       // descarga sesenta controles».
@@ -16165,4 +16170,190 @@ describe("sprint 24 día 10 — el cierre, sin ratón", () => {
     }
   }, 300_000);
   // --- RECORRIDO SIN RATÓN: FIN ---
+});
+
+/**
+ * **Sprint 25 día 2 — escalar mide la sección viva** (ADR 0050 §3).
+ *
+ * La promesa de la oferta es «No se mueve nada al empezar», y con filas de ocho píxeles reales sólo
+ * puede cumplirse midiendo: el catálogo centra sus elementos en filas del tamaño de su contenido, y
+ * convertir esas filas por el ritmo del tema deja un titular corto en lo alto de la suya. Así que el
+ * editor mide cada caja el instante antes y la escalada escribe las filas que la sección tenía.
+ *
+ * Lo que la caminata asevera, y que ninguna prueba sin navegador puede: que **cada elemento sigue
+ * donde estaba** —exacto a los lados, a cuatro píxeles en vertical— y que las filas escritas son las
+ * medidas y no las derivadas. Por **las dos puertas**: la oferta del lienzo y el botón del panel
+ * «Diseño», que llaman al mismo verbo y miden por la misma función.
+ */
+describe("sprint 25 día 2 — escalar mide la sección viva", () => {
+  const VIEWPORT = { width: 1440, height: 900 };
+
+  interface Where {
+    id: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  }
+
+  /**
+   * La caja de cada elemento colocado, **relativa al contenido de su sección**, que es de lo que
+   * habla la promesa: la sección entera baja al aparecer la barra «Diseñada a mano», y eso ya está
+   * medido y decidido (REVIEW, 7 de octubre).
+   *
+   * **Espera la tipografía antes de medir**, y no es una precaución: midiendo en cuanto aparece la
+   * foto del banco, el titular daba 46 px con la familia de reserva y 52 con EB Garamond ya
+   * aplicada, así que la caminata se acusaba a sí misma de haber movido seis píxeles. Lo que mide
+   * el editor tiene el mismo límite y el ADR 0050 §3 lo nombra; aquí se espera porque se puede.
+   */
+  async function boxesIn(frame: FrameLocator, sectionId: string): Promise<Where[]> {
+    const section = frame.locator(`[data-section="${sectionId}"]`);
+    await section.evaluate(async (node) => {
+      await (node as HTMLElement).ownerDocument.fonts.ready;
+    });
+    return section.evaluate((node) => {
+      const section = node as HTMLElement;
+      const outer = section.getBoundingClientRect();
+      const padTop = Number.parseFloat(getComputedStyle(section).paddingTop) || 0;
+      return [...section.querySelectorAll<HTMLElement>(":scope > [data-id]")].map((child) => {
+        const el = child as HTMLElement;
+        const rect = el.getBoundingClientRect();
+        return {
+          id: el.dataset["id"] ?? "",
+          x: rect.left - outer.left,
+          y: rect.top - (outer.top + padTop),
+          w: rect.width,
+          h: rect.height,
+        };
+      });
+    });
+  }
+
+  /** El ancho de la sección en el marco, que es lo que cambia al abrirse un panel. */
+  function sectionWidth(frame: FrameLocator, sectionId: string): Promise<number> {
+    return frame
+      .locator(`[data-section="${sectionId}"]`)
+      .evaluate((node) => (node as HTMLElement).getBoundingClientRect().width);
+  }
+
+  /** Cada elemento, antes y después, con el presupuesto de cada eje. */
+  function nothingMoved(before: Where[], after: Where[], where: string): void {
+    expect(
+      after.map((box) => box.id),
+      `${where}: los elementos colocados cambiaron`,
+    ).toEqual(before.map((box) => box.id));
+    for (const [index, was] of before.entries()) {
+      const now = after[index];
+      // A los lados la conversión es exacta (unidad = (columna − 1)·8 + 1), así que un píxel de
+      // tolerancia es el redondeo del navegador y nada más.
+      expect(now?.x, `${where}/${was.id} x`).toBeCloseTo(was.x, 0);
+      expect(now?.w, `${where}/${was.id} ancho`).toBeCloseTo(was.w, 0);
+      expect(now?.h, `${where}/${was.id} alto`).toBeCloseTo(was.h, 0);
+      // En vertical, media fila: la fila es la línea de ocho píxeles más cercana a donde estaba.
+      expect(
+        Math.abs((now?.y ?? 0) - was.y),
+        `${where}/${was.id} vertical: ${was.y} → ${now?.y}`,
+      ).toBeLessThanOrEqual(4);
+    }
+  }
+
+  it("deja cada elemento donde estaba al escalar, por las dos puertas", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      await studioToolsOn(page);
+      const frame = page.frameLocator(PREVIEW).first();
+
+      // ---- puerta 1: la oferta del lienzo ----
+      const cover = frame.locator('[data-section="sec-cover"]');
+      const before = await boxesIn(frame, "sec-cover");
+      expect(before.length, "la portada no tiene elementos colocados").toBeGreaterThan(1);
+
+      await cover.click();
+      await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
+      await expect(frame.getByText("Esta sección la coloca el catálogo")).toBeVisible();
+      await replacingTheDocument(page, async () => {
+        await frame.locator(".rb-escalate-yes").click();
+      });
+      await waitForBankPhoto(frame);
+      await expect(frame.locator(".rb-handmade-badge")).toHaveText("Diseñada a mano");
+
+      nothingMoved(before, await boxesIn(frame, "sec-cover"), "oferta del lienzo");
+
+      /**
+       * **Y las filas escritas son las medidas, no las derivadas.**
+       *
+       * Dos aserciones, y la segunda es la que distingue una medida de una conversión: cada caja
+       * cabe en sus filas (`rowSpan · 8 ≥ alto`, que es por lo que el tramo redondea hacia arriba y
+       * la fila al más cercano), y el elemento más alto ocupa muchas más filas de las que el ritmo
+       * del tema habría escrito — una foto de cuatrocientos píxeles son cincuenta filas de ocho, y
+       * la conversión del catálogo habría dicho siete.
+       */
+      const placed = await placedIn(frame, "sec-cover");
+      const measured = await boxesIn(frame, "sec-cover");
+      for (const element of placed) {
+        const box = measured.find((candidate) => candidate.id === element.id);
+        expect(box, `la colocación de ${element.id} no tiene caja`).toBeDefined();
+        expect(
+          element.rowSpan * 8,
+          `${element.id}: su caja de ${box?.h}px no cabe en ${element.rowSpan} filas`,
+        ).toBeGreaterThanOrEqual((box?.h ?? 0) - 1);
+      }
+      const tallest = measured.toSorted((a, b) => b.h - a.h)[0];
+      const spanOfTallest = placed.find((element) => element.id === tallest?.id)?.rowSpan ?? 0;
+      expect(
+        spanOfTallest,
+        `el elemento más alto (${tallest?.id}, ${tallest?.h}px) no ocupa las filas que mide`,
+      ).toBeGreaterThanOrEqual(Math.floor((tallest?.h ?? 0) / 8) - 1);
+      expect(spanOfTallest, "las filas parecen derivadas del tema y no medidas").toBeGreaterThan(
+        12,
+      );
+
+      // ---- puerta 2: el botón del panel «Diseño» ----
+      // La sección se lee de la página, no se escribe aquí: la que vaya segunda y la dibuje aún el
+      // catálogo, para que la caminata no dependa de la composición que el generador eligió.
+      const others = await frame
+        .locator("[data-section]:not(.rb-free)")
+        .evaluateAll((nodes) =>
+          nodes.map((node) => (node as HTMLElement).dataset["section"] ?? ""),
+        );
+      const second = others.find((id) => id !== "sec-cover" && id !== "");
+      expect(second, "no queda ninguna sección del catálogo para la segunda puerta").toBeDefined();
+
+      await frame.locator(`[data-section="${second}"]`).click();
+      const wide = await sectionWidth(frame, second as string);
+      await page.getByRole("button", { name: "Diseño", exact: true }).click();
+      // El panel está en su estado de oferta: la segunda puerta del ADR 0025 enmendado, con las
+      // mismas palabras que la del lienzo y el mismo verbo detrás.
+      const panel = page.locator("aside");
+      await expect(panel.getByRole("button", { name: "Diseñar a mano" })).toBeVisible();
+
+      /**
+       * **Se espera a que el lienzo se estreche, y se mide después**; la caminata lo aprendió dos
+       * veces. Abrir el panel estrecha la sección —a 1440 pasa de 1168 px a 948: los 340 del panel
+       * menos el margen de la fila, que baja de `px-24` a `px-6` al abrirlo— así que medir antes
+       * compara dos anchos y acusa a la escalada de haber estrechado 220 px lo que estrechó el
+       * panel. Y que el botón esté visible no basta: el ancho lo decide un `ResizeObserver` y un
+       * render después, y la primera medición llegaba antes que ellos.
+       */
+      await expect
+        .poll(() => sectionWidth(frame, second as string), {
+          message: "el panel no estrechó el lienzo",
+        })
+        .toBeLessThan(wide - 1);
+      const beforeSecond = await boxesIn(frame, second as string);
+      expect(beforeSecond.length, `${second} no tiene elementos colocados`).toBeGreaterThan(0);
+      await replacingTheDocument(page, async () => {
+        await panel.getByRole("button", { name: "Diseñar a mano" }).click();
+      });
+      await waitForBankPhoto(page.frameLocator(PREVIEW).first());
+      const live = page.frameLocator(PREVIEW).first();
+      await expect(live.locator(`[data-section="${second}"]`)).toHaveClass(/rb-free/);
+
+      nothingMoved(beforeSecond, await boxesIn(live, second as string), "panel Diseño");
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
 });

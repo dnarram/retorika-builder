@@ -76,13 +76,20 @@ describe("what the interface can and cannot produce", () => {
   });
 
   it("so a section straight off the escalation has nothing surplus to decide about", () => {
-    expect(revertImpact(free, "sec-cover", cover)).toMatchObject({ surplus: [], lossless: true });
+    // `placementsMoved` is the editor's answer since ADR 0050 día 2, and here it is the true one:
+    // this document was escalated and nothing else.
+    expect(revertImpact(free, "sec-cover", cover, { placementsMoved: false })).toMatchObject({
+      surplus: [],
+      lossless: true,
+    });
   });
 
   it("but the schema can overfill a slot, which is why the branch is built", () => {
     // `fillSlot` refuses to create the third of something when there is no second — and stops
     // there. It takes a slot order, not a preset, so it has no way to know the maximum.
-    const impact = revertImpact(withSecondHeadline(), "sec-cover", cover);
+    const impact = revertImpact(withSecondHeadline(), "sec-cover", cover, {
+      placementsMoved: false,
+    });
     expect(impact?.surplus).toEqual([
       { elementId: "el-headline-2", slot: "headline", reason: 'slot "headline" shows at most 1' },
     ]);

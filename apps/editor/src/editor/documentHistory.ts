@@ -36,6 +36,7 @@ import {
   findSection,
   flattenElements,
   insertSection as insertSectionIntoDoc,
+  type MeasuredBox,
   marksFor,
   mintCollectionId,
   mintSectionId,
@@ -228,7 +229,15 @@ export type HistoryAction =
   | { type: "setSiteDescription"; variant: number; text: string }
   | { type: "setSiteUrl"; variant: number; url: string | undefined }
   | { type: "setVariant"; variant: number; sectionId: string; variantId: string }
-  | { type: "escalateSection"; variant: number; sectionId: string }
+  | {
+      type: "escalateSection";
+      variant: number;
+      sectionId: string;
+      /** Measured on the canvas by whoever pressed, so escalating writes the rows the page had.
+       * Explicitly `| undefined` because `exactOptionalPropertyTypes` is on and the canvas passes
+       * the measurement through whether it got one or not. */
+      boxes?: readonly MeasuredBox[] | undefined;
+    }
   | {
       type: "setPlacement";
       variant: number;
@@ -699,11 +708,19 @@ function presetOf(document: RetorikaDocument, sectionId: string) {
  * Both hand back the same document when the section is already in the state asked for, so pressing
  * an action that decides nothing opens no step.
  */
-function escalateSection(history: History, sectionId: string): History {
+function escalateSection(
+  history: History,
+  sectionId: string,
+  /** What each placed element's box measured on the live page, when the caller had one to measure
+   * (ADR 0050 §3). The verb writes the fine grid's rows from it; without it the theme's rhythm
+   * answers, which is what a test or a headless caller gets. */
+  boxes: readonly MeasuredBox[] | undefined,
+): History {
   const document = escalateSectionInDoc(
     history.present.document,
     sectionId,
     presetOf(history.present.document, sectionId),
+    boxes,
   );
   if (document === history.present.document) return history;
   return step(history, document, { type: "escalateSection", sectionId });
@@ -1201,7 +1218,7 @@ function apply(history: History, action: HistoryAction): History {
     case "setVariant":
       return setVariant(history, action.sectionId, action.variantId);
     case "escalateSection":
-      return escalateSection(history, action.sectionId);
+      return escalateSection(history, action.sectionId, action.boxes);
     case "setPlacement":
       return setPlacement(history, action.sectionId, action.elementId, action.edit);
     case "setMobilePatch":
@@ -1343,6 +1360,28 @@ function sectionOf(cause: NonNullable<SnapshotCause>): string | undefined {
   if ("address" in cause) return cause.address.sectionId;
   if ("sectionId" in cause) return cause.sectionId;
   return undefined;
+}
+
+/**
+ * Whether anybody has moved or resized an element in this section's own grid.
+ *
+ * **The question the document stopped being able to answer** (ADR 0050, sprint 25 día 2).
+ * `revertImpact` used to derive it by re-drawing the catalog's layout and comparing; escalation now
+ * measures the live page to write its eight-pixel rows, so a freshly escalated section matches no
+ * re-derivation and the comparison would report work nobody did. The undo history holds the act
+ * itself, which is both the honest source and the one that cannot drift: it answers «did somebody
+ * lay this out by hand», not «does the document differ from a guess».
+ *
+ * Past, present and future, like `wasSectionEverEdited` and for the same reason: a move that has
+ * been undone was still made, and the dialog's job is to warn rather than to be clever. Pressing
+ * «Volver a la original» after undoing every move therefore still asks, which is the safe side of
+ * the only wrong answer that costs anything.
+ */
+export function wasPlacementEverMoved(history: History, sectionId: string): boolean {
+  const steps = [...history.past, history.present, ...history.future];
+  return steps.some(
+    (step) => step.cause?.type === "setPlacement" && sectionOf(step.cause) === sectionId,
+  );
 }
 
 export function wasSectionEverEdited(history: History, sectionId: string): boolean {

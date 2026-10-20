@@ -14,6 +14,7 @@ import {
   designRows,
   MAX_ROW,
   mobileControlsFor,
+  rowBelowPlacements,
   selectedRowId,
   stepTo,
 } from "../src/editor/designTree.ts";
@@ -210,6 +211,36 @@ describe("boundsFor — rule 4, as the two limits it actually imposes", () => {
   it("couples the row span to the row, so the two cannot walk past the cap together", () => {
     expect(boundsFor(placement(1, 1, MAX_ROW)).rowSpan).toEqual({ min: 1, max: 1 });
     expect(boundsFor(placement(1, 1, 1)).rowSpan).toEqual({ min: 1, max: MAX_ROW });
+  });
+});
+
+describe("rowBelowPlacements", () => {
+  it("is the first row under everything the section places", () => {
+    // The escalated cover: whatever the catalog drew, the chrome's row is past the lowest edge of
+    // every placement, so a full-width chrome child can never take a row an element spans.
+    const below = rowBelowPlacements(free, "sec-cover") as number;
+    const placements = designRows(free, "sec-cover").map((row) => row.placement);
+    expect(below).toBeGreaterThan(1);
+    for (const placement of placements) {
+      expect(placement.row + placement.rowSpan, `${placement.elementId}`).toBeLessThanOrEqual(
+        below,
+      );
+    }
+    expect(below).toBe(Math.max(...placements.map((p) => p.row + p.rowSpan)));
+  });
+
+  it("moves down when an element is sent further down the grid", () => {
+    const lower = setPlacement(
+      free,
+      "sec-cover",
+      designRows(free, "sec-cover")[0]?.elementId as string,
+      { row: 120, rowSpan: 4 },
+    );
+    expect(rowBelowPlacements(lower, "sec-cover")).toBe(124);
+  });
+
+  it("says nothing for a section the catalog draws, whose rows are its content's", () => {
+    expect(rowBelowPlacements(doc, "sec-cover")).toBeUndefined();
   });
 });
 
