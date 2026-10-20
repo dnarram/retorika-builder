@@ -17279,6 +17279,28 @@ describe("sprint 25 día 7 — las asas en táctil, y el móvil sin solape", () 
   }
 
   /**
+   * **Where the handles are, by document** — «live:8 buffered:0», say.
+   *
+   * The sentence a red run needed and did not have. An edit is shown by building the next version
+   * of the page in a **buffered** frame and swapping it in, so there are two live documents for a
+   * few milliseconds, and the first version of this walk could only say «no handle» about the one
+   * being looked at. Painting them into the other one is exactly the defect CI found, and this is
+   * what names it instead of leaving it to be guessed.
+   */
+  async function whereHandlesAre(page: Page): Promise<string> {
+    return (
+      await page.evaluate(() =>
+        [...document.querySelectorAll("iframe")].map(
+          (frame) =>
+            `${frame.hasAttribute("data-buffered") ? "buffered" : "live"}:${
+              frame.contentDocument?.querySelectorAll(".rb-handle").length ?? -1
+            }`,
+        ),
+      )
+    ).join(" ");
+  }
+
+  /**
    * **What the browser says about the hand, asked of the canvas itself.**
    *
    * The premise of every assertion below, and the walk states it rather than assuming it: the
@@ -17330,6 +17352,16 @@ describe("sprint 25 día 7 — las asas en táctil, y el móvil sin solape", () 
         "el-headline",
       );
 
+      /**
+       * **In the document being looked at**, which is the half CI had to teach: the assertion used
+       * to be «there is an `se` handle» and passed here while the handles were being painted into
+       * the buffered frame — true of *a* document, false of the one with the hand on it.
+       */
+      await expect
+        .poll(() => whereHandlesAre(page), {
+          message: "las asas no llegaron al documento que se está mirando",
+        })
+        .toMatch(/\blive:[1-9]/);
       await expect(section.locator(".rb-handle-se")).toBeAttached();
 
       const drawn = await handlesOn(frame);
@@ -17440,6 +17472,11 @@ describe("sprint 25 día 7 — las asas en táctil, y el móvil sin solape", () 
       expect(says.coarse, `el navegador no da un puntero grueso: ${JSON.stringify(says)}`).toBe(
         true,
       );
+      await expect
+        .poll(() => whereHandlesAre(page), {
+          message: "las asas no llegaron al documento que se está mirando",
+        })
+        .toMatch(/\blive:[1-9]/);
       await expect(frame.locator('[data-section="sec-cover"] .rb-handle-se')).toBeAttached();
 
       /**

@@ -675,6 +675,18 @@ box starts changing, and a finger holding one does not need to see the other sev
 They are painted from `markChosen` — nothing chosen means none of them — and again when a pull ends,
 because a committed resize rebuilds the frame and a cancelled one has to be put back by somebody.
 
+**One painter per document, and that is a correction CI had to force.** The first version kept a
+single slot holding «the painter of whatever was wired last», which is wrong in this editor for a
+reason that predates the handles: an edit is shown by building the next version of the page in a
+**buffered** frame and swapping it in, so for a few milliseconds there are two live documents.
+Choosing an element in the visible one then repainted the handles into the buffered one — the
+element the hand had just chosen showed none, and nothing put them back until the next choice. This
+machine never saw it, because the swap always finished first; CI, which is faster, failed both touch
+walks on it. The painters live in a `WeakMap` keyed by document now, so «repaint the handles» is
+asked of the document the choosing happened in, which is the only form of that question with one
+right answer. The walks say *which* document the handles are in when they fail — «live:0
+buffered:8» is the sentence that would have taken an hour off finding this.
+
 ### 3. `touch-action: none` on the handles and on the chosen element, and on nothing else
 
 The promise of ADR 0049 §7 now has eight new elements that depend on it: declare that property one

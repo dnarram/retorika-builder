@@ -895,14 +895,23 @@ export function Editor({
    */
   const keepWriting = useRef<ElementAddress | null>(null);
   /**
-   * Repaint the touch handles, installed by `wireResizing` (día 7).
+   * Repaint the touch handles — **one painter per document** (día 7).
    *
-   * A ref and not a call, because the two functions are on opposite sides of the frame: `markChosen`
+   * A ref and not a call, because the two halves are on opposite sides of the frame: `markChosen`
    * knows *when* the handles should change and `wireResizing` is where the gesture they begin is in
-   * scope. `null` until the chrome has been wired, and whenever the design tools are off — a
-   * section with no placements has nothing to stretch.
+   * scope. Empty until the chrome has been wired, and for any document whose design tools were off:
+   * a section with no placements has nothing to stretch.
+   *
+   * **Keyed by document, which is the whole correction CI forced.** A single slot held «the painter
+   * of whatever was wired last», and this editor has two live documents whenever an edit is in
+   * flight: the one on screen and the buffered one being built (see the `<iframe>` note). Choosing
+   * in the visible frame then repainted the handles **into the buffered one**, so the element the
+   * hand had just chosen showed none, with nothing to put them back until the next choice. On this
+   * machine the swap had always finished first; on CI it had not. The map answers «the painter of
+   * *this* document», which is the only question with one right answer. A `WeakMap` so a document
+   * that has been thrown away takes its painter with it.
    */
-  const syncHandles = useRef<(() => void) | null>(null);
+  const handlePainters = useRef(new WeakMap<Document, () => void>());
   /**
    * Which device view is on **right now**, for the listeners that outlive the render that wired them.
    *
@@ -4471,7 +4480,7 @@ export function Editor({
     if (!el) {
       chosenText.current = null;
       // The handles belong to whatever is chosen, so nothing chosen means none of them (día 7).
-      syncHandles.current?.();
+      handlePainters.current.get(iframeDoc)?.();
       return;
     }
     const section = el.closest<HTMLElement>("[data-section]");
@@ -4498,9 +4507,12 @@ export function Editor({
       (findSection(doc, sectionId)?.section.layout?.placements ?? []).some(
         (placement) => placement.elementId === elementId,
       );
-    // The handles go on the element that is chosen now, whatever else this function says about it
-    // (día 7). Before the early return below, because an image with no hint still gets handles.
-    syncHandles.current?.();
+    /**
+     * The handles go on the element that is chosen now, whatever else this function says about it
+     * (día 7) — and in **its own** document, which is not always the caller's idea of the live one.
+     * Before the early return below, because an image with no hint still gets handles.
+     */
+    handlePainters.current.get(el.ownerDocument)?.();
 
     const says = [
       el.dataset["rbText"] === "1" ? chosenHintText() : "",
@@ -5438,6 +5450,11 @@ export function Editor({
      */
     const coarse = iframeDoc.defaultView?.matchMedia("(pointer: coarse)").matches === true;
     const repaintHandles: (() => void)[] = [];
+    /** Every section of **this** document, repainted. Populated by the loop below and called after
+     * it, so a gesture that ends can put back the handles it took away. */
+    const repaintAll = () => {
+      for (const paint of repaintHandles) paint();
+    };
 
     for (const section of iframeDoc.querySelectorAll<HTMLElement>("[data-section]")) {
       const sectionId = section.dataset.section;
@@ -5513,7 +5530,7 @@ export function Editor({
         // And the handles come back around the box as it now is. A committed resize rebuilds the
         // frame a moment later and draws them again from scratch; a cancelled one has to be put
         // back by somebody, and this is that somebody.
-        syncHandles.current?.();
+        repaintAll();
       };
 
       /**
@@ -5684,12 +5701,11 @@ export function Editor({
       section.addEventListener("lostpointercapture", release);
     }
 
-    // What `markChosen` calls when the chosen element changes: the handles belong to it, and this
-    // function is where the gesture they start is in scope.
-    syncHandles.current = () => {
-      for (const paint of repaintHandles) paint();
-    };
-    syncHandles.current();
+    // What `markChosen` calls when the chosen element changes, found by the document it happened
+    // in: the handles belong to one element of one page, and this function is where the gesture
+    // they start is in scope.
+    handlePainters.current.set(iframeDoc, repaintAll);
+    repaintAll();
   }
 
   /**
