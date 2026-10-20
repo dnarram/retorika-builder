@@ -6,10 +6,12 @@ import {
   CORNERS,
   clampToHost,
   cornerPoint,
+  DRAG_THRESHOLD,
   defaultPoint,
   dragged,
   gripKeyAction,
   isDrag,
+  isDragBeyond,
   nearestCorner,
   nextCorner,
   offsetBetween,
@@ -288,5 +290,45 @@ describe("remembering where a bar was put, as a displacement", () => {
     const far = withOffset(computed, { x: 9_000, y: 9_000 }, BOUNDS);
     expect(far.x).toBe(BOUNDS.hostWidth - BOUNDS.barWidth - BAR_INSET);
     expect(far.y).toBe(BOUNDS.hostHeight - BOUNDS.barHeight - BAR_INSET);
+  });
+});
+
+describe("isDragBeyond — three pixels of the screen, not of the frame", () => {
+  /**
+   * **David's adjustment 3, as arithmetic.** Everything inside the canvas is in the frame's own
+   * pixels and the card is scaled from outside it, so a gesture that armed at three *frame* pixels
+   * armed sooner than a hand meant it: with the panel open at 1024 the canvas sits at a zoom of
+   * 0.74, where three frame pixels are 2.2 under the hand. The element drag divides the threshold
+   * by the zoom (`zoomOf` in `Editor.tsx`) and this is the function that takes it.
+   */
+  const from = { x: 100, y: 100 };
+
+  it("takes the threshold it is given, on the larger of the two axes", () => {
+    expect(isDragBeyond(from, { x: 104, y: 100 }, 3)).toBe(true);
+    expect(isDragBeyond(from, { x: 103, y: 100 }, 3)).toBe(false);
+    expect(isDragBeyond(from, { x: 100, y: 96 }, 3)).toBe(true);
+    expect(isDragBeyond(from, { x: 103, y: 103 }, 3)).toBe(false);
+  });
+
+  it("is what `isDrag` is, with the default threshold", () => {
+    for (const to of [
+      { x: 103, y: 100 },
+      { x: 104, y: 100 },
+      { x: 100, y: 112 },
+    ]) {
+      expect(isDragBeyond(from, to, DRAG_THRESHOLD), `${to.x},${to.y}`).toBe(isDrag(from, to));
+    }
+  });
+
+  it("arms a zoomed canvas at three pixels of the screen rather than at two", () => {
+    // The zoom the shell reaches with the panel open at 1024: 721 of layout inside 532 of card.
+    const zoom = 532 / 721;
+    const threshold = DRAG_THRESHOLD / zoom;
+    // A hand that moved three screen pixels has moved 4.07 frame pixels, which is the threshold…
+    expect(isDragBeyond(from, { x: 100 + 3 / zoom, y: 100 }, threshold)).toBe(false);
+    // …and four screen pixels is 5.4, which is a drag. Under the old threshold of three frame
+    // pixels, 2.3 screen pixels would already have armed it.
+    expect(isDragBeyond(from, { x: 100 + 4 / zoom, y: 100 }, threshold)).toBe(true);
+    expect(isDragBeyond(from, { x: 100 + 2.3 / zoom, y: 100 }, DRAG_THRESHOLD)).toBe(true);
   });
 });

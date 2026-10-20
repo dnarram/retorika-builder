@@ -210,7 +210,20 @@ export function stepped(
  * and nobody has ever meant one and not the other.
  */
 export function isDrag(from: Point, to: Point): boolean {
-  return Math.max(Math.abs(to.x - from.x), Math.abs(to.y - from.y)) > DRAG_THRESHOLD;
+  return isDragBeyond(from, to, DRAG_THRESHOLD);
+}
+
+/**
+ * The same judgement with the threshold given, **because three pixels of the screen are not three
+ * pixels of the frame** (ADR 0050 §6, David's adjustment 3).
+ *
+ * Everything inside the canvas is in the frame's own pixels and the card is scaled from outside it,
+ * so a caller that means «three pixels of travel under the hand» has to divide by the zoom. The
+ * element drag does (`zoomOf` in `Editor.tsx`); the bar's own grip keeps `isDrag`, where the
+ * difference is under a pixel at every width the canvas zooms at.
+ */
+export function isDragBeyond(from: Point, to: Point, threshold: number): boolean {
+  return Math.max(Math.abs(to.x - from.x), Math.abs(to.y - from.y)) > threshold;
 }
 
 /**

@@ -301,3 +301,86 @@ the day it is dragged, the hand decides those rows anyway. The announcement in p
 `rowSpan` the editor readjusts after a text edit stay where the plan's own adjustment 1 put them,
 día 3 and día 6: the second one has to fold into the typing's own history step rather than open one
 per keystroke, which is a decision about the history and not about the measurement.
+
+## Amendment — the element follows the hand and stays where it is let go (día 3, 20 October 2026)
+
+§6 named what día 3 would decide; this is it, built, and it amends three of sprint 24's decisions.
+The request it answers is the one that opened the sprint: «quiero que al arrastrar un elemento
+visual este **se quede en la posición donde se deja**».
+
+### 1. The element is the preview, so the ghost is gone (amends ADR 0048 §5)
+
+While the hand holds it, the element itself travels on a `transform` — chrome, never the document,
+the same way the floating bar moves — by the distance the hand has travelled rather than to where
+the pointer is, so the grip stays where it was taken. On release the placement is written once, in
+the unit and row nearest the element's own top-left corner.
+
+Yesterday's ghost existed **because** the twelve-column snap moved the element somewhere else on
+release: the honest preview was the destination's rectangle, not the element under the hand. With a
+unit of 7–10 px the destination *is* where the hand is — the walk measures it at **six pixels or
+better**, which is half a unit sideways and half a row down — so the element is the preview, and a
+second thing on screen saying the same would be noise. For the same reason the twelve stripes no
+longer come up during a drag: they answer «which column will this land in», and the answer is now
+«where your hand is». The panel's own stripes stay, because the twelve bands are still real — they
+are where the gutters are.
+
+`.rb-moving` carries a `z-index` for as long as the gesture lasts (David's adjustment 5): a
+`transform` makes the element its own stacking context, and without a layer of its own it would
+travel *under* every sibling that comes after it in the document.
+
+### 2. Overlapping is allowed (amends ADR 0048 §4)
+
+`dropAt` no longer takes the section's other placements, which is the strongest way to say it cannot
+refuse for being occupied, and `arrowDrop` does not either: what the pointer may drop on top of, the
+keyboard may walk onto. The stacking order is the document's own — the later element paints on top,
+which is what CSS grid already did and what the renderer's `.rb-panel` already assumed — and there
+is no «bring to front» this sprint. Día 5 adds the one warning the owner needs: two **texts** on top
+of each other are illegible, and the review before the download says so.
+
+The only refusal left is the floor on rows (four hundred of eight pixels, 3200 px of section). With
+no ghost to carry the sentence, the live region says it: «nothing happened» is the one answer a drag
+must never give silently, which is ADR 0048 §4's principle outliving its refusal.
+
+### 3. A held click drags, whether or not the element was chosen (amends ADR 0047 §1, ADR 0048 §8)
+
+Sprint 24 required a text to be chosen before it could be dragged, because a drag over a text
+selects words. What tells the two apart is **movement**, which the browser can be asked about, so
+the precondition was guarding an ambiguity that is already resolved by the time it matters. A click
+that does not move still chooses; a second click still writes; and **inside a text being written in
+a drag still selects words**, which is the one place the ambiguity is real and is exactly how Word
+behaves. The walk asserts all three, and that a drag across an unchosen headline leaves **no
+selection** behind — the range the first pixels make is dropped when the gesture arms, and
+`user-select: none` keeps it from growing.
+
+**And the element it drops is the chosen one.** Canva and Word both do it, it makes the gesture
+finish rather than stop, and it is what gives día 4's edges something to take hold of without a
+click nobody would think to make. A text chosen this way is one click from being written in, which
+is ADR 0047's two states exactly as drawn.
+
+### 4. Three pixels of the screen, and rows read off the browser
+
+**The threshold is divided by the canvas zoom** (David's adjustment 3): inside the frame everything
+is in the document's own pixels, so three of them are 2.2 under the hand at a zoom of 0.74 and the
+gesture armed sooner than anybody meant. `zoomOf` reads the zoom from the frame itself — its scaled
+box against its unscaled viewport — and `isDragBeyond` takes the threshold as an argument.
+
+**Both axes are read off the resolved tracks** (David's adjustment 1): `getComputedStyle` gives the
+107 column widths and every row the grid has, implicit ones included, and `fineColumnAt` walks them
+through `fineTrack` so the gutters' rule lives in one place. For the rows this is the correction
+itself — with `minmax(8px, auto)` a row holding a text taller than its span grows, so `y / 8` is not
+the row it looks like. The unit test holds the real shape of a measured cover (52, 8, 8, 31, …) and
+asserts that a point fifty pixels down is row 2, where the division would have said row 7.
+
+### 5. What this does not change, and what it deleted
+
+The catalog's sections still ask before being designed by hand (ADR 0048 §7); a phone still reorders
+and still keeps its ghost, which is the one place a ghost is the honest preview, because there the
+gesture means «change the order» and not «stay where I put you» (ADR 0049 §7, rule 7). The arrows
+still move by a whole catalog column — `ARROW_UNITS` — and still announce in twelfths, because a
+press worth a ninety-sixth would be a control nobody could cross a section with; día 6 makes a press
+one unit, `Shift` eight, the run one history step and the announcement pixels, which is where
+David's conditions put them.
+
+`apps/editor/src/editor/coarseBoundary.ts` is deleted, as its own header said it would be: the
+editor speaks the document's units everywhere now. `editor.drag.occupied` is deleted too — an
+interface sentence for a refusal that no longer exists.
