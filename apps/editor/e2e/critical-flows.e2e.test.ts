@@ -172,6 +172,47 @@ async function intoTheCanvas(page: Page): Promise<void> {
   await waitForBankPhoto(frame);
 }
 
+/** Where an element sits **inside its own section**, which is the only frame of reference a walk
+ * can trust: the preview scrolls (a `pointerdown` focuses what it presses, and focus scrolls), so a
+ * box read against the page moves when nothing in the document has. Relative to the section's
+ * content box, both measurements move together and the difference is the element's own. */
+interface BoxInSection {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+async function boxesInSection(frame: FrameLocator, sectionId: string): Promise<BoxInSection[]> {
+  await fontsReady(frame);
+  return frame.locator(`[data-section="${sectionId}"]`).evaluate((node) => {
+    const section = node as HTMLElement;
+    const outer = section.getBoundingClientRect();
+    const padTop = Number.parseFloat(getComputedStyle(section).paddingTop) || 0;
+    return [...section.querySelectorAll<HTMLElement>(":scope > [data-id]")].map((child) => {
+      const el = child as HTMLElement;
+      const rect = el.getBoundingClientRect();
+      return {
+        id: el.dataset["id"] ?? "",
+        x: rect.left - outer.left,
+        y: rect.top - (outer.top + padTop),
+        w: rect.width,
+        h: rect.height,
+      };
+    });
+  });
+}
+
+/** One element's box inside its section, or `undefined` when the page is not drawing it. */
+async function boxOf(
+  frame: FrameLocator,
+  sectionId: string,
+  elementId: string,
+): Promise<BoxInSection | undefined> {
+  return (await boxesInSection(frame, sectionId)).find((box) => box.id === elementId);
+}
+
 /**
  * The frame's faces, settled — **and every measurement of a text waits for this**.
  *
@@ -15538,23 +15579,35 @@ describe("sprint 24 día 8 — un elemento se arrastra a su celda", () => {
       // **Nothing is chosen first, whatever kind of element this turned out to be** (ADR 0050 §6,
       // amending ADR 0047 §1): a held click drags, and the walk below is what says so for a text.
       const isText = (await subject.getAttribute("data-rb-text")) === "1";
-      // Before a single pixel is measured: a face arriving mid-gesture moves everything under the
-      // text it belongs to, and this walk is nothing but a comparison of pixels.
-      await fontsReady(frame);
-      const startedAt = await subject.boundingBox();
-
       /**
        * **The element follows the hand**, which is the whole of día 3 and cannot be seen any other
        * way: mid-gesture its own box has travelled by what the pointer travelled, and the document
        * has not changed at all — the placement is written on release and nowhere else.
        *
-       * Measured at a window of 1440 with no panel, where the canvas is at zoom 1, so a pixel of
-       * the screen is a pixel of the frame and the two deltas are comparable.
+       * **Measured inside the section, and the baseline taken once the pointer is down.** Both are
+       * corrections CI made and this machine could not: a box read against the page moves when the
+       * preview scrolls, and `pointerdown` focuses what it presses, which scrolls it into view —
+       * seven pixels of it, reported as a drag that overshot. Against the section's own content box
+       * a scroll cancels out, and after the press there is no scroll left to come.
+       *
+       * At a window of 1440 with no panel the canvas is at zoom 1, so a pixel of the screen is a
+       * pixel of the frame and the pointer's delta is comparable with the element's.
        */
       const DX = 137;
       const DY = 30;
-      await dragElementBy(page, subject, DX, DY);
-      const carried = await subject.boundingBox();
+      const grab = await subject.boundingBox();
+      await page.mouse.move(
+        (grab?.x ?? 0) + (grab?.width ?? 0) / 2,
+        (grab?.y ?? 0) + (grab?.height ?? 0) / 2,
+      );
+      await page.mouse.down();
+      const startedAt = await boxOf(frame, "sec-cover", mover?.id as string);
+      await page.mouse.move(
+        (grab?.x ?? 0) + (grab?.width ?? 0) / 2 + DX,
+        (grab?.y ?? 0) + (grab?.height ?? 0) / 2 + DY,
+        { steps: 10 },
+      );
+      const carried = await boxOf(frame, "sec-cover", mover?.id as string);
       expect((carried?.x ?? 0) - (startedAt?.x ?? 0), "no siguió a la mano a lo ancho").toBeCloseTo(
         DX,
         0,
@@ -15576,13 +15629,15 @@ describe("sprint 24 día 8 — un elemento se arrastra a su celda", () => {
        * That is the sentence David asked for — «que se quede en la posición donde se deja» — and it
        * is the one thing no unit assertion can show.
        */
-      const landed = await subject.boundingBox();
-      expect((landed?.x ?? 0) - (startedAt?.x ?? 0), "no se quedó donde se soltó").toBeCloseTo(
-        DX,
-        -1,
-      );
-      expect(Math.abs((landed?.x ?? 0) - (startedAt?.x ?? 0) - DX)).toBeLessThanOrEqual(6);
-      expect(Math.abs((landed?.y ?? 0) - (startedAt?.y ?? 0) - DY)).toBeLessThanOrEqual(6);
+      const landed = await boxOf(frame, "sec-cover", mover?.id as string);
+      expect(
+        Math.abs((landed?.x ?? 0) - (startedAt?.x ?? 0) - DX),
+        "no se quedó donde se soltó, a lo ancho",
+      ).toBeLessThanOrEqual(6);
+      expect(
+        Math.abs((landed?.y ?? 0) - (startedAt?.y ?? 0) - DY),
+        "no se quedó donde se soltó, a lo alto",
+      ).toBeLessThanOrEqual(6);
       // Which is fourteen units right and four rows down, read off the document itself.
       const after = await placedIn(frame, "sec-cover");
       const moved = after.find((element) => element.id === mover?.id);
@@ -16319,43 +16374,14 @@ describe("sprint 24 día 10 — el cierre, sin ratón", () => {
 describe("sprint 25 día 2 — escalar mide la sección viva", () => {
   const VIEWPORT = { width: 1440, height: 900 };
 
-  interface Where {
-    id: string;
-    x: number;
-    y: number;
-    w: number;
-    h: number;
-  }
-
   /**
-   * La caja de cada elemento colocado, **relativa al contenido de su sección**, que es de lo que
-   * habla la promesa: la sección entera baja al aparecer la barra «Diseñada a mano», y eso ya está
-   * medido y decidido (REVIEW, 7 de octubre).
-   *
-   * **Espera la tipografía antes de medir**, y no es una precaución: midiendo en cuanto aparece la
-   * foto del banco, el titular daba 46 px con la familia de reserva y 52 con EB Garamond ya
-   * aplicada, así que la caminata se acusaba a sí misma de haber movido seis píxeles. Lo que mide
-   * el editor tiene el mismo límite y el ADR 0050 §3 lo nombra; aquí se espera porque se puede.
+   * La caja de cada elemento colocado, **relativa al contenido de su sección** —`boxesInSection`,
+   * compartida con la caminata del arrastre— que es de lo que habla la promesa: la sección entera
+   * baja al aparecer la barra «Diseñada a mano», y eso ya está medido y decidido (REVIEW, 7 de
+   * octubre). Espera además la tipografía, por la razón que `fontsReady` explica.
    */
-  async function boxesIn(frame: FrameLocator, sectionId: string): Promise<Where[]> {
-    await fontsReady(frame);
-    return frame.locator(`[data-section="${sectionId}"]`).evaluate((node) => {
-      const section = node as HTMLElement;
-      const outer = section.getBoundingClientRect();
-      const padTop = Number.parseFloat(getComputedStyle(section).paddingTop) || 0;
-      return [...section.querySelectorAll<HTMLElement>(":scope > [data-id]")].map((child) => {
-        const el = child as HTMLElement;
-        const rect = el.getBoundingClientRect();
-        return {
-          id: el.dataset["id"] ?? "",
-          x: rect.left - outer.left,
-          y: rect.top - (outer.top + padTop),
-          w: rect.width,
-          h: rect.height,
-        };
-      });
-    });
-  }
+  const boxesIn = boxesInSection;
+  type Where = BoxInSection;
 
   /** El ancho de la sección en el marco, que es lo que cambia al abrirse un panel. */
   function sectionWidth(frame: FrameLocator, sectionId: string): Promise<number> {
