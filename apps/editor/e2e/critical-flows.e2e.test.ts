@@ -16511,3 +16511,236 @@ describe("sprint 25 día 2 — escalar mide la sección viva", () => {
     }
   }, 300_000);
 });
+
+/**
+ * **Sprint 25 día 4 — los bordes de la caja la estiran** (ADR 0050, día 4).
+ *
+ * La segunda petición de David para el sprint: «quiero además que las cajas que limitan el tamaño
+ * del objeto visual (el recuadro azul) sea ajustable al arrastrar los bordes […] parecido a como
+ * funcionan los cuadros de texto insertados en un documento de Word». Y su propio gesto para que se
+ * encuentre: «cursor `ew-resize` en una zona de ±6 px alrededor del borde, para que se descubra sin
+ * explicación».
+ *
+ * Lo que sólo un navegador puede decir, y es lo que estas caminatas miden: que el cursor cambia
+ * donde tiene que cambiar, que el borde de enfrente no se mueve, que una foto crece de área sin
+ * estirarse, y que estirar un texto mientras se escribe en él no pierde una palabra.
+ */
+describe("sprint 25 día 4 — los bordes estiran la caja", () => {
+  const VIEWPORT = { width: 1440, height: 900 };
+
+  /** Una portada diseñada a mano, que es donde hay una caja que estirar. */
+  async function handDesigned(page: Page): Promise<FrameLocator> {
+    await intoTheCanvas(page);
+    await studioToolsOn(page);
+    const frame = page.frameLocator(PREVIEW).first();
+    await frame.locator('[data-section="sec-cover"]').click();
+    await replacingTheDocument(page, async () => {
+      await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
+      await frame.locator(".rb-escalate-yes").click();
+    });
+    await waitForBankPhoto(frame);
+    await fontsReady(frame);
+    return page.frameLocator(PREVIEW).first();
+  }
+
+  /** El cursor que el editor ha puesto en el elemento, que es todo el aviso que hay. */
+  function cursorOn(target: Locator): Promise<string> {
+    return target.evaluate((node) => getComputedStyle(node as HTMLElement).cursor);
+  }
+
+  /** Arrastra desde un punto, en pasos, y suelta. */
+  async function pull(page: Page, from: Point, dx: number, dy: number): Promise<void> {
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(from.x + dx, from.y + dy, { steps: 10 });
+    await page.mouse.up();
+  }
+
+  it("ensancha por el borde derecho, mueve por el izquierdo, y el cursor lo dice", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const page = await context.newPage();
+    try {
+      const frame = await handDesigned(page);
+      const step = await columnStepOf(frame, "sec-cover");
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+
+      // Elegido: la zona del borde sólo contesta sobre el elemento con el que la mano ya trabaja.
+      await headline.click();
+      await expect(headline).toHaveClass(/rb-chosen/);
+      const before = (await placedIn(frame, "sec-cover")).find((e) => e.id === "el-headline");
+      expect(before, "el titular no tiene colocación").toBeDefined();
+
+      // **El cursor, dos píxeles dentro del borde derecho** — sin él no hay forma de saber que el
+      // borde se puede tirar, que es la mitad de la decisión de David.
+      const box = await headline.boundingBox();
+      const right = { x: (box?.x ?? 0) + (box?.width ?? 0) - 2, y: (box?.y ?? 0) + 8 };
+      await page.mouse.move(right.x, right.y);
+      await expect.poll(() => cursorOn(headline)).toBe("ew-resize");
+      // Y en el medio no: el elemento se arrastra, no se estira.
+      await page.mouse.move((box?.x ?? 0) + (box?.width ?? 0) / 2, (box?.y ?? 0) + 8);
+      await expect.poll(() => cursorOn(headline)).not.toBe("ew-resize");
+
+      // ---- el borde derecho: dos columnas del catálogo son dieciséis unidades ----
+      await pull(page, right, step * 2, 0);
+      await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+      const wider = (await placedIn(frame, "sec-cover")).find((e) => e.id === "el-headline");
+      expect(wider?.columnSpan, "no ensanchó dos columnas").toBe(
+        (before?.columnSpan ?? 0) + 2 * FINE_PER_COLUMN,
+      );
+      expect(wider?.column, "el borde izquierdo se movió al tirar del derecho").toBe(
+        before?.column,
+      );
+      expect(wider?.row).toBe(before?.row);
+      /**
+       * **Y aparece el panel de legibilidad**, que es la decisión del día 3 trabajando: el titular
+       * ensanchado se solapa ahora con la foto, el renderizador emite `.rb-panel` detrás del texto
+       * que queda sobre una imagen, y nadie ha tenido que elegir nada. Solapar está permitido y el
+       * texto sigue leyéndose.
+       */
+      await expect(frame.locator('[data-section="sec-cover"] .rb-panel')).toHaveCount(1);
+
+      // ---- un gesto, un paso de historial ----
+      await page.getByRole("button", { name: "Deshacer", exact: true }).click();
+      await expect
+        .poll(
+          async () =>
+            (await placedIn(frame, "sec-cover")).find((e) => e.id === "el-headline")?.columnSpan,
+        )
+        .toBe(before?.columnSpan);
+
+      // ---- el borde izquierdo: mueve el principio y deja quieto el final ----
+      const again = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      await again.click();
+      await expect(again).toHaveClass(/rb-chosen/);
+      const nowBox = await again.boundingBox();
+      const left = { x: (nowBox?.x ?? 0) + 2, y: (nowBox?.y ?? 0) + 8 };
+      await page.mouse.move(left.x, left.y);
+      await expect.poll(() => cursorOn(again)).toBe("ew-resize");
+      await pull(page, left, step, 0);
+
+      /**
+       * **Sondeado, y la primera versión no lo hacía**: cada gesto escribe una colocación, eso
+       * reemplaza el `srcDoc`, y leer las colocaciones en el mismo respiro lee un marco a medio
+       * sustituir — que no tiene la sección todavía. La caminata se acusaba de haber perdido el
+       * titular; lo había leído demasiado pronto.
+       */
+      await expect
+        .poll(
+          async () =>
+            (await placedIn(frame, "sec-cover")).find((e) => e.id === "el-headline")?.column,
+          { message: "el borde izquierdo no movió el principio" },
+        )
+        .toBe((before?.column ?? 0) + FINE_PER_COLUMN);
+      const narrower = (await placedIn(frame, "sec-cover")).find((e) => e.id === "el-headline");
+      // El borde de enfrente no se ha movido, que es el comportamiento entero de un borde: la
+      // última unidad es la misma antes y después.
+      expect(
+        (narrower?.column ?? 0) + (narrower?.columnSpan ?? 0),
+        "el borde derecho se movió al tirar del izquierdo",
+      ).toBe((before?.column ?? 0) + (before?.columnSpan ?? 0));
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+
+  it("estira mientras se escribe, como en Word, y no pierde ni una palabra", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const page = await context.newPage();
+    try {
+      const frame = await handDesigned(page);
+      const step = await columnStepOf(frame, "sec-cover");
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+
+      // Escribiendo: el segundo clic entra a escribir y el contenido entero queda seleccionado, así
+      // que lo que se teclea lo sustituye — y es justo lo que tiene que sobrevivir al gesto.
+      await headline.click();
+      await intoWriting(headline);
+      await page.keyboard.type("Mesas en la plaza");
+      await expect(headline).toHaveText("Mesas en la plaza");
+      const before = (await placedIn(frame, "sec-cover")).find((e) => e.id === "el-headline");
+
+      /**
+       * **Seis píxeles por fuera, que es la mitad holgada de la zona asimétrica** (ajuste 8 de
+       * David): por dentro sólo dos, para que un clic sobre la primera o la última letra siga
+       * poniendo el cursor de escritura.
+       */
+      const box = await headline.boundingBox();
+      const outside = { x: (box?.x ?? 0) + (box?.width ?? 0) + 3, y: (box?.y ?? 0) + 8 };
+      await page.mouse.move(outside.x, outside.y);
+      await expect.poll(() => cursorOn(headline)).toBe("ew-resize");
+
+      await pull(page, outside, step, 0);
+
+      // La caja creció una columna…
+      const after = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      await expect
+        .poll(
+          async () =>
+            (await placedIn(frame, "sec-cover")).find((e) => e.id === "el-headline")?.columnSpan,
+        )
+        .toBe((before?.columnSpan ?? 0) + FINE_PER_COLUMN);
+      // …las palabras están intactas, porque el texto se confirma antes de escribir la colocación…
+      await expect(after).toHaveText("Mesas en la plaza");
+      // …y se sigue escribiendo en él, que es lo que hace Word y lo que el rehacer del marco se
+      // habría llevado por delante.
+      await expect(after).toHaveAttribute("contenteditable", "true");
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+
+  it("agranda el área de una foto por su borde inferior sin estirar la foto", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const page = await context.newPage();
+    try {
+      const frame = await handDesigned(page);
+      const photo = frame.locator('[data-section="sec-cover"] [data-id="el-image"]');
+      // Una foto se elige con el foco: un clic sobre ella abre «Cambiar foto», que es su propio
+      // gesto desde el sprint 7 y no se toca.
+      await photo.focus();
+      await expect(photo).toHaveClass(/rb-chosen/);
+
+      const before = (await placedIn(frame, "sec-cover")).find((e) => e.id === "el-image");
+      const box = await photo.boundingBox();
+      const bottom = {
+        x: (box?.x ?? 0) + (box?.width ?? 0) / 2,
+        y: (box?.y ?? 0) + (box?.height ?? 0) - 2,
+      };
+      await page.mouse.move(bottom.x, bottom.y);
+      await expect.poll(() => cursorOn(photo)).toBe("ns-resize");
+
+      await pull(page, bottom, 0, 48);
+      await expect
+        .poll(
+          async () =>
+            (await placedIn(frame, "sec-cover")).find((e) => e.id === "el-image")?.rowSpan,
+          { message: "el área no creció al tirar del borde inferior" },
+        )
+        .toBeGreaterThan(before?.rowSpan ?? 0);
+      const after = (await placedIn(frame, "sec-cover")).find((e) => e.id === "el-image");
+      /**
+       * **Cuarenta y ocho píxeles son cinco o seis filas, y los cuatro de diferencia son el asunto
+       * de esta caminata.** El alto de la foto lo decide su propia proporción (`height: auto`), así
+       * que su caja acaba cuatro píxeles por encima del final de su área de cincuenta filas: tirar
+       * desde su borde visible pide, por esos cuatro píxeles, una fila menos que la aritmética
+       * redonda. Que la caja y el área no coincidan **es** «crece sin estirarse».
+       */
+      expect(after?.rowSpan ?? 0, "el área no creció cinco o seis filas").toBeGreaterThanOrEqual(
+        (before?.rowSpan ?? 0) + 5,
+      );
+      expect(after?.rowSpan ?? 0).toBeLessThanOrEqual((before?.rowSpan ?? 0) + 6);
+      expect(after?.column).toBe(before?.column);
+      expect(after?.columnSpan).toBe(before?.columnSpan);
+      /**
+       * **Y la foto mide lo que medía**, que es la mitad que el ADR nombra: `.rb-section img` lleva
+       * `width: 100%; height: auto`, así que el alto de una imagen lo decide su propia proporción y
+       * no el área que la contiene. Agrandar el área no estira la foto; le deja sitio.
+       */
+      const grown = frame.locator('[data-section="sec-cover"] [data-id="el-image"]');
+      const nowBox = await grown.boundingBox();
+      expect(nowBox?.height, "la foto se estiró con su área").toBeCloseTo(box?.height ?? 0, 0);
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+});

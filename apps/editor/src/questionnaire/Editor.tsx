@@ -20,6 +20,8 @@ import {
   FINE_PER_COLUMN,
   FINE_TRACKS,
   findSection,
+  fineTrack,
+  fineTrackSpan,
   flattenElements,
   isHandDesigned,
   type ListItem,
@@ -97,8 +99,12 @@ import {
   arrowDrop,
   type Drop,
   dropAt,
+  fineColumnAt,
+  fineLastColumnAt,
   type GridMetrics,
+  lastRowAt,
   reorderAt,
+  rowAt,
 } from "../editor/dragGrid.ts";
 import {
   EditorShell,
@@ -114,6 +120,14 @@ import { measureOverflow } from "../editor/overflowCheck.ts";
 import { countPhotos, listPhotos, type PhotoState } from "../editor/photoInventory.ts";
 import { withPhotoUrls } from "../editor/previewDocument.ts";
 import { record, serialOf } from "../editor/probe.ts";
+import {
+  cursorFor,
+  EDGE_ZONE,
+  EDGE_ZONE_WRITING_INSIDE,
+  type Edge,
+  edgeAt,
+  resizeTo,
+} from "../editor/resizeBox.ts";
 import { sectionFields } from "../editor/sectionFields.ts";
 import {
   placeAfterRebuild,
@@ -857,6 +871,16 @@ export function Editor({
    * David asked for exactly that assertion when he approved the sprint.
    */
   const keepChosenFocus = useRef(false);
+  /**
+   * Which text should be **written in** again after the rebuild this edit causes, if any.
+   *
+   * `keepChosenFocus` above restores the outline and the keyboard; this restores the state, and it
+   * exists for one gesture: stretching a text's box by its edge while writing in it (ADR 0050, día
+   * 4). The placement is an edit like any other, so the frame is replaced and the fresh element has
+   * no `contenteditable` — a person who pulled an edge would be left with a box the right size and
+   * no caret in it. The commit happens first (`el.blur()`), so nothing typed is lost.
+   */
+  const keepWriting = useRef<ElementAddress | null>(null);
   /**
    * Which device view is on **right now**, for the listeners that outlive the render that wired them.
    *
@@ -4353,6 +4377,30 @@ export function Editor({
     // Read before `open` runs. Its own `refresh` looks at a document nothing is selected in yet and
     // would clear the very record this needs — which is correct of it, and is why the read is here.
     const rememberedSelection = lastSelection.current;
+
+    /**
+     * **And the writing itself comes back, for the one gesture that interrupts it** (ADR 0050, día
+     * 4): stretching a text's box by its edge while writing in it.
+     *
+     * Every other edit made while writing goes *through* the writing — a letter, a mark, the
+     * toolbar's own buttons — and the commit on blur is what ends it. A resize is the first act
+     * that changes the document while the caret should stay where it is, and the frame it rebuilds
+     * has no `contenteditable` anywhere. So the state is restored here, **before** the block below
+     * puts the bar and the selection back: that restoration focuses the element to place the range,
+     * and a range placed in something not editable is a focus with no caret.
+     */
+    const writeAgain = keepWriting.current;
+    keepWriting.current = null;
+    if (writeAgain) {
+      const again = iframeDoc
+        .querySelector(`[data-section="${CSS.escape(writeAgain.sectionId)}"]`)
+        ?.querySelector<HTMLElement>(`[data-id="${CSS.escape(writeAgain.elementId)}"]`);
+      if (again) {
+        markChosen(iframeDoc, again);
+        startWriting(again);
+      }
+    }
+
     if (remembered) {
       const section = iframeDoc.querySelector(
         `[data-section="${CSS.escape(remembered.sectionId)}"]`,
@@ -5245,6 +5293,201 @@ export function Editor({
   }
 
   /**
+   * **The edges of the chosen element's box stretch it** (ADR 0050, sprint 25 día 4).
+   *
+   * David's second request for the sprint, and his own gesture for finding it: a zone of ±6 px
+   * around the border, a cursor that changes in it, no handles with a mouse — «parecido a como
+   * funcionan los cuadros de texto insertados en un documento de Word».
+   *
+   * **Wired on the section and in the capture phase, and both halves of that are the design.**
+   *
+   * - *On the section*, because the zone reaches **outside** the element: a `pointermove` three
+   *   pixels past a headline's right border is delivered to the section, not to the headline, so an
+   *   element-level listener could never show the cursor there — the first version did exactly that
+   *   and the walk found the outer half of the zone dead.
+   * - *In capture*, because the press has to beat everything the element and the section would
+   *   otherwise do with it: choosing, starting to write, closing a menu, or arming the drag. A
+   *   capture listener runs before any of them, and `stopPropagation` is what makes the gesture
+   *   unambiguous rather than a race between listeners (the plan named this risk; this is the
+   *   answer to it).
+   *
+   * The element it acts on is the one the hand is already working on — the chosen one of this
+   * section, written in or not — never every placed element: an edge zone around all of them would
+   * turn «drag this» into «stretch this» a few pixels from every border on the page.
+   */
+  function wireResizing(iframeDoc: Document) {
+    // A placement is a design-tools idea, the same gate the drag and the panel's arrows sit behind.
+    if (designTools !== true) return;
+
+    for (const section of iframeDoc.querySelectorAll<HTMLElement>("[data-section]")) {
+      const sectionId = section.dataset.section;
+      if (!sectionId) continue;
+
+      /** The element the gesture is about, and whether it is being written in. */
+      const target = (): { el: HTMLElement; writing: boolean } | null => {
+        const chosen = chosenText.current;
+        if (!chosen || chosen.sectionId !== sectionId) return null;
+        const el = section.querySelector<HTMLElement>(
+          `[data-id="${CSS.escape(chosen.elementId)}"]`,
+        );
+        // Top-level only: a placement belongs to an element of the section, and a line inside a
+        // list has none of its own.
+        if (!el || el.parentElement !== section) return null;
+        return { el, writing: el.isContentEditable };
+      };
+
+      /** Which edge of that element the point is on, or `null` for anything that is not a resize. */
+      const edgeUnder = (event: PointerEvent): { el: HTMLElement; edge: Edge } | null => {
+        // A finger is wider than this zone in every direction, so touch gets real handles instead
+        // (día 7) and asking this question of one would only steal the drag it already has.
+        if (event.pointerType === "touch") return null;
+        if (deviceNow.current === "mobile") return null;
+        if (!findSection(doc, sectionId)?.section.layout) return null;
+        const found = target();
+        if (!found) return null;
+        const zoom = zoomOf(iframeDoc);
+        const edge = edgeAt(
+          { x: event.clientX, y: event.clientY },
+          found.el.getBoundingClientRect(),
+          {
+            // Screen pixels, divided by the canvas zoom (David's adjustment 3) — and asymmetric while
+            // writing, 6 outside and 2 in, so a click on the first or the last letter still places
+            // the caret (adjustment 8).
+            outside: EDGE_ZONE / zoom,
+            inside: (found.writing ? EDGE_ZONE_WRITING_INSIDE : EDGE_ZONE) / zoom,
+          },
+        );
+        return edge ? { el: found.el, edge } : null;
+      };
+
+      let pulling: {
+        readonly el: HTMLElement;
+        readonly edge: Edge;
+        readonly from: Placement;
+        readonly column: string;
+        readonly row: string;
+      } | null = null;
+      let pulled: PlacementEdit | null = null;
+
+      /** The cursor, on the element and on the section both: whichever the pointer is over has to
+       * show it, and a cursor set on the section is overridden by any child with one of its own —
+       * which every text has while it is being written in. */
+      const showCursor = (el: HTMLElement | null, edge: Edge | null) => {
+        section.style.cursor = edge ? cursorFor(edge) : "";
+        if (el) el.style.cursor = edge ? cursorFor(edge) : "";
+      };
+
+      const stop = () => {
+        if (!pulling) return;
+        // The live preview was written onto the element's own inline grid area, which is the
+        // renderer's to own: put back exactly what was there. A committed resize gets it again from
+        // the rebuild, and a cancelled one must leave no trace.
+        pulling.el.style.gridColumn = pulling.column;
+        pulling.el.style.gridRow = pulling.row;
+        showCursor(pulling.el, null);
+        iframeDoc.documentElement.classList.remove("rb-resizing");
+        iframeDoc.documentElement.style.cursor = "";
+        pulling = null;
+        pulled = null;
+      };
+
+      section.addEventListener(
+        "pointerdown",
+        (event) => {
+          const found = edgeUnder(event);
+          if (!found) return;
+          const placement = findSection(doc, sectionId)?.section.layout?.placements.find(
+            (candidate) => candidate.elementId === found.el.dataset["id"],
+          );
+          if (!placement) return;
+          // Taken from the browser and from everything else: without this a press on a chosen text
+          // starts a native selection, and the click that follows would choose, write, or close a
+          // menu over a gesture that is about one element's own box.
+          event.preventDefault();
+          event.stopPropagation();
+          pulling = {
+            el: found.el,
+            edge: found.edge,
+            from: placement,
+            column: found.el.style.gridColumn,
+            row: found.el.style.gridRow,
+          };
+          pulled = null;
+          section.setPointerCapture(event.pointerId);
+          // The cursor belongs to the whole document while the gesture lasts: a hand that pulls
+          // past the section's own border must not see the pointer flicker back to an arrow.
+          iframeDoc.documentElement.classList.add("rb-resizing");
+          iframeDoc.documentElement.style.cursor = cursorFor(found.edge);
+        },
+        true,
+      );
+
+      section.addEventListener("pointermove", (event) => {
+        if (!pulling) {
+          // A hand looking for the edge. The cursor is the whole of «se descubra sin explicación»,
+          // and the only thing that says the border can be pulled at all.
+          const found = edgeUnder(event);
+          showCursor(found?.el ?? target()?.el ?? null, found?.edge ?? null);
+          return;
+        }
+        /**
+         * **The live preview is the element's own grid area, rewritten** — not a transform.
+         *
+         * A resize changes what the content has to fit in, so the only honest preview is the one
+         * the grid draws: a text rewraps as it narrows, and a photograph's area grows without the
+         * photograph stretching (`.rb-section img { height: auto }`). A transform would show the
+         * same element scaled, which is a picture of something that will not happen.
+         *
+         * The numbers written here are the renderer's own form — tracks, gutters included — so what
+         * the eye sees during the gesture is what the document will say after it.
+         */
+        const metrics = gridMetricsOf(section);
+        pulled = resizeTo(pulling.from, pulling.edge, {
+          startColumn: fineColumnAt(event.clientX, metrics),
+          endColumn: fineLastColumnAt(event.clientX, metrics),
+          startRow: rowAt(event.clientY, metrics),
+          endRow: lastRowAt(event.clientY, metrics),
+        });
+        const next = { ...pulling.from, ...pulled };
+        pulling.el.style.gridColumn = `${fineTrack(next.column)}/span ${fineTrackSpan(
+          next.column,
+          next.columnSpan,
+        )}`;
+        pulling.el.style.gridRow = `${next.row}/span ${next.rowSpan}`;
+      });
+
+      const release = () => {
+        if (!pulling) return;
+        const el = pulling.el;
+        const elementId = el.dataset["id"];
+        const edit = pulled;
+        const wasWriting = el.isContentEditable;
+        stop();
+        if (!elementId || !edit || Object.keys(edit).length === 0) return;
+        if (wasWriting) {
+          /**
+           * **The words come first, and then the box** (ADR 0050, día 4).
+           *
+           * A text being written in holds the person's letters in the DOM and nowhere else — this
+           * editor commits a text on blur — and writing the placement rebuilds the frame, which
+           * would throw them away. So the text is committed the way clicking away commits it, and
+           * the writing is picked up again on the other side of the rebuild (`keepWriting`): one
+           * gesture, two acts, in the order that cannot lose anything.
+           */
+          keepWriting.current = { sectionId, elementId };
+          el.blur();
+        } else {
+          keepChosenFocus.current = true;
+        }
+        onSetPlacement(sectionId, elementId, edit);
+      };
+      section.addEventListener("pointerup", release);
+      section.addEventListener("pointercancel", stop);
+      section.addEventListener("lostpointercapture", release);
+    }
+  }
+
+  /**
    * **The element follows the hand and stays where it is let go** (ADR 0050 §6, sprint 25 día 3).
    *
    * This is the sprint's own request: «quiero que al arrastrar un elemento visual este se quede en
@@ -5371,7 +5614,9 @@ export function Editor({
       };
 
       el.addEventListener("pointerdown", (event) => {
-        // Writing wins: inside a text being written in, a drag selects words (ADR 0047).
+        // Writing wins: inside a text being written in, a drag selects words (ADR 0047). An edge is
+        // the exception and it never reaches here: `wireResizing` takes that press in the capture
+        // phase, on the section, because the zone reaches outside this element's own box.
         if (el.isContentEditable) return;
         const chosen =
           chosenText.current?.sectionId === sectionId &&
@@ -6111,6 +6356,10 @@ export function Editor({
        * happens to be over, which during a drag is the client's own page.
        */
       ".rb-dragging, .rb-dragging * { user-select: none; cursor: grabbing !important; }",
+      // While an edge is being pulled, the cursor is set on the root **inline** (it is one of four,
+      // and which one is the gesture's own business), so the only thing a class is needed for is
+      // keeping a text from selecting itself as the hand travels across it.
+      ".rb-resizing, .rb-resizing * { user-select: none; }",
       /*
        * **A focus ring, which these eight buttons never had.** `globals.css` has drawn one for the
        * application's own side since sprint 15 and the pills inside the frame got theirs the same
@@ -6599,6 +6848,9 @@ export function Editor({
     // After both: the drag asks `wireEditing`'s state whether a text is chosen, and it must not be
     // armed on an element the editing layer has not finished wiring.
     wireDragging(iframeDoc);
+    // After the drag, so a press in an edge zone is the resize's: its own listener is in the
+    // capture phase and stops the press there, which is what keeps the two gestures apart.
+    wireResizing(iframeDoc);
     wireHandmade(iframeDoc);
     wireReadingPosition(iframeDoc);
     // Last, and on the load rather than only on a render: a delete reloads this frame, so the render
