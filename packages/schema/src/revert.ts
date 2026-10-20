@@ -1,4 +1,5 @@
-import type { ContentElement, Section } from "./document.ts";
+import { type ContentElement, FINE_COLUMNS, type Section } from "./document.ts";
+import { coarseToFine } from "./fineGrid.ts";
 import type { PresetShape } from "./preset.ts";
 
 /**
@@ -9,16 +10,29 @@ import type { PresetShape } from "./preset.ts";
  * — `source: "free"` plus its own layout, instead of a converted document.
  */
 
-/** Escalate: copy the catalog layout into the section so not a pixel moves. */
-export function escalate(section: Section, preset: PresetShape): Section {
+/**
+ * Escalate: copy the catalog layout into the section so not a pixel moves.
+ *
+ * **Written in the fine grid's units** (ADR 0050): the catalog draws on twelve columns and content
+ * rows, a free section is ninety-six units and eight-pixel rows, and `coarseToFine` is the exact
+ * conversion sideways and the theme's rhythm downwards — `gapRows` is how many empty rows stand for
+ * one `space.md` gap (`gapRowsFor`). The caller that has the document passes its theme's answer;
+ * nothing here guesses a scale.
+ */
+export function escalate(section: Section, preset: PresetShape, gapRows: number): Section {
   if (section.source === "free") return structuredClone(section);
+  const drawn = preset.layoutFor(section.preset.variantId, section.content);
   return {
     ...structuredClone(section),
     source: "free",
     // The copy keeps the element ids, which is what lets every text and photo find its
     // exact slot again on the way back, with no guessing. Only top-level elements have a
     // slot on the section grid: a list is placed as one element and its items flow inside it.
-    layout: preset.layoutFor(section.preset.variantId, section.content),
+    layout: {
+      grid: { columns: FINE_COLUMNS },
+      placements: drawn.placements.map((placement) => coarseToFine(placement, gapRows)),
+      breakpoints: drawn.breakpoints,
+    },
   };
 }
 

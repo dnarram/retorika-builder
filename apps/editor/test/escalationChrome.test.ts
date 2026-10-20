@@ -13,9 +13,14 @@ import { describe, expect, it } from "vitest";
  * changes — which is the optimisation that keeps a click-to-edit selection alive.
  *
  * The measurement below is the cause, and it is also the promise the offer makes: «No se mueve nada
- * al empezar». Escalating changes the document and changes **not one byte** of the page. So the
- * editor keys its frame on the chrome's own state (`Editor.tsx`, the note at the `<iframe>`), and if
- * anybody ever deletes that key, the test at the bottom is what fails.
+ * al empezar». Until ADR 0050 escalating changed the document and changed **not one byte** of the
+ * page; since the fine grid it changes the bytes and not the pixels — the section gains `rb-free`,
+ * its placements are written as the fine grid's tracks and the stylesheet gains the fine grid's
+ * rules, while every element keeps its left edge and width to the pixel (measured in
+ * `packages/renderer/test/fine-grid.browser.test.ts`). So the frame now reloads on escalation on
+ * its own, and the key the editor puts on its frame (`Editor.tsx`, the note at the `<iframe>`) is
+ * still what carries the *switch*, which changes nothing in the document. If anybody ever deletes
+ * that key, the test at the bottom is what fails.
  */
 
 const doc = generate({
@@ -30,32 +35,48 @@ const doc = generate({
 
 const cover = presetFor("cover");
 
-describe("escalating a section is invisible in what gets published", () => {
-  it("renders the identical HTML and the identical CSS", () => {
-    // «Al escalar… se copia la maquetación del catálogo, así que no se mueve ni un píxel», at the
-    // only level where that sentence can be checked rather than believed.
+/**
+ * What escalating is allowed to change in the published bytes, and nothing else (ADR 0050): the
+ * section's `rb-free` class, the inline grid area of its children, and the fine grid's own
+ * stylesheet block. With those three taken out, the two pages are the same string — every tag,
+ * every word, every other rule.
+ */
+function withoutTheFineGrid(html: string): string {
+  return (
+    html
+      .replace(/ rb-free"/g, '"')
+      .replace(/ style="grid-column:[^"]*"/g, "")
+      // The whole block `fineGridCss` emits, from its first rule to the end of its mobile override.
+      .replace(
+        /\n\.rb-section\.rb-free \{ grid-template-columns: repeat[\s\S]*?grid-auto-rows: auto; \}\n\}\n/,
+        "",
+      )
+  );
+}
+
+describe("escalating a section changes the bytes and not the pixels", () => {
+  it("renders the same page apart from the fine grid's class, tracks and rules", () => {
+    // «Al escalar… se copia la maquetación del catálogo, así que no se mueve ni un píxel» — the
+    // pixels are the browser suite's claim; this is the one about everything else in the page.
     const free = escalateSection(doc, "sec-cover", cover);
     const before = render(doc, "html");
     const after = render(free, "html");
 
     expect(free.pages[0]?.sections[0]?.source).toBe("free");
-    expect(after.html).toBe(before.html);
-    expect(after.css).toBe(before.css);
+    expect(after.html).not.toBe(before.html);
+    expect(after.html).toContain('rb-free"');
+    expect(withoutTheFineGrid(after.html)).toBe(withoutTheFineGrid(before.html));
+    // And the normaliser is doing work, on the side that has the fine grid: sabotage check.
+    expect(withoutTheFineGrid(after.html)).not.toBe(after.html);
+    expect(withoutTheFineGrid(after.html)).not.toContain("rb-free");
+    expect(before.html).not.toContain("rb-free");
   });
 
-  it("and so does going back", () => {
+  it("and going back renders the identical bytes again", () => {
     const free = escalateSection(doc, "sec-cover", cover);
     const back = render(revertSection(free, "sec-cover", cover), "html");
     expect(back.html).toBe(render(doc, "html").html);
     expect(back.css).toBe(render(doc, "html").css);
-  });
-
-  it("which is also `INV_5` reached through the product for the first time", () => {
-    // "Publishing produces identical output with tools on or off" has only ever been checked as
-    // determinism — the same document rendered twice. This is the other half: two documents that
-    // differ exactly by the switch's work, publishing the same bytes.
-    const free = escalateSection(doc, "sec-cover", cover);
-    expect(render(free, "html").html).toBe(render(doc, "html").html);
   });
 });
 
@@ -76,9 +97,8 @@ describe("so the chrome cannot be keyed on the rendered page", () => {
     expect(chromeKey(true, doc)).not.toBe(chromeKey(false, doc));
   });
 
-  it("changes when a section is escalated, though the page renders the same", () => {
+  it("changes when a section is escalated, which the frame reloads for on its own since ADR 0050", () => {
     const free = escalateSection(doc, "sec-cover", cover);
-    expect(render(free, "html").html).toBe(render(doc, "html").html);
     expect(chromeKey(true, free)).not.toBe(chromeKey(true, doc));
   });
 

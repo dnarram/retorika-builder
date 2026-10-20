@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.12.0",
   "id": "doc-physio",
   "siteName": "Fisioterapia Ribera",
   "theme": {
@@ -71,28 +71,28 @@
           ],
           "layout": {
             "grid": {
-              "columns": 12
+              "columns": 96
             },
             "placements": [
               {
                 "elementId": "el-image",
                 "column": 1,
-                "columnSpan": 5,
+                "columnSpan": 40,
                 "row": 1,
-                "rowSpan": 3
+                "rowSpan": 7
               },
               {
                 "elementId": "el-headline",
-                "column": 6,
-                "columnSpan": 7,
+                "column": 41,
+                "columnSpan": 56,
                 "row": 1,
                 "rowSpan": 1
               },
               {
                 "elementId": "el-body",
-                "column": 6,
-                "columnSpan": 7,
-                "row": 2,
+                "column": 41,
+                "columnSpan": 56,
+                "row": 4,
                 "rowSpan": 1
               }
             ],

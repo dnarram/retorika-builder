@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { coarseToFine } from "../src/fineGrid.ts";
 import type {
   ContentElement,
   PlacementEdit,
@@ -30,7 +31,12 @@ import { type Theme, TOKEN_KEYS } from "../src/tokens.ts";
  * changed" in a way the history can recognise.
  */
 
-const theme = Object.fromEntries(TOKEN_KEYS.map((key) => [key, `value-${key}`])) as Theme;
+// `space.md` in pixels, because escalating reads it: the fine grid's vertical rhythm is how many
+// eight-pixel rows stand for one gap between two catalog rows (ADR 0050), and 16px is two.
+const theme = {
+  ...(Object.fromEntries(TOKEN_KEYS.map((key) => [key, `value-${key}`])) as Theme),
+  "space.md": "16px",
+} as Theme;
 
 function heading(id: string, text: string): ContentElement {
   return { id, role: "heading", hidden: false, slot: "headline", value: { kind: "text", text } };
@@ -96,7 +102,14 @@ describe("escalateSection", () => {
     const free = sectionOf(after, "sec-demo");
 
     expect(free?.source).toBe("free");
-    expect(free?.layout).toEqual(preset.layoutFor("stacked", section().content));
+    // The catalog's drawing, written in the fine grid's units (ADR 0050): ×8 sideways and the
+    // theme's rhythm downwards — 16px is two empty rows between two catalog rows.
+    const drawn = preset.layoutFor("stacked", section().content);
+    expect(free?.layout).toEqual({
+      grid: { columns: 96 },
+      placements: drawn.placements.map((placement) => coarseToFine(placement, 2)),
+      breakpoints: drawn.breakpoints,
+    });
   });
 
   it("moves nothing: every element keeps its id, its slot and its words", () => {
@@ -248,13 +261,16 @@ describe("setPlacement", () => {
     sectionOf(doc, "sec-demo")?.layout?.placements.find((p) => p.elementId === elementId);
 
   it("starts from the layout the catalog was drawing, which is what makes a first move sensible", () => {
+    // In the fine grid's units (ADR 0050): the catalog's full width is ninety-six, and its second
+    // content row is the fourth fine row — one row, then the two empty rows that stand for a 16px gap.
     expect(placementOf(free(), "el-h")).toEqual({
       elementId: "el-h",
       column: 1,
-      columnSpan: 12,
+      columnSpan: 96,
       row: 1,
       rowSpan: 1,
     });
+    expect(placementOf(free(), "el-b")).toMatchObject({ column: 1, columnSpan: 96, row: 4 });
   });
 
   it("changes one number and leaves the other three alone", () => {
@@ -317,7 +333,7 @@ describe("setPlacement", () => {
     // What lets a stepper be held down at its limit without filling the undo stack with steps that
     // changed nothing — the same answer `setVariant` and `escalateSection` give.
     const doc = free();
-    expect(setPlacement(doc, "sec-demo", "el-h", { column: 1, columnSpan: 12 })).toBe(doc);
+    expect(setPlacement(doc, "sec-demo", "el-h", { column: 1, columnSpan: 96 })).toBe(doc);
     expect(setPlacement(doc, "sec-demo", "el-h", {})).toBe(doc);
   });
 
@@ -329,17 +345,17 @@ describe("setPlacement", () => {
   });
 
   describe("rule 4, refused in the verb and named", () => {
-    it("refuses a span that reaches past the twelfth column, saying which column it reached", () => {
+    it("refuses a span that reaches past the last unit, saying which column it reached", () => {
       // The provocation the plan asked for: not "the schema would have caught it", but this verb
-      // catching it, with the arithmetic in the message.
-      expect(() => setPlacement(free(), "sec-demo", "el-h", { column: 10, columnSpan: 4 })).toThrow(
-        /column 10 with a span of 4 reaches column 13, past the 12-column grid \(rule 4\)/,
+      // catching it, with the arithmetic in the message. Against the layout's own ninety-six.
+      expect(() => setPlacement(free(), "sec-demo", "el-h", { column: 90, columnSpan: 8 })).toThrow(
+        /column 90 with a span of 8 reaches column 97, past the 96-unit grid \(rule 4\)/,
       );
     });
 
     it("refuses a column outside the grid", () => {
-      expect(() => setPlacement(free(), "sec-demo", "el-h", { column: 13 })).toThrow(
-        /column 13 is outside the 12-column grid \(rule 4\)/,
+      expect(() => setPlacement(free(), "sec-demo", "el-h", { column: 97 })).toThrow(
+        /column 97 is outside the 96-unit grid \(rule 4\)/,
       );
     });
 
@@ -371,7 +387,7 @@ describe("setPlacement", () => {
       // element being placed twice, not two elements in one place, and this verb does not invent a
       // rule the document model does not have.
       const after = setPlacement(free(), "sec-demo", "el-b", { row: 1 });
-      expect(placementOf(after, "el-b")).toMatchObject({ row: 1, column: 1, columnSpan: 12 });
+      expect(placementOf(after, "el-b")).toMatchObject({ row: 1, column: 1, columnSpan: 96 });
       expect(placementOf(after, "el-h")).toMatchObject({ row: 1 });
     });
 
@@ -473,7 +489,7 @@ describe("revertImpact — what the return dialog has to say before it does anyt
     // Compared against what the preset draws *now*, not against a snapshot taken at escalation —
     // so moving something and moving it back costs nothing, which is what a person would expect.
     const there = setPlacement(free(), "sec-demo", "el-h", { column: 3, columnSpan: 4 });
-    const back = setPlacement(there, "sec-demo", "el-h", { column: 1, columnSpan: 12 });
+    const back = setPlacement(there, "sec-demo", "el-h", { column: 1, columnSpan: 96 });
     expect(revertImpact(back, "sec-demo", preset)).toMatchObject({
       lossless: true,
       dropsPlacements: false,

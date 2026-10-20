@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GRID_COLUMNS, type Section } from "../src/document.ts";
+import { FINE_COLUMNS, type Section } from "../src/document.ts";
 import { checkInvariants } from "../src/invariants.ts";
 import { parseDocument } from "../src/parse.ts";
 import { TOKEN_KEYS } from "../src/tokens.ts";
@@ -36,8 +36,9 @@ function coverSection(overrides: Partial<Section> = {}): Section {
   };
 }
 
+/** A stored layout is the fine grid's (ADR 0050); the numbers below are units of ninety-six. */
 const layout = (placements: unknown[], breakpoints: unknown = {}) => ({
-  grid: { columns: GRID_COLUMNS },
+  grid: { columns: FINE_COLUMNS },
   placements,
   breakpoints,
 });
@@ -55,11 +56,11 @@ describe("rule 1 — layout never owns content", () => {
 });
 
 describe("rule 4 — positions are relative to the section grid", () => {
-  it("rejects a span that runs off the twelfth column", () => {
+  it("rejects a span that runs off the last unit", () => {
     const section = coverSection({
       source: "free",
       layout: layout([
-        { elementId: "el-headline", column: 10, columnSpan: 6, row: 1, rowSpan: 1 },
+        { elementId: "el-headline", column: 90, columnSpan: 8, row: 1, rowSpan: 1 },
       ]) as Section["layout"],
     });
     expect(() => parseDocument(documentWith(section))).toThrow(/rule 4/);
@@ -69,7 +70,7 @@ describe("rule 4 — positions are relative to the section grid", () => {
     const section = coverSection({
       source: "free",
       layout: layout([
-        { elementId: "el-headline", column: 13, columnSpan: 1, row: 1, rowSpan: 1 },
+        { elementId: "el-headline", column: 97, columnSpan: 1, row: 1, rowSpan: 1 },
       ]) as Section["layout"],
     });
     expect(() => parseDocument(documentWith(section))).toThrow();

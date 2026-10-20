@@ -52,10 +52,13 @@ export {
   collectionSchema,
   contentElementSchema,
   documentSchema,
+  FINE_COLUMNS,
+  FINE_PER_COLUMN,
   FORBIDDEN_DOCUMENT_KEYS,
   GRID_COLUMNS,
   pageSchema,
   placementSchema,
+  ROW_STEP_PX,
   SCHEMA_VERSION,
   sectionLayoutSchema,
   sectionSchema,
@@ -67,6 +70,16 @@ export {
   setElementImageSrc,
   setElementText,
 } from "./fields.ts";
+export {
+  coarseToFine,
+  FINE_TRACKS,
+  fineColumnOf,
+  fineSpanOf,
+  fineTemplateColumns,
+  fineTrack,
+  fineTrackSpan,
+  gapRowsFor,
+} from "./fineGrid.ts";
 export type { PresetLookup, Violation } from "./invariants.ts";
 export { checkInvariants, flattenElements } from "./invariants.ts";
 export type { InvariantId } from "./invariants-catalog.ts";
@@ -103,7 +116,7 @@ export {
 } from "./marks.ts";
 export { deletePage, movePage, renamePage, setPageInMenu } from "./pages.ts";
 export { DocumentValidationError, parseDocument, safeParseDocument } from "./parse.ts";
-export type { PresetShape, PresetSlot } from "./preset.ts";
+export type { CatalogLayout, PresetShape, PresetSlot } from "./preset.ts";
 export { checkAgainstPreset } from "./preset.ts";
 export type { RevertPlan, SurplusDecision } from "./revert.ts";
 export { applyRevert, escalate, planRevert, RevertDecisionRequiredError } from "./revert.ts";

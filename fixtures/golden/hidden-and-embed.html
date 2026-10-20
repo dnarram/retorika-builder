@@ -94,6 +94,14 @@ body { margin: 0; font-family: var(--font-body); color: var(--color-ink);
   .rb-nav-wide { display: none; }
   .rb-nav-narrow { display: block; }
 }
+
+.rb-section.rb-free { grid-template-columns: repeat(11, minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) var(--space-md)) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 0; row-gap: 0; grid-auto-rows: minmax(8px, auto);
+  align-items: start; }
+@media (max-width: 720px) {
+  .rb-section.rb-free { grid-template-columns: 1fr; row-gap: var(--space-md);
+    grid-auto-rows: auto; }
+}
 </style>
 </head>
 <body>
@@ -111,8 +119,8 @@ body { margin: 0; font-family: var(--font-body); color: var(--color-ink);
     </h1>
     <img alt="Fachada" data-id="el2-image" data-role="image" data-slot="image" loading="lazy" src="assets/academy.svg" style="grid-column:7/span 6;grid-row:1/span 4">
   </section>
-  <section class="rb-section rb-cover rb-image-right" data-preset="cover" data-section="sec-embed" data-variant="image-right" id="sec-embed">
-    <h1 data-id="el3-headline" data-role="heading" data-slot="headline" style="grid-column:1/span 12;grid-row:1/span 1">
+  <section class="rb-section rb-cover rb-image-right rb-free" data-preset="cover" data-section="sec-embed" data-variant="image-right" id="sec-embed">
+    <h1 data-id="el3-headline" data-role="heading" data-slot="headline" style="grid-column:1/span 107;grid-row:1/span 1">
       Vídeo de presentación
     </h1>
     <!-- retorika:embed withheld (Vídeo de YouTube) -->

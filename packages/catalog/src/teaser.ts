@@ -1,9 +1,9 @@
 import type {
+  CatalogLayout,
   ContentElement,
   PresetShape,
   PresetSlot,
   Section,
-  SectionLayout,
 } from "@retorika/schema";
 import { resolvePlacements, type SlotPlacement, unknownVariant } from "./layout.ts";
 
@@ -72,7 +72,7 @@ export const teaserPreset: PresetShape = {
   catalogId: TEASER_ID,
   slots: TEASER_SLOTS,
 
-  layoutFor(variantId: string, elements: readonly ContentElement[]): SectionLayout {
+  layoutFor(variantId: string, elements: readonly ContentElement[]): CatalogLayout {
     if (!isTeaserVariant(variantId)) throw unknownVariant(TEASER_ID, variantId, TEASER_VARIANTS);
     return resolvePlacements(TEMPLATES[variantId], elements);
   },

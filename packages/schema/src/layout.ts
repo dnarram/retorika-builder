@@ -1,10 +1,5 @@
-import {
-  type BreakpointPatch,
-  GRID_COLUMNS,
-  type Placement,
-  type RetorikaDocument,
-  type Section,
-} from "./document.ts";
+import type { BreakpointPatch, Placement, RetorikaDocument, Section } from "./document.ts";
+import { coarseToFine, gapRowsFor } from "./fineGrid.ts";
 import { parseDocument } from "./parse.ts";
 import type { PresetShape } from "./preset.ts";
 import {
@@ -76,7 +71,10 @@ export function escalateSection(
 ): RetorikaDocument {
   const found = sectionOrThrow(doc, sectionId, "escalateSection");
   if (found.section.source === "free") return doc;
-  return withSection(doc, found.page.id, sectionId, escalate(found.section, preset));
+  // The fine grid's vertical rhythm comes from this document's own theme (ADR 0050): how many
+  // eight-pixel rows stand for one `space.md` gap between two catalog rows.
+  const gapRows = gapRowsFor(doc.theme["space.md"]);
+  return withSection(doc, found.page.id, sectionId, escalate(found.section, preset, gapRows));
 }
 
 /**
@@ -166,9 +164,12 @@ export function revertImpact(
   // Compared against the layout the catalog would draw for this variant *and these elements*, not
   // against the one `escalate` copied in at the time: an element hidden or filled since then changes
   // what the preset draws, and a placement that still matches the new drawing has not been moved.
-  const drawn = preset.layoutFor(section.preset.variantId, section.content);
-  const dropsPlacements =
-    JSON.stringify(section.layout?.placements) !== JSON.stringify(drawn.placements);
+  // In the fine grid's units, as `escalate` writes them (ADR 0050), with the same rhythm.
+  const gapRows = gapRowsFor(doc.theme["space.md"]);
+  const drawn = preset
+    .layoutFor(section.preset.variantId, section.content)
+    .placements.map((placement) => coarseToFine(placement, gapRows));
+  const dropsPlacements = JSON.stringify(section.layout?.placements) !== JSON.stringify(drawn);
 
   return {
     ...plan,
@@ -185,11 +186,13 @@ export type PlacementEdit = Partial<Omit<Placement, "elementId">>;
  *
  * **Rule 4 is not amended, it is the reason this can exist at all**: «la colocación libre siempre
  * ocurre dentro de la rejilla de la sección, nunca sobre coordenadas absolutas» (advanced dossier
- * §6). Columns, spans and rows, and no `x` or `y` anywhere.
+ * §6). Columns, spans and rows, and no `x` or `y` anywhere. The grid is the fine one since schema
+ * 1.12.0 (ADR 0050) — ninety-six units, read off the layout itself rather than a constant, so the
+ * verb and the schema cannot disagree about where the edge is.
  *
  * **It refuses before `parseDocument`, and the message says which rule and which numbers.**
- * `checkInvariants` already rejects a placement that overflows the twelve columns, and `parseDocument`
- * already rejects a column outside 1..12 — so there is a net underneath either way. The net is not
+ * `checkInvariants` already rejects a placement that overflows the grid, and `parseDocument`
+ * already rejects a column outside 1..96 — so there is a net underneath either way. The net is not
  * enough on its own: it would report «column 11 + span 4 overflows» against a path into a parsed
  * object, at the end of a stack that started with somebody pressing an arrow. The caller that
  * pressed the arrow is the one that needs to hear why.
@@ -239,15 +242,16 @@ export function setPlacement(
       throw new Error(`setPlacement: ${field} must be a whole number of at least 1, not ${value}`);
     }
   }
-  if (next.column > GRID_COLUMNS) {
+  const columns = layout.grid.columns;
+  if (next.column > columns) {
     throw new Error(
-      `setPlacement: column ${next.column} is outside the ${GRID_COLUMNS}-column grid (rule 4)`,
+      `setPlacement: column ${next.column} is outside the ${columns}-unit grid (rule 4)`,
     );
   }
-  if (next.column + next.columnSpan - 1 > GRID_COLUMNS) {
+  if (next.column + next.columnSpan - 1 > columns) {
     throw new Error(
       `setPlacement: column ${next.column} with a span of ${next.columnSpan} reaches column ` +
-        `${next.column + next.columnSpan - 1}, past the ${GRID_COLUMNS}-column grid (rule 4)`,
+        `${next.column + next.columnSpan - 1}, past the ${columns}-unit grid (rule 4)`,
     );
   }
 

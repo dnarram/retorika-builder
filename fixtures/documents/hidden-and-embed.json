@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.12.0",
   "id": "doc-hidden-embed",
   "siteName": "Academia Trazo",
   "theme": {
@@ -122,22 +122,22 @@
           "source": "free",
           "layout": {
             "grid": {
-              "columns": 12
+              "columns": 96
             },
             "placements": [
               {
                 "elementId": "el3-headline",
                 "column": 1,
-                "columnSpan": 12,
+                "columnSpan": 96,
                 "row": 1,
                 "rowSpan": 1
               },
               {
                 "elementId": "el3-embed",
                 "column": 1,
-                "columnSpan": 12,
-                "row": 2,
-                "rowSpan": 3
+                "columnSpan": 96,
+                "row": 4,
+                "rowSpan": 7
               }
             ],
             "breakpoints": {

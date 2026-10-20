@@ -159,16 +159,17 @@ describe("selectedRowId — one answer, because two of them disagreed", () => {
 
 describe("boundsFor — rule 4, as the two limits it actually imposes", () => {
   it("couples moving right to the current span", () => {
-    // A 4-wide element can start no later than column 9, because 9 + 4 - 1 is 12.
-    expect(boundsFor(placement(1, 4)).column).toEqual({ min: 1, max: 9 });
-    expect(boundsFor(placement(1, 12)).column).toEqual({ min: 1, max: 1 });
-    expect(boundsFor(placement(1, 1)).column).toEqual({ min: 1, max: 12 });
+    // On the fine grid (ADR 0050): a 4-unit element can start no later than unit 93, because
+    // 93 + 4 - 1 is 96.
+    expect(boundsFor(placement(1, 4)).column).toEqual({ min: 1, max: 93 });
+    expect(boundsFor(placement(1, 96)).column).toEqual({ min: 1, max: 1 });
+    expect(boundsFor(placement(1, 1)).column).toEqual({ min: 1, max: 96 });
   });
 
   it("couples widening to the current column", () => {
-    expect(boundsFor(placement(9, 4)).columnSpan).toEqual({ min: 1, max: 4 });
-    expect(boundsFor(placement(1, 4)).columnSpan).toEqual({ min: 1, max: 12 });
-    expect(boundsFor(placement(12, 1)).columnSpan).toEqual({ min: 1, max: 1 });
+    expect(boundsFor(placement(93, 4)).columnSpan).toEqual({ min: 1, max: 4 });
+    expect(boundsFor(placement(1, 4)).columnSpan).toEqual({ min: 1, max: 96 });
+    expect(boundsFor(placement(96, 1)).columnSpan).toEqual({ min: 1, max: 1 });
   });
 
   it("never allows a value the verb would refuse, at any position in the grid", () => {
@@ -220,19 +221,28 @@ describe("stepTo", () => {
 
   it("returns undefined at each end, which is how the arrow knows to be disabled", () => {
     expect(stepTo(placement(1, 4), "column", -1)).toBeUndefined();
-    expect(stepTo(placement(9, 4), "column", 1)).toBeUndefined();
-    expect(stepTo(placement(1, 12), "columnSpan", 1)).toBeUndefined();
+    expect(stepTo(placement(93, 4), "column", 1)).toBeUndefined();
+    expect(stepTo(placement(1, 96), "columnSpan", 1)).toBeUndefined();
     expect(stepTo(placement(1, 1), "columnSpan", -1)).toBeUndefined();
     expect(stepTo(placement(1, 1, 1), "row", -1)).toBeUndefined();
     expect(stepTo(placement(1, 1, MAX_ROW), "row", 1)).toBeUndefined();
   });
 
-  it("does not clamp silently: a refused press is undefined, never the limit again", () => {
-    // Clamping would make the arrow send the value it already had, which `setPlacement` answers by
-    // returning the same document — correct, and invisible. The person would press an arrow that
-    // looks enabled and nothing would happen, which is the dead button again.
-    expect(stepTo(placement(9, 4), "column", 1)).not.toBe(9);
-    expect(stepTo(placement(9, 4), "column", 1)).toBeUndefined();
+  it("does not clamp silently: a press at the edge is undefined, never the limit again", () => {
+    // Clamping to the value it already had would make the arrow send that value, which
+    // `setPlacement` answers by returning the same document — correct, and invisible. The person
+    // would press an arrow that looks enabled and nothing would happen, which is the dead button
+    // again.
+    expect(stepTo(placement(93, 4), "column", 1)).not.toBe(93);
+    expect(stepTo(placement(93, 4), "column", 1)).toBeUndefined();
+  });
+
+  it("lands a press that overshoots the edge on the edge, so the last unit is reachable", () => {
+    // The panel steps sideways by a catalog column of eight units (ADR 0050); from unit 90 a
+    // 4-unit element has three to go, and the press takes them rather than refusing.
+    expect(stepTo(placement(90, 4), "column", 8)).toBe(93);
+    expect(stepTo(placement(3, 4), "column", -8)).toBe(1);
+    expect(stepTo(placement(1, 90), "columnSpan", 8)).toBe(96);
   });
 });
 

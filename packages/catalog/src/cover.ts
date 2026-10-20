@@ -1,4 +1,4 @@
-import type { ContentElement, PresetShape, PresetSlot, SectionLayout } from "@retorika/schema";
+import type { CatalogLayout, ContentElement, PresetShape, PresetSlot } from "@retorika/schema";
 import { resolvePlacements, type SlotPlacement, unknownVariant } from "./layout.ts";
 
 /**
@@ -86,7 +86,7 @@ export const coverPreset: PresetShape = {
   catalogId: COVER_ID,
   slots: COVER_SLOTS,
 
-  layoutFor(variantId: string, elements: readonly ContentElement[]): SectionLayout {
+  layoutFor(variantId: string, elements: readonly ContentElement[]): CatalogLayout {
     if (!isCoverVariant(variantId)) throw unknownVariant(COVER_ID, variantId, COVER_VARIANTS);
     return resolvePlacements(TEMPLATES[variantId], elements);
   },

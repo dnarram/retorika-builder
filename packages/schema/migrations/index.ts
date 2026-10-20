@@ -11,6 +11,7 @@ import aCollectionEntryCarriesMarks from "./0009-a-collection-entry-carries-mark
 import aPagePerEntry from "./0010-a-page-per-entry.ts";
 import theMenuIsCurated from "./0011-the-menu-is-curated.ts";
 import theSerifReservesNoName from "./0012-the-serif-reserves-no-name.ts";
+import aFreeSectionIsAFineGrid from "./0013-a-free-section-is-a-fine-grid.ts";
 
 export interface Migration {
   version: string;
@@ -33,6 +34,7 @@ export const MIGRATIONS: readonly Migration[] = [
   aPagePerEntry,
   theMenuIsCurated,
   theSerifReservesNoName,
+  aFreeSectionIsAFineGrid,
 ];
 
 /** `1.2.0` → `[1, 2, 0]`, for comparing two versions without a dependency. A missing or
