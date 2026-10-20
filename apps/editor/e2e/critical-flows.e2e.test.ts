@@ -173,6 +173,28 @@ async function intoTheCanvas(page: Page): Promise<void> {
 }
 
 /**
+ * The frame's faces, settled — **and every measurement of a text waits for this**.
+ *
+ * A measurement taken before the face arrives is a measurement of the fallback: the cover's
+ * headline is 46px on it and 52 with EB Garamond, and since a free section's rows are measured
+ * (ADR 0050 §3) a headline that grows afterwards grows its rows and moves everything below it.
+ * In CI, where the whole flow runs in a few hundred milliseconds, that can land **in the middle of
+ * a gesture**: the drag walk measured an element travelling 49.8px where the hand had moved 30,
+ * because a headline above it had just grown. This machine never saw it, which is what CI is for.
+ *
+ * The editor's own measurement has the same limit and cannot wait inside a click — ADR 0050 §3
+ * names it. A walk can wait, so it does.
+ */
+async function fontsReady(frame: FrameLocator): Promise<void> {
+  await frame
+    .locator("[data-section]")
+    .first()
+    .evaluate(async (node) => {
+      await (node as HTMLElement).ownerDocument.fonts.ready;
+    });
+}
+
+/**
  * Turn the design tools on and come back only once the preview is showing the **new** document.
  *
  * **Through `replacingTheDocument`, and the first version of this was the exact mistake that
@@ -15516,6 +15538,9 @@ describe("sprint 24 día 8 — un elemento se arrastra a su celda", () => {
       // **Nothing is chosen first, whatever kind of element this turned out to be** (ADR 0050 §6,
       // amending ADR 0047 §1): a held click drags, and the walk below is what says so for a text.
       const isText = (await subject.getAttribute("data-rb-text")) === "1";
+      // Before a single pixel is measured: a face arriving mid-gesture moves everything under the
+      // text it belongs to, and this walk is nothing but a comparison of pixels.
+      await fontsReady(frame);
       const startedAt = await subject.boundingBox();
 
       /**
@@ -16313,11 +16338,8 @@ describe("sprint 25 día 2 — escalar mide la sección viva", () => {
    * el editor tiene el mismo límite y el ADR 0050 §3 lo nombra; aquí se espera porque se puede.
    */
   async function boxesIn(frame: FrameLocator, sectionId: string): Promise<Where[]> {
-    const section = frame.locator(`[data-section="${sectionId}"]`);
-    await section.evaluate(async (node) => {
-      await (node as HTMLElement).ownerDocument.fonts.ready;
-    });
-    return section.evaluate((node) => {
+    await fontsReady(frame);
+    return frame.locator(`[data-section="${sectionId}"]`).evaluate((node) => {
       const section = node as HTMLElement;
       const outer = section.getBoundingClientRect();
       const padTop = Number.parseFloat(getComputedStyle(section).paddingTop) || 0;
