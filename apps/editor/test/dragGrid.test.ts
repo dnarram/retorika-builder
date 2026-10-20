@@ -9,7 +9,9 @@ import {
   cellAt,
   dropAt,
   fineColumnAt,
+  fineLastColumnAt,
   type GridMetrics,
+  lastRowAt,
   overlaps,
   reorderAt,
   rowAt,
@@ -98,6 +100,51 @@ describe("fineColumnAt", () => {
   it("clamps rather than inventing a ninety-seventh unit or a zeroth", () => {
     expect(fineColumnAt(metrics.left - 400, metrics)).toBe(1);
     expect(fineColumnAt(metrics.left + 100_000, metrics)).toBe(FINE_COLUMNS);
+  });
+});
+
+describe("fineLastColumnAt — the unit a right-hand border aims at", () => {
+  it("is a different question from `fineColumnAt`, and a gutter is the difference", () => {
+    // The middle of the gutter after unit 8: the nearest unit *start* is 9 (eight pixels away,
+    // across the rest of the gutter) and the nearest unit *end* is 8 (eight pixels back). A resize
+    // that asked the first question about a right border landed one unit short of the hand.
+    const middleOfGutter = unitLeft(8) + UNIT + GUTTER / 2;
+    expect(fineColumnAt(middleOfGutter, metrics)).toBe(9);
+    expect(fineLastColumnAt(middleOfGutter, metrics)).toBe(8);
+  });
+
+  it("answers the unit whose own right edge the point is on", () => {
+    for (const column of [1, 8, 9, 48, 96]) {
+      const rightEdge = unitLeft(column) + UNIT;
+      expect(fineLastColumnAt(rightEdge, metrics), `unit ${column}`).toBe(column);
+    }
+  });
+
+  it("reaches the last unit at the content box's own right edge, and clamps there", () => {
+    const right = metrics.left + metrics.columns.reduce((total, width) => total + width, 0);
+    expect(fineLastColumnAt(right, metrics)).toBe(FINE_COLUMNS);
+    expect(fineLastColumnAt(right + 400, metrics)).toBe(FINE_COLUMNS);
+  });
+});
+
+describe("lastRowAt — the row a bottom border aims at", () => {
+  it("is the row above the line `rowAt` answers, which is the off-by-one it exists for", () => {
+    // The bottom of row 1 is the top of row 2. A bottom border that asked «which row starts
+    // nearest» would grow the element by a row nobody pulled it over.
+    const bottomOfFirst = metrics.top + (ROWS[0] ?? 0);
+    expect(rowAt(bottomOfFirst, metrics)).toBe(2);
+    expect(lastRowAt(bottomOfFirst, metrics)).toBe(1);
+  });
+
+  it("extrapolates below the last row, so a section grows by what the hand pulled", () => {
+    const below = ROWS.reduce((total, height) => total + height, 0);
+    expect(lastRowAt(metrics.top + below, metrics)).toBe(ROWS.length);
+    expect(lastRowAt(metrics.top + below + 48, metrics)).toBe(ROWS.length + 6);
+  });
+
+  it("clamps at the interface's own floor", () => {
+    expect(lastRowAt(metrics.top + 1_000_000, metrics)).toBe(MAX_ROW);
+    expect(lastRowAt(metrics.top - 500, metrics)).toBe(1);
   });
 });
 

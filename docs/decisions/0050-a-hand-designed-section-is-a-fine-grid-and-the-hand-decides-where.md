@@ -384,3 +384,84 @@ David's conditions put them.
 `apps/editor/src/editor/coarseBoundary.ts` is deleted, as its own header said it would be: the
 editor speaks the document's units everywhere now. `editor.drag.occupied` is deleted too — an
 interface sentence for a refusal that no longer exists.
+
+## Amendment — the edges of the box stretch it (día 4, 20 October 2026)
+
+§6 named día 4 in a sentence; this is it. The request is the second half of what opened the sprint:
+«quiero además que las cajas que limitan el tamaño del objeto visual (el recuadro azul) sea
+**ajustable al arrastrar los bordes**, bien para agrandarlo o bien para reducirlo (parecido a como
+funcionan los cuadros de texto insertados en un documento de Word)».
+
+### 1. A zone and a cursor, no handles with a mouse
+
+Six pixels either side of the border of the element the hand is already working on — the chosen one,
+written in or not — and the pointer changes to one of the platform's four (`ew-resize`, `ns-resize`,
+`nwse-resize`, `nesw-resize`). That is David's own prescription, and the reason is in it: «para que
+se descubra sin explicación». Eight squares drawn around every chosen element would say the same
+thing louder and would be in the way of the page they sit on; touch cannot use a six-pixel zone at
+all and gets real handles on día 7.
+
+**The far edge stays put**, which is the whole behaviour of a box's border: pulling the left one
+moves the start and shortens the span by as much, so the right edge does not budge. **Clamped, never
+refused**, exactly as a drop is: a hand that pulls past the grid's edge means «as far as it goes»,
+and an element never becomes thinner than one unit or shorter than one row — pulling the left border
+past the right one leaves a box one unit wide rather than an inverted one.
+
+**The zone is asymmetric while writing: 6 px outside and 2 inside** (David's adjustment 8), so a
+click on the first or the last letter still places the caret; and both numbers are divided by the
+canvas zoom (adjustment 3), so six pixels are six pixels under the hand at every window width.
+
+### 2. Wired on the section, in the capture phase — and both halves are the design
+
+**On the section**, because the zone reaches *outside* the element: a `pointermove` three pixels past
+a headline's border is delivered to the section, not to the headline, so an element-level listener
+cannot show the cursor there. The first version was element-level and the walk found the outer half
+of the zone dead — the cursor stayed `text` where David had asked for `ew-resize`.
+
+**In capture**, because the press has to beat everything else that would take it: choosing, starting
+to write, closing a menu, arming the drag. A capture listener on the section runs before any of them
+and `stopPropagation` ends the argument. The plan listed this as a risk — «un `pointerdown` en la
+zona debe ganar al clic que elige» — and this is the answer: not a race settled by registration
+order, but a phase.
+
+The cursor is set on the section *and* on the element, because a cursor on the parent is overridden
+by any child with one of its own — which every text has while it is being written in.
+
+### 3. The preview is the real grid area, and resizing while writing commits the words first
+
+**The live preview rewrites the element's own inline `grid-column`/`grid-row`** — the renderer's own
+form, tracks and gutters included — so the grid reflows as the hand moves: a text rewraps as it
+narrows, a photograph's area grows without the photograph stretching (`height: auto` on
+`.rb-section img`). A transform would show the same element scaled, which is a picture of something
+that will not happen. The plan's own risk here was that the reflow moves the target under the
+pointer; the walks pull in ten steps and land where they aimed, in both axes, so it does not.
+
+**Resizing a text while writing in it commits the text first.** A text being written in holds the
+person's letters in the DOM and nowhere else — this editor commits on blur — and writing a placement
+rebuilds the frame, which would throw them away. So the gesture blurs the element (the ordinary
+commit path), writes the placement, and picks the writing up again on the other side of the rebuild
+(`keepWriting`): one gesture, two acts, in the order that cannot lose anything. The walk types
+«Mesas en la plaza», pulls the right border a column wider, and finds the words intact and the
+caret still in them.
+
+### 4. Each border takes its own reading, which Chromium had to correct
+
+A left border aims at the unit whose **left** edge is nearest; a right border at the unit whose
+**right** edge is nearest — and between those two units there can be a gutter of sixteen pixels. One
+reading for both borders made a resize of two catalog columns land **63 units where the hand had
+asked for 64**, measured. Vertically it is the same shape without the gutter: the bottom of row 7 is
+the top of row 8, and a border that confused them grew the element by a row nobody pulled it over.
+`fineColumnAt`/`fineLastColumnAt` and `rowAt`/`lastRowAt` are the four readings, all one walk of the
+resolved tracks.
+
+### 5. What the keyboard has, and what the walks had to learn
+
+Nothing new: the «Colocación» panel's four steppers count in fine units since día 1 and
+`Shift+arrow` widens and narrows (ADR 0049 §1), so the gesture has the equivalent WCAG 2.1.1 asks
+for. Día 6 is where the arrows become one unit with `Shift` for eight.
+
+Two things the walks measured rather than assumed. **A photograph's own box ends four pixels above
+the bottom of its area** — fifty rows of eight for 396 px of photograph — so pulling from its
+visible border asks for one row less than the round arithmetic, and that gap *is* «crece sin
+estirarse». And **reading the placements in the same breath as a gesture reads a half-replaced
+frame**: every gesture writes a placement, which replaces the `srcDoc`, so the walks poll.

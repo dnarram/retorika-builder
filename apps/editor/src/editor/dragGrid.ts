@@ -84,14 +84,33 @@ function edges(tracks: readonly number[]): number[] {
  * cannot start on a gutter — the document never names one (`fineGrid.ts`).
  */
 export function fineColumnAt(x: number, metrics: GridMetrics): number {
+  return nearestUnit(x, metrics, "start");
+}
+
+/**
+ * The unit whose **right** edge is nearest to `x` — what a right-hand border aims at.
+ *
+ * **Not the same question as `fineColumnAt`, and the difference is a gutter.** The right edge of
+ * unit 8 and the left edge of unit 9 are sixteen pixels apart, and an element may end at the first
+ * or begin at the second; asking «which unit starts nearest» about a right border is what made a
+ * resize of two catalog columns come out one unit short — 63 units where the hand had asked for 64,
+ * measured in Chromium before this function existed.
+ */
+export function fineLastColumnAt(x: number, metrics: GridMetrics): number {
+  return nearestUnit(x, metrics, "end");
+}
+
+/** The unit whose start or end line is nearest, which is the one walk both readings share. */
+function nearestUnit(x: number, metrics: GridMetrics, side: "start" | "end"): number {
   const offsets = edges(metrics.columns);
   const local = x - metrics.left;
   let best = 1;
   let distance = Number.POSITIVE_INFINITY;
   for (let column = 1; column <= FINE_COLUMNS; column += 1) {
     // Through `fineTrack`, so the gutters' pattern lives in one place and this cannot disagree
-    // with what the renderer emitted.
-    const offset = offsets[fineTrack(column) - 1];
+    // with what the renderer emitted: the unit's own track starts at `fineTrack(column) - 1` and
+    // ends where the next track begins.
+    const offset = offsets[fineTrack(column) - (side === "start" ? 1 : 0)];
     if (offset === undefined) break;
     const to = Math.abs(local - offset);
     if (to < distance) {
@@ -110,22 +129,46 @@ export function fineColumnAt(x: number, metrics: GridMetrics): number {
  * decides whether it may.
  */
 export function rowAt(y: number, metrics: GridMetrics): number {
+  return nearestRow(y, metrics, "start");
+}
+
+/**
+ * The row whose **bottom** edge is nearest to `y` — what a bottom border aims at.
+ *
+ * The same distinction `fineLastColumnAt` makes, and here it is not a gutter but an off-by-one: the
+ * bottom of row 7 is the top of row 8, so a bottom border that asked «which row starts nearest»
+ * would answer 8 and grow the element by a row nobody pulled it over.
+ */
+export function lastRowAt(y: number, metrics: GridMetrics): number {
+  return nearestRow(y, metrics, "end");
+}
+
+function nearestRow(y: number, metrics: GridMetrics, side: "start" | "end"): number {
   const offsets = edges(metrics.rows);
   const local = y - metrics.top;
   const last = offsets.at(-1) ?? 0;
+  // Past the last row the grid grows downwards in steps of `ROW_STEP_PX`, so a point below
+  // everything is extrapolated rather than clamped: that is how a section gets taller, and `dropAt`
+  // (or `resizeTo`) is what decides whether it may.
   if (local > last) {
-    return Math.min(MAX_ROW, offsets.length + Math.round((local - last) / ROW_STEP_PX));
+    const grown = metrics.rows.length + Math.round((local - last) / ROW_STEP_PX);
+    return Math.min(MAX_ROW, Math.max(1, side === "start" ? grown + 1 : grown));
   }
   let best = 1;
   let distance = Number.POSITIVE_INFINITY;
-  for (const [index, offset] of offsets.entries()) {
+  // A start line exists for the row **after** the last one — that is how a section grows, and the
+  // drag depends on it; an end line does not, because there is no row there to end in.
+  const upTo = metrics.rows.length + (side === "start" ? 1 : 0);
+  for (let row = 1; row <= upTo; row += 1) {
+    const offset = offsets[row - (side === "start" ? 1 : 0)];
+    if (offset === undefined) break;
     const to = Math.abs(local - offset);
     if (to < distance) {
       distance = to;
-      best = index + 1;
+      best = row;
     }
   }
-  return Math.min(Math.max(best, 1), MAX_ROW);
+  return Math.min(MAX_ROW, Math.max(1, best));
 }
 
 /** The cell a point falls in: the nearest unit and the nearest row. */
