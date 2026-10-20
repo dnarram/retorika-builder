@@ -2,7 +2,6 @@ import {
   FINE_COLUMNS,
   FINE_PER_COLUMN,
   fineTrack,
-  GRID_COLUMNS,
   type GridArea,
   type Placement,
   ROW_STEP_PX,
@@ -236,27 +235,33 @@ export function dropAt(args: {
 }
 
 /**
- * **The keyboard's half of the drag** (ADR 0049, sprint 24 día 9).
+ * **The keyboard's half of the gesture** (ADR 0049, amended by ADR 0050 §6 on sprint 25 día 6).
  *
  * A pointer gesture with no keyboard equivalent does not exist for whoever has no pointer — the rule
  * this repository has applied to every handle it ever drew — and WCAG 2.1.1 says the same thing with
- * a number. So with an element chosen, the arrows move it and `Shift` with a sideways arrow widens
- * or narrows it.
+ * a number. So with an element chosen, the arrows move it.
  *
- * **One press is one catalog column of eight units, until día 6 makes it one unit with `Shift` for
- * eight.** A press worth a ninety-sixth of the section would be a control nobody could use to cross
- * one, and día 6 is where the accumulated run and the announcement in pixels arrive together — the
- * two halves of David's own condition. Today's model change is the pointer's, and it travels alone.
+ * **One unit per press, eight with `Shift`** — David's own decision for this day: «Flecha = 1
+ * unidad; Mayús+flecha = 8 (una columna gorda)», which is the `Shift` of Canva. A press is now the
+ * finest thing the document can express, which is what makes the keyboard equal to the hand on a
+ * grid of ninety-six; and eight is the catalog column, for crossing a section without fifty presses.
  *
- * **Vertical only moves; it never resizes.** `Shift+ArrowDown` would be «one row taller», which is a
- * different kind of change — a row's height is its content's — and the panel's own stepper already
- * owns `rowSpan`. Offering half of a pair here would read as the other half being broken.
+ * **This amends ADR 0049 §1 a second time, and takes something away.** `Shift` used to widen and
+ * narrow — it was the only keyboard resize on the canvas — and it cannot mean two things, so
+ * resizing by keyboard belongs entirely to the «Colocación» panel's four steppers, which have
+ * counted in these same units since día 1. Nothing is lost: the steppers were always the
+ * single-pointer alternative WCAG 2.5.7 asks for, and now they are the keyboard's width as well.
+ *
+ * **Vertical moves by rows, in the same two sizes.** A row is eight pixels, so one press is a row
+ * and `Shift` is sixty-four pixels — the same shape as sideways, where before `Shift+ArrowDown`
+ * meant nothing at all.
  */
-export const ARROW_UNITS = FINE_PER_COLUMN;
+
+/** What `Shift` is worth: one catalog column of eight units, and eight rows. */
+export const SHIFT_UNITS = FINE_PER_COLUMN;
 
 export type ArrowAction =
-  | { readonly kind: "move"; readonly column: number; readonly row: number }
-  | { readonly kind: "span"; readonly columns: number }
+  | { readonly kind: "move"; readonly columns: number; readonly rows: number }
   | { readonly kind: "none" };
 
 const NO_ARROW: ArrowAction = { kind: "none" };
@@ -267,52 +272,49 @@ export function arrowAction(press: KeyPress): ArrowAction {
   // Alt, Meta and Control are never ours: `Meta+ArrowDown` is «end of document» everywhere and
   // `Control+ArrowUp` is Mission Control on the machine this is built on (`sectionKeys.ts`).
   if (press.altKey || press.metaKey || press.ctrlKey) return NO_ARROW;
-  const column = press.key === "ArrowLeft" ? -1 : press.key === "ArrowRight" ? 1 : 0;
-  const row = press.key === "ArrowUp" ? -1 : press.key === "ArrowDown" ? 1 : 0;
-  if (press.shiftKey) return column === 0 ? NO_ARROW : { kind: "span", columns: column };
-  if (column === 0 && row === 0) return NO_ARROW;
-  return { kind: "move", column, row };
+  const sideways = press.key === "ArrowLeft" ? -1 : press.key === "ArrowRight" ? 1 : 0;
+  const downwards = press.key === "ArrowUp" ? -1 : press.key === "ArrowDown" ? 1 : 0;
+  if (sideways === 0 && downwards === 0) return NO_ARROW;
+  const step = press.shiftKey ? SHIFT_UNITS : 1;
+  return { kind: "move", columns: sideways * step, rows: downwards * step };
 }
 
 /**
- * What an arrow press would do, in the same words a drop gets.
+ * Where a **run** of arrow presses would put the element, in the same words a drop gets.
  *
- * **One vocabulary for the pointer and the keyboard, and now one permission too**: the pointer may
- * drop an element on top of another, so the arrows may walk one there. The refusal that is left is
- * the same for both — the floor on rows — and `none` is «the press changes nothing»: an element
- * already against the left edge, or already one unit wide. Silence is the honest answer there;
- * announcing a position nobody moved to would teach a screen reader's user that the press worked.
+ * It takes the totals rather than one press (`arrowRun.ts`), because a run of presses is one
+ * movement and one step of history (David's condition 1 for this day): the element travels while
+ * the presses accumulate and the placement is written once, when the hand stops.
+ *
+ * **Clamped, not refused, on the horizontal.** A run of forty presses against the left edge means
+ * «as far left as it goes», which is what the same hand holding the key expects — and refusing the
+ * fortieth while accepting the thirty-ninth would make a held key stop dead for no visible reason.
+ * Rows keep the one refusal there is: the interface's own floor, past which a section would grow
+ * taller than anything anybody designs.
+ *
+ * Overlapping is allowed since día 3, so there is no occupancy to refuse either way: what the
+ * pointer may drop on top of, the keyboard may walk onto.
  */
 export function arrowDrop(args: {
   readonly moving: Placement;
-  readonly action: ArrowAction;
+  readonly columns: number;
+  readonly rows: number;
 }): Drop | { readonly kind: "none" } {
-  const { moving, action } = args;
-  if (action.kind === "none") return NO_DROP;
+  const { moving, columns, rows } = args;
+  if (columns === 0 && rows === 0) return NO_DROP;
 
-  const target: GridArea =
-    action.kind === "move"
-      ? {
-          column: moving.column + action.column * ARROW_UNITS,
-          columnSpan: moving.columnSpan,
-          row: moving.row + action.row,
-          rowSpan: moving.rowSpan,
-        }
-      : {
-          column: moving.column,
-          columnSpan: moving.columnSpan + action.columns * ARROW_UNITS,
-          row: moving.row,
-          rowSpan: moving.rowSpan,
-        };
+  const target: GridArea = {
+    column: Math.max(1, Math.min(moving.column + columns, FINE_COLUMNS - moving.columnSpan + 1)),
+    columnSpan: moving.columnSpan,
+    row: Math.max(1, moving.row + rows),
+    rowSpan: moving.rowSpan,
+  };
 
-  // Rule 4's coupling, the same arithmetic `boundsFor` gives the panel's arrows: a unit that still
-  // fits the span, a span that still fits from the unit, and the interface's own floor on rows.
-  // Outside any of them the press is refused rather than clamped — a clamp would answer a
-  // deliberate press with a move nobody asked for.
-  if (target.column < 1 || target.column + target.columnSpan - 1 > FINE_COLUMNS) return NO_DROP;
-  if (target.columnSpan < 1) return NO_DROP;
-  if (target.row < 1 || target.row + target.rowSpan - 1 > MAX_ROW) return NO_DROP;
-
+  if (target.row + target.rowSpan - 1 > MAX_ROW) return { kind: "refuse", why: "rows", at: target };
+  // Nothing moved: an element already against the left edge, pressed left again. Silence is the
+  // honest answer — announcing a position nobody moved to would teach a screen reader's user that
+  // the press worked.
+  if (target.column === moving.column && target.row === moving.row) return NO_DROP;
   return { kind: "place", at: target };
 }
 
@@ -320,26 +322,24 @@ export function arrowDrop(args: {
  * What the editor says out loud when an element moves, **in the parent document's live region**.
  *
  * David's correction while approving sprint 24, and it is a defect that would have shipped: every
- * arrow is an edit, every edit replaces the canvas's whole `srcDoc`, so a region inside the frame
- * would be a **freshly created** region on every move — and a screen reader does not announce the
- * contents of a region that has just appeared. The region lives in the editor's own document, which
- * survives the rebuild.
+ * placement written replaces the canvas's whole `srcDoc`, so a region inside the frame would be a
+ * **freshly created** region on every move — and a screen reader does not announce the contents of a
+ * region that has just appeared. The region lives in the editor's own document, which survives.
  *
- * **In catalog columns, because that is what one press moves** (`ARROW_UNITS`). Saying «columna 25
- * de 96» would be arithmetically true and useless: nobody counts in ninety-sixths, and a press
- * lands exactly on a twelfth. Día 6 replaces the whole sentence with pixels, which is what David
- * asked for once the arrows move by one unit.
+ * **In pixels from the section's own corner, measured** (David's condition 2 for this day, with his
+ * adjustment 1 on how). «Columna 3 de 12» meant something on the catalog's grid and nothing on a
+ * grid of ninety-six; «columna 25 de 96» would be arithmetically true and useless, since nobody
+ * counts in ninety-sixths. Pixels are what a person beside the screen would say — and they are
+ * taken from the element's **measured box**, not from unit × column: a row is eight pixels only
+ * until a text makes it taller, so the arithmetic would describe a page the browser is not drawing.
  *
- * Two sentences for two acts: where it went, or how wide it is now. A move that said «ancho 4»
- * every time would bury the number that changed under one that did not.
+ * One sentence per run, not per press: a held key is one movement (`arrowRun.ts`), and twenty
+ * sentences for one gesture is noise rather than information.
  */
-export function announceText(area: GridArea, kind: "move" | "span"): string {
-  const key = kind === "move" ? "editor.canvas.at" : "editor.canvas.width";
-  return es[key]
-    .replace("{column}", String(Math.floor((area.column - 1) / FINE_PER_COLUMN) + 1))
-    .replace("{columns}", String(GRID_COLUMNS))
-    .replace("{row}", String(area.row))
-    .replace("{span}", String(Math.round(area.columnSpan / FINE_PER_COLUMN)));
+export function announceText(at: { readonly x: number; readonly y: number }): string {
+  return es["editor.canvas.atPixels"]
+    .replace("{x}", String(Math.round(at.x)))
+    .replace("{y}", String(Math.round(at.y)));
 }
 
 /**

@@ -272,6 +272,87 @@ describe("deleteSection", () => {
  * can no longer answer (ADR 0050, sprint 25 día 2: escalation measures the live page, so a fresh
  * layout equals no re-derivation of the catalog's drawing).
  */
+/**
+ * **A text's own rows, written with its words** (ADR 0050 §3, sprint 25 día 6, David's adjustment
+ * 1): a free section's rows are eight real pixels, typing changes how tall a text is, and the row
+ * span has to follow or the row grows past its minimum and pushes everything below it down.
+ */
+describe("editText with the rows the text now needs", () => {
+  const escalate = (sectionId = "sec-cover"): HistoryAction => ({
+    type: "escalateSection",
+    variant: 0,
+    sectionId,
+  });
+  const free = () => run(start(), escalate());
+  const placementOf = (state: Histories, elementId = "el-headline") =>
+    state[0]?.present.document.pages[0]?.sections
+      .find((section) => section.id === "sec-cover")
+      ?.layout?.placements.find((placement) => placement.elementId === elementId);
+  /** The headline's own words, as the document holds them. */
+  const wordsOf = (state: Histories) => {
+    const element = state[0]?.present.document.pages[0]?.sections
+      .find((section) => section.id === "sec-cover")
+      ?.content.find((candidate) => candidate.id === "el-headline");
+    return element?.value?.kind === "text" ? element.value.text : "";
+  };
+  const typeInto = (text: string, rowSpan?: number): HistoryAction => ({
+    type: "editText",
+    variant: 0,
+    address: HEADLINE,
+    text,
+    ...(rowSpan === undefined ? {} : { rowSpan }),
+  });
+
+  it("writes the words and the rows in one step, and one undo takes back both", () => {
+    const before = free();
+    const was = placementOf(before);
+    expect(was?.rowSpan, "la portada escalada no trajo filas").toBeGreaterThan(0);
+
+    const after = run(before, typeInto("Dos líneas de titular", (was?.rowSpan ?? 1) + 4));
+    expect(placementOf(after)?.rowSpan).toBe((was?.rowSpan ?? 1) + 4);
+
+    const undone = historiesReducer(after, { type: "undo", variant: 0 });
+    expect(undone[0]?.present.document).toEqual(before[0]?.present.document);
+  });
+
+  it("is still one amendable step while the same text is being typed into", () => {
+    // Typing is the one thing that amends rather than stacking (ADR 0014), and carrying the rows
+    // must not change that: two keystrokes are one entry to undo.
+    const before = free();
+    const twice = run(before, typeInto("Una", 7), typeInto("Una línea", 9));
+    expect(twice[0]?.amendable).toBe(true);
+    expect(placementOf(twice)?.rowSpan).toBe(9);
+    const undone = historiesReducer(twice, { type: "undo", variant: 0 });
+    expect(undone[0]?.present.document).toEqual(before[0]?.present.document);
+  });
+
+  it("opens no step at all when neither the words nor the rows changed", () => {
+    const before = free();
+    const again = run(before, typeInto(wordsOf(before), placementOf(before)?.rowSpan));
+    expect(again).toBe(before);
+  });
+
+  it("changes the rows of a text whose words stayed the same, because the width can change them", () => {
+    // Narrowing a text's box rewraps it without touching a letter, and the rows it needs are then
+    // different: the commit has to be able to say so on its own.
+    const before = free();
+    const was = placementOf(before);
+    const words = wordsOf(before);
+    const taller = run(before, typeInto(words, (was?.rowSpan ?? 1) + 3));
+    expect(taller).not.toBe(before);
+    expect(placementOf(taller)?.rowSpan).toBe((was?.rowSpan ?? 1) + 3);
+  });
+
+  it("ignores the rows for a section the catalog draws, which has no placements", () => {
+    const state = run(start(), typeInto("Nuevo titular", 12));
+    const section = state[0]?.present.document.pages[0]?.sections.find((s) => s.id === "sec-cover");
+    expect(section?.layout).toBeNull();
+    expect(section?.content.find((e) => e.id === "el-headline")?.value).toMatchObject({
+      text: "Nuevo titular",
+    });
+  });
+});
+
 describe("wasPlacementEverMoved", () => {
   const escalate = (sectionId = "sec-cover"): HistoryAction => ({
     type: "escalateSection",

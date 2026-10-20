@@ -549,3 +549,69 @@ coordinate space — the first version measured the section's centre inside the 
 and `boundingBox()` speak in the page's, which moved the drag 176 px and read a horizontal guide as
 a vertical one — and the download gate's dialogs are not all `role="alertdialog"`, so a walk that
 scopes to that role waits thirty seconds for a button that is on screen.
+
+## Amendment — the keyboard counts in units, and a run is one movement (día 6, 20 October 2026)
+
+§6 named día 6 in three clauses; this is all three, and they amend ADR 0049 twice more.
+
+### 1. One unit per press, eight with `Shift` — and `Shift` stops resizing
+
+A press is now the finest thing the document can express, which is what makes the keyboard equal to
+the hand on a grid of ninety-six; `Shift` is the catalog column, for crossing a section without
+fifty presses. Vertically the same two sizes: a row, or eight.
+
+**That takes something away, and it is named rather than quietly dropped.** `Shift+Arrow` used to
+widen and narrow (ADR 0049 §1) — the only keyboard resize on the canvas — and it cannot mean two
+things. Resizing by keyboard belongs entirely to the «Colocación» panel's four steppers, which have
+counted in these units since día 1 and were always the single-pointer alternative WCAG 2.5.7 asks
+for. Sideways a run is **clamped** rather than refused: refusing the fortieth press while accepting
+the thirty-ninth would make a held key stop dead for no visible reason, and «as far left as it
+goes» is what the hand means. Rows keep the one refusal there is, the interface's own floor.
+
+### 2. A run of presses is one movement and one step of history
+
+David's condition: «Las pulsaciones seguidas son un solo paso del historial […] se escribe al soltar
+la tecla (o tras ~300 ms sin pulsar)». `arrowRun.ts` accumulates the presses — pure, with the clock
+as an argument, so «the hand has paused» is a tested decision rather than a `setTimeout` somebody
+has to trust — and the placement is written once, on `keyup` or after 300 ms of quiet, whichever
+comes first. A `blur` flushes too, which is the net for the press whose `keyup` never arrives
+because the window changed with the key held down.
+
+Fifty presses to cross a section would otherwise be fifty documents, fifty re-parses of the canvas
+and fifty entries to undo one gesture through. It also retires the lost keypress of ADR 0049 §4:
+there is no rebuild to lose a press to until the hand stops.
+
+**Previewed on the element's own grid area, not on a `transform`** — a departure from the plan's
+letter, with día 5's finding as the reason: an element that crosses a gutter gets wider, so a
+transform would show the eye a box the document is not going to produce. Rewriting the inline area
+reflows the grid, which is cheap inside one document; it is the rebuild of the whole `srcDoc` that
+is not, and that is what the run defers.
+
+### 3. The announcement is pixels, from the measured box
+
+«Columna 3 de 12» meant something on the catalog's grid and nothing on a grid of ninety-six;
+«columna 25 de 96» would be arithmetically true and useless, since nobody counts in ninety-sixths.
+So the live region says «A 312 px del borde izquierdo y 96 del superior» — what a person beside the
+screen would say — and the numbers come from the element's **measured box** (David's adjustment 1),
+not from unit × column: a row is eight pixels only until a text makes it taller, so the arithmetic
+would describe a page the browser is not drawing. **One sentence per run**, not per press: a held
+key is one movement, and twenty sentences for one gesture is noise rather than information.
+
+### 4. A text's rows follow its content, in the same step as its words
+
+The third clause of David's adjustment 1. A free section's rows are eight real pixels and a text's
+height is its content's, so typing changes how many rows it needs; left alone, the row grows past
+its minimum and pushes everything under it down — the accumulation `measuredToFine` ceils to avoid
+— and the editor's idea of where things are drifts from the page. So the commit measures the
+element it has just finished with and carries the span **in the `editText` step itself**: one letter
+must not cost two presses of «Deshacer». `editText` now opens no step when neither the words nor the
+rows changed, and one when either did — narrowing a text's box rewraps it without touching a letter,
+and the rows it then needs are different.
+
+### 5. And the panel says what a unit is
+
+Four numbers counted in units of ninety-six with nothing on screen explaining them is a number
+somebody has to guess the meaning of, so «Colocación» now carries one line: ninety-six units a
+section, eight to a catalog column, which is what one press of a stepper moves; rows of eight
+pixels; and what the canvas's arrows are worth, because the two controls are the same act and a
+person who finds one should know about the other.

@@ -216,6 +216,9 @@ export type HistoryAction =
       /** The marks the editor already shifted, when it watched the edit happen (ADR 0027 §4b).
        * Absent means "derive them from the two strings", which is the documented fallback. */
       marks?: readonly MarkRun[];
+      /** The rows the text now needs, measured by the canvas (día 6). Absent for a section the
+       * catalog draws, and for a caller with no page to measure. */
+      rowSpan?: number | undefined;
     }
   | { type: "deleteSection"; variant: number; sectionId: string }
   | { type: "duplicateSection"; variant: number; sectionId: string }
@@ -417,11 +420,31 @@ function editText(
   address: ElementAddress,
   text: string,
   marks?: readonly MarkRun[],
+  /**
+   * How many eight-pixel rows the text now needs, measured on the live page (ADR 0050 §3, día 6).
+   *
+   * **In the same step as the words, which is the whole reason it is an argument here.** A text in
+   * a hand-designed section lives in rows of eight pixels, and typing makes it taller or shorter;
+   * leaving `rowSpan` behind would make the row grow past its minimum and push everything under it
+   * down — the thing `measuredToFine` ceils to avoid. Writing it as its own `setPlacement` would
+   * open a second entry in the history, so one letter would take two presses of «Deshacer» to take
+   * back. The edit is what changed the height, so the edit is where the row belongs.
+   */
+  rowSpan?: number,
 ): History {
   // A blur that changed nothing is not a step. It used to be one, and worse: it threw away the
-  // redo stack, so an undo followed by a stray click into a field could not be redone.
-  if (alreadySays(history.present.document, address, text, marks)) return history;
-  const document = setElementText(history.present.document, address, text, marks);
+  // redo stack, so an undo followed by a stray click into a field could not be redone. **Both
+  // halves have to be unchanged now**: the same words with the same rows is nothing, and the same
+  // words with different rows is a step — narrowing a text's box rewraps it without touching a
+  // letter, and the rows it needs are then different.
+  const sameWords = alreadySays(history.present.document, address, text, marks);
+  const written = sameWords
+    ? history.present.document
+    : setElementText(history.present.document, address, text, marks);
+  // `withRowSpan` hands back the identical document when there is nothing to write — no placement,
+  // a catalog section, or a span that already says this — so one comparison answers for all of it.
+  const document = rowSpan === undefined ? written : withRowSpan(written, address, rowSpan);
+  if (document === history.present.document) return history;
   const present: Snapshot = { document, cause: { type: "editText", address } };
   // Still typing into the field the last edit touched: amend that step rather than adding one.
   // `amendable` is what an undo or a redo turns off — a restored snapshot may well carry an
@@ -435,6 +458,26 @@ function editText(
     future: [],
     amendable: true,
   };
+}
+
+/**
+ * The document with one element's `rowSpan` set to what its text now needs, or unchanged.
+ *
+ * Unchanged for a section the catalog draws (there are no placements to write), for an element with
+ * no placement of its own — a line inside a list moves with the list — and for a span that already
+ * says this, which is the common case: most edits do not change how many rows a text needs.
+ */
+function withRowSpan(
+  document: RetorikaDocument,
+  address: ElementAddress,
+  rowSpan: number,
+): RetorikaDocument {
+  const section = findSection(document, address.sectionId)?.section;
+  const placement = section?.layout?.placements.find(
+    (candidate) => candidate.elementId === address.elementId,
+  );
+  if (!placement || placement.rowSpan === rowSpan) return document;
+  return setPlacementInDoc(document, address.sectionId, address.elementId, { rowSpan });
 }
 
 function deleteSection(history: History, sectionId: string): History {
@@ -1190,7 +1233,7 @@ function redo(history: History): History {
 function apply(history: History, action: HistoryAction): History {
   switch (action.type) {
     case "editText":
-      return editText(history, action.address, action.text, action.marks);
+      return editText(history, action.address, action.text, action.marks, action.rowSpan);
     case "deleteSection":
       return deleteSection(history, action.sectionId);
     case "duplicateSection":
