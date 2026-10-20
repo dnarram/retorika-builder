@@ -30,6 +30,7 @@ import {
   type Mark,
   type MarkRange,
   type MarkRun,
+  type MeasuredBox,
   type MobilePatchEdit,
   marksAfterTrim,
   marksFor,
@@ -78,7 +79,12 @@ import { canvasLinkTarget } from "../editor/canvasLinks.ts";
 import { CHROME_SCALE, PILL_REST_BORDER, VERB_SCALE } from "../editor/chromeScale.ts";
 import { toCoarse, toFine } from "../editor/coarseBoundary.ts";
 import type { SwitchNotice } from "../editor/designTools.ts";
-import { designRows, elementLabels, selectedRowId } from "../editor/designTree.ts";
+import {
+  designRows,
+  elementLabels,
+  rowBelowPlacements,
+  selectedRowId,
+} from "../editor/designTree.ts";
 import {
   type AcceptedWarning,
   type DownloadGate,
@@ -556,6 +562,7 @@ export function Editor({
   switchNotice,
   onDesignToolsChange,
   onEscalateSection,
+  placementWasMoved,
   onRevertSection,
   onSetPlacement,
   onSetMobilePatch,
@@ -643,8 +650,21 @@ export function Editor({
   onDesignToolsChange: (on: boolean) => void;
   /** This section starts being designed by hand, and goes back to the catalog's layout. One
    * history step each, so Ctrl+Z covers the first minutes — which is what the advanced dossier §5
-   * asks for and the reason day 4's dialog is about the durable case rather than this one. */
-  onEscalateSection: (sectionId: string) => void;
+   * asks for and the reason day 4's dialog is about the durable case rather than this one.
+   *
+   * `boxes` is what the canvas measured the instant before (ADR 0050 §3): the fine grid's rows are
+   * eight real pixels, so the only way «no se mueve nada al empezar» can be true for a section the
+   * catalog had centred is to write the rows the elements actually had. Both doors measure. */
+  onEscalateSection: (sectionId: string, boxes?: readonly MeasuredBox[]) => void;
+  /**
+   * Whether anybody has laid this section out by hand, which decides whether the return warns.
+   *
+   * **A prop and not a comparison** (ADR 0050, sprint 25 día 2): the answer lives in the undo
+   * history, which `Variants` holds, and the document cannot be asked any more — escalation
+   * measures the live page, so a freshly escalated layout equals no re-derivation of the catalog's
+   * drawing. `wasPlacementEverMoved` is the selector.
+   */
+  placementWasMoved: (sectionId: string) => boolean;
   /** `decisions` names one choice per element the preset cannot place. Absent means the interface
    * made none, and `revertSection` then hides every surplus element rather than deleting it — which
    * is only ever the case for a return that had nothing to decide. */
@@ -1194,7 +1214,9 @@ export function Editor({
   function requestRevert(sectionId: string) {
     const found = findSection(doc, sectionId);
     if (!found) return;
-    const impact = revertImpact(doc, sectionId, presetFor(found.section.preset.catalogId));
+    const impact = revertImpact(doc, sectionId, presetFor(found.section.preset.catalogId), {
+      placementsMoved: placementWasMoved(sectionId),
+    });
     if (!impact) return;
     if (impact.lossless) {
       onRevertSection(sectionId);
@@ -2581,7 +2603,9 @@ export function Editor({
          * which is the right answer either way: what changed is the section.
          */
         armReturn(sectionId, '.rb-actions [data-action="handmade"]');
-        onEscalateSection(sectionId);
+        // `iframeDoc` and not `liveDoc()`: this handler lives in the document it has to measure,
+        // and was wired into it before it became the visible one.
+        onEscalateSection(sectionId, measurePlaced(iframeDoc, sectionId));
       });
       row.appendChild(yes);
 
@@ -3277,6 +3301,11 @@ export function Editor({
       const list = section.querySelector<HTMLElement>(".rb-list");
       if (!list) continue;
 
+      // The row this section's own chrome goes in, so that it cannot take one an element is
+      // counting on — see `rowBelowPlacements`, and the 33px it cost on «Qué hago». `undefined`
+      // for a section the catalog draws, which keeps auto-placement exactly as it was there.
+      const chromeRow = rowBelowPlacements(doc, sectionId);
+
       const items = [...list.querySelectorAll<HTMLElement>("[data-item]")];
       for (const [index, li] of items.entries()) {
         const itemId = li.dataset.item;
@@ -3345,6 +3374,7 @@ export function Editor({
         // a limit.
         const full = iframeDoc.createElement("p");
         full.className = "rb-line-full";
+        if (chromeRow !== undefined) full.style.gridRow = `${chromeRow} / span 1`;
         // Through `lineLabel`, so it says «fotos» in a gallery where the button beside it says
         // «Añadir foto». The generic sentence talks about «líneas», which is the editor's word and
         // not the owner's, and it would be the only place in this section that used it.
@@ -3355,6 +3385,7 @@ export function Editor({
       const add = iframeDoc.createElement("button");
       add.type = "button";
       add.className = "rb-line-add";
+      if (chromeRow !== undefined) add.style.gridRow = `${chromeRow} / span 1`;
       add.textContent = `+ ${lineLabel("add", lines.catalogId)}`;
       add.addEventListener("click", (event) => {
         event.stopPropagation();
@@ -5101,6 +5132,71 @@ export function Editor({
    * Everything is in the frame's own coordinates, which is also what `event.clientX` arrives in, so
    * nothing here crosses the frame boundary and no zoom factor is involved.
    */
+  /**
+   * What each placed element's box is right now, for the escalation that is about to write it
+   * (ADR 0050 §3, sprint 25 día 2).
+   *
+   * **The document is an argument, and that is the whole defect this signature prevents.** The
+   * first version asked `liveDoc()` for it and measured nothing at all: the chrome is wired into a
+   * frame **before** it becomes the visible one («Wired before it is seen», below), so a handler
+   * created there captured a render in which the live slot was still the *other* frame. `liveDoc()`
+   * then answered with the document that does not hold this section, `measurePlaced` found none and
+   * handed back `undefined`, and the escalation quietly fell back to the theme's rhythm — a section
+   * that looked escalated correctly and had derived rows. Measured in Chromium (the headline's row
+   * came out 1 where its box said 4) rather than reasoned about. Whoever is inside the frame passes
+   * its own document; the panel, which React re-renders, passes `liveDoc()`.
+   *
+   * **In the frame's own pixels.** The canvas is zoomed by a `transform` on the card *outside* the
+   * iframe, so a `getBoundingClientRect` taken inside it is already in the document's own pixels and
+   * the difference between two of them needs no dividing — which is what makes these numbers the
+   * same eight-pixel rows the published page will have.
+   *
+   * **What it cannot promise**: that the face the text will settle on is the face it is measuring.
+   * A web font arriving after the press moves a heading by a few pixels, and the rows written here
+   * are the ones it had. Nobody escalates in the first moments of a preview that has been on screen
+   * since the questionnaire, and the alternative — awaiting `document.fonts.ready` inside a click —
+   * would delay the act for a case that costs four pixels. ADR 0050 §3 names it with the other
+   * vertical drifts.
+   *
+   * **Top-level children only, and only the ones the renderer named.** A placement exists for an
+   * element of the section, not for a line inside a list, and the chrome this file draws into the
+   * section — the handmade bar, the ghost, the add-line pill — carries no `data-id`. The panel
+   * `.rb-panel` has none either, which is why it cannot be mistaken for content here.
+   *
+   * `undefined` when there is nothing to measure: no live frame, or a section that is not on screen
+   * because the canvas is showing another page. The verb then falls back to the theme's rhythm,
+   * which is the honest answer for a page nobody can see rather than a zero anybody would believe.
+   */
+  function measurePlaced(
+    iframeDoc: Document | null | undefined,
+    sectionId: string,
+  ): MeasuredBox[] | undefined {
+    if (!iframeDoc) return undefined;
+    let section: HTMLElement | undefined;
+    for (const candidate of iframeDoc.querySelectorAll<HTMLElement>("[data-section]")) {
+      if (candidate.dataset.section === sectionId) section = candidate;
+    }
+    if (!section) return undefined;
+
+    const view = section.ownerDocument.defaultView;
+    const box = section.getBoundingClientRect();
+    const padTop = Number.parseFloat(view?.getComputedStyle(section).paddingTop ?? "");
+    const contentTop = box.top + (Number.isFinite(padTop) ? padTop : 0);
+
+    const boxes: MeasuredBox[] = [];
+    for (const child of section.children) {
+      const el = child as HTMLElement;
+      const elementId = el.dataset["id"];
+      if (!elementId) continue;
+      const rect = el.getBoundingClientRect();
+      boxes.push({ elementId, top: rect.top - contentTop, height: rect.height });
+    }
+    // An empty list is «nothing was placed», which is not the same as «there was nothing to read»:
+    // handing it over would write no rows at all, and handing back `undefined` lets the rhythm
+    // answer for a section whose elements are all hidden.
+    return boxes.length > 0 ? boxes : undefined;
+  }
+
   function gridMetricsOf(section: HTMLElement): GridMetrics {
     const view = section.ownerDocument.defaultView;
     const box = section.getBoundingClientRect();
@@ -6857,9 +6953,12 @@ export function Editor({
             }}
             onPreviewMobile={() => setDevice("mobile")}
             // The same verb the section header's own «Diseñar a mano» calls, so the two doors are
-            // one offer (ADR 0025's amendment). Nothing is escalated without a press.
+            // one offer (ADR 0025's amendment), measuring through the same function so the two
+            // cannot produce different rows for the same section. Nothing is escalated without a
+            // press.
             onEscalate={() => {
-              if (designSectionId) onEscalateSection(designSectionId);
+              if (designSectionId)
+                onEscalateSection(designSectionId, measurePlaced(liveDoc(), designSectionId));
             }}
             onClose={() => showRail("sections")}
           />

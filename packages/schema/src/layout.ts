@@ -1,5 +1,5 @@
 import type { BreakpointPatch, Placement, RetorikaDocument, Section } from "./document.ts";
-import { coarseToFine, gapRowsFor } from "./fineGrid.ts";
+import { gapRowsFor, type MeasuredBox } from "./fineGrid.ts";
 import { parseDocument } from "./parse.ts";
 import type { PresetShape } from "./preset.ts";
 import {
@@ -60,6 +60,12 @@ function withSection(
  * without risk, and it is the whole reason the return can be lossless: «Al escalar se guarda una
  * versión y se copia la maquetación del catálogo, así que no se mueve ni un píxel.»
  *
+ * **`boxes` is how that sentence stays true to the pixel** (ADR 0050 §3, sprint 25 día 2): a caller
+ * with the section on screen measures each placed element and passes it, and the vertical is written
+ * from what was there rather than derived from the theme's spacing. Left out — migration 0013, a
+ * test with no browser — the rhythm answers instead, which is within four pixels for a section of
+ * stacked texts and names its own limit for a photograph taller than the texts beside it.
+ *
  * A section that is already free comes back unchanged — the same document, not a copy — so the
  * editor's history opens no step for an action that changed nothing. `setVariant` and `renamePage`
  * already answer that way for the same reason.
@@ -68,13 +74,20 @@ export function escalateSection(
   doc: RetorikaDocument,
   sectionId: string,
   preset: PresetShape,
+  boxes?: readonly MeasuredBox[],
 ): RetorikaDocument {
   const found = sectionOrThrow(doc, sectionId, "escalateSection");
   if (found.section.source === "free") return doc;
   // The fine grid's vertical rhythm comes from this document's own theme (ADR 0050): how many
-  // eight-pixel rows stand for one `space.md` gap between two catalog rows.
+  // eight-pixel rows stand for one `space.md` gap between two catalog rows. The fallback for an
+  // element with no measured box, and the whole answer for a caller that measured nothing.
   const gapRows = gapRowsFor(doc.theme["space.md"]);
-  return withSection(doc, found.page.id, sectionId, escalate(found.section, preset, gapRows));
+  return withSection(
+    doc,
+    found.page.id,
+    sectionId,
+    escalate(found.section, preset, gapRows, boxes),
+  );
 }
 
 /**
@@ -126,12 +139,19 @@ export function isHandDesigned(doc: RetorikaDocument, sectionId: string): boolea
 /** What the return would cost, which is what the dialog of day 4 has to say before doing it. */
 export interface RevertImpact extends RevertPlan {
   /**
-   * Whether the layout being dropped is one somebody actually changed.
+   * Whether the layout being dropped is one somebody actually did work in.
    *
-   * `escalate` copies the preset's own layout in, so a section escalated and left alone has a layout
-   * identical to the one the catalog would draw: dropping it costs nothing and is invisible. Once an
-   * element has been moved, dropping it throws away work. **Losing the layout is correct either way**
-   * — rule 1 puts it in the layout object and `document-rules.md` says so — but only one of the two
+   * **This package cannot answer it any more, so it is told** (ADR 0050, sprint 25 día 2). It used
+   * to be derived: `escalate` copied the preset's own drawing in, so a section escalated and left
+   * alone held a layout identical to a re-derivation, and anything else meant somebody had moved
+   * something. Escalation now **measures the live page** to write its eight-pixel rows, so a
+   * freshly escalated section no longer matches any pure function of the preset — a photograph of
+   * 438 px is fifty-five rows where the theme's rhythm would have said seven — and the comparison
+   * would report work nobody had done, on every escalation, which is the dialog crying wolf.
+   *
+   * The question is «did anybody lay this section out by hand», and the editor's undo history
+   * answers it exactly (`wasPlacementEverMoved`). **Losing the layout is correct either way** —
+   * rule 1 puts it in the layout object and `document-rules.md` says so — but only one of the two
    * is worth stopping a person to mention.
    */
   dropsPlacements: boolean;
@@ -155,21 +175,19 @@ export function revertImpact(
   doc: RetorikaDocument,
   sectionId: string,
   preset: PresetShape,
+  /**
+   * What the caller knows and this package does not: whether anybody has moved or resized an
+   * element in this section. Required rather than defaulted, because a default of `false` is a
+   * dialog that quietly stops warning and a default of `true` is one that always does.
+   */
+  work: { readonly placementsMoved: boolean },
 ): RevertImpact | undefined {
   const found = sectionOrThrow(doc, sectionId, "revertImpact");
   const { section } = found;
   if (section.source !== "free") return undefined;
 
   const plan = planRevert(section, preset);
-  // Compared against the layout the catalog would draw for this variant *and these elements*, not
-  // against the one `escalate` copied in at the time: an element hidden or filled since then changes
-  // what the preset draws, and a placement that still matches the new drawing has not been moved.
-  // In the fine grid's units, as `escalate` writes them (ADR 0050), with the same rhythm.
-  const gapRows = gapRowsFor(doc.theme["space.md"]);
-  const drawn = preset
-    .layoutFor(section.preset.variantId, section.content)
-    .placements.map((placement) => coarseToFine(placement, gapRows));
-  const dropsPlacements = JSON.stringify(section.layout?.placements) !== JSON.stringify(drawn);
+  const dropsPlacements = work.placementsMoved;
 
   return {
     ...plan,

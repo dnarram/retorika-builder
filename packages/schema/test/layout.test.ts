@@ -112,6 +112,40 @@ describe("escalateSection", () => {
     });
   });
 
+  /**
+   * **The measured escalation** (ADR 0050 §3, sprint 25 día 2): a caller with the section on screen
+   * passes each element's box, and the rows come from the pixels rather than from the theme.
+   *
+   * The fallback is per element and that is the half worth asserting: `el-b` is not measured here —
+   * which is what a hidden element looks like, since the renderer draws it nowhere — and it keeps
+   * the rhythm's answer instead of landing in row 1 on top of the headline.
+   */
+  it("writes the rows from the boxes it is given, and the rhythm for the rest", () => {
+    const after = escalateSection(documentWith(section()), "sec-demo", preset, [
+      { elementId: "el-h", top: 0, height: 92 },
+    ]);
+    const placements = sectionOf(after, "sec-demo")?.layout?.placements;
+    expect(placements).toEqual([
+      // Measured: twelve rows of eight pixels, at the top of the content box.
+      { elementId: "el-h", column: 1, columnSpan: 96, row: 1, rowSpan: 12 },
+      // Not measured: the catalog's second row, two gap rows below the first (16px theme).
+      { elementId: "el-b", column: 1, columnSpan: 96, row: 4, rowSpan: 1 },
+    ]);
+  });
+
+  it("takes the columns from the catalog even when it has a box, because sideways is exact", () => {
+    // A box is a vertical measurement and nothing else: measuring the left edge would put an error
+    // where the conversion has none.
+    const after = escalateSection(documentWith(section()), "sec-demo", preset, [
+      { elementId: "el-h", top: 7, height: 20 },
+      { elementId: "el-b", top: 40, height: 20 },
+    ]);
+    expect(sectionOf(after, "sec-demo")?.layout?.placements).toEqual([
+      { elementId: "el-h", column: 1, columnSpan: 96, row: 2, rowSpan: 3 },
+      { elementId: "el-b", column: 1, columnSpan: 96, row: 6, rowSpan: 3 },
+    ]);
+  });
+
   it("moves nothing: every element keeps its id, its slot and its words", () => {
     // The promise the offer makes before anybody accepts it — «no se mueve ni un píxel» — and the
     // reason the return can be lossless later.
@@ -427,7 +461,14 @@ describe("revertImpact — what the return dialog has to say before it does anyt
    * explicit decision. What it needs from this package is one answer to «is there anything worth
    * stopping the person for», and that answer is a decision about the document model rather than
    * about the layout of a panel — so it lives here and the component only draws it.
+   *
+   * **One of the three losses is now an argument** (ADR 0050, sprint 25 día 2): whether anybody
+   * laid the section out by hand. Escalation measures the live page, so a freshly escalated layout
+   * no longer equals any re-derivation of the preset's drawing, and the caller that has the undo
+   * history is the one that can answer. The tests below pass it both ways on purpose.
    */
+  const untouched = { placementsMoved: false } as const;
+  const worked = { placementsMoved: true } as const;
   const free = () => escalateSection(documentWith(section()), "sec-demo", preset);
 
   const withSurplus = () => {
@@ -462,13 +503,13 @@ describe("revertImpact — what the return dialog has to say before it does anyt
     });
 
   it("says nothing about a section the catalog still draws", () => {
-    expect(revertImpact(documentWith(section()), "sec-demo", preset)).toBeUndefined();
+    expect(revertImpact(documentWith(section()), "sec-demo", preset, untouched)).toBeUndefined();
   });
 
   it("is lossless right after escalating, because nothing has been moved yet", () => {
     // The whole reason the offer can be accepted without risk, stated as the thing the interface
     // reads: escalate and change your mind, and the return takes away nothing at all.
-    const impact = revertImpact(free(), "sec-demo", preset);
+    const impact = revertImpact(free(), "sec-demo", preset, untouched);
     expect(impact).toMatchObject({
       lossless: true,
       dropsPlacements: false,
@@ -477,22 +518,33 @@ describe("revertImpact — what the return dialog has to say before it does anyt
     });
   });
 
-  it("stops being lossless the moment an element is moved", () => {
+  it("stops being lossless the moment the caller says an element was moved", () => {
     const moved = setPlacement(free(), "sec-demo", "el-h", { column: 3, columnSpan: 4 });
-    expect(revertImpact(moved, "sec-demo", preset)).toMatchObject({
+    expect(revertImpact(moved, "sec-demo", preset, worked)).toMatchObject({
       lossless: false,
       dropsPlacements: true,
     });
   });
 
-  it("is lossless again once the element is put back where the catalog had it", () => {
-    // Compared against what the preset draws *now*, not against a snapshot taken at escalation —
-    // so moving something and moving it back costs nothing, which is what a person would expect.
-    const there = setPlacement(free(), "sec-demo", "el-h", { column: 3, columnSpan: 4 });
-    const back = setPlacement(there, "sec-demo", "el-h", { column: 1, columnSpan: 96 });
-    expect(revertImpact(back, "sec-demo", preset)).toMatchObject({
+  /**
+   * **And a moved document with nothing to report is still lossless**, which is the half that says
+   * this is an argument and not a re-derivation.
+   *
+   * Until día 2 this answer came from comparing the stored placements with what the preset would
+   * draw, so moving an element and moving it back read as lossless again. That cleverness bought
+   * nothing once the grid became ninety-six units and the rows became measured pixels: landing back
+   * on the same four numbers by hand is not something that happens. The question the dialog asks is
+   * «did you do work here», the history knows, and over-warning is the safe side of it.
+   */
+  it("takes the answer it is given, even against what the document looks like", () => {
+    const moved = setPlacement(free(), "sec-demo", "el-h", { column: 3, columnSpan: 4 });
+    expect(revertImpact(moved, "sec-demo", preset, untouched)).toMatchObject({
       lossless: true,
       dropsPlacements: false,
+    });
+    expect(revertImpact(free(), "sec-demo", preset, worked)).toMatchObject({
+      lossless: false,
+      dropsPlacements: true,
     });
   });
 
@@ -500,12 +552,12 @@ describe("revertImpact — what the return dialog has to say before it does anyt
     // `planRevert` has returned `dropsBreakpointAdjustments` since phase 0 and nothing has ever
     // read it. This is the field the dossier §5 wrote it for: «El diálogo lo advierte, porque si no
     // parece un fallo.»
-    const impact = revertImpact(withMobilePatch(free()), "sec-demo", preset);
+    const impact = revertImpact(withMobilePatch(free()), "sec-demo", preset, untouched);
     expect(impact).toMatchObject({ dropsBreakpointAdjustments: true, lossless: false });
   });
 
   it("reports the surplus with a reason per element", () => {
-    const impact = revertImpact(withSurplus(), "sec-demo", preset);
+    const impact = revertImpact(withSurplus(), "sec-demo", preset, untouched);
     expect(impact?.surplus).toEqual([
       { elementId: "el-extra", slot: "intro", reason: 'slot "intro" shows at most 1' },
     ]);
@@ -513,7 +565,7 @@ describe("revertImpact — what the return dialog has to say before it does anyt
   });
 
   it("reports what comes back and to which slot, which is the dialog's other half", () => {
-    expect(revertImpact(free(), "sec-demo", preset)?.assignments).toEqual([
+    expect(revertImpact(free(), "sec-demo", preset, untouched)?.assignments).toEqual([
       { elementId: "el-h", slot: "headline" },
       { elementId: "el-b", slot: "intro" },
     ]);
@@ -521,7 +573,7 @@ describe("revertImpact — what the return dialog has to say before it does anyt
 
   it("reports all three losses at once when all three apply", () => {
     const moved = setPlacement(withSurplus(), "sec-demo", "el-h", { column: 2, columnSpan: 3 });
-    const impact = revertImpact(withMobilePatch(moved), "sec-demo", preset);
+    const impact = revertImpact(withMobilePatch(moved), "sec-demo", preset, worked);
     expect(impact).toMatchObject({
       dropsPlacements: true,
       dropsBreakpointAdjustments: true,
@@ -531,7 +583,7 @@ describe("revertImpact — what the return dialog has to say before it does anyt
   });
 
   it("throws for a section the document does not have, naming it", () => {
-    expect(() => revertImpact(free(), "sec-nope", preset)).toThrow(
+    expect(() => revertImpact(free(), "sec-nope", preset, untouched)).toThrow(
       /revertImpact: no section "sec-nope"/,
     );
   });

@@ -54,6 +54,7 @@ import {
   type History,
   historiesReducer,
   initHistories,
+  wasPlacementEverMoved,
   wasSectionEverEdited,
 } from "../editor/documentHistory.ts";
 import { PHOTO_CONTENT_TYPE } from "../editor/downloadGate.ts";
@@ -1293,10 +1294,15 @@ export function Variants({
             }
           }}
           switchNotice={switchNotice(browserRefused, accountRefused)}
-          onEscalateSection={(sectionId) => {
+          onEscalateSection={(sectionId, boxes) => {
             dismissToast();
-            dispatch({ type: "escalateSection", variant: openIndex, sectionId });
+            // The boxes the canvas measured the instant before the press (ADR 0050 §3): this
+            // component never measures anything itself, it only carries what the canvas read.
+            dispatch({ type: "escalateSection", variant: openIndex, sectionId, boxes });
           }}
+          // Read from the history rather than from the document, which cannot answer it since
+          // escalation started measuring the page (ADR 0050, día 2).
+          placementWasMoved={(sectionId) => wasPlacementEverMoved(history, sectionId)}
           onRevertSection={(sectionId, decisions) => {
             dismissToast();
             dispatch({

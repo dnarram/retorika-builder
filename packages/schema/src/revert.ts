@@ -1,5 +1,5 @@
 import { type ContentElement, FINE_COLUMNS, type Section } from "./document.ts";
-import { coarseToFine } from "./fineGrid.ts";
+import { coarseToFine, type MeasuredBox, measuredToFine } from "./fineGrid.ts";
 import type { PresetShape } from "./preset.ts";
 
 /**
@@ -14,14 +14,30 @@ import type { PresetShape } from "./preset.ts";
  * Escalate: copy the catalog layout into the section so not a pixel moves.
  *
  * **Written in the fine grid's units** (ADR 0050): the catalog draws on twelve columns and content
- * rows, a free section is ninety-six units and eight-pixel rows, and `coarseToFine` is the exact
- * conversion sideways and the theme's rhythm downwards — `gapRows` is how many empty rows stand for
- * one `space.md` gap (`gapRowsFor`). The caller that has the document passes its theme's answer;
- * nothing here guesses a scale.
+ * rows, a free section is ninety-six units and eight-pixel rows. Sideways the conversion is exact
+ * either way. The vertical has two sources, and which one is used is decided **per element**:
+ *
+ * - **A measured box wins** (sprint 25 día 2). The caller that has the section on screen passes
+ *   what each element's box actually was, and `measuredToFine` turns it into the rows it really
+ *   occupied — so the page the instant after is the page the instant before, to within four pixels,
+ *   including where the catalog had centred something in a row taller than itself.
+ * - **The theme's rhythm is the fallback**, element by element: `gapRows` empty rows stand for one
+ *   `space.md` gap between two catalog rows (`gapRowsFor`). It answers for an element nothing could
+ *   measure — a hidden one, which rule 3 keeps in the document and the renderer draws nowhere — and
+ *   for a caller with no page at all, which is migration 0013 and every test that has no browser.
+ *
+ * Mixing the two in one section is deliberate rather than tolerated: an element that is not drawn
+ * has no box to read, and the rhythm is the best that can be said about where it would have been.
  */
-export function escalate(section: Section, preset: PresetShape, gapRows: number): Section {
+export function escalate(
+  section: Section,
+  preset: PresetShape,
+  gapRows: number,
+  boxes?: readonly MeasuredBox[],
+): Section {
   if (section.source === "free") return structuredClone(section);
   const drawn = preset.layoutFor(section.preset.variantId, section.content);
+  const measured = new Map((boxes ?? []).map((box) => [box.elementId, box]));
   return {
     ...structuredClone(section),
     source: "free",
@@ -30,7 +46,10 @@ export function escalate(section: Section, preset: PresetShape, gapRows: number)
     // slot on the section grid: a list is placed as one element and its items flow inside it.
     layout: {
       grid: { columns: FINE_COLUMNS },
-      placements: drawn.placements.map((placement) => coarseToFine(placement, gapRows)),
+      placements: drawn.placements.map((placement) => {
+        const box = measured.get(placement.elementId);
+        return box ? measuredToFine(placement, box) : coarseToFine(placement, gapRows);
+      }),
       breakpoints: drawn.breakpoints,
     },
   };

@@ -224,3 +224,80 @@ saying that the third request was the product owner's and the answer was to make
 - The e2e walks' `placedIn` reads units through `fineColumnOf`/`fineSpanOf`; the day-8 and day-9
   walks of sprint 24 count in units of eight until día 3 rewrites them.
 - Días 2–7 of the sprint each amend the ADR they name, in that ADR, on their day.
+
+## Amendment — escalating measures the live section, and the return asks the history (día 2, 20 October 2026)
+
+§3 said a section escalated from now on would be **measured rather than converted**, and named what
+the conversion could not reproduce. This is that half, built, with what the browser had to say about
+it.
+
+### 1. The vertical comes from the boxes, the horizontal still from the conversion
+
+`escalate(section, preset, gapRows, boxes?)` takes what each placed element's box measured on the
+live page — `top` relative to the section's **content** box, and `height`, both in the frame's own
+pixels — and writes `row = 1 + round(top / 8)` and `rowSpan = ceil(height / 8)` (`measuredToFine`).
+Sideways nothing is measured: column `c` is still unit `(c − 1) · 8 + 1`, because that conversion is
+exact and a measurement would only add error to it.
+
+**The row rounds and the span ceils, and the asymmetry is the decision.** A row is the nearest
+eight-pixel line to where the element's top was, so the worst error is four pixels — half a row. A
+span of `round(height / 8)` would be up to four pixels *shorter* than its content, and a grid row
+that cannot hold what sits in it grows: every element below would be pushed down by somebody else's
+rounding, and the pushes would add up down the section. `ceil` leaves the area at most seven pixels
+taller than the content — invisible, a grid area has no border — and keeps every row at its
+eight-pixel minimum, so a top measured here is a top on the page.
+
+**The fallback is per element, not per call.** An element nothing could measure keeps the theme's
+rhythm: a hidden one, which rule 3 keeps in the document and the renderer draws nowhere, and every
+element of a caller with no page at all (migration 0013, every test with no browser). Both doors of
+the offer — the canvas's and the «Diseño» panel's — measure through the same function, so they
+cannot write different rows for the same section.
+
+### 2. «Did anybody lay this out by hand» stops being a comparison
+
+`revertImpact` used to derive `dropsPlacements` by re-drawing the catalog's layout and comparing it
+with what the document stored. A measured escalation ends that: a photograph of 438 px is fifty
+rows where the rhythm would have said seven, so a section escalated and touched by nobody matches no
+re-derivation, and the dialog would have warned about work nobody did — on every escalation.
+
+So the verb is **told**: `revertImpact(doc, sectionId, preset, { placementsMoved })`, and the
+editor's undo history answers it (`wasPlacementEverMoved`). It is the honest source — it holds the
+act rather than a guess about the result — and the one place that cannot drift from what happened.
+
+**What that costs, named:** moving an element and moving it back used to read as lossless again, and
+now warns. With ninety-six units and measured rows, landing back on the same four numbers by hand is
+not something that happens, so the cleverness was buying nothing; and of the two ways to be wrong,
+warning about work that was undone costs a click while staying silent about work that exists costs
+the work.
+
+### 3. Three things only a browser could say, and all three were defects
+
+- **The boxes never arrived, and nothing looked wrong.** The first version asked `liveDoc()` for the
+  document to measure. The chrome is wired into a frame **before** it becomes the visible one, so a
+  handler created there captured a render in which the live slot was still the *other* frame:
+  `liveDoc()` answered with the document that does not hold the section, the measurement came back
+  empty, and the escalation fell back to the rhythm — a section that looked correctly escalated and
+  had derived rows. Chromium said it in one number: the headline's row came out 1 where its box said
+  4. The document to measure is an argument now, and whoever is inside the frame passes its own.
+- **The web font moves the measurement.** The walk measured the cover's headline at 46 px with the
+  fallback face and 52 with EB Garamond applied, and accused the escalation of having stretched it.
+  The walk waits for `document.fonts.ready`; the editor cannot wait inside a click, so a face that
+  arrives after the press leaves the rows a few pixels out — named here with the other vertical
+  drifts, and not worth delaying the act for.
+- **The editor's own chrome stole a row.** «+ Añadir línea» is a grid child with `grid-column: 1 /
+  -1` and no row of its own. On the catalog's content rows auto-placement put it after the content;
+  on eight-pixel rows it takes the first row where the full width is free, which is a **gap above
+  its own list** — and then grows that row to its own height and pushes the list down 33 px. Grid
+  chrome is placed explicitly now, in the first row below every placement (`rowBelowPlacements`).
+  Day 1 had already paid for the sideways half of this (the same pill spilling 72 px out of an
+  eight-pixel cell); this is the vertical half, and the rule is now written down: **a chrome child
+  of a free section needs both its column and its row.**
+
+### 4. What this does not change
+
+The migration's conversion, the goldens, the published bytes: nothing here reaches the renderer. A
+document escalated before día 2 keeps the rows migration 0013 wrote, and nothing re-measures it —
+the day it is dragged, the hand decides those rows anyway. The announcement in pixels and the
+`rowSpan` the editor readjusts after a text edit stay where the plan's own adjustment 1 put them,
+día 3 and día 6: the second one has to fold into the typing's own history step rather than open one
+per keystroke, which is a decision about the history and not about the measurement.

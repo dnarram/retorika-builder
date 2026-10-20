@@ -9,6 +9,7 @@ import {
   fineTrack,
   fineTrackSpan,
   gapRowsFor,
+  measuredToFine,
 } from "../src/fineGrid.ts";
 
 /**
@@ -132,6 +133,70 @@ describe("gapRowsFor", () => {
     expect(() => gapRowsFor("1rem")).toThrow(/pixel length/);
     expect(() => gapRowsFor(undefined)).toThrow(/pixel length/);
     expect(() => gapRowsFor("space.md-x")).toThrow(/pixel length/);
+  });
+});
+
+describe("measuredToFine", () => {
+  const place = (column: number, columnSpan: number) => ({
+    elementId: "el",
+    column,
+    columnSpan,
+    row: 1,
+    rowSpan: 1,
+  });
+
+  it("converts the columns exactly and reads the rows off the pixels", () => {
+    // A headline 92px tall sitting 100px down the section's content box: row 1 + round(100/8) = 14,
+    // and ceil(92/8) = 12 rows of span.
+    expect(measuredToFine(place(6, 7), { top: 100, height: 92 })).toEqual({
+      elementId: "el",
+      column: 41,
+      columnSpan: 56,
+      row: 14,
+      rowSpan: 12,
+    });
+  });
+
+  it("puts the top row where the element started, within half a row", () => {
+    // The whole «no se mueve nada al empezar» claim, as arithmetic: the worst case is four pixels.
+    for (let top = 0; top <= 1600; top += 1) {
+      const { row } = measuredToFine(place(1, 1), { top, height: 24 });
+      expect(Math.abs((row - 1) * ROW_STEP_PX - top), `top ${top}`).toBeLessThanOrEqual(
+        ROW_STEP_PX / 2,
+      );
+    }
+  });
+
+  /**
+   * **The span never leaves the content taller than its area**, which is why it ceils where the row
+   * rounds. A span four pixels short would make its rows grow past the eight-pixel minimum, and
+   * every element below would be pushed down by somebody else's rounding — an error that adds up
+   * down the section instead of staying under four pixels.
+   */
+  it("never asks for fewer pixels than the element had", () => {
+    for (let height = 0; height <= 800; height += 1) {
+      const { rowSpan } = measuredToFine(place(1, 1), { top: 0, height });
+      expect(rowSpan * ROW_STEP_PX, `height ${height}`).toBeGreaterThanOrEqual(height);
+      expect(rowSpan).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it("gives an element with no height a row of its own rather than none", () => {
+    expect(measuredToFine(place(1, 12), { top: 0, height: 0 })).toMatchObject({
+      row: 1,
+      rowSpan: 1,
+    });
+  });
+
+  it("clamps an element drawn above its own section to the first row", () => {
+    expect(measuredToFine(place(1, 1), { top: -40, height: 20 })).toMatchObject({ row: 1 });
+  });
+
+  it("refuses a box that is not finite pixels, rather than writing NaN into a document", () => {
+    expect(() => measuredToFine(place(1, 1), { top: Number.NaN, height: 10 })).toThrow(
+      /finite pixels/,
+    );
+    expect(() => measuredToFine(place(1, 1), { top: 0, height: -1 })).toThrow(/finite pixels/);
   });
 });
 
