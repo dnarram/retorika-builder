@@ -115,6 +115,7 @@ import {
   type SaveStatus,
 } from "../editor/EditorShell.tsx";
 import { GUIDE_ZONE, type Guide, guidesFor, type Rect } from "../editor/guides.ts";
+import { HANDLE_TOUCH, handlesFor } from "../editor/handles.ts";
 import { ACCEPTED_IMAGE_ACCEPT } from "../editor/imageBytes.ts";
 import { toolbarFamilyLabel } from "../editor/letterGallery.ts";
 import { LOOK_AHEAD_DEADLINE_MS, lookAheadStep } from "../editor/lookAhead.ts";
@@ -893,6 +894,15 @@ export function Editor({
    * no caret in it. The commit happens first (`el.blur()`), so nothing typed is lost.
    */
   const keepWriting = useRef<ElementAddress | null>(null);
+  /**
+   * Repaint the touch handles, installed by `wireResizing` (día 7).
+   *
+   * A ref and not a call, because the two functions are on opposite sides of the frame: `markChosen`
+   * knows *when* the handles should change and `wireResizing` is where the gesture they begin is in
+   * scope. `null` until the chrome has been wired, and whenever the design tools are off — a
+   * section with no placements has nothing to stretch.
+   */
+  const syncHandles = useRef<(() => void) | null>(null);
   /**
    * Which device view is on **right now**, for the listeners that outlive the render that wired them.
    *
@@ -4460,6 +4470,8 @@ export function Editor({
     for (const hint of iframeDoc.querySelectorAll(".rb-hint")) hint.remove();
     if (!el) {
       chosenText.current = null;
+      // The handles belong to whatever is chosen, so nothing chosen means none of them (día 7).
+      syncHandles.current?.();
       return;
     }
     const section = el.closest<HTMLElement>("[data-section]");
@@ -4486,6 +4498,10 @@ export function Editor({
       (findSection(doc, sectionId)?.section.layout?.placements ?? []).some(
         (placement) => placement.elementId === elementId,
       );
+    // The handles go on the element that is chosen now, whatever else this function says about it
+    // (día 7). Before the early return below, because an image with no hint still gets handles.
+    syncHandles.current?.();
+
     const says = [
       el.dataset["rbText"] === "1" ? chosenHintText() : "",
       movable ? es["editor.canvas.moveHint"] : "",
@@ -5415,6 +5431,14 @@ export function Editor({
     // A placement is a design-tools idea, the same gate the drag and the panel's arrows sit behind.
     if (designTools !== true) return;
 
+    /**
+     * Whether this is a finger's device, which is David's own criterion for the handles: «En táctil
+     * (`(pointer: coarse)`) aparecen asas visibles». Asked of the browser once per wiring rather
+     * than per press: it is a property of the device, and a device does not change mid-gesture.
+     */
+    const coarse = iframeDoc.defaultView?.matchMedia("(pointer: coarse)").matches === true;
+    const repaintHandles: (() => void)[] = [];
+
     for (const section of iframeDoc.querySelectorAll<HTMLElement>("[data-section]")) {
       const sectionId = section.dataset.section;
       if (!sectionId) continue;
@@ -5486,38 +5510,87 @@ export function Editor({
         iframeDoc.documentElement.style.cursor = "";
         pulling = null;
         pulled = null;
+        // And the handles come back around the box as it now is. A committed resize rebuilds the
+        // frame a moment later and draws them again from scratch; a cancelled one has to be put
+        // back by somebody, and this is that somebody.
+        syncHandles.current?.();
+      };
+
+      /**
+       * Take hold of one border. **Two doors, one gesture**: the ±6 px zone a mouse finds (día 4)
+       * and the handles a finger is given (día 7), which pass their own edge because a finger has
+       * landed on a 44-pixel target rather than near a line.
+       */
+      const begin = (edge: Edge, el: HTMLElement, event: PointerEvent) => {
+        const placement = findSection(doc, sectionId)?.section.layout?.placements.find(
+          (candidate) => candidate.elementId === el.dataset["id"],
+        );
+        if (!placement) return;
+        // Taken from the browser and from everything else: without this a press on a chosen text
+        // starts a native selection, and the click that follows would choose, write, or close a
+        // menu over a gesture that is about one element's own box.
+        event.preventDefault();
+        event.stopPropagation();
+        pulling = { el, edge, from: placement, column: el.style.gridColumn, row: el.style.gridRow };
+        pulled = null;
+        section.setPointerCapture(event.pointerId);
+        // The handles would be stale the moment the box starts changing, and a finger holding one
+        // does not need to see the other seven.
+        for (const handle of section.querySelectorAll(".rb-handle")) handle.remove();
+        // The cursor belongs to the whole document while the gesture lasts: a hand that pulls
+        // past the section's own border must not see the pointer flicker back to an arrow.
+        iframeDoc.documentElement.classList.add("rb-resizing");
+        iframeDoc.documentElement.style.cursor = cursorFor(edge);
       };
 
       section.addEventListener(
         "pointerdown",
         (event) => {
           const found = edgeUnder(event);
-          if (!found) return;
-          const placement = findSection(doc, sectionId)?.section.layout?.placements.find(
-            (candidate) => candidate.elementId === found.el.dataset["id"],
-          );
-          if (!placement) return;
-          // Taken from the browser and from everything else: without this a press on a chosen text
-          // starts a native selection, and the click that follows would choose, write, or close a
-          // menu over a gesture that is about one element's own box.
-          event.preventDefault();
-          event.stopPropagation();
-          pulling = {
-            el: found.el,
-            edge: found.edge,
-            from: placement,
-            column: found.el.style.gridColumn,
-            row: found.el.style.gridRow,
-          };
-          pulled = null;
-          section.setPointerCapture(event.pointerId);
-          // The cursor belongs to the whole document while the gesture lasts: a hand that pulls
-          // past the section's own border must not see the pointer flicker back to an arrow.
-          iframeDoc.documentElement.classList.add("rb-resizing");
-          iframeDoc.documentElement.style.cursor = cursorFor(found.edge);
+          if (found) begin(found.edge, found.el, event);
         },
         true,
       );
+
+      /**
+       * **The handles a finger gets** (ADR 0050 §6, día 7, David's condition 4).
+       *
+       * Eight targets of forty-four pixels on the chosen element, and **only** on it: `touch-action`
+       * is declared on the chosen element and on these, so one finger goes on scrolling the canvas
+       * everywhere else (ADR 0049 §7). Drawn under `(pointer: coarse)` — a mouse has the zone and
+       * the cursor instead, which is what keeps the canvas free of squares nobody asked for — and
+       * never in the mobile view, where a section is one column and the gesture reorders.
+       *
+       * Repainted rather than kept in step: every placement written rebuilds the frame anyway, so
+       * the only state here is «where is the chosen element now».
+       */
+      const paintHandles = () => {
+        for (const handle of section.querySelectorAll(".rb-handle")) handle.remove();
+        if (!coarse || deviceNow.current === "mobile" || pulling) return;
+        if (!findSection(doc, sectionId)?.section.layout) return;
+        const found = target();
+        if (!found) return;
+        const host = section.getBoundingClientRect();
+        const box = found.el.getBoundingClientRect();
+        for (const spot of handlesFor({
+          box: {
+            left: box.left - host.left,
+            top: box.top - host.top,
+            width: box.width,
+            height: box.height,
+          },
+          host: { width: host.width, height: host.height },
+        })) {
+          const handle = iframeDoc.createElement("div");
+          handle.className = `rb-handle rb-handle-${spot.edge}`;
+          handle.setAttribute("aria-hidden", "true");
+          handle.style.left = `${Math.round(spot.left)}px`;
+          handle.style.top = `${Math.round(spot.top)}px`;
+          handle.addEventListener("pointerdown", (event) => begin(spot.edge, found.el, event));
+          section.appendChild(handle);
+        }
+      };
+      repaintHandles.push(paintHandles);
 
       section.addEventListener("pointermove", (event) => {
         if (!pulling) {
@@ -5598,6 +5671,13 @@ export function Editor({
       section.addEventListener("pointercancel", stop);
       section.addEventListener("lostpointercapture", release);
     }
+
+    // What `markChosen` calls when the chosen element changes: the handles belong to it, and this
+    // function is where the gesture they start is in scope.
+    syncHandles.current = () => {
+      for (const paint of repaintHandles) paint();
+    };
+    syncHandles.current();
   }
 
   /**
@@ -6560,6 +6640,21 @@ export function Editor({
       // and which one is the gesture's own business), so the only thing a class is needed for is
       // keeping a text from selecting itself as the hand travels across it.
       ".rb-resizing, .rb-resizing * { user-select: none; }",
+      /*
+       * **The handles a finger gets** (ADR 0050 §6, día 7). Forty-four pixels of target — WCAG
+       * 2.5.5's number and both platforms' own — with a dot of twelve drawn in the middle of it:
+       * what a finger has to hit is not what the eye needs to see.
+       *
+       * `touch-action: none` on them and on the chosen element, **and on nothing else**, which is
+       * what keeps one finger scrolling the canvas everywhere else (ADR 0049 §7). `z-index: 11`,
+       * over the verbs' cluster (10) so a handle at a corner is never buried by it, and under the
+       * text bar (30).
+       */
+      `.rb-handle { position: absolute; z-index: 11; width: ${HANDLE_TOUCH}px;`,
+      `  height: ${HANDLE_TOUCH}px; display: grid; place-items: center; touch-action: none; }`,
+      '.rb-handle::before { content: ""; width: 12px; height: 12px; border-radius: 50%;',
+      `  background: #FFFFFF; border: 2px solid ${CHROME_SCALE.brand};`,
+      `  box-shadow: ${CHROME_SCALE.shadow1}; }`,
       /*
        * **The alignment guides** (ADR 0050, día 5): one pixel of brand blue, under the verbs'
        * cluster (10) and the text bar (30) and over the stripes (0), and `pointer-events: none`
