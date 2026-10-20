@@ -1,5 +1,6 @@
 import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
 import {
+  FINE_COLUMNS,
   findSection,
   GRID_COLUMNS,
   isHandDesigned,
@@ -132,37 +133,49 @@ export interface StepperBounds {
  * lights up and then throws would be the dead button in its worst form, one that looks like it
  * worked. So the two horizontal limits are coupled, exactly as rule 4 couples them:
  *
- * - **Moving right** stops where the element's current span still fits: `13 - columnSpan`.
- * - **Widening** stops where the element's current column still fits: `13 - column`.
+ * - **Moving right** stops where the element's current span still fits: `97 - columnSpan`.
+ * - **Widening** stops where the element's current column still fits: `97 - column`.
+ *
+ * Ninety-six and not twelve since ADR 0050: a hand-designed section's grid is the fine one, and
+ * these are its units. The steppers step by a catalog column (`FINE_PER_COLUMN`) so a press still
+ * moves something visible, and clamp at the edge so the last unit is reachable.
  *
  * Rows have no upper limit in the document model — a grid grows downwards — so the cap here is the
  * interface's own, not the schema's, and it exists only so an arrow held down cannot walk an element
- * a thousand rows off the bottom of a section nobody can scroll to.
+ * a thousand rows off the bottom of a section nobody can scroll to. Four hundred eight-pixel rows is
+ * 3200 px, which is more section than anybody designs by hand.
  */
-export const MAX_ROW = 24;
+export const MAX_ROW = 400;
 
 export function boundsFor(
   placement: Placement,
 ): Record<keyof Omit<Placement, "elementId">, StepperBounds> {
   return {
-    column: { min: 1, max: GRID_COLUMNS - placement.columnSpan + 1 },
-    columnSpan: { min: 1, max: GRID_COLUMNS - placement.column + 1 },
+    column: { min: 1, max: FINE_COLUMNS - placement.columnSpan + 1 },
+    columnSpan: { min: 1, max: FINE_COLUMNS - placement.column + 1 },
     row: { min: 1, max: MAX_ROW },
     rowSpan: { min: 1, max: MAX_ROW - placement.row + 1 },
   };
 }
 
-/** The value one press of a stepper would send, clamped to its own bounds so the caller cannot
+/**
+ * The value one press of a stepper would send, clamped to its own bounds so the caller cannot
  * produce one the verb refuses. `undefined` when the press would change nothing, which is how the
- * button knows to be disabled rather than how the reducer finds out afterwards. */
+ * button knows to be disabled rather than how the reducer finds out afterwards.
+ *
+ * A press that overshoots the edge lands on it rather than being refused: with a step of eight on
+ * a grid of ninety-six, an element at unit 93 still has three units to go, and a press that did
+ * nothing there would be the dead button this panel refuses. At the edge itself there is nothing to
+ * land on, and the answer is `undefined` as before.
+ */
 export function stepTo(
   placement: Placement,
   field: keyof Omit<Placement, "elementId">,
   delta: number,
 ): number | undefined {
   const bounds = boundsFor(placement)[field];
-  const next = placement[field] + delta;
-  if (next < bounds.min || next > bounds.max) return undefined;
+  const next = Math.min(bounds.max, Math.max(bounds.min, placement[field] + delta));
+  if (next === placement[field]) return undefined;
   return next;
 }
 

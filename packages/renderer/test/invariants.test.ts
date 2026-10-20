@@ -4,6 +4,7 @@ import {
   checkAgainstPreset,
   escalate,
   flattenElements,
+  gapRowsFor,
   invariantTestName,
   listEditableFields,
   parseDocument,
@@ -105,7 +106,10 @@ describe("invariants", () => {
         const section = doc.pages[0]?.sections[0];
         if (!section) return;
 
-        const back = applyRevert(escalate(section, cover), cover);
+        const back = applyRevert(
+          escalate(section, cover, gapRowsFor(doc.theme["space.md"])),
+          cover,
+        );
 
         // Ignoring nothing but the absence of timestamps: there are none in the model,
         // so this is plain structural and content equality.
@@ -124,7 +128,7 @@ describe("invariants", () => {
           const section = doc.pages[0]?.sections[0];
           if (!section) return;
 
-          const free = escalate(section, cover);
+          const free = escalate(section, cover, gapRowsFor(doc.theme["space.md"]));
 
           // Content edits while the section is free: retitle some elements, and add a
           // surplus link the preset has nowhere to put.
@@ -180,13 +184,14 @@ describe("invariants", () => {
     const section = entry?.document.pages[0]?.sections.find((s) => s.id === "sec-services");
     if (!section) throw new Error("cover-and-services has no sec-services section");
     const services = presetFor("services");
+    const gapRows = gapRowsFor(entry?.document.theme["space.md"]);
 
     it(invariantTestName("INV_3A"), () => {
-      expect(applyRevert(escalate(section, services), services)).toEqual(section);
+      expect(applyRevert(escalate(section, services, gapRows), services)).toEqual(section);
     });
 
     it(invariantTestName("INV_3B"), () => {
-      const free = escalate(section, services);
+      const free = escalate(section, services, gapRows);
 
       // A content edit inside a card while the section is free.
       const edited: Section = {

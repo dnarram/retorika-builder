@@ -17,6 +17,8 @@ import {
   type ElementAddress,
   type EntryField,
   entryCountBlock,
+  FINE_PER_COLUMN,
+  FINE_TRACKS,
   findSection,
   flattenElements,
   isHandDesigned,
@@ -74,6 +76,7 @@ import {
 import { holdFor } from "../editor/buildingScreen.ts";
 import { canvasLinkTarget } from "../editor/canvasLinks.ts";
 import { CHROME_SCALE, PILL_REST_BORDER, VERB_SCALE } from "../editor/chromeScale.ts";
+import { toCoarse, toFine } from "../editor/coarseBoundary.ts";
 import type { SwitchNotice } from "../editor/designTools.ts";
 import { designRows, elementLabels, selectedRowId } from "../editor/designTree.ts";
 import {
@@ -5109,15 +5112,22 @@ export function Editor({
     const padLeft = px(style?.paddingLeft);
     const padRight = px(style?.paddingRight);
     const padTop = px(style?.paddingTop);
-    const rows = (style?.gridTemplateRows ?? "")
-      .split(" ")
-      .map((value) => Number.parseFloat(value))
-      .filter((value) => Number.isFinite(value));
+    const tracks = (value: string | undefined) =>
+      (value ?? "")
+        .split(" ")
+        .map((entry) => Number.parseFloat(entry))
+        .filter((entry) => Number.isFinite(entry));
+    const rows = tracks(style?.gridTemplateRows);
+    // A free section has no `column-gap`: its eleven gutters are tracks of their own, the ninth
+    // and every ninth after it (ADR 0050, `fineTemplateColumns`). The twelve-column arithmetic
+    // below still describes the fine grid to the pixel once it is given that gutter as its gap.
+    const columns = tracks(style?.gridTemplateColumns);
+    const gutter = columns.length === FINE_TRACKS ? (columns[FINE_PER_COLUMN] ?? 0) : null;
     return {
       left: box.left + padLeft,
       top: box.top + padTop,
       width: box.width - padLeft - padRight,
-      columnGap: px(style?.columnGap),
+      columnGap: gutter ?? px(style?.columnGap),
       rowGap: px(style?.rowGap),
       rows,
     };
@@ -5391,11 +5401,13 @@ export function Editor({
 
         const metrics = gridMetricsOf(section);
         const placements = findSection(doc, sectionId)?.section.layout?.placements ?? [];
+        // The drag still snaps to the catalog's twelve columns until día 3; the document is in
+        // the fine grid's units (ADR 0050). `coarseBoundary.ts` is the only place the two meet.
         outcome = dropAt({
           metrics,
           at: { x: now.x - grab.x, y: now.y - grab.y },
-          moving,
-          placements,
+          moving: toCoarse(moving),
+          placements: placements.map(toCoarse),
         });
         drawGhost(section, metrics, outcome);
       });
@@ -5415,7 +5427,8 @@ export function Editor({
           // The phone's answer: one swap, one history step, through the verb the document has.
           onMoveUpOnMobile(sectionId, swapWith);
         } else if (drop?.kind === "place") {
-          onSetPlacement(sectionId, elementId, { column: drop.at.column, row: drop.at.row });
+          const at = toFine(drop.at);
+          onSetPlacement(sectionId, elementId, { column: at.column, row: at.row });
         }
       };
       el.addEventListener("pointerup", release);
@@ -5476,7 +5489,12 @@ export function Editor({
         // Taken from the page rather than left to scroll it: an arrow that means something here
         // must not also move the view.
         event.preventDefault();
-        const drop = arrowDrop({ moving: placement, placements: layout.placements, action });
+        // In the catalog's twelve columns until día 3, through the same boundary as the drag.
+        const drop = arrowDrop({
+          moving: toCoarse(placement),
+          placements: layout.placements.map(toCoarse),
+          action,
+        });
         if (drop.kind === "none") return;
         if (drop.kind === "refuse") {
           announce(es["editor.drag.occupied"]);
@@ -5485,12 +5503,13 @@ export function Editor({
         // The rebuild is about to throw this node away; the next wiring gives the keyboard back to
         // whatever takes its place.
         keepChosenFocus.current = true;
+        const at = toFine(drop.at);
         onSetPlacement(
           sectionId,
           elementId,
           action.kind === "move"
-            ? { column: drop.at.column, row: drop.at.row }
-            : { columnSpan: drop.at.columnSpan },
+            ? { column: at.column, row: at.row }
+            : { columnSpan: at.columnSpan },
         );
         announce(announceText(drop.at, action.kind));
       });
@@ -5560,7 +5579,9 @@ export function Editor({
       });
       bar.appendChild(back);
 
-      element.classList.add("rb-free");
+      // `rb-free` is the renderer's to add since ADR 0050 — it selects the fine grid's rules in
+      // both targets, so the editor adding it here would be a class the preview had for one frame
+      // and the published page for none. `wireDesigning` still reads it off the section.
       // **Before the section, not inside it**, which is what mockup 16 draws and what the code had
       // diverged from — see `docs/design/REVIEW.md`, 7 October 2026. Prepended, it was
       // `position: absolute` over the section's own first element: measured on a 320px canvas it
@@ -6278,7 +6299,13 @@ export function Editor({
        * behind it, under WCAG 1.4.11's 3:1 — so it gets the same resting colour for the same
        * reason, and the same emphasis behind `@media (hover: hover)` plus `:focus-visible`.
        */
+      // `grid-column: 1 / -1; justify-self: start`: the button is a direct child of the section's
+      // grid, and in a hand-designed section a track is one unit of eight pixels (ADR 0050), so an
+      // auto-placed pill of 102px spilled 72px past its cell — the canvas overflow walk caught it
+      // the day the fine grid landed. Spanning the row and sitting at its start keeps it the same
+      // pill in the same place on the catalog's grid, where a column was wide enough to hide this.
       `.rb-line-add { font-family: ${UI_FONT}; margin-top: 10px; display: inline-flex;`,
+      "  grid-column: 1 / -1; justify-self: start;",
       "  align-items: center; height: 30px; padding: 0 14px; font-size: 13px; font-weight: 600;",
       "  white-space: nowrap;",
       `  color: ${CHROME_SCALE.brand}; background: ${CHROME_SCALE.surface};`,

@@ -1,5 +1,4 @@
 import type { ContentElement, RetorikaDocument, Section } from "./document.ts";
-import { GRID_COLUMNS } from "./document.ts";
 import { isContainerRole } from "./roles.ts";
 
 /**
@@ -65,13 +64,16 @@ function checkSection(section: Section, path: string, violations: Violation[]): 
     }
     placed.add(placement.elementId);
 
-    // Rule 4: positions are relative to the section's grid. A span that runs off the
-    // twelfth column is an absolute position wearing a disguise.
-    if (placement.column + placement.columnSpan - 1 > GRID_COLUMNS) {
+    // Rule 4: positions are relative to the section's grid. A span that runs off the last
+    // unit is an absolute position wearing a disguise. Against the layout's own grid — the
+    // ninety-six units of a free section (ADR 0050) — and not a constant, so this file cannot
+    // disagree with the schema about how wide a section is.
+    const columns = layout.grid.columns;
+    if (placement.column + placement.columnSpan - 1 > columns) {
       violations.push({
         rule: 4,
         path: at,
-        message: `column ${placement.column} + span ${placement.columnSpan} overflows the ${GRID_COLUMNS}-column grid`,
+        message: `column ${placement.column} + span ${placement.columnSpan} overflows the ${columns}-unit grid`,
       });
     }
   }

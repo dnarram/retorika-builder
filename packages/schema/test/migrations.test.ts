@@ -18,7 +18,12 @@ const DOCUMENTS_DIR = join(
   "documents",
 );
 
-const theme = Object.fromEntries(TOKEN_KEYS.map((key) => [key, `value-${key}`])) as Theme;
+// `space.md` in pixels: since 1.12.0 the chain reads it to convert a stored layout to the fine
+// grid (migration 0013), and a placeholder where a length should be is refused rather than guessed.
+const theme = {
+  ...(Object.fromEntries(TOKEN_KEYS.map((key) => [key, `value-${key}`])) as Theme),
+  "space.md": "16px",
+} as Theme;
 
 /**
  * The versions `0003`'s claim is about: documents written before the style vocabulary closed.
@@ -1257,17 +1262,18 @@ describe("1.11.0 — the serif reserves no name", () => {
     };
   }
 
-  it("is registered, and it is the one the chain ends at", () => {
-    // `step` throws when nothing produces that version, which is the whole assertion.
+  it("is registered", () => {
+    // `step` throws when nothing produces that version, which is the whole assertion. It was the
+    // end of the chain until 1.12.0, and the test said so — the form the `step` helper's own
+    // comment warns against, caught the day the next version landed.
     expect(step("1.11.0").version).toBe("1.11.0");
-    expect(SCHEMA_VERSION).toBe("1.11.0");
   });
 
   it("swaps the heading stack it knows and stamps the version", () => {
-    const after = migrateToCurrent(before());
+    const after = upTo(before(), "1.11.0");
     expect((after["theme"] as Theme)["font.heading"]).toBe(GARAMOND);
     expect(after["schemaVersion"]).toBe("1.11.0");
-    expect(() => parseDocument(after)).not.toThrow();
+    expect(() => parseDocument(migrateToCurrent(after))).not.toThrow();
   });
 
   /**
@@ -1298,5 +1304,174 @@ describe("1.11.0 — the serif reserves no name", () => {
     const down = step("1.11.0").down;
     expect(down, "1.11.0 has no `down`").toBeDefined();
     expect(down?.(migrateToCurrent(before()))).toEqual(before());
+  });
+});
+
+describe("1.12.0 — a free section is a fine grid", () => {
+  /** A site with one hand-designed cover as 1.11.0 stored it: twelve columns, content rows. */
+  function before(spaceMd = "16px"): Record<string, unknown> {
+    return {
+      schemaVersion: "1.11.0",
+      id: "doc-free",
+      siteName: "Fisio",
+      theme: { ...theme, "space.md": spaceMd },
+      collections: [],
+      pages: [
+        {
+          id: "home",
+          slug: "index",
+          title: "Fisio",
+          sections: [
+            {
+              id: "sec-cover",
+              preset: { catalogId: "cover", variantId: "image-right" },
+              source: "free",
+              layout: {
+                grid: { columns: 12 },
+                placements: [
+                  { elementId: "el-image", column: 1, columnSpan: 5, row: 1, rowSpan: 3 },
+                  { elementId: "el-headline", column: 6, columnSpan: 7, row: 1, rowSpan: 1 },
+                  { elementId: "el-body", column: 6, columnSpan: 7, row: 2, rowSpan: 1 },
+                ],
+                breakpoints: {
+                  mobile: [{ elementId: "el-image", order: 2, columnSpan: 12 }],
+                },
+              },
+              content: [
+                {
+                  id: "el-image",
+                  role: "image",
+                  hidden: false,
+                  slot: "image",
+                  value: { kind: "image", src: "image.jpg", alt: "" },
+                },
+                {
+                  id: "el-headline",
+                  role: "heading",
+                  hidden: false,
+                  slot: "headline",
+                  value: { kind: "text", text: "Fisio" },
+                },
+                {
+                  id: "el-body",
+                  role: "body",
+                  hidden: false,
+                  slot: "intro",
+                  value: { kind: "text", text: "Te ayudamos" },
+                },
+              ],
+            },
+            {
+              id: "sec-other",
+              preset: { catalogId: "cover", variantId: "image-right" },
+              source: "catalog",
+              layout: null,
+              content: [],
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  const layoutAfter = (doc: Record<string, unknown>) =>
+    (doc["pages"] as { sections: { layout: Record<string, unknown> | null }[] }[])[0]?.sections[0]
+      ?.layout;
+
+  it("is registered, and it is the one the chain ends at", () => {
+    expect(step("1.12.0").version).toBe("1.12.0");
+    expect(SCHEMA_VERSION).toBe("1.12.0");
+  });
+
+  it("multiplies every column and span by eight, exactly, and says the grid is ninety-six", () => {
+    const after = migrateToCurrent(before());
+    expect(after["schemaVersion"]).toBe("1.12.0");
+    const layout = layoutAfter(after);
+    expect(layout?.["grid"]).toEqual({ columns: 96 });
+    expect(layout?.["placements"]).toMatchObject([
+      { elementId: "el-image", column: 1, columnSpan: 40 },
+      { elementId: "el-headline", column: 41, columnSpan: 56 },
+      { elementId: "el-body", column: 41, columnSpan: 56 },
+    ]);
+    expect(() => parseDocument(after)).not.toThrow();
+  });
+
+  /**
+   * **The ×8 asserted directly, not through the overflow invariant**: a migration that forgot the
+   * multiplication would leave `column: 6, columnSpan: 7` on a grid of ninety-six, which overflows
+   * nothing and parses — and the section would publish squeezed into the leftmost eighth.
+   */
+  it("follows each content row with the rows that stand for the theme's gap", () => {
+    // 16px is two eight-pixel rows: rows 1 and 2 become 1 and 4; three rows with two gaps are seven.
+    expect(layoutAfter(migrateToCurrent(before()))?.["placements"]).toMatchObject([
+      { elementId: "el-image", row: 1, rowSpan: 7 },
+      { elementId: "el-headline", row: 1, rowSpan: 1 },
+      { elementId: "el-body", row: 4, rowSpan: 1 },
+    ]);
+    // The generous scale: three gap rows, so the second row is the fifth and three rows with two
+    // gaps of three are nine.
+    expect(layoutAfter(migrateToCurrent(before("24px")))?.["placements"]).toMatchObject([
+      { elementId: "el-image", row: 1, rowSpan: 9 },
+      { elementId: "el-headline", row: 1, rowSpan: 1 },
+      { elementId: "el-body", row: 5, rowSpan: 1 },
+    ]);
+  });
+
+  it("leaves the mobile patch in twelfths, because «Foto menor» still is one", () => {
+    expect(layoutAfter(migrateToCurrent(before()))?.["breakpoints"]).toEqual({
+      mobile: [{ elementId: "el-image", order: 2, columnSpan: 12 }],
+    });
+  });
+
+  it("leaves a section the catalog draws alone", () => {
+    type Pages = { sections: Record<string, unknown>[] }[];
+    const after = (migrateToCurrent(before())["pages"] as Pages)[0]?.sections;
+    const was = (before()["pages"] as Pages)[0]?.sections;
+    expect(after?.[1]).toEqual(was?.[1]);
+  });
+
+  it("refuses a document whose theme has no pixel gap rather than guessing a rhythm", () => {
+    expect(() => migrateToCurrent(before("space.md-x"))).toThrow(/pixel length/);
+  });
+
+  it("never reads the theme of a document with nothing to convert", () => {
+    const plain = { ...before("not a length"), pages: [] };
+    expect(() => migrateToCurrent(plain)).not.toThrow();
+  });
+
+  it("goes back down to what 1.11.0 could express, exactly for what up produced", () => {
+    const down = step("1.12.0").down;
+    expect(down, "1.12.0 has no `down`").toBeDefined();
+    expect(down?.(migrateToCurrent(before()))).toEqual(before());
+    expect(down?.(migrateToCurrent(before("24px")))).toEqual(before("24px"));
+  });
+
+  it("takes a hand-placed unit down to the column it falls in, and says so in its header", () => {
+    const down = step("1.12.0").down;
+    const dragged = migrateToCurrent(before());
+    const layout = layoutAfter(dragged) as { placements: Record<string, number>[] };
+    const headline = layout.placements[1];
+    if (!headline) throw new Error("no headline placement");
+    headline["column"] = 44; // three units right of column 6's start: still column 6
+    headline["columnSpan"] = 52; // six and a half columns: seven
+    const back = layoutAfter(down?.(dragged) ?? {}) as { placements: Record<string, number>[] };
+    expect(back.placements[1]).toMatchObject({ column: 6, columnSpan: 7 });
+  });
+
+  it("is the claim it rests on: two corpus fixtures carry a layout, and both now parse as the fine grid", () => {
+    const corpus = readdirSync(DOCUMENTS_DIR).filter((file) => file.endsWith(".json"));
+    const withLayout: string[] = [];
+    for (const file of corpus) {
+      const raw = readFileSync(join(DOCUMENTS_DIR, file), "utf8");
+      if (!raw.includes('"source": "free"')) continue;
+      withLayout.push(file);
+      const parsed = parseDocument(JSON.parse(raw));
+      for (const page of parsed.pages) {
+        for (const section of page.sections) {
+          if (section.layout) expect(section.layout.grid.columns, file).toBe(96);
+        }
+      }
+    }
+    expect(withLayout.sort()).toEqual(["hidden-and-embed.json", "physio-free-cover.json"]);
   });
 });

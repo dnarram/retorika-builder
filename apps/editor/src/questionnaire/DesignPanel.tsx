@@ -1,13 +1,14 @@
 "use client";
 
-import type {
-  MobilePatchEdit,
-  Placement,
-  PlacementEdit,
-  RetorikaDocument,
-  StyleException,
+import {
+  FINE_PER_COLUMN,
+  listStyleExceptions,
+  type MobilePatchEdit,
+  type Placement,
+  type PlacementEdit,
+  type RetorikaDocument,
+  type StyleException,
 } from "@retorika/schema";
-import { listStyleExceptions } from "@retorika/schema";
 import { useId, useState } from "react";
 import {
   boundsFor,
@@ -71,8 +72,11 @@ function Stepper({
   onStep: (edit: PlacementEdit) => void;
 }) {
   const bounds = boundsFor(placement)[field];
-  const down = stepTo(placement, field, -1);
-  const up = stepTo(placement, field, 1);
+  // In the fine grid's units (ADR 0050): a sideways press is one catalog column of eight units,
+  // so that a press still moves something a person can see; a vertical press is one row.
+  const step = field === "column" || field === "columnSpan" ? FINE_PER_COLUMN : 1;
+  const down = stepTo(placement, field, -step);
+  const up = stepTo(placement, field, step);
 
   /**
    * The arrow is disabled when the press would be refused, never enabled-and-ignored.

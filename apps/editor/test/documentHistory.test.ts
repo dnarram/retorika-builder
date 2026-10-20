@@ -1488,8 +1488,9 @@ describe("designing a section by hand, and taking it back", () => {
 
     it("refuses to break rule 4, with the arithmetic in the message", () => {
       const before = escalated();
-      expect(() => run(before, place(before, { column: 10, columnSpan: 6 }))).toThrow(
-        /reaches column 15, past the 12-column grid \(rule 4\)/,
+      // On the fine grid (ADR 0050): ninety-six units, and the message counts in them.
+      expect(() => run(before, place(before, { column: 90, columnSpan: 8 }))).toThrow(
+        /reaches column 97, past the 96-unit grid \(rule 4\)/,
       );
     });
 

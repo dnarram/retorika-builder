@@ -1,4 +1,4 @@
-import type { ContentElement, PresetShape, PresetSlot, SectionLayout } from "@retorika/schema";
+import type { CatalogLayout, ContentElement, PresetShape, PresetSlot } from "@retorika/schema";
 import { resolvePlacements, type SlotPlacement, unknownVariant } from "./layout.ts";
 
 /**
@@ -73,7 +73,7 @@ export const footerPreset: PresetShape = {
   catalogId: FOOTER_ID,
   slots: FOOTER_SLOTS,
 
-  layoutFor(variantId: string, elements: readonly ContentElement[]): SectionLayout {
+  layoutFor(variantId: string, elements: readonly ContentElement[]): CatalogLayout {
     if (!isFooterVariant(variantId)) throw unknownVariant(FOOTER_ID, variantId, FOOTER_VARIANTS);
     return resolvePlacements(TEMPLATES[variantId], elements);
   },

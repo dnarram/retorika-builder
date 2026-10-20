@@ -1,4 +1,10 @@
-import type { ContentElement, Section, SectionLayout } from "./document.ts";
+import type {
+  ContentElement,
+  GRID_COLUMNS,
+  Placement,
+  Section,
+  SectionLayout,
+} from "./document.ts";
 import type { Violation } from "./invariants.ts";
 import type { Role } from "./roles.ts";
 
@@ -13,6 +19,19 @@ export interface PresetSlot {
   role: Role;
   min: number;
   max: number;
+}
+
+/**
+ * The layout a preset draws: **twelve columns and content rows**, which is not the shape a document
+ * stores. A stored layout is a free section's and is always the fine grid (`sectionLayoutSchema`,
+ * ADR 0050); the catalog keeps declaring its slots on twelve, and `escalate` converts on the way
+ * in. Two types rather than one with a union on `columns`, so that a twelve-column layout cannot be
+ * put into a document by accident and the renderer cannot forget which of the two it is drawing.
+ */
+export interface CatalogLayout {
+  grid: { columns: typeof GRID_COLUMNS };
+  placements: Placement[];
+  breakpoints: SectionLayout["breakpoints"];
 }
 
 export interface PresetShape {
@@ -50,7 +69,7 @@ export interface PresetShape {
    * That resolution is also what makes the return from a hand-designed layout lossless:
    * the ids line up on the way back with no guessing.
    */
-  layoutFor(variantId: string, elements: readonly ContentElement[]): SectionLayout;
+  layoutFor(variantId: string, elements: readonly ContentElement[]): CatalogLayout;
 }
 
 /**

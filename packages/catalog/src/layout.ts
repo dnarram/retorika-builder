@@ -1,4 +1,4 @@
-import { type ContentElement, GRID_COLUMNS, type SectionLayout } from "@retorika/schema";
+import { type CatalogLayout, type ContentElement, GRID_COLUMNS } from "@retorika/schema";
 
 /**
  * Turning a preset's declared geometry into a section's layout.
@@ -32,7 +32,7 @@ export interface SlotPlacement {
 export function resolvePlacements(
   entries: readonly SlotPlacement[],
   elements: readonly ContentElement[],
-): SectionLayout {
+): CatalogLayout {
   const bySlot = new Map<string, ContentElement[]>();
   for (const element of elements) {
     const list = bySlot.get(element.slot);

@@ -61,6 +61,21 @@ left implicit.
    > this rule. Two owners is still not a case for moving a foundation, and rule 5 below still
    > names exactly what both of them asked for.
 
+   > *And the third time, 20 October 2026, it was the owner of the product — and it still held,
+   > by getting finer.* Opening sprint 25, David asked for exactly what the two owners had: an
+   > element that «se quede en la posición donde se deja», boxes that stretch by their edges, the
+   > gestures of Canva and Word. This is the request the two notes above said would need an ADR
+   > before any code, and it got one: [ADR 0050](decisions/0050-a-hand-designed-section-is-a-fine-grid-and-the-hand-decides-where.md).
+   >
+   > **The rule is not amended.** Put in front of the fixed canvas those applications have — a
+   > page that breaks at every width the canvas was not — he chose the grid, and the answer to the
+   > jump both owners had felt was the *step*, not the model: a hand-designed section is drawn on
+   > ninety-six units, eight to a catalog column, so that snapping is 7–10 px where somebody
+   > drags and below what a person notices. A placement is still a column, a span and a row on the
+   > section's grid, there is still no `x` and no `y`, the published page is still a grid that
+   > reflows, and rule 7 still derives the phone from it. What the three askings had in common was
+   > never the grid; it was a grid too coarse to feel like the hand.
+
 5. **There are no orphan elements: every element belongs to a section, every section to a
    page.** This closes the hole free placement would otherwise open — there is no floating layer
    above the site.

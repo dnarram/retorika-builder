@@ -1,4 +1,10 @@
-import { parseDocument, type RetorikaDocument, type Section } from "@retorika/schema";
+import {
+  FINE_COLUMNS,
+  FINE_PER_COLUMN,
+  parseDocument,
+  type RetorikaDocument,
+  type Section,
+} from "@retorika/schema";
 import { describe, expect, it } from "vitest";
 import { render } from "../src/index.ts";
 import { loadCorpus } from "./corpus.ts";
@@ -55,7 +61,15 @@ function withSection(
   return parseDocument({ ...base, pages: [{ ...page, sections: [change(first)] }] });
 }
 
-/** A free section of barbershop-cover's elements, laid out by hand. */
+/**
+ * A free section of barbershop-cover's elements, laid out by hand.
+ *
+ * The tuples are catalog columns — easier to read than units — and are written into the document
+ * as the fine grid's units (×8, ADR 0050), which is the only form a stored layout has. The rows are
+ * rows either way. The expected `grid-column` strings below are CSS tracks, gutters included: a
+ * span of four catalog columns is thirty-two units and, with the three gutters it crosses,
+ * thirty-five tracks.
+ */
 function freeSection(
   placements: Record<string, [column: number, columnSpan: number, row: number, rowSpan: number]>,
   hidden: string[] = [],
@@ -65,12 +79,12 @@ function freeSection(
     source: "free",
     content: s.content.map((el) => (hidden.includes(el.id) ? { ...el, hidden: true } : el)),
     layout: {
-      grid: { columns: 12 },
+      grid: { columns: FINE_COLUMNS },
       placements: Object.entries(placements).map(
         ([elementId, [column, columnSpan, row, rowSpan]]) => ({
           elementId,
-          column,
-          columnSpan,
+          column: (column - 1) * FINE_PER_COLUMN + 1,
+          columnSpan: columnSpan * FINE_PER_COLUMN,
           row,
           rowSpan,
         }),
@@ -129,7 +143,7 @@ describe("the panel behind text over an image", () => {
       "el-headline": [1, 4, 2, 1],
       "el-body": [7, 6, 1, 1],
     });
-    expect(panelStyle(doc, "sec-cover")).toBe("grid-column:1/span 4;grid-row:2/span 1");
+    expect(panelStyle(doc, "sec-cover")).toBe("grid-column:1/span 35;grid-row:2/span 1");
   });
 
   it("treats edges that only touch as not overlapping", () => {

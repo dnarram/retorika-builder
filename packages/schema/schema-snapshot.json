@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.11.0",
+  "schemaVersion": "1.12.0",
   "document": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -197,7 +197,7 @@
                             "properties": {
                               "columns": {
                                 "type": "number",
-                                "const": 12
+                                "const": 96
                               }
                             },
                             "required": [
@@ -218,12 +218,12 @@
                                 "column": {
                                   "type": "integer",
                                   "minimum": 1,
-                                  "maximum": 12
+                                  "maximum": 96
                                 },
                                 "columnSpan": {
                                   "type": "integer",
                                   "minimum": 1,
-                                  "maximum": 12
+                                  "maximum": 96
                                 },
                                 "row": {
                                   "type": "integer",

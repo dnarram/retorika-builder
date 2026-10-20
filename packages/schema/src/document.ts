@@ -10,7 +10,7 @@ import { type ElementStyle, elementStyleSchema, themeSchema } from "./tokens.ts"
  * role or a token is additive and bumps the minor; removing or renaming one breaks and
  * bumps the major.
  */
-export const SCHEMA_VERSION = "1.11.0";
+export const SCHEMA_VERSION = "1.12.0";
 
 const idSchema = z.string().min(1).max(128);
 
@@ -157,16 +157,34 @@ export const contentElementSchema: z.ZodType<ContentElement> = z.lazy(() =>
 // Layout
 // ---------------------------------------------------------------------------
 
+/** The catalog's grid: the twelve columns every preset declares its slots on, and the unit the
+ * mobile patch's «Foto menor» still speaks in (a fraction of twelve over a one-column page). */
 export const GRID_COLUMNS = 12;
 
 /**
- * Rule 4: positions are relative to the section's grid, never absolute on the page.
+ * **A hand-designed section's grid is finer** (ADR 0050): ninety-six units, eight to a catalog
+ * column, so that an element dragged by hand stays within 7–10 px of where it was let go. The
+ * gutters between the twelve columns are kept to the pixel and the document never names one —
+ * `fineGrid.ts` translates a unit to a CSS track. `GRID_COLUMNS` stays because the catalog still
+ * draws on twelve, and `escalate` converts (×8, exactly).
+ */
+export const FINE_COLUMNS = 96;
+export const FINE_PER_COLUMN = FINE_COLUMNS / GRID_COLUMNS;
+/** A free section's rows are steps of this many pixels (`grid-auto-rows: minmax(8px, auto)`), so a
+ * drop thirty pixels lower is four rows lower everywhere, in the editor and on the published page.
+ * A row with more content than its span grows; nothing is clipped. */
+export const ROW_STEP_PX = 8;
+
+/**
+ * Rule 4: positions are relative to the section's grid, never absolute on the page. A placement
+ * is a column, a span and a row on the fine grid of the section that holds it — never an `x` or a
+ * `y`. The grid got finer in schema 1.12.0 (ADR 0050); it did not go away.
  * Rule 1: a placement references an element by id and never contains it.
  */
 export const placementSchema = z.strictObject({
   elementId: idSchema,
-  column: z.number().int().min(1).max(GRID_COLUMNS),
-  columnSpan: z.number().int().min(1).max(GRID_COLUMNS),
+  column: z.number().int().min(1).max(FINE_COLUMNS),
+  columnSpan: z.number().int().min(1).max(FINE_COLUMNS),
   row: z.number().int().min(1),
   rowSpan: z.number().int().min(1),
 });
@@ -190,7 +208,9 @@ export const breakpointPatchSchema = z.strictObject({
 export type BreakpointPatch = z.infer<typeof breakpointPatchSchema>;
 
 export const sectionLayoutSchema = z.strictObject({
-  grid: z.strictObject({ columns: z.literal(GRID_COLUMNS) }),
+  /** A stored layout is always a free section's, and a free section is always the fine grid: the
+   * twelve-column form is the catalog's and never reaches the document (migration 0013). */
+  grid: z.strictObject({ columns: z.literal(FINE_COLUMNS) }),
   placements: z.array(placementSchema),
   /**
    * One bucket, and that is the decision rather than the current state of things (ADR 0030).

@@ -3,6 +3,7 @@ import {
   applyRevert,
   type ContentElement,
   escalate,
+  gapRowsFor,
   type PresetShape,
   planRevert,
   type Section,
@@ -23,6 +24,9 @@ import {
 
 /** Every call to layoutFor records the ids it was given, so the test can see what escalate passes. */
 const received: string[][] = [];
+
+/** The fine grid's vertical rhythm for the default scale (ADR 0050): a 16px gap is two rows. */
+const GAP_ROWS = gapRowsFor("16px");
 
 const listPreset: PresetShape = {
   catalogId: "list-fixture",
@@ -103,11 +107,13 @@ const itemElementIds = (s: Section) =>
 
 describe("revert with a list", () => {
   it("escalate then revert gives back the identical section", () => {
-    expect(applyRevert(escalate(withOneList, listPreset), listPreset)).toEqual(withOneList);
+    expect(applyRevert(escalate(withOneList, listPreset, GAP_ROWS), listPreset)).toEqual(
+      withOneList,
+    );
   });
 
   it("never reports an element inside an item as surplus; the list lands in its slot", () => {
-    const plan = planRevert(escalate(withOneList, listPreset), listPreset);
+    const plan = planRevert(escalate(withOneList, listPreset, GAP_ROWS), listPreset);
     expect(plan.surplus).toEqual([]);
     expect(plan.assignments).toEqual([
       { elementId: "el-headline", slot: "headline" },
@@ -119,7 +125,7 @@ describe("revert with a list", () => {
 
   it("reports a surplus list once, with its items inside it, and applies the decision to the whole list", () => {
     const twoLists = section([headline, list("list-services", "a", 3), list("list-extra", "b", 2)]);
-    const escalated = escalate(twoLists, listPreset);
+    const escalated = escalate(twoLists, listPreset, GAP_ROWS);
 
     const plan = planRevert(escalated, listPreset);
     expect(plan.surplus.map((entry) => entry.elementId)).toEqual(["list-extra"]);
@@ -136,12 +142,12 @@ describe("revert with a list", () => {
 
   it("gives layoutFor only the top-level elements when escalating", () => {
     received.length = 0;
-    escalate(withOneList, listPreset);
+    escalate(withOneList, listPreset, GAP_ROWS);
     expect(received).toEqual([["el-headline", "list-services"]]);
   });
 
   it("keeps a content edit made inside an item while the section was free", () => {
-    const escalated = escalate(withOneList, listPreset);
+    const escalated = escalate(withOneList, listPreset, GAP_ROWS);
     const edited: Section = {
       ...escalated,
       content: escalated.content.map(

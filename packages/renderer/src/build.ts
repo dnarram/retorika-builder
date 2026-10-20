@@ -2,11 +2,16 @@ import { COVER_ID, FOOTER_ID, presetFor, TEASER_ID } from "@retorika/catalog";
 import {
   type Collection,
   type ContentElement,
+  FINE_COLUMNS,
+  fineTemplateColumns,
+  fineTrack,
+  fineTrackSpan,
   GRID_COLUMNS,
   mobileSequence,
   type Page,
   type Placement,
   type RetorikaDocument,
+  ROW_STEP_PX,
   type Section,
   SORTED_TOKEN_KEYS,
   STYLE_PROPERTIES,
@@ -31,11 +36,21 @@ import { textElement } from "./runs.ts";
 
 type GridArea = Pick<Placement, "column" | "columnSpan" | "row" | "rowSpan">;
 
-function placementStyle(placement: GridArea): string {
-  return [
-    `grid-column:${placement.column}/span ${placement.columnSpan}`,
-    `grid-row:${placement.row}/span ${placement.rowSpan}`,
-  ].join(";");
+/**
+ * The inline grid area of a placed element.
+ *
+ * **Two grids, one function, and the layout says which** (ADR 0050). A section the catalog draws
+ * is twelve columns with a gap, and its placement is written as it is. A hand-designed section is
+ * the fine grid — ninety-six units and the eleven gutters as tracks of their own — so its unit has
+ * to become the CSS line it starts on and its span has to take the gutters it crosses with it;
+ * `fineTrack` and `fineTrackSpan` are the one translation, shared with the editor and the walks.
+ * Rows are rows in both.
+ */
+function placementStyle(placement: GridArea, fine: boolean): string {
+  const column = fine
+    ? `${fineTrack(placement.column)}/span ${fineTrackSpan(placement.column, placement.columnSpan)}`
+    : `${placement.column}/span ${placement.columnSpan}`;
+  return [`grid-column:${column}`, `grid-row:${placement.row}/span ${placement.rowSpan}`].join(";");
 }
 
 /**
@@ -437,9 +452,11 @@ function teaserTarget(doc: RetorikaDocument, href: string): TeaserTarget | undef
   };
 }
 
-/** The same inline grid style every placed element gets, for the two nodes a teaser derives. */
-function derivedArea(row: number): string {
-  return placementStyle({ column: 1, columnSpan: 12, row, rowSpan: 1 });
+/** The same inline grid style every placed element gets, for the two nodes a teaser derives:
+ * the full width, in whichever units the section's grid has. */
+function derivedArea(row: number, fine: boolean): string {
+  const columnSpan = fine ? FINE_COLUMNS : GRID_COLUMNS;
+  return placementStyle({ column: 1, columnSpan, row, rowSpan: 1 }, fine);
 }
 
 /** A teaser's destination: the href of its one visible link, or "" if it has none to read. */
@@ -461,8 +478,11 @@ function sectionNode(
   const elements = section.content;
 
   // A free section brings its own layout; a catalog section borrows the preset's.
-  // Rule 1 in practice: either way the layout only names element ids.
+  // Rule 1 in practice: either way the layout only names element ids. And the two are written in
+  // different units — the fine grid's and the catalog's (ADR 0050) — which `placementStyle` has to
+  // be told, so it is decided once here rather than guessed per element.
   const layout = section.layout ?? preset.layoutFor(section.preset.variantId, elements);
+  const fine = section.layout !== null;
   const placementById = new Map(layout.placements.map((p) => [p.elementId, p]));
 
   // The page's <h1> is the cover when there is one, and the page's first section when there is
@@ -495,7 +515,7 @@ function sectionNode(
     }
 
     const placement = placementById.get(el.id);
-    if (placement) node.attributes["style"] = placementStyle(placement);
+    if (placement) node.attributes["style"] = placementStyle(placement, fine);
     emitted.push({ el, node, placement });
   }
 
@@ -505,8 +525,8 @@ function sectionNode(
   // is that nothing published changes.
   const derived: RenderNode[] = target
     ? [
-        element(headingTag(level), { style: derivedArea(1) }, [target.title]),
-        ...(target.line ? [element("p", { style: derivedArea(2) }, [target.line])] : []),
+        element(headingTag(level), { style: derivedArea(1, fine) }, [target.title]),
+        ...(target.line ? [element("p", { style: derivedArea(2, fine) }, [target.line])] : []),
       ]
     : [];
 
@@ -516,7 +536,7 @@ function sectionNode(
       ? [
           element(
             "div",
-            { "aria-hidden": "true", class: "rb-panel", style: placementStyle(panel) },
+            { "aria-hidden": "true", class: "rb-panel", style: placementStyle(panel, fine) },
             [],
           ),
         ]
@@ -546,7 +566,14 @@ function sectionNode(
       "data-section": section.id,
       "data-preset": section.preset.catalogId,
       "data-variant": section.preset.variantId,
-      class: `rb-section rb-${section.preset.catalogId} rb-${section.preset.variantId}`,
+      // `rb-free` is what selects the fine grid's stylesheet rules (ADR 0050). Emitted here, by
+      // the renderer, for both targets — the editor used to add it when wiring the handmade bar,
+      // which drew the section on the catalog's grid for one frame and would have made the
+      // published page differ from the preview, the thing «one renderer, two targets» exists to
+      // prevent.
+      class:
+        `rb-section rb-${section.preset.catalogId} rb-${section.preset.variantId}` +
+        (fine ? " rb-free" : ""),
     },
     children,
   );
@@ -793,6 +820,48 @@ function breakpointCss(doc: RetorikaDocument): string[] {
   // the selectors already win — but placing it second means a future rule of equal specificity
   // behaves the way somebody reading the file would expect.
   return rules.length === 0 ? [] : ["@media (max-width: 720px) {", ...rules, "}", ""];
+}
+
+/** Whether any section of the document is drawn by hand, which is the only case the fine grid's
+ * rules are worth a byte of. */
+function hasFreeSection(doc: RetorikaDocument): boolean {
+  return doc.pages.some((page) => page.sections.some((section) => section.layout !== null));
+}
+
+/**
+ * The fine grid a hand-designed section is drawn on (ADR 0050), emitted only when the document has
+ * one — a site that never escalated a section publishes exactly the bytes it always did, which is
+ * what keeps seventeen of the nineteen golden files still.
+ *
+ * - **107 tracks and no column gap**: ninety-six units of `minmax(0, 1fr)` with the eleven gutters
+ *   as `var(--space-md)` tracks between the groups of eight, so the catalog's twelve bands and its
+ *   gutters are kept to the pixel and a free section lines up with the catalog's beside it.
+ *   `fineTemplateColumns` is the one place the list is written.
+ * - **Rows of `ROW_STEP_PX`** (`minmax(8px, auto)`): a row with content grows to it, an empty one is
+ *   eight pixels, and a drop thirty pixels lower is four rows lower — the same on the published
+ *   page as in the editor, because a pixel is a pixel where a fraction of the width is not.
+ * - **`row-gap: 0`**, since the rows *are* the vertical unit and a gap would make it 8 + gap.
+ * - **`align-items: start`** instead of the shared `center`: with eight-pixel rows an element's
+ *   top is where its row starts, which is what «it stays where you let go of it» means. This is
+ *   the one visible change for a section stored before 1.12.0 and migration 0013 names it.
+ *
+ * **On mobile the patch of rule 7 applies and the fine grid does not**: the shared block already
+ * puts every child on `grid-column: 1 / -1` and `grid-row: auto`, and this gives back the one
+ * column, the theme's row gap and content-sized rows — otherwise the desktop's empty eight-pixel
+ * rows would open holes down the single column.
+ */
+function fineGridCss(doc: RetorikaDocument): string[] {
+  if (!hasFreeSection(doc)) return [];
+  return [
+    `.rb-section.rb-free { grid-template-columns: ${fineTemplateColumns()};`,
+    `  column-gap: 0; row-gap: 0; grid-auto-rows: minmax(${ROW_STEP_PX}px, auto);`,
+    "  align-items: start; }",
+    "@media (max-width: 720px) {",
+    "  .rb-section.rb-free { grid-template-columns: 1fr; row-gap: var(--space-md);",
+    "    grid-auto-rows: auto; }",
+    "}",
+    "",
+  ];
 }
 
 /** The CSS property each of rule 6's five properties writes. Written out rather than derived by
@@ -1081,6 +1150,7 @@ export function buildCss(doc: RetorikaDocument): string {
     // did. Style before patches because it applies at every width and the patches are the mobile
     // override; source order settles nothing here, since the selectors already decide, but a
     // stylesheet should read in the order somebody would explain it.
+    ...fineGridCss(doc),
     ...elementStyleCss(doc),
     ...breakpointCss(doc),
   ].join("\n");

@@ -13,6 +13,7 @@ import {
   type Page,
 } from "@playwright/test";
 import { GALLERY_SAMPLE_COUNT } from "@retorika/generator";
+import { FINE_PER_COLUMN, FINE_TRACKS, fineColumnOf, fineSpanOf } from "@retorika/schema";
 import type { NodeResult } from "axe-core";
 import { afterAll, beforeAll, describe, it } from "vitest";
 import {
@@ -2244,9 +2245,20 @@ describe("sprint 8 — el modo estudio: encender, diseñar a mano, colocar, y vo
       await expect(frame.locator(".rb-handmade-badge")).toHaveText("Diseñada a mano");
 
       // «No se mueve ni un píxel»: the same words, in the same place within the section it belongs
-      // to, the instant after.
+      // to, the instant after — **sideways, to the pixel; and vertically no lower** (ADR 0050 §3).
+      // Since the fine grid a hand-designed section aligns its rows to `start`, so a headline the
+      // catalog centred beside a taller photograph rises to the top of its row: 20px on this cover,
+      // measured. The width and the left edge are the exact half, and the ADR names the other.
       expect(await headline.textContent()).toBe(wordsBefore);
-      await expect.poll(placeInSection).toEqual(placeBefore);
+      await expect
+        .poll(async () => {
+          const now = await placeInSection();
+          return now && { x: now.x, w: now.w, h: now.h };
+        })
+        .toEqual(placeBefore && { x: placeBefore.x, w: placeBefore.w, h: placeBefore.h });
+      expect((await placeInSection())?.y ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(
+        placeBefore?.y ?? 0,
+      );
 
       // The panel: collapsed on open, because encendiendo las herramientas «añade una puerta, no
       // descarga sesenta controles».
@@ -2278,7 +2290,8 @@ describe("sprint 8 — el modo estudio: encender, diseñar a mano, colocar, y vo
       // element's own width stops fitting, and `setPlacement` is never sent a value it would refuse.
       while (!(await column.isDisabled())) await column.click();
       const numbers = await studio.locator("aside output").allTextContents();
-      expect(Number(numbers[0]) + Number(numbers[1]) - 1).toBe(12);
+      // Against the fine grid's last unit (ADR 0050): the steppers count in units of ninety-six.
+      expect(Number(numbers[0]) + Number(numbers[1]) - 1).toBe(96);
 
       // Now the dialog, and what it says.
       await frame.locator(".rb-handmade-back").click();
@@ -2456,15 +2469,17 @@ describe("sprint 8 día 7 — el recorrido completo del sprint", () => {
       const headlineStyleAfterFreshEscalate = await frame
         .locator('[data-section="sec-cover"] [data-id="el-headline"]')
         .getAttribute("style");
-      expect(headlineStyleAfterFreshEscalate).toContain("grid-column:1/span 6");
+      // Six catalog columns in the fine grid's tracks: forty-eight units and five gutters (ADR 0050).
+      expect(headlineStyleAfterFreshEscalate).toContain("grid-column:1/span 53");
 
       // ---- round two: this is the state that goes into the ZIP ----
       await studio.getByRole("button", { name: "Titular", exact: true }).click();
       await columnRight.click();
       await columnRight.click();
       await columnRight.click();
+      // Three presses of a catalog column each, in the fine grid's units: 1, 9, 17, 25.
       const columnNow = await studio.locator("aside output").first().textContent();
-      expect(columnNow).toBe("4");
+      expect(columnNow).toBe("25");
 
       await studio.getByRole("button", { name: "Foto", exact: true }).click();
       await studio.getByRole("button", { name: "Foto menor" }).click();
@@ -2509,9 +2524,10 @@ describe("sprint 8 día 7 — el recorrido completo del sprint", () => {
         await expect(offlinePage).toHaveTitle("Barbería El Corte");
 
         // The placement round two made survived render(doc, "html") and the ZIP: the headline's own
-        // grid-column is the one the panel showed, not the catalog's original 1/span 6.
+        // grid-column is the one the panel showed — unit 25 is track 28 — not the catalog's
+        // original 1/span 53.
         const headline = offlinePage.locator('[data-id="el-headline"]');
-        await expect(headline).toHaveAttribute("style", /grid-column:4\/span 6/);
+        await expect(headline).toHaveAttribute("style", /grid-column:28\/span 53/);
 
         // The mobile patches published in their own @media block, and take effect at mobile width —
         // measured with real CSS in a real browser, not read off the stylesheet's text.
@@ -3452,6 +3468,12 @@ describe("sprint 9 día 7 — colchón: la barra no traga un clic que era para o
  *
  * Shared by the two days that read placements — the drag and its keyboard — because a second copy
  * would be a second parser of `grid-column` to keep level with the first.
+ *
+ * **In the fine grid's units** (ADR 0050, sprint 25 día 1): a free section's inline `grid-column`
+ * is a CSS track, gutters included, and `fineColumnOf`/`fineSpanOf` from the schema take the
+ * gutters back out — the same functions the renderer used to put them in, so this parser cannot
+ * disagree with the emitter about where a gutter is. A section the catalog draws has no
+ * placements of its own to read, so everything this returns is in units of ninety-six.
  */
 interface Placed {
   id: string;
@@ -3462,21 +3484,51 @@ interface Placed {
 }
 
 function placedIn(frame: FrameLocator, sectionId: string): Promise<Placed[]> {
-  return frame.locator(`[data-section="${sectionId}"] > [data-id]`).evaluateAll((nodes) =>
-    nodes.map((node) => {
-      const el = node as HTMLElement;
-      const read = (value: string): [number, number] => {
-        const [start, span] = value.split("/");
-        return [
-          Number.parseInt(start ?? "1", 10),
-          Number.parseInt((span ?? "span 1").replace("span", "").trim(), 10),
-        ];
-      };
-      const [column, columnSpan] = read(el.style.gridColumn || "1/span 1");
-      const [row, rowSpan] = read(el.style.gridRow || "1/span 1");
-      return { id: el.dataset["id"] ?? "", column, columnSpan, row, rowSpan };
-    }),
-  );
+  return frame
+    .locator(`[data-section="${sectionId}"] > [data-id]`)
+    .evaluateAll((nodes) =>
+      nodes.map((node) => {
+        const el = node as HTMLElement;
+        const read = (value: string): [number, number] => {
+          const [start, span] = value.split("/");
+          return [
+            Number.parseInt(start ?? "1", 10),
+            Number.parseInt((span ?? "span 1").replace("span", "").trim(), 10),
+          ];
+        };
+        const [track, trackSpan] = read(el.style.gridColumn || "1/span 1");
+        const [row, rowSpan] = read(el.style.gridRow || "1/span 1");
+        return { id: el.dataset["id"] ?? "", track, trackSpan, row, rowSpan };
+      }),
+    )
+    .then((placed) =>
+      placed.map(({ track, trackSpan, ...rest }) => ({
+        ...rest,
+        column: fineColumnOf(track),
+        columnSpan: fineSpanOf(track, trackSpan),
+      })),
+    );
+}
+
+/** A unit of the fine grid as the catalog column it falls in, for the announcement that still
+ * speaks in twelve until día 6. */
+const coarseColumnOf = (unit: number) => Math.floor((unit - 1) / FINE_PER_COLUMN) + 1;
+
+/**
+ * One catalog column's step in pixels — eight units and the gutter after them — measured from the
+ * section's own resolved tracks rather than computed from `column-gap`, which a free section no
+ * longer has (its gutters are tracks of their own, ADR 0050).
+ */
+function columnStepOf(frame: FrameLocator, sectionId: string): Promise<number> {
+  return frame.locator(`[data-section="${sectionId}"]`).evaluate((node, tracksInFineGrid) => {
+    const style = getComputedStyle(node as HTMLElement);
+    const tracks = style.gridTemplateColumns.split(" ").map((entry) => Number.parseFloat(entry));
+    if (tracks.length === tracksInFineGrid) {
+      // Eight units and the gutter: the first nine tracks.
+      return tracks.slice(0, 9).reduce((total, width) => total + width, 0);
+    }
+    return (tracks[0] ?? 0) + (Number.parseFloat(style.columnGap) || 0);
+  }, FINE_TRACKS);
 }
 
 async function clickToEdit(frame: FrameLocator, target: Locator): Promise<void> {
@@ -15392,20 +15444,6 @@ describe("sprint 24 día 7 — un texto se elige antes de escribir en él", () =
 describe("sprint 24 día 8 — un elemento se arrastra a su celda", () => {
   const VIEWPORT = { width: 1440, height: 900 };
 
-  /** One column's step in pixels — width plus gap — measured from the section itself. */
-  function columnStep(frame: FrameLocator, sectionId: string): Promise<number> {
-    return frame.locator(`[data-section="${sectionId}"]`).evaluate((node) => {
-      const section = node as HTMLElement;
-      const style = getComputedStyle(section);
-      const gap = Number.parseFloat(style.columnGap) || 0;
-      const inner =
-        section.getBoundingClientRect().width -
-        (Number.parseFloat(style.paddingLeft) || 0) -
-        (Number.parseFloat(style.paddingRight) || 0);
-      return (inner - gap * 11) / 12 + gap;
-    });
-  }
-
   /** Drag from the middle of an element by this many pixels, with the pointer. */
   async function dragElementBy(page: Page, target: Locator, dx: number, dy: number): Promise<void> {
     const box = await target.boundingBox();
@@ -15452,7 +15490,7 @@ describe("sprint 24 día 8 — un elemento se arrastra a su celda", () => {
       expect(placed.length, "la sección escalada no trajo colocaciones").toBeGreaterThan(1);
 
       // ---- the drag that lands: one column to the right of an element with room beside it ----
-      const step = await columnStep(frame, "sec-cover");
+      const step = await columnStepOf(frame, "sec-cover");
       const taken = (column: number, row: number) =>
         placed.some(
           (other) =>
@@ -15461,9 +15499,10 @@ describe("sprint 24 día 8 — un elemento se arrastra a su celda", () => {
             row < other.row + other.rowSpan &&
             other.row <= row,
         );
+      // A catalog column of room, in units: eight to the right of the element's own edge.
       const mover = placed.find(
         (element) =>
-          element.column + element.columnSpan <= 12 &&
+          element.column + element.columnSpan + FINE_PER_COLUMN - 1 <= 96 &&
           !taken(element.column + element.columnSpan, element.row),
       );
       expect(mover, "ninguna colocación tiene sitio libre a su derecha").toBeDefined();
@@ -15492,7 +15531,7 @@ describe("sprint 24 día 8 — un elemento se arrastra a su celda", () => {
       const after = await placedIn(frame, "sec-cover");
       expect(after.find((element) => element.id === mover?.id)).toEqual({
         ...mover,
-        column: (mover?.column ?? 1) + 1,
+        column: (mover?.column ?? 1) + FINE_PER_COLUMN,
       });
       // And the ghost is gone the moment the hand is.
       await expect(frame.locator(".rb-ghost")).toHaveCount(0);
@@ -15634,7 +15673,7 @@ describe("sprint 24 día 9 — el teclado lo mueve y lo dice", () => {
       );
     return placed.find(
       (element) =>
-        element.column + element.columnSpan <= 12 &&
+        element.column + element.columnSpan + FINE_PER_COLUMN - 1 <= 96 &&
         !taken(element.column + element.columnSpan, element.row),
     );
   }
@@ -15711,7 +15750,9 @@ describe("sprint 24 día 9 — el teclado lo mueve y lo dice", () => {
       // reader does not announce those.
       const said = page.locator('p[role="status"]');
       await expect(said).toHaveText(
-        new RegExp(`Columna ${mover?.column} de 12, fila ${(started ?? 1) + 3}`),
+        new RegExp(
+          `Columna ${coarseColumnOf(mover?.column ?? 1)} de 12, fila ${(started ?? 1) + 3}`,
+        ),
       );
       expect(
         await page.locator(`${PREVIEW}`).count(),
@@ -15731,9 +15772,12 @@ describe("sprint 24 día 9 — el teclado lo mueve y lo dice", () => {
         (await placedIn(frame, "sec-cover")).find((element) => element.id === mover?.id)
           ?.columnSpan;
       const wasWide = await spanOf();
-      expect(wasWide ?? 0, "el elemento más bajo ya era de una columna").toBeGreaterThan(1);
+      expect(wasWide ?? 0, "el elemento más bajo ya era de una columna").toBeGreaterThan(
+        FINE_PER_COLUMN,
+      );
+      // One catalog column narrower, which is eight units of the fine grid.
       await page.keyboard.press("Shift+ArrowLeft");
-      await expect.poll(spanOf).toBe((wasWide ?? 2) - 1);
+      await expect.poll(spanOf).toBe((wasWide ?? 2) - FINE_PER_COLUMN);
       await expect(said).toHaveText(/Ancho \d+ de 12 columnas/);
 
       // Escape gives the keyboard back to the section, as it did before any of this.
@@ -15793,12 +15837,11 @@ describe("sprint 24 día 9 — el teclado lo mueve y lo dice", () => {
       const step = await frame.locator('[data-section="sec-cover"]').evaluate((node) => {
         const section = node as HTMLElement;
         const style = getComputedStyle(section);
-        const gap = Number.parseFloat(style.columnGap) || 0;
-        const inner =
-          section.getBoundingClientRect().width -
-          (Number.parseFloat(style.paddingLeft) || 0) -
-          (Number.parseFloat(style.paddingRight) || 0);
-        return (inner - gap * 11) / 12 + gap;
+        const tracks = style.gridTemplateColumns
+          .split(" ")
+          .map((entry) => Number.parseFloat(entry));
+        // Eight units and their gutter (ADR 0050): the first nine tracks of the fine grid.
+        return tracks.slice(0, 9).reduce((total, width) => total + width, 0);
       });
       await finger(context, page, centre, { x: centre.x + step, y: centre.y });
       await expect
@@ -15807,7 +15850,7 @@ describe("sprint 24 día 9 — el teclado lo mueve y lo dice", () => {
             (await placedIn(frame, "sec-cover")).find((element) => element.id === mover?.id)
               ?.column,
         )
-        .toBe((mover?.column ?? 1) + 1);
+        .toBe((mover?.column ?? 1) + FINE_PER_COLUMN);
     } finally {
       await context.close();
     }

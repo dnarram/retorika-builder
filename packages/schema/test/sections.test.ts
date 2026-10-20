@@ -377,8 +377,8 @@ describe("insertSection", () => {
     const withBadLayout: Section = {
       ...broken,
       layout: {
-        grid: { columns: 12 },
-        placements: [{ elementId: "el-nowhere", column: 1, columnSpan: 12, row: 1, rowSpan: 1 }],
+        grid: { columns: 96 },
+        placements: [{ elementId: "el-nowhere", column: 1, columnSpan: 96, row: 1, rowSpan: 1 }],
         breakpoints: {},
       },
     };
@@ -879,8 +879,8 @@ describe("setVariant", () => {
       ...cover,
       source: "free",
       layout: {
-        grid: { columns: 12 },
-        placements: [{ elementId: "el-headline", column: 1, columnSpan: 12, row: 1, rowSpan: 1 }],
+        grid: { columns: 96 },
+        placements: [{ elementId: "el-headline", column: 1, columnSpan: 96, row: 1, rowSpan: 1 }],
         breakpoints: { mobile: [] },
       },
     };
