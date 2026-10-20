@@ -15588,8 +15588,8 @@ describe("sprint 24 día 8 — un elemento se arrastra a su celda", () => {
        * No click before this drag either, for the same reason as above: a text stays chosen after a
        * drag, and a second click on a chosen text starts writing (ADR 0047), which wins.
        */
-      const others = (await placedIn(frame, "sec-cover")).filter((e) => e.id !== mover?.id);
-      const neighbour = others[0];
+      const beforeOverlap = await placedIn(frame, "sec-cover");
+      const neighbour = beforeOverlap.find((e) => e.id !== mover?.id);
       expect(neighbour, "la sección no tiene un segundo elemento que ocupar").toBeDefined();
       const onto = frame.locator(`[data-id="${neighbour?.id}"]`);
       const ontoBox = await onto.boundingBox();
@@ -15608,19 +15608,27 @@ describe("sprint 24 día 8 — un elemento se arrastra a su celda", () => {
       const onTop = stacked.find((element) => element.id === mover?.id);
       const under = stacked.find((element) => element.id === neighbour?.id);
       expect(onTop?.column, "no aterrizó sobre la celda del vecino").toBe(under?.column);
-      expect(onTop?.row).toBe(under?.row);
-      // Which is a real overlap by the document's own definition, and one step of history: the
-      // undo takes it back off.
+      expect(onTop?.row, "no aterrizó sobre la fila del vecino").toBe(under?.row);
+      // A real overlap by the document's own definition — the whole rectangle on both sides, which
+      // is David's own definition of «ocupada» from sprint 24, now allowed instead of refused.
       expect(
         (onTop?.column ?? 0) < (under?.column ?? 0) + (under?.columnSpan ?? 0) &&
-          (under?.column ?? 0) < (onTop?.column ?? 0) + (onTop?.columnSpan ?? 0),
+          (under?.column ?? 0) < (onTop?.column ?? 0) + (onTop?.columnSpan ?? 0) &&
+          (onTop?.row ?? 0) < (under?.row ?? 0) + (under?.rowSpan ?? 0) &&
+          (under?.row ?? 0) < (onTop?.row ?? 0) + (onTop?.rowSpan ?? 0),
+        "las dos cajas no se solapan de verdad",
       ).toBe(true);
+      /**
+       * **And one step of history, asserted against the whole section as it was.**
+       *
+       * The first version of this compared the mover's column with the neighbour's and expected
+       * them to differ after the undo — which says nothing when the two share a column, and a
+       * cover stacks its headline, its tagline and its body in the same one. It passed here and
+       * failed in CI, where a different face made `withRoomToTheRight` pick a different element.
+       * The placement before the drag is the only thing worth comparing against.
+       */
       await page.getByRole("button", { name: "Deshacer", exact: true }).click();
-      await expect
-        .poll(
-          async () => (await placedIn(frame, "sec-cover")).find((e) => e.id === mover?.id)?.column,
-        )
-        .not.toBe(under?.column);
+      await expect.poll(() => placedIn(frame, "sec-cover")).toEqual(beforeOverlap);
     } finally {
       await context.close();
     }
