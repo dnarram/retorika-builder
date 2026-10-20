@@ -8,6 +8,7 @@ import {
   fineTrackSpan,
   GRID_COLUMNS,
   mobileSequence,
+  overlaps,
   type Page,
   type Placement,
   type RetorikaDocument,
@@ -361,15 +362,6 @@ function elementNode(
 }
 
 /** Half-open intervals: an area ending where another starts does not touch it. */
-function intersects(a: GridArea, b: GridArea): boolean {
-  return (
-    a.column < b.column + b.columnSpan &&
-    b.column < a.column + a.columnSpan &&
-    a.row < b.row + b.rowSpan &&
-    b.row < a.row + a.rowSpan
-  );
-}
-
 /**
  * The area of the panel behind text that overlaps an image, or undefined if there is none.
  *
@@ -392,7 +384,7 @@ function panelArea(
   const images = placed.filter(({ el }) => el.value?.kind === "image");
   const over = placed.filter(
     ({ el, placement }) =>
-      el.value?.kind !== "image" && images.some((image) => intersects(placement, image.placement)),
+      el.value?.kind !== "image" && images.some((image) => overlaps(placement, image.placement)),
   );
   if (over.length === 0) return undefined;
 

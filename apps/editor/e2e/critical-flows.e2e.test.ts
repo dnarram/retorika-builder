@@ -25,6 +25,7 @@ import {
 } from "../src/app/landingHero.ts";
 import { BAR_INSET, BAR_STEP, type Point, TOOLBAR_GAP } from "../src/editor/barPosition.ts";
 import { VERB_SCALE } from "../src/editor/chromeScale.ts";
+import { GUIDE_ZONE } from "../src/editor/guides.ts";
 import { NARROWEST_WIDTH, PHONE_BREAKPOINT } from "../src/editor/overflowCheck.ts";
 import { BASE_URL, QUESTIONNAIRE_URL, startEditorServer, stopEditorServer } from "./server.ts"; /**
  * The preview frame, addressed as the one on screen rather than as «an iframe».
@@ -12483,7 +12484,7 @@ describe("sprint 17 día 7 — axe de cierre, con los diálogos abiertos", () =>
         LANDMARKS_IN_PAGE,
       );
 
-      await page.getByRole("button", { name: "Descargar", exact: true }).click();
+      await page.getByRole("button", { name: "Descargar" }).click();
       const gate = page.locator('[role="dialog"], [role="alertdialog"]').first();
       await expect(gate).toBeVisible();
 
@@ -12679,7 +12680,7 @@ describe("sprint 18 día 4 — la galería del banco en el editor, contada una a
 
       // The warning before a download: the same five, one row each, and it warns rather than
       // blocks — «Descargar igualmente» is there, which a dead link would not allow.
-      await page.getByRole("button", { name: "Descargar" }).click();
+      await page.getByRole("button", { name: "Descargar", exact: true }).click();
       const dialog = page.locator('[role="dialog"]', { hasText: "Antes de descargar" });
       await expect(dialog).toBeVisible();
       await expect(dialog.getByText(`Tu web tiene ${total} fotos de ejemplo`)).toBeVisible();
@@ -15607,15 +15608,23 @@ describe("sprint 24 día 8 — un elemento se arrastra a su celda", () => {
         (grab?.y ?? 0) + (grab?.height ?? 0) / 2 + DY,
         { steps: 10 },
       );
+      /**
+       * **A seis píxeles de la mano, no exactos, y la diferencia es el imán del día 5.**
+       *
+       * Las guías tiran del elemento hasta la línea de un vecino o el centro de la sección cuando
+       * queda dentro del umbral, así que «sigue a la mano» significa ahora «sigue a la mano o a la
+       * guía más cercana». Medido aquí: 136 px donde la mano movió 137, que es exactamente una
+       * guía haciendo su trabajo y no un arrastre que se queda corto.
+       */
       const carried = await boxOf(frame, "sec-cover", mover?.id as string);
-      expect((carried?.x ?? 0) - (startedAt?.x ?? 0), "no siguió a la mano a lo ancho").toBeCloseTo(
-        DX,
-        0,
-      );
-      expect((carried?.y ?? 0) - (startedAt?.y ?? 0), "no siguió a la mano a lo alto").toBeCloseTo(
-        DY,
-        0,
-      );
+      expect(
+        Math.abs((carried?.x ?? 0) - (startedAt?.x ?? 0) - DX),
+        "no siguió a la mano a lo ancho",
+      ).toBeLessThanOrEqual(GUIDE_ZONE);
+      expect(
+        Math.abs((carried?.y ?? 0) - (startedAt?.y ?? 0) - DY),
+        "no siguió a la mano a lo alto",
+      ).toBeLessThanOrEqual(GUIDE_ZONE);
       // No ghost anywhere: the element *is* the preview now (ADR 0048 §5, amended).
       await expect(frame.locator(".rb-ghost")).toHaveCount(0);
       // And nothing has been written while the hand is still down.
@@ -15630,14 +15639,17 @@ describe("sprint 24 día 8 — un elemento se arrastra a su celda", () => {
        * is the one thing no unit assertion can show.
        */
       const landed = await boxOf(frame, "sec-cover", mover?.id as string);
+      // Media unidad por el redondeo a la celda, más lo que el imán haya tirado: once píxeles es el
+      // presupuesto honesto de los dos juntos (ADR 0050, enmiendas de los días 3 y 5).
+      const BUDGET = GUIDE_ZONE + 5;
       expect(
         Math.abs((landed?.x ?? 0) - (startedAt?.x ?? 0) - DX),
         "no se quedó donde se soltó, a lo ancho",
-      ).toBeLessThanOrEqual(6);
+      ).toBeLessThanOrEqual(BUDGET);
       expect(
         Math.abs((landed?.y ?? 0) - (startedAt?.y ?? 0) - DY),
         "no se quedó donde se soltó, a lo alto",
-      ).toBeLessThanOrEqual(6);
+      ).toBeLessThanOrEqual(BUDGET);
       // Which is fourteen units right and four rows down, read off the document itself.
       const after = await placedIn(frame, "sec-cover");
       const moved = after.find((element) => element.id === mover?.id);
@@ -15747,12 +15759,22 @@ describe("sprint 24 día 8 — un elemento se arrastra a su celda", () => {
       await expect(frame.locator(".rb-ghost")).toHaveCount(0);
       await page.mouse.up();
 
-      const after = await placedIn(frame, "sec-cover");
+      /**
+       * Sondeado, por la razón que la otra caminata de este día ya aprendió: la colocación se
+       * escribe al soltar, eso reemplaza el `srcDoc`, y leerla en el mismo respiro lee un marco a
+       * medio sustituir —que no tiene la sección— y da «el texto no se movió» por un elemento que
+       * simplemente no estaba todavía.
+       */
       const was = before.find((element) => element.id === "el-headline");
-      const now = after.find((element) => element.id === "el-headline");
-      expect((now?.column ?? 0) - (was?.column ?? 0), "el texto no se movió").toBeGreaterThan(
-        FINE_PER_COLUMN,
-      );
+      await expect
+        .poll(
+          async () => {
+            const now = (await placedIn(frame, "sec-cover")).find((e) => e.id === "el-headline");
+            return (now?.column ?? 0) - (was?.column ?? 0);
+          },
+          { message: "el texto no se movió" },
+        )
+        .toBeGreaterThan(FINE_PER_COLUMN);
       const selectionIn = () =>
         frame.locator('[data-section="sec-cover"]').evaluate((node) => {
           const selection = (node as HTMLElement).ownerDocument.getSelection();
@@ -16739,6 +16761,208 @@ describe("sprint 25 día 4 — los bordes estiran la caja", () => {
       const grown = frame.locator('[data-section="sec-cover"] [data-id="el-image"]');
       const nowBox = await grown.boundingBox();
       expect(nowBox?.height, "la foto se estiró con su área").toBeCloseTo(box?.height ?? 0, 0);
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+});
+
+/**
+ * **Sprint 25 día 5 — las guías y el aviso de texto sobre texto** (ADR 0050 §6, día 5).
+ *
+ * Las guías son lo que hace usable a mano una rejilla de noventa y seis unidades: una unidad mide
+ * 7–10 px, así que «alinea esto con aquello» es algo que el ojo quiere y la mano no acierta. Y el
+ * aviso es la condición con la que David permitió los solapes: «Texto sobre texto avisa […] no un
+ * bloqueo».
+ *
+ * Las dos mitades sólo se pueden ver en un navegador: que la línea se dibuje y que el elemento
+ * acabe donde la línea dice, y que la puerta de la descarga enseñe el aviso con las palabras de los
+ * dos textos y deje pasar.
+ */
+describe("sprint 25 día 5 — las guías y el aviso de texto sobre texto", () => {
+  const VIEWPORT = { width: 1440, height: 900 };
+
+  async function handDesigned(page: Page): Promise<FrameLocator> {
+    await intoTheCanvas(page);
+    await studioToolsOn(page);
+    const frame = page.frameLocator(PREVIEW).first();
+    await frame.locator('[data-section="sec-cover"]').click();
+    await replacingTheDocument(page, async () => {
+      await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
+      await frame.locator(".rb-escalate-yes").click();
+    });
+    await waitForBankPhoto(frame);
+    await fontsReady(frame);
+    return page.frameLocator(PREVIEW).first();
+  }
+
+  it("imanta al centro de la sección, dibuja la guía, y la suelta centrada", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const page = await context.newPage();
+    try {
+      const frame = await handDesigned(page);
+      const cover = frame.locator('[data-section="sec-cover"]');
+      const cta = cover.locator('[data-id="el-cta"]');
+
+      /**
+       * **El centro del contenido de la sección, en las coordenadas del ratón.**
+       *
+       * Es la única línea de la sección misma que las guías ofrecen (la vertical se mueve con lo
+       * que arrastras, así que no es una guía — lo dice `guides.ts`). Y la primera versión lo midió
+       * *dentro* del marco mientras el ratón y `boundingBox()` hablan en coordenadas de la página:
+       * arrastró el elemento 176 px a la izquierda de donde creía y midió una guía horizontal como
+       * si fuera vertical. Un sistema de coordenadas por caminata, y éste es el de Playwright.
+       */
+      const sectionBox = await cover.boundingBox();
+      const padding = await cover.evaluate((node) => {
+        const style = getComputedStyle(node as HTMLElement);
+        return {
+          left: Number.parseFloat(style.paddingLeft) || 0,
+          right: Number.parseFloat(style.paddingRight) || 0,
+        };
+      });
+      const centre =
+        (sectionBox?.x ?? 0) +
+        padding.left +
+        ((sectionBox?.width ?? 0) - padding.left - padding.right) / 2;
+
+      // El botón, arrastrado hasta que su propio centro queda a cuatro píxeles del de la sección:
+      // dentro del umbral de seis, así que la guía tiene que ganar.
+      const box = await cta.boundingBox();
+      const from = {
+        x: (box?.x ?? 0) + (box?.width ?? 0) / 2,
+        y: (box?.y ?? 0) + (box?.height ?? 0) / 2,
+      };
+      await page.mouse.move(from.x, from.y);
+      await page.mouse.down();
+      await page.mouse.move(centre - 4, from.y + 24, { steps: 12 });
+
+      // **La guía se ve**, que es la mitad que ningún número puede contar: una línea de un píxel
+      // dentro de la sección, en el centro de su contenido.
+      // Puede haber dos —una por eje— si al bajar 24 px algún vecino también cae en el umbral; la
+      // que importa es la vertical, que es la del centro de la sección.
+      const guide = cover.locator(".rb-guide");
+      await expect(guide.first()).toBeVisible();
+      const vertical = await guide.evaluateAll((nodes) =>
+        nodes
+          .map((node) => (node as HTMLElement).getBoundingClientRect())
+          .filter((box) => box.width <= 2)
+          .map((box) => box.left),
+      );
+      expect(vertical, "no se dibujó ninguna guía vertical").toHaveLength(1);
+      const frameOffset = sectionBox?.x ?? 0;
+      expect(
+        Math.abs((vertical[0] ?? 0) + frameOffset - centre),
+        "la guía no está en el centro",
+      ).toBeLessThanOrEqual(1);
+
+      // Y el elemento ya está imantado mientras la mano sigue abajo: su centro sobre la línea.
+      const carried = await cta.boundingBox();
+      expect(
+        Math.abs((carried?.x ?? 0) + (carried?.width ?? 0) / 2 - centre),
+        "el elemento no se imantó a la guía",
+      ).toBeLessThanOrEqual(1);
+
+      await page.mouse.up();
+      // La guía se va con la mano.
+      await expect(cover.locator(".rb-guide")).toHaveCount(0);
+
+      /**
+       * **Se queda donde el imán lo puso**: su borde izquierdo, a media unidad —que es todo lo que
+       * la rejilla fina puede expresar— de donde estaba a mitad del gesto.
+       */
+      const landed = await frame
+        .locator('[data-section="sec-cover"] [data-id="el-cta"]')
+        .boundingBox();
+      expect(
+        Math.abs((landed?.x ?? 0) - (carried?.x ?? 0)),
+        "no se quedó donde la guía lo puso",
+      ).toBeLessThanOrEqual(5);
+
+      /**
+       * **Y centrado, con el margen que los huecos imponen** — que es un hallazgo de esta caminata
+       * y no una tolerancia de conveniencia.
+       *
+       * Un tramo de N unidades **no es un ancho fijo**: es N unidades más los huecos que resulte
+       * cruzar. Este botón mide 24 unidades: empezando en la 1 cruza dos huecos (256 px) y
+       * empezando en la 38 cruza tres (272). Así que el imán centra la caja que mide, y al caer en
+       * la unidad más cercana la caja puede ensanchar un hueco y su centro moverse ocho píxeles.
+       * Media unidad más medio hueco —trece píxeles— es el margen honesto, y es consecuencia
+       * directa de conservar los huecos del catálogo al píxel (ADR 0050 §2).
+       */
+      expect(
+        Math.abs((landed?.x ?? 0) + (landed?.width ?? 0) / 2 - centre),
+        "no quedó centrado al soltar",
+      ).toBeLessThanOrEqual(13);
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+
+  it("avisa de texto sobre texto antes de descargar, con las palabras de los dos, y deja pasar", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const page = await context.newPage();
+    try {
+      const frame = await handDesigned(page);
+      const cover = frame.locator('[data-section="sec-cover"]');
+
+      // Dos textos encima: el cuerpo arrastrado sobre el titular, que es lo que un ratón puede
+      // hacer desde el día 3 porque solapar está permitido.
+      const headline = cover.locator('[data-id="el-headline"]');
+      const body = cover.locator('[data-id="el-body"]');
+      const target = await headline.boundingBox();
+      const mine = await body.boundingBox();
+      await page.mouse.move(
+        (mine?.x ?? 0) + (mine?.width ?? 0) / 2,
+        (mine?.y ?? 0) + (mine?.height ?? 0) / 2,
+      );
+      await page.mouse.down();
+      await page.mouse.move(
+        (target?.x ?? 0) + (target?.width ?? 0) / 2,
+        (target?.y ?? 0) + (target?.height ?? 0) / 2,
+        { steps: 12 },
+      );
+      await page.mouse.up();
+      await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+
+      // ---- la puerta de la descarga ----
+      // `exact`, porque «Descargar» es también el principio de «Descargar igualmente» y el
+      // locator de Playwright busca por subcadena.
+      await page.getByRole("button", { name: "Descargar", exact: true }).click();
+      /**
+       * Puede haber avisos antes que este —las fotos del banco son del banco, y algo puede salirse
+       * en el móvil— y pasar por uno pregunta otra vez, que es lo que hace `acceptAndContinue`. Así
+       * que la caminata va pasando avisos hasta encontrar el de los textos, que es el último.
+       *
+       * Sin acotar a `role="alertdialog"`: no todos los diálogos de la puerta lo son, y la primera
+       * versión se quedó treinta segundos esperando un botón dentro de un rol que no existía.
+       */
+      const stacked = page.getByText("Hay texto encima de otro texto");
+      const anyway = page.getByRole("button", { name: "Descargar igualmente", exact: true });
+      await expect
+        .poll(
+          async () => {
+            if (await stacked.isVisible()) return "aviso";
+            if (await anyway.isVisible()) {
+              await anyway.click();
+              return "pasando";
+            }
+            return "esperando";
+          },
+          { message: "el aviso de texto sobre texto no llegó", timeout: 60_000 },
+        )
+        .toBe("aviso");
+
+      // **Las palabras de los dos textos**, no sus identificadores: el dueño piensa en frases.
+      const words = (await headline.textContent())?.trim() ?? "";
+      expect(words.length, "el titular no tiene palabras que citar").toBeGreaterThan(0);
+      await expect(page.getByText(words, { exact: false }).last()).toBeVisible();
+      // Y la explicación de por qué una foto debajo de un texto no avisa y dos textos sí.
+      await expect(page.getByText("no hay contraste entre una frase y otra")).toBeVisible();
+
+      // **Avisa, no bloquea**: pasar por él descarga.
+      const [download] = await Promise.all([page.waitForEvent("download"), anyway.click()]);
+      expect(download.suggestedFilename().endsWith(".zip")).toBe(true);
     } finally {
       await context.close();
     }

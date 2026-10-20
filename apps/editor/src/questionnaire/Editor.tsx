@@ -112,6 +112,7 @@ import {
   type SavedWhere,
   type SaveStatus,
 } from "../editor/EditorShell.tsx";
+import { GUIDE_ZONE, type Guide, guidesFor, type Rect } from "../editor/guides.ts";
 import { ACCEPTED_IMAGE_ACCEPT } from "../editor/imageBytes.ts";
 import { toolbarFamilyLabel } from "../editor/letterGallery.ts";
 import { LOOK_AHEAD_DEADLINE_MS, lookAheadStep } from "../editor/lookAhead.ts";
@@ -121,6 +122,7 @@ import { countPhotos, listPhotos, type PhotoState } from "../editor/photoInvento
 import { withPhotoUrls } from "../editor/previewDocument.ts";
 import { record, serialOf } from "../editor/probe.ts";
 import {
+  axes,
   cursorFor,
   EDGE_ZONE,
   EDGE_ZONE_WRITING_INSIDE,
@@ -149,6 +151,7 @@ import {
   DownloadWarningDialog,
   OverflowDialog,
   PhotosFailedDialog,
+  StackedTextDialog,
   TooManyPhotosDialog,
 } from "./DownloadGateDialogs.tsx";
 import { FieldsPanel } from "./FieldsPanel.tsx";
@@ -5272,6 +5275,61 @@ export function Editor({
   }
 
   /**
+   * The boxes of a section's other placed elements — what the guides line up against.
+   *
+   * Top-level children with a `data-id`, which is the renderer's own mark: the chrome this file
+   * draws into a section carries none, so the handmade bar, the verbs' cluster and the guides
+   * themselves cannot become things to line up with. The element being moved is left out, because
+   * an element lining up with itself is not a guide.
+   */
+  function neighbourRects(section: HTMLElement, exceptId: string | undefined): Rect[] {
+    const out: Rect[] = [];
+    for (const child of section.children) {
+      const el = child as HTMLElement;
+      const id = el.dataset["id"];
+      if (!id || id === exceptId) continue;
+      const rect = el.getBoundingClientRect();
+      out.push({ left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom });
+    }
+    return out;
+  }
+
+  /** The content box's own centre along x, which is the one line of the section itself the guides
+   * offer (`guides.ts` says why the vertical centre is not one). */
+  function centreOf(metrics: GridMetrics): number {
+    return metrics.left + metrics.columns.reduce((total, width) => total + width, 0) / 2;
+  }
+
+  /**
+   * The guides, drawn inside the section for as long as the hand is on something (ADR 0050, día 5).
+   *
+   * `position: absolute`, so they ride the section's own scroll and — the lesson of día 2 — take no
+   * row of the grid they are drawn over. `pointer-events: none`, because a line that can swallow
+   * the pointer would end the gesture it is guiding.
+   */
+  function drawGuides(section: HTMLElement, lines: readonly Guide[]) {
+    for (const old of section.querySelectorAll(".rb-guide")) old.remove();
+    const box = section.getBoundingClientRect();
+    for (const line of lines) {
+      const guide = section.ownerDocument.createElement("div");
+      guide.className = "rb-guide";
+      guide.setAttribute("aria-hidden", "true");
+      if (line.axis === "x") {
+        guide.style.left = `${Math.round(line.at - box.left)}px`;
+        guide.style.top = "0";
+        guide.style.width = "1px";
+        guide.style.height = "100%";
+      } else {
+        guide.style.top = `${Math.round(line.at - box.top)}px`;
+        guide.style.left = "0";
+        guide.style.height = "1px";
+        guide.style.width = "100%";
+      }
+      section.appendChild(guide);
+    }
+  }
+
+  /**
    * The canvas's zoom, read off the frame itself — **what turns a threshold in screen pixels into
    * one in the frame's** (ADR 0050 §6, David's adjustment 3).
    *
@@ -5384,6 +5442,7 @@ export function Editor({
         // the rebuild, and a cancelled one must leave no trace.
         pulling.el.style.gridColumn = pulling.column;
         pulling.el.style.gridRow = pulling.row;
+        for (const guide of section.querySelectorAll(".rb-guide")) guide.remove();
         showCursor(pulling.el, null);
         iframeDoc.documentElement.classList.remove("rb-resizing");
         iframeDoc.documentElement.style.cursor = "";
@@ -5442,11 +5501,27 @@ export function Editor({
          * the eye sees during the gesture is what the document will say after it.
          */
         const metrics = gridMetricsOf(section);
+        /**
+         * **The border being pulled lines up as well** (día 5), and only the axes that border owns:
+         * a right border has something to say about columns and nothing about rows, so offering its
+         * vertical position as a line would snap a width to a neighbour's top.
+         */
+        const owns = axes(pulling.edge);
+        const guided = guidesFor({
+          x: owns.horizontal ? [event.clientX] : [],
+          y: owns.vertical ? [event.clientY] : [],
+          others: neighbourRects(section, pulling.el.dataset["id"]),
+          centreX: centreOf(metrics),
+          threshold: GUIDE_ZONE / zoomOf(iframeDoc),
+        });
+        drawGuides(section, guided.lines);
+        const x = event.clientX + guided.dx;
+        const y = event.clientY + guided.dy;
         pulled = resizeTo(pulling.from, pulling.edge, {
-          startColumn: fineColumnAt(event.clientX, metrics),
-          endColumn: fineLastColumnAt(event.clientX, metrics),
-          startRow: rowAt(event.clientY, metrics),
-          endRow: lastRowAt(event.clientY, metrics),
+          startColumn: fineColumnAt(x, metrics),
+          endColumn: fineLastColumnAt(x, metrics),
+          startRow: rowAt(y, metrics),
+          endRow: lastRowAt(y, metrics),
         });
         const next = { ...pulling.from, ...pulled };
         pulling.el.style.gridColumn = `${fineTrack(next.column)}/span ${fineTrackSpan(
@@ -5580,6 +5655,8 @@ export function Editor({
 
       let from: Point | null = null;
       let grab: Point = { x: 0, y: 0 };
+      /** The element's own box when the hand took it, which is what the guides line up (día 5). */
+      let took: Rect | null = null;
       let moving: Placement | null = null;
       let moved = false;
       let outcome: Drop | null = null;
@@ -5609,6 +5686,8 @@ export function Editor({
         el.classList.remove("rb-moving");
         // The displacement is chrome and lives on the element for exactly as long as the hand does.
         el.style.transform = "";
+        took = null;
+        for (const guide of section.querySelectorAll(".rb-guide")) guide.remove();
         iframeDoc.documentElement.classList.remove("rb-dragging");
         for (const ghost of iframeDoc.querySelectorAll(".rb-ghost")) ghost.remove();
       };
@@ -5669,9 +5748,10 @@ export function Editor({
         gesture = "move";
         from = { x: event.clientX, y: event.clientY };
         const rect = el.getBoundingClientRect();
-        // Where inside the element the hand took hold, so the ghost follows the corner the person
-        // is moving rather than jumping to put the pointer at the element's top-left.
+        // Where inside the element the hand took hold, so what travels keeps the grip it was taken
+        // by rather than jumping to put the pointer at the element's top-left.
         grab = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+        took = { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
         el.setPointerCapture(event.pointerId);
       });
 
@@ -5758,13 +5838,30 @@ export function Editor({
          * where the pointer is, which would snatch the element's corner under the cursor the
          * instant the drag began. The same decision `barPosition`'s own drag made, for the same
          * reason: a hand expects whatever it has picked up to keep the grip it took.
+         *
+         * **And the guides pull it the last few pixels** (ADR 0050, día 5): its three lines per
+         * axis are offered to the neighbours' edges and centres and to the centre of the section,
+         * and whatever is within six screen pixels wins. Outside that, the fine grid decides as it
+         * did before — which is what «gana la guía dentro del umbral» means.
          */
-        el.style.transform = `translate(${now.x - from.x}px, ${now.y - from.y}px)`;
+        const metrics = gridMetricsOf(section);
+        const raw = { x: now.x - from.x, y: now.y - from.y };
+        const guided = took
+          ? guidesFor({
+              x: [took.left + raw.x, (took.left + took.right) / 2 + raw.x, took.right + raw.x],
+              y: [took.top + raw.y, (took.top + took.bottom) / 2 + raw.y, took.bottom + raw.y],
+              others: neighbourRects(section, elementId),
+              centreX: centreOf(metrics),
+              threshold: GUIDE_ZONE / zoomOf(iframeDoc),
+            })
+          : { dx: 0, dy: 0, lines: [] };
+        el.style.transform = `translate(${raw.x + guided.dx}px, ${raw.y + guided.dy}px)`;
+        drawGuides(section, guided.lines);
         // And where that would land, kept for the release. Read every move rather than once,
         // because a row can grow under the hand while something above it reflows.
         outcome = dropAt({
-          metrics: gridMetricsOf(section),
-          at: { x: now.x - grab.x, y: now.y - grab.y },
+          metrics,
+          at: { x: now.x - grab.x + guided.dx, y: now.y - grab.y + guided.dy },
           moving,
         });
       });
@@ -6360,6 +6457,15 @@ export function Editor({
       // and which one is the gesture's own business), so the only thing a class is needed for is
       // keeping a text from selecting itself as the hand travels across it.
       ".rb-resizing, .rb-resizing * { user-select: none; }",
+      /*
+       * **The alignment guides** (ADR 0050, día 5): one pixel of brand blue, under the verbs'
+       * cluster (10) and the text bar (30) and over the stripes (0), and `pointer-events: none`
+       * because a line that could swallow the pointer would end the gesture it is guiding. Drawn
+       * `position: absolute`, which is what keeps a child of a grid from taking a row of it — the
+       * lesson día 2 paid 33 pixels for.
+       */
+      `.rb-guide { position: absolute; z-index: 8; pointer-events: none;`,
+      `  background: ${CHROME_SCALE.brand}; }`,
       /*
        * **A focus ring, which these eight buttons never had.** `globals.css` has drawn one for the
        * application's own side since sprint 15 and the pills inside the frame got theirs the same
@@ -7437,6 +7543,13 @@ export function Editor({
         <OverflowDialog
           findings={downloadDialog.findings}
           onDownloadAnyway={() => acceptAndContinue("overflow")}
+          onCancel={() => setDownloadDialog(null)}
+        />
+      ) : null}
+      {downloadDialog?.kind === "textOverText" ? (
+        <StackedTextDialog
+          findings={downloadDialog.findings}
+          onDownloadAnyway={() => acceptAndContinue("layout")}
           onCancel={() => setDownloadDialog(null)}
         />
       ) : null}

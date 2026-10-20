@@ -1,6 +1,11 @@
 "use client";
 
-import type { ElementAddress, RetorikaDocument, StyleException } from "@retorika/schema";
+import type {
+  ElementAddress,
+  OverlappingTexts,
+  RetorikaDocument,
+  StyleException,
+} from "@retorika/schema";
 import { useId } from "react";
 import type { OverflowFinding } from "../editor/overflowCheck.ts";
 import { listPhotos } from "../editor/photoInventory.ts";
@@ -485,6 +490,90 @@ export function OverflowDialog({
             type="button"
             onClick={onDownloadAnyway}
             className="h-10 cursor-pointer rounded-[10px] border-0 bg-ui-brand px-5 text-[14px] font-semibold text-white"
+          >
+            {es["editor.download.warning.downloadAnyway"]}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * **Two texts on top of each other** — the one overlap the review mentions (ADR 0050 §6, día 5).
+ *
+ * Overlapping is allowed since día 3, and David's condition for allowing it is this dialog: «Texto
+ * sobre texto avisa […] no un bloqueo». So it says what is stacked, in the owner's own words rather
+ * than in element ids, and «Descargar igualmente» goes past it like every other warning.
+ *
+ * The foot explains the asymmetry, because without it the warning would look arbitrary: a
+ * photograph under a heading is fine — the renderer draws a panel behind the words — and two
+ * sentences are not, because there is no contrast between a sentence and another sentence.
+ */
+export function StackedTextDialog({
+  findings,
+  onDownloadAnyway,
+  onCancel,
+}: {
+  findings: readonly OverlappingTexts[];
+  onDownloadAnyway: () => void;
+  onCancel: () => void;
+}) {
+  const titleId = useId();
+  const container = useFocusTrap(true, onCancel);
+  const body =
+    findings.length === 1
+      ? es["editor.download.stacked.body.one"]
+      : es["editor.download.stacked.body.many"].replace("{n}", String(findings.length));
+
+  return (
+    <div className="fixed inset-0 z-20 flex items-center justify-center bg-[#0F172A]/45 p-5">
+      <div
+        ref={container}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className="flex max-h-full w-full max-w-[520px] flex-col rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.28)]"
+      >
+        <h2 id={titleId} className="m-0 text-[17px] font-bold text-ui-ink">
+          {es["editor.download.stacked.title"]}
+        </h2>
+        <p className="mt-2 mb-0 text-[14px] leading-snug text-ui-muted">{body}</p>
+
+        <div className="mt-4 flex min-h-0 flex-col gap-2 overflow-y-auto">
+          {findings.map((finding) => (
+            <div
+              key={`${finding.sectionId}/${finding.first.elementId}/${finding.second.elementId}`}
+              className="rounded-[9px] border border-ui-border px-3 py-2.5"
+            >
+              {/* The words of both, truncated by CSS rather than cut here: a heading can be long,
+                  and a sentence clipped with an ellipsis still says which one it is. */}
+              <span className="block truncate text-[13px] text-ui-ink">
+                {es["editor.download.stacked.pair"]
+                  .replace("{first}", finding.first.words)
+                  .replace("{second}", finding.second.words)}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <p className="mt-4 mb-0 text-[12px] leading-snug text-ui-muted">
+          {es["editor.download.stacked.foot"]}
+        </p>
+
+        <div className="mt-5 flex justify-end gap-2.5">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="h-10 cursor-pointer rounded-[10px] border border-ui-border bg-white px-4 text-[14px] font-medium text-ui-ink"
+          >
+            {es["editor.download.contrast.cancel"]}
+          </button>
+          <button
+            type="button"
+            onClick={onDownloadAnyway}
+            className="h-10 cursor-pointer rounded-[10px] border-0 bg-ui-ink px-4 text-[14px] font-semibold text-white"
           >
             {es["editor.download.warning.downloadAnyway"]}
           </button>

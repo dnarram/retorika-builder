@@ -31,7 +31,7 @@ import { describe, expect, it } from "vitest";
  * and the behaviour the trap produces is covered by the `e2e` walks on the five a click can reach.
  *
  * **It reads lines rather than parsing, and the road to that is worth recording.** A sweep over the
- * whole text found nine dialogs where there are eight, twice over: once on the sentence in
+ * whole text found one dialog more than there were, twice over: once on the sentence in
  * `useFocusTrap.ts` that explains what `aria-modal` promises, and once on `Editor.tsx`'s own
  * `document.querySelector('[aria-modal="true"]')` — a selector that asks about dialogs is not an
  * element carrying the attribute. Blanking comments and quoted strings by hand fixed both and
@@ -42,7 +42,7 @@ import { describe, expect, it } from "vitest";
  * is there and `ts.createSourceFile` is not.
  *
  * So the unit of reading is **one line**, which cannot drift out of step with anything. A dialog is
- * a line whose whole content is the attribute, which is how all eight are written and how the
+ * a line whose whole content is the attribute, which is how every one of them is written and how
  * formatter keeps them. The two false positives are excluded by the same rule for free, and the
  * shape that rule would miss — the attribute inline among others — is caught by the third test
  * below rather than left as a hole.
@@ -50,8 +50,9 @@ import { describe, expect, it } from "vitest";
 
 const SRC = fileURLToPath(new URL("../src", import.meta.url));
 
-/** How many `aria-modal` dialogs the application has. */
-const MODAL_COUNT = 8;
+/** How many `aria-modal` dialogs the application has. Nine since sprint 25 día 5, which added the
+ * one that says two texts are sitting on top of each other (ADR 0050 §6). */
+const MODAL_COUNT = 9;
 
 /**
  * The prose that names the count, so a failure says where to go. Listed rather than asserted on:

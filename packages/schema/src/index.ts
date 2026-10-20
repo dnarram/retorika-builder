@@ -116,6 +116,8 @@ export {
   shiftMarks,
   textEditBetween,
 } from "./marks.ts";
+export type { GridArea, OverlappingTexts } from "./overlapping.ts";
+export { overlappingTexts, overlaps } from "./overlapping.ts";
 export { deletePage, movePage, renamePage, setPageInMenu } from "./pages.ts";
 export { DocumentValidationError, parseDocument, safeParseDocument } from "./parse.ts";
 export type { CatalogLayout, PresetShape, PresetSlot } from "./preset.ts";

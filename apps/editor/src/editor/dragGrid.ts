@@ -3,6 +3,7 @@ import {
   FINE_PER_COLUMN,
   fineTrack,
   GRID_COLUMNS,
+  type GridArea,
   type Placement,
   ROW_STEP_PX,
 } from "@retorika/schema";
@@ -37,8 +38,14 @@ import type { KeyPress } from "./shortcuts.ts";
  * and `twoStates.ts` already use.
  */
 
-/** The part of a placement that is geometry: no element id, because a cell is about rectangles. */
-export type GridArea = Pick<Placement, "column" | "columnSpan" | "row" | "rowSpan">;
+/**
+ * The part of a placement that is geometry: no element id, because a cell is about rectangles.
+ *
+ * Re-exported from `packages/schema`, where it now lives beside `overlaps` — the predicate the
+ * renderer's legibility panel, this drag and día 5's text-over-text warning all need. Three copies
+ * of «these two share a cell» existed until today; one definition is what keeps them from drifting.
+ */
+export type { GridArea };
 
 export interface GridMetrics {
   /** The section's content box, in the frame's own coordinates. */
@@ -174,23 +181,6 @@ function nearestRow(y: number, metrics: GridMetrics, side: "start" | "end"): num
 /** The cell a point falls in: the nearest unit and the nearest row. */
 export function cellAt(at: Point, metrics: GridMetrics): Cell {
   return { column: fineColumnAt(at.x, metrics), row: rowAt(at.y, metrics) };
-}
-
-/**
- * Whether two grid areas share any cell.
- *
- * **Not a refusal any more** (ADR 0050, amending ADR 0048 §4): overlapping is allowed, as it is in
- * Canva and Word, and the stacking order is the document's own. Kept because the download review
- * asks a related question — two *texts* on top of each other are illegible and worth a warning,
- * which día 5 builds in `packages/schema` where the document can be asked.
- */
-export function overlaps(a: GridArea, b: GridArea): boolean {
-  return (
-    a.column < b.column + b.columnSpan &&
-    b.column < a.column + a.columnSpan &&
-    a.row < b.row + b.rowSpan &&
-    b.row < a.row + a.rowSpan
-  );
 }
 
 /**

@@ -465,3 +465,87 @@ the bottom of its area** — fifty rows of eight for 396 px of photograph — so
 visible border asks for one row less than the round arithmetic, and that gap *is* «crece sin
 estirarse». And **reading the placements in the same breath as a gesture reads a half-replaced
 frame**: every gesture writes a placement, which replaces the `srcDoc`, so the walks poll.
+
+## Amendment — the guides, and the one overlap that warns (día 5, 20 October 2026)
+
+Two things David asked for on the same day he chose the fine grid: «Sí, guías de alineación», and —
+when he allowed overlapping — «Texto sobre texto avisa […] no un bloqueo». They are the two halves
+of making ninety-six units usable by hand: the guides let the eye line things up that the hand
+cannot hit, and the warning catches the one thing the freedom costs.
+
+### 1. The guides: neighbours' edges and centres, and the centre of the section
+
+`guidesFor` takes the lines of the thing being moved that are **live** — a drag offers three per
+axis (left, centre, right), a resize offers only the border being pulled — and answers with how far
+to shift and which line to draw. The candidates are each neighbour's two edges and its middle on
+each axis, plus **the section's own centre along x**. Within six screen pixels (divided by the
+canvas zoom, adjustment 3) the guide wins; outside it the fine grid decides exactly as before.
+
+**No vertical candidate for the section itself, and that is deliberate**: a section's height is its
+content's, so its vertical centre moves while the thing being dragged is still in the air, and a
+magnet to a line that moves with you is not a guide. Horizontally the content box is fixed by the
+canvas, so its centre is a real place to put something.
+
+Each axis is decided on its own — a drag can snap sideways and stay free vertically, which is what
+lining up a column of texts feels like — and a neighbour's line wins a tie against the section's
+centre: lining up with something on the page is a stronger intention than lining up with the middle
+of nothing. The lines are drawn as `.rb-guide`, one pixel of brand blue, `position: absolute` inside
+the section (so they take no row of the grid they are drawn over — día 2's lesson) and
+`pointer-events: none`, because a line that could swallow the pointer would end the gesture it is
+guiding. A resize only offers the axes its border owns: a right border has something to say about
+columns and nothing about rows.
+
+### 2. A span of N units is not a fixed width, which the walk found
+
+**The finding of the day, and it belongs to §2's decision rather than to the guides.** An element's
+rendered width is its units *plus however many gutters it happens to cross*: the generated cover's
+button is 24 units wide, which is 256 px starting at unit 1 (two gutters inside) and 272 px starting
+at unit 38 (three). So the magnet centres the box it measures, the drop keeps the **span** — a drag
+moves an element, it never resizes it (día 3) — and the box can therefore come to rest up to a
+gutter wider than it was, with its centre eight pixels off the line.
+
+Measured: a button magnetised to the section's centre lands with its left edge within half a unit of
+where the guide put it, and its centre within **thirteen pixels** — half a unit plus half a gutter —
+of the line. That is the honest tolerance, and it is the direct consequence of keeping the catalog's
+gutters to the pixel. Making the drop preserve the rendered width instead would mean a drag that
+quietly changes a span, which is the one thing this gesture has promised not to do since día 3.
+
+### 3. Text over text warns, and nothing else does
+
+`overlappingTexts(doc)` lives in `packages/schema` — it is a statement about the document — and
+lists every pair of **text** elements whose placements overlap in a hand-designed section, in
+document order, with the words of both so the dialog can name them. Four exclusions, each a
+decision:
+
+- **Only text over text.** A photograph under a heading is design, and the renderer already draws a
+  panel behind those words to keep them legible (`panelArea`). Two sentences competing for the same
+  pixels fail for a reason no palette can fix: there is no contrast between a sentence and another
+  sentence.
+- **Only what the page draws**: a hidden element renders as nothing, and warning about an overlap
+  nobody can see would be warning about the document rather than about the site.
+- **Only a free section**, because only there does the document hold placements at all.
+- **Only pairs, each once**: three texts in one place are three findings, and naming one twice would
+  read as two problems.
+
+It is the **last** of the four warnings and it never blocks, which is David's condition: the owner
+put it there with their own hand and the canvas showed it happening, so it is the least likely of
+the four to be news. The dialog quotes both texts and explains the asymmetry in one line, because
+without that the warning would look arbitrary.
+
+**And `overlaps` is now one function.** The renderer's `intersects` (for the legibility panel), the
+editor's own (for the drag) and this one were three copies of «these two share a cell»; the
+definition lives in the schema and all three import it.
+
+### 4. What the day cost in records, and what the guard caught
+
+The warning's dialog is the **ninth** `aria-modal` dialog, and `modalTrap.test.ts` refused the
+change until the count and **four** records that name it were updated — `useFocusTrap.ts`,
+`modalTrap.test.ts` itself, `docs/tasks/backlog.md` and
+`docs/tasks/el-recorrido-de-la-cuenta.md`. That guard exists because the backlog «said five for
+five days after the sixth was written»; this is the second time it has stopped the same drift.
+
+Two walk-level corrections worth keeping: a walk that measures a guide must work in **one**
+coordinate space — the first version measured the section's centre inside the frame while the mouse
+and `boundingBox()` speak in the page's, which moved the drag 176 px and read a horizontal guide as
+a vertical one — and the download gate's dialogs are not all `role="alertdialog"`, so a walk that
+scopes to that role waits thirty seconds for a button that is on screen.

@@ -12,9 +12,10 @@ import { initialFocusIndex, tabDecision } from "./focusTrap.ts";
  * claimed it.
  *
  * David's adjustment of 4 October scoped that sprint's fix to its own new screens, leaving the
- * dialogs that already existed owed this as a backlog row. **Sprint 17 day 1 pays it:** all eight
- * `aria-modal` dialogs now call this hook, and `test/modalTrap.test.ts` fails if a ninth is written
- * without it. The row said «five» because the sixth, `PhotosFailedDialog`, was committed on 4
+ * dialogs that already existed owed this as a backlog row. **Sprint 17 day 1 pays it:** every
+ * `aria-modal` dialog calls this hook — nine of them since sprint 25 día 5 — and
+ * `test/modalTrap.test.ts` fails if the next one is written without it, naming every record that
+ * carries the number. The row said «five» because the sixth, `PhotosFailedDialog`, was committed on 4
  * October 2026 — the same day as this hook, in a different commit — so nothing was wrong when it
  * was written and the number was stale by the evening. That is the drift the guard ends.
  *
@@ -36,7 +37,7 @@ import { initialFocusIndex, tabDecision } from "./focusTrap.ts";
  * was defensible and the record was still false. Now the record is the markup.
  *
  * **`onClose` is read through a ref, and that is a fix rather than a style.** Every one of the
- * eight call sites passes an inline arrow — `onClose={() => setDownloadDialog(null)}` — so it is a
+ * call sites passes an inline arrow — `onClose={() => setDownloadDialog(null)}` — so it is a
  * new function on every render of its parent, and `Editor.tsx` re-renders on every autosave tick,
  * every notice and every photograph that arrives. With `onClose` in the dependency list, that
  * re-ran this effect on every one of those: the cleanup returned focus and the body re-captured

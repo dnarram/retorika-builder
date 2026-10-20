@@ -147,8 +147,9 @@ export interface ResizeTarget {
   readonly endRow: number;
 }
 
-/** Which of the two axes an edge owns. */
-function axes(edge: Edge): { horizontal: boolean; vertical: boolean } {
+/** Which of the two axes an edge owns — which is also which axes the guides may snap while it is
+ * being pulled (día 5): a right border lines up sideways and has nothing to say about rows. */
+export function axes(edge: Edge): { horizontal: boolean; vertical: boolean } {
   return {
     horizontal: ["left", "right", "nw", "ne", "sw", "se"].includes(edge),
     vertical: ["top", "bottom", "nw", "ne", "sw", "se"].includes(edge),
