@@ -2829,3 +2829,272 @@ Quitarla y dejar el botón los recupera, con el viaje intacto al pulsar.
 
 **Y lo de antes, que no se ha movido:** la lista del iPhone de verdad del sprint 21, y los 7,9 px que
 el campo se desplaza al filtrar sectores.
+
+## Sprint 24 — «La letra se elige, el elemento se arrastra y el panel no tapa» (17 a 19 de octubre de 2026)
+
+David, tras fusionar el cierre del sprint 23, con cinco peticiones — tres pequeñas y dos grandes:
+
+> «1. Elimina el texto «Las webs de negocios suelen identificar a su titular. Si tienes dudas,
+> consúltalo con tu gestoría.».
+>
+> 2. Cuando en el editor dentro de una sección hago clic en el botón «Campos» se abre un menu/panel
+> en el lado derecho del editor que oculta parte de la seccion a editar. Quiero que el menu/panel
+> desplegado tras pulsar «campos» siga la misma logica que todas las herramientas de diseño
+> avanzadas y no oculte elementos que van a ser editados.
+>
+> 3. La maqueta dentro de la landing page que aparece en el lado derecho cuando se visualiza la
+> landing desde el pc está demasiado arriba y descompensa la landing. Busca que los textos y la
+> maqueta este compensado para que todos los elementos se vean de un pantallazo y la landing page
+> quede compensada y balanceada. La landing page visualizada desde el movil se ve genial.
+>
+> 4. En el editor dentro de una sección quiero poder mover cualquier elemnto visual arrastrando con
+> el raton sin asas para ajustar su posicion en la pagina.
+>
+> 5. Quiero poder seleccionar la fuente de letra exacta para la página y/o cualquier texto (ten en
+> cuenta que la fuente es uno de los elementos visuales mas importantes del branding corporativo).»
+
+**Las cinco causas, localizadas en el código antes de planificar.** Ninguna se dedujo:
+
+1. **El texto tenía un ADR firmado por el CEO y su redacción *era* la decisión.** El
+   [ADR 0019](../decisions/0019-the-footer-offers-the-owners-details.md) dice literalmente «its
+   wording **is part of this decision, not a detail of the implementation**» y cita la frase entera.
+   Ninguna prueba la aseveraba, y el propio ADR nombraba su reapertura: «the warning's wording is the
+   first thing to change».
+2. **«Campos» era el único panel que no estaba en la fila.** `EditorShell` hace sitio con flexbox y
+   el lienzo se reescala solo; `FieldsPanel` se dibujaba dentro de la tarjeta y era `position: fixed`.
+   Y su razón escrita ya no se sostenía: decía que dentro de la tarjeta la página quedaría «a sliver
+   wide», cierto de la *tarjeta* y no de la *fila* — `SharePanel` había hecho esa misma mudanza.
+3. **La maqueta estaba alta por una línea.** `items-center` y ninguna de las dos columnas declarando
+   `align-self`: la de la maqueta medía unos **547 px** contra unos **420** de la de texto, así que su
+   borde superior quedaba unos **65 px** por encima del titular.
+4. **La rejilla existía y el arrastre no.** `placementSchema` son cuatro enteros, `grid.columns` es
+   `z.literal(12)` y `placementStyle` emite solo `grid-column`/`grid-row`: **un píxel libre es un
+   error de compilación, no un caso no soportado**. Faltaban dos piezas: el lienzo no sabía elegir un
+   elemento, y **todo texto era `contentEditable` de forma permanente**.
+5. **La tipografía tenía medio camino hecho y el dossier aprobado prometía el otro medio.** Tres
+   parejas nombradas por carácter, nunca por fuente, porque la fuente podía no llegarle al visitante;
+   `SHIPPABLE_FAMILIES` era una tabla cerrada de **dos** familias.
+
+**Las cuatro decisiones de David, el 17 de octubre.** Entre opciones puestas delante:
+
+1. **Las cinco cosas en un solo sprint.**
+2. **Una galería de fuentes que enviamos**, elegidas por su nombre real, titulares y texto por
+   separado, y viajando solo las que la web usa.
+3. **Arrastrar con imán a la rejilla**, sin asas y sin tocar la regla 4.
+4. **Igualar las alturas** de las dos columnas de la landing.
+
+**Y catorce correcciones al plan, en dos revisiones.** Todas en el producto final:
+
+| | Corrección | Dónde acabó |
+|---|---|---|
+| 1 | El umbral de 3 px no separa mover de editar: define dos estados explícitos | [ADR 0047](../decisions/0047-a-text-is-chosen-before-it-is-written-in.md) |
+| 2 | `preventDefault` en `dragstart` sobre imágenes y enlaces del lienzo | ADR 0048 §2 |
+| 3 | Colisiones y límites decididos en el ADR, no descubiertos luego | ADR 0048 §3–§4 |
+| 4 | `touch-action: none` solo sobre el elemento elegido, con el lienzo desplazándose con un dedo | [ADR 0049](../decisions/0049-the-arrows-move-it-and-say-so-and-one-finger-still-scrolls.md) §6 |
+| 5 | WCAG 2.5.7 citado, y cada movimiento por teclado anunciado | ADR 0048 §7, ADR 0049 §3 |
+| 6 | No tapar no basta: la sección editada sigue a la vista tras abrir y cerrar «Campos» | día 3 |
+| 7 | «De un pantallazo» es una restricción de pliegue, no de alturas iguales | día 2 |
+| 8 | La PR del día 1 espera firma; su entrada en este archivo se escribe al cierre | esta entrada |
+| 9 | El anuncio y el foco tienen que sobrevivir al `srcDoc`: región en el documento padre | ADR 0049 §3 |
+| 10 | Tres flechas, tres movimientos, sin volver a elegir | día 9, y encontró un defecto |
+| 11 | Definición exacta de «ocupada», con dos pruebas unitarias | ADR 0048 §3 |
+| 12 | Dos mitigaciones para los dos estados: segundo clic y pista visible | ADR 0047 §3 |
+| 13 | Tolerancia ±24 px, no igualdad, y el suelo manda | día 2 |
+| 14 | El `contentEditable` va en su propia PR, antes del arrastre | día 7 (PR #270) |
+
+Y tres decisiones que tomó al revisar, no en la PR: **colisión al soltar: rechaza y vuelve**;
+**tercera ranura `font.accent`: no**; **la palabra «opcional» junto a los campos del pie: sí**.
+
+### El aviso del titular se va, y el ADR 0044 dice por qué (día 1, PRs #261 y #262)
+
+La clave `editor.footerIdentity` y su único lector fuera, con `footerNeedsIdentity` y el import de
+`FOOTER_IDENTITY_SLOTS` que quedaban muertos. Los tres campos del pie ganan «(opcional)» en
+`packages/catalog`, decidido por él: no afirma nada sobre la ley y mantiene explicables tres campos
+que se quedan sin la única frase del producto que decía por qué existen.
+
+El **[ADR 0044](../decisions/0044-the-editor-stops-advising-about-the-owners-identity.md)** enmienda
+al 0019 y **nombra el contexto que acepta con su artículo**: el art. 10 de la LSSI-CE obliga al
+prestador a mostrar nombre, NIF y domicilio. Los campos siguen ofrecidos y opcionales; lo que
+desaparece es que el producto lo recuerde, y **ese riesgo pasa al cliente**. Está firmado por David,
+**no por el CEO**, y así está escrito en el propio ADR.
+
+**Y un defecto de contraste de catorce sprints, encontrado de paso** (PR #261): `.rb-toolbar-caption`
+y `.rb-hole-fate` pintaban `#94A3B8` sobre blanco — **2,8:1**, bajo el 4,5 de la WCAG 1.4.3 — en
+textos del cromo que nadie había medido porque los grises de la maqueta se habían copiado como
+colores de texto. Ahora son `#5B6B82` (4,9:1) y la guarda es una **negativa**: los grises de la
+maqueta no pueden usarse como color de texto en ninguna parte de la hoja inyectada.
+
+### Las dos columnas de la landing caben en una pantalla (día 2, PRs #263 y #264)
+
+`HERO_COLUMN_MAX = 420` y el reparto `studio:grid-cols-[minmax(0,1fr)_minmax(0,420px)]` con
+`items-start`: los dos topes alineados y la columna de la maqueta con el **suelo de legibilidad
+medido** — por debajo de 420 px de marco, el estado de móvil cae de 128 px y deja de leerse como un
+teléfono. La aserción que manda es **el pliegue**: el fondo de las dos columnas dentro de la ventana
+a 1280×720, 1440×900 y 1680×1050. La tolerancia de ±24 px que él fijó antes de empezar evitó una
+parada inútil: en el suelo la diferencia son veinte píxeles invisibles.
+
+**Y una prueba que pasaba bajo sabotaje**: la primera versión pedía `studio:items-start` «en algún
+sitio del fichero», y el bloque de secciones de debajo lleva la misma clase. Se asevera el fragmento
+entero de la rejilla, y cada mitad se saboteó por separado.
+
+### «Campos» se pone al lado, y la sección no se va de la vista (día 3, PR #265)
+
+`FieldsPanel` deja de ser `position: fixed` dentro de la tarjeta y pasa al hueco `panel` de
+`EditorShell`, como los otros seis: el lienzo se encoge y se escala solo, **sin geometría nueva**. De
+paso desaparece un peligro latente — `canvas-card` lleva `transform: scale()` y un ancestro
+transformado es el bloque contenedor de un `fixed`, así que el panel se escalaba con la tarjeta por
+debajo de 721 px — y el botón «Enlace» de la barra de texto pasa por `showFields`, que es la regla de
+«una sola superficie».
+
+**Lo que este día enseñó sobre medir:** «la sección no se mueve al abrir el panel» era cierto en
+macOS (0 px) y falso en el Linux de CI (174 px). `overflow-anchor` vale `auto` por defecto y el
+anclaje de desplazamiento de Chromium absorbe el crecimiento de arriba en una plataforma y no en la
+otra. La aserción se retiró y quedó la que importa: **la sección editada sigue visible** tras abrir
+y tras cerrar, a 1024, 1280 y 1600. Un número que sale del comportamiento del navegador y no de
+nuestro código no se asevera hasta verlo dos veces.
+
+### La licencia de Playfair Display, en cuestión y resuelta (día 4, PRs #266 y #267)
+
+El plan puso una verificación antes de la galería: si los ficheros `*-latin-*.woff2` de `@fontsource`
+son subconjuntos, el razonamiento que permitía enviar Playfair Display no se sostiene. **Lo estaba**,
+y por una razón que el comentario del repositorio no veía: «unmodified» ahí significaba que *nosotros*
+no alteramos el fichero del paquete, y la prueba de la licencia es contra la **Original Version**. El
+paquete declara cuatro subconjuntos y la cara 400 completa **son cuatro ficheros**; enviamos uno, en
+woff2. OFL 1.1 llama Modified Version a «adding to, deleting… **by changing formats**», y su §3
+prohíbe el nombre reservado en una Modified Version sin permiso escrito.
+
+Con los dos costes medidos delante, David eligió **sustituirla por una serif sin nombre reservado** y
+**migrar los temas que ya existen**:
+[ADR 0045](../decisions/0045-the-serif-this-product-ships-reserves-no-name.md), EB Garamond, migración
+`0012` y `SCHEMA_VERSION` 1.11.0. La corrección que hizo falta por el camino: **dije que no había
+migración y era falso** — el tema guarda la pila resuelta, así que los documentos existentes nombran
+Playfair y dejarían de enviar una cara. Y busqué «Reserved Font Name» en el **cuerpo** de la licencia,
+que lo contiene siempre en su propio §3; la declaración está en la línea de copyright y en ningún otro
+sitio.
+
+### La galería: ocho familias que viajan (día 5, PR #268)
+
+[ADR 0046](../decisions/0046-the-gallery-ships-the-faces-so-the-letter-can-be-named.md): una familia
+se elige **por su nombre real porque la enviamos**. `SHIPPABLE_FAMILIES` pasa de dos filas a ocho,
+alfabéticas, cada una en su woff2 latino a 400 y 700 con su OFL al lado. Cuatro filtros, leídos del
+`metadata.json` de cada paquete: OFL 1.1, **sin Reserved Font Name**, latino con 400 y 700 reales, y
+un nombre que encaje en el patrón que `escape.ts` admite. Los dos pesos son obligatorios, y el coste
+está dicho: **la galería no tiene ninguna display**.
+
+**El presupuesto de peso se parte en dos, con los dos números medidos en gzip**: 115 KB de caras en su
+propia línea —la peor pareja posible es EB Garamond + Inter, **98,7 KB** con las dos licencias— y
+20 KB para lo demás que escribimos, donde el paquete más gordo mide 7,1 KB. Los 80 KB antiguos no
+podían disparar nunca.
+
+**Y el medio megabyte generado se midió**: `fontData.ts` pasa de 139,7 KB a 456,6, y el servidor de
+descarga arranca igual — «Ready in» 55-58 ms en tres arranques por estado, misma respuesta caliente,
+632 KB más en la salida compilada. En el ZIP del cliente, nada.
+
+### El editor elige la letra (día 6, PR #269)
+
+El grupo «LETRA» gana, bajo las tres parejas, la galería plegada: las ocho familias por su nombre, dos
+elecciones separadas —TITULARES y TEXTO— y cada especimen dibujado **en la cara que el ZIP va a
+llevar**, servida por la ruta `fonts/[file]` y pedida al abrir el grupo. `packages/tokens` gana
+`withFamily` (escribe **una** clave) e `identifyFamily` (deduce la marca de la primera familia de la
+pila). Donde una pareja ya nombra una familia primero, la pila de la galería **es la de esa pareja**,
+para que elegir la letra que ya tienes no borre la marca de la pareja.
+
+La barra flotante nombra la familia en el **nombre accesible** y conserva la palabra del papel en el
+botón: «Letra — Titular (Libre Baskerville)». Una barra dentro de una sección tiene el ancho que la
+sección le da.
+
+**Tres cosas que solo dijo el navegador:** el editor ya carga Inter por su propia interfaz, así que
+`document.fonts` nunca está vacío y la pereza hay que medirla por las peticiones a la ruta;
+`document.fonts.check` responde «¿se puede dibujar esto?» y devuelve `true` para una familia no
+declarada; y el lema de la portada se compone con la letra de los **titulares**, así que la del texto
+se lee en `body`.
+
+### Un texto se elige antes de escribir en él (día 7, PR #270)
+
+`contentEditable` deja de ser permanente, y por petición suya fue en su propia PR antes del arrastre.
+Dos estados: **elegido** (un clic, o Tab) y **escribiendo** (segundo clic, doble clic, o Intro). Las
+cuatro cosas que el atributo hacía en silencio quedan repartidas a mano, y la segunda es la que nada
+habría puesto en rojo: **el `tabindex` que mantiene la parada de tabulación** sin la cual «escribir sin
+ratón» habría dejado de funcionar.
+
+**Cuatro defectos de orden de eventos**, todos del navegador: el foco llega en `mousedown`, antes del
+clic, así que todo primer clic parecía el segundo; entrar a escribir con el foco ya puesto no dispara
+`focus`, donde vivían la captura y el seleccionar-todo; quitar `contenteditable` tira el foco al body
+y el `blur` resultante volvía a marcar «elegido»; y la acción por defecto del clic coloca el cursor
+**después** de los manejadores, así que el seleccionar-todo se perdía — medido como un titular que
+acabó leyendo `UNODOSTCUATRORESCINCO`.
+
+**48 sitios de caminata reescritos a mano**, y la instrucción del editor cambió con el comportamiento:
+«Haz **doble clic** en cualquier texto para cambiarlo».
+
+### El primer arrastre sobre el documento (día 8, PR #271)
+
+[ADR 0048](../decisions/0048-the-first-drag-puts-an-element-in-the-grids-nearest-cell.md): se suelta
+donde sea y cae en la columna y la fila **más cercanas**, porque él eligió imán. De aquí no sale
+ninguna coordenada, así que **la regla 4 no se enmienda ni se puede enmendar desde aquí**. «Ocupada»
+tiene su definición exacta —el rectángulo completo, excluyendo al propio elemento— **dentro** de
+`dropAt`, para que la exclusión no se pueda olvidar, con las dos pruebas unitarias que pidió.
+
+Rechazar y volver es una regla **de interfaz**, más estricta que el documento, y lo dice: apilar a
+propósito sigue en los cuatro botones de «Colocación», que además son la alternativa de un solo
+puntero de la WCAG 2.5.7. El fantasma enseña el resultado antes de soltar, también cuando se rechaza,
+y **el elemento no viaja bajo el puntero**: el ancho con el que se dibuja un elemento *es* el de su
+tramo de columnas, así que uno arrastrado se vería con el tamaño que tiene y no con el que tendría.
+
+**Y el defecto que solo vio la suite entera**: abrir la oferta de «diseñar a mano» en `pointerdown`
+rompía la edición — en una sección del catálogo un clic simple la abría y se comía el clic, así que con
+las herramientas encendidas no se podía escribir en ningún texto. Siete caminatas en rojo desde seis
+sitios. La oferta se abre ahora pasado el umbral, en `pointermove`.
+
+### El teclado lo mueve y lo dice, y el dedo no bloquea el lienzo (día 9, PR #272)
+
+ADR 0049: las flechas mueven el elemento elegido una celda por pulsación y **Mayús+flecha** lo
+ensancha o lo estrecha, lo que enmienda el §1 del 0047 **solo en el estado «elegido»**, donde no hay
+cursor. Un solo rechazo para la mano y el teclado. El anuncio vive en el documento del editor —su
+corrección— y dice «Columna 3 de 12, fila 2», con un contador que hace audible la misma frase dos
+veces. En táctil, `touch-action: none` **solo** sobre el elemento elegido, y la caminata mide que un
+dedo sigue desplazando el lienzo. En la vista de móvil el mismo gesto **reordena**, porque la regla 7
+solo admite ocultar, reordenar y estrechar.
+
+**Su aserción de las tres flechas hizo exactamente su trabajo:** la restauración del día 7 borraba la
+elección de todo lo que no fuera texto —leía `EDITABLE_TAGS`, escrito cuando solo un texto podía estar
+elegido—, así que la primera flecha movía la foto y la reconstrucción la desElegía: **tres pulsaciones,
+un movimiento**. Con una sola habría pasado en verde. Y dos más: `device` quedaba congelado en el
+cierre de los oyentes —cambiar a móvil no reconstruye el documento, así que las doce bandas se
+dibujaban sobre una página de una columna— y **Escape no liberaba una imagen**.
+
+**Lo que cuesta, dicho en el ADR:** una pulsación que llega mientras el marco se reconstruye se
+pierde, así que mantener la flecha pulsada no pasea el elemento. Es la arquitectura del ADR 0001
+asomando.
+
+### El cierre (día 10, PR #273)
+
+- **axe a 390** sobre la landing, el paso 2, las propuestas, el editor en vista de móvil, «Estilo»,
+  «Campos» y —nuevo— **«Estilo» con la galería desplegada**: dieciséis filas que la pasada anterior no
+  veía, porque están plegadas por defecto.
+- **Una segunda caminata sin ratón**, con sus propias marcas: elegir una letra por su nombre y mover un
+  elemento de celda en celda. `keyboardOnly.test.ts` guarda ahora **todas** las regiones marcadas, no
+  una: bolt-on sobre la caminata del sprint 17 habría movido todas las cuentas de Tab que mide desde
+  entonces.
+- **Y una trampa del teclado, medida y anotada**: el `tabindex` rotatorio lo mueve el `focusin` de los
+  hijos de una sección, así que en cuanto el foco entra en un texto la sección pasa a ser la única
+  parada… y Tab ya la ha pasado. Hacia delante no se vuelve a alcanzar; **se alcanza con Mayús+Tab
+  desde dentro**. Sesenta pulsaciones de `keyboardTo` no encontraban nada, y seiscientas tampoco.
+  Está en el backlog, al lado de la pregunta a la que pertenece.
+
+### Lo que este sprint deja a David
+
+**Cinco firmas**, todas `proposed`: **0045** (la serif sin nombre reservado, que él decidió en dos
+respuestas), **0046** (la galería), **0047** (los dos estados), **0048** (el arrastre) y **0049** (el
+teclado y el táctil). El **0044** está firmado por él y **necesita la del CEO**, porque enmienda un ADR
+que el CEO firmó. Y siguen sin firmar el **0042** del sprint 21 y el **0043** del sprint 23.
+
+**Una pregunta abierta que él declinó como remedio pero no como petición:** pedir a los autores de
+Playfair Display el permiso escrito que su §3 contempla. No cuesta bytes y devolvería la familia como
+una fila más de la galería.
+
+**Y lo medido sin arreglar**, en el backlog con su número: el desplazamiento de 164 px al cerrar un
+panel (dependiente de plataforma, dos reparaciones medidas peores), los 7,9 px del filtro de sectores,
+los dos colores de marca que pasan el 4,5:1 por los pelos, la pulsación perdida mientras el marco se
+reconstruye, y la pregunta del Tab dentro de una sección, que hoy lleva una parada más por cada
+elemento colocado.
