@@ -3579,10 +3579,6 @@ function placedIn(frame: FrameLocator, sectionId: string): Promise<Placed[]> {
     );
 }
 
-/** A unit of the fine grid as the catalog column it falls in, for the announcement that still
- * speaks in twelve until día 6. */
-const coarseColumnOf = (unit: number) => Math.floor((unit - 1) / FINE_PER_COLUMN) + 1;
-
 /**
  * One catalog column's step in pixels — eight units and the gutter after them — measured from the
  * section's own resolved tracks rather than computed from `column-gap`, which a free section no
@@ -15958,40 +15954,43 @@ describe("sprint 24 día 9 — el teclado lo mueve y lo dice", () => {
           .toBe(mover?.id);
       }
 
-      // **And it says where it went, in the editor's own document rather than in the canvas.** A
-      // region inside the frame would be a freshly created one after every edit, and a screen
-      // reader does not announce those.
+      /**
+       * **And it says where it went, in pixels and in the editor's own document** (ADR 0050 §6,
+       * día 6).
+       *
+       * In the editor's document because a region inside the frame would be a freshly created one
+       * after every edit and a screen reader does not announce those — David's correction when he
+       * approved sprint 24. In pixels because «Columna 3 de 12» meant something on the catalog's
+       * grid and nothing on a grid of ninety-six, and the numbers are read off the element's
+       * measured box rather than computed, since a row is eight pixels only until a text makes it
+       * taller.
+       */
       const said = page.locator('p[role="status"]');
-      await expect(said).toHaveText(
-        new RegExp(
-          `Columna ${coarseColumnOf(mover?.column ?? 1)} de 12, fila ${(started ?? 1) + 3}`,
-        ),
-      );
+      await expect(said).toHaveText(/A \d+ px del borde izquierdo y \d+ del superior/);
       expect(
         await page.locator(`${PREVIEW}`).count(),
         "la vista previa dejó de ser un iframe",
       ).toBeGreaterThan(0);
 
       /**
-       * **Shift narrows it**, which is the other half of the keys and a different sentence.
+       * **Shift moves eight, and no longer resizes** (ADR 0050 §6, día 6, amending ADR 0049 §1 a
+       * second time).
        *
-       * Narrowing and not widening, and the walk learnt the difference: this cover's lowest element
-       * is the photograph at columns 7–12, so `Shift+ArrowRight` is correctly refused — a
-       * thirteenth column does not exist. A walk asserting widening would be asserting this one
-       * layout. Widening into a free cell, and its refusal at the edge, are both unit-tested where
-       * the geometry can be chosen instead of read.
+       * It used to widen and narrow — the only keyboard resize on the canvas — and a key cannot
+       * mean two things: the width belongs to the «Colocación» panel's steppers now, which have
+       * counted in these units since día 1. So the eight here is eight *units of movement*, and the
+       * spans are what must not change.
        */
-      const spanOf = async () =>
-        (await placedIn(frame, "sec-cover")).find((element) => element.id === mover?.id)
-          ?.columnSpan;
-      const wasWide = await spanOf();
-      expect(wasWide ?? 0, "el elemento más bajo ya era de una columna").toBeGreaterThan(
-        FINE_PER_COLUMN,
-      );
-      // One catalog column narrower, which is eight units of the fine grid.
+      const placedNow = async () =>
+        (await placedIn(frame, "sec-cover")).find((element) => element.id === mover?.id);
+      const wide = await placedNow();
+      expect(wide?.columnSpan ?? 0).toBeGreaterThan(FINE_PER_COLUMN);
+      // Leftwards, which always has room: this cover's lowest element reaches the last unit.
       await page.keyboard.press("Shift+ArrowLeft");
-      await expect.poll(spanOf).toBe((wasWide ?? 2) - FINE_PER_COLUMN);
-      await expect(said).toHaveText(/Ancho \d+ de 12 columnas/);
+      await expect
+        .poll(async () => (await placedNow())?.column, { message: "Mayús no movió ocho unidades" })
+        .toBe((wide?.column ?? 1) - FINE_PER_COLUMN);
+      expect((await placedNow())?.columnSpan, "Mayús cambió el ancho").toBe(wide?.columnSpan);
 
       // Escape gives the keyboard back to the section, as it did before any of this.
       await page.keyboard.press("Escape");
@@ -16186,7 +16185,7 @@ describe("sprint 24 día 10 — el cierre, sin ratón", () => {
   }
 
   // --- RECORRIDO SIN RATÓN: INICIO ---
-  it("elige una letra por su nombre y mueve un elemento de celda en celda, sin ratón", async () => {
+  it("elige una letra por su nombre, y mueve un elemento por unidades y en carrera, sin ratón", async () => {
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const page = await context.newPage();
     try {
@@ -16341,11 +16340,11 @@ describe("sprint 24 día 10 — el cierre, sin ratón", () => {
        * choosing — and the arrows are then the keyboard's half of the drag.
        */
       /**
-       * **The lowest element, because the cell below it is the only one guaranteed free.**
+       * **The lowest element, because downwards from the bottom the section simply grows.**
        *
-       * An arrow onto a cell another element holds is refused, by the same rule the drag follows
-       * (ADR 0048 §4) — so a walk that moved whatever Tab happened to land on would be asserting
-       * this cover's layout rather than the keyboard. Downwards from the bottom the section grows.
+       * It used to be «the only cell guaranteed free»: an arrow onto an occupied cell was refused
+       * (ADR 0048 §4). Overlapping has been allowed since sprint 25 día 3, so the choice is no
+       * longer about refusals — it is about asserting the keyboard rather than this cover's layout.
        */
       const lowest = (await placedIn(live, sectionId)).toSorted(
         (a, b) => b.row + b.rowSpan - (a.row + a.rowSpan),
@@ -16366,13 +16365,72 @@ describe("sprint 24 día 10 — el cierre, sin ratón", () => {
       await expect
         .poll(rowOf, { message: "la flecha no movió el elemento" })
         .toBe((startedAt ?? 1) + 1);
-      // **Lo dice en el documento del editor**, que es lo que sobrevive a la reconstrucción que
-      // cada flecha provoca — la corrección de David al aprobar el sprint.
-      await expect(page.locator('p[role="status"]')).toHaveText(/Columna \d+ de 12, fila \d+/);
+      /**
+       * **Y lo dice en píxeles, en el documento del editor** (ADR 0050 §6, día 6).
+       *
+       * En el documento del editor porque cada colocación escrita reemplaza el `srcDoc` y un
+       * lector de pantalla no anuncia una región recién creada —la corrección de David al aprobar
+       * el sprint 24—. Y en píxeles porque «Columna 3 de 12» significaba algo en la rejilla del
+       * catálogo y nada en una de noventa y seis, mientras «columna 25 de 96» sería cierto e
+       * inútil: nadie cuenta en noventaiseisavos.
+       */
+      const said = page.locator('p[role="status"]');
+      await expect(said).toHaveText(/A \d+ px del borde izquierdo y \d+ del superior/);
 
-      // Esc devuelve el teclado a la sección, que es de donde vino.
+      /**
+       * **Una unidad por pulsación, ocho con Mayús** — la decisión de David para este día, y lo
+       * que hace al teclado igual a la mano en una rejilla de noventa y seis.
+       */
+      const columnOf = async () =>
+        (await placedIn(live, sectionId)).find((element) => element.id === chosen)?.column;
+      const beforeArrows = await columnOf();
+      /**
+       * **Hacia el lado que tiene sitio, leído de la propia colocación.**
+       *
+       * El elemento más bajo de esta portada es la foto, que ocupa hasta la última unidad: una
+       * flecha a la derecha ahí está correctamente recortada y no mueve nada, así que una caminata
+       * que presionara siempre a la derecha estaría aseverando esta maqueta en vez del teclado.
+       */
+      const towards = (beforeArrows ?? 1) > 1 ? -1 : 1;
+      const arrow = towards === -1 ? "ArrowLeft" : "ArrowRight";
+      await page.keyboard.press(arrow);
+      await expect
+        .poll(columnOf, { message: "la flecha no movió una unidad" })
+        .toBe((beforeArrows ?? 1) + towards);
+      await page.keyboard.press(`Shift+${arrow}`);
+      await expect
+        .poll(columnOf, { message: "Mayús+flecha no movió ocho unidades" })
+        .toBe((beforeArrows ?? 1) + towards * (1 + FINE_PER_COLUMN));
+
+      /**
+       * **Una tecla mantenida es un solo movimiento y un solo paso del historial** (condición 1 de
+       * David). Veinte `keydown` y un único `keyup`, que es exactamente lo que manda el teclado
+       * cuando se repite una tecla: si cada pulsación escribiera su colocación, serían veinte
+       * documentos, veinte reconstrucciones del lienzo y veinte veces «Deshacer» para una sola
+       * intención.
+       */
+      const beforeRun = await columnOf();
+      await page.keyboard.down(arrow);
+      for (let repeat = 0; repeat < 19; repeat += 1) await page.keyboard.down(arrow);
+      await page.keyboard.up(arrow);
+      await expect
+        .poll(columnOf, { message: "la carrera de flechas no movió veinte unidades" })
+        .toBe((beforeRun ?? 1) + towards * 20);
+
+      // Esc devuelve el teclado a la sección, que es de donde vino — y llega aquí porque la
+      // carrera, al escribirse, le devuelve el foco al elemento que movió (ADR 0049).
       await page.keyboard.press("Escape");
       await expect(live.locator(".rb-chosen")).toHaveCount(0);
+
+      /**
+       * **Y un solo «Deshacer» devuelve la carrera entera**, que es la mitad que importa de la
+       * condición 1 de David. Al final, porque deshacer no necesita que el foco esté en el
+       * elemento y reconstruir el marco se lo lleva: veinte pulsaciones, un paso.
+       */
+      await page.keyboard.press("Control+z");
+      await expect
+        .poll(columnOf, { message: "la carrera no fue un solo paso del historial" })
+        .toBe(beforeRun);
     } finally {
       await context.close();
     }
@@ -16963,6 +17021,97 @@ describe("sprint 25 día 5 — las guías y el aviso de texto sobre texto", () =
       // **Avisa, no bloquea**: pasar por él descarga.
       const [download] = await Promise.all([page.waitForEvent("download"), anyway.click()]);
       expect(download.suggestedFilename().endsWith(".zip")).toBe(true);
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+});
+
+/**
+ * **Sprint 25 día 6 — el panel dice en qué cuenta, y el alto de un texto sigue a su contenido**
+ * (ADR 0050 §6 y §3, día 6).
+ *
+ * Las dos mitades de este día que no son el teclado del lienzo —ése lo asevera la caminata sin
+ * ratón, en su propia región—: que los cuatro steppers digan qué es una unidad, porque «Columna 25»
+ * sin explicación es un número que hay que adivinar; y que al terminar de escribir un texto en una
+ * sección libre su alto en filas siga a lo que mide, **en el mismo paso del historial que las
+ * palabras** (ajuste 1 de David).
+ */
+describe("sprint 25 día 6 — las unidades dichas y el alto que sigue al texto", () => {
+  const VIEWPORT = { width: 1440, height: 900 };
+
+  async function handDesigned(page: Page): Promise<FrameLocator> {
+    await intoTheCanvas(page);
+    await studioToolsOn(page);
+    const frame = page.frameLocator(PREVIEW).first();
+    await frame.locator('[data-section="sec-cover"]').click();
+    await replacingTheDocument(page, async () => {
+      await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
+      await frame.locator(".rb-escalate-yes").click();
+    });
+    await waitForBankPhoto(frame);
+    await fontsReady(frame);
+    return page.frameLocator(PREVIEW).first();
+  }
+
+  it("dice en el panel qué es una unidad y qué mueve cada paso", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const page = await context.newPage();
+    try {
+      const frame = await handDesigned(page);
+      await frame.locator('[data-section="sec-cover"] [data-id="el-headline"]').click();
+      await page.getByRole("button", { name: "Diseño", exact: true }).click();
+      const panel = page.locator("aside");
+      const placement = panel.getByRole("button", { name: "Colocación" });
+      await placement.click();
+
+      // Los cuatro números siguen siendo los del documento —unidades de noventa y seis— y ahora
+      // hay una línea que dice qué significan y qué mueve cada paso.
+      await expect(panel.getByText("96 en cada sección", { exact: false })).toBeVisible();
+      await expect(panel.getByText("filas de 8 px", { exact: false })).toBeVisible();
+      await expect(panel.getByText("Mayús de ocho", { exact: false })).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+
+  it("reajusta el alto en filas al terminar de escribir, y es un solo paso con las palabras", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const page = await context.newPage();
+    try {
+      const frame = await handDesigned(page);
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      const rowsOf = async () =>
+        (await placedIn(frame, "sec-cover")).find((element) => element.id === "el-headline")
+          ?.rowSpan;
+      const before = await rowsOf();
+      expect(before, "el titular no tiene colocación").toBeGreaterThan(0);
+      const wordsBefore = (await headline.textContent())?.trim() ?? "";
+
+      // Un titular mucho más largo: en su mismo ancho ocupa varias líneas más, así que necesita
+      // más filas de ocho píxeles de las que tenía.
+      await headline.click();
+      await intoWriting(headline);
+      await page.keyboard.type(
+        "Taberna Santo Domingo, cocina de siempre en el corazón de Ronda desde mil novecientos ochenta",
+      );
+      // Clic fuera para confirmar, que es como se confirma un texto en este editor.
+      await editHint(page).click();
+
+      await expect
+        .poll(rowsOf, { message: "el alto en filas no siguió al contenido" })
+        .toBeGreaterThan(before ?? 0);
+
+      /**
+       * **Y un solo «Deshacer» devuelve las dos cosas**, que es la mitad que importa: el alto
+       * viaja en el paso de las palabras, porque la edición es lo que cambió la altura. Dos pasos
+       * harían que una letra costase dos pulsaciones de deshacer.
+       */
+      await page.getByRole("button", { name: "Deshacer", exact: true }).click();
+      await expect.poll(rowsOf, { message: "el alto no volvió con las palabras" }).toBe(before);
+      await expect(frame.locator('[data-section="sec-cover"] [data-id="el-headline"]')).toHaveText(
+        wordsBefore,
+      );
     } finally {
       await context.close();
     }

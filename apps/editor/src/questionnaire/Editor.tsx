@@ -41,6 +41,7 @@ import {
   type PresetShape,
   type RetorikaDocument,
   type RevertImpact,
+  ROW_STEP_PX,
   type Role,
   rangeHasMark,
   revertImpact,
@@ -58,6 +59,7 @@ import {
 } from "@retorika/schema";
 import type { FontKey } from "@retorika/tokens";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { type ArrowRun, accumulate, moves, RUN_IDLE_MS } from "../editor/arrowRun.ts";
 import { BuildingScreen } from "../editor/BuildingScreen.tsx";
 import {
   BAR_INSET,
@@ -630,7 +632,14 @@ export function Editor({
 }: {
   title: string;
   document: RetorikaDocument;
-  onEditText: (address: ElementAddress, text: string, marks?: readonly MarkRun[]) => void;
+  onEditText: (
+    address: ElementAddress,
+    text: string,
+    marks?: readonly MarkRun[],
+    /** The rows the text now needs, measured on the live page (ADR 0050 §3, día 6). It travels in
+     * the same history step as the words: one letter must not cost two presses of «Deshacer». */
+    rowSpan?: number,
+  ) => void;
   onDeleteSection: (sectionId: string) => void;
   onDuplicateSection: (sectionId: string) => void;
   onMoveSection: (sectionId: string, toIndex: number) => void;
@@ -5021,7 +5030,19 @@ export function Editor({
           });
           return;
         }
-        onEditText(address, next, anchoredMarks);
+        /**
+         * **And the rows the text now needs, measured** (ADR 0050 §3, día 6, David's adjustment 1).
+         *
+         * A free section's rows are eight real pixels and a text's height is its content's, so
+         * typing changes how many rows it needs. Left alone, the row grows past its eight-pixel
+         * minimum and pushes everything under it down — exactly the accumulation `measuredToFine`
+         * ceils to avoid — and the editor's own idea of where things are starts drifting from the
+         * page. Measured here, on the element the person has just finished with, and carried **in
+         * the same history step as the words**: one letter must not cost two presses of «Deshacer».
+         *
+         * `undefined` for a section the catalog draws, which has no placements of its own.
+         */
+        onEditText(address, next, anchoredMarks, rowsFor(el));
       });
 
       /**
@@ -5272,6 +5293,23 @@ export function Editor({
       columns: tracks(style?.gridTemplateColumns),
       rows: tracks(style?.gridTemplateRows),
     };
+  }
+
+  /**
+   * How many eight-pixel rows an element's box needs, or `undefined` when nobody should be told.
+   *
+   * The same arithmetic the measured escalation uses (`measuredToFine` ceils, so the content always
+   * fits inside its rows and no row has to grow past its minimum), asked of one element at the
+   * moment its text is committed.
+   */
+  function rowsFor(el: HTMLElement): number | undefined {
+    const section = el.closest<HTMLElement>("[data-section]");
+    const sectionId = section?.dataset.section;
+    if (!section || !sectionId) return undefined;
+    // Only a hand-designed section has rows of its own to keep true.
+    if (!findSection(doc, sectionId)?.section.layout) return undefined;
+    if (el.parentElement !== section) return undefined;
+    return Math.max(1, Math.ceil(el.getBoundingClientRect().height / ROW_STEP_PX));
   }
 
   /**
@@ -5909,6 +5947,43 @@ export function Editor({
       el.addEventListener("pointercancel", release);
       el.addEventListener("lostpointercapture", release);
 
+      /** The run of arrow presses in flight, and the timer that writes it (día 6). */
+      let run: ArrowRun | null = null;
+      let runTimer: number | undefined;
+
+      /**
+       * Write what the run came to, and forget it.
+       *
+       * The placement is read again here rather than captured when the run started: nothing has
+       * rebuilt the document in between — that is the whole point of deferring — so it is the same
+       * placement, and reading it keeps this honest if that ever stops being true.
+       */
+      const flushRun = () => {
+        window.clearTimeout(runTimer);
+        const total = run;
+        run = null;
+        if (!moves(total)) return;
+        const layout = findSection(doc, sectionId)?.section.layout ?? null;
+        const placement = layout?.placements.find((candidate) => candidate.elementId === elementId);
+        if (!placement || !total) return;
+        const drop = arrowDrop({ moving: placement, columns: total.columns, rows: total.rows });
+        if (drop.kind !== "place") return;
+        // The rebuild is about to throw this node away; the next wiring gives the keyboard back to
+        // whatever takes its place.
+        keepChosenFocus.current = true;
+        /**
+         * **Said in pixels, from the box the browser is drawing** (David's condition 2 and his
+         * adjustment 1 on how): the element has already been previewed where the run put it, so
+         * its own rectangle against the section's content corner is exactly what somebody beside
+         * the screen would read out. Unit × column would be arithmetic about a page that may not
+         * be the one on screen, since a row is eight pixels only until a text makes it taller.
+         */
+        const box = el.getBoundingClientRect();
+        const metrics = gridMetricsOf(section);
+        announce(announceText({ x: box.left - metrics.left, y: box.top - metrics.top }));
+        onSetPlacement(sectionId, elementId, { column: drop.at.column, row: drop.at.row });
+      };
+
       /**
        * **The keyboard's half of the same gesture** (ADR 0049, WCAG 2.1.1).
        *
@@ -5963,26 +6038,54 @@ export function Editor({
         // Taken from the page rather than left to scroll it: an arrow that means something here
         // must not also move the view.
         event.preventDefault();
-        // In the fine grid's own units, one catalog column per press until día 6 (`ARROW_UNITS`).
-        // No occupancy refusal any more: what the pointer may drop on, the keyboard may walk onto.
-        const drop = arrowDrop({ moving: placement, action });
-        if (drop.kind === "none") return;
+
+        /**
+         * **A run of presses is one movement and one step** (ADR 0050 §6, día 6, David's condition
+         * 1): the presses accumulate, the element is previewed where the run has taken it, and the
+         * placement is written once — when the key comes up, or three hundred milliseconds after
+         * the last press, whichever happens first.
+         *
+         * One unit per press on a grid of ninety-six is fifty presses to cross a section; writing
+         * a placement each time would be fifty documents, fifty re-parses of the canvas and fifty
+         * entries to undo one gesture through. It also retires the lost keypress of ADR 0049 §4:
+         * there is no rebuild to lose a press to until the hand stops.
+         */
+        run = accumulate(run, { columns: action.columns, rows: action.rows }, performance.now());
+        const drop = arrowDrop({ moving: placement, columns: run.columns, rows: run.rows });
         if (drop.kind === "refuse") {
           announce(es["editor.drag.rows"]);
           return;
         }
-        // The rebuild is about to throw this node away; the next wiring gives the keyboard back to
-        // whatever takes its place.
-        keepChosenFocus.current = true;
-        onSetPlacement(
-          sectionId,
-          elementId,
-          action.kind === "move"
-            ? { column: drop.at.column, row: drop.at.row }
-            : { columnSpan: drop.at.columnSpan },
-        );
-        announce(announceText(drop.at, action.kind));
+        /**
+         * **Previewed on the element's own grid area, not on a `transform`.**
+         *
+         * The plan said transform, as the pointer's drag does, and the resize of día 4 is the
+         * better precedent: an element that crosses a gutter gets wider (día 5's own finding), so a
+         * transform would show the eye a box the document is not going to produce. Rewriting the
+         * inline area reflows the grid, which is cheap inside one document — it is the rebuild of
+         * the whole `srcDoc` that is not, and that is what the run is deferring.
+         */
+        if (drop.kind === "place") {
+          el.style.gridColumn = `${fineTrack(drop.at.column)}/span ${fineTrackSpan(
+            drop.at.column,
+            drop.at.columnSpan,
+          )}`;
+          el.style.gridRow = `${drop.at.row}/span ${drop.at.rowSpan}`;
+        }
+        // One timer, reset by every press: the run is written when it stops being fed. `keyup`
+        // below is the ordinary end; this is the net for the press whose `keyup` never comes —
+        // a window changed with the key held down.
+        window.clearTimeout(runTimer);
+        runTimer = window.setTimeout(flushRun, RUN_IDLE_MS);
       });
+
+      /** The run ends when the key comes up, which is what a hand expects of «one movement». */
+      el.addEventListener("keyup", (event) => {
+        if (event.key.startsWith("Arrow")) flushRun();
+      });
+      // And if focus leaves while a run is still open — Escape to the section, a click elsewhere —
+      // the movement is written rather than lost with the node.
+      el.addEventListener("blur", () => flushRun());
     }
 
     /**

@@ -411,6 +411,14 @@ export function DesignPanel({
                 field="rowSpan"
                 onStep={(edit) => onSetPlacement(selected.elementId, edit)}
               />
+              {/* **What a unit is, said once** (ADR 0050 §6, día 6). The four numbers above are
+                  units of ninety-six and rows of eight pixels, and nothing on screen said so: a
+                  «Columna 25» with no explanation is a number somebody has to guess the meaning of.
+                  It also says what the canvas's arrows are worth, because the two controls are the
+                  same act and a person who finds one should know about the other. */}
+              <p className="m-0 text-[11px] leading-snug text-ui-muted">
+                {es["editor.design.placementHelp"]}
+              </p>
             </Family>
           ) : null}
 

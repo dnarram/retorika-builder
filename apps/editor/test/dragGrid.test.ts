@@ -2,7 +2,6 @@ import { FINE_COLUMNS, FINE_PER_COLUMN, fineTrack, GRID_COLUMNS, overlaps } from
 import { describe, expect, it } from "vitest";
 import { MAX_ROW } from "../src/editor/designTree.ts";
 import {
-  ARROW_UNITS,
   announceText,
   arrowAction,
   arrowDrop,
@@ -14,6 +13,7 @@ import {
   lastRowAt,
   reorderAt,
   rowAt,
+  SHIFT_UNITS,
 } from "../src/editor/dragGrid.ts";
 import type { KeyPress } from "../src/editor/shortcuts.ts";
 
@@ -268,28 +268,44 @@ describe("arrowAction", () => {
     ...modifiers,
   });
 
-  it("moves one cell per bare arrow, in both axes", () => {
-    expect(arrowAction(press("ArrowLeft"))).toEqual({ kind: "move", column: -1, row: 0 });
-    expect(arrowAction(press("ArrowRight"))).toEqual({ kind: "move", column: 1, row: 0 });
-    expect(arrowAction(press("ArrowUp"))).toEqual({ kind: "move", column: 0, row: -1 });
-    expect(arrowAction(press("ArrowDown"))).toEqual({ kind: "move", column: 0, row: 1 });
+  it("moves one unit per bare arrow, in both axes", () => {
+    // One unit is the finest thing the document can express, which is what makes the keyboard
+    // equal to the hand on a grid of ninety-six (ADR 0050 §6, día 6).
+    expect(arrowAction(press("ArrowLeft"))).toEqual({ kind: "move", columns: -1, rows: 0 });
+    expect(arrowAction(press("ArrowRight"))).toEqual({ kind: "move", columns: 1, rows: 0 });
+    expect(arrowAction(press("ArrowUp"))).toEqual({ kind: "move", columns: 0, rows: -1 });
+    expect(arrowAction(press("ArrowDown"))).toEqual({ kind: "move", columns: 0, rows: 1 });
   });
 
-  it("widens and narrows with Shift, sideways only", () => {
-    // **This is the clause that amends ADR 0047 §1**, and only in the chosen state: there is no
-    // caret there, so «Shift+Arrow is a selection gesture everywhere» does not apply.
+  /**
+   * **`Shift` is eight, and it moves rather than resizes** — David's own decision for this day,
+   * and the second amendment to ADR 0049 §1. `Shift` used to widen and narrow, which was the only
+   * keyboard resize on the canvas; it cannot mean two things, so the width belongs entirely to the
+   * «Colocación» panel's steppers now.
+   */
+  it("moves eight with Shift, in all four directions", () => {
     expect(arrowAction(press("ArrowRight", { shiftKey: true }))).toEqual({
-      kind: "span",
-      columns: 1,
+      kind: "move",
+      columns: SHIFT_UNITS,
+      rows: 0,
     });
     expect(arrowAction(press("ArrowLeft", { shiftKey: true }))).toEqual({
-      kind: "span",
-      columns: -1,
+      kind: "move",
+      columns: -SHIFT_UNITS,
+      rows: 0,
     });
-    // Vertical with Shift does nothing: a row's height is its content's, and `rowSpan` belongs to
-    // the panel's own stepper. Half a pair here would read as the other half being broken.
-    expect(arrowAction(press("ArrowDown", { shiftKey: true }))).toEqual({ kind: "none" });
-    expect(arrowAction(press("ArrowUp", { shiftKey: true }))).toEqual({ kind: "none" });
+    // Where `Shift+ArrowDown` used to mean nothing at all.
+    expect(arrowAction(press("ArrowDown", { shiftKey: true }))).toEqual({
+      kind: "move",
+      columns: 0,
+      rows: SHIFT_UNITS,
+    });
+    expect(arrowAction(press("ArrowUp", { shiftKey: true }))).toEqual({
+      kind: "move",
+      columns: 0,
+      rows: -SHIFT_UNITS,
+    });
+    expect(SHIFT_UNITS).toBe(FINE_PER_COLUMN);
   });
 
   it("takes nothing with Alt, Meta or Control, nor any other key", () => {
@@ -305,102 +321,74 @@ describe("arrowAction", () => {
 });
 
 describe("arrowDrop", () => {
-  // In the fine grid's units: a headline across the first four catalog columns, a photograph
-  // across the last four but one.
-  const headline = place("el-headline", 1, 32, 1, 1);
-  const photo = place("el-photo", 65, 32, 1, 2);
+  // In the fine grid's units: a headline across the first four catalog columns.
+  const headline = place("el-headline", 9, 32, 4, 2);
 
-  it("moves one catalog column per press, keeping the spans", () => {
-    // `ARROW_UNITS` until día 6, which makes a bare press one unit and `Shift` eight — the two
-    // halves of David's condition arrive together there, with the accumulated run.
-    expect(arrowDrop({ moving: headline, action: { kind: "move", column: 1, row: 0 } })).toEqual({
+  it("takes a run's totals, which is what makes a held key one movement", () => {
+    expect(arrowDrop({ moving: headline, columns: 20, rows: 3 })).toEqual({
       kind: "place",
-      at: { column: 1 + ARROW_UNITS, columnSpan: 32, row: 1, rowSpan: 1 },
+      at: { column: 29, columnSpan: 32, row: 7, rowSpan: 2 },
     });
-    expect(ARROW_UNITS).toBe(FINE_PER_COLUMN);
   });
 
-  it("moves one row per vertical press, because a row is the vertical unit", () => {
-    expect(
-      arrowDrop({ moving: headline, action: { kind: "move", column: 0, row: 1 } }),
-    ).toMatchObject({ at: { row: 2, rowSpan: 1 } });
+  it("walks onto an occupied cell instead of refusing, as the pointer may drop onto one", () => {
+    const neighbour = place("el-photo", 41, 32, 4, 2);
+    const drop = arrowDrop({ moving: headline, columns: SHIFT_UNITS * 4, rows: 0 });
+    expect(drop).toMatchObject({ kind: "place", at: { column: 41 } });
+    expect(drop.kind === "place" && overlaps(drop.at, neighbour)).toBe(true);
   });
 
   /**
-   * **And it walks onto the cell another element holds** (ADR 0050 §6, amending ADR 0048 §4).
-   *
-   * One vocabulary and one permission for the hand and the keyboard: what the pointer may drop on
-   * top of, the arrows may walk onto. `arrowDrop` no longer takes the section's other placements at
-   * all, which is the strongest way to say it cannot refuse for that reason.
+   * **Clamped sideways rather than refused**, which a held key is the reason for: refusing the
+   * fortieth press while accepting the thirty-ninth would make the element stop dead for no
+   * visible reason, and «as far left as it goes» is what the hand holding the key means.
    */
-  it("walks onto an occupied cell instead of refusing", () => {
-    const against = place("el-headline", 57, 32, 1, 1);
-    const drop = arrowDrop({ moving: against, action: { kind: "move", column: 1, row: 0 } });
-    expect(drop).toMatchObject({ kind: "place", at: { column: 65 } });
-    expect(drop.kind === "place" && overlaps(drop.at, photo)).toBe(true);
-  });
-
-  it("does nothing at the edges, rather than clamping a deliberate press", () => {
-    expect(arrowDrop({ moving: headline, action: { kind: "move", column: -1, row: 0 } })).toEqual({
-      kind: "none",
-    });
-    expect(arrowDrop({ moving: headline, action: { kind: "move", column: 0, row: -1 } })).toEqual({
-      kind: "none",
-    });
-    // Thirty-two units from unit 65 reaches 96 exactly, so one column more does not fit.
-    expect(arrowDrop({ moving: photo, action: { kind: "span", columns: 1 } })).toEqual({
-      kind: "none",
-    });
-    // And a span of one catalog column cannot become none.
-    const thin = place("el-thin", 1, ARROW_UNITS, 6, 1);
-    expect(arrowDrop({ moving: thin, action: { kind: "span", columns: -1 } })).toEqual({
-      kind: "none",
-    });
-  });
-
-  it("refuses past the interface's own floor on rows", () => {
-    const low = place("el-low", 1, 16, MAX_ROW, 1);
-    expect(arrowDrop({ moving: low, action: { kind: "move", column: 0, row: 1 } })).toEqual({
-      kind: "none",
-    });
-  });
-
-  it("widens by a catalog column, into a taken cell as readily as a free one", () => {
-    const narrow = place("el-narrow", 1, 32, 1, 1);
-    expect(arrowDrop({ moving: narrow, action: { kind: "span", columns: 1 } })).toEqual({
+  it("clamps at both edges and keeps the spans", () => {
+    expect(arrowDrop({ moving: headline, columns: -40, rows: 0 })).toEqual({
       kind: "place",
-      at: { column: 1, columnSpan: 32 + ARROW_UNITS, row: 1, rowSpan: 1 },
+      at: { column: 1, columnSpan: 32, row: 4, rowSpan: 2 },
     });
-    const wide = place("el-wide", 1, 64, 1, 1);
-    expect(arrowDrop({ moving: wide, action: { kind: "span", columns: 1 } })).toMatchObject({
+    expect(arrowDrop({ moving: headline, columns: 400, rows: 0 })).toEqual({
       kind: "place",
-      at: { columnSpan: 72 },
+      at: { column: FINE_COLUMNS - 32 + 1, columnSpan: 32, row: 4, rowSpan: 2 },
+    });
+    expect(arrowDrop({ moving: headline, columns: 0, rows: -40 })).toMatchObject({
+      at: { row: 1, rowSpan: 2 },
     });
   });
 
-  it("answers none to none, so a key nobody mapped changes nothing", () => {
-    expect(arrowDrop({ moving: headline, action: { kind: "none" } })).toEqual({ kind: "none" });
+  it("answers nothing when the run would change nothing", () => {
+    expect(arrowDrop({ moving: headline, columns: 0, rows: 0 })).toEqual({ kind: "none" });
+    // Already against the left edge, pressed left again: silence, because announcing a position
+    // nobody moved to would teach a screen reader's user that the press worked.
+    const atEdge = place("el-edge", 1, 8, 1, 1);
+    expect(arrowDrop({ moving: atEdge, columns: -3, rows: 0 })).toEqual({ kind: "none" });
+    expect(arrowDrop({ moving: atEdge, columns: 0, rows: -3 })).toEqual({ kind: "none" });
+  });
+
+  it("refuses past the interface's own floor on rows, which is the one refusal left", () => {
+    const low = place("el-low", 1, 16, MAX_ROW - 1, 1);
+    expect(arrowDrop({ moving: low, columns: 0, rows: 5 })).toMatchObject({
+      kind: "refuse",
+      why: "rows",
+    });
   });
 });
 
 describe("announceText", () => {
   /**
-   * **In catalog columns, from the fine unit** — because that is what one press moves
-   * (`ARROW_UNITS`). «Columna 25 de 96» would be arithmetically true and useless: nobody counts in
-   * ninety-sixths, and a press lands exactly on a twelfth. Día 6 replaces the sentence with pixels,
-   * which is what David asked for once a press is worth one unit.
+   * **In pixels from the section's own corner** (David's condition 2 for día 6). «Columna 3 de 12»
+   * meant something on the catalog's grid and nothing on a grid of ninety-six, and «columna 25 de
+   * 96» would be true and useless. The numbers come from the element's measured box, which is why
+   * this takes pixels and not a placement.
    */
-  it("says where it went, in the words the owner's language uses", () => {
-    expect(announceText({ column: 17, columnSpan: 32, row: 2, rowSpan: 1 }, "move")).toBe(
-      "Columna 3 de 12, fila 2",
-    );
+  it("says where the element is, in the words the owner's language uses", () => {
+    expect(announceText({ x: 312, y: 96 })).toBe("A 312 px del borde izquierdo y 96 del superior");
   });
 
-  it("says how wide it is when the width is what changed", () => {
-    // Two sentences for two acts: a move that said «ancho 4» every time would bury the number that
-    // changed under one that did not.
-    expect(announceText({ column: 17, columnSpan: 40, row: 2, rowSpan: 1 }, "span")).toBe(
-      "Ancho 5 de 12 columnas, desde la columna 3",
+  it("rounds, because half a pixel is not something to read out", () => {
+    expect(announceText({ x: 311.6, y: 95.2 })).toBe(
+      "A 312 px del borde izquierdo y 95 del superior",
     );
   });
 });
