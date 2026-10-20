@@ -1,5 +1,10 @@
 import { GALLERY_PHOTOS } from "@retorika/catalog";
-import { MAX_PAGES, type RetorikaDocument } from "@retorika/schema";
+import {
+  MAX_PAGES,
+  type OverlappingTexts,
+  overlappingTexts,
+  type RetorikaDocument,
+} from "@retorika/schema";
 import type { OverflowFinding } from "./overflowCheck.ts";
 import type { PhotoCounts } from "./photoInventory.ts";
 import { type ContrastFinding, reviewStyle } from "./styleReview.ts";
@@ -90,7 +95,14 @@ export const PHOTO_CONTENT_TYPE = "image/jpeg";
  *    commonest cause is a long word they typed, which is theirs to decide about. A colour at 2:1
  *    is invisible to the person who chose it, which is why that one blocks. **Last of the three
  *    warnings**, because it is the least likely to be a surprise.
- * 6. **`"ready"`** — nothing to say; `download()` runs immediately.
+ * 6. **`"textOverText"`** — two texts of a hand-designed section sitting on top of each other
+ *    (ADR 0050 §6, sprint 25 día 5). **A warning and never a block, which is David's own condition
+ *    for allowing overlaps at all**: «Texto sobre texto avisa […] no un bloqueo». **Last of the
+ *    warnings**, because it is the only one the owner made with a gesture of their own hand — they
+ *    dragged one text onto another and the canvas showed it happening — so it is the least likely
+ *    of the four to be news. A photograph under a heading says nothing here: that is design, and
+ *    the renderer even draws a panel behind the words to keep them legible.
+ * 7. **`"ready"`** — nothing to say; `download()` runs immediately.
  *
  * Two of the five now need the document rather than the counts, which is why this takes it. The
  * counts stay a separate argument rather than being recomputed here, so the gate and the «Fotos»
@@ -104,7 +116,7 @@ export const PHOTO_CONTENT_TYPE = "image/jpeg";
  * again, and answers with whatever is still true. A block is never in this set, which is what a
  * block means.
  */
-export type AcceptedWarning = "photos" | "contrast" | "overflow";
+export type AcceptedWarning = "photos" | "contrast" | "overflow" | "layout";
 export type DownloadGate =
   | { kind: "ready" }
   /**
@@ -122,7 +134,8 @@ export type DownloadGate =
   | { kind: "unreadable"; findings: ContrastFinding[] }
   | { kind: "warn"; sample: number; empty: number }
   | { kind: "lowContrast"; findings: ContrastFinding[] }
-  | { kind: "overflows"; findings: OverflowFinding[] };
+  | { kind: "overflows"; findings: OverflowFinding[] }
+  | { kind: "textOverText"; findings: OverlappingTexts[] };
 
 /**
  * **This stays pure and synchronous, and the measurement arrives as data.**
@@ -172,6 +185,12 @@ export function downloadGateFor(
   if (!accepted.has("overflow") && overflow.length > 0) {
     return { kind: "overflows", findings: [...overflow] };
   }
+  if (!accepted.has("layout")) {
+    // Asked of the document, like the contrast review and unlike the overflow measurement: two
+    // placements on top of each other is a fact the document holds, with no browser needed.
+    const stacked = overlappingTexts(doc);
+    if (stacked.length > 0) return { kind: "textOverText", findings: stacked };
+  }
   return { kind: "ready" };
 }
 
@@ -194,6 +213,7 @@ export const DIALOG_KINDS = [
   "warn",
   "lowContrast",
   "overflows",
+  "textOverText",
 ] as const;
 
 type KindWithDialog = (typeof DIALOG_KINDS)[number];

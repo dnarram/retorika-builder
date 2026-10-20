@@ -1,4 +1,4 @@
-import { FINE_COLUMNS, FINE_PER_COLUMN, fineTrack, GRID_COLUMNS } from "@retorika/schema";
+import { FINE_COLUMNS, FINE_PER_COLUMN, fineTrack, GRID_COLUMNS, overlaps } from "@retorika/schema";
 import { describe, expect, it } from "vitest";
 import { MAX_ROW } from "../src/editor/designTree.ts";
 import {
@@ -12,7 +12,6 @@ import {
   fineLastColumnAt,
   type GridMetrics,
   lastRowAt,
-  overlaps,
   reorderAt,
   rowAt,
 } from "../src/editor/dragGrid.ts";
@@ -194,21 +193,6 @@ describe("rowAt", () => {
 describe("cellAt", () => {
   it("is the two answers together", () => {
     expect(cellAt({ x: unitLeft(25), y: rowTop(4) }, metrics)).toEqual({ column: 25, row: 4 });
-  });
-});
-
-describe("overlaps", () => {
-  it("is true only when the two rectangles share a cell", () => {
-    const a = place("a", 1, 8, 1, 2);
-    expect(overlaps(a, place("b", 8, 8, 1, 1))).toBe(true);
-    expect(overlaps(a, place("b", 9, 8, 1, 1))).toBe(false);
-    expect(overlaps(a, place("b", 1, 8, 3, 1))).toBe(false);
-  });
-
-  it("touching edges do not overlap, in either direction", () => {
-    const a = place("a", 1, 8, 1, 1);
-    expect(overlaps(a, place("b", 9, 8, 1, 1))).toBe(false);
-    expect(overlaps(a, place("b", 1, 8, 2, 1))).toBe(false);
   });
 });
 

@@ -292,7 +292,8 @@ Eight things changed state in this file.
 **What was owed and is now paid:**
 
 1. **The six `aria-modal` dialogs** take focus, cycle Tab, close on Escape and give focus back —
-   eight of them, not the five this file said. A guard fails if a ninth is written without it.
+   eight of them at the time, not the five this file said, and nine since sprint 25 día 5. A guard
+   fails if the next one is written without it, and names every record that carries the number.
 2. **The four inert corner handles** are withdrawn, with the refusal and its four reasons in
    `docs/design/REVIEW.md`. That closes one of sprint 14's two remaining appendix findings.
 3. **The six mouse-only section verbs** are reachable, pressable and survive being pressed: the

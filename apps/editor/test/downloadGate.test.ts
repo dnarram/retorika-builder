@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { GALLERY_PHOTOS } from "@retorika/catalog";
 import { EMPTY_ANSWERS, GALLERY_SAMPLE_COUNT, generate } from "@retorika/generator";
 import {
+  FINE_COLUMNS,
   MAX_PAGES,
   parseDocument,
   type RetorikaDocument,
@@ -10,6 +11,7 @@ import {
   type Section,
   type StyleValue,
   setElementStyle,
+  setPlacement,
   type Theme,
   TOKEN_KEYS,
 } from "@retorika/schema";
@@ -40,6 +42,13 @@ if (!classicBlue) throw new Error("no classic-blue palette");
 const theme = {
   ...(Object.fromEntries(TOKEN_KEYS.map((key) => [key, "1rem"])) as Theme),
   ...classicBlue.colors,
+  // **And the spacing in pixels, because it is read and not only emitted.** Since ADR 0050
+  // escalating a section asks the theme how tall one gap is, in order to turn the catalog's rows
+  // into eight-pixel ones (`gapRowsFor`), and it refuses anything that is not a pixel length
+  // rather than guessing. Every theme this product makes is pixels — migration 0007 converted the
+  // stored ones and `buildTheme` has produced them since — so `1rem` was a fixture nothing could
+  // have produced, which is why it only showed up the day a verb needed to read it.
+  "space.md": "16px",
 } as Theme;
 
 const section: Section = {
@@ -413,6 +422,97 @@ describe("a bank photograph that did not load", () => {
     const gate = downloadGateFor(counts({}), plain, new Set(), [], failed);
     failed.push("b.svg");
     expect(gate.kind === "photosFailed" && gate.srcs).toEqual(["a.svg"]);
+  });
+});
+
+/**
+ * **Text over text** — the warning David's own condition asked for when he allowed overlapping
+ * (ADR 0050 §6, sprint 25 día 5): «avisa […] no un bloqueo».
+ */
+describe("two texts on top of each other", () => {
+  /**
+   * A cover designed by hand with its two texts on top of each other — which is exactly what a
+   * mouse can produce since día 3, and what the shared fixture cannot: it carries one visible text
+   * (the headline), a link, and a hidden body, and every one of those three is deliberately not
+   * what this warning is about.
+   */
+  function stacked(): RetorikaDocument {
+    const headline = section.content[0];
+    if (!headline) throw new Error("the fixture section has no headline");
+    return parseDocument({
+      schemaVersion: SCHEMA_VERSION,
+      id: "doc-1",
+      siteName: "Barbería El Corte",
+      theme,
+      collections: [],
+      pages: [
+        {
+          id: "home",
+          slug: "index",
+          title: "Inicio",
+          sections: [
+            {
+              ...section,
+              source: "free",
+              content: [
+                headline,
+                {
+                  id: "el-body",
+                  role: "body",
+                  hidden: false,
+                  slot: "body",
+                  value: { kind: "text", text: "Cortes y afeitados de toda la vida" },
+                },
+              ],
+              layout: {
+                grid: { columns: FINE_COLUMNS },
+                placements: [
+                  { elementId: "el-headline", column: 1, columnSpan: 48, row: 1, rowSpan: 7 },
+                  { elementId: "el-body", column: 25, columnSpan: 48, row: 4, rowSpan: 7 },
+                ],
+                breakpoints: { mobile: [] },
+              },
+            },
+          ],
+        },
+      ],
+    });
+  }
+
+  it("warns, naming the words of both texts", () => {
+    const gate = downloadGateFor(counts({}), stacked());
+    expect(gate.kind).toBe("textOverText");
+    const findings = gate.kind === "textOverText" ? gate.findings : [];
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.sectionId).toBe("sec-cover");
+    expect(findings[0]?.first.words.length, "la primera frase llega vacía").toBeGreaterThan(0);
+    expect(findings[0]?.second.words.length, "la segunda frase llega vacía").toBeGreaterThan(0);
+  });
+
+  it("never blocks: going past it downloads", () => {
+    expect(downloadGateFor(counts({}), stacked(), new Set(["layout"]))).toEqual({ kind: "ready" });
+  });
+
+  it("says nothing about the same site laid out by the catalog", () => {
+    expect(downloadGateFor(counts({}), plain)).toEqual({ kind: "ready" });
+  });
+
+  it("comes after the overflow warning, which is about the whole site", () => {
+    const overflow = [{ pageId: "home", over: 12 }];
+    const first = downloadGateFor(counts({}), stacked(), new Set(), overflow);
+    expect(first.kind).toBe("overflows");
+    const second = downloadGateFor(counts({}), stacked(), new Set(["overflow"]), overflow);
+    expect(second.kind).toBe("textOverText");
+  });
+
+  it("and after every block, because a block is not something to warn about", () => {
+    const illegible = setElementStyle(
+      stacked(),
+      { sectionId: "sec-cover", elementId: "el-headline" },
+      "color",
+      { exact: "#FDFDFD", exception: true },
+    );
+    expect(downloadGateFor(counts({}), illegible).kind).toBe("unreadable");
   });
 });
 
