@@ -5567,7 +5567,19 @@ export function Editor({
       const paintHandles = () => {
         for (const handle of section.querySelectorAll(".rb-handle")) handle.remove();
         if (!coarse || deviceNow.current === "mobile" || pulling) return;
-        if (!findSection(doc, sectionId)?.section.layout) return;
+        /**
+         * **Whether this section is hand-designed, asked of the page and not of the state.**
+         *
+         * `rb-free` is the renderer's own class for `source === "free"` (día 1), and a saved layout
+         * is always free (§1), so the class and «it has placements» are the same fact — but one of
+         * them is on the document this function is about to draw on and the other is in a closure
+         * that was captured when the frame was wired. The gesture's own handlers can read the state
+         * safely, because a hand arrives long after a rebuild has settled; **this runs inside the
+         * rebuild**, on `markChosen`, so a stale `doc` here would mean no handles at all for the
+         * element somebody just chose, with nothing to repaint them until the next choice. The same
+         * lesson as `liveDoc()` on día 2, in a place where it is permanent rather than a flicker.
+         */
+        if (!section.classList.contains("rb-free")) return;
         const found = target();
         if (!found) return;
         const host = section.getBoundingClientRect();

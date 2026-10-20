@@ -17278,6 +17278,33 @@ describe("sprint 25 día 7 — las asas en táctil, y el móvil sin solape", () 
     await fontsReady(frame);
   }
 
+  /**
+   * **What the browser says about the hand, asked of the canvas itself.**
+   *
+   * The premise of every assertion below, and the walk states it rather than assuming it: the
+   * handles exist because the browser answers `(pointer: coarse)`, and a context that does not —
+   * CI's Chromium need not emulate a finger the way this machine's does — would otherwise fail on
+   * the consequence with nothing to say about the cause. It also reads the two other things that
+   * decide whether a handle is drawn, so a red run names which one gave way.
+   */
+  function deviceSays(frame: FrameLocator): Promise<{
+    coarse: boolean;
+    hover: boolean;
+    touchPoints: number;
+    free: boolean;
+    chosen: string;
+  }> {
+    return frame.locator("body").evaluate(() => ({
+      coarse: matchMedia("(pointer: coarse)").matches,
+      hover: matchMedia("(hover: hover)").matches,
+      touchPoints: navigator.maxTouchPoints,
+      free:
+        document.querySelector('[data-section="sec-cover"]')?.classList.contains("rb-free") ===
+        true,
+      chosen: document.querySelector(".rb-chosen")?.getAttribute("data-id") ?? "",
+    }));
+  }
+
   it("el elegido enseña asas de cuarenta y cuatro píxeles, y un asa estira la caja", async () => {
     const context = await browser.newContext(FINGER);
     const page = await context.newPage();
@@ -17292,6 +17319,17 @@ describe("sprint 25 día 7 — las asas en táctil, y el móvil sin solape", () 
       const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
       await headline.tap();
       await expect(headline).toHaveClass(/rb-chosen/);
+
+      // The premise, out loud: a finger's device, a hand-designed section, and the headline chosen.
+      const says = await deviceSays(frame);
+      expect(says.coarse, `el navegador no da un puntero grueso: ${JSON.stringify(says)}`).toBe(
+        true,
+      );
+      expect(says.free, `la portada no quedó diseñada a mano: ${JSON.stringify(says)}`).toBe(true);
+      expect(says.chosen, `el elegido no es el titular: ${JSON.stringify(says)}`).toBe(
+        "el-headline",
+      );
+
       await expect(section.locator(".rb-handle-se")).toBeAttached();
 
       const drawn = await handlesOn(frame);
@@ -17398,6 +17436,10 @@ describe("sprint 25 día 7 — las asas en táctil, y el móvil sin solape", () 
       const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
       await headline.tap();
       await expect(headline).toHaveClass(/rb-chosen/);
+      const says = await deviceSays(frame);
+      expect(says.coarse, `el navegador no da un puntero grueso: ${JSON.stringify(says)}`).toBe(
+        true,
+      );
       await expect(frame.locator('[data-section="sec-cover"] .rb-handle-se')).toBeAttached();
 
       /**
