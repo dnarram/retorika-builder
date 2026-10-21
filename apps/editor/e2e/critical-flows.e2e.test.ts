@@ -16199,7 +16199,7 @@ describe("sprint 24 día 10 — el cierre, sin ratón", () => {
   }
 
   // --- RECORRIDO SIN RATÓN: INICIO ---
-  it("elige una letra por su nombre, y mueve un elemento por unidades y en carrera, sin ratón", async () => {
+  it("elige una letra por su nombre, mueve un elemento por unidades y en carrera, y estira su caja desde el panel, sin ratón", async () => {
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const page = await context.newPage();
     try {
@@ -16445,6 +16445,88 @@ describe("sprint 24 día 10 — el cierre, sin ratón", () => {
       await expect
         .poll(columnOf, { message: "la carrera no fue un solo paso del historial" })
         .toBe(beforeRun);
+
+      /**
+       * **Y la caja se estira sin ratón, que es lo que este sprint añadió y nadie había probado
+       * por teclado** (día 8).
+       *
+       * El sprint 25 añadió un gesto nuevo entero: redimensionar el recuadro de un elemento, por
+       * los bordes con el ratón (día 4) y por asas con el dedo (día 7). Las dos son punteros. Su
+       * camino de teclado son **los cuatro steppers de «Colocación»** —es lo que dice ADR 0050 §6
+       * al retirarle a `Mayús` el redimensionado el día 6, y lo que la WCAG 2.5.7 pide— y ninguna
+       * caminata sin ratón los pulsaba: el recorrido del sprint 24 día 10 mueve y no estira.
+       * Así que la promesa «monta una web, la edita, le da estilo y descarga el ZIP sin tocar el
+       * trackpad» cubría desde hoy un gesto menos de los que el editor tiene.
+       *
+       * **Se estrecha y no se ensancha, y es a propósito**: la flecha de un stepper está
+       * deshabilitada cuando su pulsación sería rechazada (`stepTo` contesta `undefined` en vez del
+       * límite), y el elemento más bajo de esta portada llega hasta la última unidad — «uno más»
+       * estaría correctamente apagado. «Uno menos» está vivo para cualquier tramo mayor que el
+       * mínimo, así que la caminata pulsa el que existe.
+       */
+      const spansNow = async () =>
+        Object.fromEntries(
+          (await placedIn(live, sectionId)).map((element) => [
+            element.id,
+            `${element.column}/${element.columnSpan}/${element.row}/${element.rowSpan}`,
+          ]),
+        );
+      const beforeStepper = await spansNow();
+
+      await tabUntil(page, (at) => at.text === "Diseño", "el panel «Diseño» del raíl", 200);
+      await page.keyboard.press("Enter");
+      await expect(page.getByRole("heading", { name: "Diseño" })).toBeVisible();
+
+      /**
+       * **No hace falta elegir fila: el panel ya trae una.** `selectedRowId` cae en `rows[0]` si
+       * nadie ha nombrado un elemento, así que «Colocación» está dibujada desde que el panel abre —
+       * y cuál sea la fila da igual, porque lo que se asevera abajo es que **un** elemento cambió
+       * un solo número, y eso vale para cualquiera.
+       *
+       * **Y el camino hasta ahí pasa por dentro del lienzo**, que es por lo que el límite es el del
+       * sprint 17 y no una docena: el panel va después del lienzo en el documento, el lienzo con las
+       * herramientas encendidas es unas setenta y cinco paradas (está en el backlog, con su
+       * medida), y la primera versión de esto se quedó en el `IFRAME` tras cuarenta pulsaciones.
+       */
+      await tabUntil(page, (at) => at.text === "Colocación", "la familia «Colocación»", 200);
+      await page.keyboard.press("Enter");
+      await tabUntil(page, (at) => at.label === "Ancho: uno menos", "el stepper del ancho", 40);
+      await page.keyboard.press("Enter");
+
+      await expect
+        .poll(
+          async () => {
+            const after = await spansNow();
+            return Object.keys(after).filter((id) => after[id] !== beforeStepper[id]).length;
+          },
+          { message: "el stepper del panel no cambió ninguna colocación" },
+        )
+        .toBe(1);
+
+      const afterStepper = await spansNow();
+      const moved = Object.keys(afterStepper).find((id) => afterStepper[id] !== beforeStepper[id]);
+      expect(moved, "ningún elemento cambió").toBeDefined();
+      const was = (beforeStepper[moved ?? ""] ?? "").split("/").map(Number);
+      const is = (afterStepper[moved ?? ""] ?? "").split("/").map(Number);
+      // Un stepper mueve un número: una columna del catálogo de ancho, y nada más. La columna, la
+      // fila y el alto son los de antes — un «Ancho» que moviese el borde izquierdo sería otro
+      // gesto, y el día 4 ya asevera eso mismo del ratón.
+      expect(is[1], "«Ancho: uno menos» no estrechó una columna del catálogo").toBe(
+        (was[1] ?? 0) - FINE_PER_COLUMN,
+      );
+      expect([is[0], is[2], is[3]], "el ancho movió además la columna, la fila o el alto").toEqual([
+        was[0],
+        was[2],
+        was[3],
+      ]);
+
+      // Y un «Deshacer» lo devuelve, por teclado como todo lo demás de este recorrido.
+      await page.keyboard.press("Control+z");
+      await expect
+        .poll(async () => (await spansNow())[moved ?? ""], {
+          message: "el paso del stepper no se deshizo",
+        })
+        .toBe(beforeStepper[moved ?? ""]);
     } finally {
       await context.close();
     }
