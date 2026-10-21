@@ -16199,7 +16199,7 @@ describe("sprint 24 día 10 — el cierre, sin ratón", () => {
   }
 
   // --- RECORRIDO SIN RATÓN: INICIO ---
-  it("elige una letra por su nombre, y mueve un elemento por unidades y en carrera, sin ratón", async () => {
+  it("elige una letra por su nombre, mueve un elemento por unidades y en carrera, y estira su caja desde el panel, sin ratón", async () => {
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const page = await context.newPage();
     try {
@@ -16445,6 +16445,88 @@ describe("sprint 24 día 10 — el cierre, sin ratón", () => {
       await expect
         .poll(columnOf, { message: "la carrera no fue un solo paso del historial" })
         .toBe(beforeRun);
+
+      /**
+       * **Y la caja se estira sin ratón, que es lo que este sprint añadió y nadie había probado
+       * por teclado** (día 8).
+       *
+       * El sprint 25 añadió un gesto nuevo entero: redimensionar el recuadro de un elemento, por
+       * los bordes con el ratón (día 4) y por asas con el dedo (día 7). Las dos son punteros. Su
+       * camino de teclado son **los cuatro steppers de «Colocación»** —es lo que dice ADR 0050 §6
+       * al retirarle a `Mayús` el redimensionado el día 6, y lo que la WCAG 2.5.7 pide— y ninguna
+       * caminata sin ratón los pulsaba: el recorrido del sprint 24 día 10 mueve y no estira.
+       * Así que la promesa «monta una web, la edita, le da estilo y descarga el ZIP sin tocar el
+       * trackpad» cubría desde hoy un gesto menos de los que el editor tiene.
+       *
+       * **Se estrecha y no se ensancha, y es a propósito**: la flecha de un stepper está
+       * deshabilitada cuando su pulsación sería rechazada (`stepTo` contesta `undefined` en vez del
+       * límite), y el elemento más bajo de esta portada llega hasta la última unidad — «uno más»
+       * estaría correctamente apagado. «Uno menos» está vivo para cualquier tramo mayor que el
+       * mínimo, así que la caminata pulsa el que existe.
+       */
+      const spansNow = async () =>
+        Object.fromEntries(
+          (await placedIn(live, sectionId)).map((element) => [
+            element.id,
+            `${element.column}/${element.columnSpan}/${element.row}/${element.rowSpan}`,
+          ]),
+        );
+      const beforeStepper = await spansNow();
+
+      await tabUntil(page, (at) => at.text === "Diseño", "el panel «Diseño» del raíl", 200);
+      await page.keyboard.press("Enter");
+      await expect(page.getByRole("heading", { name: "Diseño" })).toBeVisible();
+
+      /**
+       * **No hace falta elegir fila: el panel ya trae una.** `selectedRowId` cae en `rows[0]` si
+       * nadie ha nombrado un elemento, así que «Colocación» está dibujada desde que el panel abre —
+       * y cuál sea la fila da igual, porque lo que se asevera abajo es que **un** elemento cambió
+       * un solo número, y eso vale para cualquiera.
+       *
+       * **Y el camino hasta ahí pasa por dentro del lienzo**, que es por lo que el límite es el del
+       * sprint 17 y no una docena: el panel va después del lienzo en el documento, el lienzo con las
+       * herramientas encendidas es unas setenta y cinco paradas (está en el backlog, con su
+       * medida), y la primera versión de esto se quedó en el `IFRAME` tras cuarenta pulsaciones.
+       */
+      await tabUntil(page, (at) => at.text === "Colocación", "la familia «Colocación»", 200);
+      await page.keyboard.press("Enter");
+      await tabUntil(page, (at) => at.label === "Ancho: uno menos", "el stepper del ancho", 40);
+      await page.keyboard.press("Enter");
+
+      await expect
+        .poll(
+          async () => {
+            const after = await spansNow();
+            return Object.keys(after).filter((id) => after[id] !== beforeStepper[id]).length;
+          },
+          { message: "el stepper del panel no cambió ninguna colocación" },
+        )
+        .toBe(1);
+
+      const afterStepper = await spansNow();
+      const moved = Object.keys(afterStepper).find((id) => afterStepper[id] !== beforeStepper[id]);
+      expect(moved, "ningún elemento cambió").toBeDefined();
+      const was = (beforeStepper[moved ?? ""] ?? "").split("/").map(Number);
+      const is = (afterStepper[moved ?? ""] ?? "").split("/").map(Number);
+      // Un stepper mueve un número: una columna del catálogo de ancho, y nada más. La columna, la
+      // fila y el alto son los de antes — un «Ancho» que moviese el borde izquierdo sería otro
+      // gesto, y el día 4 ya asevera eso mismo del ratón.
+      expect(is[1], "«Ancho: uno menos» no estrechó una columna del catálogo").toBe(
+        (was[1] ?? 0) - FINE_PER_COLUMN,
+      );
+      expect([is[0], is[2], is[3]], "el ancho movió además la columna, la fila o el alto").toEqual([
+        was[0],
+        was[2],
+        was[3],
+      ]);
+
+      // Y un «Deshacer» lo devuelve, por teclado como todo lo demás de este recorrido.
+      await page.keyboard.press("Control+z");
+      await expect
+        .poll(async () => (await spansNow())[moved ?? ""], {
+          message: "el paso del stepper no se deshizo",
+        })
+        .toBe(beforeStepper[moved ?? ""]);
     } finally {
       await context.close();
     }
@@ -17625,4 +17707,302 @@ describe("sprint 25 día 7 — las asas en táctil, y el móvil sin solape", () 
       await context.close();
     }
   }, 240_000);
+});
+
+/**
+ * **Sprint 25 día 8 — el cierre: lo que este sprint añadió, mirado desde fuera.**
+ *
+ * Tres cosas que ninguna caminata de los días 1 a 7 preguntaba, y las tres salieron de medir en vez
+ * de razonar. La primera es una pasada de axe sobre el cromo nuevo. Las otras dos son defectos de
+ * este mismo sprint, con la medida al lado.
+ */
+describe("sprint 25 día 8 — el cierre", () => {
+  /**
+   * **La ventana más estrecha en la que puede existir un asa, que no es 390.**
+   *
+   * El plan del día pedía axe «a 390 sobre un elemento elegido con asas», y a 390 no hay ninguna
+   * que auditar — no por un defecto, sino por una decisión: `designToolsFor` devuelve `undefined`
+   * por debajo de `MIN_STUDIO_WIDTH` (ADR 0025 §5, ADR 0042), así que a 390 el interruptor de las
+   * herramientas de diseño **no está en el DOM**, y sin herramientas no hay sección diseñada a
+   * mano, ni rejilla fina, ni asas. Medido el 21 de octubre: cero interruptores a 390, uno a 1024.
+   *
+   * Así que la pasada se hace donde la cosa existe por primera vez, que es 1024 con un dedo — una
+   * tableta o un portátil táctil, el caso duro del día 7 — y el otro medio se asevera abajo: a 390
+   * no hay nada que auditar, y eso es la frase que faltaba.
+   */
+  const NARROWEST_TOUCH = { viewport: { width: 1024, height: 900 }, hasTouch: true } as const;
+
+  /** Una portada diseñada a mano, con las herramientas encendidas, en la ventana que toque. */
+  async function handDesigned(page: Page): Promise<FrameLocator> {
+    await intoTheCanvas(page);
+    await studioToolsOn(page);
+    const frame = page.frameLocator(PREVIEW).first();
+    await frame.locator('[data-section="sec-cover"]').click();
+    await replacingTheDocument(page, async () => {
+      await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
+      await frame.locator(".rb-escalate-yes").click();
+    });
+    const live = page.frameLocator(PREVIEW).first();
+    await waitForBankPhoto(live);
+    await fontsReady(live);
+    return live;
+  }
+
+  /**
+   * **Dónde está cada asa frente a la esquina que marca**, todo relativo a la sección y en los
+   * píxeles del propio documento, que es el único marco de referencia que no se mueve cuando la
+   * vista previa se desplaza (la lección del día 3).
+   */
+  function handleDrift(
+    frame: FrameLocator,
+    elementId: string,
+  ): Promise<{ drift: number; width: number }> {
+    return frame.locator('[data-section="sec-cover"]').evaluate((node, id) => {
+      const section = node as HTMLElement;
+      const host = section.getBoundingClientRect();
+      const el = section.querySelector<HTMLElement>(`[data-id="${id}"]`);
+      const se = section.querySelector<HTMLElement>(".rb-handle-se");
+      if (!el || !se) return { drift: Number.NaN, width: Number.NaN };
+      const box = el.getBoundingClientRect();
+      const handle = se.getBoundingClientRect();
+      return {
+        // El asa está centrada en la esquina, así que lo que se compara es su centro con la esquina
+        // de abajo a la derecha de la caja — las dos medidas contra la sección, de modo que un
+        // desplazamiento de la página mueve las dos juntas y la diferencia sigue siendo la del asa.
+        drift: Math.hypot(
+          handle.left - host.left + handle.width / 2 - (box.right - host.left),
+          handle.top - host.top + handle.height / 2 - (box.bottom - host.top),
+        ),
+        // **La premisa, leída en el mismo respiro que la consecuencia**, y la razón por la que esta
+        // función devuelve dos números en vez de uno. `expect.poll` se da por satisfecho con su
+        // primera muestra, así que «espera a que la deriva sea cero» se cumplía *antes* de que la
+        // página refluyese: medido con el defecto puesto, la primera muestra tras pulsar «Diseño»
+        // todavía veía la página de 752 px y una deriva de cero, y la aseveración pasaba en verde
+        // sin haber comprobado nada. Así que lo que se espera es **que el reflujo haya ocurrido**
+        // —el ancho de la caja ya no es el de antes— y solo entonces se mira el asa.
+        width: box.width,
+      };
+    }, elementId);
+  }
+
+  it("axe no ve nada con un elemento elegido y sus asas puestas, en la ventana más estrecha que las tiene", async () => {
+    const context = await browser.newContext(NARROWEST_TOUCH);
+    const page = await context.newPage();
+    try {
+      const frame = await handDesigned(page);
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      await headline.tap();
+      await expect(headline).toHaveClass(/rb-chosen/);
+
+      /**
+       * **La premisa antes de la consecuencia**, que es lo que las dos caminatas del día 7
+       * aprendieron a decir en voz alta tras tres rondas de CI: si el navegador no diera un puntero
+       * grueso, esta pasada auditaría una pantalla sin asas y se llamaría verde.
+       */
+      const says = await frame.locator("body").evaluate(() => ({
+        coarse: matchMedia("(pointer: coarse)").matches,
+        free:
+          document.querySelector('[data-section="sec-cover"]')?.classList.contains("rb-free") ===
+          true,
+        handles: document.querySelectorAll(".rb-handle").length,
+      }));
+      expect(says.coarse, `el navegador no da un puntero grueso: ${JSON.stringify(says)}`).toBe(
+        true,
+      );
+      expect(says.free, `la portada no quedó diseñada a mano: ${JSON.stringify(says)}`).toBe(true);
+      expect(
+        says.handles,
+        `no hay asas que auditar: ${JSON.stringify(says)}`,
+      ).toBeGreaterThanOrEqual(4);
+
+      /**
+       * Y axe sobre todo: su documento y el de la vista previa, porque axe entra en los marcos. Lo
+       * que esta pasada busca de verdad es un `aria-hidden` sobre algo enfocable, que es un hallazgo
+       * serio — ocho divs nuevos sobre el elemento elegido, todos `aria-hidden` a propósito porque
+       * el teclado redimensiona por los steppers del panel (WCAG 2.5.7), y «a propósito» es
+       * exactamente lo que nadie había comprobado.
+       */
+      await axeSerious(page, "un elemento elegido con sus asas, a 1024 con un dedo");
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+
+  it("a 390 no hay asas que auditar, porque no hay herramientas de diseño", async () => {
+    const context = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      isMobile: true,
+      hasTouch: true,
+      deviceScaleFactor: 2,
+    });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      // Lo que decide todo lo demás, aseverado donde se puede ver: por debajo de 1024 el
+      // interruptor no se dibuja, así que el sprint entero —la rejilla fina, el arrastre libre, los
+      // bordes, las guías y las asas— no tiene puerta en un teléfono. Es ADR 0025 §5 funcionando,
+      // y queda escrito aquí para que el próximo cierre no lo busque a 390.
+      await expect(page.getByRole("switch", { name: "Herramientas de diseño" })).toHaveCount(0);
+      const frame = page.frameLocator(PREVIEW).first();
+      await expect(frame.locator('.rb-action[aria-label="Diseñar a mano"]')).toHaveCount(0);
+      await expect(frame.locator(".rb-handle")).toHaveCount(0);
+      // Y el otro medio, para que esto no sea «no hay nada en ninguna parte»: la pasada de arriba
+      // sí encontró asas a 1024, y a 390 el editor está entero por lo demás.
+      await expect(page.getByRole("button", { name: "Estilo", exact: true })).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("escalar desde la vista de móvil no se lleva la maqueta de escritorio por delante", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      await studioToolsOn(page);
+
+      /**
+       * **El defecto, medido el 21 de octubre antes de arreglarlo.** Escalar mide la página viva
+       * desde el día 2, y en la vista de móvil la página viva tiene 320 px de ancho: cada elemento
+       * es `grid-column: 1 / -1` y la sección es una pila. Las columnas se salvaban —el ×8 es
+       * exacto y no se mide— pero las filas salían en el orden del teléfono: el titular de la
+       * portada generada aterrizaba en la **fila 29** en vez de la 4, doscientos píxeles más abajo
+       * y por debajo de una foto cuya propia área salía de veintiséis filas donde el escritorio
+       * mide cincuenta. La maqueta de escritorio quedaba deshecha en silencio, y «no se mueve nada
+       * al empezar» (ADR 0025 §7) dejaba de ser cierto.
+       */
+      await page.getByRole("button", { name: "Ver en móvil" }).click();
+      const phone = page.frameLocator(PREVIEW).first();
+      await expect
+        .poll(
+          () =>
+            phone
+              .locator('[data-section="sec-cover"]')
+              .evaluate(
+                (node) =>
+                  getComputedStyle(node as HTMLElement).gridTemplateColumns.split(" ").length,
+              ),
+          { message: "la vista de móvil no colapsó la rejilla a una columna" },
+        )
+        .toBe(1);
+
+      await phone.locator('[data-section="sec-cover"]').click();
+      await replacingTheDocument(page, async () => {
+        await phone.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
+        await phone.locator(".rb-escalate-yes").click();
+      });
+
+      await page.getByRole("button", { name: "Ver en ordenador" }).click();
+      const desk = page.frameLocator(PREVIEW).first();
+      await expect
+        .poll(
+          () =>
+            desk
+              .locator('[data-section="sec-cover"]')
+              .evaluate(
+                (node) =>
+                  getComputedStyle(node as HTMLElement).gridTemplateColumns.split(" ").length,
+              ),
+          { message: "la vista de ordenador no devolvió las ciento siete pistas" },
+        )
+        .toBe(FINE_TRACKS);
+      await waitForBankPhoto(desk);
+      await fontsReady(desk);
+
+      const fromPhone = await placedIn(desk, "sec-cover");
+      const headline = fromPhone.find((entry) => entry.id === "el-headline");
+      const image = fromPhone.find((entry) => entry.id === "el-image");
+      expect(headline, "la portada escalada no trajo titular").toBeDefined();
+      expect(image, "la portada escalada no trajo foto").toBeDefined();
+      // Lo que el catálogo dibuja y lo que la conversión por el ritmo conserva: los dos empiezan
+      // arriba, uno al lado del otro. Con el defecto el titular estaba en la 29 y la foto en la 1.
+      expect(headline?.row, "el titular no está en la primera fila").toBe(1);
+      expect(image?.row, "la foto no está en la primera fila").toBe(1);
+      expect(
+        headline?.column === image?.column,
+        "el titular y la foto comparten columna, así que no están uno al lado del otro",
+      ).toBe(false);
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+
+  it("y escalar desde la vista de ordenador sigue midiendo", async () => {
+    /**
+     * **El saboteo de la caminata de arriba, y por eso existe.** Devolver `undefined` de
+     * `measurePlaced` siempre haría pasar aquella en verde: la conversión por el ritmo pone el
+     * titular en la primera fila y la aseveración se cumpliría sin que nada midiera nunca. Esta
+     * dice la otra mitad — en la vista de ordenador la medición sigue viva, y se nota porque el
+     * titular cae por debajo de la caja medida de la sección y **no** en la fila 1.
+     */
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    try {
+      const frame = await handDesigned(page);
+      const placed = await placedIn(frame, "sec-cover");
+      const headline = placed.find((entry) => entry.id === "el-headline");
+      expect(headline, "la portada escalada no trajo titular").toBeDefined();
+      expect(
+        headline?.row ?? 0,
+        "el titular salió en la primera fila, así que nada se midió",
+      ).toBeGreaterThan(1);
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+
+  it("las asas siguen a su elemento cuando la página refluye bajo ellas", async () => {
+    const context = await browser.newContext(NARROWEST_TOUCH);
+    const page = await context.newPage();
+    try {
+      const frame = await handDesigned(page);
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      await headline.tap();
+      await expect(headline).toHaveClass(/rb-chosen/);
+      await expect(frame.locator('[data-section="sec-cover"] .rb-handle-se')).toBeAttached();
+
+      // Recién elegido están donde tienen que estar, que es la premisa: sin esto una deriva de
+      // cero más abajo podría ser «nunca se dibujaron bien» en vez de «siguieron».
+      const atFirst = await handleDrift(frame, "el-headline");
+      expect(atFirst.drift, "el asa no está en la esquina al elegir").toBeLessThanOrEqual(1);
+
+      /**
+       * **Cada puerta se mira en dos tiempos: primero que la página refluyó, después que el asa
+       * siguió.** Al revés no comprueba nada, y eso se midió: con el defecto puesto la primera
+       * muestra tras abrir el panel llegaba antes del reflujo y daba deriva cero.
+       */
+      const afterReflow = async (what: string, was: number) => {
+        await expect
+          .poll(async () => (await handleDrift(frame, "el-headline")).width, {
+            message: `la página no refluyó al ${what}, así que no hay nada que seguir`,
+          })
+          .not.toBe(was);
+        const now = await handleDrift(frame, "el-headline");
+        expect(now.width, `la página no refluyó al ${what}`).not.toBe(was);
+        await expect
+          .poll(async () => (await handleDrift(frame, "el-headline")).drift <= 1, {
+            message: `el asa no siguió al titular al ${what} (deriva ${now.drift.toFixed(1)} px sobre una caja de ${Math.round(now.width)} px)`,
+          })
+          .toBe(true);
+        return (await handleDrift(frame, "el-headline")).width;
+      };
+
+      /**
+       * **Y abrir un panel refluye la página sin reconstruir el documento**, que es la puerta por
+       * la que se colaba el defecto: a 1024 el ancho de la página baja de 752 a 721 al abrir
+       * «Diseño», el titular pasa de 320 px de ancho a 305, y hasta el día 8 las ocho asas se
+       * quedaban donde estaban — el asa de abajo a la derecha a **quince píxeles** de la esquina
+       * que marca. Sin volver a elegir, que es justo lo que una mano no hace.
+       */
+      await page.getByRole("button", { name: "Diseño", exact: true }).click();
+      const withPanel = await afterReflow("abrir «Diseño»", atFirst.width);
+
+      // Y por la otra puerta, que no es la misma: una ventana que se ensancha no abre ningún panel.
+      // De 1024 a 1280 la página pasa a 788 px y el asa se quedaba dieciocho píxeles corta.
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await afterReflow("ensanchar la ventana", withPanel);
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
 });

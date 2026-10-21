@@ -12,7 +12,86 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 19 October 2026, **closing sprint 24 — «la letra se elige, el elemento se arrastra y el
+Last reviewed: 21 October 2026, **closing sprint 25 — «se queda donde se suelta».** One request, and
+it corrected the drag sprint 24 had just shipped: «quiero que al arrastrar un elemento visual este se
+quede en la posición donde se deja… y que las cajas que limitan el tamaño sea ajustable al arrastrar
+los bordes». It was the **third** time an owner asked for freer placement and the first time the
+asker was the product's owner, so document rule 4 got the ADR it demands — and **the answer was to
+refine the grid, not to abandon it**: a hand-designed section is ninety-six units and eight-pixel
+rows, so the adjustment on release is seven to ten pixels where a hand actually drags, measured in
+Chromium rather than calculated. The element follows the hand with no ghost, its borders stretch it,
+guides snap it to its neighbours, overlapping is allowed with the document's own stacking order, text
+over text **warns** and never blocks, the arrows count in units with `Shift` worth eight, a run of
+presses is one movement and one undo, and in touch the chosen element gets handles a finger can take.
+The record is `docs/design/REVIEW.md`, sprint 25, and the decision is
+[ADR 0050](../decisions/0050-a-hand-designed-section-is-a-fine-grid-and-the-hand-decides-where.md),
+with six amendments of its own — one per day.
+
+**What this sprint found that nobody was looking for:**
+
+1. **The whole sprint has no door on a phone, and that is a decision nobody had written down.**
+   `designToolsFor` returns `undefined` below `MIN_STUDIO_WIDTH`, so at 390 the design-tools switch
+   is **not in the DOM** — measured, zero at 390 and one at 1024. No switch, no hand-designed
+   section; no hand-designed section, no fine grid, no stretching borders, no guides, no handles. It
+   is ADR 0025 §5 and ADR 0042 working as decided, but the closing day's own plan had asked for «axe
+   at 390 over a chosen element with its handles», which cannot exist. The pass moved to 1024 with a
+   finger — the narrowest window the thing lives in — and 390 got a walk that asserts the zero.
+2. **Escalating from the mobile view undid the desktop layout.** Escalating measures the live page
+   from day 2, and the mobile view's live page is 320px wide, so the boxes are a stack. The columns
+   survived (the ×8 is exact and is not measured) and the rows came out in the phone's order: the
+   generated cover's headline landed on **row 29 instead of 4**, two hundred pixels down and under a
+   photograph whose area came out **26 rows where the desktop measures 50**. Silently, by a door the
+   design tools leave open all the time. Fixed on day 8: `measurePlaced` hands back nothing when the
+   section resolves to **one** track, and the rhythm conversion keeps the composition.
+3. **The touch handles did not follow their element when the page reflowed under them.** They are
+   absolute boxes placed at the corner the element had *when it was chosen*, repainted only on
+   `markChosen`: opening «Diseño» at a 1024 window took the page from 752px to 721 and left the
+   bottom-right handle **15.5px** past its corner; widening the window to 1280 left it **18px**
+   short. Permanent, measured stable from 150ms to 3850, with the dots drawn the whole time. A
+   `ResizeObserver` per section, and not a window `resize` listener, because opening a panel resizes
+   no window.
+4. **An `expect.poll` for «this is fine now» passes before the thing that would break it happens.**
+   The first version of that handle assertion was **green with the defect in place**: poll is
+   satisfied by its first sample, and the first sample after pressing «Diseño» arrives before React
+   has redone the row, when the page is still 752 wide and the drift is zero. The walk now waits for
+   the reflow to have happened — the box's width is no longer what it was — and only then looks at
+   the handle. The sabotage rule applied to the assertion that looked like it derived nothing.
+5. **The mouseless walk was a gesture short and nobody noticed for two days.** This sprint added
+   resizing, and both its doors are pointers; its keyboard path is «Colocación»'s four steppers
+   (ADR 0050 §6, WCAG 2.5.7) and no keyboard-only walk pressed one. It does now, and it asserts that
+   a stepper moves **one** number.
+6. **A span of N units is not a fixed width** (day 5): it is N units plus the gutters it crosses, so
+   the same 24-unit button is 256px at unit 1 and 272 at unit 38. The direct consequence of keeping
+   the catalog's eleven gutters to the pixel, and it moved day 3's own walk from «the hand» to «the
+   hand or the nearest guide».
+7. **Two documents are live during an edit**, so nothing may be keyed to «the frame wired last». A
+   single ref holding the latest painter drew the touch handles into the **buffered** document while
+   the person looked at the visible one — zero handles on the element just chosen, permanent until
+   the next choice. CI caught it; this machine never could, because the swap always won the race
+   here.
+
+**What sprint 25 leaves open**, each with the number it was measured with:
+
+1. **Nine signatures.** ADR 0050 is new and `proposed`; 0042, 0043, 0045, 0046, 0047, 0048 and 0049
+   are still `proposed`; and **0044 still needs the CEO's**, not David's.
+2. **Whether the chrome the editor draws inside the canvas should keep its size when the canvas is
+   scaled.** Measured at 1024 with «Diseño» open, where the zoom is **0.7379**: a touch handle is
+   44 × 44 in the document and **32.5 × 32.5** on screen, a section verb 32 → **23.6**, the floating
+   bar's grip 24 × 26 → **17.7 × 19.2**. The handle is the only one whose number comes from WCAG
+   (44 is 2.5.5) and it is the one that fares **best** — 32.5 still clears the 24 × 24 that WCAG
+   2.2's 2.5.8 asks. The verb and the grip fall **below** that 24, and the grip has been there since
+   sprint 20 under a comment citing that very clause. The gesture's thresholds are divided by the
+   zoom (David's adjustment 3); the drawn things never have been. The fix is his adjustment applied
+   to what is drawn, and its cost is that on a scaled canvas a small element would lose its four
+   edge handles, because «two targets across» would start counting in screen pixels — which is what
+   his condition 6 meant. Nobody touches it until he answers.
+3. **The vertical holds within 4px only where the boxes were measured.** A layout converted by the
+   rhythm — migration 0013, or a document escalated before day 2 — does move: `center → start` raises
+   a centred headline 27px on `cover-and-services`, and a spanning photograph's spare height spreads
+   over the gap rows. Named in ADR 0050 §3, pre-launch, and it moved the two goldens.
+4. **Everything sprint 24 left**, which has not moved except where this sprint touched it.
+
+The review before that: 19 October 2026, **closing sprint 24 — «la letra se elige, el elemento se arrastra y el
 panel no tapa».** David's five requests, all five delivered: the owner's-identity warning is gone with
 an ADR naming the LSSI-CE article whose risk now passes to the client; «Campos» sits beside the canvas
 like the other six panels and the edited section stays in view; the landing's two columns share a top
@@ -68,10 +147,16 @@ front of him. The record is `docs/design/REVIEW.md`, sprint 23, and the decision
 1. **Five signatures** — ADR 0045, 0046, 0047, 0048 and 0049, all `proposed`. **And the 0044 needs the
    CEO's**, not David's: it amends an ADR the CEO signed, and it is the one that moves the LSSI-CE
    article 10 risk to the client. ADR 0042 (sprint 21) and 0043 (sprint 23) are still unsigned.
-2. **A key press that arrives while the canvas is being rebuilt is lost**, so holding an arrow down
-   does not walk an element across the grid. Named in ADR 0049 §4 as the cost of ADR 0001's
+2. **A key press that arrives while the canvas is being rebuilt is lost**, ~~so holding an arrow down
+   does not walk an element across the grid~~. Named in ADR 0049 §4 as the cost of ADR 0001's
    architecture rather than hidden: the fix is a canvas that does not lose its document on every
    edit, which is the same bigger change the undo row below has been pointing at since sprint 12.
+   **The struck half was paid on sprint 25 day 6, and only that half.** A run of arrows now
+   accumulates and writes once — on `keyup`, after 300ms of quiet, or on `blur` — so there is no
+   rebuild to lose a press to until the hand stops, and holding an arrow does walk the element
+   (ADR 0050's día 6 amendment says so in those words). What is left is the general cause, which no
+   longer has the arrows as its visible symptom: a press that lands while the frame is rebuilding
+   after **any other** edit is still lost, and that is the same bigger change. Narrower, not closed.
 3. **A section element cannot be reached by Tab once focus is inside it**, which is the roving
    `tabindex` being moved by `focusin` from the children: the moment a text or a photograph takes
    focus, its section becomes the one stop and Tab has already gone past it. `Shift+Tab` from inside
@@ -79,6 +164,12 @@ front of him. The record is `docs/design/REVIEW.md`, sprint 23, and the decision
    and `0,-1,-1,-1,-1,-1` the moment a child had focus — after sixty presses of `keyboardTo` found
    nothing. **It belongs to the open question below** about whether Tab should walk a section's
    insides at all before the section is chosen, which now carries one more stop per placed element.
+   **Unchanged by sprint 25, and the walk it blocks is longer.** `Shift+Tab` from inside is still the
+   only way forward to a section, and the fine grid gives a hand-designed section more placed
+   elements to walk past: the day 8 mouseless walk reaches «Colocación» by Tab and needs a bound of
+   **200** presses to do it, because the panel sits after the canvas in the document and the canvas
+   with the tools on is the seventy-five stops the open question below measures. A bound of forty
+   ended on the `IFRAME`.
 4. **Asking Playfair Display's authors for the written permission OFL §3 provides for.** David
    declined it as the *remedy* — the family was replaced instead — and did not refuse it as a request.
    It costs no bytes and would bring the family back as one gallery row among eight.
@@ -514,6 +605,32 @@ open survives.
   sentence above is left standing, struck through in effect, because a row that quietly tightens its
   own story is worth less than one that shows where it was wrong.
 
+  **Fourth occurrence, 21 October 2026, closing sprint 25 (PR #282) — and this one hands the row
+  what it has never had: a mechanism you can reproduce on demand.** The failing test was «sprint 25
+  día 4 … agranda el área de una foto por su borde inferior sin estirar la foto», and the symptom
+  fits the common factor above exactly: `expect.poll(() => cursorOn(photo)).toBe("ns-resize")` timed
+  out at 5 s — an interaction with the inside of the preview frame that did not take effect, the
+  cursor the editor paints on a `pointermove` never arriving. The re-run of the identical commit went
+  green, and all eleven checks with it.
+
+  **What is new is that it is no longer only a CI ghost.** Run that one walk **alone**
+  (`RETORIKA_E2E=1 pnpm vitest run --project e2e -t "agranda el área de una foto"`) and it fails
+  **three times out of three** — and it fails three out of three on `main` too, with none of that
+  day's changes present, while passing in the full suite on both. So it is not the branch that
+  found it and it is not new; it is a race the walk loses whenever its setup is slow, and running it
+  filtered is the cheapest way to be slow (a filtered walk pays the cold compile, which this file
+  already records elsewhere). A probe repeating the same steps with longer waits gets `ns-resize`
+  every time, with the hover point measured 2 px above the live box's bottom edge and the zoom at 1
+  — so **the product is right and the instrument is fragile**, which is the half the three earlier
+  occurrences could never separate.
+
+  **What it would cost to fix, for whoever takes it:** the walk reads the photo's box with
+  `boundingBox()` immediately after `focus()`, and this file's own sprint 25 notes say a canvas
+  element is measured with `boxesInSection`/`boxOf` and never with `boundingBox()`, because focus
+  scrolls the preview and a face arriving moves everything under it. Nobody has done it, because the
+  walk belongs to a merged day and CI is green; it is written down here so the fifth occurrence costs
+  one command instead of an afternoon.
+
   **What is ruled out about PR #146 specifically**, since three failures on one branch against
   twenty-odd green runs on `main` is a correlation that deserves an answer rather than a shrug: its
   three new `e2e` tests are **appended at the end of the file**, and with `--maxWorkers 1` on a single
@@ -916,6 +1033,7 @@ open survives.
 
 | What | Where |
 |---|---|
+| **Should the chrome the editor draws inside the canvas keep its size when the canvas is scaled? Measured on 21 October 2026, closing sprint 25.** Every piece of it — the touch handles, the eight section verbs, the floating bar's grip, the «Añadir sección aquí» pills — is drawn in the preview page's own pixels, so the card's `transform: scale(zoom)` shrinks all of it. At a 1024 window with the «Diseño» panel open the zoom is **0.7379**, and there: a touch handle is 44 × 44 in the document and **32.5 × 32.5** on screen; a section verb 32 × 32 → **23.6 × 23.6**; the grip 24 × 26 → **17.7 × 19.2**. With no panel the zoom is 1 and all three measure what they say. **The handle is the only one whose number comes from WCAG** — 44 is 2.5.5 — **and it is the one that fares best**: 32.5 still clears the 24 × 24 that WCAG 2.2's 2.5.8 asks of a pointer target. The verb and the grip fall below that 24, and `VERB_SCALE.grip` has carried a comment citing 2.5.8 by name since sprint 20, which makes this a defect older than the handles that found it. The gesture's **thresholds** are divided by the zoom already — the drag's 3px, the border's ±6, the guide's 6, David's adjustment 3 of sprint 25 — and nothing **drawn** ever has been. So the question is whether that adjustment belongs to what is drawn too, and it is a question rather than a fix because the answer touches four controls and has a visible cost: with the targets counted in screen pixels, `handlesFor`'s «two targets across in both directions» would withdraw a small element's four edge handles on a scaled canvas, leaving the corners — which is what David's own condition 6 («por debajo de un tamaño, solo esquinas») meant, now that it would be measured where the finger is. Nobody touches it until he answers. | `apps/editor/src/editor/handles.ts`, `apps/editor/src/editor/chromeScale.ts` (`VERB_SCALE`), `zoomOf` in `Editor.tsx`, and `docs/design/REVIEW.md`'s sprint 25 entry |
 | **Tab walks the whole canvas, text by text, once the design tools are on.** Measured press by press on 12 October 2026, the day the generated gallery made the walk long enough to exceed the sprint 17 closing walk's bound of 80: from the design-tools switch, Tab enters the frame at its first menu link and stops on every pill, every editable text, every «Foto de ejemplo» badge, the floating toolbar's steps and each gallery card's three line verbs — about 75 stops on a generated restaurante site, 23 of them the gallery's — before it reaches the «Estilo» panel. Sprint 17 day 3's «el lienzo es una sola parada» holds for a frame entered with the tools off. The bound was raised to 160 with the measurement beside it; nothing in the product changed, because whether Tab should walk a section's insides before the section is chosen is a keyboard decision (ADR 0036's sibling in sprint 17, not this sprint's gallery) and nobody has asked for it yet. | `apps/editor/e2e/critical-flows.e2e.test.ts`, the sprint 17 day 7 walk, and `docs/design/REVIEW.md`'s sprint 17 entry |
 | **Lighthouse, measured for the first time on 12 October 2026 — «95 or more» has been in the protocol since sprint 2 and there was never a number until sprint 18 day 2.** `pnpm lighthouse` serves a generated «Taberna del Puerto» (`restaurante-bar`, the one filled sector) from memory and audits the three compositions on the mobile preset: **performance 100, accessibility 100, SEO 100, best practices 96** on all three, LCP 1.35–1.65 s, CLS ≤ 0.002, TBT 0 ms; three runs in a row, identical. **The 96 is one thing: the browser asks for `/favicon.ico`, the bundle has none, and the 404 counts as a console error.** A favicon in a generated site is `publisher.md`'s «phase 2» by its own words, and it would change the published HTML, so it is not this sprint's — but it is now the only weighted audit short of full marks and it is cheap, so whoever opens phase 2 of the publisher has the number. Four more audits sit at zero and **weigh zero**, said here so nobody reads them as findings: no compression and no cache headers are the test's own `node:http` server, not the site (a ZIP opened from disk has no server and a host that serves it compresses); the cover photograph is sent at 1600 px and drawn at 364 (ADR 0011's size, a content question, 64 KB of «savings» the insight would like); and `fetchpriority="high"` on the cover image, which is a renderer attribute, moves every golden page, and is unscheduled. **One oddity, recorded and not explained**: in one run of four the third audit sat for the whole two-minute timeout with its scores already measured; the report now prints how long the audit itself took so the next occurrence says which half hung. Sabotage of the gate: a 2.5-second blocking script in the served `<head>` — performance 56, red on all three, naming the composition. **Re-measured the same day with the bank's gallery (ADR 0039), five photographs instead of one: performance 97 / 96 / 96, LCP 2.55–2.86 s where it was 1.35–1.65.** Over simulated slow 4G the four gallery photographs compete with the cover for the wire, and the cover is the LCP. Still over the floor, by one to two points, which is a margin and not a cushion. The lever is `loading="lazy"` on images below the fold, a renderer attribute that moves every golden page — sprint 18 day 4 decides whether it is worth the diff. **Day 4 did it, 12 October 2026: every photograph outside the first section of its page carries `loading="lazy"`, the first section's never (it is where the LCP is). The golden diff was three images on two of seventeen pages — `equipo`'s two team photographs and one in `hidden-and-embed` — reviewed line by line, nothing else moved. Re-measured with the five photographs: performance 100 / 99 / 99, LCP 1.65–2.18 s.** The favicon 404 is still the whole of the 96 in best practices. | `packages/publisher/test/lighthouse.browser.test.ts`, the `lighthouse` job in `ci.yml`, and protocol Part 8.5 |
 | **Formatting inside a text — the wait is over, and it is built in sprint 10.** [ADR 0024](../decisions/0024-formatting-inside-a-text-is-designed-and-waiting.md) settled the shape on 29 September 2026 (bold and italic over a run of characters; **underline refused**, because on the web it means a link) and made the code wait for the third session. **That session ran on 30 September and asked the question**, and the second owner named negrita and cursiva. **Neither waking condition was met at the letter** — Conchi's request was spontaneous and his was an answer to a question the ADR's own script required, and «the first thing they name» is not verifiable because the order and «¿Qué le falta?» are both blank. So the build was **authorised by David on 1 October 2026 in approving the sprint 10 plan**, on three things together: two requests in two different shapes, the texts already fixed and the request surviving them, and the professional audience ADR 0025 added after this ADR was written. **Underline was asked for a second time and is still refused.** **Shipped and closed on 1 October 2026**: the schema at 1.3.0 with migration `0004`, the renderer splitting and escaping piece by piece with `xss-attempt` green and untouched, `B` and `I` in the floating toolbar for everybody, and a composed walk that marks two words, edits around them, and opens the downloaded ZIP with the emphasis intact and nothing executing. **#52 closed with the day 7 pull request** — day 5 shipped the control but its body never said `Closes #52`, the same gap `CLAUDE.md` records for #19 and #25, caught on the last day rather than left open. | [#52](https://github.com/dnarram/retorika-builder/issues/52), [ADR 0024](../decisions/0024-formatting-inside-a-text-is-designed-and-waiting.md), and [the session](../sessions/2026-09-30-taller.md) |
