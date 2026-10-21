@@ -5279,6 +5279,31 @@ export function Editor({
     if (!section) return undefined;
 
     const view = section.ownerDocument.defaultView;
+    /**
+     * **Not from a page drawn in one column**, which is the mobile view (día 8).
+     *
+     * The preview's layout width is 320 px in the mobile view, under the renderer's own 720
+     * breakpoint, so every element is `grid-column: 1 / -1; grid-row: auto` and the section is a
+     * stack. Those boxes are a true measurement of the phone and a false one of the hand: sideways
+     * the ×8 conversion saves the columns, but the rows would come out in the phone's reading
+     * order, and escalating the generated cover from the mobile view put its headline on row 29
+     * instead of row 4 — two hundred pixels down, under a photograph whose own area came out
+     * twenty-six rows where the desktop measures fifty. Measured, not reasoned about.
+     *
+     * The honest answer is the one this function already gives for a page nobody can see: hand
+     * back nothing and let `escalate` convert the catalog's own drawing with the theme's rhythm,
+     * which is what «no se mueve nada al empezar» (ADR 0025 §7) meant before día 2 measured
+     * anything. A layout that cannot be measured is not a layout that should be guessed at.
+     *
+     * Asked of the page and never of the device state, which is día 7's lesson: this runs inside a
+     * rebuild, where a captured `device` can be the one from before the toggle. One resolved track
+     * where the desktop declares twelve or a hundred and seven is the mobile view saying so itself.
+     */
+    const columnTracks = (view?.getComputedStyle(section).gridTemplateColumns ?? "")
+      .split(" ")
+      .filter((entry) => entry.trim() !== "").length;
+    if (columnTracks <= 1) return undefined;
+
     const box = section.getBoundingClientRect();
     const padTop = Number.parseFloat(view?.getComputedStyle(section).paddingTop ?? "");
     const contentTop = box.top + (Number.isFinite(padTop) ? padTop : 0);
@@ -5706,6 +5731,38 @@ export function Editor({
     // they start is in scope.
     handlePainters.current.set(iframeDoc, repaintAll);
     repaintAll();
+
+    /**
+     * **And again whenever the page under them reflows** (día 8, measured).
+     *
+     * A handle is an absolutely positioned box placed at a corner the element had when it was
+     * chosen, and until this it was only ever repainted on `markChosen`. Everything that changes
+     * the preview's width without rebuilding the document therefore left all eight behind: opening
+     * «Diseño» at a 1024 window took the page from 752 px to 721, so the headline's own box went
+     * from 320 px wide to 305 and the `se` handle stayed **fifteen pixels past** the corner it
+     * marks; widening the window from 1024 to 1280 took the page to 788 and left it **eighteen
+     * pixels short**. Both measured on 21 October, both with the element still chosen and the dots
+     * still drawn — pointing at nothing, which is the one thing a handle must not do.
+     *
+     * A `ResizeObserver` on the section and not a `resize` listener on the window, because the two
+     * doors are not the same: a panel opening never resizes the window, and this catches both by
+     * watching the thing whose geometry the handles are made of. The observer fires once on
+     * observation, which is a free first paint rather than something to guard against.
+     *
+     * Not on `pointermove`-driven reflow: a gesture takes the handles away itself (`begin`) and
+     * puts them back on release, so there is nothing to keep in step while a hand is pulling.
+     *
+     * Nothing holds the observer and nothing has to: `wireInteractions` runs **once** per document
+     * (the `rbWired` guard), so there is exactly one of these per page, its own targets keep it
+     * alive, and both go when the frame's document is replaced.
+     */
+    const view = iframeDoc.defaultView;
+    if (view) {
+      const watcher = new view.ResizeObserver(() => repaintAll());
+      for (const section of iframeDoc.querySelectorAll<HTMLElement>("[data-section]")) {
+        watcher.observe(section);
+      }
+    }
   }
 
   /**
