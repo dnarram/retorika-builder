@@ -18100,3 +18100,249 @@ describe("sprint 26 día 1 — la medida de hoy", () => {
     }
   }, 180_000);
 });
+
+/**
+ * **Sprint 26 día 2 — el parche, tras una llave.**
+ *
+ * La ruta `patch` del ADR 0051 existe desde hoy y no corre para nadie salvo quien ponga la llave:
+ * `localStorage["rb.canvas"] = "patch"`, leída una vez al montar (`canvasMode.ts`). Estas
+ * caminatas la ponen antes de que el editor cargue y aseveran las tres cosas que la ruta promete
+ * en su primer día — y que el día 5, cuando la llave cambie de valor por defecto, pasarán a ser las
+ * de todo el mundo.
+ *
+ * Cada una dice su premisa antes de su consecuencia: que la ruta es `patch`, leída del propio
+ * registro del editor, porque una llave que no llegara dejaría a las tres midiendo la ruta vieja
+ * y llamándolo verde.
+ */
+describe("sprint 26 día 2 — el parche, tras una llave", () => {
+  type Event = { at: number; kind: string; data: Record<string, unknown> };
+
+  /** Un contexto con la llave puesta y la sonda encendida. */
+  async function patched(): Promise<{ context: BrowserContext; page: Page }> {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    await context.addInitScript(() => {
+      window.localStorage.setItem("rb.canvas", "patch");
+    });
+    await probeOn(context);
+    const page = await context.newPage();
+    return { context, page };
+  }
+
+  const events = (page: Page) =>
+    page.evaluate(() => ((window as unknown as { __rb?: Event[] }).__rb ?? []) as Event[]);
+
+  /** La premisa: el editor dice que su ruta es `patch`, en su propio registro. */
+  async function routeIs(page: Page, route: string): Promise<void> {
+    await expect
+      .poll(async () => (await events(page)).find((e) => e.kind === "html")?.data["route"], {
+        message: "el editor no registró su ruta",
+      })
+      .toBe(route);
+  }
+
+  const editSerial = (page: Page) =>
+    page.evaluate(() =>
+      Number(
+        document.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")?.contentDocument
+          ?.documentElement.dataset["rbEdit"] ?? "0",
+      ),
+    );
+
+  it("una edición de texto es un parche: cero documentos nuevos, y la letra está", async () => {
+    const { context, page } = await patched();
+    try {
+      await intoTheCanvas(page);
+      await routeIs(page, "patch");
+      const frame = page.frameLocator(PREVIEW).first();
+      await fontsReady(frame);
+      const wiredBefore = (await events(page)).filter((e) => e.kind === "wire").length;
+      const serialBefore = await editSerial(page);
+      // La identidad del documento, que es lo que todo esto promete conservar.
+      await page.evaluate(() => {
+        const doc = document.querySelector<HTMLIFrameElement>(
+          "iframe:not([data-buffered])",
+        )?.contentDocument;
+        if (doc) (doc as unknown as { __rbStamp?: string }).__rbStamp = "the-one";
+      });
+
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      await headline.click();
+      await headline.click();
+      await expect(headline).toHaveAttribute("contenteditable", "true");
+      await page.keyboard.type("x");
+      await page.keyboard.press("Enter");
+
+      // El serial sube cuando el parche está en la página; eso es la señal, no un reloj.
+      await expect
+        .poll(() => editSerial(page), { message: "ningún parche llegó a la página" })
+        .toBeGreaterThan(serialBefore);
+      const patches = (await events(page)).filter((e) => e.kind === "patch");
+      expect(patches.length, "no se registró ningún parche").toBeGreaterThan(0);
+      const last = patches[patches.length - 1];
+      expect(last?.data["ok"], `el último parche no se aplicó: ${JSON.stringify(last?.data)}`).toBe(
+        true,
+      );
+      // **Cero documentos nuevos**: la mitad que el día 1 midió como «uno» y que hoy se da la vuelta.
+      expect(
+        (await events(page)).filter((e) => e.kind === "wire").length,
+        "la edición cableó un documento nuevo: la ruta vieja sigue corriendo",
+      ).toBe(wiredBefore);
+      expect(
+        await page.evaluate(
+          () =>
+            (
+              document.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")
+                ?.contentDocument as unknown as { __rbStamp?: string }
+            )?.__rbStamp,
+        ),
+        "el documento ya no es el mismo",
+      ).toBe("the-one");
+      await expect(frame.locator('[data-section="sec-cover"] [data-id="el-headline"]')).toHaveText(
+        /x\s*$/,
+      );
+      await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("deshacer mientras se escribe: dentro del texto es del navegador, y el botón vuelca y deshace con causa «history»", async () => {
+    const { context, page } = await patched();
+    try {
+      await intoTheCanvas(page);
+      await routeIs(page, "patch");
+      const frame = page.frameLocator(PREVIEW).first();
+      await fontsReady(frame);
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+
+      // Una edición volcada, para que haya algo que deshacer: el titular pasa a «Uno».
+      await headline.click();
+      await headline.click();
+      await page.keyboard.type("Uno");
+      await page.keyboard.press("Enter");
+      await expect(headline).toHaveText(/Uno\s*$/);
+
+      /**
+       * **La premisa que el ajuste 2 de David no podía ver desde el plan**: con el cursor dentro de
+       * un texto, Ctrl+Z es del navegador y no del historial. `shortcuts.ts` lo decidió en el
+       * sprint 12 —«nothing fires while focus is in a contentEditable», su condición para
+       * escribirlo— y así sigue: la pulsación deshace lo tecleado en el DOM, el historial no se
+       * mueve y ningún parche llega. La regla del ajuste 2 está en el módulo y en sus pruebas,
+       * pero el único camino de hoy hasta un deshacer *mientras* se escribe es el botón, y el
+       * botón quita el foco antes.
+       */
+      await headline.click();
+      await headline.click();
+      await expect(headline).toHaveAttribute("contenteditable", "true");
+      await page.keyboard.press("End");
+      await page.keyboard.type("Dos");
+      const serialBefore = await editSerial(page);
+      await page.keyboard.press("Control+z");
+      await page.waitForTimeout(400);
+      expect(await editSerial(page), "Ctrl+Z dentro de un texto movió el historial").toBe(
+        serialBefore,
+      );
+      await expect(headline).toHaveAttribute("contenteditable", "true");
+
+      // El camino que sí existe: el botón. Quita el foco primero — y el `blur` no vuelca nada,
+      // porque lo que hay en el DOM tras el deshacer del navegador es «Uno», igual que lo que el
+      // documento dice (la mitad del ajuste 2 que vive en `blur`) — y deshace el único paso
+      // volcado: el titular vuelve a ser el original. El parche que lo trae dice «history».
+      await page.getByRole("button", { name: "Deshacer", exact: true }).click();
+      await expect
+        .poll(() => editSerial(page), { message: "el deshacer del botón no llegó a la página" })
+        .toBeGreaterThan(serialBefore);
+      const patches = (await events(page)).filter((e) => e.kind === "patch");
+      const history = patches.find((e) => e.data["cause"] === "history" && e.data["ok"] === true);
+      expect(
+        history,
+        `ningún parche con causa «history»: ${JSON.stringify(patches.slice(-3))}`,
+      ).toBeDefined();
+      expect(history?.data["deferred"], "un texto quedó diferido con el botón pulsado").toEqual([]);
+      // Y el documento dice lo que el deshacer deja: ni «Uno» ni «Dos» — el titular original.
+      // Un `blur` que hubiera volcado «UnoDos» como segundo paso habría dejado «Uno» aquí.
+      await expect(
+        frame.locator('[data-section="sec-cover"] [data-id="el-headline"]'),
+      ).not.toHaveText(/Uno|Dos/);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("un parche que llega en mitad de un arrastre espera a que la mano suelte", async () => {
+    const { context, page } = await patched();
+    try {
+      await intoTheCanvas(page);
+      await routeIs(page, "patch");
+      await studioToolsOn(page);
+      let frame = page.frameLocator(PREVIEW).first();
+      await frame.locator('[data-section="sec-cover"]').click();
+      await replacingTheDocument(page, async () => {
+        await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
+        await frame.locator(".rb-escalate-yes").click();
+      });
+      frame = page.frameLocator(PREVIEW).first();
+      await waitForBankPhoto(frame);
+      await fontsReady(frame);
+
+      // Algo que deshacer luego: una letra en el titular, volcada. Con las herramientas encendidas
+      // Enter no vuelca — las demás caminatas con herramientas vuelcan pulsando fuera, en la tira de
+      // la pista — y «Guardado» es la señal de que el documento la tiene.
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      const serialBeforeEdit = await editSerial(page);
+      await headline.click();
+      await headline.click();
+      await expect(headline).toHaveAttribute("contenteditable", "true");
+      await page.keyboard.type("x");
+      await editHint(page).click();
+      await page.waitForTimeout(1200);
+      expect(
+        await editSerial(page),
+        `la letra no llegó al documento:\n${await probeReport(page)}`,
+      ).toBeGreaterThan(serialBeforeEdit);
+
+      // Una mano sobre la foto, a medio arrastre, y mientras tanto un cambio del documento que no
+      // es de la mano.
+      const photo = frame.locator('[data-section="sec-cover"] [data-id="el-image"]');
+      await photo.scrollIntoViewIfNeeded();
+      const box = await photo.boundingBox();
+      const from = {
+        x: (box?.x ?? 0) + (box?.width ?? 0) / 2,
+        y: (box?.y ?? 0) + (box?.height ?? 0) / 2,
+      };
+      await page.mouse.move(from.x, from.y);
+      await page.mouse.down();
+      await page.mouse.move(from.x + 40, from.y + 30, { steps: 8 });
+      const dragging = await frame
+        .locator("html")
+        .evaluate((root) => root.classList.contains("rb-dragging"));
+      expect(dragging, "la mano no está arrastrando").toBe(true);
+
+      const serialMidGesture = await editSerial(page);
+      const patchesBefore = (await events(page)).filter((e) => e.kind === "patch").length;
+      // El cambio ajeno a la mano, con el botón del ratón aún pulsado: un deshacer del historial
+      // por teclado. El foco está en la foto elegida —no en un texto—, así que el atajo es del
+      // editor, y hay algo que deshacer porque arriba se volcó una letra.
+      await page.keyboard.press("Control+z");
+
+      // **Espera**: nada se aplicó mientras la mano sigue abajo, y el parche quedó en cola.
+      await page.waitForTimeout(400);
+      expect(await editSerial(page), "un parche se aplicó con la mano en la página").toBe(
+        serialMidGesture,
+      );
+      const queued = (await events(page))
+        .filter((e) => e.kind === "patch")
+        .slice(patchesBefore)
+        .some((e) => e.data["queued"] === true);
+      expect(queued, `el parche no quedó en cola:\n${await probeReport(page)}`).toBe(true);
+
+      // Al soltar, se aplica.
+      await page.mouse.up();
+      await expect
+        .poll(() => editSerial(page), { message: "el parche en cola no se aplicó al soltar" })
+        .toBeGreaterThan(serialMidGesture);
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+});
