@@ -36,6 +36,17 @@ minimumReleaseAgeExclude:
 # Pinned rather than excepted for the same reason as the line above: 0.35.5 is published, so the
 # exception hatch would be standing in for a one-line upgrade. The patch is a minor bump within the
 # same line, and the prebuilt `@img/sharp-*` binaries follow it.
+# `vite` below 8.3.3 carries three advisories against its bundled `launch-editor`, all of them in
+# the dev server's «open in editor» path and all Windows-only: GHSA-587h-7wmj-h5pm (high — an
+# `fs.existsSync()` check that can be bypassed), GHSA-698v-4r3x-3vcv and GHSA-r825-w8mm-5pxw (both
+# moderate — `%` left out of command escaping, and editor CLI flags misread into arbitrary command
+# execution). It arrives four ways, every one of them under `vitest`: the test runner's own bundler,
+# which is a development dependency and reaches no client's site — ADR 0001 again — and this
+# repository does not run a Vite dev server at all. Pinned rather than excepted for the same reason
+# as the two lines above: 8.3.3 is published, so the hatch would be standing in for a one-line
+# upgrade. `vitest` 5.0.1 asks for `^6.4.0 || ^7.0.0 || ^8.0.0`, so the range resolves inside what it
+# already accepts.
 overrides:
   "source-map-js@<1.2.2": ">=1.2.2"
   "sharp@<0.35.5": ">=0.35.5"
+  "vite@<8.3.3": ">=8.3.3"
