@@ -63,6 +63,27 @@ export interface RenderOptions {
   entryId?: string;
 }
 
+/**
+ * What the `"dom"` target additionally takes, and the `"html"` target cannot.
+ *
+ * **The document the nodes are created in** (ADR 0051, sprint 26 día 1). It is a parameter of the
+ * target and not an option of the page: nothing here changes a byte of what is rendered, which is
+ * why it does not live in `RenderOptions` above — that interface's own first line is «options that
+ * change what reaches a published page», and this one reaches no page at all.
+ *
+ * It exists because of what a browser does with a node the moment it is created: an `<img src>`
+ * made in a document that has a browsing context **fetches its source**, and it fetches it whether
+ * or not the node is ever attached. An editor that renders the tree on every edit, to diff it
+ * against what is on screen, would therefore fire one request per photograph per keystroke, each
+ * for a fragment it is about to discard. A document from `document.implementation
+ * .createHTMLDocument("")` has no browsing context and loads nothing; the editor builds the tree
+ * there and `importNode`s what it keeps. Unset, the global `document` — which is what every caller
+ * before this sprint got, and what a test that only counts sections still wants.
+ */
+export interface DomRenderOptions extends RenderOptions {
+  document?: Document;
+}
+
 /** `allowEmbeds` resolved; `pageId` stays optional because "unset" is itself a meaningful value
  * (the first page) and not a gap to be filled in. */
 export type ResolvedRenderOptions = Omit<

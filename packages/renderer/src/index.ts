@@ -7,9 +7,19 @@ export { fontFilesFor, SHIPPABLE_FAMILIES } from "./fonts.ts";
 
 import { headMetaOf } from "./head.ts";
 import { pageToHtml } from "./html.ts";
-import { type RenderOptions, withDefaults } from "./options.ts";
+import { type DomRenderOptions, type RenderOptions, withDefaults } from "./options.ts";
 
+/**
+ * **The page's stylesheet on its own, and the `@font-face` half of it** (ADR 0051, sprint 26
+ * día 1). The editor keeps one document for the whole session and patches it; a patch rewrites
+ * the `<style>`'s text when the document's CSS changed, and needs that text without asking the
+ * `html` target for a page it is not going to parse. `fontFaceCss` is exported beside it for the
+ * fallback the plan names: if rewriting a stylesheet whose font rules did not change makes the
+ * faces flash, the two halves go in two elements and only the second is rewritten.
+ */
+export { buildCss } from "./build.ts";
 export { escapeHtml, NEUTRALISED_URL, safeUrl } from "./escape.ts";
+export { fontFaceCss } from "./fonts.ts";
 /**
  * **What the menu would call a section, and how much of a menu is left**, for the places in the
  * editor that have to show it: the switch that takes a section out (ADR 0043 §3), the one per page
@@ -28,7 +38,7 @@ export {
   pageMenuEntries,
   sectionMenuEntries,
 } from "./menu.ts";
-export type { RenderOptions } from "./options.ts";
+export type { DomRenderOptions, RenderOptions } from "./options.ts";
 export { DEFAULT_RENDER_OPTIONS } from "./options.ts";
 
 export interface AssetRef {
@@ -68,22 +78,25 @@ export function render(doc: RetorikaDocument, target: "html", options?: RenderOp
 export function render(
   doc: RetorikaDocument,
   target: "dom",
-  options?: RenderOptions,
+  options?: DomRenderOptions,
 ): DocumentFragment;
 export function render(
   doc: RetorikaDocument,
   target: "html" | "dom",
-  options: RenderOptions = {},
+  options: DomRenderOptions = {},
 ): HtmlOutput | DocumentFragment {
   const resolved = withDefaults(options);
   const tree = buildTree(doc, resolved);
 
   if (target === "dom") {
-    if (typeof document === "undefined") {
+    // The document the nodes are born in — see `DomRenderOptions` for why an editor passes an
+    // inert one. Unset, the global `document`, as every caller before sprint 26 got.
+    const host = options.document ?? (typeof document === "undefined" ? undefined : document);
+    if (host === undefined) {
       // Explicit rather than a confusing null-reference failure deep in the walk.
       throw new Error('render(doc, "dom") needs a DOM; use the "html" target outside a browser');
     }
-    return treeToFragment(tree, document);
+    return treeToFragment(tree, host);
   }
 
   const css = buildCss(doc);
