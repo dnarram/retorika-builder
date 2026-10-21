@@ -258,4 +258,71 @@ and reinserting it, so keeping focus across a move is the editor's — and the l
 
 ## Amendments
 
-*(One per day, in the plan's order, written the day each lands.)*
+### Amendment — the patch, behind a key (día 2, 22 October 2026)
+
+**morphdom, adopted** (adjustment 1), read first: a keyed walk with positional fallback, text
+rewritten by `nodeValue` in place, attributes the fresh node lacks removed, and the hooks the four
+rules need — `getNodeKey`, `onBeforeElUpdated`, `onBeforeNodeDiscarded`, and
+`onBeforeElChildrenUpdated` for the editable with focus. MIT, no dependencies, 2.7.8, a dependency
+of the editor and never of the page. **What it does not cover, and `patchCanvas.ts` does:** it
+moves a keyed node with `insertBefore`, so focus inside a moved node is put back by hand; it has no
+notion of the chrome; it has no notion of which attributes the editor owns, so the preserved lists
+are copied from the live node onto the fresh one before it compares them.
+
+**The chrome is parked, not keyed.** The first design gave every chrome node a key of its own and
+let the hooks refuse its discard. Measured on the first patch of a session — the one that strips
+the pretty-printer's text nodes — morphdom, meeting a keyed node the fresh tree lacks, inserted the
+fresh node *before* it and pushed an `.rb-actions` cluster from first child to third. So the
+chrome is taken out of the tree for the duration of the walk and put back after the renderer
+sibling it followed, which persists because keyed renderer nodes keep their identity. The test
+that proves it had to be written on the unsettled document: on a settled one it passed with the
+parking removed.
+
+**Keys are paths.** A collection's cards share the template's `data-id`, so a node is keyed by its
+chain of keyed ancestors — `s:sec-cover/e:el-headline`, `s:sec-list/n:3/e:el-title` — which is
+unique and stable.
+
+**Rule 3, corrected by the walk that could not run.** The first version protected *any* focused
+element's children on an ordinary edit. A chosen headline has focus too — it is a Tab stop — and
+its words are nobody's draft: an edit from elsewhere must show on it. The guard is now
+`isContentEditable`, with the test that a focused non-editable is patched.
+
+**Adjustment 2, as it stands in the product.** The rule is built and unit-tested — a history patch
+rewrites the focused editable, keeps the caret by offset, leaves the words behind for the `blur`,
+and the `blur` commits only the difference from what the document last said. But the scenario
+David named, Ctrl+Z with the caret inside a text, **has no keyboard path**: `shortcuts.ts` has
+yielded to the browser inside a `contentEditable` since sprint 12 — «nothing fires while focus is
+in a contentEditable», his own condition for writing it — so inside a text Ctrl+Z is the native
+undo of the DOM, the history does not move and no patch comes. The one reachable undo while
+writing is the «Deshacer» button, which takes the focus first; and there the `blur` half of the
+rule is what shows: with the native undo having already taken the typed words out of the DOM, the
+`blur` finds the DOM equal to the document and commits nothing, and the undo reverts the one real
+step. The walk asserts both halves. The rule stays, because the hazard it closes needs no user to
+reach it — any doc change from outside the frame while a text is being written — and because the
+day the shortcut stops yielding, the walk is already there.
+
+**The old route takes what the patch does not.** Día 2 patches text, marks, inline styles and
+attributes inside an unchanged keyed skeleton. A changed skeleton — a section, an item or an
+element that came, went or moved — is refused with `reason: "structure"`, and a change of
+`chromeKey` (the tools toggled, a section escalated or returned) with `reason: "chrome"`; both hand
+the frame the current html **and a new key**, so it reloads even when the html string repeats. The
+patch then continues on the document that arrives.
+
+**Three things only the browser could say.**
+
+1. **A text edit under `patch` wires zero documents** where día 1 measured one: the document's
+   identity survives (stamped before, read after), the serial moves, the letter is committed and
+   saved. A patch costs **0.8–1.6 ms** on this machine, by the probe. The default route, measured
+   in the same run, still wires one.
+2. **After a chrome swap two documents are wired in a row** — serial 3 by `promote`, serial 4 by
+   `onload` — and `wiredDoc` names the last one, which need not be the one on screen. A patch
+   effect that waited for `wiredDoc.current === iframeDoc` parked forever; it asks the document
+   for its own `data-rb-wired` mark instead, which is sprint 18 día 5's lesson in a new place.
+3. **With the design tools on, Enter does not commit a text**; the walks that run with the tools
+   on commit by pressing outside, on the hint strip, and the día 2 walk learned to do the same.
+   The gesture queue was sabotaged — `gestureLive` returning `false` — and the mid-drag walk went
+   red on «el parche no quedó en cola».
+
+**What día 2 retires: nothing.** Under `swap` every piece of the old route runs as before; under
+`patch`, `keepWriting`, `keepChosenFocus`, `pendingReturn` and the reading-position family simply
+never fire, because nothing rebuilds. They are retired when the route is (adjustment 6).
