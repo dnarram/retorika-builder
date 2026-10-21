@@ -3358,7 +3358,20 @@ tragando.
   **16,30 s con el arreglo y 15,50 s sin él**, y pasan de las dos maneras. Vaciar los 2,8 GB del caché
   de `next dev` no cambió nada. La máquina se degrada con horas de Chromium encima, que es exactamente
   por lo que David la reinició antes de este día; **la pasada completa que vale es la de CI, o una
-  local tras reiniciar**.
+  local tras reiniciar**. **Y CI contestó: las once comprobaciones en verde**, con el `e2e`
+  completo en 18 minutos — las cinco caminatas nuevas del día 8, el recorrido sin ratón estirado y las
+  tres del día 7 incluidas. Pero contestó a la segunda: **la primera pasada de CI falló una caminata**,
+  «agranda el área de una foto por su borde inferior» del día 4, con el `poll` del cursor `ns-resize`
+  agotando sus cinco segundos. La repetición del **mismo commit** fue verde.
+  **Y eso, perseguido en vez de dado por ruido, le da a la fila de los parpadeos del `e2e` lo que no
+  tenía desde el sprint 13: un mecanismo reproducible.** Esa caminata, corrida **sola**, falla **tres
+  de tres** — y falla tres de tres **en `main` también**, sin nada de este día puesto, mientras pasa en
+  la suite completa en las dos ramas. No es de esta rama ni es nueva: es una carrera que la caminata
+  pierde cuando su preparación va lenta, y correrla filtrada es la forma más barata de ir lenta. Un
+  sondeo con los mismos pasos y esperas más largas saca `ns-resize` siempre, con el punto medido a 2 px
+  del borde inferior de la caja viva y el zoom en 1 — **el producto está bien y el instrumento es
+  frágil**, que es la mitad que las tres veces anteriores no pudieron separar. Está en el backlog con
+  el comando que lo reproduce y con lo que costaría arreglarlo.
 - **`RETORIKA_A11Y=1 pnpm test:a11y`**: 538 pruebas en 7 ficheros, verde.
 - **`pnpm lighthouse`**, preset de móvil, las tres composiciones y la página por ficha:
   rendimiento **100 / 99 / 99 / 100**, accesibilidad **100** en las cuatro, buenas prácticas 96,

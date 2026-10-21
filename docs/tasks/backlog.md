@@ -605,6 +605,32 @@ open survives.
   sentence above is left standing, struck through in effect, because a row that quietly tightens its
   own story is worth less than one that shows where it was wrong.
 
+  **Fourth occurrence, 21 October 2026, closing sprint 25 (PR #282) — and this one hands the row
+  what it has never had: a mechanism you can reproduce on demand.** The failing test was «sprint 25
+  día 4 … agranda el área de una foto por su borde inferior sin estirar la foto», and the symptom
+  fits the common factor above exactly: `expect.poll(() => cursorOn(photo)).toBe("ns-resize")` timed
+  out at 5 s — an interaction with the inside of the preview frame that did not take effect, the
+  cursor the editor paints on a `pointermove` never arriving. The re-run of the identical commit went
+  green, and all eleven checks with it.
+
+  **What is new is that it is no longer only a CI ghost.** Run that one walk **alone**
+  (`RETORIKA_E2E=1 pnpm vitest run --project e2e -t "agranda el área de una foto"`) and it fails
+  **three times out of three** — and it fails three out of three on `main` too, with none of that
+  day's changes present, while passing in the full suite on both. So it is not the branch that
+  found it and it is not new; it is a race the walk loses whenever its setup is slow, and running it
+  filtered is the cheapest way to be slow (a filtered walk pays the cold compile, which this file
+  already records elsewhere). A probe repeating the same steps with longer waits gets `ns-resize`
+  every time, with the hover point measured 2 px above the live box's bottom edge and the zoom at 1
+  — so **the product is right and the instrument is fragile**, which is the half the three earlier
+  occurrences could never separate.
+
+  **What it would cost to fix, for whoever takes it:** the walk reads the photo's box with
+  `boundingBox()` immediately after `focus()`, and this file's own sprint 25 notes say a canvas
+  element is measured with `boxesInSection`/`boxOf` and never with `boundingBox()`, because focus
+  scrolls the preview and a face arriving moves everything under it. Nobody has done it, because the
+  walk belongs to a merged day and CI is green; it is written down here so the fifth occurrence costs
+  one command instead of an afternoon.
+
   **What is ruled out about PR #146 specifically**, since three failures on one branch against
   twenty-odd green runs on `main` is a correlation that deserves an answer rather than a shrug: its
   three new `e2e` tests are **appended at the end of the file**, and with `--maxWorkers 1` on a single
