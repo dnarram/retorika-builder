@@ -13,7 +13,14 @@ import {
   type Page,
 } from "@playwright/test";
 import { GALLERY_SAMPLE_COUNT } from "@retorika/generator";
-import { FINE_PER_COLUMN, FINE_TRACKS, fineColumnOf, fineSpanOf } from "@retorika/schema";
+import {
+  FINE_PER_COLUMN,
+  FINE_TRACKS,
+  fineColumnOf,
+  fineSpanOf,
+  overlaps,
+  ROW_STEP_PX,
+} from "@retorika/schema";
 import type { NodeResult } from "axe-core";
 import { afterAll, beforeAll, describe, it } from "vitest";
 import {
@@ -26,6 +33,7 @@ import {
 import { BAR_INSET, BAR_STEP, type Point, TOOLBAR_GAP } from "../src/editor/barPosition.ts";
 import { VERB_SCALE } from "../src/editor/chromeScale.ts";
 import { GUIDE_ZONE } from "../src/editor/guides.ts";
+import { HANDLE_TOUCH } from "../src/editor/handles.ts";
 import { NARROWEST_WIDTH, PHONE_BREAKPOINT } from "../src/editor/overflowCheck.ts";
 import { BASE_URL, QUESTIONNAIRE_URL, startEditorServer, stopEditorServer } from "./server.ts"; /**
  * The preview frame, addressed as the one on screen rather than as «an iframe».
@@ -2709,6 +2717,12 @@ describe("el lienzo no dibuja tiradores en las esquinas, y sigue sin desplazarse
       // And no handle, at any corner, on a section that is selected right now — which is the
       // state that used to draw four of them. Asserted on the section rather than the document so
       // a selected section with handles cannot hide behind an unselected one without.
+      //
+      // `.rb-handle` names something alive again since sprint 25 día 7 — the touch handles that
+      // resize one chosen *element* — and this assertion is unchanged by that on purpose: those
+      // are drawn only with the design tools on, under `(pointer: coarse)`, around an element
+      // somebody chose. None of the three is true here, so a hit would still be the old grips
+      // coming back, and now a stray handle on a plain selected section would be caught too.
       await expect(frame.locator('[data-section="sec-cover"].rb-selected')).toHaveCount(1);
       await expect(frame.locator(".rb-handle")).toHaveCount(0);
 
@@ -17112,6 +17126,501 @@ describe("sprint 25 día 6 — las unidades dichas y el alto que sigue al texto"
       await expect(frame.locator('[data-section="sec-cover"] [data-id="el-headline"]')).toHaveText(
         wordsBefore,
       );
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+});
+
+/**
+ * **Sprint 25 día 7 — las asas que un dedo puede coger, y el móvil que no hereda el solape**
+ * (ADR 0050 §6, condiciones 3 y 4 de David).
+ *
+ * Dos de las cuatro condiciones con que David aceptó la rejilla fina se cierran aquí, y las dos son
+ * sobre lo que *no* se ve en esta máquina: un dedo no puede usar la zona de seis píxeles del día 4 —
+ * mide once milímetros — y un solape que en escritorio es diseño sería, en una columna única, texto
+ * encima de texto en el móvil de un cliente.
+ *
+ * **`hasTouch` es lo que hace que `(pointer: coarse)` conteste que sí**, medido en Chromium antes de
+ * escribir esto: con `hasTouch` y sin `isMobile` la consulta ya es `coarse`, `(hover: hover)` es
+ * falsa y `maxTouchPoints` es uno. Así que el contexto del dedo es el mismo ancho de escritorio, que
+ * es justo el caso difícil — una tableta — y no un teléfono, donde la regla 7 manda y no hay rejilla
+ * que estirar.
+ */
+describe("sprint 25 día 7 — las asas en táctil, y el móvil sin solape", () => {
+  const VIEWPORT = { width: 1440, height: 900 };
+  /** Una tableta: ancho de escritorio y un dedo. `(pointer: coarse)` sale de `hasTouch`. */
+  const FINGER = { ...VIEWPORT, hasTouch: true } as const;
+
+  /** Un dedo que se mueve va por CDP: `page.touchscreen` solo sabe tocar. */
+  async function finger(
+    context: BrowserContext,
+    page: Page,
+    from: Point,
+    to: Point,
+  ): Promise<void> {
+    const touch = await context.newCDPSession(page);
+    const send = (type: "touchStart" | "touchMove" | "touchEnd", at?: Point) =>
+      touch.send("Input.dispatchTouchEvent", {
+        type,
+        touchPoints: at ? [{ x: at.x, y: at.y }] : [],
+      });
+    await send("touchStart", from);
+    for (let step = 1; step <= 6; step += 1) {
+      await send("touchMove", {
+        x: from.x + ((to.x - from.x) * step) / 6,
+        y: from.y + ((to.y - from.y) * step) / 6,
+      });
+    }
+    await send("touchEnd");
+  }
+
+  /** Una portada diseñada a mano, que es donde hay una caja que estirar. */
+  async function handDesigned(page: Page): Promise<FrameLocator> {
+    await intoTheCanvas(page);
+    await studioToolsOn(page);
+    const frame = page.frameLocator(PREVIEW).first();
+    await frame.locator('[data-section="sec-cover"]').click();
+    await replacingTheDocument(page, async () => {
+      await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
+      await frame.locator(".rb-escalate-yes").click();
+    });
+    await waitForBankPhoto(frame);
+    await fontsReady(frame);
+    return page.frameLocator(PREVIEW).first();
+  }
+
+  /** Las asas dibujadas: qué borde tira cada una, cuánto mide y si cabe entera en la sección. */
+  function handlesOn(frame: FrameLocator): Promise<
+    {
+      edge: string;
+      width: number;
+      height: number;
+      inside: boolean;
+      hidden: string | null;
+    }[]
+  > {
+    return frame.locator('[data-section="sec-cover"]').evaluate((node) => {
+      const section = node as HTMLElement;
+      const host = section.getBoundingClientRect();
+      return [...section.querySelectorAll<HTMLElement>(".rb-handle")].map((handle) => {
+        const rect = handle.getBoundingClientRect();
+        const match = handle.className.match(/rb-handle-([a-z]+)/);
+        return {
+          edge: match === null ? "" : (match[1] ?? ""),
+          width: rect.width,
+          height: rect.height,
+          // Media asa fuera de la sección es media asa recortada: `html { overflow-x: clip }` se
+          // come lo que sobresale, y el ajuste 6 de David es dibujarlas hacia dentro.
+          inside:
+            rect.left >= host.left - 0.5 &&
+            rect.top >= host.top - 0.5 &&
+            rect.right <= host.right + 0.5 &&
+            rect.bottom <= host.bottom + 0.5,
+          hidden: handle.getAttribute("aria-hidden"),
+        };
+      });
+    });
+  }
+
+  /**
+   * **El fondo del área de un elemento, leído de las pistas resueltas** — que no es el fondo de su
+   * caja azul.
+   *
+   * Con `align-items: start` (ADR 0050 §3) un elemento mide lo que mide su contenido, y su área
+   * puede ser más alta: el titular de esta portada ocupa doce filas y dibuja cincuenta y dos
+   * píxeles, porque la medición de escalar se hizo con la letra de reserva — la carrera de la
+   * tipografía que `fontsReady` nombra, y que en una mano de verdad ocurre igual. Así que lo que un
+   * borde de abajo mueve es **el área**, y es el área lo que hay que medir para saber si siguió a
+   * la mano.
+   */
+  function areaBottomOf(frame: FrameLocator, elementId: string): Promise<number> {
+    return frame.locator('[data-section="sec-cover"]').evaluate((node, id) => {
+      const section = node as HTMLElement;
+      const rows = getComputedStyle(section)
+        .gridTemplateRows.split(" ")
+        .map((entry) => Number.parseFloat(entry));
+      const el = section.querySelector<HTMLElement>(`[data-id="${id}"]`);
+      if (el === null) return Number.NaN;
+      // «3 / span 12», que es lo que el renderizador escribe y lo que el estilo resuelve.
+      const area = getComputedStyle(el).gridRow.split("/");
+      const start = Number.parseInt((area[0] ?? "1").trim(), 10);
+      const span = Number.parseInt((area[1] ?? "span 1").replace("span", "").trim(), 10);
+      let bottom = 0;
+      for (let row = 1; row <= start + span - 1; row += 1) bottom += rows[row - 1] ?? 0;
+      return bottom;
+    }, elementId);
+  }
+
+  /**
+   * **La vista de móvil, de verdad en su sitio antes de medir.**
+   *
+   * El conmutador reemplaza el documento de la vista previa y medir en el respiro siguiente mide el
+   * de escritorio: la primera versión de la caminata del solape vio la foto al lado del titular a
+   * mil ciento sesenta y ocho píxeles de ancho y se acusó de un defecto que no existía. Una sola
+   * pista donde el escritorio declara ciento siete es la señal de que la consulta de medios ya
+   * manda.
+   */
+  async function ontoThePhone(page: Page, frame: FrameLocator): Promise<void> {
+    await page.getByRole("button", { name: "Ver en móvil" }).click();
+    await waitForBankPhoto(frame);
+    await expect
+      .poll(
+        () =>
+          frame
+            .locator('[data-section="sec-cover"]')
+            .evaluate(
+              (node) => getComputedStyle(node as HTMLElement).gridTemplateColumns.split(" ").length,
+            ),
+        { message: "la vista de móvil no colapsó la rejilla a una columna" },
+      )
+      .toBe(1);
+    await fontsReady(frame);
+  }
+
+  /**
+   * **Where the handles are, by document** — «live:8 buffered:0», say.
+   *
+   * The sentence a red run needed and did not have. An edit is shown by building the next version
+   * of the page in a **buffered** frame and swapping it in, so there are two live documents for a
+   * few milliseconds, and the first version of this walk could only say «no handle» about the one
+   * being looked at. Painting them into the other one is exactly the defect CI found, and this is
+   * what names it instead of leaving it to be guessed.
+   */
+  async function whereHandlesAre(page: Page): Promise<string> {
+    return (
+      await page.evaluate(() =>
+        [...document.querySelectorAll("iframe")].map(
+          (frame) =>
+            `${frame.hasAttribute("data-buffered") ? "buffered" : "live"}:${
+              frame.contentDocument?.querySelectorAll(".rb-handle").length ?? -1
+            }`,
+        ),
+      )
+    ).join(" ");
+  }
+
+  /**
+   * **What the browser says about the hand, asked of the canvas itself.**
+   *
+   * The premise of every assertion below, and the walk states it rather than assuming it: the
+   * handles exist because the browser answers `(pointer: coarse)`, and a context that does not —
+   * CI's Chromium need not emulate a finger the way this machine's does — would otherwise fail on
+   * the consequence with nothing to say about the cause. It also reads the two other things that
+   * decide whether a handle is drawn, so a red run names which one gave way.
+   */
+  function deviceSays(frame: FrameLocator): Promise<{
+    coarse: boolean;
+    hover: boolean;
+    touchPoints: number;
+    free: boolean;
+    chosen: string;
+  }> {
+    return frame.locator("body").evaluate(() => ({
+      coarse: matchMedia("(pointer: coarse)").matches,
+      hover: matchMedia("(hover: hover)").matches,
+      touchPoints: navigator.maxTouchPoints,
+      free:
+        document.querySelector('[data-section="sec-cover"]')?.classList.contains("rb-free") ===
+        true,
+      chosen: document.querySelector(".rb-chosen")?.getAttribute("data-id") ?? "",
+    }));
+  }
+
+  it("el elegido enseña asas de cuarenta y cuatro píxeles, y un asa estira la caja", async () => {
+    const context = await browser.newContext(FINGER);
+    const page = await context.newPage();
+    try {
+      const frame = await handDesigned(page);
+      const section = frame.locator('[data-section="sec-cover"]');
+
+      // **Antes de elegir, ninguna.** Son del elemento con el que la mano trabaja, no del lienzo:
+      // ocho asas por cada cosa colocada serían la pantalla entera cubierta de cuadrados.
+      await expect(section.locator(".rb-handle")).toHaveCount(0);
+
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      await headline.tap();
+      await expect(headline).toHaveClass(/rb-chosen/);
+
+      // The premise, out loud: a finger's device, a hand-designed section, and the headline chosen.
+      const says = await deviceSays(frame);
+      expect(says.coarse, `el navegador no da un puntero grueso: ${JSON.stringify(says)}`).toBe(
+        true,
+      );
+      expect(says.free, `la portada no quedó diseñada a mano: ${JSON.stringify(says)}`).toBe(true);
+      expect(says.chosen, `el elegido no es el titular: ${JSON.stringify(says)}`).toBe(
+        "el-headline",
+      );
+
+      /**
+       * **In the document being looked at**, which is the half CI had to teach: the assertion used
+       * to be «there is an `se` handle» and passed here while the handles were being painted into
+       * the buffered frame — true of *a* document, false of the one with the hand on it.
+       */
+      await expect
+        .poll(() => whereHandlesAre(page), {
+          message: "las asas no llegaron al documento que se está mirando",
+        })
+        .toMatch(/\blive:[1-9]/);
+      await expect(section.locator(".rb-handle-se")).toBeAttached();
+
+      const drawn = await handlesOn(frame);
+      // Las cuatro esquinas, siempre: un elemento pequeño se queda solo con ellas, y el titular de
+      // una portada no es pequeño, pero las esquinas son las que ningún tamaño retira.
+      for (const edge of ["nw", "ne", "sw", "se"]) {
+        expect(
+          drawn.some((handle) => handle.edge === edge),
+          `falta el asa ${edge}`,
+        ).toBe(true);
+      }
+      for (const handle of drawn) {
+        // Cuarenta y cuatro, que es el número de WCAG 2.5.5 y el de las dos plataformas. El punto
+        // que se dibuja mide doce; lo que un dedo tiene que acertar son estos.
+        expect(handle.width, `el asa ${handle.edge} no mide el objetivo de lado`).toBe(
+          HANDLE_TOUCH,
+        );
+        expect(handle.height, `el asa ${handle.edge} no mide el objetivo de alto`).toBe(
+          HANDLE_TOUCH,
+        );
+        expect(handle.inside, `el asa ${handle.edge} sobresale de la sección`).toBe(true);
+        // Y no se anuncian: el teclado redimensiona por los cuatro steppers del panel (WCAG 2.5.7),
+        // y ocho divs sin nombre en el árbol de accesibilidad serían ruido sobre el elemento.
+        expect(handle.hidden, `el asa ${handle.edge} se anuncia`).toBe("true");
+      }
+
+      // **Y se van con lo elegido**, que es la otra mitad de «solo sobre el elemento ya elegido».
+      await page.keyboard.press("Escape");
+      await expect(section.locator(".rb-handle")).toHaveCount(0);
+      await expect(frame.locator(".rb-chosen")).toHaveCount(0);
+
+      // ---- un dedo en el asa de abajo a la derecha estira la caja ----
+      await headline.tap();
+      await expect(headline).toHaveClass(/rb-chosen/);
+      const before = (await placedIn(frame, "sec-cover")).find((e) => e.id === "el-headline");
+      expect(before, "el titular no tiene colocación").toBeDefined();
+      const step = await columnStepOf(frame, "sec-cover");
+
+      const corner = section.locator(".rb-handle-se");
+      await corner.scrollIntoViewIfNeeded();
+      const spot = await corner.boundingBox();
+      const grab = {
+        x: (spot?.x ?? 0) + (spot?.width ?? 0) / 2,
+        y: (spot?.y ?? 0) + (spot?.height ?? 0) / 2,
+      };
+      // Desde dónde tira la mano: el asa está centrada en la esquina de la caja azul, que es dónde
+      // el dedo aterriza y por tanto dónde empieza la cuenta hacia abajo.
+      const held = await boxOf(frame, "sec-cover", "el-headline");
+      const DROP = 120;
+      await finger(context, page, grab, { x: grab.x + step * 2, y: grab.y + DROP });
+
+      const placedNow = async () =>
+        (await placedIn(frame, "sec-cover")).find((e) => e.id === "el-headline");
+      /**
+       * **Dieciséis unidades exactas**, que es el mismo número que el día 4 saca del ratón: el asa
+       * es una puerta más al redimensionado, no otro redimensionado — `resizeTo` es la misma
+       * función pura y `begin` el mismo gesto, y lo que cambia es que un dedo aterriza en un
+       * objetivo de cuarenta y cuatro en vez de cerca de una línea de seis.
+       */
+      await expect
+        .poll(async () => (await placedNow())?.columnSpan, {
+          message: "el asa no ensanchó dos columnas",
+        })
+        .toBe((before?.columnSpan ?? 0) + 2 * FINE_PER_COLUMN);
+      const pulled = await placedNow();
+      expect(pulled?.column, "la esquina de abajo movió el borde izquierdo").toBe(before?.column);
+      expect(pulled?.row, "la esquina de abajo movió el borde superior").toBe(before?.row);
+      /**
+       * **Y hacia abajo el área acaba donde estaba la mano, con la precisión de una fila** — la
+       * mitad vertical, que el día 4 asevera en las pruebas de `resizeTo` y no en el navegador.
+       *
+       * Se mide el área y no el `rowSpan`, y eso es la caminata habiendo aprendido algo: la
+       * primera versión tiraba cuarenta y ocho píxeles y aseveraba que las filas crecían, y no
+       * crecían — el área del titular ya era cuarenta y cuatro píxeles más alta que su caja azul
+       * (la carrera de la tipografía, arriba), así que el tirón entero cabía dentro de lo que ya
+       * estaba reservado. Contar filas habría dado un número que no significa nada; el fondo del
+       * área siguiendo al dedo es lo que David pidió.
+       */
+      const bottom = await areaBottomOf(frame, "el-headline");
+      expect(pulled?.rowSpan ?? 0, "el área no creció hacia abajo").toBeGreaterThan(
+        before?.rowSpan ?? 0,
+      );
+      expect(
+        Math.abs(bottom - ((held?.y ?? 0) + (held?.h ?? 0) + DROP)),
+        "el fondo del área no acabó donde la mano",
+      ).toBeLessThanOrEqual(ROW_STEP_PX);
+
+      // Un gesto, un paso: el ancho y el alto vuelven con el mismo «Deshacer».
+      await page.getByRole("button", { name: "Deshacer", exact: true }).click();
+      await expect
+        .poll(async () => (await placedNow())?.columnSpan, { message: "el ancho no volvió" })
+        .toBe(before?.columnSpan);
+      expect((await placedNow())?.rowSpan, "el alto volvió en otro paso").toBe(before?.rowSpan);
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+
+  it("con las asas puestas, un dedo sigue desplazando el lienzo", async () => {
+    const context = await browser.newContext(FINGER);
+    const page = await context.newPage();
+    try {
+      const frame = await handDesigned(page);
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      await headline.tap();
+      await expect(headline).toHaveClass(/rb-chosen/);
+      const says = await deviceSays(frame);
+      expect(says.coarse, `el navegador no da un puntero grueso: ${JSON.stringify(says)}`).toBe(
+        true,
+      );
+      await expect
+        .poll(() => whereHandlesAre(page), {
+          message: "las asas no llegaron al documento que se está mirando",
+        })
+        .toMatch(/\blive:[1-9]/);
+      await expect(frame.locator('[data-section="sec-cover"] .rb-handle-se')).toBeAttached();
+
+      /**
+       * **`touch-action: none` está en las asas y en el elegido, y en nada más.**
+       *
+       * Es la promesa del ADR 0049 §7 y la más fácil de romper sin notarlo: declararla una vez en
+       * la sección, o en `[data-id]`, deja el lienzo de un teléfono sin desplazamiento y nadie lo
+       * ve en un ratón. Se vuelve a aseverar hoy porque hoy hay ocho elementos nuevos que la
+       * llevan.
+       */
+      const at = { x: 720, y: 700 };
+      // Y el dedo aterriza donde dice: sin esto la caminata podría acabar aseverando que el
+      // elemento elegido desplaza el lienzo, que es lo contrario de lo que se promete.
+      const under = await page.evaluate((point) => {
+        const host = document.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])");
+        const box = host?.getBoundingClientRect();
+        const inner = host?.contentDocument;
+        const found = inner?.elementFromPoint(
+          point.x - (box?.left ?? 0),
+          point.y - (box?.top ?? 0),
+        ) as HTMLElement | null | undefined;
+        return {
+          tag: found?.tagName ?? "none",
+          handle: found?.classList.contains("rb-handle") === true,
+          chosen: found?.closest(".rb-chosen") != null,
+        };
+      }, at);
+      expect(under.tag, "el dedo no aterrizó dentro del lienzo").not.toBe("none");
+      expect(under.handle, "el dedo aterrizó sobre un asa").toBe(false);
+      expect(under.chosen, "el dedo aterrizó sobre el elemento elegido").toBe(false);
+
+      const scrollTop = () =>
+        frame.locator("body").evaluate(() => document.scrollingElement?.scrollTop ?? 0);
+      const before = await scrollTop();
+      await finger(context, page, at, { x: at.x, y: at.y - 400 });
+      await expect
+        .poll(scrollTop, { message: "un dedo dejó de desplazar el lienzo" })
+        .toBeGreaterThan(before);
+
+      /**
+       * **En la vista de móvil no hay asas que dibujar.** La sección es una columna y el gesto
+       * reordena (regla 7, ADR 0049 §7): un asa que estirase un ancho ahí mentiría sobre lo que la
+       * página publicada hace con ella, y el redimensionado vertical no existe en la columna única.
+       */
+      await ontoThePhone(page, frame);
+      const onPhone = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      await onPhone.tap();
+      await expect(onPhone).toHaveClass(/rb-chosen/);
+      await expect(frame.locator('[data-section="sec-cover"] .rb-handle')).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+
+  it("el solape de escritorio no llega a la vista de móvil", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const page = await context.newPage();
+    try {
+      const frame = await handDesigned(page);
+
+      /**
+       * **Con ratón no hay asas**, que es la otra mitad de la condición 4 de David y la que decide
+       * cómo se ve el lienzo: «En táctil aparecen asas visibles […] Con ratón no hay asas: la zona
+       * de ±6 px y el cursor». Ocho cuadrados alrededor de cada cosa elegida serían el editor
+       * diciendo todo el rato que algo se puede estirar, en vez de contestarlo cuando la mano
+       * pregunta — y esta caminata corre en un contexto sin dedo, que es dónde eso se ve.
+       */
+      const withMouse = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      await withMouse.click();
+      await expect(withMouse).toHaveClass(/rb-chosen/);
+      await expect(frame.locator('[data-section="sec-cover"] .rb-handle')).toHaveCount(0);
+      await page.keyboard.press("Escape");
+
+      const placed = await placedIn(frame, "sec-cover");
+      expect(placed.length, "la portada no trajo dos elementos que solapar").toBeGreaterThan(1);
+
+      /**
+       * **Primero el solape, hecho a mano con el ratón**, porque la condición 3 de David es sobre
+       * lo que pasa *después*: «Móvil no hereda el solape». El elemento más pequeño se arrastra al
+       * centro del más grande y se queda donde se deja (día 3), así que el documento guarda dos
+       * rectángulos cruzados — y se comprueba con `overlaps` del esquema, que es el mismo predicado
+       * que usan el panel del renderizador y el aviso de texto sobre texto.
+       */
+      const boxes = await boxesInSection(frame, "sec-cover");
+      const area = (id: string) => {
+        const box = boxes.find((entry) => entry.id === id);
+        return (box?.w ?? 0) * (box?.h ?? 0);
+      };
+      const bySize = placed.toSorted((a, b) => area(a.id) - area(b.id));
+      const mover = bySize[0];
+      const onto = bySize[bySize.length - 1];
+      expect(mover?.id, "no hay dos elementos distintos que cruzar").not.toBe(onto?.id);
+
+      const subject = frame.locator(`[data-section="sec-cover"] [data-id="${mover?.id}"]`);
+      const target = frame.locator(`[data-section="sec-cover"] [data-id="${onto?.id}"]`);
+      await subject.scrollIntoViewIfNeeded();
+      const from = await subject.boundingBox();
+      const to = await target.boundingBox();
+      const centre = (box: Awaited<ReturnType<Locator["boundingBox"]>>) => ({
+        x: (box?.x ?? 0) + (box?.width ?? 0) / 2,
+        y: (box?.y ?? 0) + (box?.height ?? 0) / 2,
+      });
+      // Clic mantenido y mover: desde el día 3 arrastra sin haber elegido antes.
+      await page.mouse.move(centre(from).x, centre(from).y);
+      await page.mouse.down();
+      await page.mouse.move(centre(to).x, centre(to).y, { steps: 12 });
+      await page.mouse.up();
+
+      await expect
+        .poll(
+          async () => {
+            const now = await placedIn(frame, "sec-cover");
+            const first = now.find((entry) => entry.id === mover?.id);
+            const second = now.find((entry) => entry.id === onto?.id);
+            return first !== undefined && second !== undefined && overlaps(first, second);
+          },
+          { message: "el arrastre no dejó los dos rectángulos cruzados" },
+        )
+        .toBe(true);
+
+      /**
+       * **Y en la vista de móvil ninguna caja cruza otra.**
+       *
+       * La regla 7 reordena en vertical: el override de móvil pone a cada hijo en
+       * `grid-column: 1 / -1` y `grid-row: auto`, así que la rejilla coloca cada uno en su propia
+       * fila y el solape de escritorio no existe ahí. Se mide, no se deduce — sin el `grid-row:
+       * auto` esta caminata vería la foto encima del titular, que es exactamente el defecto que el
+       * hallazgo 1 de la PR #6 arregló y que una rejilla de noventa y seis podría haber devuelto.
+       */
+      await ontoThePhone(page, frame);
+      const onPhone = (await boxesInSection(frame, "sec-cover")).filter(
+        (box) => box.w > 0 && box.h > 0,
+      );
+      expect(onPhone.length, "la vista de móvil no dibuja dos elementos").toBeGreaterThan(1);
+      for (const [index, mine] of onPhone.entries()) {
+        for (const other of onPhone.slice(index + 1)) {
+          const crossed =
+            mine.x < other.x + other.w &&
+            other.x < mine.x + mine.w &&
+            mine.y < other.y + other.h &&
+            other.y < mine.y + mine.h;
+          expect(crossed, `${mine.id} y ${other.id} se cruzan en la vista de móvil`).toBe(false);
+        }
+      }
     } finally {
       await context.close();
     }

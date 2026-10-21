@@ -615,3 +615,115 @@ somebody has to guess the meaning of, so «Colocación» now carries one line: n
 section, eight to a catalog column, which is what one press of a stepper moves; rows of eight
 pixels; and what the canvas's arrows are worth, because the two controls are the same act and a
 person who finds one should know about the other.
+
+## Amendment — the handles a finger can take, and the phone that inherits no overlap (día 7, 20 October 2026)
+
+Two of David's four conditions close here, and neither of them is visible on this machine: condition
+4, «Redimensionar en táctil: asas solo sobre el elemento elegido», and condition 3, «Móvil no hereda
+el solape».
+
+### 1. Forty-four pixels, on the chosen element, and only where there is a finger
+
+A finger is about eleven millimetres wide, so the ±6 px zone of día 4 is not a target it can hit at
+all — it would only steal the drag the finger already has. Under `(pointer: coarse)` the chosen
+element therefore gets real handles: **forty-four pixels**, which is WCAG 2.5.5's number and the one
+both Apple and Google publish. The dot that is *drawn* is twelve; what is forty-four is the thing a
+hand has to land on, which is the distinction a design that drew twelve-pixel squares would get
+wrong.
+
+**Where they go is arithmetic, in `handles.ts`, decided without a DOM** — `handlesFor({box, host})` —
+and two of David's adjustments live in that function because both are about a handle that would
+otherwise be unusable:
+
+- **A small element gets corners only.** Eight targets of forty-four on a button of 60 × 30 bury the
+  button. The test is the **box's** size and not one side's, and the suite is what taught that: a
+  first version asked each side about its own length, so a text of 528 × 52 was given a top and a
+  bottom midpoint — forty-four pixels tall each, centred on edges fifty-two apart, so between them
+  they covered the element and a finger aiming at its middle landed on a handle. **It stopped being
+  draggable at all, only resizable**, and the sprint 24 touch walk caught it by asking for a drag of
+  one column and getting nothing. So the midpoints arrive only when the box is two targets across in
+  **both** directions, which is the same number twice over: a midpoint pair takes a target's width
+  out of the middle, so what is left has to be a target too. The four corners are never withdrawn —
+  they are the pair of axes every box has — and they leave the middle clear whenever the box is wider
+  than one target. Smaller than that they meet over it: such an element is moved from «Colocación» or
+  with the arrows, which is said here rather than solved by taking away the only handles it has.
+- **At the edge they are drawn inward.** `html, body { overflow-x: clip }` eats whatever leaves the
+  page, so a target centred on a border is clamped into the section rather than losing half of
+  itself. With the padding a section carries this rarely bites; on a full-bleed one it is the
+  difference between eight handles and six.
+
+**Asked of the browser once, and measured before being written**: with Playwright's `hasTouch` and no
+`isMobile`, Chromium answers `(pointer: coarse)`, `(hover: none)` and one touch point — so the walks
+run a *tablet*, desktop width with a finger, which is the hard case rather than a phone. **With a
+mouse there are no handles**, which is David's own sentence and the reason the canvas stays quiet:
+eight squares around everything chosen is the editor shouting that something can be stretched
+instead of answering when the hand asks.
+
+They are `aria-hidden`. Resizing by keyboard is the «Colocación» panel's four steppers — the
+single-pointer alternative WCAG 2.5.7 asks for, in these units since día 1 — and eight nameless divs
+in the accessibility tree would be noise laid over the element they belong to.
+
+### 2. A handle is a second door to the same gesture, not a second gesture
+
+The press body of día 4 is now `begin(edge, el, event)`, and it has two callers: the section's
+capture listener, which finds an edge within six pixels, and a handle, which already knows its own.
+Everything after that is the same code — the same live preview on the element's real grid area, the
+same `resizeTo`, the same single `setPlacement`, the same «commit the words first» when the element
+is being written in. The handles are removed while the pull lasts: they would be stale the moment the
+box starts changing, and a finger holding one does not need to see the other seven.
+
+They are painted from `markChosen` — nothing chosen means none of them — and again when a pull ends,
+because a committed resize rebuilds the frame and a cancelled one has to be put back by somebody.
+
+**One painter per document, and that is a correction CI had to force.** The first version kept a
+single slot holding «the painter of whatever was wired last», which is wrong in this editor for a
+reason that predates the handles: an edit is shown by building the next version of the page in a
+**buffered** frame and swapping it in, so for a few milliseconds there are two live documents.
+Choosing an element in the visible one then repainted the handles into the buffered one — the
+element the hand had just chosen showed none, and nothing put them back until the next choice. This
+machine never saw it, because the swap always finished first; CI, which is faster, failed both touch
+walks on it. The painters live in a `WeakMap` keyed by document now, so «repaint the handles» is
+asked of the document the choosing happened in, which is the only form of that question with one
+right answer. The walks say *which* document the handles are in when they fail — «live:0
+buffered:8» is the sentence that would have taken an hour off finding this.
+
+### 3. `touch-action: none` on the handles and on the chosen element, and on nothing else
+
+The promise of ADR 0049 §7 now has eight new elements that depend on it: declare that property one
+level up — on the section, or on `[data-id]` — and a phone's canvas stops scrolling, which nobody
+sees with a mouse. So the walk asserts again that one finger scrolls the canvas **with the handles
+drawn**, and it first asks the page what is under the finger, so that it can never end up quietly
+asserting that the chosen element scrolls the page.
+
+**In the mobile view no handles are drawn at all.** A section there is one column and the gesture
+reorders (rule 7): a handle that stretched a width would be lying about what the published page does
+with it.
+
+### 4. What a vertical pull actually moves, which the walk had to learn
+
+Found while writing it, and worth saying plainly: **a text's blue box is its content, and its area
+can be taller.** With `align-items: start` (§3) an element measures what its content measures, while
+its rows are whatever was written for it — and this cover's headline arrived with twelve rows for
+fifty-two pixels of text, because the measurement that escalated it ran before the face did (the
+typography race §3 already names, and a real hand meets it the same way). So a short pull downwards
+lands inside space that was already reserved and changes nothing anybody can see.
+
+The walk therefore measures **the bottom of the area**, read off the section's resolved tracks, and
+asserts it ends where the hand did, to within one row. Counting rows would have produced a number
+that means nothing. A vertical pull on a text reserves space; what is drawn is still the content's,
+and no border ever clips a word.
+
+### 5. The phone inherits no overlap, and the walk measures it
+
+Overlapping has been allowed since día 3 and the stacking order is the document's own. On a phone
+there is nothing to stack: rule 7's shared block puts every child on `grid-column: 1 / -1` and
+`grid-row: auto`, so the grid gives each one its own row. **That is now asserted rather than
+believed** — the walk overlaps two elements on the desktop with the pointer, confirms the crossing
+with the schema's own `overlaps`, switches to the mobile view and measures every pair of boxes. It is
+the defect finding 1 of PR #6 fixed, and a grid of ninety-six is exactly the kind of change that
+could have given it back.
+
+**Its first version reported the defect that did not exist**, and that is the harness lesson of the
+day: the device switch replaces the preview's document, and measuring in the next breath measures the
+desktop one — the trap of día 2, in a new place. The walk now waits until the section resolves to a
+single track before it believes it is on a phone.
