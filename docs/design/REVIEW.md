@@ -3098,3 +3098,373 @@ panel (dependiente de plataforma, dos reparaciones medidas peores), los 7,9 px d
 los dos colores de marca que pasan el 4,5:1 por los pelos, la pulsación perdida mientras el marco se
 reconstruye, y la pregunta del Tab dentro de una sección, que hoy lleva una parada más por cada
 elemento colocado.
+
+## Sprint 25 — «Se queda donde se suelta» (20 y 21 de octubre de 2026)
+
+David, tras fusionar el cierre del sprint 24, con una sola petición — grande, y una corrección del
+arrastre que ese mismo sprint acababa de entregar:
+
+> «No me convence el arrastre de los elementos visuales mediante rejilla. Quiero que al arrastrar un
+> elemento visual este **se quede en la posición donde se deja** (parecido a lo que ocurre al arrastrar
+> la barra flotante o los iconos dentro de la sección pero sin asa). Quiero además que las cajas que
+> limitan el tamaño del objeto visual (el recuadro azul) sea **ajustable al arrastrar los bordes** bien
+> para agrandarlo o bien para reducirlo (parecido a como funcionan los cuadros de texto insertados en
+> un documento de Word). Me parece que lo más estándar es un clic de ratón mantenido pulsado sobre el
+> elemento arrastra, doble clic permite editar el contenido/escribir y el hacer clic mantenido/pulsado
+> en el borde altera el tamaño del recuadro del elemento visual. […] buscamos con el proyecto que todas
+> estas ediciones sean **instintivas** (familiar para usuarios de aplicaciones tipo Canva y Word).»
+
+**Lo que choca, dicho antes de diseñar y no después.** La regla 4 —«las posiciones son relativas a la
+rejilla de la sección, nunca absolutas»— viene del dossier aprobado (Módulo Avanzado §6) y ya se había
+probado dos veces contra dueños reales, Conchi el 27 de septiembre y el dueño del taller el 30; las
+dos veces se mantuvo. La propia regla manda un ADR antes de código a la siguiente petición. **Esta
+era la tercera, y la hizo el dueño del producto.** Y lo segundo que choca no es una regla sino una
+diferencia de medio: **Canva y Word tienen un lienzo fijo y una sección web no** — su ancho es el del
+visitante y su alto el de su contenido. «Se queda donde se suelta» es por tanto una decisión sobre
+**qué se publica**, no sobre la interfaz, así que se le pusieron tres modelos delante con su coste.
+
+**Las tres decisiones de David, el 20 de octubre:**
+
+1. **Rejilla fina, mano libre.** El elemento sigue la mano y se queda donde se suelta con un ajuste
+   imperceptible; los bordes estiran; **la regla 4 no se enmienda: se afina.** No al lienzo fijo tipo
+   Canva, cuyo coste estaba delante — texto que se desborda en otra pantalla, una enmienda del dossier,
+   una migración total y dos sprints.
+2. **Guías de alineación**: el elemento se imanta a los bordes y los centros de sus vecinos, y al
+   centro de la sección.
+3. **Gestos**: clic mantenido y mover arrastra **sin tener que elegir antes**; clic suelto elige; doble
+   clic —o un segundo clic sobre el ya elegido— escribe; **el borde redimensiona también mientras se
+   escribe**, como en Word; el cursor cambia en una zona de ±6 px «para que se descubra sin
+   explicación»; Esc sale.
+
+Y dos más, el mismo día, cada una con sus condiciones: **los solapes se permiten** (enmienda del §4 del
+ADR 0048 — con un paso de ocho píxeles casi cualquier celda toca a otra, y el documento ya apila), con
+el orden del documento como apilado, **el aviso de texto sobre texto** y **el móvil sin heredar el
+solape**; y **las flechas en unidades** (enmienda del §1 del ADR 0049), con la carrera de pulsaciones
+como un solo paso del historial y el anuncio en píxeles.
+
+### Las cuatro condiciones, respondidas con medidas
+
+**1. El paso.** La condición era que el ajuste no se vea. El lienzo del editor no mide 960:
+`layoutWidth = max(available, 721)`, y `available` es la ventana menos el raíl de 80 px y los márgenes
+de la fila. Medido en Chromium el día 1, con el margen de la fila bajando de `px-24` a `px-6` al abrir
+un panel:
+
+| Dónde | Sección | Útil | Paso con 12 | **con 96** | con 48 |
+|---|---|---|---|---|---|
+| Editor, ventana 1440, sin panel | 1168 | 896 | 74,7 + 16 | **9,3 px** | 18,7 |
+| Editor, ventana 1440, panel de 340 abierto | **948** | 676 | 56,3 + 16 | **7,0 px** | 14,1 |
+| Publicada a 1280 | 1280 | 1008 | 84,0 + 16 | 10,5 | 21,0 |
+| Publicada a 1440 | 1440 | 1168 | 97,3 + 16 | 12,2 | 24,3 |
+| Publicada a 1920 | 1920 | 1648 | 137,3 + 16 | 17,2 | 34,3 |
+
+Con las otras dos escalas, a 1440 y sin panel: `compact` 10,1 px, `generous` 7,9 px. **Son 96
+unidades**: siete a diez píxeles donde se arrastra. Cuarenta y ocho darían catorce a diecinueve, y eso
+se ve. En la página publicada el paso crece con el ancho porque la unidad es proporcional, y ahí nadie
+arrastra. La fila es de **8 px fijos** y no derivada del paso horizontal, porque derivarla necesita
+`vw` —que arrastra la barra de desplazamiento, 16 px de deriva por cada 100 filas— o una altura
+definida, que una sección no tiene.
+
+**2. Los huecos se conservan exactos, y el documento no los ve.** Una rejilla de 96 con `gap` no
+conserva el gutter del catálogo: tendría 95 huecos donde el catálogo tiene 11. La sección libre declara
+**107 pistas** —96 de contenido y los once gutters como pistas propias— con `column-gap: 0`, y como
+`repeat()` no se anida en CSS Grid la lista es
+`repeat(11, minmax(0, 1fr) ×8 var(--space-md))` más ocho `minmax(0, 1fr)` — y es `minmax(0, 1fr)`
+y no `1fr` por el ajuste 2 de David, porque `1fr` es `minmax(auto, 1fr)` y una palabra larga
+inflaría las pistas que cruza. Unos 110 bytes, emitidos una vez y solo si el documento
+tiene alguna sección libre. **El documento guarda unidades 1..96 y nunca nombra un gutter**; la
+traducción vive en una sola función de `packages/schema` (`fineGrid.ts`) que importan el renderizador,
+el editor y el `placedIn` de las caminatas, para que html, dom y pruebas no puedan discrepar. Las
+secciones del catálogo siguen en doce y el parche móvil sigue en doceavos.
+
+**3. La vertical.** `grid-auto-rows: minmax(8px, auto)`, `row-gap: 0`, `align-items: start`: soltar
+30 px más abajo mueve cuatro filas, siempre, y un texto que no cabe hace crecer sus filas y empuja lo
+de debajo en vez de recortarse. **La migración no toca `row` ni `rowSpan`** —una fila con contenido
+mide lo mismo bajo `auto` que bajo `minmax(8px, auto)`—; lo único que cambia en una sección libre ya
+guardada es `center → start`, y eso **sí mueve**: un titular centrado sube 27 px en
+`cover-and-services` y el alto sobrante de una foto que abarca varias filas se reparte entre las filas
+de hueco. Es el coste, mueve los dos goldens y el ADR 0050 §3 lo nombra en vez de aseverar lo
+contrario. Desde el día 2 **escalar mide la página viva** elemento a elemento en vez de derivar las
+filas del ritmo del tema, con el ritmo como reserva por elemento.
+
+**4. Asas solo sobre el elemento elegido, en táctil.** Cuatro esquinas y cuatro bordes, objetivos de
+44 px —el número de la WCAG 2.5.5 y el de las dos plataformas—, **solo** sobre el elemento ya elegido y
+solo donde el navegador contesta `(pointer: coarse)`. Con ratón no hay asas: la zona de ±6 px y el
+cursor. Los cuatro steppers de «Colocación» siguen siendo la alternativa de un solo puntero y el camino
+del teclado (WCAG 2.5.7), en unidades finas desde el día 1.
+
+### Ocho ajustes suyos al aprobar el plan, todos en el producto final
+
+| | Ajuste | Dónde acabó |
+|---|---|---|
+| 1 | La fila no es `y/8`: `rowAt` lee las pistas resueltas, el anuncio se calcula de la caja medida, y editar un texto reajusta su `rowSpan` | días 4, 6 y 7 |
+| 2 | `minmax(0, 1fr)` en las 96 unidades — `1fr` es `minmax(auto, 1fr)` y una palabra larga inflaría las pistas que cruza | día 1 |
+| 3 | Los umbrales en píxeles de pantalla se dividen por el zoom del lienzo (arrastre, borde, guía) | días 3 a 6 |
+| 4 | El override móvil devuelve también `grid-row: auto`, el `row-gap` del tema y `grid-auto-rows: auto` | día 1 |
+| 5 | `z-index` mientras dura el arrastre, porque un `transform` crea su propio contexto de apilamiento | día 3 |
+| 6 | Asas: por debajo de un tamaño solo esquinas, y en el borde de la sección dibujadas hacia dentro | día 7 |
+| 7 | La tabla del paso se mide en Chromium, no se calcula — y 948 con el panel abierto era correcto | día 1 |
+| 8 | Zona del borde asimétrica mientras se escribe: 6 px por fuera y 2 por dentro | día 4 |
+
+### La rejilla fina, entera en una sola PR (día 1, PR #274)
+
+[ADR 0050](../decisions/0050-a-hand-designed-section-is-a-fine-grid-and-the-hand-decides-where.md),
+esquema 1.12.0 y migración 0013 **en la misma PR que el renderizador**, y eso fue un recorte del plan
+hecho el primer día: el esquema en 96 y el renderizador en 12 no pueden fusionarse por separado porque
+David redespliega cada día, y una sección libre guardada se publicaría con `grid-column: 9/span 48`
+sobre doce pistas. El cambio de modelo va primero y solo, **entero**. El catálogo sigue declarando en
+doce, `escalate` convierte ×8 exacto, y el arrastre del editor siguió imantando a doce hasta el día 3
+a través de un `coarseBoundary.ts` que existía para ser borrado.
+
+**La regla 4 no se enmienda**, y `docs/document-rules.md` gana su tercera nota bajo la regla: la tercera
+petición la hizo el dueño del producto y la respuesta fue **afinar** la rejilla, no abandonarla.
+
+### Escalar mide la página viva (día 2, PR #275)
+
+`escalate(section, preset, gapRows, boxes?)` recibe la caja que cada elemento colocado tenía de verdad
+y escribe `row = 1 + round(top/8)`, `rowSpan = ceil(alto/8)`. **El tramo redondea hacia arriba donde la
+fila redondea al más cercano, y la asimetría es el punto**: un tramo cuatro píxeles corto hace crecer
+sus filas por encima del mínimo y ese empujón se acumula hacia abajo, mientras una fila redondeada se
+equivoca como mucho en media fila.
+
+Tres defectos que encontró el navegador, los tres nombrados en la enmienda del ADR: **las cajas no
+llegaban nunca** —`liveDoc()` dentro de cromo cableado antes de que su marco sea el visible contesta
+con el otro documento, así que la medición volvía vacía y la escalada caía en silencio al ritmo del
+tema—; **una tipografía que llega a mitad de la medición** movía el titular de la portada de 46 a 52
+píxeles; y **«+ Añadir línea» se autocolocaba en el primer hueco libre a todo lo ancho**, que sobre
+filas de ocho píxeles es un hueco *encima* de su propia lista. De ahí la regla que ya se puede escribir:
+**el cromo dentro de una sección libre necesita una columna y una fila.**
+
+### El elemento sigue la mano (día 3, PR #276)
+
+Sin fantasma: mientras la mano lo sostiene viaja el elemento mismo, sobre un `transform` que es cromo y
+nunca el documento, por la distancia que la mano recorrió, así que el agarre se queda donde se tomó. Al
+soltar se escribe una sola colocación, en la unidad y la fila más cercanas a su propia esquina superior
+izquierda: la caminata mide el aterrizaje a seis píxeles o menos de donde la mano soltó, que es media
+unidad de lado y media fila de alto. **El fantasma del sprint 24 existía porque un imán de doce
+columnas movía el elemento a otro sitio; con una unidad de nueve píxeles el elemento es la previa
+honesta.**
+
+**Y los solapes se permiten de la forma más fuerte de decirlo**: `dropAt` ya no recibe las demás
+colocaciones de la sección y `arrowDrop` tampoco, así que ninguno de los dos *puede* rechazar por
+ocupación — lo que el puntero puede soltar encima, el teclado puede pisarlo. Un clic mantenido arrastra
+**esté elegido o no**: el movimiento es lo que distingue un arrastre de una selección de texto, así que
+la precondición guardaba una ambigüedad ya resuelta cuando importaba.
+
+### Los bordes estiran (día 4, PR #277)
+
+Seis píxeles a cada lado del borde del elemento con el que la mano trabaja, y uno de los cuatro
+cursores de la plataforma en esa zona. Cableado **en la sección y en fase de captura**, y las dos
+mitades son el diseño: en la sección porque la zona llega *fuera* del elemento —un `pointermove` tres
+píxeles más allá de un titular es un evento de la sección, y la primera versión, a nivel de elemento,
+tenía la mitad exterior muerta—; en captura porque la pulsación tiene que ganarle a elegir, a escribir,
+a cerrar un menú y a armar el arrastre.
+
+La previa es el área de rejilla real del elemento, así que la rejilla refluye mientras la mano se mueve:
+un texto reparte sus líneas otra vez y el área de una foto crece sin que la foto se estire.
+Redimensionar un texto mientras se escribe en él **vuelca primero las palabras**, luego escribe la caja,
+luego recoge la escritura: un gesto, dos actos, en el orden que no puede perder nada.
+
+Chromium corrigió la aritmética una vez: **cada borde toma su propia lectura**, porque la unidad cuyo
+borde izquierdo está más cerca y la unidad cuyo borde derecho está más cerca pueden estar a un gutter
+de distancia. Una sola lectura para los dos dejaba dos columnas del catálogo en 63 unidades donde se
+pedían 64.
+
+### Las guías, y el único solape que avisa (día 5, PR #278)
+
+`guidesFor` toma las líneas vivas de lo que se mueve —las tres por eje de un arrastre, solo el borde
+tirado de un redimensionado— y contesta con un desplazamiento y la línea que hay que dibujar. Candidatas:
+los dos bordes y el medio de cada vecino en cada eje, más el centro de la sección **en x y no en y**,
+porque el alto de una sección es el de su contenido y su centro vertical se mueve mientras lo que se
+arrastra está en el aire.
+
+**El aviso**: `overlappingTexts(doc)` lista cada par de textos cuyas colocaciones se solapan en una
+sección diseñada a mano, con las palabras de los dos, y la revisión previa a la descarga lo enseña al
+final, **sin bloquear** — es la decisión de David, aviso y no bloqueo. Cuatro exclusiones, cada una una
+decisión: solo texto sobre texto, solo lo que la página dibuja, solo secciones libres, y cada par una
+vez. El diálogo es el **noveno** `aria-modal`, y `modalTrap.test.ts` se negó al cambio hasta que la
+cuenta y los cuatro registros que la nombran estuvieron actualizados.
+
+**Y una medida que corrigió a la caminata del día 3**: un tramo de N unidades no es un ancho fijo, es N
+unidades más los gutters que le toque cruzar, así que el mismo botón de 24 unidades mide 256 px en la
+unidad 1 y 272 en la 38. «Centrado» aterriza dentro de media unidad más medio gutter, trece píxeles, que
+es la consecuencia directa de conservar los gutters del catálogo al píxel.
+
+### El teclado cuenta en unidades (día 6, PR #279)
+
+Una unidad por pulsación y ocho con `Mayús`, en las cuatro direcciones — una pulsación es ya lo más
+fino que el documento puede expresar, que es lo que hace al teclado igual a la mano sobre una rejilla de
+96. **`Mayús` deja de redimensionar**: era el único redimensionado por teclado en el lienzo y una tecla
+no puede significar dos cosas, así que el ancho pasa entero a los steppers del panel.
+
+**Una carrera de pulsaciones es un movimiento y un solo paso del historial** (su condición 1):
+`arrowRun.ts` las acumula, puro, con el reloj como argumento, y la colocación se escribe en `keyup`,
+tras 300 ms de silencio, o en `blur` — la red para la pulsación cuyo `keyup` no llega nunca. Cincuenta
+pulsaciones para cruzar una sección serían si no cincuenta documentos y cincuenta «Deshacer» para una
+sola intención, **y de paso retira la pulsación perdida del ADR 0049 §4**: no hay reconstrucción hasta
+soltar.
+
+**El anuncio es píxeles, desde la caja medida** (su condición 2): «Columna 3 de 12» significaba algo en
+la rejilla del catálogo y nada en una de noventa y seis, y «columna 25 de 96» sería cierto e inútil
+porque nadie cuenta en noventaiseisavos.
+
+### Las asas que un dedo puede tomar (día 7, PR #280)
+
+`handles.ts` es puro y probado: cuatro esquinas siempre, los cuatro puntos medios **solo cuando la caja
+mide dos objetivos de 44 px en las dos direcciones**, y cada objetivo recortado dentro de la sección
+para que `overflow-x: clip` no se coma la mitad de uno. **La regla del ancho es obra de la suite**:
+preguntar a cada lado por su propio largo enterró un texto de 528×52 bajo sus asas de arriba y abajo
+—las dos de 44 px centradas en bordes separados por 52— y la caminata táctil del sprint 24 cazó que el
+elemento había dejado de poder arrastrarse.
+
+**Y dos defectos que solo vio CI**, los dos de la misma familia y el segundo peor que el primero. El
+primero: `paintHandles` corre *dentro* de una reconstrucción, así que el `doc` que su cierre capturó al
+cablear el marco podía ser el de antes de escalar la sección — `layout` era `null` y no dibujaba nada,
+permanente y no un parpadeo. Pregunta a la sección por `rb-free`, que es la clase del renderizador y
+está en el documento que se va a dibujar. El segundo: **una edición se enseña construyendo la siguiente
+versión de la página en un marco con búfer y cambiándola**, así que durante unos milisegundos hay dos
+documentos vivos, y una sola referencia con «el pintor del último cableado» pintaba en el del búfer
+mientras la persona miraba el visible. Los pintores son un `WeakMap` por documento y `markChosen` pide
+el del documento en el que su elemento vive de verdad. **El cambio siempre ganaba la carrera en esta
+máquina; CI es más rápida.**
+
+Lo que costó tres rondas de CI y habría costado una: que la caminata diga **de qué documento habla**.
+«live:0 buffered:8» en vez de «no hay asa».
+
+### Un aviso que bloqueaba, aparte y primero (PR #281)
+
+Tres avisos de seguridad de `launch-editor` bajo `vitest` ponían en rojo el `security` de la PR del
+día 7. Se arreglaron en su propia PR —`"vite@<8.3.3": ">=8.3.3"` en `pnpm-workspace.yaml`—, se fusionó
+primero, y después la rama del día 7 se actualizó con `main` por una fusión ordinaria. Un aviso que
+bloquea no viaja dentro de la PR de la función.
+
+### El cierre (día 8, PR #282)
+
+**Lo medido, en el orden que la máquina quiso y nada en paralelo.** El portátil se reinició a
+propósito antes de este día, porque tres caminatas se habían colgado por paginación el 20 de
+octubre: `vm.swapusage` dijo **0,00 M usados sobre un total de 0,00 M** antes de empezar y seguía
+diciéndolo al acabar, así que ningún número de abajo está medido sobre una máquina que estuviera
+tragando.
+
+- **`RETORIKA_E2E=1 pnpm e2e` entero y solo**: 215 pasadas, 1 saltada, **902 s**. Verde antes de
+  tocar nada, que es lo que separa un defecto heredado de uno de hoy. **Y una advertencia sobre esta
+  máquina, que es un hallazgo del día tanto como los otros**: las tres pasadas completas de la tarde
+  dieron 1 556, 1 362 y 1 313 s —entre un 45 % y un 70 % por encima de esa primera— con **tres, cuatro
+  y tres** caminatas en rojo, **diez caminatas distintas en total y ninguna repetida**. Las diez son
+  esperas por la respuesta de la aplicación y ninguna una aseveración: «Comidas», «Siguiente», «Que
+  reserven», una foto `blob:`, la frase de guardado. Siete de las diez caen **antes** de que existan
+  las herramientas de diseño, donde nada de lo de hoy corre. Por el criterio del propio plan —«un
+  defecto rompe las mismas caminatas y el ruido se mueve»— esto es ruido, y se midió en vez de
+  suponerlo: los tres recorridos del día 7, que son los que más ejercitan el cambio de hoy, tardan
+  **16,30 s con el arreglo y 15,50 s sin él**, y pasan de las dos maneras. Vaciar los 2,8 GB del caché
+  de `next dev` no cambió nada. La máquina se degrada con horas de Chromium encima, que es exactamente
+  por lo que David la reinició antes de este día; **la pasada completa que vale es la de CI, o una
+  local tras reiniciar**.
+- **`RETORIKA_A11Y=1 pnpm test:a11y`**: 538 pruebas en 7 ficheros, verde.
+- **`pnpm lighthouse`**, preset de móvil, las tres composiciones y la página por ficha:
+  rendimiento **100 / 99 / 99 / 100**, accesibilidad **100** en las cuatro, buenas prácticas 96,
+  SEO 100; LCP 1,65 / 2,18 / 2,18 / 0,90 s, CLS 0,000 / 0,000 / 0,027 / 0,000, TBT 0 ms. El 96 sigue
+  siendo el 404 del favicon, que ya tiene su fila. **Y hay que decir lo que esto no mide**: el sitio
+  de muestra lo coloca el catálogo, así que ninguna de las cuatro auditorías dibuja una sección
+  libre. El peso de la rejilla fina lo miden los goldens y `pnpm size`, no Lighthouse.
+- **El peso de la rejilla fina, exacto**: `hidden-and-embed` pasa de 6 079 a 6 627 bytes y
+  `physio-free-cover` de 5 547 a 6 099 — **+86 y +90 bytes comprimidos** sobre un presupuesto de
+  60 KB por página. Y `cover-and-services`, que no tiene sección libre, es **byte a byte idéntico**:
+  el bloque de las 107 pistas se emite solo si el documento lo necesita, y eso ya no es una promesa
+  del plan sino una comparación.
+- **Goldens: los dos del día 1 y ninguno más**, comprobado contra el cierre del sprint 24 y no
+  contra la memoria. El diff entero es la rejilla fina: `rb-free` puesto por el renderizador, las
+  107 pistas, las columnas ×8 y las filas convertidas.
+
+**Y tres cosas que salieron de medir, que es para lo que existe un día de cierre.**
+
+**1. A 390 no hay nada que auditar, y el plan del día pedía auditarlo.** El plan decía «axe a 390
+sobre un elemento elegido con asas». A 390 no hay asas — y no por un defecto: `designToolsFor`
+devuelve `undefined` por debajo de `MIN_STUDIO_WIDTH`, así que **el interruptor de las herramientas
+de diseño no está en el DOM** (cero a 390, uno a 1024, medido). Sin interruptor no hay sección
+diseñada a mano, y sin sección a mano no hay rejilla fina, ni bordes que estiren, ni guías, ni asas:
+**el sprint entero no tiene puerta en un teléfono.** Es ADR 0025 §5 y ADR 0042 funcionando como se
+decidió, no una sorpresa, pero nadie lo había escrito y el plan lo dio por supuesto. Así que la
+pasada de axe se hace donde la cosa existe por primera vez —**1024 con un dedo**, que es una tableta
+o un portátil táctil, el caso duro del día 7— y a 390 queda una caminata que asevera el cero.
+Verde: las ocho asas `aria-hidden` no añaden ni un hallazgo serio, que es exactamente lo que había
+que comprobar, porque un `aria-hidden` sobre algo enfocable sí lo es.
+
+**2. Escalar desde la vista de móvil deshacía la maqueta de escritorio.** Escalar mide la página viva
+desde el día 2, y en la vista de móvil la página viva tiene 320 px: cada elemento es
+`grid-column: 1 / -1` y la sección es una pila. Las columnas se salvaban —el ×8 es exacto y no se
+mide— pero las filas salían en el orden del teléfono. Medido: el titular de la portada generada
+aterrizaba en la **fila 29** en vez de la 4, **doscientos píxeles más abajo** y por debajo de una
+foto cuya área salía de **26 filas donde el escritorio mide 50**. En silencio, y «no se mueve nada al
+empezar» (ADR 0025 §7) dejaba de ser cierto por una puerta que las herramientas encendidas tienen
+abierta todo el rato. `measurePlaced` devuelve ahora `undefined` cuando la sección resuelve **una
+sola pista** —se le pregunta a la página y no al estado, que es la lección del día 7— y la escalada
+cae en la conversión por el ritmo, que es lo que conserva la maqueta. **Las dos mitades se
+aseveran**: desde el móvil el titular vuelve a la fila 1 al lado de la foto, y desde el escritorio
+sigue cayendo por debajo de la 1, que es la caminata que caza un `undefined` devuelto siempre.
+
+**3. Las asas no seguían a su elemento cuando la página refluía debajo.** Un asa es una caja
+absoluta colocada en la esquina que el elemento tenía **al elegirlo**, y hasta hoy solo se
+repintaban en `markChosen`. Todo lo que cambia el ancho de la vista previa sin reconstruir el
+documento las dejaba atrás: abrir «Diseño» en una ventana de 1024 lleva la página de 752 px a 721, el
+titular de 320 px de ancho a 305, y el asa de abajo a la derecha se quedaba a **15,5 px** de su
+esquina; ensanchar la ventana de 1024 a 1280 lleva la página a 788 y la dejaba **18 px corta**.
+Permanente, no un parpadeo —medido estable a los 150 ms y a los 3 850— y con los puntos dibujados
+todo el rato, señalando a donde no hay nada. Un `ResizeObserver` sobre cada sección lo arregla, y es
+un observador y no un oyente de `resize` porque **las dos puertas no son la misma**: abrir un panel
+no redimensiona ninguna ventana.
+
+**Y una trampa de la propia caminata, que es la que más vale de las tres.** La primera versión de
+esa aseveración pasaba en verde **con el defecto puesto**: `expect.poll(…).toBeLessThanOrEqual(1)`
+se da por satisfecho con su **primera** muestra, y la primera muestra tras pulsar «Diseño» llega
+antes de que React haya rehecho la fila, cuando la página todavía mide 752 y la deriva es cero. Una
+espera por «esto ya está bien» que se cumple antes de que ocurra lo que iba a romperlo no comprueba
+nada. La caminata espera ahora **a que el reflujo haya ocurrido** —el ancho de la caja ya no es el de
+antes— y solo entonces mira el asa; con el defecto puesto falla diciendo «deriva 15,5 px sobre una
+caja de 305 px». Es el saboteo de cada aseveración derivada haciendo su trabajo, en la aseveración
+que parecía no derivar nada.
+
+**Y el paseo sin ratón gana un gesto, porque le faltaba uno.** El sprint 25 añadió un gesto nuevo
+entero —redimensionar el recuadro— y sus dos puertas son punteros: los bordes con el ratón (día 4) y
+las asas con el dedo (día 7). Su camino de teclado son los cuatro steppers de «Colocación», que es
+lo que ADR 0050 §6 dice al quitarle a `Mayús` el redimensionado el día 6, y lo que pide la WCAG
+2.5.7 — y **ninguna caminata sin ratón los pulsaba**: la del sprint 24 día 10 mueve y no estira. Así
+que la promesa «monta una web, la edita, le da estilo y descarga el ZIP sin tocar el trackpad»
+cubría desde el día 6 un gesto menos de los que el editor tiene. Ahora el recorrido abre «Diseño»,
+despliega «Colocación» y pulsa «Ancho: uno menos» con Enter: **un stepper mueve un número** —una
+columna del catálogo de ancho y nada más, con la columna, la fila y el alto intactos— y un
+«Deshacer» lo devuelve. Se estrecha y no se ensancha a propósito, porque la flecha que sería
+rechazada está deshabilitada y el elemento más bajo de esta portada llega hasta la última unidad.
+
+**Lo medido y no arreglado, que es una pregunta más grande que las asas.** Todo el cromo que el
+editor dibuja **dentro** de la vista previa está en los píxeles de la página, así que un lienzo con
+zoom lo encoge entero. Medido a 1024 con el panel «Diseño» abierto, donde el zoom es **0,7379**:
+
+| Cromo | En el documento | En pantalla |
+|---|---|---|
+| Un asa táctil | 44 × 44 | **32,5 × 32,5** |
+| Un verbo de sección | 32 × 32 | **23,6 × 23,6** |
+| El agarre de la barra flotante | 24 × 26 | **17,7 × 19,2** |
+
+Sin panel el zoom es 1 y las tres miden lo que dicen. El asa es la única cuyo número viene de la
+WCAG —44 es el 2.5.5— y es la que **mejor** sale: 32,5 sigue por encima del 24 × 24 que pide la 2.5.8
+de la WCAG 2.2. El verbo y el agarre caen **por debajo** de ese 24, y el agarre lleva ahí desde el
+sprint 20 con un comentario que cita esa misma cláusula. Los umbrales del gesto sí se dividen por el
+zoom —los 3 px del arrastre, los ±6 del borde, los 6 de la guía: el ajuste 3 de David—, y lo dibujado
+nunca; que lo dibujado deba compensar también es una decisión que toca los verbos, el agarre y las
+pastillas, no solo lo que este sprint añadió. Va al backlog con las tres medidas, no arreglada a
+medias en el cierre.
+
+### Lo que este sprint deja a David
+
+**Nueve firmas.** El **ADR 0050** es nuevo y está `proposed`, con sus seis enmiendas de los días 2 a
+7 dentro. Y siguen sin firmar los siete de antes: **0042** (sprint 21), **0043** (sprint 23), y
+**0045, 0046, 0047, 0048 y 0049** (sprint 24) — más la del **CEO para el 0044**, que es la que enmienda
+un ADR que él firmó y la que mueve el riesgo del artículo 10 de la LSSI-CE al cliente. El desarrollo
+no firma ninguna.
+
+**Y una decisión con los números delante**: si el cromo dibujado dentro del lienzo tiene que mantener
+su tamaño cuando el lienzo está a escala. La tabla de arriba es la medida; el arreglo es el ajuste 3
+suyo aplicado a lo dibujado y no solo a los umbrales; el coste es que a zoom bajo un elemento
+pequeño perdería sus cuatro asas de borde, porque la regla de «dos objetivos de ancho» empezaría a
+contarse en píxeles de pantalla — que es lo que su condición 6 quería decir. La fila está en el
+backlog y nadie la toca hasta que él conteste.
