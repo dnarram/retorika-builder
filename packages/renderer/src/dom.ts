@@ -15,6 +15,12 @@ export function nodeToDom(node: RenderNode, doc: Document): Node {
     el.setAttribute(name, node.attributes[name] ?? "");
   }
   for (const child of node.children) {
+    // An empty string makes no node (ADR 0051, sprint 26 día 1). The html target prints it as a
+    // line with nothing on it, which no parser turns into a text node — so a page parsed from the
+    // html has no node there, and a fragment that did would be a tree the editor's patch kept
+    // adding and removing for nothing. The parity test is what found it, on a generated button
+    // with an empty label; it is the one structural difference the two targets ever had.
+    if (child === "") continue;
     el.appendChild(typeof child === "string" ? doc.createTextNode(child) : nodeToDom(child, doc));
   }
   return el;

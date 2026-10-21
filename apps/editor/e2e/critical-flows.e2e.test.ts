@@ -18006,3 +18006,97 @@ describe("sprint 25 día 8 — el cierre", () => {
     }
   }, 300_000);
 });
+
+/**
+ * **Sprint 26 día 1 — la medida de hoy, antes de cambiar nada.**
+ *
+ * El sprint 26 va a dejar al lienzo con un solo documento por sesión (ADR 0051). Antes de tocarlo,
+ * esta caminata escribe con números lo que el modelo de hoy hace en una edición de texto: cuántos
+ * documentos produce, cuánto tarda el cromo en volver, y si hubo un segundo marco. Son los números
+ * que el ADR cita como línea base, leídos del propio editor por la sonda del sprint 18 (`probe.ts`)
+ * y no deducidos desde fuera.
+ *
+ * **Lo que asevera es lo que hoy es cierto** —una edición de texto reconstruye el documento, así
+ * que hay al menos un cableado nuevo después de ella— y eso es a propósito: el día 5 esta misma
+ * caminata se da la vuelta y pide **cero**. Hasta entonces es una medida, y se imprime
+ * (`--disable-console-intercept` para leerla, porque vitest se traga `console.log`).
+ */
+describe("sprint 26 día 1 — la medida de hoy", () => {
+  it("una edición de texto reconstruye el documento, y se dice cuánto cuesta", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    await probeOn(context);
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      await fontsReady(frame);
+
+      type Event = { at: number; kind: string; data: Record<string, unknown> };
+      const events = () =>
+        page.evaluate(() => ((window as unknown as { __rb?: Event[] }).__rb ?? []) as Event[]);
+      const wiredSoFar = (await events()).filter((event) => event.kind === "wire").length;
+
+      // Una edición: una letra en el titular y el volcado. Este editor vuelca al perder el foco, y
+      // la forma de perderlo que las demás caminatas usan es **Enter** — Escape deja el texto sin
+      // volcar, que es lo que la primera versión de esta caminata hizo sin saberlo y midió como
+      // «no reconstruye». El reloj es el del editor, para que la pulsación y los registros de la
+      // sonda compartan escala.
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      await headline.click();
+      await headline.click();
+      await expect(headline).toHaveAttribute("contenteditable", "true");
+      await page.keyboard.press("End");
+      const pressedAt = await page.evaluate(() => performance.now());
+      await page.keyboard.type("x");
+      await page.keyboard.press("Enter");
+      await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+
+      // Hasta que el editor haya cableado un documento nuevo, que es lo que hoy sigue a una
+      // edición. Si un día esto deja de ocurrir sin que nadie haya cambiado la caminata, es el
+      // modelo el que cambió — y el día 5 es cuando esta espera se vuelve «no ocurre».
+      await expect
+        .poll(async () => (await events()).filter((event) => event.kind === "wire").length, {
+          message: "la edición no reconstruyó el documento, que es lo que hoy hace",
+        })
+        .toBeGreaterThan(wiredSoFar);
+
+      const all = await events();
+      const after = all.filter((event) => event.at >= pressedAt);
+      const wires = after.filter((event) => event.kind === "wire");
+      const htmls = after.filter((event) => event.kind === "html");
+      const promotions = after.filter((event) => event.kind === "promote");
+      const firstHtml = htmls[0];
+      const firstWire = wires[0];
+      const window_ = firstHtml && firstWire ? firstWire.at - firstHtml.at : Number.NaN;
+      const latency = firstWire ? firstWire.at - pressedAt : Number.NaN;
+      const frames = await page.evaluate(() => document.querySelectorAll("iframe").length);
+
+      console.log(
+        `[sprint 26 día 1 · línea base] documentos cableados tras una edición de texto: ${wires.length}; ` +
+          `ventana html→cableado: ${window_.toFixed(1)} ms; latencia pulsación→cableado: ${latency.toFixed(1)} ms; ` +
+          `promociones de marco: ${promotions.length}; marcos ahora: ${frames}`,
+      );
+
+      // Lo que hoy es cierto, y el día 5 deja de serlo: la edición produjo un documento nuevo.
+      expect(
+        wires.length,
+        "hoy una edición de texto cablea al menos un documento nuevo",
+      ).toBeGreaterThanOrEqual(1);
+      expect(Number.isFinite(window_), `no hay ventana que medir: ${await probeReport(page)}`).toBe(
+        true,
+      );
+      // Y la letra llegó al documento, por la ruta de hoy: la medida no vale si la edición se perdió.
+      // El segundo clic deja el texto seleccionado, así que la letra **sustituye** al titular en vez
+      // de seguirlo — el titular queda en «x» — y eso es igual de edición para lo que aquí se mide.
+      // `\s*` porque el documento reconstruido lleva la indentación del renderizador alrededor.
+      await expect(
+        page
+          .frameLocator(PREVIEW)
+          .first()
+          .locator('[data-section="sec-cover"] [data-id="el-headline"]'),
+      ).toHaveText(/x\s*$/);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+});
