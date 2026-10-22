@@ -217,6 +217,45 @@ jobs:
       # of apps/editor/e2e/critical-flows.e2e.test.ts for which two are missing and why.
       - run: pnpm e2e
 
+  # **The same walks, with the canvas on its other route** (ADR 0051 §6, sprint 26 día 3). The
+  # editor keeps two canvases until sprint 27 closes: `swap`, the default the job above runs, and
+  # `patch`, chosen per browser by `localStorage["rb.canvas"]`. `RETORIKA_CANVAS=patch` makes the
+  # e2e harness set that key in every context it opens, so one suite serves both and no walk has
+  # two versions. **Non-blocking until día 5**: the walks were written against a canvas that
+  # replaces its document on every edit (`replacingTheDocument` waits for a *new* document), and
+  # día 5 rewrites that contract (`afterTheEdit`) and turns the default; until then this job's red
+  # is information, not a gate, and `continue-on-error` says so in the one place CI reads. Day 5
+  # removes the line, and from then until the 27 closes both jobs block.
+  e2e-patch:
+    name: e2e (patch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: github.event_name == 'pull_request'
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - name: Read the Playwright version
+        id: playwright
+        run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      - if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install --with-deps chromium
+      - if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm exec playwright install-deps chromium
+      # Verbose, because this job's output is the whole of its value today: the first run printed
+      # nothing before the 20-minute kill — vitest's default reporter speaks only at the end, and
+      # under `patch` the walks that wait for a new document each wait their own timeout — so a
+      # cancelled job said which route it ran and not one word about which walks it had passed.
+      # With one line per walk as it lands, the kill still leaves the picture día 5 needs.
+      - run: pnpm e2e --reporter=verbose
+        env:
+          RETORIKA_CANVAS: patch
+
   security:
     name: security
     runs-on: ubuntu-latest

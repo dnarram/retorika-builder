@@ -347,10 +347,19 @@ async function keyboardTo(page: Page, sectionId: string): Promise<void> {
   // the published page's own links and buttons are in it too. Stopping at the first thing that is
   // merely *inside* a section lands on one of those, where the arrows are correctly not ours.
   await page.keyboard.press("Tab");
+  // The trail, for the failure message: what Tab did reach says why it never reached a section.
+  const trail: string[] = [];
   for (let press = 1; press < 60 && !(await focus(page)).onSection; press += 1) {
+    const at = await focus(page);
+    trail.push(
+      `${at.tag}${at.action ? `[${at.action}]` : ""}${at.section ? `@${at.section}` : ""}`,
+    );
     await page.keyboard.press("Tab");
   }
-  expect((await focus(page)).onSection, "Tab never reached a section element itself").toBe(true);
+  expect(
+    (await focus(page)).onSection,
+    `Tab never reached a section element itself; it went through: ${trail.join(" → ")}`,
+  ).toBe(true);
   for (let step = 0; step < 20; step += 1) {
     const at = await focus(page);
     if (at.onSection && at.section === sectionId) return;
@@ -712,8 +721,31 @@ let page: Page;
 beforeAll(async () => {
   await startEditorServer();
   browser = await chromium.launch();
+  onTheRouteAsked(browser);
   page = await (await browser.newContext()).newPage();
 }, 90_000);
+
+/**
+ * **One suite, two canvases** (ADR 0051 §6, sprint 26 día 3). The editor keeps its old route —
+ * replace the frame's document on every edit — behind `localStorage["rb.canvas"]` until sprint 27
+ * closes, beside the new one that patches the document in place. CI runs these walks once per
+ * route; `RETORIKA_CANVAS=patch` is how the second run asks, and this puts the key into every
+ * context the suite opens, so a walk that opens its own context is on the asked route too. A walk
+ * that sets the key itself (día 2's) sets the same value and loses nothing. Unset, nothing here
+ * runs and the editor's default decides, which is what the first job measures.
+ */
+function onTheRouteAsked(browser: Browser): void {
+  const route = process.env["RETORIKA_CANVAS"];
+  if (route !== "patch" && route !== "swap") return;
+  const open = browser.newContext.bind(browser);
+  browser.newContext = async (options) => {
+    const context = await open(options);
+    await context.addInitScript((value) => {
+      window.localStorage.setItem("rb.canvas", value);
+    }, route);
+    return context;
+  };
+}
 
 afterAll(async () => {
   await page?.context().close();
@@ -18345,4 +18377,230 @@ describe("sprint 26 día 2 — el parche, tras una llave", () => {
       await context.close();
     }
   }, 240_000);
+});
+
+/**
+ * **Sprint 26 día 3 — las clausuras leen el presente.** Bajo `patch`, el cableado corre una vez por
+ * sesión; cada manejador lee el documento de *ahora* por una ref, y los oyentes son del documento,
+ * despachados por `closest` (ajuste 5 de David). Lo que esta caminata asevera es lo que un
+ * manejador con el `doc` capturado no puede dar: la **segunda** línea añadida existe y recibe el
+ * teclado (la primera habría salido igual con un documento rancio); subir, duplicar, borrar y
+ * deshacer son parches estructurales con **cero documentos nuevos**; y el cromo sigue a la página
+ * —un solo «+ Añadir línea», un solo grupo de verbos, un hueco más por sección más— porque cada
+ * función que dibuja limpia primero. El foco tras un verbo está donde `placeAfterRebuild` dice, y
+ * está **al salir del parche**, no un cableado después.
+ */
+describe("sprint 26 día 3 — las clausuras leen el presente", () => {
+  type Event = { at: number; kind: string; data: Record<string, unknown> };
+
+  async function patched(): Promise<{ context: BrowserContext; page: Page }> {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    await context.addInitScript(() => {
+      window.localStorage.setItem("rb.canvas", "patch");
+    });
+    await probeOn(context);
+    const page = await context.newPage();
+    return { context, page };
+  }
+
+  const events = (page: Page) =>
+    page.evaluate(() => ((window as unknown as { __rb?: Event[] }).__rb ?? []) as Event[]);
+
+  const editSerial = (page: Page) =>
+    page.evaluate(() =>
+      Number(
+        document.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")?.contentDocument
+          ?.documentElement.dataset["rbEdit"] ?? "0",
+      ),
+    );
+
+  /** Secciones, huecos y grupos de verbos en el lienzo, contados de una vez. */
+  const chromeCount = (page: Page) =>
+    page.evaluate(() => {
+      const doc = document.querySelector<HTMLIFrameElement>(
+        "iframe:not([data-buffered])",
+      )?.contentDocument;
+      return {
+        sections: [...(doc?.querySelectorAll("[data-section]") ?? [])].map((el) =>
+          el.getAttribute("data-section"),
+        ),
+        gaps: doc?.querySelectorAll(".rb-gap").length ?? -1,
+        actions: doc?.querySelectorAll(".rb-actions").length ?? -1,
+        lineAdders:
+          doc?.querySelectorAll('[data-section="sec-services"] .rb-line-add').length ?? -1,
+        stamp: (doc as unknown as { __rbStamp?: string } | undefined)?.__rbStamp ?? null,
+      };
+    });
+
+  /** Qué línea de «Qué hacemos» tiene el foco, por su puesto. */
+  const focusedLineAt = (page: Page) =>
+    page.evaluate(() => {
+      const doc = document.querySelector<HTMLIFrameElement>(
+        "iframe:not([data-buffered])",
+      )?.contentDocument;
+      const line = (doc?.activeElement as HTMLElement | null)?.closest<HTMLElement>("[data-item]");
+      const items = [...(doc?.querySelectorAll('[data-section="sec-services"] [data-item]') ?? [])];
+      return line ? items.indexOf(line) : -1;
+    });
+
+  /** Un acto, y la espera hasta que su parche está en la página. Devuelve los parches que trajo. */
+  async function patching(page: Page, act: () => Promise<void>): Promise<Event[]> {
+    const serial = await editSerial(page);
+    const before = (await events(page)).filter((e) => e.kind === "patch").length;
+    await act();
+    await expect
+      .poll(() => editSerial(page), { message: "ningún parche llegó a la página" })
+      .toBeGreaterThan(serial);
+    return (await events(page)).filter((e) => e.kind === "patch").slice(before);
+  }
+
+  it("dos líneas, subir, duplicar, borrar y deshacer: cero documentos nuevos, y el cromo sigue a la página", async () => {
+    const { context, page } = await patched();
+    try {
+      await intoTheCanvas(page);
+      await expect
+        .poll(async () => (await events(page)).find((e) => e.kind === "html")?.data["route"], {
+          message: "el editor no registró su ruta",
+        })
+        .toBe("patch");
+      const frame = page.frameLocator(PREVIEW).first();
+      await fontsReady(frame);
+      await page.evaluate(() => {
+        const doc = document.querySelector<HTMLIFrameElement>(
+          "iframe:not([data-buffered])",
+        )?.contentDocument;
+        if (doc) (doc as unknown as { __rbStamp?: string }).__rbStamp = "the-one";
+      });
+      const wiredBefore = (await events(page)).filter((e) => e.kind === "wire").length;
+      const start = await chromeCount(page);
+      expect(start.gaps, "la página no tiene huecos de inserción").toBeGreaterThan(0);
+      // Un hueco por sección y uno más al final: la relación que el cromo debe conservar.
+      const gapsPerSection = start.gaps - start.sections.length;
+
+      const cards = frame.locator('[data-section="sec-services"] [data-item]');
+      const cardsBefore = await cards.count();
+      const structural: Event[] = [];
+
+      // **Dos líneas, no una.** La primera sale igual con un `doc` rancio: lo que la segunda
+      // demuestra es que «añadir» leyó el documento que ya tenía la primera.
+      structural.push(
+        ...(await patching(page, () =>
+          frame.locator('[data-section="sec-services"] .rb-line-add').click(),
+        )),
+      );
+      await expect(cards).toHaveCount(cardsBefore + 1);
+      expect(await focusedLineAt(page), "la línea nueva no recibió el teclado").toBe(cardsBefore);
+      await page.keyboard.type("Paella de la casa");
+      await editHint(page).click();
+      await expect(cards.nth(cardsBefore)).toContainText("Paella de la casa");
+
+      structural.push(
+        ...(await patching(page, () =>
+          frame.locator('[data-section="sec-services"] .rb-line-add').click(),
+        )),
+      );
+      await expect(cards).toHaveCount(cardsBefore + 2);
+      expect(await focusedLineAt(page), "la segunda línea no recibió el teclado").toBe(
+        cardsBefore + 1,
+      );
+      await page.keyboard.type("Menú del día");
+      await editHint(page).click();
+      await expect(cards.nth(cardsBefore + 1)).toContainText("Menú del día");
+      // La primera sigue diciendo lo suyo: el parche de la segunda no la tocó.
+      await expect(cards.nth(cardsBefore)).toContainText("Paella de la casa");
+      // Limpiar-primero: un solo «+ Añadir línea», no uno por parche.
+      expect((await chromeCount(page)).lineAdders, "los «Añadir línea» se apilan").toBe(1);
+
+      /**
+       * **Subir**, elegida con un clic y no con `keyboardTo`: Tab entra en el marco por arriba, y
+       * cada texto que pisa mueve el `tabindex` rodante a su sección — así que tras tocar «Qué
+       * hacemos» el recorrido con Tab pasa de largo por todas las secciones (medido: 60 paradas y
+       * ninguna sección). Es la pregunta abierta del backlog sobre Tab dentro de una sección, de
+       * las dos rutas por igual, y no de hoy. El foco tras el verbo sí es de hoy: queda en la
+       * sección movida al salir del parche — `placeAfterRebuild` corre dentro del repintado, no en
+       * un cableado que ya no hay.
+       */
+      await frame.locator('[data-section="sec-services"]').click();
+      await expect(frame.locator(".rb-actions")).toHaveCount(1);
+      const indexBefore = start.sections.indexOf("sec-services");
+      expect(indexBefore, "«Qué hacemos» no está donde la portada la deja").toBeGreaterThan(0);
+      structural.push(
+        ...(await patching(page, () =>
+          frame.locator('.rb-actions [data-action="move-up"]').click(),
+        )),
+      );
+      const moved = await chromeCount(page);
+      expect(moved.sections.indexOf("sec-services"), "la sección no subió").toBe(indexBefore - 1);
+      expect((await focus(page)).section, "el teclado no siguió a la sección movida").toBe(
+        "sec-services",
+      );
+      expect(moved.actions, "los grupos de verbos se apilan").toBe(1);
+      expect(moved.gaps - moved.sections.length).toBe(gapsPerSection);
+
+      // **Duplicar**: una sección que no existía, con sus huecos y sin cableado.
+      await expect(frame.locator(".rb-actions")).toHaveCount(1);
+      structural.push(
+        ...(await patching(page, () =>
+          frame.locator('.rb-actions [data-action="duplicate"]').click(),
+        )),
+      );
+      const duplicated = await chromeCount(page);
+      expect(duplicated.sections.length).toBe(start.sections.length + 1);
+      expect(
+        duplicated.gaps - duplicated.sections.length,
+        "los huecos no siguieron a la sección nueva",
+      ).toBe(gapsPerSection);
+
+      // **Borrar** la original y **deshacer**: dos parches más que mueven el esqueleto.
+      await frame.locator('[data-section="sec-services"]').click();
+      await expect(frame.locator('[data-section="sec-services"] .rb-actions')).toHaveCount(1);
+      structural.push(
+        ...(await patching(page, () =>
+          frame.locator('.rb-actions [data-action="delete"]').click(),
+        )),
+      );
+      const deleted = await chromeCount(page);
+      expect(deleted.sections).not.toContain("sec-services");
+      expect(deleted.sections.length).toBe(start.sections.length);
+      expect(deleted.gaps - deleted.sections.length).toBe(gapsPerSection);
+      expect(deleted.actions, "el grupo de verbos de la sección borrada sigue dibujado").toBe(1);
+
+      structural.push(...(await patching(page, () => page.keyboard.press("Control+z"))));
+      const undone = await chromeCount(page);
+      expect(undone.sections).toContain("sec-services");
+      expect(undone.sections.length).toBe(start.sections.length + 1);
+      await expect(cards).toHaveCount(cardsBefore + 2);
+
+      // **Cero documentos nuevos en todo el recorrido**, y el mismo documento al final.
+      const refused = structural.filter((e) => e.data["ok"] !== true);
+      expect(
+        refused,
+        `un parche se rechazó: ${JSON.stringify(refused.map((e) => e.data))}`,
+      ).toEqual([]);
+      expect(
+        structural.filter((e) => e.data["structural"] === true).length,
+        "ningún parche fue estructural: la ruta vieja los tomó",
+      ).toBeGreaterThanOrEqual(6);
+      expect(
+        (await events(page)).filter((e) => e.kind === "wire").length,
+        "una edición estructural cableó un documento nuevo",
+      ).toBe(wiredBefore);
+      expect(undone.stamp, "el documento ya no es el mismo").toBe("the-one");
+
+      // La medida del día: lo que cuesta repintar el cromo tras un parche estructural.
+      const costs = structural
+        .map((e) => e.data["redrawMs"])
+        .filter((ms): ms is number => typeof ms === "number")
+        .sort((a, b) => a - b);
+      expect(costs.length, "ningún parche informó del coste del repintado").toBe(structural.length);
+      console.log(
+        `[sprint 26 día 3 · repintado] ${costs.length} parches estructurales; repintado ` +
+          `mín ${costs[0]} ms, mediana ${costs[Math.floor(costs.length / 2)]} ms, máx ${costs[costs.length - 1]} ms; ` +
+          `parche mín ${Math.min(...structural.map((e) => Number(e.data["ms"])))} ms, ` +
+          `máx ${Math.max(...structural.map((e) => Number(e.data["ms"])))} ms`,
+      );
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
 });

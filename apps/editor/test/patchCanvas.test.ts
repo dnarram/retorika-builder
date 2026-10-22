@@ -248,19 +248,64 @@ describe("patchCanvas — an edit is a patch", () => {
     expect(after?.startOffset).toBe(7);
   });
 
-  it("refuses a changed skeleton and leaves the live document untouched", () => {
+  it("patches a changed skeleton too and says so: a section gone, the chrome beside it kept", () => {
     const doc = fixture();
-    const live = liveFrom(doc);
-    const html = live.body.innerHTML;
+    const live = settled(doc);
+    const sections = [...live.querySelectorAll("[data-section]")];
+    expect(sections.length).toBeGreaterThan(1);
+    const kept = sections[0] as Element;
+    const gone = sections[sections.length - 1] as Element;
+    // Chrome inside the section that stays, which a structural patch must leave where it is.
+    const cluster = live.createElement("div");
+    cluster.setAttribute(CHROME_ATTRIBUTE, "1");
+    kept.prepend(cluster);
+
     const copy = structuredClone(doc);
-    // One section fewer is a different skeleton.
     copy.pages[0]?.sections.pop();
     const next = parseDocument(copy);
     expect(skeletonOf(live.body)).not.toBe(skeletonOf(freshFrom(next)));
 
     const report = patchCanvas(live, freshFrom(next), buildCss(next), rules);
-    expect(report).toEqual({ ok: false, reason: "structure" });
-    expect(live.body.innerHTML).toBe(html);
+    expect(report).toMatchObject({ ok: true, structural: true, inserted: 0 });
+    if (!report.ok) return;
+    expect(report.removed).toBeGreaterThan(0);
+    expect(gone.isConnected, "the removed section is still on the page").toBe(false);
+    expect(kept.isConnected).toBe(true);
+    expect(kept.firstElementChild).toBe(cluster);
+    expect(live.querySelectorAll("[data-section]").length).toBe(sections.length - 1);
+    expect(skeletonOf(live.body)).toBe(skeletonOf(freshFrom(next)));
+  });
+
+  it("inserts what the document gained, in its place, and reports it", () => {
+    const doc = fixture();
+    const fewer = structuredClone(doc);
+    // The page starts one section short; the patch brings the full document back.
+    const [dropped] = fewer.pages[0]?.sections.splice(0, 1) ?? [];
+    if (!dropped) throw new Error("fixture shape");
+    const live = settled(parseDocument(fewer));
+    const before = live.querySelectorAll("[data-section]").length;
+
+    const report = patchCanvas(live, freshFrom(doc), buildCss(doc), rules);
+    expect(report).toMatchObject({ ok: true, structural: true });
+    if (!report.ok) return;
+    expect(report.inserted).toBeGreaterThan(0);
+    const now = [...live.querySelectorAll("[data-section]")].map((el) =>
+      el.getAttribute("data-section"),
+    );
+    expect(now.length).toBe(before + 1);
+    expect(now[0]).toBe(dropped.id);
+    expect(skeletonOf(live.body)).toBe(skeletonOf(freshFrom(doc)));
+    // A second patch of the same document is a no-op: the structure settled in one.
+    const again = patchCanvas(live, freshFrom(doc), buildCss(doc), rules);
+    expect(again).toMatchObject({ ok: true, structural: false, inserted: 0, removed: 0 });
+  });
+
+  it("reports a plain text edit as not structural", () => {
+    const doc = fixture();
+    const live = settled(doc);
+    const next = withHeadline(doc, "Otro titular");
+    const report = patchCanvas(live, freshFrom(next), buildCss(next), rules);
+    expect(report).toMatchObject({ ok: true, structural: false });
   });
 
   it("rewrites the page's stylesheet only when it changed, and marks it the first time", () => {
