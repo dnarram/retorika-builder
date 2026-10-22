@@ -247,7 +247,12 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
       - if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: pnpm exec playwright install-deps chromium
-      - run: pnpm e2e
+      # Verbose, because this job's output is the whole of its value today: the first run printed
+      # nothing before the 20-minute kill — vitest's default reporter speaks only at the end, and
+      # under `patch` the walks that wait for a new document each wait their own timeout — so a
+      # cancelled job said which route it ran and not one word about which walks it had passed.
+      # With one line per walk as it lands, the kill still leaves the picture día 5 needs.
+      - run: pnpm e2e --reporter=verbose
         env:
           RETORIKA_CANVAS: patch
 
