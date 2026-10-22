@@ -7,11 +7,13 @@ import { applyMark, pageToSection, parseDocument, type RetorikaDocument } from "
 import { describe, expect, it } from "vitest";
 import {
   CHROME_ATTRIBUTE,
+  FONT_CSS_ATTRIBUTE,
   HISTORY_TOUCHED_ATTRIBUTE,
   keyOf,
   PAGE_CSS_ATTRIBUTE,
   patchCanvas,
   skeletonOf,
+  splitFontFaces,
 } from "../src/editor/patchCanvas.ts";
 
 /**
@@ -304,6 +306,47 @@ describe("patchCanvas — an edit is a patch", () => {
     expect(selection?.rangeCount).toBe(1);
     expect(selection?.toString()).toBe(text.slice(0, end));
     expect(headline2.contains(selection?.getRangeAt(0).startContainer ?? null)).toBe(true);
+  });
+
+  it("moves the faces into their own sheet on the first patch, and a change of palette never touches it", () => {
+    // The menu fixture's theme names two shippable faces; `cover-and-services` names none.
+    const doc = menuFixture();
+    const live = liveFrom(doc);
+    const css = buildCss(doc);
+    expect(css).toContain("@font-face {");
+    expect(live.querySelectorAll("head style").length).toBe(1);
+
+    const first = patchCanvas(live, freshFrom(doc), css, rules);
+    expect(first).toMatchObject({ ok: true, fontsChanged: true, cssChanged: true });
+    const fonts = live.querySelector(`style[${FONT_CSS_ATTRIBUTE}]`);
+    const page = live.querySelector(`style[${PAGE_CSS_ATTRIBUTE}]`);
+    if (!fonts || !page) throw new Error("the two sheets are not there");
+    // The faces' sheet comes first, holds every face and nothing else; the page's holds no face.
+    expect(fonts.nextElementSibling).toBe(page);
+    expect((fonts.textContent ?? "").match(/@font-face \{/g)?.length).toBe(
+      css.match(/@font-face \{/g)?.length,
+    );
+    expect(page.textContent).not.toContain("@font-face");
+    expect(page.textContent).toContain(":root {");
+    const facesText = fonts.textContent;
+
+    // A different palette: the page's sheet is rewritten, the faces' is not touched.
+    const recoloured = parseDocument({
+      ...structuredClone(doc),
+      theme: { ...doc.theme, "color.primary": "#123456" },
+    });
+    const second = patchCanvas(live, freshFrom(recoloured), buildCss(recoloured), rules);
+    expect(second).toMatchObject({ ok: true, cssChanged: true, fontsChanged: false });
+    expect(fonts.textContent).toBe(facesText);
+    expect(page.textContent).toContain("#123456");
+    // Split and rebuilt, the two sheets together say exactly what one sheet said.
+    const { fonts: wantFonts, page: wantPage } = splitFontFaces(buildCss(recoloured));
+    expect((fonts.textContent ?? "").trim()).toBe(wantFonts);
+    expect((page.textContent ?? "").trim()).toBe(wantPage);
+
+    // The same document again: neither sheet moves.
+    const third = patchCanvas(live, freshFrom(recoloured), buildCss(recoloured), rules);
+    expect(third).toMatchObject({ ok: true, cssChanged: false, fontsChanged: false });
   });
 
   it("drops the menu's links the document dropped: folding a page back leaves one «Qué ponemos», in each strip", () => {

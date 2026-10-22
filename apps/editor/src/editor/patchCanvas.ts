@@ -80,6 +80,38 @@ export const PAGE_CSS_ATTRIBUTE = "data-rb-page-css";
 export const HISTORY_TOUCHED_ATTRIBUTE = "data-rb-history-touched";
 
 /**
+ * The `<style>` that holds the page's `@font-face` rules alone (día 4). The html target writes one
+ * stylesheet with the faces inside it, and rewriting that sheet re-declares the faces: measured as
+ * one `loadingdone` per palette change, ten in ten, with no request behind any of them — the files
+ * are cached — but a face re-declared is a face the browser may paint its fallback for while it
+ * re-resolves. So the first patch moves the faces into a sheet of their own, before the page's, and
+ * from then on a change of palette or spacing rewrites the page's sheet and never the faces'.
+ */
+export const FONT_CSS_ATTRIBUTE = "data-rb-font-css";
+
+/** The page stylesheet split at the `@font-face` blocks `fontFaceCss` writes — its own format, the
+ * comment line included — into the faces and everything else. */
+export function splitFontFaces(css: string): { fonts: string; page: string } {
+  const fonts: string[] = [];
+  const page: string[] = [];
+  let inFace = false;
+  for (const line of css.split("\n")) {
+    if (line.startsWith("@font-face {")) inFace = true;
+    if (inFace) {
+      fonts.push(line);
+      if (line === "}") inFace = false;
+      continue;
+    }
+    if (line.startsWith("/* Self-hosted faces.")) {
+      fonts.push(line);
+      continue;
+    }
+    page.push(line);
+  }
+  return { fonts: fonts.join("\n").trim(), page: page.join("\n").trim() };
+}
+
+/**
  * The words a history patch put into a focused editable, so its `blur` can compare what the
  * person leaves behind with what the document last said — and commit only the difference
  * (adjustment 2). Read once and cleared, by `wireEditing`'s blur.
@@ -142,6 +174,9 @@ export type PatchReport =
       readonly textChanges: number;
       readonly attributeChanges: number;
       readonly cssChanged: boolean;
+      /** Whether the faces' own sheet was rewritten — on the first patch, which makes it, and then
+       * only when the document names other faces (día 4). */
+      readonly fontsChanged: boolean;
       /** Keys of focused editables whose children were left alone this time. */
       readonly deferred: readonly string[];
       /** Whether the keyed skeleton changed: something came, went or moved (día 3). */
@@ -446,15 +481,30 @@ export function patchCanvas(
     if (offsets !== null) setSelectionOffsets(el, offsets);
   }
 
-  // The html target writes the stylesheet as `\n{css.trimEnd()}\n` (`pageToHtml`), so the
-  // comparison is on the trimmed text and the rewrite keeps the same shape.
+  // The html target writes one stylesheet as `\n{css.trimEnd()}\n` (`pageToHtml`), faces inside.
+  // Here it is two: the faces' sheet, made on the first patch and rewritten only when the faces
+  // change, and the page's, compared and rewritten on its trimmed text. The split costs one
+  // re-declaration of the faces at the first patch — right after the first paint, while they are
+  // still arriving — and saves one on every change of style after it.
   let cssChanged = false;
+  let fontsChanged = false;
   const style =
     live.querySelector(`style[${PAGE_CSS_ATTRIBUTE}]`) ?? live.head?.querySelector("style");
   if (style) {
     if (!style.hasAttribute(PAGE_CSS_ATTRIBUTE)) style.setAttribute(PAGE_CSS_ATTRIBUTE, "1");
-    if ((style.textContent ?? "").trim() !== css.trim()) {
-      style.textContent = `\n${css.trimEnd()}\n`;
+    const split = splitFontFaces(css);
+    let fontStyle = live.querySelector(`style[${FONT_CSS_ATTRIBUTE}]`);
+    if (split.fonts !== "" && !fontStyle) {
+      fontStyle = live.createElement("style");
+      fontStyle.setAttribute(FONT_CSS_ATTRIBUTE, "1");
+      style.before(fontStyle);
+    }
+    if (fontStyle && (fontStyle.textContent ?? "").trim() !== split.fonts) {
+      fontStyle.textContent = `\n${split.fonts}\n`;
+      fontsChanged = true;
+    }
+    if ((style.textContent ?? "").trim() !== split.page) {
+      style.textContent = `\n${split.page}\n`;
       cssChanged = true;
     }
   }
@@ -467,6 +517,7 @@ export function patchCanvas(
     textChanges,
     attributeChanges,
     cssChanged,
+    fontsChanged,
     deferred,
     structural,
   };
