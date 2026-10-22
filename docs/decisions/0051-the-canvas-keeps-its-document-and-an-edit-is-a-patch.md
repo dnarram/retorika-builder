@@ -567,3 +567,40 @@ numbers under `RETORIKA_CANVAS=swap`, the patch numbers under the default.
 **What the table does not say.** The suite is not faster under `patch`: its time is the walks'
 own waits, not the canvas's. And the two-step escalation — free, then measured rows — is the same
 200 ms under both routes; `patch` only made it visible.
+
+### Amendment — the notes tell the truth (día 7, 22 October 2026)
+
+**What changed: no behaviour, and thirty-three comments.** `Editor.tsx` reasoned from the rebuild
+in some seventy places — «every action in this editor replaces the iframe's whole `srcDoc`», «the
+frame it rebuilds has no `contenteditable` anywhere», «a frame just rebuilt has focus nowhere» —
+and every one of those was true of `swap` and false of `patch`, the route the editor has run by
+default since día 5. Each block now says both halves as they are: «under `swap` …, under `patch`
+…», naming the settle or the redraw that does under `patch` what the wiring did under `swap`, and
+pointing at the retirement list where the `swap` half goes on sprint 27 día 1. The refs the plan's
+precision called swap-only (`keepWriting`, `keepChosenFocus`, `pendingReturn`, `focusTarget`) say
+in their own comments that both routes read them. The `<iframe>`'s long note keeps its history and
+gains the one paragraph that says none of it happens under `patch`.
+
+**The orphan comment is named, not deleted.** Above the buffered swap's trigger effect sat sixty
+lines describing a re-anchor of the reading position on a change of **width** — written, deleted
+and written again, and measured to the pixel (253 at 1024 on closing «Campos»). The version that
+re-anchored on width is the one that is gone: `restoreReadingPosition` runs only from `wireOnce`,
+for a new document, and nothing runs when the card's width changes. The comment now says exactly
+that, keeps its measurements as the record of why the 164 px (sprint 25 día 8's open item) is still
+open, and says the effect under it is the swap's trigger and unrelated. It is a width re-flow under
+both routes, `patch` included, and it is its own change — not this sprint's.
+
+**The record elsewhere.** ADR 0048 §6's technical half (the drag written on `pointerup` because the
+rebuild destroyed the listeners) is amended as `swap`'s: the rule stands on the product reason
+alone. ADR 0049 §3 (the live region's address — it stays in the editor's document on purpose, one
+region for both routes, the reason changed and not the place) and §4 (the lost press, no longer a
+cost under `patch`, 30 of 30 measured; «what is lost» reads «under `swap` only») are amended. ADR
+0050's one painter per document is amended as correct under both routes and reducible to one ref
+when `swap` retires. The backlog's three rows that stated the rebuild as the mechanism (the lost
+press, the two documents a verb produced, the `srcDoc` replaced after a palette) say «under `swap`»
+and what `patch` does instead. `documentation-sync.test.ts` was not written: the phrases this day
+corrects live in comments, and a test that pins prose in comments would pin the next rewrite too.
+
+**What día 8 closes.** The measurements to the ADR's head, the undecided list, `docs/design/REVIEW.md`
+and the backlog's head, axe, keyboard, weights, Lighthouse, the goldens (none moved all sprint), and
+the two routes green in CI — which today they are.

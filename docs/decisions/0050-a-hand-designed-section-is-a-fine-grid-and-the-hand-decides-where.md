@@ -727,3 +727,17 @@ could have given it back.
 day: the device switch replaces the preview's document, and measuring in the next breath measures the
 desktop one — the trap of día 2, in a new place. The walk now waits until the section resolves to a
 single track before it believes it is on a phone.
+
+## Amendment — one painter per document, under one document (sprint 26 día 7, 22 October 2026)
+
+The día 7 amendment above keeps the handle painters in a `WeakMap` keyed by document, because under
+the editor's `swap` route two documents are alive during a buffered swap and «the painter of
+whatever was wired last» was the wrong one — CI forced the correction. Under `patch` (ADR 0051,
+the default since sprint 26 día 5) there is one document per session, `redrawChrome` calls its
+painter after every patch, and `observeSections` keeps one `ResizeObserver` per document that a
+structural patch asks to observe the sections it inserted. The map is correct under both routes
+and costs nothing; it reduces to one ref when `swap` retires on sprint 27 día 1, which
+`docs/tasks/swap-route-retirement.md` names. **What this amendment corrects in the record:** «the
+device switch replaces the preview's document», said in the day's harness lesson, is `swap`'s;
+under `patch` the switch changes only the canvas's width, which is the measurement sprint 25's
+closing walk makes under either route.

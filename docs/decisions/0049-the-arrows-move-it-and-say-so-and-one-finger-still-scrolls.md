@@ -165,3 +165,23 @@ the one of the three it can mean: **up or down changes the reading order, and si
 - The e2e: three arrows and three movements with the announcement read **outside** the canvas; a
   finger that scrolls and then drags; and the phone reordering while sideways does nothing.
 - The record is `docs/design/REVIEW.md`, sprint 24.
+
+## Amendment — §3 and §4 under the patch route (sprint 26 día 7, 22 October 2026)
+
+**§3, the region's address.** The reason the announcement lives in the editor's document — every
+arrow replaced the canvas's `srcDoc`, so a region inside it would be freshly created on every move —
+is the `swap` route's. Under `patch` (ADR 0051) the canvas's document survives every edit and a
+region inside it would be announced like any other. **The region stays where it is, on purpose**:
+one region that serves both routes until sprint 27 closes, and nothing to gain by moving it after
+— a screen reader hears the editor's own status region exactly as well from the parent document.
+What changes is the reason, not the place.
+
+**§4, the lost press.** «A press that arrives while the frame is being rebuilt is lost» was named
+as the cost of ADR 0001's architecture. It was the cost of *this editor's* way of drawing the
+architecture, and sprint 26 removed it for the default route: under `patch` there is no rebuild,
+the window in which a press has nowhere to land measures **0 ms** (ADR 0051, día 6's table), and
+día 5's walk types thirty keystrokes at five milliseconds while a patch lands on the very text —
+thirty of thirty. Under `swap`, reachable under `localStorage["rb.canvas"]` until sprint 27 closes,
+the cost stands as §4 states it, and it retires with the route. The run of arrows written as one
+step (ADR 0050's día 6 amendment) stays as the product rule it became, not as the workaround it
+was. **«What is lost»**: its first bullet reads, from today, «under `swap` only».

@@ -157,6 +157,12 @@ front of him. The record is `docs/design/REVIEW.md`, sprint 23, and the decision
    (ADR 0050's día 6 amendment says so in those words). What is left is the general cause, which no
    longer has the arrows as its visible symptom: a press that lands while the frame is rebuilding
    after **any other** edit is still lost, and that is the same bigger change. Narrower, not closed.
+   **Closed for the default route on sprint 26 (22 October 2026), the bigger change itself**: the
+   canvas keeps its document and an edit is a patch ([ADR 0051](../decisions/0051-the-canvas-keeps-its-document-and-an-edit-is-a-patch.md));
+   the window in which a press had nowhere to land measures **0 ms**, and día 5's walk types thirty
+   keystrokes at five milliseconds while a patch lands on the very text — thirty of thirty. Under
+   `swap`, reachable under the key until sprint 27 closes, the cost stands as written here, and
+   retires with the route.
 3. **A section element cannot be reached by Tab once focus is inside it**, which is the roving
    `tabindex` being moved by `focusin` from the children: the moment a text or a photograph takes
    focus, its section becomes the one stop and Tab has already gone past it. `Shift+Tab` from inside
@@ -1363,8 +1369,8 @@ open survives.
   `page` should be read for `page` before it is trusted — and the alternative, renaming the
   module-level one, is a change across every describe that uses it and is not this sprint's.
 
-- **A verb that changes how many sections a page has produces two documents, and the first one is
-  discarded.** Found on sprint 17 day 4 and worth keeping, because it is the kind of thing that
+- **Under `swap`, a verb that changes how many sections a page has produces two documents, and the
+  first one is discarded.** Found on sprint 17 day 4 and worth keeping, because it is the kind of thing that
   explains a future bug in one line. An edit changes `html`, so the live frame's `srcDoc` is replaced
   and that document is wired; if it also changes the **count**, `chromeKey` changes too — it is one
   character per section — so the buffered swap opens, parses a second document in the other frame,
@@ -1372,7 +1378,10 @@ open survives.
   so it never swaps.
 
   The practical consequence: **anything that remembers something across a rebuild has to survive two
-  wirings, and «the live frame's document» is not a test for «this one will stay».** Measured during
+  wirings, and «the live frame's document» is not a test for «this one will stay».** Under `patch`
+  (sprint 26) the same verb is one structural patch on the one document and the selection is settled
+  from the redraw; there is nothing to survive, and `data-rb-wired` on the document is the one guard
+  (ADR 0051, día 2 amendment). Measured during
   the duplicate as `isLive=true buffered=1 frames=2`. The test that works is the absence of an
   `iframe[data-buffered]`, asked of the DOM rather than of `buffer`, which a closure can be a render
   behind.
@@ -1394,7 +1403,8 @@ open survives.
   is the lesson.** A walk failed three runs out of three with «Failed to execute 'getComputedStyle'
   on 'Window': parameter 1 is not of type 'Element'», and the first thing written down — here, in
   this entry — was «the realm trap, a fourth time». It was not. Measured with a probe in the walk:
-  after a palette is picked the frame's `srcDoc` is replaced, and for one sample in two the live
+  after a palette is picked the frame's `srcDoc` is replaced (under `swap`; under `patch` the page's
+  sheet is rewritten in place and the document stays), and for one sample in two the live
   `contentDocument` is a document whose **`documentElement` is `null`**. `getComputedStyle(null)`
   throws that message; Chromium accepts a cross-realm element without complaint; and `expect.poll`
   does not retry when the sampled function throws — it fails with the thrown message. The fix is

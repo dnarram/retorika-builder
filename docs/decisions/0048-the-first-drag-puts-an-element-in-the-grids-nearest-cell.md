@@ -178,3 +178,15 @@ Inside a text being **written in**, a drag selects words, as it always has. Writ
   it in one step and has a refusal explained; and one that holds the precondition — a text nobody
   chose does not drag.
 - The record is `docs/design/REVIEW.md`, sprint 24.
+
+## Amendment — §6's technical half belongs to the `swap` route (sprint 26 día 7, 22 October 2026)
+
+§6 gave two reasons for writing a drag on `pointerup` and never on `pointermove`: the product one —
+one drag is one step of history — and a technical one underneath it, that every edit replaced the
+canvas's whole `srcDoc` and destroyed the injected chrome, the drag's own listeners included. Since
+ADR 0051 the second reason is the `swap` route's alone: under `patch`, the default since sprint 26
+día 5, the document keeps its identity across every edit and the listeners are the document's
+(ADR 0051 §5), so nothing would be destroyed by writing on `pointermove`. **The rule does not
+change.** One drag is one step, written on release, because that is what undo should take back;
+the product reason was always the one that decided it, and it now stands alone. A refusal still
+writes nothing. The `swap` half of the sentence retires with the route on sprint 27 día 1.
