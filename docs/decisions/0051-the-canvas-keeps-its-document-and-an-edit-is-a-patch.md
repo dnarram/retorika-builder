@@ -326,3 +326,89 @@ patch then continues on the document that arrives.
 **What día 2 retires: nothing.** Under `swap` every piece of the old route runs as before; under
 `patch`, `keepWriting`, `keepChosenFocus`, `pendingReturn` and the reading-position family simply
 never fire, because nothing rebuilds. They are retired when the route is (adjustment 6).
+
+### Amendment — the closures read the present, and the listeners are the document's (día 3, 22 October 2026)
+
+**Delegation, adopted (David's adjustment 5).** Every listener the canvas used to attach per node
+— nine on each text, nine on each placed element, four on each section plus one per handle — is
+now one set on the frame's document, registered once per wiring and dispatched by
+`closest(selector)` to the renderer node the event concerns (`apps/editor/src/editor/delegate.ts`).
+A node that arrives with a patch is heard the moment it exists; a node that stays keeps no closure
+from before. What is still done per node is attributes and one observer, as the adjustment said:
+`prepareTexts` (the `data-rb-text` mark, a Tab stop, the entry link unwrapped) and
+`prepareDraggables` (`draggable` off on images and links, a Tab stop on a placed non-text), both
+idempotent and run after every patch; and `observeSections`, which asks one `ResizeObserver` per
+document to observe every section it has — `observe` on one already observed is a no-op, so a
+section inserted by a patch costs one call and nothing else. `focus` and `blur` do not bubble, so the
+wiring asks for `focusin` and `focusout`; the border zone's `pointerdown` stays in the capture
+phase, so it keeps beating the click that chooses. The gates that used to sit on the wiring —
+`designTools !== true` at the top of `wireResizing`, `wireDragging` and `wireHandmade` — moved
+inside the handlers, because under `patch` the wiring runs once per session and the tools can be
+turned on after it. Per-element state (what a text said when writing began, a drag's grab point,
+an arrow run) moved from closures into a `WeakMap` keyed by the element; one resize happens at a
+time, so its state is the document's.
+
+**The refs that read the present.** Every value a handler reads — `doc`, `designTools`,
+`photoStates`, `designOn`, `designSectionId`, `placingElementId` and the eighteen `on*` callbacks —
+goes through a `*Now` ref kept in step by the render (`docNow`, `designToolsNow`, `propsNow`, …),
+on the `deviceNow` precedent. `closureGuard.test.ts` reads `Editor.tsx` between `wireLinks` and
+`wireOnce` and refuses a bare `doc`, `designTools`, `pageId`, `photoStates`, `designOn`,
+`designSectionId`, `placingElementId`, or a bare `on[A-Z]…(` other than `onClick(`. `wireSelection`
+reads its sections through `sectionsNow()` rather than an array captured at wiring, at 27 sites.
+
+**Draw and attach, split; the chrome redrawn after every patch.** The functions that drew *and*
+listened were split into a drawing half that clears its own chrome first (`drawGaps`, `drawLines`,
+`drawPhotoChrome`, `wireHandmade`) and an attaching half registered once (`attachDocument`,
+`attachPhotos`, the toolbar's `focusin`/`focusout`). `redrawChrome(iframeDoc)` runs them all after a
+successful patch, structural or not — a text that grew moved the gap below it — followed by what
+each wiring used to settle at its end: the selection and `placeAfterRebuild` (`settleSelection`),
+the chosen text (`settleEditing`), the focus a gesture asked to keep (`settleDragging`),
+`focusLineAfterChange`, the observer, the handles. It runs synchronously, before the `data-rb-edit`
+serial moves, so a walk that sees the serial sees the chrome. The cost is in the report as
+`redrawMs`.
+
+**The structural refusal, lifted.** `patchCanvas` no longer answers `{ ok: false, reason:
+"structure" }`; a changed skeleton is patched like anything else and the report says
+`structural: true`. The tests that proved the refusal now prove the patch: a section gone with the
+chrome beside its neighbour kept in place, a section gained in its place with a second patch a
+no-op.
+
+**`chromeKey`, by id and not by position.** The key was one bit per section in page order, so a
+duplicate, a delete, a move or their undo changed it — a chrome swap under `swap`, and under `patch`
+a refused patch and a rebuilt document, for an edit that changed no section's source. Measured in
+the día 3 walk as three refusals with `reason: "chrome"`. It is now the sorted ids of the
+hand-designed sections, so it moves only when a section is escalated or returned (día 4 makes those
+a patch too), when the tools are toggled, or when a hand-designed section is duplicated — which is
+a new bar to draw. `escalationChrome.test.ts` carries the new shape and the three cases that must
+not move it.
+
+**CI runs the walks in both modes from today.** `e2e (patch)` is the same job with
+`RETORIKA_CANVAS=patch`, which the harness turns into `localStorage["rb.canvas"] = "patch"` in every
+context it opens; `continue-on-error` until día 5 rewrites the walks' contract (`afterTheEdit`) and
+turns the default, then both block until the 27 closes.
+
+**Three things only the browser could say.**
+
+1. **Two lines, up, duplicate, delete, undo — six structural patches, zero documents wired,** the
+   same document at the end by its stamp. Patch **1.2–1.8 ms**, redraw **0.6–2 ms, median 1 ms**,
+   on this machine. The second line receives the keyboard and its placeholder is replaced; one
+   «Añadir línea», one verb cluster, one gap per section plus one, after every change; the focus
+   is inside the moved section when the serial moves.
+2. **Tab into the frame cannot reach a section once a text has been touched**, under either route
+   and before today: Tab enters at the top, every text it crosses is a Tab stop whose `focusin`
+   moves the roving `tabindex` to *its* section, so by the time Tab reaches the section that held
+   it, it no longer does — measured as sixty stops and no section. `keyboardTo` now prints the trail
+   it walked; the walk selects by click. This is the backlog's open question on Tab inside a
+   section, not today's.
+3. **The sabotage the plan named did not turn the walk red, and the guard did.** A handler returned
+   to the captured `doc` (`boundAt(doc, …)` in the commit) and to a captured callback
+   (`onDeleteSection`) left the walk green both times: the callbacks are stable, the once-registered
+   handlers read structure from the DOM, and the drawing functions run from the render's own
+   closure after every patch — so the stale read today's walk could see does not exist. What the
+   walk does catch is the mechanism itself: `redrawChrome` skipped, and the new line has no focus
+   (`-1`). The closure guard is the net for the closures; the walk is the net for the redraw. Said
+   here rather than claimed otherwise.
+
+**What día 3 changes under `swap` too.** The listeners are the document's under both routes; `swap`
+still wires each new document, once, and `redrawChrome` is not called there — the wiring draws.
+Nothing is retired (adjustment 6).
