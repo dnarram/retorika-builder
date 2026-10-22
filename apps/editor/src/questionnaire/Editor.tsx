@@ -2057,6 +2057,7 @@ export function Editor({
     settleWriting(iframeDoc);
     settleDragging(iframeDoc);
     refreshWriting.current(iframeDoc);
+    settleToolbar.current(iframeDoc);
     focusLineAfterChange(iframeDoc);
     observeSections(iframeDoc);
     handlePainters.current.get(iframeDoc)?.();
@@ -2066,6 +2067,9 @@ export function Editor({
    * (history or its own mark) has its capture re-read from the document, or the next commit would
    * carry the marks from before. */
   const refreshWriting = useRef<(iframeDoc: Document) => void>(() => {});
+  /** What `wireToolbar` registers for the redraw: the open bar drawn again from the document, with
+   * its selection put back — what the wiring did on every rebuild (día 4). */
+  const settleToolbar = useRef<(iframeDoc: Document) => void>(() => {});
   flushQueuedPatch.current = () => {
     if (!queuedPatch.current) return;
     queuedPatch.current = false;
@@ -4791,28 +4795,60 @@ export function Editor({
      */
     settleWriting(iframeDoc);
 
-    if (remembered) {
-      const section = iframeDoc.querySelector(
-        `[data-section="${CSS.escape(remembered.sectionId)}"]`,
-      );
-      const el = section?.querySelector<HTMLElement>(
-        `[data-id="${CSS.escape(remembered.elementId)}"]`,
-      );
+    /**
+     * **The bar, drawn again from the document as it now is.** Every control in it — the role
+     * pressed, the size step, the colour in force — is read at `open` and never after; under `swap`
+     * each rebuild reopened it here, and under `patch` the redraw does the same after every patch
+     * (día 4: the «Aa» walk pressed the body role and the bar still said «false»). `open` closes
+     * first, so the `selectionchange` listener is one, however many times this runs.
+     */
+    const reopen = (bar: ElementAddress, selection: typeof lastSelection.current) => {
+      const section = iframeDoc.querySelector(`[data-section="${CSS.escape(bar.sectionId)}"]`);
+      const el = section?.querySelector<HTMLElement>(`[data-id="${CSS.escape(bar.elementId)}"]`);
       // Gone means the element was deleted or hidden while the bar was open; forget it rather than
       // keeping a pointer to something nobody can see.
-      if (el) {
-        open(el);
-        // Only the element the selection was actually in: the bar can be remembered for one
-        // element while the last selection belonged to another.
-        if (
-          rememberedSelection &&
-          rememberedSelection.sectionId === remembered.sectionId &&
-          rememberedSelection.elementId === remembered.elementId
-        ) {
-          restoreSelection(iframeDoc, el, rememberedSelection);
-        }
-      } else toolbarOn.current = null;
-    }
+      if (!el) {
+        toolbarOn.current = null;
+        return;
+      }
+      // **The control the hand was on comes back under it.** Under `patch` the bar is rebuilt while
+      // a `<select>` or a button of it may hold the focus; `open` removes that node, focus falls to
+      // the body, and the text's deferred `focusout` — finding nothing of the bar focused — would
+      // dismiss the bar it had just rebuilt (measured: «element(s) not found» on the spacing select
+      // right after choosing in it). So the same control, by its `data-ref` or its mark, is focused
+      // in the new bar before that timer fires.
+      const held = iframeDoc.activeElement?.closest(".rb-toolbar")
+        ? (iframeDoc.activeElement as HTMLElement)
+        : null;
+      const heldRef = held?.dataset["ref"] ?? held?.dataset["mark"] ?? null;
+      const heldTag = held?.tagName ?? null;
+      open(el);
+      if (held && heldTag) {
+        const again = [...iframeDoc.querySelectorAll<HTMLElement>(`.rb-toolbar ${heldTag}`)].find(
+          (node) => (node.dataset["ref"] ?? node.dataset["mark"] ?? null) === heldRef,
+        );
+        again?.focus({ preventScroll: true });
+        if (again) return;
+      }
+      // Only the element the selection was actually in: the bar can be remembered for one
+      // element while the last selection belonged to another.
+      if (
+        selection &&
+        selection.sectionId === bar.sectionId &&
+        selection.elementId === bar.elementId
+      ) {
+        restoreSelection(iframeDoc, el, selection);
+      }
+    };
+    settleToolbar.current = (live) => {
+      if (live !== iframeDoc) return;
+      const bar = toolbarOn.current;
+      if (!bar) return;
+      // Read before `open` runs, for the same reason as above: its `refresh` would clear it.
+      const selection = lastSelection.current;
+      reopen(bar, selection);
+    };
+    if (remembered) reopen(remembered, rememberedSelection);
   }
 
   /**

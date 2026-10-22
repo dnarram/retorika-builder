@@ -466,6 +466,15 @@ rewrites, `loadingdone` 0, requests 2 → 2, both nodes the same, the heading fa
 Sabotaged by rewriting the faces' sheet on every patch: the walk goes red on `loadingdone`. The
 report says `fontsChanged` beside `cssChanged`.
 
+**The toolbar, reopened by the redraw.** Every control in the floating bar — the role pressed, the
+size step, the colour in force — is read when the bar opens and never after; under `swap` each
+rebuild reopened it, and under `patch` nothing did, so the «Aa» walk pressed the body role and the
+bar still said `aria-pressed="false"`. `settleToolbar` reopens the bar in the redraw, with the
+selection put back — and with **the control the hand was on focused again in the new bar**: `open`
+removes the old bar, the focused `<select>` with it, focus falls to the body, and the text's deferred
+`focusout` would otherwise dismiss the bar it had just rebuilt (measured as the spacing select
+«not found» right after choosing in it). Both routes green on the sprint 9 and 13 toolbar walks.
+
 **What stays for día 5.** Every walk that waits on `replacingTheDocument` around the switch, an
 escalation or a verb is red under `patch` by contract, not by defect — the switch and the
 escalation no longer replace the document, so the wait never returns. Día 2's own mid-drag walk
