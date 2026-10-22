@@ -519,6 +519,14 @@ other route, and **both block** from today.
 from the render's closure, and `wireOnce` — which applies a patch queued before the first wiring —
 can be renders behind: measured on the keyboard walk as the bank's photographs never replacing
 their sample names. They go through `*Now` refs now, like everything else a handler reads (día 3).
-And the photograph's bottom-edge resize was red twice under `patch` inside a long filtered run and
-green three times alone; the resize now records its decision for the probe, and CI's two full runs
-are where it is watched.
+And the photograph's bottom-edge resize was red twice under `patch` inside a long filtered run,
+green three times alone, and red again — with the drag's drop landing 22 px high — in CI's first
+full run on this route. The cause is the escalation, which is **two changes of the document**: the
+section turns free, and a couple of hundred milliseconds later its rows, measured on the live
+layout (ADR 0050 §3), are written in a second step. A gesture begun between the two measures a box
+the second step moves. Under `swap` the two steps were two rebuilds, slow enough to hide it; under
+`patch` they are two patches, fast enough to show it. The walks now wait for the canvas to go quiet
+after every escalation (`canvasQuiet`, 400 ms without the serial moving), which is what a person's
+eye does. **The race itself is the editor's, not the harness's**: a hand that escalates and drags
+within 200 ms meets it in either route, and whether the escalation should measure and write in one
+step is a question for día 6's list or the backlog, named here rather than closed.
