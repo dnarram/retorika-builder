@@ -229,7 +229,12 @@ jobs:
   e2e-patch:
     name: e2e (patch)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 30 and not the blocking job's 20 (día 4): under `patch` the walks that wait for a new document
+    # each wait their own timeout before failing, and as the route fixes more of them the run gets
+    # *longer*, not shorter — día 4's run was cancelled at 20 with 178 green, 17 red and the device
+    # walks still to go. A non-blocking job that is killed before its summary informs nobody; ten
+    # minutes of slack is what it costs to read the whole picture until día 5 turns the contract.
+    timeout-minutes: 30
     if: github.event_name == 'pull_request'
     continue-on-error: true
     steps:

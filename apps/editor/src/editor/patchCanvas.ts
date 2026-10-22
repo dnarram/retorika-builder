@@ -80,6 +80,38 @@ export const PAGE_CSS_ATTRIBUTE = "data-rb-page-css";
 export const HISTORY_TOUCHED_ATTRIBUTE = "data-rb-history-touched";
 
 /**
+ * The `<style>` that holds the page's `@font-face` rules alone (día 4). The html target writes one
+ * stylesheet with the faces inside it, and rewriting that sheet re-declares the faces: measured as
+ * one `loadingdone` per palette change, ten in ten, with no request behind any of them — the files
+ * are cached — but a face re-declared is a face the browser may paint its fallback for while it
+ * re-resolves. So the first patch moves the faces into a sheet of their own, before the page's, and
+ * from then on a change of palette or spacing rewrites the page's sheet and never the faces'.
+ */
+export const FONT_CSS_ATTRIBUTE = "data-rb-font-css";
+
+/** The page stylesheet split at the `@font-face` blocks `fontFaceCss` writes — its own format, the
+ * comment line included — into the faces and everything else. */
+export function splitFontFaces(css: string): { fonts: string; page: string } {
+  const fonts: string[] = [];
+  const page: string[] = [];
+  let inFace = false;
+  for (const line of css.split("\n")) {
+    if (line.startsWith("@font-face {")) inFace = true;
+    if (inFace) {
+      fonts.push(line);
+      if (line === "}") inFace = false;
+      continue;
+    }
+    if (line.startsWith("/* Self-hosted faces.")) {
+      fonts.push(line);
+      continue;
+    }
+    page.push(line);
+  }
+  return { fonts: fonts.join("\n").trim(), page: page.join("\n").trim() };
+}
+
+/**
  * The words a history patch put into a focused editable, so its `blur` can compare what the
  * person leaves behind with what the document last said — and commit only the difference
  * (adjustment 2). Read once and cleared, by `wireEditing`'s blur.
@@ -108,7 +140,19 @@ export function chrome<K extends keyof HTMLElementTagNameMap>(
   return el;
 }
 
-export type PatchCause = "edit" | "history";
+/**
+ * Where a patch comes from, which decides what it may do to the editable with focus (rule 3).
+ *
+ * - `edit`: anything else — the focused editable's children are left alone, the rest is patched.
+ * - `history`: undo or redo (adjustment 2) — applied to the focused editable too, the selection put
+ *   back by its plain-text offsets, and the words left behind for the `blur` to compare against.
+ * - `mark`: a mark set from the text's **own** floating toolbar while writing in it (día 4). The
+ *   change is the person's own act on these very words, so refusing it would be refusing what they
+ *   just asked for — measured on día 3's patch run as five walks whose `<strong>` never appeared.
+ *   Applied exactly like `history`: the words do not change, the selection stays on them, and the
+ *   bar sees its mark lit the way it did when the document was rebuilt around it.
+ */
+export type PatchCause = "edit" | "history" | "mark";
 
 export interface PatchRules {
   /** Why the document changed. A change from the history is applied to the focused text too. */
@@ -130,6 +174,9 @@ export type PatchReport =
       readonly textChanges: number;
       readonly attributeChanges: number;
       readonly cssChanged: boolean;
+      /** Whether the faces' own sheet was rewritten — on the first patch, which makes it, and then
+       * only when the document names other faces (día 4). */
+      readonly fontsChanged: boolean;
       /** Keys of focused editables whose children were left alone this time. */
       readonly deferred: readonly string[];
       /** Whether the keyed skeleton changed: something came, went or moved (día 3). */
@@ -166,6 +213,19 @@ function ownKey(el: Element): string | null {
   if (entry !== null) return `n:${entry}`;
   if (item !== null) return `i:${item}`;
   if (id !== null) return `e:${id}`;
+  // **The menu, by strip and by list** (día 4). The renderer draws every link twice — once in the
+  // wide strip and once in the narrow `<details>` — and each strip holds up to two `<nav>`s, pages
+  // and sections. A link keyed by `href` alone therefore had two or four twins with the same key;
+  // morphdom keeps one entry per key, matched a fresh link to a twin in the other strip, and the
+  // link the document had dropped stayed on the page. Measured on día 3's patch run as «Qué
+  // ponemos» twice in one strip, `#sec-services` beside `./que-ponemos.html`. With the strip and
+  // the list in the chain, `m:wide/nav:Páginas/a:./que-ponemos.html` names exactly one node.
+  if (el.classList.contains("rb-nav-wide")) return "m:wide";
+  if (el.classList.contains("rb-nav-narrow")) return "m:narrow";
+  if (el.tagName === "NAV") {
+    const label = el.getAttribute("aria-label");
+    return label === null ? null : `nav:${label}`;
+  }
   if (el.tagName === "A" && el.hasAttribute("href") && el.closest("nav") !== null) {
     return `a:${el.getAttribute("href")}`;
   }
@@ -225,45 +285,46 @@ export function skeletonOf(root: ParentNode): string {
   return keys.join("\n");
 }
 
-/** The caret's offset in the element's plain text, or `null` when the selection is not inside it. */
-function caretOffsetIn(el: Element): number | null {
+/** The selection's offsets in the element's plain text — a caret has `start === end` — or `null`
+ * when the selection is not inside it. */
+function selectionOffsetsIn(el: Element): { start: number; end: number } | null {
   const selection = el.ownerDocument.getSelection();
   if (!selection || selection.rangeCount === 0) return null;
   const range = selection.getRangeAt(0);
-  if (!el.contains(range.startContainer)) return null;
+  if (!el.contains(range.startContainer) || !el.contains(range.endContainer)) return null;
   const before = range.cloneRange();
   before.selectNodeContents(el);
   before.setEnd(range.startContainer, range.startOffset);
-  return before.toString().length;
+  const start = before.toString().length;
+  return { start, end: start + range.toString().length };
 }
 
-/** Put the caret back at a plain-text offset, clamped to what the element now holds. */
-function setCaretOffset(el: Element, offset: number): void {
-  const doc = el.ownerDocument;
-  const selection = doc.getSelection();
-  if (!selection) return;
-  const walker = doc.createTreeWalker(el, 0x4 /* NodeFilter.SHOW_TEXT */);
+/** The text node and offset a plain-text offset falls in, clamped to what the element now holds. */
+function pointAt(el: Element, offset: number): { node: Node; offset: number } {
+  const walker = el.ownerDocument.createTreeWalker(el, 0x4 /* NodeFilter.SHOW_TEXT */);
   let remaining = offset;
   let node = walker.nextNode();
   let last: Node | null = null;
   while (node) {
     const length = node.nodeValue?.length ?? 0;
-    if (remaining <= length) {
-      const range = doc.createRange();
-      range.setStart(node, remaining);
-      range.collapse(true);
-      selection.removeAllRanges();
-      selection.addRange(range);
-      return;
-    }
+    if (remaining <= length) return { node, offset: remaining };
     remaining -= length;
     last = node;
     node = walker.nextNode();
   }
+  return last ? { node: last, offset: last.nodeValue?.length ?? 0 } : { node: el, offset: 0 };
+}
+
+/** Put the selection back on the same plain-text offsets — a caret, or the words a mark was set on. */
+function setSelectionOffsets(el: Element, offsets: { start: number; end: number }): void {
+  const doc = el.ownerDocument;
+  const selection = doc.getSelection();
+  if (!selection) return;
+  const from = pointAt(el, offsets.start);
+  const to = pointAt(el, offsets.end);
   const range = doc.createRange();
-  if (last) range.setStart(last, last.nodeValue?.length ?? 0);
-  else range.setStart(el, 0);
-  range.collapse(true);
+  range.setStart(from.node, from.offset);
+  range.setEnd(to.node, to.offset);
   selection.removeAllRanges();
   selection.addRange(range);
 }
@@ -321,7 +382,7 @@ export function patchCanvas(
   const deferred: string[] = [];
   const touchedByHistory: Element[] = [];
   const focused = rules.focused;
-  const caret = focused && rules.cause === "history" ? caretOffsetIn(focused) : null;
+  const offsets = focused && rules.cause !== "edit" ? selectionOffsetsIn(focused) : null;
   const active = live.activeElement;
 
   /**
@@ -366,7 +427,7 @@ export function patchCanvas(
       // first version protected any focused element and would have stopped that silently; the
       // día 2 walk that could not run is what found it.
       if (focused !== null && fromEl === focused && (focused as HTMLElement).isContentEditable) {
-        if (rules.cause !== "history") {
+        if (rules.cause === "edit") {
           deferred.push(keyOf(fromEl) ?? fromEl.tagName.toLowerCase());
           return false;
         }
@@ -417,18 +478,33 @@ export function patchCanvas(
   for (const el of touchedByHistory) {
     el.setAttribute(HISTORY_TOUCHED_ATTRIBUTE, "1");
     historyText.set(el, el.textContent ?? "");
-    if (caret !== null) setCaretOffset(el, caret);
+    if (offsets !== null) setSelectionOffsets(el, offsets);
   }
 
-  // The html target writes the stylesheet as `\n{css.trimEnd()}\n` (`pageToHtml`), so the
-  // comparison is on the trimmed text and the rewrite keeps the same shape.
+  // The html target writes one stylesheet as `\n{css.trimEnd()}\n` (`pageToHtml`), faces inside.
+  // Here it is two: the faces' sheet, made on the first patch and rewritten only when the faces
+  // change, and the page's, compared and rewritten on its trimmed text. The split costs one
+  // re-declaration of the faces at the first patch — right after the first paint, while they are
+  // still arriving — and saves one on every change of style after it.
   let cssChanged = false;
+  let fontsChanged = false;
   const style =
     live.querySelector(`style[${PAGE_CSS_ATTRIBUTE}]`) ?? live.head?.querySelector("style");
   if (style) {
     if (!style.hasAttribute(PAGE_CSS_ATTRIBUTE)) style.setAttribute(PAGE_CSS_ATTRIBUTE, "1");
-    if ((style.textContent ?? "").trim() !== css.trim()) {
-      style.textContent = `\n${css.trimEnd()}\n`;
+    const split = splitFontFaces(css);
+    let fontStyle = live.querySelector(`style[${FONT_CSS_ATTRIBUTE}]`);
+    if (split.fonts !== "" && !fontStyle) {
+      fontStyle = live.createElement("style");
+      fontStyle.setAttribute(FONT_CSS_ATTRIBUTE, "1");
+      style.before(fontStyle);
+    }
+    if (fontStyle && (fontStyle.textContent ?? "").trim() !== split.fonts) {
+      fontStyle.textContent = `\n${split.fonts}\n`;
+      fontsChanged = true;
+    }
+    if ((style.textContent ?? "").trim() !== split.page) {
+      style.textContent = `\n${split.page}\n`;
       cssChanged = true;
     }
   }
@@ -441,6 +517,7 @@ export function patchCanvas(
     textChanges,
     attributeChanges,
     cssChanged,
+    fontsChanged,
     deferred,
     structural,
   };

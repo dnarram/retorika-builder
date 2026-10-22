@@ -3,14 +3,17 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildCss, render } from "@retorika/renderer";
-import { parseDocument, type RetorikaDocument } from "@retorika/schema";
+import { applyMark, pageToSection, parseDocument, type RetorikaDocument } from "@retorika/schema";
 import { describe, expect, it } from "vitest";
 import {
   CHROME_ATTRIBUTE,
+  FONT_CSS_ATTRIBUTE,
   HISTORY_TOUCHED_ATTRIBUTE,
+  keyOf,
   PAGE_CSS_ATTRIBUTE,
   patchCanvas,
   skeletonOf,
+  splitFontFaces,
 } from "../src/editor/patchCanvas.ts";
 
 /**
@@ -24,9 +27,15 @@ import {
 
 const here = dirname(fileURLToPath(import.meta.url));
 const FIXTURE = join(here, "..", "..", "..", "fixtures", "documents", "cover-and-services.json");
+const MENU_FIXTURE = join(here, "..", "..", "..", "fixtures", "documents", "menu-y-paginas.json");
 
 function fixture(): RetorikaDocument {
   return parseDocument(JSON.parse(readFileSync(FIXTURE, "utf8")));
+}
+
+/** A site with a menu: a home page and two pages converted from sections, each drawn in both strips. */
+function menuFixture(): RetorikaDocument {
+  return parseDocument(JSON.parse(readFileSync(MENU_FIXTURE, "utf8")));
 }
 
 /**
@@ -246,6 +255,128 @@ describe("patchCanvas — an edit is a patch", () => {
     const after = selection?.getRangeAt(0);
     expect(after && headline.contains(after.startContainer)).toBe(true);
     expect(after?.startOffset).toBe(7);
+  });
+
+  it("applies the text's own mark to the focused editable, keeps the words selected, and marks it", () => {
+    const doc = fixture();
+    const live = settled(doc);
+    const headline = live.querySelector<HTMLElement>('[data-id="el-headline"]');
+    if (!headline) throw new Error("no headline");
+    const text = headline.textContent ?? "";
+    expect(text.length).toBeGreaterThan(6);
+    headline.setAttribute("contenteditable", "true");
+    // The first word, selected — the way the toolbar reads the words a mark is pressed on.
+    const end = text.indexOf(" ") > 0 ? text.indexOf(" ") : text.length;
+    const range = live.createRange();
+    const textNode = headline.firstChild;
+    if (!textNode) throw new Error("no text node");
+    range.setStart(textNode, 0);
+    range.setEnd(textNode, end);
+    live.getSelection()?.removeAllRanges();
+    live.getSelection()?.addRange(range);
+
+    const next = applyMark(
+      doc,
+      { sectionId: "sec-cover", elementId: "el-headline" },
+      { from: 0, to: end },
+      "strong",
+    );
+    // Día 3's rule defers it: the headline has focus and is editable, and this is «an edit».
+    const asEdit = patchCanvas(live, freshFrom(next), buildCss(next), {
+      cause: "edit",
+      focused: headline,
+    });
+    expect(asEdit.ok && asEdit.deferred.length).toBe(1);
+    expect(headline.querySelector("strong")).toBeNull();
+
+    // Named as the text's own mark, it goes through.
+    const headline2 = headline;
+    const report = patchCanvas(live, freshFrom(next), buildCss(next), {
+      cause: "mark",
+      focused: headline2,
+    });
+    expect(report.ok).toBe(true);
+    if (!report.ok) return;
+    expect(report.deferred).toEqual([]);
+    expect(headline2.querySelector("strong")?.textContent).toBe(text.slice(0, end));
+    expect(headline2.textContent).toBe(text);
+    expect(headline2.getAttribute(HISTORY_TOUCHED_ATTRIBUTE)).toBe("1");
+    // The words are still the selection: the bar's own refresh will find them and light the mark.
+    const selection = live.getSelection();
+    expect(selection?.rangeCount).toBe(1);
+    expect(selection?.toString()).toBe(text.slice(0, end));
+    expect(headline2.contains(selection?.getRangeAt(0).startContainer ?? null)).toBe(true);
+  });
+
+  it("moves the faces into their own sheet on the first patch, and a change of palette never touches it", () => {
+    // The menu fixture's theme names two shippable faces; `cover-and-services` names none.
+    const doc = menuFixture();
+    const live = liveFrom(doc);
+    const css = buildCss(doc);
+    expect(css).toContain("@font-face {");
+    expect(live.querySelectorAll("head style").length).toBe(1);
+
+    const first = patchCanvas(live, freshFrom(doc), css, rules);
+    expect(first).toMatchObject({ ok: true, fontsChanged: true, cssChanged: true });
+    const fonts = live.querySelector(`style[${FONT_CSS_ATTRIBUTE}]`);
+    const page = live.querySelector(`style[${PAGE_CSS_ATTRIBUTE}]`);
+    if (!fonts || !page) throw new Error("the two sheets are not there");
+    // The faces' sheet comes first, holds every face and nothing else; the page's holds no face.
+    expect(fonts.nextElementSibling).toBe(page);
+    expect((fonts.textContent ?? "").match(/@font-face \{/g)?.length).toBe(
+      css.match(/@font-face \{/g)?.length,
+    );
+    expect(page.textContent).not.toContain("@font-face");
+    expect(page.textContent).toContain(":root {");
+    const facesText = fonts.textContent;
+
+    // A different palette: the page's sheet is rewritten, the faces' is not touched.
+    const recoloured = parseDocument({
+      ...structuredClone(doc),
+      theme: { ...doc.theme, "color.primary": "#123456" },
+    });
+    const second = patchCanvas(live, freshFrom(recoloured), buildCss(recoloured), rules);
+    expect(second).toMatchObject({ ok: true, cssChanged: true, fontsChanged: false });
+    expect(fonts.textContent).toBe(facesText);
+    expect(page.textContent).toContain("#123456");
+    // Split and rebuilt, the two sheets together say exactly what one sheet said.
+    const { fonts: wantFonts, page: wantPage } = splitFontFaces(buildCss(recoloured));
+    expect((fonts.textContent ?? "").trim()).toBe(wantFonts);
+    expect((page.textContent ?? "").trim()).toBe(wantPage);
+
+    // The same document again: neither sheet moves.
+    const third = patchCanvas(live, freshFrom(recoloured), buildCss(recoloured), rules);
+    expect(third).toMatchObject({ ok: true, cssChanged: false, fontsChanged: false });
+  });
+
+  it("drops the menu's links the document dropped: folding a page back leaves one «Qué ponemos», in each strip", () => {
+    const doc = menuFixture();
+    const live = settled(doc);
+    const before = [...live.querySelectorAll(".rb-nav-wide a, .rb-nav-narrow a")].map((a) =>
+      a.getAttribute("href"),
+    );
+    expect(before).toContain("./que-ponemos.html");
+    // Every menu link keyed apart from its twins: the strip and the list are in the chain.
+    const keys = [...live.querySelectorAll("nav a")].map((a) => keyOf(a));
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(keys[0]).toMatch(/^m:(wide|narrow)\/nav:[^/]+\/a:/);
+
+    const folded = pageToSection(doc, "page-que-ponemos");
+    const report = patchCanvas(live, freshFrom(folded), buildCss(folded), rules);
+    expect(report).toMatchObject({ ok: true, structural: true });
+
+    const expected = [
+      ...freshFrom(folded).querySelectorAll(".rb-nav-wide a, .rb-nav-narrow a"),
+    ].map((a) => a.getAttribute("href"));
+    const after = [...live.querySelectorAll(".rb-nav-wide a, .rb-nav-narrow a")].map((a) =>
+      a.getAttribute("href"),
+    );
+    expect(after).toEqual(expected);
+    expect(after).not.toContain("./que-ponemos.html");
+    expect(after.filter((href) => href === "#sec-services")).toHaveLength(2);
+    // And the texts: «Qué ponemos» once per strip, not twice.
+    const wide = [...live.querySelectorAll(".rb-nav-wide a")].map((a) => a.textContent?.trim());
+    expect(wide.filter((label) => label === "Qué ponemos")).toHaveLength(1);
   });
 
   it("patches a changed skeleton too and says so: a section gone, the chrome beside it kept", () => {

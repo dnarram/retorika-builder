@@ -88,7 +88,28 @@ const PREVIEW = "iframe:not([data-buffered])";
  * `docs/tasks/backlog.md`.
  */
 async function waitForBankPhoto(frame: FrameLocator): Promise<void> {
-  await frame.locator('[data-section="sec-cover"] img[src^="blob:"]').first().waitFor();
+  try {
+    await frame.locator('[data-section="sec-cover"] img[src^="blob:"]').first().waitFor();
+  } catch (error) {
+    // What the page holds instead, and what the editor recorded: a photograph that never arrived
+    // and one that arrived as something other than a blob are different failures with one message.
+    const imgs = await frame
+      .locator("img")
+      .evaluateAll((nodes) => nodes.map((node) => node.getAttribute("src")?.slice(0, 48) ?? null))
+      .catch(() => ["(unreadable)"]);
+    const events = await frame
+      .locator("html")
+      .evaluate(() => {
+        const probe = (window.parent as unknown as { __rb?: { kind: string; data: unknown }[] })
+          .__rb;
+        return (probe ?? []).slice(-12).map((e) => `${e.kind} ${JSON.stringify(e.data)}`);
+      })
+      .catch(() => ["(probe unreadable)"]);
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `${message}\nimages on the page: ${JSON.stringify(imgs)}\n${events.join("\n")}`,
+    );
+  }
   // Since ADR 0039 a generated restaurante site also carries the bank's gallery of four, and the
   // card writes its photographs in one batch, so the four are in the same document as the cover.
   // Waited for anyway: if the batch ever splits, this is what says so, here and not three
@@ -18306,14 +18327,21 @@ describe("sprint 26 día 2 — el parche, tras una llave", () => {
     try {
       await intoTheCanvas(page);
       await routeIs(page, "patch");
-      await studioToolsOn(page);
-      let frame = page.frameLocator(PREVIEW).first();
+      // Since día 4 neither the switch nor the escalation replaces the document under `patch`: the
+      // first is a redraw and the second a patch, and both move the serial. So the walk waits on the
+      // serial, as día 4's do, and not on a new document that will never come.
+      const frame = page.frameLocator(PREVIEW).first();
+      const serialAtStart = await editSerial(page);
+      await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
+      await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
+      await expect(page.getByRole("button", { name: "Diseño", exact: true })).toBeVisible();
+      await expect.poll(() => editSerial(page)).toBeGreaterThan(serialAtStart);
       await frame.locator('[data-section="sec-cover"]').click();
-      await replacingTheDocument(page, async () => {
-        await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
-        await frame.locator(".rb-escalate-yes").click();
-      });
-      frame = page.frameLocator(PREVIEW).first();
+      const serialBeforeEscalation = await editSerial(page);
+      await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
+      await frame.locator(".rb-escalate-yes").click();
+      await expect.poll(() => editSerial(page)).toBeGreaterThan(serialBeforeEscalation);
+      await expect(frame.locator(".rb-handmade")).toHaveCount(1);
       await waitForBankPhoto(frame);
       await fontsReady(frame);
 
@@ -18603,4 +18631,324 @@ describe("sprint 26 día 3 — las clausuras leen el presente", () => {
       await context.close();
     }
   }, 300_000);
+});
+
+/**
+ * **Sprint 26 día 4 — fotos, estilos, páginas e interruptor.** Lo que bajo `swap` reconstruía el
+ * documento sin que el documento del dueño hubiera cambiado — el interruptor, escalar y volver, una
+ * foto que llega, un cambio de paleta, otra página — bajo `patch` es un repintado o un parche sobre
+ * el mismo documento. Cada caminata cuenta los cableados (deben quedarse en uno), sella el documento
+ * (debe ser el mismo al final) y mira el cromo que el repintado debe dejar.
+ */
+describe("sprint 26 día 4 — fotos, estilos, páginas e interruptor", () => {
+  type Event = { at: number; kind: string; data: Record<string, unknown> };
+
+  async function patched(): Promise<{ context: BrowserContext; page: Page }> {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    await context.addInitScript(() => {
+      window.localStorage.setItem("rb.canvas", "patch");
+    });
+    await probeOn(context);
+    const page = await context.newPage();
+    return { context, page };
+  }
+
+  const events = (page: Page) =>
+    page.evaluate(() => ((window as unknown as { __rb?: Event[] }).__rb ?? []) as Event[]);
+  const wires = async (page: Page) => (await events(page)).filter((e) => e.kind === "wire").length;
+
+  const editSerial = (page: Page) =>
+    page.evaluate(() =>
+      Number(
+        document.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")?.contentDocument
+          ?.documentElement.dataset["rbEdit"] ?? "0",
+      ),
+    );
+
+  /** El documento del lienzo, sellado — y leído — por una propiedad que un documento nuevo no tendría. */
+  const stamp = (page: Page) =>
+    page.evaluate(() => {
+      const doc = document.querySelector<HTMLIFrameElement>(
+        "iframe:not([data-buffered])",
+      )?.contentDocument;
+      if (doc) (doc as unknown as { __rbStamp?: string }).__rbStamp = "the-one";
+    });
+  const stamped = (page: Page) =>
+    page.evaluate(
+      () =>
+        (
+          document.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")
+            ?.contentDocument as unknown as { __rbStamp?: string } | undefined
+        )?.__rbStamp ?? null,
+    );
+
+  /** Un acto, y la espera hasta que su parche o su repintado está en la página. */
+  async function afterTheEdit(page: Page, act: () => Promise<void>): Promise<Event[]> {
+    const serial = await editSerial(page);
+    const before = (await events(page)).length;
+    await act();
+    await expect
+      .poll(() => editSerial(page), { message: "ni un parche ni un repintado llegó a la página" })
+      .toBeGreaterThan(serial);
+    return (await events(page)).slice(before);
+  }
+
+  async function opened(page: Page): Promise<{ frame: FrameLocator; wiredBefore: number }> {
+    await intoTheCanvas(page);
+    await expect
+      .poll(async () => (await events(page)).find((e) => e.kind === "html")?.data["route"], {
+        message: "el editor no registró su ruta",
+      })
+      .toBe("patch");
+    const frame = page.frameLocator(PREVIEW).first();
+    await fontsReady(frame);
+    await stamp(page);
+    return { frame, wiredBefore: await wires(page) };
+  }
+
+  it("las fotos del banco llegan como atributo: un solo documento desde la primera pintura", async () => {
+    const { context, page } = await patched();
+    try {
+      const { frame } = await opened(page);
+      // `intoTheCanvas` ya esperó a la foto de la portada y a las cuatro de la galería.
+      await expect(frame.locator('[data-section="sec-cover"] img[src^="blob:"]')).toHaveCount(1);
+      // **Un cableado en toda la apertura.** Bajo `swap` la foto que llega tras la primera pintura
+      // cambia el `srcDoc` y es un segundo documento (la línea base del día 1 lo midió); bajo
+      // `patch` es un `src` que cambia en el documento que ya estaba.
+      expect(await wires(page), "las fotos trajeron un documento nuevo").toBe(1);
+      // Por cuál de las dos puertas: la tarjeta de las propuestas escribe las fotos en un lote y,
+      // si el lote llega antes de que el editor monte, la primera pintura ya las lleva; si llega
+      // después, es un parche de cinco `src`. Las dos valen — lo que no vale es un segundo documento.
+      const photoPatches = (await events(page)).filter(
+        (e) =>
+          e.kind === "patch" && e.data["ok"] === true && Number(e.data["attributeChanges"]) >= 5,
+      );
+      console.log(
+        `[sprint 26 día 4 · fotos] ${photoPatches.length > 0 ? "llegaron por parche" : "venían en la primera pintura"}; documentos cableados: ${await wires(page)}`,
+      );
+      expect(await stamped(page)).toBe("the-one");
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("el interruptor repinta el cromo sobre el mismo documento, y escalar y volver son parches con su barra", async () => {
+    const { context, page } = await patched();
+    try {
+      const { frame, wiredBefore } = await opened(page);
+
+      // **Encender**: ningún documento nuevo; un repintado con causa «tools», el serial sube, y el
+      // cromo que las herramientas añaden está — la foto de la portada es ahora parada de Tab.
+      const on = await afterTheEdit(page, async () => {
+        await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
+        await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
+      });
+      await expect(page.getByRole("button", { name: "Diseño", exact: true })).toBeVisible();
+      expect(
+        on.some((e) => e.kind === "redraw" && e.data["cause"] === "tools"),
+        `el interruptor no repintó:\n${on.map((e) => `${e.kind} ${JSON.stringify(e.data)}`).join("\n")}`,
+      ).toBe(true);
+      expect(
+        on.some((e) => e.kind === "wire"),
+        "encender cableó un documento nuevo",
+      ).toBe(false);
+      await expect(
+        frame.locator('[data-section="sec-cover"] [data-id="el-image"]'),
+      ).toHaveAttribute("tabindex", "0");
+
+      // **Escalar**: la sección pasa a diseñada a mano por un parche, y la barra se dibuja.
+      await frame.locator('[data-section="sec-cover"]').click();
+      await expect(frame.locator(".rb-actions")).toHaveCount(1);
+      const escalated = await afterTheEdit(page, async () => {
+        await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
+        await frame.locator(".rb-escalate-yes").click();
+      });
+      expect(
+        escalated.some((e) => e.kind === "wire"),
+        "escalar cableó un documento nuevo",
+      ).toBe(false);
+      expect(
+        escalated.some((e) => e.kind === "patch" && e.data["ok"] === true),
+        "escalar no fue un parche",
+      ).toBe(true);
+      await expect(frame.locator('[data-section="sec-cover"]')).toHaveClass(/rb-free/);
+      await expect(frame.locator(".rb-handmade")).toHaveCount(1);
+      await expect(frame.locator(".rb-handmade-badge")).toHaveText("Diseñada a mano");
+
+      // **Volver**, sin haber movido nada: no pregunta, la barra se va, la clase también.
+      const back = await afterTheEdit(page, () => frame.locator(".rb-handmade-back").click());
+      await expect(page.getByRole("alertdialog")).toHaveCount(0);
+      await expect(frame.locator(".rb-handmade")).toHaveCount(0);
+      await expect(frame.locator('[data-section="sec-cover"]')).not.toHaveClass(/rb-free/);
+      expect(
+        back.some((e) => e.kind === "wire"),
+        "volver cableó un documento nuevo",
+      ).toBe(false);
+
+      // **Apagar**: otro repintado, y la parada de Tab de la foto se va con las herramientas.
+      const off = await afterTheEdit(page, () =>
+        page.getByRole("switch", { name: "Herramientas de diseño" }).click(),
+      );
+      expect(off.some((e) => e.kind === "redraw" && e.data["cause"] === "tools")).toBe(true);
+      await expect(frame.locator(".rb-handle")).toHaveCount(0);
+
+      expect(await wires(page), "el recorrido cableó algún documento nuevo").toBe(wiredBefore);
+      expect(await stamped(page), "el documento ya no es el mismo").toBe("the-one");
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+
+  it("otra página empieza arriba, la misma página conserva el scroll, y el documento es el mismo", async () => {
+    const { context, page } = await patched();
+    try {
+      const { frame, wiredBefore } = await opened(page);
+      const scrollY = () =>
+        frame.locator("html").evaluate((root) => root.ownerDocument.defaultView?.scrollY ?? -1);
+      const scrollTo = (y: number) =>
+        frame.locator("html").evaluate((root, want) => {
+          root.ownerDocument.defaultView?.scrollTo(0, want);
+        }, y);
+
+      // En la portada, que es larga: una edición no mueve el scroll.
+      await scrollTo(160);
+      await expect.poll(scrollY).toBe(160);
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      await headline.click();
+      await headline.click();
+      await expect(headline).toHaveAttribute("contenteditable", "true");
+      await page.keyboard.type("x");
+      const edited = await afterTheEdit(page, () => page.keyboard.press("Enter"));
+      expect(
+        edited.some((e) => e.kind === "patch" && e.data["pageChanged"] === false),
+        "la edición no fue un parche de la misma página",
+      ).toBe(true);
+      expect(await scrollY(), "una edición en la misma página movió el scroll").toBe(160);
+
+      // Una sección convertida en página: dos pestañas, y la portada sigue donde estaba.
+      await frame.locator('[data-section="sec-services"]').click();
+      await afterTheEdit(page, () =>
+        frame
+          .locator(
+            '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+          )
+          .click(),
+      );
+      const tabs = page.locator('[data-testid="page-tabs"] button');
+      await expect(tabs).toHaveCount(2);
+      await scrollTo(160);
+      await expect.poll(scrollY).toBe(160);
+
+      // A la otra página: un parche que dice `pageChanged`, y el principio.
+      const toPage = await afterTheEdit(page, () => tabs.nth(1).click());
+      expect(
+        toPage.some((e) => e.kind === "patch" && e.data["pageChanged"] === true),
+        "el cambio de página no fue un parche con `pageChanged`",
+      ).toBe(true);
+      await expect(frame.locator('[data-section="sec-services"]')).toBeVisible();
+      await expect.poll(scrollY, { message: "la otra página no empezó arriba" }).toBe(0);
+
+      // De vuelta a la portada, que estaba a 160: otra página, arriba otra vez.
+      await afterTheEdit(page, () => tabs.first().click());
+      await expect(frame.locator('[data-section="sec-cover"]')).toBeVisible();
+      await expect.poll(scrollY).toBe(0);
+
+      expect(await wires(page)).toBe(wiredBefore);
+      expect(await stamped(page)).toBe("the-one");
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+
+  it("un cambio de estilo reescribe la hoja sin volver a pedir las letras: la medida de las fuentes", async () => {
+    const { context, page } = await patched();
+    try {
+      const { frame, wiredBefore } = await opened(page);
+      const measure = () =>
+        frame.locator("html").evaluate((root) => {
+          const doc = root.ownerDocument;
+          const win = doc.defaultView as (Window & { __rbFontEvents?: number }) | null;
+          const style = doc.querySelector("style[data-rb-page-css]") as
+            | (HTMLStyleElement & { __rbStyleStamp?: string })
+            | null;
+          const faces = doc.querySelector("style[data-rb-font-css]") as
+            | (HTMLStyleElement & { __rbStyleStamp?: string })
+            | null;
+          return {
+            styleStamp: style?.__rbStyleStamp ?? null,
+            facesStamp: faces?.__rbStyleStamp ?? null,
+            facesText: faces?.textContent ?? "",
+            styleLength: style?.textContent?.length ?? 0,
+            fontRequests: performance
+              .getEntriesByType("resource")
+              .filter((entry) => entry.name.includes("/fonts/")).length,
+            loadingdone: win?.__rbFontEvents ?? 0,
+            heading: doc.fonts.check("700 16px 'EB Garamond'"),
+            body: doc.fonts.check("400 16px 'Figtree'") || doc.fonts.check("400 16px 'Inter'"),
+          };
+        });
+      // El sello en el nodo `<style>`, y un contador de `loadingdone` en las fuentes del marco.
+      await frame.locator("html").evaluate((root) => {
+        const doc = root.ownerDocument;
+        const style = doc.querySelector("style[data-rb-page-css]") as
+          | (HTMLStyleElement & { __rbStyleStamp?: string })
+          | null;
+        if (style) style.__rbStyleStamp = "the-sheet";
+        const faces = doc.querySelector("style[data-rb-font-css]") as
+          | (HTMLStyleElement & { __rbStyleStamp?: string })
+          | null;
+        if (faces) faces.__rbStyleStamp = "the-faces";
+        const win = doc.defaultView as (Window & { __rbFontEvents?: number }) | null;
+        if (win) {
+          win.__rbFontEvents = 0;
+          doc.fonts.addEventListener("loadingdone", () => {
+            win.__rbFontEvents = (win.__rbFontEvents ?? 0) + 1;
+          });
+        }
+      });
+      const before = await measure();
+      expect(before.styleStamp, "la hoja de la página no está marcada").toBe("the-sheet");
+      // Las dos hojas desde el primer parche: las letras en la suya, la página sin una sola cara.
+      expect(before.facesStamp, "no hay una hoja propia para las letras").toBe("the-faces");
+      expect(before.facesText).toContain("@font-face");
+      expect(before.heading, "la letra de los titulares no estaba cargada al empezar").toBe(true);
+
+      // Diez cambios de paleta, de ida y vuelta: diez hojas reescritas.
+      await page.getByRole("button", { name: "Estilo", exact: true }).click();
+      const neutra = page.getByRole("radio", { name: "Neutra", exact: true });
+      const azul = page.getByRole("radio", { name: "Azul confianza" });
+      let cssPatches = 0;
+      for (let round = 0; round < 10; round += 1) {
+        const target = round % 2 === 0 ? azul : neutra;
+        const got = await afterTheEdit(page, () => target.click());
+        cssPatches += got.filter((e) => e.kind === "patch" && e.data["cssChanged"] === true).length;
+      }
+      expect(cssPatches, "los cambios de paleta no reescribieron la hoja").toBe(10);
+      await fontsReady(frame);
+      await page.waitForTimeout(300);
+      const after = await measure();
+
+      console.log(
+        `[sprint 26 día 4 · fuentes] 10 hojas reescritas; peticiones de fuentes ${before.fontRequests} → ${after.fontRequests}; ` +
+          `loadingdone ${after.loadingdone}; titulares cargados ${after.heading}; el nodo <style> de la página ${
+            after.styleStamp === "the-sheet" ? "es el mismo" : "fue sustituido"
+          }; el de las letras ${after.facesStamp === "the-faces" ? "es el mismo" : "fue sustituido"}`,
+      );
+      // La hoja de la página es el mismo nodo, reescrita; la de las letras ni se toca — ni un
+      // `loadingdone`, que es lo que una hoja única daba diez veces —, nada se pide otra vez, y las
+      // letras siguen cargadas.
+      expect(after.styleStamp, "el nodo <style> de la página fue sustituido").toBe("the-sheet");
+      expect(after.facesStamp, "el nodo <style> de las letras fue sustituido").toBe("the-faces");
+      expect(after.facesText).toBe(before.facesText);
+      expect(after.loadingdone, "las letras se volvieron a declarar al cambiar la paleta").toBe(0);
+      expect(after.fontRequests, "una hoja reescrita volvió a pedir las fuentes").toBe(
+        before.fontRequests,
+      );
+      expect(after.heading).toBe(true);
+      expect(await wires(page)).toBe(wiredBefore);
+      expect(await stamped(page)).toBe("the-one");
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
 });

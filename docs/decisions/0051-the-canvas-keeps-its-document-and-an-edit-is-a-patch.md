@@ -412,3 +412,73 @@ turns the default, then both block until the 27 closes.
 **What día 3 changes under `swap` too.** The listeners are the document's under both routes; `swap`
 still wires each new document, once, and `redrawChrome` is not called there — the wiring draws.
 Nothing is retired (adjustment 6).
+
+### Amendment — photographs, styles, pages and the switch (día 4, 22 October 2026)
+
+**What día 3's patch-route run measured, closed.** Fifteen walks were red under the key; read one
+by one they were five causes, three of them defects of this route:
+
+1. **The menu kept the links the document dropped.** A link was keyed by `href` alone, and the
+   renderer draws every link twice — the wide strip and the narrow `<details>` — in up to two
+   `<nav>`s each. morphdom keeps one node per key, so a fresh link matched a twin in the other
+   strip and the orphan stayed: «Qué ponemos» twice, `#sec-services` beside `./que-ponemos.html`.
+   The strips (`m:wide`, `m:narrow`) and the lists (`nav:<aria-label>`) now have keys of their own,
+   so a link's chain names exactly one node. Unit test on `menu-y-paginas.json`, folding a page
+   back; sabotaged by removing the two keys.
+2. **Rule 3 deferred the text's own mark.** A mark set from the floating toolbar while writing is an
+   edit of the focused editable's children, and rule 3 refused it until the blur — five walks whose
+   `<strong>` never came. `PatchCause` gains `mark`: the toolbar names the change as the text's own
+   act, and the patch applies it like `history`, with the **selection** put back by its plain-text
+   offsets (start and end, where `history` restored a caret), and the writing's capture re-read
+   from the document so the next commit carries the new marks and not the old ones. Rule 3 as
+   amended: *the focused editable's children are left alone unless the change is the history's or
+   the text's own.*
+3. **`keepWriting` had no listener under `patch`.** A resize while writing commits and asks for the
+   writing back, and only the wiring answered. `settleWriting` is now part of the redraw.
+
+The other two were the plan's own: a change of page starts at the top (**done**: the patch that
+changes page scrolls to 0; the same page keeps its scroll by doing nothing), and the bank photograph
+«never reaching the `img`» — which was the switch taking the old route under `patch` and the walk
+polling a frame in transit, gone with the next point.
+
+**The switch redraws; escalating and returning are patches.** `chromeKey` is a `swap` notion — it
+decides when that route needs a new document wired for the tools. Under `patch` it opens no slot
+and refuses nothing: toggling the tools runs `redrawChrome` (the handles, the bars, the Tab stops
+the tools add) and moves the serial, recorded as `redraw {cause: "tools"}`; a section escalated or
+returned arrives as a patch — `rb-free` and the inline grid areas are the renderer's and the fresh
+tree wins — and `wireHandmade` draws its bar in the same redraw. Measured: switch on, escalate,
+return, switch off — zero documents wired, one `.rb-handmade` while escalated and none after, the
+photograph a Tab stop while the tools are on.
+
+**Photographs.** One document from the first paint: the proposals card writes the bank's
+photographs in one batch, and in the walk they were already in the first html (`venían en la
+primera pintura`); when they arrive later they are a patch of five `src` attributes. Either way the
+count of wired documents is one, which `swap` could not say — día 1's baseline measured the second
+document the photographs used to bring.
+
+**Fonts: two sheets.** The html target writes one stylesheet with the `@font-face` rules inside it.
+Rewriting it on a change of palette re-declared the faces: **measured as one `loadingdone` per
+rewrite, ten in ten, with no request behind any** — the files are cached, but a face re-declared is
+a face the browser may paint its fallback for while it re-resolves. So the first patch moves the
+faces into `<style data-rb-font-css>` before the page's sheet, and from then on the page's sheet
+is rewritten and the faces' only when the document names other faces. **Measured after: ten
+rewrites, `loadingdone` 0, requests 2 → 2, both nodes the same, the heading face still loaded.**
+Sabotaged by rewriting the faces' sheet on every patch: the walk goes red on `loadingdone`. The
+report says `fontsChanged` beside `cssChanged`.
+
+**The toolbar, reopened by the redraw.** Every control in the floating bar — the role pressed, the
+size step, the colour in force — is read when the bar opens and never after; under `swap` each
+rebuild reopened it, and under `patch` nothing did, so the «Aa» walk pressed the body role and the
+bar still said `aria-pressed="false"`. `settleToolbar` reopens the bar in the redraw, with the
+selection put back — and with **the control the hand was on focused again in the new bar**: `open`
+removes the old bar, the focused `<select>` with it, focus falls to the body, and the text's deferred
+`focusout` would otherwise dismiss the bar it had just rebuilt (measured as the spacing select
+«not found» right after choosing in it). Both routes green on the sprint 9 and 13 toolbar walks.
+
+**What stays for día 5.** Every walk that waits on `replacingTheDocument` around the switch, an
+escalation or a verb is red under `patch` by contract, not by defect — the switch and the
+escalation no longer replace the document, so the wait never returns. Día 2's own mid-drag walk
+was moved to the serial today; the rest is día 5's `afterTheEdit`. The día 1 baseline measures the
+old route by definition. «Desenlazar» compares `textContent` across a block boundary the first
+patch strips the pretty-print whitespace from; día 5 decides whether the walk or the first patch
+is the one to change.

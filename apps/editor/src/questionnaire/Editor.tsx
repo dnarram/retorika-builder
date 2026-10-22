@@ -122,7 +122,13 @@ import { toolbarFamilyLabel } from "../editor/letterGallery.ts";
 import { LOOK_AHEAD_DEADLINE_MS, lookAheadStep } from "../editor/lookAhead.ts";
 import { menuStateFor } from "../editor/menuState.ts";
 import { measureOverflow } from "../editor/overflowCheck.ts";
-import { chrome, patchCanvas, takeHistoryText } from "../editor/patchCanvas.ts";
+import {
+  chrome,
+  HISTORY_TOUCHED_ATTRIBUTE,
+  type PatchCause,
+  patchCanvas,
+  takeHistoryText,
+} from "../editor/patchCanvas.ts";
 import { countPhotos, listPhotos, type PhotoState } from "../editor/photoInventory.ts";
 import { withPhotoUrls } from "../editor/previewDocument.ts";
 import { record, serialOf } from "../editor/probe.ts";
@@ -1003,19 +1009,23 @@ export function Editor({
   /** Undo and redo, marked as such for the patch that follows (adjustment 2): the one change that
    * is applied to the text being written in, caret kept. */
   const undoFromHistory = () => {
-    pendingHistory.current = true;
+    pendingCause.current = "history";
     onUndo();
   };
   const redoFromHistory = () => {
-    pendingHistory.current = true;
+    pendingCause.current = "history";
     onRedo();
   };
   /** The document the fresh tree is built in, which has no browsing context and loads nothing
    * (adjustment 4). Made on first use, kept for the session. */
   const inertDoc = useRef<Document | null>(null);
-  /** The next patch comes from undo or redo (adjustment 2): applied to the focused text as well,
-   * caret kept. Set by the two history calls, read and cleared by the patch that follows. */
-  const pendingHistory = useRef(false);
+  /** The page the last patch drew, so a change of page can start at the top (día 4). */
+  const patchedPageId = useRef<string | null>(pageId ?? null);
+  /** Where the next patch comes from (adjustment 2; día 4): `history` for undo and redo, `mark`
+   * for a mark set from the text's own toolbar — both applied to the focused text as well, the
+   * selection kept. Set by the call that changes the document, read and cleared by the patch that
+   * follows; `edit` otherwise. */
+  const pendingCause = useRef<PatchCause>("edit");
   /** A patch that arrived while a hand was on the page, waiting for the hand to let go
    * (adjustment 3). The gesture's own end calls `flushQueuedPatch`. */
   const queuedPatch = useRef(false);
@@ -1782,6 +1792,10 @@ export function Editor({
    * `wireOnce`'s, and doing it twice would fight it.
    */
   useEffect(() => {
+    // Under `patch` the chrome never needs a new document (día 4): the tools' gates live in the
+    // handlers, the bars and handles are drawn by `redrawChrome`, and an escalated section arrives
+    // as a patch like any other edit. The key stays what it was at mount and no slot ever opens.
+    if (canvasMode.current === "patch") return;
     if (chromeKey === buffer.liveKey) {
       if (buffer.pendingKey !== null) setBuffer((b) => ({ ...b, pendingKey: null }));
       return;
@@ -1960,7 +1974,6 @@ export function Editor({
    * or returned, the count changed) and takes the old route on día 2 as well; día 4 teaches the
    * patch the chrome's half of those.
    */
-  const chromeKeyPatched = useRef(chromeKey);
   function bumpEdit(iframeDoc: Document) {
     editSerial.current += 1;
     iframeDoc.documentElement.dataset["rbEdit"] = String(editSerial.current);
@@ -1981,11 +1994,6 @@ export function Editor({
       record("patch", { ok: false, reason: "gesture", queued: true });
       return;
     }
-    if (chromeKey !== chromeKeyPatched.current) {
-      chromeKeyPatched.current = chromeKey;
-      takeOldRoute("chrome");
-      return;
-    }
     if (inertDoc.current === null) {
       inertDoc.current = document.implementation.createHTMLDocument("");
     }
@@ -1998,8 +2006,8 @@ export function Editor({
     };
     const started = performance.now();
     const fresh = render(display, "dom", options);
-    const cause = pendingHistory.current ? "history" : "edit";
-    pendingHistory.current = false;
+    const cause = pendingCause.current;
+    pendingCause.current = "edit";
     const report = patchCanvas(iframeDoc, fresh, buildCss(display), {
       cause,
       focused: iframeDoc.activeElement,
@@ -2012,7 +2020,14 @@ export function Editor({
     // The chrome follows the page (día 3): after every patch, structural or not, because a text
     // that grew moved the gap below it and a section that arrived has no verbs yet.
     const redrawMs = redrawChrome(iframeDoc);
-    record("patch", { ...report, cause, ms, redrawMs });
+    // Another page starts at the top (día 4): the one rule of the reading position that holds
+    // under `patch`, where the document is never replaced and so never restored. The same page,
+    // patched, keeps its scroll by doing nothing at all.
+    const page = pageId ?? null;
+    const pageChanged = patchedPageId.current !== page;
+    patchedPageId.current = page;
+    if (pageChanged) iframeDoc.defaultView?.scrollTo(0, 0);
+    record("patch", { ...report, cause, ms, redrawMs, pageChanged });
     bumpEdit(iframeDoc);
   }
   /**
@@ -2039,18 +2054,45 @@ export function Editor({
     );
     settleSelection.current();
     settleEditing(iframeDoc);
+    settleWriting(iframeDoc);
     settleDragging(iframeDoc);
+    refreshWriting.current(iframeDoc);
+    settleToolbar.current(iframeDoc);
     focusLineAfterChange(iframeDoc);
     observeSections(iframeDoc);
     handlePainters.current.get(iframeDoc)?.();
     return Math.round((performance.now() - started) * 10) / 10;
   }
+  /** What `wireEditing` registers for the redraw: a text the patch rewrote under the caret
+   * (history or its own mark) has its capture re-read from the document, or the next commit would
+   * carry the marks from before. */
+  const refreshWriting = useRef<(iframeDoc: Document) => void>(() => {});
+  /** What `wireToolbar` registers for the redraw: the open bar drawn again from the document, with
+   * its selection put back — what the wiring did on every rebuild (día 4). */
+  const settleToolbar = useRef<(iframeDoc: Document) => void>(() => {});
   flushQueuedPatch.current = () => {
     if (!queuedPatch.current) return;
     queuedPatch.current = false;
     const iframeDoc = liveFrame()?.contentDocument;
     if (iframeDoc) applyPatch(iframeDoc);
   };
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the switch is the trigger; the redraw reads everything else through refs
+  useEffect(() => {
+    // **The switch redraws, it does not rebuild** (día 4). Under `swap` toggling the tools changes
+    // `chromeKey` and a new document arrives wired for them; under `patch` the document stays and
+    // the chrome is drawn again over it — the handles, the bars, the Tab stops the tools add — and
+    // the serial moves, because a walk waiting on «a patch or a repaint» is waiting for exactly
+    // this. Skipped on mount: the wiring draws the first chrome.
+    if (canvasMode.current !== "patch") return;
+    const iframeDoc = liveFrame()?.contentDocument;
+    if (!iframeDoc || iframeDoc.documentElement.dataset["rbWired"] !== "1") return;
+    if (toolsDrawn.current === designTools) return;
+    toolsDrawn.current = designTools;
+    const redrawMs = redrawChrome(iframeDoc);
+    record("redraw", { cause: "tools", designTools, redrawMs });
+    bumpEdit(iframeDoc);
+  }, [designTools]);
+  const toolsDrawn = useRef(designTools);
   // biome-ignore lint/correctness/useExhaustiveDependencies: the four listed are what a patch is made of; everything else is read through refs or is the render's own
   useEffect(() => {
     if (canvasMode.current !== "patch") return;
@@ -4212,6 +4254,9 @@ export function Editor({
             const range = selectionRange();
             if (!range) return;
             // Read at press time, never at draw time: between the two the person chose the words.
+            // And named as the text's own act, so the patch applies it to the text being written in
+            // instead of deferring it to the blur (rule 3; día 4).
+            pendingCause.current = "mark";
             propsNow.current.onSetMark(
               address,
               range,
@@ -4748,40 +4793,62 @@ export function Editor({
      * puts the bar and the selection back: that restoration focuses the element to place the range,
      * and a range placed in something not editable is a focus with no caret.
      */
-    const writeAgain = keepWriting.current;
-    keepWriting.current = null;
-    if (writeAgain) {
-      const again = iframeDoc
-        .querySelector(`[data-section="${CSS.escape(writeAgain.sectionId)}"]`)
-        ?.querySelector<HTMLElement>(`[data-id="${CSS.escape(writeAgain.elementId)}"]`);
-      if (again) {
-        markChosen(iframeDoc, again);
-        startWriting(again);
-      }
-    }
+    settleWriting(iframeDoc);
 
-    if (remembered) {
-      const section = iframeDoc.querySelector(
-        `[data-section="${CSS.escape(remembered.sectionId)}"]`,
-      );
-      const el = section?.querySelector<HTMLElement>(
-        `[data-id="${CSS.escape(remembered.elementId)}"]`,
-      );
+    /**
+     * **The bar, drawn again from the document as it now is.** Every control in it — the role
+     * pressed, the size step, the colour in force — is read at `open` and never after; under `swap`
+     * each rebuild reopened it here, and under `patch` the redraw does the same after every patch
+     * (día 4: the «Aa» walk pressed the body role and the bar still said «false»). `open` closes
+     * first, so the `selectionchange` listener is one, however many times this runs.
+     */
+    const reopen = (bar: ElementAddress, selection: typeof lastSelection.current) => {
+      const section = iframeDoc.querySelector(`[data-section="${CSS.escape(bar.sectionId)}"]`);
+      const el = section?.querySelector<HTMLElement>(`[data-id="${CSS.escape(bar.elementId)}"]`);
       // Gone means the element was deleted or hidden while the bar was open; forget it rather than
       // keeping a pointer to something nobody can see.
-      if (el) {
-        open(el);
-        // Only the element the selection was actually in: the bar can be remembered for one
-        // element while the last selection belonged to another.
-        if (
-          rememberedSelection &&
-          rememberedSelection.sectionId === remembered.sectionId &&
-          rememberedSelection.elementId === remembered.elementId
-        ) {
-          restoreSelection(iframeDoc, el, rememberedSelection);
-        }
-      } else toolbarOn.current = null;
-    }
+      if (!el) {
+        toolbarOn.current = null;
+        return;
+      }
+      // **The control the hand was on comes back under it.** Under `patch` the bar is rebuilt while
+      // a `<select>` or a button of it may hold the focus; `open` removes that node, focus falls to
+      // the body, and the text's deferred `focusout` — finding nothing of the bar focused — would
+      // dismiss the bar it had just rebuilt (measured: «element(s) not found» on the spacing select
+      // right after choosing in it). So the same control, by its `data-ref` or its mark, is focused
+      // in the new bar before that timer fires.
+      const held = iframeDoc.activeElement?.closest(".rb-toolbar")
+        ? (iframeDoc.activeElement as HTMLElement)
+        : null;
+      const heldRef = held?.dataset["ref"] ?? held?.dataset["mark"] ?? null;
+      const heldTag = held?.tagName ?? null;
+      open(el);
+      if (held && heldTag) {
+        const again = [...iframeDoc.querySelectorAll<HTMLElement>(`.rb-toolbar ${heldTag}`)].find(
+          (node) => (node.dataset["ref"] ?? node.dataset["mark"] ?? null) === heldRef,
+        );
+        again?.focus({ preventScroll: true });
+        if (again) return;
+      }
+      // Only the element the selection was actually in: the bar can be remembered for one
+      // element while the last selection belonged to another.
+      if (
+        selection &&
+        selection.sectionId === bar.sectionId &&
+        selection.elementId === bar.elementId
+      ) {
+        restoreSelection(iframeDoc, el, selection);
+      }
+    };
+    settleToolbar.current = (live) => {
+      if (live !== iframeDoc) return;
+      const bar = toolbarOn.current;
+      if (!bar) return;
+      // Read before `open` runs, for the same reason as above: its `refresh` would clear it.
+      const selection = lastSelection.current;
+      reopen(bar, selection);
+    };
+    if (remembered) reopen(remembered, rememberedSelection);
   }
 
   /**
@@ -4865,6 +4932,21 @@ export function Editor({
    * `focusLineAfterChange` when a new line appears. The order matters: the attribute is set first,
    * so that listener can tell writing from being merely chosen by asking the element.
    */
+  /** The writing a gesture interrupted, taken up again (ADR 0050 día 4) — after a wiring under
+   * `swap`, after the patch under `patch` (día 4: the resize's commit blurs the text and asks for
+   * it back, and only the wiring used to listen). */
+  function settleWriting(iframeDoc: Document) {
+    const writeAgain = keepWriting.current;
+    keepWriting.current = null;
+    if (!writeAgain) return;
+    const again = iframeDoc
+      .querySelector(`[data-section="${CSS.escape(writeAgain.sectionId)}"]`)
+      ?.querySelector<HTMLElement>(`[data-id="${CSS.escape(writeAgain.elementId)}"]`);
+    if (!again) return;
+    markChosen(iframeDoc, again);
+    startWriting(again);
+  }
+
   function startWriting(el: HTMLElement) {
     el.contentEditable = "true";
     el.focus({ preventScroll: true });
@@ -5180,6 +5262,21 @@ export function Editor({
       }
       stopWriting(el);
     });
+
+    // **After a history or mark patch under the caret, the capture is re-read** (día 4): the
+    // document's marks are not what `beginWriting` captured, and a commit built on the old capture
+    // would store the old marks over the new ones. Only for a text still being written in; the
+    // attribute itself stays for the `blur`, which is what `takeHistoryText` consumes.
+    refreshWriting.current = (live) => {
+      for (const el of live.querySelectorAll<HTMLElement>(`[${HISTORY_TOUCHED_ATTRIBUTE}]`)) {
+        const state = states.get(el);
+        const address = addressOf(el);
+        if (!state || !address || !el.isContentEditable) continue;
+        state.liveMarks = marksFor(docNow.current, address) ?? [];
+        state.liveText = liveFrameOf(el.textContent ?? "").text;
+        state.anchored = true;
+      }
+    };
 
     prepareTexts(iframeDoc);
     settleEditing(iframeDoc);
