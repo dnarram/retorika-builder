@@ -17,7 +17,6 @@ import {
   type ElementAddress,
   type EntryField,
   entryCountBlock,
-  FINE_PER_COLUMN,
   FINE_TRACKS,
   findSection,
   fineTrack,
@@ -84,6 +83,7 @@ import { holdFor } from "../editor/buildingScreen.ts";
 import { canvasLinkTarget } from "../editor/canvasLinks.ts";
 import { CANVAS_MODE_KEY, type CanvasMode, canvasModeFrom } from "../editor/canvasMode.ts";
 import { CHROME_SCALE, PILL_REST_BORDER, VERB_SCALE } from "../editor/chromeScale.ts";
+import { delegate } from "../editor/delegate.ts";
 import type { SwitchNotice } from "../editor/designTools.ts";
 import {
   designRows,
@@ -896,6 +896,8 @@ export function Editor({
    * no caret in it. The commit happens first (`el.blur()`), so nothing typed is lost.
    */
   const keepWriting = useRef<ElementAddress | null>(null);
+  /** `wireSelection`'s settling tail, callable after a structural patch (día 3). */
+  const settleSelection = useRef<() => void>(() => {});
   /**
    * Repaint the touch handles — **one painter per document** (día 7).
    *
@@ -924,6 +926,63 @@ export function Editor({
    */
   const deviceNow = useRef(device);
   deviceNow.current = device;
+
+  /**
+   * **Every value a handler reads comes through a «now» ref** (ADR 0051 §5, sprint 26 día 3).
+   *
+   * The handlers the canvas wires used to capture `doc`, `designTools` and every callback at
+   * wiring time, and that was correct only because each edit threw the document away and wired
+   * the next one with the next render's values. Under `patch` the document — and its listeners —
+   * outlive every edit, so a captured `doc` is the document from before the edit, and a captured
+   * `onDeleteSection` closes over a history that has since moved. `deviceNow` above is the
+   * precedent: the device switch never rebuilt the document either. `closureGuard.test.ts` holds
+   * the wiring to these — no bare `doc`, no bare prop — because one read missed is a handler
+   * acting on a document that no longer exists, silently.
+   */
+  const docNow = useRef(doc);
+  docNow.current = doc;
+  const designToolsNow = useRef(designTools);
+  designToolsNow.current = designTools;
+  const propsNow = useRef({
+    onAddItem,
+    onDeleteSection,
+    onDuplicateSection,
+    onEditText,
+    onEscalateSection,
+    onInsertSection,
+    onMoveItem,
+    onMoveSection,
+    onMoveUpOnMobile,
+    onRemoveItem,
+    onSectionToPage,
+    onSelectPage,
+    onSetElementStyle,
+    onSetEntryField,
+    onSetMark,
+    onSetPlacement,
+    onSetVariant,
+    onUnbindList,
+  });
+  propsNow.current = {
+    onAddItem,
+    onDeleteSection,
+    onDuplicateSection,
+    onEditText,
+    onEscalateSection,
+    onInsertSection,
+    onMoveItem,
+    onMoveSection,
+    onMoveUpOnMobile,
+    onRemoveItem,
+    onSectionToPage,
+    onSelectPage,
+    onSetElementStyle,
+    onSetEntryField,
+    onSetMark,
+    onSetPlacement,
+    onSetVariant,
+    onUnbindList,
+  };
 
   /**
    * **Which route shows an edit** (ADR 0051 §6, sprint 26 día 2): `swap` rebuilds the frame as it
@@ -1413,12 +1472,22 @@ export function Editor({
    */
   const [canvasBackground, setCanvasBackground] = useState<string | null>(null);
 
+  /**
+   * **By the ids of the hand-designed sections, not by position** (sprint 26 día 3). The first
+   * form was one bit per section in page order, so a section inserted, duplicated, deleted or
+   * undone changed the key — a chrome swap, and under `patch` a refused patch and a rebuilt
+   * document, for an edit that changed no section's source. Named by id, the key moves only when a
+   * section is escalated or returned (día 4 turns those into a patch too), or when the tools are
+   * toggled; and a duplicate of a hand-designed section is a new id, which is a new bar to draw.
+   */
   const chromeKey = useMemo(
     () =>
       `${designTools}|${doc.pages
         .flatMap((page) => page.sections)
-        .map((section) => (section.source === "free" ? "1" : "0"))
-        .join("")}`,
+        .filter((section) => section.source === "free")
+        .map((section) => section.id)
+        .sort()
+        .join(",")}`,
     [designTools, doc],
   );
 
@@ -1939,8 +2008,42 @@ export function Editor({
       takeOldRoute(report.reason);
       return;
     }
-    record("patch", { ...report, cause, ms: Math.round((performance.now() - started) * 10) / 10 });
+    const ms = Math.round((performance.now() - started) * 10) / 10;
+    // The chrome follows the page (día 3): after every patch, structural or not, because a text
+    // that grew moved the gap below it and a section that arrived has no verbs yet.
+    const redrawMs = redrawChrome(iframeDoc);
+    record("patch", { ...report, cause, ms, redrawMs });
     bumpEdit(iframeDoc);
+  }
+  /**
+   * **Every piece of chrome, drawn again from the page as it now is** (ADR 0051 §5, día 3): the
+   * gaps, the lines' verbs, the photographs' badges, the handmade bars, the hole, the grid, the
+   * handles; then what each wiring used to settle at its end — the selection and the return of
+   * focus, the chosen text, the focus a gesture asked to keep, the line just added. Each drawing
+   * function clears its own chrome first, and no listener is attached here: the listeners are the
+   * document's. Returns the cost, for the probe.
+   */
+  function redrawChrome(iframeDoc: Document): number {
+    const started = performance.now();
+    prepareTexts(iframeDoc);
+    prepareDraggables(iframeDoc);
+    drawGaps(iframeDoc);
+    drawLines(iframeDoc);
+    drawPhotoChrome(iframeDoc);
+    wireHandmade(iframeDoc);
+    syncHole(iframeDoc);
+    syncGrid(
+      iframeDoc,
+      designOnNow.current ? designSectionIdNow.current : null,
+      placingElementIdNow.current,
+    );
+    settleSelection.current();
+    settleEditing(iframeDoc);
+    settleDragging(iframeDoc);
+    focusLineAfterChange(iframeDoc);
+    observeSections(iframeDoc);
+    handlePainters.current.get(iframeDoc)?.();
+    return Math.round((performance.now() - started) * 10) / 10;
   }
   flushQueuedPatch.current = () => {
     if (!queuedPatch.current) return;
@@ -2176,6 +2279,17 @@ export function Editor({
    * does: «Reservar mesa» does not dial a telephone either. Making a menu entry move the editor to
    * that page belongs with the page tabs, which is the next day's work.
    */
+  // The four «now» refs whose values are born after the block above — placed where all four
+  // exist, and still at the component's top level so the hook order never changes.
+  const photoStatesNow = useRef(photoStates);
+  photoStatesNow.current = photoStates;
+  const designOnNow = useRef(designOn);
+  designOnNow.current = designOn;
+  const designSectionIdNow = useRef(designSectionId);
+  designSectionIdNow.current = designSectionId;
+  const placingElementIdNow = useRef(placingElementId);
+  placingElementIdNow.current = placingElementId;
+
   function wireLinks(iframeDoc: Document) {
     iframeDoc.addEventListener(
       "click",
@@ -2196,7 +2310,7 @@ export function Editor({
         // inside the editor. `./<slug>.html` is the published form, and the slug is the only part
         // of it anybody here needs.
         const href = anchor.getAttribute?.("href") ?? "";
-        const destination = canvasLinkTarget(doc, href);
+        const destination = canvasLinkTarget(docNow.current, href);
         // A card's title link never reaches here: `wireEditing` unwraps it, so the click edits the
         // title (David's adjustment). What does reach here with an entry's slug is a link the owner
         // typed by hand to a ficha, and that moves the canvas to the ficha, the way a menu entry
@@ -2208,17 +2322,21 @@ export function Editor({
             [destination.pageId]: destination.entryId,
           }));
         }
-        onSelectPage(doc.pages[0]?.id === destination.pageId ? undefined : destination.pageId);
+        propsNow.current.onSelectPage(
+          docNow.current.pages[0]?.id === destination.pageId ? undefined : destination.pageId,
+        );
       },
       true,
     );
   }
 
   function wireSelection(iframeDoc: Document) {
-    const sections = [...iframeDoc.querySelectorAll<HTMLElement>("[data-section]")];
+    // Read every time, never captured (ADR 0051 §5): under `patch` a section can arrive or leave
+    // between two uses, and a captured array would be the page from before.
+    const sectionsNow = () => [...iframeDoc.querySelectorAll<HTMLElement>("[data-section]")];
 
     /**
-     * The canvas becomes reachable: one Tab stop, arrows between the sections, Enter to choose.
+     * The canvas becomes reachable: one Tab stop, arrows between the sectionsNow(), Enter to choose.
      *
      * **`role="group"` and not a named `<section>`, which is David's correction and he was right.**
      * `packages/renderer` emits `element("section", …)`, and a `<section>` with an accessible name
@@ -2232,25 +2350,27 @@ export function Editor({
      * screen reader cannot come to call something what the panel beside it does not.
      */
     function describeForKeyboard() {
-      const names = sections.map((section) =>
-        sectionDisplayName(doc, section.dataset.section ?? ""),
+      const names = sectionsNow().map((section) =>
+        sectionDisplayName(docNow.current, section.dataset.section ?? ""),
       );
-      for (const [index, section] of sections.entries()) {
+      for (const [index, section] of sectionsNow().entries()) {
         section.setAttribute("role", "group");
         section.setAttribute("aria-label", names[index] ?? "");
       }
       applyRovingTabIndex();
     }
 
-    /** Where the keyboard is, as an index into `sections`, or `-1`. */
+    /** Where the keyboard is, as an index into `sectionsNow()`, or `-1`. */
     function keyboardIndex(): number {
       const id = keyboardSection.current;
-      return id === null ? -1 : sections.findIndex((section) => section.dataset.section === id);
+      return id === null
+        ? -1
+        : sectionsNow().findIndex((section) => section.dataset.section === id);
     }
 
     function applyRovingTabIndex() {
-      const indexes = rovingTabIndex(sections.length, keyboardIndex());
-      for (const [index, section] of sections.entries()) {
+      const indexes = rovingTabIndex(sectionsNow().length, keyboardIndex());
+      for (const [index, section] of sectionsNow().entries()) {
         section.setAttribute("tabindex", String(indexes[index] ?? -1));
       }
     }
@@ -2269,7 +2389,7 @@ export function Editor({
      * that is the document the focus is in.
      */
     function announceChoice(sectionId: string) {
-      for (const section of sections) {
+      for (const section of sectionsNow()) {
         if (section.dataset.section === sectionId) section.setAttribute("aria-current", "true");
         else section.removeAttribute("aria-current");
       }
@@ -2283,7 +2403,7 @@ export function Editor({
       }
       region.textContent = es["editor.canvasKeys.chosen"].replace(
         "{section}",
-        sectionDisplayName(doc, sectionId),
+        sectionDisplayName(docNow.current, sectionId),
       );
     }
 
@@ -2359,7 +2479,7 @@ export function Editor({
       pendingReturn.current = {
         sectionId,
         within,
-        index: sections.findIndex((section) => section.dataset["section"] === sectionId),
+        index: sectionsNow().findIndex((section) => section.dataset["section"] === sectionId),
       };
     }
 
@@ -2562,7 +2682,7 @@ export function Editor({
           pendingReturn.current = {
             sectionId: hostId,
             within: `.rb-actions [data-action="${verb}"]`,
-            index: sections.indexOf(host),
+            index: sectionsNow().indexOf(host),
           };
         }
         onClick(button);
@@ -2647,7 +2767,7 @@ export function Editor({
         const move = gripKeyAction(event);
         if (move.kind === "ignore") return;
         // Stopped as well as prevented: the canvas's own `keydown` listener is on the document in
-        // the capture phase, and an arrow that reached it would move between sections instead.
+        // the capture phase, and an arrow that reached it would move between sectionsNow() instead.
         event.preventDefault();
         event.stopPropagation();
         if (move.kind === "home") {
@@ -2748,7 +2868,7 @@ export function Editor({
           // down (`setVariant` hands back the same document), so the frame does not reload and
           // the menu would otherwise vanish for nothing; picking a different one reloads it, and
           // `compositionMenuOpen` is what brings the menu back so the next try is one click.
-          onSetVariant(sectionId, composition.variantId);
+          propsNow.current.onSetVariant(sectionId, composition.variantId);
         });
         panel.appendChild(choice);
       }
@@ -2804,7 +2924,7 @@ export function Editor({
         armReturn(sectionId, '.rb-actions [data-action="handmade"]');
         // `iframeDoc` and not `liveDoc()`: this handler lives in the document it has to measure,
         // and was wired into it before it became the visible one.
-        onEscalateSection(sectionId, measurePlaced(iframeDoc, sectionId));
+        propsNow.current.onEscalateSection(sectionId, measurePlaced(iframeDoc, sectionId));
       });
       row.appendChild(yes);
 
@@ -2856,7 +2976,7 @@ export function Editor({
         serial: serialOf(iframeDoc),
         readyState: iframeDoc.readyState,
       });
-      for (const section of sections) {
+      for (const section of sectionsNow()) {
         section.classList.remove("rb-selected");
         for (const el of section.querySelectorAll(".rb-actions, .rb-compositions")) {
           el.remove();
@@ -2888,7 +3008,7 @@ export function Editor({
         if (current !== sectionId) setDesignElementId(null);
         return sectionId;
       });
-      const index = sections.indexOf(target);
+      const index = sectionsNow().indexOf(target);
 
       const actions = chrome(iframeDoc, "div");
       actions.className = "rb-actions";
@@ -2897,7 +3017,7 @@ export function Editor({
        * particular contract: one Tab stop for the whole thing, and the arrows moving between the
        * controls inside it. This cluster keeps neither — every verb is its own Tab stop, which is
        * what sprint 17 day 4's walks are written against, and the arrows belong to the canvas for
-       * moving between sections. A role that announces a contract the keys do not honour is worse
+       * moving between sectionsNow(). A role that announces a contract the keys do not honour is worse
        * than a plain group with a name, which is all this needs: eight buttons a screen reader
        * used to reach with nothing saying what they were eight of.
        */
@@ -2911,7 +3031,7 @@ export function Editor({
           "move",
           index <= 0,
           `<svg width="${VERB_SCALE.icon}" height="${VERB_SCALE.icon}" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg>`,
-          () => onMoveSection(sectionId, index - 1),
+          () => propsNow.current.onMoveSection(sectionId, index - 1),
         ),
       );
       actions.appendChild(
@@ -2920,9 +3040,9 @@ export function Editor({
           es["editor.moveSectionDown"],
           es["editor.verb.moveDown"],
           "move",
-          index < 0 || index >= sections.length - 1,
+          index < 0 || index >= sectionsNow().length - 1,
           `<svg width="${VERB_SCALE.icon}" height="${VERB_SCALE.icon}" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M6 13l6 6 6-6"/></svg>`,
-          () => onMoveSection(sectionId, index + 1),
+          () => propsNow.current.onMoveSection(sectionId, index + 1),
         ),
       );
       // Sixth button, and it only appears when there is a choice to make: a section carrying its
@@ -2930,7 +3050,7 @@ export function Editor({
       // dead one. Placed after the two moves because it answers the same kind of question — where
       // this section's parts sit — and before duplicate, fields and delete, which are about the
       // section as a thing.
-      const compositions = compositionsFor(doc, sectionId);
+      const compositions = compositionsFor(docNow.current, sectionId);
       if (compositions.length > 0) {
         actions.appendChild(
           action(
@@ -2960,7 +3080,7 @@ export function Editor({
       // The offer, and only while the tools are on and the catalog is still placing this section.
       // A free section has the bar instead, which is where its way back lives — two controls for
       // the same pair of states would be one too many, and the bar is visible without selecting.
-      if (designTools && !isHandDesigned(doc, sectionId)) {
+      if (designToolsNow.current && !isHandDesigned(docNow.current, sectionId)) {
         actions.appendChild(
           action(
             "handmade",
@@ -2994,7 +3114,7 @@ export function Editor({
           "move",
           false,
           `<svg width="${VERB_SCALE.icon}" height="${VERB_SCALE.icon}" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`,
-          () => onDuplicateSection(sectionId),
+          () => propsNow.current.onDuplicateSection(sectionId),
         ),
       );
       // Seventh button, and the one this sprint exists for: «Convertir esta sección en página»
@@ -3003,7 +3123,7 @@ export function Editor({
       // Three kinds of section are never offered it (the cover is the page's h1 and its promise,
       // the footer is chrome, an avance is already a reference to a page), and neither is anything
       // once the site has the five pages the download route accepts.
-      if (canConvert(doc, sectionId)) {
+      if (canConvert(docNow.current, sectionId)) {
         actions.appendChild(
           action(
             "to-page",
@@ -3012,7 +3132,7 @@ export function Editor({
             "move",
             false,
             `<svg width="${VERB_SCALE.icon}" height="${VERB_SCALE.icon}" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8"/><path d="M14 3v6h6"/><path d="M14 3l6 6"/><path d="M11 13h9"/><path d="M17 10l3 3-3 3"/></svg>`,
-            () => onSectionToPage(sectionId),
+            () => propsNow.current.onSectionToPage(sectionId),
           ),
         );
       }
@@ -3036,7 +3156,7 @@ export function Editor({
           "delete",
           false,
           `<svg width="${VERB_SCALE.icon}" height="${VERB_SCALE.icon}" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6 7l1 13h10l1-13"/></svg>`,
-          () => onDeleteSection(sectionId),
+          () => propsNow.current.onDeleteSection(sectionId),
         ),
       );
       actions.appendChild(gripFor(actions, target, sectionId));
@@ -3056,21 +3176,22 @@ export function Editor({
       placeActions(actions, target, sectionId);
     }
 
-    for (const section of sections) {
-      section.addEventListener("click", () => select(section, "click"));
-      /*
-       * Clicking into a section's text, or Tab-ing to it, moves the keyboard's place as well —
-       * otherwise the arrows would act on wherever the place last was, which is somewhere the
-       * person is not. `focusin` and not `focus`, because the thing receiving focus is usually a
-       * child: a paragraph being edited, or one of the action buttons.
-       */
-      section.addEventListener("focusin", () => {
-        const id = section.dataset.section;
-        if (!id || keyboardSection.current === id) return;
-        keyboardSection.current = id;
-        applyRovingTabIndex();
-      });
-    }
+    // Delegated (ADR 0051 §5, día 3): one click and one focusin on the document, dispatched to the
+    // section the event concerns — so a section that arrives with an edit is heard at once.
+    delegate(iframeDoc, "click", "[data-section]", (section) => select(section, "click"));
+
+    /*
+     * Clicking into a section's text, or Tab-ing to it, moves the keyboard's place as well —
+     * otherwise the arrows would act on wherever the place last was, which is somewhere the
+     * person is not. `focusin` and not `focus`, because the thing receiving focus is usually a
+     * child: a paragraph being edited, or one of the action buttons.
+     */
+    delegate(iframeDoc, "focusin", "[data-section]", (section) => {
+      const id = section.dataset.section;
+      if (!id || keyboardSection.current === id) return;
+      keyboardSection.current = id;
+      applyRovingTabIndex();
+    });
 
     /**
      * The canvas's own keys. Every decision is `sectionKeys.ts`'s; this is the wiring.
@@ -3098,7 +3219,7 @@ export function Editor({
          * carries two notes saying so.
          */
         const focused = iframeDoc.activeElement as HTMLElement | null;
-        const at = focused ? sections.findIndex((section) => section === focused) : -1;
+        const at = focused ? sectionsNow().findIndex((section) => section === focused) : -1;
         const action = sectionKeyAction(
           {
             key: event.key,
@@ -3107,13 +3228,13 @@ export function Editor({
             shiftKey: event.shiftKey,
             altKey: event.altKey,
           },
-          { count: sections.length, at },
+          { count: sectionsNow().length, at },
         );
         if (action.kind === "ignore") return;
         event.preventDefault();
 
         if (action.kind === "focus") {
-          const target = sections[action.index];
+          const target = sectionsNow()[action.index];
           if (!target) return;
           keyboardSection.current = target.dataset.section ?? null;
           applyRovingTabIndex();
@@ -3125,7 +3246,7 @@ export function Editor({
           // The focused section, not the remembered one: the two agree because `focusin` keeps the
           // ref in step, and reading the same source the decision was made from is what stops them
           // ever disagreeing in the one direction that matters.
-          const target = sections[at];
+          const target = sectionsNow()[at];
           if (target) select(target);
           return;
         }
@@ -3135,7 +3256,7 @@ export function Editor({
          * you were. Focus goes to the frame's own body, which is where it would be if nothing in
          * the canvas had ever been touched.
          */
-        sections[at]?.blur();
+        sectionsNow()[at]?.blur();
         showKeyLegend(false);
       },
       true,
@@ -3145,7 +3266,7 @@ export function Editor({
 
     // Anywhere else in the page closes the composition menu, the same way the insertion menu
     // closes. Registered on the frame's document rather than the body so a click on the padding
-    // around the sections counts too.
+    // around the sectionsNow() counts too.
     iframeDoc.addEventListener("click", (event) => {
       /*
        * **Duck-typed, and until sprint 17 day 3 this line was dead.** It read `target instanceof
@@ -3171,98 +3292,110 @@ export function Editor({
     // Put the selection back where it was before this render replaced the whole frame. A section
     // that is gone — deleted, and this is the render that removed it — simply does not come back,
     // which is the right answer without a special case for it.
-    const remembered = selectedSection.current;
-    if (remembered) {
-      const target = sections.find((section) => section.dataset.section === remembered);
-      if (target) {
-        select(target, "restore");
-        if (compositionMenuOpen.current) {
-          const compositions = compositionsFor(doc, remembered);
-          if (compositions.length > 0) {
-            const menu = compositionMenu(remembered, compositions);
-            target.appendChild(menu);
-            anchorPopup(menu, target);
-            /*
-             * **Wired here too, or the menu that comes back is the one nobody can use.** This is
-             * the reopening the mouse has had since the menu shipped — `compositionMenuOpen` brings
-             * it back after a choice «so the next try is one click» — and until sprint 17 day 5 it
-             * came back inert to a keyboard: no focus in it, no arrows, no Escape.
-             */
-            const opener = target.querySelector<HTMLElement>(
-              '.rb-actions [data-action="composition"]',
-            );
-            if (opener) wirePopup(menu, opener);
-          } else {
-            compositionMenuOpen.current = false;
-          }
-        }
-      } else {
-        selectedSection.current = null;
-        compositionMenuOpen.current = false;
-      }
-    }
-
     /**
-     * **Put the keyboard back after a verb, which is the whole of sprint 17 day 4.**
-     *
-     * Pressing «subir» throws the frame away and parses a new one. Before this, focus went nowhere
-     * — the element that had it no longer existed — so it fell to the new document's body, which is
-     * the top of the page. A keyboard user moved a section once and then had to walk all the way
-     * back down to move it again; somebody using a screen reader was simply told they were at the
-     * beginning of the site.
-     *
-     * Where it goes is `placeAfterRebuild`'s one rule: follow the section that was acted on, and if
-     * it is no longer on this page take whatever is now in its place. Then, inside that section,
-     * **the same verb again** if it is still there and still usable — so three presses of «subir»
-     * are three presses in one place, which is what a person does with a verb like that. The
-     * fallbacks are in order and each one is a real case: the button exists but is now disabled
-     * (the section reached the top), or the cluster is not drawn because the thing in this place is
-     * a different section (a delete). The section itself is always focusable, so the chain cannot
-     * end in nothing while a section exists.
+     * **Settling the selection, the return of focus and the pending place — once at wiring, and
+     * again after a structural patch** (día 3). This tail used to run only when a new document was
+     * wired; under `patch` a section inserted, moved or removed changes what it reads without any
+     * wiring, so `applyPatch` calls it through `settleSelection`.
      */
-    const pending = pendingReturn.current;
-    if (pending) {
-      pendingReturn.current = null;
-      const place = placeAfterRebuild({
-        // `-1` whenever there is no id to follow, which `placeAfterRebuild` reads as «take whatever
-        // is in that place now» — the one rule that already served a delete and now serves an
-        // insertion without knowing it is one.
-        idIndex:
-          pending.sectionId === null
-            ? -1
-            : sections.findIndex((section) => section.dataset.section === pending.sectionId),
-        wasAt: pending.index,
-        count: sections.length,
-      });
-      const target = place === null ? undefined : sections[place];
-      const targetId = target?.dataset["section"];
-      if (target && targetId) {
-        focusTarget.current = {
-          sectionId: targetId,
-          ...(pending.within === undefined ? {} : { within: pending.within }),
-        };
+    const settle = () => {
+      const remembered = selectedSection.current;
+      if (remembered) {
+        const target = sectionsNow().find((section) => section.dataset.section === remembered);
+        if (target) {
+          select(target, "restore");
+          if (compositionMenuOpen.current) {
+            const compositions = compositionsFor(docNow.current, remembered);
+            if (compositions.length > 0) {
+              const menu = compositionMenu(remembered, compositions);
+              target.appendChild(menu);
+              anchorPopup(menu, target);
+              /*
+               * **Wired here too, or the menu that comes back is the one nobody can use.** This is
+               * the reopening the mouse has had since the menu shipped — `compositionMenuOpen` brings
+               * it back after a choice «so the next try is one click» — and until sprint 17 day 5 it
+               * came back inert to a keyboard: no focus in it, no arrows, no Escape.
+               */
+              const opener = target.querySelector<HTMLElement>(
+                '.rb-actions [data-action="composition"]',
+              );
+              if (opener) wirePopup(menu, opener);
+            } else {
+              compositionMenuOpen.current = false;
+            }
+          }
+        } else {
+          selectedSection.current = null;
+          compositionMenuOpen.current = false;
+        }
       }
-    }
 
-    /*
-     * Applied on **every** wiring and not only on the one that read the pending verb, because a
-     * single verb can produce two documents and the first is discarded. Re-selecting here as well:
-     * the action cluster is what is being focused into, and after a delete the section now in that
-     * place was never chosen, so nothing has drawn one for it yet.
-     */
-    const wanted = focusTarget.current;
-    if (wanted) {
-      const host = sections.find((section) => section.dataset["section"] === wanted.sectionId);
-      /*
-       * **Only when it is not already the chosen one**, and that `if` is a fix rather than a
-       * micro-optimisation: `select` clears `.rb-compositions` from every section, so calling it
-       * here destroyed the menu the restore above had just reopened — and with it the focus this
-       * block exists to place. The case it is actually for is a delete, where the section now in
-       * that place was never chosen and nothing has drawn a cluster for it.
+      /**
+       * **Put the keyboard back after a verb, which is the whole of sprint 17 day 4.**
+       *
+       * Pressing «subir» throws the frame away and parses a new one. Before this, focus went nowhere
+       * — the element that had it no longer existed — so it fell to the new document's body, which is
+       * the top of the page. A keyboard user moved a section once and then had to walk all the way
+       * back down to move it again; somebody using a screen reader was simply told they were at the
+       * beginning of the site.
+       *
+       * Where it goes is `placeAfterRebuild`'s one rule: follow the section that was acted on, and if
+       * it is no longer on this page take whatever is now in its place. Then, inside that section,
+       * **the same verb again** if it is still there and still usable — so three presses of «subir»
+       * are three presses in one place, which is what a person does with a verb like that. The
+       * fallbacks are in order and each one is a real case: the button exists but is now disabled
+       * (the section reached the top), or the cluster is not drawn because the thing in this place is
+       * a different section (a delete). The section itself is always focusable, so the chain cannot
+       * end in nothing while a section exists.
        */
-      if (host && selectedSection.current !== wanted.sectionId) select(host, "return");
-      takeCanvasFocus(iframeDoc);
-    }
+      const pending = pendingReturn.current;
+      if (pending) {
+        pendingReturn.current = null;
+        const place = placeAfterRebuild({
+          // `-1` whenever there is no id to follow, which `placeAfterRebuild` reads as «take whatever
+          // is in that place now» — the one rule that already served a delete and now serves an
+          // insertion without knowing it is one.
+          idIndex:
+            pending.sectionId === null
+              ? -1
+              : sectionsNow().findIndex((section) => section.dataset.section === pending.sectionId),
+          wasAt: pending.index,
+          count: sectionsNow().length,
+        });
+        const target = place === null ? undefined : sectionsNow()[place];
+        const targetId = target?.dataset["section"];
+        if (target && targetId) {
+          focusTarget.current = {
+            sectionId: targetId,
+            ...(pending.within === undefined ? {} : { within: pending.within }),
+          };
+        }
+      }
+
+      /*
+       * Applied on **every** wiring and not only on the one that read the pending verb, because a
+       * single verb can produce two documents and the first is discarded. Re-selecting here as well:
+       * the action cluster is what is being focused into, and after a delete the section now in that
+       * place was never chosen, so nothing has drawn one for it yet.
+       */
+      const wanted = focusTarget.current;
+      if (wanted) {
+        const host = sectionsNow().find(
+          (section) => section.dataset["section"] === wanted.sectionId,
+        );
+        /*
+         * **Only when it is not already the chosen one**, and that `if` is a fix rather than a
+         * micro-optimisation: `select` clears `.rb-compositions` from every section, so calling it
+         * here destroyed the menu the restore above had just reopened — and with it the focus this
+         * block exists to place. The case it is actually for is a delete, where the section now in
+         * that place was never chosen and nothing has drawn a cluster for it.
+         */
+        if (host && selectedSection.current !== wanted.sectionId) select(host, "return");
+        takeCanvasFocus(iframeDoc);
+      }
+    };
+    settle();
+    settleSelection.current = settle;
   }
 
   /**
@@ -3276,7 +3409,7 @@ export function Editor({
    * None of it reaches the published HTML — this runs against the live DOM only, never the
    * document.
    */
-  function wireInsertion(iframeDoc: Document) {
+  function drawGaps(iframeDoc: Document) {
     // Drawn from a clean slate, like `.rb-menu`, `.rb-toolbar` and `.rb-hole` already are: a second
     // pass over a document that has its gaps must replace them, never add a second row of pills
     // under each. `wireOnce`'s mark is what stops the second pass; this is what makes one harmless.
@@ -3381,7 +3514,7 @@ export function Editor({
            * landing on one of its verbs would be answering a question nobody asked.
            */
           pendingReturn.current = { sectionId: null, index };
-          onInsertSection(offer.catalogId, index);
+          propsNow.current.onInsertSection(offer.catalogId, index);
         });
         return button;
       }
@@ -3462,7 +3595,18 @@ export function Editor({
     // give the keyboard back to, and handing it the listener's own `Event` would be handing it
     // something that is not an element at all. A click elsewhere passes nothing on purpose — the
     // person has already chosen where they are going.
-    iframeDoc.addEventListener("click", () => closeMenus());
+  }
+
+  /**
+   * **What listens on the document itself, once per session** (ADR 0051 §5). The drawing
+   * functions used to attach these at the end of their own pass, which was one listener per
+   * document under `swap` and would be one per redraw under `patch`.
+   */
+  function attachDocument(iframeDoc: Document) {
+    // A click anywhere closes the «Añadir sección» menu — the pill's own click stops propagation.
+    iframeDoc.addEventListener("click", () => {
+      for (const menu of iframeDoc.querySelectorAll(".rb-menu")) menu.remove();
+    });
   }
 
   /**
@@ -3490,11 +3634,17 @@ export function Editor({
    * maximum is reached, and no "remove" on the last line, since a list with nothing in it renders
    * as nothing and would leave a heading with a hole under it.
    */
-  function wireLines(iframeDoc: Document) {
+  function drawLines(iframeDoc: Document) {
+    // Clear-first, so a redraw after a patch draws each line's verbs once and not twice (día 3).
+    for (const old of iframeDoc.querySelectorAll(
+      ".rb-line-move, .rb-line-remove, .rb-line-add, .rb-line-full",
+    )) {
+      old.remove();
+    }
     for (const section of iframeDoc.querySelectorAll<HTMLElement>("[data-section]")) {
       const sectionId = section.dataset.section;
       if (!sectionId) continue;
-      const lines = linesFor(doc, sectionId);
+      const lines = linesFor(docNow.current, sectionId);
       if (!lines) continue;
 
       const list = section.querySelector<HTMLElement>(".rb-list");
@@ -3503,7 +3653,7 @@ export function Editor({
       // The row this section's own chrome goes in, so that it cannot take one an element is
       // counting on — see `rowBelowPlacements`, and the 33px it cost on «Qué hago». `undefined`
       // for a section the catalog draws, which keeps auto-placement exactly as it was there.
-      const chromeRow = rowBelowPlacements(doc, sectionId);
+      const chromeRow = rowBelowPlacements(docNow.current, sectionId);
 
       const items = [...list.querySelectorAll<HTMLElement>("[data-item]")];
       for (const [index, li] of items.entries()) {
@@ -3539,7 +3689,12 @@ export function Editor({
             }"/></svg>`;
             button.addEventListener("click", (event) => {
               event.stopPropagation();
-              onMoveItem(sectionId, lines.slot, itemId, direction === "up" ? index - 1 : index + 1);
+              propsNow.current.onMoveItem(
+                sectionId,
+                lines.slot,
+                itemId,
+                direction === "up" ? index - 1 : index + 1,
+              );
             });
             return button;
           };
@@ -3559,7 +3714,7 @@ export function Editor({
             // The index the line being taken away occupies: after the removal that position holds
             // the line that followed it, which is where the keyboard goes.
             focusAfterLines.current = { kind: "removed", sectionId, index };
-            onRemoveItem(sectionId, lines.slot, itemId);
+            propsNow.current.onRemoveItem(sectionId, lines.slot, itemId);
           });
           li.appendChild(remove);
         }
@@ -3590,16 +3745,39 @@ export function Editor({
         event.stopPropagation();
         // Built here from the catalog, because what a valid line is made of is the catalog's
         // business; the schema re-mints its ids against the document it lands in.
-        const found = findSection(doc, sectionId);
+        const found = findSection(docNow.current, sectionId);
         if (!found) return;
         focusAfterLines.current = { kind: "added", sectionId, index: items.length };
-        onAddItem(sectionId, lines.slot, blankItem(found.section.preset.catalogId));
+        propsNow.current.onAddItem(
+          sectionId,
+          lines.slot,
+          blankItem(found.section.preset.catalogId),
+        );
       });
       list.insertAdjacentElement("afterend", add);
     }
   }
 
-  function wirePhotos(iframeDoc: Document) {
+  /**
+   * **One listener for every photograph, delegated** (ADR 0051 §5, día 3): a photograph that
+   * arrives with an edit is heard the moment it exists, and a redraw of the chrome below cannot
+   * stack a second click on one that stayed.
+   */
+  function attachPhotos(iframeDoc: Document) {
+    delegate(iframeDoc, "click", 'img[data-role="image"]', (image, event) => {
+      const elementId = image.dataset["id"];
+      const sectionId = image.closest<HTMLElement>("[data-section]")?.dataset["section"];
+      if (!elementId || !sectionId) return;
+      // Not the section's click too: choosing a photo is not choosing a section.
+      event.stopPropagation();
+      replacePhoto({ sectionId, elementId });
+    });
+  }
+
+  /** The photographs' chrome — the class, the title, the «Foto de ejemplo» badge — drawn
+   * clear-first, so it can be drawn again after every patch. */
+  function drawPhotoChrome(iframeDoc: Document) {
+    for (const old of iframeDoc.querySelectorAll(".rb-sample")) old.remove();
     for (const image of iframeDoc.querySelectorAll<HTMLImageElement>('img[data-role="image"]')) {
       const elementId = image.dataset.id;
       const sectionId = image.closest<HTMLElement>("[data-section]")?.dataset.section;
@@ -3607,13 +3785,8 @@ export function Editor({
 
       image.classList.add("rb-photo");
       image.setAttribute("title", es["editor.changePhoto"]);
-      image.addEventListener("click", (event) => {
-        // Not the section's click too: choosing a photo is not choosing a section.
-        event.stopPropagation();
-        replacePhoto({ sectionId, elementId });
-      });
 
-      if (photoStates.get(addressKey(sectionId, elementId)) !== "sample") continue;
+      if (photoStatesNow.current.get(addressKey(sectionId, elementId)) !== "sample") continue;
 
       // The badge is absolutely positioned, so it needs a positioned ancestor to anchor to, and
       // the nearest one it would otherwise find is the section — which, for a gallery card, is the
@@ -3827,12 +4000,12 @@ export function Editor({
       const role = el.dataset["role"] as Role | undefined;
       if (!section || !sectionId || !elementId || !role) return;
 
-      const controls = toolbarFor({ role }, designTools === true);
+      const controls = toolbarFor({ role }, designToolsNow.current === true);
       if (!controls || !hasAnyControl(controls)) return;
 
       const address: ElementAddress = { sectionId, elementId };
       toolbarOn.current = address;
-      const current = styleFor(doc, address);
+      const current = styleFor(docNow.current, address);
 
       const bar = chrome(iframeDoc, "div");
       bar.className = "rb-toolbar";
@@ -3882,7 +4055,7 @@ export function Editor({
       };
 
       const write = (property: StyleProperty, value: StyleValue | undefined) => {
-        onSetElementStyle(address, property, value);
+        propsNow.current.onSetElementStyle(address, property, value);
       };
 
       /**
@@ -3909,12 +4082,12 @@ export function Editor({
        * about and the useful thing is where the words live — so it says that instead, rather than
        * warning about a consequence that has nowhere to land.
        */
-      const boundHere = boundAt(doc, address, el);
+      const boundHere = boundAt(docNow.current, address, el);
       if (boundHere) {
-        const collection = doc.collections.find(
+        const collection = docNow.current.collections.find(
           (candidate) => candidate.id === boundHere.collectionId,
         );
-        const places = usesOfCollection(doc, boundHere.collectionId).length;
+        const places = usesOfCollection(docNow.current, boundHere.collectionId).length;
         const notice = chrome(iframeDoc, "div");
         notice.className = "rb-toolbar-notice";
         notice.setAttribute("role", "status");
@@ -3936,8 +4109,8 @@ export function Editor({
         exit.title = es["editor.toolbar.unbindHelp"];
         exit.addEventListener("click", () => {
           dismiss();
-          const list = boundListOf(doc, sectionId);
-          if (list) onUnbindList(sectionId, list.slot);
+          const list = boundListOf(docNow.current, sectionId);
+          if (list) propsNow.current.onUnbindList(sectionId, list.slot);
         });
         exitGroup.appendChild(exit);
         bar.appendChild(exitGroup);
@@ -4001,7 +4174,7 @@ export function Editor({
           lastSelection.current = range
             ? { sectionId: address.sectionId, elementId: address.elementId, ...range }
             : null;
-          const marks = marksFor(doc, address);
+          const marks = marksFor(docNow.current, address);
           for (const { mark, node } of buttons) {
             const pressed = range !== undefined && rangeHasMark(marks, range, mark);
             node.setAttribute("aria-pressed", String(pressed));
@@ -4039,7 +4212,12 @@ export function Editor({
             const range = selectionRange();
             if (!range) return;
             // Read at press time, never at draw time: between the two the person chose the words.
-            onSetMark(address, range, mark, !rangeHasMark(marksFor(doc, address), range, mark));
+            propsNow.current.onSetMark(
+              address,
+              range,
+              mark,
+              !rangeHasMark(marksFor(docNow.current, address), range, mark),
+            );
           });
           buttons.push({ mark, node: button });
           marksGroup.appendChild(button);
@@ -4161,7 +4339,7 @@ export function Editor({
            * give no way to tell the colour from the family. Naming the newcomer rather than renaming
            * the swatch: the swatch is in the mockup, this is not.
            */
-          const name = toolbarFamilyLabel(doc.theme, ref);
+          const name = toolbarFamilyLabel(docNow.current.theme, ref);
           button.setAttribute("aria-label", name);
           button.title = name;
           // Pressing the one already chosen takes it off, like the size steps. With two buttons and
@@ -4180,7 +4358,7 @@ export function Editor({
           button.type = "button";
           button.className = "rb-toolbar-swatch";
           button.dataset["ref"] = ref;
-          button.style.background = doc.theme[ref];
+          button.style.background = docNow.current.theme[ref];
           const label = es[`editor.toolbar.colorOf.${ref}` as keyof typeof es];
           button.title = label;
           button.setAttribute("aria-label", label);
@@ -4234,7 +4412,7 @@ export function Editor({
             exactColor !== ""
               ? exactColor
               : inForce
-                ? (doc.theme[inForce] ?? "#000000")
+                ? (docNow.current.theme[inForce] ?? "#000000")
                 : "#000000";
           if (exactColor !== "") exact.classList.add("rb-toolbar-on");
           // `change` rather than `input`: dragging across a colour wheel fires `input` continuously
@@ -4512,27 +4690,29 @@ export function Editor({
       });
     };
 
-    for (const el of iframeDoc.querySelectorAll<HTMLElement>("[data-id]")) {
-      if (!EDITABLE_TAGS.has(el.tagName)) continue;
-      el.addEventListener("focus", () => open(el));
-      el.addEventListener("blur", () => {
-        // Deferred, so a click that lands on the bar itself is not raced by the blur it follows.
-        // `mousedown`'s preventDefault stops the blur in the ordinary case; this covers a keyboard
-        // tab out, where there is no mousedown at all.
-        setTimeout(() => {
-          // **Only if the bar is still this element's.** Clicking from one text straight to
-          // another fires the new element's `focus` *before* this deferred blur, so the bar has
-          // already been rebuilt for the new element by the time this runs — and a blur that
-          // closed it unconditionally would tear down the bar it never opened. The walk found
-          // exactly that: the toolbar appeared on the cover and on no other section, because
-          // every later click opened it and then immediately took it away again.
-          if (toolbarOn.current?.elementId !== el.dataset.id) return;
-          if (iframeDoc.activeElement !== el && !iframeDoc.activeElement?.closest(".rb-toolbar")) {
-            dismiss();
-          }
-        }, 0);
-      });
-    }
+    // Delegated (ADR 0051 §5, día 3): `focusin`/`focusout` bubble where `focus`/`blur` do not, and
+    // a text that arrives with an edit opens the bar the moment it is focused.
+    delegate(iframeDoc, "focusin", "[data-id]", (el) => {
+      if (EDITABLE_TAGS.has(el.tagName)) open(el);
+    });
+    delegate(iframeDoc, "focusout", "[data-id]", (el) => {
+      if (!EDITABLE_TAGS.has(el.tagName)) return;
+      // Deferred, so a click that lands on the bar itself is not raced by the blur it follows.
+      // `mousedown`'s preventDefault stops the blur in the ordinary case; this covers a keyboard
+      // tab out, where there is no mousedown at all.
+      setTimeout(() => {
+        // **Only if the bar is still this element's.** Clicking from one text straight to
+        // another fires the new element's `focus` *before* this deferred blur, so the bar has
+        // already been rebuilt for the new element by the time this runs — and a blur that
+        // closed it unconditionally would tear down the bar it never opened. The walk found
+        // exactly that: the toolbar appeared on the cover and on no other section, because
+        // every later click opened it and then immediately took it away again.
+        if (toolbarOn.current?.elementId !== el.dataset.id) return;
+        if (iframeDoc.activeElement !== el && !iframeDoc.activeElement?.closest(".rb-toolbar")) {
+          dismiss();
+        }
+      }, 0);
+    });
 
     /**
      * Put the bar back on the element it was on, after an edit rebuilt the frame.
@@ -4651,8 +4831,8 @@ export function Editor({
      * moved. Neither being true means no hint rather than an empty one.
      */
     const movable =
-      designTools === true &&
-      (findSection(doc, sectionId)?.section.layout?.placements ?? []).some(
+      designToolsNow.current === true &&
+      (findSection(docNow.current, sectionId)?.section.layout?.placements ?? []).some(
         (placement) => placement.elementId === elementId,
       );
     /**
@@ -4706,348 +4886,82 @@ export function Editor({
     el.removeAttribute("contenteditable");
   }
 
-  function wireEditing(iframeDoc: Document) {
+  /** A text's writing state, which used to be a closure per element and is a map since the
+   * listeners stopped being per element (ADR 0051 §5). */
+  interface EditState {
+    original: string;
+    liveMarks: MarkRun[];
+    liveText: string;
+    anchored: boolean;
+    chosenWhenPressed: ElementAddress | null;
+  }
+
+  /** The texts the editor writes in: the renderer's editable tags, marked by `prepareTexts`. */
+  const TEXT = "[data-id][data-rb-text]";
+
+  /** Where an element lives in the document, read from the page. */
+  function addressOf(el: HTMLElement): ElementAddress | null {
+    const sectionId = el.closest<HTMLElement>("[data-section]")?.dataset["section"];
+    const elementId = el.dataset["id"];
+    return sectionId && elementId ? { sectionId, elementId } : null;
+  }
+
+  /**
+   * **What a text needs on itself, and nothing more** (ADR 0051 §5): the mark the delegated
+   * handlers dispatch on, a Tab stop, and the entry link unwrapped — because the renderer draws a
+   * card's title as a link to its page and the editor keeps it plain, and a link inside the
+   * element would otherwise be followed on click. Idempotent, so it runs at wiring and again after
+   * every patch, over inserted texts and settled ones alike.
+   */
+  function prepareTexts(iframeDoc: Document) {
     for (const el of iframeDoc.querySelectorAll<HTMLElement>("[data-id]")) {
       if (!EDITABLE_TAGS.has(el.tagName)) continue;
-      const elementId = el.dataset.id;
-      // The section this field lives in, read off the same markup: `data-section` is what makes
-      // the address unambiguous once two sections can carry the same element id.
-      const sectionId = el.closest<HTMLElement>("[data-section]")?.dataset.section;
-      if (!elementId || !sectionId) continue;
-      const address: ElementAddress = { sectionId, elementId };
-
-      /**
-       * **The card's title link is unwrapped before the title becomes editable** (ADR 0040 §5, and
-       * David's adjustment to the sprint: the link is inert in the canvas and the click edits).
-       *
-       * Measured on 13 October 2026, sprint 19 day 5, with the anchor left in: focus selects the
-       * whole title, which is this field's contract, and `End` then did **not** collapse the
-       * selection — Chromium keeps a selection that covers an anchor — so typing replaced the
-       * words and «Comidas» was committed as «del día». An `<a>` inside a `contentEditable` is a
-       * caret trap, not a styling choice. So in the canvas the title is the plain text it was
-       * before the link existed, and the link exists only on the published page, where
-       * `rb-entry-link` is drawn again from the slug on every render.
-       */
       for (const link of el.querySelectorAll("a.rb-entry-link")) {
         link.replaceWith(...link.childNodes);
       }
+      if (el.dataset["rbText"] !== "1") el.dataset["rbText"] = "1";
+      if (el.tabIndex !== 0) el.tabIndex = 0;
+    }
+  }
 
-      /**
-       * **Marked as a text, not made editable** (ADR 0047, sprint 24 día 7).
-       *
-       * `el.contentEditable = "true"` stood here from sprint 2 until today, and it is what made one
-       * gesture mean two things: a click placed a caret and a drag selected words, so there was no
-       * gesture left for «move this» — and no threshold could tell the two apart, because selecting
-       * text by dragging passes any threshold a drag would use.
-       *
-       * The attribute now arrives in `startWriting` and leaves in `stopWriting`. This marker is what
-       * takes over everything the attribute was doing besides editing: the hover affordance that
-       * says a text can be changed, the walks that find an editable text, and
-       * `focusLineAfterChange`'s search for the words in a line that has just appeared.
-       */
-      el.dataset["rbText"] = "1";
-      /**
-       * **Focusable, exactly as it was before today.**
-       *
-       * A `contentEditable` element is in the tab order by default, so every text in this canvas has
-       * been a Tab stop since sprint 2 — which is how somebody with no mouse reaches one at all.
-       * Taking the attribute away would have taken that with it and left «escribir sin ratón»
-       * impossible, which is the half of this change that nothing would have gone red over.
-       *
-       * So the stop stays and what changes is what arriving means: Tab lands **on** a chosen text
-       * instead of **inside** an editable one, and Intro starts the edit. That is also safer than
-       * what it replaces — a stray keystroke on arrival used to replace a whole heading, because
-       * the field selected all of itself on focus.
-       *
-       * (Whether Tab should walk a section's insides before the section is chosen is the question
-       * `docs/tasks/backlog.md` has open. This day neither answers it nor makes it worse: the stops
-       * are the same ones, and from here they can be taken away in one line.)
-       */
-      el.tabIndex = 0;
-      // Through `textFrameOf`, not a bare `.trim()`: it is the one place that also takes out the
-      // non-breaking spaces `contentEditable` invents, which otherwise reach the document and the
-      // owner's ZIP. `original` is compared against `next` to decide whether anything changed, so
-      // the two have to be normalised the same way or a space turning into U+00A0 reads as an edit.
-      // **Re-read every time writing begins** (ADR 0051 §2, adjustment 2), not captured at wiring:
-      // under the `patch` route the element outlives every edit, so what it held when it was wired
-      // is not what the document says by the time somebody clicks into it.
-      let original = textFrameOf(el.textContent ?? "").text;
+  /**
+   * **Writing in a text** (ADRs 0024, 0027, 0047; sprint 26 día 3 for the shape). The listeners are
+   * the document's, dispatched to the text the event concerns; each text's state — what it said
+   * when writing began, the marks and text the capture believes in, whether every edit was anchored
+   * — lives in a map keyed by the element, created on first touch.
+   */
+  function wireEditing(iframeDoc: Document) {
+    const states = new WeakMap<HTMLElement, EditState>();
+    const stateOf = (el: HTMLElement): EditState => {
+      let state = states.get(el);
+      if (!state) {
+        state = {
+          original: textFrameOf(el.textContent ?? "").text,
+          liveMarks: [],
+          liveText: "",
+          anchored: true,
+          chosenWhenPressed: null,
+        };
+        states.set(el, state);
+      }
+      return state;
+    };
 
-      /**
-       * The marks after every edit this focus has seen, the text they believe in, and whether every
-       * one of those edits was anchored in a range the browser gave us (ADR 0027 §4b).
-       *
-       * `anchored` going false is not an error: it is the mechanism choosing to fall back. An IME
-       * composition, the browser's own undo, or an engine whose `getTargetRanges()` returns nothing
-       * all land here, and the commit then takes §4's path — the diff — exactly as it did before
-       * this listener existed. Degrading to what shipped is the floor.
-       *
-       * **`liveText` is what makes the capture checkable rather than merely plausible.** Each edit
-       * is applied to it as well as to the marks, so after every keystroke it must equal what the
-       * element actually holds. When it does not, something changed the text that this listener never
-       * saw, the offsets are no longer about the string in front of the person, and the only honest
-       * answer is to stop claiming they are.
-       */
-      let liveMarks: MarkRun[] = [];
-      let liveText = "";
-      let anchored = true;
-
-      /**
-       * Everything writing needs to begin: the capture started, and the whole field selected.
-       *
-       * **A function and not the body of the `focus` listener, because entering writing does not
-       * always fire `focus`** — and that is a defect this would have shipped. One click chooses a
-       * text, which focuses it; the second click turns `contentEditable` on and calls `focus()`
-       * again on the element that already has it, and the browser fires nothing. So the capture
-       * would never have started and the field would never have been selected: typing would append
-       * to the heading instead of replacing it, and the marks would be read from a text that had
-       * already moved. The keyboard path is the same shape — Tab chooses, Intro writes — which is
-       * where the walk found it.
-       *
-       * Idempotent on purpose: the paths that *do* fire `focus` run it twice, and re-reading the
-       * marks and re-selecting the field costs nothing.
-       */
-      const beginWriting = () => {
-        original = textFrameOf(el.textContent ?? "").text;
-        liveMarks = marksFor(doc, address) ?? [];
-        liveText = liveFrameOf(el.textContent ?? "").text;
-        anchored = true;
-        // The hint's instruction has been followed, so it stops being advice and becomes clutter.
-        // `aria-describedby` goes with it: a description pointing at a removed node is a broken
-        // reference, which is worse than no description.
-        for (const hint of iframeDoc.querySelectorAll(".rb-hint")) hint.remove();
-        el.removeAttribute("aria-describedby");
-        /**
-         * **The select-all is deferred by one microtask, and that is the fix for a measured race.**
-         *
-         * A click's default action — placing the caret where the pointer is — runs **after** the
-         * listeners, inside the same task. Until today the element was already editable when the
-         * pointer went down, so the browser placed its caret on `mousedown` and this select-all,
-         * running afterwards, won. Now the attribute arrives during the `click` listener, so the
-         * caret placement is the *last* thing to happen and it collapses the selection.
-         *
-         * Measured as a heading that read `UNODOSTCUATRORESCINCO` after five edits that each
-         * should have replaced it, and as «escribir lo sustituye» quietly becoming «escribir añade
-         * donde pinchaste» — which is also the promise `rbFresh` and `focusLineAfterChange` rest on.
-         *
-         * A microtask and not a timer: the queue is drained after the current task's synchronous
-         * work, which is exactly after the default action, so the order is defined rather than
-         * raced. The guard re-reads the element because a commit can replace the document in
-         * between.
-         */
-        queueMicrotask(() => {
-          if (!el.isContentEditable || !iframeDoc.contains(el)) return;
-          const selection = iframeDoc.getSelection();
-          if (!selection) return;
-          const range = iframeDoc.createRange();
-          range.selectNodeContents(el);
-          selection.removeAllRanges();
-          selection.addRange(range);
-        });
-      };
-
-      /** Into writing from this element, however the gesture arrived. */
-      const write = () => {
-        startWriting(el);
-        beginWriting();
-      };
-
-      // Select the whole field the moment it gains focus, the same as clicking into a
-      // pre-filled name field: the first keystroke replaces the placeholder text rather
-      // than landing mid-word wherever the click happened to fall.
-      el.addEventListener("focus", () => {
-        /**
-         * **Arriving at a text chooses it; only writing in it starts the capture.**
-         *
-         * Reached by Tab or by a click, focus means «this is the one» — so the outline and the hint
-         * are drawn here as well as in the click handler, which is what makes the keyboard's route
-         * into the two states the same route the pointer takes.
-         *
-         * Everything below belongs to writing. Selecting a whole field for somebody who has not
-         * asked to type in it would be the flash `wireToolbar`'s restoration note argues against,
-         * and starting the capture would be recording an edit nobody is making.
-         */
-        if (!el.isContentEditable) {
-          markChosen(iframeDoc, el);
-          return;
-        }
-        beginWriting();
-      });
-
-      /**
-       * The range `beforeinput` says it is about to replace, as offsets into the document's text.
-       *
-       * `getTargetRanges()` hands back `StaticRange`s, which carry the four container/offset fields
-       * and none of a live `Range`'s methods — so it is copied into one, which is also what makes
-       * `toString()` available for the same code-unit measurement the toolbar uses.
-       */
-      const editOf = (range: Range, inserted: number): TextEdit | undefined => {
-        if (!el.contains(range.commonAncestorContainer)) return undefined;
-        // `liveFrameOf`, not `textFrameOf`: trailing whitespace stays, because `trim()` moves under
-        // somebody who types a space at the end and every offset after that would be one short.
-        const frame = liveFrameOf(el.textContent ?? "");
-        const upTo = iframeDoc.createRange();
-        upTo.selectNodeContents(el);
-        upTo.setEnd(range.startContainer, range.startOffset);
-        const from = offsetFor(frame, upTo.toString().length);
-        const to = Math.max(from, Math.min(from + range.toString().length, frame.text.length));
-        return { from, to, inserted };
-      };
-
-      /**
-       * Whether this listener's picture of the text still matches the element's.
-       *
-       * **Checked on the way in to the next edit and again at the commit, never with a timer.**
-       * `beforeinput` runs before the browser applies anything, so the result of an edit can only be
-       * read later — and "later" has two moments that are already there and are exactly the ones that
-       * matter. A `setTimeout` would buy the same answer with a scheduling race attached.
-       *
-       * A mismatch means something changed the text that this listener never saw, so every offset it
-       * has is about a string that is not in front of the person any more. Falling back then is not
-       * caution, it is correctness.
-       *
-       * **Compared trimmed, and that is not laxness — it was measured.** The html target prints a
-       * trailing `"\n    "` after the words, and Chromium's select-all reports a target range that
-       * covers only the visible text while removing that whitespace as well. So after the very first
-       * edit, `liveText` carries a tail the element no longer has, every later check fails, and the
-       * anchored path is lost for the rest of the session — which is exactly what the walk found
-       * happening on an ordinary replacement. Whitespace at the two ends is the one difference that
-       * cannot matter here, because `marksAfterTrim` removes it before anything is committed.
-       */
-      const stillInStep = (): boolean =>
-        liveFrameOf(el.textContent ?? "").text.trim() === liveText.trim();
-
-      /** One captured edit, applied to the marks and to the text they believe in, together. */
-      const record = (edit: TextEdit, inserted: string): void => {
-        liveMarks = shiftMarks(liveMarks, edit);
-        liveText = liveText.slice(0, edit.from) + inserted + liveText.slice(edit.to);
-      };
-
-      const liveRange = (target: StaticRange | undefined): Range | undefined => {
-        if (target) {
-          const range = iframeDoc.createRange();
-          range.setStart(target.startContainer, target.startOffset);
-          range.setEnd(target.endContainer, target.endOffset);
-          return range;
-        }
-        // No target range is the fallback's own case, and paste still has to be made plain — so the
-        // live selection stands in for it there, and nowhere else.
-        const selection = iframeDoc.getSelection();
-        if (!selection || selection.rangeCount === 0) return undefined;
-        const range = selection.getRangeAt(0);
-        return el.contains(range.commonAncestorContainer) ? range : undefined;
-      };
-
-      /**
-       * Where the edit stops being a guess (ADR 0027 §4b).
-       *
-       * Fires **before** the browser changes anything, which is the whole point: the range it is
-       * about to replace is still measurable, and `inputType` says what is going in. `textEditBetween`
-       * cannot recover either from the two strings afterwards, and gets both wrong in ways that
-       * silently corrupt a mark — `"pan y pan y aceite"` with the second `pan y ` deleted destroys a
-       * bold on the first `pan`, measured.
-       */
-      el.addEventListener("beforeinput", (event) => {
-        const input = event as InputEvent;
-        // Whatever is in the field from now on is the person's, not ours.
-        delete el.dataset["rbFresh"];
-        // The previous edit's result is in the element by now, so this is where it gets verified.
-        if (anchored && !stillInStep()) anchored = false;
-        const targets = input.getTargetRanges();
-        const range = liveRange(targets[0]);
-
-        // **Paste is forced to plain text, whatever the clipboard holds.** `contentEditable` pastes
-        // HTML by default, and ADR 0024 requires this field to stay a flat string — one paste of a
-        // formatted sentence from a word processor would otherwise put markup where the document
-        // expects characters. The text the table measures and the text inserted here are the same
-        // `text/plain`, so the anchored edit describes exactly what happened.
-        //
-        // Cancelled and done by hand even when the capture has already fallen back, because the
-        // plain-text rule is not about marks: it is what keeps the value a flat string at all.
-        if (input.inputType === "insertFromPaste") {
-          input.preventDefault();
-          const text = input.dataTransfer?.getData("text/plain") ?? "";
-          if (!range) {
-            anchored = false;
-            return;
-          }
-          const edit = editOf(range, text.length);
-          range.deleteContents();
-          const node = iframeDoc.createTextNode(text);
-          range.insertNode(node);
-          const selection = iframeDoc.getSelection();
-          if (selection) {
-            const caret = iframeDoc.createRange();
-            caret.setStartAfter(node);
-            caret.collapse(true);
-            selection.removeAllRanges();
-            selection.addRange(caret);
-          }
-          if (edit) record(edit, text);
-          else anchored = false;
-          return;
-        }
-
-        const inserted = insertedTextFor({
-          inputType: input.inputType,
-          data: input.data,
-          pastedText: null,
-        });
-        // An unmapped type, or more than one target range — which the specification allows and no
-        // engine is known to produce for a plain text field. Either way the honest answer is that
-        // this edit was not measured, so the commit must not pretend it was.
-        if (inserted === undefined || !range || targets.length > 1) {
-          anchored = false;
-          return;
-        }
-        const edit = editOf(range, inserted.length);
-        if (edit) record(edit, inserted);
-        else anchored = false;
-      });
-
-      /**
-       * **One click chooses; a second one writes** (ADR 0047).
-       *
-       * The second click is David's mitigation and not a flourish: the two states cost the main
-       * audience — a pyme with no tutorials — one click more than before, so two clicks of any
-       * speed have to arrive at writing. The browser's own double click *is* this sequence, which
-       * is why there is no `dblclick` listener here: the first click chooses, the second writes,
-       * and `dblclick` arrives afterwards to a text that is already being written in, where its
-       * default — selecting the word under the pointer — is exactly what it should do.
-       *
-       * A click while writing is a caret and nothing else.
-       */
-      /**
-       * Which text was chosen when this gesture **started**.
-       *
-       * **Read at `pointerdown`, and that is a correction the walk forced.** A focusable element is
-       * focused by the browser on `mousedown`, before `click` — and arriving at a text chooses it,
-       * so by the time the click ran, every first click looked like a second one and one click went
-       * straight to writing. The two states existed and no gesture could reach the first.
-       *
-       * Measured as `<h1 tabindex="0" class="rb-chosen" contenteditable="true">` after a single
-       * click, which is both states at once.
-       */
-      let chosenWhenPressed: ElementAddress | null = null;
-      el.addEventListener("pointerdown", () => {
-        chosenWhenPressed = chosenText.current;
-      });
-
-      el.addEventListener("click", () => {
-        if (el.isContentEditable) return;
-        if (clickAction(chosenWhenPressed, address) === "write") {
-          write();
-          return;
-        }
-        markChosen(iframeDoc, el);
-        el.focus({ preventScroll: true });
-      });
-
-      // A field that still holds exactly what the editor put in it keeps all of it selected,
-      // however somebody arrives at it — see `focusLineAfterChange`. Ordinary editing is untouched:
-      // the mark only exists between a line being added and its first keystroke.
-      el.addEventListener("click", () => {
-        if (el.dataset["rbFresh"] !== "1") return;
+    /** **Re-read every time writing begins** (ADR 0051 §2, adjustment 2): the element outlives every
+     * edit, so what it held when it was wired is not what the document says now. */
+    const beginWriting = (el: HTMLElement, address: ElementAddress, state: EditState) => {
+      state.original = textFrameOf(el.textContent ?? "").text;
+      state.liveMarks = marksFor(docNow.current, address) ?? [];
+      state.liveText = liveFrameOf(el.textContent ?? "").text;
+      state.anchored = true;
+      // The hint's instruction has been followed, so it stops being advice and becomes clutter.
+      for (const hint of iframeDoc.querySelectorAll(".rb-hint")) hint.remove();
+      el.removeAttribute("aria-describedby");
+      // Deferred by one microtask: a click's default caret placement runs after the listeners,
+      // and a select-all that ran before it would be collapsed by it (measured as
+      // «UNODOSTCUATRORESCINCO» after five edits that should each have replaced the heading).
+      queueMicrotask(() => {
+        if (!el.isContentEditable || !iframeDoc.contains(el)) return;
         const selection = iframeDoc.getSelection();
         if (!selection) return;
         const range = iframeDoc.createRange();
@@ -5055,230 +4969,231 @@ export function Editor({
         selection.removeAllRanges();
         selection.addRange(range);
       });
+    };
+    const write = (el: HTMLElement, address: ElementAddress, state: EditState) => {
+      startWriting(el);
+      beginWriting(el, address, state);
+    };
 
-      // These are real hrefs (a "Reservar mesa" button, say): clicking one to place a
-      // cursor must not also navigate the preview away.
-      if (el.tagName === "A") el.addEventListener("click", (event) => event.preventDefault());
+    const editOf = (el: HTMLElement, range: Range, inserted: number): TextEdit | undefined => {
+      if (!el.contains(range.commonAncestorContainer)) return undefined;
+      const frame = liveFrameOf(el.textContent ?? "");
+      const upTo = iframeDoc.createRange();
+      upTo.selectNodeContents(el);
+      upTo.setEnd(range.startContainer, range.startOffset);
+      const from = offsetFor(frame, upTo.toString().length);
+      const to = Math.max(from, Math.min(from + range.toString().length, frame.text.length));
+      return { from, to, inserted };
+    };
+    const stillInStep = (el: HTMLElement, state: EditState): boolean =>
+      liveFrameOf(el.textContent ?? "").text.trim() === state.liveText.trim();
+    const recordEdit = (state: EditState, edit: TextEdit, inserted: string): void => {
+      state.liveMarks = shiftMarks(state.liveMarks, edit);
+      state.liveText =
+        state.liveText.slice(0, edit.from) + inserted + state.liveText.slice(edit.to);
+    };
+    const liveRange = (el: HTMLElement, target: StaticRange | undefined): Range | undefined => {
+      if (target) {
+        const range = iframeDoc.createRange();
+        range.setStart(target.startContainer, target.startOffset);
+        range.setEnd(target.endContainer, target.endOffset);
+        return range;
+      }
+      const selection = iframeDoc.getSelection();
+      if (!selection || selection.rangeCount === 0) return undefined;
+      const range = selection.getRangeAt(0);
+      return el.contains(range.commonAncestorContainer) ? range : undefined;
+    };
 
-      /**
-       * The keys of the two states, decided by `textKeyAction` and wired here (ADR 0047).
-       *
-       * **Intro and Escape each mean two things now**, and that is the whole gain of having two
-       * states: Intro writes in a text that is chosen and commits a text being written in; Escape
-       * puts the original words back while writing and stops being chosen when not. Every arrow
-       * and every modifier is left alone — `Shift+Arrow` is a selection gesture everywhere, and
-       * the bare arrows are día 8's, which is a reason to leave them rather than to take them now.
-       *
-       * The canvas's own capture listener has already had this press and refused it: it reads
-       * `activeElement`, and a chosen text is not a section, so `at` is `-1` and the canvas takes
-       * nothing. One rule, in one place, and the states fit inside it rather than beside it.
-       */
-      el.addEventListener("keydown", (event) => {
-        const state = el.isContentEditable
-          ? "writing"
-          : chosenText.current?.sectionId === address.sectionId &&
-              chosenText.current?.elementId === address.elementId
-            ? "chosen"
-            : "idle";
-        const action = textKeyAction(
-          {
-            key: event.key,
-            metaKey: event.metaKey,
-            ctrlKey: event.ctrlKey,
-            shiftKey: event.shiftKey,
-            altKey: event.altKey,
-          },
-          state,
-        );
-        if (action.kind === "ignore") return;
-        if (action.kind === "write") {
-          event.preventDefault();
-          write();
+    // Arriving at a text chooses it; only writing in it starts the capture (ADR 0047).
+    delegate(iframeDoc, "focusin", TEXT, (el) => {
+      const address = addressOf(el);
+      if (!address) return;
+      if (!el.isContentEditable) {
+        markChosen(iframeDoc, el);
+        return;
+      }
+      beginWriting(el, address, stateOf(el));
+    });
+
+    delegate(iframeDoc, "beforeinput", TEXT, (el, event) => {
+      const state = stateOf(el);
+      const input = event as InputEvent;
+      // Whatever is in the field from now on is the person's, not ours.
+      delete el.dataset["rbFresh"];
+      if (state.anchored && !stillInStep(el, state)) state.anchored = false;
+      const targets = input.getTargetRanges();
+      const range = liveRange(el, targets[0]);
+      if (input.inputType === "insertFromPaste") {
+        // Plain text only, placed by hand, so the marks can follow it (ADR 0027 §4b).
+        input.preventDefault();
+        const text = input.dataTransfer?.getData("text/plain") ?? "";
+        if (!range) {
+          state.anchored = false;
           return;
         }
-        if (action.kind === "release") {
-          event.preventDefault();
-          markChosen(iframeDoc, null);
-          // Back to the section, so the arrows go back to meaning «the next section» — which is
-          // where the keyboard came from and the only place that has somewhere to go today.
-          el.closest<HTMLElement>("[data-section]")?.focus({ preventScroll: true });
-          return;
+        const edit = editOf(el, range, text.length);
+        range.deleteContents();
+        const node = iframeDoc.createTextNode(text);
+        range.insertNode(node);
+        const selection = iframeDoc.getSelection();
+        if (selection) {
+          const caret = iframeDoc.createRange();
+          caret.setStartAfter(node);
+          caret.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(caret);
         }
-        event.preventDefault();
-        if (action.kind === "revert") {
-          el.textContent = original;
-          // A programmatic reset no `beforeinput` ever reported, so the captured marks now describe
-          // a text that is gone. Nothing is committed — the text is back to `original` — but
-          // leaving stale offsets behind would be a trap for whoever reads them.
-          liveMarks = marksFor(doc, address) ?? [];
-          liveText = liveFrameOf(el.textContent ?? "").text;
-          anchored = true;
-          /**
-           * **Escape ends the edit without blurring**, which is the difference between «stop
-           * writing» and «stop being here».
-           *
-           * Until today Escape blurred, because being focused *was* being editable and there was
-           * no other way to stop. Now there is a state to come back to, and blurring would leave
-           * the keyboard on the document body with the text still outlined — stranded for exactly
-           * the person who cannot see where focus went. The walk caught it: after Escape the text
-           * was chosen and nothing was focused.
-           *
-           * Nothing is lost by not blurring: the commit listener would have returned at its own
-           * `next === original` guard, and the floating bar stays open on a text that is still
-           * chosen, which is where it belongs.
-           */
-          stopWriting(el);
-          markChosen(iframeDoc, el);
-          /**
-           * **And the keyboard stays on the text**, which needs saying out loud: taking
-           * `contenteditable` off the focused element removes the editing host under it, and
-           * Chromium drops focus to the body. Measured — the walk pressed Escape twice and the
-           * second press reached the document instead of the text, so «Escape leaves the choice»
-           * did nothing and the outline stayed on screen.
-           *
-           * The element is focusable in its own right (`tabindex`), so asking for it back is one
-           * line and it is the line that makes the state a place rather than a look.
-           */
-          el.focus({ preventScroll: true });
-          return;
-        }
-        el.blur();
+        if (edit) recordEdit(state, edit, text);
+        else state.anchored = false;
+        return;
+      }
+      const inserted = insertedTextFor({
+        inputType: input.inputType,
+        data: input.data,
+        pastedText: null,
       });
+      if (inserted === undefined || !range || targets.length > 1) {
+        state.anchored = false;
+        return;
+      }
+      const edit = editOf(el, range, inserted.length);
+      if (edit) recordEdit(state, edit, inserted);
+      else state.anchored = false;
+    });
 
-      el.addEventListener("blur", () => {
-        const next = textFrameOf(el.textContent ?? "").text;
-        // **Emptying a text is a real edit**, and used to be silently undone here. The comment
-        // that guarded it said "nothing here offers a real way to hide the element instead", and
-        // that stopped being true twice: the fields panel clears a section's slot (sprint 3
-        // day 4), and an empty text now renders as nothing rather than as an empty tag (day 6).
-        // Nothing is lost either way — a section slot comes back through that panel, a list line
-        // through remove-and-add, and both through undo, which is the same net ADR 0014 gives a
-        // deleted section.
-        //
-        // Found by building a carta: a dish with no price could not be given one, so the line
-        // published «Escribe aquí el precio» — a marker on a real restaurant's page — and made
-        // "the price is optional per line" false in practice.
-        //
-        // **A link or a button is the exception, and the original reasoning holds for it word for
-        // word.** Its value is a destination, so emptying the label leaves an anchor that still
-        // points somewhere with no words in it: invisible on the page and nameless to a screen
-        // reader. The download refuses a button that goes nowhere; this refuses one that says
-        // nothing.
-        if (next === "" && (el.dataset["role"] === "link" || el.dataset["role"] === "button")) {
-          el.textContent = original;
-          return;
+    // What was chosen when the press began decides what the click means (ADR 0047).
+    delegate(iframeDoc, "pointerdown", TEXT, (el) => {
+      stateOf(el).chosenWhenPressed = chosenText.current;
+    });
+
+    delegate(iframeDoc, "click", TEXT, (el, event) => {
+      // A link in the page is a text here; following it would leave the editor.
+      if (el.tagName === "A") event.preventDefault();
+      const address = addressOf(el);
+      if (!address) return;
+      const state = stateOf(el);
+      if (!el.isContentEditable) {
+        if (clickAction(state.chosenWhenPressed, address) === "write") {
+          write(el, address, state);
+        } else {
+          markChosen(iframeDoc, el);
+          el.focus({ preventScroll: true });
         }
-        /**
-         * **Against what the document last said, not against what the person found.** An undo
-         * while writing rewrites these words under the caret (adjustment 2); the document is then
-         * the undone text, and a blur that compared with `original` would commit the words from
-         * before the undo straight back over it, silently. `takeHistoryText` is what the history
-         * patch left behind, read once; with it, a blur commits exactly the difference the person
-         * typed after the undo, and nothing if they typed nothing.
-         */
-        const lastSaid = takeHistoryText(el);
-        if (lastSaid !== undefined) original = textFrameOf(lastSaid).text;
-        if (next === original) return;
+      }
+      // A line just added says «escribe aquí»; the first click selects it so typing replaces it.
+      if (el.dataset["rbFresh"] === "1") {
+        const selection = iframeDoc.getSelection();
+        if (!selection) return;
+        const range = iframeDoc.createRange();
+        range.selectNodeContents(el);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+    });
 
-        /**
-         * The captured marks, in the coordinates of the text actually being stored (ADR 0027 §4b).
-         *
-         * Three conditions, and all three have to hold for the capture to be used:
-         *
-         * 1. **Every edit was anchored.** One unmapped input type in the session is enough to make
-         *    the running offsets wrong, and there is no way to repair them halfway.
-         * 2. **The listener is still in step with the element**, which also verifies the last edit —
-         *    the one no later `beforeinput` was ever going to check.
-         * 3. **Trimming `liveText` gives exactly the text being committed.** `marksAfterTrim` removes
-         *    the whitespace at the two ends; if what is left is not the committed string, then the
-         *    element changed some other way and the offsets are not about it.
-         *
-         * Failing any of them hands `onEditText` no marks at all, and `withText` derives them by
-         * diff exactly as it did before §4b existed. That is the floor, and it is reached by
-         * returning less information rather than by a different code path.
-         */
+    delegate(iframeDoc, "keydown", TEXT, (el, event) => {
+      const address = addressOf(el);
+      if (!address) return;
+      const state = stateOf(el);
+      const mode = el.isContentEditable
+        ? "writing"
+        : chosenText.current?.sectionId === address.sectionId &&
+            chosenText.current?.elementId === address.elementId
+          ? "chosen"
+          : "idle";
+      const action = textKeyAction(
+        {
+          key: event.key,
+          metaKey: event.metaKey,
+          ctrlKey: event.ctrlKey,
+          shiftKey: event.shiftKey,
+          altKey: event.altKey,
+        },
+        mode,
+      );
+      if (action.kind === "ignore") return;
+      if (action.kind === "write") {
+        event.preventDefault();
+        write(el, address, state);
+        return;
+      }
+      if (action.kind === "release") {
+        event.preventDefault();
+        markChosen(iframeDoc, null);
+        el.closest<HTMLElement>("[data-section]")?.focus({ preventScroll: true });
+        return;
+      }
+      event.preventDefault();
+      if (action.kind === "revert") {
+        el.textContent = state.original;
+        state.liveMarks = marksFor(docNow.current, address) ?? [];
+        state.liveText = liveFrameOf(el.textContent ?? "").text;
+        state.anchored = true;
+        stopWriting(el);
+        markChosen(iframeDoc, el);
+        el.focus({ preventScroll: true });
+        return;
+      }
+      el.blur();
+    });
+
+    // The commit, on leaving — and the attribute leaves with it, whichever way the edit ended.
+    delegate(iframeDoc, "focusout", TEXT, (el) => {
+      const address = addressOf(el);
+      if (!address) return;
+      const state = stateOf(el);
+      const next = textFrameOf(el.textContent ?? "").text;
+      // A link or a button emptied would be an anchor with no words: refused, like the download.
+      if (next === "" && (el.dataset["role"] === "link" || el.dataset["role"] === "button")) {
+        el.textContent = state.original;
+        stopWriting(el);
+        return;
+      }
+      /**
+       * **Against what the document last said, not against what the person found** (ADR 0051 §2,
+       * adjustment 2): a history patch that rewrote these words leaves them behind, read once here,
+       * so a blur commits exactly the difference typed after the undo and nothing if nothing was.
+       */
+      const lastSaid = takeHistoryText(el);
+      if (lastSaid !== undefined) state.original = textFrameOf(lastSaid).text;
+      if (next !== state.original) {
+        // The captured marks, in the coordinates of the text being stored (ADR 0027 §4b), only if
+        // every edit was anchored, the listener is still in step, and the trimmed live text is
+        // exactly what is committed; otherwise `withText` derives them by diff.
         const anchoredMarks =
-          anchored && stillInStep() && liveText.trim() === next
-            ? marksAfterTrim(liveText, liveMarks)
+          state.anchored && stillInStep(el, state) && state.liveText.trim() === next
+            ? marksAfterTrim(state.liveText, state.liveMarks)
             : undefined;
-
-        /**
-         * **A bound text's words live in the list, so that is where the edit goes** (ADR 0033 §6).
-         *
-         * Same gesture, same commit, different destination — and the destination is the whole point:
-         * one edit changes every card that shows this entry. The toolbar has already said so, on
-         * focus, before a character was typed.
-         *
-         * The marks go straight through: `anchoredMarks` is already in the coordinates of the text
-         * being stored, which is exactly what an entry's field wants.
-         */
-        const bound = boundAt(doc, address, el);
+        // A bound text's words live in the list, so that is where the edit goes (ADR 0033 §6).
+        const bound = boundAt(docNow.current, address, el);
         if (bound) {
-          onSetEntryField(bound.collectionId, bound.entryId, bound.field, {
+          propsNow.current.onSetEntryField(bound.collectionId, bound.entryId, bound.field, {
             text: next,
             ...(anchoredMarks && anchoredMarks.length > 0 ? { marks: anchoredMarks } : {}),
           });
-          return;
+        } else {
+          // And the rows the text now needs, measured, in the same history step as the words
+          // (ADR 0050 día 6, David's adjustment 1).
+          propsNow.current.onEditText(address, next, anchoredMarks, rowsFor(el));
         }
-        /**
-         * **And the rows the text now needs, measured** (ADR 0050 §3, día 6, David's adjustment 1).
-         *
-         * A free section's rows are eight real pixels and a text's height is its content's, so
-         * typing changes how many rows it needs. Left alone, the row grows past its eight-pixel
-         * minimum and pushes everything under it down — exactly the accumulation `measuredToFine`
-         * ceils to avoid — and the editor's own idea of where things are starts drifting from the
-         * page. Measured here, on the element the person has just finished with, and carried **in
-         * the same history step as the words**: one letter must not cost two presses of «Deshacer».
-         *
-         * `undefined` for a section the catalog draws, which has no placements of its own.
-         */
-        onEditText(address, next, anchoredMarks, rowsFor(el));
-      });
+      }
+      stopWriting(el);
+    });
 
-      /**
-       * **The attribute leaves on blur, whichever way the edit ended** (ADR 0047).
-       *
-       * A separate listener rather than a line inside the one above, because that one returns early
-       * three times — a link emptied, a text unchanged, a bound field written to the list — and
-       * «stop being editable» is true of all of them. Registered after it, so the commit has
-       * already read the words.
-       *
-       * The text stays **chosen**: Escape and Intro end the edit, they do not deselect. When the
-       * commit rebuilds the frame this node is gone a moment later and the restoration at the end
-       * of this function draws the state again on the new one.
-       */
-      el.addEventListener("blur", () => stopWriting(el));
-    }
+    prepareTexts(iframeDoc);
+    settleEditing(iframeDoc);
+  }
 
-    /**
-     * Draw «chosen» again after an edit rebuilt the frame.
-     *
-     * **Without focusing**, which is the difference from `wireToolbar`'s restoration one function
-     * up: that one puts the bar and the person's own selection back, and this one is only the
-     * outline and the hint. Focus in a frame that has just been parsed belongs to nobody, and
-     * taking it here would steal it from whatever the person pressed to cause the rebuild — a
-     * swatch in the toolbar, a verb in the cluster.
-     *
-     * Gone means the text was deleted or hidden while it was chosen; forget it rather than keep a
-     * pointer to something nobody can see, which is `toolbarOn`'s own rule.
-     */
+  /** The chosen text, put back after a wiring or a structural patch — or let go, if it is gone. */
+  function settleEditing(iframeDoc: Document) {
     const stillChosen = chosenText.current;
-    if (stillChosen) {
-      const el = iframeDoc
-        .querySelector(`[data-section="${CSS.escape(stillChosen.sectionId)}"]`)
-        ?.querySelector<HTMLElement>(`[data-id="${CSS.escape(stillChosen.elementId)}"]`);
-      /**
-       * **Any element that is still there, not only a text** (ADR 0049).
-       *
-       * This asked `EDITABLE_TAGS` because when it was written only a text could be chosen. A
-       * photograph can be from today — that is what lets the arrows reach one — and the check was
-       * then quietly *clearing* the choice on every rebuild: the first arrow moved the image and
-       * the second had nothing chosen to act on. Three presses, one movement, which is exactly the
-       * assertion David asked for.
-       */
-      if (el) markChosen(iframeDoc, el);
-      else chosenText.current = null;
-    }
+    if (!stillChosen) return;
+    const el = iframeDoc
+      .querySelector(`[data-section="${CSS.escape(stillChosen.sectionId)}"]`)
+      ?.querySelector<HTMLElement>(`[data-id="${CSS.escape(stillChosen.elementId)}"]`);
+    if (el) markChosen(iframeDoc, el);
+    else chosenText.current = null;
   }
 
   /**
@@ -5522,7 +5437,7 @@ export function Editor({
     const sectionId = section?.dataset.section;
     if (!section || !sectionId) return undefined;
     // Only a hand-designed section has rows of its own to keep true.
-    if (!findSection(doc, sectionId)?.section.layout) return undefined;
+    if (!findSection(docNow.current, sectionId)?.section.layout) return undefined;
     if (el.parentElement !== section) return undefined;
     return Math.max(1, Math.ceil(el.getBoundingClientRect().height / ROW_STEP_PX));
   }
@@ -5626,311 +5541,272 @@ export function Editor({
    * section, written in or not — never every placed element: an edge zone around all of them would
    * turn «drag this» into «stretch this» a few pixels from every border on the page.
    */
+  /**
+   * **The edges of the chosen element's box stretch it** (ADR 0050 día 4) — and since sprint 26
+   * día 3 the listeners are the document's, dispatched to the section the pointer is in (ADR 0051
+   * §5, David's adjustment 5). One resize happens at a time, so its state is the document's too:
+   * `pulling` names the section as well as the element. Pointer capture on the section still
+   * routes the gesture there, and the events bubble to the document. The design-tools gate moved
+   * from the wiring into the handlers, because under `patch` the wiring runs once per session and
+   * the tools can be turned on after it.
+   */
   function wireResizing(iframeDoc: Document) {
-    // A placement is a design-tools idea, the same gate the drag and the panel's arrows sit behind.
-    if (designTools !== true) return;
-
-    /**
-     * Whether this is a finger's device, which is David's own criterion for the handles: «En táctil
-     * (`(pointer: coarse)`) aparecen asas visibles». Asked of the browser once per wiring rather
-     * than per press: it is a property of the device, and a device does not change mid-gesture.
-     */
     const coarse = iframeDoc.defaultView?.matchMedia("(pointer: coarse)").matches === true;
-    const repaintHandles: (() => void)[] = [];
-    /** Every section of **this** document, repainted. Populated by the loop below and called after
-     * it, so a gesture that ends can put back the handles it took away. */
-    const repaintAll = () => {
-      for (const paint of repaintHandles) paint();
+
+    const target = (
+      section: HTMLElement,
+      sectionId: string,
+    ): { el: HTMLElement; writing: boolean } | null => {
+      const chosen = chosenText.current;
+      if (!chosen || chosen.sectionId !== sectionId) return null;
+      const el = section.querySelector<HTMLElement>(`[data-id="${CSS.escape(chosen.elementId)}"]`);
+      // Top-level only: a placement belongs to an element of the section, and a line inside a
+      // list has none of its own.
+      if (!el || el.parentElement !== section) return null;
+      return { el, writing: el.isContentEditable };
     };
 
-    for (const section of iframeDoc.querySelectorAll<HTMLElement>("[data-section]")) {
-      const sectionId = section.dataset.section;
-      if (!sectionId) continue;
-
-      /** The element the gesture is about, and whether it is being written in. */
-      const target = (): { el: HTMLElement; writing: boolean } | null => {
-        const chosen = chosenText.current;
-        if (!chosen || chosen.sectionId !== sectionId) return null;
-        const el = section.querySelector<HTMLElement>(
-          `[data-id="${CSS.escape(chosen.elementId)}"]`,
-        );
-        // Top-level only: a placement belongs to an element of the section, and a line inside a
-        // list has none of its own.
-        if (!el || el.parentElement !== section) return null;
-        return { el, writing: el.isContentEditable };
-      };
-
-      /** Which edge of that element the point is on, or `null` for anything that is not a resize. */
-      const edgeUnder = (event: PointerEvent): { el: HTMLElement; edge: Edge } | null => {
-        // A finger is wider than this zone in every direction, so touch gets real handles instead
-        // (día 7) and asking this question of one would only steal the drag it already has.
-        if (event.pointerType === "touch") return null;
-        if (deviceNow.current === "mobile") return null;
-        if (!findSection(doc, sectionId)?.section.layout) return null;
-        const found = target();
-        if (!found) return null;
-        const zoom = zoomOf(iframeDoc);
-        const edge = edgeAt(
-          { x: event.clientX, y: event.clientY },
-          found.el.getBoundingClientRect(),
-          {
-            // Screen pixels, divided by the canvas zoom (David's adjustment 3) — and asymmetric while
-            // writing, 6 outside and 2 in, so a click on the first or the last letter still places
-            // the caret (adjustment 8).
-            outside: EDGE_ZONE / zoom,
-            inside: (found.writing ? EDGE_ZONE_WRITING_INSIDE : EDGE_ZONE) / zoom,
-          },
-        );
-        return edge ? { el: found.el, edge } : null;
-      };
-
-      let pulling: {
-        readonly el: HTMLElement;
-        readonly edge: Edge;
-        readonly from: Placement;
-        readonly column: string;
-        readonly row: string;
-      } | null = null;
-      let pulled: PlacementEdit | null = null;
-
-      /** The cursor, on the element and on the section both: whichever the pointer is over has to
-       * show it, and a cursor set on the section is overridden by any child with one of its own —
-       * which every text has while it is being written in. */
-      const showCursor = (el: HTMLElement | null, edge: Edge | null) => {
-        // One class per cursor, never `style.cursor` (adjustment 3): the patch would strip it.
-        for (const target of [section, el]) {
-          if (!target) continue;
-          for (const name of [...target.classList]) {
-            if (name.startsWith("rb-cursor-")) target.classList.remove(name);
-          }
-          if (edge) target.classList.add(`rb-cursor-${cursorFor(edge).replace("-resize", "")}`);
-        }
-      };
-
-      const stop = () => {
-        if (!pulling) return;
-        // The live preview was written onto the element's own inline grid area, which is the
-        // renderer's to own: put back exactly what was there. A committed resize gets it again from
-        // the rebuild, and a cancelled one must leave no trace.
-        pulling.el.style.gridColumn = pulling.column;
-        pulling.el.style.gridRow = pulling.row;
-        for (const guide of section.querySelectorAll(".rb-guide")) guide.remove();
-        showCursor(pulling.el, null);
-        iframeDoc.documentElement.classList.remove("rb-resizing");
-        flushQueuedPatch.current();
-        iframeDoc.documentElement.style.cursor = "";
-        pulling = null;
-        pulled = null;
-        // And the handles come back around the box as it now is. A committed resize rebuilds the
-        // frame a moment later and draws them again from scratch; a cancelled one has to be put
-        // back by somebody, and this is that somebody.
-        repaintAll();
-      };
-
-      /**
-       * Take hold of one border. **Two doors, one gesture**: the ±6 px zone a mouse finds (día 4)
-       * and the handles a finger is given (día 7), which pass their own edge because a finger has
-       * landed on a 44-pixel target rather than near a line.
-       */
-      const begin = (edge: Edge, el: HTMLElement, event: PointerEvent) => {
-        const placement = findSection(doc, sectionId)?.section.layout?.placements.find(
-          (candidate) => candidate.elementId === el.dataset["id"],
-        );
-        if (!placement) return;
-        // Taken from the browser and from everything else: without this a press on a chosen text
-        // starts a native selection, and the click that follows would choose, write, or close a
-        // menu over a gesture that is about one element's own box.
-        event.preventDefault();
-        event.stopPropagation();
-        pulling = { el, edge, from: placement, column: el.style.gridColumn, row: el.style.gridRow };
-        pulled = null;
-        section.setPointerCapture(event.pointerId);
-        // The handles would be stale the moment the box starts changing, and a finger holding one
-        // does not need to see the other seven.
-        for (const handle of section.querySelectorAll(".rb-handle")) handle.remove();
-        // The cursor belongs to the whole document while the gesture lasts: a hand that pulls
-        // past the section's own border must not see the pointer flicker back to an arrow.
-        iframeDoc.documentElement.classList.add("rb-resizing");
-        iframeDoc.documentElement.style.cursor = cursorFor(edge);
-      };
-
-      section.addEventListener(
-        "pointerdown",
-        (event) => {
-          const found = edgeUnder(event);
-          if (found) begin(found.edge, found.el, event);
+    /** Which edge of the chosen element the point is on, or `null` for anything that is not a resize. */
+    const edgeUnder = (
+      event: PointerEvent,
+      section: HTMLElement,
+      sectionId: string,
+    ): { el: HTMLElement; edge: Edge } | null => {
+      if (designToolsNow.current !== true) return null;
+      // A finger is wider than this zone in every direction, so touch gets real handles instead.
+      if (event.pointerType === "touch") return null;
+      if (deviceNow.current === "mobile") return null;
+      if (!findSection(docNow.current, sectionId)?.section.layout) return null;
+      const found = target(section, sectionId);
+      if (!found) return null;
+      const zoom = zoomOf(iframeDoc);
+      const edge = edgeAt(
+        { x: event.clientX, y: event.clientY },
+        found.el.getBoundingClientRect(),
+        {
+          // Screen pixels, divided by the canvas zoom (David's adjustment 3 of sprint 25) — and
+          // asymmetric while writing, 6 outside and 2 in (adjustment 8).
+          outside: EDGE_ZONE / zoom,
+          inside: (found.writing ? EDGE_ZONE_WRITING_INSIDE : EDGE_ZONE) / zoom,
         },
-        true,
       );
+      return edge ? { el: found.el, edge } : null;
+    };
 
-      /**
-       * **The handles a finger gets** (ADR 0050 §6, día 7, David's condition 4).
-       *
-       * Eight targets of forty-four pixels on the chosen element, and **only** on it: `touch-action`
-       * is declared on the chosen element and on these, so one finger goes on scrolling the canvas
-       * everywhere else (ADR 0049 §7). Drawn under `(pointer: coarse)` — a mouse has the zone and
-       * the cursor instead, which is what keeps the canvas free of squares nobody asked for — and
-       * never in the mobile view, where a section is one column and the gesture reorders.
-       *
-       * Repainted rather than kept in step: every placement written rebuilds the frame anyway, so
-       * the only state here is «where is the chosen element now».
-       */
-      const paintHandles = () => {
-        for (const handle of section.querySelectorAll(".rb-handle")) handle.remove();
-        if (!coarse || deviceNow.current === "mobile" || pulling) return;
-        /**
-         * **Whether this section is hand-designed, asked of the page and not of the state.**
-         *
-         * `rb-free` is the renderer's own class for `source === "free"` (día 1), and a saved layout
-         * is always free (§1), so the class and «it has placements» are the same fact — but one of
-         * them is on the document this function is about to draw on and the other is in a closure
-         * that was captured when the frame was wired. The gesture's own handlers can read the state
-         * safely, because a hand arrives long after a rebuild has settled; **this runs inside the
-         * rebuild**, on `markChosen`, so a stale `doc` here would mean no handles at all for the
-         * element somebody just chose, with nothing to repaint them until the next choice. The same
-         * lesson as `liveDoc()` on día 2, in a place where it is permanent rather than a flicker.
-         */
-        if (!section.classList.contains("rb-free")) return;
-        const found = target();
-        if (!found) return;
-        const host = section.getBoundingClientRect();
-        const box = found.el.getBoundingClientRect();
-        for (const spot of handlesFor({
-          box: {
-            left: box.left - host.left,
-            top: box.top - host.top,
-            width: box.width,
-            height: box.height,
-          },
-          host: { width: host.width, height: host.height },
-        })) {
-          const handle = chrome(iframeDoc, "div");
-          handle.className = `rb-handle rb-handle-${spot.edge}`;
-          handle.setAttribute("aria-hidden", "true");
-          handle.style.left = `${Math.round(spot.left)}px`;
-          handle.style.top = `${Math.round(spot.top)}px`;
-          handle.addEventListener("pointerdown", (event) => begin(spot.edge, found.el, event));
-          section.appendChild(handle);
+    let pulling: {
+      readonly section: HTMLElement;
+      readonly sectionId: string;
+      readonly el: HTMLElement;
+      readonly edge: Edge;
+      readonly from: Placement;
+      readonly column: string;
+      readonly row: string;
+    } | null = null;
+    let pulled: PlacementEdit | null = null;
+
+    /** The cursor, on the element and on the section both, as classes (adjustment 3). */
+    const showCursor = (section: HTMLElement, el: HTMLElement | null, edge: Edge | null) => {
+      for (const node of [section, el]) {
+        if (!node) continue;
+        for (const name of [...node.classList]) {
+          if (name.startsWith("rb-cursor-")) node.classList.remove(name);
         }
+        if (edge) node.classList.add(`rb-cursor-${cursorFor(edge).replace("-resize", "")}`);
+      }
+    };
+
+    const paintHandles = (section: HTMLElement) => {
+      const sectionId = section.dataset["section"];
+      if (!sectionId) return;
+      for (const handle of section.querySelectorAll(".rb-handle")) handle.remove();
+      if (!coarse || deviceNow.current === "mobile" || pulling) return;
+      if (designToolsNow.current !== true) return;
+      // Asked of the page and not of the state (ADR 0050 día 7): `rb-free` is the renderer's own
+      // class for a free section, and it is on the document being drawn on.
+      if (!section.classList.contains("rb-free")) return;
+      const found = target(section, sectionId);
+      if (!found) return;
+      const host = section.getBoundingClientRect();
+      const box = found.el.getBoundingClientRect();
+      for (const spot of handlesFor({
+        box: {
+          left: box.left - host.left,
+          top: box.top - host.top,
+          width: box.width,
+          height: box.height,
+        },
+        host: { width: host.width, height: host.height },
+      })) {
+        const handle = chrome(iframeDoc, "div");
+        handle.className = `rb-handle rb-handle-${spot.edge}`;
+        handle.setAttribute("aria-hidden", "true");
+        handle.style.left = `${Math.round(spot.left)}px`;
+        handle.style.top = `${Math.round(spot.top)}px`;
+        handle.addEventListener("pointerdown", (event) =>
+          begin(section, sectionId, spot.edge, found.el, event),
+        );
+        section.appendChild(handle);
+      }
+    };
+    const repaintAll = () => {
+      for (const section of iframeDoc.querySelectorAll<HTMLElement>("[data-section]")) {
+        paintHandles(section);
+      }
+    };
+
+    const stop = () => {
+      if (!pulling) return;
+      const { section, el } = pulling;
+      // The live preview was written onto the element's own inline grid area, which is the
+      // renderer's to own: put back exactly what was there. A committed resize gets it again from
+      // the patch, and a cancelled one must leave no trace.
+      el.style.gridColumn = pulling.column;
+      el.style.gridRow = pulling.row;
+      for (const guide of section.querySelectorAll(".rb-guide")) guide.remove();
+      showCursor(section, el, null);
+      iframeDoc.documentElement.classList.remove("rb-resizing");
+      flushQueuedPatch.current();
+      iframeDoc.documentElement.style.cursor = "";
+      pulling = null;
+      pulled = null;
+      repaintAll();
+    };
+
+    const begin = (
+      section: HTMLElement,
+      sectionId: string,
+      edge: Edge,
+      el: HTMLElement,
+      event: PointerEvent,
+    ) => {
+      const placement = findSection(docNow.current, sectionId)?.section.layout?.placements.find(
+        (candidate) => candidate.elementId === el.dataset["id"],
+      );
+      if (!placement) return;
+      // Taken from the browser and from everything else: without this a press on a chosen text
+      // starts a native selection, and the click that follows would choose, write, or close a
+      // menu over a gesture that is about one element's own box.
+      event.preventDefault();
+      event.stopPropagation();
+      pulling = {
+        section,
+        sectionId,
+        el,
+        edge,
+        from: placement,
+        column: el.style.gridColumn,
+        row: el.style.gridRow,
       };
-      repaintHandles.push(paintHandles);
+      pulled = null;
+      section.setPointerCapture(event.pointerId);
+      for (const handle of section.querySelectorAll(".rb-handle")) handle.remove();
+      iframeDoc.documentElement.classList.add("rb-resizing");
+      iframeDoc.documentElement.style.cursor = cursorFor(edge);
+    };
 
-      section.addEventListener("pointermove", (event) => {
-        if (!pulling) {
-          // A hand looking for the edge. The cursor is the whole of «se descubra sin explicación»,
-          // and the only thing that says the border can be pulled at all.
-          const found = edgeUnder(event);
-          showCursor(found?.el ?? target()?.el ?? null, found?.edge ?? null);
-          return;
-        }
-        /**
-         * **The live preview is the element's own grid area, rewritten** — not a transform.
-         *
-         * A resize changes what the content has to fit in, so the only honest preview is the one
-         * the grid draws: a text rewraps as it narrows, and a photograph's area grows without the
-         * photograph stretching (`.rb-section img { height: auto }`). A transform would show the
-         * same element scaled, which is a picture of something that will not happen.
-         *
-         * The numbers written here are the renderer's own form — tracks, gutters included — so what
-         * the eye sees during the gesture is what the document will say after it.
-         */
-        const metrics = gridMetricsOf(section);
-        /**
-         * **The border being pulled lines up as well** (día 5), and only the axes that border owns:
-         * a right border has something to say about columns and nothing about rows, so offering its
-         * vertical position as a line would snap a width to a neighbour's top.
-         */
-        const owns = axes(pulling.edge);
-        const guided = guidesFor({
-          x: owns.horizontal ? [event.clientX] : [],
-          y: owns.vertical ? [event.clientY] : [],
-          others: neighbourRects(section, pulling.el.dataset["id"]),
-          centreX: centreOf(metrics),
-          threshold: GUIDE_ZONE / zoomOf(iframeDoc),
-        });
-        drawGuides(section, guided.lines);
-        const x = event.clientX + guided.dx;
-        const y = event.clientY + guided.dy;
-        pulled = resizeTo(pulling.from, pulling.edge, {
-          startColumn: fineColumnAt(x, metrics),
-          endColumn: fineLastColumnAt(x, metrics),
-          startRow: rowAt(y, metrics),
-          endRow: lastRowAt(y, metrics),
-        });
-        const next = { ...pulling.from, ...pulled };
-        pulling.el.style.gridColumn = `${fineTrack(next.column)}/span ${fineTrackSpan(
-          next.column,
-          next.columnSpan,
-        )}`;
-        pulling.el.style.gridRow = `${next.row}/span ${next.rowSpan}`;
+    // In the capture phase: the press in the zone must beat choosing, writing, closing a menu and
+    // arming the drag.
+    delegate(
+      iframeDoc,
+      "pointerdown",
+      "[data-section]",
+      (section, event) => {
+        const sectionId = section.dataset["section"];
+        if (!sectionId) return;
+        const found = edgeUnder(event, section, sectionId);
+        if (found) begin(section, sectionId, found.edge, found.el, event);
+      },
+      { capture: true },
+    );
+
+    delegate(iframeDoc, "pointermove", "[data-section]", (section, event) => {
+      if (!pulling) {
+        const sectionId = section.dataset["section"];
+        if (!sectionId) return;
+        // A hand looking for the edge. The cursor is the whole of «se descubra sin explicación».
+        const found = edgeUnder(event, section, sectionId);
+        showCursor(
+          section,
+          found?.el ?? target(section, sectionId)?.el ?? null,
+          found?.edge ?? null,
+        );
+        return;
+      }
+      if (section !== pulling.section) return;
+      // The live preview is the element's own grid area, rewritten — not a transform — so a text
+      // rewraps as it narrows and a photograph's area grows without the photograph stretching.
+      const metrics = gridMetricsOf(section);
+      const owns = axes(pulling.edge);
+      const guided = guidesFor({
+        x: owns.horizontal ? [event.clientX] : [],
+        y: owns.vertical ? [event.clientY] : [],
+        others: neighbourRects(section, pulling.el.dataset["id"]),
+        centreX: centreOf(metrics),
+        threshold: GUIDE_ZONE / zoomOf(iframeDoc),
       });
+      drawGuides(section, guided.lines);
+      const x = event.clientX + guided.dx;
+      const y = event.clientY + guided.dy;
+      pulled = resizeTo(pulling.from, pulling.edge, {
+        startColumn: fineColumnAt(x, metrics),
+        endColumn: fineLastColumnAt(x, metrics),
+        startRow: rowAt(y, metrics),
+        endRow: lastRowAt(y, metrics),
+      });
+      const next = { ...pulling.from, ...pulled };
+      pulling.el.style.gridColumn = `${fineTrack(next.column)}/span ${fineTrackSpan(
+        next.column,
+        next.columnSpan,
+      )}`;
+      pulling.el.style.gridRow = `${next.row}/span ${next.rowSpan}`;
+    });
 
-      const release = () => {
-        if (!pulling) return;
-        const el = pulling.el;
-        const elementId = el.dataset["id"];
-        const edit = pulled;
-        const wasWriting = el.isContentEditable;
-        stop();
-        if (!elementId || !edit || Object.keys(edit).length === 0) return;
-        if (wasWriting) {
-          /**
-           * **The words come first, and then the box** (ADR 0050, día 4).
-           *
-           * A text being written in holds the person's letters in the DOM and nowhere else — this
-           * editor commits a text on blur — and writing the placement rebuilds the frame, which
-           * would throw them away. So the text is committed the way clicking away commits it, and
-           * the writing is picked up again on the other side of the rebuild (`keepWriting`): one
-           * gesture, two acts, in the order that cannot lose anything.
-           */
-          keepWriting.current = { sectionId, elementId };
-          el.blur();
-        } else {
-          keepChosenFocus.current = true;
-        }
-        onSetPlacement(sectionId, elementId, edit);
-      };
-      section.addEventListener("pointerup", release);
-      section.addEventListener("pointercancel", stop);
-      section.addEventListener("lostpointercapture", release);
-    }
+    const release = () => {
+      if (!pulling) return;
+      const { el, sectionId } = pulling;
+      const elementId = el.dataset["id"];
+      const edit = pulled;
+      const wasWriting = el.isContentEditable;
+      stop();
+      if (!elementId || !edit || Object.keys(edit).length === 0) return;
+      if (wasWriting) {
+        // The words come first, and then the box (ADR 0050 día 4): this editor commits a text on
+        // blur, so the text is committed the way clicking away commits it, and the writing is
+        // picked up again on the other side (`keepWriting`).
+        keepWriting.current = { sectionId, elementId };
+        el.blur();
+      } else {
+        keepChosenFocus.current = true;
+      }
+      propsNow.current.onSetPlacement(sectionId, elementId, edit);
+    };
+    delegate(iframeDoc, "pointerup", "[data-section]", () => release());
+    delegate(iframeDoc, "pointercancel", "[data-section]", () => stop());
+    delegate(iframeDoc, "lostpointercapture", "[data-section]", () => release());
 
-    // What `markChosen` calls when the chosen element changes, found by the document it happened
-    // in: the handles belong to one element of one page, and this function is where the gesture
-    // they start is in scope.
+    // What `markChosen` and the redraw call, found by the document it happened in.
     handlePainters.current.set(iframeDoc, repaintAll);
     repaintAll();
+    observeSections(iframeDoc);
+  }
 
-    /**
-     * **And again whenever the page under them reflows** (día 8, measured).
-     *
-     * A handle is an absolutely positioned box placed at a corner the element had when it was
-     * chosen, and until this it was only ever repainted on `markChosen`. Everything that changes
-     * the preview's width without rebuilding the document therefore left all eight behind: opening
-     * «Diseño» at a 1024 window took the page from 752 px to 721, so the headline's own box went
-     * from 320 px wide to 305 and the `se` handle stayed **fifteen pixels past** the corner it
-     * marks; widening the window from 1024 to 1280 took the page to 788 and left it **eighteen
-     * pixels short**. Both measured on 21 October, both with the element still chosen and the dots
-     * still drawn — pointing at nothing, which is the one thing a handle must not do.
-     *
-     * A `ResizeObserver` on the section and not a `resize` listener on the window, because the two
-     * doors are not the same: a panel opening never resizes the window, and this catches both by
-     * watching the thing whose geometry the handles are made of. The observer fires once on
-     * observation, which is a free first paint rather than something to guard against.
-     *
-     * Not on `pointermove`-driven reflow: a gesture takes the handles away itself (`begin`) and
-     * puts them back on release, so there is nothing to keep in step while a hand is pulling.
-     *
-     * Nothing holds the observer and nothing has to: `wireInteractions` runs **once** per document
-     * (the `rbWired` guard), so there is exactly one of these per page, its own targets keep it
-     * alive, and both go when the frame's document is replaced.
-     */
+  /**
+   * **One `ResizeObserver` per document, observing every section the page has** (sprint 25 día 8
+   * for the why — handles that stayed behind when the page reflowed — and sprint 26 día 3 for the
+   * shape: a patch that inserts a section calls this again, and `observe` on a section already
+   * observed is a no-op). The callback asks for the document's painter at the time it fires.
+   */
+  const sectionObservers = useRef(new WeakMap<Document, ResizeObserver>());
+  function observeSections(iframeDoc: Document) {
     const view = iframeDoc.defaultView;
-    if (view) {
-      const watcher = new view.ResizeObserver(() => repaintAll());
-      for (const section of iframeDoc.querySelectorAll<HTMLElement>("[data-section]")) {
-        watcher.observe(section);
-      }
+    if (!view) return;
+    let watcher = sectionObservers.current.get(iframeDoc);
+    if (!watcher) {
+      watcher = new view.ResizeObserver(() => handlePainters.current.get(iframeDoc)?.());
+      sectionObservers.current.set(iframeDoc, watcher);
+    }
+    for (const section of iframeDoc.querySelectorAll<HTMLElement>("[data-section]")) {
+      watcher.observe(section);
     }
   }
 
@@ -5962,32 +5838,77 @@ export function Editor({
    * is the product answer — and there is a technical one underneath it: every edit replaces the
    * whole `srcDoc`, which destroys the injected chrome, the listeners of this very drag included.
    */
-  function wireDragging(iframeDoc: Document) {
-    // A placement is a design-tools idea: the four «Colocación» arrows live behind the same switch
-    // (ADR 0025), and this is the same question asked with a pointer.
-    if (designTools !== true) return;
+  /** A placed element's gesture state — a drag or a run of arrows — kept per element in a map
+   * since the listeners stopped being per element (ADR 0051 §5). */
+  interface DragState {
+    from: Point | null;
+    grab: Point;
+    took: Rect | null;
+    moving: Placement | null;
+    moved: boolean;
+    outcome: Drop | null;
+    mobileSwap: string | null;
+    gesture: "none" | "move" | "ask";
+    asked: boolean;
+    run: ArrowRun | null;
+    runTimer: number | undefined;
+  }
 
-    /**
-     * **The browser's own drag-and-drop must not appear** (ADR 0048 §2).
-     *
-     * An image and a link are what a browser drags by itself, and it would turn a gesture about
-     * position into a copy of an image or a shortcut to a URL — over a canvas where neither means
-     * anything.
-     */
+  /**
+   * **What a placed element needs on itself** (ADR 0051 §5): a Tab stop when it is not a text (a
+   * text has its own), and `draggable` off on images and links so the browser's own drag never
+   * starts. Only with the tools on, as the whole wiring used to be; idempotent, so it runs at
+   * wiring and after every patch.
+   */
+  function prepareDraggables(iframeDoc: Document) {
+    if (designToolsNow.current !== true) return;
     for (const node of iframeDoc.querySelectorAll<HTMLElement>("img, a")) {
-      node.addEventListener("dragstart", (event) => event.preventDefault());
-      node.draggable = false;
+      if (node.draggable) node.draggable = false;
     }
+    for (const el of iframeDoc.querySelectorAll<HTMLElement>("[data-id]")) {
+      if (!EDITABLE_TAGS.has(el.tagName) && el.tabIndex !== 0) el.tabIndex = 0;
+    }
+  }
 
-    /** A pointer that was dragging has not clicked, whatever the browser says next. */
+  /**
+   * **The element follows the hand and stays where it is let go** (ADR 0050 día 3), **the arrows
+   * move it a unit and a run is one step** (día 6) — and since sprint 26 día 3 the listeners are
+   * the document's, dispatched to the `[data-id]` the event concerns (ADR 0051 §5). The gate on the
+   * design tools is in each handler, because the wiring now outlives the switch.
+   */
+  function wireDragging(iframeDoc: Document) {
+    delegate(iframeDoc, "dragstart", "img, a", (_, event) => event.preventDefault());
+
+    const states = new WeakMap<HTMLElement, DragState>();
+    const stateOf = (el: HTMLElement): DragState => {
+      let state = states.get(el);
+      if (!state) {
+        state = {
+          from: null,
+          grab: { x: 0, y: 0 },
+          took: null,
+          moving: null,
+          moved: false,
+          outcome: null,
+          mobileSwap: null,
+          gesture: "none",
+          asked: false,
+          run: null,
+          runTimer: undefined,
+        };
+        states.set(el, state);
+      }
+      return state;
+    };
+    const placedAt = (el: HTMLElement) => {
+      const section = el.closest<HTMLElement>("[data-section]");
+      const sectionId = section?.dataset["section"];
+      const elementId = el.dataset["id"];
+      return section && sectionId && elementId ? { section, sectionId, elementId } : null;
+    };
+
+    // A click right after a drag is the drag's own release, not a choice (ADR 0048 §2).
     let justDragged = false;
-    /**
-     * **Cleared by the next gesture, so a swallow cannot outlive the drag that armed it.**
-     *
-     * The flag is set at `pointerup` and the click of that same gesture follows immediately, before
-     * any new `pointerdown` — so a flag still standing here belongs to a gesture whose click never
-     * came, and leaving it would eat somebody else's. One swallowed click is the whole budget.
-     */
     iframeDoc.addEventListener("pointerdown", () => {
       justDragged = false;
     });
@@ -5996,461 +5917,280 @@ export function Editor({
       (event) => {
         if (!justDragged) return;
         justDragged = false;
-        // The capture phase, so it never reaches a photograph's «Cambiar foto» or a text's own
-        // click: a drag that ended on a photo must not also open the picker.
         event.stopPropagation();
         event.preventDefault();
       },
       true,
     );
 
-    for (const el of iframeDoc.querySelectorAll<HTMLElement>("[data-id]")) {
-      const elementId = el.dataset.id;
-      const section = el.closest<HTMLElement>("[data-section]");
-      const sectionId = section?.dataset.section;
-      if (!elementId || !section || !sectionId) continue;
+    // Arriving at a photograph or a list by Tab chooses it, as it does a text.
+    delegate(iframeDoc, "focusin", "[data-id]", (el) => {
+      if (designToolsNow.current !== true) return;
+      if (!EDITABLE_TAGS.has(el.tagName)) markChosen(iframeDoc, el);
+    });
 
-      /**
-       * **Anything placed is focusable, not only a text** (ADR 0049).
-       *
-       * A photograph could be dragged from the first day of this drag and reached by no keyboard at
-       * all: `wireEditing` makes a *text* focusable, and nothing made an image one. So the arrows
-       * had nothing to act on and WCAG 2.1.1 was met only through the panel.
-       *
-       * A click on a photograph still opens «Cambiar foto», untouched: what arrives today is Tab
-       * and the choosing that focus means, which is the same rule a text follows.
-       */
-      if (!EDITABLE_TAGS.has(el.tagName)) {
-        el.tabIndex = 0;
-        el.addEventListener("focus", () => markChosen(iframeDoc, el));
+    const clear = (el: HTMLElement, section: HTMLElement, state: DragState) => {
+      state.from = null;
+      state.moving = null;
+      state.moved = false;
+      state.outcome = null;
+      state.mobileSwap = null;
+      state.gesture = "none";
+      state.asked = false;
+      el.classList.remove("rb-moving");
+      // The displacement is chrome and lives on the element for exactly as long as the hand does.
+      el.style.transform = "";
+      state.took = null;
+      for (const guide of section.querySelectorAll(".rb-guide")) guide.remove();
+      iframeDoc.documentElement.classList.remove("rb-dragging");
+      flushQueuedPatch.current();
+      for (const ghost of iframeDoc.querySelectorAll(".rb-ghost")) ghost.remove();
+    };
+
+    delegate(iframeDoc, "pointerdown", "[data-id]", (el, event) => {
+      if (designToolsNow.current !== true) return;
+      // Writing wins: inside a text being written in, a drag selects words (ADR 0047).
+      if (el.isContentEditable) return;
+      const at = placedAt(el);
+      if (!at) return;
+      const state = stateOf(el);
+      const chosen =
+        chosenText.current?.sectionId === at.sectionId &&
+        chosenText.current?.elementId === at.elementId;
+      // A finger drags only what it has chosen; otherwise one finger scrolls (ADR 0049 §7).
+      if (event.pointerType === "touch" && !chosen) return;
+      const layout = findSection(docNow.current, at.sectionId)?.section.layout ?? null;
+      if (layout === null) {
+        // A catalog section: a drag past the threshold opens the «Diseñar a mano» offer.
+        state.gesture = "ask";
+        state.from = { x: event.clientX, y: event.clientY };
+        return;
       }
+      const found = layout.placements.find((placement) => placement.elementId === at.elementId);
+      if (!found) return;
+      state.moving = found;
+      state.gesture = "move";
+      state.from = { x: event.clientX, y: event.clientY };
+      const rect = el.getBoundingClientRect();
+      state.grab = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+      state.took = { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+      el.setPointerCapture(event.pointerId);
+    });
 
-      let from: Point | null = null;
-      let grab: Point = { x: 0, y: 0 };
-      /** The element's own box when the hand took it, which is what the guides line up (día 5). */
-      let took: Rect | null = null;
-      let moving: Placement | null = null;
-      let moved = false;
-      let outcome: Drop | null = null;
-      /** On a phone, which element would trade places with this one — see the move listener. */
-      let mobileSwap: string | null = null;
-      /**
-       * What this gesture can do: move the element, or **ask** whether the section may be designed
-       * by hand — and «ask» is decided at `pointerdown` and acted on only once the hand has actually
-       * travelled.
-       *
-       * **Opening the offer at `pointerdown` was a defect that broke editing**, found by the full
-       * suite: in a section the catalog draws — which is most of them — a plain click on a text
-       * opened the offer and the swallowed click never chose the text. So with the design tools on,
-       * no text could be written in at all. A drag asks the question; a click is still a click.
-       */
-      let gesture: "none" | "move" | "ask" = "none";
-      let asked = false;
-
-      const clear = () => {
-        from = null;
-        moving = null;
-        moved = false;
-        outcome = null;
-        mobileSwap = null;
-        gesture = "none";
-        asked = false;
-        el.classList.remove("rb-moving");
-        // The displacement is chrome and lives on the element for exactly as long as the hand does.
-        el.style.transform = "";
-        took = null;
-        for (const guide of section.querySelectorAll(".rb-guide")) guide.remove();
-        iframeDoc.documentElement.classList.remove("rb-dragging");
-        flushQueuedPatch.current();
-        for (const ghost of iframeDoc.querySelectorAll(".rb-ghost")) ghost.remove();
-      };
-
-      el.addEventListener("pointerdown", (event) => {
-        // Writing wins: inside a text being written in, a drag selects words (ADR 0047). An edge is
-        // the exception and it never reaches here: `wireResizing` takes that press in the capture
-        // phase, on the section, because the zone reaches outside this element's own box.
-        if (el.isContentEditable) return;
-        const chosen =
-          chosenText.current?.sectionId === sectionId &&
-          chosenText.current?.elementId === elementId;
-        /**
-         * **On touch, only the element already chosen drags** (ADR 0049).
-         *
-         * David offered two shapes — «arranca con pulsación larga, **o** solo sobre el elemento ya
-         * elegido» — and this is the second, because the first cannot be made honest in a browser:
-         * a touch's gesture is decided at `touchstart`, so a `touch-action` set when a long press
-         * fires arrives after the page has already agreed to scroll. Declaring it on the chosen
-         * element instead (`.rb-chosen { touch-action: none }`) makes the gesture unambiguous from
-         * the first move — **on that element and nowhere else**, so one finger keeps scrolling the
-         * canvas everywhere a walk can reach.
-         *
-         * A tap is what chooses, so touch needs no new gesture at all: tap once, then drag.
-         */
-        if (event.pointerType === "touch" && !chosen) return;
-        /**
-         * **With a pointer nothing has to be chosen first** (ADR 0050 §6, amending ADR 0047 §1 and
-         * ADR 0048 §8).
-         *
-         * A text used to need choosing before it could be dragged, because a drag over a text
-         * selects words and the two gestures start identically. What tells them apart is movement,
-         * which the browser can be asked about — three screen pixels of travel is a drag and
-         * anything less is a click — so the precondition was protecting against an ambiguity that
-         * had already been resolved by the time it mattered. «Clic mantenido sobre el elemento
-         * arrastra» is David's own sentence for this sprint, and a held click that first has to be
-         * a released click is not that.
-         *
-         * The one place the ambiguity is real is **inside a text being written in**, and that is
-         * the line above: there every drag selects words, as it does in Word.
-         */
-
-        const layout = findSection(doc, sectionId)?.section.layout ?? null;
-        if (layout === null) {
-          // Nothing happens yet: a section the catalog draws has no placements to move, and whether
-          // this gesture is a drag is not known until the hand moves.
-          gesture = "ask";
-          from = { x: event.clientX, y: event.clientY };
-          return;
-        }
-        const found = layout.placements.find((placement) => placement.elementId === elementId);
-        // A nested element — a gallery card, a line of a list — has no placement of its own and
-        // moves with its list. The drag does not start there, which `setPlacement` would also
-        // refuse, and refusing here means nothing happens rather than a throw nobody asked for.
-        if (!found) return;
-
-        moving = found;
-        gesture = "move";
-        from = { x: event.clientX, y: event.clientY };
-        const rect = el.getBoundingClientRect();
-        // Where inside the element the hand took hold, so what travels keeps the grip it was taken
-        // by rather than jumping to put the pointer at the element's top-left.
-        grab = { x: event.clientX - rect.left, y: event.clientY - rect.top };
-        took = { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
-        el.setPointerCapture(event.pointerId);
-      });
-
-      el.addEventListener("pointermove", (event) => {
-        if (!from) return;
-        const now = { x: event.clientX, y: event.clientY };
-        // The same three pixels the bar's grip uses — below that a hand has not moved, it has
-        // trembled, and here it means a click, which belongs to the two states — **but three
-        // pixels of the screen** (David's adjustment 3): inside the frame everything is in the
-        // document's own pixels, which the canvas's zoom scales on the way out.
-        if (!isDragBeyond(from, now, DRAG_THRESHOLD / zoomOf(iframeDoc)) && !moved) return;
-
-        if (gesture === "ask") {
-          if (asked) return;
-          asked = true;
-          openEscalateOffer.current?.(sectionId, el);
-          /**
-           * **And the click that follows is swallowed**, which the walk found by watching the offer
-           * appear and vanish in the same breath: `wireSelection` closes any open popup on a click
-           * outside it — correctly — and a `pointerup` still produces one. So the gesture that
-           * asked the question also dismissed it. A drag is not a click, even when all it did was
-           * ask.
-           */
-          justDragged = true;
-          return;
-        }
-        if (!moving) return;
-        if (!moved) {
-          moved = true;
-          // `.rb-moving` carries the `z-index` for as long as the gesture lasts (David's adjustment
-          // 5): a `transform` makes the element its own stacking context, and without a layer of
-          // its own it would travel *under* the siblings that come after it in the document.
-          el.classList.add("rb-moving");
-          iframeDoc.documentElement.classList.add("rb-dragging");
-          /**
-           * **And whatever the browser had started selecting is dropped.**
-           *
-           * Dragging over a text that is not being written in is a native selection, and until this
-           * sprint the precondition above is what kept the two apart. `user-select: none` on
-           * `.rb-dragging` stops it from growing; the range the first few pixels already made has
-           * to be taken away, or the gesture ends with half a headline highlighted.
-           */
-          iframeDoc.getSelection()?.removeAllRanges();
-        }
-        if (deviceNow.current === "mobile") {
-          /**
-           * **On a phone the same gesture reorders** (ADR 0049, rule 7).
-           *
-           * There is no column to move between — the renderer collapses a section to one — and rule
-           * 7 admits only hiding, reordering and narrowing. So the drag means the one of the three
-           * it can mean, and the ghost is drawn over the element it would trade places with rather
-           * than over a cell that does not exist here.
-           */
-          const rows = [...section.querySelectorAll<HTMLElement>("[data-id]")]
-            .filter((node) => node.parentElement === section)
-            .map((node) => {
-              const box = node.getBoundingClientRect();
-              return { elementId: node.dataset["id"] ?? "", top: box.top, bottom: box.bottom };
-            })
-            .sort((a, b) => a.top - b.top);
-          const swap = reorderAt({ rows, moving: elementId, y: now.y });
-          mobileSwap = swap.kind === "moveUp" ? swap.elementId : null;
-          const target = rows.find((row) => row.elementId === mobileSwap);
-          const host = section.getBoundingClientRect();
-          let ghost = section.querySelector<HTMLElement>(".rb-ghost");
-          if (!ghost) {
-            ghost = chrome(iframeDoc, "div");
-            ghost.className = "rb-ghost";
-            ghost.setAttribute("aria-hidden", "true");
-            section.appendChild(ghost);
-          }
-          const over = target ?? rows.find((row) => row.elementId === elementId);
-          ghost.style.left = "0px";
-          ghost.style.width = `${Math.round(host.width)}px`;
-          ghost.style.top = `${Math.round((over?.top ?? host.top) - host.top)}px`;
-          ghost.style.height = `${Math.round((over?.bottom ?? host.top) - (over?.top ?? host.top))}px`;
-          ghost.classList.toggle("rb-ghost-no", mobileSwap === null);
-          ghost.textContent = mobileSwap === null ? es["editor.drag.order"] : "";
-          return;
-        }
-
-        /**
-         * **The element travels with the hand**, by the distance the hand has travelled — not to
-         * where the pointer is, which would snatch the element's corner under the cursor the
-         * instant the drag began. The same decision `barPosition`'s own drag made, for the same
-         * reason: a hand expects whatever it has picked up to keep the grip it took.
-         *
-         * **And the guides pull it the last few pixels** (ADR 0050, día 5): its three lines per
-         * axis are offered to the neighbours' edges and centres and to the centre of the section,
-         * and whatever is within six screen pixels wins. Outside that, the fine grid decides as it
-         * did before — which is what «gana la guía dentro del umbral» means.
-         */
-        const metrics = gridMetricsOf(section);
-        const raw = { x: now.x - from.x, y: now.y - from.y };
-        const guided = took
-          ? guidesFor({
-              x: [took.left + raw.x, (took.left + took.right) / 2 + raw.x, took.right + raw.x],
-              y: [took.top + raw.y, (took.top + took.bottom) / 2 + raw.y, took.bottom + raw.y],
-              others: neighbourRects(section, elementId),
-              centreX: centreOf(metrics),
-              threshold: GUIDE_ZONE / zoomOf(iframeDoc),
-            })
-          : { dx: 0, dy: 0, lines: [] };
-        el.style.transform = `translate(${raw.x + guided.dx}px, ${raw.y + guided.dy}px)`;
-        drawGuides(section, guided.lines);
-        // And where that would land, kept for the release. Read every move rather than once,
-        // because a row can grow under the hand while something above it reflows.
-        outcome = dropAt({
-          metrics,
-          at: { x: now.x - grab.x + guided.dx, y: now.y - grab.y + guided.dy },
-          moving,
-        });
-      });
-
-      const release = () => {
-        if (!from) return;
-        const wasMoved = moved && gesture === "move";
-        const drop = outcome;
-        const swapWith = mobileSwap;
-        clear();
-        if (!wasMoved) return;
-        // A drag is not a click, even where the browser sends one afterwards.
+    delegate(iframeDoc, "pointermove", "[data-id]", (el, event) => {
+      const state = states.get(el);
+      if (!state?.from) return;
+      const at = placedAt(el);
+      if (!at) return;
+      const { section, sectionId, elementId } = at;
+      const now = { x: event.clientX, y: event.clientY };
+      if (!isDragBeyond(state.from, now, DRAG_THRESHOLD / zoomOf(iframeDoc)) && !state.moved)
+        return;
+      if (state.gesture === "ask") {
+        if (state.asked) return;
+        state.asked = true;
+        openEscalateOffer.current?.(sectionId, el);
         justDragged = true;
-        if (swapWith !== null) {
-          // The phone's answer: one swap, one history step, through the verb the document has.
-          onMoveUpOnMobile(sectionId, swapWith);
-          return;
-        }
-        /**
-         * **A refusal is not an edit, and with no ghost it has to be said.**
-         *
-         * The only refusal left is the floor on rows — four hundred of them, so a drag can only
-         * reach it in a section taller than anything anybody designs — and with the ghost gone
-         * there is nothing on screen to carry the sentence. «Nothing happened» is the one answer a
-         * drag must never give silently (ADR 0048 §4's principle, which outlived its refusal), so
-         * the live region says it.
-         */
-        if (drop?.kind === "refuse") {
-          announce(es["editor.drag.rows"]);
-          return;
-        }
-        if (drop?.kind !== "place") return;
-        /**
-         * **And the element it dropped is the chosen one**, which is what Canva and Word both do
-         * and what makes the gesture finish rather than stop: the outline says what moved, the
-         * arrows carry on from there, and día 4's edges have something to take hold of without a
-         * click nobody would think to make. A text chosen this way is one click from being written
-         * in, which is the two states exactly as ADR 0047 drew them.
-         */
-        markChosen(iframeDoc, el);
-        keepChosenFocus.current = true;
-        onSetPlacement(sectionId, elementId, { column: drop.at.column, row: drop.at.row });
-      };
-      el.addEventListener("pointerup", release);
-      el.addEventListener("pointercancel", release);
-      el.addEventListener("lostpointercapture", release);
-
-      /** The run of arrow presses in flight, and the timer that writes it (día 6). */
-      let run: ArrowRun | null = null;
-      let runTimer: number | undefined;
-
-      /**
-       * Write what the run came to, and forget it.
-       *
-       * The placement is read again here rather than captured when the run started: nothing has
-       * rebuilt the document in between — that is the whole point of deferring — so it is the same
-       * placement, and reading it keeps this honest if that ever stops being true.
-       */
-      const flushRun = () => {
-        iframeDoc.documentElement.classList.remove("rb-arrowing");
-        flushQueuedPatch.current();
-        window.clearTimeout(runTimer);
-        const total = run;
-        run = null;
-        if (!moves(total)) return;
-        const layout = findSection(doc, sectionId)?.section.layout ?? null;
-        const placement = layout?.placements.find((candidate) => candidate.elementId === elementId);
-        if (!placement || !total) return;
-        const drop = arrowDrop({ moving: placement, columns: total.columns, rows: total.rows });
-        if (drop.kind !== "place") return;
-        // The rebuild is about to throw this node away; the next wiring gives the keyboard back to
-        // whatever takes its place.
-        keepChosenFocus.current = true;
-        /**
-         * **Said in pixels, from the box the browser is drawing** (David's condition 2 and his
-         * adjustment 1 on how): the element has already been previewed where the run put it, so
-         * its own rectangle against the section's content corner is exactly what somebody beside
-         * the screen would read out. Unit × column would be arithmetic about a page that may not
-         * be the one on screen, since a row is eight pixels only until a text makes it taller.
-         */
-        const box = el.getBoundingClientRect();
-        const metrics = gridMetricsOf(section);
-        announce(announceText({ x: box.left - metrics.left, y: box.top - metrics.top }));
-        onSetPlacement(sectionId, elementId, { column: drop.at.column, row: drop.at.row });
-      };
-
-      /**
-       * **The keyboard's half of the same gesture** (ADR 0049, WCAG 2.1.1).
-       *
-       * A pointer gesture with no keyboard equivalent does not exist for whoever has no pointer, and
-       * this repository has applied that to every handle it has ever drawn. The arrows move the
-       * chosen element one cell at a time; `Shift` with a sideways arrow widens or narrows it.
-       *
-       * **In this function and not in `wireEditing`**, so the pointer and the keyboard share one
-       * refusal — `arrowDrop` and `dropAt` answer in the same words — and one gate, because a
-       * placement is a design-tools idea. `textKeyAction` returns «ignore» for every arrow, which is
-       * what leaves them free here: ADR 0047 left them alone so this day could take them.
-       */
-      el.addEventListener("keydown", (event) => {
-        // Writing owns every key, the arrows included: there they move the caret.
-        if (el.isContentEditable) return;
-        const isChosen =
-          chosenText.current?.sectionId === sectionId &&
-          chosenText.current?.elementId === elementId;
-        if (!isChosen) return;
-        /**
-         * **Escape releases anything chosen, not only a text** (ADR 0049).
-         *
-         * `wireEditing` gives a text its way out — Escape ends the writing and a second Escape hands
-         * the keyboard back to the section (ADR 0047) — and it wires no photograph, so until today a
-         * chosen image had no exit at all: the outline stayed and the arrows kept it. **Only for the
-         * elements that function does not wire**, because a text's Escape already means two things
-         * there and a second handler would turn «stop writing» into «stop being chosen».
-         */
-        if (event.key === "Escape" && !EDITABLE_TAGS.has(el.tagName)) {
-          event.preventDefault();
-          markChosen(iframeDoc, null);
-          section.focus({ preventScroll: true });
-          return;
-        }
-
-        const action = arrowAction({
-          key: event.key,
-          metaKey: event.metaKey,
-          ctrlKey: event.ctrlKey,
-          shiftKey: event.shiftKey,
-          altKey: event.altKey,
-        });
-        if (action.kind === "none") return;
-
-        const layout = findSection(doc, sectionId)?.section.layout ?? null;
-        // A section the catalog draws has nothing to move. The pointer's door to the offer is a
-        // drag; the keyboard's is the section's own «A mano» verb, so there is none to open here.
-        if (layout === null) return;
-        const placement = layout.placements.find((candidate) => candidate.elementId === elementId);
-        if (!placement) return;
-
-        // Taken from the page rather than left to scroll it: an arrow that means something here
-        // must not also move the view.
-        event.preventDefault();
-
-        /**
-         * **A run of presses is one movement and one step** (ADR 0050 §6, día 6, David's condition
-         * 1): the presses accumulate, the element is previewed where the run has taken it, and the
-         * placement is written once — when the key comes up, or three hundred milliseconds after
-         * the last press, whichever happens first.
-         *
-         * One unit per press on a grid of ninety-six is fifty presses to cross a section; writing
-         * a placement each time would be fifty documents, fifty re-parses of the canvas and fifty
-         * entries to undo one gesture through. It also retires the lost keypress of ADR 0049 §4:
-         * there is no rebuild to lose a press to until the hand stops.
-         */
-        run = accumulate(run, { columns: action.columns, rows: action.rows }, performance.now());
-        // A run previews on the element's own grid area until it is written; a patch that lands
-        // meanwhile waits for it, like one that lands during a drag (adjustment 3).
-        iframeDoc.documentElement.classList.add("rb-arrowing");
-        const drop = arrowDrop({ moving: placement, columns: run.columns, rows: run.rows });
-        if (drop.kind === "refuse") {
-          announce(es["editor.drag.rows"]);
-          return;
-        }
-        /**
-         * **Previewed on the element's own grid area, not on a `transform`.**
-         *
-         * The plan said transform, as the pointer's drag does, and the resize of día 4 is the
-         * better precedent: an element that crosses a gutter gets wider (día 5's own finding), so a
-         * transform would show the eye a box the document is not going to produce. Rewriting the
-         * inline area reflows the grid, which is cheap inside one document — it is the rebuild of
-         * the whole `srcDoc` that is not, and that is what the run is deferring.
-         */
-        if (drop.kind === "place") {
-          el.style.gridColumn = `${fineTrack(drop.at.column)}/span ${fineTrackSpan(
-            drop.at.column,
-            drop.at.columnSpan,
-          )}`;
-          el.style.gridRow = `${drop.at.row}/span ${drop.at.rowSpan}`;
-        }
-        // One timer, reset by every press: the run is written when it stops being fed. `keyup`
-        // below is the ordinary end; this is the net for the press whose `keyup` never comes —
-        // a window changed with the key held down.
-        window.clearTimeout(runTimer);
-        runTimer = window.setTimeout(flushRun, RUN_IDLE_MS);
-      });
-
-      /** The run ends when the key comes up, which is what a hand expects of «one movement». */
-      el.addEventListener("keyup", (event) => {
-        if (event.key.startsWith("Arrow")) flushRun();
-      });
-      // And if focus leaves while a run is still open — Escape to the section, a click elsewhere —
-      // the movement is written rather than lost with the node.
-      el.addEventListener("blur", () => flushRun());
-    }
-
-    /**
-     * **The keyboard comes back to the element it was moving** (ADR 0049).
-     *
-     * Every arrow is an edit and every edit replaces the frame, so the node that had the keyboard is
-     * gone by the time this runs. Without this, three presses produce one movement: the first moves
-     * the element and loses the focus, and the next two reach a document body that does nothing with
-     * them. The walk asserts the three, which is the only way to see it.
-     *
-     * Guarded by a flag that only an arrow sets, so an edit made with a swatch or a verb still
-     * leaves the keyboard where the hand was.
-     */
-    if (keepChosenFocus.current) {
-      keepChosenFocus.current = false;
-      const chosen = chosenText.current;
-      const back = chosen
-        ? iframeDoc
-            .querySelector(`[data-section="${CSS.escape(chosen.sectionId)}"]`)
-            ?.querySelector<HTMLElement>(`[data-id="${CSS.escape(chosen.elementId)}"]`)
-        : null;
-      if (back) {
-        markChosen(iframeDoc, back);
-        back.focus({ preventScroll: true });
+        return;
       }
+      if (!state.moving) return;
+      if (!state.moved) {
+        state.moved = true;
+        el.classList.add("rb-moving");
+        iframeDoc.documentElement.classList.add("rb-dragging");
+        iframeDoc.getSelection()?.removeAllRanges();
+      }
+      if (deviceNow.current === "mobile") {
+        // On a phone the same gesture reorders (ADR 0049, rule 7).
+        const rows = [...section.querySelectorAll<HTMLElement>("[data-id]")]
+          .filter((node) => node.parentElement === section)
+          .map((node) => {
+            const box = node.getBoundingClientRect();
+            return { elementId: node.dataset["id"] ?? "", top: box.top, bottom: box.bottom };
+          })
+          .sort((a, b) => a.top - b.top);
+        const swap = reorderAt({ rows, moving: elementId, y: now.y });
+        state.mobileSwap = swap.kind === "moveUp" ? swap.elementId : null;
+        const target = rows.find((row) => row.elementId === state.mobileSwap);
+        const host = section.getBoundingClientRect();
+        let ghost = section.querySelector<HTMLElement>(".rb-ghost");
+        if (!ghost) {
+          ghost = chrome(iframeDoc, "div");
+          ghost.className = "rb-ghost";
+          ghost.setAttribute("aria-hidden", "true");
+          section.appendChild(ghost);
+        }
+        const over = target ?? rows.find((row) => row.elementId === elementId);
+        ghost.style.left = "0px";
+        ghost.style.width = `${Math.round(host.width)}px`;
+        ghost.style.top = `${Math.round((over?.top ?? host.top) - host.top)}px`;
+        ghost.style.height = `${Math.round((over?.bottom ?? host.top) - (over?.top ?? host.top))}px`;
+        ghost.classList.toggle("rb-ghost-no", state.mobileSwap === null);
+        ghost.textContent = state.mobileSwap === null ? es["editor.drag.order"] : "";
+        return;
+      }
+      const metrics = gridMetricsOf(section);
+      const raw = { x: now.x - state.from.x, y: now.y - state.from.y };
+      const took = state.took;
+      const guided = took
+        ? guidesFor({
+            x: [took.left + raw.x, (took.left + took.right) / 2 + raw.x, took.right + raw.x],
+            y: [took.top + raw.y, (took.top + took.bottom) / 2 + raw.y, took.bottom + raw.y],
+            others: neighbourRects(section, elementId),
+            centreX: centreOf(metrics),
+            threshold: GUIDE_ZONE / zoomOf(iframeDoc),
+          })
+        : { dx: 0, dy: 0, lines: [] };
+      el.style.transform = `translate(${raw.x + guided.dx}px, ${raw.y + guided.dy}px)`;
+      drawGuides(section, guided.lines);
+      state.outcome = dropAt({
+        metrics,
+        at: { x: now.x - state.grab.x + guided.dx, y: now.y - state.grab.y + guided.dy },
+        moving: state.moving,
+      });
+    });
+
+    const release = (el: HTMLElement) => {
+      const state = states.get(el);
+      if (!state?.from) return;
+      const at = placedAt(el);
+      if (!at) return;
+      const wasMoved = state.moved && state.gesture === "move";
+      const drop = state.outcome;
+      const swapWith = state.mobileSwap;
+      clear(el, at.section, state);
+      if (!wasMoved) return;
+      justDragged = true;
+      if (swapWith !== null) {
+        propsNow.current.onMoveUpOnMobile(at.sectionId, swapWith);
+        return;
+      }
+      if (drop?.kind === "refuse") {
+        announce(es["editor.drag.rows"]);
+        return;
+      }
+      if (drop?.kind !== "place") return;
+      markChosen(iframeDoc, el);
+      keepChosenFocus.current = true;
+      propsNow.current.onSetPlacement(at.sectionId, at.elementId, {
+        column: drop.at.column,
+        row: drop.at.row,
+      });
+    };
+    delegate(iframeDoc, "pointerup", "[data-id]", (el) => release(el));
+    delegate(iframeDoc, "pointercancel", "[data-id]", (el) => release(el));
+    delegate(iframeDoc, "lostpointercapture", "[data-id]", (el) => release(el));
+
+    // A run of arrows is one movement and one step (ADR 0050 día 6): written on keyup, after
+    // 300 ms of quiet, or on blur — the net for the press whose keyup never comes.
+    const flushRun = (el: HTMLElement) => {
+      const state = states.get(el);
+      iframeDoc.documentElement.classList.remove("rb-arrowing");
+      flushQueuedPatch.current();
+      if (!state) return;
+      window.clearTimeout(state.runTimer);
+      const total = state.run;
+      state.run = null;
+      if (!moves(total)) return;
+      const at = placedAt(el);
+      if (!at) return;
+      const layout = findSection(docNow.current, at.sectionId)?.section.layout ?? null;
+      const placement = layout?.placements.find(
+        (candidate) => candidate.elementId === at.elementId,
+      );
+      if (!placement || !total) return;
+      const drop = arrowDrop({ moving: placement, columns: total.columns, rows: total.rows });
+      if (drop.kind !== "place") return;
+      keepChosenFocus.current = true;
+      const box = el.getBoundingClientRect();
+      const metrics = gridMetricsOf(at.section);
+      announce(announceText({ x: box.left - metrics.left, y: box.top - metrics.top }));
+      propsNow.current.onSetPlacement(at.sectionId, at.elementId, {
+        column: drop.at.column,
+        row: drop.at.row,
+      });
+    };
+
+    delegate(iframeDoc, "keydown", "[data-id]", (el, event) => {
+      if (designToolsNow.current !== true) return;
+      if (el.isContentEditable) return;
+      const at = placedAt(el);
+      if (!at) return;
+      const isChosen =
+        chosenText.current?.sectionId === at.sectionId &&
+        chosenText.current?.elementId === at.elementId;
+      if (!isChosen) return;
+      if (event.key === "Escape" && !EDITABLE_TAGS.has(el.tagName)) {
+        event.preventDefault();
+        markChosen(iframeDoc, null);
+        at.section.focus({ preventScroll: true });
+        return;
+      }
+      const action = arrowAction({
+        key: event.key,
+        metaKey: event.metaKey,
+        ctrlKey: event.ctrlKey,
+        shiftKey: event.shiftKey,
+        altKey: event.altKey,
+      });
+      if (action.kind === "none") return;
+      const layout = findSection(docNow.current, at.sectionId)?.section.layout ?? null;
+      if (layout === null) return;
+      const placement = layout.placements.find((candidate) => candidate.elementId === at.elementId);
+      if (!placement) return;
+      event.preventDefault();
+      const state = stateOf(el);
+      state.run = accumulate(
+        state.run,
+        { columns: action.columns, rows: action.rows },
+        performance.now(),
+      );
+      // A run previews on the element's own grid area until it is written; a patch that lands
+      // meanwhile waits for it (adjustment 3).
+      iframeDoc.documentElement.classList.add("rb-arrowing");
+      const drop = arrowDrop({
+        moving: placement,
+        columns: state.run.columns,
+        rows: state.run.rows,
+      });
+      if (drop.kind === "refuse") {
+        announce(es["editor.drag.rows"]);
+        return;
+      }
+      if (drop.kind === "place") {
+        el.style.gridColumn = `${fineTrack(drop.at.column)}/span ${fineTrackSpan(
+          drop.at.column,
+          drop.at.columnSpan,
+        )}`;
+        el.style.gridRow = `${drop.at.row}/span ${drop.at.rowSpan}`;
+      }
+      window.clearTimeout(state.runTimer);
+      state.runTimer = window.setTimeout(() => flushRun(el), RUN_IDLE_MS);
+    });
+    delegate(iframeDoc, "keyup", "[data-id]", (el, event) => {
+      if (event.key.startsWith("Arrow")) flushRun(el);
+    });
+    delegate(iframeDoc, "focusout", "[data-id]", (el) => {
+      if (states.has(el)) flushRun(el);
+    });
+
+    prepareDraggables(iframeDoc);
+    settleDragging(iframeDoc);
+  }
+
+  /** The focus a drag or a run asked to keep, put back on the element after a wiring or a patch. */
+  function settleDragging(iframeDoc: Document) {
+    if (!keepChosenFocus.current) return;
+    keepChosenFocus.current = false;
+    const chosen = chosenText.current;
+    const back = chosen
+      ? iframeDoc
+          .querySelector(`[data-section="${CSS.escape(chosen.sectionId)}"]`)
+          ?.querySelector<HTMLElement>(`[data-id="${CSS.escape(chosen.elementId)}"]`)
+      : null;
+    if (back) {
+      markChosen(iframeDoc, back);
+      back.focus({ preventScroll: true });
     }
   }
 
@@ -6461,11 +6201,11 @@ export function Editor({
     // The bars already in this document go first, for the same reason `wireInsertion` clears its
     // gaps: a second pass replaces, it does not stack a second «Diseñada a mano» over the first.
     for (const old of iframeDoc.querySelectorAll(".rb-handmade")) old.remove();
-    if (!designTools) return;
+    if (!designToolsNow.current) return;
 
     for (const element of iframeDoc.querySelectorAll<HTMLElement>("[data-section]")) {
       const sectionId = element.dataset.section;
-      if (!sectionId || !isHandDesigned(doc, sectionId)) continue;
+      if (!sectionId || !isHandDesigned(docNow.current, sectionId)) continue;
 
       const bar = chrome(iframeDoc, "div");
       bar.className = "rb-handmade";
@@ -6479,7 +6219,7 @@ export function Editor({
 
       const name = chrome(iframeDoc, "span");
       name.className = "rb-handmade-name";
-      name.textContent = sectionDisplayName(doc, sectionId);
+      name.textContent = sectionDisplayName(docNow.current, sectionId);
       bar.appendChild(name);
 
       const back = chrome(iframeDoc, "button");
@@ -6518,7 +6258,11 @@ export function Editor({
 
     // The stripes, on whichever section the panel is about. Here as well as in the effect above,
     // because after a remount the effect can fire before the new frame has loaded.
-    syncGrid(iframeDoc, designOn ? designSectionId : null, placingElementId);
+    syncGrid(
+      iframeDoc,
+      designOnNow.current ? designSectionIdNow.current : null,
+      placingElementIdNow.current,
+    );
   }
 
   /**
@@ -7415,9 +7159,11 @@ export function Editor({
 
     wireLinks(iframeDoc);
     wireSelection(iframeDoc);
-    wireInsertion(iframeDoc);
-    wireLines(iframeDoc);
-    wirePhotos(iframeDoc);
+    attachDocument(iframeDoc);
+    attachPhotos(iframeDoc);
+    drawGaps(iframeDoc);
+    drawLines(iframeDoc);
+    drawPhotoChrome(iframeDoc);
     wireEditing(iframeDoc);
     // After `wireEditing`, which is what makes an element focusable in the first place.
     wireToolbar(iframeDoc);

@@ -90,8 +90,10 @@ describe("so the chrome cannot be keyed on the rendered page", () => {
   const chromeKey = (designTools: boolean, document: typeof doc) =>
     `${designTools}|${document.pages
       .flatMap((page) => page.sections)
-      .map((section) => (section.source === "free" ? "1" : "0"))
-      .join("")}`;
+      .filter((section) => section.source === "free")
+      .map((section) => section.id)
+      .sort()
+      .join(",")}`;
 
   it("changes when the switch flips, though the document is untouched", () => {
     expect(chromeKey(true, doc)).not.toBe(chromeKey(false, doc));
@@ -107,12 +109,65 @@ describe("so the chrome cannot be keyed on the rendered page", () => {
     expect(chromeKey(true, revertSection(free, "sec-cover", cover))).toBe(chromeKey(true, doc));
   });
 
+  /**
+   * **And does not move when a section comes, goes or changes place** (sprint 26 día 3). The first
+   * key was one bit per section in page order, so a duplicate, a delete, a move or their undo
+   * changed it and the frame was rebuilt for an edit that touched no section's source — under
+   * `patch`, three refused patches in one walk. Keyed by id, only an escalation, a return, the
+   * switch, or a hand-designed section arriving or leaving can move it.
+   */
+  it("stays put when a catalog section is duplicated, removed or moved", () => {
+    const sections = doc.pages[0]?.sections ?? [];
+    expect(sections.length).toBeGreaterThan(2);
+    const first = sections[0];
+    if (!first) throw new Error("fixture shape");
+    const twin = { ...structuredClone(first), id: `${first.id}-twin` };
+    const withTwin = {
+      ...doc,
+      pages: [{ ...doc.pages[0], sections: [first, twin, ...sections.slice(1)] }],
+    } as typeof doc;
+    const withoutLast = {
+      ...doc,
+      pages: [{ ...doc.pages[0], sections: sections.slice(0, -1) }],
+    } as typeof doc;
+    const reordered = {
+      ...doc,
+      pages: [{ ...doc.pages[0], sections: [...sections].reverse() }],
+    } as typeof doc;
+    for (const changed of [withTwin, withoutLast, reordered]) {
+      expect(chromeKey(true, changed)).toBe(chromeKey(true, doc));
+    }
+  });
+
+  it("moves when a hand-designed section is duplicated, because the copy needs a bar of its own", () => {
+    const free = escalateSection(doc, "sec-cover", cover);
+    const sections = free.pages[0]?.sections ?? [];
+    const first = sections[0];
+    if (!first) throw new Error("fixture shape");
+    const twin = { ...structuredClone(first), id: `${first.id}-twin` };
+    const withTwin = {
+      ...free,
+      pages: [{ ...free.pages[0], sections: [first, twin, ...sections.slice(1)] }],
+    } as typeof doc;
+    expect(chromeKey(true, withTwin)).not.toBe(chromeKey(true, free));
+  });
+
   it("names every section, not just the first page's", () => {
-    // A section escalated on the second page has to re-wire the chrome too, and a key that only
+    // A section escalated on the last page has to re-wire the chrome too, and a key that only
     // looked at `pages[0]` would be silently right for every single-page site — which is most of
     // them, and exactly how this would have survived to production.
-    const many = doc.pages.flatMap((page) => page.sections).length;
-    expect(chromeKey(false, doc)).toHaveLength("false|".length + many);
+    const last = doc.pages[doc.pages.length - 1];
+    const section = last?.sections[last.sections.length - 1];
+    if (!last || !section) throw new Error("fixture shape");
+    const freed = {
+      ...doc,
+      pages: [
+        ...doc.pages.slice(0, -1),
+        { ...last, sections: [...last.sections.slice(0, -1), { ...section, source: "free" }] },
+      ],
+    } as typeof doc;
+    expect(chromeKey(false, freed)).not.toBe(chromeKey(false, doc));
+    expect(chromeKey(false, freed)).toContain(section.id);
   });
 
   it("does not change for an edit that the rendered page already reflects", () => {

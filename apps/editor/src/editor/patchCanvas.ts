@@ -132,12 +132,13 @@ export type PatchReport =
       readonly cssChanged: boolean;
       /** Keys of focused editables whose children were left alone this time. */
       readonly deferred: readonly string[];
+      /** Whether the keyed skeleton changed: something came, went or moved (día 3). */
+      readonly structural: boolean;
     }
   | {
       readonly ok: false;
-      /** `structure`: the keyed skeleton differs, which día 2 does not patch yet. `no-body`: the live
-       * document has nothing to patch into. */
-      readonly reason: "structure" | "no-body";
+      /** `no-body`: the live document has nothing to patch into. */
+      readonly reason: "no-body";
     };
 
 export function isChrome(node: Node | null | undefined): boolean {
@@ -206,9 +207,9 @@ export function keyOf(node: Node): string | undefined {
 
 /**
  * The keyed skeleton of a tree, chrome excluded, in document order. Two trees with the same
- * skeleton differ only in text, attributes and unkeyed inline structure — which is what día 2
- * patches. A different skeleton is a section, an item or an element that came, went or moved,
- * and that is día 3's.
+ * skeleton differ only in text, attributes and unkeyed inline structure. A different skeleton is a
+ * section, an item or an element that came, went or moved — patched since día 3, and reported as
+ * `structural` so the editor knows the chrome has new ground to draw on.
  */
 export function skeletonOf(root: ParentNode): string {
   const keys: string[] = [];
@@ -312,10 +313,10 @@ export function patchCanvas(
   const to = fresh.ownerDocument.createElement("body");
   to.append(...fresh.childNodes);
 
-  // Día 2 patches what the skeleton already holds. A section, an item or a placed element that
-  // came, went or moved is refused here and taken by the old route, until día 3 teaches the
-  // chrome to redraw around a changed skeleton.
-  if (skeletonOf(body) !== skeletonOf(to)) return { ok: false, reason: "structure" };
+  // Whether the keyed skeleton changed — a section, an item or a placed element that came, went
+  // or moved. Día 2 refused those and left them to the old route; since día 3 the chrome is drawn
+  // again after every patch, so they are patched like anything else and the report says so.
+  const structural = skeletonOf(body) !== skeletonOf(to);
 
   const deferred: string[] = [];
   const touchedByHistory: Element[] = [];
@@ -441,5 +442,6 @@ export function patchCanvas(
     attributeChanges,
     cssChanged,
     deferred,
+    structural,
   };
 }
