@@ -13,8 +13,8 @@ describe("the canvas route is read from what is stored, once", () => {
     }
   });
 
-  it("defaults to swap until día 5 turns it around", () => {
+  it("defaults to patch since día 5, with swap still reachable under the key", () => {
     // Written as a test so the day that flips the default has to touch this line and say why.
-    expect(DEFAULT_CANVAS_MODE).toBe("swap");
+    expect(DEFAULT_CANVAS_MODE).toBe("patch");
   });
 });

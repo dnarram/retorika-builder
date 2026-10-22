@@ -217,26 +217,19 @@ jobs:
       # of apps/editor/e2e/critical-flows.e2e.test.ts for which two are missing and why.
       - run: pnpm e2e
 
-  # **The same walks, with the canvas on its other route** (ADR 0051 §6, sprint 26 día 3). The
-  # editor keeps two canvases until sprint 27 closes: `swap`, the default the job above runs, and
-  # `patch`, chosen per browser by `localStorage["rb.canvas"]`. `RETORIKA_CANVAS=patch` makes the
-  # e2e harness set that key in every context it opens, so one suite serves both and no walk has
-  # two versions. **Non-blocking until día 5**: the walks were written against a canvas that
-  # replaces its document on every edit (`replacingTheDocument` waits for a *new* document), and
-  # día 5 rewrites that contract (`afterTheEdit`) and turns the default; until then this job's red
-  # is information, not a gate, and `continue-on-error` says so in the one place CI reads. Day 5
-  # removes the line, and from then until the 27 closes both jobs block.
-  e2e-patch:
-    name: e2e (patch)
+  # **The same walks, with the canvas on its other route** (ADR 0051 §6). The editor keeps two
+  # canvases until sprint 27 closes: `patch`, the default since día 5 and what the job above runs,
+  # and `swap`, the route it had since sprint 15, chosen per browser by `localStorage["rb.canvas"]`.
+  # `RETORIKA_CANVAS=swap` makes the e2e harness set that key in every context it opens, so one
+  # suite serves both and no walk has two versions. **Both jobs block** since día 5: the walks'
+  # contract (`afterTheEdit`, on the edit serial) holds under either route, and a red here is a
+  # route that broke, not a wait that cannot return. Verbose, so a run killed at the limit still
+  # says which walks it had passed.
+  e2e-swap:
+    name: e2e (swap)
     runs-on: ubuntu-latest
-    # 30 and not the blocking job's 20 (día 4): under `patch` the walks that wait for a new document
-    # each wait their own timeout before failing, and as the route fixes more of them the run gets
-    # *longer*, not shorter — día 4's run was cancelled at 20 with 178 green, 17 red and the device
-    # walks still to go. A non-blocking job that is killed before its summary informs nobody; ten
-    # minutes of slack is what it costs to read the whole picture until día 5 turns the contract.
-    timeout-minutes: 30
+    timeout-minutes: 20
     if: github.event_name == 'pull_request'
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
@@ -252,14 +245,9 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
       - if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: pnpm exec playwright install-deps chromium
-      # Verbose, because this job's output is the whole of its value today: the first run printed
-      # nothing before the 20-minute kill — vitest's default reporter speaks only at the end, and
-      # under `patch` the walks that wait for a new document each wait their own timeout — so a
-      # cancelled job said which route it ran and not one word about which walks it had passed.
-      # With one line per walk as it lands, the kill still leaves the picture día 5 needs.
       - run: pnpm e2e --reporter=verbose
         env:
-          RETORIKA_CANVAS: patch
+          RETORIKA_CANVAS: swap
 
   security:
     name: security
