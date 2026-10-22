@@ -18251,10 +18251,17 @@ describe("sprint 26 día 1 — la medida de hoy", () => {
       const window_ = firstHtml && firstWire ? firstWire.at - firstHtml.at : Number.NaN;
       const latency = firstWire ? firstWire.at - pressedAt : Number.NaN;
       const frames = await page.evaluate(() => document.querySelectorAll("iframe").length);
+      // The patch route's own numbers, beside the swap route's (día 6: the two side by side): the
+      // first patch after the press, and what it cost.
+      const firstPatch = after.find((event) => event.kind === "patch" && event.data["ok"]);
+      const patchLatency = firstPatch ? firstPatch.at - pressedAt : Number.NaN;
+      const patchMs = firstPatch ? Number(firstPatch.data["ms"]) : Number.NaN;
+      const redrawMs = firstPatch ? Number(firstPatch.data["redrawMs"]) : Number.NaN;
 
       console.log(
-        `[sprint 26 día 1 · línea base] documentos cableados tras una edición de texto: ${wires.length}; ` +
+        `[sprint 26 día 1 · ${canvasRoute()}] documentos cableados tras una edición de texto: ${wires.length}; ` +
           `ventana html→cableado: ${window_.toFixed(1)} ms; latencia pulsación→cableado: ${latency.toFixed(1)} ms; ` +
+          `latencia pulsación→parche: ${patchLatency.toFixed(1)} ms; parche ${patchMs} ms; repintado ${redrawMs} ms; ` +
           `promociones de marco: ${promotions.length}; marcos ahora: ${frames}`,
       );
 

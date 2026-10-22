@@ -195,7 +195,14 @@ jobs:
     # and the one that passed did so at 19m38s. A limit the suite grazes on every run measures the
     # runner, not the suite; the five minutes are slack, and the day the suite itself is trimmed
     # (the walks' own waits are its time, not the canvas — ADR 0051, día 6) the number comes down.
-    timeout-minutes: 25
+    #
+    # **And the 25 is the suite's, on its own step — the job gets 40.** Measured on 22 October at
+    # 20:14: `playwright install-deps` (apt, which runs even when the browser cache hits) took
+    # **eleven minutes** on both e2e runners at once, the suite then ran at its usual pace, and the
+    # job limit killed 178 green walks at 25m19s. A limit on the job measures apt plus the suite;
+    # a limit on the step measures the suite. The job's 40 is only a ceiling for a runner that never
+    # comes back.
+    timeout-minutes: 40
     # Protocol Part 9.2: "El job `e2e` se limita a los pull request porque los minutos de
     # Actions son finitos y Playwright es lo más lento de todo." A push straight to main skips
     # it — every push that matters had a pull request first, which already ran this.
@@ -223,6 +230,7 @@ jobs:
       # Three of the five critical flows the protocol names — see the doc comment at the top
       # of apps/editor/e2e/critical-flows.e2e.test.ts for which two are missing and why.
       - run: pnpm e2e
+        timeout-minutes: 25
 
   # **The same walks, with the canvas on its other route** (ADR 0051 §6). The editor keeps two
   # canvases until sprint 27 closes: `patch`, the default since día 5 and what the job above runs,
@@ -235,8 +243,8 @@ jobs:
   e2e-swap:
     name: e2e (swap)
     runs-on: ubuntu-latest
-    # The same 25 as the job above, for the same measurement.
-    timeout-minutes: 25
+    # The same 40 for the job and 25 for the suite's step as the job above, for the same measurement.
+    timeout-minutes: 40
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
@@ -254,6 +262,7 @@ jobs:
       - if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: pnpm exec playwright install-deps chromium
       - run: pnpm e2e --reporter=verbose
+        timeout-minutes: 25
         env:
           RETORIKA_CANVAS: swap
 
