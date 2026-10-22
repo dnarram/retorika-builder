@@ -10,7 +10,7 @@ import {
   variantsFor,
 } from "@retorika/catalog";
 import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
-import { render, sectionMenuEntries } from "@retorika/renderer";
+import { buildCss, render, sectionMenuEntries } from "@retorika/renderer";
 import {
   bindList,
   canFoldPage,
@@ -82,6 +82,7 @@ import {
 } from "../editor/barPosition.ts";
 import { holdFor } from "../editor/buildingScreen.ts";
 import { canvasLinkTarget } from "../editor/canvasLinks.ts";
+import { CANVAS_MODE_KEY, type CanvasMode, canvasModeFrom } from "../editor/canvasMode.ts";
 import { CHROME_SCALE, PILL_REST_BORDER, VERB_SCALE } from "../editor/chromeScale.ts";
 import type { SwitchNotice } from "../editor/designTools.ts";
 import {
@@ -121,6 +122,7 @@ import { toolbarFamilyLabel } from "../editor/letterGallery.ts";
 import { LOOK_AHEAD_DEADLINE_MS, lookAheadStep } from "../editor/lookAhead.ts";
 import { menuStateFor } from "../editor/menuState.ts";
 import { measureOverflow } from "../editor/overflowCheck.ts";
+import { chrome, patchCanvas, takeHistoryText } from "../editor/patchCanvas.ts";
 import { countPhotos, listPhotos, type PhotoState } from "../editor/photoInventory.ts";
 import { withPhotoUrls } from "../editor/previewDocument.ts";
 import { record, serialOf } from "../editor/probe.ts";
@@ -922,6 +924,47 @@ export function Editor({
    */
   const deviceNow = useRef(device);
   deviceNow.current = device;
+
+  /**
+   * **Which route shows an edit** (ADR 0051 §6, sprint 26 día 2): `swap` rebuilds the frame as it
+   * has since sprint 15; `patch` keeps one document and patches it. Read once, at mount, from the
+   * key David's adjustment 6 named, because a document wired for one route cannot change route
+   * halfway. `swap` by default until día 5. Storage can throw (a private window), and a throw
+   * means the default.
+   */
+  const canvasMode = useRef<CanvasMode>(
+    (() => {
+      try {
+        return canvasModeFrom(window.localStorage.getItem(CANVAS_MODE_KEY));
+      } catch {
+        return canvasModeFrom(null);
+      }
+    })(),
+  );
+  /** Undo and redo, marked as such for the patch that follows (adjustment 2): the one change that
+   * is applied to the text being written in, caret kept. */
+  const undoFromHistory = () => {
+    pendingHistory.current = true;
+    onUndo();
+  };
+  const redoFromHistory = () => {
+    pendingHistory.current = true;
+    onRedo();
+  };
+  /** The document the fresh tree is built in, which has no browsing context and loads nothing
+   * (adjustment 4). Made on first use, kept for the session. */
+  const inertDoc = useRef<Document | null>(null);
+  /** The next patch comes from undo or redo (adjustment 2): applied to the focused text as well,
+   * caret kept. Set by the two history calls, read and cleared by the patch that follows. */
+  const pendingHistory = useRef(false);
+  /** A patch that arrived while a hand was on the page, waiting for the hand to let go
+   * (adjustment 3). The gesture's own end calls `flushQueuedPatch`. */
+  const queuedPatch = useRef(false);
+  const flushQueuedPatch = useRef<() => void>(() => {});
+  /** A patch that arrived before the first document was wired; `wireOnce` applies it. */
+  const pendingPatch = useRef(false);
+  /** One per applied patch or wiring — the e2e's signal that an edit is on the page. */
+  const editSerial = useRef(0);
   const announce = (text: string) => {
     announcements.current += 1;
     setAnnouncement(announcements.current % 2 === 0 ? `${text}\u200B` : text);
@@ -1350,6 +1393,20 @@ export function Editor({
   }, [doc, photoUrls, pageId, previewEntryId]);
 
   /**
+   * **What the frame is given, by route.** Under `swap` it is `html`, every time it changes, which
+   * is the rebuild. Under `patch` it is the html of the first document and then **never `html`
+   * again** — React re-sets `srcDoc` on any change and the frame reloads — except when a patch is
+   * refused, which is the old route taking one edit: the frame gets the current html *and a new
+   * key*, so it reloads even when the string happens to repeat. The patch itself runs in the
+   * effect below; the chrome swap keyed on `chromeKey` keeps working for both routes because it
+   * reads `frameHtml` too.
+   */
+  const initialHtml = useRef(html);
+  const [fallback, setFallback] = useState<{ html: string; serial: number } | null>(null);
+  const frameHtml = canvasMode.current === "swap" ? html : (fallback?.html ?? initialHtml.current);
+  const frameSerial = canvasMode.current === "swap" ? 0 : (fallback?.serial ?? 0);
+
+  /**
    * What the canvas's chrome depends on but the rendered page does not — see the long note at the
    * `<iframe>`. Kept as a string so React's own `key` comparison does the work, and derived rather
    * than tracked, so no new action has to remember to bump it.
@@ -1582,14 +1639,14 @@ export function Editor({
     if (!role.live) {
       return (
         <iframe
-          key={role.key}
+          key={`${role.key}:${frameSerial}`}
           ref={ref}
           data-buffered="true"
           inert
           aria-hidden
           tabIndex={-1}
           title={title}
-          srcDoc={html}
+          srcDoc={frameHtml}
           onLoad={(event) => promote(event.currentTarget)}
           className="pointer-events-none absolute inset-0 h-full w-full border-0 opacity-0"
           style={background}
@@ -1598,10 +1655,10 @@ export function Editor({
     }
     return (
       <iframe
-        key={role.key}
+        key={`${role.key}:${frameSerial}`}
         ref={ref}
         title={title}
-        srcDoc={html}
+        srcDoc={frameHtml}
         // `wireOnce` is the backstop the look-ahead usually beats; `settleReadingPosition` is not,
         // and this is the only place it can run. `load` is what waits for the pictures, and the
         // pictures are what the renderer gives no dimensions to.
@@ -1751,8 +1808,8 @@ export function Editor({
     record("buffer", { live: buffer.live, liveKey: buffer.liveKey, pendingKey: buffer.pendingKey });
   }, [buffer]);
   useEffect(() => {
-    record("html", { length: html.length, chromeKey });
-  }, [html, chromeKey]);
+    record("html", { length: frameHtml.length, chromeKey, route: canvasMode.current });
+  }, [frameHtml, chromeKey]);
 
   /**
    * Look for the new page every frame until it is there, and wire it the moment it is.
@@ -1817,7 +1874,93 @@ export function Editor({
     return () => cancelAnimationFrame(frame);
     // `buffer.pendingKey` is listed because it is what moves the target: a swap opening or closing
     // has to restart the walk against the frame that now holds the arriving document.
-  }, [html, chromeKey, buffer.pendingKey]);
+  }, [frameHtml, chromeKey, buffer.pendingKey]);
+
+  /**
+   * **An edit is a patch** (ADR 0051, día 2) — the `patch` route's whole effect.
+   *
+   * Every change of the document, of a photograph's URL, of the page shown or of the entry shown
+   * renders the tree again in the inert document and brings the live one in step with it. The
+   * first document still arrives by `srcDoc` and is wired by the look-ahead; a change that lands
+   * before that wiring waits for it (`pendingPatch`, applied at the end of `wireOnce`), a change
+   * that lands while a hand is on the page waits for the hand (`queuedPatch`, applied by the
+   * gesture's own end), and a change the patch cannot take yet — a changed skeleton, which is
+   * día 3's — goes by the old route: the frame gets the current html and a new key.
+   *
+   * A change of `chromeKey` is structural by definition (the tools toggled, a section escalated
+   * or returned, the count changed) and takes the old route on día 2 as well; día 4 teaches the
+   * patch the chrome's half of those.
+   */
+  const chromeKeyPatched = useRef(chromeKey);
+  function bumpEdit(iframeDoc: Document) {
+    editSerial.current += 1;
+    iframeDoc.documentElement.dataset["rbEdit"] = String(editSerial.current);
+  }
+  function gestureLive(iframeDoc: Document): boolean {
+    const root = iframeDoc.documentElement.classList;
+    return (
+      root.contains("rb-dragging") || root.contains("rb-resizing") || root.contains("rb-arrowing")
+    );
+  }
+  function takeOldRoute(reason: string) {
+    record("patch", { ok: false, reason });
+    setFallback((before) => ({ html, serial: (before?.serial ?? 0) + 1 }));
+  }
+  function applyPatch(iframeDoc: Document) {
+    if (gestureLive(iframeDoc)) {
+      queuedPatch.current = true;
+      record("patch", { ok: false, reason: "gesture", queued: true });
+      return;
+    }
+    if (chromeKey !== chromeKeyPatched.current) {
+      chromeKeyPatched.current = chromeKey;
+      takeOldRoute("chrome");
+      return;
+    }
+    if (inertDoc.current === null) {
+      inertDoc.current = document.implementation.createHTMLDocument("");
+    }
+    const display = withPhotoUrls(doc, photoUrls);
+    const options = {
+      entryHints: true,
+      ...(pageId === undefined ? {} : { pageId }),
+      ...(previewEntryId === undefined ? {} : { entryId: previewEntryId }),
+      document: inertDoc.current,
+    };
+    const started = performance.now();
+    const fresh = render(display, "dom", options);
+    const cause = pendingHistory.current ? "history" : "edit";
+    pendingHistory.current = false;
+    const report = patchCanvas(iframeDoc, fresh, buildCss(display), {
+      cause,
+      focused: iframeDoc.activeElement,
+    });
+    if (!report.ok) {
+      takeOldRoute(report.reason);
+      return;
+    }
+    record("patch", { ...report, cause, ms: Math.round((performance.now() - started) * 10) / 10 });
+    bumpEdit(iframeDoc);
+  }
+  flushQueuedPatch.current = () => {
+    if (!queuedPatch.current) return;
+    queuedPatch.current = false;
+    const iframeDoc = liveFrame()?.contentDocument;
+    if (iframeDoc) applyPatch(iframeDoc);
+  };
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the four listed are what a patch is made of; everything else is read through refs or is the render's own
+  useEffect(() => {
+    if (canvasMode.current !== "patch") return;
+    const iframeDoc = liveFrame()?.contentDocument;
+    // Wired is a mark the document carries, not a ref's identity (sprint 18 día 5): after a chrome
+    // swap two documents are wired in a row and `wiredDoc` names the last one, which need not be
+    // the one on screen. A patch parked on that identity test never came back — measured on día 2.
+    if (!iframeDoc || iframeDoc.documentElement.dataset["rbWired"] !== "1") {
+      pendingPatch.current = true;
+      return;
+    }
+    applyPatch(iframeDoc);
+  }, [doc, photoUrls, pageId, previewEntryId]);
 
   /**
    * The grid stripes follow the selected section, **without** remounting the frame.
@@ -1916,13 +2059,13 @@ export function Editor({
     if (toast.pageId !== shown || toast.index < 0) return;
 
     const sections = [...iframeDoc.querySelectorAll<HTMLElement>("[data-section]")];
-    const hole = iframeDoc.createElement("div");
+    const hole = chrome(iframeDoc, "div");
     hole.className = "rb-hole";
     hole.setAttribute("role", "status");
-    const was = iframeDoc.createElement("span");
+    const was = chrome(iframeDoc, "span");
     was.className = "rb-hole-was";
     was.textContent = es["editor.hole.was"].replace("{name}", toast.sectionName);
-    const fate = iframeDoc.createElement("span");
+    const fate = chrome(iframeDoc, "span");
     fate.className = "rb-hole-fate";
     fate.textContent = toast.persistent ? es["editor.hole.stays"] : es["editor.hole.goes"];
     hole.append(was, fate);
@@ -1968,8 +2111,8 @@ export function Editor({
         : null;
     if (keepsItsOwnUndo(focused)) return;
     event.preventDefault();
-    if (shortcut === "undo") onUndo();
-    else onRedo();
+    if (shortcut === "undo") undoFromHistory();
+    else redoFromHistory();
   };
 
   // The editor's own document. The frame's is wired in `wireInteractions`, because a key pressed
@@ -2132,7 +2275,7 @@ export function Editor({
       }
       let region = iframeDoc.querySelector<HTMLElement>(".rb-announce");
       if (!region) {
-        region = iframeDoc.createElement("div");
+        region = chrome(iframeDoc, "div");
         region.className = "rb-announce";
         region.setAttribute("role", "status");
         region.setAttribute("aria-live", "polite");
@@ -2168,7 +2311,7 @@ export function Editor({
         return;
       }
       if (legend) return;
-      legend = iframeDoc.createElement("div");
+      legend = chrome(iframeDoc, "div");
       legend.className = "rb-keys";
       // `aria-hidden`: a screen reader is told the keys by the section's own role and label plus
       // the live region, and reading a legend out on every arrow would be noise over the name of
@@ -2181,7 +2324,7 @@ export function Editor({
         es["editor.canvasKeys.release"],
         es["editor.canvasKeys.bar"],
       ]) {
-        const row = iframeDoc.createElement("span");
+        const row = chrome(iframeDoc, "span");
         row.textContent = text;
         legend.appendChild(row);
       }
@@ -2382,7 +2525,7 @@ export function Editor({
        * put the focus back on, and the only thing that knows is the thing that was pressed. */
       onClick: (button: HTMLButtonElement) => void,
     ): HTMLElement {
-      const button = iframeDoc.createElement("button");
+      const button = chrome(iframeDoc, "button");
       button.type = "button";
       // The grip stands in the same row and wears the same word, and is not a verb: its own class
       // rather than a verb's with half its properties undone.
@@ -2441,9 +2584,9 @@ export function Editor({
        * time shorter. This is for the eyes — the pair of them that cannot tell eight white glyphs
        * apart, with a pointer or with a keyboard.
        */
-      const wrapper = iframeDoc.createElement("span");
+      const wrapper = chrome(iframeDoc, "span");
       wrapper.className = "rb-verb";
-      const tip = iframeDoc.createElement("span");
+      const tip = chrome(iframeDoc, "span");
       tip.className = "rb-tip";
       tip.setAttribute("aria-hidden", "true");
       tip.textContent = word;
@@ -2555,6 +2698,7 @@ export function Editor({
       const release = () => {
         from = null;
         iframeDoc.documentElement.classList.remove("rb-dragging");
+        flushQueuedPatch.current();
       };
       grip.addEventListener("pointerup", release);
       grip.addEventListener("pointercancel", release);
@@ -2572,20 +2716,20 @@ export function Editor({
      * each carries `aria-pressed` and the current one is marked rather than hidden.
      */
     function compositionMenu(sectionId: string, compositions: readonly Composition[]): HTMLElement {
-      const panel = iframeDoc.createElement("div");
+      const panel = chrome(iframeDoc, "div");
       panel.className = "rb-compositions";
 
-      const title = iframeDoc.createElement("p");
+      const title = chrome(iframeDoc, "p");
       title.className = "rb-menu-title";
       title.textContent = es["editor.composition.title"];
       panel.appendChild(title);
 
       for (const composition of compositions) {
-        const choice = iframeDoc.createElement("button");
+        const choice = chrome(iframeDoc, "button");
         choice.type = "button";
         choice.className = "rb-menu-choice rb-composition-choice";
         choice.setAttribute("aria-pressed", String(composition.current));
-        const name = iframeDoc.createElement("span");
+        const name = chrome(iframeDoc, "span");
         name.className = "rb-menu-name";
         name.textContent = composition.name;
         choice.appendChild(name);
@@ -2609,7 +2753,7 @@ export function Editor({
         panel.appendChild(choice);
       }
 
-      const note = iframeDoc.createElement("p");
+      const note = chrome(iframeDoc, "p");
       note.className = "rb-menu-note";
       note.textContent = es["editor.composition.note"];
       panel.appendChild(note);
@@ -2629,23 +2773,23 @@ export function Editor({
      * action cluster, where the other questions about where a section's parts sit already live.
      */
     function escalateOffer(sectionId: string): HTMLElement {
-      const panel = iframeDoc.createElement("div");
+      const panel = chrome(iframeDoc, "div");
       panel.className = "rb-compositions rb-escalate";
 
-      const title = iframeDoc.createElement("p");
+      const title = chrome(iframeDoc, "p");
       title.className = "rb-menu-title";
       title.textContent = es["editor.section.escalate.title"];
       panel.appendChild(title);
 
-      const body = iframeDoc.createElement("p");
+      const body = chrome(iframeDoc, "p");
       body.className = "rb-menu-description";
       body.textContent = es["editor.section.escalate.body"];
       panel.appendChild(body);
 
-      const row = iframeDoc.createElement("div");
+      const row = chrome(iframeDoc, "div");
       row.className = "rb-escalate-row";
 
-      const yes = iframeDoc.createElement("button");
+      const yes = chrome(iframeDoc, "button");
       yes.type = "button";
       yes.className = "rb-escalate-yes";
       yes.textContent = es["editor.section.escalate.yes"];
@@ -2664,7 +2808,7 @@ export function Editor({
       });
       row.appendChild(yes);
 
-      const no = iframeDoc.createElement("button");
+      const no = chrome(iframeDoc, "button");
       no.type = "button";
       no.className = "rb-escalate-no";
       no.textContent = es["editor.section.escalate.no"];
@@ -2746,7 +2890,7 @@ export function Editor({
       });
       const index = sections.indexOf(target);
 
-      const actions = iframeDoc.createElement("div");
+      const actions = chrome(iframeDoc, "div");
       actions.className = "rb-actions";
       /*
        * **`group` and not `toolbar`.** The WAI-ARIA toolbar pattern promises a keyboard a
@@ -3155,7 +3299,7 @@ export function Editor({
     }
 
     function menu(index: number, pill: HTMLElement): HTMLElement {
-      const panel = iframeDoc.createElement("div");
+      const panel = chrome(iframeDoc, "div");
       panel.className = "rb-menu";
       // Everything inside the menu is a click that must not reach the document-level handler that
       // closes it — typing in the search field would otherwise shut the menu on the first
@@ -3172,10 +3316,10 @@ export function Editor({
         closeMenus(pill);
       });
 
-      const header = iframeDoc.createElement("div");
+      const header = chrome(iframeDoc, "div");
       header.className = "rb-menu-header";
 
-      const title = iframeDoc.createElement("p");
+      const title = chrome(iframeDoc, "p");
       title.className = "rb-menu-title";
       title.textContent = es["editor.addSection.title"];
 
@@ -3185,7 +3329,7 @@ export function Editor({
       // close control lives everywhere else, which also makes it the first thing Tab reaches
       // inside the menu: the way out before the way in, which is the right order for a control
       // whose absence is what stranded someone in the first place.
-      const close = iframeDoc.createElement("button");
+      const close = chrome(iframeDoc, "button");
       close.type = "button";
       close.className = "rb-menu-close";
       close.textContent = es["editor.addSection.close"];
@@ -3197,29 +3341,29 @@ export function Editor({
       header.append(title, close);
       panel.appendChild(header);
 
-      const search = iframeDoc.createElement("input");
+      const search = chrome(iframeDoc, "input");
       search.type = "search";
       search.className = "rb-menu-search";
       search.placeholder = es["editor.addSection.searchPlaceholder"];
       search.setAttribute("aria-label", es["editor.addSection.searchLabel"]);
       panel.appendChild(search);
 
-      const list = iframeDoc.createElement("div");
+      const list = chrome(iframeDoc, "div");
       list.className = "rb-menu-list";
       panel.appendChild(list);
 
-      const note = iframeDoc.createElement("p");
+      const note = chrome(iframeDoc, "p");
       note.className = "rb-menu-note";
       note.textContent = es["editor.addSection.contactUnavailable"];
 
       function choice(offer: SectionOffer): HTMLElement {
-        const button = iframeDoc.createElement("button");
+        const button = chrome(iframeDoc, "button");
         button.type = "button";
         button.className = "rb-menu-choice";
-        const name = iframeDoc.createElement("span");
+        const name = chrome(iframeDoc, "span");
         name.className = "rb-menu-name";
         name.textContent = offer.name;
-        const description = iframeDoc.createElement("span");
+        const description = chrome(iframeDoc, "span");
         description.className = "rb-menu-description";
         description.textContent = offer.description;
         button.append(name, description);
@@ -3251,7 +3395,7 @@ export function Editor({
         const matches = offersMatching(offers, query);
 
         if (matches.length === 0) {
-          const empty = iframeDoc.createElement("p");
+          const empty = chrome(iframeDoc, "p");
           empty.className = "rb-menu-empty";
           empty.textContent = es["editor.addSection.noMatch"].replace("{query}", query.trim());
           list.appendChild(empty);
@@ -3271,10 +3415,10 @@ export function Editor({
     }
 
     function gap(index: number): HTMLElement {
-      const row = iframeDoc.createElement("div");
+      const row = chrome(iframeDoc, "div");
       row.className = "rb-gap";
 
-      const pill = iframeDoc.createElement("button");
+      const pill = chrome(iframeDoc, "button");
       pill.type = "button";
       pill.className = "rb-pill";
       pill.innerHTML =
@@ -3301,9 +3445,9 @@ export function Editor({
         panel.querySelector<HTMLInputElement>(".rb-menu-search")?.focus();
       });
 
-      const before = iframeDoc.createElement("span");
+      const before = chrome(iframeDoc, "span");
       before.className = "rb-rule";
-      const after = iframeDoc.createElement("span");
+      const after = chrome(iframeDoc, "span");
       after.className = "rb-rule";
       row.append(before, pill, after);
       return row;
@@ -3386,7 +3530,7 @@ export function Editor({
         // true in both, and it is also what the owner means: the best photograph goes first.
         if (items.length > 1) {
           const move = (direction: "up" | "down") => {
-            const button = iframeDoc.createElement("button");
+            const button = chrome(iframeDoc, "button");
             button.type = "button";
             button.className = `rb-line-move rb-line-${direction}`;
             button.setAttribute("aria-label", lineLabel(direction, lines.catalogId));
@@ -3404,7 +3548,7 @@ export function Editor({
         }
 
         if (lines.canRemove) {
-          const remove = iframeDoc.createElement("button");
+          const remove = chrome(iframeDoc, "button");
           remove.type = "button";
           remove.className = "rb-line-remove";
           remove.setAttribute("aria-label", lineLabel("remove", lines.catalogId));
@@ -3427,7 +3571,7 @@ export function Editor({
         // without anything ever drawing it. An owner who fills a gallery to its eighth photograph
         // watched «Añadir foto» disappear with no explanation, which reads like a bug rather than
         // a limit.
-        const full = iframeDoc.createElement("p");
+        const full = chrome(iframeDoc, "p");
         full.className = "rb-line-full";
         if (chromeRow !== undefined) full.style.gridRow = `${chromeRow} / span 1`;
         // Through `lineLabel`, so it says «fotos» in a gallery where the button beside it says
@@ -3437,7 +3581,7 @@ export function Editor({
         list.insertAdjacentElement("afterend", full);
         continue;
       }
-      const add = iframeDoc.createElement("button");
+      const add = chrome(iframeDoc, "button");
       add.type = "button";
       add.className = "rb-line-add";
       if (chromeRow !== undefined) add.style.gridRow = `${chromeRow} / span 1`;
@@ -3476,9 +3620,12 @@ export function Editor({
       // wrong box by the height of the whole section. Positioning the image's own parent is a
       // no-op wherever that parent is already positioned, and never reaches the published page:
       // this runs on the iframe's DOM, not on the document.
+      // A class and not `style.position` (ADR 0051 §2, adjustment 3): the chrome writes no inline
+      // style on a renderer node, because the patch gives `style` to the renderer and would take
+      // it back on the next edit.
       const parent = image.parentElement;
       if (parent && iframeDoc.defaultView?.getComputedStyle(parent).position === "static") {
-        parent.style.position = "relative";
+        parent.classList.add("rb-photo-host");
       }
       image.insertAdjacentElement(
         "afterend",
@@ -3506,7 +3653,7 @@ export function Editor({
     image: HTMLImageElement,
     address: ElementAddress,
   ): HTMLButtonElement {
-    const badge = iframeDoc.createElement("button");
+    const badge = chrome(iframeDoc, "button");
     badge.type = "button";
     badge.className = "rb-sample";
     badge.textContent = es["editor.photos.state.sample"];
@@ -3661,6 +3808,7 @@ export function Editor({
       const release = () => {
         from = null;
         iframeDoc.documentElement.classList.remove("rb-dragging");
+        flushQueuedPatch.current();
       };
       grip.addEventListener("pointerup", release);
       grip.addEventListener("pointercancel", release);
@@ -3686,7 +3834,7 @@ export function Editor({
       toolbarOn.current = address;
       const current = styleFor(doc, address);
 
-      const bar = iframeDoc.createElement("div");
+      const bar = chrome(iframeDoc, "div");
       bar.className = "rb-toolbar";
       bar.setAttribute("role", "toolbar");
       bar.setAttribute("aria-label", es["editor.toolbar.label"]);
@@ -3724,9 +3872,9 @@ export function Editor({
       bar.addEventListener("click", (event) => event.stopPropagation());
 
       const group = (label: string): HTMLElement => {
-        const wrapper = iframeDoc.createElement("div");
+        const wrapper = chrome(iframeDoc, "div");
         wrapper.className = "rb-toolbar-group";
-        const caption = iframeDoc.createElement("span");
+        const caption = chrome(iframeDoc, "span");
         caption.className = "rb-toolbar-caption";
         caption.textContent = label;
         wrapper.appendChild(caption);
@@ -3767,7 +3915,7 @@ export function Editor({
           (candidate) => candidate.id === boundHere.collectionId,
         );
         const places = usesOfCollection(doc, boundHere.collectionId).length;
-        const notice = iframeDoc.createElement("div");
+        const notice = chrome(iframeDoc, "div");
         notice.className = "rb-toolbar-notice";
         notice.setAttribute("role", "status");
         notice.textContent =
@@ -3781,7 +3929,7 @@ export function Editor({
         // text would unbind the template and change every card: the surprise the notice above exists
         // to prevent, arriving through the control meant to avoid it.
         const exitGroup = group(es["editor.toolbar.bound"]);
-        const exit = iframeDoc.createElement("button");
+        const exit = chrome(iframeDoc, "button");
         exit.type = "button";
         exit.className = "rb-toolbar-link";
         exit.textContent = es["editor.toolbar.unbindSection"];
@@ -3877,7 +4025,7 @@ export function Editor({
         };
 
         for (const mark of MARKS) {
-          const button = iframeDoc.createElement("button");
+          const button = chrome(iframeDoc, "button");
           button.type = "button";
           button.className = `rb-toolbar-mark rb-toolbar-mark-${mark}`;
           button.dataset["mark"] = mark;
@@ -3906,7 +4054,7 @@ export function Editor({
       if (controls.size.length > 0) {
         const sizes = group(es["editor.toolbar.size"]);
         for (const ref of controls.size) {
-          const button = iframeDoc.createElement("button");
+          const button = chrome(iframeDoc, "button");
           button.type = "button";
           button.className = "rb-toolbar-step";
           button.dataset["ref"] = ref;
@@ -3932,7 +4080,7 @@ export function Editor({
          * values live beside their own references for the same reason.
          */
         if (controls.measures?.exact.includes("fontSize")) {
-          const exact = iframeDoc.createElement("input");
+          const exact = chrome(iframeDoc, "input");
           exact.type = "number";
           exact.min = "8";
           exact.max = "200";
@@ -3993,7 +4141,7 @@ export function Editor({
       if (controls.family) {
         const families = group(es["editor.toolbar.family"]);
         for (const ref of controls.family) {
-          const button = iframeDoc.createElement("button");
+          const button = chrome(iframeDoc, "button");
           button.type = "button";
           button.className = "rb-toolbar-step";
           button.dataset["ref"] = ref;
@@ -4028,7 +4176,7 @@ export function Editor({
       if (controls.color.length > 0) {
         const colors = group(es["editor.toolbar.color"]);
         for (const ref of controls.color) {
-          const button = iframeDoc.createElement("button");
+          const button = chrome(iframeDoc, "button");
           button.type = "button";
           button.className = "rb-toolbar-swatch";
           button.dataset["ref"] = ref;
@@ -4060,7 +4208,7 @@ export function Editor({
          * audit, and measured before the ZIP leaves.
          */
         if (controls.measures?.exact.includes("color")) {
-          const exact = iframeDoc.createElement("input");
+          const exact = chrome(iframeDoc, "input");
           exact.type = "color";
           exact.className = "rb-toolbar-color";
           exact.title = es["editor.toolbar.exactColor"];
@@ -4097,7 +4245,7 @@ export function Editor({
           colors.appendChild(exact);
 
           if (exactColor !== "") {
-            const off = iframeDoc.createElement("button");
+            const off = chrome(iframeDoc, "button");
             off.type = "button";
             off.className = "rb-toolbar-step";
             off.textContent = es["editor.toolbar.reset"];
@@ -4128,15 +4276,15 @@ export function Editor({
         const chosenRef = value !== undefined && "ref" in value ? value.ref : "";
         const exactValue = value !== undefined && "exact" in value ? value.exact : "";
 
-        const select = iframeDoc.createElement("select");
+        const select = chrome(iframeDoc, "select");
         select.className = "rb-toolbar-select";
         select.setAttribute("aria-label", caption);
-        const none = iframeDoc.createElement("option");
+        const none = chrome(iframeDoc, "option");
         none.value = "";
         none.textContent = es["editor.toolbar.default"];
         select.appendChild(none);
         for (const ref of refs) {
-          const option = iframeDoc.createElement("option");
+          const option = chrome(iframeDoc, "option");
           option.value = ref;
           option.textContent = es[`editor.toolbar.${property}Of.${ref}` as keyof typeof es];
           select.appendChild(option);
@@ -4154,7 +4302,7 @@ export function Editor({
            * says, by being disabled, that this is not where the state is changed — the number
            * beside it is.
            */
-          const marked = iframeDoc.createElement("option");
+          const marked = chrome(iframeDoc, "option");
           marked.value = "exact";
           marked.disabled = true;
           marked.textContent = `${es["editor.toolbar.exact"]}: ${exactValue}`;
@@ -4170,7 +4318,7 @@ export function Editor({
         wrapper.appendChild(select);
 
         if (controls.measures?.exact.includes(property)) {
-          const exact = iframeDoc.createElement("input");
+          const exact = chrome(iframeDoc, "input");
           exact.type = "number";
           exact.min = "0";
           exact.max = "999";
@@ -4205,7 +4353,7 @@ export function Editor({
 
       if (controls.link) {
         const linkGroup = group(es["editor.toolbar.link"]);
-        const button = iframeDoc.createElement("button");
+        const button = chrome(iframeDoc, "button");
         button.type = "button";
         button.className = "rb-toolbar-link";
         button.textContent = es["editor.toolbar.link"];
@@ -4232,9 +4380,9 @@ export function Editor({
        * what takes the right border off the final group; a bare button appended after the groups
        * would have left the previously-last one bordered and the grip floating beside it.
        */
-      const gripGroup = iframeDoc.createElement("div");
+      const gripGroup = chrome(iframeDoc, "div");
       gripGroup.className = "rb-toolbar-group";
-      const grip = iframeDoc.createElement("button");
+      const grip = chrome(iframeDoc, "button");
       grip.type = "button";
       grip.className = "rb-toolbar-grip";
       grip.dataset["action"] = "grip";
@@ -4520,7 +4668,7 @@ export function Editor({
     ].filter((part) => part !== "");
     if (says.length === 0) return;
 
-    const hint = iframeDoc.createElement("div");
+    const hint = chrome(iframeDoc, "div");
     hint.className = "rb-hint";
     hint.id = "rb-hint";
     hint.textContent = says.join(" · ");
@@ -4620,7 +4768,10 @@ export function Editor({
       // non-breaking spaces `contentEditable` invents, which otherwise reach the document and the
       // owner's ZIP. `original` is compared against `next` to decide whether anything changed, so
       // the two have to be normalised the same way or a space turning into U+00A0 reads as an edit.
-      const original = textFrameOf(el.textContent ?? "").text;
+      // **Re-read every time writing begins** (ADR 0051 §2, adjustment 2), not captured at wiring:
+      // under the `patch` route the element outlives every edit, so what it held when it was wired
+      // is not what the document says by the time somebody clicks into it.
+      let original = textFrameOf(el.textContent ?? "").text;
 
       /**
        * The marks after every edit this focus has seen, the text they believe in, and whether every
@@ -4657,6 +4808,7 @@ export function Editor({
        * marks and re-selecting the field costs nothing.
        */
       const beginWriting = () => {
+        original = textFrameOf(el.textContent ?? "").text;
         liveMarks = marksFor(doc, address) ?? [];
         liveText = liveFrameOf(el.textContent ?? "").text;
         anchored = true;
@@ -5016,6 +5168,16 @@ export function Editor({
           el.textContent = original;
           return;
         }
+        /**
+         * **Against what the document last said, not against what the person found.** An undo
+         * while writing rewrites these words under the caret (adjustment 2); the document is then
+         * the undone text, and a blur that compared with `original` would commit the words from
+         * before the undo straight back over it, silently. `takeHistoryText` is what the history
+         * patch left behind, read once; with it, a blur commits exactly the difference the person
+         * typed after the undo, and nothing if they typed nothing.
+         */
+        const lastSaid = takeHistoryText(el);
+        if (lastSaid !== undefined) original = textFrameOf(lastSaid).text;
         if (next === original) return;
 
         /**
@@ -5402,7 +5564,7 @@ export function Editor({
     for (const old of section.querySelectorAll(".rb-guide")) old.remove();
     const box = section.getBoundingClientRect();
     for (const line of lines) {
-      const guide = section.ownerDocument.createElement("div");
+      const guide = chrome(section.ownerDocument, "div");
       guide.className = "rb-guide";
       guide.setAttribute("aria-hidden", "true");
       if (line.axis === "x") {
@@ -5535,8 +5697,14 @@ export function Editor({
        * show it, and a cursor set on the section is overridden by any child with one of its own —
        * which every text has while it is being written in. */
       const showCursor = (el: HTMLElement | null, edge: Edge | null) => {
-        section.style.cursor = edge ? cursorFor(edge) : "";
-        if (el) el.style.cursor = edge ? cursorFor(edge) : "";
+        // One class per cursor, never `style.cursor` (adjustment 3): the patch would strip it.
+        for (const target of [section, el]) {
+          if (!target) continue;
+          for (const name of [...target.classList]) {
+            if (name.startsWith("rb-cursor-")) target.classList.remove(name);
+          }
+          if (edge) target.classList.add(`rb-cursor-${cursorFor(edge).replace("-resize", "")}`);
+        }
       };
 
       const stop = () => {
@@ -5549,6 +5717,7 @@ export function Editor({
         for (const guide of section.querySelectorAll(".rb-guide")) guide.remove();
         showCursor(pulling.el, null);
         iframeDoc.documentElement.classList.remove("rb-resizing");
+        flushQueuedPatch.current();
         iframeDoc.documentElement.style.cursor = "";
         pulling = null;
         pulled = null;
@@ -5635,7 +5804,7 @@ export function Editor({
           },
           host: { width: host.width, height: host.height },
         })) {
-          const handle = iframeDoc.createElement("div");
+          const handle = chrome(iframeDoc, "div");
           handle.className = `rb-handle rb-handle-${spot.edge}`;
           handle.setAttribute("aria-hidden", "true");
           handle.style.left = `${Math.round(spot.left)}px`;
@@ -5892,6 +6061,7 @@ export function Editor({
         took = null;
         for (const guide of section.querySelectorAll(".rb-guide")) guide.remove();
         iframeDoc.documentElement.classList.remove("rb-dragging");
+        flushQueuedPatch.current();
         for (const ghost of iframeDoc.querySelectorAll(".rb-ghost")) ghost.remove();
       };
 
@@ -6021,7 +6191,7 @@ export function Editor({
           const host = section.getBoundingClientRect();
           let ghost = section.querySelector<HTMLElement>(".rb-ghost");
           if (!ghost) {
-            ghost = iframeDoc.createElement("div");
+            ghost = chrome(iframeDoc, "div");
             ghost.className = "rb-ghost";
             ghost.setAttribute("aria-hidden", "true");
             section.appendChild(ghost);
@@ -6124,6 +6294,8 @@ export function Editor({
        * placement, and reading it keeps this honest if that ever stops being true.
        */
       const flushRun = () => {
+        iframeDoc.documentElement.classList.remove("rb-arrowing");
+        flushQueuedPatch.current();
         window.clearTimeout(runTimer);
         const total = run;
         run = null;
@@ -6216,6 +6388,9 @@ export function Editor({
          * there is no rebuild to lose a press to until the hand stops.
          */
         run = accumulate(run, { columns: action.columns, rows: action.rows }, performance.now());
+        // A run previews on the element's own grid area until it is written; a patch that lands
+        // meanwhile waits for it, like one that lands during a drag (adjustment 3).
+        iframeDoc.documentElement.classList.add("rb-arrowing");
         const drop = arrowDrop({ moving: placement, columns: run.columns, rows: run.rows });
         if (drop.kind === "refuse") {
           announce(es["editor.drag.rows"]);
@@ -6292,22 +6467,22 @@ export function Editor({
       const sectionId = element.dataset.section;
       if (!sectionId || !isHandDesigned(doc, sectionId)) continue;
 
-      const bar = iframeDoc.createElement("div");
+      const bar = chrome(iframeDoc, "div");
       bar.className = "rb-handmade";
 
-      const badge = iframeDoc.createElement("span");
+      const badge = chrome(iframeDoc, "span");
       badge.className = "rb-handmade-badge";
       badge.innerHTML =
         '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#B4740B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21l4-1 11-11-3-3L4 17l-1 4z"/></svg>';
       badge.appendChild(iframeDoc.createTextNode(es["editor.section.handmade"]));
       bar.appendChild(badge);
 
-      const name = iframeDoc.createElement("span");
+      const name = chrome(iframeDoc, "span");
       name.className = "rb-handmade-name";
       name.textContent = sectionDisplayName(doc, sectionId);
       bar.appendChild(name);
 
-      const back = iframeDoc.createElement("button");
+      const back = chrome(iframeDoc, "button");
       back.type = "button";
       back.className = "rb-handmade-back";
       back.textContent = es["editor.section.revert"];
@@ -6427,6 +6602,13 @@ export function Editor({
     // Last, and on every new document rather than only on a swap: an ordinary edit replaces the
     // document in place, which is the case direction reported and the one a swap cannot cover.
     restoreReadingPosition(frame);
+    // A wiring counts as an edit on the page for the e2e's signal, under either route; and under
+    // `patch`, a change that arrived before this document was wired is applied to it now.
+    bumpEdit(iframeDoc);
+    if (canvasMode.current === "patch" && pendingPatch.current) {
+      pendingPatch.current = false;
+      applyPatch(iframeDoc);
+    }
   }
 
   /**
@@ -6527,7 +6709,7 @@ export function Editor({
     // everywhere except the one place the person is actually looking.
     iframeDoc.addEventListener("keydown", handleShortcut);
 
-    const style = iframeDoc.createElement("style");
+    const style = chrome(iframeDoc, "style");
     style.textContent = [
       /*
        * **The cause of this rule is gone, the rule stays, and it is no longer load-bearing —
@@ -7040,6 +7222,11 @@ export function Editor({
       // A photo reads as replaceable the same way an editable text does: the dashed outline on
       // hover, and nothing until then.
       ".rb-photo { cursor: pointer; outline: 2px dashed transparent; outline-offset: 3px; }",
+      // The two classes that replace inline styles the chrome used to write on renderer nodes
+      // (ADR 0051 §2, adjustment 3): the badge's positioned host, and the border zone's cursor.
+      ".rb-photo-host { position: relative; }",
+      ".rb-cursor-ew { cursor: ew-resize; } .rb-cursor-ns { cursor: ns-resize; }",
+      ".rb-cursor-nwse { cursor: nwse-resize; } .rb-cursor-nesw { cursor: nesw-resize; }",
       ".rb-photo:hover { outline-color: #156FE7; }",
       // «Foto de ejemplo», over a photograph the bank supplied. Dark and slightly translucent
       // rather than the blue of the editor's own controls: it is a statement about the picture,
@@ -7427,8 +7614,8 @@ export function Editor({
       onDeviceChange={setDevice}
       canUndo={canUndo}
       canRedo={canRedo}
-      onUndo={onUndo}
-      onRedo={onRedo}
+      onUndo={undoFromHistory}
+      onRedo={redoFromHistory}
       saveStatus={saveStatus}
       savedWhere={savedWhere}
       photosMissing={photosMissing}
@@ -7757,7 +7944,7 @@ export function Editor({
           ) : null}
           <button
             type="button"
-            onClick={onUndo}
+            onClick={undoFromHistory}
             className="h-9 cursor-pointer rounded-[9px] border-0 bg-white px-[18px] text-sm font-semibold text-ui-ink"
           >
             {es["editor.toast.undo"]}
