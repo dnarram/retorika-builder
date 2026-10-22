@@ -482,3 +482,51 @@ was moved to the serial today; the rest is día 5's `afterTheEdit`. The día 1 b
 old route by definition. «Desenlazar» compares `textContent` across a block boundary the first
 patch strips the pretty-print whitespace from; día 5 decides whether the walk or the first patch
 is the one to change.
+
+### Amendment — the walks' contract, and `patch` by default (día 5, 22 October 2026)
+
+**One wait for both routes.** `afterTheEdit(page, act)` replaces `replacingTheDocument` in the
+e2e: it reads the live document's edit serial (`data-rb-edit`, §4), runs the act, and waits for
+the serial to move. Under `patch` a patch or a repaint moves it; under `swap` the new document is
+wired and stamped before it is promoted, so the live frame's serial moves the moment the swap
+lands. The old wait stamped the outgoing document and waited for one without the stamp — a wait
+that under `patch` never returns, because nothing replaces anything; día 4's full run under the key
+was red on **thirty-eight walks for that reason alone, and none for a defect**. The new wait keeps
+the old one's guard — it waits for the canvas to be wired first, and a canvas that never wires fails
+by name — because two list walks act while the first document is still parsing.
+
+**Per route, never per page.** The three walks that exist to prove the buffered swap («la vista
+previa nunca se queda sin página», «un clic durante el relevo», «encender y apagar seguido») and
+día 1's baseline assert what each route promises, chosen by `canvasRoute()` — what the harness
+asked for, or the editor's default — and never by looking at the page, so a walk cannot drift into
+testing whatever route it finds. Under `patch` the promise is the opposite one: never a second
+frame, a text edit that wires nothing and produces no html, a window of **0 ms**. «Desenlazar»
+compares what a card *says* (`innerText`) rather than the whitespace between its blocks, which the
+two routes leave differently.
+
+**(a), measured.** Thirty keystrokes at five milliseconds while the text's own mark lands as a
+patch: all thirty are there, the mark is on its word, and one document was wired in the session.
+Two things the walk found on the way, both of the editor and not of the route: a mark pressed on
+text that has not been committed marks the document's text, not the typed one — the toolbar should
+commit first, in both routes, which is a defect to its own backlog line — and `End` does not
+collapse the selection the patch puts back where an arrow does; noted, not chased.
+
+**`patch` is the default.** `DEFAULT_CANVAS_MODE` turns; `swap` stays reachable under the key
+until sprint 27 closes (adjustment 6). CI runs the default job on `patch` and `e2e (swap)` on the
+other route, and **both block** from today.
+
+**Two more things the browser said.** `applyPatch` read the photo URLs, the page and the entry
+from the render's closure, and `wireOnce` — which applies a patch queued before the first wiring —
+can be renders behind: measured on the keyboard walk as the bank's photographs never replacing
+their sample names. They go through `*Now` refs now, like everything else a handler reads (día 3).
+And the photograph's bottom-edge resize was red twice under `patch` inside a long filtered run,
+green three times alone, and red again — with the drag's drop landing 22 px high — in CI's first
+full run on this route. The cause is the escalation, which is **two changes of the document**: the
+section turns free, and a couple of hundred milliseconds later its rows, measured on the live
+layout (ADR 0050 §3), are written in a second step. A gesture begun between the two measures a box
+the second step moves. Under `swap` the two steps were two rebuilds, slow enough to hide it; under
+`patch` they are two patches, fast enough to show it. The walks now wait for the canvas to go quiet
+after every escalation (`canvasQuiet`, 400 ms without the serial moving), which is what a person's
+eye does. **The race itself is the editor's, not the harness's**: a hand that escalates and drags
+within 200 ms meets it in either route, and whether the escalation should measure and write in one
+step is a question for día 6's list or the backlog, named here rather than closed.

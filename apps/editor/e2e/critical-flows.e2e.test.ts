@@ -31,6 +31,7 @@ import {
   HERO_WINDOW,
 } from "../src/app/landingHero.ts";
 import { BAR_INSET, BAR_STEP, type Point, TOOLBAR_GAP } from "../src/editor/barPosition.ts";
+import { type CanvasMode, DEFAULT_CANVAS_MODE } from "../src/editor/canvasMode.ts";
 import { VERB_SCALE } from "../src/editor/chromeScale.ts";
 import { GUIDE_ZONE } from "../src/editor/guides.ts";
 import { HANDLE_TOUCH } from "../src/editor/handles.ts";
@@ -268,7 +269,7 @@ async function fontsReady(frame: FrameLocator): Promise<void> {
 /**
  * Turn the design tools on and come back only once the preview is showing the **new** document.
  *
- * **Through `replacingTheDocument`, and the first version of this was the exact mistake that
+ * **Through `afterTheEdit` (once `replacingTheDocument`), and the first version of this was the exact mistake that
  * function's own comment describes.** It waited for `[data-section="sec-cover"]` and a blob
  * photograph — both of which the **outgoing** document satisfies, because the swap is buffered and
  * the live frame keeps its contents until the last moment. So a walk could Tab into a document that
@@ -280,7 +281,7 @@ async function fontsReady(frame: FrameLocator): Promise<void> {
  * because a probe that paused for a second after turning the tools on always won the race.
  */
 async function studioToolsOn(page: Page): Promise<void> {
-  await replacingTheDocument(page, async () => {
+  await afterTheEdit(page, async () => {
     await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
     await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
   });
@@ -416,39 +417,100 @@ async function tabToVerb(page: Page, verb: string): Promise<void> {
   });
 }
 
-async function replacingTheDocument(page: Page, act: () => Promise<void>): Promise<void> {
-  const stamped = await page.evaluate(() => {
+/**
+ * **Which route the canvas is on in this run** (ADR 0051 §6): what `onTheRouteAsked` put in every
+ * context, or the editor's default when nothing was asked. The walks that mean different things
+ * under the two routes — a buffered swap exists under one and not the other — ask this, and never
+ * the page, so a walk cannot drift into testing whatever route it happens to find.
+ */
+function canvasRoute(): CanvasMode {
+  const asked = process.env["RETORIKA_CANVAS"];
+  return asked === "swap" || asked === "patch" ? asked : DEFAULT_CANVAS_MODE;
+}
+
+/** The live frame's edit serial — `data-rb-edit` on its root — or `0` while there is no document. */
+async function editSerialOf(page: Page): Promise<number> {
+  return page.evaluate(() => {
     const doc = document.querySelector<HTMLIFrameElement>(
       "iframe:not([data-buffered])",
     )?.contentDocument;
-    if (!doc) return false;
-    doc.documentElement.dataset["outgoing"] = "1";
-    return doc.documentElement.dataset["outgoing"] === "1";
+    // `documentElement` can be null while `contentDocument` is not: a frame between «replaced»
+    // and «parsed» under `swap`. That is one more turn of the poll, not a crash.
+    const root = doc?.documentElement;
+    if (!root || doc.querySelectorAll("[data-section]").length === 0) return 0;
+    return Number(root.dataset["rbEdit"] ?? "0");
   });
-  // A stamp that did not land would make the poll below answer «arrived» on its first try and wait
-  // for nothing at all — the same shape of hole as a walk that examines zero elements.
-  expect(stamped, "no se pudo marcar el documento saliente: la espera no esperaría nada").toBe(
-    true,
-  );
+}
+
+/**
+ * **Run `act`, and come back once the canvas shows its effect** (ADR 0051 §4, sprint 26 día 5).
+ *
+ * The signal is the edit serial the editor writes on the live document's root: under `patch` a
+ * patch or a repaint moves it; under `swap` the new document is wired and stamped before it is
+ * promoted, so the live frame's serial moves the moment the swap lands. One wait for both routes,
+ * which is what lets one suite run twice without two versions of itself.
+ *
+ * This replaces `replacingTheDocument`, which stamped the outgoing document and waited for one
+ * without the stamp — a wait that under `patch` never returns, because nothing replaces anything.
+ * Thirty-eight walks were red under the key for that reason alone on día 4, and none for a defect.
+ * Its one guard survives: the serial is read before `act`, and a serial that cannot be read makes
+ * the wait fail rather than pass on nothing.
+ */
+/**
+ * **Wait for the canvas to go quiet** (día 5): no change of the edit serial for `quietMs`.
+ *
+ * Escalating a section is two changes of the document, not one: the section turns free, and then
+ * — because a free section's rows are measured on the live layout (ADR 0050 §3) — its rows are
+ * written in a second step a couple of hundred milliseconds later. `afterTheEdit` returns after the
+ * first, and a gesture begun between the two measures a box the second one moves: the photograph's
+ * bottom edge was no longer where the pointer pressed, and a drop landed 22 px high. Under `swap`
+ * the same two steps were two rebuilds slow enough to hide it; under `patch` they are two patches
+ * fast enough to show it — in CI and in two of three local full runs. So every escalation in these
+ * walks waits for the second step the way a person's eye does: until nothing moves.
+ */
+async function canvasQuiet(frame: FrameLocator, quietMs = 400, limitMs = 5_000): Promise<void> {
+  const serial = async (): Promise<number> => {
+    try {
+      return await frame
+        .locator("html")
+        .evaluate((root) => Number((root as HTMLElement).dataset["rbEdit"] ?? "0"));
+    } catch {
+      // A frame mid-swap has no root to ask; that is a change, not an answer.
+      return -1;
+    }
+  };
+  let last = await serial();
+  let since = Date.now();
+  const deadline = Date.now() + limitMs;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const now = await serial();
+    if (now !== last) {
+      last = now;
+      since = Date.now();
+    } else if (Date.now() - since >= quietMs) {
+      return;
+    }
+  }
+}
+
+async function afterTheEdit(page: Page, act: () => Promise<void>): Promise<void> {
+  // The canvas must be wired before the act, or there is no serial to move: a walk that opens the
+  // editor and acts at once arrives here while the first document is still parsing (measured on
+  // the two list walks that act right after «Ver a tamaño real»). Waited for, not assumed — and a
+  // canvas that never wires fails here, by name, rather than passing on nothing.
+  await expect
+    .poll(() => editSerialOf(page), {
+      message: "el lienzo nunca se cableó: no hay serial que esperar",
+    })
+    .toBeGreaterThan(0);
+  const before = await editSerialOf(page);
   await act();
   await expect
-    .poll(async () =>
-      page.evaluate(() => {
-        const doc = document.querySelector<HTMLIFrameElement>(
-          "iframe:not([data-buffered])",
-        )?.contentDocument;
-        // **`documentElement` can be null while `contentDocument` is not**, which is a frame
-        // caught between «replaced» and «parsed». `backlog.md` has counted this crash three times
-        // under «a `dataset` of `null` in `replacingTheDocument`»; asking for the element rather
-        // than assuming it is there turns a crash into one more turn of the poll, which is what
-        // the poll is for.
-        if (!doc?.documentElement || doc.documentElement.dataset["outgoing"] === "1") {
-          return "outgoing";
-        }
-        return doc.querySelectorAll("[data-section]").length > 0 ? "arrived" : "parsing";
-      }),
-    )
-    .toBe("arrived");
+    .poll(() => editSerialOf(page), {
+      message: "ni un parche, ni un repintado, ni un documento nuevo llegó al lienzo",
+    })
+    .toBeGreaterThan(before);
 }
 
 /**
@@ -2367,6 +2429,7 @@ describe("sprint 8 — el modo estudio: encender, diseñar a mano, colocar, y vo
       const placeBefore = await placeInSection();
 
       await frame.locator(".rb-escalate-yes").click();
+      await canvasQuiet(frame);
       await expect(frame.locator(".rb-handmade-badge")).toHaveText("Diseñada a mano");
 
       // «No se mueve ni un píxel»: the same words, in the same place within the section it belongs
@@ -2406,6 +2469,7 @@ describe("sprint 8 — el modo estudio: encender, diseñar a mano, colocar, y vo
       await frame.locator('[data-section="sec-cover"]').click();
       await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
       await frame.locator(".rb-escalate-yes").click();
+      await canvasQuiet(frame);
       await expect(frame.locator(".rb-handmade-badge")).toHaveText("Diseñada a mano");
       // Already expanded: the family collapses when the panel *opens*, not every time the section
       // changes — somebody working through three sections should not reopen it three times. Clicking
@@ -2563,6 +2627,7 @@ describe("sprint 8 día 7 — el recorrido completo del sprint", () => {
       await frame.locator('[data-section="sec-cover"]').click();
       await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
       await frame.locator(".rb-escalate-yes").click();
+      await canvasQuiet(frame);
       await expect(frame.locator(".rb-handmade-badge")).toHaveText("Diseñada a mano");
 
       await studio.getByRole("button", { name: "Diseño" }).click();
@@ -2594,6 +2659,7 @@ describe("sprint 8 día 7 — el recorrido completo del sprint", () => {
       await frame.locator('[data-section="sec-cover"]').click();
       await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
       await frame.locator(".rb-escalate-yes").click();
+      await canvasQuiet(frame);
       await expect(frame.locator(".rb-handmade-badge")).toHaveText("Diseñada a mano");
 
       const headlineStyleAfterFreshEscalate = await frame
@@ -6485,7 +6551,7 @@ describe("sprint 14 día 6 — enlazar, avisar y desenlazar", () => {
     await page.getByText("Ver a tamaño real →").first().click();
     const frame = page.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').waitFor();
-    await replacingTheDocument(page, async () => {
+    await afterTheEdit(page, async () => {
       await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
       await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
     });
@@ -6505,7 +6571,7 @@ describe("sprint 14 día 6 — enlazar, avisar y desenlazar", () => {
       //
       // **Counting is the wrong wait, though, and `withTools` is where that is now handled.** Both
       // documents hold the same three cards, so `toHaveCount(3)` is answered by whichever one is
-      // mounted — including the one on its way out. `replacingTheDocument` waits for the swap
+      // mounted — including the one on its way out. `afterTheEdit` waits for the swap
       // itself; this stays as the wait for the content being there at all.
       await expect(cards).toHaveCount(3);
       const before = await cards.evaluateAll((nodes) =>
@@ -6620,8 +6686,11 @@ describe("sprint 14 día 6 — enlazar, avisar y desenlazar", () => {
 
       const cards = frame.locator('[data-section="sec-services"] li.rb-item');
       await expect(cards).toHaveCount(3);
+      // `innerText`, not `textContent`: the two routes differ in the whitespace between a card's
+      // blocks — the html target's pretty-print leaves a text node there and the first patch takes
+      // it out — and what a card *says* is the same either way («Terraza», then its line).
       const before = await cards.evaluateAll((nodes) =>
-        nodes.map((node) => node.textContent?.replace(/\s+/g, " ").trim()),
+        nodes.map((node) => (node as HTMLElement).innerText.replace(/\s+/g, " ").trim()),
       );
 
       await frame.locator('[data-section="sec-services"] li.rb-item h3').first().click();
@@ -6635,7 +6704,7 @@ describe("sprint 14 día 6 — enlazar, avisar y desenlazar", () => {
       await expect(cards).toHaveCount(before.length);
       expect(
         await cards.evaluateAll((nodes) =>
-          nodes.map((node) => node.textContent?.replace(/\s+/g, " ").trim()),
+          nodes.map((node) => (node as HTMLElement).innerText.replace(/\s+/g, " ").trim()),
         ),
       ).toEqual(before);
       // No `data-entry` left: these are ordinary cards now.
@@ -6720,8 +6789,8 @@ describe("sprint 14 día 7 — el recorrido completo del sprint", () => {
       expect(usable, "the preview loaded no shipped face").toBe(true);
 
       // Returns once the preview is showing the document the tools produced, not the one they
-      // replaced — see `replacingTheDocument`. This is the walk CI failed on.
-      await replacingTheDocument(walk, async () => {
+      // replaced — see `afterTheEdit`, once `replacingTheDocument`. This is the walk CI failed on.
+      await afterTheEdit(walk, async () => {
         await walk.getByRole("switch", { name: "Herramientas de diseño" }).click();
         await walk.getByRole("button", { name: "Sí, enciéndelas" }).click();
       });
@@ -9851,6 +9920,7 @@ describe("lo que el cromo del editor dibuja dentro del lienzo, y el aviso del in
 
       // ---- 6. escalada: la barra «Diseñada a mano» ---------------------------------------------
       await frame.locator(".rb-escalate-yes").click();
+      await canvasQuiet(frame);
       await expect(frame.locator(".rb-handmade")).toHaveCount(1);
       await expect
         .poll(async () =>
@@ -10542,12 +10612,25 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
         faded.length,
         `opacidades distintas de 1: ${[...new Set(faded.map((s) => s.opacity))].join(", ")}`,
       ).toBe(0);
-      // And a frame really was prepared, so none of the above is true merely because nothing
-      // happened. Read from the mutations rather than the frames: the swap is quicker than a paint.
-      expect(
-        watch.events.filter((event) => event.buffered === 1).length,
-        "no se preparó ningún marco: la prueba no ha visto un relevo",
-      ).toBeGreaterThan(0);
+      // And the route did what it promises, so none of the above is true merely because nothing
+      // happened. Under `swap` a frame really was prepared — read from the mutations rather than
+      // the frames, the swap is quicker than a paint. Under `patch` (día 5) the promise is the
+      // opposite one: no second frame, ever; the switch repaints the one there is.
+      if (canvasRoute() === "swap") {
+        expect(
+          watch.events.filter((event) => event.buffered === 1).length,
+          "no se preparó ningún marco: la prueba no ha visto un relevo",
+        ).toBeGreaterThan(0);
+      } else {
+        // The watcher records frame mutations, and under `patch` there are none to record: the
+        // samples are the evidence (thirty-plus, none blank, asserted above), and the frames are
+        // the one that was there, before and after.
+        expect(
+          watch.events.filter((event) => event.buffered > 0 || event.frames !== 1).length,
+          "bajo `patch` apareció un segundo marco",
+        ).toBe(0);
+        await expect(walker.locator("iframe")).toHaveCount(1);
+      }
       await expect(walker.getByRole("button", { name: "Diseño" })).toHaveCount(1);
     } finally {
       await walker.context().close();
@@ -10596,22 +10679,31 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
       await throttle.send("Emulation.setCPUThrottlingRate", { rate: 1 });
 
       const whileBuffered = watch.events.filter((event) => event.buffered === 1);
-      expect(
-        whileBuffered.length,
-        "nunca se vio un marco preparándose: la prueba sería vacua",
-      ).toBeGreaterThan(0);
-      expect(
-        whileBuffered.filter((event) => event.hitBuffered).length,
-        `el marco oculto se quedó el clic en ${whileBuffered.filter((e) => e.hitBuffered).length} de ${whileBuffered.length} momentos`,
-      ).toBe(0);
-      expect(
-        whileBuffered.filter((event) => event.inert !== true).length,
-        "el marco oculto no era inert",
-      ).toBe(0);
-      expect(
-        [...new Set(whileBuffered.map((event) => event.pointerEvents))],
-        "el marco oculto aceptaba el puntero",
-      ).toEqual(["none"]);
+      if (canvasRoute() === "swap") {
+        expect(
+          whileBuffered.length,
+          "nunca se vio un marco preparándose: la prueba sería vacua",
+        ).toBeGreaterThan(0);
+        expect(
+          whileBuffered.filter((event) => event.hitBuffered).length,
+          `el marco oculto se quedó el clic en ${whileBuffered.filter((e) => e.hitBuffered).length} de ${whileBuffered.length} momentos`,
+        ).toBe(0);
+        expect(
+          whileBuffered.filter((event) => event.inert !== true).length,
+          "el marco oculto no era inert",
+        ).toBe(0);
+        expect(
+          [...new Set(whileBuffered.map((event) => event.pointerEvents))],
+          "el marco oculto aceptaba el puntero",
+        ).toEqual(["none"]);
+      } else {
+        // Under `patch` there is no hidden frame for a click to fall into (día 5): the twelve
+        // clicks land on the one frame there is, throttled or not. No frame mutation means no
+        // event; the samples below and the text comparison are what this route is held to.
+        expect(watch.samples.length, "el muestreo no miró nada").toBeGreaterThan(30);
+        expect(whileBuffered.length, "bajo `patch` se preparó un marco").toBe(0);
+        expect(watch.events.filter((event) => event.frames !== 1).length).toBe(0);
+      }
 
       // And nothing was edited anywhere: the presses reached the live frame, which selects rather
       // than types, and one frame is left standing.
@@ -10647,9 +10739,17 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
       });
       await throttle.send("Emulation.setCPUThrottlingRate", { rate: 1 });
 
-      expect(watch.events.length, "el observador no vio ningún cambio").toBeGreaterThan(0);
-      const most = Math.max(...watch.events.map((event) => event.frames));
-      expect(most, `llegó a haber ${most} marcos a la vez`).toBeLessThanOrEqual(2);
+      // Two at most under `swap`, the one being shown and the one being prepared — and the
+      // watcher must have seen the swaps to say so. Under `patch` on and off are two repaints of
+      // the same document (día 5): nothing for the watcher to record, and never a second frame.
+      if (canvasRoute() === "swap") {
+        expect(watch.events.length, "el observador no vio ningún cambio").toBeGreaterThan(0);
+        const most = Math.max(...watch.events.map((event) => event.frames));
+        expect(most, `llegó a haber ${most} marcos a la vez`).toBeLessThanOrEqual(2);
+      } else {
+        expect(watch.samples.length, "el muestreo no miró nada").toBeGreaterThan(30);
+        expect(watch.events.filter((event) => event.frames > 1).length).toBe(0);
+      }
       expect(
         watch.events.filter((event) => event.buffered > 1).length,
         "hubo más de un marco preparándose",
@@ -10697,6 +10797,7 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
       ).toBe("IFRAME");
 
       await frame.locator(".rb-escalate-yes").click();
+      await canvasQuiet(frame);
       await expect(frame.locator(".rb-handmade")).toHaveCount(1);
       await expect(walker.locator(PREVIEW)).toHaveCount(1);
 
@@ -10781,6 +10882,7 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
         .locator('[data-section="sec-cover"] .rb-action[aria-label="Diseñar a mano"]')
         .click();
       await frame.locator(".rb-escalate-yes").click();
+      await canvasQuiet(frame);
       await expect(frame.locator(".rb-handmade")).toHaveCount(1);
 
       const look = async (where: string) => {
@@ -10921,6 +11023,7 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
         .locator('[data-section="sec-services"] .rb-action[aria-label="Diseñar a mano"]')
         .click();
       await frame.locator(".rb-escalate-yes").click();
+      await canvasQuiet(frame);
       await expect(frame.locator(".rb-handmade")).toHaveCount(1);
       // A mitad de la entrada, no solo al final: lo que se promete es que no se mueve en ningún
       // momento, y medir solo el destino dejaría pasar un viaje de ida y vuelta.
@@ -11065,7 +11168,7 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
       ).toHaveText("Qué ponemos");
       // Esperado antes de medir: el clic en la pestaña recarga el marco, y leer durante la
       // recarga encuentra un documento sin `documentElement`. Misma disciplina que
-      // `replacingTheDocument` impone arriba, y por la misma razón.
+      // `afterTheEdit` impone arriba, y por la misma razón.
       await expect(frame.locator('[data-section="sec-services"]')).toBeVisible();
 
       // Y que la página de destino se puede desplazar de verdad, que es lo que hace que el 0 de
@@ -11128,6 +11231,7 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
       await frame.locator('[data-section="sec-cover"]').click();
       await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
       await frame.locator(".rb-escalate-yes").click();
+      await canvasQuiet(frame);
       await expect(frame.locator(".rb-handmade")).toHaveCount(1);
 
       // **Donde se asiente, no donde se le pidió.** `scrolledPreview` explica por qué los dos
@@ -13049,7 +13153,7 @@ async function withToolsAndList(page: Page): Promise<FrameLocator> {
   const frame = page.frameLocator(PREVIEW).first();
   await frame.locator('[data-section="sec-cover"]').waitFor();
   await waitForBankPhoto(frame);
-  await replacingTheDocument(page, async () => {
+  await afterTheEdit(page, async () => {
     await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
     await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
   });
@@ -13301,7 +13405,7 @@ describe("sprint 19 día 7 — el recorrido como un desconocido, con fichas y si
       );
 
       // The tools on, a list from the cards, and a page per entry — days 4 and 5 of this sprint.
-      await replacingTheDocument(page, async () => {
+      await afterTheEdit(page, async () => {
         await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
         await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
       });
@@ -13978,7 +14082,7 @@ describe("sprint 20 día 2 — el grupo de verbos se mueve, con un asa", () => {
        * primera pulsación. Vive en el editor, por id de sección, y `select()` la vuelve a poner.
        */
       await backToVerb(walker, "move-down");
-      await replacingTheDocument(walker, async () => {
+      await afterTheEdit(walker, async () => {
         await walker.keyboard.press("Enter");
       });
       await expect.poll(() => placed(walker).then((p) => p?.left)).toBe(moved?.left);
@@ -14345,7 +14449,7 @@ describe("sprint 20 día 3 — la barra flotante se mueve, y recuerda el desplaz
       );
 
       // Y usar un botón rehace el documento entero: la barra vuelve a abrirse donde se la dejó.
-      await replacingTheDocument(walker, async () => {
+      await afterTheEdit(walker, async () => {
         await frame.locator('.rb-toolbar-mark[data-mark="strong"]').click();
       });
       await expect.poll(() => bar(walker, HEADLINE).then((b) => b?.top)).toBe(dragged?.top);
@@ -15614,9 +15718,10 @@ describe("sprint 24 día 8 — un elemento se arrastra a su celda", () => {
       expect(await placedIn(frame, "sec-cover")).toEqual(beforeOffer);
 
       // ---- accept it, and the section becomes one with placements of its own ----
-      await replacingTheDocument(page, async () => {
+      await afterTheEdit(page, async () => {
         await frame.locator(".rb-escalate-yes").click();
       });
+      await canvasQuiet(frame);
       await waitForBankPhoto(frame);
       const placed = await placedIn(frame, "sec-cover");
       expect(placed.length, "la sección escalada no trajo colocaciones").toBeGreaterThan(1);
@@ -15798,10 +15903,11 @@ describe("sprint 24 día 8 — un elemento se arrastra a su celda", () => {
       const frame = page.frameLocator(PREVIEW).first();
       const cover = frame.locator('[data-section="sec-cover"]');
       await cover.click();
-      await replacingTheDocument(page, async () => {
+      await afterTheEdit(page, async () => {
         await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
         await frame.locator(".rb-escalate-yes").click();
       });
+      await canvasQuiet(frame);
       await waitForBankPhoto(frame);
 
       /**
@@ -15929,10 +16035,11 @@ describe("sprint 24 día 9 — el teclado lo mueve y lo dice", () => {
     await studioToolsOn(page);
     const frame = page.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').click();
-    await replacingTheDocument(page, async () => {
+    await afterTheEdit(page, async () => {
       await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
       await frame.locator(".rb-escalate-yes").click();
     });
+    await canvasQuiet(frame);
     await waitForBankPhoto(frame);
     return frame;
   }
@@ -16389,7 +16496,7 @@ describe("sprint 24 día 10 — el cierre, sin ratón", () => {
       await expect(
         page.frameLocator(PREVIEW).first().getByText("Esta sección la coloca el catálogo"),
       ).toBeVisible();
-      await replacingTheDocument(page, async () => {
+      await afterTheEdit(page, async () => {
         await tabInFrameUntil(
           page,
           (at) => at.classes.includes("rb-escalate-yes"),
@@ -16656,9 +16763,10 @@ describe("sprint 25 día 2 — escalar mide la sección viva", () => {
       await cover.click();
       await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
       await expect(frame.getByText("Esta sección la coloca el catálogo")).toBeVisible();
-      await replacingTheDocument(page, async () => {
+      await afterTheEdit(page, async () => {
         await frame.locator(".rb-escalate-yes").click();
       });
+      await canvasQuiet(frame);
       await waitForBankPhoto(frame);
       await expect(frame.locator(".rb-handmade-badge")).toHaveText("Diseñada a mano");
 
@@ -16727,7 +16835,7 @@ describe("sprint 25 día 2 — escalar mide la sección viva", () => {
         .toBeLessThan(wide - 1);
       const beforeSecond = await boxesIn(frame, second as string);
       expect(beforeSecond.length, `${second} no tiene elementos colocados`).toBeGreaterThan(0);
-      await replacingTheDocument(page, async () => {
+      await afterTheEdit(page, async () => {
         await panel.getByRole("button", { name: "Diseñar a mano" }).click();
       });
       await waitForBankPhoto(page.frameLocator(PREVIEW).first());
@@ -16763,10 +16871,11 @@ describe("sprint 25 día 4 — los bordes estiran la caja", () => {
     await studioToolsOn(page);
     const frame = page.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').click();
-    await replacingTheDocument(page, async () => {
+    await afterTheEdit(page, async () => {
       await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
       await frame.locator(".rb-escalate-yes").click();
     });
+    await canvasQuiet(frame);
     await waitForBankPhoto(frame);
     await fontsReady(frame);
     return page.frameLocator(PREVIEW).first();
@@ -16920,6 +17029,7 @@ describe("sprint 25 día 4 — los bordes estiran la caja", () => {
 
   it("agranda el área de una foto por su borde inferior sin estirar la foto", async () => {
     const context = await browser.newContext({ viewport: VIEWPORT });
+    await probeOn(context);
     const page = await context.newPage();
     try {
       const frame = await handDesigned(page);
@@ -16943,7 +17053,9 @@ describe("sprint 25 día 4 — los bordes estiran la caja", () => {
         .poll(
           async () =>
             (await placedIn(frame, "sec-cover")).find((e) => e.id === "el-image")?.rowSpan,
-          { message: "el área no creció al tirar del borde inferior" },
+          {
+            message: `el área no creció al tirar del borde inferior:\n${await probeReport(page)}`,
+          },
         )
         .toBeGreaterThan(before?.rowSpan ?? 0);
       const after = (await placedIn(frame, "sec-cover")).find((e) => e.id === "el-image");
@@ -16994,10 +17106,11 @@ describe("sprint 25 día 5 — las guías y el aviso de texto sobre texto", () =
     await studioToolsOn(page);
     const frame = page.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').click();
-    await replacingTheDocument(page, async () => {
+    await afterTheEdit(page, async () => {
       await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
       await frame.locator(".rb-escalate-yes").click();
     });
+    await canvasQuiet(frame);
     await waitForBankPhoto(frame);
     await fontsReady(frame);
     return page.frameLocator(PREVIEW).first();
@@ -17194,10 +17307,11 @@ describe("sprint 25 día 6 — las unidades dichas y el alto que sigue al texto"
     await studioToolsOn(page);
     const frame = page.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').click();
-    await replacingTheDocument(page, async () => {
+    await afterTheEdit(page, async () => {
       await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
       await frame.locator(".rb-escalate-yes").click();
     });
+    await canvasQuiet(frame);
     await waitForBankPhoto(frame);
     await fontsReady(frame);
     return page.frameLocator(PREVIEW).first();
@@ -17316,10 +17430,11 @@ describe("sprint 25 día 7 — las asas en táctil, y el móvil sin solape", () 
     await studioToolsOn(page);
     const frame = page.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').click();
-    await replacingTheDocument(page, async () => {
+    await afterTheEdit(page, async () => {
       await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
       await frame.locator(".rb-escalate-yes").click();
     });
+    await canvasQuiet(frame);
     await waitForBankPhoto(frame);
     await fontsReady(frame);
     return page.frameLocator(PREVIEW).first();
@@ -17791,10 +17906,11 @@ describe("sprint 25 día 8 — el cierre", () => {
     await studioToolsOn(page);
     const frame = page.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').click();
-    await replacingTheDocument(page, async () => {
+    await afterTheEdit(page, async () => {
       await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
       await frame.locator(".rb-escalate-yes").click();
     });
+    await canvasQuiet(frame);
     const live = page.frameLocator(PREVIEW).first();
     await waitForBankPhoto(live);
     await fontsReady(live);
@@ -17940,7 +18056,7 @@ describe("sprint 25 día 8 — el cierre", () => {
         .toBe(1);
 
       await phone.locator('[data-section="sec-cover"]').click();
-      await replacingTheDocument(page, async () => {
+      await afterTheEdit(page, async () => {
         await phone.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
         await phone.locator(".rb-escalate-yes").click();
       });
@@ -18104,14 +18220,26 @@ describe("sprint 26 día 1 — la medida de hoy", () => {
       await page.keyboard.press("Enter");
       await expect(page.getByText("Guardado en este navegador")).toBeVisible();
 
-      // Hasta que el editor haya cableado un documento nuevo, que es lo que hoy sigue a una
-      // edición. Si un día esto deja de ocurrir sin que nadie haya cambiado la caminata, es el
-      // modelo el que cambió — y el día 5 es cuando esta espera se vuelve «no ocurre».
-      await expect
-        .poll(async () => (await events()).filter((event) => event.kind === "wire").length, {
-          message: "la edición no reconstruyó el documento, que es lo que hoy hace",
-        })
-        .toBeGreaterThan(wiredSoFar);
+      // Bajo `swap`, hasta que el editor haya cableado un documento nuevo, que es lo que sigue a una
+      // edición en esa ruta. Bajo `patch` (día 5) la espera es la contraria: el parche llega, el
+      // serial sube, y ningún documento se cablea — la misma caminata mide las dos rutas.
+      if (canvasRoute() === "swap") {
+        await expect
+          .poll(async () => (await events()).filter((event) => event.kind === "wire").length, {
+            message: "la edición no reconstruyó el documento, que es lo que `swap` hace",
+          })
+          .toBeGreaterThan(wiredSoFar);
+      } else {
+        await expect
+          .poll(
+            async () =>
+              (await events()).filter(
+                (e) => e.kind === "patch" && e.at >= pressedAt && e.data["ok"],
+              ).length,
+            { message: "la edición no llegó como parche" },
+          )
+          .toBeGreaterThan(0);
+      }
 
       const all = await events();
       const after = all.filter((event) => event.at >= pressedAt);
@@ -18130,14 +18258,24 @@ describe("sprint 26 día 1 — la medida de hoy", () => {
           `promociones de marco: ${promotions.length}; marcos ahora: ${frames}`,
       );
 
-      // Lo que hoy es cierto, y el día 5 deja de serlo: la edición produjo un documento nuevo.
-      expect(
-        wires.length,
-        "hoy una edición de texto cablea al menos un documento nuevo",
-      ).toBeGreaterThanOrEqual(1);
-      expect(Number.isFinite(window_), `no hay ventana que medir: ${await probeReport(page)}`).toBe(
-        true,
-      );
+      if (canvasRoute() === "swap") {
+        // Lo que `swap` hace: la edición produjo un documento nuevo, y hubo una ventana entre el
+        // html y su cableado en la que una pulsación no tenía dónde caer.
+        expect(
+          wires.length,
+          "bajo `swap` una edición de texto cablea al menos un documento nuevo",
+        ).toBeGreaterThanOrEqual(1);
+        expect(
+          Number.isFinite(window_),
+          `no hay ventana que medir: ${await probeReport(page)}`,
+        ).toBe(true);
+      } else {
+        // Lo que `patch` promete: ningún documento nuevo, ningún html nuevo, ventana **0 ms**.
+        expect(wires.length, "bajo `patch` una edición cableó un documento").toBe(0);
+        expect(htmls.length, "bajo `patch` una edición produjo un html nuevo").toBe(0);
+        const patches = after.filter((event) => event.kind === "patch" && event.data["ok"]);
+        expect(patches.length).toBeGreaterThan(0);
+      }
       // Y la letra llegó al documento, por la ruta de hoy: la medida no vale si la edición se perdió.
       // El segundo clic deja el texto seleccionado, así que la letra **sustituye** al titular en vez
       // de seguirlo — el titular queda en «x» — y eso es igual de edición para lo que aquí se mide.
@@ -18340,6 +18478,7 @@ describe("sprint 26 día 2 — el parche, tras una llave", () => {
       const serialBeforeEscalation = await editSerial(page);
       await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
       await frame.locator(".rb-escalate-yes").click();
+      await canvasQuiet(frame);
       await expect.poll(() => editSerial(page)).toBeGreaterThan(serialBeforeEscalation);
       await expect(frame.locator(".rb-handmade")).toHaveCount(1);
       await waitForBankPhoto(frame);
@@ -18683,7 +18822,7 @@ describe("sprint 26 día 4 — fotos, estilos, páginas e interruptor", () => {
     );
 
   /** Un acto, y la espera hasta que su parche o su repintado está en la página. */
-  async function afterTheEdit(page: Page, act: () => Promise<void>): Promise<Event[]> {
+  async function patchesAfter(page: Page, act: () => Promise<void>): Promise<Event[]> {
     const serial = await editSerial(page);
     const before = (await events(page)).length;
     await act();
@@ -18739,7 +18878,7 @@ describe("sprint 26 día 4 — fotos, estilos, páginas e interruptor", () => {
 
       // **Encender**: ningún documento nuevo; un repintado con causa «tools», el serial sube, y el
       // cromo que las herramientas añaden está — la foto de la portada es ahora parada de Tab.
-      const on = await afterTheEdit(page, async () => {
+      const on = await patchesAfter(page, async () => {
         await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
         await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
       });
@@ -18759,10 +18898,11 @@ describe("sprint 26 día 4 — fotos, estilos, páginas e interruptor", () => {
       // **Escalar**: la sección pasa a diseñada a mano por un parche, y la barra se dibuja.
       await frame.locator('[data-section="sec-cover"]').click();
       await expect(frame.locator(".rb-actions")).toHaveCount(1);
-      const escalated = await afterTheEdit(page, async () => {
+      const escalated = await patchesAfter(page, async () => {
         await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
         await frame.locator(".rb-escalate-yes").click();
       });
+      await canvasQuiet(frame);
       expect(
         escalated.some((e) => e.kind === "wire"),
         "escalar cableó un documento nuevo",
@@ -18776,7 +18916,7 @@ describe("sprint 26 día 4 — fotos, estilos, páginas e interruptor", () => {
       await expect(frame.locator(".rb-handmade-badge")).toHaveText("Diseñada a mano");
 
       // **Volver**, sin haber movido nada: no pregunta, la barra se va, la clase también.
-      const back = await afterTheEdit(page, () => frame.locator(".rb-handmade-back").click());
+      const back = await patchesAfter(page, () => frame.locator(".rb-handmade-back").click());
       await expect(page.getByRole("alertdialog")).toHaveCount(0);
       await expect(frame.locator(".rb-handmade")).toHaveCount(0);
       await expect(frame.locator('[data-section="sec-cover"]')).not.toHaveClass(/rb-free/);
@@ -18786,7 +18926,7 @@ describe("sprint 26 día 4 — fotos, estilos, páginas e interruptor", () => {
       ).toBe(false);
 
       // **Apagar**: otro repintado, y la parada de Tab de la foto se va con las herramientas.
-      const off = await afterTheEdit(page, () =>
+      const off = await patchesAfter(page, () =>
         page.getByRole("switch", { name: "Herramientas de diseño" }).click(),
       );
       expect(off.some((e) => e.kind === "redraw" && e.data["cause"] === "tools")).toBe(true);
@@ -18818,7 +18958,7 @@ describe("sprint 26 día 4 — fotos, estilos, páginas e interruptor", () => {
       await headline.click();
       await expect(headline).toHaveAttribute("contenteditable", "true");
       await page.keyboard.type("x");
-      const edited = await afterTheEdit(page, () => page.keyboard.press("Enter"));
+      const edited = await patchesAfter(page, () => page.keyboard.press("Enter"));
       expect(
         edited.some((e) => e.kind === "patch" && e.data["pageChanged"] === false),
         "la edición no fue un parche de la misma página",
@@ -18827,7 +18967,7 @@ describe("sprint 26 día 4 — fotos, estilos, páginas e interruptor", () => {
 
       // Una sección convertida en página: dos pestañas, y la portada sigue donde estaba.
       await frame.locator('[data-section="sec-services"]').click();
-      await afterTheEdit(page, () =>
+      await patchesAfter(page, () =>
         frame
           .locator(
             '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
@@ -18840,7 +18980,7 @@ describe("sprint 26 día 4 — fotos, estilos, páginas e interruptor", () => {
       await expect.poll(scrollY).toBe(160);
 
       // A la otra página: un parche que dice `pageChanged`, y el principio.
-      const toPage = await afterTheEdit(page, () => tabs.nth(1).click());
+      const toPage = await patchesAfter(page, () => tabs.nth(1).click());
       expect(
         toPage.some((e) => e.kind === "patch" && e.data["pageChanged"] === true),
         "el cambio de página no fue un parche con `pageChanged`",
@@ -18849,7 +18989,7 @@ describe("sprint 26 día 4 — fotos, estilos, páginas e interruptor", () => {
       await expect.poll(scrollY, { message: "la otra página no empezó arriba" }).toBe(0);
 
       // De vuelta a la portada, que estaba a 160: otra página, arriba otra vez.
-      await afterTheEdit(page, () => tabs.first().click());
+      await patchesAfter(page, () => tabs.first().click());
       await expect(frame.locator('[data-section="sec-cover"]')).toBeVisible();
       await expect.poll(scrollY).toBe(0);
 
@@ -18920,7 +19060,7 @@ describe("sprint 26 día 4 — fotos, estilos, páginas e interruptor", () => {
       let cssPatches = 0;
       for (let round = 0; round < 10; round += 1) {
         const target = round % 2 === 0 ? azul : neutra;
-        const got = await afterTheEdit(page, () => target.click());
+        const got = await patchesAfter(page, () => target.click());
         cssPatches += got.filter((e) => e.kind === "patch" && e.data["cssChanged"] === true).length;
       }
       expect(cssPatches, "los cambios de paleta no reescribieron la hoja").toBe(10);
@@ -18951,4 +19091,72 @@ describe("sprint 26 día 4 — fotos, estilos, páginas e interruptor", () => {
       await context.close();
     }
   }, 240_000);
+});
+
+/**
+ * **Sprint 26 día 5 — el contrato de las caminatas.** Lo que el plan llamó (a): treinta pulsaciones
+ * a cinco milisegundos mientras un parche cae sobre el texto que se está escribiendo. Bajo `swap`
+ * ese parche era una reconstrucción y la ventana entre el html y el cableado se tragaba una
+ * pulsación (medido el día 1: 5,8 ms); bajo `patch` la marca de la propia barra llega como parche
+ * del editable con foco, la selección vuelve a su sitio, y las treinta letras están.
+ */
+describe("sprint 26 día 5 — el contrato de las caminatas", () => {
+  it.skipIf(canvasRoute() === "swap")(
+    "treinta pulsaciones a cinco milisegundos no pierden ninguna mientras cae la marca del propio texto",
+    async () => {
+      const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+      await probeOn(context);
+      const page = await context.newPage();
+      try {
+        await intoTheCanvas(page);
+        const frame = page.frameLocator(PREVIEW).first();
+        await fontsReady(frame);
+        const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+        // Un titular corto y volcado — «Reserva» — para que la marca tenga un documento al que
+        // aplicarse: la barra marca el texto que el documento tiene, y un texto sin volcar no está
+        // en él (en las dos rutas; las caminatas de marcas vuelcan antes de marcar desde el sprint 10).
+        await headline.click();
+        await headline.click();
+        await expect(headline).toHaveAttribute("contenteditable", "true");
+        await page.keyboard.type("Reserva");
+        await page.keyboard.press("Enter");
+        await expect(headline).toHaveText(/^\s*Reserva\s*$/);
+        // Otra vez dentro, la palabra elegida con el teclado, y la negrita de la barra sobre ella:
+        // un parche del propio texto, aplicado con el foco dentro (causa `mark`).
+        await headline.click();
+        await headline.click();
+        await expect(headline).toHaveAttribute("contenteditable", "true");
+        await page.keyboard.press("Home");
+        for (let i = 0; i < 7; i += 1) await page.keyboard.press("Shift+ArrowRight");
+        await frame.locator('.rb-toolbar-mark[data-mark="strong"]').click();
+        await expect(headline.locator("strong")).toHaveText("Reserva");
+        // La selección sigue sobre la palabra marcada — es lo que la causa `mark` promete —; una
+        // flecha la pliega a su final, y desde ahí se escribe.
+        await page.keyboard.press("ArrowRight");
+        // Y treinta pulsaciones, sin esperar a nada, a cinco milisegundos cada una.
+        const typed = " abcdefghijklmnopqrstuvwxyz123";
+        await page.keyboard.type(typed, { delay: 5 });
+        await page.keyboard.press("Enter");
+        await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+
+        const text = (await headline.innerText()).replace(/\s+/g, " ").trim();
+        expect(text, `faltan pulsaciones: «${text}»`).toBe(`Reserva${typed}`);
+        await expect(headline.locator("strong")).toHaveText(/Reserva/);
+        type Event = { kind: string; data: Record<string, unknown> };
+        const events = await page.evaluate(
+          () => ((window as unknown as { __rb?: Event[] }).__rb ?? []) as Event[],
+        );
+        expect(
+          events.some((e) => e.kind === "patch" && e.data["cause"] === "mark" && e.data["ok"]),
+          "la marca no llegó como parche con causa «mark»",
+        ).toBe(true);
+        expect(events.filter((e) => e.kind === "wire").length, "se cableó un documento nuevo").toBe(
+          1,
+        );
+      } finally {
+        await context.close();
+      }
+    },
+    180_000,
+  );
 });

@@ -946,7 +946,15 @@ export function Editor({
    * acting on a document that no longer exists, silently.
    */
   const docNow = useRef(doc);
+  const photoUrlsNow = useRef(photoUrls);
+  const pageIdNow = useRef(pageId);
   docNow.current = doc;
+  /** What a patch is made of besides the document (día 5): read through refs because `applyPatch`
+   * also runs from `wireOnce`, whose closure can be renders behind — measured as a pending patch
+   * applied at wiring with the photo URLs of the render that queued it, so the bank's photographs
+   * never replaced their sample names on the keyboard walk. */
+  photoUrlsNow.current = photoUrls;
+  pageIdNow.current = pageId;
   const designToolsNow = useRef(designTools);
   designToolsNow.current = designTools;
   const propsNow = useRef({
@@ -994,7 +1002,7 @@ export function Editor({
    * **Which route shows an edit** (ADR 0051 §6, sprint 26 día 2): `swap` rebuilds the frame as it
    * has since sprint 15; `patch` keeps one document and patches it. Read once, at mount, from the
    * key David's adjustment 6 named, because a document wired for one route cannot change route
-   * halfway. `swap` by default until día 5. Storage can throw (a private window), and a throw
+   * halfway. `patch` by default since día 5, `swap` under the key. Storage can throw (a private window), and a throw
    * means the default.
    */
   const canvasMode = useRef<CanvasMode>(
@@ -1442,6 +1450,9 @@ export function Editor({
     return collection?.entries[0]?.id;
   }
   const previewEntryId = entryShown(pageId);
+  /** The entry shown, for `applyPatch` (día 5): declared here, where the value is. */
+  const previewEntryIdNow = useRef(previewEntryId);
+  previewEntryIdNow.current = previewEntryId;
 
   const html = useMemo(() => {
     // `entryHints` (ADR 0033 §10): each card drawn from a collection entry says which entry it is.
@@ -1997,7 +2008,9 @@ export function Editor({
     if (inertDoc.current === null) {
       inertDoc.current = document.implementation.createHTMLDocument("");
     }
-    const display = withPhotoUrls(doc, photoUrls);
+    const pageId = pageIdNow.current;
+    const previewEntryId = previewEntryIdNow.current;
+    const display = withPhotoUrls(docNow.current, photoUrlsNow.current);
     const options = {
       entryHints: true,
       ...(pageId === undefined ? {} : { pageId }),
@@ -5865,6 +5878,8 @@ export function Editor({
       const edit = pulled;
       const wasWriting = el.isContentEditable;
       stop();
+      // For the probe: what the gesture decided, before the document is asked to change.
+      record("resize", { sectionId, elementId, edge: pulling?.edge ?? null, edit, wasWriting });
       if (!elementId || !edit || Object.keys(edit).length === 0) return;
       if (wasWriting) {
         // The words come first, and then the box (ADR 0050 día 4): this editor commits a text on
