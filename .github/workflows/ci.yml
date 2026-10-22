@@ -188,7 +188,14 @@ jobs:
     # sprint's proposals walks one shared journey instead of four, so this is slack and not a
     # ceiling raised to cover waste: the run that overran measured 866s of tests, and the local
     # full suite went 471s → 778s across the sprint.
-    timeout-minutes: 20
+    # **25 since 22 October 2026 (sprint 26 día 6), and again the number is a measurement.** The
+    # suite measured 866 s of tests when 20 was set; it measures ~950 s on a quiet machine and
+    # 17–20 min on these runners now, with the sprint 26 walks added. In two days the limit cancelled
+    # four green-looking runs — 20m18s, 20m19s, and both routes at once on the Next 16.4.2 bump —
+    # and the one that passed did so at 19m38s. A limit the suite grazes on every run measures the
+    # runner, not the suite; the five minutes are slack, and the day the suite itself is trimmed
+    # (the walks' own waits are its time, not the canvas — ADR 0051, día 6) the number comes down.
+    timeout-minutes: 25
     # Protocol Part 9.2: "El job `e2e` se limita a los pull request porque los minutos de
     # Actions son finitos y Playwright es lo más lento de todo." A push straight to main skips
     # it — every push that matters had a pull request first, which already ran this.
@@ -228,7 +235,8 @@ jobs:
   e2e-swap:
     name: e2e (swap)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # The same 25 as the job above, for the same measurement.
+    timeout-minutes: 25
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
