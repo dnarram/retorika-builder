@@ -1052,6 +1052,28 @@ open survives.
 
 ## No home but this one
 
+- **Three things sprint 26's patch route found in the editor, which belong to the editor and not
+  to the route** (22 October 2026, días 5 and 6; the record is ADR 0051's día 5 amendment).
+
+  **A mark pressed on text that has not been committed marks the document's text, not the typed
+  one.** The floating toolbar reads the selection from the DOM and writes the mark into the
+  document, and the document does not have the words being typed until the blur commits them. Under
+  `swap` the rebuild then threw the typed words away; under `patch` the mark patch rewrites the
+  focused text with the document's version. Both routes, since sprint 10; the mark walks never saw
+  it because they commit before marking. The fix is the toolbar's: commit first, then mark.
+
+  **`End` does not collapse the selection a mark patch puts back; an arrow does.** Observed on the
+  día 5 keystroke walk in Chromium; not chased. Whether it is the restored `Range`'s direction or
+  the key's handling is the first thing to measure.
+
+  **Escalating a section is two changes of the document about 200 ms apart** — the section turns
+  free, then its rows, measured on the live layout (ADR 0050 §3), are written — and a hand that
+  escalates and drags at once measures a box the second step moves. Under `swap` two slow rebuilds
+  hid it; under `patch` CI showed it (a drop 22 px high, a bottom-edge resize that never began).
+  The walks wait for the canvas to go quiet; the editor still has the gap. Whether escalation
+  should measure and write in one step is the question, and it is sprint 27's unless David pulls
+  it forward.
+
 - **Three visual ideas this sprint measured and turned down, so the next one does not re-propose
   them from scratch** (16 October 2026, sprint 22).
 

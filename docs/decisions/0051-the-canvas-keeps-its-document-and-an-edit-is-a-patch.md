@@ -530,3 +530,40 @@ after every escalation (`canvasQuiet`, 400 ms without the serial moving), which 
 eye does. **The race itself is the editor's, not the harness's**: a hand that escalates and drags
 within 200 ms meets it in either route, and whether the escalation should measure and write in one
 step is a question for día 6's list or the backlog, named here rather than closed.
+
+### Amendment — the two routes side by side, and the retirement list (día 6, 22 October 2026)
+
+**What dies today under both routes: nothing.** The plan expected little and the days left less:
+the refusals día 4 made unnecessary left with día 4, `pendingHistory` became `pendingCause`,
+`chromeKeyPatched` went with the chrome swap. What remains of `swap` runs under `swap` and nowhere
+else, and the plan's precision of 21 October — that `chromeKey` and the restoration blocks *are*
+the swap route and stay until the 27 — held, with one correction the days made: `keepWriting`,
+`keepChosenFocus`, `pendingReturn` and `focusTarget` are **not** swap-only; the settles read them
+under both routes, and `keepWriting` was día 4's third real defect.
+
+**The retirement list** is `docs/tasks/swap-route-retirement.md`: every symbol, its file and its
+line as of main after PR #288, what it does, and what 27 día 1 does with it — remove, keep, or
+decide by a measurement named there. `apps/editor/test/swapRetirement.test.ts` reads the list and
+fails when a symbol is gone from its file or has drifted more than 120 lines from the line it
+states, so the list is refreshed and not trusted. Its first run caught seven rows of the first
+draft that gave one line to several symbols.
+
+**The two routes, measured side by side.** Same machine, same walks, same afternoon; the swap
+numbers under `RETORIKA_CANVAS=swap`, the patch numbers under the default.
+
+| | `swap` | `patch` |
+|---|---|---|
+| Documents wired after a text edit | **1** | **0** |
+| Window between the new html and its wiring, in which a keystroke has nowhere to land | **4.6–5.9 ms** (día 1: 5.8 / 5.7) | **0 ms** — no new html, no new document |
+| Keystroke → the edit on the page | 10.1–10.5 ms (press → wire) | **6.0 ms** (press → patch); the patch itself 0.9 ms, the redraw 1.2 ms |
+| Two lines, up, duplicate, delete, undo (día 3) | one rebuilt document per verb | 6 structural patches, **1.3–2.4 ms** each, redraw **0.7–2 ms** (median 1.2) |
+| A change of palette | a new document, every `@font-face` declared anew | the page's sheet rewritten, the faces' untouched: **`loadingdone` 0**, requests 2 → 2 |
+| The bank's photographs after the first paint | a second document (día 1's baseline measured it) | an attribute patch, or already in the first paint: **one document** |
+| Thirty keystrokes at 5 ms while the text's own mark lands | the window swallows one (the day-1 measurement, by construction) | **30 of 30** |
+| The switch, escalate, return | three documents | one document: a redraw and two patches |
+| Frames in the editor, ever | up to 2 | **1** |
+| The full suite in CI | 17–20 min, cancelled at 20 twice in two days | 18–20 min (1 100 s with día 5's reds, 19 min 38 s green) |
+
+**What the table does not say.** The suite is not faster under `patch`: its time is the walks'
+own waits, not the canvas's. And the two-step escalation — free, then measured rows — is the same
+200 ms under both routes; `patch` only made it visible.
