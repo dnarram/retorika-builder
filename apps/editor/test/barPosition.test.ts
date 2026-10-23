@@ -260,6 +260,81 @@ describe("where the floating text bar goes", () => {
   });
 });
 
+/**
+ * **Where the bar goes when the canvas is scrolled** (sprint 27 día 3, ADR 0052 §4's own cause).
+ *
+ * The numbers are the defect's, measured in Chromium on 23 October 2026 at 1440 × 900: the cover's
+ * headline 204 pixels down its section, 52 tall, a 580 × 38 bar for it, the frame 1168 × 774 and
+ * scrolled 189 — which is what choosing another section first leaves behind, because choosing
+ * focuses and focus scrolls. Above the words is 158, inside the section and 31 pixels above the top
+ * of what is on screen, and a press there lands outside the frame: the words lose the focus, the
+ * deferred blur closes the bar, «B» marks nothing. The bar that dies, in arithmetic.
+ */
+const SCROLLED: ToolbarGeometry = {
+  elementTop: 204,
+  elementLeft: 48,
+  elementHeight: 52,
+  barWidth: 580,
+  barHeight: 38,
+  hostWidth: 1168,
+  view: { top: 189, height: 774 },
+};
+
+describe("the band of the section that is on screen", () => {
+  it("puts the bar below the words when above them is off the top of the frame", () => {
+    const { point, side } = toolbarPoint(SCROLLED);
+    expect(side).toBe("below");
+    expect(point.y).toBe(SCROLLED.elementTop + SCROLLED.elementHeight + TOOLBAR_GAP);
+    // On screen, which is the whole point: the band starts at 189 and is 774 tall.
+    expect(point.y).toBeGreaterThanOrEqual(SCROLLED.view?.top ?? 0);
+    expect(point.y + SCROLLED.barHeight).toBeLessThanOrEqual(
+      (SCROLLED.view?.top ?? 0) + (SCROLLED.view?.height ?? 0),
+    );
+  });
+
+  /** The same geometry with the band taken away — the answer this file gave until día 3, kept here
+   * so the difference the band makes is a number and not a story: 158, which is 31 above the edge. */
+  it("said «above» for that same text while it was only asked about the section", () => {
+    const { view: _band, ...blind } = SCROLLED;
+    const { point, side } = toolbarPoint(blind);
+    expect(side).toBe("above");
+    expect(point.y).toBe(158);
+    expect(point.y - (SCROLLED.view?.top ?? 0)).toBe(-31);
+  });
+
+  it("leaves a bar that fits exactly where it was", () => {
+    const roomy: ToolbarGeometry = { ...TEXT, view: { top: 0, height: 900 } };
+    expect(toolbarPoint(roomy)).toEqual(toolbarPoint(TEXT));
+  });
+
+  it("gives «below» when «above» is asked for and is off the band", () => {
+    expect(toolbarPoint(SCROLLED, "above").side).toBe("below");
+  });
+
+  /**
+   * A text taller than the frame: nothing above it is on screen and nothing below it is either. The
+   * side is reported as it was decided and the place is pinned to the band, because a bar nobody can
+   * reach is the one outcome worse than a bar in the way.
+   */
+  it("pins the bar inside the band when neither side is on screen", () => {
+    const tall: ToolbarGeometry = {
+      ...SCROLLED,
+      elementTop: 0,
+      elementHeight: 2_000,
+      view: { top: 400, height: 500 },
+    };
+    const { point } = toolbarPoint(tall);
+    expect(point.y).toBeGreaterThanOrEqual(400);
+    expect(point.y + tall.barHeight).toBeLessThanOrEqual(900);
+    expect(point.y).toBe(900 - tall.barHeight);
+  });
+
+  it("never asks for a place above the band, even when the band is taller than the bar is", () => {
+    const short: ToolbarGeometry = { ...SCROLLED, elementTop: 190, view: { top: 189, height: 20 } };
+    expect(toolbarPoint(short).point.y).toBe(189);
+  });
+});
+
 describe("remembering where a bar was put, as a displacement", () => {
   const BOUNDS: Bounds = { hostWidth: 1200, hostHeight: 600, barWidth: 400, barHeight: 44 };
 

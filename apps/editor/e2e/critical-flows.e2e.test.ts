@@ -19327,3 +19327,243 @@ describe("sprint 27 día 2 — el lienzo es una parada", () => {
     }
   }, 120_000);
 });
+
+/**
+ * **Sprint 27 día 3 — la barra que muere.** The sequence `docs/tasks/backlog.md` recorded on 15
+ * October 2026 and nobody fixed: a section chosen first, a text of **another** section written in,
+ * and a press on the bar — on `mousedown` the focus left the text for the body, the deferred blur
+ * closed the bar, and «B» applied nothing. Every other walk that drives this bar clicks the text
+ * first, which is why none of them saw it.
+ */
+describe("sprint 27 día 3 — la barra que muere", () => {
+  /** Who has the focus inside the frame, and whether it is still the text being written in. */
+  const holder = (page: Page) =>
+    page.evaluate(() => {
+      const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
+      const active = doc?.activeElement as HTMLElement | null | undefined;
+      return {
+        tag: active?.tagName ?? "none",
+        id: active?.dataset?.["id"] ?? null,
+        writing: active?.isContentEditable ?? false,
+      };
+    });
+
+  /**
+   * The bar's box against the frame's own visible area, in the frame's pixels — which is the
+   * question the defect turns on. A box the person cannot see is a box they cannot press, and
+   * Playwright's own `boundingBox` cannot answer it: it reports where the element is, scrolled
+   * into view or not.
+   */
+  const barOnScreen = (page: Page) =>
+    page.evaluate(() => {
+      const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
+      const win = doc?.defaultView;
+      const bar = doc?.querySelector(".rb-toolbar");
+      if (!doc || !win || !bar) return null;
+      const box = bar.getBoundingClientRect();
+      return {
+        top: Math.round(box.top),
+        bottom: Math.round(box.bottom),
+        left: Math.round(box.left),
+        right: Math.round(box.right),
+        viewHeight: win.innerHeight,
+        viewWidth: win.innerWidth,
+        scrollY: Math.round(win.scrollY),
+      };
+    });
+
+  it("tres clics: una sección, un texto de otra, y la barra se dibuja donde se puede pulsar", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    await probeOn(context);
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      await fontsReady(frame);
+
+      /*
+       * 1. A section — **not** the one the text is in — chosen with a click on its own box. This is
+       *    the step every other walk that drives this bar leaves out, and the one that breaks it:
+       *    choosing focuses the section, focus scrolls the canvas, and the cover's headline ends up
+       *    a few pixels under the frame's top edge with its whole section above it.
+       */
+      await frame.locator('[data-section="sec-services"]').click();
+      await expect(frame.locator('[data-section="sec-services"]')).toHaveClass(/rb-selected/);
+
+      // 2. The cover's headline, written in (ADR 0047's two clicks), with a word of it chosen.
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      await clickToEdit(frame, headline);
+      const word = (await headline.innerText()).trim().split(/\s+/)[0] ?? "";
+      expect(word.length, "the headline has no word to mark").toBeGreaterThan(0);
+      await selectWord(headline, word);
+      const B = frame.locator('.rb-toolbar-mark[data-mark="strong"]');
+      await expect(B).toBeVisible();
+      expect(await holder(page)).toMatchObject({ id: "el-headline", writing: true });
+
+      /**
+       * **The line that was red**: the bar inside the frame's visible area. Measured before the fix
+       * at 1440 × 900 — `scrollY` 189 and the bar's top at −31, thirty-one pixels above anything on
+       * screen, which is why the press below could not work. The bar is placed against the band
+       * that is on screen now (ADR 0052 §4's cause, `toolbarPoint`'s `view`).
+       */
+      const bar = await barOnScreen(page);
+      console.log(`[día 3] the bar, in the frame's pixels: ${JSON.stringify(bar)}`);
+      expect(bar, "no bar on screen").not.toBeNull();
+      if (!bar) return;
+      expect(bar.top, "the bar is drawn above the top of what is on screen").toBeGreaterThanOrEqual(
+        0,
+      );
+      expect(
+        bar.bottom,
+        "the bar is drawn below the bottom of what is on screen",
+      ).toBeLessThanOrEqual(bar.viewHeight);
+
+      /**
+       * **And pressed with the mouse where it actually is**, which is the gesture the defect was
+       * reported as. Not `locator.click()`: that scrolls the element into view first, so it moves
+       * the very thing being measured and passes over a bar nobody could have pressed.
+       */
+      const box = await B.boundingBox();
+      expect(box, "«B» has no box").not.toBeNull();
+      if (!box) return;
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.down();
+      // On the `mousedown`, because that is the event the bar cancels to keep the words: this used
+      // to be where the focus left for the body and the deferred blur closed the bar under the
+      // pointer.
+      expect(await holder(page), "the press took the focus off the words").toMatchObject({
+        id: "el-headline",
+        writing: true,
+      });
+      await page.mouse.up();
+
+      await expect(headline.locator("strong")).toHaveText(word);
+      expect(await holder(page), "the focus did not stay on the words").toMatchObject({
+        id: "el-headline",
+        writing: true,
+      });
+      await expect(frame.locator(".rb-toolbar"), "the bar closed under the pointer").toHaveCount(1);
+      // The mark went as the text's own act, so the patch applied it in place (rule 3's exception).
+      type Event = { kind: string; data: Record<string, unknown> };
+      const events = await page.evaluate(
+        () => ((window as unknown as { __rb?: Event[] }).__rb ?? []) as Event[],
+      );
+      expect(
+        events.some((e) => e.kind === "patch" && e.data["cause"] === "mark" && e.data["ok"]),
+        "the mark did not arrive as a patch with cause «mark»",
+      ).toBe(true);
+    } finally {
+      await context.close();
+    }
+  }, 120_000);
+
+  it("marca sin volcar: las palabras escritas quedan en negrita en el DOM con el foco dentro, y en el documento", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    await probeOn(context);
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      await fontsReady(frame);
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      await clickToEdit(frame, headline);
+
+      /*
+       * Written and **not committed** — no Enter, no click off the text, which is exactly what
+       * every mark walk in this file has done since sprint 10 and the reason none of them saw this.
+       * The document still says «Taberna Santo Domingo»; the DOM says what was typed.
+       */
+      await page.keyboard.type("Reserva hoy");
+      await expect(headline).toHaveText(/^\s*Reserva hoy\s*$/);
+      await page.keyboard.press("Home");
+      for (let i = 0; i < 7; i += 1) await page.keyboard.press("Shift+ArrowRight");
+
+      await frame.locator('.rb-toolbar-mark[data-mark="strong"]').click();
+
+      /**
+       * **The typed words survive the mark, in bold, with the focus still in them.** Before día 3
+       * the bar wrote the mark into a document that did not have these words, and the mark's own
+       * patch put the older text back over them: «Taberna Santo Domingo» in bold, and «Reserva
+       * hoy» gone. The commit now runs first (ADR 0052 §4), so one set of offsets names the same
+       * letters in the DOM and in the document.
+       */
+      await expect(headline.locator("strong")).toHaveText("Reserva");
+      await expect(headline).toHaveText(/^\s*Reserva hoy\s*$/);
+      expect(await holder(page), "the mark took the focus out of the text").toMatchObject({
+        id: "el-headline",
+        writing: true,
+      });
+
+      // And in the document: the canvas is drawn from it after every patch, the save says it is
+      // stored, and it is all still there once the writing ends.
+      await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+      await editHint(page).click();
+      await expect(headline).not.toHaveAttribute("contenteditable", "true");
+      await expect(headline.locator("strong")).toHaveText("Reserva");
+      await expect(headline).toHaveText(/^\s*Reserva hoy\s*$/);
+    } finally {
+      await context.close();
+    }
+  }, 120_000);
+
+  /**
+   * **`End` measured, and left failing on purpose** (día 3, the plan's «se corrige o se dice»).
+   *
+   * The backlog's row read «`End` does not collapse the selection a mark patch puts back; an arrow
+   * does», and asked whether it is the restored `Range`'s direction or the key's handling. Measured
+   * in Chromium on 23 October 2026, it is neither, and the row was wrong in both halves:
+   *
+   * - **The mark has nothing to do with it.** With no mark at all — a selection made with `Home`
+   *   and seven `Shift+ArrowRight` — the first `End` changes nothing and the second collapses to
+   *   the end of the line. Same with a selection set by script.
+   * - **No code of ours treats the key.** `preventDefault` is never called (read at capture, at
+   *   the bubble and at the frame's window), and nothing calls a single `Selection` method on the
+   *   press: `removeAllRanges`, `addRange`, `setBaseAndExtent`, `collapse`, `extend`, `modify` and
+   *   `empty` were all wrapped on the frame's own prototype and none of them ran. So nothing
+   *   restores the selection — the key's default action simply does not act the first time.
+   * - **It is not our wiring either.** A brand-new `<h1 contenteditable>` the editor has never
+   *   touched, appended to the same section, behaves identically; so does the real headline with
+   *   every stylesheet disabled, and with the section's `tabindex` and `role` removed.
+   * - **A bare editable collapses on the first press**, in the top document and inside an iframe —
+   *   until that iframe's document is tall enough to scroll, where the first `Home` is swallowed
+   *   too. What the canvas and that control share is a scrolling document inside a frame.
+   *
+   * Left as `it.fails` rather than fixed: the only fix from here is to take `Home` and `End` over
+   * ourselves inside the writing, which means our own line-box arithmetic for a key that works on
+   * the second press — a trade for David, not for a Tuesday. It turns red the day the first press
+   * starts landing, which is the signal this deserves.
+   */
+  it.fails("End pliega la selección a la primera pulsación", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      await fontsReady(frame);
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      await clickToEdit(frame, headline);
+      await page.keyboard.type("Reserva hoy");
+      await page.keyboard.press("Enter");
+      await expect(headline).toHaveText(/^\s*Reserva hoy\s*$/);
+      await headline.click();
+      await expect(headline).toHaveAttribute("contenteditable", "true");
+      await page.keyboard.press("Home");
+      for (let i = 0; i < 7; i += 1) await page.keyboard.press("Shift+ArrowRight");
+      const selection = () =>
+        page.evaluate(() => {
+          const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
+          const live = doc?.getSelection();
+          return { collapsed: live?.isCollapsed ?? null, text: live?.toString() ?? null };
+        });
+      expect(await selection()).toMatchObject({ collapsed: false, text: "Reserva" });
+      await page.keyboard.press("End");
+      // Red today: the first press changes nothing. The second one collapses to offset 11.
+      expect(await selection(), "the first End did not collapse the selection").toMatchObject({
+        collapsed: true,
+      });
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+});

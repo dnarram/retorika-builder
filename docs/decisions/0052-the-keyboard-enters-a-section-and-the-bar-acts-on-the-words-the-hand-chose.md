@@ -161,6 +161,38 @@ leans on it, so that what it breaks is seen on its own. Measured in Chromium, 14
 
 Walks rewritten for the model: **one** — the sprint 24 día 10 mouseless walk, which went backwards onto the section with `Shift+Tab` and now stands on it going forward, and whose two bounds of two hundred are the measured sixty. The other ten walks that press Tab passed unchanged, in the full suite. Walks added: three, under `sprint 27 día 2`, the first two red under the old model.
 
+## What is measured on día 3 (23 October 2026)
+
+Día 3 ships §4, and the cause of the bar that dies with it — which turned out to be the same
+sentence from the other side: a mark is useless if the bar cannot be pressed.
+
+| Measure | Before | Día 3 |
+|---|---|---|
+| the bar's top in the frame's own pixels, after a section was chosen and then a text of another section (1440 × 900, `scrollY` 189) | **−31**, thirty-one pixels above anything on screen | **75**, with its bottom at 113 inside a band 774 tall |
+| «B» pressed with the mouse where the bar actually is | the focus left the words for the body, the deferred blur closed the bar, no bold | the focus stays on the words, the bar stays, the word is bold |
+| a mark on text that was never committed | the mark's patch put the document's older text back over the typed words | the typed words stay, in bold, with the focus still in them |
+| presses of `End` before the restored selection collapses | 1 expected, 2 measured | 2 — **not fixed**, measured and left as a failing walk (below) |
+
+**The cause of the bar, which four days of notes had not named.** The bar's place was decided
+against the section it sits in — «above the words» meaning «above them inside the section» — and the
+canvas is a scrolling document inside an iframe. Choosing a section focuses it, focus scrolls, and
+the next text clicked can be a few pixels below the frame's top edge with its whole section above
+it: the place above it is then off the top of what is on screen. The press lands on the editor's own
+chrome *outside* the frame, the words lose the focus, and the deferred `focusout` closes the bar.
+`toolbarPoint` now takes the band of the section that is on screen and decides against that, falling
+to the visible edge when neither side fits. Nothing about the press itself was ever wrong, which is
+why the four things the backlog ruled out were all correctly ruled out.
+
+**`End` is measured and not fixed.** The backlog's framing was wrong in both halves: it is not the
+restored `Range`'s direction and it is not the mark. With no mark at all the first press changes
+nothing and the second collapses; no code of ours treats the key, nothing calls `preventDefault`,
+and nothing calls a single `Selection` method on the press; an element the editor never wired
+behaves the same, and so does the real one with every stylesheet off. A bare editable collapses on
+the first press until its document is tall enough to scroll. The only fix from here is to take
+`Home` and `End` over ourselves inside the writing, with our own line-box arithmetic, for a key that
+works on the second press — David's trade to make, and the walk is left failing so it turns red the
+day the first press lands.
+
 ## Consequences
 
 - **The canvas with the tools on is a short list again**, and the two mouseless walks say so with

@@ -1723,6 +1723,15 @@ export function Editor({
    * (history or its own mark) has its capture re-read from the document, or the next commit would
    * carry the marks from before. */
   const refreshWriting = useRef<(iframeDoc: Document) => void>(() => {});
+  /**
+   * **The commit, for the floating bar** (ADR 0052 §4, día 3): `wireEditing` registers it and
+   * `wireToolbar` calls it before writing a mark, so the words being typed are in the document
+   * before anything marks them. `unchanged` until a document is wired, which is the truth: there
+   * is no text being written in.
+   */
+  const commitWriting = useRef<
+    (el: HTMLElement) => "no-address" | "reverted" | "written" | "unchanged"
+  >(() => "unchanged");
   /** What `wireToolbar` registers for the redraw: the open bar drawn again from the document, with
    * its selection put back — what the wiring did on every rebuild (día 4). */
   const settleToolbar = useRef<(iframeDoc: Document) => void>(() => {});
@@ -3910,6 +3919,22 @@ export function Editor({
             es[`editor.toolbar.markTitleOf.${mark}` as keyof typeof es],
           );
           button.addEventListener("click", () => {
+            /**
+             * **The words are committed first** (ADR 0052 §4, día 3, David's adjustment 3).
+             *
+             * A mark is written into the document, and until this line the document did not have
+             * the words being typed: pressing «B» on them marked the text the document still
+             * remembered, and the mark's own patch then put that older text back over what had
+             * been written. Committing first makes the DOM and the document say the same thing,
+             * which is what lets `selectionRange`'s offsets name the same letters in both.
+             *
+             * **The mark turns on, rather than being asked of the document, when the words are
+             * new**: words that have just been committed did not carry the mark a moment ago,
+             * because they were not in the document to carry it. Where nothing was committed the
+             * document answers as it always did.
+             */
+            const fresh = el.isContentEditable ? commitWriting.current(el) : "unchanged";
+            if (fresh === "reverted" || fresh === "no-address") return;
             const range = selectionRange();
             if (!range) return;
             // Read at press time, never at draw time: between the two the person chose the words.
@@ -3920,7 +3945,9 @@ export function Editor({
               address,
               range,
               mark,
-              !rangeHasMark(marksFor(docNow.current, address), range, mark),
+              fresh === "written"
+                ? true
+                : !rangeHasMark(marksFor(docNow.current, address), range, mark),
             );
           });
           buttons.push({ mark, node: button });
@@ -4363,14 +4390,41 @@ export function Editor({
        * against the page instead of against its section — two mistakes cancelled and a walk on the
        * second section is what found it.
        */
-      const geometry = (): ToolbarGeometry => ({
-        elementTop: top,
-        elementLeft: left,
-        elementHeight: el.offsetHeight,
-        barWidth: bar.offsetWidth,
-        barHeight: bar.offsetHeight,
-        hostWidth: section.clientWidth,
-      });
+      /**
+       * **What of this section is on screen, in the section's own coordinates** (día 3).
+       *
+       * The bar used to be placed against the section alone, and «above the words» meant «above
+       * them inside the section», which is not the same as «where somebody can press it»: the
+       * canvas is a scrolling document inside an iframe. Choose a section — which focuses it, and
+       * focus scrolls — then click a text near the top of what is now on screen, and the place
+       * above it is off the top of the frame. Measured on 23 October 2026: `scrollY` 189, the bar
+       * drawn at −31, and a press there landing on the editor's chrome *outside* the frame, where
+       * it blurs the words, lets the deferred `focusout` close the bar and marks nothing. That is
+       * the defect of 15 October, and `toolbarPoint` needs the band to avoid it.
+       *
+       * Read on every `place()` rather than once: the bar is placed again after every patch, and
+       * the scroll is not the same then as it was when the bar opened.
+       */
+      const viewBand = (): { top: number; height: number } | undefined => {
+        const win = iframeDoc.defaultView;
+        if (!win) return undefined;
+        // The section's own offset in the page, from the box on screen plus the scroll — the same
+        // frame of reference `top` above is summed in, and the frame's own pixels throughout.
+        const sectionTop = section.getBoundingClientRect().top + win.scrollY;
+        return { top: win.scrollY - sectionTop, height: win.innerHeight };
+      };
+      const geometry = (): ToolbarGeometry => {
+        const view = viewBand();
+        return {
+          elementTop: top,
+          elementLeft: left,
+          elementHeight: el.offsetHeight,
+          barWidth: bar.offsetWidth,
+          barHeight: bar.offsetHeight,
+          hostWidth: section.clientWidth,
+          ...(view ? { view } : {}),
+        };
+      };
       const bounds = (): Bounds => ({
         hostWidth: section.clientWidth,
         hostHeight: section.clientHeight,
@@ -4883,17 +4937,37 @@ export function Editor({
       el.blur();
     });
 
-    // The commit, on leaving — and the attribute leaves with it, whichever way the edit ended.
-    delegate(iframeDoc, "focusout", TEXT, (el) => {
+    /**
+     * **The commit a blur does, available without the blur** (ADR 0052 §4, día 3, David's
+     * adjustment 3).
+     *
+     * It was the body of the `focusout` handler below and nothing else could reach it, which is
+     * the whole of the defect the backlog recorded on 22 October: **a mark pressed on text that
+     * has not been committed marks the document's text, not the typed one.** The bar reads the
+     * words from the DOM and writes the mark into the document, and the document does not have
+     * what is being typed until the writing ends — so under `patch` the mark's own patch rewrote
+     * the focused text with the document's older version and the typed words disappeared under
+     * the mark. The fix is the toolbar's and it is this: commit first, then mark, with the DOM and
+     * the document saying the same thing, so one set of offsets is good for both.
+     *
+     * **It stops short of `stopWriting`**, which is the one line that cannot be shared: the blur
+     * has already left the text and takes the attribute off, while a mark is pressed from inside
+     * the writing and must leave the caret exactly where it is.
+     *
+     * What it answers is what the caller needs to decide next: `written` means the words in the
+     * DOM have just become the document's, so a mark pressed on them is a mark on new words;
+     * `unchanged` means there was nothing to commit and the document's own marks still answer;
+     * `reverted` means an emptied link or button got its words back, and there is nothing to mark.
+     */
+    const commit = (el: HTMLElement): "no-address" | "reverted" | "written" | "unchanged" => {
       const address = addressOf(el);
-      if (!address) return;
+      if (!address) return "no-address";
       const state = stateOf(el);
       const next = textFrameOf(el.textContent ?? "").text;
       // A link or a button emptied would be an anchor with no words: refused, like the download.
       if (next === "" && (el.dataset["role"] === "link" || el.dataset["role"] === "button")) {
         el.textContent = state.original;
-        stopWriting(el);
-        return;
+        return "reverted";
       }
       /**
        * **Against what the document last said, not against what the person found** (ADR 0051 §2,
@@ -4922,9 +4996,21 @@ export function Editor({
           // (ADR 0050 día 6, David's adjustment 1).
           propsNow.current.onEditText(address, next, anchoredMarks, rowsFor(el));
         }
+        return "written";
       }
+      return "unchanged";
+    };
+
+    // The commit, on leaving — and the attribute leaves with it, whichever way the edit ended.
+    delegate(iframeDoc, "focusout", TEXT, (el) => {
+      if (commit(el) === "no-address") return;
       stopWriting(el);
     });
+
+    // What the floating bar calls before it marks (ADR 0052 §4): the capture every commit reads
+    // belongs to this wiring, so the commit stays here and the bar reaches it through the ref, the
+    // way the redraw reaches `settleToolbar` and a patch reaches `refreshWriting`.
+    commitWriting.current = commit;
 
     // **After a history or mark patch under the caret, the capture is re-read** (día 4): the
     // document's marks are not what `beginWriting` captured, and a commit built on the old capture
