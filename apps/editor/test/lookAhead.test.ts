@@ -6,26 +6,25 @@ import {
 } from "../src/editor/lookAhead.ts";
 
 /**
- * The look-ahead's decision, pinned where it was wrong (sprint 18 day 5): after wiring a live
- * document it must keep looking, because the document this `html` produced may not be the one it
- * just wired. Six probed failures said so; see `lookAhead.ts`.
+ * The look-ahead's decision, pinned where it was wrong (sprint 18 day 5): after wiring a document
+ * it must keep looking, because the document this html produced may not be the one it just wired.
+ * Six probed failures said so; see `lookAhead.ts`.
+ *
+ * The `promote` answer and the `pending` input left with the `swap` route on sprint 27 día 1. The
+ * last case below is kept even though a second document can no longer arrive under the patch route:
+ * it is the decision the six failures bought, and it costs one property read per frame.
  */
 const ready: LookAheadTick = {
   document: true,
   unwired: true,
   parsed: true,
   hasSection: true,
-  pending: false,
   withinDeadline: true,
 };
 
 describe("the canvas look-ahead, one tick at a time", () => {
   it("wires a parsed, unwired live document — and keeps looking", () => {
     expect(lookAheadStep(ready)).toBe("wire");
-  });
-
-  it("promotes a parsed, unwired buffered document, and stops: the swap restarts the walk", () => {
-    expect(lookAheadStep({ ...ready, pending: true })).toBe("promote");
   });
 
   it("waits while the document is missing, still loading, already wired, or has no section", () => {
@@ -35,10 +34,9 @@ describe("the canvas look-ahead, one tick at a time", () => {
     expect(lookAheadStep({ ...ready, hasSection: false })).toBe("wait");
   });
 
-  it("stops at the deadline whatever it sees, except a promotion", () => {
+  it("stops at the deadline whatever it sees", () => {
     expect(lookAheadStep({ ...ready, withinDeadline: false })).toBe("stop");
     expect(lookAheadStep({ ...ready, unwired: false, withinDeadline: false })).toBe("stop");
-    expect(lookAheadStep({ ...ready, pending: true, withinDeadline: false })).toBe("promote");
   });
 
   it("the sequence the probe recorded: wire the outgoing document, then the arriving one", () => {
@@ -46,8 +44,9 @@ describe("the canvas look-ahead, one tick at a time", () => {
     expect(lookAheadStep(ready)).toBe("wire");
     // Next ticks: the same document, now wired — wait, do not stop.
     expect(lookAheadStep({ ...ready, unwired: false })).toBe("wait");
-    // Then the second document replaces it, parsed and unwired — wired too. With «stop after
-    // wiring» this tick never ran, and the second document waited for `load`.
+    // Then a second document replaces it, parsed and unwired — wired too. With «stop after
+    // wiring» this tick never ran, and the second document waited for `load`. Kept as the record
+    // of the decision; under one document per session there is no second document to find.
     expect(lookAheadStep(ready)).toBe("wire");
   });
 

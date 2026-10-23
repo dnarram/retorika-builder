@@ -81,7 +81,6 @@ import {
 } from "../editor/barPosition.ts";
 import { holdFor } from "../editor/buildingScreen.ts";
 import { canvasLinkTarget } from "../editor/canvasLinks.ts";
-import { CANVAS_MODE_KEY, type CanvasMode, canvasModeFrom } from "../editor/canvasMode.ts";
 import { CHROME_SCALE, PILL_REST_BORDER, VERB_SCALE } from "../editor/chromeScale.ts";
 import { delegate } from "../editor/delegate.ts";
 import type { SwitchNotice } from "../editor/designTools.ts";
@@ -464,43 +463,6 @@ function linesFor(doc: RetorikaDocument, sectionId: string): ListLines | undefin
 
 /** From `Content-Disposition: attachment; filename="doc-taberna.zip"`. */
 /**
- * How long a buffered frame gets to load before the swap is given up on.
- *
- * The frame being prepared is invisible, so a slow one is not a slow preview — it is a preview
- * showing chrome that is one act out of date. Past this, the swap is abandoned and the live frame
- * is remounted the old way: one visible flicker, which is what the whole change exists to remove,
- * but in exchange for the chrome actually being right. Stale chrome is the worse failure — it is
- * the defect the remount was introduced to fix in the first place.
- */
-const BUFFER_DEADLINE_MS = 2_000;
-
-/**
- * Where the reading position is, named by a section rather than by a number of pixels.
- *
- * **A raw `scrollY` is only the same place if everything above it is the same height**, and across
- * a swap that is an assumption rather than a fact: the incoming frame carries chrome the outgoing
- * one did not. Today it happens to hold — `.rb-handmade` is `position: absolute`, so a section
- * becoming hand-designed adds no height to the flow — but it holds by a property of one stylesheet
- * rule, and anchoring costs twenty lines.
- *
- * Returns the first section whose bottom edge is still below the top of the viewport, with how far
- * into it the reading position falls.
- */
-function readingAnchor(
-  doc: Document,
-  scrollY: number,
-): { sectionId: string; within: number } | null {
-  for (const section of doc.querySelectorAll<HTMLElement>("[data-section]")) {
-    const top = section.getBoundingClientRect().top + scrollY;
-    if (top + section.offsetHeight > scrollY) {
-      const sectionId = section.dataset.section;
-      if (sectionId) return { sectionId, within: scrollY - top };
-    }
-  }
-  return null;
-}
-
-/**
  * The DOM point `chars` characters into an element's text — **the inverse of how every offset in
  * this file is measured.**
  *
@@ -537,9 +499,9 @@ function filenameFrom(response: Response, fallback: string): string {
  * button/link label the renderer marks with `data-id` becomes a native `contentEditable` region
  * directly inside the same-origin iframe — reached through `iframe.contentDocument`, no
  * postMessage needed. An edit commits on blur, reported up as `onEditText(address, text)`, which
- * `Variants` applies to the document it holds; the canvas then shows that new document — reloading
- * the iframe under `swap`, patching it in place under `patch` (ADR 0051) —
- * which is why nothing is written mid-keystroke — only once the user leaves the field.
+ * `Variants` applies to the document it holds; the canvas then shows that new document by patching
+ * the page in place (ADR 0051) — which is why nothing is written mid-keystroke, only once the user
+ * leaves the field.
  *
  * **An edit names the section as well as the element** (day 2). Element ids are unique only
  * within a section, so a bare id stops identifying anything the moment a section can be
@@ -839,17 +801,17 @@ export function Editor({
     isPhoneViewport() ? "mobile" : "desktop",
   );
   /**
-   * **Two slots, and neither ever moves.** An `<iframe>` reloads when its node is removed from the
-   * document and re-inserted, and React's keyed reconciliation implements a reorder as exactly
-   * that — so a single list of frames would reload the surviving one at every swap, which is the
-   * blank frame this whole change exists to remove. Two fixed JSX positions cannot reorder: a slot
-   * is emptied or filled, and the other one is untouched.
+   * **One frame, and its document outlives every edit** (ADR 0051; `swap` retired on sprint 27
+   * día 1). It is mounted once, given the first document's html as `srcDoc`, and from then on the
+   * page inside it is only ever patched — so the node is never removed, never re-inserted and
+   * never reloaded. There was a second slot here until the 27, and the pair of them existed so a
+   * rebuild could happen out of sight; with nothing to rebuild, the buffer, its key, its deadline
+   * and the promotion went with the route.
    */
-  const frameA = useRef<HTMLIFrameElement>(null);
-  const frameB = useRef<HTMLIFrameElement>(null);
+  const frame = useRef<HTMLIFrameElement>(null);
   /**
-   * Which element the floating toolbar is on, across what every edit does to the canvas: under
-   * `swap` a frame reload, under `patch` a patch and the redraw that reopens the bar (`settleToolbar`).
+   * Which element the floating toolbar is on, across what every edit does to the canvas: a patch
+   * and the redraw that reopens the bar (`settleToolbar`).
    *
    * A ref and not state, for the same reason `fileInputRef` below is: nothing on the React side
    * renders from it, and making it state would re-render the whole editor on every focus. It is
@@ -858,25 +820,27 @@ export function Editor({
    */
   const toolbarOn = useRef<ElementAddress | null>(null);
   /**
-   * Which text is **chosen** in the canvas, across what every edit does to the canvas — a frame
-   * reload under `swap`, a patch under `patch` (ADR 0047, sprint 24 día 7; ADR 0051).
+   * Which text is **chosen** in the canvas, across what every edit does to it — a patch
+   * (ADR 0047, sprint 24 día 7; ADR 0051).
    *
    * A ref for the reason `toolbarOn` above is one: nothing on the React side renders from it, and
    * it belongs to the person looking rather than to the site. It is also what makes «Esc stops
-   * writing and leaves the text chosen» survive what a commit does: under `swap` the element in the
-   * new document is a different node with the same address; under `patch` it is the same node, and
-   * `settleEditing` marks it again from this ref after every patch.
+   * writing and leaves the text chosen» survive what a commit does: the element is the same node
+   * across the patch, and `settleEditing` marks it again from this ref after every one. Under
+   * `swap` it was a different node in a new document with the same address, which is why the
+   * address and not the node is what this holds.
    */
   const chosenText = useRef<ElementAddress | null>(null);
   /**
    * What the editor says out loud about a move, **in its own document** (ADR 0049).
    *
-   * **The region does not live inside the canvas**, which is David's correction and, under `swap`,
-   * a defect it would have shipped: every arrow is an edit, every edit replaces the frame's whole
-   * `srcDoc`, so a region in there would be a freshly created one on every move — and a screen reader
-   * does not announce the contents of a region that has just appeared. Under `patch` the frame's
-   * document survives every edit and a region in it would too; it stays here on purpose, one region
-   * for both routes (ADR 0051's amendment to ADR 0049 §3).
+   * **The region does not live inside the canvas**, which is David's correction and, under the old
+   * route, a defect it would have shipped: every arrow is an edit, every edit replaced the frame's
+   * whole `srcDoc`, so a region in there would have been a freshly created one on every move — and
+   * a screen reader does not announce the contents of a region that has just appeared. The frame's
+   * document now survives every edit and a region in it would too. **It stays here on purpose**,
+   * and the reason has changed rather than gone: it is the editor speaking, not the page, and the
+   * page is what gets published (ADR 0051's amendment to ADR 0049 §3).
    */
   const [announcement, setAnnouncement] = useState("");
   /**
@@ -888,8 +852,8 @@ export function Editor({
    */
   const announcements = useRef(0);
   /**
-   * Whether the chosen element should have the keyboard back after this edit — after the rebuild
-   * under `swap`, after the patch under `patch` (`settleDragging` reads it from the redraw).
+   * Whether the chosen element should have the keyboard back after this edit — after the patch,
+   * read by `settleDragging` from the redraw.
    *
    * **Only a keyboard move asks for it**, which is the whole reason it is a flag rather than a rule:
    * the restoration deliberately does not focus anything, because an edit made by pressing a swatch
@@ -899,14 +863,14 @@ export function Editor({
    */
   const keepChosenFocus = useRef(false);
   /**
-   * Which text should be **written in** again after this edit, if any — after the rebuild under
-   * `swap`, after the patch under `patch` (`settleWriting` reads it from the redraw; día 4).
+   * Which text should be **written in** again after this edit, if any — after the patch
+   * (`settleWriting` reads it from the redraw; sprint 26 día 4).
    *
    * `keepChosenFocus` above restores the outline and the keyboard; this restores the state, and it
    * exists for one gesture: stretching a text's box by its edge while writing in it (ADR 0050, día
-   * 4). The placement is an edit like any other, so the frame is replaced and the fresh element has
-   * no `contenteditable` — a person who pulled an edge would be left with a box the right size and
-   * no caret in it. The commit happens first (`el.blur()`), so nothing typed is lost.
+   * 4). The placement is an edit like any other and the commit happens first (`el.blur()`), so the
+   * element comes out of it chosen rather than being written in — a person who pulled an edge would
+   * be left with a box the right size and no caret in it. Nothing typed is lost either way.
    */
   const keepWriting = useRef<ElementAddress | null>(null);
   /** `wireSelection`'s settling tail, callable after a structural patch (día 3). */
@@ -919,16 +883,16 @@ export function Editor({
    * scope. Empty until the chrome has been wired, and for any document whose design tools were off:
    * a section with no placements has nothing to stretch.
    *
-   * **Keyed by document, which is the whole correction CI forced.** A single slot held «the painter
-   * of whatever was wired last», and this editor has two live documents whenever an edit is in
-   * flight: the one on screen and the buffered one being built (see the `<iframe>` note). Choosing
-   * in the visible frame then repainted the handles **into the buffered one**, so the element the
-   * hand had just chosen showed none, with nothing to put them back until the next choice. On this
-   * machine the swap had always finished first; on CI it had not. The map answers «the painter of
-   * *this* document», which is the only question with one right answer. A `WeakMap` so a document
-   * that has been thrown away takes its painter with it.
+   * **One slot again, because there is one document** (sprint 27 día 1). This was a
+   * `WeakMap<Document, …>` for as long as the editor had two live documents whenever an edit was in
+   * flight — the one on screen and the buffered one being built — and a single slot held «the
+   * painter of whatever was wired last», so choosing in the visible frame repainted the handles
+   * into the buffered one and the element the hand had just chosen showed none. On this machine the
+   * swap had always finished first; on CI it had not. With `swap` retired the two documents cannot
+   * exist, so the question the map answered has one answer and a ref is it. The correction is kept
+   * written down because the defect was invisible locally.
    */
-  const handlePainters = useRef(new WeakMap<Document, () => void>());
+  const handlePainter = useRef<(() => void) | null>(null);
   /**
    * Which device view is on **right now**, for the listeners that outlive the render that wired them.
    *
@@ -945,8 +909,8 @@ export function Editor({
    *
    * The handlers the canvas wires used to capture `doc`, `designTools` and every callback at
    * wiring time, and that was correct only because each edit threw the document away and wired
-   * the next one with the next render's values. Under `patch` the document — and its listeners —
-   * outlive every edit, so a captured `doc` is the document from before the edit, and a captured
+   * the next one with the next render's values. The document — and its listeners — now outlive
+   * every edit, so a captured `doc` is the document from before the edit, and a captured
    * `onDeleteSection` closes over a history that has since moved. `deviceNow` above is the
    * precedent: the device switch never rebuilt the document either. `closureGuard.test.ts` holds
    * the wiring to these — no bare `doc`, no bare prop — because one read missed is a handler
@@ -1005,22 +969,6 @@ export function Editor({
     onUnbindList,
   };
 
-  /**
-   * **Which route shows an edit** (ADR 0051 §6, sprint 26 día 2): `swap` rebuilds the frame as it
-   * has since sprint 15; `patch` keeps one document and patches it. Read once, at mount, from the
-   * key David's adjustment 6 named, because a document wired for one route cannot change route
-   * halfway. `patch` by default since día 5, `swap` under the key. Storage can throw (a private window), and a throw
-   * means the default.
-   */
-  const canvasMode = useRef<CanvasMode>(
-    (() => {
-      try {
-        return canvasModeFrom(window.localStorage.getItem(CANVAS_MODE_KEY));
-      } catch {
-        return canvasModeFrom(null);
-      }
-    })(),
-  );
   /** Undo and redo, marked as such for the patch that follows (adjustment 2): the one change that
    * is applied to the text being written in, caret kept. */
   const undoFromHistory = () => {
@@ -1180,11 +1128,11 @@ export function Editor({
    * Which section is selected, and whether its composition menu is open — remembered across the
    * preview's re-renders, which is what makes trying compositions usable at all.
    *
-   * Under `swap` every action replaces the iframe's whole `srcDoc`, so the selection outline, the
-   * handles and the action cluster are all destroyed and rebuilt on each one; under `patch` the
-   * document stays and `redrawChrome` draws the selection again from this ref after every patch
-   * (día 3) — the ref is what both routes read. Under `swap` that used to cost
-   * one click to get back, which nobody noticed because you rarely delete the same section twice.
+   * The document stays and `redrawChrome` draws the selection again from this ref after every
+   * patch (sprint 26 día 3). Under the old route every action replaced the iframe's whole `srcDoc`,
+   * so the outline, the handles and the action cluster were destroyed and rebuilt on each one, and
+   * without this ref that cost one click to get back — which nobody noticed, because you rarely
+   * delete the same section twice.
    * Composition is the first action anyone will repeat deliberately — the whole point is to look at
    * two and keep one — and re-selecting between each try would be a click and a hunt every time.
    *
@@ -1200,10 +1148,10 @@ export function Editor({
    * make the document re-serialise for a thing that is not part of it (`INV_4`), would travel in
    * the ZIP, and would put a toolbar nudge in the undo history beside the owner's own words. David
    * asked for «por sección, mientras editas», which is exactly this: a ref, keyed by section id,
-   * reapplied by `select()` after every rebuild (`swap`) or redraw (`patch`), gone on reload.
+   * reapplied by `select()` after every redraw, gone on reload.
    *
    * A ref and not state for the reason the rest of `wireSelection` is one: it has to survive what
-   * an edit does to the frame — replacing it under `swap`, redrawing its chrome under `patch`.
+   * an edit does to the frame, which is redrawing its chrome over a patched page.
    *
    * Stored **unclamped**. The clamping happens when it is applied, so a bar placed far right on a
    * wide editor comes back to exactly that place after a trip through the mobile view, where it
@@ -1225,11 +1173,11 @@ export function Editor({
    * The verb that was just pressed, kept so the keyboard can be put back once the document it was
    * pressed in has been replaced (sprint 17 day 4).
    *
-   * Four of the section's verbs change the page's sections — a rebuild under `swap`, a structural
-   * patch under `patch` — and two of those take the section with it, so
-   * «put focus back» cannot mean «back on that element»: the element is gone, along with the
-   * document it lived in. What survives is a name — the section's id, the index it held, and which
-   * verb — and `placeAfterRebuild` turns the first two into a place.
+   * Four of the section's verbs change the page's sections — a structural patch — and two of those
+   * take the section with it, so «put focus back» cannot mean «back on that element»: the element
+   * is gone. What survives is a name — the section's id, the index it held, and which verb — and
+   * `placeAfterRebuild` turns the first two into a place. Under `swap` the document it lived in was
+   * gone too, which is how this came to be a name rather than a node.
    */
   const pendingReturn = useRef<{
     /** `null` for «there is no id to follow» — an insertion, where the section did not exist yet
@@ -1243,23 +1191,22 @@ export function Editor({
    * What the canvas should focus as soon as it is allowed to, and **«allowed to» is the whole
    * reason this is a ref and not a line of code.**
    *
-   * **Under `swap`, a verb that changes how many sections a page has produces two documents, and the
-   * first one is thrown away.** (Under `patch` the same verb is one structural patch on the one
-   * document, and `settleSelection` runs from the redraw — día 3.) It changes `html`, so the live
-   * frame's `srcDoc` is replaced and that document is
-   * wired; and it changes `chromeKey` — which is one character per section — so a buffered swap also
-   * opens, parses a *second* document in the other frame, wires that, and promotes it. A move
-   * changes neither count nor any section's `source`, so it never swaps, which is why moving worked
-   * and duplicate, delete and «convertir en página» did not.
+   * A verb that changes how many sections a page has is one structural patch on the one document,
+   * and `settleSelection` runs from the redraw (sprint 26 día 3). So the thing to focus exists by
+   * the time anything looks for it, and this ref is what carries the asking across the patch.
+   *
+   * **Under `swap` it produced two documents and threw the first away**, which is the history this
+   * ref was shaped by and worth keeping: the verb changed `html`, so the live frame's `srcDoc` was
+   * replaced and that document wired; and it changed `chromeKey` — one character per section — so a
+   * buffered swap also opened, parsed a *second* document in the other frame, wired that, and
+   * promoted it. A move changed neither the count nor any section's `source`, so it never swapped,
+   * which is why moving worked and duplicate, delete and «convertir en página» did not.
    *
    * Instrumented rather than reasoned about, because the first explanation was wrong: the log
    * showed focus **landing** on the right button (`took=true`, and the frame was not `inert`), then
    * a second wiring with nothing pending, then focus on the body. The intent was being spent on the
-   * document that was about to be discarded.
-   *
-   * So the intent outlives a single wiring. `takeCanvasFocus` re-applies it on every document it is
-   * given and **clears it only when the document it landed in is the live one** — which the swap's
-   * incoming frame is not until after the commit, where the swap effect applies it once more.
+   * document that was about to be discarded. So the intent outlives a single wiring, and
+   * `takeCanvasFocus` re-applies it on every document it is given.
    */
   const focusTarget = useRef<{ sectionId: string; within?: string } | null>(null);
 
@@ -1298,30 +1245,26 @@ export function Editor({
     const target = again && !again.disabled ? again : section;
     target.focus();
     /*
-     * **Spent only once the document it landed in is going to stay.**
+     * **Spent as soon as it lands, because the document it landed in is the only one there is.**
      *
-     * «The live frame's document» is not that test, and the measurement is the reason. During the
-     * duplicate the log read `isLive=true buffered=1 frames=2`: the live frame's own `srcDoc` had
-     * already been replaced *and* a swap was in flight, so the document focus landed in was the
-     * live one and was discarded moments later anyway. Clearing there spent the intent on a corpse,
-     * which is how focus reached the body.
+     * This used to ask «and is the document going to stay», and it had to: under `swap` the log
+     * read `isLive=true buffered=1 frames=2` during a duplicate — the live frame's own `srcDoc`
+     * had already been replaced *and* a swap was in flight — so the document focus landed in was
+     * discarded moments later and the intent had been spent on a corpse, which is how focus
+     * reached the body. The test was «no frame is buffered», asked of the DOM rather than of the
+     * buffer state, because this runs inside a closure that can be a render behind.
      *
-     * So the condition is «no swap in flight», asked of the DOM rather than of `buffer`: this runs
-     * inside a closure that can be a render behind, and the buffered frame's presence is the same
-     * fact without the staleness. It reaches zero in the commit's own render, which is why the swap
-     * effect is where the intent is finally spent.
+     * With one document per session (ADR 0051 §1) the question has one answer, so landing is the
+     * whole condition. `onLive` is kept in the record because it is still the thing that would be
+     * false if this were ever handed a document that is not the canvas's.
      */
-    const settled =
-      doc === liveFrame()?.contentDocument &&
-      document.querySelectorAll("iframe[data-buffered]").length === 0;
+    const settled = doc === liveFrame()?.contentDocument;
     record("focus", {
       want: want.sectionId,
       within: want.within ?? null,
       serial: serialOf(doc),
-      onLive: doc === liveFrame()?.contentDocument,
-      buffered: document.querySelectorAll("iframe[data-buffered]").length,
+      onLive: settled,
       landed: doc.activeElement === target,
-      settled,
     });
     if (settled && doc.activeElement === target) focusTarget.current = null;
   }
@@ -1466,7 +1409,17 @@ export function Editor({
   const previewEntryIdNow = useRef(previewEntryId);
   previewEntryIdNow.current = previewEntryId;
 
-  const html = useMemo(() => {
+  /**
+   * **The bytes of the first paint, and they are the published ones.**
+   *
+   * Computed once, at mount, and never again: the frame's `srcDoc` is set from this and the
+   * document inside it is patched from then on (ADR 0051 §1). It was a `useMemo` over
+   * `[doc, photoUrls, pageId, previewEntryId]` while `swap` lived, because that route re-set
+   * `srcDoc` on every change — the rebuild. Nothing re-reads it now, so a memo would be a
+   * recomputation nobody collects; `useState`'s initialiser runs once and that is the whole
+   * requirement.
+   */
+  const [initialHtml] = useState(() => {
     // `entryHints` (ADR 0033 §10): each card drawn from a collection entry says which entry it is.
     // **Only here.** The document cannot supply it — a binding carries no entry id and every card
     // shares the template's `data-id` — and a published page must never carry it, which is why the
@@ -1482,505 +1435,110 @@ export function Editor({
     // instead — invisible for as long as a generated site's only image was the placeholder, and a
     // broken image on all three cards the moment the generator started asking the bank.
     return render(withPhotoUrls(doc, photoUrls), "html", options).html;
-  }, [doc, photoUrls, pageId, previewEntryId]);
+  });
 
   /**
-   * **What the frame is given, by route.** Under `swap` it is `html`, every time it changes, which
-   * is the rebuild. Under `patch` it is the html of the first document and then **never `html`
-   * again** — React re-sets `srcDoc` on any change and the frame reloads — except when a patch is
-   * refused, which is the old route taking one edit: the frame gets the current html *and a new
-   * key*, so it reloads even when the string happens to repeat. The patch itself runs in the
-   * effect below; the chrome swap keyed on `chromeKey` keeps working for both routes because it
-   * reads `frameHtml` too.
+   * The one frame, and the one document in it.
+   *
+   * `liveFrame` is the name every call site has used since sprint 15, when there were two slots and
+   * the question «which one is on screen» had an answer that changed. It is kept because the answer
+   * is now always the same and 19 call sites asking it is not a reason to rename anything.
    */
-  const initialHtml = useRef(html);
-  const [fallback, setFallback] = useState<{ html: string; serial: number } | null>(null);
-  const frameHtml = canvasMode.current === "swap" ? html : (fallback?.html ?? initialHtml.current);
-  const frameSerial = canvasMode.current === "swap" ? 0 : (fallback?.serial ?? 0);
-
-  /**
-   * What the canvas's chrome depends on but the rendered page does not — see the long note at the
-   * `<iframe>`. Kept as a string so React's own `key` comparison does the work, and derived rather
-   * than tracked, so no new action has to remember to bump it.
-   */
-  const [canvasBackground, setCanvasBackground] = useState<string | null>(null);
-
-  /**
-   * **By the ids of the hand-designed sections, not by position** (sprint 26 día 3). The first
-   * form was one bit per section in page order, so a section inserted, duplicated, deleted or
-   * undone changed the key — a chrome swap, and under `patch` a refused patch and a rebuilt
-   * document, for an edit that changed no section's source. Named by id, the key moves only when a
-   * section is escalated or returned (día 4 turns those into a patch too), or when the tools are
-   * toggled; and a duplicate of a hand-designed section is a new id, which is a new bar to draw.
-   */
-  const chromeKey = useMemo(
-    () =>
-      `${designTools}|${doc.pages
-        .flatMap((page) => page.sections)
-        .filter((section) => section.source === "free")
-        .map((section) => section.id)
-        .sort()
-        .join(",")}`,
-    [designTools, doc],
-  );
-
-  /**
-   * Which slot is on screen, and which is being prepared behind it.
-   *
-   * **The swap, instead of the flicker.** `chromeKey` still decides when the chrome has to be
-   * re-attached and still does it by putting a new `Document` in a frame — so `wiredDoc`'s identity
-   * guard, and the «attaches the chrome exactly once» guarantee that rests on it, are untouched.
-   * What changes is that the new document is loaded and wired in a frame nobody can see, and the
-   * frame already on screen keeps painting until it is ready. There is no moment with no page in it,
-   * so there is nothing for a fade to cover.
-   *
-   * **One pending slot, which is why «never two» needs no bookkeeping.** `pendingKey` is one
-   * string. Turning the tools on and straight back off overwrites it, React unmounts the frame
-   * whose key is gone and mounts one for the new key, and the live frame has not moved throughout.
-   * And a key that comes back to the one already live cancels the swap outright: nothing needs
-   * re-attaching, because the live frame is already wired for it.
-   */
-  const [buffer, setBuffer] = useState<{
-    live: 0 | 1;
-    liveKey: string;
-    pendingKey: string | null;
-  }>(() => ({ live: 0, liveKey: chromeKey, pendingKey: null }));
-
-  const pendingSlot: 0 | 1 = buffer.live === 0 ? 1 : 0;
-
-  /**
-   * Where the person is reading, so **nothing they do sends them back to the top**.
-   *
-   * Reported by direction on 6 October 2026: deleting an element from a section showed the start of
-   * the page, «le obliga a hacer scroll down para volver al área que estaba editando». Measured at
-   * 500 → 0.
-   *
-   * **A swap and an edit are not the same act, and that is why the buffered swap did not fix this.**
-   * A swap has two frames, so the position can be copied from one to the other. An edit changes
-   * `srcDoc` on the live frame and the browser replaces the document underneath it — there is no
-   * outgoing frame to read. So the position is not read at replacement time, it is **kept as it
-   * happens**: the frame's own `scroll` tells us, and the record survives the document that
-   * produced it.
-   *
-   * Two records rather than one, for cost. `readingRaw` is numbers only and reads no layout, so it
-   * can run on every event of a smooth scroll for nothing. `readingAnchorAt` names the section at
-   * the top of the viewport, which costs a layout flush per section, so it is taken once a frame at
-   * most. **Editing happens at rest**, so by the time anything is committed the anchor has caught
-   * up; the equality check at restore is what makes a stale one fall back to the number instead of
-   * trusting it.
-   */
-  const readingRaw = useRef<{ pageId: string | undefined; x: number; y: number } | null>(null);
-  const readingAnchorAt = useRef<{
-    pageId: string | undefined;
-    y: number;
-    sectionId: string;
-    within: number;
-  } | null>(null);
-
-  /**
-   * What the last restore aimed at, kept apart from the two records above **because the restore
-   * scrolls, and scrolling is recorded**. Without a separate slot, applying a position would
-   * immediately overwrite the position being applied, and the second pass below would have nothing
-   * left to re-anchor from.
-   */
-  const restoreTarget = useRef<{
-    pageId: string | undefined;
-    x: number;
-    sectionId: string | null;
-    within: number;
-    y: number;
-  } | null>(null);
-  const restoredTo = useRef<number | null>(null);
-
-  /** The page on screen, resolved the way the renderer resolves it: absent means the first one. */
-  function shownPageId(): string | undefined {
-    return pageId ?? doc.pages[0]?.id;
-  }
-
-  function wireReadingPosition(iframeDoc: Document) {
-    const win = iframeDoc.defaultView;
-    if (!win) return;
-    let takingAnchor = false;
-    iframeDoc.addEventListener("scroll", () => {
-      readingRaw.current = { pageId: shownPageId(), x: win.scrollX, y: win.scrollY };
-      if (takingAnchor) return;
-      takingAnchor = true;
-      win.requestAnimationFrame(() => {
-        takingAnchor = false;
-        const y = win.scrollY;
-        const anchor = readingAnchor(iframeDoc, y);
-        readingAnchorAt.current = anchor
-          ? { pageId: shownPageId(), y, sectionId: anchor.sectionId, within: anchor.within }
-          : null;
-      });
-    });
-  }
-
-  /**
-   * Put the person back where they were reading, in a document that has just arrived.
-   *
-   * **Anchored on a section rather than on the offset, because an edit changes heights.** Deleting
-   * an element makes its section shorter and everything below it moves up, so the same number is a
-   * different place. Naming the section at the top of the viewport survives that; the number is the
-   * fallback for when there is no section to name — an empty page, or the very delete that removed
-   * the one being read.
-   *
-   * **A different page of the site starts where a new page starts: at the top.** Carrying an offset
-   * across a page change would drop somebody into the middle of a page they have not seen.
-   */
-  function restoreReadingPosition(frame: HTMLIFrameElement) {
-    const raw = readingRaw.current;
-    const win = frame.contentWindow;
-    const iframeDoc = frame.contentDocument;
-    if (!raw || !win || !iframeDoc) return;
-    if (raw.pageId !== shownPageId()) return;
-    const anchor = readingAnchorAt.current;
-    const fresh = anchor !== null && anchor.pageId === raw.pageId && anchor.y === raw.y;
-    restoreTarget.current = {
-      pageId: raw.pageId,
-      x: raw.x,
-      y: raw.y,
-      sectionId: fresh && anchor ? anchor.sectionId : null,
-      within: fresh && anchor ? anchor.within : 0,
-    };
-    applyRestoreTarget(frame);
-  }
-
-  function applyRestoreTarget(frame: HTMLIFrameElement) {
-    const want = restoreTarget.current;
-    const win = frame.contentWindow;
-    const iframeDoc = frame.contentDocument;
-    if (!want || !win || !iframeDoc) return;
-    const landing = want.sectionId
-      ? [...iframeDoc.querySelectorAll<HTMLElement>("[data-section]")].find(
-          (section) => section.dataset.section === want.sectionId,
-        )
-      : undefined;
-    const y = landing
-      ? Math.max(0, landing.getBoundingClientRect().top + win.scrollY + want.within)
-      : want.y;
-    win.scrollTo(want.x, y);
-    // What the browser actually settled on, which is not always what was asked for: a page shorter
-    // than the offset clamps.
-    restoredTo.current = Math.round(win.scrollY);
-  }
-
-  /**
-   * A second pass once the pictures have arrived, and it is needed because **the renderer gives an
-   * `<img>` no dimensions** — `width: 100%; height: auto` and nothing else, so a section's height
-   * is not known until its photograph loads. The first restore runs as soon as the document is
-   * parsed, which is what keeps the first paint in the right place; a picture above the fold
-   * arriving afterwards then pushes everything down under a fixed offset.
-   *
-   * **Only if nothing has moved since.** A picture loading changes what sits at an offset without
-   * changing the offset, so the number still matching means the person has not scrolled and the
-   * view wants re-anchoring. If it has changed, they have taken over and are left alone.
-   */
-  function settleReadingPosition(frame: HTMLIFrameElement) {
-    const win = frame.contentWindow;
-    if (!win || restoredTo.current === null) return;
-    if (Math.round(win.scrollY) !== restoredTo.current) return;
-    applyRestoreTarget(frame);
-  }
-
-  /**
-   * Whether a swap has ever happened, and it decides one thing: the fade.
-   *
-   * `ui-fade-in` is a keyframe animation, so it runs **whenever the class arrives**, not only when
-   * the element mounts — which means handing it to the frame being promoted would fade the page in
-   * at every swap and put back exactly the flicker this removes. It is wanted on the very first
-   * load, which has no previous frame to carry and does briefly show the surface colour.
-   *
-   * A ref rather than state, and read during the render: the answer only ever goes from false to
-   * true, so there is nothing for a re-render to discover. Keying it on `canvasBackground` was the
-   * obvious move and was wrong — that is set at wiring time, a few milliseconds in, so it cut the
-   * first fade off almost as soon as it started.
-   */
-  const everSwapped = useRef(false);
-
-  function slotFrame(slot: 0 | 1): HTMLIFrameElement | null {
-    return (slot === 0 ? frameA : frameB).current;
-  }
-
   function liveFrame(): HTMLIFrameElement | null {
-    return slotFrame(buffer.live);
+    return frame.current;
   }
 
   function liveDoc(): Document | null | undefined {
     return liveFrame()?.contentDocument;
   }
 
-  /** What a slot is for right now, or `null` when it is empty. */
-  function slotRole(slot: 0 | 1): { key: string; live: boolean } | null {
-    if (buffer.live === slot) return { key: buffer.liveKey, live: true };
-    if (buffer.pendingKey === null) return null;
-    return { key: buffer.pendingKey, live: false };
-  }
-
   /**
-   * One slot's frame. Both are absolutely positioned and fill the same box, so the page inside the
-   * frame being prepared lays out at exactly the width it will be shown at — a buffered frame of a
-   * different width would reflow at the reveal, which is the jump this replaces rather than a swap.
+   * The canvas: one `<iframe>`, mounted once, never keyed, never reloaded.
    *
-   * **`inert` on the buffered one, not merely `opacity: 0`.** It covers the live frame for as long
-   * as it is loading, and an invisible frame that still took a click would swallow it into a
-   * document nobody can see: the click would land, edit something, and appear to do nothing.
-   * `aria-hidden` keeps it out of the accessibility tree, `tabIndex={-1}` out of the tab order, and
-   * `inert` refuses focus and interaction — `pointer-events: none` is beside it because that is the
-   * one the browser's hit test consults, so the click reaches the live frame underneath rather than
-   * merely being dropped.
+   * `srcDoc` is the first document's html and **nothing re-sets it** (ADR 0051 §1), so the
+   * `Document` inside it is the one the whole session edits and every change reaches it as a patch.
+   * `wireOnce` attaches the chrome as soon as the page is parsed, which the look-ahead reaches long
+   * before `load` — `load` waits out the font requests, and that wait was a window in which the
+   * whole preview was visible and completely inert. `onLoad` stays as the backstop.
+   *
+   * **What used to be here**, until sprint 27 día 1: two absolutely positioned slots, one of them
+   * `inert`, `aria-hidden` and `tabIndex={-1}` while it loaded a document behind the live one, a
+   * `key` of `chromeKey` and a serial, a promotion when the buffered one finished, a deadline that
+   * fell back to a visible remount, a remembered page colour so the frame with nothing in it was
+   * not white, and a fade that had to be withheld from every arrival but the first. All of it
+   * existed so that a rebuild could happen out of sight. There is no rebuild.
+   *
+   * `ui-fade-in` is unconditional now: the one arrival is the first one, which has no previous
+   * frame to carry and does briefly show the surface colour underneath.
    */
-  function previewFrame(slot: 0 | 1) {
-    const role = slotRole(slot);
-    if (role === null) return null;
-    const ref = slot === 0 ? frameA : frameB;
-    // The remembered page colour, so a frame with nothing in it yet is the colour the page already
-    // was. `--ui-surface` until a page has ever loaded, which is the one moment nothing better is
-    // known — and the first arrival fades, because it has no previous frame to carry.
-    const background = { background: canvasBackground ?? "var(--ui-surface)" };
-    if (!role.live) {
-      return (
-        <iframe
-          key={`${role.key}:${frameSerial}`}
-          ref={ref}
-          data-buffered="true"
-          inert
-          aria-hidden
-          tabIndex={-1}
-          title={title}
-          srcDoc={frameHtml}
-          onLoad={(event) => promote(event.currentTarget)}
-          className="pointer-events-none absolute inset-0 h-full w-full border-0 opacity-0"
-          style={background}
-        />
-      );
-    }
+  function previewFrame() {
     return (
       <iframe
-        key={`${role.key}:${frameSerial}`}
-        ref={ref}
+        ref={frame}
         title={title}
-        srcDoc={frameHtml}
-        // `wireOnce` is the backstop the look-ahead usually beats; `settleReadingPosition` is not,
-        // and this is the only place it can run. `load` is what waits for the pictures, and the
-        // pictures are what the renderer gives no dimensions to.
-        onLoad={(event) => {
-          wireOnce(event.currentTarget, "onload");
-          settleReadingPosition(event.currentTarget);
-        }}
-        className={`absolute inset-0 h-full w-full border-0 ${
-          everSwapped.current ? "" : "ui-fade-in"
-        }`}
-        style={background}
+        srcDoc={initialHtml}
+        onLoad={(event) => wireOnce(event.currentTarget, "onload")}
+        className="absolute inset-0 h-full w-full border-0 bg-ui-surface ui-fade-in"
       />
     );
   }
 
-  /** Open a slot for the new chrome, or close one that is no longer wanted. */
   /**
-   * **Put the person back where they were reading when the preview is re-laid-out at a new width**
-   * (sprint 24 día 3), and **it is the panel closing that needs it, not the panel opening.**
+   * Look for the page every frame until it is there, and wire it the moment it is.
    *
-   * David asked for «Campos» to stop covering the section being edited, and moving it into the row
-   * does that — but not covering is only half, and he said so: «al abrir baja el zoom y, con el
-   * mismo `scrollTop`, la sección editada se desplaza en vertical». The panel takes 340 pixels plus
-   * a 24-pixel gap, so the card gets a narrower `layoutWidth`, the preview re-flows at that width
-   * and gets taller, and a fixed `scrollY` then points somewhere else.
+   * **This is what actually closes the window** `wireOnce` describes; `onLoad` is only the
+   * backstop. The parent cannot listen for the frame's `DOMContentLoaded`, because at the moment
+   * `srcDoc` is set the document that will fire it does not exist yet. So the test is document
+   * **identity**: keep looking until `contentDocument` is something the chrome is not attached to,
+   * and has sections in it.
    *
-   * **Measured, and the two directions are not symmetric — which is the whole reason this exists
-   * in the shape it does.**
-   *
-   * - **Opening moves nothing**, at 1024, 1280 or 1600: the browser's own scroll anchoring
-   *   (`overflow-anchor`, `auto` because nothing here turns it off) pins content near the top edge
-   *   when something above it grows. The repair for the open case was already in the browser.
-   * - **Closing moved the section 253 pixels at 1024** — from 151 to 404 — because the page gets
-   *   *wider and shorter*, the scroll offset ends up past the new maximum, and the browser clamps
-   *   it. Scroll anchoring does not save that: the content moves because the scroll position did.
-   *
-   * So this was written, deleted, and written again. Deleted because a first version of the walk
-   * below passed without it and fifty-nine lines that change nothing observable have no business
-   * shipping; written again when the walk was tightened from «stays in view» to «does not move»
-   * and failed on the close. **Both facts are recorded because the second one is only interesting
-   * next to the first.**
-   *
-   * **What this comment described no longer runs, and the effect under it is not it.** The
-   * mechanism it named — `wireReadingPosition` recording the section at the top of the viewport,
-   * `restoreReadingPosition` putting it back, «here for a change of **width**» — was written,
-   * deleted and written again, and the version that re-anchored on width is the one that is gone:
-   * `restoreReadingPosition` runs only from `wireOnce`, for a new document, and nothing runs when
-   * the card's width changes. Found closing sprint 25 (día 8's open item, the 164 px on closing a
-   * panel) and left said here rather than fixed, sprint 26 día 7: it is a width re-flow under both
-   * routes, `patch` included, and it is its own change. The measurements above are the record of
-   * why it matters; the effect that follows is the buffered swap's trigger (`chromeKey`, `swap`
-   * only) and has nothing to do with scrolling.
+   * **Once, at mount, because there is one document.** This used to re-run on every change of
+   * `frameHtml` or `chromeKey` — both of which put a *new* document in the frame under `swap` — and
+   * to aim at the buffered frame of a swap when there was one, promoting it when it was ready.
+   * With `swap` retired (sprint 27 día 1) the only document that ever arrives is the first, so the
+   * walk runs once and the deadline is what stops it.
    */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once, at mount; `wireOnce` is redeclared every render and reads the frame when it runs
   useEffect(() => {
-    // Under `patch` the chrome never needs a new document (día 4): the tools' gates live in the
-    // handlers, the bars and handles are drawn by `redrawChrome`, and an escalated section arrives
-    // as a patch like any other edit. The key stays what it was at mount and no slot ever opens.
-    if (canvasMode.current === "patch") return;
-    if (chromeKey === buffer.liveKey) {
-      if (buffer.pendingKey !== null) setBuffer((b) => ({ ...b, pendingKey: null }));
-      return;
-    }
-    if (chromeKey === buffer.pendingKey) return;
-    setBuffer((b) => ({ ...b, pendingKey: chromeKey }));
-  }, [chromeKey, buffer.liveKey, buffer.pendingKey]);
-
-  /**
-   * The deadline. Falls back to the visible remount rather than leaving the chrome stale — see
-   * `BUFFER_DEADLINE_MS`. Promoting the key into the live slot is what stops this retrying for
-   * ever: `chromeKey` and `liveKey` then agree, so the effect above opens no new slot.
-   */
-  useEffect(() => {
-    const waitingFor = buffer.pendingKey;
-    if (waitingFor === null) return;
-    const timer = setTimeout(() => {
-      setBuffer((b) =>
-        b.pendingKey === waitingFor ? { ...b, liveKey: waitingFor, pendingKey: null } : b,
-      );
-    }, BUFFER_DEADLINE_MS);
-    return () => clearTimeout(timer);
-  }, [buffer.pendingKey]);
-
-  /**
-   * The keyboard's focus was inside the frame that just left, so it goes into the one that
-   * replaced it. Without this, editing with a keyboard would drop focus to the document on every
-   * swap — which is a worse interruption than the flicker, and a silent one.
-   *
-   * After the commit rather than before it, because the incoming frame is `inert` until then and
-   * an inert element cannot take focus.
-   */
-  const refocusAfterSwap = useRef(false);
-  /*
-   * `buffer.live` flipping **is** the swap, so it is the whole trigger even though the body does
-   * not read it — and `liveFrame` is redeclared on every render, so listing it would run this on
-   * every render instead, which is the opposite of what it is for.
-   */
-  // biome-ignore lint/correctness/useExhaustiveDependencies: see the note above this line
-  useEffect(() => {
-    record("swap", {
-      live: buffer.live,
-      asked: refocusAfterSwap.current,
-      want: focusTarget.current?.sectionId ?? null,
-      serial: serialOf(liveFrame()?.contentDocument),
-      buffered: document.querySelectorAll("iframe[data-buffered]").length,
-    });
-    if (!refocusAfterSwap.current) return;
-    refocusAfterSwap.current = false;
-    /*
-     * **Not while a dialog claims the page is unavailable.** A swap can happen with a modal open —
-     * an autosave or an arriving photograph is enough to re-render and re-render the frame — and
-     * this would then move focus to the preview, out of a dialog whose `aria-modal` has just told a
-     * screen reader the preview does not exist. The trap pulls focus back on the next Tab, but by
-     * then the person has already pressed a key into the wrong place.
-     *
-     * Asked of the DOM rather than tracked in state, because the question is literally «is anything
-     * claiming to be modal right now», and the eight dialogs are mutually exclusive but owned by
-     * three different components. A boolean here would be a fourth thing to keep in step.
-     */
-    if (document.querySelector('[aria-modal="true"]')) return;
-    /*
-     * **The verb's own place first, and the frame only if there is none.** A section count that
-     * changed is what sent this rebuild through the swap in the first place, so the verbs whose
-     * focus has furthest to travel are exactly the ones that arrive here. Focusing the frame
-     * instead would put the keyboard at the top of the page, which is the one outcome sprint 17
-     * day 4 exists to prevent.
-     */
-    const frame = liveFrame();
-    takeCanvasFocus(frame?.contentDocument);
-    /*
-     * **Something inside the new document has focus, so the frame does not need it** — either the
-     * line above put it there, or the restore already succeeded while wiring.
-     *
-     * This used to ask that *and* that the intent had been spent (`focusTarget.current === null`),
-     * and the second half is what made the line take back what the first half had just given.
-     * `takeCanvasFocus` only spends the intent once no swap is in flight, and at this exact moment
-     * one still is — the buffered frame is removed in the commit this effect is running inside of.
-     * So on a slow machine the sequence read: place the keyboard on the section, decline to spend
-     * the intent because a frame is still buffered, fall through, and `frame.focus()` moved it to
-     * the body. Measured with the CPU throttled twenty-fold; it is the last of the three reasons
-     * «insertar una sección deja el teclado en la que acaba de aparecer» went red on CI.
-     *
-     * What matters is where the keyboard is, not whether a ref has been tidied up.
-     */
-    const inner = frame?.contentDocument?.activeElement as HTMLElement | null;
-    if (inner && inner !== frame?.contentDocument?.body) return;
-    frame?.focus();
-  }, [buffer.live]);
-
-  // The probe's view of the two things that put a new document in a frame (sprint 18 day 5).
-  useEffect(() => {
-    record("buffer", { live: buffer.live, liveKey: buffer.liveKey, pendingKey: buffer.pendingKey });
-  }, [buffer]);
-  useEffect(() => {
-    record("html", { length: frameHtml.length, chromeKey, route: canvasMode.current });
-  }, [frameHtml, chromeKey]);
-
-  /**
-   * Look for the new page every frame until it is there, and wire it the moment it is.
-   *
-   * **This is what actually closes the window** `wireOnce` describes; `onLoad` is only the backstop.
-   * The parent cannot listen for the frame's `DOMContentLoaded`, because at the moment `srcDoc`
-   * changes the document that will fire it does not exist yet — and the document that *does* exist is
-   * the outgoing one, already wired. So the test is document **identity**: keep looking until
-   * `contentDocument` is something other than what the chrome is attached to, and has sections in it.
-   *
-   * Bounded, and it terminates on the first interesting frame in every real case: this effect runs
-   * only when `html` or `chromeKey` changes, and both of those mean a new document is on its way.
-   * The deadline is for the one case where neither produces one, so a missed swap costs a second of
-   * idle frames rather than a loop with no end.
-   */
-  /*
-   * `wireOnce` is deliberately not a dependency. The two that are listed are the whole trigger — a
-   * new rendered string, or a remount — and they are the only two things that put a new document in
-   * the frame. `wireOnce` is redeclared on every render, so listing it would restart this look-ahead
-   * on every render instead, which is the opposite of what it is for; and it can hold nothing stale,
-   * because it reads the frame's document at the moment it runs.
-   */
-  // biome-ignore lint/correctness/useExhaustiveDependencies: see the note above this line
-  useEffect(() => {
-    let frame = 0;
+    let tick = 0;
     const deadline = Date.now() + LOOK_AHEAD_DEADLINE_MS;
     const look = () => {
-      // **The frame being prepared, when there is one.** This look-ahead exists to wire a new
-      // document the moment it is parsed, and during a swap the new document is in the buffered
-      // frame — the live one is already wired and must stay that way. Pointing it at the live
-      // frame here would re-wire the live document the instant `wiredDoc` moved to the buffered
-      // one, which is the double attach everything else in this file is arranged to prevent.
-      const pending = buffer.pendingKey === null ? null : slotFrame(pendingSlot);
-      const target = pending ?? liveFrame();
+      const target = liveFrame();
       const iframeDoc = target?.contentDocument;
       /*
        * **Wiring does not end the walk — sprint 18 day 5, and the intermittent of sprint 7.**
        * This used to `return` after `wireOnce`, and six probed failures showed what that cost:
        * the bank's photographs replaced `srcDoc` a few milliseconds after the first document's
-       * `html`, before that document had been wired; this effect re-ran, found the *first*
-       * document still in the frame, wired it, and returned — so the *second* document, the one
-       * this `html` produced, arrived unwired and waited for `load`. The decision is a pure
-       * function now (`lookAheadStep`) and the rule is: wire, and keep looking until the
-       * deadline. The identity guard and the `data-rb-wired` mark make the extra ticks free.
+       * html, before that document had been wired; this effect re-ran, found the *first* document
+       * still in the frame, wired it, and returned — so the *second* document arrived unwired and
+       * waited for `load`. The decision is a pure function (`lookAheadStep`) and the rule is:
+       * wire, and keep looking until the deadline. The identity guard and the `data-rb-wired` mark
+       * make the extra ticks free.
+       *
+       * A photograph arriving no longer replaces the document — it is an attribute in a patch — so
+       * the case that taught this cannot happen. The rule is kept anyway: it costs one property
+       * read per frame for two seconds, and it is the cheaper half of the pair.
        */
       const step = lookAheadStep({
         document: iframeDoc !== null && iframeDoc !== undefined,
         unwired: iframeDoc !== null && iframeDoc !== undefined && iframeDoc !== wiredDoc.current,
         parsed: iframeDoc?.readyState !== "loading",
         hasSection: iframeDoc?.querySelector("[data-section]") !== null,
-        pending: pending !== null,
         withinDeadline: Date.now() < deadline,
       });
-      if (step === "promote" && pending) {
-        promote(pending);
-        return;
-      }
       if (step === "wire") wireOnce(target, "lookahead");
-      if (step !== "stop") frame = requestAnimationFrame(look);
+      if (step !== "stop") tick = requestAnimationFrame(look);
     };
     look();
-    return () => cancelAnimationFrame(frame);
-    // `buffer.pendingKey` is listed because it is what moves the target: a swap opening or closing
-    // has to restart the walk against the frame that now holds the arriving document.
-  }, [frameHtml, chromeKey, buffer.pendingKey]);
+    return () => cancelAnimationFrame(tick);
+  }, []);
+
+  // The probe's view of the one paint there is (sprint 18 day 5, narrowed on 27 día 1: the two
+  // things that used to put a new document in a frame were the rendered string changing and the
+  // chrome key changing, and neither exists).
+  useEffect(() => {
+    record("html", { length: initialHtml.length });
+  }, [initialHtml]);
 
   /**
    * **An edit is a patch** (ADR 0051, día 2) — the `patch` route's whole effect.
@@ -2006,10 +1564,6 @@ export function Editor({
     return (
       root.contains("rb-dragging") || root.contains("rb-resizing") || root.contains("rb-arrowing")
     );
-  }
-  function takeOldRoute(reason: string) {
-    record("patch", { ok: false, reason });
-    setFallback((before) => ({ html, serial: (before?.serial ?? 0) + 1 }));
   }
   function applyPatch(iframeDoc: Document) {
     if (gestureLive(iframeDoc)) {
@@ -2038,16 +1592,22 @@ export function Editor({
       focused: iframeDoc.activeElement,
     });
     if (!report.ok) {
-      takeOldRoute(report.reason);
-      return;
+      // **There is no second route to fall back to** (sprint 27 día 1). Every refusal `patchCanvas`
+      // could answer with was answered during sprint 26 — `structure` on día 3, `chrome` on día 4,
+      // `gesture` above — and the one that is left is `no-body`, a document with no `<body>`, which
+      // a wired canvas cannot be: `wireOnce` only runs on a document with a `[data-section]` in it.
+      // So this is the house rule for the impossible rather than a path: an explicit throw, because
+      // the silent alternative is a canvas that stops answering and a page that looks finished.
+      record("patch", { ok: false, reason: report.reason });
+      throw new Error(`the canvas refused a patch: ${report.reason}`);
     }
     const ms = Math.round((performance.now() - started) * 10) / 10;
     // The chrome follows the page (día 3): after every patch, structural or not, because a text
     // that grew moved the gap below it and a section that arrived has no verbs yet.
     const redrawMs = redrawChrome(iframeDoc);
-    // Another page starts at the top (día 4): the one rule of the reading position that holds
-    // under `patch`, where the document is never replaced and so never restored. The same page,
-    // patched, keeps its scroll by doing nothing at all.
+    // Another page starts at the top (sprint 26 día 4): the one rule of the reading position that
+    // is left, the document being never replaced and so never restored. The same page, patched,
+    // keeps its scroll by doing nothing at all.
     const page = pageId ?? null;
     const pageChanged = patchedPageId.current !== page;
     patchedPageId.current = page;
@@ -2085,7 +1645,7 @@ export function Editor({
     settleToolbar.current(iframeDoc);
     focusLineAfterChange(iframeDoc);
     observeSections(iframeDoc);
-    handlePainters.current.get(iframeDoc)?.();
+    handlePainter.current?.();
     return Math.round((performance.now() - started) * 10) / 10;
   }
   /** What `wireEditing` registers for the redraw: a text the patch rewrote under the caret
@@ -2103,12 +1663,11 @@ export function Editor({
   };
   // biome-ignore lint/correctness/useExhaustiveDependencies: the switch is the trigger; the redraw reads everything else through refs
   useEffect(() => {
-    // **The switch redraws, it does not rebuild** (día 4). Under `swap` toggling the tools changes
-    // `chromeKey` and a new document arrives wired for them; under `patch` the document stays and
-    // the chrome is drawn again over it — the handles, the bars, the Tab stops the tools add — and
-    // the serial moves, because a walk waiting on «a patch or a repaint» is waiting for exactly
-    // this. Skipped on mount: the wiring draws the first chrome.
-    if (canvasMode.current !== "patch") return;
+    // **The switch redraws, it does not rebuild** (día 4). The document stays and the chrome is
+    // drawn again over it — the handles, the bars, the Tab stops the tools add — and the serial
+    // moves, because a walk waiting on «a patch or a repaint» is waiting for exactly this. Skipped
+    // on mount: the wiring draws the first chrome. Under `swap`, retired on 27 día 1, toggling the
+    // tools instead changed `chromeKey` and a whole new document arrived wired for them.
     const iframeDoc = liveFrame()?.contentDocument;
     if (!iframeDoc || iframeDoc.documentElement.dataset["rbWired"] !== "1") return;
     if (toolsDrawn.current === designTools) return;
@@ -2120,11 +1679,12 @@ export function Editor({
   const toolsDrawn = useRef(designTools);
   // biome-ignore lint/correctness/useExhaustiveDependencies: the four listed are what a patch is made of; everything else is read through refs or is the render's own
   useEffect(() => {
-    if (canvasMode.current !== "patch") return;
     const iframeDoc = liveFrame()?.contentDocument;
-    // Wired is a mark the document carries, not a ref's identity (sprint 18 día 5): after a chrome
-    // swap two documents are wired in a row and `wiredDoc` names the last one, which need not be
-    // the one on screen. A patch parked on that identity test never came back — measured on día 2.
+    // Wired is a mark the document carries, not a ref's identity (sprint 18 día 5): under `swap`,
+    // after a chrome swap, two documents were wired in a row and `wiredDoc` named the last one,
+    // which need not have been the one on screen — a patch parked on that identity test never came
+    // back, measured on día 2. With one document the two tests agree, and the mark is kept because
+    // it is the document's own answer rather than a ref's memory of it.
     if (!iframeDoc || iframeDoc.documentElement.dataset["rbWired"] !== "1") {
       pendingPatch.current = true;
       return;
@@ -2205,12 +1765,12 @@ export function Editor({
    *
    * It runs on every render rather than on frame load, because it has to **leave** when the toast
    * does — the six-second timer changes no document and reloads no frame — which is the same reason
-   * `syncGrid` above is shaped this way. It also runs at the end of `wireInteractions`, which is what
-   * draws it after a delete under `swap`: that reloads the frame, and the reload wipes every `rb-`
-   * node with it. Under `patch` it runs from `redrawChrome` after every patch (día 3).
+   * `syncGrid` above is shaped this way. It also runs at the end of `wireInteractions`, and from
+   * `redrawChrome` after every patch (sprint 26 día 3) — under `swap` that was what drew it again
+   * after a delete, because the reload wiped every `rb-` node with it.
    *
    * **A guard against a stale frame was written here, measured, and removed** (`swap`). A delete
-   * changes the document, which changes `srcDoc`, which reloads the frame — so the reasoning was that this render
+   * changed the document, which changed `srcDoc`, which reloaded the frame — so the reasoning was that this render
    * could land while the old page, deleted section and all, was still on screen, and put the notice
    * beside the very section it says is gone. Instrumented over a real delete it **never once
    * happened**: two calls, both against a frame that had already dropped the section, zero stale. The
@@ -2399,8 +1959,8 @@ export function Editor({
   }
 
   function wireSelection(iframeDoc: Document) {
-    // Read every time, never captured (ADR 0051 §5): under `patch` a section can arrive or leave
-    // between two uses, and a captured array would be the page from before.
+    // Read every time, never captured (ADR 0051 §5): a section can arrive or leave between two
+    // uses of this, and a captured array would be the page from before.
     const sectionsNow = () => [...iframeDoc.querySelectorAll<HTMLElement>("[data-section]")];
 
     /**
@@ -2539,7 +2099,7 @@ export function Editor({
      */
     /**
      * Remember where the keyboard should come back to after this press changes the document — a
-     * rebuild under `swap`, a structural patch under `patch`; `placeAfterRebuild` serves both.
+     * structural patch, which `placeAfterRebuild` turns into a place.
      *
      * The action buttons arm this themselves; the popups cannot, because what rebuilds is a button
      * **inside** what they open, and the place to return to is not the thing that was pressed.
@@ -2730,9 +2290,8 @@ export function Editor({
         if (disabled) return;
         /*
          * **Remembered before the verb runs, because afterwards there is nothing to ask.** Four of
-         * these verbs change the page's sections — a rebuild under `swap`, a structural patch under
-         * `patch` — and two of them (delete, «convertir en página») take the section this button
-         * belongs to with it. The id, the index and the verb are everything `settle` needs to put
+         * these verbs change the page's sections — a structural patch — and two of them (delete,
+         * «convertir en página») take the section this button belongs to with it. The id, the index and the verb are everything `settle` needs to put
          * the keyboard back when the page is drawn again.
          *
          * Recorded for a mouse click too, and that is deliberate rather than sloppy: a browser
@@ -2927,9 +2486,9 @@ export function Editor({
           event.stopPropagation();
           /*
            * **Back into the menu, on the choice that is now in use** — not onto the button that
-           * opened it. Choosing a composition changes the page (a rebuild under `swap`, a patch
-           * under `patch`) and `compositionMenuOpen` brings
-           * the menu straight back, by design, «so the next try is one click». For a keyboard that
+           * opened it. Choosing a composition changes the page (a patch) and
+           * `compositionMenuOpen` brings the menu straight back, by design, «so the next try is one
+           * click». For a keyboard that
            * means the next try should be one *press*, and the only way that is true is if the
            * keyboard is still inside the menu when it reappears. The `aria-pressed="true"` choice
            * is also the honest place: it is the answer to «what did that do».
@@ -3071,8 +2630,8 @@ export function Editor({
        *
        * **The element only resets when the section actually changes**, and getting that wrong cost a
        * real defect the day-6 walk found. `select()` runs on a genuine click *and* on the restore at
-       * the end of `wireSelection` — `settle`, which puts the selection back after every edit:
-       * after the reload under `swap`, from the redraw under `patch`.
+       * the end of `wireSelection` — `settle`, which puts the selection back after every edit,
+       * from the redraw.
        * Clearing unconditionally meant every press of a mobile control threw the person back to the
        * first element in the tree — so «Subir» went dead and the next press acted on the wrong thing.
        */
@@ -3366,9 +2925,9 @@ export function Editor({
     // which is the right answer without a special case for it.
     /**
      * **Settling the selection, the return of focus and the pending place — once at wiring, and
-     * again after a structural patch** (día 3). This tail used to run only when a new document was
-     * wired; under `patch` a section inserted, moved or removed changes what it reads without any
-     * wiring, so `applyPatch` calls it through `settleSelection`.
+     * again after a structural patch** (sprint 26 día 3). This tail used to run only when a new
+     * document was wired; a section inserted, moved or removed now changes what it reads without
+     * any wiring at all, so `applyPatch` calls it through `settleSelection`.
      */
     const settle = () => {
       const remembered = selectedSection.current;
@@ -3405,9 +2964,9 @@ export function Editor({
       /**
        * **Put the keyboard back after a verb, which is the whole of sprint 17 day 4.**
        *
-       * Under `swap` pressing «subir» throws the frame away and parses a new one; under `patch` the
-       * section moves in place and this tail runs from the redraw (día 3). Before this, focus went
-       * nowhere — the element that had it no longer existed — so it fell to the new document's body, which is
+       * Pressing «subir» moves the section in place and this tail runs from the redraw (sprint 26
+       * día 3); under `swap` it threw the frame away and parsed a new one. Before this, focus went
+       * nowhere — the element that had it no longer existed — so it fell to the document's body, which is
        * the top of the page. A keyboard user moved a section once and then had to walk all the way
        * back down to move it again; somebody using a screen reader was simply told they were at the
        * beginning of the site.
@@ -3594,9 +3153,10 @@ export function Editor({
 
       /**
        * Redrawn on every keystroke, in place — the menu's own DOM, never React's. A `setState`
-       * here would re-render the editor on every letter and, under `swap`, rebuild the iframe's
-       * whole `srcDoc` and take the open menu with it; under `patch` the menu is chrome the patch
-       * parks, and a React state per keystroke is still the wrong shape for a search box.
+       * here would re-render the editor on every letter, and the menu is chrome the patch parks —
+       * a React state per keystroke is the wrong shape for a search box either way. Under `swap` it
+       * was worse than wrong: the re-render rebuilt the iframe's whole `srcDoc` and took the open
+       * menu with it.
        */
       function draw(query: string) {
         list.replaceChildren();
@@ -3675,7 +3235,7 @@ export function Editor({
   /**
    * **What listens on the document itself, once per session** (ADR 0051 §5). The drawing
    * functions used to attach these at the end of their own pass, which was one listener per
-   * document under `swap` and would be one per redraw under `patch`.
+   * document while documents were thrown away, and would be one per redraw now.
    */
   function attachDocument(iframeDoc: Document) {
     // A click anywhere closes the «Añadir sección» menu — the pill's own click stops propagation.
@@ -4064,8 +3624,8 @@ export function Editor({
     }
 
     /** A drag must not also flip the bar; cleared by the click it suppresses. Outside `open`
-     * because the bar is reopened on every edit — by the rebuild under `swap`, by `settleToolbar`
-     * under `patch` — and the pointer does not care. */
+     * because the bar is reopened on every edit, by `settleToolbar`, and the pointer does not
+     * care. */
     let justDragged = false;
 
     const open = (el: HTMLElement) => {
@@ -4797,10 +4357,10 @@ export function Editor({
      * Put the bar back on the element it was on, after an edit changed the canvas under it.
      *
      * **Found by the walk, and it made the control useless: the bar vanished the moment it was
-     * used.** Under `swap`, writing a style changes the document, which changes `srcDoc`, which
-     * reloads the iframe — every edit does. Nothing had focus in the new frame, so nothing reopened
-     * the bar, and a person got exactly one press per click into the text. Under `patch` the same
-     * reopening runs from the redraw (`settleToolbar`, día 4), with the control under the hand kept.
+     * used.** Under `swap`, writing a style changed the document, which changed `srcDoc`, which
+     * reloaded the iframe — every edit did. Nothing had focus in the new frame, so nothing reopened
+     * the bar, and a person got exactly one press per click into the text. The reopening runs from
+     * the redraw now (`settleToolbar`, sprint 26 día 4), with the control under the hand kept.
      *
      * **And the chosen words come back with it**, which is the half that was missing. This used to
      * reopen the bar *without focusing*, deliberately: `wireEditing` selects a whole field on focus,
@@ -4832,9 +4392,9 @@ export function Editor({
 
     /**
      * **The bar, drawn again from the document as it now is.** Every control in it — the role
-     * pressed, the size step, the colour in force — is read at `open` and never after; under `swap`
-     * each rebuild reopened it here, and under `patch` the redraw does the same after every patch
-     * (día 4: the «Aa» walk pressed the body role and the bar still said «false»). `open` closes
+     * pressed, the size step, the colour in force — is read at `open` and never after, so the
+     * redraw reopens it here after every patch (sprint 26 día 4: the «Aa» walk pressed the body
+     * role and the bar still said «false»); each rebuild did it under `swap`. `open` closes
      * first, so the `selectionchange` listener is one, however many times this runs.
      */
     const reopen = (bar: ElementAddress, selection: typeof lastSelection.current) => {
@@ -4846,8 +4406,8 @@ export function Editor({
         toolbarOn.current = null;
         return;
       }
-      // **The control the hand was on comes back under it.** Under `patch` the bar is rebuilt while
-      // a `<select>` or a button of it may hold the focus; `open` removes that node, focus falls to
+      // **The control the hand was on comes back under it.** The bar is rebuilt while a `<select>`
+      // or a button of it may hold the focus; `open` removes that node, focus falls to
       // the body, and the text's deferred `focusout` — finding nothing of the bar focused — would
       // dismiss the bar it had just rebuilt (measured: «element(s) not found» on the spacing select
       // right after choosing in it). So the same control, by its `data-ref` or its mark, is focused
@@ -4910,7 +4470,7 @@ export function Editor({
     if (!el) {
       chosenText.current = null;
       // The handles belong to whatever is chosen, so nothing chosen means none of them (día 7).
-      handlePainters.current.get(iframeDoc)?.();
+      handlePainter.current?.();
       return;
     }
     const section = el.closest<HTMLElement>("[data-section]");
@@ -4942,7 +4502,7 @@ export function Editor({
      * (día 7) — and in **its own** document, which is not always the caller's idea of the live one.
      * Before the early return below, because an image with no hint still gets handles.
      */
-    handlePainters.current.get(el.ownerDocument)?.();
+    handlePainter.current?.();
 
     const says = [
       el.dataset["rbText"] === "1" ? chosenHintText() : "",
@@ -4967,9 +4527,9 @@ export function Editor({
    * `focusLineAfterChange` when a new line appears. The order matters: the attribute is set first,
    * so that listener can tell writing from being merely chosen by asking the element.
    */
-  /** The writing a gesture interrupted, taken up again (ADR 0050 día 4) — after a wiring under
-   * `swap`, after the patch under `patch` (día 4: the resize's commit blurs the text and asks for
-   * it back, and only the wiring used to listen). */
+  /** The writing a gesture interrupted, taken up again (ADR 0050 día 4) — after the patch (sprint
+   * 26 día 4: the resize's commit blurs the text and asks for it back, and under `swap` only the
+   * wiring listened, which is how `keepWriting` came to have no listener on the patch route). */
   function settleWriting(iframeDoc: Document) {
     const writeAgain = keepWriting.current;
     keepWriting.current = null;
@@ -5355,9 +4915,8 @@ export function Editor({
    *
    * **Today it lands nowhere.** The three line controls are `<button>`s inside the frame and, unlike
    * the floating toolbar, they do not cancel `mousedown` — so pressing «+ Añadir línea» blurs the
-   * text, commits the edit, changes the document (a rebuild under `swap`; under `patch` a structural
-   * patch after which `drawLines` redraws the controls) and leaves focus on a button that the change
-   * itself destroyed. To type in the new card you have to find it and click it.
+   * text, commits the edit, changes the document (a structural patch, after which `drawLines`
+   * redraws the controls) and leaves focus on a button that the change itself destroyed. To type in the new card you have to find it and click it.
    *
    * Kept as an **act and an index**, not as an element id. `mintItem` mints ids against the ones
    * already used, so removing a line and adding another can hand the new one the id the removed one
@@ -5680,8 +5239,8 @@ export function Editor({
    * §5, David's adjustment 5). One resize happens at a time, so its state is the document's too:
    * `pulling` names the section as well as the element. Pointer capture on the section still
    * routes the gesture there, and the events bubble to the document. The design-tools gate moved
-   * from the wiring into the handlers, because under `patch` the wiring runs once per session and
-   * the tools can be turned on after it.
+   * from the wiring into the handlers, because the wiring runs once per session and the tools can
+   * be turned on after it.
    */
   function wireResizing(iframeDoc: Document) {
     const coarse = iframeDoc.defaultView?.matchMedia("(pointer: coarse)").matches === true;
@@ -5920,7 +5479,7 @@ export function Editor({
     delegate(iframeDoc, "lostpointercapture", "[data-section]", () => release());
 
     // What `markChosen` and the redraw call, found by the document it happened in.
-    handlePainters.current.set(iframeDoc, repaintAll);
+    handlePainter.current = repaintAll;
     repaintAll();
     observeSections(iframeDoc);
   }
@@ -5937,7 +5496,7 @@ export function Editor({
     if (!view) return;
     let watcher = sectionObservers.current.get(iframeDoc);
     if (!watcher) {
-      watcher = new view.ResizeObserver(() => handlePainters.current.get(iframeDoc)?.());
+      watcher = new view.ResizeObserver(() => handlePainter.current?.());
       sectionObservers.current.set(iframeDoc, watcher);
     }
     for (const section of iframeDoc.querySelectorAll<HTMLElement>("[data-section]")) {
@@ -5972,8 +5531,8 @@ export function Editor({
    * **Written on `pointerup` and never on `pointermove`.** One drag is one step of history, which
    * is the product answer — and under `swap` there was a technical one underneath it: every edit
    * replaced the whole `srcDoc`, which destroyed the injected chrome, the listeners of this very
-   * drag included. Under `patch` the listeners are the document's and survive every edit (ADR 0051
-   * §5); the product answer stands on its own (ADR 0051's amendment to ADR 0048 §6).
+   * drag included. The listeners are the document's now and survive every edit (ADR 0051 §5), so
+   * the product answer stands on its own (ADR 0051's amendment to ADR 0048 §6).
    */
   /** A placed element's gesture state — a drag or a run of arrows — kept per element in a map
    * since the listeners stopped being per element (ADR 0051 §5). */
@@ -6404,9 +5963,9 @@ export function Editor({
 
   /**
    * Which document the chrome is attached to, so attaching it twice is impossible and attaching it
-   * *early* is safe. Under `swap` a reload and a remount both produce a new `Document`, so the
-   * identity is the whole bookkeeping — there is no flag to reset and nothing to clear. Under
-   * `patch` there is one document per session, and this names it.
+   * *early* is safe. There is one document per session and this names it. Under `swap` a reload
+   * and a remount each produced a new `Document`, so the identity was the whole bookkeeping —
+   * there was no flag to reset and nothing to clear.
    */
   const wiredDoc = useRef<Document | null>(null);
   /** One number per wired document, stamped on its root as `data-rb-serial` (sprint 18 day 5). */
@@ -6442,23 +6001,26 @@ export function Editor({
    */
   function wireOnce(
     frame: HTMLIFrameElement | null | undefined,
-    via: "lookahead" | "onload" | "promote" = "onload",
+    via: "lookahead" | "onload" = "onload",
   ) {
     const iframeDoc = frame?.contentDocument;
     if (!iframeDoc || wiredDoc.current === iframeDoc) return;
     // **The document carries its own mark, and the mark is what «never twice» rests on.**
     //
-    // `wiredDoc` is one ref shared by the two frames of the buffered swap, and a ref can only
-    // remember one document. With two documents loading at once — a `srcDoc` change (the bank
-    // photograph arriving after the editor opened) during a chrome swap (the account's switch
-    // preference arriving after mount) — their `load` events interleave: the entering document is
-    // promoted and wired, the outgoing frame's late `load` wires *its* document and moves the ref,
-    // and the entering frame's own `load` then finds its document is «not the wired one» and wires
-    // it a second time. Reported by David on 9 October 2026 on the deployed editor, right after a
+    // Under `swap` `wiredDoc` was one ref shared by two frames, and a ref can only remember one
+    // document. With two documents loading at once — a `srcDoc` change (the bank photograph
+    // arriving after the editor opened) during a chrome swap (the account's switch preference
+    // arriving after mount) — their `load` events interleaved: the entering document was promoted
+    // and wired, the outgoing frame's late `load` wired *its* document and moved the ref, and the
+    // entering frame's own `load` then found its document was «not the wired one» and wired it a
+    // second time. Reported by David on 9 October 2026 on the deployed editor, right after a
     // redeploy when fonts and photographs come off a cold instance: «+ Añadir sección aquí»,
-    // «Diseñada a mano», «Portada» and «Volver a la original» drawn twice. The ref stays, for the
-    // look-ahead's cheap identity test; the mark is what makes the second wiring impossible rather
-    // than unlikely, whatever order the events arrive in.
+    // «Diseñada a mano», «Portada» and «Volver a la original» drawn twice.
+    //
+    // One frame cannot interleave with itself, so the ref alone would do now. The mark stays
+    // because `onLoad` and the look-ahead still race each other for the one document, and because
+    // it is what the patch effect asks before it patches: the document's own answer rather than a
+    // ref's memory of it.
     //
     // Checked by sabotage on 9 October 2026: with this ref guard removed so `onLoad` re-enters,
     // the old code drew 12 gaps for 5 sections — the reported picture — and the mark alone, or the
@@ -6473,118 +6035,31 @@ export function Editor({
       readyState: iframeDoc.readyState,
       sections: iframeDoc.querySelectorAll("[data-section]").length,
       live: frame === liveFrame(),
-      buffered: document.querySelectorAll("iframe[data-buffered]").length,
     });
     wiredDoc.current = iframeDoc;
-    rememberCanvasBackground(iframeDoc);
     wireInteractions(iframeDoc);
-    // Before the reading position, so that restore has the last word on the scroll — `focus` is
-    // asked not to scroll, but the order is the thing that makes that guarantee cheap.
     focusLineAfterChange(iframeDoc);
-    // Last, and on every new document rather than only on a swap: under `swap` an ordinary edit
-    // replaces the document in place, which is the case direction reported and the one a swap
-    // cannot cover. Under `patch` this runs once, at the first wiring; the page's only scroll rule
-    // after that is «another page starts at the top» (`applyPatch`, día 4).
-    restoreReadingPosition(frame);
-    // A wiring counts as an edit on the page for the e2e's signal, under either route; and under
-    // `patch`, a change that arrived before this document was wired is applied to it now.
+    /*
+     * **Nothing puts the scroll back any more, because nothing takes it away.**
+     *
+     * `restoreReadingPosition` ran here, for every new document: under `swap` an ordinary edit
+     * replaced the document in place and sent the person to the top of the page, which direction
+     * reported on 6 October 2026 — «le obliga a hacer scroll down para volver al área que estaba
+     * editando», measured at 500 px → 0. A patched document keeps its scroll by doing nothing at
+     * all, so the recorder, the anchor, the restore and its second pass went with the route on
+     * sprint 27 día 1. The page's only scroll rule is «another page starts at the top»
+     * (`applyPatch`, día 4).
+     *
+     * **What is still open is a different thing** and it is in the backlog: the page moves when the
+     * *card* changes width, which is a panel opening or closing, and that happens under either
+     * route. Nothing here ever ran on a width change.
+     */
+    // A wiring counts as an edit on the page for the e2e's signal; and a change that arrived before
+    // this document was wired is applied to it now.
     bumpEdit(iframeDoc);
-    if (canvasMode.current === "patch" && pendingPatch.current) {
+    if (pendingPatch.current) {
       pendingPatch.current = false;
       applyPatch(iframeDoc);
-    }
-  }
-
-  /**
-   * Hand the canvas over to the frame that was being prepared.
-   *
-   * **Wired before it is seen, which is the point of the whole arrangement.** If the frame were
-   * revealed first and wired after, the swap would trade one flicker for another: a page with no
-   * insertion pills, no selection outline and no hand-designed bar for however long the wiring
-   * takes. So everything that draws into the canvas runs here, against a frame that is still
-   * invisible and still `inert`, and the reveal is the last thing that happens.
-   *
-   * `syncHole` and `syncGrid` are called directly rather than left to their own passive effects
-   * for the same reason — those run after the commit, which is after the frame is on screen. They
-   * are idempotent in both directions, so running them twice costs nothing and the effects
-   * correct anything this closure read a render too early.
-   */
-  function promote(frame: HTMLIFrameElement) {
-    const arriving = buffer.pendingKey;
-    if (arriving === null || frame !== slotFrame(pendingSlot) || !frame.contentDocument) return;
-    wireOnce(frame, "promote");
-    record("promote", { serial: serialOf(frame.contentDocument), arriving });
-    syncHole(frame.contentDocument);
-    syncGrid(frame.contentDocument, designOn ? designSectionId : null, placingElementId);
-    /*
-     * Read before the commit, because afterwards the frame it is asking about is gone. An
-     * `<iframe>` is the parent document's `activeElement` whenever focus is anywhere inside it.
-     *
-     * **Asked, never withdrawn — and that one word is a defect that reddened CI three times.**
-     * This function runs from a closure that can be a render behind, so `buffer.pendingKey` can
-     * still read as pending after the commit and `promote` runs a second time for the same
-     * arriving document. `wireOnce` makes the wiring idempotent; this line was not. The second
-     * pass re-read `document.activeElement`, found it was no longer the frame that had just been
-     * swapped away, and **turned the request off** — so the effect that puts the keyboard back
-     * returned at its first line and the focus stayed on the body.
-     *
-     * Measured on 14 October 2026 with the CPU throttled twenty-fold: the losing runs have two
-     * `promote` records for one arriving key where the winning ones have one. So the request is a
-     * latch — once anything in this swap has asked for the keyboard back, a later look cannot take
-     * the asking away — and the effect is what clears it, when it acts.
-     *
-     * **And it asks about both frames, which is the other half of the same defect.** The question
-     * «was the keyboard in the canvas» was being asked as «was it in the *live* frame», and by the
-     * time a swap commits the keyboard is usually in the **arriving** one: `wireOnce(frame,
-     * "promote")` wires the buffered document a few milliseconds earlier, and the focus that
-     * `placeAfterRebuild` puts back lands there. So on the runs where the latch had nothing to
-     * latch, the honest answer to the old question was «no» and the keyboard was dropped on purpose.
-     *
-     * «insertar una sección deja el teclado en la que acaba de aparecer» had failed this way on
-     * PR #226, #240 and #242, each time on a change that touches nothing on this path.
-     */
-    const keyboardWasInTheCanvas =
-      document.activeElement === liveFrame() || document.activeElement === frame;
-    /*
-     * **And «there is still an intent» counts as «the keyboard was here», which is the condition
-     * that actually fires.** `document.activeElement` is the parent's, and the focus that
-     * `placeAfterRebuild` puts back a few milliseconds earlier lands inside the **buffered**
-     * document — a frame that is off screen and never takes the browser's real focus, so the
-     * parent still reports its own body. Asking only about the frames answered «the keyboard was
-     * not in the canvas» on exactly the runs where it was about to be, and the swap dropped it on
-     * purpose. An unspent `focusTarget` is the honest form of the same question.
-     */
-    refocusAfterSwap.current =
-      refocusAfterSwap.current || keyboardWasInTheCanvas || focusTarget.current !== null;
-    everSwapped.current = true;
-    setBuffer({ live: pendingSlot, liveKey: arriving, pendingKey: null });
-  }
-
-  /**
-   * The colour the page paints itself, kept so the frame can wear it.
-   *
-   * **This is the flicker, and it is one frame wide** — under `swap`. Turning the design tools on
-   * changes `chromeKey`, the frame remounts, and for exactly one frame — measured at 79ms, `readyState`
-   * still `loading` — there is no document in it. The frame's own background was `bg-ui-surface`,
-   * so that frame painted **white** while the site being edited is whatever colour its palette
-   * chose. One white flash against a cream page is precisely what reads as the page refreshing.
-   *
-   * Remembering the colour costs nothing and removes the flash without removing the remount, which
-   * is load-bearing: the comment at the `<iframe>` records the two defects it exists to fix, and
-   * both are about chrome that cannot re-attach itself. Under `patch` nothing remounts and the
-   * switch redraws; this runs once, at the first wiring, and goes with `swap` (the retirement list).
-   *
-   * `body` first and then `documentElement`, because a page may set its background on either, and
-   * a transparent answer is not an answer.
-   */
-  function rememberCanvasBackground(iframeDoc: Document) {
-    for (const element of [iframeDoc.body, iframeDoc.documentElement]) {
-      if (!element) continue;
-      const colour = iframeDoc.defaultView?.getComputedStyle(element).backgroundColor;
-      if (colour && colour !== "transparent" && !colour.startsWith("rgba(0, 0, 0, 0")) {
-        setCanvasBackground(colour);
-        return;
-      }
     }
   }
 
@@ -7315,11 +6790,11 @@ export function Editor({
     // capture phase and stops the press there, which is what keeps the two gestures apart.
     wireResizing(iframeDoc);
     wireHandmade(iframeDoc);
-    wireReadingPosition(iframeDoc);
-    // Last, and on the load rather than only on a render: a delete reloads this frame, so the render
-    // that opened the toast ran against the document that still had the section in it. This is the
-    // pass that actually draws the notice. It goes after `wireInsertion`, which inserts the `.rb-gap`
-    // rows the notice is positioned among.
+    // `wireReadingPosition` was here, recording where the person was reading so the next document
+    // could put them back. There is no next document (sprint 27 día 1), and a patched page keeps
+    // its scroll by doing nothing.
+    // Last: the pass that actually draws the delete notice. It goes after `wireInsertion`, which
+    // inserts the `.rb-gap` rows the notice is positioned among.
     syncHole(iframeDoc);
   }
 
@@ -7748,49 +7223,39 @@ export function Editor({
         }}
       />
       {/*
-        **Two frames, one canvas**, and `chromeKey` still decides when the chrome is re-attached.
+        **One frame, one document, and the chrome is re-drawn rather than re-attached.**
 
         Every piece of chrome inside the canvas is attached by `wireInteractions` when the frame's
-        document is parsed, and the comment above `html` explains why that is normally enough: an
-        unchanged document renders to the identical string, the frame does not reload, and nothing
-        has to be re-attached. Two acts break that assumption, both by being invisible in the
-        rendered page — which is exactly what they promise to be:
+        document is parsed, once per session, and kept in step by `redrawChrome` after every patch.
+        Two acts used to break that, both by being invisible in the rendered page — which is
+        exactly what they promise to be:
 
-        1. **The switch changes no document at all** (`INV_4`). So nothing reloaded, and
+        1. **The switch changes no document at all** (`INV_4`). Nothing reloaded, and
            `wireSelection`'s closure kept the old value: turning the tools on did nothing until the
-           next unrelated edit.
+           next unrelated edit. It is a redraw now (día 4), and the closures read the present
+           through `*Now` refs (día 3).
         2. **Escalating changes the document and renders byte for byte the same.** Measured, not
            assumed: `escalationChrome.test.ts` asserts the HTML and the CSS are identical before and
            after. That is «no se mueve ni un píxel» at the only level where it can be checked, and
-           the reason accepting the offer left no bar behind.
+           the reason accepting the offer left no bar behind. It is a patch and a redraw now.
 
-        Both still need the chrome attached to a document it has never seen, and that is still what
-        happens — the document is just no longer the one on screen. The arriving page loads and is
-        wired in the buffered frame while the live one keeps painting, and the two change places
-        only once the new one is complete. So there is no frame with nothing in it, which is what
-        the fade and the remembered background existed to disguise; `wiredDoc`'s identity guard is
-        untouched, because a buffered frame is as new a `Document` as a remounted one.
-
-        **What this does not fix**, said plainly: the page is parsed twice during a swap, and the
-        text caret inside an editable element does not survive. The section selection does —
-        `wireSelection` restores it from `selectedSection` — and so does the reading position, by
-        `restoreReadingPosition`, which `wireOnce` runs for **every** new document rather than only
-        for a swap: an ordinary edit replaces the document in place, and that is the case a swap
-        cannot cover. An earlier version of this comment claimed the remount cost the selection; it
-        was wrong, and it had been wrong for a while.
-
-        **Under `patch` none of this happens** (ADR 0051, built sprint 26 días 2-4, the default since
-        día 5): one document for the session, every edit a patch built from `render(doc, "dom")`,
-        the switch a redraw, no second frame ever. The two slots, the swap and everything above are
-        `swap`'s, reachable under `localStorage["rb.canvas"]` until sprint 27 closes;
-        `docs/tasks/swap-route-retirement.md` names what goes with it.
+        **What stood here until sprint 27 día 1** was the answer those two got in sprint 15: a
+        second frame. `chromeKey` decided when the chrome had to be re-attached and did it by
+        putting a new `Document` in a frame nobody could see, the live one kept painting until the
+        new one was wired, and the two changed places. It worked, and it cost: the page was parsed
+        twice per swap, the text caret did not survive it, a keystroke in the window between the
+        paint and the wiring was lost, and some seventy pieces of machinery in this file existed to
+        survive it. ADR 0051 replaced all of it with one document and a patch; the key, the slots,
+        the promotion, the deadline, the remembered background and the restore of the reading
+        position left on 27 día 1, and `docs/tasks/swap-route-retirement.md` is the list they left
+        by. The published bytes never changed: no golden moved in either sprint.
       */}
       <div
-        // The frames fill this box, so it is what reserves the canvas's height — it was
+        // The frame fills this box, so it is what reserves the canvas's height — it was
         // `minHeight` on the frame itself, and the number has not changed. `relative` is here to
-        // be the containing block the buffered frame is positioned against: the canvas card is
-        // only a containing block while it happens to be scaled, which is not something to rest
-        // on.
+        // be the containing block the absolutely positioned frame is laid out against: the canvas
+        // card is only a containing block while it happens to be scaled, which is not something to
+        // rest on.
         //
         // **`phone:min-h-0` (sprint 21 day 4).** 60vh is a floor for the ordinary case, where the
         // card's own height is whatever the row leaves it. On a phone, `EditorShell` instead gives
@@ -7802,8 +7267,7 @@ export function Editor({
         // that it never bound; a phone is exactly where it does.
         className="relative w-full flex-grow min-h-[60vh] phone:min-h-0"
       >
-        {previewFrame(0)}
-        {previewFrame(1)}
+        {previewFrame()}
       </div>
       {toast ? (
         <div className="fixed bottom-[34px] left-1/2 z-10 flex max-w-[calc(100vw-32px)] -translate-x-1/2 flex-wrap items-center gap-5 rounded-[13px] bg-[#0F172A] py-3.5 pr-3.5 pl-5 shadow-[0_10px_30px_rgba(15,23,42,0.28)] phone:bottom-[calc(72px+env(safe-area-inset-bottom))]">

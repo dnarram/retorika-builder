@@ -31,40 +31,23 @@ import {
   HERO_WINDOW,
 } from "../src/app/landingHero.ts";
 import { BAR_INSET, BAR_STEP, type Point, TOOLBAR_GAP } from "../src/editor/barPosition.ts";
-import { type CanvasMode, DEFAULT_CANVAS_MODE } from "../src/editor/canvasMode.ts";
 import { VERB_SCALE } from "../src/editor/chromeScale.ts";
 import { GUIDE_ZONE } from "../src/editor/guides.ts";
 import { HANDLE_TOUCH } from "../src/editor/handles.ts";
 import { NARROWEST_WIDTH, PHONE_BREAKPOINT } from "../src/editor/overflowCheck.ts";
 import { BASE_URL, QUESTIONNAIRE_URL, startEditorServer, stopEditorServer } from "./server.ts"; /**
- * The preview frame, addressed as the one on screen rather than as «an iframe».
+ * The preview frame. One per editor, three on the landing page's cards.
  *
- * Turning the design tools on, or escalating a section, loads the next version of the page in a
- * **buffered** frame so the live one never goes blank — see the note at the `<iframe>` in
- * `Editor.tsx`. For the few milliseconds that takes there are two, and a bare `iframe` would be a
- * strict-mode violation here and would pick the wrong one in `document.querySelector`. Excluding
- * the buffered frame means every assertion below keeps asking exactly what it asked before, and on
- * the landing page — which has three preview cards and no buffering — it still matches all three.
+ * This was `iframe:not([data-buffered])` from 6 October 2026 until sprint 27 día 1, because
+ * turning the design tools on or escalating a section loaded the next version of the page in a
+ * second, buffered frame so the live one never went blank: for the few milliseconds that took
+ * there were two, and a bare `iframe` was both a strict-mode violation and a coin toss in
+ * `document.querySelector`. ADR 0051 left one document per session and nothing to buffer, so the
+ * selector is the plain one again and every assertion below asks exactly what it asked before.
  */
 
-const PREVIEW = "iframe:not([data-buffered])";
+const PREVIEW = "iframe";
 
-/**
- * Run `act` and come back only once the preview is showing a **different document**.
- *
- * **Why counting the contents is not enough, and this is the correction of a comment that used to
- * say it was.** Turning the design tools on replaces the preview's document. It used to do that by
- * remounting the frame, which went blank, so `await expect(cards).toHaveCount(3)` could not be
- * satisfied until the new document had parsed — the wait doubled as a wait for the swap by
- * accident. Since the swap is buffered, the outgoing frame keeps its contents until the very last
- * moment, so that same assertion is satisfied **by the document that is about to be thrown away**,
- * and the `evaluateAll` after it lands on a frame mid-replacement and reports `[]`. CI caught it on
- * 6 October 2026 at one of the two places that do this; the other passed by luck.
- *
- * So the wait is for the thing that actually changes: the document itself. The live document is
- * stamped before `act`, and the mark is gone once it has been replaced — which no amount of
- * content-counting can tell you, because both documents have the same content.
- */
 /**
  * Wait until the bank's photograph is in the cover, which is the moment the frame has stopped being
  * replaced underneath whoever is about to act on it.
@@ -75,11 +58,12 @@ const PREVIEW = "iframe:not([data-buffered])";
  *
  * `Variants.tsx` fetches the photograph's bytes from `/api/muestras/<id>` while the three cards are
  * on screen, and whether they are back by the time «Ver a tamaño real» is pressed depends on how
- * warm that route is. When they arrive *after* the editor opens, `srcDoc` depends on `photoUrls`
- * and the frame is replaced once — so a test evaluating inside it loses its execution context, a
- * selection it made is nowhere in the second document, and **a menu it opened is gone**. The object
- * URL is what the preview shows once the bytes are stored, so a `blob:` src in the cover means the
- * replacement, if there was going to be one, has already happened.
+ * warm that route is. When they arrived *after* the editor opened, `srcDoc` depended on `photoUrls`
+ * and the frame was replaced once — so a test evaluating inside it lost its execution context, a
+ * selection it had made was nowhere in the second document, and **a menu it had opened was gone**.
+ * A late photograph is an attribute in a patch now (sprint 26 día 4) and replaces nothing, so what
+ * this waits for is simply that the photograph has arrived: the object URL is what the preview
+ * shows once the bytes are stored, so a `blob:` src in the cover means it is in.
  *
  * **Three call sites, which is why this is a function now.** The two `openedVariant` helpers took
  * the wait inline on 9 October 2026 (PR #200), each with its own copy of the reasoning; «sprint 6
@@ -269,16 +253,18 @@ async function fontsReady(frame: FrameLocator): Promise<void> {
 /**
  * Turn the design tools on and come back only once the preview is showing the **new** document.
  *
- * **Through `afterTheEdit` (once `replacingTheDocument`), and the first version of this was the exact mistake that
- * function's own comment describes.** It waited for `[data-section="sec-cover"]` and a blob
- * photograph — both of which the **outgoing** document satisfies, because the swap is buffered and
- * the live frame keeps its contents until the last moment. So a walk could Tab into a document that
- * was about to be thrown away, arrow to a section in it, press Enter and draw a cluster there, and
- * then lose all of it when the swap committed.
+ * **Through `afterTheEdit`, on the edit serial.** The switch is a redraw of the chrome over the one
+ * document (sprint 26 día 4), so what this waits for is the serial moving — not a document arriving.
  *
- * That is what «Tab never reached the handmade button» was: intermittent, because it depended on
- * whether the swap landed before or after those three keystrokes, and invisible in isolation
- * because a probe that paused for a second after turning the tools on always won the race.
+ * **The mistake it was written against is worth keeping.** It first waited for
+ * `[data-section="sec-cover"]` and a blob photograph, and under the buffered swap the **outgoing**
+ * document satisfied both: the live frame kept its contents until the last moment, so a walk could
+ * Tab into a document that was about to be thrown away, arrow to a section in it, press Enter and
+ * draw a cluster there, and lose all of it when the swap committed. That is what «Tab never reached
+ * the handmade button» was — intermittent, because it depended on whether the swap landed before or
+ * after those three keystrokes, and invisible in isolation because a probe that paused for a second
+ * after turning the tools on always won the race. **The lesson survives the route: wait for the
+ * thing that changes, never for content both states have.**
  */
 async function studioToolsOn(page: Page): Promise<void> {
   await afterTheEdit(page, async () => {
@@ -304,9 +290,7 @@ function focus(page: Page): Promise<{
   disabled: boolean;
 }> {
   return page.evaluate(() => {
-    const doc = document.querySelector<HTMLIFrameElement>(
-      "iframe:not([data-buffered])",
-    )?.contentDocument;
+    const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
     const active = doc?.activeElement as HTMLElement | null | undefined;
     const host = active?.closest?.("[data-section]") as HTMLElement | null | undefined;
     return {
@@ -332,17 +316,16 @@ function focus(page: Page): Promise<{
 /**
  * The ids of the sections on the page right now, in order.
  *
- * Read through `page.evaluate` and not through a `FrameLocator`, because every verb here replaces
- * the document and some of them remount the frame: a locator resolved a moment earlier throws
- * «Frame was detached» mid-swap, which is what the first version of this walk did. Asking the page
- * to find the live frame on each call cannot go stale, and it returns `[]` rather than throwing
- * while there is no document — which is exactly what a poll wants to see.
+ * Read through `page.evaluate` and not through a `FrameLocator`, because every verb here used to
+ * replace the document and some of them remounted the frame: a locator resolved a moment earlier
+ * threw «Frame was detached» mid-swap, which is what the first version of this walk did. Nothing
+ * replaces the document now (ADR 0051) and the shape is kept anyway: asking the page to find the
+ * frame on each call cannot go stale, and it returns `[]` rather than throwing while there is no
+ * document yet — which is exactly what a poll wants to see at the first paint.
  */
 function order(page: Page): Promise<string[]> {
   return page.evaluate(() => {
-    const doc = document.querySelector<HTMLIFrameElement>(
-      "iframe:not([data-buffered])",
-    )?.contentDocument;
+    const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
     if (!doc) return [];
     return [...doc.querySelectorAll("[data-section]")].map(
       (node) => node.getAttribute("data-section") ?? "",
@@ -417,25 +400,12 @@ async function tabToVerb(page: Page, verb: string): Promise<void> {
   });
 }
 
-/**
- * **Which route the canvas is on in this run** (ADR 0051 §6): what `onTheRouteAsked` put in every
- * context, or the editor's default when nothing was asked. The walks that mean different things
- * under the two routes — a buffered swap exists under one and not the other — ask this, and never
- * the page, so a walk cannot drift into testing whatever route it happens to find.
- */
-function canvasRoute(): CanvasMode {
-  const asked = process.env["RETORIKA_CANVAS"];
-  return asked === "swap" || asked === "patch" ? asked : DEFAULT_CANVAS_MODE;
-}
-
 /** The live frame's edit serial — `data-rb-edit` on its root — or `0` while there is no document. */
 async function editSerialOf(page: Page): Promise<number> {
   return page.evaluate(() => {
-    const doc = document.querySelector<HTMLIFrameElement>(
-      "iframe:not([data-buffered])",
-    )?.contentDocument;
-    // `documentElement` can be null while `contentDocument` is not: a frame between «replaced»
-    // and «parsed» under `swap`. That is one more turn of the poll, not a crash.
+    const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
+    // `documentElement` can be null while `contentDocument` is not: the frame between mounting
+    // and parsing its first document. That is one more turn of the poll, not a crash.
     const root = doc?.documentElement;
     if (!root || doc.querySelectorAll("[data-section]").length === 0) return 0;
     return Number(root.dataset["rbEdit"] ?? "0");
@@ -445,16 +415,16 @@ async function editSerialOf(page: Page): Promise<number> {
 /**
  * **Run `act`, and come back once the canvas shows its effect** (ADR 0051 §4, sprint 26 día 5).
  *
- * The signal is the edit serial the editor writes on the live document's root: under `patch` a
- * patch or a repaint moves it; under `swap` the new document is wired and stamped before it is
- * promoted, so the live frame's serial moves the moment the swap lands. One wait for both routes,
- * which is what lets one suite run twice without two versions of itself.
+ * The signal is the edit serial the editor writes on the document's root, which a patch or a
+ * repaint moves. It was written to serve both routes at once — under `swap` the arriving document
+ * was wired and stamped before it was promoted, so the serial moved the moment the swap landed —
+ * and that is what let one suite run twice without two versions of itself.
  *
- * This replaces `replacingTheDocument`, which stamped the outgoing document and waited for one
- * without the stamp — a wait that under `patch` never returns, because nothing replaces anything.
- * Thirty-eight walks were red under the key for that reason alone on día 4, and none for a defect.
- * Its one guard survives: the serial is read before `act`, and a serial that cannot be read makes
- * the wait fail rather than pass on nothing.
+ * It replaced `replacingTheDocument`, which stamped the outgoing document and waited for one
+ * without the stamp: a wait that never returns when nothing replaces anything. Thirty-eight walks
+ * were red for that reason alone on sprint 26 día 4, and none for a defect. Its one guard survives:
+ * the serial is read before `act`, and a serial that cannot be read makes the wait fail rather than
+ * pass on nothing.
  */
 /**
  * **Wait for the canvas to go quiet** (día 5): no change of the edit serial for `quietMs`.
@@ -463,10 +433,11 @@ async function editSerialOf(page: Page): Promise<number> {
  * — because a free section's rows are measured on the live layout (ADR 0050 §3) — its rows are
  * written in a second step a couple of hundred milliseconds later. `afterTheEdit` returns after the
  * first, and a gesture begun between the two measures a box the second one moves: the photograph's
- * bottom edge was no longer where the pointer pressed, and a drop landed 22 px high. Under `swap`
- * the same two steps were two rebuilds slow enough to hide it; under `patch` they are two patches
- * fast enough to show it — in CI and in two of three local full runs. So every escalation in these
- * walks waits for the second step the way a person's eye does: until nothing moves.
+ * bottom edge was no longer where the pointer pressed, and a drop landed 22 px high. The two steps
+ * were two rebuilds under `swap`, slow enough to hide the race; as two patches they are fast enough
+ * to show it — in CI and in two of three local full runs. So every escalation in these walks waits
+ * for the second step the way a person's eye does: until nothing moves. **Whether escalation should
+ * be one step is sprint 27 día 5's**; this is the harness covering for the editor until it is.
  */
 async function canvasQuiet(frame: FrameLocator, quietMs = 400, limitMs = 5_000): Promise<void> {
   const serial = async (): Promise<number> => {
@@ -475,7 +446,7 @@ async function canvasQuiet(frame: FrameLocator, quietMs = 400, limitMs = 5_000):
         .locator("html")
         .evaluate((root) => Number((root as HTMLElement).dataset["rbEdit"] ?? "0"));
     } catch {
-      // A frame mid-swap has no root to ask; that is a change, not an answer.
+      // A frame with no document yet has no root to ask; that is a change, not an answer.
       return -1;
     }
   };
@@ -699,9 +670,7 @@ async function spillingInsideTheCanvas(
   page: Page,
 ): Promise<{ examined: number; markers: string[]; found: CanvasSpill[] }> {
   return page.evaluate(() => {
-    const doc = document.querySelector<HTMLIFrameElement>(
-      "iframe:not([data-buffered])",
-    )?.contentDocument;
+    const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
     if (!doc) return { examined: 0, markers: [], found: [] };
     const out: { what: string; text: string; spill: number }[] = [];
     // Which pieces of chrome the walk actually looked at. Without this, «examined > 0» only says
@@ -804,31 +773,8 @@ let page: Page;
 beforeAll(async () => {
   await startEditorServer();
   browser = await chromium.launch();
-  onTheRouteAsked(browser);
   page = await (await browser.newContext()).newPage();
 }, 90_000);
-
-/**
- * **One suite, two canvases** (ADR 0051 §6, sprint 26 día 3). The editor keeps its old route —
- * replace the frame's document on every edit — behind `localStorage["rb.canvas"]` until sprint 27
- * closes, beside the new one that patches the document in place. CI runs these walks once per
- * route; `RETORIKA_CANVAS=patch` is how the second run asks, and this puts the key into every
- * context the suite opens, so a walk that opens its own context is on the asked route too. A walk
- * that sets the key itself (día 2's) sets the same value and loses nothing. Unset, nothing here
- * runs and the editor's default decides, which is what the first job measures.
- */
-function onTheRouteAsked(browser: Browser): void {
-  const route = process.env["RETORIKA_CANVAS"];
-  if (route !== "patch" && route !== "swap") return;
-  const open = browser.newContext.bind(browser);
-  browser.newContext = async (options) => {
-    const context = await open(options);
-    await context.addInitScript((value) => {
-      window.localStorage.setItem("rb.canvas", value);
-    }, route);
-    return context;
-  };
-}
 
 afterAll(async () => {
   await page?.context().close();
@@ -906,8 +852,7 @@ async function scrolledPreview(
           (want) =>
             new Promise<number>((done) => {
               const live = () =>
-                document.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")
-                  ?.contentDocument;
+                document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
               const doc = live();
               if (!doc?.defaultView) return done(-1);
               const stamp = Math.random();
@@ -2514,9 +2459,9 @@ describe("sprint 8 — el modo estudio: encender, diseñar a mano, colocar, y vo
        * inside the preview is the `<iframe>` — so focusing it restores the element the frame's own
        * document still holds, which is «Volver a la original» on the hand-design bar. That is right
        * when the dialog is cancelled and wrong when it is confirmed: reverting puts the section back
-       * under the catalog and the bar goes with it. Reverting also flips the section's `source`,
-       * which changes `chromeKey` and sends the rebuild through the buffered swap, so the intent has
-       * to survive two documents.
+       * under the catalog and the bar goes with it. Reverting arrives as a patch and a redraw, so
+       * the intent has to survive the bar it was pointing at being drawn again — and under `swap`,
+       * until sprint 27 día 1, it had to survive two documents.
        */
       await expect
         .poll(
@@ -5305,7 +5250,7 @@ async function probeOn(context: BrowserContext): Promise<void> {
 /** What the canvas looks like from the editor's window, at this instant. */
 function canvasSnapshot(page: Page, sectionId: string) {
   return page.evaluate((id) => {
-    const live = document.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])");
+    const live = document.querySelector<HTMLIFrameElement>("iframe");
     const doc = live?.contentDocument;
     const section = doc?.querySelector<HTMLElement>(`[data-section="${id}"]`);
     const box = section?.getBoundingClientRect();
@@ -5330,10 +5275,8 @@ function canvasSnapshot(page: Page, sectionId: string) {
       readyState: doc?.readyState ?? "no document",
       wired: doc?.documentElement.dataset["rbWired"] ?? null,
       serial: doc?.documentElement.dataset["rbSerial"] ?? null,
-      buffered: document.querySelectorAll("iframe[data-buffered]").length,
-      hitInEditor: hit
-        ? `${hit.tagName}${hit === live ? " (the live frame)" : hit.hasAttribute("data-buffered") ? " (a BUFFERED frame)" : ""}`
-        : null,
+      frames: document.querySelectorAll("iframe").length,
+      hitInEditor: hit ? `${hit.tagName}${hit === live ? " (the canvas)" : ""}` : null,
       hitInFrame: hitInFrame
         ? `${hitInFrame.tagName} in ${hitInFrame.closest("[data-section]")?.getAttribute("data-section") ?? "-"}`
         : null,
@@ -5622,9 +5565,7 @@ describe("la ficha nueva nace con el cursor dentro, y quitar una no lo tira al s
   /** Qué ficha tiene el foco, por su posición en la lista, y qué dice. */
   async function focusedLine(page: Page): Promise<{ at: number; text: string }> {
     return page.evaluate(() => {
-      const doc = document.querySelector<HTMLIFrameElement>(
-        "iframe:not([data-buffered])",
-      )?.contentDocument;
+      const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
       const active = doc?.activeElement as HTMLElement | null;
       const line = active?.closest<HTMLElement>("[data-item]");
       if (!doc || !line) return { at: -1, text: active?.tagName ?? "nada" };
@@ -6570,9 +6511,9 @@ describe("sprint 14 día 6 — enlazar, avisar y desenlazar", () => {
       // the same reason.
       //
       // **Counting is the wrong wait, though, and `withTools` is where that is now handled.** Both
-      // documents hold the same three cards, so `toHaveCount(3)` is answered by whichever one is
-      // mounted — including the one on its way out. `afterTheEdit` waits for the swap
-      // itself; this stays as the wait for the content being there at all.
+      // documents held the same three cards under the buffered swap, so `toHaveCount(3)` was
+      // answered by whichever one was mounted, including the one on its way out. `afterTheEdit`
+      // waits for the edit serial; this stays as the wait for the content being there at all.
       await expect(cards).toHaveCount(3);
       const before = await cards.evaluateAll((nodes) =>
         nodes.map((node) => node.textContent?.replace(/\s+/g, " ").trim()),
@@ -9255,7 +9196,7 @@ describe("abrir un panel no tapa la página ni la convierte en otra", () => {
       const card = document.querySelector('[data-testid="canvas-card"]');
       // The preview frame is still found as an iframe: it has no name of its own to hook, and
       // "the one iframe on the page" is a fact about the editor, not about its styling.
-      const frame = card?.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])");
+      const frame = card?.querySelector<HTMLIFrameElement>("iframe");
       if (!row || !card || !frame) return { error: "no se encuentra el lienzo" };
 
       /**
@@ -9454,9 +9395,7 @@ describe("abrir un panel no tapa la página ni la convierte en otra", () => {
       /** Si la sección cae dentro de la ventana del propio marco, que es lo que se ve. */
       const inView = (section: string) =>
         walker.evaluate((id) => {
-          const doc = document.querySelector<HTMLIFrameElement>(
-            "iframe:not([data-buffered])",
-          )?.contentDocument;
+          const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
           const win = doc?.defaultView;
           const el = doc?.querySelector(`[data-section="${id}"]`);
           if (!doc || !win || !el) return null;
@@ -9744,8 +9683,7 @@ describe("lo que el cromo del editor dibuja dentro del lienzo, y el aviso del in
       const canvasWidth = async () =>
         walker.evaluate(
           () =>
-            document.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")?.contentWindow
-              ?.innerWidth ?? -1,
+            document.querySelector<HTMLIFrameElement>("iframe")?.contentWindow?.innerWidth ?? -1,
         );
 
       /** Dos lecturas seguidas iguales: el lienzo deja de moverse tras un cambio de ventana. */
@@ -9926,7 +9864,7 @@ describe("lo que el cromo del editor dibuja dentro del lienzo, y el aviso del in
         .poll(async () =>
           walker.evaluate(() => {
             const bar = document
-              .querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")
+              .querySelector<HTMLIFrameElement>("iframe")
               ?.contentDocument?.querySelector<HTMLElement>(".rb-handmade");
             return bar ? bar.getAnimations().every((a) => a.playState === "finished") : false;
           }),
@@ -10221,7 +10159,7 @@ describe("cambiar de escritorio a móvil se ve recolocarse", () => {
     await page.evaluate(() => {
       (window as unknown as { __w: number[] }).__w = [];
       const card = document.querySelector('[data-testid="canvas-card"]');
-      const frame = card?.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])");
+      const frame = card?.querySelector<HTMLIFrameElement>("iframe");
       const started = performance.now();
       const tick = () => {
         (window as unknown as { __w: number[] }).__w.push(frame?.contentWindow?.innerWidth ?? 0);
@@ -10497,16 +10435,18 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
   }, 300_000);
 
   /**
-   * Watch the preview through a swap, with **two instruments, because there are two questions**.
+   * Watch the preview while something happens to it, with **two instruments, because there are two
+   * questions**.
    *
    * `samples` is one reading per animation frame: it answers what a person sees, which is exactly
    * what a repaint-based sampler is for.
    *
-   * `events` is one reading per DOM change, from a `MutationObserver`. It exists because the swap
-   * turned out to be **faster than a frame**: measured here, a `requestAnimationFrame` loop never
-   * once caught the buffered frame — the arriving page parsed, was wired and took over between two
-   * paints. So every claim about the mechanism is read from the mutation that made it, and the
-   * hit test is run inside that callback, at the one moment the buffered frame is on screen.
+   * `events` is one reading per DOM change, from a `MutationObserver`. It was written because the
+   * buffered swap turned out to be **faster than a frame** — a `requestAnimationFrame` loop never
+   * once caught the second frame, which parsed, wired and took over between two paints — so every
+   * claim about the mechanism had to be read from the mutation that made it. With one document
+   * (ADR 0051) there is no second frame to catch, and what the counter is for now is the opposite
+   * claim: that **no** frame was ever added or removed while the canvas changed.
    *
    * Both report how much they saw, and every caller asserts on that first: an instrument that
    * observed nothing passes every assertion about what it observed, which is how this repository's
@@ -10514,13 +10454,7 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
    */
   type Watch = {
     samples: { opacity: string; sections: number }[];
-    events: {
-      frames: number;
-      buffered: number;
-      inert: boolean | null;
-      pointerEvents: string | null;
-      hitBuffered: boolean | null;
-    }[];
+    events: { frames: number }[];
   };
   async function watchPreviewWhile(
     page: Page,
@@ -10534,24 +10468,7 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
 
       const record = () => {
         if (bag.__w.events.length > 500) return;
-        const buffered = document.querySelector<HTMLIFrameElement>("iframe[data-buffered]");
-        let inert: boolean | null = null;
-        let pointerEvents: string | null = null;
-        let hitBuffered: boolean | null = null;
-        if (buffered) {
-          const box = buffered.getBoundingClientRect();
-          const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
-          inert = buffered.inert === true;
-          pointerEvents = getComputedStyle(buffered).pointerEvents;
-          hitBuffered = hit === buffered || buffered.contains(hit);
-        }
-        bag.__w.events.push({
-          frames: document.querySelectorAll("iframe").length,
-          buffered: document.querySelectorAll("iframe[data-buffered]").length,
-          inert,
-          pointerEvents,
-          hitBuffered,
-        });
+        bag.__w.events.push({ frames: document.querySelectorAll("iframe").length });
       };
       // Scoped to the card the frames live in, so React's ordinary attribute churn elsewhere in
       // the editor does not drown the handful of changes this is about.
@@ -10559,7 +10476,7 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
       new MutationObserver(record).observe(watched, { subtree: true, childList: true });
 
       const tick = () => {
-        const live = document.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])");
+        const live = document.querySelector<HTMLIFrameElement>("iframe");
         const doc = live?.contentDocument;
         bag.__w.samples.push({
           opacity: live ? Number(getComputedStyle(live).opacity).toFixed(2) : "gone",
@@ -10582,17 +10499,17 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
 
   it("la vista previa nunca se queda sin página al rehacerse el cromo", async () => {
     /**
-     * **The flicker, and what replaced it.** Turning the tools on used to remount the preview
-     * frame, and a remounted frame holds no document for a frame or two — measured at one sample
-     * in 120 with `readyState` still `loading`. PR186 stopped that frame painting white and gave
-     * the arrival a fade, which is the best a single frame can do: the page still went away and
-     * came back.
+     * **The flicker, and the two things that replaced it.** Turning the tools on used to remount
+     * the preview frame, and a remounted frame holds no document for a frame or two — measured at
+     * one sample in 120 with `readyState` still `loading`. PR186 stopped that frame painting white
+     * and gave the arrival a fade, which is the best a single frame can do: the page still went
+     * away and came back. Sprint 15 loaded the arriving page in a second, invisible frame instead,
+     * so there was never a frame without a page in it.
      *
-     * Now the arriving page loads in a second, invisible frame and the two change places only once
-     * it is complete, so there is no frame without a page in it. That is a stronger claim than the
-     * fade's, and it is what this asserts: **every** sample has sections in it and **every** sample
-     * is fully opaque. The fade is gone from the swap because there is nothing left for it to
-     * cover — it stays on the first load, which has nothing to fade from.
+     * ADR 0051 made the question disappear rather than answer it: the switch is a redraw of the
+     * chrome over a document that never goes anywhere (sprint 26 día 4). So the claim is stronger
+     * than either — **every** sample has sections in it, **every** sample is fully opaque, and the
+     * frame count never moves off one.
      */
     const walker = await (await browser.newContext()).newPage();
     try {
@@ -10612,43 +10529,35 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
         faded.length,
         `opacidades distintas de 1: ${[...new Set(faded.map((s) => s.opacity))].join(", ")}`,
       ).toBe(0);
-      // And the route did what it promises, so none of the above is true merely because nothing
-      // happened. Under `swap` a frame really was prepared — read from the mutations rather than
-      // the frames, the swap is quicker than a paint. Under `patch` (día 5) the promise is the
-      // opposite one: no second frame, ever; the switch repaints the one there is.
-      if (canvasRoute() === "swap") {
-        expect(
-          watch.events.filter((event) => event.buffered === 1).length,
-          "no se preparó ningún marco: la prueba no ha visto un relevo",
-        ).toBeGreaterThan(0);
-      } else {
-        // The watcher records frame mutations, and under `patch` there are none to record: the
-        // samples are the evidence (thirty-plus, none blank, asserted above), and the frames are
-        // the one that was there, before and after.
-        expect(
-          watch.events.filter((event) => event.buffered > 0 || event.frames !== 1).length,
-          "bajo `patch` apareció un segundo marco",
-        ).toBe(0);
-        await expect(walker.locator("iframe")).toHaveCount(1);
-      }
+      // And the promise the route makes, so none of the above is true merely because nothing
+      // happened: no second frame, ever. The watcher records frame mutations and there are none to
+      // record — the samples are the evidence (thirty-plus, none blank, asserted above), and the
+      // frame is the one that was there, before and after.
+      expect(
+        watch.events.filter((event) => event.frames !== 1).length,
+        "apareció o desapareció un marco",
+      ).toBe(0);
+      await expect(walker.locator("iframe")).toHaveCount(1);
       await expect(walker.getByRole("button", { name: "Diseño" })).toHaveCount(1);
     } finally {
       await walker.context().close();
     }
   }, 300_000);
 
-  it("un clic durante el relevo no cae en el marco oculto", async () => {
+  it("doce clics mientras se enciende el diseño no editan nada ni traen otro marco", async () => {
     /**
-     * Direction's adjustment, and it names a defect the first draft of this had: the frame being
-     * prepared covers the live one, so an invisible frame that still took a click would swallow it
-     * into a document nobody can see — the click would land, edit something, and appear to do
-     * nothing at all.
+     * **What this was, and what is left of it.** Direction's adjustment named a defect the first
+     * draft of the buffered swap had: the frame being prepared covered the live one, so an
+     * invisible frame that still took a click would swallow it into a document nobody can see —
+     * the click would land, edit something, and appear to do nothing at all. It was asserted with
+     * the browser's own hit test, inside the mutation that inserted the frame, which was the one
+     * moment there was anything to ask about.
      *
-     * Asserted with the browser's own hit test rather than by reading the attribute back, and run
-     * inside the mutation that inserts the frame, which is the one moment it is there to ask
-     * about: `elementFromPoint` at the middle of the canvas must answer something other than the
-     * buffered frame. The CPU is throttled as well, the same device the «attaches the chrome
-     * exactly once» guard uses, so the real presses below have a window to land in.
+     * There is no second frame to fall into (sprint 27 día 1), so what survives is the outcome
+     * direction actually cared about: **twelve presses into the canvas while the tools come on
+     * change nothing and leave one frame standing.** The CPU is throttled twentyfold, the same
+     * device the «attaches the chrome exactly once» guard uses, so the presses land in the window
+     * where the chrome is being drawn rather than comfortably after it.
      */
     const context = await browser.newContext();
     const walker = await context.newPage();
@@ -10678,32 +10587,14 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
       );
       await throttle.send("Emulation.setCPUThrottlingRate", { rate: 1 });
 
-      const whileBuffered = watch.events.filter((event) => event.buffered === 1);
-      if (canvasRoute() === "swap") {
-        expect(
-          whileBuffered.length,
-          "nunca se vio un marco preparándose: la prueba sería vacua",
-        ).toBeGreaterThan(0);
-        expect(
-          whileBuffered.filter((event) => event.hitBuffered).length,
-          `el marco oculto se quedó el clic en ${whileBuffered.filter((e) => e.hitBuffered).length} de ${whileBuffered.length} momentos`,
-        ).toBe(0);
-        expect(
-          whileBuffered.filter((event) => event.inert !== true).length,
-          "el marco oculto no era inert",
-        ).toBe(0);
-        expect(
-          [...new Set(whileBuffered.map((event) => event.pointerEvents))],
-          "el marco oculto aceptaba el puntero",
-        ).toEqual(["none"]);
-      } else {
-        // Under `patch` there is no hidden frame for a click to fall into (día 5): the twelve
-        // clicks land on the one frame there is, throttled or not. No frame mutation means no
-        // event; the samples below and the text comparison are what this route is held to.
-        expect(watch.samples.length, "el muestreo no miró nada").toBeGreaterThan(30);
-        expect(whileBuffered.length, "bajo `patch` se preparó un marco").toBe(0);
-        expect(watch.events.filter((event) => event.frames !== 1).length).toBe(0);
-      }
+      // The twelve clicks land on the one frame there is, throttled or not. The sampler has to
+      // have looked — an instrument that saw nothing passes everything — and no frame was ever
+      // added or taken away while it looked.
+      expect(watch.samples.length, "el muestreo no miró nada").toBeGreaterThan(30);
+      expect(
+        watch.events.filter((event) => event.frames !== 1).length,
+        "apareció o desapareció un marco durante los clics",
+      ).toBe(0);
 
       // And nothing was edited anywhere: the presses reached the live frame, which selects rather
       // than types, and one frame is left standing.
@@ -10718,12 +10609,15 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
 
   it("encender y apagar seguido no deja dos marcos", async () => {
     /**
-     * Direction's adjustment: never two frames being prepared at once, and a key that changes
-     * again mid-swap discards the pending one rather than queueing it.
+     * Direction's adjustment: never two frames being prepared at once, and a key that changed
+     * again mid-swap discarded the pending one rather than queueing it. Under the buffered swap
+     * that needed no bookkeeping to be true — `pendingKey` was one string, so a second swap
+     * overwrote the first — and this said so out loud, because «one slot» was a property of the
+     * shape of the state that a refactor could have lost without noticing.
      *
-     * It needs no bookkeeping to be true — `pendingKey` is one string, so a second swap overwrites
-     * the first — and this is what says so out loud, because «one slot» is a property of the shape
-     * of the state that a later refactor could lose without noticing.
+     * The shape it guards now is one frame and no slots at all (sprint 27 día 1). Flipping the
+     * switch twice in a row, under a twentyfold CPU throttle, must still leave the one frame and
+     * land on «off» with the chrome that goes with it.
      */
     const context = await browser.newContext();
     const walker = await context.newPage();
@@ -10739,21 +10633,12 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
       });
       await throttle.send("Emulation.setCPUThrottlingRate", { rate: 1 });
 
-      // Two at most under `swap`, the one being shown and the one being prepared — and the
-      // watcher must have seen the swaps to say so. Under `patch` on and off are two repaints of
-      // the same document (día 5): nothing for the watcher to record, and never a second frame.
-      if (canvasRoute() === "swap") {
-        expect(watch.events.length, "el observador no vio ningún cambio").toBeGreaterThan(0);
-        const most = Math.max(...watch.events.map((event) => event.frames));
-        expect(most, `llegó a haber ${most} marcos a la vez`).toBeLessThanOrEqual(2);
-      } else {
-        expect(watch.samples.length, "el muestreo no miró nada").toBeGreaterThan(30);
-        expect(watch.events.filter((event) => event.frames > 1).length).toBe(0);
-      }
-      expect(
-        watch.events.filter((event) => event.buffered > 1).length,
-        "hubo más de un marco preparándose",
-      ).toBe(0);
+      // On and off are two redraws of the same document (sprint 26 día 4), so there is never a
+      // second frame — not two at a time, as the buffered swap allowed, and not one at a time
+      // either. The sampler has to have looked for that to mean anything.
+      expect(watch.samples.length, "el muestreo no miró nada").toBeGreaterThan(30);
+      const most = watch.events.length === 0 ? 1 : Math.max(...watch.events.map((e) => e.frames));
+      expect(most, `llegó a haber ${most} marcos a la vez`).toBe(1);
       // Still never blank, through two swaps on top of each other.
       expect(watch.samples.filter((sample) => sample.sections < 1).length).toBe(0);
 
@@ -10766,18 +10651,20 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
     }
   }, 300_000);
 
-  it("el foco del teclado vuelve al marco nuevo", async () => {
+  it("el foco del teclado se queda en el lienzo al escalar una sección", async () => {
     /**
-     * Direction's adjustment, and the reason it matters more than it sounds: the swap replaces the
-     * element focus was inside, so without putting it back, editing with a keyboard would drop
-     * focus to the document on every swap — silently, mid-sentence.
+     * Direction's adjustment, and the reason it matters more than it sounds: the swap replaced the
+     * element focus was inside, so without putting it back, editing with a keyboard dropped focus
+     * to the document on every swap — silently, mid-sentence. Escalating is a patch and a redraw
+     * now (sprint 26 día 4), so the element focus is on is drawn again rather than replaced, and
+     * **this is what says the keyboard survives that**.
      *
      * **Driven by escalating from inside the canvas, not by the switch**, and that is the whole
      * design of the test rather than a detail. The switch is a button in the editor's own chrome,
-     * so pressing it takes focus out of the preview before the swap even starts — the first version
-     * of this test asserted against that and was measuring nothing. Accepting «Diseñar a mano» is a
-     * press on a button *inside* the frame, which is the real case where focus is in the document
-     * that is about to be replaced.
+     * so pressing it takes focus out of the preview before anything happens to the canvas — the
+     * first version of this test asserted against that and was measuring nothing. Accepting
+     * «Diseñar a mano» is a press on a button *inside* the frame, which is the real case where the
+     * keyboard is in the page the editor is about to change under it.
      *
      * An `<iframe>` is the parent document's `activeElement` whenever focus is anywhere inside it,
      * which is both how this is read before the swap and how it is asserted after.
@@ -10793,7 +10680,7 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
       await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
       expect(
         await walker.evaluate(() => document.activeElement?.tagName ?? "none"),
-        "el foco no estaba dentro de la vista previa antes del relevo",
+        "el foco no estaba dentro de la vista previa antes de escalar",
       ).toBe("IFRAME");
 
       await frame.locator(".rb-escalate-yes").click();
@@ -10804,7 +10691,7 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
       await expect
         .poll(async () =>
           walker.evaluate(() => {
-            const live = document.querySelector("iframe:not([data-buffered])");
+            const live = document.querySelector("iframe");
             return document.activeElement === live
               ? "preview"
               : (document.activeElement?.tagName ?? "none");
@@ -10892,16 +10779,14 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
           .poll(async () =>
             walker.evaluate(() => {
               const bar = document
-                .querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")
+                .querySelector<HTMLIFrameElement>("iframe")
                 ?.contentDocument?.querySelector<HTMLElement>(".rb-handmade");
               return bar ? bar.getAnimations().every((a) => a.playState === "finished") : false;
             }),
           )
           .toBe(true);
         const seen = await walker.evaluate(() => {
-          const doc = document.querySelector<HTMLIFrameElement>(
-            "iframe:not([data-buffered])",
-          )?.contentDocument;
+          const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
           const bar = doc?.querySelector<HTMLElement>(".rb-handmade");
           // La sección es la de al lado ahora que la barra tiene su propia fila, y seguía siendo
           // la antepasada cuando se dibujaba encima. Las dos formas, para que esta guarda mida lo
@@ -10958,8 +10843,7 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
         .poll(async () =>
           walker.evaluate(
             () =>
-              document.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")
-                ?.contentWindow?.innerWidth ?? -1,
+              document.querySelector<HTMLIFrameElement>("iframe")?.contentWindow?.innerWidth ?? -1,
           ),
         )
         .toBeLessThan(400);
@@ -11002,9 +10886,7 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
       // Una sección con sitio por encima, que es lo que distingue este caso del de la portada.
       const where = async () =>
         walker.evaluate(() => {
-          const doc = document.querySelector<HTMLIFrameElement>(
-            "iframe:not([data-buffered])",
-          )?.contentDocument;
+          const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
           const el = doc?.querySelector('[data-section="sec-services"]');
           return {
             top: Math.round(el?.getBoundingClientRect().top ?? -9_999),
@@ -11036,7 +10918,7 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
         .poll(async () =>
           walker.evaluate(() => {
             const bar = document
-              .querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")
+              .querySelector<HTMLIFrameElement>("iframe")
               ?.contentDocument?.querySelector<HTMLElement>(".rb-handmade");
             return bar ? bar.getAnimations().every((a) => a.playState === "finished") : false;
           }),
@@ -11065,10 +10947,12 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
      * importar si la edición se hizo en una sección posterior… le obliga a hacer scroll down para
      * volver al área que estaba editando».
      *
-     * **Un relevo y una edición no son lo mismo.** El relevo tiene dos marcos, así que el punto de
-     * lectura se puede copiar de uno a otro; una edición cambia `srcDoc` en el marco vivo y el
-     * navegador reemplaza el documento sin que haya nada de donde copiar. `carryReadingPosition`
-     * nunca se ejecutaba en este camino.
+     * **Y desde el ADR 0051 se cumple por construcción**: una edición es un parche sobre el mismo
+     * documento, así que el desplazamiento no se toca y no hay nada que reponer. Antes hacían falta
+     * dos mecanismos y ninguno cubría este camino: el relevo amortiguado tenía dos marcos y podía
+     * copiar el punto de lectura de uno a otro, pero una edición cambiaba `srcDoc` en el marco vivo
+     * y el navegador reemplazaba el documento sin que hubiera nada de donde copiar. La prueba se
+     * queda porque lo que asevera es la promesa, no el mecanismo.
      *
      * El `scrollIntoView` se asevera distinto de cero antes de medir nada: una prueba que empieza
      * en el principio de la página no puede distinguir «se quedó quieta» de «volvió al principio».
@@ -11094,9 +10978,7 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
       await expect(walker.getByText("Guardado en este navegador")).toBeVisible();
 
       const after = await walker.evaluate(
-        () =>
-          document.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")?.contentWindow
-            ?.scrollY ?? -1,
+        () => document.querySelector<HTMLIFrameElement>("iframe")?.contentWindow?.scrollY ?? -1,
       );
       expect(
         Math.abs(after - reading),
@@ -11174,9 +11056,7 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
       // Y que la página de destino se puede desplazar de verdad, que es lo que hace que el 0 de
       // abajo signifique algo. Sin esto la prueba no mide nada: lo comprobé saboteando el código.
       const room = await walker.evaluate(() => {
-        const doc = document.querySelector<HTMLIFrameElement>(
-          "iframe:not([data-buffered])",
-        )?.contentDocument;
+        const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
         const win = doc?.defaultView;
         if (!doc?.documentElement || !win) return -1;
         return doc.documentElement.scrollHeight - win.innerHeight;
@@ -11189,9 +11069,7 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
       await expect
         .poll(async () =>
           walker.evaluate(
-            () =>
-              document.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")
-                ?.contentWindow?.scrollY ?? -1,
+            () => document.querySelector<HTMLIFrameElement>("iframe")?.contentWindow?.scrollY ?? -1,
           ),
         )
         .toBe(0);
@@ -11255,9 +11133,7 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
        */
       const onScreen = async (which?: string) =>
         walker.evaluate((id: string | undefined) => {
-          const doc = document.querySelector<HTMLIFrameElement>(
-            "iframe:not([data-buffered])",
-          )?.contentDocument;
+          const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
           const win = doc?.defaultView;
           if (!doc || !win) return { id: "", top: -10_000, scrollY: -1 };
           const sections = [...doc.querySelectorAll<HTMLElement>("[data-section]")];
@@ -11272,7 +11148,8 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
         }, which);
       const before = await onScreen();
 
-      // The swap, with the hand-designed section above the reading point losing its bar on the way.
+      // Turning the tools off, with the hand-designed section above the reading point losing its
+      // bar on the way — which is 44 px coming out of the flow above what is being read.
       await walker.getByRole("switch").first().click();
       await expect(walker.getByRole("button", { name: "Diseño" })).toHaveCount(0);
       await expect(frame.locator(".rb-handmade")).toHaveCount(0);
@@ -11285,7 +11162,9 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
       //
       // Se mide dónde cae en pantalla la sección que se estaba leyendo, que es lo que significa
       // «no se ha movido» para quien edita.
-      expect(before.id, "no se encontró ninguna sección a la vista antes del relevo").not.toBe("");
+      expect(before.id, "no se encontró ninguna sección a la vista antes de apagarlas").not.toBe(
+        "",
+      );
       const after = await onScreen(before.id);
       expect(
         after.id,
@@ -11352,9 +11231,7 @@ describe("sprint 17 día 3 — el lienzo se maneja con el teclado", () => {
    */
   function focusedSection(page: Page): Promise<string | null> {
     return page.evaluate(() => {
-      const doc = document.querySelector<HTMLIFrameElement>(
-        "iframe:not([data-buffered])",
-      )?.contentDocument;
+      const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
       const active = doc?.activeElement as HTMLElement | null | undefined;
       return active?.dataset?.["section"] ?? null;
     });
@@ -11366,9 +11243,7 @@ describe("sprint 17 día 3 — el lienzo se maneja con el teclado", () => {
    * one, which is a different question from the one these walks ask. */
   function focusedElementId(page: Page): Promise<string | null> {
     return page.evaluate(() => {
-      const doc = document.querySelector<HTMLIFrameElement>(
-        "iframe:not([data-buffered])",
-      )?.contentDocument;
+      const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
       const active = doc?.activeElement as HTMLElement | null | undefined;
       return active?.dataset?.["id"] ?? null;
     });
@@ -11611,9 +11486,7 @@ describe("sprint 17 día 3 — axe sobre el documento del editor", () => {
 
   function landmarksInFrame(page: Page, selector: string): Promise<string[]> {
     return page.evaluate((list) => {
-      const doc = document.querySelector<HTMLIFrameElement>(
-        "iframe:not([data-buffered])",
-      )?.contentDocument;
+      const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
       if (!doc) return [];
       return [...doc.querySelectorAll(list)].map(
         (node) =>
@@ -11661,9 +11534,7 @@ describe("sprint 17 día 3 — axe sobre el documento del editor", () => {
       await expect
         .poll(() =>
           page.evaluate(() => {
-            const doc = document.querySelector<HTMLIFrameElement>(
-              "iframe:not([data-buffered])",
-            )?.contentDocument;
+            const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
             if (!doc) return "no document";
             const sections = doc.querySelectorAll("[data-section]").length;
             const groups = doc.querySelectorAll('[data-section][role="group"]').length;
@@ -11915,9 +11786,7 @@ describe("sprint 17 día 5 — lo que los verbos abren también responde al tecl
   /** Which choice inside the open popup has focus, as `index/total`, plus whether it is pressed. */
   function popupFocus(page: Page): Promise<string> {
     return page.evaluate(() => {
-      const doc = document.querySelector<HTMLIFrameElement>(
-        "iframe:not([data-buffered])",
-      )?.contentDocument;
+      const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
       const panel = doc?.querySelector(".rb-compositions");
       if (!panel) return "no popup";
       const choices = [...panel.querySelectorAll("button:not([disabled])")];
@@ -12122,9 +11991,7 @@ describe("sprint 17 día 6 — «+ Añadir sección aquí» abre con el cursor e
   /** Where focus is in the editor's own document, by shape, for the menu's own controls. */
   function menuFocus(page: Page): Promise<string> {
     return page.evaluate(() => {
-      const doc = document.querySelector<HTMLIFrameElement>(
-        "iframe:not([data-buffered])",
-      )?.contentDocument;
+      const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
       const active = doc?.activeElement as HTMLElement | null | undefined;
       if (!active) return "none";
       const inMenu = active.closest?.(".rb-menu") ? "in-menu " : "";
@@ -12465,9 +12332,7 @@ describe("sprint 17 día 7 — el recorrido entero sin tocar el ratón", () => {
        */
       const styleOf = () =>
         page.evaluate(() => {
-          const doc = document.querySelector<HTMLIFrameElement>(
-            "iframe:not([data-buffered])",
-          )?.contentDocument;
+          const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
           /*
            * **«no page» while the frame is between documents, so the poll retries instead of
            * throwing.** Picking a palette replaces the frame's `srcDoc`, and for one sample after
@@ -12497,9 +12362,7 @@ describe("sprint 17 día 7 — el recorrido entero sin tocar el ratón", () => {
             .join("|");
         });
       await page.evaluate(() => {
-        const doc = document.querySelector<HTMLIFrameElement>(
-          "iframe:not([data-buffered])",
-        )?.contentDocument;
+        const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
         return doc?.fonts.ready;
       });
       const styleBefore = await styleOf();
@@ -14217,9 +14080,7 @@ describe("sprint 20 día 2 — el grupo de verbos se mueve, con un asa", () => {
       // primera versión de esta caminata midió el padre, leyó 1 y se dio por buena sin haber
       // probado nada de lo que dice su nombre.
       const zoom = await walker.evaluate(() => {
-        let node = document.querySelector<HTMLElement>(
-          "iframe:not([data-buffered])",
-        )?.parentElement;
+        let node = document.querySelector<HTMLElement>("iframe")?.parentElement;
         while (node) {
           const found = /matrix\(([\d.]+)/.exec(getComputedStyle(node).transform);
           if (found?.[1]) return Number(found[1]);
@@ -15523,9 +15384,7 @@ describe("sprint 24 día 7 — un texto se elige antes de escribir en él", () =
     describedBy: string | null;
   }> {
     return page.evaluate(() => {
-      const doc = document.querySelector<HTMLIFrameElement>(
-        "iframe:not([data-buffered])",
-      )?.contentDocument;
+      const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
       const active = doc?.activeElement as HTMLElement | null | undefined;
       return {
         id: active?.dataset?.["id"] ?? null,
@@ -16118,9 +15977,7 @@ describe("sprint 24 día 9 — el teclado lo mueve y lo dice", () => {
           .poll(
             () =>
               page.evaluate(() => {
-                const doc = document.querySelector<HTMLIFrameElement>(
-                  "iframe:not([data-buffered])",
-                )?.contentDocument;
+                const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
                 return (doc?.activeElement as HTMLElement | null)?.dataset?.["id"] ?? "";
               }),
             { message: "el teclado no volvió al elemento" },
@@ -16328,9 +16185,7 @@ describe("sprint 24 día 10 — el cierre, sin ratón", () => {
   /** What the keyboard is on **inside the canvas**, by shape, for a Tab that has to land in there. */
   function inFrame(page: Page): Promise<{ id: string; classes: string; tag: string }> {
     return page.evaluate(() => {
-      const doc = document.querySelector<HTMLIFrameElement>(
-        "iframe:not([data-buffered])",
-      )?.contentDocument;
+      const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
       const at = doc?.activeElement as HTMLElement | null | undefined;
       return {
         id: at?.dataset?.["id"] ?? "",
@@ -16405,9 +16260,7 @@ describe("sprint 24 día 10 — el cierre, sin ratón", () => {
        */
       const styleOf = () =>
         page.evaluate(() => {
-          const doc = document.querySelector<HTMLIFrameElement>(
-            "iframe:not([data-buffered])",
-          )?.contentDocument;
+          const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
           if (!doc?.defaultView || doc.documentElement === null) return "no page";
           return doc.defaultView
             .getComputedStyle(doc.documentElement)
@@ -17529,22 +17382,20 @@ describe("sprint 25 día 7 — las asas en táctil, y el móvil sin solape", () 
   }
 
   /**
-   * **Where the handles are, by document** — «live:8 buffered:0», say.
+   * **Where the handles are** — «live:8», say, and «live:8 live:0» if there were ever two frames.
    *
-   * The sentence a red run needed and did not have. An edit is shown by building the next version
-   * of the page in a **buffered** frame and swapping it in, so there are two live documents for a
-   * few milliseconds, and the first version of this walk could only say «no handle» about the one
-   * being looked at. Painting them into the other one is exactly the defect CI found, and this is
-   * what names it instead of leaving it to be guessed.
+   * The sentence a red run needed and did not have. An edit used to be shown by building the next
+   * version of the page in a buffered frame and swapping it in, so there were two live documents
+   * for a few milliseconds and the first version of this walk could only say «no handle» about the
+   * one it was looking at; painting them into the other one was exactly the defect CI found. One
+   * document since ADR 0051, so this now reads one number — and it still counts over every frame,
+   * because «how many frames are there» is the premise and not an assumption.
    */
   async function whereHandlesAre(page: Page): Promise<string> {
     return (
       await page.evaluate(() =>
         [...document.querySelectorAll("iframe")].map(
-          (frame) =>
-            `${frame.hasAttribute("data-buffered") ? "buffered" : "live"}:${
-              frame.contentDocument?.querySelectorAll(".rb-handle").length ?? -1
-            }`,
+          (frame) => `live:${frame.contentDocument?.querySelectorAll(".rb-handle").length ?? -1}`,
         ),
       )
     ).join(" ");
@@ -17741,7 +17592,7 @@ describe("sprint 25 día 7 — las asas en táctil, y el móvil sin solape", () 
       // Y el dedo aterriza donde dice: sin esto la caminata podría acabar aseverando que el
       // elemento elegido desplaza el lienzo, que es lo contrario de lo que se promete.
       const under = await page.evaluate((point) => {
-        const host = document.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])");
+        const host = document.querySelector<HTMLIFrameElement>("iframe");
         const box = host?.getBoundingClientRect();
         const inner = host?.contentDocument;
         const found = inner?.elementFromPoint(
@@ -18220,73 +18071,48 @@ describe("sprint 26 día 1 — la medida de hoy", () => {
       await page.keyboard.press("Enter");
       await expect(page.getByText("Guardado en este navegador")).toBeVisible();
 
-      // Bajo `swap`, hasta que el editor haya cableado un documento nuevo, que es lo que sigue a una
-      // edición en esa ruta. Bajo `patch` (día 5) la espera es la contraria: el parche llega, el
-      // serial sube, y ningún documento se cablea — la misma caminata mide las dos rutas.
-      if (canvasRoute() === "swap") {
-        await expect
-          .poll(async () => (await events()).filter((event) => event.kind === "wire").length, {
-            message: "la edición no reconstruyó el documento, que es lo que `swap` hace",
-          })
-          .toBeGreaterThan(wiredSoFar);
-      } else {
-        await expect
-          .poll(
-            async () =>
-              (await events()).filter(
-                (e) => e.kind === "patch" && e.at >= pressedAt && e.data["ok"],
-              ).length,
-            { message: "la edición no llegó como parche" },
-          )
-          .toBeGreaterThan(0);
-      }
+      // La espera: el parche llega, el serial sube, y ningún documento se cablea. La versión de
+      // esta caminata que medía `swap` esperaba lo contrario — un cableado nuevo — porque en esa
+      // ruta una edición reconstruía el documento.
+      await expect
+        .poll(
+          async () =>
+            (await events()).filter((e) => e.kind === "patch" && e.at >= pressedAt && e.data["ok"])
+              .length,
+          { message: "la edición no llegó como parche" },
+        )
+        .toBeGreaterThan(0);
 
       const all = await events();
       const after = all.filter((event) => event.at >= pressedAt);
       const wires = after.filter((event) => event.kind === "wire");
       const htmls = after.filter((event) => event.kind === "html");
-      const promotions = after.filter((event) => event.kind === "promote");
-      const firstHtml = htmls[0];
-      const firstWire = wires[0];
-      const window_ = firstHtml && firstWire ? firstWire.at - firstHtml.at : Number.NaN;
-      const latency = firstWire ? firstWire.at - pressedAt : Number.NaN;
       const frames = await page.evaluate(() => document.querySelectorAll("iframe").length);
-      // The patch route's own numbers, beside the swap route's (día 6: the two side by side): the
-      // first patch after the press, and what it cost.
+      // The numbers: the first patch after the press, and what it cost. The pair this walk printed
+      // beside them until sprint 27 día 1 — the html→wire window and the press→wire latency, and
+      // the count of frame promotions — had no values left to read once the rebuild was gone.
       const firstPatch = after.find((event) => event.kind === "patch" && event.data["ok"]);
       const patchLatency = firstPatch ? firstPatch.at - pressedAt : Number.NaN;
       const patchMs = firstPatch ? Number(firstPatch.data["ms"]) : Number.NaN;
       const redrawMs = firstPatch ? Number(firstPatch.data["redrawMs"]) : Number.NaN;
 
       console.log(
-        `[sprint 26 día 1 · ${canvasRoute()}] documentos cableados tras una edición de texto: ${wires.length}; ` +
-          `ventana html→cableado: ${window_.toFixed(1)} ms; latencia pulsación→cableado: ${latency.toFixed(1)} ms; ` +
-          `latencia pulsación→parche: ${patchLatency.toFixed(1)} ms; parche ${patchMs} ms; repintado ${redrawMs} ms; ` +
-          `promociones de marco: ${promotions.length}; marcos ahora: ${frames}`,
+        `[sprint 27 día 1] documentos cableados tras una edición de texto: ${wires.length}; ` +
+          `latencia pulsación→parche: ${patchLatency.toFixed(1)} ms; parche ${patchMs} ms; ` +
+          `repintado ${redrawMs} ms; marcos ahora: ${frames}; cableados antes: ${wiredSoFar}`,
       );
 
-      if (canvasRoute() === "swap") {
-        // Lo que `swap` hace: la edición produjo un documento nuevo, y hubo una ventana entre el
-        // html y su cableado en la que una pulsación no tenía dónde caer.
-        expect(
-          wires.length,
-          "bajo `swap` una edición de texto cablea al menos un documento nuevo",
-        ).toBeGreaterThanOrEqual(1);
-        expect(
-          Number.isFinite(window_),
-          `no hay ventana que medir: ${await probeReport(page)}`,
-        ).toBe(true);
-      } else {
-        // Lo que `patch` promete: ningún documento nuevo, ningún html nuevo, ventana **0 ms**.
-        expect(wires.length, "bajo `patch` una edición cableó un documento").toBe(0);
-        expect(htmls.length, "bajo `patch` una edición produjo un html nuevo").toBe(0);
-        const patches = after.filter((event) => event.kind === "patch" && event.data["ok"]);
-        expect(patches.length).toBeGreaterThan(0);
-      }
-      // Y la letra llegó al documento, por la ruta de hoy: la medida no vale si la edición se perdió.
+      // Lo que la ruta promete: ningún documento nuevo, ningún html nuevo, ventana **0 ms** —
+      // porque no hay ventana. Un marco, el de siempre.
+      expect(wires.length, "una edición cableó un documento").toBe(0);
+      expect(htmls.length, "una edición produjo un html nuevo").toBe(0);
+      expect(frames, "apareció un segundo marco").toBe(1);
+      const patches = after.filter((event) => event.kind === "patch" && event.data["ok"]);
+      expect(patches.length).toBeGreaterThan(0);
+      // Y la letra llegó al documento: la medida no vale si la edición se perdió.
       // El segundo clic deja el texto seleccionado, así que la letra **sustituye** al titular en vez
       // de seguirlo — el titular queda en «x» — y eso es igual de edición para lo que aquí se mide.
-      // `\s*` porque el documento reconstruido lleva la indentación del renderizador alrededor.
+      // `\s*` porque el texto lleva la indentación del renderizador alrededor.
       await expect(
         page
           .frameLocator(PREVIEW)
@@ -18302,25 +18128,22 @@ describe("sprint 26 día 1 — la medida de hoy", () => {
 /**
  * **Sprint 26 día 2 — el parche, tras una llave.**
  *
- * La ruta `patch` del ADR 0051 existe desde hoy y no corre para nadie salvo quien ponga la llave:
- * `localStorage["rb.canvas"] = "patch"`, leída una vez al montar (`canvasMode.ts`). Estas
- * caminatas la ponen antes de que el editor cargue y aseveran las tres cosas que la ruta promete
- * en su primer día — y que el día 5, cuando la llave cambie de valor por defecto, pasarán a ser las
- * de todo el mundo.
+ * La ruta `patch` del ADR 0051 nació tras una llave — `localStorage["rb.canvas"] = "patch"`, leída
+ * una vez al montar — y estas caminatas la ponían antes de que el editor cargara. Pasó a ser la
+ * de todo el mundo el día 5 y la única el 27 día 1, cuando la llave y la ruta vieja se retiraron.
  *
- * Cada una dice su premisa antes de su consecuencia: que la ruta es `patch`, leída del propio
- * registro del editor, porque una llave que no llegara dejaría a las tres midiendo la ruta vieja
- * y llamándolo verde.
+ * Cada una sigue diciendo su premisa antes de su consecuencia; lo que la premisa dice ha cambiado:
+ * era «la ruta es `patch`» y ahora es «el lienzo cableó su documento», que es lo que hace falta
+ * para que haya algo que parchear.
  */
 describe("sprint 26 día 2 — el parche, tras una llave", () => {
   type Event = { at: number; kind: string; data: Record<string, unknown> };
 
   /** Un contexto con la llave puesta y la sonda encendida. */
   async function patched(): Promise<{ context: BrowserContext; page: Page }> {
+    // It set `localStorage["rb.canvas"] = "patch"` here until sprint 27 día 1, because the patch
+    // route lived behind that key. There is one route, so the key is nobody's.
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-    await context.addInitScript(() => {
-      window.localStorage.setItem("rb.canvas", "patch");
-    });
     await probeOn(context);
     const page = await context.newPage();
     return { context, page };
@@ -18329,20 +18152,27 @@ describe("sprint 26 día 2 — el parche, tras una llave", () => {
   const events = (page: Page) =>
     page.evaluate(() => ((window as unknown as { __rb?: Event[] }).__rb ?? []) as Event[]);
 
-  /** La premisa: el editor dice que su ruta es `patch`, en su propio registro. */
-  async function routeIs(page: Page, route: string): Promise<void> {
+  /**
+   * La premisa: el lienzo tiene su documento cableado.
+   *
+   * Era «el editor dice que su ruta es `patch`», leída del registro `html` de la sonda, porque la
+   * ruta venía de una llave que podía no llegar y entonces las caminatas habrían medido la ruta
+   * vieja llamándolo verde. Retirada la llave (sprint 27 día 1), lo que queda por aseverar antes
+   * de actuar es lo que de verdad hace falta: que hay un documento cableado al que parchear.
+   */
+  async function canvasWired(page: Page): Promise<void> {
     await expect
-      .poll(async () => (await events(page)).find((e) => e.kind === "html")?.data["route"], {
-        message: "el editor no registró su ruta",
+      .poll(async () => (await events(page)).filter((e) => e.kind === "wire").length, {
+        message: "el lienzo no cableó ningún documento",
       })
-      .toBe(route);
+      .toBeGreaterThan(0);
   }
 
   const editSerial = (page: Page) =>
     page.evaluate(() =>
       Number(
-        document.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")?.contentDocument
-          ?.documentElement.dataset["rbEdit"] ?? "0",
+        document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument?.documentElement
+          .dataset["rbEdit"] ?? "0",
       ),
     );
 
@@ -18350,16 +18180,14 @@ describe("sprint 26 día 2 — el parche, tras una llave", () => {
     const { context, page } = await patched();
     try {
       await intoTheCanvas(page);
-      await routeIs(page, "patch");
+      await canvasWired(page);
       const frame = page.frameLocator(PREVIEW).first();
       await fontsReady(frame);
       const wiredBefore = (await events(page)).filter((e) => e.kind === "wire").length;
       const serialBefore = await editSerial(page);
       // La identidad del documento, que es lo que todo esto promete conservar.
       await page.evaluate(() => {
-        const doc = document.querySelector<HTMLIFrameElement>(
-          "iframe:not([data-buffered])",
-        )?.contentDocument;
+        const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
         if (doc) (doc as unknown as { __rbStamp?: string }).__rbStamp = "the-one";
       });
 
@@ -18389,8 +18217,9 @@ describe("sprint 26 día 2 — el parche, tras una llave", () => {
         await page.evaluate(
           () =>
             (
-              document.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")
-                ?.contentDocument as unknown as { __rbStamp?: string }
+              document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument as unknown as {
+                __rbStamp?: string;
+              }
             )?.__rbStamp,
         ),
         "el documento ya no es el mismo",
@@ -18408,7 +18237,7 @@ describe("sprint 26 día 2 — el parche, tras una llave", () => {
     const { context, page } = await patched();
     try {
       await intoTheCanvas(page);
-      await routeIs(page, "patch");
+      await canvasWired(page);
       const frame = page.frameLocator(PREVIEW).first();
       await fontsReady(frame);
       const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
@@ -18471,7 +18300,7 @@ describe("sprint 26 día 2 — el parche, tras una llave", () => {
     const { context, page } = await patched();
     try {
       await intoTheCanvas(page);
-      await routeIs(page, "patch");
+      await canvasWired(page);
       // Since día 4 neither the switch nor the escalation replaces the document under `patch`: the
       // first is a redraw and the second a patch, and both move the serial. So the walk waits on the
       // serial, as día 4's do, and not on a new document that will never come.
@@ -18568,10 +18397,9 @@ describe("sprint 26 día 3 — las clausuras leen el presente", () => {
   type Event = { at: number; kind: string; data: Record<string, unknown> };
 
   async function patched(): Promise<{ context: BrowserContext; page: Page }> {
+    // It set `localStorage["rb.canvas"] = "patch"` here until sprint 27 día 1, because the patch
+    // route lived behind that key. There is one route, so the key is nobody's.
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-    await context.addInitScript(() => {
-      window.localStorage.setItem("rb.canvas", "patch");
-    });
     await probeOn(context);
     const page = await context.newPage();
     return { context, page };
@@ -18583,17 +18411,15 @@ describe("sprint 26 día 3 — las clausuras leen el presente", () => {
   const editSerial = (page: Page) =>
     page.evaluate(() =>
       Number(
-        document.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")?.contentDocument
-          ?.documentElement.dataset["rbEdit"] ?? "0",
+        document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument?.documentElement
+          .dataset["rbEdit"] ?? "0",
       ),
     );
 
   /** Secciones, huecos y grupos de verbos en el lienzo, contados de una vez. */
   const chromeCount = (page: Page) =>
     page.evaluate(() => {
-      const doc = document.querySelector<HTMLIFrameElement>(
-        "iframe:not([data-buffered])",
-      )?.contentDocument;
+      const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
       return {
         sections: [...(doc?.querySelectorAll("[data-section]") ?? [])].map((el) =>
           el.getAttribute("data-section"),
@@ -18609,9 +18435,7 @@ describe("sprint 26 día 3 — las clausuras leen el presente", () => {
   /** Qué línea de «Qué hacemos» tiene el foco, por su puesto. */
   const focusedLineAt = (page: Page) =>
     page.evaluate(() => {
-      const doc = document.querySelector<HTMLIFrameElement>(
-        "iframe:not([data-buffered])",
-      )?.contentDocument;
+      const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
       const line = (doc?.activeElement as HTMLElement | null)?.closest<HTMLElement>("[data-item]");
       const items = [...(doc?.querySelectorAll('[data-section="sec-services"] [data-item]') ?? [])];
       return line ? items.indexOf(line) : -1;
@@ -18633,16 +18457,14 @@ describe("sprint 26 día 3 — las clausuras leen el presente", () => {
     try {
       await intoTheCanvas(page);
       await expect
-        .poll(async () => (await events(page)).find((e) => e.kind === "html")?.data["route"], {
-          message: "el editor no registró su ruta",
+        .poll(async () => (await events(page)).filter((e) => e.kind === "wire").length, {
+          message: "el lienzo no cableó ningún documento",
         })
-        .toBe("patch");
+        .toBeGreaterThan(0);
       const frame = page.frameLocator(PREVIEW).first();
       await fontsReady(frame);
       await page.evaluate(() => {
-        const doc = document.querySelector<HTMLIFrameElement>(
-          "iframe:not([data-buffered])",
-        )?.contentDocument;
+        const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
         if (doc) (doc as unknown as { __rbStamp?: string }).__rbStamp = "the-one";
       });
       const wiredBefore = (await events(page)).filter((e) => e.kind === "wire").length;
@@ -18790,10 +18612,9 @@ describe("sprint 26 día 4 — fotos, estilos, páginas e interruptor", () => {
   type Event = { at: number; kind: string; data: Record<string, unknown> };
 
   async function patched(): Promise<{ context: BrowserContext; page: Page }> {
+    // It set `localStorage["rb.canvas"] = "patch"` here until sprint 27 día 1, because the patch
+    // route lived behind that key. There is one route, so the key is nobody's.
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-    await context.addInitScript(() => {
-      window.localStorage.setItem("rb.canvas", "patch");
-    });
     await probeOn(context);
     const page = await context.newPage();
     return { context, page };
@@ -18806,25 +18627,24 @@ describe("sprint 26 día 4 — fotos, estilos, páginas e interruptor", () => {
   const editSerial = (page: Page) =>
     page.evaluate(() =>
       Number(
-        document.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")?.contentDocument
-          ?.documentElement.dataset["rbEdit"] ?? "0",
+        document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument?.documentElement
+          .dataset["rbEdit"] ?? "0",
       ),
     );
 
   /** El documento del lienzo, sellado — y leído — por una propiedad que un documento nuevo no tendría. */
   const stamp = (page: Page) =>
     page.evaluate(() => {
-      const doc = document.querySelector<HTMLIFrameElement>(
-        "iframe:not([data-buffered])",
-      )?.contentDocument;
+      const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
       if (doc) (doc as unknown as { __rbStamp?: string }).__rbStamp = "the-one";
     });
   const stamped = (page: Page) =>
     page.evaluate(
       () =>
         (
-          document.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")
-            ?.contentDocument as unknown as { __rbStamp?: string } | undefined
+          document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument as unknown as
+            | { __rbStamp?: string }
+            | undefined
         )?.__rbStamp ?? null,
     );
 
@@ -18842,10 +18662,10 @@ describe("sprint 26 día 4 — fotos, estilos, páginas e interruptor", () => {
   async function opened(page: Page): Promise<{ frame: FrameLocator; wiredBefore: number }> {
     await intoTheCanvas(page);
     await expect
-      .poll(async () => (await events(page)).find((e) => e.kind === "html")?.data["route"], {
-        message: "el editor no registró su ruta",
+      .poll(async () => (await events(page)).filter((e) => e.kind === "wire").length, {
+        message: "el lienzo no cableó ningún documento",
       })
-      .toBe("patch");
+      .toBeGreaterThan(0);
     const frame = page.frameLocator(PREVIEW).first();
     await fontsReady(frame);
     await stamp(page);
@@ -19104,68 +18924,67 @@ describe("sprint 26 día 4 — fotos, estilos, páginas e interruptor", () => {
  * **Sprint 26 día 5 — el contrato de las caminatas.** Lo que el plan llamó (a): treinta pulsaciones
  * a cinco milisegundos mientras un parche cae sobre el texto que se está escribiendo. Bajo `swap`
  * ese parche era una reconstrucción y la ventana entre el html y el cableado se tragaba una
- * pulsación (medido el día 1: 5,8 ms); bajo `patch` la marca de la propia barra llega como parche
- * del editable con foco, la selección vuelve a su sitio, y las treinta letras están.
+ * pulsación (medido el día 1: 5,8 ms); la marca de la propia barra llega como parche del editable
+ * con foco, la selección vuelve a su sitio, y las treinta letras están.
+ *
+ * Esta caminata se salteaba bajo `swap`, porque allí era roja por diseño. Con la ruta retirada
+ * (sprint 27 día 1) corre siempre.
  */
 describe("sprint 26 día 5 — el contrato de las caminatas", () => {
-  it.skipIf(canvasRoute() === "swap")(
-    "treinta pulsaciones a cinco milisegundos no pierden ninguna mientras cae la marca del propio texto",
-    async () => {
-      const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-      await probeOn(context);
-      const page = await context.newPage();
-      try {
-        await intoTheCanvas(page);
-        const frame = page.frameLocator(PREVIEW).first();
-        await fontsReady(frame);
-        const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
-        // Un titular corto y volcado — «Reserva» — para que la marca tenga un documento al que
-        // aplicarse: la barra marca el texto que el documento tiene, y un texto sin volcar no está
-        // en él (en las dos rutas; las caminatas de marcas vuelcan antes de marcar desde el sprint 10).
-        await headline.click();
-        await headline.click();
-        await expect(headline).toHaveAttribute("contenteditable", "true");
-        await page.keyboard.type("Reserva");
-        await page.keyboard.press("Enter");
-        await expect(headline).toHaveText(/^\s*Reserva\s*$/);
-        // Otra vez dentro, la palabra elegida con el teclado, y la negrita de la barra sobre ella:
-        // un parche del propio texto, aplicado con el foco dentro (causa `mark`).
-        await headline.click();
-        await headline.click();
-        await expect(headline).toHaveAttribute("contenteditable", "true");
-        await page.keyboard.press("Home");
-        for (let i = 0; i < 7; i += 1) await page.keyboard.press("Shift+ArrowRight");
-        await frame.locator('.rb-toolbar-mark[data-mark="strong"]').click();
-        await expect(headline.locator("strong")).toHaveText("Reserva");
-        // La selección sigue sobre la palabra marcada — es lo que la causa `mark` promete —; una
-        // flecha la pliega a su final, y desde ahí se escribe.
-        await page.keyboard.press("ArrowRight");
-        // Y treinta pulsaciones, sin esperar a nada, a cinco milisegundos cada una.
-        const typed = " abcdefghijklmnopqrstuvwxyz123";
-        await page.keyboard.type(typed, { delay: 5 });
-        await page.keyboard.press("Enter");
-        await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+  it("treinta pulsaciones a cinco milisegundos no pierden ninguna mientras cae la marca del propio texto", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    await probeOn(context);
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      await fontsReady(frame);
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      // Un titular corto y volcado — «Reserva» — para que la marca tenga un documento al que
+      // aplicarse: la barra marca el texto que el documento tiene, y un texto sin volcar no está
+      // en él (en las dos rutas; las caminatas de marcas vuelcan antes de marcar desde el sprint 10).
+      await headline.click();
+      await headline.click();
+      await expect(headline).toHaveAttribute("contenteditable", "true");
+      await page.keyboard.type("Reserva");
+      await page.keyboard.press("Enter");
+      await expect(headline).toHaveText(/^\s*Reserva\s*$/);
+      // Otra vez dentro, la palabra elegida con el teclado, y la negrita de la barra sobre ella:
+      // un parche del propio texto, aplicado con el foco dentro (causa `mark`).
+      await headline.click();
+      await headline.click();
+      await expect(headline).toHaveAttribute("contenteditable", "true");
+      await page.keyboard.press("Home");
+      for (let i = 0; i < 7; i += 1) await page.keyboard.press("Shift+ArrowRight");
+      await frame.locator('.rb-toolbar-mark[data-mark="strong"]').click();
+      await expect(headline.locator("strong")).toHaveText("Reserva");
+      // La selección sigue sobre la palabra marcada — es lo que la causa `mark` promete —; una
+      // flecha la pliega a su final, y desde ahí se escribe.
+      await page.keyboard.press("ArrowRight");
+      // Y treinta pulsaciones, sin esperar a nada, a cinco milisegundos cada una.
+      const typed = " abcdefghijklmnopqrstuvwxyz123";
+      await page.keyboard.type(typed, { delay: 5 });
+      await page.keyboard.press("Enter");
+      await expect(page.getByText("Guardado en este navegador")).toBeVisible();
 
-        const text = (await headline.innerText()).replace(/\s+/g, " ").trim();
-        expect(text, `faltan pulsaciones: «${text}»`).toBe(`Reserva${typed}`);
-        await expect(headline.locator("strong")).toHaveText(/Reserva/);
-        type Event = { kind: string; data: Record<string, unknown> };
-        const events = await page.evaluate(
-          () => ((window as unknown as { __rb?: Event[] }).__rb ?? []) as Event[],
-        );
-        expect(
-          events.some((e) => e.kind === "patch" && e.data["cause"] === "mark" && e.data["ok"]),
-          "la marca no llegó como parche con causa «mark»",
-        ).toBe(true);
-        expect(events.filter((e) => e.kind === "wire").length, "se cableó un documento nuevo").toBe(
-          1,
-        );
-      } finally {
-        await context.close();
-      }
-    },
-    180_000,
-  );
+      const text = (await headline.innerText()).replace(/\s+/g, " ").trim();
+      expect(text, `faltan pulsaciones: «${text}»`).toBe(`Reserva${typed}`);
+      await expect(headline.locator("strong")).toHaveText(/Reserva/);
+      type Event = { kind: string; data: Record<string, unknown> };
+      const events = await page.evaluate(
+        () => ((window as unknown as { __rb?: Event[] }).__rb ?? []) as Event[],
+      );
+      expect(
+        events.some((e) => e.kind === "patch" && e.data["cause"] === "mark" && e.data["ok"]),
+        "la marca no llegó como parche con causa «mark»",
+      ).toBe(true);
+      expect(events.filter((e) => e.kind === "wire").length, "se cableó un documento nuevo").toBe(
+        1,
+      );
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
 });
 
 /**
@@ -19191,9 +19010,7 @@ describe("sprint 26 día 8 — el cierre", () => {
         page.evaluate(() => ((window as unknown as { __rb?: Event[] }).__rb ?? []) as Event[]);
       const wires = async () => (await events()).filter((e) => e.kind === "wire").length;
       await page.evaluate(() => {
-        const doc = document.querySelector<HTMLIFrameElement>(
-          "iframe:not([data-buffered])",
-        )?.contentDocument;
+        const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
         if (doc) (doc as unknown as { __rbStamp?: string }).__rbStamp = "the-one";
       });
       const wiredAtStart = await wires();
@@ -19269,23 +19086,20 @@ describe("sprint 26 día 8 — el cierre", () => {
       const stamp = await page.evaluate(
         () =>
           (
-            document.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")
-              ?.contentDocument as unknown as { __rbStamp?: string } | undefined
+            document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument as unknown as
+              | { __rbStamp?: string }
+              | undefined
           )?.__rbStamp ?? null,
       );
       console.log(
-        `[sprint 26 día 8 · ${canvasRoute()}] ${edits} ediciones; documentos cableados ${wiredAtStart} → ${wiredAtEnd}; sello ${stamp ?? "perdido"}`,
+        `[sprint 27 día 1] ${edits} ediciones; documentos cableados ${wiredAtStart} → ${wiredAtEnd}; sello ${stamp ?? "perdido"}`,
       );
-      if (canvasRoute() === "patch") {
-        expect(wiredAtEnd, "la sesión cableó un documento nuevo").toBe(wiredAtStart);
-        expect(stamp, "el documento ya no es el mismo").toBe("the-one");
-      } else {
-        expect(wiredAtEnd, "bajo `swap` cada edición cablea un documento").toBeGreaterThan(
-          wiredAtStart + edits / 2,
-        );
-        expect(stamp, "bajo `swap` el sello se va con el primer documento").toBeNull();
-      }
-      // Y la página dice lo mismo en las dos rutas.
+      // El sello se pone en el documento al empezar y sigue ahí al final: es la prueba de que es
+      // el mismo `Document`, no uno que se parece. Bajo `swap` se iba con el primero y la cuenta
+      // de cableados subía con cada edición (2 → 17 en el cierre del 26).
+      expect(wiredAtEnd, "la sesión cableó un documento nuevo").toBe(wiredAtStart);
+      expect(stamp, "el documento ya no es el mismo").toBe("the-one");
+      // Y la página dice lo que debe decir.
       await expect(headline).toHaveText(/Cierre del sprint/);
       await expect(page.getByText("Guardado en este navegador")).toBeVisible();
     } finally {
