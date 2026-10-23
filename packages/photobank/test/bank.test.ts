@@ -382,7 +382,9 @@ describe("every approved photograph, against its own record", () => {
   );
 
   /**
-   * **This test is meant to fail on 1 November 2026, and that is the whole point of it** (ADR 0035).
+   * **This test is meant to fail on 1 December 2026, and that is the whole point of it** (ADR 0035;
+   * the date was 1 November until David moved it on 23 October 2026 as a reserve, in that ADR's own
+   * amendment, while the nine regenerated photographs were still being produced).
    *
    * David's decision of 9 October 2026 is that the nine are regenerated at 1600 x 1072; the
    * exemption that lets the 1024 px ones stay published in the meantime carries a date, because an
