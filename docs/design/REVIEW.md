@@ -3632,13 +3632,23 @@ alternativa silenciosa es un lienzo que deja de responder con la página con asp
 de dos, 3061 → **3003** pruebas unitarias en 149 ficheros. **Ningún golden se movió** y no se tocó
 nada bajo `packages/`.
 
-**Las dos filas condicionales de la lista, resueltas midiendo.** `lookAhead.ts` **se queda**: la
-condición era que el `load` del marco llegara a un fotograma del cableado por anticipación, y medido
-tres veces en Chromium real la anticipación gana por **482, 495 y 506 ms**. La ventana es más ancha
-que los 64,9 ms del 2 de octubre, y la causa es un arreglo: desde el sprint 14 las fuentes se
-responden con bytes de verdad en vez de dar 404, y los bytes tardan más que una negativa. Medio
-segundo de lienzo visible y sordo es el defecto que compró la anticipación. `wireReadingPosition`
-**se va** con la restauración, porque el reancle por ancho no se construye este sprint.
+**Las dos filas condicionales de la lista.** `wireReadingPosition` **se va** con la restauración,
+porque el reancle por ancho no se construye este sprint. Y `lookAhead.ts` **se queda, por juicio y no
+por el número**, que es la historia de la jornada y conviene contarla entera. La condición era que el
+`load` del marco llegara a un fotograma del cableado por anticipación. Medido cinco veces con la
+caminata **a solas**, la anticipación gana por **482 a 573 ms**; medido **dentro de la suite
+completa**, tras unas doscientas caminatas, **cablea `onload` y el margen es −0,1 ms**, con lo que la
+condición de borrado se cumple.
+
+**El medio segundo era Next compilando `fonts/[file]` la primera vez que se le pide**, que es lo que
+paga siempre una caminata filtrada —este repositorio ya lo tiene escrito— y se leyó como el número
+del producto. La medida aislada medía el servidor de desarrollo, no el editor. Se queda igualmente, y
+se dice que es un juicio: lo que vale la anticipación es lo que cuesten los subrecursos del marco
+—64,9 ms el 2 de octubre con las fuentes dando 404, 1,5 s con ellas retenidas, nada cuando llegan al
+instante—, no puede valer menos que nada, y cuesta una lectura de propiedad por fotograma durante dos
+segundos. Borrarla sería cambiar eso por reabrir una clase de defecto que tardó del sprint 7 al 18 en
+encontrarse. **La medida que lo zanjaría es el editor desplegado sobre una instancia de Render
+dormida**, que es la única de estas cuatro condiciones que un dueño real encuentra.
 
 **Dos cosas que aparecieron al hacerlo.** Un **comentario huérfano**: el bloque de
 `replacingTheDocument` seguía en el `e2e`, apilado sobre el de `waitForBankPhoto`, tres días después

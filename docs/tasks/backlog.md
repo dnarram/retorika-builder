@@ -28,13 +28,19 @@ is the list it left by, and `Editor.tsx` came down 536 lines with it.
 
 ## Sprint 27 día 1 — the old route is gone, and the two conditional rows resolved
 
-- **`lookAhead.ts` stays, and the measurement is why.** The retirement list left it conditional: the
-  module goes if the frame's `load` lands within one frame of the look-ahead's wiring. Measured three
-  times in real Chromium on 23 October 2026 — the look-ahead wires at ~3.4-3.6 s and `load` fires
-  **482, 495 and 506 ms later**. The window it closes is *wider* than the 64.9 ms sprint 18 measured,
-  and the reason is that the fonts stopped 404ing: since sprint 14 `apps/editor/src/app/fonts/[file]`
-  answers them with real bytes, and real bytes take longer than a refusal. A canvas that is visible
-  and inert for half a second is exactly the defect of 2 October, so the module keeps its place.
+- **`lookAhead.ts` stays, and the measurement that was to decide it measured the dev server.** The
+  retirement list left it conditional: the module goes if the frame's `load` lands within one frame
+  of the look-ahead's wiring. Run on its own, five times, the look-ahead wires first and wins
+  **482-573 ms**. Run inside the full suite, after about two hundred walks, **`onload` wires first
+  and the margin is −0.1 ms** — so the deletion condition is met. The half-second is Next compiling
+  `fonts/[file]` on first use, which a filtered walk always pays for; it was read as the product's
+  number anyway, which is this repository's own lesson being relearned
+  (`project-kill-local-servers-after-smoke-tests` says exactly that). **Kept by judgement**: what it
+  is worth is whatever the subresources cost (64.9 ms on 2 October with the fonts 404ing, 1.5 s with
+  them held, nothing when they are instant), it cannot be worth less than nothing, and it costs one
+  property read per frame for two seconds. **The measurement that would settle it is the deployed
+  editor on a cold Render instance** — the only one of these conditions a real owner meets, and
+  nobody has taken it.
 - **`wireReadingPosition` went** with the restore, because the 164 px width re-anchor is not built
   this sprint. Nothing records where the page is being read any more, and nothing needs to: a patched
   page keeps its scroll by doing nothing. The row below is unchanged by that.

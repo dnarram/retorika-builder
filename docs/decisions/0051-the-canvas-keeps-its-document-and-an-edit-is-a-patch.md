@@ -664,14 +664,31 @@ stops answering while the page still looks finished.
 
 **The list's two conditional rows, resolved by measurement.**
 
-- **`lookAhead.ts` stays.** The condition was «the module goes too if the first `wire` lands via
-  `onload` within one frame of `lookahead`». Measured three times in real Chromium: the look-ahead
-  wires at 3.40, 3.41 and 3.57 s, and the frame's `load` fires **482, 495 and 506 ms** after it. The
-  window is **wider** than the 64.9 ms of 2 October, and the cause is a fix: since sprint 14 the
-  fonts are answered with real bytes by `apps/editor/src/app/fonts/[file]` instead of 404ing, and
-  real bytes take longer than a refusal. Half a second of a visible, inert canvas is the defect that
-  bought the look-ahead in the first place, so it keeps its place — and `onLoad` now records when it
-  fired, which is what made the measurement possible.
+- **`lookAhead.ts` stays, and the measurement that was supposed to decide it answered two different
+  things.** The condition was «the module goes too if the first `wire` lands via `onload` within one
+  frame of `lookahead`». `onLoad` was given a `record("load", …)` so the margin could be read, and it
+  was read twice over:
+
+  | How it was run | First wiring | Margin the look-ahead won |
+  |---|---|---|
+  | The walk on its own, five times | `lookahead` | **482, 495, 502, 506, 573 ms** |
+  | Inside the full suite, after ~200 walks | **`onload`** | **−0.1 ms** |
+
+  **The isolated number is the dev server compiling a route, not the product.** `pnpm e2e` starts the
+  editor fresh, so a filtered run makes this walk the first to ask for `fonts/[file]`, and Next
+  compiles that route on demand — about half a second, spent inside the frame's `load`. In the full
+  suite the route has been warm for two hundred walks, `load` and `DOMContentLoaded` arrive together,
+  and the look-ahead wins nothing. This repository already knew that a filtered walk pays for a cold
+  compile; it was read as the product's number anyway, and that is the mistake worth recording.
+
+  **So the condition is satisfied, and the module stays regardless**, which is a judgement and is
+  said as one. What the look-ahead is worth is whatever the frame's subresources cost — 64.9 ms on
+  2 October with the fonts 404ing, 1.5 s with them held, half a second against a cold route, nothing
+  at all when they are instant. It cannot be worth *less* than nothing, and it costs one property
+  read per frame for two seconds. Deleting it would trade that for re-opening a defect class that
+  took from sprint 7 to sprint 18 to find: a canvas that is on screen and listening to nothing. The
+  measurement to take before revisiting this is **the deployed editor on a cold Render instance**,
+  which is the only one of these four conditions a real owner meets.
 - **`wireReadingPosition` went** with the restore it fed, because the 164 px width re-anchor is not
   built this sprint. A patched page keeps its scroll by doing nothing; the open item is a width
   re-flow and it is in the backlog, with a third measurement rescued from a comment that was about

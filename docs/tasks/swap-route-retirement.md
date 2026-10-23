@@ -71,14 +71,18 @@ are día 7's to rewrite as «under `patch` … / under `swap` …», and 27 día
 
 ## The two rows that said «measure first», resolved on 27 día 1
 
-- **`lookAheadStep` / `LOOK_AHEAD_DEADLINE_MS` / `lookAhead.ts`: kept.** The condition was «if the
-  first `wire` event lands via `onload` within one frame of `lookahead`, the module goes too».
-  Measured three times in real Chromium with the probe on: the look-ahead wires the document at 3.40,
-  3.41 and 3.57 s, and the frame's own `load` fires **482, 495 and 506 ms later**. It is not one
-  frame, it is half a second of a canvas that is on screen and listening to nothing — the defect of
-  2 October. What the effect lost is its second target and the `promote` answer; it now runs once, at
-  mount, because there is one document to wait for. `onLoad` gained a `record("load", …)` so the
-  margin can be read again without rebuilding the instrument.
+- **`lookAheadStep` / `LOOK_AHEAD_DEADLINE_MS` / `lookAhead.ts`: kept, by judgement and not by the
+  number.** The condition was «if the first `wire` event lands via `onload` within one frame of
+  `lookahead`, the module goes too». `onLoad` gained a `record("load", …)` so the margin could be
+  read, and the answer depends entirely on how the walk is run: **on its own, five times, the
+  look-ahead wires first and wins 482-573 ms; inside the full suite it loses, `onload` wires, margin
+  −0.1 ms.** The isolated half-second is Next compiling `fonts/[file]` on first use — a filtered run
+  pays for that cold compile, which this repository already knew and read past anyway. So the
+  condition is met and the module stays: what it is worth is whatever the frame's subresources cost
+  (64.9 ms on 2 October with the fonts 404ing, 1.5 s with them held, nothing when they are instant),
+  it cannot be worth less than nothing, and it costs one property read per frame for two seconds.
+  What the effect did lose is its second target and the `promote` answer; it runs once, at mount.
+  **The measurement that would settle it is the deployed editor on a cold Render instance.**
 - **`wireReadingPosition`: removed**, with `restoreReadingPosition`, `applyRestoreTarget`,
   `settleReadingPosition`, `readingAnchor` and the four refs. It survived only if the 164 px width
   re-anchor were built on it, and that is not this sprint's work. The third measurement its comment
