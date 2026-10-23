@@ -168,6 +168,7 @@ would know how to answer before seeing the page. The editor can delete three car
   where it shows, and a title beside the grid (`side`) narrows a heading to four columns for no
   gain anybody has asked for.
 - **Galleries for the ten sectors with no photographs.** Content production, ADR 0011's circuit,
-  and the exemption that ends on 1 November 2026 (ADR 0035). The day a sector's file fills, its
+  and the exemption that fails from 1 December 2026 (ADR 0035, as amended on 23 October 2026). The
+  day a sector's file fills, its
   generated sites gain a gallery with no change here.
 - **Whether a dish may be in the bank at all.** Named above; David's.

@@ -68,8 +68,13 @@ export const FLOOR_EXEMPT_IDS: ReadonlySet<string> = new Set([
  * ADR 0035 names the cost rather than discovering it: on this date the test goes red on whatever
  * pull request is open, which is what a deadline that enforces itself does. The remedy is to
  * regenerate, never to move the date.
+ *
+ * **It moved once, and only because David said so** (ADR 0035's amendment of 23 October 2026,
+ * sprint 27 día 1): from `2026-11-01` to `2026-12-01`, as a reserve while the nine regenerated
+ * photographs were still being produced. The remedy above did not change, and the clause that let
+ * it move is the original decision's own — «if the date moves, it moves because David says so».
  */
-export const FLOOR_EXEMPTION_FAILS_FROM = "2026-11-01";
+export const FLOOR_EXEMPTION_FAILS_FROM = "2026-12-01";
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD");
 

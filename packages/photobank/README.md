@@ -106,8 +106,9 @@ the record of this list for anyone who needs to act on it without reading code f
 and its declared `width`, `height` and `bytes` must match the file exactly; the schema checks both
 independently. **And at least 1344 × 896, both numbers** — the full-width cover box at a 1440 px
 window on the default scale (ADR 0035, 9 October 2026; this list said only «longest side 1600px»
-for four days after that ADR, found on 13 October). The nine of `restaurante-bar` are exempt by id
-until 1 November 2026 and are being regenerated at 1600 × 1072.
+for four days after that ADR, found on 13 October). The nine of `restaurante-bar` are exempt by id,
+`bank.test.ts` fails from 1 December 2026 while any of them is still in the bank (ADR 0035 and its
+amendment of 23 October 2026), and they are being regenerated at 1600 × 1072.
 
 **How many.** At least eight per sector. A sector holds zero or at least eight, never something in
 between, and `bank.test.ts` enforces it.

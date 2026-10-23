@@ -104,7 +104,9 @@ our own use. A licence that stops at us fails the criterion.
 > would have passed review exactly as the first nine did. **1600 stays the ceiling and the floor is
 > 1344 × 896**, both numbers, because `object-fit: cover` scales by `max(W/w, H/h)` and the cover's
 > box is always landscape. The nine photographs of `restaurante-bar` are regenerated at
-> 1600 × 1072; they stay published, exempt by id, and **the exemption expires on 31 October 2026**.
+> 1600 × 1072; they stay published, exempt by id, and **the exemption fails from 1 December 2026**
+> (this line said «expires on 31 October 2026» until ADR 0035's own amendment of 23 October 2026
+> moved the date and settled on one form for writing it: the first day the test is red).
 
 - **WebP, longest side 1600 px, quality around 75,** with EXIF and XMP removed. The origin is in
   the record, not in the file.
