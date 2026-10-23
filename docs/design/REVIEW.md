@@ -3602,3 +3602,63 @@ el job) tras cuatro cancelaciones en dos días, y `patch` como ruta por defecto,
 para el día 5 y el día 5 cumplió. Y lo que este sprint no tocó, por decisión: los 164 px al cerrar
 un panel (un reflujo por ancho, en las dos rutas), el cromo a escala, Tab dentro de una sección,
 las versiones con nombre.
+
+## Sprint 27 — «El teclado llega a todo, y el cromo mide lo que mide» (desde el 23 de octubre de 2026)
+
+David, tras cerrar el sprint 26: «planifica el sprint 27 primero». Sin tema nombrado, así que el
+inventario fue delante y él eligió con cuatro respuestas: **el teclado y el foco del editor** para
+los días 2 a 6 —lo que el ADR 0051 dejó fuera a propósito y el backlog lleva cuatro sprints
+midiendo—, **el cromo a escala sí mantiene su tamaño en pantalla** con tres condiciones suyas (día
+7), **los límites del `e2e` aceptados** tal cual (25 en el paso, 25 → 40 en el job), y **las nueve
+fotos antes del 1 de noviembre con una PR de reserva** que mueve la fecha del ADR 0035 si el 30 no
+están. Aprobó el plan con seis ajustes y dos notas más; el plan está en
+`~/.claude/plans/planifica-el-sprint-27-clever-oasis.md`.
+
+### Día 1 — la ruta vieja se va
+
+**La retirada de `swap`**, por la lista que el sprint 26 día 6 escribió símbolo a símbolo
+(`docs/tasks/swap-route-retirement.md`, que desde hoy es el registro de lo hecho y no un plan). El
+lienzo es **un `<iframe>` y un `Document` por sesión**: la llave `rb.canvas` y `canvasMode.ts` fuera,
+el memo de `html` convertido en un `useState` que nadie vuelve a leer, la ruta de reserva
+(`fallback`, `frameHtml`, `frameSerial`, `takeOldRoute`) fuera, `chromeKey` fuera, el relevo
+amortiguado entero fuera (`buffer`, `pendingSlot`, `everSwapped`, `slotFrame`, `slotRole`,
+`BUFFER_DEADLINE_MS`, `data-buffered`, las dos ranuras del JSX, `promote`, `refocusAfterSwap`, el
+color recordado) y la posición de lectura con su grabador, su ancla, su restauración y su segunda
+pasada. **Lo único que `patchCanvas` podía rechazar y queda** es `no-body`, que un documento cableado
+no puede ser, así que `applyPatch` **lanza**: la regla de la casa para lo imposible, porque la
+alternativa silenciosa es un lienzo que deja de responder con la página con aspecto de terminada.
+
+**Números**: `Editor.tsx` 7965 → **7429** líneas, el `e2e` 19295 → **19109**, un job de `e2e` en vez
+de dos, 3061 → **3003** pruebas unitarias en 149 ficheros. **Ningún golden se movió** y no se tocó
+nada bajo `packages/`.
+
+**Las dos filas condicionales de la lista.** `wireReadingPosition` **se va** con la restauración,
+porque el reancle por ancho no se construye este sprint. Y `lookAhead.ts` **se queda, por juicio y no
+por el número**, que es la historia de la jornada y conviene contarla entera. La condición era que el
+`load` del marco llegara a un fotograma del cableado por anticipación. Medido cinco veces con la
+caminata **a solas**, la anticipación gana por **482 a 573 ms**; medido **dentro de la suite
+completa**, tras unas doscientas caminatas, **cablea `onload` y el margen es −0,1 ms**, con lo que la
+condición de borrado se cumple.
+
+**El medio segundo era Next compilando `fonts/[file]` la primera vez que se le pide**, que es lo que
+paga siempre una caminata filtrada —este repositorio ya lo tiene escrito— y se leyó como el número
+del producto. La medida aislada medía el servidor de desarrollo, no el editor. Se queda igualmente, y
+se dice que es un juicio: lo que vale la anticipación es lo que cuesten los subrecursos del marco
+—64,9 ms el 2 de octubre con las fuentes dando 404, 1,5 s con ellas retenidas, nada cuando llegan al
+instante—, no puede valer menos que nada, y cuesta una lectura de propiedad por fotograma durante dos
+segundos. Borrarla sería cambiar eso por reabrir una clase de defecto que tardó del sprint 7 al 18 en
+encontrarse. **La medida que lo zanjaría es el editor desplegado sobre una instancia de Render
+dormida**, que es la única de estas cuatro condiciones que un dueño real encuentra.
+
+**Dos cosas que aparecieron al hacerlo.** Un **comentario huérfano**: el bloque de
+`replacingTheDocument` seguía en el `e2e`, apilado sobre el de `waitForBankPhoto`, tres días después
+de que el día 5 retirara la función que describía. Y, en la rama de reserva del ADR 0035, que **ocho
+de las nueve fotos miden 1024 × 1024 y la `.07` mide 866 × 942**: el ADR y el backlog lo dicen bien
+desde el 9 de octubre, y el único sitio que lo había aplanado a «las nueve miden 1024 px» era el
+documento del que David decide.
+
+**Lo que se queda a propósito**: `keepWriting`, `keepChosenFocus`, `pendingReturn`, `focusTarget` y
+`pendingPatch` — los cuatro primeros los leen los `settle*`, y guardan **nombres** y no nodos, que es
+la forma que les dio la época de los dos documentos y sigue siendo la correcta porque un parche
+sustituye nodos. `data-rb-wired` se queda como la respuesta del propio documento a «¿hay algo que
+parchear?».

@@ -15,8 +15,10 @@
  * wired the moment it is parsed — which costs one property read per frame for the rest of the
  * deadline and nothing else, because `wireOnce` wires a document at most once by identity and mark.
  *
- * A pending (buffered) frame is different: promoting it moves the buffer state, which restarts
- * the look-ahead, so stopping there is right and is kept.
+ * **One target since sprint 27 día 1.** There was a third answer, `promote`, for the buffered frame
+ * of a chrome swap: a document ready in the frame nobody could see was handed the canvas, and that
+ * moved the buffer state, which restarted the look-ahead, so stopping there was right. With `swap`
+ * retired there is one frame and one document, and the tick has nothing to promote.
  */
 
 export interface LookAheadTick {
@@ -40,29 +42,28 @@ export interface LookAheadTick {
   parsed: boolean;
   /** Has it at least one `[data-section]`. */
   hasSection: boolean;
-  /** Is the target the buffered frame of a swap rather than the live one. */
-  pending: boolean;
   /** Is the deadline still ahead. */
   withinDeadline: boolean;
 }
 
-export type LookAheadStep = "promote" | "wire" | "wait" | "stop";
+export type LookAheadStep = "wire" | "wait" | "stop";
 
 /**
- * `promote` and `stop` end the loop; `wire` and `wait` schedule another tick. `wire` means the
- * document is ready and unwired: attach the chrome **and keep looking**, because the next
- * document may already be on its way.
+ * `stop` ends the loop; `wire` and `wait` schedule another tick. `wire` means the document is ready
+ * and unwired: attach the chrome **and keep looking**, because a second document could still be on
+ * its way — which it no longer can be under the patch route, and the rule is kept because its cost
+ * is one property read per frame.
  */
 export function lookAheadStep(tick: LookAheadTick): LookAheadStep {
   const ready = tick.document && tick.unwired && tick.parsed && tick.hasSection;
-  if (ready && tick.pending) return "promote";
   if (ready) return tick.withinDeadline ? "wire" : "stop";
   return tick.withinDeadline ? "wait" : "stop";
 }
 
 /**
- * How long the look-ahead keeps looking after an `html` change. Two seconds since sprint 18
- * day 5, from one: a second document can follow the first by any amount a loaded machine
- * chooses, and the cost of an idle tick is one property read.
+ * How long the look-ahead keeps looking. Two seconds since sprint 18 day 5, from one: a second
+ * document could follow the first by any amount a loaded machine chose, and the cost of an idle
+ * tick is one property read. Since sprint 27 día 1 the walk runs once, at mount, so this is how
+ * long the editor will wait for its only document to be parsed before giving up on beating `load`.
  */
 export const LOOK_AHEAD_DEADLINE_MS = 2_000;

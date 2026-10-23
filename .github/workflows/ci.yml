@@ -201,7 +201,13 @@ jobs:
     # **eleven minutes** on both e2e runners at once, the suite then ran at its usual pace, and the
     # job limit killed 178 green walks at 25m19s. A limit on the job measures apt plus the suite;
     # a limit on the step measures the suite. The job's 40 is only a ceiling for a runner that never
-    # comes back.
+    # comes back. **Accepted as they stand by David on 23 October 2026**, planning sprint 27.
+    #
+    # **One job again since sprint 27 día 1.** There were two from sprint 26 día 3: this one and
+    # `e2e (swap)`, the same walks with the canvas on the route it had since sprint 15, chosen by
+    # `localStorage["rb.canvas"]`. Both blocked, both took 17–20 minutes, and every defect had to be
+    # looked for in two places. The route was retired with the suite green on both for a sprint,
+    # which is the evidence ADR 0051 §6 asked for.
     timeout-minutes: 40
     # Protocol Part 9.2: "El job `e2e` se limita a los pull request porque los minutos de
     # Actions son finitos y Playwright es lo más lento de todo." A push straight to main skips
@@ -229,42 +235,11 @@ jobs:
 
       # Three of the five critical flows the protocol names — see the doc comment at the top
       # of apps/editor/e2e/critical-flows.e2e.test.ts for which two are missing and why.
-      - run: pnpm e2e
-        timeout-minutes: 25
-
-  # **The same walks, with the canvas on its other route** (ADR 0051 §6). The editor keeps two
-  # canvases until sprint 27 closes: `patch`, the default since día 5 and what the job above runs,
-  # and `swap`, the route it had since sprint 15, chosen per browser by `localStorage["rb.canvas"]`.
-  # `RETORIKA_CANVAS=swap` makes the e2e harness set that key in every context it opens, so one
-  # suite serves both and no walk has two versions. **Both jobs block** since día 5: the walks'
-  # contract (`afterTheEdit`, on the edit serial) holds under either route, and a red here is a
-  # route that broke, not a wait that cannot return. Verbose, so a run killed at the limit still
-  # says which walks it had passed.
-  e2e-swap:
-    name: e2e (swap)
-    runs-on: ubuntu-latest
-    # The same 40 for the job and 25 for the suite's step as the job above, for the same measurement.
-    timeout-minutes: 40
-    if: github.event_name == 'pull_request'
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup
-      - name: Read the Playwright version
-        id: playwright
-        run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
-        id: playwright-cache
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-chromium-${{ runner.os }}-${{ steps.playwright.outputs.version }}
-      - if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: pnpm exec playwright install --with-deps chromium
-      - if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: pnpm exec playwright install-deps chromium
+      # Verbose, so a run killed at the limit still says which walks it had passed — vitest's
+      # default reporter prints nothing at all before a kill, which cost a diagnosis on 22 October.
+      # It was the retired `e2e (swap)` job that carried this flag; the lesson outlived the job.
       - run: pnpm e2e --reporter=verbose
         timeout-minutes: 25
-        env:
-          RETORIKA_CANVAS: swap
 
   security:
     name: security
