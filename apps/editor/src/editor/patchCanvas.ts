@@ -285,9 +285,18 @@ export function skeletonOf(root: ParentNode): string {
   return keys.join("\n");
 }
 
-/** The selection's offsets in the element's plain text — a caret has `start === end` — or `null`
- * when the selection is not inside it. */
-function selectionOffsetsIn(el: Element): { start: number; end: number } | null {
+/**
+ * The selection's offsets in the element's plain text — a caret has `start === end` — or `null`
+ * when the selection is not inside it.
+ *
+ * **Exported for the test that pins the shape** (sprint 27 día 3, David's adjustment 2): the
+ * editor's own record of the chosen words is `{ element, start, end }` in characters and never a
+ * live `Range`, and the reason is this function's own patch — applying a mark splits one text node
+ * into three, so every node reference taken before it is meaningless after, while the offsets still
+ * name the same letters. `patchCanvas.test.ts` records, patches and restores, and holds a `Range`
+ * across the same patch to show what the other shape would have cost.
+ */
+export function selectionOffsetsIn(el: Element): { start: number; end: number } | null {
   const selection = el.ownerDocument.getSelection();
   if (!selection || selection.rangeCount === 0) return null;
   const range = selection.getRangeAt(0);

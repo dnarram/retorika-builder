@@ -271,6 +271,26 @@ export interface ToolbarGeometry {
   readonly barHeight: number;
   readonly hostWidth: number;
   readonly gap?: number;
+  /**
+   * **What of this section is on screen**, in the section's own coordinates: `top` is where the
+   * visible band starts inside it and `height` is how tall that band is — the frame's `scrollY`
+   * minus the section's own offset in the page, and the frame's `innerHeight` (sprint 27 día 3).
+   *
+   * **Without it the bar is placed against the section and lands where nobody can press it.** The
+   * canvas is a scrolling document inside an iframe, and a section's top is not the top of what is
+   * on screen: choose a section — which focuses it, and focus scrolls — and the cover's headline is
+   * then a few pixels below the frame's upper edge with its whole section above it. «Above the
+   * words» is forty-six pixels higher, the arithmetic below says that is room enough because it is
+   * room enough *inside the section*, and the bar is drawn off the top of the visible area. A press
+   * there lands on the editor's own chrome outside the frame: the words lose the focus, the
+   * deferred blur closes the bar, and «B» marks nothing. That is the defect of 15 October 2026,
+   * measured on 23 October: `scrollY` 189, the bar at −31.
+   *
+   * Optional, and absent means an unbounded band from the section's own top — exactly the rule
+   * this file had before, kept so that a caller with no window (and every unit below) reads the
+   * same answer it always did.
+   */
+  readonly view?: { readonly top: number; readonly height: number };
 }
 
 /**
@@ -300,13 +320,40 @@ export function toolbarPoint(
   const gap = geometry.gap ?? TOOLBAR_GAP;
   const above = geometry.elementTop - geometry.barHeight - gap;
   const below = geometry.elementTop + geometry.elementHeight + gap;
-  const wanted = side === "auto" ? (above < 0 ? "below" : "above") : side;
-  const settled = wanted === "above" && above < 0 ? "below" : wanted;
+  /**
+   * **The band that decides, which is the screen and not the section** (día 3). With no band given
+   * the floor is the section's own top and there is no ceiling, which is what `above < 0` meant
+   * when this was four lines inside `wireToolbar`: the generalisation keeps every one of those
+   * answers and adds the only question that was missing — whether the place is *visible*.
+   */
+  const view = geometry.view ?? { top: 0, height: Number.POSITIVE_INFINITY };
+  /**
+   * **The band narrows the section, it does not replace it.** The floor is the higher of the two:
+   * the section's own top, which the bar has never been allowed above — it is the section's child,
+   * and above that edge it would stand over the section before — and the top of what is on screen.
+   * A section whose top is itself on screen has a band starting at a negative offset, and the first
+   * version of this line took that as room: it drew the bar above «Contacto»'s own edge, and the
+   * sprint 9 walk that clicks through the bar's blank space to the paragraph underneath it found it
+   * in the full suite (the bar's bottom 51 px short of the paragraph it had always reached).
+   */
+  const floor = Math.max(view.top, 0);
+  const ceiling = view.top + view.height;
+  const fits = (y: number) => y >= floor && y + geometry.barHeight <= ceiling;
+  const wanted = side === "auto" ? (fits(above) ? "above" : "below") : side;
+  const settled = wanted === "above" && !fits(above) ? "below" : wanted;
   const rightmost = Math.max(geometry.hostWidth - geometry.barWidth - gap, 0);
+  /**
+   * **And when neither side is on screen, the visible edge wins over the side.** A text taller than
+   * the frame has no room above it and none below it either; pinned to the edge of the band the bar
+   * stands over the text's own lower part, which is reachable — and unreachable is the one outcome
+   * this function exists to refuse.
+   */
+  const lowest = Math.max(ceiling - geometry.barHeight, floor);
+  const y = settled === "above" ? above : below;
   return {
     point: {
       x: Math.min(Math.max(geometry.elementLeft, 0), rightmost),
-      y: settled === "above" ? above : below,
+      y: Math.min(Math.max(y, floor), lowest),
     },
     side: settled,
   };

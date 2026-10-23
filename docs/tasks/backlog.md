@@ -1125,16 +1125,37 @@ open survives.
 - **Three things sprint 26's patch route found in the editor, which belong to the editor and not
   to the route** (22 October 2026, días 5 and 6; the record is ADR 0051's día 5 amendment).
 
-  **A mark pressed on text that has not been committed marks the document's text, not the typed
-  one.** The floating toolbar reads the selection from the DOM and writes the mark into the
+  ~~**A mark pressed on text that has not been committed marks the document's text, not the typed
+  one.**~~ **Fixed on 23 October 2026, sprint 27 día 3** (ADR 0052 §4, David's adjustment 3). The
+  commit the blur did is a function now — `commit` in `wireEditing`, reached by the bar through a
+  ref, the way the redraw reaches `settleToolbar` — and the mark button calls it before it reads the
+  range, so the DOM and the document say the same thing and one set of offsets names the same
+  letters in both. A mark on words that were just committed turns *on* rather than asking the
+  document, because words that were not in it a moment ago cannot have carried the mark. The walk
+  «marca sin volcar» types without committing and asserts the bold **in the DOM with the focus
+  still inside the text**, and again once the writing ends. *What follows is the row as it stood.*
+  The floating toolbar reads the selection from the DOM and writes the mark into the
   document, and the document does not have the words being typed until the blur commits them. Under
   `swap` the rebuild then threw the typed words away; under `patch` the mark patch rewrites the
   focused text with the document's version. Both routes, since sprint 10; the mark walks never saw
   it because they commit before marking. The fix is the toolbar's: commit first, then mark.
 
-  **`End` does not collapse the selection a mark patch puts back; an arrow does.** Observed on the
-  día 5 keystroke walk in Chromium; not chased. Whether it is the restored `Range`'s direction or
-  the key's handling is the first thing to measure.
+  ~~**`End` does not collapse the selection a mark patch puts back; an arrow does.**~~ **Measured on
+  23 October 2026, sprint 27 día 3, and it is not the editor's.** On Linux — CI's own run — `End`
+  collapses at the first press. On a Mac the first `End` and the first `Home` do nothing in the
+  canvas and the second `End` collapses, while **`Cmd+→`, the Mac's own end-of-line key, collapses at
+  the first press**. What the measurement ruled out, in Chromium on the Mac: **the mark**, because a
+  selection made with `Home` and seven `Shift+ArrowRight` with no mark at all behaves identically,
+  and so does one set by script; **our code**, because `preventDefault` is never called — read at
+  the capture, at the bubble and at the frame's own window — and because `removeAllRanges`,
+  `addRange`, `setBaseAndExtent`, `collapse`, `extend`, `modify` and `empty`, wrapped on the frame's
+  `Selection.prototype`, never ran; **our wiring**, because a brand-new `<h1 contenteditable>`
+  appended to the same section behaves the same, as does the real headline with every stylesheet
+  disabled and with the section's `tabindex` and `role` removed. The walk in
+  `apps/editor/e2e/critical-flows.e2e.test.ts` asserts each platform's own end-of-line key at the
+  first press; it was an `it.fails` until CI passed it, which is how the platform split was found.
+  *The row as it stood:* «Observed on the día 5 keystroke walk in Chromium; not chased. Whether it
+  is the restored `Range`'s direction or the key's handling is the first thing to measure.»
 
   **Escalating a section is two changes of the document about 200 ms apart** — the section turns
   free, then its rows, measured on the live layout (ADR 0050 §3), are written — and a hand that
@@ -1392,8 +1413,40 @@ open survives.
   emulation through `Input.dispatchTouchEvent`, because `page.touchscreen` only taps), and two
   fingers at once, which nothing in this editor has an answer for.
 
-- **The floating text bar closes, and does nothing, if a section was chosen before the text was.**
-  Found on 15 October 2026 while writing sprint 20's touch walk, which is the only reason anybody
+- ~~**The floating text bar closes, and does nothing, if a section was chosen before the text was.**~~
+  **Found and fixed on 23 October 2026, sprint 27 día 3** (PR of `fix/la-barra-que-muere`; the
+  record is ADR 0052's día 3 measurement).
+
+  **The cause was never the press: the bar was drawn off the top of what is on screen.** Its place
+  was decided against the section it sits in, so «above the words» meant «above them *inside the
+  section*» — and the canvas is a scrolling document inside an iframe. Choosing a section focuses
+  it, focus scrolls, and the text clicked next can sit a few pixels below the frame's top edge with
+  its whole section above it; the place above it is then outside the visible band. Measured at
+  1440 × 900: `scrollY` 189, the bar's top at **−31**. A press there lands on the editor's own
+  chrome *outside* the frame, so the words lose the focus, the deferred `focusout` closes the bar
+  and «B» marks nothing — every one of the four things ruled out below was correctly ruled out,
+  because none of them was ever it.
+
+  `toolbarPoint` takes the band of the section that is on screen (`view`, the frame's `scrollY`
+  minus the section's own offset, and its `innerHeight`) and decides against that — never above
+  the section's own top, which stays the floor as it always was — falling to the visible edge when
+  neither side fits; `Editor.tsx` reads the band on every placement, because the
+  bar is placed again after every patch and the scroll is not what it was when the bar opened. The
+  bar's top is **75** on the same walk now. The walk presses «B» with `page.mouse` at the bar's own
+  coordinates rather than `locator.click()`, which would scroll the thing it is measuring into view
+  and pass over a bar nobody could have pressed.
+
+  **Two things this leaves untried, both the same question from a different side.** Scrolling the
+  canvas *while* the bar is open moves the band under a bar that is already placed — nothing
+  re-places it until the next patch. And the **section's own cluster of verbs** is placed by
+  `cornerPoint` at a corner of its section, with no band at all: a section taller than the frame
+  can have its top-right corner off screen. Nobody has reported it, and `select()` focuses the
+  section — which scrolls it into view — so the corner is usually on screen by the time the verbs
+  are drawn; it is the same arithmetic waiting for the same correction, and `clampToHost` is where
+  it would go.
+
+  *What follows is the row as it stood.* Found on 15 October 2026 while writing sprint 20's touch
+  walk, which is the only reason anybody
   chained those two gestures in one page. Measured, reproduced, and **not fixed** — it is not that
   sprint's subject and the cause is not found.
 

@@ -12,6 +12,7 @@ import {
   keyOf,
   PAGE_CSS_ATTRIBUTE,
   patchCanvas,
+  selectionOffsetsIn,
   skeletonOf,
   splitFontFaces,
 } from "../src/editor/patchCanvas.ts";
@@ -306,6 +307,68 @@ describe("patchCanvas — an edit is a patch", () => {
     expect(selection?.rangeCount).toBe(1);
     expect(selection?.toString()).toBe(text.slice(0, end));
     expect(headline2.contains(selection?.getRangeAt(0).startContainer ?? null)).toBe(true);
+  });
+
+  /**
+   * **Why the chosen words are remembered as offsets and never as a `Range`** (David's adjustment 2
+   * to the sprint 27 plan, día 3).
+   *
+   * The toolbar has to put the person's selection back after the patch its own press caused, and
+   * the two shapes it could hold it in are not equally good: the patch that applies a mark splits
+   * the text node those words live in, so a `Range` taken before it points at a node the document
+   * no longer has, while `{ start, end }` in characters still names the same letters. This records,
+   * patches, and asks both.
+   */
+  it("keeps the chosen words as offsets across a patch that replaces the text nodes, where a live Range loses them", () => {
+    const doc = fixture();
+    const live = settled(doc);
+    const headline = live.querySelector<HTMLElement>('[data-id="el-headline"]');
+    if (!headline) throw new Error("no headline");
+    const text = headline.textContent ?? "";
+    // The first seven letters, rather than the first word: the fixture's headline opens with a
+    // two-letter one, and what this measures is the node under the offsets, not a word boundary.
+    const end = Math.min(7, text.length);
+    const word = text.slice(0, end);
+    expect(word.length).toBe(7);
+    headline.setAttribute("contenteditable", "true");
+    const textNode = headline.firstChild;
+    if (!textNode) throw new Error("no text node");
+    const range = live.createRange();
+    range.setStart(textNode, 0);
+    range.setEnd(textNode, end);
+    live.getSelection()?.removeAllRanges();
+    live.getSelection()?.addRange(range);
+
+    // Recorded the way `refresh()` records it, and held the way it must not be held.
+    const recorded = selectionOffsetsIn(headline);
+    expect(recorded).toEqual({ start: 0, end });
+    const held = range.cloneRange();
+
+    const next = applyMark(
+      doc,
+      { sectionId: "sec-cover", elementId: "el-headline" },
+      { from: 0, to: end },
+      "strong",
+    );
+    const report = patchCanvas(live, freshFrom(next), buildCss(next), {
+      cause: "mark",
+      focused: headline,
+    });
+    expect(report.ok).toBe(true);
+
+    // The node those offsets were read from is gone — one text node became a `<strong>` and a
+    // remainder — and the offsets still name the same letters.
+    expect(headline.querySelector("strong")?.textContent).toBe(word);
+    expect(headline.firstChild).not.toBe(textNode);
+    expect(selectionOffsetsIn(headline)).toEqual(recorded);
+    expect(live.getSelection()?.toString()).toBe(word);
+
+    // And the `Range` that was held across it does not: either its container left the element or
+    // it no longer covers the words. This is the sabotage of adjustment 2, run rather than argued.
+    const stillThere = headline.contains(held.startContainer) && held.toString() === word;
+    expect(stillThere, "a live Range survived the patch, so the offsets are not load-bearing").toBe(
+      false,
+    );
   });
 
   it("moves the faces into their own sheet on the first patch, and a change of palette never touches it", () => {
