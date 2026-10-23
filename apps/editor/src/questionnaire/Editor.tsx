@@ -145,6 +145,7 @@ import {
   placeAfterRebuild,
   popupKeyAction,
   rovingTabIndex,
+  rovingTabIndexInside,
   sectionKeyAction,
 } from "../editor/sectionKeys.ts";
 import { offersMatching } from "../editor/sectionSearch.ts";
@@ -215,6 +216,13 @@ export interface DeleteToast {
  * image to click, and a list's own children get their own `data-id` individually.
  */
 const EDITABLE_TAGS = new Set(["H1", "H2", "H3", "H4", "H5", "H6", "P", "A"]);
+
+/**
+ * Everything inside a section that Tab could stop on: the renderer's texts and placed elements,
+ * the page's own links and buttons, the chrome's verbs, badges and line buttons, and whatever
+ * already carries a `tabindex`. `applyCanvasStops` decides which of them are stops right now.
+ */
+const CANVAS_STOP = "[data-id], a[href], button, input, select, textarea, [tabindex]";
 
 /** The interface's typeface, for chrome injected into the preview frame. Spelled out rather
  * than inherited: inside that frame, "inherit" means the client's own site font. */
@@ -1638,6 +1646,9 @@ export function Editor({
     drawLines(iframeDoc);
     drawPhotoChrome(iframeDoc);
     wireHandmade(iframeDoc);
+    // After every drawing that can add a button to a section, and before the settles that may
+    // focus one: the stops of the holder are `0` and the rest `-1` (ADR 0052 §2).
+    applyCanvasStops(iframeDoc);
     syncHole(iframeDoc);
     syncGrid(
       iframeDoc,
@@ -1654,6 +1665,59 @@ export function Editor({
     observeSections(iframeDoc);
     handlePainter.current?.();
     return Math.round((performance.now() - started) * 10) / 10;
+  }
+  /**
+   * **The canvas is one Tab stop, and a section's insides are stops only while that section holds
+   * the keyboard** (ADR 0052 §1 and §2). One pass over the sections and over what is inside them,
+   * run at wiring, after every patch and whenever the keyboard's place moves.
+   *
+   * The sections' half is the roving `tabindex` sprint 17 built: `0` on the holder, `-1` on the
+   * rest, the first section as the door when nothing holds it. The insides' half is what that
+   * model never said. `prepareTexts` gave every text a `0` on every repaint and `prepareDraggables`
+   * every photograph and list with the tools on, nothing ever took one away, and the result was
+   * measured on 23 October 2026: about seventy-five stops with the tools on, two hundred presses to
+   * reach «Colocación» past them, and a section that could never be reached by Tab once a text of
+   * it had been touched, because the `focusin` from the child moved the one `0` to its section —
+   * always *behind* the cursor, so `Shift+Tab` was the only way forward.
+   *
+   * So the insides follow the holder, with `rovingTabIndexInside`: Tab from the holder enters its
+   * own texts, verbs and photographs in document order, Tab after the last of them leaves the
+   * canvas, and the other sections' insides are not in the way. A click still focuses a text at
+   * `-1` — that is what `-1` means — so nothing changes for the hand.
+   *
+   * Three things are deliberately not this function's. The floating text bar keeps its own
+   * contract (one stop on the grip, its controls at `-1`; the arrows are día 4's), so its insides
+   * are skipped and the grip is treated like any other button. A placed element with the design
+   * tools **off** is not a stop at all — it loses the attribute rather than keeping yesterday's
+   * `0`, which is the «nothing ever took one away» above. And the gaps' pills live *between* the
+   * sections, so they stay what they are: one native stop per gap, because «añadir una sección
+   * aquí» has no other keyboard route.
+   */
+  function applyCanvasStops(iframeDoc: Document) {
+    const sections = [...iframeDoc.querySelectorAll<HTMLElement>("[data-section]")];
+    const id = keyboardSection.current;
+    const at = id === null ? -1 : sections.findIndex((section) => section.dataset.section === id);
+    const indexes = rovingTabIndex(sections.length, at);
+    const stops: HTMLElement[] = [];
+    const owners: number[] = [];
+    for (const [index, section] of sections.entries()) {
+      section.setAttribute("tabindex", String(indexes[index] ?? -1));
+      for (const el of section.querySelectorAll<HTMLElement>(CANVAS_STOP)) {
+        if (el.closest(".rb-toolbar") && !el.classList.contains("rb-toolbar-grip")) continue;
+        const placed = el.dataset["id"] !== undefined && !EDITABLE_TAGS.has(el.tagName);
+        if (placed && designToolsNow.current !== true) {
+          el.removeAttribute("tabindex");
+          continue;
+        }
+        stops.push(el);
+        owners.push(index);
+      }
+    }
+    const inside = rovingTabIndexInside(owners, sections.length, at);
+    for (const [index, el] of stops.entries()) {
+      const want = String(inside[index] ?? -1);
+      if (el.getAttribute("tabindex") !== want) el.setAttribute("tabindex", want);
+    }
   }
   /** What `wireEditing` registers for the redraw: a text the patch rewrote under the caret
    * (history or its own mark) has its capture re-read from the document, or the next commit would
@@ -1995,19 +2059,9 @@ export function Editor({
       applyRovingTabIndex();
     }
 
-    /** Where the keyboard is, as an index into `sectionsNow()`, or `-1`. */
-    function keyboardIndex(): number {
-      const id = keyboardSection.current;
-      return id === null
-        ? -1
-        : sectionsNow().findIndex((section) => section.dataset.section === id);
-    }
-
+    /** The sections' roving `tabindex` and their insides', in one pass (ADR 0052 §2). */
     function applyRovingTabIndex() {
-      const indexes = rovingTabIndex(sectionsNow().length, keyboardIndex());
-      for (const [index, section] of sectionsNow().entries()) {
-        section.setAttribute("tabindex", String(indexes[index] ?? -1));
-      }
+      applyCanvasStops(iframeDoc);
     }
 
     /**
@@ -2075,6 +2129,7 @@ export function Editor({
       for (const text of [
         es["editor.canvasKeys.title"],
         es["editor.canvasKeys.move"],
+        es["editor.canvasKeys.inside"],
         es["editor.canvasKeys.choose"],
         es["editor.canvasKeys.release"],
         es["editor.canvasKeys.bar"],
@@ -2824,7 +2879,10 @@ export function Editor({
      * person is not. `focusin` and not `focus`, because the thing receiving focus is usually a
      * child: a paragraph being edited, or one of the action buttons.
      */
-    delegate(iframeDoc, "focusin", "[data-section]", (section) => {
+    delegate(iframeDoc, "focusin", "[data-section]", (section, event) => {
+      // The legend says the model the moment a section itself has the keyboard — by Tab as much
+      // as by an arrow (ADR 0052 §7). A child taking focus is not that moment.
+      if (event.target === section) showKeyLegend(true);
       const id = section.dataset.section;
       if (!id || keyboardSection.current === id) return;
       keyboardSection.current = id;
@@ -4456,13 +4514,13 @@ export function Editor({
   /**
    * Draw «chosen» on one text and take it off whatever had it (ADR 0047).
    *
-   * **The chrome is three things and each has a reason.** The solid outline says which text is the
+   * **The chrome is two things and each has a reason.** The solid outline says which text is the
    * one — dashed on hover means «you could», solid means «this is it», the same pair the sections
-   * have used since sprint 17. `tabindex` arrives only while chosen, which is what keeps the canvas
-   * **one** Tab stop when nothing is and still lets Intro reach the text that is. And the hint is
-   * the element's own `aria-describedby`, not a decoration with `aria-hidden`: a screen reader
-   * arriving at a chosen text is told how to start writing in it, which is the same sentence the
-   * eye gets.
+   * have used since sprint 17. And the hint is the element's own `aria-describedby`, not a
+   * decoration with `aria-hidden`: a screen reader arriving at a chosen text is told how to start
+   * writing in it, which is the same sentence the eye gets. The Tab stop is not this function's
+   * and never depended on being chosen: a text is a stop while its section holds the keyboard
+   * (ADR 0052 §2, `applyCanvasStops`), and a click focuses it either way.
    *
    * `el` of `null` means nothing is chosen, and that is a real state — a press of Escape, or a
    * click on the page around the sections.
@@ -4592,10 +4650,14 @@ export function Editor({
 
   /**
    * **What a text needs on itself, and nothing more** (ADR 0051 §5): the mark the delegated
-   * handlers dispatch on, a Tab stop, and the entry link unwrapped — because the renderer draws a
-   * card's title as a link to its page and the editor keeps it plain, and a link inside the
-   * element would otherwise be followed on click. Idempotent, so it runs at wiring and again after
-   * every patch, over inserted texts and settled ones alike.
+   * handlers dispatch on, and the entry link unwrapped — because the renderer draws a card's title
+   * as a link to its page and the editor keeps it plain, and a link inside the element would
+   * otherwise be followed on click. Idempotent, so it runs at wiring and again after every patch,
+   * over inserted texts and settled ones alike.
+   *
+   * The Tab stop used to be given here too — `0` to every text on every repaint — and that is the
+   * seventy-five stops ADR 0052 counts. It is `applyCanvasStops`'s now: a text is a stop while its
+   * section holds the keyboard, and `-1` otherwise.
    */
   function prepareTexts(iframeDoc: Document) {
     for (const el of iframeDoc.querySelectorAll<HTMLElement>("[data-id]")) {
@@ -4604,7 +4666,6 @@ export function Editor({
         link.replaceWith(...link.childNodes);
       }
       if (el.dataset["rbText"] !== "1") el.dataset["rbText"] = "1";
-      if (el.tabIndex !== 0) el.tabIndex = 0;
     }
   }
 
@@ -5558,18 +5619,18 @@ export function Editor({
   }
 
   /**
-   * **What a placed element needs on itself** (ADR 0051 §5): a Tab stop when it is not a text (a
-   * text has its own), and `draggable` off on images and links so the browser's own drag never
-   * starts. Only with the tools on, as the whole wiring used to be; idempotent, so it runs at
-   * wiring and after every patch.
+   * **What a placed element needs on itself** (ADR 0051 §5): `draggable` off on images and links
+   * so the browser's own drag never starts. Only with the tools on, as the whole wiring used to
+   * be; idempotent, so it runs at wiring and after every patch.
+   *
+   * The Tab stop a photograph or a list gets with the tools on is `applyCanvasStops`'s (ADR 0052
+   * §2), which also takes it away when the tools go off — the `0` given here used to outlive the
+   * switch, because nothing ever removed it.
    */
   function prepareDraggables(iframeDoc: Document) {
     if (designToolsNow.current !== true) return;
     for (const node of iframeDoc.querySelectorAll<HTMLElement>("img, a")) {
       if (node.draggable) node.draggable = false;
-    }
-    for (const el of iframeDoc.querySelectorAll<HTMLElement>("[data-id]")) {
-      if (!EDITABLE_TAGS.has(el.tagName) && el.tabIndex !== 0) el.tabIndex = 0;
     }
   }
 

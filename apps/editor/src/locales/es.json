@@ -415,6 +415,7 @@
   "editor.canvas.chosenHint": "Doble clic o Intro para escribir",
   "editor.canvasKeys.title": "Teclas del lienzo",
   "editor.canvasKeys.move": "\u2191 \u2193 cambiar de secci\u00f3n",
+  "editor.canvasKeys.inside": "Tab: lo de esta secci\u00f3n, y despu\u00e9s fuera del lienzo",
   "editor.canvasKeys.choose": "Intro: elegir",
   "editor.canvasKeys.release": "Esc: soltar el lienzo",
   "editor.canvasKeys.bar": "En el asa: flechas mover, Inicio devolver",

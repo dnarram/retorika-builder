@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  keyboardHolder,
   placeAfterRebuild,
   popupKeyAction,
   rovingTabIndex,
+  rovingTabIndexInside,
   sectionKeyAction,
 } from "../src/editor/sectionKeys.ts";
 
@@ -181,6 +183,49 @@ describe("the roving tabindex", () => {
 
   it("is empty for an empty canvas", () => {
     expect(rovingTabIndex(0, -1)).toEqual([]);
+  });
+});
+
+describe("the roving tabindex inside the sections (ADR 0052 §2)", () => {
+  // Five sections; the stops are listed by the section they are inside, in document order:
+  // two in the first, three in the third, one in the last.
+  const owners = [0, 0, 2, 2, 2, 4];
+
+  it("makes stops of the holder's insides only", () => {
+    expect(rovingTabIndexInside(owners, 5, 2)).toEqual([-1, -1, 0, 0, 0, -1]);
+    expect(rovingTabIndexInside(owners, 5, 4)).toEqual([-1, -1, -1, -1, -1, 0]);
+  });
+
+  it("opens the door's insides when nothing holds the keyboard, like the door itself", () => {
+    // The same rule as `rovingTabIndex`, one level down: with no holder the first section is the
+    // way in, and its insides are what Tab finds after it. A clamped or negative `at` is the
+    // first section's, as it is for the sections.
+    expect(rovingTabIndexInside(owners, 5, -1)).toEqual([0, 0, -1, -1, -1, -1]);
+    expect(rovingTabIndexInside(owners, 5, 7)).toEqual([0, 0, -1, -1, -1, -1]);
+    expect(keyboardHolder(5, -1)).toBe(0);
+    expect(keyboardHolder(5, 7)).toBe(0);
+    expect(keyboardHolder(5, 3)).toBe(3);
+  });
+
+  it("agrees with the sections' own roving tabindex about who the holder is", () => {
+    // The two functions share `keyboardHolder`, and this is the assertion that keeps them doing
+    // so: a stop is `0` exactly when its section is.
+    for (const at of [-1, 0, 2, 4, 9]) {
+      const sections = rovingTabIndex(5, at);
+      const inside = rovingTabIndexInside(owners, 5, at);
+      for (const [index, owner] of owners.entries()) {
+        expect(inside[index], `stop ${index} in section ${owner} with at=${at}`).toBe(
+          sections[owner],
+        );
+      }
+    }
+  });
+
+  it("never makes a stop of something in no section, and answers nothing for no sections", () => {
+    expect(rovingTabIndexInside([-1, 0], 5, 0)).toEqual([-1, 0]);
+    expect(rovingTabIndexInside([0, 1], 0, -1)).toEqual([-1, -1]);
+    expect(keyboardHolder(0, 0)).toBe(-1);
+    expect(rovingTabIndexInside([], 5, 1)).toEqual([]);
   });
 });
 
