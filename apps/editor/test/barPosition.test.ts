@@ -12,6 +12,7 @@ import {
   gripKeyAction,
   isDrag,
   isDragBeyond,
+  isToolbarShortcut,
   nearestCorner,
   nextCorner,
   offsetBetween,
@@ -19,8 +20,12 @@ import {
   stepped,
   TOOLBAR_GAP,
   type ToolbarGeometry,
+  textGripKeyAction,
   tipSide,
+  toolbarIndex,
+  toolbarKeyAction,
   toolbarPoint,
+  toolbarShortcutFor,
   withOffset,
 } from "../src/editor/barPosition.ts";
 
@@ -150,6 +155,131 @@ describe("what a press on the grip means", () => {
         });
       }
     }
+  });
+});
+
+/**
+ * The text bar's own keys (ADR 0052 §3, sprint 27 día 4): its grip keeps ↑ ↓, and ← → Inicio Fin
+ * walk between its controls, because the bar has become a toolbar and the grip is where a keyboard
+ * arrives.
+ */
+describe("what a press means on the text bar's grip", () => {
+  it("↑ and ↓ still move the bar, by the same step as the cluster's", () => {
+    expect(textGripKeyAction(press("ArrowUp"))).toEqual({ kind: "step", dx: 0, dy: -BAR_STEP });
+    expect(textGripKeyAction(press("ArrowDown"))).toEqual({ kind: "step", dx: 0, dy: BAR_STEP });
+  });
+
+  it("leaves ← → and Inicio to the toolbar, which the cluster's grip does not", () => {
+    for (const key of ["ArrowLeft", "ArrowRight", "Home"]) {
+      expect(gripKeyAction(press(key)).kind, `the cluster lost «${key}»`).not.toBe("ignore");
+      expect(textGripKeyAction(press(key)), `the text bar's grip kept «${key}»`).toEqual({
+        kind: "ignore",
+      });
+    }
+  });
+
+  it("refuses a modifier the same way the cluster's grip does", () => {
+    for (const held of ["altKey", "metaKey", "ctrlKey", "shiftKey"] as const) {
+      expect(textGripKeyAction(press("ArrowUp", { [held]: true }))).toEqual({ kind: "ignore" });
+    }
+  });
+});
+
+describe("what a press means anywhere in the text bar", () => {
+  it("← → Inicio Fin move between its controls", () => {
+    expect(toolbarKeyAction(press("ArrowLeft"))).toEqual({ kind: "focus", to: "previous" });
+    expect(toolbarKeyAction(press("ArrowRight"))).toEqual({ kind: "focus", to: "next" });
+    expect(toolbarKeyAction(press("Home"))).toEqual({ kind: "focus", to: "first" });
+    expect(toolbarKeyAction(press("End"))).toEqual({ kind: "focus", to: "last" });
+  });
+
+  it("Escape goes back to the words", () => {
+    expect(toolbarKeyAction(press("Escape"))).toEqual({ kind: "words" });
+  });
+
+  it("Tab and Shift+Tab leave the bar, forwards and back", () => {
+    expect(toolbarKeyAction(press("Tab"))).toEqual({ kind: "leave", forward: true });
+    expect(toolbarKeyAction(press("Tab", { shiftKey: true }))).toEqual({
+      kind: "leave",
+      forward: false,
+    });
+  });
+
+  /**
+   * ↑ and ↓ belong to the control — a `<select>` opens, a number steps, the grip moves the bar —
+   * and Intro and Espacio are a button's own click, the one path a mouse press also takes.
+   */
+  it("leaves ↑ ↓ Intro Espacio and everything else to the control", () => {
+    for (const key of ["ArrowUp", "ArrowDown", "Enter", " ", "a", "PageDown", "F10"]) {
+      expect(toolbarKeyAction(press(key)), `«${key}» was taken`).toEqual({ kind: "ignore" });
+    }
+  });
+
+  it("refuses Alt, Cmd and Ctrl on every key it claims, and Shift on all but Tab", () => {
+    for (const key of ["ArrowLeft", "ArrowRight", "Home", "End", "Escape", "Tab"]) {
+      for (const held of ["altKey", "metaKey", "ctrlKey"] as const) {
+        expect(toolbarKeyAction(press(key, { [held]: true })), `${held}+${key}`).toEqual({
+          kind: "ignore",
+        });
+      }
+      if (key === "Tab") continue;
+      expect(toolbarKeyAction(press(key, { shiftKey: true })), `Shift+${key}`).toEqual({
+        kind: "ignore",
+      });
+    }
+  });
+});
+
+describe("which control a press lands on", () => {
+  it("wraps at both ends, so → from the grip — the last control — comes round to the first", () => {
+    expect(toolbarIndex(5, 4, "next")).toBe(0);
+    expect(toolbarIndex(5, 0, "previous")).toBe(4);
+    expect(toolbarIndex(5, 2, "next")).toBe(3);
+    expect(toolbarIndex(5, 2, "previous")).toBe(1);
+  });
+
+  it("goes to the ends from anywhere", () => {
+    expect(toolbarIndex(5, 3, "first")).toBe(0);
+    expect(toolbarIndex(5, 1, "last")).toBe(4);
+  });
+
+  it("reads focus on none of them as standing just outside both ends", () => {
+    expect(toolbarIndex(5, -1, "next")).toBe(0);
+    expect(toolbarIndex(5, -1, "previous")).toBe(4);
+    expect(toolbarIndex(5, 9, "next")).toBe(0);
+  });
+
+  it("has nowhere to land with no controls", () => {
+    for (const to of ["previous", "next", "first", "last"] as const) {
+      expect(toolbarIndex(0, -1, to)).toBe(-1);
+    }
+  });
+});
+
+describe("the shortcut to the bar, and how the legend names it", () => {
+  it("is Alt+F10 and nothing more", () => {
+    expect(isToolbarShortcut(press("F10", { altKey: true }))).toBe(true);
+    expect(isToolbarShortcut(press("F10"))).toBe(false);
+    for (const held of ["metaKey", "ctrlKey", "shiftKey"] as const) {
+      expect(isToolbarShortcut(press("F10", { altKey: true, [held]: true })), held).toBe(false);
+    }
+    expect(isToolbarShortcut(press("F9", { altKey: true }))).toBe(false);
+  });
+
+  /**
+   * The strings are the ones the browsers actually report — «macOS» from `userAgentData` in
+   * Chromium, «MacIntel» from `navigator.platform` in every browser on a Mac, Intel or not.
+   */
+  it("says the Mac's sentence on a Mac, by either source, and the other one elsewhere", () => {
+    expect(toolbarShortcutFor({ userAgentData: { platform: "macOS" } })).toBe("mac");
+    expect(toolbarShortcutFor({ platform: "MacIntel" })).toBe("mac");
+    expect(toolbarShortcutFor({ userAgentData: { platform: "" }, platform: "MacIntel" })).toBe(
+      "mac",
+    );
+    expect(toolbarShortcutFor({ userAgentData: { platform: "Windows" } })).toBe("other");
+    expect(toolbarShortcutFor({ platform: "Win32" })).toBe("other");
+    expect(toolbarShortcutFor({ platform: "Linux x86_64" })).toBe("other");
+    expect(toolbarShortcutFor({})).toBe("other");
   });
 });
 

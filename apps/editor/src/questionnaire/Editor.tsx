@@ -70,13 +70,18 @@ import {
   gripKeyAction,
   isDrag,
   isDragBeyond,
+  isToolbarShortcut,
   nextCorner,
   offsetBetween,
   type Point,
   stepped,
   type ToolbarGeometry,
+  textGripKeyAction,
   tipSide,
+  toolbarIndex,
+  toolbarKeyAction,
   toolbarPoint,
+  toolbarShortcutFor,
   withOffset,
 } from "../editor/barPosition.ts";
 import { holdFor } from "../editor/buildingScreen.ts";
@@ -2141,7 +2146,13 @@ export function Editor({
         es["editor.canvasKeys.inside"],
         es["editor.canvasKeys.choose"],
         es["editor.canvasKeys.release"],
+        // The way to the text bar, in the keys this machine needs (ADR 0052 §3, David's note 8:
+        // without Fn a MacBook's F10 mutes the audio and never arrives). Then the bar's own keys.
+        toolbarShortcutFor(window.navigator) === "mac"
+          ? es["editor.canvasKeys.toBarMac"]
+          : es["editor.canvasKeys.toBar"],
         es["editor.canvasKeys.bar"],
+        es["editor.canvasKeys.grip"],
       ]) {
         const row = chrome(iframeDoc, "span");
         row.textContent = text;
@@ -3604,6 +3615,153 @@ export function Editor({
     };
 
     /**
+     * What is selected inside `el`, as offsets into the **document's** text — a caret included,
+     * where `from === to`.
+     *
+     * Two corrections, and the second was found by walking it.
+     *
+     * **Measured with a range from the start of the element**, never off `anchorOffset`: a
+     * marked text is several nodes, so the selection may begin inside a `<strong>`, and that
+     * node's own offsets say nothing about where the word sits in the sentence the document
+     * stores. The span from the element's start counts in the same UTF-16 code units the
+     * document uses (ADR 0027 §2).
+     *
+     * **And the frame's text is not the document's text.** The html target pretty-prints, so an
+     * unmarked heading arrives as `"\n      Taberna del Puerto\n    "` — the words with the
+     * file's own indentation wrapped around them. `wireEditing` has committed
+     * `textContent.trim()` since sprint 2 for exactly that reason, and this has to agree with
+     * it: measured against the raw node, every mark landed as many characters to the right as
+     * the element happened to be indented. The walk caught it on the first press.
+     *
+     * The clamp is the other half: a drag that runs past the last word selects into the
+     * indentation, and an offset the document has no character for would be refused by
+     * `applyMark` — correctly, and far too late to be useful.
+     *
+     * **Both corrections now live in `textEdits.ts`**, because `wireEditing`'s `beforeinput`
+     * listener needs the identical arithmetic on a different kind of range (ADR 0027 §4b). They
+     * cost a day to find by walking the toolbar in a browser, and two copies would drift
+     * silently — the symptom being a mark landing in the wrong place, which is the whole thing
+     * this file is trying to stop.
+     *
+     * Out here rather than inside the marks, where it was until día 4, because the way back to
+     * the words needs the caret too: a collapsed selection is no mark's business and every
+     * keyboard's.
+     */
+    const selectionIn = (el: HTMLElement): { from: number; to: number } | undefined => {
+      const selection = iframeDoc.getSelection();
+      if (!selection || selection.rangeCount === 0) return undefined;
+      const range = selection.getRangeAt(0);
+      if (!el.contains(range.commonAncestorContainer)) return undefined;
+
+      const frame = textFrameOf(el.textContent ?? "");
+      const upTo = iframeDoc.createRange();
+      upTo.selectNodeContents(el);
+      upTo.setEnd(range.startContainer, range.startOffset);
+
+      const from = offsetFor(frame, upTo.toString().length);
+      const to = Math.max(from, Math.min(from + range.toString().length, frame.text.length));
+      return { from, to };
+    };
+
+    /**
+     * **Where the hand was in the words when the keyboard left them for the bar** (ADR 0052 §3,
+     * sprint 27 día 4): which text, whether it was being written in, and the selection as offsets
+     * into the document's text — the chosen words, or a caret.
+     *
+     * Taken as the focus crosses from the text into the bar, because that is the last moment it
+     * can be: leaving a text ends the writing (`wireEditing` commits on `focusout`), the commit's
+     * patch may replace the text's nodes, and with the focus on a button the words are not
+     * selected anywhere a `selectionchange` could read them. **Offsets and never a `Range`**
+     * (David's adjustment 2): the commit and every mark rewrite the nodes a `Range` would be
+     * holding, while `{ from, to }` still names the same letters. And the text it was taken from,
+     * so a record an edit has made stale while the bar had the keyboard — an undo pressed from the
+     * bar — is dropped rather than put back on other letters.
+     *
+     * Two things read it: the marks, which stay drawn for the words chosen before the keyboard
+     * came (`refresh`), and the way back (`backToTheWords`).
+     */
+    let home: {
+      readonly sectionId: string;
+      readonly elementId: string;
+      readonly writing: boolean;
+      readonly at: { readonly from: number; readonly to: number } | null;
+      readonly text: string;
+    } | null = null;
+
+    /** The record above, if it is this text's and still true of it. */
+    const homeOf = (el: HTMLElement) => {
+      const sectionId = el.closest<HTMLElement>("[data-section]")?.dataset.section;
+      if (!home || home.elementId !== el.dataset.id || home.sectionId !== sectionId) return null;
+      return home.text === textFrameOf(el.textContent ?? "").text ? home : null;
+    };
+
+    /**
+     * **Back to the words, as they were when the keyboard left them** — writing again if they
+     * were being written in, with the caret or the chosen words where they were. The bar is a
+     * detour and the text is home (ADR 0052 §3), the same as with the mouse, whose `mousedown`
+     * never lets go of the text: a person who Tabs to «B» and presses it is still writing.
+     *
+     * **The selection goes back a microtask later**, after the select-all `beginWriting` queues
+     * on the focus that starting to write gives: put back synchronously, it would be selected
+     * over by that, and the next key would replace the whole text. `then` runs in the same
+     * microtask, so whatever it presses acts on the words with the DOM and the document agreeing —
+     * the identical state a mouse press finds them in.
+     */
+    const backToTheWords = (el: HTMLElement, then?: () => void) => {
+      const was = homeOf(el);
+      home = null;
+      if (was?.writing) startWriting(el);
+      else el.focus({ preventScroll: true });
+      queueMicrotask(() => {
+        if (was?.at) restoreSelection(iframeDoc, el, was.at);
+        then?.();
+      });
+    };
+
+    /** A press from the keyboard: a button's `click` with no pointer behind it (`detail` 0), on
+     * the control that has the focus — which a mouse press on this bar never is, since its
+     * `mousedown` keeps the focus on the words. */
+    const fromTheKeyboard = (event: MouseEvent, control: HTMLElement) =>
+      event.detail === 0 && iframeDoc.activeElement === control;
+
+    /**
+     * A control that acts on the words: the marks, the sizes, the families, the swatches. Pressed
+     * with the mouse it acts at once, as it always did; pressed from the keyboard it goes back to
+     * the words first and acts there, so the focus ends where it would have ended with the mouse.
+     * The grip and the two doors — «Enlace», «Desvincular» — are not this: the first acts on the
+     * bar, the others go somewhere else.
+     */
+    const actsOnTheWords = (el: HTMLElement, button: HTMLButtonElement, act: () => void) => {
+      button.addEventListener("click", (event) => {
+        if (fromTheKeyboard(event, button)) backToTheWords(el, act);
+        else act();
+      });
+    };
+
+    /**
+     * The stop Tab reaches after `el` with the bar out of the way: the first thing after the text
+     * in document order that the canvas has made a stop, outside the bar and outside the text.
+     *
+     * **Asked of the document rather than left to the browser, because of where the bar is.** It is
+     * inserted after the text's top-level branch (the note at the insertion says why), so the
+     * browser's own Tab from the bar goes to whatever follows that branch — and every stop between
+     * the text and the end of its branch, a card's paragraph after its title, would be skipped.
+     * `null` when nothing in the frame comes after, and then the browser's Tab leaves the frame as
+     * it would have.
+     */
+    const nextStopAfter = (el: HTMLElement): HTMLElement | null => {
+      for (const candidate of iframeDoc.querySelectorAll<HTMLElement>(CANVAS_STOP)) {
+        if ((el.compareDocumentPosition(candidate) & el.DOCUMENT_POSITION_FOLLOWING) === 0)
+          continue;
+        if (el.contains(candidate) || candidate.closest(".rb-toolbar")) continue;
+        if (candidate.tabIndex < 0 || (candidate as HTMLButtonElement).disabled) continue;
+        if (candidate.getClientRects().length === 0) continue;
+        return candidate;
+      }
+      return null;
+    };
+
+    /**
      * The handle on the text bar, wired the same three ways as the verbs' cluster.
      *
      * A click puts the bar on **the other side of the words** — which is the move a person wants
@@ -3612,8 +3770,10 @@ export function Editor({
      * — a headline with the section's padding and nothing else above it — it undoes whatever the
      * arrows had done, so the press always means «put it where it belongs» and never nothing.
      *
-     * The arrows nudge, `Home` forgets. Enter and Space are the button's own click, which is the
-     * flip, so the mouse and the keyboard share one implementation.
+     * ↑ and ↓ nudge it; ← → and Inicio are the toolbar's since día 4 (`textGripKeyAction` says
+     * why), and pressing the grip twice is the way home now that `Home` is not. Enter and Space are
+     * the button's own click, which is the flip, so the mouse and the keyboard share one
+     * implementation.
      */
     interface BarHandle {
       readonly sectionId: string;
@@ -3651,15 +3811,10 @@ export function Editor({
       });
 
       grip.addEventListener("keydown", (event) => {
-        const move = gripKeyAction(event);
-        if (move.kind === "ignore") return;
+        const move = textGripKeyAction(event);
+        if (move.kind !== "step") return;
         event.preventDefault();
         event.stopPropagation();
-        if (move.kind === "home") {
-          toolbarOffset.current.delete(handle.sectionId);
-          handle.place();
-          return;
-        }
         // The step is clamped before it is remembered, so pressing against an edge does not pile up
         // a displacement that would take twenty presses to walk back out of.
         remember(stepped(handle.at(), move, handle.bounds()));
@@ -3702,7 +3857,12 @@ export function Editor({
      * care. */
     let justDragged = false;
 
-    const open = (el: HTMLElement) => {
+    /**
+     * `held` says the bar is being drawn again under the keyboard — a control of the old one had
+     * the focus — so the marks start from the words chosen before the keyboard came, not from a
+     * DOM selection that is nowhere while a button is focused.
+     */
+    const open = (el: HTMLElement, held = false) => {
       close();
       const section = el.closest<HTMLElement>("[data-section]");
       const sectionId = section?.dataset.section;
@@ -3753,6 +3913,66 @@ export function Editor({
         if (onButton) event.preventDefault();
       });
       bar.addEventListener("click", (event) => event.stopPropagation());
+
+      /**
+       * **The other half of `role="toolbar"`** (ADR 0052 §3, sprint 27 día 4): ← and → between the
+       * controls, Inicio and Fin to the ends, Escape back to the words, and Tab out of the bar to
+       * the stops either side of the text. Every decision is `toolbarKeyAction`'s; this is the
+       * wiring. On the bar rather than on each control, so a control added later is walked to
+       * without remembering to be; the grip's own ↑ ↓ stop at the grip and never get here.
+       *
+       * «Walked to» means drawn and enabled: the marks are not drawn without chosen words, and a
+       * hidden button is not a place for → to land.
+       */
+      bar.addEventListener("keydown", (event) => {
+        const action = toolbarKeyAction(event);
+        if (action.kind === "ignore") return;
+        if (action.kind === "leave") {
+          // The bar is the stop right after its text (David's note 7), so the stop before it is
+          // the text and the stop after it is whatever followed the text.
+          if (!action.forward) {
+            event.preventDefault();
+            el.focus({ preventScroll: true });
+            return;
+          }
+          const next = nextStopAfter(el);
+          if (!next) return;
+          event.preventDefault();
+          next.focus();
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        if (action.kind === "words") {
+          backToTheWords(el);
+          return;
+        }
+        const controls = [...bar.querySelectorAll<HTMLElement>("button, select, input")].filter(
+          (control) =>
+            !(control as HTMLButtonElement).disabled && control.getClientRects().length > 0,
+        );
+        const at = controls.indexOf(iframeDoc.activeElement as HTMLElement);
+        controls[toolbarIndex(controls.length, at, action.to)]?.focus({ preventScroll: true });
+      });
+
+      /**
+       * **And the bar goes when the keyboard leaves both it and its words**, which is the text's
+       * own rule from the other side. The text's deferred blur closes the bar unless the focus went
+       * into it; nothing closed it once the focus was *in* it and went on elsewhere, so Tab from
+       * the grip on to anything that is not a text — a pill, a verb, a badge — would leave the bar
+       * drawn over the page for words nobody is in. The día 4 walk Tabs on until it stands on such
+       * a stop and asserts there is no bar.
+       * Deferred for the same reason as the text's: a rebuild under the keyboard removes this bar
+       * and focuses the same control in the next one before the timer runs.
+       */
+      bar.addEventListener("focusout", () => {
+        setTimeout(() => {
+          if (!bar.isConnected) return;
+          const active = iframeDoc.activeElement;
+          if (active === el || (active !== null && bar.contains(active))) return;
+          dismiss();
+        }, 0);
+      });
 
       const group = (label: string): HTMLElement => {
         const wrapper = chrome(iframeDoc, "div");
@@ -3829,61 +4049,35 @@ export function Editor({
       if (controls.marks) {
         const marksGroup = group(es["editor.toolbar.marks"]);
 
-        /**
-         * What is selected, as offsets into the **document's** text.
-         *
-         * Two corrections, and the second was found by walking it.
-         *
-         * **Measured with a range from the start of the element**, never off `anchorOffset`: a
-         * marked text is several nodes, so the selection may begin inside a `<strong>`, and that
-         * node's own offsets say nothing about where the word sits in the sentence the document
-         * stores. The span from the element's start counts in the same UTF-16 code units the
-         * document uses (ADR 0027 §2).
-         *
-         * **And the frame's text is not the document's text.** The html target pretty-prints, so an
-         * unmarked heading arrives as `"\n      Taberna del Puerto\n    "` — the words with the
-         * file's own indentation wrapped around them. `wireEditing` has committed
-         * `textContent.trim()` since sprint 2 for exactly that reason, and this has to agree with
-         * it: measured against the raw node, every mark landed as many characters to the right as
-         * the element happened to be indented. The walk caught it on the first press.
-         *
-         * The clamp is the other half: a drag that runs past the last word selects into the
-         * indentation, and an offset the document has no character for would be refused by
-         * `applyMark` — correctly, and far too late to be useful.
-         *
-         * **Both corrections now live in `textEdits.ts`**, because `wireEditing`'s `beforeinput`
-         * listener needs the identical arithmetic on a different kind of range (ADR 0027 §4b). They
-         * cost a day to find by walking the toolbar in a browser, and two copies would drift
-         * silently — the symptom being a mark landing in the wrong place, which is the whole thing
-         * this file is trying to stop.
-         */
+        /** What is selected inside the text, when it is words — `selectionIn` above, which says
+         * why it measures from the element's start and why against the document's text. */
         const selectionRange = (): MarkRange | undefined => {
-          const selection = iframeDoc.getSelection();
-          if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return undefined;
-          const range = selection.getRangeAt(0);
-          if (!el.contains(range.commonAncestorContainer)) return undefined;
-
-          const frame = textFrameOf(el.textContent ?? "");
-          const upTo = iframeDoc.createRange();
-          upTo.selectNodeContents(el);
-          upTo.setEnd(range.startContainer, range.startOffset);
-
-          const from = offsetFor(frame, upTo.toString().length);
-          const to = Math.max(from, Math.min(from + range.toString().length, frame.text.length));
-          return to > from ? { from, to } : undefined;
+          const at = selectionIn(el);
+          return at && at.to > at.from ? at : undefined;
         };
 
         const buttons: { mark: Mark; node: HTMLButtonElement }[] = [];
 
-        const refresh = () => {
-          const range = selectionRange();
+        const refresh = (rebuilt = false) => {
+          const live = selectionRange();
           // Recorded here rather than at press time because this already runs on every
           // `selectionchange`, so it costs nothing and is never behind. **Cleared when there is no
           // range**, which matters as much as setting it: a stale record would put a selection back
           // onto words the person had already deselected.
-          lastSelection.current = range
-            ? { sectionId: address.sectionId, elementId: address.elementId, ...range }
+          lastSelection.current = live
+            ? { sectionId: address.sectionId, elementId: address.elementId, ...live }
             : null;
+          /**
+           * **While the bar has the keyboard, the words are the ones chosen before it came**
+           * (ADR 0052 §3, día 4). With the focus on a control nothing is selected in the text — the
+           * commit that leaving it ran may even have replaced its nodes — so the live selection
+           * would hide «Resaltar» the moment the keyboard arrived to use it. `home` is the record
+           * taken as the keyboard left the words, in offsets; `rebuilt` covers the one moment the
+           * focus is in no bar at all, while this bar is being drawn to replace the one that had it.
+           */
+          const holding = rebuilt || bar.contains(iframeDoc.activeElement);
+          const before = holding ? homeOf(el)?.at : undefined;
+          const range = live ?? (before && before.to > before.from ? before : undefined);
           const marks = marksFor(docNow.current, address);
           for (const { mark, node } of buttons) {
             const pressed = range !== undefined && rangeHasMark(marks, range, mark);
@@ -3918,7 +4112,7 @@ export function Editor({
             "aria-label",
             es[`editor.toolbar.markTitleOf.${mark}` as keyof typeof es],
           );
-          button.addEventListener("click", () => {
+          actsOnTheWords(el, button, () => {
             /**
              * **The words are committed first** (ADR 0052 §4, día 3, David's adjustment 3).
              *
@@ -3954,9 +4148,10 @@ export function Editor({
           marksGroup.appendChild(button);
         }
 
-        refresh();
-        followSelection = refresh;
-        iframeDoc.addEventListener("selectionchange", refresh);
+        refresh(held);
+        const follow = () => refresh();
+        followSelection = follow;
+        iframeDoc.addEventListener("selectionchange", follow);
         bar.appendChild(marksGroup);
       }
 
@@ -3976,7 +4171,7 @@ export function Editor({
           button.textContent = es[`editor.toolbar.sizeOf.${ref}` as keyof typeof es];
           // Pressing the step already chosen takes it off, which is the only way back to the
           // site's own size without a separate «quitar» for a control of three buttons.
-          button.addEventListener("click", () => write("fontSize", chosen ? undefined : { ref }));
+          actsOnTheWords(el, button, () => write("fontSize", chosen ? undefined : { ref }));
           sizes.appendChild(button);
         }
 
@@ -4076,7 +4271,7 @@ export function Editor({
           // Pressing the one already chosen takes it off, like the size steps. With two buttons and
           // no exact arm it is the only way back to the family the site's type pair gives this role,
           // and a «quitar» for a control of two would be half the group again.
-          button.addEventListener("click", () => write("fontFamily", chosen ? undefined : { ref }));
+          actsOnTheWords(el, button, () => write("fontFamily", chosen ? undefined : { ref }));
           families.appendChild(button);
         }
         bar.appendChild(families);
@@ -4099,7 +4294,7 @@ export function Editor({
               : false;
           if (chosen) button.classList.add("rb-toolbar-on");
           button.setAttribute("aria-pressed", String(chosen));
-          button.addEventListener("click", () => write("color", chosen ? undefined : { ref }));
+          actsOnTheWords(el, button, () => write("color", chosen ? undefined : { ref }));
           colors.appendChild(button);
         }
 
@@ -4158,7 +4353,7 @@ export function Editor({
             off.type = "button";
             off.className = "rb-toolbar-step";
             off.textContent = es["editor.toolbar.reset"];
-            off.addEventListener("click", () => write("color", undefined));
+            actsOnTheWords(el, off, () => write("color", undefined));
             colors.appendChild(off);
           }
         }
@@ -4324,26 +4519,35 @@ export function Editor({
        * Nothing moves on screen. The bar is `position: absolute`, so it is out of flow and not a
        * grid item: it occupies no track in the section's twelve columns and displaces nothing,
        * whichever child it sits beside. It was already a direct child; only its index changes.
+       *
+       * **And still after the branch, not after the text, now that the Tab order is asserted with
+       * a text that is not the last of its branch** (sprint 27 día 4, David's note 7: «si falla, la
+       * barra se inserta justo después del texto, o la PR dice por qué no»). It failed — and not
+       * only in a card: Tab from the cover's headline did not reach the bar either, measured the
+       * same day. Inserted after the
+       * text itself, the bar would sit inside the card, and the card is an `.rb-line`, which the
+       * line chrome makes `position: relative`: the card would become the bar's containing block,
+       * every `top`/`left` below is in the section's coordinates, and the bar would be drawn a
+       * card's offset away from its words. So the order is made by the keys instead: Tab from the
+       * text goes to the grip, Tab from the bar goes on to `nextStopAfter(el)`, and Shift+Tab from
+       * the bar comes back to the text — the order a person would get if the bar were beside the
+       * words, without moving where it is drawn.
        */
       /**
        * **One Tab stop for the whole bar, and it is the handle.**
        *
        * `role="toolbar"` has been on this element since sprint 9 and promises a keyboard exactly
-       * this: one stop for the group, arrows between what is inside it. The bar kept neither half —
-       * and measured, it kept them so thoroughly that *none* of its controls could be reached by
-       * Tab at all, because the bar sat after everything in its section and closed as soon as focus
-       * left the words.
+       * this: one stop for the group, arrows between what is inside it. Sprint 20 kept the first
+       * half — the controls out of the tab order and the handle left in, so Tab-ing past a
+       * paragraph costs one press and not fifteen — and wrote the second down as a day of its own,
+       * because «B» needs the words the person chose and Tab-ing off a text takes the focus away
+       * from them.
        *
-       * Moving it beside the words fixes the reach and would cost fifteen presses every time
-       * somebody Tabs past a paragraph. So the controls are taken out of the tab order and the
-       * handle is left in: the journey grows by one stop, the drag gets the keyboard equivalent
-       * this repository requires of it, and the fourteen controls are no worse off than they were
-       * yesterday — they were unreachable then too, and a mouse still presses them exactly as
-       * before.
-       *
-       * **The other half of the contract is a day of its own**, and the backlog says why: arrows
-       * between these controls is the easy part, and what they act on is the hard one — «B» needs
-       * the words the person chose, and Tab-ing off a text collapses the selection that chose them.
+       * **The second half is día 4's** (ADR 0052 §3): the bar's `keydown` walks between the
+       * controls, and what they act on is `home`, the record of the words taken as the keyboard
+       * left them, in offsets. A press from the keyboard goes back to the words and acts there.
+       * The controls stay at `-1` — the stop is the grip, wherever the arrows were last — so the
+       * bar is the same one stop every time the keyboard arrives.
        */
       for (const control of bar.querySelectorAll<HTMLElement>("button, select, input")) {
         if (control !== grip) control.tabIndex = -1;
@@ -4473,6 +4677,68 @@ export function Editor({
     });
 
     /**
+     * **`home`, written as the focus crosses from a text into its bar** (día 4). In the capture
+     * phase, so it runs before `wireEditing`'s own `focusout` commits the words and ends the
+     * writing: after that the text no longer says whether it was being written in. The live
+     * selection first, and the one `refresh` last recorded if a press on a `<select>` already
+     * took it; a crossing to anywhere else forgets.
+     */
+    delegate(
+      iframeDoc,
+      "focusout",
+      "[data-id]",
+      (el, event) => {
+        if (!EDITABLE_TAGS.has(el.tagName)) return;
+        // Shape, never `instanceof`: the target belongs to the frame's realm, not this window's.
+        const to = event.relatedTarget as Element | null;
+        const sectionId = el.closest<HTMLElement>("[data-section]")?.dataset.section;
+        const elementId = el.dataset.id;
+        const intoTheBar = to !== null && "closest" in to && to.closest(".rb-toolbar") !== null;
+        if (!intoTheBar || !sectionId || !elementId) {
+          home = null;
+          return;
+        }
+        const recorded =
+          lastSelection.current?.sectionId === sectionId &&
+          lastSelection.current.elementId === elementId
+            ? { from: lastSelection.current.from, to: lastSelection.current.to }
+            : null;
+        home = {
+          sectionId,
+          elementId,
+          writing: el.isContentEditable,
+          at: selectionIn(el) ?? recorded,
+          text: textFrameOf(el.textContent ?? "").text,
+        };
+      },
+      { capture: true },
+    );
+
+    /**
+     * **The two ways from a text to its bar** (ADR 0052 §3, día 4): Tab, because the bar is the
+     * stop right after the text that opened it (David's note 7), and Alt+F10, the convention of
+     * TinyMCE and CKEditor (his adjustment 4). Tab is taken here rather than left to the browser
+     * because the bar sits after the text's whole branch — the note at its insertion says why —
+     * and the browser would reach every stop behind the text in that branch first.
+     *
+     * Only for the text the bar is open on, and only a bare Tab: Shift+Tab from a text goes back
+     * to whatever was before it, as it always did.
+     */
+    delegate(iframeDoc, "keydown", "[data-id]", (el, event) => {
+      if (!EDITABLE_TAGS.has(el.tagName)) return;
+      const bareTab =
+        event.key === "Tab" && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey;
+      if (!bareTab && !isToolbarShortcut(event)) return;
+      const on = toolbarOn.current;
+      const sectionId = el.closest<HTMLElement>("[data-section]")?.dataset.section;
+      if (!on || on.elementId !== el.dataset.id || on.sectionId !== sectionId) return;
+      const grip = iframeDoc.querySelector<HTMLElement>(".rb-toolbar .rb-toolbar-grip");
+      if (!grip) return;
+      event.preventDefault();
+      grip.focus({ preventScroll: true });
+    });
+
+    /**
      * Put the bar back on the element it was on, after an edit changed the canvas under it.
      *
      * **Found by the walk, and it made the control useless: the bar vanished the moment it was
@@ -4536,7 +4802,7 @@ export function Editor({
         : null;
       const heldRef = held?.dataset["ref"] ?? held?.dataset["mark"] ?? null;
       const heldTag = held?.tagName ?? null;
-      open(el);
+      open(el, held !== null);
       if (held && heldTag) {
         const again = [...iframeDoc.querySelectorAll<HTMLElement>(`.rb-toolbar ${heldTag}`)].find(
           (node) => (node.dataset["ref"] ?? node.dataset["mark"] ?? null) === heldRef,

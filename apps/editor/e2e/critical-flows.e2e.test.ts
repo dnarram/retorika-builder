@@ -14272,9 +14272,36 @@ describe("sprint 20 día 3 — la barra flotante se mueve, y recuerda el desplaz
         .poll(() => bar(walker, HEADLINE).then((b) => b?.top))
         .toBe(belowTheText - 2 * BAR_STEP);
 
-      // Y `Inicio` lo olvida, para toda la sección.
-      await walker.keyboard.press("Home");
+      /**
+       * **Y dos pulsaciones del asa la devuelven a su sitio**, olvidando las flechas para toda la
+       * sección. Era `Inicio` hasta el sprint 27 día 4: desde que la barra es una barra de
+       * herramientas entera, ← → Inicio y Fin recorren sus controles (ADR 0052 §3), y en el asa
+       * — que es donde llega el teclado — no pueden significar también «muévela». Intro es el clic
+       * del asa: la primera la pasa al otro lado, la segunda la trae al sitio calculado.
+       */
+      await walker.keyboard.press("Enter");
+      await expect.poll(() => bar(walker, HEADLINE).then((b) => b?.top)).toBe(belowTheText);
+      await walker.keyboard.press("Enter");
       await expect.poll(() => bar(walker, HEADLINE).then((b) => b?.top)).toBe(aboveTheText);
+      // Y `Inicio` ya es de la barra: va a su primer control, y la barra no se mueve.
+      await walker.keyboard.press("Home");
+      const onTheFirst = await walker
+        .frameLocator(PREVIEW)
+        .first()
+        .locator("body")
+        .evaluate(() => {
+          const active = document.activeElement as HTMLElement | null;
+          // The first one drawn: without chosen words the marks are not (mockup 18 band 2).
+          const first = [
+            ...document.querySelectorAll(".rb-toolbar :is(button, select, input)"),
+          ].find((control) => control.getClientRects().length > 0);
+          return { inToolbar: Boolean(active?.closest(".rb-toolbar")), first: active === first };
+        });
+      expect(onTheFirst, "Inicio no llevó al primer control de la barra").toEqual({
+        inToolbar: true,
+        first: true,
+      });
+      expect((await bar(walker, HEADLINE))?.top).toBe(aboveTheText);
     } finally {
       await context.close();
     }
@@ -19558,6 +19585,328 @@ describe("sprint 27 día 3 — la barra que muere", () => {
         await selection(),
         `the first ${endOfLine} did not collapse the selection`,
       ).toMatchObject({ collapsed: true });
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+});
+
+/**
+ * **Sprint 27 día 4 — las flechas de la barra.** The second half of `role="toolbar"` (ADR 0052
+ * §3): one stop on the grip, ← and → between the controls, Inicio and Fin to the ends, Escape back
+ * to the words — and what the controls act on is the words the hand chose *before* the keyboard
+ * left them, kept as offsets while the bar has the focus. Reached by Tab, because the bar is the
+ * stop right after the text that opened it, and by Alt+F10, the convention of TinyMCE and CKEditor.
+ */
+describe("sprint 27 día 4 — las flechas de la barra", () => {
+  /** Where the focus is in the frame — a control of the bar by what it is, a text by its id — and
+   * what is selected, read in the same call so the two describe one moment. */
+  const at = (page: Page) =>
+    page.evaluate(() => {
+      const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
+      const active = doc?.activeElement as HTMLElement | null | undefined;
+      const selection = doc?.getSelection();
+      return {
+        inBar: Boolean(active?.closest(".rb-toolbar")),
+        action: active?.dataset?.["action"] ?? null,
+        mark: active?.dataset?.["mark"] ?? null,
+        id: active?.dataset?.["id"] ?? null,
+        writing: active?.isContentEditable ?? false,
+        selected: selection?.toString() ?? "",
+        collapsed: selection?.isCollapsed ?? true,
+        bars: doc?.querySelectorAll(".rb-toolbar").length ?? 0,
+      };
+    });
+
+  const HEADLINE = '[data-section="sec-cover"] [data-id="el-headline"]';
+
+  /**
+   * Into the cover's headline and writing in it, **with the keyboard alone**: Tab to the canvas,
+   * the arrows to the cover, Tab into its insides until the headline, Intro. Then «Reserva hoy»
+   * typed over it — written and not committed, which is the state a person is in when they reach
+   * for «B».
+   */
+  async function writeTheHeadline(page: Page): Promise<Locator> {
+    const headline = page.frameLocator(PREVIEW).first().locator(HEADLINE);
+    await keyboardTo(page, "sec-cover");
+    const trail: string[] = [];
+    for (let press = 0; press < 20 && (await at(page)).id !== "el-headline"; press += 1) {
+      await page.keyboard.press("Tab");
+      const now = await at(page);
+      trail.push(now.id ?? now.action ?? (now.inBar ? "bar" : "?"));
+    }
+    expect((await at(page)).id, `Tab never reached the headline: ${trail.join(" → ")}`).toBe(
+      "el-headline",
+    );
+    await page.keyboard.press("Enter");
+    await expect(headline).toHaveAttribute("contenteditable", "true");
+    await page.keyboard.type("Reserva hoy");
+    await expect(headline).toHaveText(/^\s*Reserva hoy\s*$/);
+    return headline;
+  }
+
+  it("la barra es la parada siguiente al texto que la abrió, también si no es el último de su rama", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+
+      /**
+       * **The case that can fail** (David's note 7). The bar is inserted after the text's
+       * top-level branch inside its section, not after the text, so a text with another stop
+       * behind it in the same branch — a card's title, its paragraph after it — reached that stop
+       * first and the bar only after. Found by asking the page, so the walk cannot pass on a
+       * composition that happens to have no such text.
+       */
+      const pair = await page.evaluate(() => {
+        const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
+        // A card's title with its paragraph behind it is the case the note names, so it is looked
+        // for first; any text with another behind it in its branch is the fallback.
+        for (const sameCard of [true, false]) {
+          for (const section of doc?.querySelectorAll<HTMLElement>("[data-section]") ?? []) {
+            for (const text of section.querySelectorAll<HTMLElement>("[data-rb-text]")) {
+              let branch: HTMLElement = text;
+              while (branch.parentElement && branch.parentElement !== section) {
+                branch = branch.parentElement;
+              }
+              if (branch === text) continue;
+              const card = text.closest("li");
+              const after = [...branch.querySelectorAll<HTMLElement>("[data-rb-text]")].find(
+                (other) =>
+                  (text.compareDocumentPosition(other) & 4) !== 0 &&
+                  (!sameCard || (card !== null && other.closest("li") === card)),
+              );
+              if (!after) continue;
+              return {
+                section: section.dataset["section"] ?? "",
+                first: text.dataset["id"] ?? "",
+                next: after.dataset["id"] ?? "",
+                sameCard,
+                shape: `${branch.tagName.toLowerCase()} > … ${text.tagName.toLowerCase()} + ${after.tagName.toLowerCase()}`,
+              };
+            }
+          }
+        }
+        return null;
+      });
+      expect(
+        pair,
+        "no text on this page has another text behind it in its own branch",
+      ).not.toBeNull();
+      if (!pair) return;
+      console.log(`[día 4] the text that is not the last of its branch: ${JSON.stringify(pair)}`);
+      const first = frame
+        .locator(`[data-section="${pair.section}"] [data-id="${pair.first}"]`)
+        .first();
+      await first.click();
+      await expect(first).toHaveClass(/rb-chosen/);
+      await expect(frame.locator(".rb-toolbar")).toHaveCount(1);
+
+      // Tab from the text: its own bar, before the text behind it.
+      await page.keyboard.press("Tab");
+      expect(await at(page), "Tab from the text did not land on its bar's grip").toMatchObject({
+        inBar: true,
+        action: "grip",
+        bars: 1,
+      });
+      // Shift+Tab is the way back, to the text and not to whatever ends its branch.
+      await page.keyboard.press("Shift+Tab");
+      expect(await at(page), "Shift+Tab from the grip did not go back to the text").toMatchObject({
+        id: pair.first,
+        inBar: false,
+      });
+      await page.keyboard.press("Tab");
+      expect(await at(page)).toMatchObject({ inBar: true, action: "grip" });
+      /**
+       * **And Tab from the bar goes on to what follows the text — not past the rest of its
+       * branch.** Read off the page's own structure, not off the editor's idea of the next stop: the
+       * stop reached is inside the text's branch, after the text, and no further than the text
+       * behind it. Whatever stands between the two — a photograph's badge in a gallery card — is
+       * a stop of its own and may be the one reached; the end of the branch may not.
+       */
+      /*
+       * **At a person's pace, not a harness's**: the text's own deferred blur check — a
+       * `setTimeout` from the press that brought the focus here — runs before a hand's next key
+       * does, and a walk pressing faster than that timer lets it run *after* the next Tab, where it
+       * closes the bar for its own reasons and hides whether the bar's rule does (measured under
+       * sabotage: green without this pause, red with it).
+       */
+      await page.waitForTimeout(100);
+      await page.keyboard.press("Tab");
+      const reached = await page.evaluate(
+        ({ section, first, next }) => {
+          const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
+          const host = doc?.querySelector<HTMLElement>(`[data-section="${section}"]`);
+          const from = host?.querySelector<HTMLElement>(`[data-id="${first}"]`);
+          const behind = host?.querySelector<HTMLElement>(`[data-id="${next}"]`);
+          const active = doc?.activeElement as HTMLElement | null | undefined;
+          if (!host || !from || !behind || !active) return null;
+          let branch: HTMLElement = from;
+          while (branch.parentElement && branch.parentElement !== host)
+            branch = branch.parentElement;
+          return {
+            what: `${active.tagName}${active.dataset["id"] ? `#${active.dataset["id"]}` : ""}.${active.className}`,
+            inTheBranch: branch.contains(active),
+            afterTheText: (from.compareDocumentPosition(active) & 4) !== 0,
+            notPastTheNext: active === behind || (active.compareDocumentPosition(behind) & 4) !== 0,
+            inBar: Boolean(active.closest(".rb-toolbar")),
+          };
+        },
+        { section: pair.section, first: pair.first, next: pair.next },
+      );
+      console.log(`[día 4] Tab from the bar reached: ${JSON.stringify(reached)}`);
+      expect(
+        reached,
+        "Tab from the bar skipped what follows the text inside its branch",
+      ).toMatchObject({
+        inTheBranch: true,
+        afterTheText: true,
+        notPastTheNext: true,
+        inBar: false,
+      });
+
+      /**
+       * **And no bar stays behind once the keyboard is on something that is not a text.** Tab on
+       * — text, its grip, the next — until the focus stands on a stop of another kind (a pill, a
+       * verb, a badge, a link out of the canvas). Nothing used to close the bar when the focus
+       * left it for such a stop, so it stayed drawn for words nobody was in.
+       */
+      let other = await at(page);
+      const trail: string[] = [];
+      for (let press = 0; press < 30 && (other.inBar || other.id !== null); press += 1) {
+        await page.keyboard.press("Tab");
+        other = await at(page);
+        trail.push(other.inBar ? "bar" : (other.id ?? other.action ?? "?"));
+      }
+      expect(
+        other.inBar || other.id !== null,
+        `Tab found no other kind of stop: ${trail.join(" → ")}`,
+      ).toBe(false);
+      await expect
+        .poll(() => at(page).then((now) => now.bars), {
+          message: `a bar was left drawn with the focus on ${trail.at(-1) ?? reached?.what}`,
+        })
+        .toBe(0);
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
+  for (const way of ["Tab", "Alt+F10"] as const) {
+    it(`negrita sin ratón, llegando a la barra con ${way}: las palabras elegidas en negrita y aún elegidas`, async () => {
+      const page = await (
+        await browser.newContext({ viewport: { width: 1440, height: 900 } })
+      ).newPage();
+      try {
+        await intoTheCanvas(page);
+        const frame = page.frameLocator(PREVIEW).first();
+        await fontsReady(frame);
+        const headline = await writeTheHeadline(page);
+
+        // «hoy», chosen with the keyboard: three letters back from the end, where typing left it.
+        for (let i = 0; i < 3; i += 1) await page.keyboard.press("Shift+ArrowLeft");
+        expect(await at(page)).toMatchObject({ id: "el-headline", writing: true, selected: "hoy" });
+
+        if (way === "Alt+F10") {
+          /**
+           * **The legend names the key the person's own machine needs** (David's note 8): on a
+           * MacBook the F keys are the system's until Fn is held, so F10 alone mutes the audio
+           * and never arrives. Playwright's own press does not depend on that setting, which is
+           * why the walk presses `Alt+F10` on every platform and the legend is what differs.
+           */
+          await expect(frame.locator(".rb-keys")).toContainText(
+            process.platform === "darwin" ? "Fn+⌥+F10" : "Alt+F10",
+          );
+        }
+        await page.keyboard.press(way);
+        expect(
+          await at(page),
+          `${way} from the words did not land on the bar's grip`,
+        ).toMatchObject({ inBar: true, action: "grip", bars: 1 });
+
+        /**
+         * **The arrows walk the bar, and «B» is there to walk to.** The marks are drawn only while
+         * words are chosen (mockup 18 band 2), and the words are not selected in the DOM any more:
+         * the focus is on the grip. What keeps «Resaltar» on screen is the record of what the hand
+         * chose, taken as the keyboard left the words — offsets, never a `Range`.
+         */
+        await page.keyboard.press("ArrowRight");
+        expect(await at(page), "→ from the grip did not wrap round to «B»").toMatchObject({
+          inBar: true,
+          mark: "strong",
+        });
+        if (way === "Tab") {
+          await page.keyboard.press("ArrowLeft");
+          expect(await at(page), "← from «B» did not wrap round to the grip").toMatchObject({
+            action: "grip",
+          });
+          await page.keyboard.press("Home");
+          expect(await at(page), "Inicio did not go to the first control").toMatchObject({
+            mark: "strong",
+          });
+          await page.keyboard.press("End");
+          expect(await at(page), "Fin did not go to the last control").toMatchObject({
+            action: "grip",
+          });
+          await page.keyboard.press("ArrowRight");
+          expect(await at(page)).toMatchObject({ mark: "strong" });
+          // axe over the bar while a control of it holds the focus — the state no walk had reached.
+          await axeSerious(page, "la barra de texto con el foco en «B»");
+        }
+
+        await page.keyboard.press("Enter");
+
+        /**
+         * **Bold, and the focus back in the words with them still chosen**: the bar is a detour
+         * and the text is home (ADR 0052 §3), the same as with the mouse, whose `mousedown` never
+         * lets go of the text. Writing goes on where it was.
+         */
+        await expect(headline.locator("strong")).toHaveText("hoy");
+        await expect(headline).toHaveText(/^\s*Reserva hoy\s*$/);
+        await expect
+          .poll(() => at(page), { message: "the focus did not come back to the words, chosen" })
+          .toMatchObject({ id: "el-headline", writing: true, selected: "hoy" });
+
+        // And in the document, once the writing ends.
+        await page.keyboard.press("Enter");
+        await expect(headline).not.toHaveAttribute("contenteditable", "true");
+        await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+        await expect(headline.locator("strong")).toHaveText("hoy");
+      } finally {
+        await page.context().close();
+      }
+    }, 180_000);
+  }
+
+  it("Escape desde la barra vuelve a las palabras sin hacer nada, con el cursor donde estaba", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      await fontsReady(frame);
+      const headline = await writeTheHeadline(page);
+      // The caret at the end of what was typed, nothing chosen: the case where a return that
+      // selected the whole text would make the next key replace it.
+      expect(await at(page)).toMatchObject({ id: "el-headline", writing: true, collapsed: true });
+
+      await page.keyboard.press("Alt+F10");
+      expect(await at(page)).toMatchObject({ inBar: true, action: "grip" });
+      await page.keyboard.press("ArrowRight");
+      expect(await at(page), "→ did not move inside the bar").toMatchObject({ inBar: true });
+      await page.keyboard.press("Escape");
+
+      expect(await at(page), "Escape did not go back to the words, writing").toMatchObject({
+        id: "el-headline",
+        writing: true,
+        collapsed: true,
+      });
+      await page.keyboard.type("!");
+      await expect(headline).toHaveText(/^\s*Reserva hoy!\s*$/);
+      await expect(headline.locator("strong")).toHaveCount(0);
     } finally {
       await page.context().close();
     }

@@ -1397,11 +1397,32 @@ open survives.
   order instead would have cost fifteen presses every time somebody Tabs past a paragraph — measured
   too: «el recorrido entero sin tocar el ratón» ran out of its eighty.
 
-  **What is still owed: arrows between the controls, and what they act on.** The arrows are the easy
+  ~~**What is still owed: arrows between the controls, and what they act on.** The arrows are the easy
   half. The hard one is that «B», the colour and the size need the words the person chose, and
   Tab-ing off a text collapses the selection that chose them — which is why this bar was born
   mouse-first and why it cannot be finished in passing. Whoever takes it should decide what a
-  keyboard's «selection» is here before writing a single key handler.
+  keyboard's «selection» is here before writing a single key handler.~~ **Built on 23 October 2026,
+  sprint 27 día 4** (PR of `feat/las-flechas-de-la-barra`; the record is ADR 0052's día 4
+  measurement). The keyboard's «selection» was decided first, as this row asked: a record taken as
+  the focus crosses from the text into the bar — which text, whether it was being written in, and
+  the selection as offsets, a caret included — never a `Range`. Then the keys: ← → Inicio Fin
+  between the controls, Escape back to the words with the caret where it was, Tab and Alt+F10 from
+  the text to the grip, and a press from the keyboard that goes back to the words, writing, and acts
+  there. **The struck premise was half wrong**: in Chromium the words stayed selected in the DOM with
+  the grip focused; what the record is needed for is the way back, which without it selected the
+  whole text and bolded all of it.
+
+  **Two things the day found that this row did not know.** The browser's own Tab from a text
+  *being written in* never reached the grip — `focusout` toward it, no `focusin` on it, the focus
+  on the body and the bar gone — a second way for the bar to die, gone now that the editor moves the
+  focus itself. And the grip's own ← → and `Home`, which nudged and reset the bar since sprint 20,
+  are the toolbar's now; ↑ ↓ still nudge, and two presses of the grip bring the bar home. That last
+  one is development's reading of ADR 0052 §3 and is written there for David to confirm.
+
+  **Left open:** what the keyboard does inside the colour picker the browser draws for «exacto»,
+  which is the platform's and was not walked; and Escape from an exact-pixel field, which does not
+  undo what was typed in it, because that field commits on `change`, which a blur fires — read off
+  the code, not walked.
 
 - **A finger works on both floating bars, and nobody had tried one.** Sprint 20 day 5, at David's
   asking. A tap on a handle sends its bar to the next corner; a finger drag moves it, exactly as far
