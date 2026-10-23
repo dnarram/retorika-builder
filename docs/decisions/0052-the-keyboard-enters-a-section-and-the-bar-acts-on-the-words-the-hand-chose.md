@@ -171,7 +171,7 @@ sentence from the other side: a mark is useless if the bar cannot be pressed.
 | the bar's top in the frame's own pixels, after a section was chosen and then a text of another section (1440 × 900, `scrollY` 189) | **−31**, thirty-one pixels above anything on screen | **75**, with its bottom at 113 inside a band 774 tall |
 | «B» pressed with the mouse where the bar actually is | the focus left the words for the body, the deferred blur closed the bar, no bold | the focus stays on the words, the bar stays, the word is bold |
 | a mark on text that was never committed | the mark's patch put the document's older text back over the typed words | the typed words stay, in bold, with the focus still in them |
-| presses of `End` before the restored selection collapses | 1 expected, 2 measured | 2 — **not fixed**, measured and left as a failing walk (below) |
+| presses of the end-of-line key before the restored selection collapses | 2 measured on a Mac with `End` | **1 on each platform's own key**: `End` on Linux (CI), `Cmd+→` on a Mac — nothing to fix (below) |
 
 **The cause of the bar, which four days of notes had not named.** The bar's place was decided
 against the section it sits in — «above the words» meaning «above them inside the section» — and the
@@ -185,15 +185,13 @@ the section's own top stays the floor, which the first version forgot and the sp
 «Contacto» caught in the full suite, the bar drawn over the section above it. Nothing about the press itself was ever wrong, which is
 why the four things the backlog ruled out were all correctly ruled out.
 
-**`End` is measured and not fixed.** The backlog's framing was wrong in both halves: it is not the
-restored `Range`'s direction and it is not the mark. With no mark at all the first press changes
-nothing and the second collapses; no code of ours treats the key, nothing calls `preventDefault`,
-and nothing calls a single `Selection` method on the press; an element the editor never wired
-behaves the same, and so does the real one with every stylesheet off. A bare editable collapses on
-the first press until its document is tall enough to scroll. The only fix from here is to take
-`Home` and `End` over ourselves inside the writing, with our own line-box arithmetic, for a key that
-works on the second press — David's trade to make, and the walk is left failing so it turns red the
-day the first press lands.
+**`End` is measured, and it is not the editor's.** The backlog's framing was wrong in both halves:
+it is not the restored `Range`'s direction and it is not the mark. On Linux — CI's run — `End`
+collapses at the first press; the walk was an `it.fails` until that run passed it. On a Mac the
+first `End` and the first `Home` do nothing in the canvas and the second `End` collapses, while
+`Cmd+→`, the Mac's own end-of-line key, collapses at the first press. No code of ours treats the
+key, nothing calls `preventDefault`, nothing calls a `Selection` method on the press, and an
+element the editor never wired behaves the same. The walk asserts each platform's own key.
 
 ## Consequences
 

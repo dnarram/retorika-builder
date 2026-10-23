@@ -19507,33 +19507,26 @@ describe("sprint 27 día 3 — la barra que muere", () => {
   }, 120_000);
 
   /**
-   * **`End` measured, and left failing on purpose** (día 3, the plan's «se corrige o se dice»).
+   * **The end-of-line key collapses the restored selection at the first press, on each platform**
+   * (día 3, the plan's «se corrige o se dice»).
    *
    * The backlog's row read «`End` does not collapse the selection a mark patch puts back; an arrow
-   * does», and asked whether it is the restored `Range`'s direction or the key's handling. Measured
-   * in Chromium on 23 October 2026, it is neither, and the row was wrong in both halves:
+   * does», and asked whether it was the restored `Range`'s direction or the key's handling. It was
+   * neither, and it is not the editor's. Measured in Chromium on 23 October 2026:
    *
-   * - **The mark has nothing to do with it.** With no mark at all — a selection made with `Home`
-   *   and seven `Shift+ArrowRight` — the first `End` changes nothing and the second collapses to
-   *   the end of the line. Same with a selection set by script.
-   * - **No code of ours treats the key.** `preventDefault` is never called (read at capture, at
-   *   the bubble and at the frame's window), and nothing calls a single `Selection` method on the
-   *   press: `removeAllRanges`, `addRange`, `setBaseAndExtent`, `collapse`, `extend`, `modify` and
-   *   `empty` were all wrapped on the frame's own prototype and none of them ran. So nothing
-   *   restores the selection — the key's default action simply does not act the first time.
-   * - **It is not our wiring either.** A brand-new `<h1 contenteditable>` the editor has never
-   *   touched, appended to the same section, behaves identically; so does the real headline with
-   *   every stylesheet disabled, and with the section's `tabindex` and `role` removed.
-   * - **A bare editable collapses on the first press**, in the top document and inside an iframe —
-   *   until that iframe's document is tall enough to scroll, where the first `Home` is swallowed
-   *   too. What the canvas and that control share is a scrolling document inside a frame.
+   * - **On Linux, `End` collapses at the first press** — CI's own run of this walk, which was an
+   *   `it.fails` until that run passed it.
+   * - **On macOS the first `End` and the first `Home` do nothing**, and the second `End` collapses;
+   *   **`Cmd+→`, the Mac's own end-of-line key, collapses at the first press.** No code of ours is
+   *   in it: `preventDefault` is never called, and seven `Selection` methods wrapped on the frame's
+   *   prototype never run. A brand-new `contenteditable` the editor never wired behaves the same,
+   *   and so does the real headline with every stylesheet disabled. Nor is it the mark: a
+   *   selection with no mark at all behaves identically.
    *
-   * Left as `it.fails` rather than fixed: the only fix from here is to take `Home` and `End` over
-   * ourselves inside the writing, which means our own line-box arithmetic for a key that works on
-   * the second press — a trade for David, not for a Tuesday. It turns red the day the first press
-   * starts landing, which is the signal this deserves.
+   * So the walk asserts what a person on each machine presses for «end of line», and a change on
+   * either platform turns it red.
    */
-  it.fails("End pliega la selección a la primera pulsación", async () => {
+  it("la tecla de fin de línea de cada plataforma pliega la selección a la primera", async () => {
     const page = await (
       await browser.newContext({ viewport: { width: 1440, height: 900 } })
     ).newPage();
@@ -19557,11 +19550,14 @@ describe("sprint 27 día 3 — la barra que muere", () => {
           return { collapsed: live?.isCollapsed ?? null, text: live?.toString() ?? null };
         });
       expect(await selection()).toMatchObject({ collapsed: false, text: "Reserva" });
-      await page.keyboard.press("End");
-      // Red today: the first press changes nothing. The second one collapses to offset 11.
-      expect(await selection(), "the first End did not collapse the selection").toMatchObject({
-        collapsed: true,
-      });
+      // Playwright drives the host's own Chromium, so the key bindings are the host's: `Meta` is
+      // `Cmd` on a Mac, where `End` is not the end of the line.
+      const endOfLine = process.platform === "darwin" ? "Meta+ArrowRight" : "End";
+      await page.keyboard.press(endOfLine);
+      expect(
+        await selection(),
+        `the first ${endOfLine} did not collapse the selection`,
+      ).toMatchObject({ collapsed: true });
     } finally {
       await page.context().close();
     }

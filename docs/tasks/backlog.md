@@ -1140,25 +1140,22 @@ open survives.
   focused text with the document's version. Both routes, since sprint 10; the mark walks never saw
   it because they commit before marking. The fix is the toolbar's: commit first, then mark.
 
-  **`End` needs two presses inside the canvas, and it is neither the mark nor the restored
-  `Range`.** Measured on 23 October 2026, sprint 27 día 3, and **left failing on purpose**:
-  `apps/editor/e2e/critical-flows.e2e.test.ts` carries it as `it.fails`, so it turns red the day the
-  first press lands. What the measurement ruled out, each in Chromium: **the mark**, because a
+  ~~**`End` does not collapse the selection a mark patch puts back; an arrow does.**~~ **Measured on
+  23 October 2026, sprint 27 día 3, and it is not the editor's.** On Linux — CI's own run — `End`
+  collapses at the first press. On a Mac the first `End` and the first `Home` do nothing in the
+  canvas and the second `End` collapses, while **`Cmd+→`, the Mac's own end-of-line key, collapses at
+  the first press**. What the measurement ruled out, in Chromium on the Mac: **the mark**, because a
   selection made with `Home` and seven `Shift+ArrowRight` with no mark at all behaves identically,
   and so does one set by script; **our code**, because `preventDefault` is never called — read at
   the capture, at the bubble and at the frame's own window — and because `removeAllRanges`,
-  `addRange`, `setBaseAndExtent`, `collapse`, `extend`, `modify` and `empty` were all wrapped on the
-  frame's `Selection.prototype` and none of them ran, so nothing restores anything: the key's
-  default action simply does not act the first time; **our wiring**, because a brand-new
-  `<h1 contenteditable>` appended to the same section behaves the same, as does the real headline
-  with every stylesheet disabled and with the section's `tabindex` and `role` removed. A bare
-  editable collapses on the first press, in the top document and inside an iframe, **until that
-  iframe's document is tall enough to scroll** — what the canvas and that control share. The only
-  fix from here is to take `Home` and `End` over ourselves inside the writing, which means our own
-  line-box arithmetic for a key that works on the second press: a trade for David. *The row as it
-  stood:* «`End` does not collapse the selection a mark patch puts back; an arrow does. Observed on
-  the día 5 keystroke walk in Chromium; not chased. Whether it is the restored `Range`'s direction
-  or the key's handling is the first thing to measure.»
+  `addRange`, `setBaseAndExtent`, `collapse`, `extend`, `modify` and `empty`, wrapped on the frame's
+  `Selection.prototype`, never ran; **our wiring**, because a brand-new `<h1 contenteditable>`
+  appended to the same section behaves the same, as does the real headline with every stylesheet
+  disabled and with the section's `tabindex` and `role` removed. The walk in
+  `apps/editor/e2e/critical-flows.e2e.test.ts` asserts each platform's own end-of-line key at the
+  first press; it was an `it.fails` until CI passed it, which is how the platform split was found.
+  *The row as it stood:* «Observed on the día 5 keystroke walk in Chromium; not chased. Whether it
+  is the restored `Range`'s direction or the key's handling is the first thing to measure.»
 
   **Escalating a section is two changes of the document about 200 ms apart** — the section turns
   free, then its rows, measured on the live layout (ADR 0050 §3), are written — and a hand that
