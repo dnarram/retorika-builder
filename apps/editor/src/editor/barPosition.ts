@@ -327,7 +327,18 @@ export function toolbarPoint(
    * answers and adds the only question that was missing — whether the place is *visible*.
    */
   const view = geometry.view ?? { top: 0, height: Number.POSITIVE_INFINITY };
-  const fits = (y: number) => y >= view.top && y + geometry.barHeight <= view.top + view.height;
+  /**
+   * **The band narrows the section, it does not replace it.** The floor is the higher of the two:
+   * the section's own top, which the bar has never been allowed above — it is the section's child,
+   * and above that edge it would stand over the section before — and the top of what is on screen.
+   * A section whose top is itself on screen has a band starting at a negative offset, and the first
+   * version of this line took that as room: it drew the bar above «Contacto»'s own edge, and the
+   * sprint 9 walk that clicks through the bar's blank space to the paragraph underneath it found it
+   * in the full suite (the bar's bottom 51 px short of the paragraph it had always reached).
+   */
+  const floor = Math.max(view.top, 0);
+  const ceiling = view.top + view.height;
+  const fits = (y: number) => y >= floor && y + geometry.barHeight <= ceiling;
   const wanted = side === "auto" ? (fits(above) ? "above" : "below") : side;
   const settled = wanted === "above" && !fits(above) ? "below" : wanted;
   const rightmost = Math.max(geometry.hostWidth - geometry.barWidth - gap, 0);
@@ -337,12 +348,12 @@ export function toolbarPoint(
    * stands over the text's own lower part, which is reachable — and unreachable is the one outcome
    * this function exists to refuse.
    */
-  const lowest = Math.max(view.top + view.height - geometry.barHeight, view.top);
+  const lowest = Math.max(ceiling - geometry.barHeight, floor);
   const y = settled === "above" ? above : below;
   return {
     point: {
       x: Math.min(Math.max(geometry.elementLeft, 0), rightmost),
-      y: Math.min(Math.max(y, view.top), lowest),
+      y: Math.min(Math.max(y, floor), lowest),
     },
     side: settled,
   };

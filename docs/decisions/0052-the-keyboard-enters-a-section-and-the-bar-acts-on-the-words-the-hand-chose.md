@@ -180,7 +180,9 @@ the next text clicked can be a few pixels below the frame's top edge with its wh
 it: the place above it is then off the top of what is on screen. The press lands on the editor's own
 chrome *outside* the frame, the words lose the focus, and the deferred `focusout` closes the bar.
 `toolbarPoint` now takes the band of the section that is on screen and decides against that, falling
-to the visible edge when neither side fits. Nothing about the press itself was ever wrong, which is
+to the visible edge when neither side fits. The band narrows the section rather than replacing it:
+the section's own top stays the floor, which the first version forgot and the sprint 9 walk on
+«Contacto» caught in the full suite, the bar drawn over the section above it. Nothing about the press itself was ever wrong, which is
 why the four things the backlog ruled out were all correctly ruled out.
 
 **`End` is measured and not fixed.** The backlog's framing was wrong in both halves: it is not the

@@ -329,6 +329,20 @@ describe("the band of the section that is on screen", () => {
     expect(point.y).toBe(900 - tall.barHeight);
   });
 
+  /**
+   * **A section whose own top is on screen**, which is most of them: the band starts above the
+   * section, at a negative offset, and that is not room for the bar. The section's top is still the
+   * floor — the rule this file had before the band — and the first version of the band forgot it,
+   * drawing the bar over the section above (found by the sprint 9 walk on «Contacto», whose
+   * paragraph the bar's blank space has to reach).
+   */
+  it("keeps the section's own top as the floor when the section starts below the top of the frame", () => {
+    const onScreen: ToolbarGeometry = { ...TEXT, elementTop: 20, view: { top: -300, height: 900 } };
+    expect(toolbarPoint(onScreen)).toEqual(toolbarPoint({ ...TEXT, elementTop: 20 }));
+    expect(toolbarPoint(onScreen).side).toBe("below");
+    expect(toolbarPoint(onScreen, "above").side).toBe("below");
+  });
+
   it("never asks for a place above the band, even when the band is taller than the bar is", () => {
     const short: ToolbarGeometry = { ...SCROLLED, elementTop: 190, view: { top: 189, height: 20 } };
     expect(toolbarPoint(short).point.y).toBe(189);

@@ -1431,13 +1431,22 @@ open survives.
   because none of them was ever it.
 
   `toolbarPoint` takes the band of the section that is on screen (`view`, the frame's `scrollY`
-  minus the section's own offset, and its `innerHeight`) and decides against that, falling to the
-  visible edge when neither side fits; `Editor.tsx` reads the band on every placement, because the
+  minus the section's own offset, and its `innerHeight`) and decides against that — never above
+  the section's own top, which stays the floor as it always was — falling to the visible edge when
+  neither side fits; `Editor.tsx` reads the band on every placement, because the
   bar is placed again after every patch and the scroll is not what it was when the bar opened. The
   bar's top is **75** on the same walk now. The walk presses «B» with `page.mouse` at the bar's own
   coordinates rather than `locator.click()`, which would scroll the thing it is measuring into view
-  and pass over a bar nobody could have pressed. **What is still untried**: scrolling the canvas
-  *while* the bar is open, which moves the band under a bar that is already placed.
+  and pass over a bar nobody could have pressed.
+
+  **Two things this leaves untried, both the same question from a different side.** Scrolling the
+  canvas *while* the bar is open moves the band under a bar that is already placed — nothing
+  re-places it until the next patch. And the **section's own cluster of verbs** is placed by
+  `cornerPoint` at a corner of its section, with no band at all: a section taller than the frame
+  can have its top-right corner off screen. Nobody has reported it, and `select()` focuses the
+  section — which scrolls it into view — so the corner is usually on screen by the time the verbs
+  are drawn; it is the same arithmetic waiting for the same correction, and `clampToHost` is where
+  it would go.
 
   *What follows is the row as it stood.* Found on 15 October 2026 while writing sprint 20's touch
   walk, which is the only reason anybody
