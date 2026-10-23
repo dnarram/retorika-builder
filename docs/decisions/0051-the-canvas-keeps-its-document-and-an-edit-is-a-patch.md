@@ -235,9 +235,15 @@ and reinserting it, so keeping focus across a move is the editor's — and the l
   keyboard inside a section, named versions, or the text toolbar's own open defect.
 - The redraw after a patch is of the whole page; narrowing it to the sections a patch touched is a
   measurement for the day it costs more than a few milliseconds, not a decision for today.
-- `moveBefore` as the only way to move a node — it is used where the browser has it and
-  `insertBefore` with a synchronous refocus where it does not.
-- The day the old route is deleted: the 27's, with the e2e of both modes as the evidence.
+- `moveBefore` as the way to move a node. morphdom does not use it (día 2); a keyed node that moves
+  is detached and reinserted, and the focus inside it is put back synchronously. The day the
+  browser's `moveBefore` is worth the dependency's fork is not decided here.
+- The day the old route is deleted: sprint 27 día 1, per `docs/tasks/swap-route-retirement.md`, with
+  the e2e of both modes as the evidence (día 6).
+- Whether escalating a section should measure and write its rows in one step: today it is two
+  changes 200 ms apart, in both routes (día 5 found it, the backlog holds it).
+- Whether the toolbar should commit uncommitted typing before marking it, and why `End` does not
+  collapse the selection a mark patch puts back (día 5's two findings, in the backlog).
 
 ## Consequences
 
@@ -604,3 +610,31 @@ corrects live in comments, and a test that pins prose in comments would pin the 
 **What día 8 closes.** The measurements to the ADR's head, the undecided list, `docs/design/REVIEW.md`
 and the backlog's head, axe, keyboard, weights, Lighthouse, the goldens (none moved all sprint), and
 the two routes green in CI — which today they are.
+
+### Amendment — the close (día 8, 23 October 2026)
+
+**Measured, nothing in parallel.** 3 061 unit tests; axe **538 of 538** in real Chromium; every
+weight `ok` (the restaurant cover at 3.1–3.2 KB of page); **no commit touched `fixtures/golden` in
+the whole sprint** — the published page did not move by a byte, which is what ADR 0001 asked of this
+decision and what the parity test (día 1) guards from the renderer's side. Lighthouse, mobile
+preset: performance 100 / 99 / 99 / 100, accessibility 100 on all four pages, best practices 96 (the
+test server's own cache and console notes, as every sprint), SEO 100; LCP 0.90–2.25 s, CLS 0.000–0.027.
+
+**The closing walk**, one long session over both routes — a text, a palette and back, the switch,
+an escalation and its return, the switch off, a line, a move up, another page and back, undo —
+thirteen edits: under **`patch`, documents wired 1 → 1 and the stamp set at the start still on the
+document**; under **`swap`, 2 → 17 and the stamp gone with the first document**. Both routes end
+with the page saying the same thing. In CI both routes have passed the whole suite, 230 walks each,
+on every pull request since día 5.
+
+**The decision's own numbers, from día 1 to día 8.** A text edit: 1 document → 0; the window in
+which a keystroke had nowhere to land: 5.8 ms → **0 ms**; keystroke → the edit on the page: 10.4 ms
+→ **6.0 ms**. Six structural patches at 1.3–2.4 ms with a redraw of 0.7–2 ms. A palette change:
+`loadingdone` 10 → **0**. Thirty keystrokes at five milliseconds during a patch on the very text:
+**30 of 30**. Frames in the editor, ever: 2 → **1**.
+
+**What stays `proposed`.** This ADR, with its eight amendments, until David signs it. **What the
+sprint changed about its own plan, said:** `chromeKey` is keyed by id and not by position (día 3);
+the fonts live in their own sheet (día 4, measured first); four refs the plan called swap-only are
+read by both routes (día 6); the e2e limit moved to the suite's step after apt took eleven minutes
+(día 6); `patch` became the default on día 5 as planned, and `swap` leaves on sprint 27 día 1.

@@ -19167,3 +19167,129 @@ describe("sprint 26 día 5 — el contrato de las caminatas", () => {
     180_000,
   );
 });
+
+/**
+ * **Sprint 26 día 8 — el cierre.** Una sesión larga sobre un solo documento: texto, paleta,
+ * interruptor, escalada y vuelta, una línea, subir, otra página y volver, deshacer. Lo que cada día
+ * aseveró por separado, aquí junto y al final: bajo `patch` **un documento cableado en toda la
+ * sesión** y el sello puesto al principio sigue en él; bajo `swap` la misma sesión cablea uno por
+ * edición, que es la ruta vieja haciendo lo suyo — y las dos terminan con la página diciendo lo
+ * mismo, que es la promesa del ajuste 6.
+ */
+describe("sprint 26 día 8 — el cierre", () => {
+  type Event = { at: number; kind: string; data: Record<string, unknown> };
+
+  it("una sesión larga: un documento bajo `patch`, uno por edición bajo `swap`, y la misma página al final", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    await probeOn(context);
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      await fontsReady(frame);
+      const events = () =>
+        page.evaluate(() => ((window as unknown as { __rb?: Event[] }).__rb ?? []) as Event[]);
+      const wires = async () => (await events()).filter((e) => e.kind === "wire").length;
+      await page.evaluate(() => {
+        const doc = document.querySelector<HTMLIFrameElement>(
+          "iframe:not([data-buffered])",
+        )?.contentDocument;
+        if (doc) (doc as unknown as { __rbStamp?: string }).__rbStamp = "the-one";
+      });
+      const wiredAtStart = await wires();
+      let edits = 0;
+      const edit = async (act: () => Promise<void>) => {
+        await afterTheEdit(page, act);
+        edits += 1;
+      };
+
+      // Un texto.
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      await headline.click();
+      await headline.click();
+      await expect(headline).toHaveAttribute("contenteditable", "true");
+      await page.keyboard.type("Cierre del sprint");
+      await edit(() => page.keyboard.press("Enter"));
+      await expect(headline).toHaveText(/Cierre del sprint/);
+
+      // Una paleta, y vuelta.
+      await page.getByRole("button", { name: "Estilo", exact: true }).click();
+      await edit(() => page.getByRole("radio", { name: "Azul confianza" }).click());
+      await edit(() => page.getByRole("radio", { name: "Neutra", exact: true }).click());
+
+      // El interruptor, una escalada y su vuelta.
+      await edit(async () => {
+        await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
+        await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
+      });
+      await expect(page.getByRole("button", { name: "Diseño", exact: true })).toBeVisible();
+      await frame.locator('[data-section="sec-cover"]').click();
+      await edit(async () => {
+        await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
+        await frame.locator(".rb-escalate-yes").click();
+      });
+      await canvasQuiet(frame);
+      await expect(frame.locator(".rb-handmade")).toHaveCount(1);
+      await edit(() => frame.locator(".rb-handmade-back").click());
+      await expect(frame.locator(".rb-handmade")).toHaveCount(0);
+      await edit(() => page.getByRole("switch", { name: "Herramientas de diseño" }).click());
+
+      // Una línea más en «Qué hacemos», y la sección subida.
+      const cards = frame.locator('[data-section="sec-services"] [data-item]');
+      const cardsBefore = await cards.count();
+      await edit(() => frame.locator('[data-section="sec-services"] .rb-line-add').click());
+      await expect(cards).toHaveCount(cardsBefore + 1);
+      await editHint(page).click();
+      await frame.locator('[data-section="sec-services"]').click();
+      await expect(frame.locator(".rb-actions")).toHaveCount(1);
+      await edit(() => frame.locator('.rb-actions [data-action="move-up"]').click());
+
+      // Otra página y vuelta a la portada.
+      await frame.locator('[data-section="sec-services"]').click();
+      await edit(() =>
+        frame
+          .locator(
+            '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+          )
+          .click(),
+      );
+      const tabs = page.locator('[data-testid="page-tabs"] button');
+      await expect(tabs).toHaveCount(2);
+      await edit(() => tabs.nth(1).click());
+      await expect(frame.locator('[data-section="sec-services"]')).toBeVisible();
+      await edit(() => tabs.first().click());
+      await expect(frame.locator('[data-section="sec-cover"]')).toBeVisible();
+
+      // Y un deshacer, desde fuera de cualquier texto.
+      await frame.locator('[data-section="sec-cover"]').click();
+      await edit(() => page.keyboard.press("Control+z"));
+
+      expect(edits).toBeGreaterThanOrEqual(12);
+      const wiredAtEnd = await wires();
+      const stamp = await page.evaluate(
+        () =>
+          (
+            document.querySelector<HTMLIFrameElement>("iframe:not([data-buffered])")
+              ?.contentDocument as unknown as { __rbStamp?: string } | undefined
+          )?.__rbStamp ?? null,
+      );
+      console.log(
+        `[sprint 26 día 8 · ${canvasRoute()}] ${edits} ediciones; documentos cableados ${wiredAtStart} → ${wiredAtEnd}; sello ${stamp ?? "perdido"}`,
+      );
+      if (canvasRoute() === "patch") {
+        expect(wiredAtEnd, "la sesión cableó un documento nuevo").toBe(wiredAtStart);
+        expect(stamp, "el documento ya no es el mismo").toBe("the-one");
+      } else {
+        expect(wiredAtEnd, "bajo `swap` cada edición cablea un documento").toBeGreaterThan(
+          wiredAtStart + edits / 2,
+        );
+        expect(stamp, "bajo `swap` el sello se va con el primer documento").toBeNull();
+      }
+      // Y la página dice lo mismo en las dos rutas.
+      await expect(headline).toHaveText(/Cierre del sprint/);
+      await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+});

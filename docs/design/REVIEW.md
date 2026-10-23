@@ -3481,3 +3481,124 @@ suyo aplicado a lo dibujado y no solo a los umbrales; el coste es que a zoom baj
 pequeño perdería sus cuatro asas de borde, porque la regla de «dos objetivos de ancho» empezaría a
 contarse en píxeles de pantalla — que es lo que su condición 6 quería decir. La fila está en el
 backlog y nadie la toca hasta que él conteste.
+
+## Sprint 26 — «El lienzo que no reconstruye» (22 de octubre de 2026)
+
+David, tras cerrar el sprint 25, con una petición abierta y no una función:
+
+> «Vamos a planificar el sprint 26 teniendo en cuenta la mejora sustancial de las herramientas
+> disponibles en el editor de páginas web. Busco mejoras sustanciales de las herramientas ya
+> existentes en el editor.»
+
+**Lo que el inventario dijo.** Las siete cosas que nombraron los dueños reales estaban construidas o
+rechazadas por ADR; lo medido y sin arreglar se agrupaba en cuatro candidatos con su coste, y David
+eligió **uno solo, el que mejora todas las herramientas a la vez**: el lienzo que reconstruía su
+documento en cada edición. `Editor.tsx:1056` lo decía en una línea —«every action in this editor
+replaces the iframe's whole `srcDoc`»—; el protocolo §3.2 dibujaba `render(doc, "dom")` para el
+editor desde el principio y el editor nunca lo había llamado. Coste medido antes de tocar nada: una
+pulsación durante la reconstrucción se perdía (ventana de 5,8 ms, 1,5 s con las fuentes retenidas);
+dos documentos vivos por edición; unas setenta piezas de maquinaria en `Editor.tsx` y sesenta y nueve
+en el e2e que existían para sobrevivir a eso; la región `aria-live` fuera del lienzo porque dentro
+no sobrevivía; el intermitente del sprint 18. El backlog lo llamaba «the bigger change» desde el
+sprint 12.
+
+**Siete ajustes suyos al aprobar, todos en el producto:** (1) evaluar morphdom antes de escribir el
+parche a mano; (2) deshacer mientras se escribe, aplicado al texto con foco con el cursor en su
+sitio; (3) el cromo nunca escribe `style` en línea sobre un nodo del renderizador, y un parche en
+mitad de un gesto espera a soltar; (4) el destino `dom` construye en un documento inerte para que
+una imagen no dispare una petición por render; (5) delegación de eventos, decidida ese día; (6) la
+ruta vieja sobrevive tras una llave hasta el cierre del sprint 27; (7) el esfuerzo de la tabla, con
+el día 6 en medio-alto.
+
+### Lo que se construyó, día a día
+
+- **Día 1 (PR #283).** El ADR 0051 `proposed`; `render(doc, "dom", { document })` con el documento
+  inerte; la paridad `dom ≡ html` como prueba del renderizador (61 casos, saboteada en los dos
+  sentidos), que encontró la única diferencia estructural entre los dos destinos — un nodo de texto
+  vacío para `""` — y la cerró sin mover un golden; la línea base medida: **1 documento por edición,
+  ventana 5,8 ms, pulsación→cableado 10,4 ms**.
+- **Día 2 (PR #284, con la #285 aparte por dos avisos del vitest).** morphdom adoptado como
+  dependencia del editor y envuelto en `patchCanvas` con las cuatro reglas; el cromo **aparcado**
+  durante el recorrido y no cifrado (morphdom empujaba un grupo de verbos del primer hijo al
+  tercero); la llave `rb.canvas`; la cola de gestos; el historial aplicado al texto con foco.
+  **Medido: una edición de texto cablea 0 documentos; el parche cuesta 0,8–1,6 ms.**
+- **Día 3 (PR #286).** La delegación de eventos: todo oyente por nodo —nueve por texto, nueve por
+  elemento colocado, cuatro por sección— es un juego por documento despachado por `closest`; las
+  refs `*Now` con una guarda por `grep`; el cromo repintado tras cada parche, también los
+  estructurales; `chromeKey` por identidad y no por posición. Dos líneas, subir, duplicar, borrar y
+  deshacer: **6 parches, 0 documentos, repintado 0,6–2 ms**.
+- **Día 4 (PR #287).** Las tres causas reales que la ruta nueva enseñó en CI: el menú no soltaba los
+  enlaces viejos (clave por tira y lista), la regla 3 difería la marca de la propia barra (causa
+  `mark`), `keepWriting` sin oyente; el interruptor repinta y escalar es un parche; otra página
+  empieza arriba; **las fuentes en su propia hoja: de un `loadingdone` por cambio de paleta (10 de
+  10) a 0**; la barra flotante reabierta por el repintado con el control bajo la mano.
+- **Día 5 (PR #288).** El contrato de las caminatas: `afterTheEdit` sobre el serial vale en las dos
+  rutas y sustituye a una espera que bajo `patch` no volvía nunca (38 rojas por eso y solo por eso);
+  las tres caminatas del relevo y la línea base aseveran **por ruta**; treinta pulsaciones a 5 ms
+  mientras cae la marca del propio texto: **30 de 30**; **`patch` por defecto**, las dos rutas
+  bloquean en CI. Y un defecto real más: `applyPatch` leía las fotos de la clausura del render.
+- **Día 6 (PR #289, con la #290 aparte por dos avisos críticos de Next).** Nada muere bajo las dos
+  rutas, y se dice; la lista de retirada para el 27 día 1 con una prueba que la mantiene honesta;
+  la tabla lado a lado. Entre medias, el límite del e2e pasó al **paso** de la suite (25) con 40 en
+  el job: `install-deps` tardó once minutos una vez y mató 178 verdes.
+- **Día 7 (PR #291).** Treinta y cinco comentarios que razonaban desde la reconstrucción dicen
+  «bajo `swap` … / bajo `patch` …»; el comentario huérfano del reancle por ancho dice que nada corre
+  al cambiar el ancho; los ADR 0048, 0049 y 0050 enmendados donde se apoyaban en la reconstrucción.
+
+### Las dos rutas, lado a lado
+
+| | `swap` (hasta el 27) | `patch` (por defecto desde el día 5) |
+|---|---|---|
+| Documentos cableados tras una edición de texto | 1 | **0** |
+| Ventana en la que una pulsación no tiene dónde caer | 4,6–5,9 ms | **0 ms** |
+| Pulsación → la edición en la página | 10,1–10,5 ms | **6,0 ms** (parche 0,9 ms, repintado 1,2 ms) |
+| Cambio de paleta | caras redeclaradas | **`loadingdone` 0**, peticiones 2 → 2 |
+| Treinta pulsaciones a 5 ms durante la marca | la ventana se traga una | **30 de 30** |
+| Marcos en el editor, alguna vez | hasta 2 | **1** |
+| La salida publicada | — | **ningún golden se movió en todo el sprint** |
+
+### El cierre (día 8)
+
+**Lo medido, nada en paralelo.** `pnpm test` 3 061 verdes; `pnpm test:a11y` **538 de 538** en
+Chromium real; `pnpm size` todo `ok`, con la portada del restaurante en 3,1–3,2 KB de página, y
+**ningún commit tocó `fixtures/golden` en todo el sprint**: la salida publicada no se movió un byte.
+Lighthouse sobre las tres composiciones y la página por ficha, perfil móvil:
+
+| Página | Rendimiento | Accesibilidad | Buenas prácticas | SEO | LCP | CLS |
+|---|---|---|---|---|---|---|
+| restaurante-bar · v1 | **100** | **100** | 96 | **100** | 1,65 s | 0,000 |
+| restaurante-bar · v2 | **99** | **100** | 96 | **100** | 2,25 s | 0,027 |
+| restaurante-bar · v3 | **99** | **100** | 96 | **100** | 2,18 s | 0,027 |
+| una-pagina-por-ficha | **100** | **100** | 96 | **100** | 0,90 s | 0,000 |
+
+El 96 de buenas prácticas es el de siempre —`cache-insight`, `errors-in-console`,
+`document-latency-insight`, todos del servidor de pruebas y no de la página— y el umbral del
+protocolo (≥ 95 en rendimiento y accesibilidad) se cumple con margen.
+
+**La caminata de cierre**, la misma sesión larga sobre las dos rutas — un texto, una paleta y su
+vuelta, el interruptor, una escalada y su vuelta, el apagado, una línea, subir, otra página y volver,
+deshacer — trece ediciones: bajo **`patch`, documentos cableados 1 → 1 y el sello puesto al principio
+sigue en el documento**; bajo **`swap`, 2 → 17 y el sello se fue con el primer documento**. Las dos
+terminan con la página diciendo lo mismo, que es la promesa del ajuste 6. En CI las dos rutas han
+pasado la suite entera, 230 caminatas cada una, en cada PR desde el día 5.
+
+**Lo que el sprint 26 no ha cerrado y dice.** La escalada en dos pasos (del editor, en las dos
+rutas); `End` sobre la selección repuesta; la marca sobre texto sin volcar; los 164 px al cerrar un
+panel; el cromo a escala; Tab dentro de una sección; y una caminata de 320 × 568 que cayó una vez en
+un runner lento con la tarjeta del lienzo «recortada» — anotada como posible parpadeo de medida, no
+perseguida.
+
+### Lo que este sprint deja a David
+
+**La firma del ADR 0051**, `proposed` con sus siete enmiendas dentro, y las nueve que seguían del
+cierre del 25. **La retirada de la ruta vieja** es del sprint 27 día 1, con la lista en
+`docs/tasks/swap-route-retirement.md` y el e2e de las dos modalidades delante; la precisión del 21
+sobre `chromeKey` y la restauración se confirmó, con una corrección: cuatro refs que se daban por de
+`swap` las leen las dos rutas. **Tres hallazgos del editor**, no de la ruta, en el backlog: marcar
+texto sin volcar marca el documento; `End` no pliega la selección repuesta; **escalar son dos pasos
+con 200 ms entre ellos**, y una mano que escala y arrastra enseguida los encuentra en las dos rutas.
+**Dos decisiones tomadas por el desarrollo y dichas**: el límite de los `e2e` (25 en el paso, 40 en
+el job) tras cuatro cancelaciones en dos días, y `patch` como ruta por defecto, que el plan fijaba
+para el día 5 y el día 5 cumplió. Y lo que este sprint no tocó, por decisión: los 164 px al cerrar
+un panel (un reflujo por ancho, en las dos rutas), el cromo a escala, Tab dentro de una sección,
+las versiones con nombre.

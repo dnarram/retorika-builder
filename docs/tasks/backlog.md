@@ -12,7 +12,41 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 21 October 2026, **closing sprint 25 — «se queda donde se suelta».** One request, and
+Last reviewed: 22 October 2026, **closing sprint 26 — «el lienzo que no reconstruye».** One open
+request — «busco mejoras sustanciales de las herramientas ya existentes en el editor» — and one
+decision, David's, over four candidates with their cost: the one that improves every tool at once.
+The editor's canvas rebuilt its document on every edit since sprint 15 (`srcDoc` replaced, chrome
+re-attached, a keystroke lost in a 5.8 ms window, two documents alive per edit, seventy pieces of
+machinery in `Editor.tsx` to survive it); since this sprint it **keeps one document per session and
+every edit is a patch** built from the renderer's own `dom` target, morphed in by morphdom under four
+rules, with the listeners delegated to the document and the chrome redrawn after every patch. The
+record is `docs/design/REVIEW.md`, sprint 26, and the decision is
+[ADR 0051](../decisions/0051-the-canvas-keeps-its-document-and-an-edit-is-a-patch.md), with seven
+amendments of its own — one per day. `patch` is the default since día 5; `swap` stays under
+`localStorage["rb.canvas"]` until sprint 27 closes, and `swap-route-retirement.md` names what goes.
+
+**What this sprint found that nobody was looking for:**
+
+1. **The published page never moved by a byte**, and the parity test that proves `dom ≡ html` found
+   the one structural difference between the two targets (a text node for `""`) and closed it.
+2. **morphdom pushes keyed chrome**: a `.rb-actions` cluster went from first child to third on the
+   first patch, so the chrome is parked around the walk, never keyed.
+3. **The menu's links were keyed by `href` alone** and the renderer draws every link twice in two
+   navs, so a dropped link stayed; **the toolbar's own mark was deferred by rule 3**; **`keepWriting`
+   had no listener** — the three real defects of the route, all found by CI's second e2e job.
+4. **A single stylesheet rewritten on a palette change re-declares every `@font-face`** — one
+   `loadingdone` per rewrite, ten in ten, no request behind any. Two sheets: 0.
+5. **`applyPatch` read the photo URLs from the render's closure**, and a pending patch applied at
+   wiring used the render that queued it: the bank's photographs never replaced their sample names
+   on the keyboard walk. Refs, like everything a handler reads.
+6. **Escalating a section is two changes 200 ms apart** (free, then measured rows), racing a hand
+   that drags at once — in both routes; `swap`'s slow rebuilds hid it, `patch` showed it in CI.
+7. **Tab into the frame cannot reach a section once a text was touched** (both routes, since the
+   roving tabindex): every text is a Tab stop whose `focusin` moves the stop to its section.
+8. **A job-level CI limit measures apt plus the suite**: `playwright install-deps` took eleven
+   minutes once and killed 178 green walks. The limit is on the suite's step now.
+
+The review before that: 21 October 2026, **closing sprint 25 — «se queda donde se suelta».** One request, and
 it corrected the drag sprint 24 had just shipped: «quiero que al arrastrar un elemento visual este se
 quede en la posición donde se deja… y que las cajas que limitan el tamaño sea ajustable al arrastrar
 los bordes». It was the **third** time an owner asked for freer placement and the first time the
@@ -91,7 +125,7 @@ with six amendments of its own — one per day.
    over the gap rows. Named in ADR 0050 §3, pre-launch, and it moved the two goldens.
 4. **Everything sprint 24 left**, which has not moved except where this sprint touched it.
 
-The review before that: 19 October 2026, **closing sprint 24 — «la letra se elige, el elemento se arrastra y el
+Two reviews back: 19 October 2026, **closing sprint 24 — «la letra se elige, el elemento se arrastra y el
 panel no tapa».** David's five requests, all five delivered: the owner's-identity warning is gone with
 an ADR naming the LSSI-CE article whose risk now passes to the client; «Campos» sits beside the canvas
 like the other six panels and the edited section stays in view; the landing's two columns share a top
