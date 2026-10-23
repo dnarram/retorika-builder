@@ -193,6 +193,85 @@ first `End` and the first `Home` do nothing in the canvas and the second `End` c
 key, nothing calls `preventDefault`, nothing calls a `Selection` method on the press, and an
 element the editor never wired behaves the same. The walk asserts each platform's own key.
 
+## What is measured on día 4 (23 October 2026)
+
+Día 4 ships §3. Measured in Chromium on macOS, 1440 × 900, with the walks under `sprint 27 día 4`
+in `critical-flows.e2e.test.ts`; where the «before» is read off the code rather than measured, the row
+says so.
+
+| Measure | Before | Día 4 |
+|---|---|---|
+| Tab from a text with another stop behind it in its own branch — a gallery caption, `ul > li > p`, found by asking the page | not the bar (measured); by the document's order, the stop behind the caption, with the bar — inserted after the whole list — further on | the bar's grip; Tab again goes on to the stop that followed the caption (its own card's «bajar» button), Shift+Tab comes back to the caption |
+| Tab from a text **being written in** — the cover's headline, typed over and not committed | the focus was lost: `focusout` toward the grip and **no `focusin` on it**, the focus on the body, the bar gone about 10 ms later | the grip, which keeps the focus through the commit's patch |
+| Alt+F10 from a text | nothing (no listener took it — read off the code) | the grip |
+| → on the grip | moved the bar 16 px to the right (`gripKeyAction`, read off the code) | «B», coming round from the grip, which is the bar's last control |
+| «B» from the keyboard, on «hoy» chosen with Shift+← | unreachable | «hoy» in bold, the focus back in the headline, writing, «hoy» still selected; axe finds nothing serious with a control of the bar focused |
+| Escape inside the bar | nothing (read off the code) | back to the words, writing, with the caret where it was: the next key types after «Reserva hoy» |
+| Tab from the bar on to a stop that is not a text | the bar stayed drawn — measured with the new rule taken out, at a person's pace | the bar closes |
+
+**The cover's headline was the surprise.** It is a direct child of its section, so the bar was
+already inserted right behind it and note 7's mechanism does not apply to it — and still the
+browser's own Tab from it, while it was being written in, never arrived at the grip. Measured on the
+unchanged code, and then twice with a recorder of focus events and the editor's own Tab taken out: the headline's `focusout` names the grip as where the focus is
+going, and the grip never gets a `focusin`. Deferring the line that takes `contenteditable` off the
+headline inside that same `focusout` does not change it, so that line is not the cause; what the
+browser does is not established. What is established is the other half: a focus the editor moves
+itself, from the text's `keydown`, arrives and survives the commit's patch. The sprint 20 walk that
+first reached the grip by Tab did it from a text that was chosen and not being written in, which is
+why it never met this. **It was a second way for the bar to die**, and it is gone with the first.
+
+### What the plan did not say, and the code had to decide
+
+Written by development for David to confirm or overturn; none of it is in the plan he approved.
+
+1. **The bar is not inserted right after the text, and the Tab order is made by the keys instead**
+   (note 7's «o la PR dice por qué no»). Inside a card the bar would sit in an `.rb-line`, which the
+   line chrome makes `position: relative`: the card would become the bar's containing block while
+   every `top` and `left` the bar is given is in its section's coordinates, and the bar would be
+   drawn a card's offset away from its words. So Tab from the text goes to the grip, Tab from
+   anywhere in the bar goes on to the first stop after the text in document order
+   (`nextStopAfter`), and Shift+Tab from the bar comes back to the text. The order a person gets is
+   the one a bar beside the words would give, and where the bar is drawn does not move.
+2. **On the text bar's grip, ↑ and ↓ still move it; ← → and Inicio are the toolbar's.** The grip is
+   the one control a keyboard arrives on, so → there has to reach «B» — the plan's own walk says
+   «→ hasta «B»» — and Inicio there has to mean «the first control». The horizontal nudge is
+   dropped, and «forget where I put it» is two presses of the grip, the first sending the bar to the
+   other side of the words and the second bringing it to its computed place. The legend says «En el
+   asa: ↑ ↓ moverla». **The verbs' cluster keeps all four arrows and `Home`**: it is not a toolbar.
+3. **← and → are taken in the exact-pixel fields too**, against the pattern's advice for a text
+   input: the fields hold up to three digits, typed and stepped with ↑ ↓, and leaving the arrows to
+   them would make two places in the middle of the bar where → stops.
+4. **What «a press» returns to the words**: the controls that act on them — the marks, the sizes,
+   the families, the swatches and the colour's «quitar» — go back to the words first, **writing
+   again if they were being written in**, and act there, which is exactly the state a mouse press
+   finds them in. The grip acts on the bar and stays; «Enlace» and «Desvincular» go elsewhere; the
+   selects and the number fields keep the focus, because a change in them is not a press.
+5. **The record of the words includes the caret.** §3 speaks of the selection `refresh()` records,
+   which is words only; the way back also needs a collapsed caret, or Escape after typing would
+   come back to a select-all and the next key would replace the whole text. So the record is taken
+   as the focus crosses from the text into the bar — `{ text, writing, from, to }`, offsets, with
+   the text itself so an edit made while the bar had the keyboard drops it rather than putting it
+   back on other letters.
+6. **The bar closes when the keyboard leaves both it and its words**, the text's own rule from the
+   other side. Nothing did before, and nothing needed to while the bar could not be walked.
+
+**One finding that changes the framing of adjustment 2.** With the record taken out, «B» was still
+drawn: in Chromium the words stayed selected in the DOM while the grip had the focus. What the
+record is load-bearing for is the way back. Without
+it the return to writing selects the whole text, and «B» bolded «Reserva hoy» instead of «hoy».
+
+### Sabotages
+
+| Sabotage | What went red |
+|---|---|
+| the record not taken (`at: null`) | both «negrita sin ratón» walks (the bold landed on «Reserva hoy») and the Escape walk (the caret came back as a select-all) |
+| Tab from the text left to the browser | the next-stop walk and «negrita» by Tab |
+| Tab from the bar left to the browser | the next-stop walk: «Tab from the bar skipped what follows the text» |
+| the bar at the end of `<body>` (the plan's) | **none of día 4's** — the order no longer depends on where the bar is — and two others: día 2's «el lienzo entero cabe en pocas paradas» (Tab never left the frame in 60) and día 3's «la barra se dibuja donde se puede pulsar» (drawn above the screen) |
+| the bar's leaving rule taken out | the next-stop walk, **only at a person's pace**: pressing faster than the text's own deferred blur check lets that check run after the next Tab and close the bar for its own reasons, so the walk waits 100 ms before that Tab |
+| a press from the keyboard acting without going back | both «negrita» walks: the focus did not come back to the words |
+| the way back without putting the selection back | both «negrita» walks (whole text bold) and the Escape walk |
+
 ## Consequences
 
 - **The canvas with the tools on is a short list again**, and the two mouseless walks say so with
