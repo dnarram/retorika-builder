@@ -49,6 +49,20 @@ import { BASE_URL, QUESTIONNAIRE_URL, startEditorServer, stopEditorServer } from
 const PREVIEW = "iframe";
 
 /**
+ * **Sprint 27 día 2's two bounds** (ADR 0052 §2), each a measurement with room above it, both
+ * taken on 23 October 2026 at 1440 × 900 with the design tools on.
+ *
+ * `DAY2_CANVAS_STOPS`: Tab stops from the canvas's first stop to the rail — the page's three
+ * navigation links, a pill, the door, its insides (each text followed by the grip of the bar that
+ * opened on it, the photograph followed by its badge), one pill per gap. **Measured 22**;
+ * seventy-five before día 2. `DAY2_PAST_THE_CANVAS`: presses from inside a hand-designed section
+ * to «Diseño» and to «Colocación» in the rail, which the sprint 24 walk bounded at two hundred for
+ * the same reason. **Measured 36 and 37.**
+ */
+const DAY2_CANVAS_STOPS = 30;
+const DAY2_PAST_THE_CANVAS = 60;
+
+/**
  * Wait until the bank's photograph is in the cover, which is the moment the frame has stopped being
  * replaced underneath whoever is about to act on it.
  *
@@ -16310,36 +16324,30 @@ describe("sprint 24 día 10 — el cierre, sin ratón", () => {
       await waitForBankPhoto(page.frameLocator(PREVIEW).first());
 
       /**
-       * **Into the canvas, and then *backwards* onto the section — which is a finding rather than a
-       * trick.**
+       * **Into the canvas, and the first thing Tab stands on is a section itself** (ADR 0052 §1,
+       * sprint 27 día 2).
        *
-       * The roving `tabindex` is moved by `focusin` **from a section's children**, so the moment Tab
-       * lands on a text or a photograph inside a section, that section becomes the one stop… and Tab
-       * has already gone past it. Going forward it is never reached again: the stop keeps moving to
-       * where the keyboard just was. `Shift+Tab` from inside is what reaches it, because by then it
-       * really is focusable.
+       * This block used to go *backwards* onto the section, and the reason was a finding: the
+       * roving `tabindex` was moved by `focusin` from a section's children, so the moment Tab
+       * landed on a text inside a section that section became the one stop — behind the cursor,
+       * never reached going forward. Measured here press by press, with the design tools on:
+       * `-1,-1,-1,-1,-1,0` before entering, `0,-1,-1,-1,-1,-1` the moment a child took focus, and
+       * sixty presses of `keyboardTo` found nothing. `Shift+Tab` from inside was the way.
        *
-       * Measured here press by press, with the design tools on: `-1,-1,-1,-1,-1,0` before entering,
-       * `0,-1,-1,-1,-1,-1` the moment a child took focus. Sixty presses of `keyboardTo` found
-       * nothing, and so would six hundred. It is written in `docs/tasks/backlog.md` beside the
-       * question it belongs to — whether Tab should walk a section's insides at all before the
-       * section is chosen.
+       * Since día 2 a section's insides are stops only while that section holds the keyboard, so
+       * from outside the canvas Tab reaches the door — the holder, or the first section — before
+       * anything inside it. The loop asks for a section *itself*, and the bound is the published
+       * page's own links before the first section, not a canvas of seventy-five stops.
        */
       let presses = 0;
-      while (presses < 160 && (await focus(page)).section === null) {
+      while (presses < 40 && !(await focus(page)).onSection) {
         await page.keyboard.press("Tab");
         presses += 1;
       }
       expect(
-        (await focus(page)).section,
-        `Tab no llegó al interior de ninguna sección en ${presses} pulsaciones`,
-      ).not.toBeNull();
-      for (let back = 0; back < 20 && !(await focus(page)).onSection; back += 1) {
-        await page.keyboard.press("Shift+Tab");
-      }
-      expect(await focus(page), "Mayús+Tab no llegó a la sección desde dentro").toMatchObject({
-        onSection: true,
-      });
+        await focus(page),
+        `Tab no se puso sobre ninguna sección en ${presses} pulsaciones`,
+      ).toMatchObject({ onSection: true });
       const sectionId = (await focus(page)).section ?? "";
       expect(sectionId, "la sección enfocada no tiene id").not.toBe("");
       await page.keyboard.press("Enter");
@@ -16486,7 +16494,12 @@ describe("sprint 24 día 10 — el cierre, sin ratón", () => {
         );
       const beforeStepper = await spansNow();
 
-      await tabUntil(page, (at) => at.text === "Diseño", "el panel «Diseño» del raíl", 200);
+      await tabUntil(
+        page,
+        (at) => at.text === "Diseño",
+        "el panel «Diseño» del raíl",
+        DAY2_PAST_THE_CANVAS,
+      );
       await page.keyboard.press("Enter");
       await expect(page.getByRole("heading", { name: "Diseño" })).toBeVisible();
 
@@ -16496,12 +16509,18 @@ describe("sprint 24 día 10 — el cierre, sin ratón", () => {
        * y cuál sea la fila da igual, porque lo que se asevera abajo es que **un** elemento cambió
        * un solo número, y eso vale para cualquiera.
        *
-       * **Y el camino hasta ahí pasa por dentro del lienzo**, que es por lo que el límite es el del
-       * sprint 17 y no una docena: el panel va después del lienzo en el documento, el lienzo con las
-       * herramientas encendidas es unas setenta y cinco paradas (está en el backlog, con su
-       * medida), y la primera versión de esto se quedó en el `IFRAME` tras cuarenta pulsaciones.
+       * **Y el camino hasta ahí pasa por dentro del lienzo**: el panel va después del lienzo en el
+       * documento. Con el modelo del sprint 17 el lienzo con las herramientas encendidas era unas
+       * setenta y cinco paradas y el límite aquí tenía que ser doscientos; desde el sprint 27 día 2
+       * (ADR 0052 §2) lo de dentro de una sección es parada solo mientras esa sección tiene el
+       * teclado, y el límite es el medido ese día, `DAY2_PAST_THE_CANVAS`.
        */
-      await tabUntil(page, (at) => at.text === "Colocación", "la familia «Colocación»", 200);
+      await tabUntil(
+        page,
+        (at) => at.text === "Colocación",
+        "la familia «Colocación»",
+        DAY2_PAST_THE_CANVAS,
+      );
       await page.keyboard.press("Enter");
       await tabUntil(page, (at) => at.label === "Ancho: uno menos", "el stepper del ancho", 40);
       await page.keyboard.press("Enter");
@@ -19115,4 +19134,196 @@ describe("sprint 26 día 8 — el cierre", () => {
       await context.close();
     }
   }, 300_000);
+});
+
+/**
+ * **Sprint 27 día 2 — el lienzo es una parada, y lo de dentro de una sección lo es solo mientras
+ * esa sección tiene el teclado** (ADR 0052 §1 y §2).
+ *
+ * Lo que había, medido el 23 de octubre de 2026 con las herramientas encendidas: el rodante del
+ * sprint 17 hacía de las secciones una parada, y `prepareTexts` daba `tabindex="0"` a todos los
+ * textos de todas las secciones en cada repintado (`prepareDraggables`, a toda foto y lista). Unas
+ * setenta y cinco paradas en el lienzo, doscientas pulsaciones para llegar a «Colocación», y una
+ * sección que Tab no alcanzaba nunca una vez tocado un texto suyo, porque el `focusin` del hijo
+ * movía el único `0` a su sección — siempre detrás del cursor. Las dos primeras caminatas de abajo
+ * eran rojas con ese modelo; la tercera mide lo que queda.
+ */
+describe("sprint 27 día 2 — el lienzo es una parada", () => {
+  /** Whether the top document's focus is inside the preview frame. */
+  const inTheFrame = (page: Page) =>
+    page.evaluate(() => document.activeElement?.tagName === "IFRAME");
+
+  /** The `tabindex` of every section, by id, and of every text, by its section. */
+  const stopsNow = (page: Page) =>
+    page.evaluate(() => {
+      const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
+      const sections: Record<string, string | null> = {};
+      const texts: { section: string; tabindex: string | null }[] = [];
+      for (const section of doc?.querySelectorAll<HTMLElement>("[data-section]") ?? []) {
+        const id = section.dataset["section"] ?? "";
+        sections[id] = section.getAttribute("tabindex");
+        for (const el of section.querySelectorAll<HTMLElement>(
+          "h1[data-id], h2[data-id], h3[data-id], p[data-id], a[data-id]",
+        )) {
+          texts.push({ section: id, tabindex: el.getAttribute("tabindex") });
+        }
+      }
+      return { sections, texts };
+    });
+
+  /**
+   * Tab until focus leaves the frame, returning every place it stopped on the way. Bounded, and
+   * the bound is the assertion's: a canvas that is one stop plus its holder's insides plus one pill
+   * per gap cannot need more than this.
+   */
+  async function tabOutOfTheFrame(page: Page, limit: number) {
+    const trail: Awaited<ReturnType<typeof focus>>[] = [];
+    for (let press = 0; press < limit; press += 1) {
+      await page.keyboard.press("Tab");
+      if (!(await inTheFrame(page))) return trail;
+      trail.push(await focus(page));
+    }
+    throw new Error(
+      `Tab never left the frame in ${limit} presses; it went through: ${trail
+        .map((at) => `${at.tag}${at.section ? `@${at.section}` : ""}`)
+        .join(" → ")}`,
+    );
+  }
+
+  it("Tab alcanza la sección cuyo texto se tocó, y la alcanza antes que a ninguna otra", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+
+      // A click on a text of «Qué hacemos» — the hand's way in, and the one that used to strand
+      // the keyboard: from here on, the section itself was behind the cursor for good.
+      await frame
+        .locator(
+          '[data-section="sec-services"] h2[data-id], [data-section="sec-services"] p[data-id]',
+        )
+        .first()
+        .click();
+      await expect
+        .poll(async () => (await focus(page)).section, { message: "el clic no enfocó el texto" })
+        .toBe("sec-services");
+
+      /**
+       * **The model, read off the attributes**: the touched section is the one stop among the
+       * sections, its texts are stops, and no text of any other section is. Before día 2 the
+       * second line was `0` for every text on the page.
+       */
+      const stops = await stopsNow(page);
+      expect(stops.sections["sec-services"]).toBe("0");
+      expect(
+        Object.entries(stops.sections)
+          .filter(([, value]) => value === "0")
+          .map(([id]) => id),
+      ).toEqual(["sec-services"]);
+      expect(stops.texts.length, "the page rendered no texts").toBeGreaterThan(3);
+      for (const text of stops.texts) {
+        expect(text.tabindex, `a text of ${text.section}`).toBe(
+          text.section === "sec-services" ? "0" : "-1",
+        );
+      }
+
+      /**
+       * **And Tab finds it again from outside.** Focus is let go — the frame's element blurred,
+       * which is where a click on the editor's chrome would leave it — and the walk Tabs back in
+       * from the top of the document. The first section it stands *on* must be the touched one:
+       * measured before día 2, sixty presses walked every text on the page and stood on none.
+       */
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      const trail: string[] = [];
+      let presses = 0;
+      for (; presses < 60 && !(await focus(page)).onSection; presses += 1) {
+        await page.keyboard.press("Tab");
+        const at = await focus(page);
+        trail.push(`${at.tag}${at.section ? `@${at.section}` : ""}`);
+      }
+      expect(
+        await focus(page),
+        `Tab stood on no section in ${presses} presses: ${trail.join(" → ")}`,
+      ).toMatchObject({ onSection: true, section: "sec-services" });
+      console.log(`[día 2] Tab back to the touched section: ${presses} presses`);
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
+  it("Tab desde la sección recorre lo suyo y sale del lienzo sin pisar otra sección", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+      await keyboardTo(page, "sec-services");
+      const frame = page.frameLocator(PREVIEW).first();
+      const textsInside = await frame
+        .locator('[data-section="sec-services"] [data-id]')
+        .evaluateAll((nodes) => nodes.filter((node) => /^(H[1-6]|P|A)$/.test(node.tagName)).length);
+      expect(textsInside, "«Qué hacemos» rendered no texts").toBeGreaterThan(0);
+
+      /**
+       * From the section: its own texts first, in document order; then whatever stands between
+       * the sections (a pill per gap, each a native stop with no other keyboard route); and then
+       * out. **Nothing inside another section**, which is the sentence the old model broke: Tab
+       * from the last text of «Qué hacemos» used to land on the first text of the section below.
+       */
+      const trail = await tabOutOfTheFrame(page, 40);
+      const inside = trail.filter((at) => at.section !== null);
+      expect(inside.length, "Tab entered no text of the section it was on").toBeGreaterThanOrEqual(
+        textsInside,
+      );
+      expect(inside.slice(0, textsInside).map((at) => at.section)).toEqual(
+        Array.from({ length: textsInside }, () => "sec-services"),
+      );
+      expect(
+        inside.filter((at) => at.section !== "sec-services").map((at) => `${at.tag}@${at.section}`),
+        "Tab stood inside another section before leaving the canvas",
+      ).toEqual([]);
+      expect(await inTheFrame(page)).toBe(false);
+      console.log(
+        `[día 2] from «Qué hacemos» to the rail: ${trail.length} presses (${inside.length} inside the section, ${trail.length - inside.length} between sections)`,
+      );
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+
+  it("con las herramientas encendidas, el lienzo entero cabe en pocas paradas", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+      await studioToolsOn(page);
+
+      /**
+       * **The measure día 2 was planned around**: the canvas with the design tools on, Tab-ed from
+       * its first stop to the rail. Seventy-five before (`docs/tasks/backlog.md`, 19 October); the
+       * bound here is the model's — the door, its insides, and one pill per gap — with room for a
+       * composition that has more texts than this one.
+       */
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      for (let press = 0; press < 40 && !(await inTheFrame(page)); press += 1) {
+        await page.keyboard.press("Tab");
+      }
+      expect(await inTheFrame(page), "Tab never reached the preview frame").toBe(true);
+      const trail = await tabOutOfTheFrame(page, 60);
+      const stops = trail.length + 1;
+      console.log(
+        `[día 2] canvas stops with the tools on: ${stops} (${trail
+          .map((at) => `${at.tag}${at.section ? `@${at.section}` : ""}`)
+          .join(" → ")})`,
+      );
+      expect(stops).toBeLessThanOrEqual(DAY2_CANVAS_STOPS);
+      const sectionsOn = new Set(trail.filter((at) => at.section !== null).map((at) => at.section));
+      expect([...sectionsOn].length, "stops inside more than one section").toBeLessThanOrEqual(1);
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
 });

@@ -105,17 +105,51 @@ export function sectionKeyAction(
 }
 
 /**
- * The roving `tabindex` for a list of sections: `0` on the one that holds the keyboard's place and
- * `-1` on the rest, so the canvas is **one** Tab stop rather than five to nine of them.
+ * Which section is the door: the one that holds the keyboard's place, or the first when none does.
+ * `-1` only when there are no sections at all.
  *
  * With no section holding it, the first one is the way in. That is what makes Tab reach the canvas
  * at all, and it is why `at` of `-1` is a real state rather than an error: a frame that has just
- * been rebuilt has no focus in it, and the next Tab must still find a door.
+ * been wired has no focus in it, and the next Tab must still find a door.
+ */
+export function keyboardHolder(count: number, at: number): number {
+  if (count <= 0) return -1;
+  return at >= 0 && at < count ? at : 0;
+}
+
+/**
+ * The roving `tabindex` for a list of sections: `0` on the one that holds the keyboard's place and
+ * `-1` on the rest, so the canvas is **one** Tab stop rather than five to nine of them.
  */
 export function rovingTabIndex(count: number, at: number): number[] {
-  if (count <= 0) return [];
-  const holder = at >= 0 && at < count ? at : 0;
+  const holder = keyboardHolder(count, at);
   return Array.from({ length: count }, (_, index) => (index === holder ? 0 : -1));
+}
+
+/**
+ * The roving `tabindex` for what is **inside** the sections — texts, photographs, verbs, the chrome's
+ * buttons: `0` only for what is inside the section that holds the keyboard, `-1` for the rest
+ * (ADR 0052 §2).
+ *
+ * `owners[i]` is the index of the section the i-th stop is inside. The rule is the sections' own
+ * rule applied one level down, and it is what the first model never said: `rovingTabIndex` made the
+ * sections one stop while every text in every section stayed a stop of its own, so the canvas with
+ * the design tools on was measured at seventy-five stops, and a section whose text had been
+ * touched could never be reached by Tab again — the `focusin` from the child moved the one `0` to
+ * its section, always *behind* the cursor. With the insides following the holder, Tab from the
+ * holder enters its own stops in order, Tab after the last of them leaves the canvas, and the
+ * other sections' insides are not in the way.
+ *
+ * An owner outside the list (a stop that is in no section) is never a stop here; the caller does
+ * not ask about those, and `-1` is the safe answer if it ever does.
+ */
+export function rovingTabIndexInside(
+  owners: readonly number[],
+  count: number,
+  at: number,
+): number[] {
+  const holder = keyboardHolder(count, at);
+  return owners.map((owner) => (owner === holder ? 0 : -1));
 }
 
 /**
