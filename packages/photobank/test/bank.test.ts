@@ -387,7 +387,8 @@ describe("every approved photograph, against its own record", () => {
    * amendment, while the nine regenerated photographs were still being produced).
    *
    * David's decision of 9 October 2026 is that the nine are regenerated at 1600 x 1072; the
-   * exemption that lets the 1024 px ones stay published in the meantime carries a date, because an
+   * exemption that lets the undersized ones stay published in the meantime carries a date (eight at
+   * 1024 x 1024 and `restaurante-bar.07` at 866 x 942), because an
    * exemption with no date is a note asking somebody to come back, and this repository has caught
    * itself failing at exactly that six times — every one found by a person re-reading the record,
    * never by the record. Nothing in CI reads prose.
