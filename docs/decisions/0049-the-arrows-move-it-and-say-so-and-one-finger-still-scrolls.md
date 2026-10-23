@@ -181,7 +181,9 @@ as the cost of ADR 0001's architecture. It was the cost of *this editor's* way o
 architecture, and sprint 26 removed it for the default route: under `patch` there is no rebuild,
 the window in which a press has nowhere to land measures **0 ms** (ADR 0051, día 6's table), and
 día 5's walk types thirty keystrokes at five milliseconds while a patch lands on the very text —
-thirty of thirty. Under `swap`, reachable under `localStorage["rb.canvas"]` until sprint 27 closes,
+thirty of thirty. Under `swap`, retired on sprint 27 día 1 and reachable under
+`localStorage["rb.canvas"]` until then,
 the cost stands as §4 states it, and it retires with the route. The run of arrows written as one
 step (ADR 0050's día 6 amendment) stays as the product rule it became, not as the workaround it
-was. **«What is lost»**: its first bullet reads, from today, «under `swap` only».
+was. **«What is lost»**: its first bullet read «under `swap` only» from sprint 26 día 7, and from
+sprint 27 día 1 it reads as history — there is no `swap`.

@@ -638,3 +638,49 @@ sprint changed about its own plan, said:** `chromeKey` is keyed by id and not by
 the fonts live in their own sheet (día 4, measured first); four refs the plan called swap-only are
 read by both routes (día 6); the e2e limit moved to the suite's step after apt took eleven minutes
 (día 6); `patch` became the default on día 5 as planned, and `swap` leaves on sprint 27 día 1.
+
+### Amendment — the old route is gone (sprint 27 día 1, 23 October 2026)
+
+**§6 is spent.** The buffered swap of 6 October survived behind `localStorage["rb.canvas"]` for a
+sprint and a half, as David's adjustment 6 asked, with CI running the whole e2e suite on both routes
+from sprint 26 día 3 to its close — 230 walks each, green on every pull request since día 5. That is
+the evidence the adjustment wanted in front of the decision, and the decision is taken: the route is
+retired, by the list `docs/tasks/swap-route-retirement.md` wrote for it, symbol by symbol.
+
+**What this leaves.** One `<iframe>`, one `Document` per session, one listener set, one handle
+painter. `Editor.tsx` goes from 7965 lines to 7429 and the e2e from 19295 to 19109; the key, the two
+slots, the chrome key, the promotion, the 2-second buffer deadline, the remembered page colour, the
+refocus-after-swap effect, the fallback route and the reading position's recorder, anchor, restore
+and second pass are gone. `apps/editor/src/editor/canvasMode.ts`, its test, and
+`apps/editor/test/swapRetirement.test.ts` — the test that kept the list honest while the days moved
+the lines under it — are deleted. CI loses the `e2e (swap)` job and keeps one.
+
+**The one refusal left throws.** `patchCanvas` could answer `{ ok: false }` with four reasons and
+three of them were answered during sprint 26 (`structure` on día 3, `chrome` on día 4, `gesture` is
+a queue rather than a refusal). The fourth, `no-body`, cannot happen on a wired document, because
+`wireOnce` only runs on a document with a `[data-section]` in it. With no second route to fall back
+to, `applyPatch` throws — the house rule for the impossible, and the alternative is a canvas that
+stops answering while the page still looks finished.
+
+**The list's two conditional rows, resolved by measurement.**
+
+- **`lookAhead.ts` stays.** The condition was «the module goes too if the first `wire` lands via
+  `onload` within one frame of `lookahead`». Measured three times in real Chromium: the look-ahead
+  wires at 3.40, 3.41 and 3.57 s, and the frame's `load` fires **482, 495 and 506 ms** after it. The
+  window is **wider** than the 64.9 ms of 2 October, and the cause is a fix: since sprint 14 the
+  fonts are answered with real bytes by `apps/editor/src/app/fonts/[file]` instead of 404ing, and
+  real bytes take longer than a refusal. Half a second of a visible, inert canvas is the defect that
+  bought the look-ahead in the first place, so it keeps its place — and `onLoad` now records when it
+  fired, which is what made the measurement possible.
+- **`wireReadingPosition` went** with the restore it fed, because the 164 px width re-anchor is not
+  built this sprint. A patched page keeps its scroll by doing nothing; the open item is a width
+  re-flow and it is in the backlog, with a third measurement rescued from a comment that was about
+  to be deleted (closing «Campos» at 1024 moved the section being read 253 px, 151 → 404).
+
+**What stayed, and why it is worth saying.** `keepWriting`, `keepChosenFocus`, `pendingReturn` and
+`focusTarget` are read by the settles under the one route that is left; the plan of 21 October called
+them swap-only and día 6 corrected it. They hold **names** rather than nodes, which is the shape the
+two-document era gave them, and that shape is still right: a patch replaces a node it cannot keep.
+`data-rb-wired` stays as the document's own answer to «is there anything to patch».
+
+**Still `proposed`.** This ADR, with its nine amendments, until David signs it.

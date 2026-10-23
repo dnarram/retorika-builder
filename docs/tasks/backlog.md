@@ -23,7 +23,26 @@ rules, with the listeners delegated to the document and the chrome redrawn after
 record is `docs/design/REVIEW.md`, sprint 26, and the decision is
 [ADR 0051](../decisions/0051-the-canvas-keeps-its-document-and-an-edit-is-a-patch.md), with seven
 amendments of its own — one per day. `patch` is the default since día 5; `swap` stays under
-`localStorage["rb.canvas"]` until sprint 27 closes, and `swap-route-retirement.md` names what goes.
+`localStorage["rb.canvas"]` until sprint 27 día 1, when it was retired — `swap-route-retirement.md`
+is the list it left by, and `Editor.tsx` came down 536 lines with it.
+
+## Sprint 27 día 1 — the old route is gone, and the two conditional rows resolved
+
+- **`lookAhead.ts` stays, and the measurement is why.** The retirement list left it conditional: the
+  module goes if the frame's `load` lands within one frame of the look-ahead's wiring. Measured three
+  times in real Chromium on 23 October 2026 — the look-ahead wires at ~3.4-3.6 s and `load` fires
+  **482, 495 and 506 ms later**. The window it closes is *wider* than the 64.9 ms sprint 18 measured,
+  and the reason is that the fonts stopped 404ing: since sprint 14 `apps/editor/src/app/fonts/[file]`
+  answers them with real bytes, and real bytes take longer than a refusal. A canvas that is visible
+  and inert for half a second is exactly the defect of 2 October, so the module keeps its place.
+- **`wireReadingPosition` went** with the restore, because the 164 px width re-anchor is not built
+  this sprint. Nothing records where the page is being read any more, and nothing needs to: a patched
+  page keeps its scroll by doing nothing. The row below is unchanged by that.
+- **A third measurement of the panel close**, taken off a comment in `Editor.tsx` before it was
+  deleted and kept here so it is not lost: **closing «Campos» at 1024 moved the section being read
+  253 px, from 151 to 404.** That is larger than the 164 px this file records, and it was measured at
+  a different moment (sprint 24 día 3, against the section rather than the scroll offset). Both are
+  the same defect seen from two instruments.
 
 **What this sprint found that nobody was looking for:**
 
@@ -195,8 +214,8 @@ front of him. The record is `docs/design/REVIEW.md`, sprint 23, and the decision
    canvas keeps its document and an edit is a patch ([ADR 0051](../decisions/0051-the-canvas-keeps-its-document-and-an-edit-is-a-patch.md));
    the window in which a press had nowhere to land measures **0 ms**, and día 5's walk types thirty
    keystrokes at five milliseconds while a patch lands on the very text — thirty of thirty. Under
-   `swap`, reachable under the key until sprint 27 closes, the cost stands as written here, and
-   retires with the route.
+   `swap` the cost stood as written here, and **it retired with the route on sprint 27 día 1**. The
+   window is 0 ms and there is nothing left behind the key, because there is no key.
 3. **A section element cannot be reached by Tab once focus is inside it**, which is the roving
    `tabindex` being moved by `focusin` from the children: the moment a text or a photograph takes
    focus, its section becomes the one stop and Tab has already gone past it. `Shift+Tab` from inside
@@ -1411,14 +1430,18 @@ open survives.
   wires that, and promotes it. Moving a section changes neither the count nor any section's `source`,
   so it never swaps.
 
-  The practical consequence: **anything that remembers something across a rebuild has to survive two
-  wirings, and «the live frame's document» is not a test for «this one will stay».** Under `patch`
-  (sprint 26) the same verb is one structural patch on the one document and the selection is settled
-  from the redraw; there is nothing to survive, and `data-rb-wired` on the document is the one guard
-  (ADR 0051, día 2 amendment). Measured during
-  the duplicate as `isLive=true buffered=1 frames=2`. The test that works is the absence of an
-  `iframe[data-buffered]`, asked of the DOM rather than of `buffer`, which a closure can be a render
-  behind.
+  The practical consequence, while it lasted: **anything that remembered something across a rebuild
+  had to survive two wirings, and «the live frame's document» was not a test for «this one will
+  stay».** Measured during the duplicate as `isLive=true buffered=1 frames=2`; the test that worked
+  was the absence of an `iframe[data-buffered]`, asked of the DOM rather than of the buffer state,
+  which a closure can be a render behind.
+
+  **Closed on sprint 27 día 1 with the route.** The same verb is one structural patch on the one
+  document and the selection is settled from the redraw, so there is nothing to survive and
+  `data-rb-wired` on the document is the one guard (ADR 0051, día 2 amendment). The row stays
+  because it explains the shape of four refs that are still in `Editor.tsx` — `focusTarget`,
+  `pendingReturn`, `keepChosenFocus`, `keepWriting` — which hold **names** rather than nodes for
+  exactly this reason.
 
 - **A realm trap this repository has now fallen into three times, and had already written up twice.**
   A handler registered on the preview frame's document still runs in the **parent window's realm**,

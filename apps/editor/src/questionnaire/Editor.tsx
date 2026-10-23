@@ -1477,7 +1477,14 @@ export function Editor({
         ref={frame}
         title={title}
         srcDoc={initialHtml}
-        onLoad={(event) => wireOnce(event.currentTarget, "onload")}
+        onLoad={(event) => {
+          // **When `load` fired**, which is the number the look-ahead exists to beat: `load` waits
+          // out the font requests, and the look-ahead wires the document at `DOMContentLoaded`.
+          // Recorded whether or not this wiring does anything, because by the time it runs the
+          // look-ahead has usually wired already and `wireOnce` returns at its first line.
+          record("load", { wired: liveDoc()?.documentElement.dataset["rbWired"] === "1" });
+          wireOnce(event.currentTarget, "onload");
+        }}
         className="absolute inset-0 h-full w-full border-0 bg-ui-surface ui-fade-in"
       />
     );

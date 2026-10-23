@@ -1,4 +1,14 @@
-# The `swap` route's retirement — the list for sprint 27, día 1
+# The `swap` route's retirement — the list, and what it did
+
+> **Executed on sprint 27 día 1, 23 October 2026, and this file is now the record of it rather than
+> a plan.** Every «27 día 1» cell below was carried out; the two that said «measure first» are
+> resolved at the bottom. `apps/editor/test/swapRetirement.test.ts`, which kept these line numbers
+> honest while the days of sprint 26 moved them, is deleted with the list it guarded — a guard for a
+> list nobody will read again is a test that can only fail for the wrong reason. The line numbers
+> below are therefore **frozen at commit `c3d3a85`** and do not point anywhere in today's file.
+>
+> Result: `Editor.tsx` 7965 → 7429 lines, the e2e 19295 → 19109, one `e2e` job instead of two,
+> 3061 → 3003 unit tests. No golden moved. The record is ADR 0051's día 1 amendment of sprint 27.
 
 **Written on sprint 26 día 6 (22 October 2026), to be executed on sprint 27 día 1 and not before.**
 ADR 0051 §6 and David's adjustment 6 to the sprint 26 plan: the canvas keeps two routes until
@@ -58,6 +68,22 @@ are día 7's to rewrite as «under `patch` … / under `swap` …», and 27 día
 ## `apps/editor/src/editor/canvasMode.ts`, `apps/editor/test/canvasMode.test.ts`
 
 **Remove** both; `DEFAULT_CANVAS_MODE` has no second value to default from.
+
+## The two rows that said «measure first», resolved on 27 día 1
+
+- **`lookAheadStep` / `LOOK_AHEAD_DEADLINE_MS` / `lookAhead.ts`: kept.** The condition was «if the
+  first `wire` event lands via `onload` within one frame of `lookahead`, the module goes too».
+  Measured three times in real Chromium with the probe on: the look-ahead wires the document at 3.40,
+  3.41 and 3.57 s, and the frame's own `load` fires **482, 495 and 506 ms later**. It is not one
+  frame, it is half a second of a canvas that is on screen and listening to nothing — the defect of
+  2 October. What the effect lost is its second target and the `promote` answer; it now runs once, at
+  mount, because there is one document to wait for. `onLoad` gained a `record("load", …)` so the
+  margin can be read again without rebuilding the instrument.
+- **`wireReadingPosition`: removed**, with `restoreReadingPosition`, `applyRestoreTarget`,
+  `settleReadingPosition`, `readingAnchor` and the four refs. It survived only if the 164 px width
+  re-anchor were built on it, and that is not this sprint's work. The third measurement its comment
+  carried — closing «Campos» at 1024 moved the section being read 253 px, from 151 to 404 — is now a
+  row in `docs/tasks/backlog.md`, so deleting the comment did not delete the number.
 
 ## What this list does not decide
 

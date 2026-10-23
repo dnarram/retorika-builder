@@ -18096,10 +18096,19 @@ describe("sprint 26 día 1 — la medida de hoy", () => {
       const patchMs = firstPatch ? Number(firstPatch.data["ms"]) : Number.NaN;
       const redrawMs = firstPatch ? Number(firstPatch.data["redrawMs"]) : Number.NaN;
 
+      // **La medida que decide el futuro de `lookAhead.ts`** (la lista de retirada, 27 día 1): si
+      // el `load` del marco llega a un fotograma (16 ms) del cableado por anticipación, la
+      // anticipación no compra nada y el módulo se va con la ruta.
+      const firstWire = all.find((event) => event.kind === "wire");
+      const load = all.find((event) => event.kind === "load");
+      const beat = firstWire && load ? load.at - firstWire.at : Number.NaN;
       console.log(
         `[sprint 27 día 1] documentos cableados tras una edición de texto: ${wires.length}; ` +
           `latencia pulsación→parche: ${patchLatency.toFixed(1)} ms; parche ${patchMs} ms; ` +
-          `repintado ${redrawMs} ms; marcos ahora: ${frames}; cableados antes: ${wiredSoFar}`,
+          `repintado ${redrawMs} ms; marcos ahora: ${frames}; cableados antes: ${wiredSoFar}; ` +
+          `primer cableado por «${String(firstWire?.data["via"] ?? "?")}» a ${firstWire?.at ?? -1} ms, ` +
+          `load a ${load?.at ?? -1} ms (ya cableado: ${String(load?.data["wired"] ?? "?")}), ` +
+          `la anticipación gana por ${beat.toFixed(1)} ms`,
       );
 
       // Lo que la ruta promete: ningún documento nuevo, ningún html nuevo, ventana **0 ms** —
