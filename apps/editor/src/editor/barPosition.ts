@@ -192,6 +192,118 @@ export function gripKeyAction(press: KeyPress): GripKeyAction {
   }
 }
 
+/**
+ * **The text bar's grip keeps only the vertical arrows** (ADR 0052 §3, sprint 27 día 4).
+ *
+ * The verbs' cluster and the text bar share one grip and one meaning for its keys, and the text bar
+ * has since become a toolbar: ← and → walk between its controls, Inicio and Fin go to its ends.
+ * Those four keys cannot also nudge the bar from the one control a keyboard arrives on, or →
+ * from the grip would move the bar instead of reaching «B». So on this grip ↑ and ↓ still move it
+ * — the bar covers the line being written on, and up or down is the way off it — and the grip's
+ * click still sends it to the other side of the words, twice brings it home. The cluster, which
+ * is not a toolbar, keeps all four arrows and `Home` through `gripKeyAction` itself.
+ */
+export function textGripKeyAction(press: KeyPress): GripKeyAction {
+  const move = gripKeyAction(press);
+  return move.kind === "step" && move.dx === 0 ? move : IGNORED;
+}
+
+/**
+ * What a key press means anywhere inside the floating text bar — the other half of
+ * `role="toolbar"`, which this bar carried since sprint 9 and kept only half of.
+ *
+ * - `focus` — another control of the bar: ← the previous, → the next, Inicio the first, Fin the
+ *   last. **Wrapping**, which the WAI-ARIA toolbar pattern leaves optional and this bar needs: the
+ *   grip, the one stop a keyboard arrives on, is the *last* control, so → from it has to come round
+ *   to «B» or the marks would be the farthest thing from the door.
+ * - `words` — Escape: back to the words, nothing done.
+ * - `leave` — Tab and Shift+Tab: out of the bar, to the stops either side of the text that opened
+ *   it, since the bar is the stop right after that text (David's note 7). Shift is the one modifier
+ *   allowed, because it is half of what Tab means.
+ * - `ignore` — the control's own: ↑ and ↓ step a number or open a list, Intro and Espacio press.
+ *
+ * **Bare presses only** for the rest, the rule `gripKeyAction` gives at length: a superset of the
+ * keys claimed is how a toolbar eats a shortcut meant for something else.
+ *
+ * **← and → are taken even inside the exact-pixel fields**, where the field's own meaning is to
+ * move the caret. The pattern warns against that for a text input, and the trade here is the
+ * other way: the fields hold up to three digits, which are typed and stepped with ↑ ↓ rather than
+ * edited from the middle, and leaving the arrows to them would make each one a place the walk
+ * through the bar stops — two of them sit between the sizes and the colours.
+ */
+export type ToolbarKeyAction =
+  | { kind: "focus"; to: "previous" | "next" | "first" | "last" }
+  | { kind: "words" }
+  | { kind: "leave"; forward: boolean }
+  | { kind: "ignore" };
+
+const NOT_THE_BARS: ToolbarKeyAction = { kind: "ignore" };
+
+export function toolbarKeyAction(press: KeyPress): ToolbarKeyAction {
+  if (press.altKey || press.metaKey || press.ctrlKey) return NOT_THE_BARS;
+  if (press.key === "Tab") return { kind: "leave", forward: !press.shiftKey };
+  if (press.shiftKey) return NOT_THE_BARS;
+  switch (press.key) {
+    case "ArrowLeft":
+      return { kind: "focus", to: "previous" };
+    case "ArrowRight":
+      return { kind: "focus", to: "next" };
+    case "Home":
+      return { kind: "focus", to: "first" };
+    case "End":
+      return { kind: "focus", to: "last" };
+    case "Escape":
+      return { kind: "words" };
+    default:
+      return NOT_THE_BARS;
+  }
+}
+
+/**
+ * Which control a `focus` action lands on, among `count` of them with the focus on `at`.
+ *
+ * `at` of `-1` — the focus on none of them, which a bar rebuilt under the keyboard can briefly
+ * be — reads as standing just outside both ends: → reaches the first and ← the last. `-1` back
+ * only when there is nothing to land on.
+ */
+export function toolbarIndex(
+  count: number,
+  at: number,
+  to: "previous" | "next" | "first" | "last",
+): number {
+  if (count <= 0) return -1;
+  if (to === "first") return 0;
+  if (to === "last") return count - 1;
+  if (at < 0 || at >= count) return to === "next" ? 0 : count - 1;
+  return to === "next" ? (at + 1) % count : (at - 1 + count) % count;
+}
+
+/**
+ * **Alt+F10 from a text with focus goes to its bar** — the convention TinyMCE and CKEditor share,
+ * so a person who has learnt it in one editor finds it here (David's adjustment 4). Alt alone: with
+ * Ctrl or Cmd it is somebody else's shortcut.
+ */
+export function isToolbarShortcut(press: KeyPress): boolean {
+  return press.key === "F10" && press.altKey && !press.ctrlKey && !press.metaKey && !press.shiftKey;
+}
+
+/**
+ * Which sentence the key legend uses for that shortcut, by the machine it is read on.
+ *
+ * **On a Mac the F keys belong to the system until Fn is held** (David's note 8): pressed alone on
+ * a MacBook, F10 mutes the audio and never reaches the page, so a legend that said «Alt+F10» there
+ * would name a key that does nothing. `userAgentData.platform` where the browser offers it
+ * («macOS»), `navigator.platform` where it does not («MacIntel»). Touch screens are not asked: the
+ * legend is not drawn on them.
+ */
+export function toolbarShortcutFor(nav: {
+  readonly platform?: string;
+  readonly userAgentData?: { readonly platform?: string };
+}): "mac" | "other" {
+  const platform = nav.userAgentData?.platform || nav.platform || "";
+  return /^mac/i.test(platform) ? "mac" : "other";
+}
+
 /** One arrow press applied, and stopped at the edge rather than past it. */
 export function stepped(
   point: Point,
