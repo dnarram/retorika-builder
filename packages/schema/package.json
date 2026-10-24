@@ -10,7 +10,7 @@
     "./testing": "./src/testing.ts"
   },
   "dependencies": {
-    "zod": "4.6.5"
+    "zod": "4.6.6"
   },
   "devDependencies": {
     "fast-check": "4.10.1"
