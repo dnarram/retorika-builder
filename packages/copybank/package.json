@@ -9,6 +9,6 @@
   },
   "comment": "The texts here become content of a client's published site, so they are Spanish (es-ES) and never go in a locales/es.json, which is for interface text. Nothing enters bank/ without a person's approval recorded in the file.",
   "dependencies": {
-    "zod": "4.6.5"
+    "zod": "4.6.6"
   }
 }

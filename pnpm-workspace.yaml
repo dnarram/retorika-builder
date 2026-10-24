@@ -50,3 +50,19 @@ overrides:
   "source-map-js@<1.2.2": ">=1.2.2"
   "sharp@<0.35.5": ">=0.35.5"
   "vite@<8.3.3": ">=8.3.3"
+  "fast-uri@<3.1.9": ">=3.1.9"
+  "zod@<4.6.6": "^4.6.6"
+# `fast-uri` below 3.1.9 is GHSA-w74x-v6f9-j3xg and GHSA-wjr9-j795-jxcr, both moderate: a scheme
+# spoofed through percent-encoding, and a host confused by unchecked WHATWG canonicalization. It
+# arrives twice, under `lighthouse` (`ajv`, and `ajv-formats`'s own `ajv`) — the protocol's Part 8.5
+# measuring tool, a development dependency that reaches no client's site, ADR 0001 again. Pinned
+# rather than excepted for the same reason as the three lines above: 3.1.9 is published.
+# `zod` below 4.6.6 is a high-severity advisory: validating an oversized constrained collection can
+# exhaust memory. Two different reaches, and the one that matters is not this line's. `zod` is a
+# runtime dependency of `packages/schema`, `packages/copybank` and `packages/photobank` — the schema
+# parses every document the editor loads — and those three pins moved to 4.6.6 in their own
+# `package.json`, exactly as they were pinned before. **This line is for the fourth copy**, under
+# `lighthouse`'s `puppeteer-core` → `chromium-bidi`, which asks for `^4.6.5` and was left on 4.6.5 by
+# the install; a development tool that reaches no client's site. `^4.6.6` rather than `>=` because
+# that dependency's own range stops at the major, and an override must not take it past what it
+# accepts.
