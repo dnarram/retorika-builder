@@ -694,6 +694,16 @@ open survives.
   — so **the product is right and the instrument is fragile**, which is the half the three earlier
   occurrences could never separate.
 
+  **Fifth entry, 24 October 2026, sprint 27 día 5 — the mechanism, and it was not the one named
+  below.** Waiting only for the escalation's one change (fonts loaded first), the walk fails alone
+  three times out of three at the pull; waiting for the «Diseñada a mano» bar's 180 ms arrival, it passes alone three
+  times out of three with its `boundingBox()` untouched. The arrival pushes the cover 44 px down
+  while it plays, and the press decides the edge on the section as drawn — so the section moves
+  under the hand that is pulling. On 21 October nothing waited after escalating; from sprint 26 día
+  5 `canvasQuiet`'s 400 ms covered the arrival by being longer than it (green alone 3 of 3 on `main`
+  on 23 October). The paragraph below is the hypothesis as it stood, and the measurement says it was
+  not the cause.
+
   **What it would cost to fix, for whoever takes it:** the walk reads the photo's box with
   `boundingBox()` immediately after `focus()`, and this file's own sprint 25 notes say a canvas
   element is measured with `boxesInSection`/`boxOf` and never with `boundingBox()`, because focus
@@ -1157,13 +1167,28 @@ open survives.
   *The row as it stood:* «Observed on the día 5 keystroke walk in Chromium; not chased. Whether it
   is the restored `Range`'s direction or the key's handling is the first thing to measure.»
 
-  **Escalating a section is two changes of the document about 200 ms apart** — the section turns
+  ~~**Escalating a section is two changes of the document about 200 ms apart** — the section turns
   free, then its rows, measured on the live layout (ADR 0050 §3), are written — and a hand that
   escalates and drags at once measures a box the second step moves. Under `swap` two slow rebuilds
   hid it; under `patch` CI showed it (a drop 22 px high, a bottom-edge resize that never began).
   The walks wait for the canvas to go quiet; the editor still has the gap. Whether escalation
   should measure and write in one step is the question, and it is sprint 27's unless David pulls
-  it forward.
+  it forward.~~ **Measured on sprint 27 día 5 (24 October 2026) and the premise did not hold** —
+  record in ADR 0051's last amendment and ADR 0052's día 5 section. Escalating is one change of the
+  document, one patch and one entry of history, and has been since sprint 25 día 2. The symptoms
+  were real and their cause was the «Diseñada a mano» bar's 180 ms arrival, which pushes a section
+  at the top of the page 44 px down while a too-fast hand is already on it — a walk's hand, not a
+  person's — plus the web fonts for a walk that escalates straight after opening. Nothing in the
+  editor changed; the walks wait for those two things (`escalated`) and `canvasQuiet` is gone.
+  **Left open, named rather than built:** an editor-side answer — a press finishing the arrival
+  first — was tried and taken out because it breaks the bottom-edge resize inside the same 180 ms;
+  if a real owner ever meets this window, the answer has to keep the press deciding on what was
+  drawn and the gesture then following the section.
+  **And the device toggle is a third wait the 400 ms covered**: «Ver en móvil» narrows the frame over
+  about 290 ms, and sprint 24 día 9's mobile reorder walk read a box in the middle of it — red alone
+  on `main`, red in día 5's first full run, now waiting for the phone's width. `ontoThePhone` waits
+  for one grid column, which arrives at about 170 ms and 497 px, mid-transition; its walks pass, and
+  it is the next one to fail the same way if anything before it gets faster.
 
 - **Three visual ideas this sprint measured and turned down, so the next one does not re-propose
   them from scratch** (16 October 2026, sprint 22).
