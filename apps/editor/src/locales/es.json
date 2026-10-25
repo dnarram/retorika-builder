@@ -147,6 +147,8 @@
   "editor.pages.perEntry": "por ficha · {n}",
   "editor.pages.viewing": "Viendo:",
   "editor.pages.close": "Cerrar las páginas",
+  "editor.rail.label": "Paneles del editor",
+  "editor.main.label": "Área de edición",
   "editor.rail.sections": "Secciones",
   "editor.rail.style": "Estilo",
   "editor.rail.pages": "Páginas",

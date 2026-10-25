@@ -792,7 +792,7 @@ export function EditorShell({
    * by `FieldsPanel`'s `top`, the way `available` is read rather than predicted. `offsetHeight`
    * and not `contentRect`, because the border is part of where the header ends.
    */
-  const header = useRef<HTMLDivElement>(null);
+  const header = useRef<HTMLElement>(null);
   const [headerHeight, setHeaderHeight] = useState(58);
 
   /**
@@ -919,7 +919,16 @@ export function EditorShell({
           not before: ADR 0012's sentence moves and wraps, which is what David chose on 15 October
           over moving the account into «Compartir». Measured before this on a 390px phone, the
           group's fixed 673px opened the whole page at 822 and put «Descargar» off the screen. */}
-      <div
+      {/* **The three landmarks of the shell** (ADR 0052 §6, sprint 27 día 6): this bar is the
+          `<header>`, the rail the `<nav>`, the canvas and its panel the `<main>`. They were three
+          `div`s from the day the shell was built, so the editor had no landmark at all and axe's
+          `region` rule found content outside one from its first scan (10 October 2026: three
+          nodes; two on the day this changed — the switch's anchor and the hint above the canvas).
+          The same boxes, the same classes: `header`, `nav` and `main` are `display: block` like a
+          `div`, and every one of them sets its own `flex`. The canvas's sections are not touched —
+          they stay `role="group"`, which is David's sprint 17 decision and the reason naming them
+          was never the answer. */}
+      <header
         ref={header}
         className="flex h-[58px] shrink-0 items-center border-b border-ui-border bg-ui-surface px-4 phone:h-auto phone:flex-wrap phone:gap-x-2.5 phone:gap-y-2 phone:px-3 phone:py-2 tablet:h-auto tablet:flex-wrap tablet:gap-x-2.5 tablet:gap-y-2 tablet:py-2"
       >
@@ -1234,7 +1243,7 @@ export function EditorShell({
             {building ? es["editor.downloading"] : es["editor.download"]}
           </button>
         </div>
-      </div>
+      </header>
 
       {/* On a phone the rail is a bar fixed to the bottom, so this row leaves it room: its own
           height plus the home indicator's inset, which `viewport-fit: cover` makes non-zero. */}
@@ -1244,8 +1253,11 @@ export function EditorShell({
             window 640px tall the last 65 were unreachable — and the last item is the design-tools
             switch, so the control that turns the studio off was behind the one edge nothing could
             scroll. It has 15px to spare at 720. */}
-        <div
+        <nav
           data-testid="rail"
+          // Named, because «navegación» alone says nothing about which: these are the panels the
+          // editor opens beside the canvas, and the design-tools switch that adds two of them.
+          aria-label={es["editor.rail.label"]}
           // **A bottom bar on a phone (ADR 0042 §2):** fixed, full width, the five items in a
           // row with icon and word, above the home indicator. The same five buttons — nothing is
           // added or taken away by the move; the studio items and the switch are already absent
@@ -1321,12 +1333,16 @@ export function EditorShell({
               onChange={onDesignToolsChange}
             />
           )}
-        </div>
+        </nav>
 
         {/* The wide side gutters centre the canvas when it is alone; with a panel open they would
             only squeeze the preview, so they go. */}
-        <div
+        <main
           data-testid="canvas-and-panel"
+          // Named, because the canvas holds the client's own page and that page has a `<main>` of
+          // its own: two unnamed `main` landmarks is axe's `landmark-unique`, measured the moment
+          // this one existed. The editor's is the area somebody edits in.
+          aria-label={es["editor.main.label"]}
           // `tablet:`/`studio:` where this said `sm:`: the wide gutters start at 721 instead of
           // 640, and on a phone the row keeps 8px a side so the 320px mobile canvas sits at zoom 1
           // from a 336px window up.
@@ -1374,7 +1390,7 @@ export function EditorShell({
             </div>
           </div>
           {panel}
-        </div>
+        </main>
       </div>
     </div>
   );

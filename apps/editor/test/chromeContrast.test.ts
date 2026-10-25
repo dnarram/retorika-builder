@@ -371,3 +371,70 @@ describe("the greys the mockups use and the product refuses", () => {
     ).toEqual([]);
   });
 });
+
+/**
+ * **«Foto de ejemplo», over a photograph nobody has seen yet** (sprint 27 día 6).
+ *
+ * axe could not measure this one, and said so from its first scan of the editor on 10 October
+ * 2026: `color-contrast`, one node, `.rb-sample` — white words on a translucent dark pill drawn over
+ * a photograph, and axe does not compute contrast against an image. The plan for the day asked for
+ * a solid background measured or the reason written; this is the reason, and it is a measurement.
+ *
+ * **The worst photograph is white.** CSS composites a translucent background in sRGB, channel by
+ * channel — `alpha × pill + (1 − alpha) × beneath` — so every channel of what ends up behind the
+ * words is at most what it is over pure white, whatever the picture is; and relative luminance
+ * rises with every channel. So the pill composited over `#FFFFFF` is the lightest it can ever be,
+ * and the contrast measured there is the floor for every photograph. The `backdrop-filter` blur
+ * only averages the pixels beneath, which keeps each of them inside the same range.
+ *
+ * Read from the injected stylesheet rather than restated, at rest and under the pointer.
+ */
+describe("the sample badge over a photograph", () => {
+  /** `rgba(r,g,b,a)` over an opaque base, as the browser composites it, as `#rrggbb`. */
+  function over(rgba: string, base: string): string {
+    const parts = rgba.match(/rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)/);
+    if (!parts) throw new Error(`not an rgba(): ${rgba}`);
+    const [r, g, b, a] = [Number(parts[1]), Number(parts[2]), Number(parts[3]), Number(parts[4])];
+    const under = [1, 3, 5].map((at) => Number.parseInt(base.slice(at, at + 2), 16));
+    return `#${[r, g, b]
+      .map((channel, index) => Math.round(a * channel + (1 - a) * (under[index] ?? 0)))
+      .map((value) => value.toString(16).padStart(2, "0"))
+      .join("")}`;
+  }
+
+  /** The declaration of one property inside the first rule for `selector`, comments stripped. */
+  function declared(selector: string, property: string): string {
+    // The stylesheet is built from template strings, and a `${UI_FONT}` carries a `}` of its own
+    // that would end the rule early; the expressions go before the closing brace is looked for.
+    const sheet = CANVAS.replace(/\$\{[^}]*\}/g, "…");
+    const rule = sheet.indexOf(`${selector} {`);
+    if (rule < 0) throw new Error(`the canvas stylesheet has no «${selector}» rule`);
+    const body = sheet.slice(rule, sheet.indexOf("}", rule));
+    const found = body.match(new RegExp(`(?:^|[;\\s"])${property}:\\s*([^;]+);`));
+    if (!found?.[1]) throw new Error(`«${selector}» declares no ${property}`);
+    return found[1].trim();
+  }
+
+  it("composites correctly — the arithmetic, before it is trusted with the badge", () => {
+    expect(over("rgba(0,0,0,0.5)", "#FFFFFF")).toBe("#808080");
+    expect(over("rgba(15,23,42,1)", "#FFFFFF")).toBe("#0f172a");
+    expect(over("rgba(15,23,42,0)", "#FFFFFF")).toBe("#ffffff");
+  });
+
+  it("clears 4.5:1 over the lightest photograph there can be, at rest and under the pointer", () => {
+    const words = declared(".rb-sample", "color");
+    const rest = declared(".rb-sample", "background");
+    const hover = declared(".rb-sample:hover", "background");
+    expect(words.toUpperCase()).toBe("#FFFFFF");
+    for (const [state, pill] of [
+      ["at rest", rest],
+      ["under the pointer", hover],
+    ] as const) {
+      const floor = contrastRatio(words, over(pill, "#FFFFFF"));
+      expect(
+        floor,
+        `«Foto de ejemplo» ${state}, over white: ${floor.toFixed(2)}:1`,
+      ).toBeGreaterThan(AA_NORMAL_TEXT);
+    }
+  });
+});
