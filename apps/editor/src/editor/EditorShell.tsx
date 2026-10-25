@@ -700,6 +700,7 @@ export function EditorShell({
   panel,
   children,
   overlay,
+  onZoomChange,
 }: {
   siteName: string;
   /** Every page of the open document, in document order, for the tabs. */
@@ -716,6 +717,17 @@ export function EditorShell({
    * box, which is also a containing block for `fixed`.
    */
   overlay?: React.ReactNode;
+  /**
+   * **The zoom the canvas is drawn at, each time it changes** (ADR 0053, David's condition 3).
+   *
+   * The canvas is `children` and the zoom is born here, from the room this shell leaves it, so the
+   * canvas cannot see it change: opening a panel narrows the room and changes the zoom without
+   * touching the document, and the canvas's chrome is redrawn after edits only. This is the
+   * notice. Not a `ResizeObserver` on the `<iframe>` from inside: its `contentRect` ignores the
+   * `transform` this shell scales the card with, so the frame's box does not change when the card
+   * is scaled. The canvas measures the zoom for itself (`zoomOf`); this only says when to.
+   */
+  onZoomChange?: (zoom: number) => void;
   device: "desktop" | "mobile";
   onDeviceChange: (device: "desktop" | "mobile") => void;
   canUndo: boolean;
@@ -894,6 +906,14 @@ export function EditorShell({
   const layoutWidth =
     device === "mobile" ? NARROWEST_WIDTH : Math.max(available, NARROWEST_DESKTOP);
   const zoom = available > 0 && layoutWidth > available ? available / layoutWidth : 1;
+
+  // After the card has its new `transform`, which is what the canvas measures; a ref, so that a
+  // new callback on every render is not a change of zoom.
+  const zoomChanged = useRef(onZoomChange);
+  zoomChanged.current = onZoomChange;
+  useEffect(() => {
+    zoomChanged.current?.(zoom);
+  }, [zoom]);
 
   const building = downloadState === "preparing" || downloadState === "downloading";
 

@@ -60,20 +60,64 @@ describe("handlesFor", () => {
     expect(wide.map((spot) => spot.edge)).toEqual(["nw", "ne", "sw", "se"]);
   });
 
-  it("takes a box of exactly two targets each way, and refuses one pixel less", () => {
-    const exact = handlesFor({
-      box: { left: 0, top: 0, width: HANDLE_TOUCH * 2, height: HANDLE_TOUCH * 2 },
-      host,
-    });
+  /**
+   * **Three along the side and two across it** (ADR 0053, David's adjustment 1): a midpoint between
+   * two corners needs three targets of side, and the pair facing each other across the box needs two
+   * targets of room between them, so the middle stays where a finger drags.
+   */
+  it("takes a box of exactly three targets each way, and gives a side its midpoint only from there", () => {
+    const three = HANDLE_TOUCH * 3;
+    const exact = handlesFor({ box: { left: 0, top: 0, width: three, height: three }, host });
     expect(exact).toHaveLength(8);
-    // One pixel short in **either** direction is short: what the midpoints leave in the middle of
-    // the box has to be a target too.
-    for (const box of [
-      { left: 0, top: 0, width: HANDLE_TOUCH * 2 - 1, height: HANDLE_TOUCH * 2 },
-      { left: 0, top: 0, width: HANDLE_TOUCH * 2, height: HANDLE_TOUCH * 2 - 1 },
-    ]) {
-      expect(handlesFor({ box, host }).map((spot) => spot.edge)).toEqual(["nw", "ne", "sw", "se"]);
-    }
+    // One pixel short of three along a side takes that side's midpoints and only those.
+    expect(
+      handlesFor({ box: { left: 0, top: 0, width: three - 1, height: three }, host }).map(
+        (spot) => spot.edge,
+      ),
+    ).toEqual(["nw", "ne", "sw", "se", "left", "right"]);
+    expect(
+      handlesFor({ box: { left: 0, top: 0, width: three, height: three - 1 }, host }).map(
+        (spot) => spot.edge,
+      ),
+    ).toEqual(["nw", "ne", "sw", "se", "top", "bottom"]);
+  });
+
+  it("no longer gives a box of two targets each way its midpoints, which sit on its corners there", () => {
+    const two = HANDLE_TOUCH * 2;
+    expect(
+      handlesFor({ box: { left: 0, top: 0, width: two, height: two }, host }).map(
+        (spot) => spot.edge,
+      ),
+    ).toEqual(["nw", "ne", "sw", "se"]);
+  });
+
+  it("keeps the two-across rule: three along is not enough on a box too thin to leave its middle", () => {
+    // 528 wide is twelve targets along, and 52 tall is not two across: the top and bottom
+    // midpoints would meet over the middle of the text.
+    const wide = { left: 100, top: 50, width: 528, height: HANDLE_TOUCH * 2 - 1 };
+    expect(handlesFor({ box: wide, host }).map((spot) => spot.edge)).toEqual([
+      "nw",
+      "ne",
+      "sw",
+      "se",
+    ]);
+    expect(
+      handlesFor({ box: { ...wide, height: HANDLE_TOUCH * 2 }, host }).map((spot) => spot.edge),
+    ).toEqual(["nw", "ne", "sw", "se", "top", "bottom"]);
+  });
+
+  /**
+   * **The thresholds are on screen** (ADR 0053): the painter passes the target in the frame's
+   * pixels, `HANDLE_TOUCH / zoom`, so at three quarters a box of 132 frame pixels — 97 on screen —
+   * is under three targets and keeps its corners only.
+   */
+  it("scales its thresholds with the target it is given, which is how they stay numbers on screen", () => {
+    const zoom = 0.7379;
+    const target = HANDLE_TOUCH / zoom;
+    const box = { left: 0, top: 0, width: HANDLE_TOUCH * 3, height: HANDLE_TOUCH * 3 };
+    expect(handlesFor({ box, host, target })).toHaveLength(4);
+    const onScreen = { left: 0, top: 0, width: target * 3, height: target * 3 };
+    expect(handlesFor({ box: onScreen, host, target })).toHaveLength(8);
   });
 
   /**

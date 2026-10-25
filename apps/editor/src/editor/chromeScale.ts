@@ -89,6 +89,40 @@ export const PILL_REST_BORDER = CHROME_SCALE.brand;
  * CSS declares instead of a second copy typed into a test — David's own condition when he approved
  * the sprint.
  */
+/**
+ * **A length of the chrome, in the pixels of the screen** (ADR 0053, sprint 27 día 7).
+ *
+ * The canvas is a page laid out at desktop width and scaled into whatever room the editor has left,
+ * so everything drawn inside the frame is drawn at that zoom — at 1024 with a panel open, about
+ * three quarters. For the page that is the point: the owner sees their site as it will be. For the
+ * chrome drawn over it, it is a defect: measured on 25 October 2026 at 1024 with «Diseño», a 32 px
+ * verb was 23.6 on screen, the text bar's grip 17.7 × 19.2 — under the 24 that WCAG 2.2 §2.5.8 asks of
+ * a pointer target — and a 2 px outline 1.48, which is a line drawn between two pixels.
+ *
+ * So the chrome's lengths are written divided by the zoom: `calc(Npx / var(--rb-zoom, 1))`, where
+ * `--rb-zoom` is the measured zoom `redrawChrome` writes on the frame's root. At zoom 1 it is N
+ * pixels exactly, which is why nothing changes for a canvas drawn at its own size.
+ *
+ * **The zoom is a measurement, not a token**, which is why it can be a custom property when the
+ * tokens above cannot: a string handed to the frame cannot read a variable from the editor's own
+ * document, as the note at the top says, but the editor can measure the frame and write the answer
+ * into it — the same reason `--rb-enter-offset` exists.
+ */
+export function screenPx(px: number): string {
+  return `calc(${px}px / var(--rb-zoom, 1))`;
+}
+
+/**
+ * The size of an icon of the chrome, as the attributes an `<svg>` string opens with: the width and
+ * height the glyph was drawn at, and an inline style that makes them pixels of the screen
+ * (ADR 0053). A presentation attribute cannot be divided by a variable; an inline style can, and it
+ * wins over the attribute — so the attribute stays as what an `<svg>` read without the stylesheet
+ * would fall back to.
+ */
+export function screenIcon(px: number): string {
+  return `width="${px}" height="${px}" style="width: ${screenPx(px)}; height: ${screenPx(px)}"`;
+}
+
 export const VERB_SCALE = {
   /** The button's whole box, its 2px white ring included. */
   size: 32,

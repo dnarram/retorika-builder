@@ -75,6 +75,8 @@ import {
   offsetBetween,
   type Point,
   stepped,
+  TIP_ROOM,
+  TOOLBAR_GAP,
   type ToolbarGeometry,
   textGripKeyAction,
   tipSide,
@@ -86,7 +88,13 @@ import {
 } from "../editor/barPosition.ts";
 import { holdFor } from "../editor/buildingScreen.ts";
 import { canvasLinkTarget } from "../editor/canvasLinks.ts";
-import { CHROME_SCALE, PILL_REST_BORDER, VERB_SCALE } from "../editor/chromeScale.ts";
+import {
+  CHROME_SCALE,
+  PILL_REST_BORDER,
+  screenIcon,
+  screenPx,
+  VERB_SCALE,
+} from "../editor/chromeScale.ts";
 import { delegate } from "../editor/delegate.ts";
 import type { SwitchNotice } from "../editor/designTools.ts";
 import {
@@ -1645,6 +1653,7 @@ export function Editor({
    */
   function redrawChrome(iframeDoc: Document): number {
     const started = performance.now();
+    writeZoom(iframeDoc);
     prepareTexts(iframeDoc);
     prepareDraggables(iframeDoc);
     drawGaps(iframeDoc);
@@ -1754,7 +1763,8 @@ export function Editor({
     // on mount: the wiring draws the first chrome. Under `swap`, retired on 27 día 1, toggling the
     // tools instead changed `chromeKey` and a whole new document arrived wired for them.
     const iframeDoc = liveFrame()?.contentDocument;
-    if (!iframeDoc || iframeDoc.documentElement.dataset["rbWired"] !== "1") return;
+    // `?.` for the frame with a document and no root yet, the state `onZoomChange` crashed on.
+    if (!iframeDoc || iframeDoc.documentElement?.dataset["rbWired"] !== "1") return;
     if (toolsDrawn.current === designTools) return;
     toolsDrawn.current = designTools;
     const redrawMs = redrawChrome(iframeDoc);
@@ -1770,7 +1780,9 @@ export function Editor({
     // which need not have been the one on screen — a patch parked on that identity test never came
     // back, measured on día 2. With one document the two tests agree, and the mark is kept because
     // it is the document's own answer rather than a ref's memory of it.
-    if (!iframeDoc || iframeDoc.documentElement.dataset["rbWired"] !== "1") {
+    // `?.`: a frame with a document and no root yet is a frame not wired yet, and the patch waits
+    // for the wiring like any other (sprint 27 día 7 found the same read crashing another effect).
+    if (!iframeDoc || iframeDoc.documentElement?.dataset["rbWired"] !== "1") {
       pendingPatch.current = true;
       return;
     }
@@ -2279,17 +2291,22 @@ export function Editor({
        * allowed to hang past their section's bottom edge; the stylesheet's own `top` does it too.
        * A menu over the section below is ordinary. A menu over its own opener is a bug.
        */
-      const below = bar.offsetTop + bar.offsetHeight + VERB_SCALE.gap;
-      const above = bar.offsetTop - popup.offsetHeight - VERB_SCALE.gap;
+      // Distances of the chrome, in the screen's pixels (ADR 0053): the gap under the bar and the
+      // inset from the section's edges grow with the zoom like the bar and the menu do.
+      const zoom = zoomOf(iframeDoc);
+      const gap = VERB_SCALE.gap / zoom;
+      const inset = BAR_INSET / zoom;
+      const below = bar.offsetTop + bar.offsetHeight + gap;
+      const above = bar.offsetTop - popup.offsetHeight - gap;
       // Above only when below would hang off the end of the page, where nothing can scroll to it —
       // and never above when that would go off the top, which is the same trap upside down.
       const page = host.ownerDocument.documentElement.scrollHeight;
       const reachable = host.offsetTop + below + popup.offsetHeight <= page;
       const y = reachable || above < 0 ? below : above;
-      const rightmost = Math.max(BAR_INSET, host.clientWidth - popup.offsetWidth - BAR_INSET);
+      const rightmost = Math.max(inset, host.clientWidth - popup.offsetWidth - inset);
       const wanted = bar.offsetLeft + bar.offsetWidth - popup.offsetWidth;
       popup.style.right = "auto";
-      popup.style.left = `${Math.min(Math.max(wanted, BAR_INSET), rightmost)}px`;
+      popup.style.left = `${Math.min(Math.max(wanted, inset), rightmost)}px`;
       popup.style.top = `${y}px`;
     }
 
@@ -2304,13 +2321,16 @@ export function Editor({
       const kept = actionsPlace.current.get(sectionId);
       if (!kept) return;
       const bounds = boundsOf(bar, host);
-      const at = clampToHost(kept, bounds);
+      // Held off the section's edges by eight pixels of the screen, and the word's room measured in
+      // the screen's too (ADR 0053): both are distances of the chrome, which grows with the zoom.
+      const zoom = zoomOf(iframeDoc);
+      const at = clampToHost(kept, bounds, BAR_INSET / zoom);
       bar.style.right = "auto";
       bar.style.left = `${at.x}px`;
       bar.style.top = `${at.y}px`;
       // The words go above the row once the bar is low enough that one below would be drawn past
       // the section's own edge.
-      bar.classList.toggle("rb-actions-low", tipSide(at, bounds) === "above");
+      bar.classList.toggle("rb-actions-low", tipSide(at, bounds, TIP_ROOM / zoom) === "above");
       for (const popup of host.querySelectorAll<HTMLElement>(".rb-compositions, .rb-escalate")) {
         anchorPopup(popup, host);
       }
@@ -2461,14 +2481,20 @@ export function Editor({
         es["editor.verb.grip"],
         "grip",
         false,
-        `<svg width="${VERB_SCALE.icon}" height="${VERB_SCALE.icon}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="5" r="1.7"/><circle cx="15" cy="5" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="19" r="1.7"/><circle cx="15" cy="19" r="1.7"/></svg>`,
+        `<svg ${screenIcon(VERB_SCALE.icon)} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="5" r="1.7"/><circle cx="15" cy="5" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="19" r="1.7"/><circle cx="15" cy="19" r="1.7"/></svg>`,
         () => {
           if (justDragged) {
             justDragged = false;
             return;
           }
           const bounds = boundsOf(bar, host);
-          moveActions(bar, host, sectionId, cornerPoint(nextCorner(pointOf(bar), bounds), bounds));
+          const inset = BAR_INSET / zoomOf(iframeDoc);
+          moveActions(
+            bar,
+            host,
+            sectionId,
+            cornerPoint(nextCorner(pointOf(bar), bounds, inset), bounds, inset),
+          );
         },
       );
 
@@ -2485,7 +2511,12 @@ export function Editor({
           homeActions(bar, host, sectionId);
           return;
         }
-        moveActions(bar, host, sectionId, stepped(pointOf(bar), move, boundsOf(bar, host)));
+        moveActions(
+          bar,
+          host,
+          sectionId,
+          stepped(pointOf(bar), move, boundsOf(bar, host), BAR_INSET / zoomOf(iframeDoc)),
+        );
       });
 
       /*
@@ -2523,7 +2554,12 @@ export function Editor({
         if (!moving && !isDrag(from, now)) return;
         moving = true;
         justDragged = true;
-        moveActions(bar, host, sectionId, dragged(start, from, now, boundsOf(bar, host)));
+        moveActions(
+          bar,
+          host,
+          sectionId,
+          dragged(start, from, now, boundsOf(bar, host), BAR_INSET / zoomOf(iframeDoc)),
+        );
       });
 
       const release = () => {
@@ -2743,7 +2779,7 @@ export function Editor({
           es["editor.verb.moveUp"],
           "move",
           index <= 0,
-          `<svg width="${VERB_SCALE.icon}" height="${VERB_SCALE.icon}" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg>`,
+          `<svg ${screenIcon(VERB_SCALE.icon)} viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="M6 11l6-6 6 6"/></svg>`,
           () => propsNow.current.onMoveSection(sectionId, index - 1),
         ),
       );
@@ -2754,7 +2790,7 @@ export function Editor({
           es["editor.verb.moveDown"],
           "move",
           index < 0 || index >= sectionsNow().length - 1,
-          `<svg width="${VERB_SCALE.icon}" height="${VERB_SCALE.icon}" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M6 13l6 6 6-6"/></svg>`,
+          `<svg ${screenIcon(VERB_SCALE.icon)} viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M6 13l6 6 6-6"/></svg>`,
           () => propsNow.current.onMoveSection(sectionId, index + 1),
         ),
       );
@@ -2772,7 +2808,7 @@ export function Editor({
             es["editor.verb.composition"],
             "move",
             false,
-            `<svg width="${VERB_SCALE.icon}" height="${VERB_SCALE.icon}" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M10 4v16"/></svg>`,
+            `<svg ${screenIcon(VERB_SCALE.icon)} viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M10 4v16"/></svg>`,
             (button) => {
               const open = target.querySelector(".rb-compositions");
               if (open) {
@@ -2801,7 +2837,7 @@ export function Editor({
             es["editor.verb.handmade"],
             "move",
             false,
-            `<svg width="${VERB_SCALE.icon}" height="${VERB_SCALE.icon}" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M3 9h18"/></svg>`,
+            `<svg ${screenIcon(VERB_SCALE.icon)} viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M3 9h18"/></svg>`,
             (button) => {
               const open = target.querySelector(".rb-escalate");
               if (open) {
@@ -2826,7 +2862,7 @@ export function Editor({
           es["editor.verb.duplicate"],
           "move",
           false,
-          `<svg width="${VERB_SCALE.icon}" height="${VERB_SCALE.icon}" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`,
+          `<svg ${screenIcon(VERB_SCALE.icon)} viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>`,
           () => propsNow.current.onDuplicateSection(sectionId),
         ),
       );
@@ -2844,7 +2880,7 @@ export function Editor({
             es["editor.verb.toPage"],
             "move",
             false,
-            `<svg width="${VERB_SCALE.icon}" height="${VERB_SCALE.icon}" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8"/><path d="M14 3v6h6"/><path d="M14 3l6 6"/><path d="M11 13h9"/><path d="M17 10l3 3-3 3"/></svg>`,
+            `<svg ${screenIcon(VERB_SCALE.icon)} viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8"/><path d="M14 3v6h6"/><path d="M14 3l6 6"/><path d="M11 13h9"/><path d="M17 10l3 3-3 3"/></svg>`,
             () => propsNow.current.onSectionToPage(sectionId),
           ),
         );
@@ -2857,7 +2893,7 @@ export function Editor({
           es["editor.verb.fields"],
           "move",
           false,
-          `<svg width="${VERB_SCALE.icon}" height="${VERB_SCALE.icon}" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10"/><path d="M4 12h16"/><path d="M4 17h7"/><circle cx="18" cy="7" r="2"/><circle cx="15" cy="17" r="2"/></svg>`,
+          `<svg ${screenIcon(VERB_SCALE.icon)} viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10"/><path d="M4 12h16"/><path d="M4 17h7"/><circle cx="18" cy="7" r="2"/><circle cx="15" cy="17" r="2"/></svg>`,
           () => showFields(sectionId),
         ),
       );
@@ -2868,7 +2904,7 @@ export function Editor({
           es["editor.verb.delete"],
           "delete",
           false,
-          `<svg width="${VERB_SCALE.icon}" height="${VERB_SCALE.icon}" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6 7l1 13h10l1-13"/></svg>`,
+          `<svg ${screenIcon(VERB_SCALE.icon)} viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6 7l1 13h10l1-13"/></svg>`,
           () => propsNow.current.onDeleteSection(sectionId),
         ),
       );
@@ -3274,8 +3310,7 @@ export function Editor({
       const pill = chrome(iframeDoc, "button");
       pill.type = "button";
       pill.className = "rb-pill";
-      pill.innerHTML =
-        '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#156FE7" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>';
+      pill.innerHTML = `<svg ${screenIcon(15)} viewBox="0 0 24 24" fill="none" stroke="#156FE7" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>`;
       pill.appendChild(iframeDoc.createTextNode(es["editor.addSectionHere"]));
       pill.addEventListener("click", (event) => {
         event.stopPropagation();
@@ -3404,7 +3439,7 @@ export function Editor({
             button.type = "button";
             button.className = `rb-line-move rb-line-${direction}`;
             button.setAttribute("aria-label", lineLabel(direction, lines.catalogId));
-            button.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#0F172A" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${
+            button.innerHTML = `<svg ${screenIcon(11)} viewBox="0 0 24 24" fill="none" stroke="#0F172A" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${
               direction === "up" ? "M12 19V5M5 12l7-7 7 7" : "M12 5v14M19 12l-7 7-7-7"
             }"/></svg>`;
             button.addEventListener("click", (event) => {
@@ -3427,8 +3462,7 @@ export function Editor({
           remove.type = "button";
           remove.className = "rb-line-remove";
           remove.setAttribute("aria-label", lineLabel("remove", lines.catalogId));
-          remove.innerHTML =
-            '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+          remove.innerHTML = `<svg ${screenIcon(11)} viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>`;
           remove.addEventListener("click", (event) => {
             event.stopPropagation();
             // The index the line being taken away occupies: after the removal that position holds
@@ -3817,7 +3851,7 @@ export function Editor({
         event.stopPropagation();
         // The step is clamped before it is remembered, so pressing against an edge does not pile up
         // a displacement that would take twenty presses to walk back out of.
-        remember(stepped(handle.at(), move, handle.bounds()));
+        remember(stepped(handle.at(), move, handle.bounds(), BAR_INSET / zoomOf(iframeDoc)));
       });
 
       let from: Point | null = null;
@@ -3839,7 +3873,7 @@ export function Editor({
         if (!moving && !isDrag(from, now)) return;
         moving = true;
         justDragged = true;
-        remember(dragged(start, from, now, handle.bounds()));
+        remember(dragged(start, from, now, handle.bounds(), BAR_INSET / zoomOf(iframeDoc)));
       });
 
       const release = () => {
@@ -4495,7 +4529,7 @@ export function Editor({
       // controls already carry one. The cluster's word pill would be one thing too many in a bar
       // that is already captioned.
       grip.title = es["editor.bar.grip"];
-      grip.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="5" r="1.7"/><circle cx="15" cy="5" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="19" r="1.7"/><circle cx="15" cy="19" r="1.7"/></svg>`;
+      grip.innerHTML = `<svg ${screenIcon(14)} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="5" r="1.7"/><circle cx="15" cy="5" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="19" r="1.7"/><circle cx="15" cy="19" r="1.7"/></svg>`;
       gripGroup.appendChild(grip);
       bar.appendChild(gripGroup);
 
@@ -4626,6 +4660,10 @@ export function Editor({
           barWidth: bar.offsetWidth,
           barHeight: bar.offsetHeight,
           hostWidth: section.clientWidth,
+          // The air between the bar and its words is a distance of the chrome, so it is eight
+          // pixels of the screen and not of the frame (ADR 0053, David's adjustment 5): the bar
+          // grows with `--rb-zoom`, and a gap that did not would bring it closer to the words.
+          gap: TOOLBAR_GAP / zoomOf(iframeDoc),
           ...(view ? { view } : {}),
         };
       };
@@ -4638,7 +4676,7 @@ export function Editor({
       const place = () => {
         const computed = toolbarPoint(geometry()).point;
         const nudge = toolbarOffset.current.get(sectionId) ?? { x: 0, y: 0 };
-        const at = withOffset(computed, nudge, bounds());
+        const at = withOffset(computed, nudge, bounds(), BAR_INSET / zoomOf(iframeDoc));
         bar.style.top = `${at.y}px`;
         bar.style.left = `${at.x}px`;
       };
@@ -5597,12 +5635,14 @@ export function Editor({
       if (line.axis === "x") {
         guide.style.left = `${Math.round(line.at - box.left)}px`;
         guide.style.top = "0";
-        guide.style.width = "1px";
+        // One pixel of the screen, not of the frame (ADR 0053): at three quarters a frame pixel is
+        // a line drawn between two of the screen's, and that is what condition 1 is about.
+        guide.style.width = screenPx(1);
         guide.style.height = "100%";
       } else {
         guide.style.top = `${Math.round(line.at - box.top)}px`;
         guide.style.left = "0";
-        guide.style.height = "1px";
+        guide.style.height = screenPx(1);
         guide.style.width = "100%";
       }
       section.appendChild(guide);
@@ -5628,6 +5668,23 @@ export function Editor({
     const inner = view?.innerWidth ?? 0;
     const width = frame?.getBoundingClientRect().width ?? 0;
     return inner > 0 && width > 0 ? width / inner : 1;
+  }
+
+  /**
+   * **`--rb-zoom`, the one number the chrome's stylesheet divides by** (ADR 0053, sprint 27 día 7).
+   *
+   * Every length of the chrome is written `calc(Npx / var(--rb-zoom, 1))` (`screenPx`), so that a
+   * handle, a verb, the text bar or a one-pixel line measures on screen what it measures at zoom 1
+   * whatever room the editor leaves the canvas. The zoom is measured here, from the frame's box on
+   * the editor's page against its own layout width — `zoomOf`, the measurement the gestures'
+   * thresholds have divided by since ADR 0050 §6 — and written on the frame's root, which the patch
+   * never touches. Written at wiring, on every redraw, and when the shell says the zoom changed
+   * (`onZoomChange`), because opening a panel changes it without changing the document.
+   */
+  function writeZoom(iframeDoc: Document): number {
+    const zoom = zoomOf(iframeDoc);
+    iframeDoc.documentElement.style.setProperty("--rb-zoom", String(zoom));
+    return zoom;
   }
 
   /**
@@ -5748,6 +5805,9 @@ export function Editor({
           height: box.height,
         },
         host: { width: host.width, height: host.height },
+        // Forty-four pixels of the screen, in the frame's (ADR 0053): the stylesheet draws the
+        // target at `screenPx(HANDLE_TOUCH)`, and the arithmetic has to place what is drawn.
+        target: HANDLE_TOUCH / zoomOf(iframeDoc),
       })) {
         const handle = chrome(iframeDoc, "div");
         handle.className = `rb-handle rb-handle-${spot.edge}`;
@@ -6328,8 +6388,7 @@ export function Editor({
 
       const badge = chrome(iframeDoc, "span");
       badge.className = "rb-handmade-badge";
-      badge.innerHTML =
-        '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#B4740B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21l4-1 11-11-3-3L4 17l-1 4z"/></svg>';
+      badge.innerHTML = `<svg ${screenIcon(11)} viewBox="0 0 24 24" fill="none" stroke="#B4740B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21l4-1 11-11-3-3L4 17l-1 4z"/></svg>`;
       badge.appendChild(iframeDoc.createTextNode(es["editor.section.handmade"]));
       bar.appendChild(badge);
 
@@ -6457,6 +6516,8 @@ export function Editor({
       live: frame === liveFrame(),
     });
     wiredDoc.current = iframeDoc;
+    // The chrome's lengths are divided by it from its first paint (ADR 0053).
+    writeZoom(iframeDoc);
     wireInteractions(iframeDoc);
     focusLineAfterChange(iframeDoc);
     /*
@@ -6530,8 +6591,8 @@ export function Editor({
        * outline and adds the caret and the selection, which is what distinguishes it — and the hint
        * in the corner disappears, because its instruction has been followed.
        */
-      "[data-rb-text] { cursor: text; border-radius: 3px;",
-      "  outline: 2px dashed transparent; outline-offset: 3px; }",
+      `[data-rb-text] { cursor: text; border-radius: ${screenPx(3)};`,
+      `  outline: ${screenPx(2)} dashed transparent; outline-offset: ${screenPx(3)}; }`,
       "[data-rb-text]:hover { outline-color: #156FE7; }",
       "[data-rb-text].rb-chosen { outline-style: solid; outline-color: #156FE7; }",
       '[data-rb-text][contenteditable="true"] { outline-style: solid; outline-color: #156FE7; }',
@@ -6541,7 +6602,7 @@ export function Editor({
        * 3px is the darkest ink the interface owns — WCAG 1.4.11 asks 3:1 of anything whose
        * appearance identifies a control, and the brand blue is spoken for by the choice itself.
        */
-      "[data-rb-text]:focus-visible { outline: 3px dashed #0F172A; outline-offset: 3px; }",
+      `[data-rb-text]:focus-visible { outline: ${screenPx(3)} dashed #0F172A; outline-offset: ${screenPx(3)}; }`,
       /*
        * The hint, in the section's own chrome and at the bottom of it — away from the verbs' cluster
        * at the top right and from the floating text bar, which opens over the words themselves.
@@ -6549,16 +6610,16 @@ export function Editor({
        * reason. It is **not** `aria-hidden`: the chosen text points at it with `aria-describedby`,
        * so a screen reader reading the text is told how to start writing in it.
        */
-      `.rb-hint { position: absolute; left: ${VERB_SCALE.inset}px; bottom: ${VERB_SCALE.inset}px;`,
-      "  z-index: 10; padding: 5px 9px; border-radius: 999px; pointer-events: none;",
+      `.rb-hint { position: absolute; left: ${screenPx(VERB_SCALE.inset)}; bottom: ${screenPx(VERB_SCALE.inset)};`,
+      `  z-index: 10; padding: ${screenPx(5)} ${screenPx(9)}; border-radius: ${screenPx(999)}; pointer-events: none;`,
       `  background: ${CHROME_SCALE.ink}; color: #FFFFFF;`,
-      `  font: 600 12px/1.3 ${UI_FONT}; box-shadow: ${CHROME_SCALE.shadow2}; }`,
+      `  font: 600 ${screenPx(12)}/1.3 ${UI_FONT}; box-shadow: ${CHROME_SCALE.shadow2}; }`,
       // Touched screens have no hover and no double click worth the name; the hint still says what
       // to do, and the key legend is the thing that hides there (see `.rb-keys`).
       "@media (hover: none) and (pointer: coarse) { [data-rb-text]:hover { outline-color:",
       "  transparent; } }",
       "[data-section] { position: relative; cursor: pointer; }",
-      "[data-section].rb-selected { outline: 2px solid #156FE7; outline-offset: -2px; }",
+      `[data-section].rb-selected { outline: ${screenPx(2)} solid #156FE7; outline-offset: ${screenPx(-2)}; }`,
       /*
        * **The focus ring, and why it is not the selection outline** (sprint 17 day 3). Where the
        * keyboard *is* and which section is *chosen* are two different facts that are often the same
@@ -6572,7 +6633,7 @@ export function Editor({
        * WCAG 1.4.11 asks 3:1 of anything whose appearance identifies a control, and the brand blue
        * is already spoken for by the selection.
        */
-      "[data-section]:focus-visible { outline: 3px dashed #0F172A; outline-offset: -5px; }",
+      `[data-section]:focus-visible { outline: ${screenPx(3)} dashed #0F172A; outline-offset: ${screenPx(-5)}; }`,
       /*
        * **And the selection survives being focused**, which the first version of these two rules
        * did not. It also carried `[data-section]:focus { outline: none; }` as a belt over the
@@ -6587,7 +6648,7 @@ export function Editor({
        * mode, where `box-shadow` is dropped and `outline` is kept. So the thing that must never
        * disappear is the one drawn with the more robust property.
        */
-      ".rb-selected:focus-visible { box-shadow: inset 0 0 0 2px #156FE7; }",
+      `.rb-selected:focus-visible { box-shadow: inset 0 0 0 ${screenPx(2)} #156FE7; }`,
       /*
        * The live region that says which section was chosen. Off screen rather than `display: none`,
        * which would stop a screen reader reading it at all, and clipped to a single pixel rather
@@ -6603,10 +6664,10 @@ export function Editor({
       // The key legend is for a keyboard; on a screen that is touched and never hovered there is
       // none, and a fixed box in the corner of a 320px canvas covers what it would explain.
       "@media (hover: none) and (pointer: coarse) { .rb-keys { display: none; } }",
-      ".rb-keys { position: fixed; left: 12px; bottom: 12px; z-index: 30; display: flex;",
-      "  flex-direction: column; gap: 2px; padding: 8px 11px; border-radius: 10px;",
+      `.rb-keys { position: fixed; left: ${screenPx(12)}; bottom: ${screenPx(12)}; z-index: 30; display: flex;`,
+      `  flex-direction: column; gap: ${screenPx(2)}; padding: ${screenPx(8)} ${screenPx(11)}; border-radius: ${screenPx(10)};`,
       "  background: #0F172A; color: #FFFFFF; pointer-events: none;",
-      `  font: 500 12px/1.45 ${UI_FONT}; box-shadow: ${CHROME_SCALE.shadow2}; }`,
+      `  font: 500 ${screenPx(12)}/1.45 ${UI_FONT}; box-shadow: ${CHROME_SCALE.shadow2}; }`,
       ".rb-keys span:first-child { font-weight: 700; letter-spacing: 0.02em; }",
       // Inset within the section, not hung outside it like the corner handles: the cover is
       // the first section, with no room above it, and a button hanging above the top of the
@@ -6650,20 +6711,20 @@ export function Editor({
        * badge keeps the half of itself nothing is standing on, and from tomorrow the cluster can
        * simply be dragged off it, which is the whole of what David asked for.
        */
-      `.rb-actions { position: absolute; top: ${VERB_SCALE.inset}px; right: ${VERB_SCALE.inset}px;`,
+      `.rb-actions { position: absolute; top: ${screenPx(VERB_SCALE.inset)}; right: ${screenPx(VERB_SCALE.inset)};`,
       "  z-index: 10; display: flex; flex-wrap: wrap; justify-content: flex-end;",
-      `  gap: ${VERB_SCALE.gap}px; max-width: calc(100% - ${VERB_SCALE.inset * 2}px); }`,
+      `  gap: ${screenPx(VERB_SCALE.gap)}; max-width: calc(100% - ${screenPx(VERB_SCALE.inset * 2)}); }`,
       // The button and its word, as one thing: the word is positioned against this, not against
       // the section, so it follows its own button wherever the cluster sits.
       ".rb-verb { position: relative; display: flex; }",
       // The box a verb and the grip share, so the row stays level and one transition is declared
       // once. What differs between them is the width, the skin and what the cursor says.
-      `.rb-action, .rb-grip { height: ${VERB_SCALE.size}px; display: flex; align-items: center;`,
-      "  justify-content: center; border-radius: 999px; cursor: pointer;",
+      `.rb-action, .rb-grip { height: ${screenPx(VERB_SCALE.size)}; display: flex; align-items: center;`,
+      `  justify-content: center; border-radius: ${screenPx(999)}; cursor: pointer;`,
       `  box-shadow: ${CHROME_SCALE.shadow2};`,
       `  transition: transform ${CHROME_SCALE.fast} ${CHROME_SCALE.ease},`,
       `    box-shadow ${CHROME_SCALE.fast} ${CHROME_SCALE.ease}; }`,
-      `.rb-action { width: ${VERB_SCALE.size}px; border: 2px solid #FFFFFF; }`,
+      `.rb-action { width: ${screenPx(VERB_SCALE.size)}; border: ${screenPx(2)} solid #FFFFFF; }`,
       `.rb-action-move { background: ${CHROME_SCALE.brand}; }`,
       `.rb-action-delete { background: ${CHROME_SCALE.danger}; }`,
       ".rb-action:disabled { background: #B9CDEA; cursor: not-allowed; }",
@@ -6674,8 +6735,8 @@ export function Editor({
        * drags the bar instead of scrolling the page underneath — the one line that makes this work
        * on a tablet at all.
        */
-      `.rb-grip { width: ${VERB_SCALE.grip}px; padding: 0; color: ${CHROME_SCALE.ink};`,
-      `  background: ${CHROME_SCALE.surface}; border: 1px solid ${CHROME_SCALE.borderStrong};`,
+      `.rb-grip { width: ${screenPx(VERB_SCALE.grip)}; padding: 0; color: ${CHROME_SCALE.ink};`,
+      `  background: ${CHROME_SCALE.surface}; border: ${screenPx(1)} solid ${CHROME_SCALE.borderStrong};`,
       "  cursor: grab; touch-action: none; }",
       /*
        * While a drag is in flight, nothing underneath may be selected and every cursor is the
@@ -6697,10 +6758,10 @@ export function Editor({
        * over the verbs' cluster (10) so a handle at a corner is never buried by it, and under the
        * text bar (30).
        */
-      `.rb-handle { position: absolute; z-index: 11; width: ${HANDLE_TOUCH}px;`,
-      `  height: ${HANDLE_TOUCH}px; display: grid; place-items: center; touch-action: none; }`,
-      '.rb-handle::before { content: ""; width: 12px; height: 12px; border-radius: 50%;',
-      `  background: #FFFFFF; border: 2px solid ${CHROME_SCALE.brand};`,
+      `.rb-handle { position: absolute; z-index: 11; width: ${screenPx(HANDLE_TOUCH)};`,
+      `  height: ${screenPx(HANDLE_TOUCH)}; display: grid; place-items: center; touch-action: none; }`,
+      `.rb-handle::before { content: ""; width: ${screenPx(12)}; height: ${screenPx(12)}; border-radius: 50%;`,
+      `  background: #FFFFFF; border: ${screenPx(2)} solid ${CHROME_SCALE.brand};`,
       `  box-shadow: ${CHROME_SCALE.shadow1}; }`,
       /*
        * **The alignment guides** (ADR 0050, día 5): one pixel of brand blue, under the verbs'
@@ -6722,7 +6783,7 @@ export function Editor({
        * pointer gets at rest is the same emphasis a keyboard has to get on arrival.
        */
       `.rb-action:focus-visible, .rb-grip:focus-visible {`,
-      `  outline: 2px solid ${CHROME_SCALE.ink}; outline-offset: 1px;`,
+      `  outline: ${screenPx(2)} solid ${CHROME_SCALE.ink}; outline-offset: ${screenPx(1)};`,
       `  transform: scale(${VERB_SCALE.grow}); }`,
       /*
        * The word.
@@ -6740,8 +6801,8 @@ export function Editor({
        * of the page. `pointer-events: none` so it can never eat a click meant for what it covers,
        * and `aria-hidden` on the element itself, in `action()`.
        */
-      `.rb-tip { position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%);`,
-      `  padding: 3px 8px; font: 600 12px/1.2 ${UI_FONT}; color: #FFFFFF;`,
+      `.rb-tip { position: absolute; top: calc(100% + ${screenPx(6)}); left: 50%; transform: translateX(-50%);`,
+      `  padding: ${screenPx(3)} ${screenPx(8)}; font: 600 ${screenPx(12)}/1.2 ${UI_FONT}; color: #FFFFFF;`,
       `  background: ${CHROME_SCALE.ink}; border-radius: ${CHROME_SCALE.radiusSm};`,
       "  white-space: nowrap; pointer-events: none; opacity: 0; visibility: hidden;",
       `  transition: opacity ${CHROME_SCALE.fast} ${CHROME_SCALE.ease},`,
@@ -6750,7 +6811,7 @@ export function Editor({
       "  opacity: 1; visibility: visible; transition-delay: 0s; }",
       // Dragged low in its section, a word under the row would be drawn past the section's own
       // edge, or over the top of the next one. `placeActions` decides the side; this draws it.
-      ".rb-actions-low .rb-tip { top: auto; bottom: calc(100% + 6px); }",
+      `.rb-actions-low .rb-tip { top: auto; bottom: calc(100% + ${screenPx(6)}); }`,
       /*
        * **Emphasis inside `@media (hover: hover)`, the rule direction set for the pills.** A touch
        * screen reports a permanent false hover on some engines and never hovers on others, so it
@@ -6763,15 +6824,15 @@ export function Editor({
       // The hole a delete leaves, drawn as mockup 11 draws it — `2px dashed`, its own margin, the
       // name above and what happens next below. `UI_FONT` because it is the editor talking, not the
       // site: every other `rb-` node in this frame does the same.
-      `.rb-hole { box-sizing: border-box; margin: 22px 30px; padding: 26px; font-family: ${UI_FONT};`,
-      `  background: ${CHROME_SCALE.bg}; border: 1px solid ${CHROME_SCALE.borderStrong};`,
+      `.rb-hole { box-sizing: border-box; margin: ${screenPx(22)} ${screenPx(30)}; padding: ${screenPx(26)}; font-family: ${UI_FONT};`,
+      `  background: ${CHROME_SCALE.bg}; border: ${screenPx(1)} solid ${CHROME_SCALE.borderStrong};`,
       `  border-radius: ${CHROME_SCALE.radius}; display: flex;`,
-      "  flex-direction: column; align-items: center; gap: 6px; }",
-      ".rb-hole-was { font-size: 15px; font-weight: 600; color: #475569; }",
+      `  flex-direction: column; align-items: center; gap: ${screenPx(6)}; }`,
+      `.rb-hole-was { font-size: ${screenPx(15)}; font-weight: 600; color: #475569; }`,
       // `#5B6B82` and not the mockups' `#94A3B8`: on this panel's `#f5f7fa` the latter measures
       // **2.39:1** against 4.5 for text, and the former 5.06 — the substitution sprint 1 day 2
       // already made in the components and this stylesheet never heard about.
-      ".rb-hole-fate { font-size: 13px; color: #5B6B82; text-align: center; }",
+      `.rb-hole-fate { font-size: ${screenPx(13)}; color: #5B6B82; text-align: center; }`,
       /**
        * The gap between sections: mockup 08 draws a dashed rule broken by a pill, and the rule is
        * the part that changes. `2px dashed #B9CDEA` measured **1.62:1** against the white this gap
@@ -6781,7 +6842,7 @@ export function Editor({
        */
       ".rb-gap { position: relative; box-sizing: border-box; height: 76px; padding: 0 40px;",
       `  display: flex; align-items: center; gap: 0; background: ${CHROME_SCALE.surface}; }`,
-      `.rb-rule { flex-grow: 1; height: 0; border-top: 1px solid ${CHROME_SCALE.borderStrong}; }`,
+      `.rb-rule { flex-grow: 1; height: 0; border-top: ${screenPx(1)} solid ${CHROME_SCALE.borderStrong}; }`,
       // The interface's own typeface, never the site's. Everything else injected here is an
       // icon, so this is the first piece of chrome with words in it, and `font: inherit` would
       // have drawn them in whatever face the client picked for their own headings — ADR 0015's
@@ -6805,18 +6866,18 @@ export function Editor({
        * the visible version always. And `:focus-visible` gets the same emphasis outside that query,
        * because a keyboard reaches this pill too and has no pointer to lead with.
        */
-      ".rb-pill { display: inline-flex; align-items: center; gap: 8px; height: 40px;",
-      `  padding: 0 20px; font-size: 14px; font-weight: 600; color: ${CHROME_SCALE.brand};`,
-      `  background: ${CHROME_SCALE.surface}; border: 1px solid ${PILL_REST_BORDER};`,
-      "  border-radius: 999px; cursor: pointer;",
+      `.rb-pill { display: inline-flex; align-items: center; gap: ${screenPx(8)}; height: ${screenPx(40)};`,
+      `  padding: 0 ${screenPx(20)}; font-size: ${screenPx(14)}; font-weight: 600; color: ${CHROME_SCALE.brand};`,
+      `  background: ${CHROME_SCALE.surface}; border: ${screenPx(1)} solid ${PILL_REST_BORDER};`,
+      `  border-radius: ${screenPx(999)}; cursor: pointer;`,
       `  transition: background-color ${CHROME_SCALE.fast} ${CHROME_SCALE.ease},`,
       `    box-shadow ${CHROME_SCALE.fast} ${CHROME_SCALE.ease},`,
       `    transform ${CHROME_SCALE.fast} ${CHROME_SCALE.ease}; }`,
       `@media (hover: hover) { .rb-pill:hover { background: ${CHROME_SCALE.brandSurface};`,
-      `  box-shadow: ${CHROME_SCALE.shadow2}; transform: translateY(-1px); } }`,
+      `  box-shadow: ${CHROME_SCALE.shadow2}; transform: translateY(${screenPx(-1)}); } }`,
       `.rb-pill:focus-visible { background: ${CHROME_SCALE.brandSurface};`,
-      `  box-shadow: ${CHROME_SCALE.shadow2}; outline: 2px solid ${CHROME_SCALE.brand};`,
-      "  outline-offset: 2px; }",
+      `  box-shadow: ${CHROME_SCALE.shadow2}; outline: ${screenPx(2)} solid ${CHROME_SCALE.brand};`,
+      `  outline-offset: ${screenPx(2)}; }`,
       // Everything inside the canvas that moves, flattened for somebody who asked for less of it —
       // the destination is never removed, only the travel, which is the same contract `globals.css`
       // keeps on the other side of the boundary.
@@ -6827,18 +6888,18 @@ export function Editor({
       // and there is no fade left to wait for.
       "  .rb-tip { transition-duration: 0.01ms; transition-delay: 0s; }",
       "  .rb-handmade-in { animation-duration: 0.01ms; } }",
-      ".rb-menu { position: absolute; top: 60px; left: 50%; transform: translateX(-50%);",
-      "  z-index: 20; width: 340px; max-width: calc(100% - 80px); box-sizing: border-box;",
-      `  padding: 14px; background: ${CHROME_SCALE.surface}; border: 1px solid ${CHROME_SCALE.border};`,
+      `.rb-menu { position: absolute; top: ${screenPx(60)}; left: 50%; transform: translateX(-50%);`,
+      `  z-index: 20; width: ${screenPx(340)}; max-width: calc(100% - ${screenPx(80)}); box-sizing: border-box;`,
+      `  padding: ${screenPx(14)}; background: ${CHROME_SCALE.surface}; border: ${screenPx(1)} solid ${CHROME_SCALE.border};`,
       `  border-radius: ${CHROME_SCALE.radiusLg};`,
       `  box-shadow: ${CHROME_SCALE.shadow3}; display: flex; flex-direction: column;`,
-      "  gap: 4px; text-align: left; }",
+      `  gap: ${screenPx(4)}; text-align: left; }`,
       ".rb-menu-header { display: flex; align-items: baseline; justify-content: space-between;",
-      "  gap: 12px; margin-bottom: 6px; }",
-      ".rb-menu-title { margin: 0; font-size: 13px; font-weight: 700; color: #0F172A; }",
+      `  gap: ${screenPx(12)}; margin-bottom: ${screenPx(6)}; }`,
+      `.rb-menu-title { margin: 0; font-size: ${screenPx(13)}; font-weight: 700; color: #0F172A; }`,
       // A quiet word rather than a cross: it sits beside a title, not over a photograph, and the
       // menu is small enough that an icon would need a label anyway.
-      `.rb-menu-close { font-family: ${UI_FONT}; flex-shrink: 0; padding: 2px 6px; font-size: 12px;`,
+      `.rb-menu-close { font-family: ${UI_FONT}; flex-shrink: 0; padding: ${screenPx(2)} ${screenPx(6)}; font-size: ${screenPx(12)};`,
       `  font-weight: 600; color: ${CHROME_SCALE.muted}; background: none; border: 0;`,
       `  border-radius: ${CHROME_SCALE.radiusSm};`,
       "  cursor: pointer; }",
@@ -6846,41 +6907,41 @@ export function Editor({
       // The catalog's search, finally on a screen. Quiet until it is used: a plain field with no
       // icon and no button, because there is nothing to submit — it filters as you type.
       `.rb-menu-search { font-family: ${UI_FONT}; box-sizing: border-box; width: 100%;`,
-      "  margin: 0 0 6px 0; height: 34px; padding: 0 10px; font-size: 13px; color: #0F172A;",
-      `  background: ${CHROME_SCALE.bg}; border: 1px solid ${CHROME_SCALE.border};`,
+      `  margin: 0 0 ${screenPx(6)} 0; height: ${screenPx(34)}; padding: 0 ${screenPx(10)}; font-size: ${screenPx(13)}; color: #0F172A;`,
+      `  background: ${CHROME_SCALE.bg}; border: ${screenPx(1)} solid ${CHROME_SCALE.border};`,
       `  border-radius: ${CHROME_SCALE.radius}; outline: none; }`,
       ".rb-menu-search:focus { border-color: #156FE7; background: #FFFFFF; }",
-      ".rb-menu-list { display: flex; flex-direction: column; gap: 4px; }",
-      ".rb-menu-empty { margin: 4px 0; font-size: 12px; line-height: 1.4; color: #5B6B82; }",
-      ".rb-menu-choice { display: flex; flex-direction: column; gap: 2px; padding: 9px 10px;",
+      `.rb-menu-list { display: flex; flex-direction: column; gap: ${screenPx(4)}; }`,
+      `.rb-menu-empty { margin: ${screenPx(4)} 0; font-size: ${screenPx(12)}; line-height: 1.4; color: #5B6B82; }`,
+      `.rb-menu-choice { display: flex; flex-direction: column; gap: ${screenPx(2)}; padding: ${screenPx(9)} ${screenPx(10)};`,
       `  text-align: left; background: none; border: 0; border-radius: ${CHROME_SCALE.radius};`,
       "  cursor: pointer; }",
       ".rb-menu-choice:hover { background: #F2F7FE; }",
-      ".rb-menu-name { font-size: 14px; font-weight: 600; color: #0F172A; }",
-      ".rb-menu-description { font-size: 12px; line-height: 1.35; color: #5B6B82; }",
-      ".rb-menu-note { margin: 8px 0 0 0; padding-top: 10px; border-top: 1px solid #EDF1F6;",
-      "  font-size: 12px; line-height: 1.4; color: #5B6B82; }",
+      `.rb-menu-name { font-size: ${screenPx(14)}; font-weight: 600; color: #0F172A; }`,
+      `.rb-menu-description { font-size: ${screenPx(12)}; line-height: 1.35; color: #5B6B82; }`,
+      `.rb-menu-note { margin: ${screenPx(8)} 0 0 0; padding-top: ${screenPx(10)}; border-top: ${screenPx(1)} solid #EDF1F6;`,
+      `  font-size: ${screenPx(12)}; line-height: 1.4; color: #5B6B82; }`,
       // The composition menu: the insertion menu's card, anchored under the action cluster
       // instead of centred in a gap, because this one belongs to a section rather than to a
       // space between two. Narrower, since every choice is a short name with no description.
       `.rb-compositions { font-family: ${UI_FONT}; position: absolute;`,
-      `  top: ${VERB_SCALE.inset + VERB_SCALE.size + VERB_SCALE.gap}px; right: ${VERB_SCALE.inset}px;`,
-      "  z-index: 20; width: 240px; max-width: calc(100% - 16px); box-sizing: border-box;",
-      "  padding: 12px; text-align: left; background: #FFFFFF; border: 1px solid #E5E9F0;",
-      "  border-radius: 13px; box-shadow: 0 14px 38px rgba(15,23,42,0.18); display: flex;",
-      "  flex-direction: column; gap: 2px; }",
+      `  top: ${screenPx(VERB_SCALE.inset + VERB_SCALE.size + VERB_SCALE.gap)}; right: ${screenPx(VERB_SCALE.inset)};`,
+      `  z-index: 20; width: ${screenPx(240)}; max-width: calc(100% - ${screenPx(16)}); box-sizing: border-box;`,
+      `  padding: ${screenPx(12)}; text-align: left; background: #FFFFFF; border: ${screenPx(1)} solid #E5E9F0;`,
+      `  border-radius: ${screenPx(13)}; box-shadow: 0 ${screenPx(14)} ${screenPx(38)} rgba(15,23,42,0.18); display: flex;`,
+      `  flex-direction: column; gap: ${screenPx(2)}; }`,
       ".rb-composition-choice { font-family: inherit; }",
       // The offer: the composition card, wider because it has a sentence to say and two decisions
       // to offer rather than a list of short names.
-      ".rb-escalate { width: 320px; gap: 10px; }",
+      `.rb-escalate { width: ${screenPx(320)}; gap: ${screenPx(10)}; }`,
       ".rb-escalate .rb-menu-description { line-height: 1.5; }",
-      ".rb-escalate-row { display: flex; gap: 8px; }",
-      `.rb-escalate-yes, .rb-escalate-no { font-family: ${UI_FONT}; flex-grow: 1; height: 36px;`,
-      `  font-size: 13px; border-radius: ${CHROME_SCALE.radius}; cursor: pointer; }`,
+      `.rb-escalate-row { display: flex; gap: ${screenPx(8)}; }`,
+      `.rb-escalate-yes, .rb-escalate-no { font-family: ${UI_FONT}; flex-grow: 1; height: ${screenPx(36)};`,
+      `  font-size: ${screenPx(13)}; border-radius: ${CHROME_SCALE.radius}; cursor: pointer; }`,
       ".rb-escalate-yes { font-weight: 600; color: #FFFFFF; background: #156FE7; border: 0; }",
       ".rb-escalate-yes:hover { background: #0E5BC4; }",
       ".rb-escalate-no { font-weight: 500; color: #334155; background: #FFFFFF;",
-      "  border: 1px solid #E3E8F0; }",
+      `  border: ${screenPx(1)} solid #E3E8F0; }`,
       ".rb-escalate-no:hover { background: #F2F7FE; border-color: #156FE7; }",
       // The bar a hand-designed section wears — chrome floating over the section, like the action
       // cluster above and `.rb-sample` below, and **not** a child in the section's flow.
@@ -6911,8 +6972,8 @@ export function Editor({
       // shortened. The name is the only part that may wrap, and `min-width: 0` plus
       // `overflow-wrap` is what stops a long one overflowing instead.
       `.rb-handmade { font-family: ${UI_FONT}; box-sizing: border-box; display: flex;`,
-      "  flex-wrap: wrap; align-items: center; gap: 8px; padding: 9px 13px;",
-      "  background: #F8FAFD; border-bottom: 1px solid #E3E8F0; }",
+      `  flex-wrap: wrap; align-items: center; gap: ${screenPx(8)}; padding: ${screenPx(9)} ${screenPx(13)};`,
+      `  background: #F8FAFD; border-bottom: ${screenPx(1)} solid #E3E8F0; }`,
       // **It arrives rather than appearing, and that is what makes the 44px honest.** Accepting
       // «Diseñar a mano» now adds the bar's height to the flow, so the section below it moves down.
       // Anywhere but the very top of the page the reading anchor absorbs that and nothing is seen to
@@ -6924,19 +6985,19 @@ export function Editor({
       // what makes everything below travel instead of teleporting, and `--rb-enter-offset` carries
       // the height because only the caller can measure it. `--ui-ease-shape` is carried into
       // `CHROME_SCALE` for this, which is the first thing inside the preview ever to animate.
-      "@keyframes rb-handmade-in { from { opacity: 0; transform: translateY(-6px);",
+      `@keyframes rb-handmade-in { from { opacity: 0; transform: translateY(${screenPx(-6)});`,
       "  margin-top: calc(-1 * var(--rb-enter-offset, 0px)); } }",
       `.rb-handmade-in { animation: rb-handmade-in ${CHROME_SCALE.base} ${CHROME_SCALE.easeShape} both; }`,
       ".rb-handmade-badge { display: inline-flex; flex-shrink: 0; white-space: nowrap;",
-      "  align-items: center; gap: 5px; padding: 4px 9px;",
-      "  font-size: 11px; font-weight: 600; color: #8A5A08; background: #FFF4E5;",
-      `  border: 1px solid #F4DDB4; border-radius: ${CHROME_SCALE.radiusSm}; }`,
+      `  align-items: center; gap: ${screenPx(5)}; padding: ${screenPx(4)} ${screenPx(9)};`,
+      `  font-size: ${screenPx(11)}; font-weight: 600; color: #8A5A08; background: #FFF4E5;`,
+      `  border: ${screenPx(1)} solid #F4DDB4; border-radius: ${CHROME_SCALE.radiusSm}; }`,
       ".rb-handmade-name { flex-grow: 1; min-width: 0; overflow-wrap: anywhere;",
-      "  font-size: 12px; color: #5B6B82; }",
+      `  font-size: ${screenPx(12)}; color: #5B6B82; }`,
       `.rb-handmade-back { font-family: ${UI_FONT}; flex-shrink: 0; white-space: nowrap;`,
-      "  padding: 5px 10px;",
-      "  font-size: 11px; font-weight: 600; color: #156FE7; background: #FFFFFF;",
-      `  border: 1px solid ${CHROME_SCALE.brand}; border-radius: ${CHROME_SCALE.radiusSm};`,
+      `  padding: ${screenPx(5)} ${screenPx(10)};`,
+      `  font-size: ${screenPx(11)}; font-weight: 600; color: #156FE7; background: #FFFFFF;`,
+      `  border: ${screenPx(1)} solid ${CHROME_SCALE.brand}; border-radius: ${CHROME_SCALE.radiusSm};`,
       "  cursor: pointer; }",
       ".rb-handmade-back:hover { background: #F2F7FE; border-color: #156FE7; }",
       // The twelve columns of rule 4, behind the section being laid out — mockup 16's own stripes.
@@ -6957,7 +7018,7 @@ export function Editor({
       // the panel's own class keeps them.
       '.rb-designing::before { content: ""; position: absolute; inset: 0;',
       "  z-index: 0; pointer-events: none; background: repeating-linear-gradient(90deg,",
-      "    rgba(21,111,231,0.16) 0 1px, transparent 1px 8.3333%); }",
+      `    rgba(21,111,231,0.16) 0 ${screenPx(1)}, transparent ${screenPx(1)} 8.3333%); }`,
       /*
        * **The ghost: where the element would land, drawn before anybody lets go.**
        *
@@ -6969,9 +7030,9 @@ export function Editor({
        */
       ".rb-ghost { position: absolute; z-index: 9; pointer-events: none; display: flex;",
       "  align-items: center; justify-content: center; text-align: center;",
-      `  border: 2px dashed ${CHROME_SCALE.brand}; border-radius: 6px;`,
+      `  border: ${screenPx(2)} dashed ${CHROME_SCALE.brand}; border-radius: ${screenPx(6)};`,
       "  background: rgba(21,111,231,0.10); color: #FFFFFF;",
-      `  font: 600 12px/1.3 ${UI_FONT}; }`,
+      `  font: 600 ${screenPx(12)}/1.3 ${UI_FONT}; }`,
       `.rb-ghost-no { border-color: ${CHROME_SCALE.danger}; border-style: solid;`,
       "  background: rgba(220,38,38,0.12); color: #7F1D1D; }",
       // The element being moved, while it is being moved: dimmed, so the ghost is what the eye
@@ -6994,14 +7055,14 @@ export function Editor({
       ".rb-chosen { touch-action: none; }",
       // The element the panel is stepping, outlined the way mockup 16 draws it, so the numbers in
       // the panel and the thing on the page are visibly the same subject.
-      ".rb-designing .rb-placing { outline: 2px solid #156FE7; outline-offset: 2px;",
-      "  border-radius: 4px; }",
+      `.rb-designing .rb-placing { outline: ${screenPx(2)} solid #156FE7; outline-offset: ${screenPx(2)};`,
+      `  border-radius: ${screenPx(4)}; }`,
       // The one in use is marked, not hidden: a toggle group where something is always chosen.
       '.rb-composition-choice[aria-pressed="true"] { background: #EAF2FE; }',
       '.rb-composition-choice[aria-pressed="true"] .rb-menu-name { color: #156FE7; }',
       // A photo reads as replaceable the same way an editable text does: the dashed outline on
       // hover, and nothing until then.
-      ".rb-photo { cursor: pointer; outline: 2px dashed transparent; outline-offset: 3px; }",
+      `.rb-photo { cursor: pointer; outline: ${screenPx(2)} dashed transparent; outline-offset: ${screenPx(3)}; }`,
       // The two classes that replace inline styles the chrome used to write on renderer nodes
       // (ADR 0051 §2, adjustment 3): the badge's positioned host, and the border zone's cursor.
       ".rb-photo-host { position: relative; }",
@@ -7012,10 +7073,10 @@ export function Editor({
       // rather than the blue of the editor's own controls: it is a statement about the picture,
       // not a control belonging to the chrome — though pressing it does open "Cambiar foto", since
       // the label is exactly where someone who disagrees with it is already looking.
-      `.rb-sample { font-family: ${UI_FONT}; position: absolute; top: 10px; left: 10px; z-index: 6;`,
-      "  align-self: start; justify-self: start; margin: 0; padding: 5px 11px; font-size: 12px;",
+      `.rb-sample { font-family: ${UI_FONT}; position: absolute; top: ${screenPx(10)}; left: ${screenPx(10)}; z-index: 6;`,
+      `  align-self: start; justify-self: start; margin: 0; padding: ${screenPx(5)} ${screenPx(11)}; font-size: ${screenPx(12)};`,
       "  font-weight: 600; line-height: 1.2; color: #FFFFFF; background: rgba(15,23,42,0.78);",
-      "  border: 0; border-radius: 999px; cursor: pointer; backdrop-filter: blur(3px); }",
+      `  border: 0; border-radius: ${screenPx(999)}; cursor: pointer; backdrop-filter: blur(${screenPx(3)}); }`,
       ".rb-sample:hover { background: rgba(15,23,42,0.92); }",
       // The line controls. The pill echoes the section one, smaller and left-aligned under the
       // list it belongs to rather than centred in a gap, because it adds to a thing rather than
@@ -7041,18 +7102,18 @@ export function Editor({
       // auto-placed pill of 102px spilled 72px past its cell — the canvas overflow walk caught it
       // the day the fine grid landed. Spanning the row and sitting at its start keeps it the same
       // pill in the same place on the catalog's grid, where a column was wide enough to hide this.
-      `.rb-line-add { font-family: ${UI_FONT}; margin-top: 10px; display: inline-flex;`,
+      `.rb-line-add { font-family: ${UI_FONT}; margin-top: ${screenPx(10)}; display: inline-flex;`,
       "  grid-column: 1 / -1; justify-self: start;",
-      "  align-items: center; height: 30px; padding: 0 14px; font-size: 13px; font-weight: 600;",
+      `  align-items: center; height: ${screenPx(30)}; padding: 0 ${screenPx(14)}; font-size: ${screenPx(13)}; font-weight: 600;`,
       "  white-space: nowrap;",
       `  color: ${CHROME_SCALE.brand}; background: ${CHROME_SCALE.surface};`,
-      `  border: 1px solid ${PILL_REST_BORDER}; border-radius: 999px; cursor: pointer;`,
+      `  border: ${screenPx(1)} solid ${PILL_REST_BORDER}; border-radius: ${screenPx(999)}; cursor: pointer;`,
       `  transition: background-color ${CHROME_SCALE.fast} ${CHROME_SCALE.ease},`,
       `    box-shadow ${CHROME_SCALE.fast} ${CHROME_SCALE.ease}; }`,
       `@media (hover: hover) { .rb-line-add:hover { background: ${CHROME_SCALE.brandSurface};`,
       `  box-shadow: ${CHROME_SCALE.shadow2}; } }`,
       `.rb-line-add:focus-visible { background: ${CHROME_SCALE.brandSurface};`,
-      `  outline: 2px solid ${CHROME_SCALE.brand}; outline-offset: 2px; }`,
+      `  outline: ${screenPx(2)} solid ${CHROME_SCALE.brand}; outline-offset: ${screenPx(2)}; }`,
       // The same slot the add button occupies, in the muted voice a limit deserves: it is not an
       // action and must not look like one.
       //
@@ -7060,28 +7121,28 @@ export function Editor({
       // child of it, so without the span it is auto-placed into a single narrow track and the
       // sentence comes out one word per line. The add button gets away with it by being an
       // `inline-flex` pill narrow enough not to notice; a paragraph does not.
-      `.rb-line-full { font-family: ${UI_FONT}; grid-column: 1 / -1; margin: 10px 0 0 0;`,
-      "  font-size: 13px; line-height: 1.4; color: #5B6B82; }",
+      `.rb-line-full { font-family: ${UI_FONT}; grid-column: 1 / -1; margin: ${screenPx(10)} 0 0 0;`,
+      `  font-size: ${screenPx(13)}; line-height: 1.4; color: #5B6B82; }`,
       // On the line itself, and only visible while the pointer is over it: a cross on every row
       // at all times would draw the eye away from the words, which are the thing being written.
       ".rb-line { position: relative; }",
-      ".rb-line-remove { position: absolute; top: 2px; right: 0; width: 20px; height: 20px;",
+      `.rb-line-remove { position: absolute; top: ${screenPx(2)}; right: 0; width: ${screenPx(20)}; height: ${screenPx(20)};`,
       "  display: flex; align-items: center; justify-content: center; background: #DC2626;",
-      "  border: 2px solid #FFFFFF; border-radius: 999px; cursor: pointer; opacity: 0;",
-      "  box-shadow: 0 2px 6px rgba(15,23,42,0.28); }",
+      `  border: ${screenPx(2)} solid #FFFFFF; border-radius: ${screenPx(999)}; cursor: pointer; opacity: 0;`,
+      `  box-shadow: 0 ${screenPx(2)} ${screenPx(6)} rgba(15,23,42,0.28); }`,
       ".rb-line:hover .rb-line-remove, .rb-line-remove:focus { opacity: 1; }",
       // The two arrows, in the same corner and on the same hover as the cross, to the left of it:
       // one cluster on a line rather than controls scattered around it. White on a light grey so
       // they read as chrome and not as part of the photograph underneath.
-      ".rb-line-move { position: absolute; top: 2px; width: 20px; height: 20px; display: flex;",
+      `.rb-line-move { position: absolute; top: ${screenPx(2)}; width: ${screenPx(20)}; height: ${screenPx(20)}; display: flex;`,
       "  align-items: center; justify-content: center; background: #FFFFFF;",
-      "  border: 1px solid #D5DEE9; border-radius: 999px; cursor: pointer; opacity: 0;",
-      "  box-shadow: 0 2px 6px rgba(15,23,42,0.18); }",
+      `  border: ${screenPx(1)} solid #D5DEE9; border-radius: ${screenPx(999)}; cursor: pointer; opacity: 0;`,
+      `  box-shadow: 0 ${screenPx(2)} ${screenPx(6)} rgba(15,23,42,0.18); }`,
       // 20px wide each, 5px apart: the cross at 0, the second arrow at 25, the first at 50.
       // Measured rather than eyeballed — the first spacing put them 3px and 5px apart, which looks
       // like a mistake at this size even though nothing overlapped.
-      ".rb-line-up { right: 50px; }",
-      ".rb-line-down { right: 25px; }",
+      `.rb-line-up { right: ${screenPx(50)}; }`,
+      `.rb-line-down { right: ${screenPx(25)}; }`,
       ".rb-line:hover .rb-line-move, .rb-line-move:focus { opacity: 1; }",
       ".rb-line-move:hover { border-color: #156FE7; background: #F2F7FE; }",
 
@@ -7099,9 +7160,9 @@ export function Editor({
       // capped by the section's box — it simply could not *use* that cap while the flex row refused
       // to break. A `max-width` was tried alongside this and proved redundant: removing it changes
       // nothing, removing `wrap` puts the e2e back in red. It is not kept as insurance.
-      "  display: flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 5px;",
-      "  background: #FFFFFF; border: 1px solid #E3E8F0; border-radius: 11px;",
-      "  box-shadow: 0 6px 18px rgba(15,23,42,0.14);",
+      `  display: flex; flex-wrap: wrap; align-items: center; gap: ${screenPx(2)}; padding: ${screenPx(5)};`,
+      `  background: #FFFFFF; border: ${screenPx(1)} solid #E3E8F0; border-radius: ${screenPx(11)};`,
+      `  box-shadow: 0 ${screenPx(6)} ${screenPx(18)} rgba(15,23,42,0.14);`,
       // **`pointer-events: none` on the bar itself, re-enabled per control — found by the day-7
       // walk, not designed in from the start.** Wrapping (above) keeps every control reachable
       // within the bar; it does nothing about what sits *beneath* the bar. A short section — the
@@ -7128,17 +7189,17 @@ export function Editor({
       // mockup 18, after a probe that read the `.hidden` property and believed it.
       // The notice is not a control and does not look like one: full width of the bar, its own line
       // above the groups, and no border — so nothing about it invites a press.
-      `.rb-toolbar-notice { font-family: ${UI_FONT}; flex-basis: 100%; padding: 2px 7px 4px;`,
-      "  font-size: 11px; line-height: 1.35; color: #92400E; }",
+      `.rb-toolbar-notice { font-family: ${UI_FONT}; flex-basis: 100%; padding: ${screenPx(2)} ${screenPx(7)} ${screenPx(4)};`,
+      `  font-size: ${screenPx(11)}; line-height: 1.35; color: #92400E; }`,
       ".rb-toolbar-group[hidden] { display: none; }",
-      ".rb-toolbar-group { display: flex; align-items: center; gap: 4px; padding: 0 7px;",
-      "  border-right: 1px solid #EDF1F6; }",
+      `.rb-toolbar-group { display: flex; align-items: center; gap: ${screenPx(4)}; padding: 0 ${screenPx(7)};`,
+      `  border-right: ${screenPx(1)} solid #EDF1F6; }`,
       ".rb-toolbar-group:last-child { border-right: 0; }",
       // Same substitution, same reason: 11px of `#94A3B8` on this bar's white measured
       // **2.56:1**, and `#5B6B82` measures 5.43. axe caught it on 17 October 2026 only because
       // a bar that had moved happened to land over white — over a photograph it reads as
       // «not measured» and says nothing. `chromeContrast.test.ts` is where it cannot hide.
-      ".rb-toolbar-caption { font-size: 11px; font-weight: 600; color: #5B6B82; }",
+      `.rb-toolbar-caption { font-size: ${screenPx(11)}; font-weight: 600; color: #5B6B82; }`,
       // Re-enabled here rather than only on the specific classes below, because it is the one
       // property every interactive element in the bar needs and the failure mode of missing it on
       // any one of them is silent — a control sitting over a swallowed click, indistinguishable
@@ -7153,43 +7214,43 @@ export function Editor({
        * rather than the cluster's. 24 wide because WCAG 2.5.8 asks 24 of a pointer target, and the
        * thing somebody has to catch to move a bar out of their way is the last one to shave.
        */
-      `.rb-toolbar-grip { width: ${VERB_SCALE.grip}px; height: 26px; display: flex;`,
+      `.rb-toolbar-grip { width: ${screenPx(VERB_SCALE.grip)}; height: ${screenPx(26)}; display: flex;`,
       `  align-items: center; justify-content: center; padding: 0; color: ${CHROME_SCALE.ink};`,
-      `  background: ${CHROME_SCALE.surface}; border: 1px solid ${CHROME_SCALE.borderStrong};`,
-      "  border-radius: 999px; cursor: grab; touch-action: none; }",
-      `.rb-toolbar-grip:focus-visible { outline: 2px solid ${CHROME_SCALE.ink};`,
-      "  outline-offset: 1px; }",
-      ".rb-toolbar-mark { width: 26px; height: 26px; padding: 0; font-size: 13px;",
-      "  color: #334155; background: #FFFFFF; border: 1px solid #E3E8F0; border-radius: 7px; }",
+      `  background: ${CHROME_SCALE.surface}; border: ${screenPx(1)} solid ${CHROME_SCALE.borderStrong};`,
+      `  border-radius: ${screenPx(999)}; cursor: grab; touch-action: none; }`,
+      `.rb-toolbar-grip:focus-visible { outline: ${screenPx(2)} solid ${CHROME_SCALE.ink};`,
+      `  outline-offset: ${screenPx(1)}; }`,
+      `.rb-toolbar-mark { width: ${screenPx(26)}; height: ${screenPx(26)}; padding: 0; font-size: ${screenPx(13)};`,
+      `  color: #334155; background: #FFFFFF; border: ${screenPx(1)} solid #E3E8F0; border-radius: ${screenPx(7)}; }`,
       ".rb-toolbar-mark-strong { font-weight: 800; }",
       ".rb-toolbar-mark-em { font-style: italic; font-family: Georgia, serif; }",
       ".rb-toolbar-mark:hover:not(:disabled) { background: #F2F7FE; border-color: #156FE7; }",
       ".rb-toolbar-mark.rb-toolbar-on { color: #156FE7; background: #E8F1FE; border-color: #156FE7; }",
       // Faded rather than gone: the control applies here, there is just nothing selected yet.
       ".rb-toolbar-mark:disabled { opacity: 0.42; cursor: default; }",
-      ".rb-toolbar-step { height: 26px; padding: 0 9px; font-size: 12px; font-weight: 500;",
-      "  color: #334155; background: #FFFFFF; border: 1px solid #E3E8F0; border-radius: 7px; }",
+      `.rb-toolbar-step { height: ${screenPx(26)}; padding: 0 ${screenPx(9)}; font-size: ${screenPx(12)}; font-weight: 500;`,
+      `  color: #334155; background: #FFFFFF; border: ${screenPx(1)} solid #E3E8F0; border-radius: ${screenPx(7)}; }`,
       ".rb-toolbar-step:hover { background: #F2F7FE; border-color: #156FE7; }",
       ".rb-toolbar-step.rb-toolbar-on { font-weight: 700; color: #156FE7;",
       "  background: #E8F1FE; border-color: #156FE7; }",
       // A ring rather than a tick, so the chosen swatch is marked without hiding the colour it is
       // there to show.
-      ".rb-toolbar-swatch { width: 20px; height: 20px; padding: 0; border-radius: 999px;",
-      "  border: 1px solid rgba(15,23,42,0.18); }",
-      ".rb-toolbar-swatch.rb-toolbar-on { box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px #156FE7; }",
-      ".rb-toolbar-link { height: 26px; padding: 0 11px; font-size: 12px; font-weight: 500;",
-      "  color: #334155; background: #FFFFFF; border: 1px solid #E3E8F0; border-radius: 7px; }",
+      `.rb-toolbar-swatch { width: ${screenPx(20)}; height: ${screenPx(20)}; padding: 0; border-radius: ${screenPx(999)};`,
+      `  border: ${screenPx(1)} solid rgba(15,23,42,0.18); }`,
+      `.rb-toolbar-swatch.rb-toolbar-on { box-shadow: 0 0 0 ${screenPx(2)} #FFFFFF, 0 0 0 ${screenPx(4)} #156FE7; }`,
+      `.rb-toolbar-link { height: ${screenPx(26)}; padding: 0 ${screenPx(11)}; font-size: ${screenPx(12)}; font-weight: 500;`,
+      `  color: #334155; background: #FFFFFF; border: ${screenPx(1)} solid #E3E8F0; border-radius: ${screenPx(7)}; }`,
       ".rb-toolbar-link:hover { background: #F2F7FE; border-color: #156FE7; }",
-      `.rb-toolbar-select, .rb-toolbar-exact { font-family: ${UI_FONT}; height: 26px;`,
-      "  font-size: 12px; color: #334155; background: #FFFFFF; border: 1px solid #E3E8F0;",
-      "  border-radius: 7px; }",
-      ".rb-toolbar-select { padding: 0 4px; }",
-      ".rb-toolbar-color { width: 26px; height: 22px; padding: 0; border: 1px solid #E3E8F0;",
-      "  border-radius: 6px; background: #FFFFFF; cursor: pointer; }",
-      ".rb-toolbar-color.rb-toolbar-on { box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px #156FE7; }",
-      ".rb-toolbar-exact { width: 52px; padding: 0 6px; }",
-      ".rb-toolbar-select:focus, .rb-toolbar-exact:focus { outline: 2px solid #156FE7;",
-      "  outline-offset: 1px; }",
+      `.rb-toolbar-select, .rb-toolbar-exact { font-family: ${UI_FONT}; height: ${screenPx(26)};`,
+      `  font-size: ${screenPx(12)}; color: #334155; background: #FFFFFF; border: ${screenPx(1)} solid #E3E8F0;`,
+      `  border-radius: ${screenPx(7)}; }`,
+      `.rb-toolbar-select { padding: 0 ${screenPx(4)}; }`,
+      `.rb-toolbar-color { width: ${screenPx(26)}; height: ${screenPx(22)}; padding: 0; border: ${screenPx(1)} solid #E3E8F0;`,
+      `  border-radius: ${screenPx(6)}; background: #FFFFFF; cursor: pointer; }`,
+      `.rb-toolbar-color.rb-toolbar-on { box-shadow: 0 0 0 ${screenPx(2)} #FFFFFF, 0 0 0 ${screenPx(4)} #156FE7; }`,
+      `.rb-toolbar-exact { width: ${screenPx(52)}; padding: 0 ${screenPx(6)}; }`,
+      `.rb-toolbar-select:focus, .rb-toolbar-exact:focus { outline: ${screenPx(2)} solid #156FE7;`,
+      `  outline-offset: ${screenPx(1)}; }`,
     ].join("\n");
     iframeDoc.head.appendChild(style);
 
@@ -7369,6 +7430,23 @@ export function Editor({
 
   return (
     <EditorShell
+      /**
+       * **The chrome follows the zoom, not only the edits** (ADR 0053, David's condition 3): a
+       * panel opened or closed changes the zoom and nothing in the document, and the chrome's
+       * lengths are divided by the zoom — so it is drawn again here, with `cause: "zoom"` in the
+       * probe. The edit serial does not move: nothing was edited, and a walk waiting for an edit
+       * must not be woken by a panel.
+       */
+      onZoomChange={(zoom) => {
+        const live = liveDoc();
+        // `documentElement` and not only the document: between the frame's mounting and the
+        // parsing of its first page the document exists with no root, and the shell's first zoom
+        // can arrive then — read without the `?.` it was a TypeError inside an effect, which took
+        // the whole editor down on a phone (measured on sprint 27 día 7, at 320 and at 768).
+        if (!live || live.documentElement?.dataset["rbWired"] !== "1") return;
+        const redrawMs = redrawChrome(live);
+        record("redraw", { cause: "zoom", zoom, redrawMs });
+      }}
       // The business name, not the variant's. The bar said «Clásica» — the caption of whichever of
       // the three cards was opened — where mockup 08 shows «Barbería El Corte», and it had said so
       // since the editor existed. Found by walking the editor on sprint 4 day 2 and recorded in

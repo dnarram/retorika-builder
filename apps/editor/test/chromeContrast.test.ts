@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { AA_NORMAL_TEXT, contrastRatio } from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
-import { CHROME_SCALE, PILL_REST_BORDER, VERB_SCALE } from "../src/editor/chromeScale.ts";
+import { CHROME_SCALE, PILL_REST_BORDER, screenPx, VERB_SCALE } from "../src/editor/chromeScale.ts";
 
 /**
  * The interface's own colours, measured.
@@ -223,14 +223,20 @@ describe("the section's verbs", () => {
     expect(cluster, "the cluster still carries a hand-typed hover red").not.toContain("#B91C1C");
   });
 
-  it("are drawn from the one place their size is written down", () => {
+  it("are drawn from the one place their size is written down, in the screen's pixels", () => {
     // The CSS, the eight icons and the walks all read `VERB_SCALE`; a number typed twice is a
     // number that will disagree with itself, which is the whole argument of `chromeScale.ts`.
-    expect(CANVAS).toContain(`width: ${reads("VERB_SCALE.size")}px`);
+    // Since sprint 27 día 7 through `screenPx`/`screenIcon` (ADR 0053): the same numbers, divided
+    // by the zoom the canvas is drawn at, so that at three quarters a verb is still 32 on screen.
+    expect(CANVAS).toContain(`width: ${reads("screenPx(VERB_SCALE.size)")}`);
     expect(CANVAS).toContain(`transform: scale(${reads("VERB_SCALE.grow")})`);
     expect(CANVAS, "an icon is drawn at a size of its own").toContain(
-      `width="${reads("VERB_SCALE.icon")}"`,
+      `<svg ${reads("screenIcon(VERB_SCALE.icon)")}`,
     );
+    expect(CANVAS, "a verb's size is still written in the frame's pixels").not.toContain(
+      `width: ${reads("VERB_SCALE.size")}px`,
+    );
+    expect(screenPx(VERB_SCALE.size)).toBe("calc(32px / var(--rb-zoom, 1))");
     expect(VERB_SCALE.size * VERB_SCALE.grow).toBe(36);
     // Big enough for a pointer by WCAG 2.5.8, which the 26px they were cleared only by two.
     expect(VERB_SCALE.size).toBeGreaterThanOrEqual(24);

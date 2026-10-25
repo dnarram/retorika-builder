@@ -20069,3 +20069,280 @@ describe("sprint 27 día 5 — escalar es un paso", () => {
     }
   }, 180_000);
 });
+
+/**
+ * **Sprint 27 día 7 — el cromo mide lo que mide** (ADR 0053). The canvas is a page laid out at
+ * desktop width and scaled into whatever room the editor has left, so at 1024 with a panel open the
+ * whole frame is drawn at about three quarters — and the chrome drawn inside it with it: a 44 px
+ * handle became 32.5 on screen, a 32 px verb 23.6, the text bar's grip 17.7 × 19.2, under the 24
+ * WCAG 2.2 §2.5.8 asks. David's decision, 23 October 2026: the chrome keeps its size on screen,
+ * with three conditions of his own, two of which these walks are.
+ */
+describe("sprint 27 día 7 — el cromo mide lo que mide", () => {
+  /**
+   * The chrome as the eye sees it: every box read in the frame's own pixels and multiplied by the
+   * zoom the card is drawn at — the frame's box on the editor's page over its own layout width,
+   * which is `zoomOf` in `Editor.tsx`, measured from outside so the walk does not take the
+   * editor's word for it.
+   */
+  const onScreen = (page: Page) =>
+    page.evaluate(() => {
+      const frameEl = document.querySelector("iframe");
+      const doc = frameEl?.contentDocument;
+      const win = doc?.defaultView;
+      if (!frameEl || !doc || !win) return null;
+      const zoom = frameEl.getBoundingClientRect().width / win.innerWidth;
+      const box = (el: Element | null | undefined) => {
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return {
+          w: Math.round(r.width * zoom * 10) / 10,
+          h: Math.round(r.height * zoom * 10) / 10,
+        };
+      };
+      const cover = doc.querySelector<HTMLElement>('[data-section="sec-cover"]');
+      const coverBox = cover?.getBoundingClientRect();
+      const chosen = doc.querySelector<HTMLElement>(".rb-chosen");
+      const chosenBox = chosen?.getBoundingClientRect();
+      const cluster = doc.querySelector<HTMLElement>(".rb-actions");
+      const clusterBox = cluster?.getBoundingClientRect();
+      const bar = doc.querySelector<HTMLElement>(".rb-toolbar");
+      const barBox = bar?.getBoundingClientRect();
+      const verbs = [...doc.querySelectorAll<HTMLElement>(".rb-actions .rb-action")];
+      const over = chosenBox
+        ? verbs
+            .filter((verb) => {
+              const r = verb.getBoundingClientRect();
+              return (
+                r.left < chosenBox.right &&
+                r.right > chosenBox.left &&
+                r.top < chosenBox.bottom &&
+                r.bottom > chosenBox.top
+              );
+            })
+            .map((verb) => verb.dataset["action"] ?? "?")
+        : null;
+      const outline = cover ? Number.parseFloat(getComputedStyle(cover).outlineWidth) : null;
+      const guide = doc.querySelector(".rb-guide");
+      const r = guide?.getBoundingClientRect();
+      return {
+        zoom: Math.round(zoom * 10000) / 10000,
+        handles: doc.querySelectorAll(".rb-handle").length,
+        handle: box(doc.querySelector(".rb-handle")),
+        verb: box(verbs[0]),
+        clusterGrip: box(doc.querySelector(".rb-actions .rb-grip")),
+        barGrip: box(doc.querySelector(".rb-toolbar-grip")),
+        chosen: chosen?.dataset["id"] ?? null,
+        chosenOnScreen: box(chosen),
+        overChosen: over,
+        // The distances adjustment 5 is about, on screen: the cluster from its section's top and
+        // right edges, and the text bar from the words it belongs to.
+        clusterInset:
+          clusterBox && coverBox
+            ? {
+                top: Math.round((clusterBox.top - coverBox.top) * zoom * 10) / 10,
+                right: Math.round((coverBox.right - clusterBox.right) * zoom * 10) / 10,
+              }
+            : null,
+        barGap:
+          barBox && chosenBox
+            ? Math.round(
+                (barBox.bottom <= chosenBox.top
+                  ? chosenBox.top - barBox.bottom
+                  : barBox.top - chosenBox.bottom) *
+                  zoom *
+                  10,
+              ) / 10
+            : null,
+        outline: outline === null ? null : Math.round(outline * zoom * 100) / 100,
+        guide: r ? Math.round(Math.min(r.width, r.height) * zoom * 100) / 100 : null,
+      };
+    });
+
+  /** The cover designed by hand, the tools on, in whatever window the context opened. */
+  async function handDesignedCover(page: Page): Promise<FrameLocator> {
+    await intoTheCanvas(page);
+    await studioToolsOn(page);
+    const frame = page.frameLocator(PREVIEW).first();
+    await frame.locator('[data-section="sec-cover"]').click();
+    await escalated(frame, async () => {
+      await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
+      await frame.locator(".rb-escalate-yes").click();
+    });
+    await waitForBankPhoto(frame);
+    return frame;
+  }
+
+  it("a 1024 con «Diseño» abierto, verbos, asas de barra, contornos y guías miden en pantalla lo que miden a zoom 1", async () => {
+    const context = await browser.newContext({ viewport: { width: 1024, height: 900 } });
+    const page = await context.newPage();
+    try {
+      const frame = await handDesignedCover(page);
+      await page.getByRole("button", { name: "Diseño", exact: true }).click();
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      await headline.click();
+      await expect(headline).toHaveClass(/rb-chosen/);
+      await expect(frame.locator(".rb-toolbar")).toHaveCount(1);
+      await expect(frame.locator(".rb-actions")).toHaveCount(1);
+
+      const at = await onScreen(page);
+      console.log(`[día 7] at 1024 with «Diseño»: ${JSON.stringify(at)}`);
+      expect(at, "nothing to measure").not.toBeNull();
+      if (!at) return;
+      // The premise: the canvas is drawn smaller than its own pixels, or this proves nothing.
+      expect(at.zoom, "the canvas is at zoom 1 here: nothing would be scaled").toBeLessThan(0.9);
+
+      const near = (value: number | undefined, want: number, label: string) =>
+        expect(
+          Math.abs((value ?? 0) - want),
+          `${label}: ${value} on screen, ${want} wanted`,
+        ).toBeLessThanOrEqual(0.75);
+      near(at.verb?.w, VERB_SCALE.size, "a verb's width");
+      near(at.verb?.h, VERB_SCALE.size, "a verb's height");
+      near(at.clusterGrip?.w, VERB_SCALE.grip, "the cluster's grip");
+      near(at.barGrip?.w, VERB_SCALE.grip, "the text bar's grip, wide");
+      expect(
+        at.barGrip?.h ?? 0,
+        "the text bar's grip, tall: under WCAG 2.5.8's 24",
+      ).toBeGreaterThanOrEqual(24);
+      /*
+       * **The section's outline is not asserted, and that is a measurement, not an omission.** Its
+       * rule reads `calc(2px / var(--rb-zoom, 1))` — 2.71 px of the frame at this zoom — and
+       * Chromium snaps an outline's width and offset to whole device pixels when it computes them:
+       * `getComputedStyle` answers «2px», and on screen it is 1.48, before this day and after it.
+       * What is drawn as a box (the guide below) comes out exact; what is drawn as an outline does
+       * not at this zoom. ADR 0053 says which part of condition 1 that leaves unmet, and why the
+       * focus rings stay outlines anyway.
+       */
+      near(at.clusterInset?.top, VERB_SCALE.inset, "the cluster's distance from its section's top");
+      near(
+        at.clusterInset?.right,
+        VERB_SCALE.inset,
+        "the cluster's distance from its section's right",
+      );
+      near(at.barGap ?? undefined, TOOLBAR_GAP, "the text bar's distance from its words");
+
+      /**
+       * **And a guide is one pixel on screen**, which is the line condition 1 names: «para que una
+       * línea de 1 px no acabe en 0,74 y se vea borrosa». A guide exists only while a hand is on
+       * something, so the walk takes the headline's right edge and holds it at the section's
+       * centre, which is always a guide (ADR 0050 día 5).
+       */
+      const edge = await headline.boundingBox();
+      const centre = await frame.locator('[data-section="sec-cover"]').evaluate((node) => {
+        const section = node as HTMLElement;
+        const style = getComputedStyle(section);
+        const r = section.getBoundingClientRect();
+        const left = r.left + Number.parseFloat(style.paddingLeft);
+        const right = r.right - Number.parseFloat(style.paddingRight);
+        return (left + right) / 2;
+      });
+      const frameBox = await page.locator("iframe").boundingBox();
+      expect(edge && frameBox, "no headline or frame to take hold of").toBeTruthy();
+      if (!edge || !frameBox) return;
+      const y = edge.y + edge.height / 2;
+      await page.mouse.move(edge.x + edge.width - 1, y);
+      await expect
+        .poll(() => headline.evaluate((node) => getComputedStyle(node).cursor))
+        .toBe("ew-resize");
+      await page.mouse.down();
+      const centreOnPage = frameBox.x + centre * at.zoom;
+      await page.mouse.move(centreOnPage + 3, y, { steps: 6 });
+      await page.mouse.move(centreOnPage + 1, y, { steps: 2 });
+      const held = await onScreen(page);
+      await page.mouse.up();
+      console.log(`[día 7] a guide while the edge is held: ${JSON.stringify(held?.guide)}`);
+      expect(
+        held?.guide,
+        "no guide was drawn while the edge was held at the centre",
+      ).not.toBeNull();
+      near(held?.guide ?? undefined, 1, "a guide's thickness");
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+
+  it("con un dedo y un elemento elegido, abrir «Campos» deja las asas del mismo tamaño en pantalla, y ningún verbo cae sobre el elemento", async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1024, height: 900 },
+      hasTouch: true,
+    });
+    const page = await context.newPage();
+    try {
+      const frame = await handDesignedCover(page);
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      await headline.tap();
+      await expect(headline).toHaveClass(/rb-chosen/);
+      await expect
+        .poll(() => onScreen(page).then((at) => at?.handles ?? 0))
+        .toBeGreaterThanOrEqual(4);
+      const before = await onScreen(page);
+
+      // «Campos», from the section's own verb, with the headline still the chosen element.
+      await frame.getByRole("button", { name: "Campos de esta sección" }).tap();
+      await expect(page.getByRole("button", { name: "Cerrar los campos" })).toBeVisible();
+      /**
+       * **The premise first**: opening the panel changed the zoom — the shell narrows the canvas,
+       * and nothing in the document changed. Measured on the first version of this walk before the
+       * change, the handles then kept their frame size and so came out smaller on screen.
+       */
+      await expect
+        .poll(() => onScreen(page).then((at) => at?.zoom), {
+          message: "opening «Campos» did not change the canvas's zoom",
+        })
+        .not.toBe(before?.zoom);
+      await expect(headline, "opening «Campos» let go of the chosen element").toHaveClass(
+        /rb-chosen/,
+      );
+      await expect
+        .poll(() => onScreen(page).then((at) => at?.handles ?? 0))
+        .toBeGreaterThanOrEqual(4);
+      const after = await onScreen(page);
+      console.log(
+        `[día 7] «Campos»: before ${JSON.stringify(before)} after ${JSON.stringify(after)}`,
+      );
+
+      for (const [when, at] of [
+        ["before", before],
+        ["after", after],
+      ] as const) {
+        expect(
+          Math.abs((at?.handle?.w ?? 0) - HANDLE_TOUCH),
+          `a handle ${when}: ${JSON.stringify(at?.handle)}`,
+        ).toBeLessThanOrEqual(0.75);
+        expect(
+          Math.abs((at?.handle?.h ?? 0) - HANDLE_TOUCH),
+          `a handle ${when}`,
+        ).toBeLessThanOrEqual(0.75);
+        expect(at?.overChosen, `verbs over the chosen element ${when}`).toEqual([]);
+        expect(
+          Math.abs((at?.clusterInset?.top ?? 0) - VERB_SCALE.inset),
+          `the cluster's inset ${when}`,
+        ).toBeLessThanOrEqual(0.75);
+      }
+      /**
+       * **Which handles, decided on screen** (condition 2): a side keeps its midpoint while the box
+       * is three targets long on it and two across, measured in the screen's pixels — so the set
+       * can change when the zoom does, and here it did: the headline was tall enough on screen for
+       * a top and a bottom handle at zoom 1 and is not at three quarters. Asserted from the box as
+       * the eye sees it, which is a second source beside the editor's own arithmetic.
+       */
+      for (const [when, at] of [
+        ["before", before],
+        ["after", after],
+      ] as const) {
+        const w = at?.chosenOnScreen?.w ?? 0;
+        const h = at?.chosenOnScreen?.h ?? 0;
+        const along = HANDLE_TOUCH * 3;
+        const across = HANDLE_TOUCH * 2;
+        const expected =
+          4 + (w >= along && h >= across ? 2 : 0) + (h >= along && w >= across ? 2 : 0);
+        expect(at?.handles, `the handles ${when}, for a box of ${w} × ${h} on screen`).toBe(
+          expected,
+        );
+      }
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+});
