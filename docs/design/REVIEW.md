@@ -3086,8 +3086,10 @@ asomando.
 
 **Cinco firmas**, todas `proposed`: **0045** (la serif sin nombre reservado, que él decidió en dos
 respuestas), **0046** (la galería), **0047** (los dos estados), **0048** (el arrastre) y **0049** (el
-teclado y el táctil). El **0044** está firmado por él y **necesita la del CEO**, porque enmienda un ADR
-que el CEO firmó. Y siguen sin firmar el **0042** del sprint 21 y el **0043** del sprint 23.
+teclado y el táctil). El **0044** está firmado por él ~~y **necesita la del CEO**, porque enmienda un ADR
+que el CEO firmó~~ — corregido el 25 de octubre de 2026, al cerrar el sprint 27: **el 0044 está
+`accepted` por David el 18 de octubre, no por el CEO**, como dice su propia cabecera; el CEO no lo ha
+visto. Y siguen sin firmar el **0042** del sprint 21 y el **0043** del sprint 23.
 
 **Una pregunta abierta que él declinó como remedio pero no como petición:** pedir a los autores de
 Playfair Display el permiso escrito que su §3 contempla. No cuesta bytes y devolvería la familia como
@@ -3471,8 +3473,9 @@ medias en el cierre.
 
 **Nueve firmas.** El **ADR 0050** es nuevo y está `proposed`, con sus seis enmiendas de los días 2 a
 7 dentro. Y siguen sin firmar los siete de antes: **0042** (sprint 21), **0043** (sprint 23), y
-**0045, 0046, 0047, 0048 y 0049** (sprint 24) — más la del **CEO para el 0044**, que es la que enmienda
-un ADR que él firmó y la que mueve el riesgo del artículo 10 de la LSSI-CE al cliente. El desarrollo
+**0045, 0046, 0047, 0048 y 0049** (sprint 24) — ~~más la del **CEO para el 0044**, que es la que enmienda
+un ADR que él firmó y la que mueve el riesgo del artículo 10 de la LSSI-CE al cliente~~ (corregido el 25
+de octubre de 2026: el 0044 lo aceptó David el 18 de octubre, no el CEO, y está `accepted`). El desarrollo
 no firma ninguna.
 
 **Y una decisión con los números delante**: si el cromo dibujado dentro del lienzo tiene que mantener
@@ -3662,3 +3665,124 @@ documento del que David decide.
 la forma que les dio la época de los dos documentos y sigue siendo la correcta porque un parche
 sustituye nodos. `data-rb-wired` se queda como la respuesta del propio documento a «¿hay algo que
 parchear?».
+
+### Día 2 — el lienzo es una parada (PR #295)
+
+El **ADR 0052** nace `proposed` y el día entrega **solo el cambio de modelo** (§1, §2 y §7), en su
+propia PR antes de nada que se apoye en él, para que lo que rompiera se viera aislado. El lienzo es
+**una parada de Tab** y lo de dentro de una sección son paradas **solo mientras esa sección tiene el
+teclado** (`applyCanvasStops`, con la mitad pura en `rovingTabIndexInside`). Medido en Chromium a
+1440 × 900: con las herramientas encendidas, de **unas setenta y cinco paradas a veintidós**; de un
+límite de doscientas pulsaciones hasta «Diseño»/«Colocación» a **36 y 37**; volver con Tab a la
+sección cuyo texto se tocó, que **nunca** ocurría, en **20**; de «Qué hacemos» al carril, **12**. Una
+caminata reescrita (la del sprint 24 día 10, que retrocedía con Mayús+Tab) y tres nuevas.
+
+### Día 3 — la barra que muere (PR #296)
+
+**La causa que cuatro días de notas no habían nombrado: la barra se dibujaba fuera de la pantalla.**
+Elegir una sección la enfoca, el foco desplaza el lienzo (`scrollY` 189) y la barra se colocaba
+contra la sección, no contra lo visible: arriba en **−31**, y una pulsación allí caía fuera del marco y
+cerraba la barra. `toolbarPoint` decide ahora contra la franja visible, **sin dejar de tener el borde
+de la sección como suelo** (la primera versión lo perdió y la caminata del sprint 9 sobre «Contacto»
+lo cazó en la suite completa). **Marcar vuelca primero** las palabras escritas, y la marca se ve en
+sitio con el foco dentro. Y **`End` no es del editor**: en Linux pliega a la primera, en un Mac lo hace
+`Cmd+→`; la caminata pulsa la tecla de cada plataforma.
+
+### Día 4 — las flechas de la barra (PR #297)
+
+La segunda mitad de `role="toolbar"`: **← → Inicio Fin** entre controles, **Escape** de vuelta a las
+palabras con el cursor donde estaba, **Tab y Alt+F10** desde el texto al asa (la leyenda dice
+«Fn+⌥+F10» en un Mac, nota 8), y **una pulsación con teclado vuelve a las palabras, escribiendo, y
+actúa ahí**. Lo que la barra recuerda es un registro tomado al cruzar el foco del texto a la barra, en
+desplazamientos y con el cursor incluido, nunca un `Range` (ajuste 2). **La nota 7 falló como
+anticipaba** y la barra **no** se movió junto al texto —dentro de una tarjeta, un `.rb-line` con
+`position: relative`, se dibujaría desplazada—: el orden lo hacen las teclas. **Un hallazgo**: el Tab
+nativo desde un texto *en escritura* nunca llegaba al asa (la causa dentro del navegador no está
+establecida). Seis decisiones que el plan no recogía, escritas en el ADR 0052 para David; **tomadas
+por el desarrollo el 25 de octubre por delegación suya**, todas como estaban.
+
+### Día 5 — escalar ya era un paso (PRs #298 y #299)
+
+**La premisa del día se midió y no se sostuvo**: escalar no son dos cambios del documento a 200 ms,
+es **uno** —un parche, una entrada de historial— y lo era desde el sprint 25 día 2. Lo que movía las
+cajas eran **la llegada de 180 ms de la barra «Diseñada a mano»**, que empuja 44 px la portada, y
+**las fuentes** si se escala nada más abrir; y, al quitar la espera, salió una tercera: **la
+transición de 290 ms del ancho del marco al pasar a «Ver en móvil»**. `canvasQuiet` funcionaba porque
+400 ms es más que las tres. Las caminatas esperan ahora a cada cosa que se mueve (21 esperas de
+silencio → 0); «agranda el área de una foto» pasa sola 3 de 3 **sin tocar su `boundingBox()`**, porque
+la hipótesis del backlog no era la causa. Se probó un arreglo en el editor y se quitó: arreglaba el
+arrastre y rompía el redimensionado. **El día no dejó nada que tocar**, y se dijo. El mismo día,
+`security` en rojo por **cuatro avisos de dependencias** (uno alto en `zod`, que usa el esquema en
+producción): en su propia PR, **#299**, fusionada antes.
+
+### Día 6 — el armazón tiene hitos (PR #300)
+
+`<header>`, `<nav aria-label="Paneles del editor">` y `<main aria-label="Área de edición">` en
+`EditorShell`; las secciones siguen siendo `role="group"`. **axe `region` de 2 nodos a 0** (eran 3 el 10
+de octubre; el plan decía 3) y la pasada asevera ahora `region` y toda regla `landmark-*` con cualquier
+gravedad. El `main` **tiene que** llevar nombre: la página del cliente dentro del lienzo tiene el suyo,
+y dos sin nombre es `landmark-unique`, medido en cuanto existió el del editor. «Foto de ejemplo» sobre
+una foto: el suelo de contraste calculado sobre el blanco puro, **8,86:1 y 14,36:1** con el puntero,
+fijado en `chromeContrast.test.ts`.
+
+### Día 7 — el cromo mide lo que mide (PR #301)
+
+El **ADR 0053** nace `proposed` con las tres condiciones de David y los ajustes 1 y 5. A 1024 con
+«Diseño» (zoom 0,7379): **verbo 23,6 → 32, asa de la barra 17,7 × 19,2 → 24 × 26, distancias 5,9 → 8,
+guía 0,99 px**; con un dedo, abrir «Campos» deja las asas en **44 → 44** (antes 32,5). Las asas se
+deciden sobre el tamaño en pantalla: **tres objetivos a lo largo y dos de través** (la regla literal de
+tres tapaba el centro de un botón de 272 × 36). **Lo que no se cumple de la condición 1: los
+contornos**, que Chromium redondea a píxeles enteros (la selección de 2 px se queda en 1,48 a este
+zoom). **Un fallo que encontró la suite**: en un teléfono el primer zoom llega con el marco sin raíz y
+el efecto lanzaba un `TypeError` que tumbaba el editor; arreglado con `?.` ahí y en dos efectos más
+antiguos. Las tres preguntas para David, **decididas por el desarrollo el 25 de octubre por delegación
+suya**: la regla de las asas se queda, los contornos se aceptan tal como Chromium los dibuja (lo exacto
+desaparecería en alto contraste) y las exclusiones se quedan.
+
+### Día 8 — el cierre (PR de `test/el-cierre-del-sprint-27`)
+
+**El recorrido del sprint, entero y sin ratón**: de la puerta del lienzo a la portada, elegirla, al
+titular, escribir, elegir tres letras, a la barra, «B», y fuera hasta la sección siguiente —
+**dieciocho pulsaciones** tras entrar en el lienzo. **Y encontró un defecto**: Escape justo después de
+marcar deshacía el lienzo y no el documento —con el ratón volvía a las palabras de antes de escribir,
+con el teclado quitaba la negrita, y el documento guardado tenía las dos cosas—, porque revertir
+reescribía la cadena con la que empezó la escritura y los días 3 y 4 hicieron que el documento pudiera
+cambiar en mitad de una. **Arreglado aquí**: revertir termina la escritura y redibuja el texto desde el
+documento. **El ZIP, byte a byte**: los diecinueve documentos del corpus dan el mismo SHA-256 con el
+publicador del inicio del sprint (`f4b3350`) y con el de hoy — el sprint no tocó nada bajo `packages/`
+salvo fijar `zod`. Y las cuatro menciones rancias del **0044** corregidas: lo **aceptó David** el 18 de
+octubre, no el CEO, y está `accepted`.
+
+**Las medidas de cierre.** Lighthouse sobre las tres composiciones del restaurante, móvil:
+**v1 100 / 100 / 96 / 100, v2 99 / 100 / 96 / 100, v3 99 / 100 / 96 / 100** (rendimiento,
+accesibilidad, buenas prácticas, SEO). En tres pasadas, la primera dio **90** de rendimiento en v1, con
+el mismo LCP de 1,65 s y un índice de velocidad de 0,03, y las dos siguientes pasaron enteras: la página
+publicada no cambió ni un byte en el sprint, así que se lee como el primer arranque en frío de la
+máquina, y se escribe. axe: **538** en la pasada del renderizador, y en el editor `region` 0 y ninguna
+regla `landmark-*`. Pesos: el presupuesto sin cambios (`pnpm size` en verde). Goldens: **ninguno se
+movió en todo el sprint**. La suite `e2e` completa del cierre: **246 pasan / 1 omitida, 1015,69 s**, a
+la primera.
+
+### Lo que el sprint 27 deja abierto
+
+1. **Once firmas**, todas `proposed`: **0042, 0043, 0045, 0046, 0047, 0048, 0049, 0050, 0051, 0052 y
+   0053**. Las decisiones que el 0052 y el 0053 dejaban a David las tomó el desarrollo por delegación
+   suya; firmarlos sigue siendo suyo.
+2. **Las nueve fotos.** Ninguna de las dieciséis PNG de la raíz (del 11 de octubre) llega a 1600 ×
+   1072: miden 1024 de ancho. La exención del banco falla desde el **1 de noviembre**; la PR de reserva
+   **#293** la mueve al 1 de diciembre y está verde. **Recomendación: fusionarla ya** — no hay fotos
+   que puedan aprobarse antes del 30, y esperar al 30 solo deja un margen de un día.
+3. **La intermitente de la caminata sin ratón del sprint 17 en CI**: cayó dos veces tras el día 4 —el
+   primer intento de la #297 y el primero de la #298 tras actualizarla—, siempre esperando la portada
+   tras «Ver a tamaño real», y pasó en las ejecuciones de la #299, la #300 y la #301. Causa no
+   establecida; el fallo de montaje del día 7 tiene el mismo síntoma y está arreglado, sin prueba de
+   que fuera este.
+4. **Los 164 px (o 253, según el instrumento) al cerrar un panel**, sin tocar.
+5. **Los contornos a escala**, aceptados como Chromium los dibuja (ADR 0053).
+6. **`ontoThePhone`** espera la rejilla de una columna, que llega a mitad de la transición del ancho:
+   sus caminatas pasan, y es la siguiente en fallar si algo de antes se acelera.
+7. **El Tab nativo desde un texto en escritura** no llega al asa; el editor mueve el foco él mismo. La
+   causa dentro del navegador no está establecida.
+8. **Desplazar el lienzo con la barra abierta** no la recoloca hasta el siguiente parche, y el grupo de
+   verbos no tiene franja visible (del día 3).
+9. **El cromo del flujo crece en el marco a menor zoom** y empuja lo de debajo (ADR 0053).

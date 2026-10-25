@@ -20346,3 +20346,124 @@ describe("sprint 27 día 7 — el cromo mide lo que mide", () => {
     }
   }, 240_000);
 });
+
+/**
+ * **Sprint 27 día 8 — el cierre, sin ratón.** The sprint's theme walked end to end with the
+ * keyboard alone, the way the plan's last check reads: into the canvas, down to the cover, choose
+ * it, into the headline, write, choose three letters, to the bar, «B», back out and on to the next
+ * section — each press counted, because the sprint's claim is that the route got short.
+ */
+describe("sprint 27 día 8 — el cierre, sin ratón", () => {
+  const where = (page: Page) =>
+    page.evaluate(() => {
+      const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
+      const active = doc?.activeElement as HTMLElement | null | undefined;
+      return {
+        id: active?.dataset?.["id"] ?? null,
+        section: active?.dataset?.["section"] ?? null,
+        inBar: Boolean(active?.closest?.(".rb-toolbar")),
+        mark: active?.dataset?.["mark"] ?? null,
+        writing: active?.isContentEditable ?? false,
+        selected: doc?.getSelection()?.toString() ?? "",
+      };
+    });
+
+  it("de la puerta del lienzo a la negrita y a la sección siguiente, contando cada tecla", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      await fontsReady(frame);
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      let presses = 0;
+      const press = async (key: string) => {
+        presses += 1;
+        await page.keyboard.press(key);
+      };
+
+      // The door, and down to the cover: `keyboardTo` is Tab into the canvas and ↓ to the section.
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      await keyboardTo(page, "sec-cover");
+      await press("Enter");
+      await expect(frame.locator(".rb-actions")).toHaveCount(1);
+      // Into its insides — the verbs come first now that it is chosen — until the headline.
+      for (let i = 0; i < 20 && (await where(page)).id !== "el-headline"; i += 1) await press("Tab");
+      expect((await where(page)).id, "Tab never reached the headline").toBe("el-headline");
+      await press("Enter");
+      await expect(headline).toHaveAttribute("contenteditable", "true");
+      await page.keyboard.type("Reserva hoy");
+      for (let i = 0; i < 3; i += 1) await press("Shift+ArrowLeft");
+      expect(await where(page)).toMatchObject({ id: "el-headline", selected: "hoy" });
+
+      // To the bar, «B», and back in the words with them still chosen (ADR 0052 §3).
+      await press("Tab");
+      expect(await where(page)).toMatchObject({ inBar: true });
+      await press("ArrowRight");
+      expect(await where(page)).toMatchObject({ mark: "strong" });
+      await press("Enter");
+      await expect(headline.locator("strong")).toHaveText("hoy");
+      await expect
+        .poll(() => where(page))
+        .toMatchObject({ id: "el-headline", writing: true, selected: "hoy" });
+
+      /**
+       * **Out the way the keyboard came in**: Escape ends the writing, Escape lets go of the text,
+       * and ↓ moves to the next section. The first Escape is the case that can fail: in a text being
+       * written in, Escape reverts what was typed since the writing began, and the bold was put on
+       * through the bar *inside* that writing — the canvas has to keep showing what the document now
+       * holds.
+       */
+      await press("Escape");
+      await expect(headline).not.toHaveAttribute("contenteditable", "true");
+      await expect(headline, "Escape after the mark lost the words").toHaveText(/^\s*Reserva hoy\s*$/);
+      await expect(headline.locator("strong"), "Escape after the mark took the bold off the canvas").toHaveText(
+        "hoy",
+      );
+      await press("Escape");
+      await expect.poll(() => where(page).then((at) => at.section)).toBe("sec-cover");
+      await press("ArrowDown");
+      await expect.poll(() => where(page).then((at) => at.section)).toBe("sec-services");
+      await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+      console.log(`[día 8] from the cover to the next section, by the keyboard: ${presses} presses after keyboardTo`);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  /**
+   * **And the mouse's half of the same defect, which was the worse one.** Writing, three letters
+   * chosen, «B» pressed with the mouse — the mark commits the typed words first (ADR 0052 §4) — and
+   * then Escape: the canvas went back to «Taberna Santo Domingo», the words from before the writing,
+   * while the saved document held «Reserva hoy» in bold. The canvas must show what will be published.
+   */
+  it("Escape tras marcar con el ratón deja en el lienzo lo que guarda el documento", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      await fontsReady(frame);
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      await clickToEdit(frame, headline);
+      await page.keyboard.type("Reserva hoy");
+      for (let i = 0; i < 3; i += 1) await page.keyboard.press("Shift+ArrowLeft");
+      await frame.locator('.rb-toolbar-mark[data-mark="strong"]').click();
+      await expect(headline.locator("strong")).toHaveText("hoy");
+      await page.keyboard.press("Escape");
+      await expect(headline).not.toHaveAttribute("contenteditable", "true");
+      await expect(headline, "Escape put back the words from before the writing").toHaveText(
+        /^\s*Reserva hoy\s*$/,
+      );
+      await expect(headline.locator("strong"), "Escape took the bold off the canvas").toHaveText("hoy");
+      // And the document says the same, read where the autosave writes it.
+      await expect
+        .poll(() => storedSession(page))
+        .toContain('"text":"Reserva hoy","marks":[{"from":8,"to":11,"mark":"strong"}]');
+    } finally {
+      await page.context().close();
+    }
+  }, 120_000);
+});
