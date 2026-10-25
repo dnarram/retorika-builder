@@ -1974,7 +1974,9 @@ so these are not a checklist someone has to remember — they are a build failur
 - **At least 1344 × 896, both numbers** (ADR 0035, 9 October 2026): the full-width cover box at a
   1440 px window on the default scale. This list went on saying only «longest side 1600 px» for
   four days after that ADR, found on 13 October 2026 when the intake tool was written against it.
-  The nine of `restaurante-bar` are exempt by id until 1 November 2026.
+  The nine of `restaurante-bar` are exempt by id, and `bank.test.ts` fails from **1 December 2026**
+  while any of them is in the bank (moved from 1 November by ADR 0035's amendment of 23 October
+  2026, David's, as a reserve while the regenerated nine were still being produced).
 - **Since 13 October 2026 the circuit is a tool**: `pnpm photos:intake` writes the draft from the
   PNG's own XMP and `pnpm photos:approve` is the `git mv` — `packages/photobank/README.md`.
 - **At most 200 KB.** Two separate checks, and worth stating separately because the first version of
@@ -2066,8 +2068,10 @@ ceiling, the floor is **1344 × 896** — two numbers, because `object-fit: cove
 `max(W/w, H/h)` and the cover's box is always landscape, so a «longest side» floor would pass a
 2000 × 800 photograph that is still stretched vertically — and **the nine are regenerated at
 1600 × 1072**, which is content production and not part of sprint 16's seven days. The schema
-enforces the floor; the nine stay published, exempt by id, and **the exemption expires on
-31 October 2026**: from 1 November `bank.test.ts` fails while any record is still under the floor.
+enforces the floor; the nine stay published, exempt by id, and **`bank.test.ts` fails from
+1 December 2026** while any record is still under the floor. That date was 31 October / 1 November —
+the record carried both shapes of the same instant — until ADR 0035's amendment of 23 October 2026
+moved it four weeks as a reserve and settled on one form: the first day the test is red.
 
 One thing that measurement got wrong and the ADR corrects: there is no width at which a photograph
 is safe. **The published page has no maximum width** — `body` has `margin: 0` and `.rb-section`
