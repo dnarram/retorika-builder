@@ -195,6 +195,27 @@ mouseless walk has hit in CI since día 4 — same wait, same line — is **not 
 | `onZoomChange` answered with nothing | both walks — the zoom written at wiring stayed, so opening «Diseño» or «Campos» left the chrome at the old size |
 | sizes divided, distances not (the cluster's inset in the sheet, the bar's gap in the arithmetic) | both walks, at the distances: the cluster 5.9 from its section's top. **Not** at «no verb over the chosen element», which the plan named: on this cover the cluster is never near the headline, so it is the distance assertions that guard adjustment 5 |
 
+## Decided on 25 October 2026, by development, under David's delegation
+
+The three questions this ADR left for David were answered by development on 25 October 2026, when he
+wrote, merging the pull request of día 7: «Actua como experto y decide lo mejor para el proyecto para
+conseguir los objetivos marcados en el proyecto». Recorded as that, not as his signature.
+
+1. **The handles' rule stays three along and two across.** It is the only reading that keeps both of
+   his conditions true at once: condition 2's corner–edge–corner, and the middle of a chosen element
+   free for the finger that drags it — the literal three-only rule was measured covering the centre
+   of a 272 × 36 button. Where the two differ the element keeps its corners, which is what it had.
+2. **The outlines are accepted as Chromium draws them.** What snapping costs is at most one pixel of
+   the frame — 0.52 of the screen for the 2 px selection at 0.7379 — and the outline stays visible
+   and in contrast, which is what WCAG 1.4.11 asks of a state's marker; it asks nothing of its
+   thickness. Drawing the selection as a box would make it exact and would make it disappear in
+   forced-colors mode, for the people who most need to see what is chosen — the same reason this
+   stylesheet keeps its focus rings as outlines. And it would mean rewriting half a dozen outline
+   rules and the walks that measure them for a change the eye cannot reliably see.
+3. **What keeps the frame's pixels stays as built**: the gaps' bands (so a panel never moves the
+   client's page), the screen-reader-only region, and the scale's string tokens. Every control and
+   every word of the chrome is at screen size, which is what the ADR is for.
+
 ## Consequences
 
 - **The chrome measures on screen what it measures at zoom 1**, at every width the canvas is scaled

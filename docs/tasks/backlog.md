@@ -12,19 +12,58 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 22 October 2026, **closing sprint 26 — «el lienzo que no reconstruye».** One open
-request — «busco mejoras sustanciales de las herramientas ya existentes en el editor» — and one
-decision, David's, over four candidates with their cost: the one that improves every tool at once.
-The editor's canvas rebuilt its document on every edit since sprint 15 (`srcDoc` replaced, chrome
-re-attached, a keystroke lost in a 5.8 ms window, two documents alive per edit, seventy pieces of
-machinery in `Editor.tsx` to survive it); since this sprint it **keeps one document per session and
-every edit is a patch** built from the renderer's own `dom` target, morphed in by morphdom under four
-rules, with the listeners delegated to the document and the chrome redrawn after every patch. The
-record is `docs/design/REVIEW.md`, sprint 26, and the decision is
-[ADR 0051](../decisions/0051-the-canvas-keeps-its-document-and-an-edit-is-a-patch.md), with seven
-amendments of its own — one per day. `patch` is the default since día 5; `swap` stays under
-`localStorage["rb.canvas"]` until sprint 27 día 1, when it was retired — `swap-route-retirement.md`
-is the list it left by, and `Editor.tsx` came down 536 lines with it.
+Last reviewed: 25 October 2026, **closing sprint 27 — «el teclado llega a todo, y el cromo mide lo
+que mide».** No theme named, so the inventory went first and David chose with four answers: the
+editor's keyboard and focus for días 2 to 6, the chrome at scale keeping its size on screen with three
+conditions of his own (día 7), the e2e limits accepted, and the nine photographs before 1 November with
+a reserve PR. The canvas is now **one Tab stop** whose sections' insides are stops only while they hold
+the keyboard; the floating text bar is a **whole toolbar** reached by Tab and Alt+F10 that acts on the
+words the hand chose; the shell has **landmarks**; and the chrome inside the canvas is drawn **in the
+screen's pixels**. The record is `docs/design/REVIEW.md`, sprint 27, and the decisions are
+[ADR 0052](../decisions/0052-the-keyboard-enters-a-section-and-the-bar-acts-on-the-words-the-hand-chose.md)
+and [ADR 0053](../decisions/0053-chrome-is-drawn-in-screen-pixels-and-an-element-too-small-on-screen-keeps-its-corners.md),
+both `proposed`; the questions each left for David were decided by development on 25 October under his
+delegation, and each ADR says so in a section of its own.
+
+**What sprint 27 leaves open** — the list sprint 26's close did not have; the full text, with every
+number, is the last section of REVIEW's sprint 27:
+
+1. **Eleven signatures**: 0042, 0043, 0045–0053, all `proposed`. (0044 is `accepted`, by David — the
+   lines here that said it needed the CEO's are corrected.)
+2. **The nine photographs at 1600 × 1072.** None of the sixteen root PNGs reaches it (all 1024 wide,
+   from 11 October). The bank's exemption fails from 1 November; **PR #293** moves it to 1 December and
+   is green. Recommended: merge it now rather than on the 30th.
+3. **Sprint 17's mouseless walk, intermittent in CI** at the same wait twice after día 4; passing in
+   the runs of #299, #300 and #301. Cause not established.
+4. **The panel close's 164 / 253 px**, untouched (row below).
+5. **Outlines at scale** snap to whole device pixels, accepted (ADR 0053).
+6. **`ontoThePhone`** waits for one grid column, mid-transition; named, not changed.
+7. **Native Tab from a text being written in** never reaches the grip; the editor moves the focus
+   itself; the cause in the browser is not established.
+8. **Scrolling with the bar open**, and the verbs' cluster with no visible band (día 3's row below).
+9. **Flow chrome grows in the frame at a lower zoom** (ADR 0053).
+
+**What this sprint found that nobody was looking for:**
+
+1. **The bar that died was drawn off the screen** (−31 px after choosing a section), and four
+   ruled-out causes were all correctly ruled out (día 3).
+2. **The browser's own Tab from a text being written in loses the focus** before it reaches the bar
+   (día 4).
+3. **Escalating was always one change**: what moved the boxes was the handmade bar's 180 ms arrival,
+   the fonts, and the device toggle's 290 ms width transition — three things a 400 ms wait for silence
+   had been covering by coincidence (día 5).
+4. **«En la vista de móvil el mismo gesto reordena» was red alone on `main`**, measuring a box in the
+   middle of that transition (día 5).
+5. **Four dependency advisories in one morning**, one of them high in the schema's runtime `zod`
+   (día 5, PR #299).
+6. **The editor had no landmark at all**, and naming its `main` is required, not stylistic: the canvas
+   holds a page with a `main` of its own (día 6).
+7. **Chromium snaps outline widths to whole device pixels**, so dividing them by the zoom does not
+   always reach the screen (día 7).
+8. **A frame with a document and no root** crashed an effect and took the editor down on a phone (día
+   7), and two older effects read the same mark the same way.
+9. **Escape after a mark undid the canvas and not the document** — after a mouse press it showed the
+   words from before the writing — because the revert's string predates the commit-before-mark (día 8).
 
 ## Sprint 27 día 1 — the old route is gone, and the two conditional rows resolved
 
@@ -49,6 +88,20 @@ is the list it left by, and `Editor.tsx` came down 536 lines with it.
   253 px, from 151 to 404.** That is larger than the 164 px this file records, and it was measured at
   a different moment (sprint 24 día 3, against the section rather than the scroll offset). Both are
   the same defect seen from two instruments.
+
+The review before that: 22 October 2026, **closing sprint 26 — «el lienzo que no reconstruye».** One open
+request — «busco mejoras sustanciales de las herramientas ya existentes en el editor» — and one
+decision, David's, over four candidates with their cost: the one that improves every tool at once.
+The editor's canvas rebuilt its document on every edit since sprint 15 (`srcDoc` replaced, chrome
+re-attached, a keystroke lost in a 5.8 ms window, two documents alive per edit, seventy pieces of
+machinery in `Editor.tsx` to survive it); since this sprint it **keeps one document per session and
+every edit is a patch** built from the renderer's own `dom` target, morphed in by morphdom under four
+rules, with the listeners delegated to the document and the chrome redrawn after every patch. The
+record is `docs/design/REVIEW.md`, sprint 26, and the decision is
+[ADR 0051](../decisions/0051-the-canvas-keeps-its-document-and-an-edit-is-a-patch.md), with seven
+amendments of its own — one per day. `patch` is the default since día 5; `swap` stays under
+`localStorage["rb.canvas"]` until sprint 27 día 1, when it was retired — `swap-route-retirement.md`
+is the list it left by, and `Editor.tsx` came down 536 lines with it.
 
 **What this sprint found that nobody was looking for:**
 
@@ -132,7 +185,9 @@ with six amendments of its own — one per day.
 **What sprint 25 leaves open**, each with the number it was measured with:
 
 1. **Nine signatures.** ADR 0050 is new and `proposed`; 0042, 0043, 0045, 0046, 0047, 0048 and 0049
-   are still `proposed`; and **0044 still needs the CEO's**, not David's.
+   are still `proposed`; and ~~**0044 still needs the CEO's**, not David's~~ — **corrected on 25 October
+   2026, closing sprint 27: the 0044 is `accepted`, by David on 18 October, not by the CEO**, as its own
+   header says; the CEO has not seen it. Nothing waits on a signature there.
 2. **Whether the chrome the editor draws inside the canvas should keep its size when the canvas is
    scaled.** Measured at 1024 with «Diseño» open, where the zoom is **0.7379**: a touch handle is
    44 × 44 in the document and **32.5 × 32.5** on screen, a section verb 32 → **23.6**, the floating
@@ -203,8 +258,10 @@ front of him. The record is `docs/design/REVIEW.md`, sprint 23, and the decision
 
 **What sprint 24 leaves open**, each with the number it was measured with:
 
-1. **Five signatures** — ADR 0045, 0046, 0047, 0048 and 0049, all `proposed`. **And the 0044 needs the
-   CEO's**, not David's: it amends an ADR the CEO signed, and it is the one that moves the LSSI-CE
+1. **Five signatures** — ADR 0045, 0046, 0047, 0048 and 0049, all `proposed`. ~~**And the 0044 needs the
+   CEO's**, not David's:~~ (corrected on 25 October 2026: the 0044 was accepted by David on 18 October,
+   not by the CEO, and is `accepted` — the sentence below is the reason it was written needing the
+   CEO's, which is not what happened) it amends an ADR the CEO signed, and it is the one that moves the LSSI-CE
    article 10 risk to the client. ADR 0042 (sprint 21) and 0043 (sprint 23) are still unsigned.
 2. **A key press that arrives while the canvas is being rebuilt is lost**, ~~so holding an arrow down
    does not walk an element across the grid~~. Named in ADR 0049 §4 as the cost of ADR 0001's

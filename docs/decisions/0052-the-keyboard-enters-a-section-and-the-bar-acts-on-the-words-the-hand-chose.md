@@ -356,6 +356,46 @@ words.
 taken out — at `landmark-unique (moderate) at main`, so the axe guard stands on its own. The badge's
 alpha at 0.30: the contrast test red at 1.96:1.
 
+## Decided on 25 October 2026, by development, under David's delegation
+
+The questions this ADR left for David — día 4's six «what the plan did not say» and día 6's two
+names — were answered by development on 25 October 2026, when David wrote, merging the pull request
+of día 7: «Actua como experto y decide lo mejor para el proyecto para conseguir los objetivos
+marcados en el proyecto». Recorded as that, and not as his signature: the status below is still his
+to change.
+
+- **The text bar's grip keeps ↑ ↓; ← → and Inicio are the toolbar's.** Kept. The grip is where the
+  keyboard arrives, so → there has to reach «B» — the approved plan's own walk says so — and a
+  toolbar whose keys meant one thing on one control and another on the next is the inconsistency
+  the WAI-ARIA pattern exists to remove. The cost is the horizontal nudge, and the bar's job is to
+  get off the line being written, which is vertical.
+- **The bar is not moved next to the text; the order is made by the keys.** Kept: moving it inside a
+  card would draw it a card's offset from its words, which is a defect for every user to fix an
+  order only a keyboard sees.
+- **← → in the exact-pixel fields belong to the bar.** Kept: three digits are typed and stepped, not
+  edited from the middle, and a walk through the bar should not stop twice in its middle.
+- **A press from the keyboard returns to the words, writing again; the record keeps the caret; the
+  bar closes when the keyboard leaves it and its words.** Kept, each for the reason día 4 gives.
+- **«Paneles del editor» and «Área de edición»** (día 6). Kept: each says what the region is to
+  somebody who has never seen the editor, and the second is required to tell the editor's `main`
+  from the client's page's own.
+
+## What día 8 found (25 October 2026)
+
+**Escape after a mark undid the canvas, not the document.** The closing walk — the sprint's route
+by the keyboard alone, eighteen presses from the cover to the next section — pressed Escape after
+«B», and the bold went off the canvas. Measured both ways against the document the autosave wrote:
+after a mark pressed **with the mouse**, Escape left the canvas reading «Taberna Santo Domingo», the
+words from before the writing; after one **from the keyboard**, «Reserva hoy» without its bold; the
+saved document held «Reserva hoy» with «hoy» in bold both times. The cause is the meeting of two of
+this ADR's own sections with a line older than both: Escape's revert wrote back the string the
+writing began with, and §4 commits the words before a mark while §3 returns to the words and writes
+again — so something could now reach the document in the middle of a writing, and the string no
+longer said what the document did. **Fixed in the same pull request**: the revert ends the writing
+and the element is drawn again from the document by the patch, so what was typed and never committed
+goes and what the document holds stays, marks included. Two walks under `sprint 27 día 8`; both red
+with the old revert put back.
+
 ## Consequences
 
 - **The canvas with the tools on is a short list again**, and the two mouseless walks say so with
