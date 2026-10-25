@@ -5229,11 +5229,29 @@ export function Editor({
       }
       event.preventDefault();
       if (action.kind === "revert") {
-        el.textContent = state.original;
+        /**
+         * **Back to what the document holds, drawn from the document** (sprint 27 día 8).
+         *
+         * This wrote `state.original` — the words as they were when the writing began — back into
+         * the element, and that string was right for as long as nothing could reach the document in
+         * the middle of a writing. Two things can now: a mark pressed on the words commits them
+         * first (ADR 0052 §4, día 3), and a press from the keyboard comes back to the words and
+         * writes again (§3, día 4). Measured on the closing walk: pressing Escape after «B» left the
+         * canvas reading «Taberna Santo Domingo» after a mouse press, and «Reserva hoy» without its
+         * bold after a keyboard one, while the saved document held «Reserva hoy» with «hoy» in bold
+         * both times — the canvas saying one thing and the published page another.
+         *
+         * So the writing ends first — the patch leaves a text being written in alone (its rule 3),
+         * and this one no longer is — and the element is drawn again from the document by the patch
+         * every other change takes. What was typed and never committed goes; what the document holds
+         * stays, marks included, and Deshacer is the way back past it.
+         */
+        stopWriting(el);
+        applyPatch(iframeDoc);
+        state.original = textFrameOf(el.textContent ?? "").text;
         state.liveMarks = marksFor(docNow.current, address) ?? [];
         state.liveText = liveFrameOf(el.textContent ?? "").text;
         state.anchored = true;
-        stopWriting(el);
         markChosen(iframeDoc, el);
         el.focus({ preventScroll: true });
         return;
