@@ -317,6 +317,45 @@ injected 200 ms after the escalation (a row moved on the section's first placeme
 at «escalar aplicó más de un parche». The fonts' wait taken out: neither red — it is the premise the
 measurement found, kept for the rows it lets the escalation measure, and said to guard nothing today.
 
+## What is measured on día 6 (25 October 2026)
+
+Día 6 ships §6. Measured with the sprint 17 día 3 axe pass over the editor — a section chosen by the
+keyboard, 1440 × 900 — which only ever failed on serious and critical findings and now also asserts
+`region` and every `landmark-*` rule at any impact.
+
+| Measure | Before | Día 6 |
+|---|---|---|
+| landmarks in the editor's own document | **none**: the top bar, the rail and the canvas with its panel were three `div`s | one `<header>`, one `<nav aria-label="Paneles del editor">`, one `<main aria-label="Área de edición">` |
+| axe `region` (moderate): content outside any landmark | 3 nodes on 10 October 2026; **2** on the morning of this day (`.pt-1.5`, the design-tools switch's anchor in the rail; `.m-0`, a line of the notice above the canvas) | **0** |
+| axe `landmark-*` rules, any impact | — | **none** — and an unnamed `main` was `landmark-unique` (moderate) the moment it existed |
+| «Foto de ejemplo» over a photograph | axe: `color-contrast`, one node it could not measure, since 10 October | the floor computed: **8.86:1** at rest and **14.36:1** under the pointer, over pure white |
+| the canvas's sections | `role="group"` | unchanged |
+
+**Why the editor's `main` has a name.** The canvas holds the client's own page, which has a
+`<header>`, a `<nav>` and a `<main>` of its own (the renderer emits them, and they should be there).
+axe walks the frame, and two unnamed `main` landmarks is `landmark-unique`. Naming the editor's tells
+the two apart for somebody moving by landmark: «Área de edición», with the page's own `main` inside
+it. The `header` and the `nav` needed nothing — the editor's `nav` is named anyway, because
+«navegación» alone says nothing about which.
+
+**Why the badge keeps its translucent pill.** The plan asked for «fondo sólido medido o la razón
+escrita». The reason is a measurement: CSS composites a translucent background channel by channel, so
+whatever photograph is under it, every channel behind the words is at most what it is over pure white,
+and relative luminance rises with every channel. The pill over white is the lightest it can be, and
+white words on it measure 8.86:1 — twice what 1.4.3 asks. `chromeContrast.test.ts` reads both
+backgrounds and the colour from the injected stylesheet and holds them to 4.5:1 over white; its own
+compositing is checked against three known values first. axe will go on reporting the node as one it
+cannot measure, which is true of axe and is not a finding about the badge.
+
+**Decided by development, for David to confirm:** the two names, «Paneles del editor» and «Área de
+edición». They are Spanish copy a screen reader says aloud; the plan fixed the landmarks and not their
+words.
+
+**Sabotages.** The `<main>` back to a `div`: `region` red (`.gap-6`). The `<nav>` back to a `div`:
+`region` red (`.w-20`). The `main` without its name: red at the name's own check, and — that check
+taken out — at `landmark-unique (moderate) at main`, so the axe guard stands on its own. The badge's
+alpha at 0.30: the contrast test red at 1.96:1.
+
 ## Consequences
 
 - **The canvas with the tools on is a short list again**, and the two mouseless walks say so with

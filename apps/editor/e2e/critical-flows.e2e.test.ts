@@ -11597,6 +11597,43 @@ describe("sprint 17 día 3 — axe sobre el documento del editor", () => {
       );
       expect(lines, `axe on the editor:\n${lines.join("\n")}`).toEqual([]);
 
+      /**
+       * **And no content outside a landmark** (ADR 0052 §6, sprint 27 día 6). `region` is
+       * moderate, so the bar above never stopped it, and it stood at three nodes from the first
+       * scan on 10 October 2026 — the save sentence, the design-tools switch's anchor and the
+       * notice above the canvas — because the shell had no landmark at all: a `div` for the top
+       * bar, a `div` for the rail, a `div` for the canvas and its panel. Now `<header>`, `<nav>`
+       * and `<main>`. The sections inside the canvas stay `role="group"` (the assertion further
+       * up), which is the half of this David decided in sprint 17.
+       */
+      const outside = results.violations
+        .filter((rule) => rule.id === "region")
+        .flatMap((rule) => rule.nodes.map((node) => node.target.join(" ")));
+      expect(outside, `content outside any landmark:\n${outside.join("\n")}`).toEqual([]);
+      const shell = await page.evaluate(() => ({
+        banner: document.querySelectorAll("header").length,
+        main: [...document.querySelectorAll("main")].map((main) => main.getAttribute("aria-label")),
+        nav: [...document.querySelectorAll("nav")].map((nav) => nav.getAttribute("aria-label")),
+      }));
+      expect(shell).toEqual({
+        banner: 1,
+        main: ["Área de edición"],
+        nav: ["Paneles del editor"],
+      });
+      /*
+       * **And the landmarks themselves are sound, at any impact.** The canvas holds the client's
+       * own page, which has a `<header>`, a `<nav>` and a `<main>` of its own, so the editor's
+       * have to be told apart from them: an unnamed `main` here was axe's `landmark-unique` the
+       * moment it existed, which is why it carries a name.
+       */
+      const landmarkRules = results.violations
+        .filter((rule) => rule.id.startsWith("landmark-"))
+        .map(
+          (rule) =>
+            `${rule.id} (${rule.impact}) at ${rule.nodes.map((n) => n.target.join(" ")).join(", ")}`,
+        );
+      expect(landmarkRules, `landmark rules:\n${landmarkRules.join("\n")}`).toEqual([]);
+
       // A guard on the guard: axe has to have actually examined something.
       expect(results.passes.length, "axe ran no checks at all").toBeGreaterThan(0);
     } finally {

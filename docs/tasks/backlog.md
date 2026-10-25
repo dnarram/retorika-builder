@@ -1398,12 +1398,21 @@ open survives.
   **39 checks pass and there are no serious or critical violations.** Two things sit below that bar
   and are recorded with their selectors rather than left for the next person to re-find:
 
-  - **`region`, moderate, three nodes:** `.inline-flex`, `.pt-1\.5` and `.gap-3` — editor chrome
-    outside any landmark. «All page content should be contained by landmarks», and the editor shell
+  - ~~**`region`, moderate, three nodes:** `.inline-flex`, `.pt-1\.5` and `.gap-3` — editor chrome
+    outside any landmark.~~ **Closed on sprint 27 día 6 (25 October 2026)**, ADR 0052 §6: the shell
+    has a `<header>`, a `<nav aria-label="Paneles del editor">` and a `<main aria-label="Área de
+    edición">`; `region` went from two nodes that morning to **0**, and the axe pass now asserts it
+    and every `landmark-*` rule at any impact. The sections were not named, as this row said they
+    should not be. The paragraph as it stood: «All page content should be contained by landmarks», and the editor shell
     has no `<main>`. Worth knowing that **the answer is not to name the sections**: that is what
     David's `role="group"` correction refused, and for the right reason. It is the shell that wants
     landmarks, which is a shell change and a design question about what the editor's regions are.
-  - **`color-contrast`, serious, one node axe could not measure:** `.rb-sample`, the «Cambiar esta
+  - **`color-contrast`, serious, one node axe could not measure:** `.rb-sample` — **answered on
+    sprint 27 día 6 with the reason, which is a measurement**: over the lightest photograph there can
+    be (pure white), the translucent pill's white words measure **8.86:1** at rest and **14.36:1**
+    under the pointer, pinned in `chromeContrast.test.ts` from the stylesheet itself (ADR 0052, día 6).
+    axe will keep listing the node as one it cannot measure. The paragraph as it stood:
+    `.rb-sample`, the «Cambiar esta
     foto» button drawn on top of a photograph. axe cannot measure text over an image, and the
     honest version of the question is what that button does over a photograph nobody has seen yet.
     `packages/renderer`'s harness forces contrast to run and this pass deliberately does not, so
