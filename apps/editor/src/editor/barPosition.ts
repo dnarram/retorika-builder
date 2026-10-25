@@ -360,8 +360,8 @@ export function dragged(start: Point, from: Point, to: Point, bounds: Bounds, in
  * browser, so the answer is known before the bar is drawn and the word never flickers from one side
  * to the other on arrival.
  */
-export function tipSide(point: Point, bounds: Bounds): "below" | "above" {
-  return point.y + bounds.barHeight + TIP_ROOM > bounds.hostHeight ? "above" : "below";
+export function tipSide(point: Point, bounds: Bounds, room = TIP_ROOM): "below" | "above" {
+  return point.y + bounds.barHeight + room > bounds.hostHeight ? "above" : "below";
 }
 
 /**
@@ -490,7 +490,12 @@ export function offsetBetween(computed: Point, placed: Point): Point {
  * nobody has moved would change where the bar sits for everyone, including the people this feature
  * is not for. Only a displaced one is held inside its section.
  */
-export function withOffset(computed: Point, offset: Point, bounds: Bounds): Point {
+export function withOffset(
+  computed: Point,
+  offset: Point,
+  bounds: Bounds,
+  inset = BAR_INSET,
+): Point {
   if (offset.x === 0 && offset.y === 0) return computed;
-  return clampToHost({ x: computed.x + offset.x, y: computed.y + offset.y }, bounds);
+  return clampToHost({ x: computed.x + offset.x, y: computed.y + offset.y }, bounds, inset);
 }

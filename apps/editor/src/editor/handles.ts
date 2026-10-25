@@ -106,13 +106,28 @@ export function handlesFor(args: {
    * moved from “Colocación” or with the arrows, and that is said in the ADR rather than solved by
    * withdrawing the only handles it has.
    */
-  if (box.width >= size * 2 && box.height >= size * 2) {
-    spots.push(
-      at("top", middleX, top),
-      at("bottom", middleX, bottom),
-      at("left", left, middleY),
-      at("right", right, middleY),
-    );
+  /**
+   * **Three along the side and two across it** (ADR 0053, sprint 27 día 7), and both halves are
+   * somebody's decision, so neither replaces the other.
+   *
+   * - *Three along* is David's condition 2 and his adjustment 1: «tres por eje — esquina, borde,
+   *   esquina — es el mínimo sin solape con objetivos de 44 px; con dos, el asa de borde se monta
+   *   sobre las de esquina». The top and the bottom midpoints sit between two corners on a side as
+   *   long as the box is wide, so they need it three targets wide; the left and the right need it
+   *   three tall. Below that a side keeps its corners and loses its midpoint.
+   * - *Two across* is the rule the paragraph above found in sprint 25: the top and the bottom
+   *   midpoints face each other across the box's height, and on a box less than two targets tall
+   *   they meet over its middle — measured again on this day, the literal three-only rule put the
+   *   top handle over the centre of a 272 × 36 button, where a finger drags it.
+   *
+   * `size` is the target in the frame's pixels — `HANDLE_TOUCH / zoom` from the painter — so every
+   * one of these thresholds is a number on screen: 132 along and 88 across, at any zoom.
+   */
+  if (box.width >= size * 3 && box.height >= size * 2) {
+    spots.push(at("top", middleX, top), at("bottom", middleX, bottom));
+  }
+  if (box.height >= size * 3 && box.width >= size * 2) {
+    spots.push(at("left", left, middleY), at("right", right, middleY));
   }
   return spots;
 }
