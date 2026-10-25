@@ -272,6 +272,51 @@ it the return to writing selects the whole text, and «B» bolded «Reserva hoy�
 | a press from the keyboard acting without going back | both «negrita» walks: the focus did not come back to the words |
 | the way back without putting the selection back | both «negrita» walks (whole text bold) and the Escape walk |
 
+## What is measured on día 5 (24 October 2026)
+
+§5 was already true when día 5 began, and what was not true was the reason for writing it. The plan
+said «localizar el segundo cambio»; measured, there is no second change of the document to find —
+ADR 0051's own amendment of today carries the measurement and the three places it corrects. In
+short: one change, one patch, one entry of history, by the probe and by «Deshacer»; what moved the
+boxes after it was the «Diseñada a mano» bar's 180 ms arrival, which pushes a section at the top of
+the page 44 px down, and — for a walk that escalates straight after opening the editor — the web
+fonts.
+
+| Measure | Before | Día 5 |
+|---|---|---|
+| changes of the document per escalation | 1 (and by the code, 1 since sprint 25 día 2) | 1 — nothing in the editor changed |
+| patches from the press to the release of a drag begun at once | — | **1**, and none parked for the gesture |
+| presses of «Deshacer» to undo a drag and the escalation before it | — | **2**: the second leaves the section the catalog's |
+| the cover's button dragged 30 px down as soon as the walk could | — | landed **16 px up** while the bar was arriving; where it was let go once the walk waits for the arrival |
+| «agranda el área de una foto por su borde inferior», alone | red 3 of 3 on 21 October (before any wait); green 3 of 3 on `main` on 23 October, under `canvasQuiet` | red 3 of 3 with no wait for the arrival; **green 3 of 3** waiting for it, its `boundingBox()` untouched |
+| `canvasQuiet` after an escalation | 21 places | **0**: 19 through `escalated`, 2 that already waited for the fonts |
+| «en la vista de móvil el mismo gesto reordena», alone | red on `main` (2 of 2); green in its full suite | **green 3 of 3**, waiting for the phone's width |
+
+**Nothing the owner touches changes today**, and that is the honest outcome of a premise measured
+wrong rather than a day cut short. The editor-side answer was tried — a press finishing the arrival
+before anything measures — and taken out, because it put the drag right and the bottom-edge resize
+wrong: the resize decides its edge on the section as the person saw it. No hand reaches an element
+within 180 ms of pressing «Sí»; a walk does. The backlog's diagnosis of the fragile resize walk
+(`boundingBox()` read right after `focus()`) did not survive either: with the arrival waited for, the
+walk passes alone without that line changing.
+
+**And a third thing the 400 ms had been covering, found by the first full run without it.** Sprint
+24 día 9's «en la vista de móvil el mismo gesto reordena» went red in the full suite: after «Ver en
+móvil» the shell narrows the frame from 1168 to 320 px over about 290 ms (a `width` transition), and
+the walk read the headline's box in the middle of it — x 224 and 528 wide, against a frame that
+ended at x 600 and 320 wide — so the press landed outside the frame and no drag began. **It was red
+alone on `main` too**, two of two; inside the full suite on `main` it passed, and dropping
+`canvasQuiet` shortened what comes before it enough to stop hiding it. The walk now waits for the
+frame to be the phone's width before it measures; alone, red 3 of 3 before and green 3 of 3 after.
+`ontoThePhone`, sprint 25 día 7's own helper for the same toggle, waits for the grid to collapse to
+one column, which happens at about 170 ms — at 497 px, in the middle of the same transition. Its
+walks pass; it is named here rather than changed.
+
+**Sabotages.** The arrival's wait taken out: both walks red, the resize 3 of 3. A second write
+injected 200 ms after the escalation (a row moved on the section's first placement): the new walk red
+at «escalar aplicó más de un parche». The fonts' wait taken out: neither red — it is the premise the
+measurement found, kept for the rows it lets the escalation measure, and said to guard nothing today.
+
 ## Consequences
 
 - **The canvas with the tools on is a short list again**, and the two mouseless walks say so with

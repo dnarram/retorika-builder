@@ -441,42 +441,45 @@ async function editSerialOf(page: Page): Promise<number> {
  * pass on nothing.
  */
 /**
- * **Wait for the canvas to go quiet** (día 5): no change of the edit serial for `quietMs`.
+ * **Escalate as a person does, and come back once the section has stopped moving** (sprint 27
+ * día 5): the page's own letters loaded first, then the one change, then the bar's arrival.
  *
- * Escalating a section is two changes of the document, not one: the section turns free, and then
- * — because a free section's rows are measured on the live layout (ADR 0050 §3) — its rows are
- * written in a second step a couple of hundred milliseconds later. `afterTheEdit` returns after the
- * first, and a gesture begun between the two measures a box the second one moves: the photograph's
- * bottom edge was no longer where the pointer pressed, and a drop landed 22 px high. The two steps
- * were two rebuilds under `swap`, slow enough to hide the race; as two patches they are fast enough
- * to show it — in CI and in two of three local full runs. So every escalation in these walks waits
- * for the second step the way a person's eye does: until nothing moves. **Whether escalation should
- * be one step is sprint 27 día 5's**; this is the harness covering for the editor until it is.
+ * It replaced `canvasQuiet` — 400 ms without the edit serial moving, after every escalation, in
+ * twenty-one places — whose note said escalating was two changes of the document about 200 ms
+ * apart: the section turning free, then its rows written in a second step. **Measured on 23 October
+ * 2026, it is one**: a probe on every patch and the cover's boxes sampled every 50 ms — one change
+ * of the document, one patch, one entry of history, and the serial does not move again. By the code
+ * it has been one since sprint 25 día 2: both doors measure the boxes and dispatch once.
+ *
+ * **Two things move the boxes after it, and neither is a write.**
+ *
+ * - **The «Diseñada a mano» bar arrives.** It is inserted before the section and opens its room
+ *   over 180 ms (`rb-handmade-in`: a negative margin running to zero, so that it reads as an
+ *   arrival and not as a jump). At the top of the page nothing absorbs that room, so the whole
+ *   section travels the bar's 44 px down while it opens. A drag begun inside it landed two rows
+ *   off — the cover's button, dragged 30 px down, 16 px *up* — and the same drag begun 400 ms
+ *   later landed where it was let go. A hand cannot reach an element within 180 ms of pressing
+ *   «Sí»; a walk can, and that is the whole of the race.
+ * - **The web fonts**, for a walk that escalates straight after opening the editor: 250 to 300 ms
+ *   after the press the frame finished loading and the cover's headline grew from 46 to 52 px,
+ *   everything under it dropping 4. A person's preview has been on screen since the
+ *   questionnaire, which is what ADR 0050 §3 says of the measurement itself.
+ *
+ * The silence `canvasQuiet` waited for came only because 400 ms is longer than both, which is why
+ * it worked and why it was the wrong thing to wait for. So the waits are for the two things: the
+ * fonts loaded **before** the press — which also makes the rows the escalation measures the ones
+ * the page keeps — and every arrival finished after the one change. Taken out under sabotage, the
+ * arrival's wait turned two walks red and the fonts' wait none: the second is the premise the
+ * measurement found, kept for what it says about the rows, not because a walk needs it today. The
+ * page is the frame's own, so a walk's own name for it does not matter.
  */
-async function canvasQuiet(frame: FrameLocator, quietMs = 400, limitMs = 5_000): Promise<void> {
-  const serial = async (): Promise<number> => {
-    try {
-      return await frame
-        .locator("html")
-        .evaluate((root) => Number((root as HTMLElement).dataset["rbEdit"] ?? "0"));
-    } catch {
-      // A frame with no document yet has no root to ask; that is a change, not an answer.
-      return -1;
-    }
-  };
-  let last = await serial();
-  let since = Date.now();
-  const deadline = Date.now() + limitMs;
-  while (Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    const now = await serial();
-    if (now !== last) {
-      last = now;
-      since = Date.now();
-    } else if (Date.now() - since >= quietMs) {
-      return;
-    }
-  }
+async function escalated(frame: FrameLocator, act: () => Promise<void>): Promise<void> {
+  await fontsReady(frame);
+  await afterTheEdit(frame.owner().page(), act);
+  await frame.locator("body").evaluate(async (body) => {
+    const arriving = [...body.ownerDocument.querySelectorAll(".rb-handmade-in")];
+    await Promise.all(arriving.flatMap((bar) => bar.getAnimations().map((each) => each.finished)));
+  });
 }
 
 async function afterTheEdit(page: Page, act: () => Promise<void>): Promise<void> {
@@ -2387,8 +2390,7 @@ describe("sprint 8 — el modo estudio: encender, diseñar a mano, colocar, y vo
         });
       const placeBefore = await placeInSection();
 
-      await frame.locator(".rb-escalate-yes").click();
-      await canvasQuiet(frame);
+      await escalated(frame, () => frame.locator(".rb-escalate-yes").click());
       await expect(frame.locator(".rb-handmade-badge")).toHaveText("Diseñada a mano");
 
       // «No se mueve ni un píxel»: the same words, in the same place within the section it belongs
@@ -2427,8 +2429,7 @@ describe("sprint 8 — el modo estudio: encender, diseñar a mano, colocar, y vo
       // Do it again, and this time move something, so the return has something to warn about.
       await frame.locator('[data-section="sec-cover"]').click();
       await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
-      await frame.locator(".rb-escalate-yes").click();
-      await canvasQuiet(frame);
+      await escalated(frame, () => frame.locator(".rb-escalate-yes").click());
       await expect(frame.locator(".rb-handmade-badge")).toHaveText("Diseñada a mano");
       // Already expanded: the family collapses when the panel *opens*, not every time the section
       // changes — somebody working through three sections should not reopen it three times. Clicking
@@ -2585,8 +2586,7 @@ describe("sprint 8 día 7 — el recorrido completo del sprint", () => {
       // ---- round one: escalate, move, patch — then revert, and prove nothing is left over ----
       await frame.locator('[data-section="sec-cover"]').click();
       await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
-      await frame.locator(".rb-escalate-yes").click();
-      await canvasQuiet(frame);
+      await escalated(frame, () => frame.locator(".rb-escalate-yes").click());
       await expect(frame.locator(".rb-handmade-badge")).toHaveText("Diseñada a mano");
 
       await studio.getByRole("button", { name: "Diseño" }).click();
@@ -2617,8 +2617,7 @@ describe("sprint 8 día 7 — el recorrido completo del sprint", () => {
       await studio.getByRole("button", { name: "Ver en ordenador" }).click();
       await frame.locator('[data-section="sec-cover"]').click();
       await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
-      await frame.locator(".rb-escalate-yes").click();
-      await canvasQuiet(frame);
+      await escalated(frame, () => frame.locator(".rb-escalate-yes").click());
       await expect(frame.locator(".rb-handmade-badge")).toHaveText("Diseñada a mano");
 
       const headlineStyleAfterFreshEscalate = await frame
@@ -9871,8 +9870,7 @@ describe("lo que el cromo del editor dibuja dentro del lienzo, y el aviso del in
       await sweep("ofrecimiento de escalar", ".rb-escalate", "rb-escalate-yes", offer);
 
       // ---- 6. escalada: la barra «Diseñada a mano» ---------------------------------------------
-      await frame.locator(".rb-escalate-yes").click();
-      await canvasQuiet(frame);
+      await escalated(frame, () => frame.locator(".rb-escalate-yes").click());
       await expect(frame.locator(".rb-handmade")).toHaveCount(1);
       await expect
         .poll(async () =>
@@ -10697,8 +10695,7 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
         "el foco no estaba dentro de la vista previa antes de escalar",
       ).toBe("IFRAME");
 
-      await frame.locator(".rb-escalate-yes").click();
-      await canvasQuiet(frame);
+      await escalated(frame, () => frame.locator(".rb-escalate-yes").click());
       await expect(frame.locator(".rb-handmade")).toHaveCount(1);
       await expect(walker.locator(PREVIEW)).toHaveCount(1);
 
@@ -10782,8 +10779,7 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
       await frame
         .locator('[data-section="sec-cover"] .rb-action[aria-label="Diseñar a mano"]')
         .click();
-      await frame.locator(".rb-escalate-yes").click();
-      await canvasQuiet(frame);
+      await escalated(frame, () => frame.locator(".rb-escalate-yes").click());
       await expect(frame.locator(".rb-handmade")).toHaveCount(1);
 
       const look = async (where: string) => {
@@ -10918,8 +10914,7 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
       await frame
         .locator('[data-section="sec-services"] .rb-action[aria-label="Diseñar a mano"]')
         .click();
-      await frame.locator(".rb-escalate-yes").click();
-      await canvasQuiet(frame);
+      await escalated(frame, () => frame.locator(".rb-escalate-yes").click());
       await expect(frame.locator(".rb-handmade")).toHaveCount(1);
       // A mitad de la entrada, no solo al final: lo que se promete es que no se mueve en ningún
       // momento, y medir solo el destino dejaría pasar un viaje de ida y vuelta.
@@ -11122,8 +11117,7 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
       await turnToolsOn(walker);
       await frame.locator('[data-section="sec-cover"]').click();
       await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
-      await frame.locator(".rb-escalate-yes").click();
-      await canvasQuiet(frame);
+      await escalated(frame, () => frame.locator(".rb-escalate-yes").click());
       await expect(frame.locator(".rb-handmade")).toHaveCount(1);
 
       // **Donde se asiente, no donde se le pidió.** `scrolledPreview` explica por qué los dos
@@ -15618,10 +15612,9 @@ describe("sprint 24 día 8 — un elemento se arrastra a su celda", () => {
       expect(await placedIn(frame, "sec-cover")).toEqual(beforeOffer);
 
       // ---- accept it, and the section becomes one with placements of its own ----
-      await afterTheEdit(page, async () => {
+      await escalated(frame, async () => {
         await frame.locator(".rb-escalate-yes").click();
       });
-      await canvasQuiet(frame);
       await waitForBankPhoto(frame);
       const placed = await placedIn(frame, "sec-cover");
       expect(placed.length, "la sección escalada no trajo colocaciones").toBeGreaterThan(1);
@@ -15803,11 +15796,10 @@ describe("sprint 24 día 8 — un elemento se arrastra a su celda", () => {
       const frame = page.frameLocator(PREVIEW).first();
       const cover = frame.locator('[data-section="sec-cover"]');
       await cover.click();
-      await afterTheEdit(page, async () => {
+      await escalated(frame, async () => {
         await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
         await frame.locator(".rb-escalate-yes").click();
       });
-      await canvasQuiet(frame);
       await waitForBankPhoto(frame);
 
       /**
@@ -15935,11 +15927,10 @@ describe("sprint 24 día 9 — el teclado lo mueve y lo dice", () => {
     await studioToolsOn(page);
     const frame = page.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').click();
-    await afterTheEdit(page, async () => {
+    await escalated(frame, async () => {
       await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
       await frame.locator(".rb-escalate-yes").click();
     });
-    await canvasQuiet(frame);
     await waitForBankPhoto(frame);
     return frame;
   }
@@ -16146,6 +16137,22 @@ describe("sprint 24 día 9 — el teclado lo mueve y lo dice", () => {
     try {
       const frame = await handDesignedCover(page);
       await page.getByRole("button", { name: "Ver en móvil" }).click();
+      /*
+       * **The frame narrows over about 290 ms** — the shell's own width transition, 1168 to 320 —
+       * and a box read in the middle of it is a desktop box over a phone frame. Measured on sprint
+       * 27 día 5: the headline read at x 224 and 528 wide, against a frame that ended at x 600 and
+       * 320 wide, so the press landed outside the frame and no drag began. The walk failed alone on
+       * `main` that way too, and passed inside the full suite until día 5 shortened what comes
+       * before it by dropping `canvasQuiet`. So: the width that is the phone's, then measure.
+       */
+      await expect
+        .poll(
+          () => page.evaluate(() => document.querySelector("iframe")?.contentWindow?.innerWidth),
+          {
+            message: "el marco no llegó al ancho del teléfono",
+          },
+        )
+        .toBe(NARROWEST_WIDTH);
       await waitForBankPhoto(frame);
 
       /** The reading order a phone shows, top to bottom. */
@@ -16662,10 +16669,9 @@ describe("sprint 25 día 2 — escalar mide la sección viva", () => {
       await cover.click();
       await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
       await expect(frame.getByText("Esta sección la coloca el catálogo")).toBeVisible();
-      await afterTheEdit(page, async () => {
+      await escalated(frame, async () => {
         await frame.locator(".rb-escalate-yes").click();
       });
-      await canvasQuiet(frame);
       await waitForBankPhoto(frame);
       await expect(frame.locator(".rb-handmade-badge")).toHaveText("Diseñada a mano");
 
@@ -16770,11 +16776,10 @@ describe("sprint 25 día 4 — los bordes estiran la caja", () => {
     await studioToolsOn(page);
     const frame = page.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').click();
-    await afterTheEdit(page, async () => {
+    await escalated(frame, async () => {
       await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
       await frame.locator(".rb-escalate-yes").click();
     });
-    await canvasQuiet(frame);
     await waitForBankPhoto(frame);
     await fontsReady(frame);
     return page.frameLocator(PREVIEW).first();
@@ -17005,11 +17010,10 @@ describe("sprint 25 día 5 — las guías y el aviso de texto sobre texto", () =
     await studioToolsOn(page);
     const frame = page.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').click();
-    await afterTheEdit(page, async () => {
+    await escalated(frame, async () => {
       await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
       await frame.locator(".rb-escalate-yes").click();
     });
-    await canvasQuiet(frame);
     await waitForBankPhoto(frame);
     await fontsReady(frame);
     return page.frameLocator(PREVIEW).first();
@@ -17206,11 +17210,10 @@ describe("sprint 25 día 6 — las unidades dichas y el alto que sigue al texto"
     await studioToolsOn(page);
     const frame = page.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').click();
-    await afterTheEdit(page, async () => {
+    await escalated(frame, async () => {
       await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
       await frame.locator(".rb-escalate-yes").click();
     });
-    await canvasQuiet(frame);
     await waitForBankPhoto(frame);
     await fontsReady(frame);
     return page.frameLocator(PREVIEW).first();
@@ -17329,11 +17332,10 @@ describe("sprint 25 día 7 — las asas en táctil, y el móvil sin solape", () 
     await studioToolsOn(page);
     const frame = page.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').click();
-    await afterTheEdit(page, async () => {
+    await escalated(frame, async () => {
       await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
       await frame.locator(".rb-escalate-yes").click();
     });
-    await canvasQuiet(frame);
     await waitForBankPhoto(frame);
     await fontsReady(frame);
     return page.frameLocator(PREVIEW).first();
@@ -17803,11 +17805,10 @@ describe("sprint 25 día 8 — el cierre", () => {
     await studioToolsOn(page);
     const frame = page.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').click();
-    await afterTheEdit(page, async () => {
+    await escalated(frame, async () => {
       await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
       await frame.locator(".rb-escalate-yes").click();
     });
-    await canvasQuiet(frame);
     const live = page.frameLocator(PREVIEW).first();
     await waitForBankPhoto(live);
     await fontsReady(live);
@@ -18368,8 +18369,7 @@ describe("sprint 26 día 2 — el parche, tras una llave", () => {
       await frame.locator('[data-section="sec-cover"]').click();
       const serialBeforeEscalation = await editSerial(page);
       await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
-      await frame.locator(".rb-escalate-yes").click();
-      await canvasQuiet(frame);
+      await escalated(frame, () => frame.locator(".rb-escalate-yes").click());
       await expect.poll(() => editSerial(page)).toBeGreaterThan(serialBeforeEscalation);
       await expect(frame.locator(".rb-handmade")).toHaveCount(1);
       await waitForBankPhoto(frame);
@@ -18784,7 +18784,6 @@ describe("sprint 26 día 4 — fotos, estilos, páginas e interruptor", () => {
         await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
         await frame.locator(".rb-escalate-yes").click();
       });
-      await canvasQuiet(frame);
       expect(
         escalated.some((e) => e.kind === "wire"),
         "escalar cableó un documento nuevo",
@@ -19100,7 +19099,6 @@ describe("sprint 26 día 8 — el cierre", () => {
         await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
         await frame.locator(".rb-escalate-yes").click();
       });
-      await canvasQuiet(frame);
       await expect(frame.locator(".rb-handmade")).toHaveCount(1);
       await edit(() => frame.locator(".rb-handmade-back").click());
       await expect(frame.locator(".rb-handmade")).toHaveCount(0);
@@ -19911,4 +19909,126 @@ describe("sprint 27 día 4 — las flechas de la barra", () => {
       await page.context().close();
     }
   }, 120_000);
+});
+
+/**
+ * **Sprint 27 día 5 — escalar es un paso** (ADR 0052 §5). Measured before anything was changed:
+ * escalating a section is one change of the document and one patch, and has been since sprint 25
+ * día 2; what moved boxes after it was the «Diseñada a mano» bar arriving and, straight after
+ * opening the editor, the web fonts (`escalated` above says how both were measured). This walk is
+ * the guard for the sentence: one patch, one entry of history, and a drag begun the moment the
+ * section has stopped moving lands where it was let go. Red, before `escalated` waited for the
+ * arrival: dragged 30 px down, the cover's button landed 16 px up.
+ */
+describe("sprint 27 día 5 — escalar es un paso", () => {
+  type Event = { at: number; kind: string; data: Record<string, unknown> };
+  const events = (page: Page) =>
+    page.evaluate(() => ((window as unknown as { __rb?: Event[] }).__rb ?? []) as Event[]);
+
+  it("escalar es un cambio y una entrada de historial, y se arrastra en cuanto la barra ha llegado", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    await probeOn(context);
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      await studioToolsOn(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      const cover = frame.locator('[data-section="sec-cover"]');
+      await cover.click();
+      await expect(frame.locator(".rb-actions")).toHaveCount(1);
+
+      const pressedAt = (await events(page)).length;
+      await escalated(frame, async () => {
+        await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
+        await frame.locator(".rb-escalate-yes").click();
+      });
+      await expect(cover).toHaveClass(/rb-free/);
+
+      /*
+       * **The drag starts now** — no silence waited for: whatever the escalation still had to
+       * write would land under the hand from here on, and the probe below would see it. The
+       * element and the rule for choosing it are sprint 24 día 8's: one with a catalog column of
+       * room to its right.
+       */
+      const placed = await placedIn(frame, "sec-cover");
+      const taken = (column: number, row: number) =>
+        placed.some(
+          (other) =>
+            column < other.column + other.columnSpan &&
+            other.column <= column &&
+            row < other.row + other.rowSpan &&
+            other.row <= row,
+        );
+      const mover = placed.find(
+        (element) =>
+          element.column + element.columnSpan + FINE_PER_COLUMN - 1 <= 96 &&
+          !taken(element.column + element.columnSpan, element.row),
+      );
+      expect(mover, "ninguna colocación tiene sitio libre a su derecha").toBeDefined();
+      if (!mover) return;
+      const subject = frame.locator(`[data-section="sec-cover"] > [data-id="${mover.id}"]`);
+      const DX = 137;
+      const DY = 30;
+      const grab = await subject.boundingBox();
+      expect(grab, "el elemento no tiene caja").not.toBeNull();
+      if (!grab) return;
+      await page.mouse.move(grab.x + grab.width / 2, grab.y + grab.height / 2);
+      await page.mouse.down();
+      const startedAt = await boxOf(frame, "sec-cover", mover.id);
+      await page.mouse.move(grab.x + grab.width / 2 + DX, grab.y + grab.height / 2 + DY, {
+        steps: 10,
+      });
+      const beforeTheDrop = (await events(page)).slice(pressedAt);
+      await page.mouse.up();
+      await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+
+      /**
+       * **One change, read off the editor's own record.** From the press to the moment the hand
+       * let go: exactly one patch applied, and none parked for the gesture — a second write landing
+       * mid-drag would have been queued (`reason: "gesture"`) and would show here.
+       */
+      const patches = beforeTheDrop.filter((e) => e.kind === "patch");
+      console.log(
+        `[día 5] patches from the press to the drop: ${JSON.stringify(patches.map((e) => e.data))}`,
+      );
+      expect(
+        patches.filter((e) => e.data["ok"] === true).length,
+        "escalar aplicó más de un parche",
+      ).toBe(1);
+      expect(
+        patches.filter((e) => e.data["reason"] === "gesture").length,
+        "un cambio llegó con la mano encima",
+      ).toBe(0);
+
+      // **And it landed where it was let go**, with sprint 24 día 8's honest budget.
+      const landed = await boxOf(frame, "sec-cover", mover.id);
+      const BUDGET = GUIDE_ZONE + 5;
+      expect(
+        Math.abs((landed?.x ?? 0) - (startedAt?.x ?? 0) - DX),
+        "no se quedó donde se soltó, a lo ancho",
+      ).toBeLessThanOrEqual(BUDGET);
+      expect(
+        Math.abs((landed?.y ?? 0) - (startedAt?.y ?? 0) - DY),
+        "no se quedó donde se soltó, a lo alto",
+      ).toBeLessThanOrEqual(BUDGET);
+
+      /**
+       * **One entry of history**: the first «Deshacer» takes the drag back, the second the whole
+       * escalation — the section is the catalog's again. Two steps for the escalation (free, then
+       * rows) would leave it hand-designed here.
+       */
+      const undo = page.getByRole("button", { name: "Deshacer", exact: true });
+      await afterTheEdit(page, () => undo.click());
+      await expect
+        .poll(async () => (await placedIn(frame, "sec-cover")).find((e) => e.id === mover.id))
+        .toMatchObject({ column: mover.column, row: mover.row });
+      await expect(cover).toHaveClass(/rb-free/);
+      await afterTheEdit(page, () => undo.click());
+      await expect(cover, "deshacer una vez no devolvió la escalada entera").not.toHaveClass(
+        /rb-free/,
+      );
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
 });

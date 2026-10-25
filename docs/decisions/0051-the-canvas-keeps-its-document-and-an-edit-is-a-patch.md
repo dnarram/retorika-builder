@@ -700,4 +700,41 @@ them swap-only and día 6 corrected it. They hold **names** rather than nodes, w
 two-document era gave them, and that shape is still right: a patch replaces a node it cannot keep.
 `data-rb-wired` stays as the document's own answer to «is there anything to patch».
 
-**Still `proposed`.** This ADR, with its nine amendments, until David signs it.
+### Amendment — escalating was never two changes (sprint 27 día 5, 24 October 2026)
+
+**Three places in this ADR say escalating a section is two changes of the document about 200 ms
+apart** — the section turning free, then its rows written in a second step: in the día 5 amendment
+(the cause of the red resize and the drop 22 px high), in the día 6 table's note, and in «What this
+does not decide». **Measured, it is one.** A probe on every patch recorded which of the patch
+effect's four inputs had changed, and the cover's boxes, the edit serial, the frame's `readyState`
+and `document.fonts.status` were sampled every 50 ms after the press — five runs, two of them
+sampling the boxes: one change of
+the document — the section free with its measured rows in it — one patch, and the serial does not
+move again. By the code it has been one since sprint 25 día 2: both doors measure the boxes and
+dispatch once, and they did on the day the sentence was written (read at the día 5 commit).
+
+**What moved the boxes was not a write.** Two things, both measured:
+
+- **The «Diseñada a mano» bar arrives.** It is inserted before the section and opens its room over
+  180 ms (`rb-handmade-in`, a negative margin running to zero, so that it reads as an arrival and
+  not a jump). At the top of the page nothing absorbs that room, and the whole section travels the
+  bar's 44 px down while it opens. A drag begun inside the 180 ms landed two rows off — the cover's
+  button, dragged 30 px down, landed 16 px up — and the same drag begun 400 ms later landed where it
+  was let go. Without a wait for it, «agranda el área de una foto por su borde inferior» fails
+  alone three times out of three, at the pull: the press decides the edge on the section as drawn,
+  and the section then moves under the hand. **That is the bottom-edge resize and the high drop
+  this ADR's día 5 amendment attributed to a second write.**
+- **The web fonts**, when a walk escalates straight after opening the editor: 250 to 300 ms after the
+  press the frame finished loading and the cover's headline grew from 46 to 52 px, everything under
+  it dropping 4.
+
+`canvasQuiet` — 400 ms without the serial moving — worked because 400 ms is longer than both, not
+because it saw either: the serial never moved. **No hand can reach an element within 180 ms of
+pressing «Sí»**, so the race is the harness's, not the owner's. Sprint 27 día 5 tried the
+editor-side answer first — a press finishing the arrival before anything measures — and took it out:
+it put the drag right and the resize wrong, because the resize's edge is decided on what the person
+saw. The walks now wait for the two things that move (the fonts before the press, the arrival after
+the change) in `escalated`, and `canvasQuiet` is gone from all twenty-one places. The three places
+above are left as they were written, which is the record of what was believed.
+
+**Still `proposed`.** This ADR, with its amendments, until David signs it.
