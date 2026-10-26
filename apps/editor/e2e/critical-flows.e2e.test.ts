@@ -20689,9 +20689,10 @@ describe("sprint 28 día 2 — el cromo sigue a la vista", () => {
         inside(followed?.bar ?? null, followed?.band ?? 0),
         "the bar is not inside the band",
       ).toBe(true);
-      expect(frame.locator('[contenteditable="true"]'), "the scroll ended the writing").toHaveCount(
-        1,
-      );
+      await expect(
+        frame.locator('[contenteditable="true"]'),
+        "the scroll ended the writing",
+      ).toHaveCount(1);
       // And the editor says it moved it for the scroll, not for an edit: no patch in between.
       type Event = { kind: string; data: Record<string, unknown> };
       const events = await page.evaluate(
