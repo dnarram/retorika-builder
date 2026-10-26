@@ -263,7 +263,8 @@ Things someone could reasonably add unasked, and must not:
 - Image optimisation, resizing or format conversion.
 - Minifying HTML or CSS. It would change golden output for no measured gain.
 - A separate `styles.css`. The renderer inlines CSS and that is what makes double-click work.
-- `og:` tags, favicons, analytics, or anything else SEO-adjacent — phase 2.
+- `og:` tags, favicons, analytics, or anything else SEO-adjacent — phase 2. (`og:` tags arrived
+  with ADR 0029 and the favicon with ADR 0054, sprint 28 day 4; analytics has not.)
 - Multi-page navigation UI. A menu is the editor's job; this package only writes the links.
 - Touching `packages/renderer` to make packaging easier.
 
