@@ -212,17 +212,30 @@ export function Step2Sector({
         >
           {es["questionnaire.step2.fieldset.label"]}
         </legend>
-        {visible.map((id, position) => (
-          <ChoiceCard
-            key={id}
-            name="sector"
-            value={id}
-            label={es[`questionnaire.sector.${id}` as keyof typeof es]}
-            selected={answers.sector === id}
-            onSelect={() => update({ sector: id })}
-            index={position}
-          />
-        ))}
+        {/* **Every sector is always in the grid; a search only hides the ones it left out**, and
+            moves them behind «Otro sector» with `order`. The grid used to render only the matches,
+            and its height went with them — 263 px to 56 at 1280 × 720 — so `Shell`, which centres
+            the card, moved the very field being typed in: 7.9 px at 1280 × 720, 31.9 at 1024 ×
+            768, 97.9 at 1440 × 900 and **159.9 at 768 × 1024**, measured on 26 October 2026
+            (sprint 28 day 3). Hidden cards keep the full grid's height at every width and every
+            wrap without anyone computing it, so the field stays where it is. `visibility: hidden`
+            takes them out of the tab order and the accessibility tree; the visible ones keep
+            their document order, which is the order the arrow keys walk. */}
+        {SECTOR_IDS.map((id) => {
+          const position = visible.indexOf(id);
+          return (
+            <ChoiceCard
+              key={id}
+              name="sector"
+              value={id}
+              label={es[`questionnaire.sector.${id}` as keyof typeof es]}
+              selected={answers.sector === id}
+              onSelect={() => update({ sector: id })}
+              filteredOut={position === -1}
+              index={Math.max(position, 0)}
+            />
+          );
+        })}
         <ChoiceCard
           name="sector"
           value="otro"

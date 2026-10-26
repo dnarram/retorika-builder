@@ -3897,3 +3897,44 @@ se mueve bajo la mano por ello: la barra abre su sitio por su alto medido, y una
 vista crece detrás del anclaje del navegador que el día 1 midió. La caminata se queda aseverando la
 regla del §1 sobre el cromo del flujo, con los dos píxeles que cuesta la letra.
 
+### Día 3 — lo pequeño de cada día (PR de `fix/lo-pequeno-de-cada-dia`)
+
+**El campo del buscador de sectores ya no se mueve, y los 7,9 px eran lo menos que se movía.** Medido
+antes de tocar nada, con «rest», en seis tamaños: 0 a 320 × 640 y a 390 × 844 —la tarjeta es más alta
+que la pantalla y no se centra—, 7,9 a 1280 × 720 (la medida del sprint 22), 31,9 a 1024 × 768, 97,9 a
+1440 × 900 y **159,9 a 768 × 1024**; «zzz» a 390 × 844 dejaba caber la tarjeta y la bajaba 5,5. La
+causa era la escrita: la rejilla pintaba solo las coincidencias, su alto iba con ellas y `Shell` centra
+la tarjeta. Ahora cada sector está siempre en la rejilla y la búsqueda esconde los que deja fuera con
+`visibility: hidden`, detrás de «Otro sector» con `order`, así que la rejilla guarda su alto entero en
+cada ancho y con cada salto de línea sin que nadie lo calcule. Los escondidos no se ven, no reciben el
+foco ni los lee un lector de pantalla; las flechas recorren solo los visibles, en su orden. 0 en los
+seis tamaños, con las dos búsquedas, en una caminata nueva; saboteada, cae con los 5,5. Lo que cuesta,
+dicho: con una búsqueda estrecha queda sitio vacío entre las tarjetas y «Siguiente». La prueba del
+sprint 22 que aseveraba que la rejilla se encogía —era verdad y era el defecto— asevera ahora que el
+filtro deja fuera tarjetas.
+
+**Escape en un campo de píxeles exactos ya no escribe lo que se tecleó.** Los dos campos numéricos de
+la barra se guardan en `change`, y volver a las palabras es un `blur`, que lo dispara: «120» tecleado y
+Escape escribía 120 px, lo contrario de «volver sin hacer nada» (ADR 0052 §3). Caminado primero, en
+rojo. El Escape de la barra devuelve al campo su `defaultValue` —el valor en vigor cuando se construyó
+la barra— antes de mover el foco, y `change` ya no tiene nada que contar. La caminata pone 48, teclea
+120, pulsa Escape y comprueba que el campo vuelve a decir 48, que el documento sigue en 48 y que **un
+solo «Deshacer» llega al tamaño de antes del 48**: ninguna entrada nueva, ni la de 120 ni un segundo
+48 encima del primero. El campo de color no entra: su Escape es el del selector del navegador.
+
+**Los textos en azul y en rojo son ya los oscuros** (decisión de David del 26 de octubre). El azul de
+marca y el rojo pasan 4,5:1 sobre un panel por un pelo —4,71 y 4,83— y a 0,90 de opacidad, que es por
+donde pasa la entrada de un panel, se quedan en 4,03 y 4,30. El texto usa ahora `--ui-brand-deep`
+`#105CB1`, que ya existía y era ya «el azul de la marca como texto», y un `--ui-danger-deep` `#B91C1C`
+nuevo: 5,34 y 5,58 a 0,90. Rellenos, bordes, contornos e iconos se quedan con los vivos, que solo
+necesitan 3:1. No es `--ui-brand-text` como decía el plan: un segundo nombre para el mismo `#105CB1`
+habría sido dos tokens que coinciden por suerte, que es justo lo que el sprint 22 quitó. Once usos de
+texto cambian; tres `text-ui-brand` se quedan, y los tres son iconos sobre su tinte. `chromeContrast`
+mide la opacidad y lee los componentes para que ninguna palabra vuelva a los vivos; saboteado con el
+aviso de `SharePanel`, lo nombra. **Encontrado de camino:** el nombre del sector elegido era azul de
+marca sobre su propia tarjeta `#F1F7FE`, a **4,37:1**, por debajo de AA para 15 px, desde la
+transcripción de las maquetas; axe no lo veía porque ninguna pasada de axe elige un sector.
+
+**«Empezar» pasa a «Crear mi web».** Una clave, `landing.start`, que también titula `/empezar`; las
+cuatro caminatas que la nombraban la nombran ahora así. Que Lighthouse deje de listarla en `link-text`
+lo confirma el cierre, que lo corre.

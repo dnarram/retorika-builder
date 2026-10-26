@@ -159,7 +159,7 @@ export function PagesPanel({
                     onClick={() => onSelectPage(page.id)}
                     {...(current ? { "aria-current": "page" as const } : {})}
                     className={`min-w-0 flex-1 truncate rounded-md px-2 py-1 text-left text-[13px] ${
-                      current ? "font-bold text-ui-brand" : "text-ui-ink"
+                      current ? "font-bold text-ui-brand-deep" : "text-ui-ink"
                     }`}
                   >
                     {page.title}

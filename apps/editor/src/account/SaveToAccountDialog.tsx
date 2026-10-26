@@ -230,10 +230,10 @@ export function SaveToAccountDialog({
        *
        * Google's flow leaves the page, so whatever this says is where somebody lands holding a
        * half-finished website. `/` is the landing, which would drop them on a marketing page with
-       * their own web nowhere in sight; they would have to press «Empezar» to get it back, and
-       * «Empezar» reads like starting over. `/empezar` restores this browser's session and reopens
-       * the editor on the web they were saving, which is the only destination that continues what
-       * they were doing.
+       * their own web nowhere in sight; they would have to press «Crear mi web» to get it back,
+       * and «Crear mi web» reads like starting over. `/empezar` restores this browser's session
+       * and reopens the editor on the web they were saving, which is the only destination that
+       * continues what they were doing.
        */
       `${window.location.origin}/auth/callback?next=/empezar`,
     );

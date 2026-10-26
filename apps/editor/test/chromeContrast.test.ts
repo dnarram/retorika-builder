@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { AA_NORMAL_TEXT, contrastRatio } from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
@@ -61,6 +61,7 @@ const BRAND = token("brand");
 const BRAND_SURFACE = token("brand-surface");
 const BRAND_DEEP = token("brand-deep");
 const DANGER = token("danger");
+const DANGER_DEEP = token("danger-deep");
 const BORDER_STRONG = token("border-strong");
 
 /** WCAG 1.4.11: a boundary or a graphic that carries meaning. */
@@ -112,6 +113,8 @@ describe("the chrome's text", () => {
     ["brand-deep on a panel", BRAND_DEEP, SURFACE],
     ["brand-deep on the app background", BRAND_DEEP, BG],
     ["brand-deep on the tinted surface", BRAND_DEEP, BRAND_SURFACE],
+    ["danger-deep on a panel", DANGER_DEEP, SURFACE],
+    ["danger-deep on the app background", DANGER_DEEP, BG],
   ];
 
   for (const [what, fg, bg] of readable) {
@@ -158,6 +161,70 @@ describe("the chrome's text", () => {
     expect(contrastRatio(BRAND_DEEP, BG)).toBeGreaterThan(contrastRatio(BRAND, BG));
     expect(contrastRatio(BRAND_DEEP, BRAND_SURFACE)).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
     expect(contrastRatio(BRAND, BRAND_SURFACE)).toBeLessThan(AA_NORMAL_TEXT);
+  });
+});
+
+/**
+ * **Brand and danger text are the deep pair, and the bright pair is for the rest** (sprint 28 day
+ * 3, David's decision of 26 October 2026).
+ *
+ * The bright two clear 4.5:1 on a panel by a hair — 4.71 and 4.83 — and at 0.90 opacity, which is
+ * where a panel's entrance fade spends part of its 180 ms, they are 4.03 and 4.30. The deep two keep
+ * their margin there. Measured as a mix over the panel, which is what opacity paints.
+ */
+describe("brand and danger as text", () => {
+  /** `fg` drawn at `alpha` over `bg`, channel by channel — what the screen shows mid-fade. */
+  function over(fg: string, bg: string, alpha: number): string {
+    const channel = (hex: string, at: number) => Number.parseInt(hex.slice(at, at + 2), 16);
+    return `#${[1, 3, 5]
+      .map((at) =>
+        Math.round(channel(fg, at) * alpha + channel(bg, at) * (1 - alpha))
+          .toString(16)
+          .padStart(2, "0"),
+      )
+      .join("")}`;
+  }
+
+  it("the deep pair still reads at 0.90 opacity on a panel, where the bright pair does not", () => {
+    for (const deep of [BRAND_DEEP, DANGER_DEEP]) {
+      expect(contrastRatio(over(deep, SURFACE, 0.9), SURFACE)).toBeGreaterThanOrEqual(
+        AA_NORMAL_TEXT,
+      );
+    }
+    for (const bright of [BRAND, DANGER]) {
+      expect(contrastRatio(over(bright, SURFACE, 0.9), SURFACE)).toBeLessThan(AA_NORMAL_TEXT);
+    }
+  });
+
+  /**
+   * **And no text reaches for the bright pair.** Read off the components, the way the canvas
+   * guards above read `Editor.tsx`. `text-ui-danger` has no use left. `text-ui-brand` keeps three,
+   * and all three colour an *icon* on its own tint — the rail's chip and the two device buttons —
+   * which is a graphic and asks 3:1, so each must sit beside `bg-ui-brand-surface`; a fourth that
+   * colours words would not.
+   */
+  it("no component colours its words with the bright brand or danger", () => {
+    const sources = ["editor", "questionnaire", "account", "auth", "app"].flatMap((dir) =>
+      readdirSync(join(import.meta.dirname, "..", "src", dir), { recursive: true })
+        .map(String)
+        .filter((file) => file.endsWith(".tsx"))
+        .map((file) => ({
+          file: `${dir}/${file}`,
+          text: readFileSync(join(import.meta.dirname, "..", "src", dir, file), "utf8"),
+        })),
+    );
+    const offenders: string[] = [];
+    for (const { file, text } of sources) {
+      text.split("\n").forEach((line, index) => {
+        const where = `${file}:${index + 1}`;
+        if (/text-ui-danger(?![-\w])/.test(line)) offenders.push(where);
+        if (/color:\s*[^,;]*var\(--ui-(brand|danger)\)/.test(line)) offenders.push(where);
+        if (/text-ui-brand(?![-\w])/.test(line) && !line.includes("bg-ui-brand-surface")) {
+          offenders.push(where);
+        }
+      });
+    }
+    expect(offenders).toEqual([]);
   });
 });
 

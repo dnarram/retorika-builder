@@ -7486,11 +7486,11 @@ describe("sprint 15 día 5 — la landing, y el camino de vuelta", () => {
     }
   }, 120_000);
 
-  it("reaches the five questions from «Empezar», which is the only way in", async () => {
+  it("reaches the five questions from «Crear mi web», which is the only way in", async () => {
     const visitor = await (await browser.newContext()).newPage();
     try {
       await visitor.goto(BASE_URL, { waitUntil: "networkidle" });
-      await visitor.getByRole("link", { name: "Empezar" }).click();
+      await visitor.getByRole("link", { name: "Crear mi web" }).click();
 
       await expect(visitor).toHaveURL(/\/empezar$/);
       // Question 1, with no account asked for on the way.
@@ -7574,7 +7574,7 @@ describe("sprint 15 día 5 — la landing, y el camino de vuelta", () => {
  * 1. Que la página de dentro **es de verdad** y trae sus fotos del banco por la ruta pública — un
  *    nombre relativo dentro de un `srcDoc` se resolvería contra `/` y daría cinco imágenes rotas.
  * 2. Que el iframe **no está en el HTML servido**, porque se monta tras la primera pintura: es lo
- *    que impide que el titular y «Empezar» esperen a la web de muestra.
+ *    que impide que el titular y «Crear mi web» esperen a la web de muestra.
  * 3. Que la demostración **se para** y que un clic la cancela en vez de que un temporizador
  *    sobrescriba a la persona.
  * 4. Que con `prefers-reduced-motion` **no se mueve sola**. La regla global aplana la transición,
@@ -8321,26 +8321,74 @@ describe("sprint 22 día 3 — la landing respira y las preguntas entran", () =>
        * Y filtrar, que es la otra forma de escribir en el paso 2, tampoco anima nada: la rejilla
        * se queda con las tarjetas que coinciden y ya está.
        *
-       * **Lo que sí se mueve, y no es de este sprint.** Medido el 15 de octubre de 2026 a 1280 ×
-       * 720: al escribir «rest» la rejilla pasa de 263px de alto a 56, y como `Shell` centra la
-       * tarjeta en vertical, **el propio campo donde se está escribiendo baja 7,9px** (302,13 →
-       * 310,02). Es anterior a este sprint —lo causa el centrado, no una animación— y tiene su
-       * fila en el backlog con esta medida. La primera versión de esta prueba aseveraba que la
-       * rejilla no se movía, que es sencillamente falso; lo que se afirma aquí es lo que el
-       * presupuesto promete de verdad.
+       * Hasta el sprint 28 día 3 esta prueba aseveraba que la rejilla se encogía, que era verdad
+       * y era el defecto: el campo bajaba con ella. Ahora la rejilla guarda su alto entero y
+       * esconde lo que no coincide; la prueba siguiente mide que el campo no se mueve.
        */
-      const grid = visitor.locator("fieldset").first();
-      const tall = (await grid.boundingBox())?.height ?? 0;
+      const shown = visitor.locator("fieldset label:visible");
+      const all = await shown.count();
       await visitor.fill("#buscar", "rest");
       await motionSettled(visitor);
       expect(await running(), "filtrar anima algo").toBe(0);
-      expect((await grid.boundingBox())?.height, "el filtro no recortó la rejilla").toBeLessThan(
-        tall,
-      );
+      expect(await shown.count(), "el filtro no dejó fuera ninguna tarjeta").toBeLessThan(all);
     } finally {
       await visitor.context().close();
     }
   }, 120_000);
+
+  /**
+   * **El campo donde se escribe no se mueve al filtrar** — sprint 28 día 3.
+   *
+   * La rejilla mostraba solo las coincidencias y su alto iba con ellas; como `Shell` centra la
+   * tarjeta, el propio campo bajaba. Medido el 26 de octubre de 2026 con «rest»: 7,9 px a 1280 ×
+   * 720 (la medida del backlog, que resultó ser la más pequeña), 31,9 a 1024 × 768, 97,9 a 1440 ×
+   * 900 y **159,9 a 768 × 1024**; 0 en un móvil, donde la tarjeta ya es más alta que la pantalla y
+   * no se centra — salvo «zzz» a 390 × 844, que la dejaba caber y bajaba 5,5. Ahora cada sector
+   * está siempre en la rejilla y el filtro esconde los que deja fuera, al final; los seis tamaños
+   * con dos búsquedas, una que deja dos tarjetas y otra que no deja ninguna.
+   */
+  it("no mueve el campo de búsqueda al filtrar los sectores, en seis tamaños", async () => {
+    for (const [width, height] of [
+      [320, 640],
+      [390, 844],
+      [768, 1024],
+      [1024, 768],
+      [1280, 720],
+      [1440, 900],
+    ] as const) {
+      const visitor = await (
+        await browser.newContext({ viewport: { width, height }, reducedMotion: "reduce" })
+      ).newPage();
+      try {
+        await visitor.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+        await visitor.fill("#nombre", "Taberna Santo Domingo");
+        await visitor.getByRole("button", { name: "Siguiente" }).click();
+        await visitor.getByText("Restaurante y bar", { exact: true }).waitFor();
+        await motionSettled(visitor);
+
+        const top = () =>
+          visitor.evaluate(
+            () => (document.querySelector("#buscar")?.getBoundingClientRect().top ?? 0) + scrollY,
+          );
+        const shown = visitor.locator("fieldset label:visible");
+        const before = await top();
+        for (const [query, left] of [
+          ["rest", 2],
+          ["zzz", 1],
+        ] as const) {
+          await visitor.fill("#buscar", query);
+          await expect(shown, `«${query}» a ${width} × ${height}`).toHaveCount(left);
+          await motionSettled(visitor);
+          expect(
+            Math.abs((await top()) - before),
+            `el campo se movió al escribir «${query}» a ${width} × ${height}`,
+          ).toBeLessThan(0.5);
+        }
+      } finally {
+        await visitor.context().close();
+      }
+    }
+  }, 240_000);
 
   it("deja la landing entera quieta para quien ha pedido menos movimiento", async () => {
     const context = await browser.newContext({ reducedMotion: "reduce" });
@@ -8601,7 +8649,7 @@ describe("sprint 22 día 5 — las tres pantallas con el teclado", () => {
         stops.push(seen?.name ?? "");
       }
       // El orden de la página: la llamada, la vuelta, y el conmutador del héroe.
-      expect(stops).toEqual(["Empezar", "Ya tengo cuenta", "Ver en móvil"]);
+      expect(stops).toEqual(["Crear mi web", "Ya tengo cuenta", "Ver en móvil"]);
 
       // Y se acciona: una demostración que solo responde al ratón no serviría de nada aquí.
       await visitor.keyboard.press("Enter");
@@ -12961,12 +13009,12 @@ describe("sprint 18 día 7 — el recorrido como un desconocido, de la landing a
           foreign.add(request.url());
       });
 
-      // In through the front door, as a stranger: the landing, then «Empezar».
+      // In through the front door, as a stranger: the landing, then «Crear mi web».
       await page.goto(BASE_URL, { waitUntil: "networkidle" });
       await expect(
         page.getByRole("heading", { name: "Tu web en cinco preguntas", level: 1 }),
       ).toBeVisible();
-      await page.getByRole("link", { name: "Empezar" }).click();
+      await page.getByRole("link", { name: "Crear mi web" }).click();
       await expect(page).toHaveURL(/\/empezar$/);
 
       await page.fill("#nombre", "Taberna del Puerto");
@@ -13357,7 +13405,7 @@ describe("sprint 19 día 7 — el recorrido como un desconocido, con fichas y si
 
       // In through the front door, as a stranger.
       await page.goto(BASE_URL, { waitUntil: "networkidle" });
-      await page.getByRole("link", { name: "Empezar" }).click();
+      await page.getByRole("link", { name: "Crear mi web" }).click();
       await expect(page).toHaveURL(/\/empezar$/);
       await page.fill("#nombre", "Taberna del Puerto");
       await page.getByRole("button", { name: "Siguiente" }).click();
@@ -20951,3 +20999,59 @@ describe("sprint 28 día 2 — el cromo sigue a la vista", () => {
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
 }
+
+/**
+ * **Sprint 28 día 3 — Escape en un campo de píxeles exactos no escribe lo que se tecleó.**
+ *
+ * The two number fields of the bar commit on `change`, and a blur fires `change`. Escape is the
+ * bar's «back to the words, nothing done» (ADR 0052 §3), and going back to the words *is* a blur:
+ * so Escape from a field with «120» typed in it wrote 120 px to the document — the opposite of what
+ * it says. Left open on sprint 27 día 4, read off the code and not walked; this is the walk.
+ */
+describe("sprint 28 día 3 — Escape en un campo de píxeles exactos", () => {
+  it("devuelve el valor antes de salir y no deja ninguna entrada nueva en el historial", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
+      await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
+
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      const exact = frame.locator('.rb-toolbar-exact[aria-label^="Tamaño"]');
+      const size = () => headline.evaluate((el) => getComputedStyle(el).fontSize);
+      const press = async (locator: Locator) => {
+        const box = await locator.boundingBox();
+        if (!box) throw new Error("nothing drawn to press");
+        await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+      };
+      const system = await size();
+
+      // One known entry first, so «Deshacer» has something to say about what came after it.
+      await press(headline);
+      await press(exact);
+      await page.keyboard.type("48");
+      await press(frame.locator('[data-section="sec-cover"]'));
+      await expect.poll(size).toBe("48px");
+
+      // Then «120» typed and Escape pressed: the field reads 48 again and the document keeps 48.
+      await press(headline);
+      await press(exact);
+      await page.keyboard.press("ControlOrMeta+a");
+      await page.keyboard.type("120");
+      await expect(exact).toHaveValue("120");
+      await page.keyboard.press("Escape");
+      await expect(exact, "Escape left what was typed in the field").toHaveValue("48");
+      expect(await size(), "Escape wrote what was typed").toBe("48px");
+
+      // **Zero new entries**: one «Deshacer» takes back the 48, so nothing — not 120, not a
+      // second 48 written over the first — was recorded after it.
+      await page.getByRole("button", { name: "Deshacer", exact: true }).click();
+      await expect.poll(size, "one «Deshacer» did not reach the size before the 48").toBe(system);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+});

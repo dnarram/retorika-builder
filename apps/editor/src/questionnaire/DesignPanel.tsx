@@ -95,7 +95,7 @@ function Stepper({
         "flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-ui-border " +
         (next === undefined
           ? "text-ui-border"
-          : "cursor-pointer text-ui-brand hover:bg-ui-brand-surface")
+          : "cursor-pointer text-ui-brand-deep hover:bg-ui-brand-surface")
       }
     >
       <svg

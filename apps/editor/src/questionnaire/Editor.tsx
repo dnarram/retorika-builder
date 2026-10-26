@@ -4056,6 +4056,15 @@ export function Editor({
         event.preventDefault();
         event.stopPropagation();
         if (action.kind === "words") {
+          /**
+           * **Nothing done means nothing typed either** (sprint 28 day 3). The two exact-pixel
+           * fields commit on `change`, and going back to the words is a blur, which fires it: «120»
+           * typed and Escape pressed wrote 120 px. Their `defaultValue` is the value in force when
+           * the bar was built, so putting it back *before* the focus moves leaves `change` nothing
+           * to report. The colour field is not one of them: its Escape is the browser's picker.
+           */
+          const active = iframeDoc.activeElement as HTMLInputElement | null;
+          if (active?.classList.contains("rb-toolbar-exact")) active.value = active.defaultValue;
           backToTheWords(el);
           return;
         }
@@ -4311,7 +4320,7 @@ export function Editor({
             current?.fontSize !== undefined && "exact" in current.fontSize
               ? current.fontSize.exact
               : "";
-          exact.value = exactSize.endsWith("px") ? exactSize.slice(0, -2) : "";
+          exact.defaultValue = exactSize.endsWith("px") ? exactSize.slice(0, -2) : "";
           if (exactSize !== "") exact.classList.add("rb-toolbar-on");
           // `change`, not `input`: a number typed digit by digit would open a history step per
           // keystroke, and the gate would re-measure the page on each one.
@@ -4542,7 +4551,7 @@ export function Editor({
           exact.placeholder = "px";
           exact.title = es["editor.toolbar.exactHelp"];
           exact.setAttribute("aria-label", `${caption} — ${es["editor.toolbar.exactHelp"]}`);
-          exact.value = exactValue === "" ? "" : exactValue.replace("px", "");
+          exact.defaultValue = exactValue === "" ? "" : exactValue.replace("px", "");
           // `change` and not `input`: a number typed digit by digit would open a history step per
           // keystroke, and `setElementStyle` would refuse the intermediate «2» as readily as it
           // accepts «20». One commit when the field is left, like every other text edit here.

@@ -319,7 +319,7 @@ function RailLabel({ label, active }: { label: string; active: boolean }) {
     <span
       className={
         "ui-interactive text-[11px] font-medium " +
-        (active ? "font-semibold text-ui-brand" : "text-ui-muted group-hover:text-ui-ink")
+        (active ? "font-semibold text-ui-brand-deep" : "text-ui-muted group-hover:text-ui-ink")
       }
     >
       {label}
@@ -523,7 +523,7 @@ function DesignToolsSwitch({
       <span
         className={
           "text-center text-[9px] leading-[1.25] " +
-          (on ? "font-semibold text-ui-brand" : "font-medium text-ui-muted")
+          (on ? "font-semibold text-ui-brand-deep" : "font-medium text-ui-muted")
         }
       >
         {es["editor.designTools.label"]}
@@ -1216,7 +1216,7 @@ export function EditorShell({
               <span
                 className={
                   "inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] font-medium " +
-                  (saveStatus === "saved" ? "text-ui-muted" : "text-ui-danger")
+                  (saveStatus === "saved" ? "text-ui-muted" : "text-ui-danger-deep")
                 }
               >
                 {saveStatus === "saved" ? (
@@ -1259,7 +1259,7 @@ export function EditorShell({
                  * was meant. A class that silently resolves to nothing is the same failure mode as the
                  * missing `--color-ui-line`: no error anywhere, just the wrong thing on screen.
                  */
-                className="ui-interactive flex h-9 cursor-pointer items-center justify-center rounded-ui border border-ui-border px-[18px] text-sm font-semibold text-ui-ink hover:border-ui-border-strong hover:bg-ui-bg phone:h-auto phone:border-0 phone:px-0 phone:py-1 phone:text-ui-brand phone:underline"
+                className="ui-interactive flex h-9 cursor-pointer items-center justify-center rounded-ui border border-ui-border px-[18px] text-sm font-semibold text-ui-ink hover:border-ui-border-strong hover:bg-ui-bg phone:h-auto phone:border-0 phone:px-0 phone:py-1 phone:text-ui-brand-deep phone:underline"
               >
                 {es["account.save.open"]}
               </button>

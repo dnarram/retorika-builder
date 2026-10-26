@@ -1398,8 +1398,18 @@ open survives.
   decided apart. More: a defect of ADR 0050, its own PR in the colchón, written as an amendment to
   sprint 24 día 3.
 
-- **Two of the application's own colours clear 4.5:1 by a hair, so any opacity on them fails.**
-  Measured 17 October 2026 (sprint 23 day 5) against the panel's white: `--ui-brand` `#156fe7` is
+- ~~**Two of the application's own colours clear 4.5:1 by a hair, so any opacity on them fails.**~~
+  **Closed on sprint 28 día 3 (26 October 2026), by David's decision of the same day**: brand and
+  danger *text* use `--ui-brand-deep` `#105cb1` and the new `--ui-danger-deep` `#b91c1c`; fills,
+  borders, outlines and icons keep the bright two. Measured with `packages/tokens`: the deep pair is
+  5.34 and 5.58 at 0.90 opacity on a panel, where the bright pair is 4.03 and 4.30.
+  `test/chromeContrast.test.ts` asserts that and reads the components so no word goes back to the
+  bright pair; three `text-ui-brand` stay, each an icon on its own tint. Found on the way: a chosen
+  sector's label was brand blue on its own `#F1F7FE` card at **4.37:1**, under AA for 15 px text,
+  since the questionnaire was transcribed from the mockups on 24 September — the same pair the top
+  bar's tab was fixed for. axe never saw it because no axe pass selects a sector. It is deep blue now.
+
+  *What follows is the row as it stood.* Measured 17 October 2026 (sprint 23 day 5) against the panel's white: `--ui-brand` `#156fe7` is
   **4.71:1** and `--ui-danger` `#dc2626` is **4.83:1**, both passing; at 0.90 opacity they are 4.03
   and 4.30 and both fail. `--ui-muted` `#5b6b82` has more room at 5.43. This is not a violation —
   a 180ms fade is not a rendered state, and axe only saw it because a test measured mid-animation —
@@ -1411,14 +1421,28 @@ open survives.
   is why sprint 21 day 5 reached for it there), and `#b91c1c` measures **6.47** on white. Both would
   still clear 4.5 at 0.90 opacity, which is the property the current two lack.
 
-- **The landing's «Empezar» is on Lighthouse's list of non-descriptive link texts**, in Spanish.
-  Measured 17 October 2026 (sprint 23 day 5): mobile Lighthouse on `/` scores SEO 0.54, and the two
+- ~~**The landing's «Empezar» is on Lighthouse's list of non-descriptive link texts**, in Spanish.~~
+  **Closed on sprint 28 día 3 (26 October 2026)**: David chose «Crear mi web», the same words as the
+  questionnaire's last button. One key changed, `landing.start`, which also titles `/empezar`.
+  Lighthouse's `link-text` is for the close to confirm (día 8 runs it).
+
+  *What follows is the row as it stood.* Measured 17 October 2026 (sprint 23 day 5): mobile Lighthouse on `/` scores SEO 0.54, and the two
   audits that fail are `is-crawlable` — which is the deliberate `noindex`, not a defect — and
   `link-text`, whose only item is `Empezar` → `/empezar` with `textLang: "es"`. It matters the day
   the page is indexed and not before. Whose call: David's, because it is the copy of the primary
   call to action on the public front door; «Empezar mi web» or an `aria-label` would satisfy it.
 
-- **The field you are typing in moves 7.9px while you filter the sectors.** Measured 15 October
+- ~~**The field you are typing in moves 7.9px while you filter the sectors.**~~ **Closed on sprint 28
+  día 3 (26 October 2026), and 7.9 px was the smallest of it.** Measured first at six sizes with
+  «rest»: 0 at 320 × 640 and 390 × 844 (the card is taller than the screen and not centred), 7.9 at
+  1280 × 720, 31.9 at 1024 × 768, 97.9 at 1440 × 900 and **159.9 at 768 × 1024**; and «zzz» at
+  390 × 844 let the card fit and moved it 5.5. Every sector is now always in the grid and the search
+  hides, with `visibility: hidden` and `order`, the ones it leaves out, behind «Otro sector», so the
+  grid keeps its full height at every width and every wrap without anyone computing it. 0 at all six,
+  in a walk that asserts it with both searches; sabotaged, it fails with the 5.5. The cost, said:
+  under a narrow search there is empty room between the cards and «Siguiente».
+
+  *What follows is the row as it stood.* Measured 15 October
   2026 (sprint 22 day 3) at 1280 × 720: typing «rest» into step 2's search takes the grid from
   263px of height to 56, and because `Shell` centres the card vertically, everything above the
   grid rides down with it — **the search field itself goes from y 302.13 to 310.02 under the
@@ -1578,9 +1602,11 @@ open survives.
   one is development's reading of ADR 0052 §3 and is written there for David to confirm.
 
   **Left open:** what the keyboard does inside the colour picker the browser draws for «exacto»,
-  which is the platform's and was not walked; and Escape from an exact-pixel field, which does not
+  which is the platform's and was not walked; and ~~Escape from an exact-pixel field, which does not
   undo what was typed in it, because that field commits on `change`, which a blur fires — read off
-  the code, not walked.
+  the code, not walked~~ — walked and closed on sprint 28 día 3: red first («120» stayed in the
+  field and reached the document), now the bar's Escape puts the field's `defaultValue` back before
+  the focus moves, and one «Deshacer» after it reaches the size before, so no entry was added.
 
 - **A finger works on both floating bars, and nobody had tried one.** Sprint 20 day 5, at David's
   asking. A tap on a handle sends its bar to the next corner; a finger drag moves it, exactly as far
