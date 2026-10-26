@@ -599,6 +599,10 @@ key is one movement, and twenty sentences for one gesture is noise rather than i
 
 ### 4. A text's rows follow its content, in the same step as its words
 
+> **Amended on sprint 28 día 7 (26 October 2026)** — the readjustment this section describes is
+> gone; a span is a minimum and the row grows to its content. The amendment at the end of this
+> document has the measurements that decided it.
+
 The third clause of David's adjustment 1. A free section's rows are eight real pixels and a text's
 height is its content's, so typing changes how many rows it needs; left alone, the row grows past
 its minimum and pushes everything under it down — the accumulation `measuredToFine` ceils to avoid
@@ -741,3 +745,74 @@ and costs nothing; it reduces to one ref when `swap` retires on sprint 27 día 1
 device switch replaces the preview's document», said in the day's harness lesson, is `swap`'s;
 under `patch` the switch changes only the canvas's width, which is the measurement sprint 25's
 closing walk makes under either route.
+
+## Amendment — a row is a minimum, and the content pushes (sprint 28 día 7, 26 October 2026)
+
+**Decided by David**, 26 October 2026, given three repairs with their cost and choosing the third:
+«rowSpan es un mínimo, el contenido manda y empuja», with three conditions, each answered below.
+Recorded by development, which does not sign. Amends §3 of the decision («the editor readjusts a
+text's `rowSpan` to its content after an edit so that, in the editor, rows stay eight pixels») and
+§4 of the día 6 amendment, which built that readjustment; §5's line in the panel changes one clause.
+
+### 1. What was measured, and why the readjustment was the defect
+
+Sprint 28 día 1 left one measurement open at David's request: the symptom a fixed layout width
+would have cured, read in screen pixels before deciding whether to build it. Hand-designed cover,
+window 1280 × 900, «Diseño» open: the panel takes the section from 912 to 692 px and the headline
+wraps to two lines (52 → 104 px). Commit it there and the readjustment wrote **13 rows where there
+were 7**. Close the panel: the headline fits one line again, the six rows stay, and the subheadline
+sits **52 px** under it where it had been flush. His threshold was 8; 52 is a defect of this ADR.
+
+And on the way, with the panel still open: one more letter in the two-line headline took the gap
+to the subheadline from **48 px to 0**. The readjustment fitted the span to the grown text — 13
+rows of 8 for 104 px — and the two empty rows that had been the gap were inside that span now. The
+same mechanism from the other side: a span written to match one width's content is wrong in every
+other width, and the panel is a second width inside the editor itself.
+
+### 2. The decision: the span is a floor, the row is as tall as what it holds
+
+`grid-auto-rows: minmax(8px, auto)` already said it for the published page (§3): a row with more
+content than its span grows and pushes what is below it. The editor now says the same. The commit
+of a text carries the words and only the words; `rowsFor`, the fourth argument of `onEditText`, the
+`rowSpan` of the `editText` action and `withRowSpan` are gone. A text wider than its box in one
+width and narrower in another leaves its rows alone, and the row does the work in both. **Rule 4
+is still not amended**: a placement is a column, a span and a row on the section's grid; what
+changes is who is responsible for the vertical slack, and it is the grid, as it always was on a
+visitor's screen.
+
+What this gives up, said plainly: in the editor the rows under a wrapped text are no longer eight
+pixels each — the three rows of a four-line body measure about nineteen. That is the price of a
+section that reads the same with and without a panel, and the next clause is what makes it safe.
+
+### 3. His condition 2 — nothing reads «row × 8», verified before removing anything
+
+- `rowAt` / `lastRowAt` (`dragGrid.ts`) walk `metrics.rows`, which `gridMetrics` reads off
+  `getComputedStyle(section).gridTemplateRows` — the resolved tracks, grown rows included; only a
+  point **below the last row** is extrapolated in steps of `ROW_STEP_PX`, which is what a new row
+  measures.
+- The announcement («A 312 px del borde izquierdo y 96 del superior») comes from the chosen
+  element's measured box against the section's content box (`announceText`), as §3 of día 6 said.
+- The guides line up against neighbour `getBoundingClientRect`s (`neighbourRects`), never a row.
+- A resize by the edges goes through the same `rowAt`/`lastRowAt`.
+
+Sabotaged — `rowAt` made to read eight pixels a row — the walk's drop under a grown body landed
+**184 px** below where the hand let go of it, 40; so the assertion sees what the condition fears.
+
+### 4. His condition 3 — the walk, and what it saw red
+
+«sprint 28 día 7 — una fila es un mínimo», 1280 × 900, one walk with five assertions and a premise:
+with «Diseño» open the headline is two lines (asserted, or there is nothing to measure); one more
+letter keeps the gap to the subheadline within a row of what it was; a body grown to four lines
+keeps its gap to the button within a row and the button comes down with it; the button dropped
+40 px under that grown row lands within a row of the hand and not a pixel sideways; and the panel
+closed gives back the gap measured before it opened, within a row. Against the editor before the
+fix the first gap went red with the measured number — «0 px donde estaba en 48» — and the same red
+returned when the readjustment was put back by hand after the fix. The sprint 25 día 6 walk that
+asserted the readjustment now asserts the rows stay put through a long edit and its undo.
+
+### 5. What this leaves open, named
+
+The fixed layout width David asked about on día 1 is **not built**, and this symptom no longer
+asks for it: with the span a floor, a text that wraps differently between panel states moves only
+what is under it, by what it grew. Its price stays in the record for the day another symptom asks —
+0,707 at 1024, 0,782 at 1280, 0,834 at 1600 — in `docs/tasks/backlog.md`.

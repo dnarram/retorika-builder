@@ -1414,6 +1414,16 @@ open survives.
   decided apart. More: a defect of ADR 0050, its own PR in the colchón, written as an amendment to
   sprint 24 día 3.
 
+  **Measured on sprint 28 día 7 (26 October 2026): 52 px, and the defect was not the width.** The
+  readjustment of sprint 25 día 6 wrote a two-line headline's rows (13 for 7) in the width the open
+  panel made; closed, the headline fit one line and the subheadline sat 52 px under it. With the
+  panel open, one more letter took the 48 px gap under the headline to 0. David chose, of three
+  repairs, to remove the readjustment: `rowSpan` is a minimum and the row grows to its content, in
+  the editor as on the published page (ADR 0050, amendment of sprint 28 día 7, with his condition
+  that nothing reads «row × 8» verified first). **The fixed layout width stays unbuilt**, and this
+  symptom no longer asks for it; its price is kept here for the day another one does — 0,707 at
+  1024, 0,782 at 1280, 0,834 at 1600, against today's 0,738 / 1 / 1 with a panel open.
+
 - ~~**Two of the application's own colours clear 4.5:1 by a hair, so any opacity on them fails.**~~
   **Closed on sprint 28 día 3 (26 October 2026), by David's decision of the same day**: brand and
   danger *text* use `--ui-brand-deep` `#105cb1` and the new `--ui-danger-deep` `#b91c1c`; fills,
