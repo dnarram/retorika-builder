@@ -4035,3 +4035,56 @@ de muestreo sin decirlo, y uno —el único sobre una negativa sin suceso propio
 falta y no tenía nombre. Ninguna de las once se declaró arreglada por
 una caminata filtrada sola: cada conjunto corrió tres veces, los sabotajes de las tres guardas una vez
 cada uno, y la suite completa la corre el día 8.
+
+### Día 6 — las puertas en un móvil (PR de `fix/las-puertas-en-un-movil`)
+
+El plan pedía abrir de verdad, a 320 y a 390, los seis diálogos de la descarga que el sprint 21 dejó
+«arreglados leyendo y sin caminar», y escribir el `it.todo` de las migraciones contra la `0012`. Las
+dos cosas están; la primera encontró un defecto que el registro no tenía.
+
+**Los diálogos de la puerta vivían dentro del lienzo escalado.** Sembrado un documento por puerta
+—siete clases, porque el de contraste dibuja el bloqueo y el aviso—, la primera pasada a 320 dio
+cinco en verde y una rara: con texto sobre texto, la pista «Haz doble clic…» salía recortada por la
+tarjeta del lienzo. La captura enseñaba otra cosa: **el fondo oscuro tapaba la tarjeta y nada más**,
+de 171 a 512 px; la cabecera con «Descargar» y la barra inferior seguían pulsables detrás de un
+diálogo que dice `aria-modal`, y en el de texto sobre texto «Volver» y «Descargar igualmente» caían
+por debajo de la caja blanca. La causa estaba escrita en el propio armazón desde el 13 de octubre: la
+tarjeta lleva `transform: scale(zoom)` cuando el lienzo es más estrecho que la página que dibuja, un
+`transform` hace del elemento el bloque contenedor de todo `position: fixed` que lleve dentro, y por
+eso la pantalla de construcción se mudó a la ranura `overlay` del armazón. Los seis diálogos de la
+puerta y el de «Volver a la original» se quedaron en `children`. A 390 el zoom es 1 y no hay
+`transform`, por eso nada lo enseñó ahí; **a 1024 con «Estilo» abierto el diálogo entero se dibujaba
+a 0,74 dentro del lienzo**, medido antes de mover nada. Ahora los siete van en `overlay`.
+
+**Lo que la caminata asevera**, en las tres pantallas y las siete puertas: el fondo del diálogo es la
+ventana, la caja se dibuja a la escala a la que se maquetó, la caja cabe entera en la ventana en las dos
+direcciones, y cada botón que no está dentro de su propia lista desplazable cae dentro de la caja. En
+los teléfonos, además, los cuatro ojos de siempre de «nada sobresale en un móvil», y axe a 390. A 1024
+el `fit` de teléfono lee las filas desplazadas de la hoja de «Estilo» como cortadas por el `main`, que
+es el panel y no la puerta, así que esa pantalla lleva solo las cuatro del diálogo — y asevera su
+premisa: la tarjeta tiene `matrix(0.…)`, porque con zoom 1 pasaría con el defecto puesto. **Saboteada**
+(los diálogos devueltos a `children`): roja a 320 y a 1024 en las siete, nombrando el fondo
+(«8,171–312,512, no la ventana») y la escala («0.95», «0.74»); a 390, verde, que es el zoom 1 de
+arriba.
+
+**Sembrados y no preparados con el ratón, que es una desviación del plan.** El plan decía preparar el
+contraste y el texto sobre texto a 1024 y luego `setViewportSize`. La caminata mide la puerta, no el
+camino hasta ella —ese ya lo andan las de contraste y la del sprint 25—, y un documento con el estado
+escrito, en un contexto `isMobile` desde el primer píxel, evita la duda de si se mide un móvil o un
+escritorio encogido. Dos cosas que el sembrado enseñó: una palabra larga sola no hace saltar el aviso
+de desborde, porque el renderer la parte; hace falta el tamaño de 200 px que teclea la caminata del
+sprint 10. Y `motionSettled` esperaba `animation.finished`, que **rechaza** con `AbortError` cuando la
+animación se cancela: a 1024 con un panel, pulsar «Descargar» cancela una en vuelo y la guarda lanzaba
+en vez de contestar. Una animación cancelada ya no se mueve; ahora cuenta como asentada.
+
+**El `it.todo` de las migraciones, escrito.** Se dejó el 29 de septiembre, con la `0002`, «hasta que
+una migración mueva datos»; la `0012` fue la primera, el 18 de octubre, y la `0013` la segunda, y el `todo` siguió ahí.
+Ahora son dos pruebas. Contra la `0012`, la que pedía el plan: un documento ya en 1.11.0 que aún nombra
+Playfair Display —imposible de fabricar con el producto, y por eso es la sonda: repetir el `up` no se
+ve en ningún documento que el paso produjo— conserva su pila. Contra la `0013`, la que de verdad
+importa: migrar un documento migrado no cambia nada, y sin el salto la columna 41 pasaría a 321 en
+una rejilla de noventa y seis. Saboteado el salto de `migrateToCurrent`, las dos en rojo y solo ellas.
+
+**Fuera, y dicho:** el diálogo de «Volver a la original» se mudó por la misma razón y no se camina
+aquí con estas cuatro aserciones; la caminata que lo abre, del 30 de septiembre, lo hace a 1280 con
+«Diseño» abierto y mira lo que dice, no dónde se dibuja.
