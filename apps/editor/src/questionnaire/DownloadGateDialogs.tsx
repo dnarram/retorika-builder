@@ -265,7 +265,7 @@ export function DownloadWarningDialog({
                 <button
                   type="button"
                   onClick={() => onReplacePhoto(address)}
-                  className="shrink-0 cursor-pointer rounded-md px-2 py-1 text-[12px] font-semibold text-ui-brand hover:bg-ui-brand-surface"
+                  className="shrink-0 cursor-pointer rounded-md px-2 py-1 text-[12px] font-semibold text-ui-brand-deep hover:bg-ui-brand-surface"
                 >
                   {es["editor.photos.change"]}
                 </button>

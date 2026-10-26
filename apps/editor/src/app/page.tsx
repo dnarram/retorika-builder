@@ -16,7 +16,7 @@ import { landingSampleHtml } from "./landingSample.ts";
  * site is the only thing in this stack that does not sleep. `docs/tasks/arranque-en-frio.md` has
  * the evaluation and the measurement; this file's job is to not foreclose it.
  *
- * **«Empezar» goes to the questionnaire and asks for nothing**, because the account is created at
+ * **«Crear mi web» goes to the questionnaire and asks for nothing**, because the account is created at
  * the end, when there is a web worth keeping (ADR 0034 §2). «Ya tengo cuenta» is for coming back,
  * and it is the second button rather than the first for the same reason.
  *
@@ -28,7 +28,7 @@ import { landingSampleHtml } from "./landingSample.ts";
  * generator and the renderer run at build time on a sample business, which reads no session and no
  * database — so this page is still prerendered, and still movable to a static site. `LandingHero`
  * is a client island that receives the finished string and mounts it after the first paint, so the
- * headline and «Empezar» never wait for a sample site to arrive.
+ * headline and «Crear mi web» never wait for a sample site to arrive.
  */
 export const metadata = {
   title: es["landing.title"],
@@ -201,7 +201,7 @@ export default function Page() {
        * column below 1024 — the `studio` class of ADR 0042, the same number the editor uses to
        * decide it has room for the design tools — and two above it.
        *
-       * **A grid, and the markup is not reordered.** The keyboard walk pins the order «Empezar»,
+       * **A grid, and the markup is not reordered.** The keyboard walk pins the order «Crear mi web»,
        * «Ya tengo cuenta», «Ver en móvil», which is the order of the DOM; putting the hero first
        * in the source to get it on the right would move the toggle ahead of the two links for
        * everybody navigating by keyboard or listening to the page. A grid places it without

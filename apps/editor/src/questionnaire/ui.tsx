@@ -539,7 +539,7 @@ export function ChoiceCard({
           flexGrow: 1,
           fontSize: 15,
           fontWeight: selected ? 600 : 500,
-          color: selected ? "var(--ui-brand)" : "#334155",
+          color: selected ? "var(--ui-brand-deep)" : "#334155",
         }}
       >
         {label}

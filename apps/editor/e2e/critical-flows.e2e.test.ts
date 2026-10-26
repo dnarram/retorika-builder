@@ -7486,11 +7486,11 @@ describe("sprint 15 día 5 — la landing, y el camino de vuelta", () => {
     }
   }, 120_000);
 
-  it("reaches the five questions from «Empezar», which is the only way in", async () => {
+  it("reaches the five questions from «Crear mi web», which is the only way in", async () => {
     const visitor = await (await browser.newContext()).newPage();
     try {
       await visitor.goto(BASE_URL, { waitUntil: "networkidle" });
-      await visitor.getByRole("link", { name: "Empezar" }).click();
+      await visitor.getByRole("link", { name: "Crear mi web" }).click();
 
       await expect(visitor).toHaveURL(/\/empezar$/);
       // Question 1, with no account asked for on the way.
@@ -7574,7 +7574,7 @@ describe("sprint 15 día 5 — la landing, y el camino de vuelta", () => {
  * 1. Que la página de dentro **es de verdad** y trae sus fotos del banco por la ruta pública — un
  *    nombre relativo dentro de un `srcDoc` se resolvería contra `/` y daría cinco imágenes rotas.
  * 2. Que el iframe **no está en el HTML servido**, porque se monta tras la primera pintura: es lo
- *    que impide que el titular y «Empezar» esperen a la web de muestra.
+ *    que impide que el titular y «Crear mi web» esperen a la web de muestra.
  * 3. Que la demostración **se para** y que un clic la cancela en vez de que un temporizador
  *    sobrescriba a la persona.
  * 4. Que con `prefers-reduced-motion` **no se mueve sola**. La regla global aplana la transición,
@@ -8649,7 +8649,7 @@ describe("sprint 22 día 5 — las tres pantallas con el teclado", () => {
         stops.push(seen?.name ?? "");
       }
       // El orden de la página: la llamada, la vuelta, y el conmutador del héroe.
-      expect(stops).toEqual(["Empezar", "Ya tengo cuenta", "Ver en móvil"]);
+      expect(stops).toEqual(["Crear mi web", "Ya tengo cuenta", "Ver en móvil"]);
 
       // Y se acciona: una demostración que solo responde al ratón no serviría de nada aquí.
       await visitor.keyboard.press("Enter");
@@ -13009,12 +13009,12 @@ describe("sprint 18 día 7 — el recorrido como un desconocido, de la landing a
           foreign.add(request.url());
       });
 
-      // In through the front door, as a stranger: the landing, then «Empezar».
+      // In through the front door, as a stranger: the landing, then «Crear mi web».
       await page.goto(BASE_URL, { waitUntil: "networkidle" });
       await expect(
         page.getByRole("heading", { name: "Tu web en cinco preguntas", level: 1 }),
       ).toBeVisible();
-      await page.getByRole("link", { name: "Empezar" }).click();
+      await page.getByRole("link", { name: "Crear mi web" }).click();
       await expect(page).toHaveURL(/\/empezar$/);
 
       await page.fill("#nombre", "Taberna del Puerto");
@@ -13405,7 +13405,7 @@ describe("sprint 19 día 7 — el recorrido como un desconocido, con fichas y si
 
       // In through the front door, as a stranger.
       await page.goto(BASE_URL, { waitUntil: "networkidle" });
-      await page.getByRole("link", { name: "Empezar" }).click();
+      await page.getByRole("link", { name: "Crear mi web" }).click();
       await expect(page).toHaveURL(/\/empezar$/);
       await page.fill("#nombre", "Taberna del Puerto");
       await page.getByRole("button", { name: "Siguiente" }).click();

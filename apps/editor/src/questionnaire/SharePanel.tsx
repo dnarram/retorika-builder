@@ -150,7 +150,7 @@ export function SharePanel({
         />
         <p className="m-0 text-[12px] leading-snug text-ui-muted">{es["editor.share.url.help"]}</p>
         {urlIssue ? (
-          <p className="m-0 text-[12px] leading-snug text-ui-danger">{urlIssue}</p>
+          <p className="m-0 text-[12px] leading-snug text-ui-danger-deep">{urlIssue}</p>
         ) : null}
         {/* What was actually stored, shown back: «midominio.es» becomes «https://midominio.es» and
             the owner sees the address their visitors will.

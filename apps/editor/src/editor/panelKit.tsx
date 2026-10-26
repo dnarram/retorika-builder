@@ -146,7 +146,7 @@ export function SmallButton({
       onClick={onClick}
       disabled={disabled}
       className={`ui-interactive rounded-ui-sm px-2 py-1 text-[12px] font-semibold ${
-        danger ? "text-ui-danger" : "text-ui-muted"
+        danger ? "text-ui-danger-deep" : "text-ui-muted"
       } ${disabled ? "opacity-40" : "cursor-pointer hover:bg-ui-bg hover:text-ui-ink"}`}
     >
       {label}

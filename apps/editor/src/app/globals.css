@@ -134,6 +134,19 @@
    * measures it.
    */
   --ui-brand-deep: #105cb1;
+
+  /**
+   * **The two deep colours are for text, the two bright ones for everything else** (sprint 28 day
+   * 3, David's decision of 26 October 2026). `--ui-brand` and `--ui-danger` clear 4.5:1 on a panel
+   * by a hair — 4.71 and 4.83 — so the panels' own 180 ms entrance spent its fade below the
+   * threshold, and any hover or disabled state reaching for opacity on them would land under it
+   * (backlog, sprint 23 day 5). Text in brand or danger now uses these; fills, borders, outlines
+   * and icons keep the bright ones, where WCAG asks 3:1. `#B91C1C` is Tailwind's red-700, the step
+   * below `--ui-danger`'s red-600, as `--ui-brand-deep` is the brand's own step down: **6.47:1** on
+   * a panel and **6.03** on the app background. Both still clear 4.5 at 0.90 opacity, which is the
+   * property the bright two lack; `test/chromeContrast.test.ts` measures it.
+   */
+  --ui-danger-deep: #b91c1c;
 }
 
 /**
@@ -154,6 +167,7 @@
   --color-ui-brand-deep: var(--ui-brand-deep);
   --color-ui-ok: var(--ui-ok);
   --color-ui-danger: var(--ui-danger);
+  --color-ui-danger-deep: var(--ui-danger-deep);
   --color-ui-border-strong: var(--ui-border-strong);
   --radius-ui-sm: var(--ui-radius-sm);
   --radius-ui: var(--ui-radius);
@@ -468,7 +482,7 @@
  *
  * On a pseudo-element the two compose: the card keeps its own entrance and the ring is a second
  * box that arrives, expands and goes. It also stops the ring fighting `ui-lift` for `box-shadow`
- * on an element that wears both, which «Empezar» on the landing does.
+ * on an element that wears both, which «Crear mi web» on the landing does.
  *
  * `position: relative` on the host, because the ring is `position: absolute` and has to be
  * anchored to the thing it is pointing at. `border-radius: inherit` so it rings the shape rather

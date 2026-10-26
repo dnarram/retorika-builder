@@ -246,6 +246,10 @@ describe("the canvas's copy of the scale", () => {
     // and the one blue that is Retorika's rather than theirs is the one colour that may never be
     // painted into their page.
     "brand-deep",
+    // Danger for *text* (sprint 28 day 3). The preview's chrome has red only as fills and borders —
+    // the delete action, the refused ghost — and no word in red, so it has nothing to paint with
+    // it. The day a red word appears on the canvas, this line goes and the pair above gains one.
+    "danger-deep",
   ];
 
   it("transcribes every token the stylesheet declares, apart from the ones named here", () => {
