@@ -642,6 +642,50 @@ async function motionSettled(page: Page): Promise<void> {
 }
 
 /**
+ * **The canvas has arrived at `width`**, after «Ver en móvil» or «Ver en ordenador».
+ *
+ * The card animates its width (`ui-reflow`, 260 ms) and the page inside re-lays itself out on the
+ * way across: the renderer's one-column query fires at 720 px, which is less than half-way, so a
+ * walk that waits for the single column and measures has measured a page still moving — sprint 27
+ * left «`ontoThePhone` waits for a column that arrives mid-transition (170 ms, 497 px)» open, and
+ * this is its wait (sprint 28 día 5). Three things in one sample, because each alone is satisfied
+ * too early: the card's **layout** width is `width` (`getComputedStyle`, which the scale does not
+ * touch) in two consecutive frames; the card no longer carries `ui-reflow`, which the shell takes
+ * off on `transitionend` of `width`; and the frame's own viewport is `width`, which is the number
+ * the media query reads. Before the click's `requestAnimationFrame` the first two hold at the
+ * *old* width, so the target width is what tells «not started» from «arrived».
+ */
+async function deviceArrived(page: Page, width: number): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          (want) =>
+            new Promise<string>((resolve) => {
+              const card = document.querySelector<HTMLElement>('[data-testid="canvas-card"]');
+              const frame = card?.querySelector<HTMLIFrameElement>("iframe");
+              const read = () =>
+                [
+                  card ? getComputedStyle(card).width : "no card",
+                  card?.classList.contains("ui-reflow") ? "moving" : "still",
+                  `${frame?.contentWindow?.innerWidth ?? -1}`,
+                ].join(" ");
+              const first = read();
+              requestAnimationFrame(() =>
+                requestAnimationFrame(() => {
+                  const second = read();
+                  resolve(first === second ? first : `${first} → ${second}`);
+                }),
+              );
+            }),
+          width,
+        ),
+      { message: `el lienzo no llegó a ${width} px de ancho y se quedó quieto` },
+    )
+    .toBe(`${width}px still ${width}`);
+}
+
+/**
  * Waits for an `<img>` to have finished loading before anything asks it a question.
  *
  * **A flake found by running the whole file under load, 15 October 2026**, and left here rather
@@ -1296,8 +1340,23 @@ describe("regression — the preview is a canvas, not a browsable site", () => {
     await expect(entries.first()).toBeVisible();
 
     const framesBefore = page.frames().length;
+    /*
+     * **What must not move is a navigation, so a navigation is what this waits for** (sprint 28
+     * día 5). A negative has no event of its own: the only honest wait is for the thing that would
+     * happen if the guard were gone, with a bound. This used to be 1500 ms of silence, and the
+     * sabotage says the silence was doing real work: with both anchor guards removed (`wireLinks`
+     * and the text delegate's `preventDefault` on an `A`), the srcdoc frame loads the editor's
+     * own page and a third frame appears **inside the pause** — read straight after the click
+     * instead, the assertion passed on a navigation that had not landed yet. So the pause stays
+     * as a bound, but named: a `framenavigated` within it is the failure, and a green run ends at
+     * the bound rather than on a guess.
+     */
+    const navigated = page.waitForEvent("framenavigated", { timeout: 1500 }).then(
+      (frame) => frame.url(),
+      () => null,
+    );
     await entries.first().click();
-    await page.waitForTimeout(1500);
+    expect(await navigated, "the preview navigated").toBeNull();
 
     // The preview still shows the site rather than a copy of the editor.
     expect(page.frames().length, "a frame appeared: the editor nested inside its own preview").toBe(
@@ -4359,8 +4418,15 @@ describe("sprint 12 día 3 — el input anclado y el atajo de deshacer", () => {
       // browser keeps its undo, so the document must not step: the redo that was available stays
       // available, because nothing consumed it.
       await box.click();
+      const inTheBox = await box.inputValue();
       await studio.keyboard.press("Control+y");
-      await studio.waitForTimeout(500);
+      // What the press must not do is step the document; what it must leave is the caret in the
+      // box with its text. A key typed after it is handled after it, so once that letter shows,
+      // the press before it has been handled too — and a step would have cleared the redo by
+      // then. The letter is not committed (the panel commits on blur), so the history is as the
+      // press left it. Replaces 500 ms of silence (sprint 28 día 5).
+      await studio.keyboard.type("!");
+      await expect(box).toHaveValue(`${inTheBox}!`);
       await expect(redoBtn).toBeEnabled();
     } finally {
       await studio.close();
@@ -9761,11 +9827,21 @@ describe("la barra superior reparte su ancho entre el logo y las pestañas", () 
         if ((await host.count()) === 0) continue;
         await host.click();
         if ((await verb.count()) === 0) continue;
+        const wasShowing = await strip(walker);
+        const tabsBefore = "error" in wasShowing ? 0 : wasShowing.tabCount;
         await verb.click();
+        // The verb makes one more page, and that page is one more tab: the strip is measured once
+        // the tab is in, not after 500 ms of silence (sprint 28 día 5). Before the first convert
+        // there may be no bar at all, which counts as zero tabs.
         await expect
-          .poll(async () => (await strip(walker)) as { tabCount?: number })
-          .toHaveProperty("tabCount");
-        await walker.waitForTimeout(500);
+          .poll(
+            async () => {
+              const now = await strip(walker);
+              return "error" in now ? 0 : now.tabCount;
+            },
+            { message: "la página nueva no llegó a la barra como pestaña" },
+          )
+          .toBeGreaterThan(tabsBefore);
 
         const now = await strip(walker);
         if ("error" in now) continue;
@@ -10366,23 +10442,15 @@ describe("cambiar de escritorio a móvil se ve recolocarse", () => {
     return [...new Set(await page.evaluate(() => (window as unknown as { __w: number[] }).__w))];
   }
 
+  /**
+   * Into the editor, with nothing still arriving: the samplers below record every frame for a
+   * second after a press, so an entrance still running — the canvas's fade-in, the rail's — would
+   * be counted as the press's own motion. This used to be the questionnaire inline and one second
+   * of silence after the photograph; the second is now the premise (sprint 28 día 5).
+   */
   async function intoTheEditor(page: Page): Promise<void> {
-    await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
-    await page.fill("#nombre", "Taberna Santo Domingo");
-    await page.getByRole("button", { name: "Siguiente" }).click();
-    await page.getByText("Restaurante y bar", { exact: true }).click();
-    await page.getByRole("button", { name: "Siguiente" }).click();
-    await page.getByText("Comidas", { exact: true }).click();
-    await page.getByRole("button", { name: "Siguiente" }).click();
-    await page.fill("#direccion", "Cta. de Santo Domingo, 2, Ronda");
-    await page.getByRole("button", { name: "Siguiente" }).click();
-    await page.getByText("Que reserven", { exact: true }).click();
-    await page.fill("#enlace", "https://reservas.example.com/taberna");
-    await page.getByRole("button", { name: "Crear mi web" }).click();
-    await page.getByText("Ver a tamaño real →").first().click();
-    await page.frameLocator(PREVIEW).first().locator('[data-section="sec-cover"]').waitFor();
-    await waitForBankPhoto(page.frameLocator(PREVIEW).first());
-    await page.waitForTimeout(1_000);
+    await intoTheCanvas(page);
+    await motionSettled(page);
   }
 
   it("pasa por anchos intermedios en vez de saltar, en los dos sentidos", async () => {
@@ -10487,23 +10555,15 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
     return { distinct: [...new Set(sampled)], final: sampled.at(-1) ?? "ausente" };
   }
 
+  /**
+   * Into the editor, with nothing still arriving: `opacitiesWhile` and the two samplers below
+   * record every frame after a press, so an entrance still running — the canvas's fade-in, the
+   * rail's — would be counted as the press's own motion. This used to be the questionnaire inline
+   * and 900 ms of silence after the photograph; the silence is now the premise (sprint 28 día 5).
+   */
   async function intoTheEditor(page: Page): Promise<void> {
-    await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
-    await page.fill("#nombre", "Taberna Santo Domingo");
-    await page.getByRole("button", { name: "Siguiente" }).click();
-    await page.getByText("Restaurante y bar", { exact: true }).click();
-    await page.getByRole("button", { name: "Siguiente" }).click();
-    await page.getByText("Comidas", { exact: true }).click();
-    await page.getByRole("button", { name: "Siguiente" }).click();
-    await page.fill("#direccion", "Cta. de Santo Domingo, 2, Ronda");
-    await page.getByRole("button", { name: "Siguiente" }).click();
-    await page.getByText("Que reserven", { exact: true }).click();
-    await page.fill("#enlace", "https://reservas.example.com/taberna");
-    await page.getByRole("button", { name: "Crear mi web" }).click();
-    await page.getByText("Ver a tamaño real →").first().click();
-    await page.frameLocator(PREVIEW).first().locator('[data-section="sec-cover"]').waitFor();
-    await waitForBankPhoto(page.frameLocator(PREVIEW).first());
-    await page.waitForTimeout(900);
+    await intoTheCanvas(page);
+    await motionSettled(page);
   }
 
   it("el panel derecho entra en vez de parpadear", async () => {
@@ -10555,6 +10615,8 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
       });
       await walker.getByRole("switch").first().click();
       await walker.getByRole("button", { name: "Sí, enciéndelas" }).click();
+      // The sampler above records for 900 ms; this is that window plus a frame or two, so the
+      // last sample is in before it is read. A measurement window, not a wait for an effect.
       await walker.waitForTimeout(1_000);
       const frames = await walker.evaluate(
         () => (window as unknown as { __s: [string, string][] }).__s,
@@ -10607,6 +10669,8 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
       });
       await walker.getByRole("switch").first().click();
       await walker.getByRole("button", { name: "Sí, enciéndelas" }).click();
+      // The sampler above records for 1500 ms; this is that window plus a frame or two, so the
+      // last sample is in before it is read. A measurement window, not a wait for an effect.
       await walker.waitForTimeout(1_700);
       const positions = [
         ...new Set(await walker.evaluate(() => (window as unknown as { __t: number[] }).__t)),
@@ -14304,24 +14368,31 @@ describe("sprint 20 día 2 — el grupo de verbos se mueve, con un asa", () => {
       await intoTheCanvas(walker);
       const frame = walker.frameLocator(PREVIEW).first();
       await walker.getByRole("button", { name: "Estilo", exact: true }).click();
-      await walker.waitForTimeout(500);
       await expect(walker.getByRole("heading", { name: "El estilo de toda la web" })).toBeVisible();
+      // The panel arrives over 260 ms and the canvas takes its scale once the panel has its
+      // width: the scale is polled for, and the panel's entrance waited out, rather than 500 ms
+      // of silence before reading a number that may not have moved yet (sprint 28 día 5).
+      await motionSettled(walker);
       // Subiendo por los antepasados hasta el que lleva la escala: no es el padre del marco, y la
       // primera versión de esta caminata midió el padre, leyó 1 y se dio por buena sin haber
       // probado nada de lo que dice su nombre.
-      const zoom = await walker.evaluate(() => {
-        let node = document.querySelector<HTMLElement>("iframe")?.parentElement;
-        while (node) {
-          const found = /matrix\(([\d.]+)/.exec(getComputedStyle(node).transform);
-          if (found?.[1]) return Number(found[1]);
-          node = node.parentElement;
-        }
-        return 1;
-      });
+      const scaleOf = () =>
+        walker.evaluate(() => {
+          let node = document.querySelector<HTMLElement>("iframe")?.parentElement;
+          while (node) {
+            const found = /matrix\(([\d.]+)/.exec(getComputedStyle(node).transform);
+            if (found?.[1]) return Number(found[1]);
+            node = node.parentElement;
+          }
+          return 1;
+        });
+      await expect
+        .poll(scaleOf, {
+          message: "el lienzo no está a escala: la caminata no probaría lo que dice",
+        })
+        .toBeLessThan(1);
+      const zoom = await scaleOf();
       console.log(`asa bajo zoom — el lienzo se dibuja a ${zoom}`);
-      expect(zoom, "el lienzo no está a escala: la caminata no probaría lo que dice").toBeLessThan(
-        1,
-      );
 
       await frame.locator('[data-section="sec-services"]').click();
       await expect(frame.locator(".rb-actions")).toHaveCount(1);
@@ -16365,16 +16436,11 @@ describe("sprint 24 día 9 — el teclado lo mueve y lo dice", () => {
        * 27 día 5: the headline read at x 224 and 528 wide, against a frame that ended at x 600 and
        * 320 wide, so the press landed outside the frame and no drag began. The walk failed alone on
        * `main` that way too, and passed inside the full suite until día 5 shortened what comes
-       * before it by dropping `canvasQuiet`. So: the width that is the phone's, then measure.
+       * before it by dropping `canvasQuiet`. So: the width that is the phone's, then measure —
+       * through `deviceArrived` since sprint 28 día 5, which also wants the width still for two
+       * frames and the shell's transition class gone, the same wait `ontoThePhone` takes.
        */
-      await expect
-        .poll(
-          () => page.evaluate(() => document.querySelector("iframe")?.contentWindow?.innerWidth),
-          {
-            message: "el marco no llegó al ancho del teléfono",
-          },
-        )
-        .toBe(NARROWEST_WIDTH);
+      await deviceArrived(page, NARROWEST_WIDTH);
       await waitForBankPhoto(frame);
 
       /** The reading order a phone shows, top to bottom. */
@@ -17633,9 +17699,17 @@ describe("sprint 25 día 7 — las asas en táctil, y el móvil sin solape", () 
    * mil ciento sesenta y ocho píxeles de ancho y se acusó de un defecto que no existía. Una sola
    * pista donde el escritorio declara ciento siete es la señal de que la consulta de medios ya
    * manda.
+   *
+   * **Y antes de la columna, el ancho** (sprint 28 día 5). La columna única llega a mitad de la
+   * transición de 260 ms del ancho de la tarjeta —la consulta dispara a 720 px, con el marco
+   * todavía en camino hacia los 320—, así que medir tras ella medía una página que aún se movía:
+   * el cierre del sprint 27 lo dejó anotado como «la siguiente en caer». `deviceArrived` espera al
+   * ancho de destino quieto en dos fotogramas y sin transición en curso; la columna y las fuentes
+   * se esperan después, como antes.
    */
   async function ontoThePhone(page: Page, frame: FrameLocator): Promise<void> {
     await page.getByRole("button", { name: "Ver en móvil" }).click();
+    await deviceArrived(page, NARROWEST_WIDTH);
     await waitForBankPhoto(frame);
     await expect
       .poll(
@@ -18542,8 +18616,19 @@ describe("sprint 26 día 2 — el parche, tras una llave", () => {
       await page.keyboard.press("End");
       await page.keyboard.type("Dos");
       const serialBefore = await editSerial(page);
-      await page.keyboard.press("Control+z");
-      await page.waitForTimeout(400);
+      /*
+       * **La tecla de deshacer de la plataforma**, y no `Control+z` a secas (sprint 28 día 5). En
+       * macOS el deshacer nativo de Chromium es Meta+Z, así que `Control+z` no movía el DOM: la
+       * caminata pasaba aquí con «UnoDos» en el titular y solo comprobaba el serial —la cuenta de
+       * abajo, «lo que hay en el DOM tras el deshacer del navegador es Uno», era verdad en el Linux
+       * de CI y no en esta máquina, y los 400 ms de silencio que había tapaban la diferencia. Lo que
+       * se mueve es el DOM del texto: se espera a que «Dos» se haya ido, y entonces se mira el
+       * historial.
+       */
+      await page.keyboard.press(process.platform === "darwin" ? "Meta+z" : "Control+z");
+      await expect(headline, "el deshacer del navegador no quitó lo tecleado").toHaveText(
+        /Uno\s*$/,
+      );
       expect(await editSerial(page), "Ctrl+Z dentro de un texto movió el historial").toBe(
         serialBefore,
       );
@@ -18607,11 +18692,14 @@ describe("sprint 26 día 2 — el parche, tras una llave", () => {
       await expect(headline).toHaveAttribute("contenteditable", "true");
       await page.keyboard.type("x");
       await editHint(page).click();
-      await page.waitForTimeout(1200);
-      expect(
-        await editSerial(page),
-        `la letra no llegó al documento:\n${await probeReport(page)}`,
-      ).toBeGreaterThan(serialBeforeEdit);
+      // La letra llega como parche y el parche mueve el serial: se espera a eso, no 1200 ms
+      // (sprint 28 día 5). La cuenta del editor va en el mensaje si nunca llega.
+      try {
+        await expect.poll(() => editSerial(page)).toBeGreaterThan(serialBeforeEdit);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(`la letra no llegó al documento: ${message}\n${await probeReport(page)}`);
+      }
 
       // Una mano sobre la foto, a medio arrastre, y mientras tanto un cambio del documento que no
       // es de la mano.
@@ -19167,8 +19255,11 @@ describe("sprint 26 día 4 — fotos, estilos, páginas e interruptor", () => {
         cssPatches += got.filter((e) => e.kind === "patch" && e.data["cssChanged"] === true).length;
       }
       expect(cssPatches, "los cambios de paleta no reescribieron la hoja").toBe(10);
+      // Sin pausa tras las fuentes (sprint 28 día 5): cada parche ya se esperó en `patchesAfter`,
+      // y una petición de fuente que la hoja provocara estaría en `performance` desde el mismo
+      // recálculo de estilo. Los 300 ms que había aquí no esperaban a nada medido; si la suite
+      // completa del día 8 los echa en falta, lo que cae dice qué se movía.
       await fontsReady(frame);
-      await page.waitForTimeout(300);
       const after = await measure();
 
       console.log(
