@@ -143,7 +143,10 @@ without knowing the model exists: a text at `-1` is one click from being written
 ## What this does not decide
 
 The 164 px the page shifts when a panel closes (its two untried repairs stay named in the backlog:
-keep the scroll *fraction*, or take the panel's width out of the mock-up's width); named versions;
+keep the scroll *fraction*, or take the panel's width out of the mock-up's width) — **closed on
+sprint 28 día 1, 26 October 2026, by neither of the two**: measured, the cause was the frame's
+viewport growing with a smaller zoom and clamping the scroll, not the re-flow; the backlog row has
+the numbers and the fix (`overscrollFor`); named versions;
 what the keyboard does in the gallery of twenty-three photographs beyond Tab between them. And the
 chrome at screen size, which is ADR 0053's on día 7.
 

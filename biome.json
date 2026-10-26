@@ -2,6 +2,7 @@
   "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
   "files": {
+    "maxSize": 2097152,
     "includes": [
       "**",
       "!**/fixtures/golden",

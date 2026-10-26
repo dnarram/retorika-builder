@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import es from "../locales/es.json" with { type: "json" };
 import type { SwitchNotice } from "./designTools.ts";
 import { NARROWEST_DESKTOP, NARROWEST_WIDTH } from "./overflowCheck.ts";
+import { overscrollFor } from "./overscroll.ts";
 
 /**
  * **The one rule every in-flow rail panel has to obey: fit the row, and scroll what does not fit.**
@@ -726,8 +727,17 @@ export function EditorShell({
    * notice. Not a `ResizeObserver` on the `<iframe>` from inside: its `contentRect` ignores the
    * `transform` this shell scales the card with, so the frame's box does not change when the card
    * is scaled. The canvas measures the zoom for itself (`zoomOf`); this only says when to.
+   *
+   * **And the room the page needs at its end so that the new zoom clamps nothing** (sprint 28
+   * día 1, `overscrollFor`): the card is `100 / zoom %` tall, so a smaller zoom is a taller frame
+   * viewport in the page's own pixels and a smaller greatest `scrollTop` — which pushed a section
+   * near the end of the page 166 px down the moment a panel opened. The number is computed here,
+   * from the row's measured height and the zoom, and **never read from the frame**: reading the
+   * frame forces its layout, and the clamp happens in that layout. Delivered from a layout effect
+   * for the same reason — after the card's new height is in the DOM and before the browser lays it
+   * out, so the viewport and the room grow in the same layout.
    */
-  onZoomChange?: (zoom: number) => void;
+  onZoomChange?: (zoom: number, overscroll: number) => void;
   device: "desktop" | "mobile";
   onDeviceChange: (device: "desktop" | "mobile") => void;
   canUndo: boolean;
@@ -793,6 +803,8 @@ export function EditorShell({
    */
   const canvasArea = useRef<HTMLDivElement>(null);
   const [available, setAvailable] = useState(0);
+  // The row's height, for the room the page is given when the zoom falls (`overscrollFor`).
+  const [rowHeight, setRowHeight] = useState(0);
 
   /**
    * **The header's height, measured, for the one thing that is pinned under it.**
@@ -886,8 +898,10 @@ export function EditorShell({
     const box = canvasArea.current;
     if (!box) return;
     const observer = new ResizeObserver((entries) => {
-      const width = entries[0]?.contentRect.width;
-      if (width !== undefined) setAvailable(width);
+      const rect = entries[0]?.contentRect;
+      if (!rect) return;
+      setAvailable(rect.width);
+      setRowHeight(rect.height);
     });
     observer.observe(box);
     return () => observer.disconnect();
@@ -907,13 +921,17 @@ export function EditorShell({
     device === "mobile" ? NARROWEST_WIDTH : Math.max(available, NARROWEST_DESKTOP);
   const zoom = available > 0 && layoutWidth > available ? available / layoutWidth : 1;
 
-  // After the card has its new `transform`, which is what the canvas measures; a ref, so that a
-  // new callback on every render is not a change of zoom.
+  // After the card has its new `transform` and height in the DOM, which is what the canvas
+  // measures, and **before the browser lays them out**, so the room the page is given arrives in
+  // the same layout as the taller viewport (see `onZoomChange`); a ref, so that a new callback on
+  // every render is not a change of zoom. The room is a dependency too: the same zoom in a taller
+  // window is more room.
+  const overscroll = overscrollFor(rowHeight, zoom);
   const zoomChanged = useRef(onZoomChange);
   zoomChanged.current = onZoomChange;
-  useEffect(() => {
-    zoomChanged.current?.(zoom);
-  }, [zoom]);
+  useLayoutEffect(() => {
+    zoomChanged.current?.(zoom, overscroll);
+  }, [zoom, overscroll]);
 
   const building = downloadState === "preparing" || downloadState === "downloading";
 

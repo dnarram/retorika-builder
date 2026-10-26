@@ -1005,6 +1005,9 @@ export function Editor({
   const inertDoc = useRef<Document | null>(null);
   /** The page the last patch drew, so a change of page can start at the top (día 4). */
   const patchedPageId = useRef<string | null>(pageId ?? null);
+  /** The room the shell last asked for at the end of the page (sprint 28 día 1, `overscrollFor`),
+   * in the frame's pixels, so a document wired after the notice gets it too (`writeZoom`). */
+  const overscrollNow = useRef(0);
   /** Where the next patch comes from (adjustment 2; día 4): `history` for undo and redo, `mark`
    * for a mark set from the text's own toolbar — both applied to the focused text as well, the
    * selection kept. Set by the call that changes the document, read and cleared by the patch that
@@ -3166,7 +3169,7 @@ export function Editor({
     // Drawn from a clean slate, like `.rb-menu`, `.rb-toolbar` and `.rb-hole` already are: a second
     // pass over a document that has its gaps must replace them, never add a second row of pills
     // under each. `wireOnce`'s mark is what stops the second pass; this is what makes one harmless.
-    for (const old of iframeDoc.querySelectorAll(".rb-gap")) old.remove();
+    for (const old of iframeDoc.querySelectorAll(".rb-gap, .rb-overscroll")) old.remove();
     const sections = [...iframeDoc.querySelectorAll<HTMLElement>("[data-section]")];
     if (sections.length === 0) return;
 
@@ -3343,6 +3346,19 @@ export function Editor({
 
     for (const [index, section] of sections.entries()) section.before(gap(index));
     sections[sections.length - 1]?.after(gap(sections.length));
+
+    /**
+     * **The room after the page, so that zooming out clamps nothing** (sprint 28 día 1,
+     * `overscrollFor`). Its height is `--rb-overscroll`, written on the root by the shell's zoom
+     * notice; at zoom 1 it is 0 and the preview ends where the page ends. The last child of the
+     * body, after the footer and the last gap, and drawn in the editor's own grey — the colour of
+     * the table the card sits on — so it never reads as the page continuing. Chrome, like the gaps:
+     * never in the published page, parked by the patch.
+     */
+    const room = chrome(iframeDoc, "div");
+    room.className = "rb-overscroll";
+    room.setAttribute("aria-hidden", "true");
+    iframeDoc.body.appendChild(room);
 
     // Anywhere else closes an open menu, the same as any menu on the web. Not `capture`, so a
     // choice's own handler runs first and its `stopPropagation` keeps this from firing twice.
@@ -5702,6 +5718,10 @@ export function Editor({
   function writeZoom(iframeDoc: Document): number {
     const zoom = zoomOf(iframeDoc);
     iframeDoc.documentElement.style.setProperty("--rb-zoom", String(zoom));
+    // The room at the end of the page that keeps this zoom from clamping the scroll (sprint 28
+    // día 1, `overscrollFor` in the shell): the shell computes it and the zoom handler stores it;
+    // this is what puts it on a document wired after the shell has already spoken.
+    iframeDoc.documentElement.style.setProperty("--rb-overscroll", `${overscrollNow.current}px`);
     return zoom;
   }
 
@@ -6549,9 +6569,14 @@ export function Editor({
      * sprint 27 día 1. The page's only scroll rule is «another page starts at the top»
      * (`applyPatch`, día 4).
      *
-     * **What is still open is a different thing** and it is in the backlog: the page moves when the
-     * *card* changes width, which is a panel opening or closing, and that happens under either
-     * route. Nothing here ever ran on a width change.
+     * **What was still open was a different thing, and it closed on sprint 28 día 1**: the page
+     * moved when the *card* changed width — a panel opening or closing — and the backlog carried
+     * it as a re-flow since sprint 24. Measured, it was not the re-flow (the browser's own scroll
+     * anchoring absorbs that, 0 px at 1280 and 1600 across a 220 px change of width): it was the
+     * frame's viewport growing with a smaller zoom and clamping the scroll. The room the page is
+     * given at its end (`overscrollFor`, `.rb-overscroll` in `drawGaps`, written on the root by the
+     * shell's zoom notice before anything is laid out) is what keeps the greatest scroll where it
+     * was. Still nothing here runs on a width change, and nothing needs to.
      */
     // A wiring counts as an edit on the page for the e2e's signal; and a change that arrived before
     // this document was wired is applied to it now.
@@ -6860,6 +6885,9 @@ export function Editor({
        */
       ".rb-gap { position: relative; box-sizing: border-box; height: 76px; padding: 0 40px;",
       `  display: flex; align-items: center; gap: 0; background: ${CHROME_SCALE.surface}; }`,
+      // In the frame's own pixels on purpose, not `screenPx`: the room is the viewport's growth in
+      // the page's pixels (`overscrollFor`), and it is 0 at zoom 1.
+      `.rb-overscroll { height: var(--rb-overscroll, 0px); background: ${CHROME_SCALE.bg}; }`,
       `.rb-rule { flex-grow: 1; height: 0; border-top: ${screenPx(1)} solid ${CHROME_SCALE.borderStrong}; }`,
       // The interface's own typeface, never the site's. Everything else injected here is an
       // icon, so this is the first piece of chrome with words in it, and `font: inherit` would
@@ -7455,15 +7483,21 @@ export function Editor({
        * probe. The edit serial does not move: nothing was edited, and a walk waiting for an edit
        * must not be woken by a panel.
        */
-      onZoomChange={(zoom) => {
+      onZoomChange={(zoom, overscroll) => {
         const live = liveDoc();
         // `documentElement` and not only the document: between the frame's mounting and the
         // parsing of its first page the document exists with no root, and the shell's first zoom
         // can arrive then — read without the `?.` it was a TypeError inside an effect, which took
         // the whole editor down on a phone (measured on sprint 27 día 7, at 320 and at 768).
+        // **The room first, before anything reads the frame** (sprint 28 día 1): `redrawChrome`
+        // measures sections, and a measurement is a layout — the one in which the taller viewport
+        // would clamp the scroll if the page had not already been given the room. A write costs no
+        // layout, so it goes first, wired or not; `writeZoom` repeats it at wiring from the ref.
+        overscrollNow.current = overscroll;
+        live?.documentElement?.style.setProperty("--rb-overscroll", `${overscroll}px`);
         if (!live || live.documentElement?.dataset["rbWired"] !== "1") return;
         const redrawMs = redrawChrome(live);
-        record("redraw", { cause: "zoom", zoom, redrawMs });
+        record("redraw", { cause: "zoom", zoom, overscroll, redrawMs });
       }}
       // The business name, not the variant's. The bar said «Clásica» — the caption of whichever of
       // the three cards was opened — where mockup 08 shows «Barbería El Corte», and it had said so
