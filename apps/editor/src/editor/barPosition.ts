@@ -35,6 +35,19 @@ export interface Bounds {
   readonly hostHeight: number;
   readonly barWidth: number;
   readonly barHeight: number;
+  /**
+   * **What of this section is on screen**, in the section's own coordinates — the same band
+   * `ToolbarGeometry.view` carries for the text bar, and for the same reason (sprint 28 día 2).
+   * The cluster of verbs was placed at a corner of its section with no band at all, so a section
+   * whose top has been scrolled off had its verbs off the screen with it: measured at 1440 × 900,
+   * the cover's cluster at −192 with the cover's lower four hundred pixels in front of the person.
+   * `select()` focuses the section and focus scrolls it into view, which is why it was usually on
+   * screen — until the hand scrolled.
+   *
+   * Optional, and absent means the section alone, which is what every caller without a window
+   * (and every unit above this one) has always read.
+   */
+  readonly view?: { readonly top: number; readonly height: number };
 }
 
 /**
@@ -102,10 +115,39 @@ export const CORNERS: readonly Corner[] = ["top-right", "bottom-right", "bottom-
 export function clampToHost(point: Point, bounds: Bounds, inset = BAR_INSET): Point {
   const right = Math.max(inset, bounds.hostWidth - bounds.barWidth - inset);
   const bottom = Math.max(inset, bounds.hostHeight - bounds.barHeight - inset);
+  const { top, low } = verticalRoom(bounds, inset, bottom);
   return {
     x: Math.min(Math.max(point.x, inset), right),
-    y: Math.min(Math.max(point.y, inset), bottom),
+    y: Math.min(Math.max(point.y, top), low),
   };
+}
+
+/**
+ * The vertical room a bar has: the section, narrowed to the band of it that is on screen.
+ *
+ * **The band narrows the section, it does not replace it** — the rule `toolbarPoint` states for
+ * the text bar, read the same way here. The highest place is the lower of the two upper edges and
+ * the lowest the higher of the two lower edges, each inset by the same eight pixels the section's
+ * own edges are, so a cluster held at the top of the band sits eight pixels under the frame's edge
+ * and not glued to it.
+ *
+ * Two cases are decided rather than left to the arithmetic. **A band that misses the section** —
+ * a section wholly above or below what is on screen — is ignored: the bar stays in its section,
+ * off the screen with it, rather than floating over whichever section is on screen instead, which
+ * would be a cluster of verbs standing over a section they do not act on. **And a band with less
+ * of the section in it than the bar is tall** has no place inside both, so the visible edge wins:
+ * the bar sits at the band's upper edge and hangs past the section's bottom, reachable — the one
+ * outcome a bar's placement exists to refuse is «on the screen and cannot be pressed».
+ */
+function verticalRoom(bounds: Bounds, inset: number, bottom: number): { top: number; low: number } {
+  const view = bounds.view;
+  if (!view) return { top: inset, low: bottom };
+  const bandEnd = view.top + view.height;
+  const meets = view.top < bounds.hostHeight && bandEnd > 0;
+  if (!meets) return { top: inset, low: bottom };
+  const top = Math.max(inset, view.top + inset);
+  const low = Math.min(bottom, bandEnd - bounds.barHeight - inset);
+  return { top, low: Math.max(low, top) };
 }
 
 export function cornerPoint(corner: Corner, bounds: Bounds, inset = BAR_INSET): Point {
@@ -361,7 +403,11 @@ export function dragged(start: Point, from: Point, to: Point, bounds: Bounds, in
  * to the other on arrival.
  */
 export function tipSide(point: Point, bounds: Bounds, room = TIP_ROOM): "below" | "above" {
-  return point.y + bounds.barHeight + room > bounds.hostHeight ? "above" : "below";
+  const under = point.y + bounds.barHeight + room;
+  // Past the section's own edge, or past the band's lower edge when there is one: a word drawn
+  // under a bar held at the bottom of what is on screen would be drawn off it (día 2).
+  const bandEnd = bounds.view ? bounds.view.top + bounds.view.height : Number.POSITIVE_INFINITY;
+  return under > bounds.hostHeight || under > bandEnd ? "above" : "below";
 }
 
 /**

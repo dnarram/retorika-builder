@@ -87,6 +87,76 @@ describe("where a bar starts, and where it is allowed to be", () => {
   });
 });
 
+/**
+ * **The band of the section that is on screen, for the cluster** (sprint 28 día 2). The section
+ * from the test above, and a frame 500 px tall scrolled so that the section's first 300 px are
+ * above its upper edge: in the section's coordinates the band starts at 300 and ends at 800 — past
+ * the section's own bottom, which is at 600.
+ */
+describe("inside the band that is on screen, as well as inside the section", () => {
+  const SCROLLED: Bounds = { ...SECTION, view: { top: 300, height: 500 } };
+
+  it("holds a point above the band at the band's upper edge, inset like a section's edge", () => {
+    expect(clampToHost({ x: 100, y: 10 }, SCROLLED)).toEqual({ x: 100, y: 300 + BAR_INSET });
+    expect(clampToHost({ x: 100, y: -400 }, SCROLLED)).toEqual({ x: 100, y: 300 + BAR_INSET });
+  });
+
+  it("leaves a point inside both exactly where it was", () => {
+    expect(clampToHost({ x: 100, y: 400 }, SCROLLED)).toEqual({ x: 100, y: 400 });
+  });
+
+  it("keeps the section's own bottom as the floor when the band reaches past it", () => {
+    expect(clampToHost({ x: 100, y: 9_000 }, SCROLLED)).toEqual({ x: 100, y: BOTTOM });
+  });
+
+  it("holds a point below the band at the band's lower edge when the section goes on below", () => {
+    // The frame's upper edge at the section's top, 200 px tall: the band ends at 200.
+    const atTheTop: Bounds = { ...SECTION, view: { top: 0, height: 200 } };
+    expect(clampToHost({ x: 100, y: 500 }, atTheTop)).toEqual({
+      x: 100,
+      y: 200 - SECTION.barHeight - BAR_INSET,
+    });
+  });
+
+  it("moves the corners into the band, so «next corner» is always somewhere on screen", () => {
+    expect(cornerPoint("top-right", SCROLLED)).toEqual({ x: RIGHT, y: 300 + BAR_INSET });
+    expect(cornerPoint("top-left", SCROLLED)).toEqual({ x: BAR_INSET, y: 300 + BAR_INSET });
+    expect(cornerPoint("bottom-right", SCROLLED)).toEqual({ x: RIGHT, y: BOTTOM });
+    expect(defaultPoint(SCROLLED)).toEqual(cornerPoint("top-right", SCROLLED));
+  });
+
+  it("gives the corner it always gave while the section's own corner is on screen", () => {
+    // The section's top 76 px under the frame's upper edge: the band starts above the section.
+    const onScreen: Bounds = { ...SECTION, view: { top: -76, height: 774 } };
+    expect(cornerPoint("top-right", onScreen)).toEqual(cornerPoint("top-right", SECTION));
+    expect(clampToHost({ x: 100, y: 100 }, onScreen)).toEqual({ x: 100, y: 100 });
+  });
+
+  it("lets the visible edge win when less of the section is on screen than the bar is tall", () => {
+    // Only the section's last 20 px are on screen: there is no place inside both, and a bar held
+    // inside the section would be off the screen, which is the one outcome this refuses.
+    const sliver: Bounds = { ...SECTION, view: { top: 580, height: 500 } };
+    expect(clampToHost({ x: 100, y: 100 }, sliver).y).toBe(580 + BAR_INSET);
+  });
+
+  it("ignores a band that misses the section altogether, which is a section not on screen", () => {
+    const below: Bounds = { ...SECTION, view: { top: 900, height: 500 } };
+    const above: Bounds = { ...SECTION, view: { top: -2_000, height: 500 } };
+    expect(clampToHost({ x: 100, y: 100 }, below)).toEqual({ x: 100, y: 100 });
+    expect(clampToHost({ x: 100, y: 100 }, above)).toEqual({ x: 100, y: 100 });
+    expect(cornerPoint("top-right", below)).toEqual(cornerPoint("top-right", SECTION));
+  });
+
+  it("puts the word above the row once a word below it would be drawn past the band's lower edge", () => {
+    const atTheTop: Bounds = { ...SECTION, view: { top: 0, height: 200 } };
+    const low = clampToHost({ x: 100, y: 500 }, atTheTop);
+    expect(tipSide(low, atTheTop)).toBe("above");
+    expect(tipSide({ x: 100, y: 100 }, atTheTop)).toBe("below");
+    // And without the band the same point is nowhere near the section's own edge.
+    expect(tipSide(low, SECTION)).toBe("below");
+  });
+});
+
 describe("the corner the grip sends it to next", () => {
   it("walks clockwise from where the bar is born and comes home on the fourth press", () => {
     let at: Point = defaultPoint(SECTION);

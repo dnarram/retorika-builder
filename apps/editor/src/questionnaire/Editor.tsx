@@ -897,6 +897,15 @@ export function Editor({
   /** `wireSelection`'s settling tail, callable after a structural patch (día 3). */
   const settleSelection = useRef<() => void>(() => {});
   /**
+   * **The two pieces of floating chrome, placed again against the band that is on screen now**
+   * (sprint 28 día 2): the chosen section's cluster of verbs, and the open text bar. Each wiring
+   * registers its own, `followOnScroll` calls both from the frame's `scroll`, and each answers
+   * whether it wrote anything — so the probe records a `follow` only when something moved, and
+   * a scroll that changes nothing costs two reads and no write.
+   */
+  const followActions = useRef<(iframeDoc: Document) => boolean>(() => false);
+  const followToolbar = useRef<(iframeDoc: Document) => boolean>(() => false);
+  /**
    * Repaint the touch handles — **one painter per document** (día 7).
    *
    * A ref and not a call, because the two halves are on opposite sides of the frame: `markChosen`
@@ -2262,13 +2271,27 @@ export function Editor({
      */
     const REBUILDS = new Set(["move-up", "move-down", "duplicate", "to-page", "delete"]);
 
-    /** The section the bar is inside, and the bar, both measured — what every rule here takes. */
-    const boundsOf = (bar: HTMLElement, host: HTMLElement): Bounds => ({
-      hostWidth: host.clientWidth,
-      hostHeight: host.clientHeight,
-      barWidth: bar.offsetWidth,
-      barHeight: bar.offsetHeight,
-    });
+    /**
+     * The section the bar is inside, and the bar, both measured — what every rule here takes.
+     *
+     * **With the band of the section that is on screen** (día 2), in the section's own
+     * coordinates: the section's box on screen is already measured from the frame's upper edge,
+     * so the band starts at minus its top and is as tall as the frame's viewport — the same band
+     * `wireToolbar` reads for the text bar. Read on every placement, never kept: the bar is placed
+     * again after a patch and after a scroll, and the band is not what it was.
+     */
+    const boundsOf = (bar: HTMLElement, host: HTMLElement): Bounds => {
+      const win = iframeDoc.defaultView;
+      return {
+        hostWidth: host.clientWidth,
+        hostHeight: host.clientHeight,
+        barWidth: bar.offsetWidth,
+        barHeight: bar.offsetHeight,
+        ...(win
+          ? { view: { top: -host.getBoundingClientRect().top, height: win.innerHeight } }
+          : {}),
+      };
+    };
 
     /** Where the bar is now, in its section's own coordinates — `[data-section]` is the
      * `offsetParent`, which is what `position: relative` on it has been for since sprint 2. */
@@ -2314,30 +2337,64 @@ export function Editor({
     }
 
     /**
-     * Draw the bar where this section's own memory says, if it has one.
+     * Draw the bar where this section's own memory says, held inside the band that is on screen.
      *
      * Called from `select()` **after** the cluster is in the document, because a bar that is not in
-     * a document has no width to place. Does nothing when the section has never been moved: the
-     * stylesheet's corner is the default, and leaving it to CSS means one place decides it.
+     * a document has no width to place; and from the frame's scroll (día 2). **The stylesheet's
+     * corner stays the default**: a section nobody has moved the bar in, with its corner on
+     * screen, gets no inline place at all, so one place decides where a bar is born and
+     * `style.left === ""` keeps meaning «never moved» for `anchorPopup` and for the walks. The
+     * inline place is written only when there is something the stylesheet cannot know — the
+     * hand's position for this section, or a corner that has been scrolled off the screen — and
+     * only when it differs from what is drawn, so a scroll that changes nothing writes nothing.
+     *
+     * **The hand's position is kept, not overwritten.** What the band does is clamp the drawing;
+     * `actionsPlace` still says where the hand put the bar, and the bar is back there the moment
+     * the scroll allows it.
+     *
+     * Returns whether anything was written, for the probe.
      */
-    function placeActions(bar: HTMLElement, host: HTMLElement, sectionId: string) {
+    function placeActions(bar: HTMLElement, host: HTMLElement, sectionId: string): boolean {
       const kept = actionsPlace.current.get(sectionId);
-      if (!kept) return;
       const bounds = boundsOf(bar, host);
       // Held off the section's edges by eight pixels of the screen, and the word's room measured in
       // the screen's too (ADR 0053): both are distances of the chrome, which grows with the zoom.
       const zoom = zoomOf(iframeDoc);
-      const at = clampToHost(kept, bounds, BAR_INSET / zoom);
+      const inset = BAR_INSET / zoom;
+      const at = kept ? clampToHost(kept, bounds, inset) : cornerPoint("top-right", bounds, inset);
+      // Born in its corner and the corner on screen: the stylesheet's `top`/`right`, exactly.
+      if (!kept && at.y === inset) {
+        if (bar.style.left === "") return false;
+        bar.removeAttribute("style");
+        bar.classList.remove("rb-actions-low");
+        for (const popup of host.querySelectorAll<HTMLElement>(".rb-compositions, .rb-escalate")) {
+          popup.removeAttribute("style");
+        }
+        return true;
+      }
+      const left = `${at.x}px`;
+      const top = `${at.y}px`;
+      if (bar.style.left === left && bar.style.top === top) return false;
       bar.style.right = "auto";
-      bar.style.left = `${at.x}px`;
-      bar.style.top = `${at.y}px`;
+      bar.style.left = left;
+      bar.style.top = top;
       // The words go above the row once the bar is low enough that one below would be drawn past
-      // the section's own edge.
+      // the section's own edge — or past the band's.
       bar.classList.toggle("rb-actions-low", tipSide(at, bounds, TIP_ROOM / zoom) === "above");
       for (const popup of host.querySelectorAll<HTMLElement>(".rb-compositions, .rb-escalate")) {
         anchorPopup(popup, host);
       }
+      return true;
     }
+
+    followActions.current = (live) => {
+      if (live !== iframeDoc) return false;
+      const bar = iframeDoc.querySelector<HTMLElement>(".rb-actions");
+      const host = bar?.closest<HTMLElement>("[data-section]");
+      const sectionId = host?.dataset.section;
+      if (!bar || !host || !sectionId) return false;
+      return placeActions(bar, host, sectionId);
+    };
 
     /** Remember where the bar was put, and put it there. The memory is this section's and this
      * session's; nothing about it reaches the document. */
@@ -3648,14 +3705,19 @@ export function Editor({
      * that no longer exists.
      */
     let followSelection: (() => void) | undefined;
+    /** The open bar's own `place`, for the frame's scroll (día 2); none while no bar is open. */
+    let placeOpen: (() => boolean) | undefined;
 
     const close = () => {
       if (followSelection) {
         iframeDoc.removeEventListener("selectionchange", followSelection);
         followSelection = undefined;
       }
+      placeOpen = undefined;
       for (const bar of iframeDoc.querySelectorAll(".rb-toolbar")) bar.remove();
     };
+
+    followToolbar.current = (live) => (live === iframeDoc ? (placeOpen?.() ?? false) : false);
 
     /** Forget which element the bar belongs to, as well as removing it. Separate from `close`
      * because a re-wire removes the bar in order to draw it again, and must not forget. */
@@ -4683,20 +4745,33 @@ export function Editor({
           ...(view ? { view } : {}),
         };
       };
-      const bounds = (): Bounds => ({
-        hostWidth: section.clientWidth,
-        hostHeight: section.clientHeight,
-        barWidth: bar.offsetWidth,
-        barHeight: bar.offsetHeight,
-      });
-      const place = () => {
+      // With the band (día 2), so a bar the hand displaced is held inside what is on screen as
+      // well as inside its section; the displacement itself is kept, in `toolbarOffset`.
+      const bounds = (): Bounds => {
+        const view = viewBand();
+        return {
+          hostWidth: section.clientWidth,
+          hostHeight: section.clientHeight,
+          barWidth: bar.offsetWidth,
+          barHeight: bar.offsetHeight,
+          ...(view ? { view } : {}),
+        };
+      };
+      /** Draw the bar where the band and the hand say; `true` when that is somewhere new. Compared
+       * before it is written, so the scroll that calls this on every frame writes only on change. */
+      const place = (): boolean => {
         const computed = toolbarPoint(geometry()).point;
         const nudge = toolbarOffset.current.get(sectionId) ?? { x: 0, y: 0 };
         const at = withOffset(computed, nudge, bounds(), BAR_INSET / zoomOf(iframeDoc));
-        bar.style.top = `${at.y}px`;
-        bar.style.left = `${at.x}px`;
+        const top = `${at.y}px`;
+        const left = `${at.x}px`;
+        if (bar.style.top === top && bar.style.left === left) return false;
+        bar.style.top = top;
+        bar.style.left = left;
+        return true;
       };
       place();
+      placeOpen = place;
       wireBarGrip(grip, {
         sectionId,
         geometry,
@@ -7320,9 +7395,49 @@ export function Editor({
     // `wireReadingPosition` was here, recording where the person was reading so the next document
     // could put them back. There is no next document (sprint 27 día 1), and a patched page keeps
     // its scroll by doing nothing.
+    // After the two wirings whose chrome it places again.
+    followOnScroll(iframeDoc);
     // Last: the pass that actually draws the delete notice. It goes after `wireInsertion`, which
     // inserts the `.rb-gap` rows the notice is positioned among.
     syncHole(iframeDoc);
+  }
+
+  /**
+   * **The floating chrome follows the view** (sprint 28 día 2). The text bar has been placed against
+   * the band of its section that is on screen since sprint 27 día 3 — and placed again only after a
+   * patch, so scrolling the canvas with the bar open moved the band from under a bar that stayed
+   * put: measured on 26 October 2026, the words scrolled to twelve pixels under the frame's upper
+   * edge and the bar at −34, unpressable, the defect of 15 October reached by the wheel instead of
+   * by focus. The cluster of verbs had no band at all: the cover's at −192 with the cover's lower
+   * four hundred pixels on screen.
+   *
+   * One listener on the frame's own window, **passive** (it never cancels a scroll) and
+   * **coalesced by `requestAnimationFrame`** (a wheel delivers several `scroll`s a frame, and the
+   * chrome is drawn once per frame regardless). Registered once per wired document, with the rest
+   * of the document's listeners; while nothing floating is drawn, each follower answers `false`
+   * after one query and nothing is written. Recorded in the probe only when something moved, so a
+   * walk can tell a bar moved by the scroll from one moved by an edit.
+   */
+  function followOnScroll(iframeDoc: Document) {
+    const win = iframeDoc.defaultView;
+    if (!win) return;
+    let queued = false;
+    win.addEventListener(
+      "scroll",
+      () => {
+        if (queued) return;
+        queued = true;
+        win.requestAnimationFrame(() => {
+          queued = false;
+          const cluster = followActions.current(iframeDoc);
+          const bar = followToolbar.current(iframeDoc);
+          if (cluster || bar) {
+            record("follow", { cause: "scroll", cluster, bar, scrollY: Math.round(win.scrollY) });
+          }
+        });
+      },
+      { passive: true },
+    );
   }
 
   /**
