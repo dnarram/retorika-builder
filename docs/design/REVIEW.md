@@ -3786,3 +3786,61 @@ la primera.
 8. **Desplazar el lienzo con la barra abierta** no la recoloca hasta el siguiente parche, y el grupo de
    verbos no tiene franja visible (del día 3).
 9. **El cromo del flujo crece en el marco a menor zoom** y empuja lo de debajo (ADR 0053).
+
+## Sprint 28 — «Lo que ya existe, sin bordes» (desde el 26 de octubre de 2026)
+
+David, con la #302 fusionada: «quiero que reparemos bugs y nos centremos en mejorar lo que tenemos…
+dejaremos el añadir funcionalidades para sprints futuros». Tema nombrado por primera vez en cuatro
+sprints, así que el inventario fue para elegir *qué* defectos y no qué tema: catorce cosas entran en
+ocho días y siete se quedan fuera con su razón. Cuatro decisiones suyas antes de planificar —el héroe
+de la landing se queda, los dos colores de texto se oscurecen, «Empezar» pasa a «Crear mi web», y el
+favicon del sitio publicado entra acotado con su ADR— y cinco ajustes al aprobar: el suelo de zoom
+0,6 para el día 1, `\p{L}`/`\p{N}` y el disco sin letra para el favicon, reponer antes del blur en el
+campo exacto, el estado de las nueve fotos en el cierre, y los modelos por día. El plan está en
+`~/.claude/plans/pr302-fusionada-y-redespliegue-validated-bengio.md`. La #293 se fusionó el mismo día:
+la exención del banco corre hasta el 1 de diciembre, y las fotos siguen siendo compromiso suyo.
+
+### Día 1 — la página no se mueve bajo las manos (PR de `fix/el-panel-no-mueve-la-pagina`)
+
+**La premisa del día se midió y no se sostuvo, igual que el día 5 del 27.** El backlog llevaba desde
+el sprint 24 que al abrir o cerrar un panel «la vista previa se remaqueta al nuevo ancho» y la sección
+editada se iba 164 px (253 según el instrumento; 174 al abrir en el Linux de CI). El plan proponía
+atacar el remaquetado fijando el ancho de maquetación. Antes de tocar nada, una sonda a 1024 y 1280,
+con dos secciones y dos paneles: **a 1280 y 1600 un remaquetado de 220 px no mueve nada**, ni al
+abrir ni al cerrar, porque el anclaje de desplazamiento del propio navegador se lo come; y a 1024 una
+sección del medio de la página tampoco se mueve. Lo que se mueve es la sección cercana al final, y
+se mueve **exactamente lo que baja el `scroll` máximo**: la tarjeta mide `100 / zoom %` de alto para
+llenar la fila, así que al bajar el zoom a 0,738 el visor del marco crece **de 654 a 909 px de la
+página**, el máximo de desplazamiento baja de 1984 a 1754 y el navegador **recorta** el `scroll`
+hasta ahí. La sección, en 1895, queda en 166. Al cerrar «Campos» quedaba en 155 porque nadie devolvía
+el `scroll` recortado. Las dos reparaciones que el backlog tenía por descartadas reanclaban a través
+de un remaquetado que nunca fue la causa; por eso medían peor.
+
+**El arreglo da a la página exactamente el sitio que el visor gana** — `rowHeight × (1 / zoom − 1)`
+píxeles del marco, `overscrollFor` (pura, con su prueba) — dibujado como cromo tras la última
+sección (`.rb-overscroll`, en el gris de la mesa, nunca en la página publicada), y lo da **antes de
+que el navegador maquete el visor nuevo**: el aviso de zoom del armazón es un efecto de maquetación y
+el editor escribe `--rb-overscroll` en la raíz del marco antes de leer nada, porque leer el marco
+fuerza la maquetación en la que ocurre el recorte. El máximo de desplazamiento sube en vez de bajar
+(1984 → 2008), nada se recorta y el anclaje hace el resto: **0 / 0 / 0 en las doce medidas**. A zoom
+1 el sitio es 0 y la vista previa acaba donde acaba la página; con «Diseño» abierto a 1024 hay 255 px
+de página de gris al final, solo al llegar abajo, y la captura dice que se lee como mesa y no como
+página. Ningún desplazamiento horizontal (`scrollWidth` 721 = el ancho de maquetación).
+
+**La caminata del sprint 24 asevera desde hoy ±8 px** —una fila de la rejilla fina— al abrir y al
+cerrar a 1024, 1280 y 1600, y antes **el mecanismo**: el máximo de desplazamiento no baja al abrir.
+Saboteando el arreglo apareció un defecto de la propia caminata: su espera guardaba el último ancho
+entre llamadas y la primera muestra tras abrir coincidía con la de antes, así que «estable» era
+verdad antes de que la tarjeta cambiara (la regla del sprint 25 día 8). Saboteada pasaba al abrir con
+el visor aún en 654 y caía al cerrar con el 155 de la apertura. Ahora espera a que el ancho sea
+**otro** y después a que ancho y visor se queden quietos; saboteada cae al abrir: «el máximo de
+desplazamiento bajó de 1950 a 1754 — el visor creció y la página no recibió el sitio».
+
+**El ajuste 1 de David, medido y no construido, por decisión suya.** El ancho fijo no arregla el
+salto; compra que un texto no refluya entre estados del panel (filas de 8 px estables, ADR 0050).
+Su precio: el zoom con panel a 1024 pasaría de 0,738 a **0,707** (sobre su suelo de 0,6), y a 1280
+y 1600 de 1 a **0,782** y **0,834**, donde hoy la página se ve a tamaño real con un panel abierto.
+Su respuesta: «el día 7 mide el síntoma, no la elegancia» — una sección a mano con «Diseño» a 1280,
+un texto de dos líneas y un elemento colocado justo debajo, cerrar el panel y medir en píxeles de
+pantalla cuánto se separa o se monta; ≤ 8 px, fila del backlog con sus tres zooms; más, defecto del
+ADR 0050 y PR aparte en el colchón con la enmienda al sprint 24 día 3.

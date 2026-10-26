@@ -9397,8 +9397,30 @@ describe("abrir un panel no tapa la página ni la convierte en otra", () => {
    * siguiente fotograma— y **medía peor en el cierre: 187 px contra 164**. Las dos fuera. La fila
    * del backlog lleva los números y lo que ya se ha descartado, para que el siguiente no repita el
    * camino y para que lo que se intente se mida **en las dos plataformas**.
+   *
+   * **Sprint 28 día 1 (26 de octubre de 2026): la causa no era el remaquetado, era el recorte del
+   * `scroll`, y la caminata asevera desde hoy que la sección no se mueve.** Medido con la sonda del
+   * día, a 1024 × 800: al abrir un panel la tarjeta pasa a `100 / zoom %` de alto, así que el visor
+   * del marco crece **de 654 a 909 px de la página** y el `scrollTop` máximo baja de 1984 a 1754;
+   * la sección, en 1895, no puede quedarse arriba y el navegador la recorta a 1754: **166 px**. El
+   * remaquetado (752 → 721) la movía 25, y el anclaje del navegador se los come — como a 1280 y
+   * 1600, donde el zoom no cambia, el visor no crece y la sección no se movía **nada** ni al abrir
+   * ni al cerrar, con un remaquetado de 220 px por medio. Con una sección del medio de la página
+   * tampoco se movía a 1024. Y al cerrar «Campos» quedaba en 155 porque el `scroll` recortado no
+   * tenía quien lo devolviera.
+   *
+   * El arreglo da a la página **exactamente el sitio que el visor gana** (`overscrollFor`, un
+   * `.rb-overscroll` de cromo tras la última sección, en gris de mesa y nunca en la página
+   * publicada), escrito en la raíz del marco **antes** de que el navegador maquete el visor nuevo:
+   * el máximo de desplazamiento ya no baja (1984 → 2008), nada se recorta y el anclaje hace el
+   * resto. Doce medidas (1024 y 1280, dos secciones, «Estilo» y «Campos»): **0 / 0 / 0** en todas.
+   * Lo que se asevera: la sección se mueve como mucho `TOLERANCE_PX` en los píxeles del marco al
+   * abrir y al cerrar, y el máximo de desplazamiento no baja al abrir — la aseveración que nombra
+   * el mecanismo, para que un rojo diga si volvió el recorte o volvió otra cosa.
    */
-  it("la sección editada no se va de la vista al abrir «Campos» ni al cerrarlo", async () => {
+  it("la sección editada no se mueve al abrir «Campos» ni al cerrarlo", async () => {
+    /** Una fila de la rejilla fina: por debajo nadie pierde la línea que leía. */
+    const TOLERANCE_PX = 8;
     const walker = await (await browser.newContext()).newPage();
     try {
       await walker.setViewportSize({ width: 1280, height: 800 });
@@ -9418,6 +9440,9 @@ describe("abrir un panel no tapa la página ni la convierte en otra", () => {
             top: Math.round(box.top),
             bottom: Math.round(box.bottom),
             viewport: win.innerHeight,
+            // El `scroll` máximo del marco: es lo que el recorte baja y lo que el sitio al final de
+            // la página mantiene.
+            maxScroll: Math.round(doc.documentElement.scrollHeight - win.innerHeight),
           };
         }, section);
 
@@ -9429,20 +9454,46 @@ describe("abrir un panel no tapa la página ni la convierte en otra", () => {
        * después de redimensionar y el anclaje aterrizaba encima, devolviendo la vista a la
        * posición anterior: a 1280 la sección acabó en 735 con una ventana de 674. El desplazamiento
        * de la prueba va cuando el ancho ya ha dejado de cambiar.
+       *
+       * **Y desde el sprint 28 día 1 se espera a que el cambio haya ocurrido, no solo a que nada
+       * cambie.** La versión anterior guardaba el último ancho entre llamadas, así que la primera
+       * muestra tras abrir el panel —tomada antes de que la tarjeta hubiera cambiado— coincidía con
+       * la de antes y «estable» era verdad al instante: la regla del sprint 25 día 8, un `poll` que
+       * se satisface con su primera muestra. Medido con la caminata saboteada (sin el sitio al final
+       * de la página): «al abrir» pasaba con el visor todavía en 654 y «al cerrar» caía con 155, que
+       * era el recorte de la apertura visto tarde. Ahora: primero el ancho de la tarjeta es **otro**
+       * que el de antes de la acción, y después ancho y alto del visor del marco —que crece un
+       * fotograma más tarde, en el documento de la página— dan dos muestras iguales seguidas.
        */
-      let lastWidth = -1;
-      const settled = async () => {
+      const cardWidth = () =>
+        walker.evaluate(() =>
+          Math.round(
+            document.querySelector('[data-testid="canvas-card"]')?.getBoundingClientRect().width ??
+              -1,
+          ),
+        );
+      const settledAfter = async (was: number) => {
+        await expect
+          .poll(cardWidth, { timeout: 5_000, intervals: [100] })
+          .not.toBe(was);
+        let lastWidth = -1;
+        let lastInnerHeight = -1;
         await expect
           .poll(
             async () => {
-              const now = await walker.evaluate(() =>
-                Math.round(
-                  document.querySelector('[data-testid="canvas-card"]')?.getBoundingClientRect()
-                    .width ?? -1,
-                ),
-              );
-              const stable = now === lastWidth;
-              lastWidth = now;
+              const now = await walker.evaluate(() => {
+                const frame = document.querySelector<HTMLIFrameElement>("iframe");
+                return {
+                  width: Math.round(
+                    document.querySelector('[data-testid="canvas-card"]')?.getBoundingClientRect()
+                      .width ?? -1,
+                  ),
+                  innerHeight: frame?.contentDocument?.defaultView?.innerHeight ?? -1,
+                };
+              });
+              const stable = now.width === lastWidth && now.innerHeight === lastInnerHeight;
+              lastWidth = now.width;
+              lastInnerHeight = now.innerHeight;
               return stable;
             },
             { timeout: 5_000, intervals: [100] },
@@ -9451,8 +9502,9 @@ describe("abrir un panel no tapa la página ni la convierte en otra", () => {
       };
 
       for (const width of [1024, 1280, 1600]) {
+        const was = await cardWidth();
         await walker.setViewportSize({ width, height: 800 });
-        await settled();
+        await settledAfter(was);
         /**
          * **Una sección con sitio por debajo, y eso es parte de la prueba.**
          *
@@ -9469,30 +9521,43 @@ describe("abrir un panel no tapa la página ni la convierte en otra", () => {
           true,
         );
 
+        const beforeOpening = await cardWidth();
         await frame.locator('[data-section="sec-location"]').click();
         await frame.getByRole("button", { name: /Campos de esta sección/ }).click();
         await expect(walker.locator("aside[aria-labelledby]")).toBeVisible();
-        await settled();
+        await settledAfter(beforeOpening);
 
         const opened = await inView("sec-location");
         expect(
           opened?.visible,
           `@${width}: al abrir «Campos» la sección se fue de la vista (top ${opened?.top}, alto de ventana ${opened?.viewport})`,
         ).toBe(true);
-        // Aquí no se exige que no se mueva: en macOS no se movía y en el Linux del CI se fue
-        // 174 px, así que el número es del navegador y no del editor. Ver la nota de arriba.
+        // Desde el sprint 28 día 1 sí se exige: el sitio al final de la página mantiene el máximo
+        // de desplazamiento, así que nada se recorta y el anclaje del navegador absorbe el
+        // remaquetado. Primero el mecanismo, para que el rojo lo nombre; luego la consecuencia.
+        expect(
+          opened?.maxScroll,
+          `@${width}: al abrir «Campos» el máximo de desplazamiento bajó de ${before?.maxScroll} a ${opened?.maxScroll} — el visor creció y la página no recibió el sitio`,
+        ).toBeGreaterThanOrEqual((before?.maxScroll ?? 0) - TOLERANCE_PX);
+        expect(
+          Math.abs((opened?.top ?? 0) - (before?.top ?? 0)),
+          `@${width}: al abrir «Campos» la sección se movió de ${before?.top} a ${opened?.top} en el marco`,
+        ).toBeLessThanOrEqual(TOLERANCE_PX);
 
+        const beforeClosing = await cardWidth();
         await walker.getByRole("button", { name: "Cerrar los campos" }).click();
         await expect(walker.locator("aside[aria-labelledby]")).toHaveCount(0);
-        await settled();
+        await settledAfter(beforeClosing);
 
         const closed = await inView("sec-location");
         expect(
           closed?.visible,
           `@${width}: al cerrar «Campos» la sección se fue de la vista (top ${closed?.top}, alto de ventana ${closed?.viewport})`,
         ).toBe(true);
-        // Y aquí no se exige que no se mueva: el cierre ensancha la página y la acorta, así que
-        // los 164 px medidos a 1024 son geometría y no un anclaje que falte. Fila del backlog.
+        expect(
+          Math.abs((closed?.top ?? 0) - (before?.top ?? 0)),
+          `@${width}: al cerrar «Campos» la sección se movió de ${before?.top} a ${closed?.top} en el marco`,
+        ).toBeLessThanOrEqual(TOLERANCE_PX);
       }
     } finally {
       await walker.context().close();

@@ -35,7 +35,9 @@ number, is the last section of REVIEW's sprint 27:
    is green. Recommended: merge it now rather than on the 30th.
 3. **Sprint 17's mouseless walk, intermittent in CI** at the same wait twice after día 4; passing in
    the runs of #299, #300 and #301. Cause not established.
-4. **The panel close's 164 / 253 px**, untouched (row below).
+4. ~~**The panel close's 164 / 253 px**, untouched (row below).~~ **Closed on sprint 28 día 1 (26
+   October 2026)**, and not by either repair the row named: the cause was never the re-flow. Row
+   below.
 5. **Outlines at scale** snap to whole device pixels, accepted (ADR 0053).
 6. **`ontoThePhone`** waits for one grid column, mid-transition; named, not changed.
 7. **Native Tab from a text being written in** never reaches the grip; the editor moves the focus
@@ -1330,6 +1332,62 @@ open survives.
   *scroll fraction* rather than the anchor across the re-flow, or keeping the panel's width out of
   the preview's layout width altogether. **Whatever is tried has to be measured on both
   platforms**, because one of them hides the problem.
+
+  **Closed on 26 October 2026, sprint 28 día 1 — and the premise above, «the preview re-flows at
+  the new width», was not the cause.** Measured with a probe at 1024 × 800 and 1280 × 800, two
+  sections («Qué hacemos», in the middle of the page, and «Dónde estamos», two from the end), «Estilo»
+  and «Campos», before / open / closed, in the frame's own pixels:
+
+  | | layout width | zoom | viewport (frame px) | greatest scroll | section's top |
+  |---|---|---|---|---|---|
+  | 1024, end section, before | 752 | 1 | 654 | 1984 | 0 |
+  | 1024, end section, «Campos» open | 721 | 0,738 | **909** | **1754** | **166** |
+  | 1024, end section, closed | 752 | 1 | 654 | 1984 | **155** |
+  | 1024, middle section, any state | 752 / 721 | 1 / 0,738 | 654 / 909 | — | **0 / 0 / 0** |
+  | 1280, either section, any state | 1008 / 788 | 1 | 654 | — | **0 / 0 / 0** |
+
+  **The mechanism**: the card is `100 / zoom %` tall so the shrunk card fills the row, which makes the
+  frame's viewport taller in the page's pixels when a panel lowers the zoom — 654 → 909 at 1024 —
+  and the greatest `scrollTop` shrinks by the same amount, 1984 → 1754. A section at 1895 cannot stay
+  at the top of a view whose bottom now meets the page's end, and the browser **clamps** the scroll to
+  1754: the 166 (the 164 this row carried) is the clamp, to the pixel. The re-flow (752 → 721, which
+  moved the section's offset 25 px) is absorbed by Chromium's own scroll anchoring, as it is at 1280
+  and 1600 where a 220 px re-flow with no change of zoom moves **nothing**, open or closed. The 155 on
+  closing «Campos» was the same clamped scroll seen afterwards: nothing put it back. Both repairs the
+  row named re-anchored across a re-flow that was never the problem, which is why they measured worse.
+
+  **The fix** gives the page exactly the room the viewport gains — `rowHeight × (1 / zoom − 1)` frame
+  pixels, `overscrollFor` in `apps/editor/src/editor/overscroll.ts`, drawn as `.rb-overscroll` after
+  the last gap in the editor's own grey, never in the published page — and gives it **before the
+  browser lays the taller viewport out**: the shell's zoom notice is a layout effect now and the editor
+  writes `--rb-overscroll` on the frame's root before it reads anything, because reading the frame
+  forces the layout the clamp happens in. The greatest scroll then rises (1984 → 2008) instead of
+  falling, nothing clamps, and anchoring does the rest: **0 / 0 / 0 in all twelve measurements**, 155
+  → 0 on close. At zoom 1 the room is 0 and the preview ends where the page ends. The walk of sprint
+  24 asserts ±8 px (one fine-grid row) on open and on close at 1024, 1280 and 1600, and asserts the
+  mechanism first — the greatest scroll does not fall on open — so a red names it. CI's Linux is this
+  PR's own run; the clamp is geometry and the anchoring is Chromium's on both, so the 174 of the table
+  above is expected to read 0 there too.
+
+  **The walk had a flaw of its own, found by sabotaging the fix**: its «settled» poll kept the last
+  width between calls, so the first sample after opening a panel matched the one before it and the
+  poll was satisfied before the card had changed (the sprint 25 día 8 rule, a poll satisfied by its
+  first sample). Sabotaged, it passed «on open» with the viewport still at 654 and failed «on close»
+  with the open's own 155. It now waits for the width to be **other** than before the action, then
+  for width and frame viewport to hold still — and the sabotaged run fails on open, naming the
+  mechanism.
+
+  **What David's adjustment 1 of the sprint 28 plan asked for is a different thing, and stays open
+  as his question**: a fixed layout width (the width the window gives the canvas with no panel, the
+  zoom alone changing when one opens) would stop a text re-flowing between panel states — the 8 px
+  rows of a hand-designed section (ADR 0050) measured at one width and shown at another. Its price,
+  measured: the zoom with a panel at 1024 would be **0,707** (today 0,738; his floor 0,6), at 1280
+  **0,782** and at 1600 **0,834** where today the page is at 1 with a panel open. **Not built**, by
+  his decision on 26 October: día 7 measures the *symptom* — a hand-designed section with «Diseño»
+  open at 1280, a two-line text with an element placed just below, close the panel, how far the
+  element moves from the text in screen pixels. ≤ 8 px: this stays a row with its three zooms,
+  decided apart. More: a defect of ADR 0050, its own PR in the colchón, written as an amendment to
+  sprint 24 día 3.
 
 - **Two of the application's own colours clear 4.5:1 by a hair, so any opacity on them fails.**
   Measured 17 October 2026 (sprint 23 day 5) against the panel's white: `--ui-brand` `#156fe7` is
