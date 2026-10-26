@@ -19,6 +19,7 @@ import { type DomRenderOptions, type RenderOptions, withDefaults } from "./optio
  */
 export { buildCss } from "./build.ts";
 export { escapeHtml, NEUTRALISED_URL, safeUrl } from "./escape.ts";
+export { FAVICON_PATH, faviconLetter, faviconSvg } from "./favicon.ts";
 export { fontFaceCss } from "./fonts.ts";
 /**
  * **What the menu would call a section, and how much of a menu is left**, for the places in the

@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { render } from "@retorika/renderer";
+import { FAVICON_PATH, faviconSvg, render } from "@retorika/renderer";
 import {
   type ContentElement,
   flattenElements,
@@ -490,5 +490,34 @@ describe("a page drawn per entry (ADR 0040)", () => {
     expect(() =>
       buildSite(unslugged, { siteId: "fichas", assets: assetsFor(document), fonts: new Map() }),
     ).toThrow(/has no slug to be drawn under/);
+  });
+});
+
+describe("the tab's icon (ADR 0054)", () => {
+  it("is one favicon.svg at the root of every bundle, linked by every page", async () => {
+    for (const { name, document } of corpus) {
+      const bundle = buildSite(document, {
+        siteId: name,
+        assets: assetsFor(document),
+        fonts: await fontsFor(document),
+      });
+      const icons = bundle.files.filter((file) => file.path === FAVICON_PATH);
+      expect(icons, name).toHaveLength(1);
+      expect(icons[0]?.contentType, name).toBe("image/svg+xml");
+      expect(new TextDecoder().decode(icons[0]?.contents), name).toBe(
+        faviconSvg(document.theme, document.siteName),
+      );
+      for (const page of bundle.files.filter((file) => file.path.endsWith(".html"))) {
+        const html = new TextDecoder().decode(page.contents);
+        expect(html.match(/<link rel="icon"[^>]*>/g), `${name} ${page.path}`).toEqual([
+          `<link rel="icon" type="image/svg+xml" href="${FAVICON_PATH}">`,
+        ]);
+      }
+    }
+  });
+
+  it("is not in the manifest, which says what serve needs and serve needs nothing of it", () => {
+    const bundle = buildSite(barbershop, { siteId: "b", assets: assetsFor(barbershop) });
+    expect(JSON.stringify(bundle.manifest)).not.toContain(FAVICON_PATH);
   });
 });

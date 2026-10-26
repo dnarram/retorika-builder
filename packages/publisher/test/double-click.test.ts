@@ -63,11 +63,18 @@ const ENTITIES: Readonly<Record<string, string>> = {
   "&#39;": "'",
 };
 
-/** The renderer always writes `name="escaped value"`, so a regex is exact here. */
+/**
+ * The renderer always writes `name="escaped value"`, so a regex is exact here.
+ *
+ * **A `<link>`'s `href` is a load, and is reported as a `src`** (ADR 0054, sprint 28 day 4). The
+ * line this file draws is between what a page loads and where it navigates, and the tab's icon is
+ * loaded — from `file://` it has to be a file in the bundle exactly as an image does. Read by tag,
+ * because the attribute alone cannot tell an `<a href>` from a `<link href>`.
+ */
 function urlAttributes(html: string): { name: "href" | "src"; value: string }[] {
-  return [...html.matchAll(/\s(href|src)="([^"]*)"/g)].map((match) => ({
-    name: match[1] as "href" | "src",
-    value: (match[2] ?? "").replace(/&(amp|lt|gt|quot|#39);/g, (e) => ENTITIES[e] ?? e),
+  return [...html.matchAll(/<([a-z0-9]+)\b[^>]*?\s(href|src)="([^"]*)"/g)].map((match) => ({
+    name: match[1] === "link" ? "src" : (match[2] as "href" | "src"),
+    value: (match[3] ?? "").replace(/&(amp|lt|gt|quot|#39);/g, (e) => ENTITIES[e] ?? e),
   }));
 }
 

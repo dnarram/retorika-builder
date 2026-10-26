@@ -74,6 +74,9 @@ export function pageToHtml(
     '<meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
     `<title>${escapeHtml(title)}</title>`,
+    ...(meta.icon === undefined
+      ? []
+      : [`<link rel="icon" type="image/svg+xml" href="${escapeHtml(meta.icon)}">`]),
     ...shareTags(meta),
     "<style>",
     css.trimEnd(),
