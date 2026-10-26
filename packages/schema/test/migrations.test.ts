@@ -102,9 +102,11 @@ describe("migrations", () => {
  * right shape — replaying a step that *moves data* would apply the change twice — but it cannot be
  * proved through the two migrations that exist, because both of their `up`s do nothing but stamp a
  * version and are therefore idempotent: replay and skip produce the identical document. I wrote a
- * test claiming to prove it, watched it pass with the skip removed, and replaced it with the `todo`
- * below. The first migration that transforms anything is what makes the claim testable, and that is
- * the commit where this belongs.
+ * test claiming to prove it, watched it pass with the skip removed, and replaced it with a `todo`.
+ * The first migration that transforms anything is what makes the claim testable — that was `0012`,
+ * eight versions later, and the `todo` outlived it by two more. The assertion now lives with the
+ * two steps that move data, under «1.11.0» and «1.12.0» below, and each was watched going red with
+ * the skip in `migrateToCurrent` removed (sprint 28 day 6).
  */
 describe("0002 — an image may name the sample it is", () => {
   /** A 1.0.0 document, as one saved before today looks: no `sample` anywhere. */
@@ -212,10 +214,6 @@ describe("0002 — an image may name the sample it is", () => {
     const already = { ...sampled(), schemaVersion: SCHEMA_VERSION };
     expect(migrateToCurrent(already)).toEqual(already);
   });
-
-  it.todo(
-    "does not re-apply a migration the document has already had — untestable until one moves data",
-  );
 
   it("runs every step for a document with no version at all", () => {
     const migrated = migrateToCurrent({ id: "doc-1" });
@@ -1300,6 +1298,19 @@ describe("1.11.0 — the serif reserves no name", () => {
     expect((after["theme"] as Theme)["font.heading"]).toBe(other);
   });
 
+  /**
+   * **The skip, asserted where it can fail.** A document already at 1.11.0 that still names
+   * Playfair Display cannot be made through the product — `down` from 1.12.0 does not touch fonts —
+   * which is exactly what makes it the probe: replaying `up` is invisible on every document this
+   * step produced, and visible only on one it did not. Skipped, the stack stays; replayed, it
+   * becomes EB Garamond.
+   */
+  it("does not re-apply itself to a document that is already 1.11.0", () => {
+    const already = { ...before(), schemaVersion: "1.11.0" };
+    const after = migrateToCurrent(already);
+    expect((after["theme"] as Theme)["font.heading"]).toBe(PLAYFAIR);
+  });
+
   it("goes back down to the stack 1.10.0 would have produced", () => {
     const down = step("1.11.0").down;
     expect(down, "1.11.0 has no `down`").toBeDefined();
@@ -1381,6 +1392,16 @@ describe("1.12.0 — a free section is a fine grid", () => {
   it("is registered, and it is the one the chain ends at", () => {
     expect(step("1.12.0").version).toBe("1.12.0");
     expect(SCHEMA_VERSION).toBe("1.12.0");
+  });
+
+  /**
+   * **The replay this chain's skip exists to prevent**, and the first step where it would corrupt a
+   * document anyone can have: every 1.12.0 site with a hand-designed section. A second `up` would
+   * multiply by eight again — column 41 to 321 on a ninety-six-unit grid.
+   */
+  it("migrating a migrated document changes nothing", () => {
+    const once = migrateToCurrent(before());
+    expect(migrateToCurrent(once)).toEqual(once);
   });
 
   it("multiplies every column and span by eight, exactly, and says the grid is ninety-six", () => {
