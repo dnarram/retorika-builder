@@ -17814,7 +17814,15 @@ describe("sprint 25 día 6 — las unidades dichas y el alto que sigue al texto"
     }
   }, 240_000);
 
-  it("reajusta el alto en filas al terminar de escribir, y es un solo paso con las palabras", async () => {
+  it("deja las filas en paz al terminar de escribir, y las palabras siguen siendo un solo paso", async () => {
+    /**
+     * **Hasta el sprint 28 día 7 esta caminata aseveraba lo contrario**: que el alto en filas seguía
+     * al contenido al confirmar. Medido a 1280 con «Diseño» abierto, eso escribía las filas de un
+     * titular a dos líneas y, cerrado el panel, el titular cabía en una y el subtítulo quedaba a 52
+     * px en vez de pegado; y con el panel abierto una letra más se comía el hueco de debajo. Una
+     * fila es ahora un mínimo y el contenido empuja (ADR 0050, enmienda del sprint 28 día 7); las
+     * medidas están en la caminata de ese día.
+     */
     const context = await browser.newContext({ viewport: VIEWPORT });
     const page = await context.newPage();
     try {
@@ -17827,8 +17835,8 @@ describe("sprint 25 día 6 — las unidades dichas y el alto que sigue al texto"
       expect(before, "el titular no tiene colocación").toBeGreaterThan(0);
       const wordsBefore = (await headline.textContent())?.trim() ?? "";
 
-      // Un titular mucho más largo: en su mismo ancho ocupa varias líneas más, así que necesita
-      // más filas de ocho píxeles de las que tenía.
+      // Un titular mucho más largo: en su mismo ancho ocupa varias líneas más. La fila crece con él
+      // y empuja lo de debajo; el documento no cambia de filas.
       await headline.click();
       await intoWriting(headline);
       await page.keyboard.type(
@@ -17836,21 +17844,15 @@ describe("sprint 25 día 6 — las unidades dichas y el alto que sigue al texto"
       );
       // Clic fuera para confirmar, que es como se confirma un texto en este editor.
       await editHint(page).click();
+      await expect(headline).toContainText("mil novecientos ochenta");
+      expect(await rowsOf(), "las filas cambiaron al escribir").toBe(before);
 
-      await expect
-        .poll(rowsOf, { message: "el alto en filas no siguió al contenido" })
-        .toBeGreaterThan(before ?? 0);
-
-      /**
-       * **Y un solo «Deshacer» devuelve las dos cosas**, que es la mitad que importa: el alto
-       * viaja en el paso de las palabras, porque la edición es lo que cambió la altura. Dos pasos
-       * harían que una letra costase dos pulsaciones de deshacer.
-       */
+      // Un solo «Deshacer» devuelve las palabras, y las filas no tenían nada que devolver.
       await page.getByRole("button", { name: "Deshacer", exact: true }).click();
-      await expect.poll(rowsOf, { message: "el alto no volvió con las palabras" }).toBe(before);
       await expect(frame.locator('[data-section="sec-cover"] [data-id="el-headline"]')).toHaveText(
         wordsBefore,
       );
+      expect(await rowsOf()).toBe(before);
     } finally {
       await context.close();
     }
@@ -21499,4 +21501,175 @@ describe("sprint 28 día 3 — Escape en un campo de píxeles exactos", () => {
       await page.context().close();
     }
   }, 180_000);
+});
+
+/**
+ * **Sprint 28 día 7 — una fila es un mínimo, y el contenido empuja** (ADR 0050, enmienda del 26 de
+ * octubre de 2026; decisión de David del mismo día, opción 3 de tres).
+ *
+ * El día 1 del sprint dejó una medida pendiente, la del síntoma del ancho fijo que David no quiso
+ * construir: a 1280, con «Diseño» abierto, un titular de dos líneas y algo colocado justo debajo;
+ * cerrar el panel; ¿cuánto se separa o se monta, en píxeles de pantalla? **52 px**, medido antes de
+ * escribir esto: el panel estrecha la sección de 912 a 692 px, el titular pasa a dos líneas, y el
+ * reajuste del alto del sprint 25 día 6 escribía 13 filas donde había 7; cerrado el panel el titular
+ * vuelve a una línea y las seis filas de más se quedan vacías entre él y el subtítulo. Y de camino,
+ * con el panel abierto, **una letra más en el titular bajaba el hueco de 48 px a 0**: el reajuste
+ * ceñía las filas al contenido crecido y se comía las dos filas vacías de debajo.
+ *
+ * La decisión es quitar el reajuste: `rowSpan` es un mínimo, la fila mide ocho píxeles o lo que su
+ * contenido necesite, en el editor y en la web publicada por igual (`grid-auto-rows: minmax(8px,
+ * auto)` ya lo decía). Las tres aserciones de aquí son sus tres condiciones; la tercera es la de
+ * siempre, que vigila que la rejilla que se lee para soltar es la resuelta y no fila × 8.
+ */
+describe("sprint 28 día 7 — una fila es un mínimo", () => {
+  const VIEWPORT = { width: 1280, height: 900 };
+  /** Una fila: la diferencia que no se ve y que una línea de texto nunca alcanza. */
+  const ONE_ROW = ROW_STEP_PX;
+
+  async function handDesigned(page: Page): Promise<FrameLocator> {
+    await intoTheCanvas(page);
+    await studioToolsOn(page);
+    const frame = page.frameLocator(PREVIEW).first();
+    await frame.locator('[data-section="sec-cover"]').click();
+    await escalated(frame, async () => {
+      await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
+      await frame.locator(".rb-escalate-yes").click();
+    });
+    await waitForBankPhoto(frame);
+    await fontsReady(frame);
+    return page.frameLocator(PREVIEW).first();
+  }
+
+  /** La caja de un elemento de la portada, en píxeles del marco — que a 1280 son los de pantalla,
+   * con y sin panel, porque la sección sigue más ancha que `NARROWEST_DESKTOP` y el zoom es 1. */
+  async function boxOf(frame: FrameLocator, id: string) {
+    const box = await frame.locator(`[data-section="sec-cover"] [data-id="${id}"]`).boundingBox();
+    expect(box, `no encuentro la caja de ${id}`).not.toBeNull();
+    return box as { x: number; y: number; width: number; height: number };
+  }
+  /** El hueco entre el borde inferior de uno y el superior del siguiente. */
+  async function gapBetween(frame: FrameLocator, above: string, below: string): Promise<number> {
+    const a = await boxOf(frame, above);
+    const b = await boxOf(frame, below);
+    return b.y - (a.y + a.height);
+  }
+  async function rowsOf(frame: FrameLocator, id: string) {
+    return (await placedIn(frame, "sec-cover")).find((element) => element.id === id)?.rowSpan;
+  }
+  /** Confirmar lo escrito como se confirma en este editor: un clic fuera. */
+  async function committed(page: Page, target: Locator, words: string) {
+    await editHint(page).click();
+    await expect(target).toContainText(words);
+  }
+
+  it("el hueco bajo un texto no cambia al escribir con el panel abierto, ni al cerrarlo", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const page = await context.newPage();
+    try {
+      const frame = await handDesigned(page);
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      const body = frame.locator('[data-section="sec-cover"] [data-id="el-body"]');
+      const cta = frame.locator('[data-section="sec-cover"] [data-id="el-cta"]');
+
+      // Sin panel: una línea de titular, y el hueco hasta el subtítulo tal como lo trajo escalar.
+      const oneLine = (await boxOf(frame, "el-headline")).height;
+      const gapClosed = await gapBetween(frame, "el-headline", "el-subheadline");
+      const rowsClosed = await rowsOf(frame, "el-headline");
+
+      // «Diseño» abierto: la sección se estrecha y el titular pasa a dos líneas. La premisa de la
+      // medida de David, aseverada: sin dos líneas no hay fila crecida que medir.
+      await headline.click();
+      await page.getByRole("button", { name: "Diseño", exact: true }).click();
+      await expect(page.locator("aside")).toBeVisible();
+      await expect
+        .poll(async () => (await boxOf(frame, "el-headline")).height, {
+          message: "con «Diseño» abierto a 1280 el titular no pasó a dos líneas",
+        })
+        .toBeGreaterThan(oneLine * 1.5);
+      const gapOpen = await gapBetween(frame, "el-headline", "el-subheadline");
+
+      // ---- una letra más, con el panel abierto: el subtítulo no se acerca ----
+      // Entrar en escritura selecciona las palabras enteras (ADR 0047), así que se teclean todas y
+      // una más; en el ancho con panel siguen siendo dos líneas.
+      await intoWriting(headline);
+      await page.keyboard.type("Taberna Santo Domingos");
+      await committed(page, headline, "Domingos");
+      const gapTyped = await gapBetween(frame, "el-headline", "el-subheadline");
+      expect(
+        Math.abs(gapTyped - gapOpen),
+        `con el panel abierto, una letra más dejó el hueco titular→subtítulo en ${gapTyped} px donde estaba en ${gapOpen}`,
+      ).toBeLessThanOrEqual(ONE_ROW);
+      expect(await rowsOf(frame, "el-headline"), "escribir cambió las filas del titular").toBe(
+        rowsClosed,
+      );
+
+      // ---- un cuerpo que crece a dos líneas: el botón de debajo baja, y el hueco se conserva ----
+      const ctaBefore = (await boxOf(frame, "el-cta")).y;
+      const bodyBefore = (await boxOf(frame, "el-body")).height;
+      const gapBodyBefore = await gapBetween(frame, "el-body", "el-cta");
+      // Con el panel abierto el cuerpo de la portada ya ocupa dos líneas; este ocupa cuatro.
+      await intoWriting(body);
+      await page.keyboard.type(
+        "Pásate a comer o a tomar algo, con tiempo y sin prisa, cuando quieras y con quien quieras. " +
+          "Cocina de mercado al mediodía, tapas por la tarde y una carta corta por la noche, " +
+          "con el vino de la casa y el pan de cada día recién hecho en el horno de la esquina.",
+      );
+      await committed(page, body, "horno de la esquina");
+      const grown = (await boxOf(frame, "el-body")).height - bodyBefore;
+      expect(grown, "el cuerpo más largo no creció de línea").toBeGreaterThanOrEqual(ONE_ROW);
+      const gapBodyAfter = await gapBetween(frame, "el-body", "el-cta");
+      expect(
+        Math.abs(gapBodyAfter - gapBodyBefore),
+        `el cuerpo creció ${grown} px y el hueco hasta el botón pasó de ${gapBodyBefore} a ${gapBodyAfter}`,
+      ).toBeLessThanOrEqual(ONE_ROW);
+      const ctaAfter = (await boxOf(frame, "el-cta")).y;
+      expect(ctaAfter - ctaBefore, "el botón no bajó con el cuerpo").toBeGreaterThanOrEqual(
+        grown - ONE_ROW,
+      );
+
+      // ---- soltar un elemento bajo el texto crecido lo deja donde se soltó ----
+      // El botón, cogido por su centro y bajado cuarenta píxeles con el panel abierto, es decir, con
+      // la fila del cuerpo midiendo más de ocho. Si el lugar de soltar se calculase fila × 8 en vez
+      // de leer las pistas resueltas, caería dos filas por encima de la mano.
+      await cta.click();
+      await expect(cta).toHaveClass(/rb-chosen/);
+      const from = await boxOf(frame, "el-cta");
+      const centre = { x: from.x + from.width / 2, y: from.y + from.height / 2 };
+      const DROP = 40;
+      await page.mouse.move(centre.x, centre.y);
+      await page.mouse.down();
+      await page.mouse.move(centre.x, centre.y + DROP, { steps: 10 });
+      await page.mouse.up();
+      await expect
+        .poll(async () => (await boxOf(frame, "el-cta")).y, {
+          message: "el botón no se movió al soltarlo",
+        })
+        .not.toBe(from.y);
+      const landed = await boxOf(frame, "el-cta");
+      expect(
+        Math.abs(landed.y - (from.y + DROP)),
+        `soltado ${DROP} px más abajo, el botón quedó ${landed.y - from.y} px más abajo`,
+      ).toBeLessThanOrEqual(ONE_ROW);
+      expect(
+        Math.abs(landed.x - from.x),
+        "el botón se movió de lado sin que nadie lo moviera",
+      ).toBe(0);
+
+      // ---- cerrar el panel: una línea otra vez, y el hueco de antes ----
+      await page.getByRole("button", { name: "Cerrar el diseño" }).click();
+      await expect(page.locator("aside")).toHaveCount(0);
+      await expect
+        .poll(async () => (await boxOf(frame, "el-headline")).height, {
+          message: "cerrado el panel el titular no volvió a una línea",
+        })
+        .toBeLessThan(oneLine * 1.5);
+      const gapAfter = await gapBetween(frame, "el-headline", "el-subheadline");
+      expect(
+        Math.abs(gapAfter - gapClosed),
+        `cerrado el panel, el hueco titular→subtítulo es ${gapAfter} px donde antes de abrirlo era ${gapClosed}`,
+      ).toBeLessThanOrEqual(ONE_ROW);
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
 });

@@ -4088,3 +4088,53 @@ una rejilla de noventa y seis. Saboteado el salto de `migrateToCurrent`, las dos
 **Fuera, y dicho:** el diálogo de «Volver a la original» se mudó por la misma razón y no se camina
 aquí con estas cuatro aserciones; la caminata que lo abre, del 30 de septiembre, lo hace a 1280 con
 «Diseño» abierto y mira lo que dice, no dónde se dibuja.
+
+### Día 7 — el colchón del 28: una fila es un mínimo (PR de `fix/el-colchon-del-28`)
+
+**Primero la medida de David, antes de tocar nada.** Portada hecha a mano, ventana de 1280 × 900,
+«Diseño» abierto: el panel estrecha la sección de 912 a 692 px y el titular pasa a dos líneas (de 52 a
+104 px). Confirmado ahí, el reajuste del alto del sprint 25 día 6 escribía **13 filas donde había 7**.
+Cerrado el panel, el titular vuelve a una línea, las seis filas de más se quedan vacías y el subtítulo
+queda a **52 px** donde iba pegado. Su umbral era 8: defecto del ADR 0050. Y de camino, con el panel
+abierto, **una letra más en el titular bajaba el hueco de 48 px a 0**, porque el reajuste ceñía las
+filas al texto crecido y se comía las dos filas vacías de debajo — el mismo mecanismo visto del otro
+lado.
+
+**Tres arreglos con su precio, y su decisión.** El ancho fijo, que arregla este síntoma y cualquier otro
+remaquetado por panel al precio de los tres zooms del día 1; medir el texto al ancho sin panel, que
+arregla este síntoma y deja el lienzo remaquetando; o quitar el reajuste y que el contenido empuje,
+que revierte su propio ajuste 1 del sprint 25. Eligió el tercero con tres condiciones: `rowSpan` es un
+mínimo y el ADR 0050 lo dice así («una fila mide 8 px o lo que su contenido necesite, en el editor y
+en la web publicada por igual»); verificar antes de quitar nada que `rowAt`, el anuncio en píxeles y
+las guías leen las pistas resueltas y no fila × 8; y las dos medidas de hoy como aserciones, más la de
+siempre del arrastre. **Las tres están.** La verificación, escrita en la enmienda del ADR: `rowAt`
+anda `gridTemplateRows` resuelto, el anuncio sale de la caja medida, las guías de los rectángulos
+vecinos, y el redimensionado pasa por el mismo `rowAt`. Lo que se va: `rowsFor`, el cuarto argumento
+de `onEditText`, el `rowSpan` de la acción `editText` y `withRowSpan`; `editText` vuelve a ser las
+palabras y nada más. La línea del panel dice ahora «filas de 8 px, o de lo que su contenido necesite».
+
+**La caminata, y lo que vio en rojo.** «sprint 28 día 7 — una fila es un mínimo», 1280 × 900, cinco
+aserciones y una premisa: con «Diseño» abierto el titular es de dos líneas (aseverado, porque sin eso no
+hay fila crecida que medir); una letra más deja el hueco al subtítulo a menos de una fila del que había;
+un cuerpo que crece a cuatro líneas conserva su hueco hasta el botón y lo baja consigo; el botón
+soltado 40 px bajo esa fila crecida queda a menos de una fila de la mano y ni un píxel de lado; y
+cerrado el panel el hueco vuelve al medido antes de abrirlo. Contra el editor sin arreglar, roja en el
+primer hueco con el número medido: «0 px donde estaba en 48». **Saboteada dos veces** después del
+arreglo: el reajuste vuelto a poner a mano, la misma roja; `rowAt` leyendo fila × 8, el botón «184 px
+más abajo» donde la mano bajó 40 — que es lo que la condición 2 temía, visto. La caminata del sprint 25
+día 6 que aseveraba el reajuste asevera ahora que las filas se quedan quietas a través de una edición
+larga y su «Deshacer»; sus tres pruebas unitarias, igual.
+
+**Lo que esto renuncia, dicho.** En el editor, las filas bajo un texto que se parte ya no miden ocho
+píxeles cada una: las tres del cuerpo de cuatro líneas miden unos diecinueve. Es el precio de una
+sección que se lee igual con panel y sin él, y la condición 2 es lo que lo hace seguro.
+
+**Dos trampas de la caminata.** Entrar en escritura selecciona las palabras enteras (ADR 0047), así que
+`End` + una letra dejó el titular en «s»: se teclea el titular entero con una letra más. Y el cuerpo de
+la portada ya ocupa dos líneas con el panel abierto, así que «más largo» tuvo que ser cuatro líneas para
+que la fila creciera de verdad.
+
+**El ancho fijo no se construye, y este síntoma ya no lo pide.** Con el `rowSpan` como suelo, un texto
+que se parte distinto entre estados del panel mueve solo lo que tiene debajo, y exactamente lo que
+creció. Sus tres zooms se quedan en el backlog por si otro síntoma lo pide. **No se midió** `lookAhead`
+en una instancia fría de Render: el plan lo dejaba a que David diera la URL, y no la dio.

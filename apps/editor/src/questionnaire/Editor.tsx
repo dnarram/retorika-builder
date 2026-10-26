@@ -40,7 +40,6 @@ import {
   type PresetShape,
   type RetorikaDocument,
   type RevertImpact,
-  ROW_STEP_PX,
   type Role,
   rangeHasMark,
   revertImpact,
@@ -625,14 +624,7 @@ export function Editor({
 }: {
   title: string;
   document: RetorikaDocument;
-  onEditText: (
-    address: ElementAddress,
-    text: string,
-    marks?: readonly MarkRun[],
-    /** The rows the text now needs, measured on the live page (ADR 0050 §3, día 6). It travels in
-     * the same history step as the words: one letter must not cost two presses of «Deshacer». */
-    rowSpan?: number,
-  ) => void;
+  onEditText: (address: ElementAddress, text: string, marks?: readonly MarkRun[]) => void;
   onDeleteSection: (sectionId: string) => void;
   onDuplicateSection: (sectionId: string) => void;
   onMoveSection: (sectionId: string, toIndex: number) => void;
@@ -5414,9 +5406,11 @@ export function Editor({
             ...(anchoredMarks && anchoredMarks.length > 0 ? { marks: anchoredMarks } : {}),
           });
         } else {
-          // And the rows the text now needs, measured, in the same history step as the words
-          // (ADR 0050 día 6, David's adjustment 1).
-          propsNow.current.onEditText(address, next, anchoredMarks, rowsFor(el));
+          // Only the words. The rows the text needs are the row's own business: `rowSpan` is a
+          // minimum and a row grows to its content, in the editor and on the published page alike
+          // (ADR 0050, amendment of sprint 28 día 7). The sprint 25 día 6 readjustment measured the
+          // text in whatever width the open panel left it, and wrote that width's rows for good.
+          propsNow.current.onEditText(address, next, anchoredMarks);
         }
         return "written";
       }
@@ -5691,23 +5685,6 @@ export function Editor({
       columns: tracks(style?.gridTemplateColumns),
       rows: tracks(style?.gridTemplateRows),
     };
-  }
-
-  /**
-   * How many eight-pixel rows an element's box needs, or `undefined` when nobody should be told.
-   *
-   * The same arithmetic the measured escalation uses (`measuredToFine` ceils, so the content always
-   * fits inside its rows and no row has to grow past its minimum), asked of one element at the
-   * moment its text is committed.
-   */
-  function rowsFor(el: HTMLElement): number | undefined {
-    const section = el.closest<HTMLElement>("[data-section]");
-    const sectionId = section?.dataset.section;
-    if (!section || !sectionId) return undefined;
-    // Only a hand-designed section has rows of its own to keep true.
-    if (!findSection(docNow.current, sectionId)?.section.layout) return undefined;
-    if (el.parentElement !== section) return undefined;
-    return Math.max(1, Math.ceil(el.getBoundingClientRect().height / ROW_STEP_PX));
   }
 
   /**
