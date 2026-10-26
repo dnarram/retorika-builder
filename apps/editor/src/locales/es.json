@@ -209,7 +209,7 @@
   "editor.design.elements": "ELEMENTOS",
   "editor.design.hidden": "oculto",
   "editor.design.placement": "Colocación",
-  "editor.design.placementHelp": "«Columna» y «Ancho» van en unidades: 96 en cada sección, 8 por columna del catálogo, que es lo que mueve cada paso. «Fila» y «Alto» van en filas de 8 px. En el lienzo, las flechas mueven de una unidad y Mayús de ocho.",
+  "editor.design.placementHelp": "«Columna» y «Ancho» van en unidades: 96 en cada sección, 8 por columna del catálogo, que es lo que mueve cada paso. «Fila» y «Alto» van en filas de 8 px, o de lo que su contenido necesite. En el lienzo, las flechas mueven de una unidad y Mayús de ocho.",
   "editor.design.column": "Columna",
   "editor.design.width": "Ancho",
   "editor.design.row": "Fila",

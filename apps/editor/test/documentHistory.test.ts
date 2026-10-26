@@ -273,11 +273,15 @@ describe("deleteSection", () => {
  * layout equals no re-derivation of the catalog's drawing).
  */
 /**
- * **A text's own rows, written with its words** (ADR 0050 §3, sprint 25 día 6, David's adjustment
- * 1): a free section's rows are eight real pixels, typing changes how tall a text is, and the row
- * span has to follow or the row grows past its minimum and pushes everything below it down.
+ * **A text's rows are nobody's to rewrite on a commit** (ADR 0050, amendment of sprint 28 día 7).
+ *
+ * From sprint 25 día 6 to sprint 28 día 7 `editText` carried a measured `rowSpan` with the words,
+ * so that a free section's rows stayed eight pixels in the editor. Measured at 1280 with «Diseño»
+ * open, that wrote a two-line headline's rows for the width the panel had made, and the panel's
+ * closing left six empty rows between it and the subheadline. A span is a minimum and the row grows
+ * to its content, in the editor and on the published page alike.
  */
-describe("editText with the rows the text now needs", () => {
+describe("editText leaves a text's rows alone", () => {
   const escalate = (sectionId = "sec-cover"): HistoryAction => ({
     type: "escalateSection",
     variant: 0,
@@ -295,56 +299,33 @@ describe("editText with the rows the text now needs", () => {
       ?.content.find((candidate) => candidate.id === "el-headline");
     return element?.value?.kind === "text" ? element.value.text : "";
   };
-  const typeInto = (text: string, rowSpan?: number): HistoryAction => ({
+  const typeInto = (text: string): HistoryAction => ({
     type: "editText",
     variant: 0,
     address: HEADLINE,
     text,
-    ...(rowSpan === undefined ? {} : { rowSpan }),
   });
 
-  it("writes the words and the rows in one step, and one undo takes back both", () => {
+  it("writes the words and not the placement, and one undo takes the words back", () => {
     const before = free();
     const was = placementOf(before);
     expect(was?.rowSpan, "la portada escalada no trajo filas").toBeGreaterThan(0);
 
-    const after = run(before, typeInto("Dos líneas de titular", (was?.rowSpan ?? 1) + 4));
-    expect(placementOf(after)?.rowSpan).toBe((was?.rowSpan ?? 1) + 4);
+    const after = run(before, typeInto("Un titular que ocupa dos líneas en cualquier ancho"));
+    expect(wordsOf(after)).toBe("Un titular que ocupa dos líneas en cualquier ancho");
+    expect(placementOf(after)).toEqual(was);
 
     const undone = historiesReducer(after, { type: "undo", variant: 0 });
     expect(undone[0]?.present.document).toEqual(before[0]?.present.document);
   });
 
-  it("is still one amendable step while the same text is being typed into", () => {
-    // Typing is the one thing that amends rather than stacking (ADR 0014), and carrying the rows
-    // must not change that: two keystrokes are one entry to undo.
+  it("opens no step at all when the words did not change", () => {
     const before = free();
-    const twice = run(before, typeInto("Una", 7), typeInto("Una línea", 9));
-    expect(twice[0]?.amendable).toBe(true);
-    expect(placementOf(twice)?.rowSpan).toBe(9);
-    const undone = historiesReducer(twice, { type: "undo", variant: 0 });
-    expect(undone[0]?.present.document).toEqual(before[0]?.present.document);
+    expect(run(before, typeInto(wordsOf(before)))).toBe(before);
   });
 
-  it("opens no step at all when neither the words nor the rows changed", () => {
-    const before = free();
-    const again = run(before, typeInto(wordsOf(before), placementOf(before)?.rowSpan));
-    expect(again).toBe(before);
-  });
-
-  it("changes the rows of a text whose words stayed the same, because the width can change them", () => {
-    // Narrowing a text's box rewraps it without touching a letter, and the rows it needs are then
-    // different: the commit has to be able to say so on its own.
-    const before = free();
-    const was = placementOf(before);
-    const words = wordsOf(before);
-    const taller = run(before, typeInto(words, (was?.rowSpan ?? 1) + 3));
-    expect(taller).not.toBe(before);
-    expect(placementOf(taller)?.rowSpan).toBe((was?.rowSpan ?? 1) + 3);
-  });
-
-  it("ignores the rows for a section the catalog draws, which has no placements", () => {
-    const state = run(start(), typeInto("Nuevo titular", 12));
+  it("is the same for a section the catalog draws, which has no placements", () => {
+    const state = run(start(), typeInto("Nuevo titular"));
     const section = state[0]?.present.document.pages[0]?.sections.find((s) => s.id === "sec-cover");
     expect(section?.layout).toBeNull();
     expect(section?.content.find((e) => e.id === "el-headline")?.value).toMatchObject({

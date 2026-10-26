@@ -1213,7 +1213,7 @@ export function Variants({
         <Editor
           title={es[caption.titleKey]}
           document={history.present.document}
-          onEditText={(address, text, marks, rowSpan) => {
+          onEditText={(address, text, marks) => {
             // Any of these makes "Deshacer" on a showing toast undo the wrong thing — the most
             // recent action, not the delete the toast still names — so the toast stops being
             // accurate the moment something else lands on top of it.
@@ -1227,9 +1227,6 @@ export function Variants({
               address,
               text,
               ...(marks === undefined ? {} : { marks }),
-              // Same reason as `marks`: absent means «the caller had no page to measure», which is
-              // not the same as «no rows», and `exactOptionalPropertyTypes` keeps the two apart.
-              ...(rowSpan === undefined ? {} : { rowSpan }),
             });
           }}
           onDeleteSection={(sectionId) => handleDeleteSection(openIndex, history, sectionId)}
