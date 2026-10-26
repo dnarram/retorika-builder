@@ -34,12 +34,23 @@ number, is the last section of REVIEW's sprint 27:
    from 11 October). The bank's exemption fails from 1 November; **PR #293** moves it to 1 December and
    is green. Recommended: merge it now rather than on the 30th.
 3. **Sprint 17's mouseless walk, intermittent in CI** at the same wait twice after día 4; passing in
-   the runs of #299, #300 and #301. Cause not established.
+   the runs of #299, #300 and #301. Cause not established. **Named on sprint 28 día 5 (26 October
+   2026), not reproduced:** the two CI logs (attempt 1 of #297's and #298's runs) say only «waiting
+   for locator('iframe').first()…sec-cover to be visible», 30 s. Alone, ten runs out of ten green
+   with the CPU throttled twenty-fold (cover in 1.3–1.8 s throttled from «Crear mi web», 8.0–8.4 s
+   throttled from the first question). The wait now names the canvas (`iframe:not([aria-hidden])`,
+   the one frame that is not a card's thumbnail) and a red lists every frame with its title, size,
+   readyState, wiring mark and section count, the heading, the focused element and the editor's
+   probe. The next red in CI says what was there.
 4. ~~**The panel close's 164 / 253 px**, untouched (row below).~~ **Closed on sprint 28 día 1 (26
    October 2026)**, and not by either repair the row named: the cause was never the re-flow. Row
    below.
 5. **Outlines at scale** snap to whole device pixels, accepted (ADR 0053).
-6. **`ontoThePhone`** waits for one grid column, mid-transition; named, not changed.
+6. ~~**`ontoThePhone`** waits for one grid column, mid-transition; named, not changed.~~ **Closed on
+   sprint 28 día 5 (26 October 2026)**: `deviceArrived` waits for the card's layout width to be the
+   target in two consecutive frames, the shell's `ui-reflow` class gone (it leaves on `transitionend`
+   of `width`) and the frame's own viewport at that width; `ontoThePhone` and the sprint 24 mobile
+   reorder walk both take it, then the column and the fonts as before. Three runs out of three alone.
 7. **Native Tab from a text being written in** never reaches the grip; the editor moves the focus
    itself; the cause in the browser is not established.
 8. ~~**Scrolling with the bar open**, and the verbs' cluster with no visible band (día 3's row below).~~
@@ -1253,7 +1264,9 @@ open survives.
   about 290 ms, and sprint 24 día 9's mobile reorder walk read a box in the middle of it — red alone
   on `main`, red in día 5's first full run, now waiting for the phone's width. `ontoThePhone` waits
   for one grid column, which arrives at about 170 ms and 497 px, mid-transition; its walks pass, and
-  it is the next one to fail the same way if anything before it gets faster.
+  it is the next one to fail the same way if anything before it gets faster. **Since sprint 28 día 5
+  both waits are one, `deviceArrived`**: the target width still for two frames and the transition's
+  class gone, before the column.
 
 - **Three visual ideas this sprint measured and turned down, so the next one does not re-propose
   them from scratch** (16 October 2026, sprint 22).

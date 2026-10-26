@@ -3967,3 +3967,71 @@ accesibilidad y SEO 100. Saboteado, 96 y rojo. `pnpm test:a11y` en local: 538 de
 publicadas no coinciden y nadie lo ha abierto en un dispositivo—, y es una línea más para la lista del
 iPhone; si no lo dibuja, el siguiente paso es un PNG al lado. El logotipo del dueño como icono espera
 a un documento que guarde el logotipo.
+
+### Día 5 — la suite espera a lo que se mueve (PR de `test/la-suite-espera-a-lo-que-se-mueve`)
+
+Un día sin nada que ver en el editor desplegado, como decía el plan: se ve en que CI no pida una
+segunda ejecución, y en que el siguiente rojo diga su nombre.
+
+**La intermitente del sprint 17 no se reproduce, y ya tiene cuenta.** Primero el registro: los dos
+intentos rojos de CI (el primero de la #297 y el primero de la #298) dicen una sola línea, «waiting for
+locator('iframe').first()…[data-section="sec-cover"] to be visible», treinta segundos, y nada más —ni
+en qué pantalla estaba la página, ni si el editor había montado, ni si su marco tenía documento—. Dos
+hechos del código que ninguna nota tenía: la espera tomaba **el primer `iframe` de la página**, y las
+tres tarjetas llevan cada una un `iframe` en miniatura del mismo sitio, con portada, `aria-hidden`
+porque son imágenes; y el `waitFor()` no decía nada al caer. Ahora la espera nombra el lienzo por lo
+que es —el único marco que un lector puede alcanzar, `iframe:not([aria-hidden])`— y al caer lista cada
+marco con su título, tamaño, `readyState`, marca de cableado y cuenta de secciones, el encabezado, el
+elemento con el foco y la cuenta de la sonda del editor, que la caminata enciende. Reproducir: la
+caminata sola, cinco veces, con la CPU a 20× entre «Crear mi web» y la portada (1,3–1,8 s), y cinco
+más con la CPU a 20× desde la primera pregunta (8,0–8,4 s): **diez de diez en verde**. No se da por
+hecho que fuera el fallo de montaje del día 7 del 27; el siguiente rojo de CI dirá qué marco había.
+
+**`ontoThePhone` espera al ancho antes que a la columna.** La columna única llega a mitad de la
+transición de 260 ms del ancho de la tarjeta, porque la consulta de medios dispara a 720 px con el
+marco aún en camino hacia los 320. `deviceArrived` pide tres cosas en una muestra, porque cada una
+sola se cumple antes de tiempo: el ancho de maquetación de la tarjeta (`getComputedStyle`, que la
+escala no toca) igual al destino en dos fotogramas seguidos, la clase `ui-reflow` fuera —el armazón la
+quita en el `transitionend` de `width`— y el visor del propio marco en ese ancho, que es el número que
+lee la consulta. La caminata de reordenar en móvil del sprint 24 llevaba su propia espera al ancho del
+marco desde el día 5 del 27; es la misma premisa y ahora es la misma función. Las tres caminatas,
+tres de tres solas.
+
+**Los once `waitForTimeout` sin razón, uno a uno.** Cada uno quitado, la caminata sola tres veces, y
+lo que caía dice qué se movía:
+
+- Los dos `intoTheEditor` (cambio de dispositivo; panel y herramientas) repetían el cuestionario y
+  dormían un segundo tras la foto. Ahora son `intoTheCanvas` y las animaciones del editor terminadas
+  (`motionSettled`): lo que el segundo tapaba era una entrada aún en marcha contada como movimiento
+  de la pulsación medida.
+- Los dos de «el interruptor» (1000 y 1700 ms) son la ventana de muestreo de su propio
+  `requestAnimationFrame` más un fotograma; se quedan, con la razón escrita.
+- La cuarta pestaña: la página que hace el verbo es una pestaña más, y se espera a la cuenta.
+- El asa bajo zoom: la entrada del panel terminada y la escala **sondeada** por debajo de 1.
+- La letra que llega al documento tras pulsar la pista: el serial, con la cuenta de la sonda si no
+  llega. La medida de las fuentes del sprint 26: sin pausa tras `fonts.ready`; cada parche ya se
+  esperó, y si la suite del día 8 echa algo en falta, lo que caiga dirá qué era.
+- Control+Y con el cursor en la caja del panel (una negativa, «el documento no da un paso»): se
+  teclea una letra después y se espera a verla; la pulsación de antes se ha atendido cuando la de
+  después se ve, y un paso habría borrado el rehacer. Saboteada la guarda de `shortcuts.ts` para los
+  `<input>`, cae donde debe: «Rehacer» deshabilitado.
+- **Ctrl+Z dentro de un texto nunca deshacía en esta máquina.** La caminata del sprint 26 decía «el
+  deshacer del navegador quita lo tecleado» y comprobaba solo el serial tras 400 ms: en macOS el
+  deshacer nativo de Chromium es Meta+Z, así que el titular se quedaba en «UnoDos» y la cuenta era
+  verdad en el Linux de CI y no aquí. Ahora pulsa la tecla de la plataforma, espera a que «Dos» se
+  haya ido y entonces mira el historial. Saboteada la guarda de `contentEditable`, cae: el titular
+  vuelve al original por el historial.
+- **Y la que el silencio sí sostenía: el clic en una entrada del menú.** Quitar la pausa de 1500 ms
+  dejó la caminata en verde tres de tres —y también en verde **con las dos guardas quitadas**
+  (`wireLinks` y el `preventDefault` del delegado de textos sobre un `<a>`): la aserción leía
+  `page.frames()` antes de que la navegación del marco cargara el editor dentro de sí mismo. Con la
+  pausa, el sabotaje caía a los 2,2 s con el tercer marco. Una negativa no tiene suceso propio; lo
+  honesto es esperar al suceso que ocurriría sin la guarda, con el mismo límite: un `framenavigated`
+  dentro de 1500 ms es el fallo, y saboteada así cae nombrándolo.
+
+**Lo que el día enseña sobre el método**: de once silencios, siete tapaban una cosa medible y ahora
+nombrada, uno no esperaba a nada medido y se queda quitado hasta la suite del día 8, dos eran ventanas
+de muestreo sin decirlo, y uno —el único sobre una negativa sin suceso propio— era un límite que hacía
+falta y no tenía nombre. Ninguna de las once se declaró arreglada por
+una caminata filtrada sola: cada conjunto corrió tres veces, los sabotajes de las tres guardas una vez
+cada uno, y la suite completa la corre el día 8.
