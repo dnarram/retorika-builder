@@ -477,6 +477,7 @@ export function ChoiceCard({
   onSelect,
   dashed = false,
   fullWidth = false,
+  filteredOut = false,
   index = 0,
 }: {
   name: string;
@@ -486,6 +487,11 @@ export function ChoiceCard({
   onSelect: () => void;
   dashed?: boolean;
   fullWidth?: boolean;
+  /**
+   * A search left it out: it keeps its room in the grid, at the end, and is not drawn, focused or
+   * read. See `Step2Sector`'s grid for why the room is kept.
+   */
+  filteredOut?: boolean;
   /** Its place in the grid, which is its place in the queue of arrivals. */
   index?: number;
 }) {
@@ -508,6 +514,8 @@ export function ChoiceCard({
         boxSizing: "border-box",
         padding: "10px 16px",
         gridColumn: fullWidth ? "1 / -1" : undefined,
+        order: filteredOut ? 1 : undefined,
+        visibility: filteredOut ? "hidden" : undefined,
         background: selected ? "#F1F7FE" : "var(--ui-surface)",
         border: selected
           ? "2px solid var(--ui-brand)"
