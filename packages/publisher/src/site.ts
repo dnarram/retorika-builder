@@ -1,4 +1,4 @@
-import { render } from "@retorika/renderer";
+import { FAVICON_PATH, faviconSvg, render } from "@retorika/renderer";
 import type { ContentElement, Page, RetorikaDocument } from "@retorika/schema";
 import { FONT_SOURCES, licencesFor } from "./fonts.ts";
 import type { SiteManifest } from "./manifest.ts";
@@ -313,6 +313,17 @@ export function buildSite(doc: RetorikaDocument, options: BuildSiteOptions): Sit
     ...pageFiles,
     ...assetFiles.values(),
     ...fontBundleFiles,
+    /**
+     * The tab's icon (ADR 0054), one file for every page: each page links it by the same name,
+     * and every page sits at the root beside it, so the relative link holds for all of them —
+     * served, or opened from a disk by double-clicking. Before it the browser asked for
+     * `/favicon.ico`, which no bundle had, and the 404 was a console error on every visit.
+     */
+    {
+      path: FAVICON_PATH,
+      contents: encoder.encode(faviconSvg(doc.theme, doc.siteName)),
+      contentType: "image/svg+xml",
+    },
     {
       path: "robots.txt",
       contents: encoder.encode(buildRobotsTxt(options.baseUrl)),

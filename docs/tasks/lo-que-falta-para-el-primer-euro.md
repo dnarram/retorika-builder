@@ -159,7 +159,7 @@ cierto.
 | Qué | Estado |
 |---|---|
 | El producto avisa cuando se rompe | Cableado e inerte (sprint 18, día 1); **activado el 13 de octubre de 2026** (sprint 19, día 1) con tu aceptación (§2.3) |
-| Lighthouse ≥ 95 medido | 100 / 99 / 99 con cinco fotos (días 2 y 4); el 96 de buenas prácticas es el favicon, fase 2 |
+| Lighthouse ≥ 95 medido | 100 / 99 / 99 con cinco fotos (días 2 y 4); el 96 de buenas prácticas era el favicon, que el paquete lleva desde el sprint 28 día 4 (ADR 0054): buenas prácticas 100, aseverado |
 | La galería del banco | Generada, contada y verificada (días 3 y 4) |
 | El intermitente del `e2e` | Mecanismo encontrado y corregido (día 5) |
 | Registros obsoletos | Tres filas corregidas hoy (fuentes, `tsconfig.json`, el barrido del sprint 14); las fechas del día 4 corregidas el día 5 |

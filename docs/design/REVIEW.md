@@ -3938,3 +3938,32 @@ transcripción de las maquetas; axe no lo veía porque ninguna pasada de axe eli
 **«Empezar» pasa a «Crear mi web».** Una clave, `landing.start`, que también titula `/empezar`; las
 cuatro caminatas que la nombraban la nombran ahora así. Que Lighthouse deje de listarla en `link-text`
 lo confirma el cierre, que lo corre.
+
+### Día 4 — el favicon del sitio (PR de `feat/el-favicon-del-sitio`, ADR 0054)
+
+**Una web descargada ya tiene icono en la pestaña:** la primera letra o cifra del nombre del negocio
+en el color de superficie sobre un disco del color principal —el par del botón, uno de los cinco que
+`packages/tokens` prueba en todas las paletas—, o el disco solo si el nombre no tiene ninguna. «¡Hola!»
+es H, «"La Tasca"» es L, «#1 Pizzas» es 1, «Ñandú» es Ñ. La letra es la del sistema de quien visita
+(`system-ui`) y no la de los títulos del sitio, y el ADR lo dice: un favicon se carga como imagen y
+una imagen no puede pedir fuentes web. 258 bytes; mirado en Chromium a 16, 32 y 96 px en las cinco
+paletas, centrado y legible.
+
+**Un archivo y un enlace, y solo dentro de un paquete.** `buildSite` escribe `favicon.svg` en la raíz
+y cada página lleva un `<link rel="icon">` tras su `<title>`; todas las páginas viven en la raíz, así
+que el mismo enlace relativo vale servido o abierto con doble clic. El enlace sale solo cuando la
+página tiene `pagePath`, la regla que el ADR 0029 puso para `og:url`: sin paquete no hay archivo. Por
+eso **el corpus golden no se ha movido**, al revés de lo que decía el plan —el corpus se dibuja sin
+paquete—; lo que habría enseñado lo asevera `publisher/test/site.test.ts` sobre cada fixture: el
+archivo, sus bytes, su tipo y exactamente un enlace por página. La prueba del doble clic aprendió que
+un `<link href>` carga y no navega; saboteada, nombra cada página cuyo icono «no es un archivo del
+paquete».
+
+**Lighthouse: buenas prácticas 100 en las cuatro auditorías**, donde era 96 desde el sprint 18 —el
+404 de `/favicon.ico` era la nota entera—, y ahora se asevera. Rendimiento 100 / 99 / 99 / 100;
+accesibilidad y SEO 100. Saboteado, 96 y rojo. `pnpm test:a11y` en local: 538 de 538.
+
+**Lo que queda dicho y no hecho:** si Safari dibuja un favicon SVG no está establecido —las fuentes
+publicadas no coinciden y nadie lo ha abierto en un dispositivo—, y es una línea más para la lista del
+iPhone; si no lo dibuja, el siguiente paso es un PNG al lado. El logotipo del dueño como icono espera
+a un documento que guarde el logotipo.

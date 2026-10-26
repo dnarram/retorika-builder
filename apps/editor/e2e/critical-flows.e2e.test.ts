@@ -1392,10 +1392,12 @@ describe("día 7 — dos conversiones desde el editor, y el ZIP resultante abier
     // was typed in this walk; with one there would be, ADR 0029 amended 13 October 2026), no stray
     // page, nothing from an earlier fixture — and, since
     // sprint 11 day 6, the two faces this restaurant's type pair asks for **with the OFL text beside
-    // them**, which is the condition rather than a detail.
+    // them**, which is the condition rather than a detail. And since sprint 28 day 4 the tab's icon
+    // at the root, which every page links (ADR 0054).
     expect([...entries].filter((entry) => !entry.startsWith("assets/muestra-")).sort()).toEqual(
       [
         "donde-estamos.html",
+        "favicon.svg",
         "fonts/OFL-EBGaramond.txt",
         "fonts/eb-garamond-latin-400-normal.woff2",
         "fonts/eb-garamond-latin-700-normal.woff2",
@@ -4111,9 +4113,11 @@ describe("sprint 11 día 7 — el recorrido completo del sprint", () => {
       // Exactly the files a single-page site on classic-display produces: no sitemap.xml (no
       // address was declared in this walk; ADR 0029 amended 13 October 2026), nothing from an
       // earlier fixture — and, since day 6, the two
-      // faces this pair asks for **with the OFL text beside them**.
+      // faces this pair asks for **with the OFL text beside them**, and since sprint 28 day 4 the
+      // tab's icon (ADR 0054).
       expect([...entries].sort()).toEqual(
         [
+          "favicon.svg",
           "fonts/OFL-EBGaramond.txt",
           "fonts/eb-garamond-latin-400-normal.woff2",
           "fonts/eb-garamond-latin-700-normal.woff2",

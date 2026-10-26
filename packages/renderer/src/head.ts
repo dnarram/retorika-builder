@@ -4,6 +4,7 @@ import {
   shareImageIssue,
   shareImageOf,
 } from "@retorika/schema";
+import { FAVICON_PATH } from "./favicon.ts";
 
 /**
  * What a published page says about itself when somebody shares the link (ADR 0029).
@@ -19,6 +20,8 @@ export interface HeadMeta {
   ogTitle: string;
   ogImage?: string;
   ogUrl?: string;
+  /** The icon's file beside the page (ADR 0054). Absent outside a bundle, like `ogUrl`. */
+  icon?: string;
 }
 
 /**
@@ -43,6 +46,15 @@ export function headMetaOf(
   pagePath: string | undefined,
 ): HeadMeta {
   const meta: HeadMeta = { ogTitle: title };
+
+  /**
+   * **The icon is linked only from a page that lives in a bundle** (ADR 0054), by the same rule
+   * as `og:url` below: `favicon.svg` is a file `buildSite` writes beside the pages, and without a
+   * `pagePath` there is no bundle and no file — the editor's preview and the golden corpus. A link
+   * there would name a file that does not exist, against whatever origin the page happened to be
+   * opened from.
+   */
+  if (pagePath !== undefined) meta.icon = FAVICON_PATH;
 
   const description = shareDescriptionOf(doc);
   if (description !== undefined) meta.description = description;
