@@ -37,13 +37,17 @@ import { buildSite, readFontBundle, type SiteBundle } from "../src/index.ts";
  * a neighbourhood bar's website is actually opened. It is the harder of the two presets, which is
  * the one a floor should be measured against.
  *
- * Only performance and accessibility are floors; the protocol names those two. Best practices and
- * SEO are printed so the number is seen, and nothing more, until somebody writes down what they
- * should be.
+ * Performance and accessibility are floors; the protocol names those two. **Best practices is held
+ * at full marks since sprint 28 day 4** (ADR 0054): its only missing four points from sprint 18 on
+ * were the browser asking for `/favicon.ico`, which no bundle had, and the 404 counting as a console
+ * error. The bundle carries its icon now, so anything that costs a point there is new and should
+ * say so. SEO is printed so the number is seen, and nothing more.
  */
 
 const SECTOR = "restaurante-bar";
 const FLOOR = 0.95;
+/** Best practices, whole (ADR 0054). */
+const BEST_PRACTICES = 1;
 
 type Measured = {
   label: string;
@@ -238,6 +242,10 @@ describe("Part 8.5 — Lighthouse over a sample site, the three compositions", (
         measured.scores["accessibility"],
         `${measured.label}: accessibility below ${FLOOR * 100} — ${report(measured)}`,
       ).toBeGreaterThanOrEqual(FLOOR);
+      expect(
+        measured.scores["best-practices"],
+        `${measured.label}: best practices short of full marks — ${report(measured)}`,
+      ).toBe(BEST_PRACTICES);
     }, 120_000);
   }
 
@@ -253,5 +261,9 @@ describe("Part 8.5 — Lighthouse over a sample site, the three compositions", (
       measured.scores["accessibility"],
       `${measured.label}: accessibility below ${FLOOR * 100} — ${report(measured)}`,
     ).toBeGreaterThanOrEqual(FLOOR);
+    expect(
+      measured.scores["best-practices"],
+      `${measured.label}: best practices short of full marks — ${report(measured)}`,
+    ).toBe(BEST_PRACTICES);
   }, 120_000);
 });
