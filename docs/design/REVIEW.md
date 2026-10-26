@@ -3857,3 +3857,43 @@ Su respuesta: «el día 7 mide el síntoma, no la elegancia» — una sección a
 un texto de dos líneas y un elemento colocado justo debajo, cerrar el panel y medir en píxeles de
 pantalla cuánto se separa o se monta; ≤ 8 px, fila del backlog con sus tres zooms; más, defecto del
 ADR 0050 y PR aparte en el colchón con la enmienda al sprint 24 día 3.
+
+### Día 2 — el cromo sigue a la vista (PR de `fix/el-cromo-sigue-a-la-vista`)
+
+**Medido antes de tocar, y las dos premisas se sostuvieron.** A 1440 × 900, con la barra abierta sobre
+un texto de «Comidas», la rueda del ratón lleva las palabras a 12 px del borde superior del marco y la
+barra se queda en **−34**: el defecto del 15 de octubre, alcanzado con la rueda en vez de con el foco,
+porque desde el día 3 del 27 la barra se colocaba contra la franja visible solo al abrirse y tras cada
+parche. Y el grupo de verbos de la portada, elegida y desplazada 200 px por encima del borde, en
+**−192** con sus cuatrocientos píxeles inferiores delante de la persona. No hacía falta una sección más
+alta que el marco, como decía la fila: basta con que el borde superior de cualquiera salga de la vista.
+
+**El arreglo es uno y va donde la fila decía.** `Bounds` lleva la franja visible como ya la llevaba
+`ToolbarGeometry`, y `clampToHost` sujeta el punto dentro de la franja además de dentro de la sección
+—con la sección como suelo y como techo cuando la franja la sobrepasa, con el borde visible ganando
+cuando queda menos sección a la vista que alto tiene la barra, e ignorando una franja que no toca la
+sección, porque un grupo de verbos flotando sobre la sección de al lado sería peor que uno fuera de
+pantalla con la suya—. Las esquinas, las flechas y el arrastre responden dentro de la franja sin tocar
+una línea suya. Un único oyente `scroll` en la ventana del marco, pasivo y agrupado por
+`requestAnimationFrame`, vuelve a colocar el grupo y la barra abierta, y **solo escribe si el punto
+cambia**: la posición que la mano dio se sujeta, nunca se sobrescribe, y al volver el scroll el grupo
+está donde lo dejaron (la caminata lo asevera con dos flechas desde el asa). La esquina de la hoja de
+estilos sigue siendo la de nacimiento de un grupo que nadie movió y cuya esquina está a la vista, así
+que `style.left === ""` sigue significando «nunca movido» para `anchorPopup` y para las caminatas del
+sprint 20. Saboteado el oyente, las dos caminatas caen con los números de antes: −34 y −192.
+
+**El cromo del flujo a menor zoom, medido y decidido «como está»** (enmienda del ADR 0053 del 26 de
+octubre). A 1024 con «Diseño» (0,7379): la barra «Diseñada a mano» pasa de 44 a **57,9** px del marco
+(44 → 42,7 en pantalla) y empuja lo de debajo 13,9 px más; el hueco de una sección borrada de 94 a
+**125,6** (138 → 185,2 con sus márgenes, 47,2 más); la píldora «Añadir» de 30 a **40,7** (30 → 30 en
+pantalla, 14,2 más con su margen). Lo de debajo empieza exactamente tras la caja y su margen inferior
+en los dos estados. El 1,3 px en pantalla no es la división sino la letra: cada caja de línea con
+`line-height: normal` pierde alrededor de un píxel de pantalla al zoom menor porque Chromium redondea
+las métricas de la fuente a píxeles enteros, la misma familia que el contorno del día 7 del 27. Se
+quedan a tamaño de pantalla porque las tres llevan un control o palabras —en píxeles del marco, «Volver
+a la original» mediría 23,6 px a 0,7379, por debajo del 24 del 2.5.8 que el ADR existe para cumplir—,
+el coste está acotado a un panel abierto (diez a treinta y cinco píxeles de pantalla por pieza) y nada
+se mueve bajo la mano por ello: la barra abre su sitio por su alto medido, y una pieza por encima de la
+vista crece detrás del anclaje del navegador que el día 1 midió. La caminata se queda aseverando la
+regla del §1 sobre el cromo del flujo, con los dos píxeles que cuesta la letra.
+

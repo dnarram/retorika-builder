@@ -20544,3 +20544,410 @@ describe("sprint 27 día 8 — el cierre, sin ratón", () => {
     }
   }, 120_000);
 });
+
+/**
+ * **Sprint 28 día 2 — el cromo sigue a la vista.** Día 3 of sprint 27 placed the floating text
+ * bar against the band of its section that is on screen, and placed it again only after a patch:
+ * scroll the canvas with the bar open and the band moves under a bar that stays where it was. The
+ * section's cluster of verbs never had a band at all — a corner of its section, on screen or not.
+ * One passive listener on the frame's own scroll now puts both against the band that is current,
+ * and the hand's displacement of either is kept. The third walk measures the chrome that sits in
+ * the page's flow at a lower zoom, which ADR 0053 left as read off the code and not measured.
+ */
+describe("sprint 28 día 2 — el cromo sigue a la vista", () => {
+  /**
+   * The floating chrome against the frame's visible band, in the frame's pixels and in one call,
+   * so the band, the section, the cluster, the bar and the words describe one instant. Playwright's
+   * `boundingBox` cannot answer where a thing is *on screen*: it reports where the element is,
+   * scrolled into view or not.
+   */
+  const against = (page: Page, sectionId: string) =>
+    page.evaluate((id) => {
+      const frameEl = document.querySelector<HTMLIFrameElement>("iframe");
+      const doc = frameEl?.contentDocument;
+      const win = doc?.defaultView;
+      if (!frameEl || !doc || !win) return null;
+      const zoom = frameEl.getBoundingClientRect().width / win.innerWidth;
+      const box = (el: Element | null | undefined) => {
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return {
+          top: Math.round(r.top),
+          bottom: Math.round(r.bottom),
+          left: Math.round(r.left),
+          right: Math.round(r.right),
+        };
+      };
+      const section = doc.querySelector<HTMLElement>(`[data-section="${id}"]`);
+      const cluster = section?.querySelector<HTMLElement>(".rb-actions");
+      return {
+        zoom: Math.round(zoom * 10_000) / 10_000,
+        scrollY: Math.round(win.scrollY),
+        band: win.innerHeight,
+        section: box(section),
+        cluster: box(cluster),
+        clusterStyle: cluster?.getAttribute("style") ?? "",
+        clusterLow: cluster?.classList.contains("rb-actions-low") ?? false,
+        bar: box(doc.querySelector(".rb-toolbar")),
+        words: box(doc.querySelector('[contenteditable="true"]')),
+      };
+    }, sectionId);
+
+  /** The frame's scroll, as the page reads it. */
+  const scrollYOf = (page: Page) =>
+    page.evaluate(
+      () =>
+        document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument?.defaultView
+          ?.scrollY ?? -1,
+    );
+
+  /**
+   * Scroll the canvas the way a hand does — the wheel over the frame — and wait until the scroll
+   * has **changed** and then stopped: Chromium animates a wheel's travel, so the first sample after
+   * the gesture is the old number (sprint 25 día 8's rule, and día 1's lesson again).
+   */
+  async function wheel(page: Page, dy: number): Promise<number> {
+    const frameBox = await page.locator("iframe").boundingBox();
+    expect(frameBox, "no frame to scroll").not.toBeNull();
+    if (!frameBox) return -1;
+    const was = await scrollYOf(page);
+    await page.mouse.move(frameBox.x + frameBox.width / 2, frameBox.y + frameBox.height / 2);
+    await page.mouse.wheel(0, dy);
+    await expect.poll(() => scrollYOf(page), { timeout: 5_000, intervals: [50] }).not.toBe(was);
+    let last = -1;
+    await expect
+      .poll(
+        async () => {
+          const now = await scrollYOf(page);
+          const stable = now === last;
+          last = now;
+          return stable;
+        },
+        { timeout: 5_000, intervals: [50] },
+      )
+      .toBe(true);
+    return last;
+  }
+
+  /** A box drawn inside the band: top at or under its upper edge, bottom at or over its lower. */
+  const inside = (box: { top: number; bottom: number } | null, band: number) =>
+    box !== null && box.top >= 0 && box.bottom <= band;
+
+  it("con la barra abierta, desplazar el lienzo la deja dentro de la franja: del mismo lado mientras hay sitio, y al otro lado cuando las palabras llegan arriba", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    await probeOn(context);
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      await fontsReady(frame);
+      // A text in the middle of the page, with room above it and a page below it to scroll.
+      const text = frame.locator('[data-section="sec-services"] [data-rb-text="1"]').first();
+      await clickToEdit(frame, text);
+      const opened = await against(page, "sec-services");
+      console.log(`[día 2] the bar as it opened: ${JSON.stringify(opened)}`);
+      expect(opened?.bar && opened.words, "no bar or no words to measure").toBeTruthy();
+      if (!opened?.bar || !opened.words) return;
+      expect(inside(opened.bar, opened.band), "the bar did not open inside the band").toBe(true);
+      const side = opened.bar.bottom <= opened.words.top ? "above" : "below";
+
+      /**
+       * **A scroll that keeps room on the bar's side**: a hundred pixels, the words still well
+       * inside the band. The bar follows the words — it is in the section's coordinates, as the
+       * section scrolls — and stays on the same side, which is the part a listener must not break.
+       */
+      await wheel(page, 100);
+      const scrolled = await against(page, "sec-services");
+      console.log(`[día 2] after 100 px: ${JSON.stringify(scrolled)}`);
+      expect(scrolled?.bar && scrolled.words, "the bar or the words went away").toBeTruthy();
+      if (!scrolled?.bar || !scrolled.words) return;
+      expect(inside(scrolled.bar, scrolled.band), "the bar left the band").toBe(true);
+      expect(
+        scrolled.bar.bottom <= scrolled.words.top ? "above" : "below",
+        "the bar changed sides with room still on its side",
+      ).toBe(side);
+
+      /**
+       * **The scroll that moves the band from under the bar**: the words brought to a few pixels
+       * under the frame's upper edge. The place above them is now off the top of what is on screen
+       * — the defect of 15 October reached by the wheel instead of by focus — and a bar that is not
+       * placed again stays there, unpressable. Measured before this day: the bar's top at −38.
+       */
+      await wheel(page, scrolled.words.top - 12);
+      const atTheTop = await against(page, "sec-services");
+      console.log(`[día 2] with the words at the top: ${JSON.stringify(atTheTop)}`);
+      expect(atTheTop?.bar && atTheTop.words, "the bar or the words went away").toBeTruthy();
+      if (!atTheTop?.bar || !atTheTop.words) return;
+      expect(atTheTop.words.top, "the words are not near the top of the band").toBeLessThan(40);
+      await expect
+        .poll(() => against(page, "sec-services").then((at) => at?.bar?.top ?? -1), {
+          message: "the bar stayed above the top of what is on screen",
+        })
+        .toBeGreaterThanOrEqual(0);
+      const followed = await against(page, "sec-services");
+      expect(
+        inside(followed?.bar ?? null, followed?.band ?? 0),
+        "the bar is not inside the band",
+      ).toBe(true);
+      await expect(
+        frame.locator('[contenteditable="true"]'),
+        "the scroll ended the writing",
+      ).toHaveCount(1);
+      // And the editor says it moved it for the scroll, not for an edit: no patch in between.
+      type Event = { kind: string; data: Record<string, unknown> };
+      const events = await page.evaluate(
+        () => ((window as unknown as { __rb?: Event[] }).__rb ?? []) as Event[],
+      );
+      expect(
+        events.some((e) => e.kind === "follow" && e.data["cause"] === "scroll"),
+        "no «follow» with cause «scroll» was recorded",
+      ).toBe(true);
+    } finally {
+      await context.close();
+    }
+  }, 120_000);
+
+  it("sección elegida, desplazar hasta sacar su esquina: los verbos siguen en pantalla, y la posición que la mano les dio vuelve con el scroll", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      await fontsReady(frame);
+      await frame.locator('[data-section="sec-cover"]').click();
+      await expect(frame.locator('[data-section="sec-cover"] .rb-actions')).toHaveCount(1);
+      const chosen = await against(page, "sec-cover");
+      console.log(`[día 2] the cluster as the section was chosen: ${JSON.stringify(chosen)}`);
+      expect(chosen?.section && chosen.cluster, "no section or no cluster").toBeTruthy();
+      if (!chosen?.section || !chosen.cluster) return;
+      expect(chosen.clusterStyle, "the cluster was born moved").toBe("");
+      const clusterHeight = chosen.cluster.bottom - chosen.cluster.top;
+      const sectionHeight = chosen.section.bottom - chosen.section.top;
+      // The premise: the section is tall enough to scroll its corner out while most of it stays.
+      // The cover, 492 px tall at this width; «Comidas», the first choice, measured 265: too short.
+      expect(sectionHeight, "the section is too short to scroll its corner out").toBeGreaterThan(
+        clusterHeight + 240,
+      );
+
+      /**
+       * **The corner out of the band, the section still mostly on screen.** Before this day the
+       * cluster sat at the section's top-right whatever was on screen: measured, its top at −192
+       * with the section's lower three hundred pixels in front of the person. `select()` focuses
+       * the section and focus scrolls it into view, which is why nobody had seen it — until they
+       * scrolled.
+       */
+      await wheel(page, chosen.section.top + 200);
+      await expect
+        .poll(() => against(page, "sec-cover").then((at) => at?.cluster?.top ?? -1), {
+          message: "the cluster stayed above the top of what is on screen",
+        })
+        .toBeGreaterThanOrEqual(0);
+      const out = await against(page, "sec-cover");
+      console.log(`[día 2] with the corner scrolled out: ${JSON.stringify(out)}`);
+      expect(out?.section && out.cluster).toBeTruthy();
+      if (!out?.section || !out.cluster) return;
+      expect(out.section.top, "the section's top is still on screen").toBeLessThan(-150);
+      expect(inside(out.cluster, out.band), "the cluster is not inside the band").toBe(true);
+      // Eight pixels of the screen under the band's upper edge, the inset the corner has always had.
+      expect(Math.abs(out.cluster.top * out.zoom - BAR_INSET)).toBeLessThanOrEqual(1);
+      expect(out.cluster.right, "the cluster left its right edge").toBe(chosen.cluster.right);
+
+      // Back up: the corner is on screen again and the cluster is in it, with no style of its own.
+      await wheel(page, -(out.scrollY + 1));
+      await expect
+        .poll(() => against(page, "sec-cover").then((at) => at?.clusterStyle ?? "x"), {
+          message: "the cluster kept an inline place once its corner was back on screen",
+        })
+        .toBe("");
+
+      /**
+       * **And a cluster the hand moved keeps what the hand meant.** Two arrow presses from the
+       * grip put it thirty-two pixels left of its corner; scrolled out, it is held inside the band
+       * at that same distance from the right; scrolled back, it is exactly where it was put.
+       */
+      await tabToVerb(page, "grip");
+      await page.keyboard.press("ArrowLeft");
+      await page.keyboard.press("ArrowLeft");
+      const moved = await against(page, "sec-cover");
+      expect(moved?.cluster, "no cluster after the arrows").toBeTruthy();
+      if (!moved?.cluster) return;
+      expect(moved.cluster.right).toBe(chosen.cluster.right - 2 * BAR_STEP);
+      await wheel(page, (moved.section?.top ?? 0) + 200);
+      await expect
+        .poll(() => against(page, "sec-cover").then((at) => at?.cluster?.top ?? -1), {
+          message: "the moved cluster stayed above the top of what is on screen",
+        })
+        .toBeGreaterThanOrEqual(0);
+      const movedOut = await against(page, "sec-cover");
+      console.log(`[día 2] the moved cluster, scrolled out: ${JSON.stringify(movedOut)}`);
+      expect(movedOut?.cluster?.right, "the band took the hand's horizontal away").toBe(
+        chosen.cluster.right - 2 * BAR_STEP,
+      );
+      expect(inside(movedOut?.cluster ?? null, movedOut?.band ?? 0)).toBe(true);
+      await wheel(page, -((movedOut?.scrollY ?? 0) + 1));
+      await expect
+        .poll(() => against(page, "sec-cover").then((at) => at?.cluster?.top ?? -1), {
+          message: "the moved cluster did not come back to where the hand put it",
+        })
+        .toBe(moved.cluster.top);
+      expect((await against(page, "sec-cover"))?.cluster?.right).toBe(moved.cluster.right);
+    } finally {
+      await context.close();
+    }
+  }, 120_000);
+
+  /**
+   * **The chrome in the page's flow at a lower zoom, measured** (ADR 0053 «What this does not
+   * decide», the plan's «medir primero, decidir después»). The «Diseñada a mano» bar, the hole a
+   * deleted section leaves and the lines' «Añadir» pill are divided by the zoom like every other
+   * length of the chrome, so at a lower zoom each takes more of the frame and pushes what is below
+   * it by the difference. How much, in the frame's pixels and on screen, with «Diseño» closed and
+   * open at 1024 — and the rule the ADR states, asserted on the flow chrome for the first time:
+   * on screen, each measures what it measures at the other zoom.
+   */
+  it("a 1024, la barra «Diseñada a mano», el hueco y la píldora «Añadir» miden lo mismo en pantalla con «Diseño» cerrado y abierto, y empujan lo de debajo por su alto en el marco", async () => {
+    const context = await browser.newContext({ viewport: { width: 1024, height: 900 } });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      await studioToolsOn(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      // The bar: the cover designed by hand.
+      await frame.locator('[data-section="sec-cover"]').click();
+      await escalated(frame, async () => {
+        await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
+        await frame.locator(".rb-escalate-yes").click();
+      });
+      await waitForBankPhoto(frame);
+      await expect(frame.locator(".rb-handmade")).toHaveCount(1);
+      // The hole: a touched section deleted, so the hole stays while the panel opens.
+      const touched = frame.locator('[data-section="sec-contact"] [data-rb-text="1"]').first();
+      await intoWriting(touched);
+      await page.keyboard.type(" y más");
+      await editHint(page).click();
+      await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+      await frame.locator('[data-section="sec-contact"]').click();
+      await afterTheEdit(page, async () => {
+        await frame
+          .locator('[data-section="sec-contact"] .rb-action[aria-label="Borrar esta sección"]')
+          .click();
+      });
+      await expect(frame.locator(".rb-hole-fate")).toHaveText(
+        "El hueco se queda hasta que deshagas o cierres el aviso.",
+      );
+      // The pill: the services' lines carry one with the tools on.
+      await expect(frame.locator('[data-section="sec-services"] .rb-line-add')).toHaveCount(1);
+      await frame.locator('[data-section="sec-cover"]').click();
+      await fontsReady(frame);
+
+      const flow = () =>
+        page.evaluate(() => {
+          const frameEl = document.querySelector<HTMLIFrameElement>("iframe");
+          const doc = frameEl?.contentDocument;
+          const win = doc?.defaultView;
+          if (!frameEl || !doc || !win) return null;
+          const zoom = frameEl.getBoundingClientRect().width / win.innerWidth;
+          const round = (n: number) => Math.round(n * 10) / 10;
+          const piece = (el: Element | null, next: Element | null) => {
+            if (!el) return null;
+            const r = el.getBoundingClientRect();
+            const style = getComputedStyle(el);
+            const marginTop = Number.parseFloat(style.marginTop);
+            const marginBottom = Number.parseFloat(style.marginBottom);
+            const outer = r.height + marginTop + marginBottom;
+            return {
+              frame: round(r.height),
+              screen: round(r.height * zoom),
+              // The room it takes in the flow: the box plus its margins.
+              push: round(outer),
+              pushOnScreen: round(outer * zoom),
+              // Where the next thing in the flow starts, from this box's top: the box plus the
+              // margin under it (the one above is already behind the top).
+              nextTop: next ? round(next.getBoundingClientRect().top - r.top) : null,
+              below: round(r.height + marginBottom),
+              // Each child's height on screen, to say which line box moves when the whole does.
+              children: [...el.children].map(
+                (child) =>
+                  `${child.className}:${round(child.getBoundingClientRect().height * zoom)}`,
+              ),
+            };
+          };
+          const bar = doc.querySelector(".rb-handmade");
+          const hole = doc.querySelector(".rb-hole");
+          const pill = doc.querySelector<HTMLElement>('[data-section="sec-services"] .rb-line-add');
+          return {
+            zoom: Math.round(zoom * 10_000) / 10_000,
+            handmade: piece(bar, bar?.nextElementSibling ?? null),
+            hole: piece(hole, hole?.nextElementSibling ?? null),
+            pill: piece(pill, pill?.nextElementSibling ?? null),
+            pageHeight: Math.round(doc.documentElement.scrollHeight),
+          };
+        });
+
+      const closed = await flow();
+      console.log(`[día 2] flow chrome, «Diseño» closed: ${JSON.stringify(closed)}`);
+      const cardWidth = () =>
+        page.evaluate(() =>
+          Math.round(
+            document.querySelector('[data-testid="canvas-card"]')?.getBoundingClientRect().width ??
+              -1,
+          ),
+        );
+      const was = await cardWidth();
+      await page.getByRole("button", { name: "Diseño", exact: true }).click();
+      await expect.poll(cardWidth, { timeout: 5_000, intervals: [100] }).not.toBe(was);
+      let last = -1;
+      await expect
+        .poll(
+          async () => {
+            const now = await cardWidth();
+            const stable = now === last;
+            last = now;
+            return stable;
+          },
+          { timeout: 5_000, intervals: [100] },
+        )
+        .toBe(true);
+      await fontsReady(frame);
+      const open = await flow();
+      console.log(`[día 2] flow chrome, «Diseño» open: ${JSON.stringify(open)}`);
+      expect(closed && open, "nothing to measure").toBeTruthy();
+      if (!closed || !open) return;
+      expect(open.zoom, "opening «Diseño» did not lower the zoom").toBeLessThan(closed.zoom);
+
+      for (const name of ["handmade", "hole", "pill"] as const) {
+        const a = closed[name];
+        const b = open[name];
+        expect(a && b, `no «${name}» in one of the two states`).toBeTruthy();
+        if (!a || !b) continue;
+        // The rule of ADR 0053, on the flow chrome: the same size on screen at either zoom —
+        // within two pixels, because a line box of `line-height: normal` is built from font
+        // metrics Chromium rounds to whole pixels, and 11 px of the screen is 14.9 of the frame.
+        // Measured: the bar 44 → 42.7 and the hole 94 → 92.7 on screen; the pill, 30 → 30.
+        expect(
+          Math.abs(a.screen - b.screen),
+          `«${name}» on screen: ${a.screen} closed, ${b.screen} open`,
+        ).toBeLessThanOrEqual(2);
+        // And what is below starts exactly after its box and the margin under it, in both states:
+        // the chrome opens the room it takes and nothing else moves.
+        expect(
+          a.nextTop === null || Math.abs(a.nextTop - a.below) <= 1,
+          `«${name}» closed: the next thing starts at ${a.nextTop} for a box of ${a.below}`,
+        ).toBe(true);
+        expect(
+          b.nextTop === null || Math.abs(b.nextTop - b.below) <= 1,
+          `«${name}» open: the next thing starts at ${b.nextTop} for a box of ${b.below}`,
+        ).toBe(true);
+        console.log(
+          `[día 2] «${name}»: ${a.frame} → ${b.frame} px of the frame (${a.screen} → ${b.screen} on screen); what is below moves ${round1(b.push - a.push)} px of the frame more, ${round1((b.push - a.push) * open.zoom)} on screen`,
+        );
+      }
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+});
+
+function round1(n: number): number {
+  return Math.round(n * 10) / 10;
+}

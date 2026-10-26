@@ -42,8 +42,14 @@ number, is the last section of REVIEW's sprint 27:
 6. **`ontoThePhone`** waits for one grid column, mid-transition; named, not changed.
 7. **Native Tab from a text being written in** never reaches the grip; the editor moves the focus
    itself; the cause in the browser is not established.
-8. **Scrolling with the bar open**, and the verbs' cluster with no visible band (día 3's row below).
-9. **Flow chrome grows in the frame at a lower zoom** (ADR 0053).
+8. ~~**Scrolling with the bar open**, and the verbs' cluster with no visible band (día 3's row below).~~
+   **Closed on sprint 28 día 2 (26 October 2026)**: one passive scroll listener places both against
+   the band that is on screen, and `Bounds` carries the band for the cluster. The row below says what
+   was measured.
+9. ~~**Flow chrome grows in the frame at a lower zoom** (ADR 0053).~~ **Measured and decided «as built»
+   on sprint 28 día 2** — the amendment of 26 October 2026 at the end of ADR 0053 has the numbers: the
+   bar pushes 13.9 px of the frame more at 0.7379, the hole 47.2, the pill 14.2, and on screen each
+   measures what it measures at zoom 1 within the pixel the font's rounding costs.
 
 **What this sprint found that nobody was looking for:**
 
@@ -1617,6 +1623,19 @@ open survives.
   section — which scrolls it into view — so the corner is usually on screen by the time the verbs
   are drawn; it is the same arithmetic waiting for the same correction, and `clampToHost` is where
   it would go.
+
+  **Both closed on 26 October 2026, sprint 28 día 2** (PR of `fix/el-cromo-sigue-a-la-vista`;
+  REVIEW's sprint 28 día 2 has the account). Measured first, at 1440 × 900: the words scrolled by
+  the wheel to twelve pixels under the frame's upper edge left the bar at **−34** — the defect above
+  reached by the wheel instead of by focus — and the cover's cluster sat at **−192** with the cover's
+  lower four hundred pixels in front of the person. It was not a section taller than the frame that
+  did it, only a section whose top had been scrolled off, which is any section. `clampToHost` is
+  where it went: `Bounds` carries the band like `ToolbarGeometry` does, the corners, the arrows and
+  the drag answer inside it, and one passive scroll listener on the frame's window — coalesced by
+  `requestAnimationFrame`, writing only when the place changed — puts the cluster and the open bar
+  against the band that is current. The hand's displacement is clamped, never overwritten: scrolled
+  back, the cluster is where the hand put it. The stylesheet's corner stays the default for a cluster
+  nobody moved whose corner is on screen, so `style.left === ""` keeps meaning «never moved».
 
   *What follows is the row as it stood.* Found on 15 October 2026 while writing sprint 20's touch
   walk, which is the only reason anybody

@@ -133,11 +133,12 @@ changes the zoom, so it is what triggers the redraw — condition 3 as written.
 - **Whether the floating bar and the verbs should also be *placed* differently at a lower zoom.** They
   are placed in the frame's pixels by `barPosition`; only their sizes and their distances are the
   screen's. The plan named this as open and it stays open.
-- **The chrome that sits in the page's flow and is not a gap band** — the «Diseñada a mano» bar, the
+- ~~**The chrome that sits in the page's flow and is not a gap band** — the «Diseñada a mano» bar, the
   hole a deleted section leaves, the lines' «Añadir» pill. It is divided like the rest, so at a lower
   zoom it takes more of the frame and pushes what is below it by the difference. Read off the code, not
   measured: the «Diseñada a mano» bar opens its own room by its measured height (`--rb-enter-offset`),
-  which is measured after the division, so its arrival still opens exactly the room it takes.
+  which is measured after the division, so its arrival still opens exactly the room it takes.~~
+  **Measured and decided on sprint 28 día 2 (26 October 2026)** — the amendment at the end.
 - **The outlines**, which is the part of condition 1 this does not meet (below).
 
 ## What is measured on día 7 (25 October 2026)
@@ -222,7 +223,61 @@ conseguir los objetivos marcados en el proyecto». Recorded as that, not as his 
   to, and the walks say so in numbers.
 - **The handles a box gets depend on the zoom**, which is condition 2 working: the same element can
   have its edge handles at 1440 and only its corners at 1024 with a panel open.
-- **Flow chrome grows in the frame at a lower zoom** (§«What this does not decide»).
+- **Flow chrome grows in the frame at a lower zoom**, by a measured amount, and stays at screen size
+  (the amendment of 26 October 2026).
 - **Two ADRs proposed in this sprint on top of ten unsigned**: 0052 and this one.
 
 **Still `proposed`.** This ADR until David signs it.
+
+## Amendment — the chrome in the page's flow at a lower zoom, measured (26 October 2026, sprint 28 día 2)
+
+**What was open.** Three pieces of chrome sit *in the page's flow* rather than over it: the «Diseñada
+a mano» bar before a hand-designed section, the hole a deleted section leaves, and the «Añadir» pill
+under a section's lines. Divided by the zoom like every other length of the chrome (§1), each takes
+more of the frame at a lower zoom and pushes what is below it by the difference — read off the code
+when this ADR was written, and not measured. The plan for sprint 28 día 2: measure first, then decide
+with this ADR in the hand, and write the decision here even if it is «as built».
+
+**Measured**, Chromium at 1024 × 900, the design tools on, the walk «a 1024, la barra «Diseñada a
+mano», el hueco y la píldora «Añadir» miden lo mismo en pantalla…» in `critical-flows.e2e.test.ts`,
+«Diseño» closed (zoom 1) against open (zoom 0.7379):
+
+| In the flow | Frame px | On screen | What is below moves, with «Diseño» open |
+|---|---|---|---|
+| the «Diseñada a mano» bar | 44 → 57.9 | 44 → 42.7 | **13.9** px of the frame more (10.3 on screen) |
+| the hole (its box; 22 px of margin above and below it, 138 → 185.2 in all) | 94 → 125.6 | 94 → 92.7 | **47.2** (34.8 on screen) |
+| the lines' «Añadir» pill (10 px of margin above it, 40 → 54.2 in all) | 30 → 40.7 | 30 → 30 | **14.2** (10.5 on screen) |
+
+In both states the next thing in the flow starts exactly after the box and the margin under it: each
+piece opens the room it takes and nothing else moves. The page's own sections and the gaps' bands keep
+their frame pixels, as §1 says.
+
+**The 1.3 px on screen is the font, not the division.** Every line box inside the bar and the hole is
+about one pixel of the screen shorter at the lower zoom — the badge 23 → 22, the name 15 → 14, «Volver
+a la original» 25 → 24, the hole's two sentences 18 → 17.7 and 16 → 15.5 — because a `line-height:
+normal` line box is built from font metrics Chromium rounds to whole pixels, and 11 px of the screen
+is 14.9 of the frame. The same family as the outline snap in «What is measured on día 7», and below
+anything the eye reads. The pill, whose height is its padding, comes out exact.
+
+**Decision: as built — every piece stays at screen size and opens its room by its own height.**
+
+1. **All three carry a control or words**: «Volver a la original» is a button, the pill is a button,
+   the hole is two sentences. Kept in the frame's pixels like the gaps' bands, the button would be
+   23.6 px tall at 0.7379 — under the 24 × 24 of WCAG 2.2 §2.5.8 that this ADR exists to meet. The
+   bands keep the frame's pixels because they are rhythm with a pill *inside* them that is divided;
+   these are not rhythm.
+2. **The cost is bounded and only while a panel is open**: ten to thirty-five pixels of the screen per
+   piece, the hole being transient and the bar one per hand-designed section. A page with three
+   hand-designed sections and a panel open is about forty frame pixels longer than it would be in the
+   frame's pixels.
+3. **Nothing moves under the hand because of it.** The bar's arrival opens exactly its measured room
+   (`--rb-enter-offset`, measured after the division). When a panel opens, a piece above what is on
+   screen grows behind the browser's own scroll anchoring, which sprint 28 día 1 measured absorbing a
+   220 px re-flow; the room the page is given at its end (`overscrollFor`) is what keeps the greatest
+   scroll from falling. A piece *inside* what is on screen while the panel opens moves the content
+   below it by the numbers in the table, up to 47 px of the frame for a hole — the same kind of move as
+   the chrome's own growth, which condition 1 asked for, and accepted with it.
+
+Nothing in `apps/editor` changes for this amendment; the walk that measured it stays, asserting the
+rule of §1 on the flow chrome — the same size on screen at either zoom, within the two pixels the font
+costs — and that what is below starts after the box and its margin.
