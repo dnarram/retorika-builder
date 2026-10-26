@@ -1365,9 +1365,12 @@ open survives.
   falling, nothing clamps, and anchoring does the rest: **0 / 0 / 0 in all twelve measurements**, 155
   → 0 on close. At zoom 1 the room is 0 and the preview ends where the page ends. The walk of sprint
   24 asserts ±8 px (one fine-grid row) on open and on close at 1024, 1280 and 1600, and asserts the
-  mechanism first — the greatest scroll does not fall on open — so a red names it. CI's Linux is this
-  PR's own run; the clamp is geometry and the anchoring is Chromium's on both, so the 174 of the table
-  above is expected to read 0 there too.
+  mechanism first — the room at the end of the page measures what the viewport grew, ±2 px — so a red
+  names it. **The first version of that assertion compared the greatest scroll before and after, and
+  CI's Linux failed it at 1280 by 15 px with no clamp anywhere**: there the page re-laid out at 788
+  comes out 15 px *shorter* than at 1008 (on macOS it comes out 10 px longer), so the greatest scroll
+  fell by the re-flow alone. The same platform difference in metrics this row recorded on 18 October,
+  measuring the re-flow instead of the clamp. The assertion now reads the room itself.
 
   **The walk had a flaw of its own, found by sabotaging the fix**: its «settled» poll kept the last
   width between calls, so the first sample after opening a panel matched the one before it and the

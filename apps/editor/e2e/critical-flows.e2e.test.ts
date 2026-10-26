@@ -9440,9 +9440,13 @@ describe("abrir un panel no tapa la página ni la convierte en otra", () => {
             top: Math.round(box.top),
             bottom: Math.round(box.bottom),
             viewport: win.innerHeight,
-            // El `scroll` máximo del marco: es lo que el recorte baja y lo que el sitio al final de
-            // la página mantiene.
-            maxScroll: Math.round(doc.documentElement.scrollHeight - win.innerHeight),
+            // El sitio dado al final de la página (`.rb-overscroll`): el mecanismo es que mida lo
+            // que el visor ha crecido. No el `scroll` máximo, que fue la primera versión: en el
+            // Linux de CI la página remaquetada a 788 queda 15 px más corta (en macOS 10 más larga)
+            // y el máximo baja por eso, sin recorte ninguno — midió el remaquetado, no el recorte.
+            room: Math.round(
+              doc.querySelector(".rb-overscroll")?.getBoundingClientRect().height ?? 0,
+            ),
           };
         }, section);
 
@@ -9473,9 +9477,7 @@ describe("abrir un panel no tapa la página ni la convierte en otra", () => {
           ),
         );
       const settledAfter = async (was: number) => {
-        await expect
-          .poll(cardWidth, { timeout: 5_000, intervals: [100] })
-          .not.toBe(was);
+        await expect.poll(cardWidth, { timeout: 5_000, intervals: [100] }).not.toBe(was);
         let lastWidth = -1;
         let lastInnerHeight = -1;
         await expect
@@ -9532,13 +9534,15 @@ describe("abrir un panel no tapa la página ni la convierte en otra", () => {
           opened?.visible,
           `@${width}: al abrir «Campos» la sección se fue de la vista (top ${opened?.top}, alto de ventana ${opened?.viewport})`,
         ).toBe(true);
-        // Desde el sprint 28 día 1 sí se exige: el sitio al final de la página mantiene el máximo
-        // de desplazamiento, así que nada se recorta y el anclaje del navegador absorbe el
-        // remaquetado. Primero el mecanismo, para que el rojo lo nombre; luego la consecuencia.
+        // Desde el sprint 28 día 1 sí se exige: la página recibe al final exactamente el sitio que
+        // el visor gana, así que nada se recorta y el anclaje del navegador absorbe el remaquetado.
+        // Primero el mecanismo, para que el rojo lo nombre; luego la consecuencia. A 1280 y 1600 el
+        // visor no crece y el sitio es 0; a 1024 crece 255 y el sitio mide 255.
+        const grown = (opened?.viewport ?? 0) - (before?.viewport ?? 0);
         expect(
-          opened?.maxScroll,
-          `@${width}: al abrir «Campos» el máximo de desplazamiento bajó de ${before?.maxScroll} a ${opened?.maxScroll} — el visor creció y la página no recibió el sitio`,
-        ).toBeGreaterThanOrEqual((before?.maxScroll ?? 0) - TOLERANCE_PX);
+          Math.abs((opened?.room ?? 0) - grown),
+          `@${width}: al abrir «Campos» el visor creció ${grown} px y el sitio al final de la página mide ${opened?.room}`,
+        ).toBeLessThanOrEqual(2);
         expect(
           Math.abs((opened?.top ?? 0) - (before?.top ?? 0)),
           `@${width}: al abrir «Campos» la sección se movió de ${before?.top} a ${opened?.top} en el marco`,
@@ -20454,7 +20458,8 @@ describe("sprint 27 día 8 — el cierre, sin ratón", () => {
       await press("Enter");
       await expect(frame.locator(".rb-actions")).toHaveCount(1);
       // Into its insides — the verbs come first now that it is chosen — until the headline.
-      for (let i = 0; i < 20 && (await where(page)).id !== "el-headline"; i += 1) await press("Tab");
+      for (let i = 0; i < 20 && (await where(page)).id !== "el-headline"; i += 1)
+        await press("Tab");
       expect((await where(page)).id, "Tab never reached the headline").toBe("el-headline");
       await press("Enter");
       await expect(headline).toHaveAttribute("contenteditable", "true");
@@ -20482,16 +20487,21 @@ describe("sprint 27 día 8 — el cierre, sin ratón", () => {
        */
       await press("Escape");
       await expect(headline).not.toHaveAttribute("contenteditable", "true");
-      await expect(headline, "Escape after the mark lost the words").toHaveText(/^\s*Reserva hoy\s*$/);
-      await expect(headline.locator("strong"), "Escape after the mark took the bold off the canvas").toHaveText(
-        "hoy",
+      await expect(headline, "Escape after the mark lost the words").toHaveText(
+        /^\s*Reserva hoy\s*$/,
       );
+      await expect(
+        headline.locator("strong"),
+        "Escape after the mark took the bold off the canvas",
+      ).toHaveText("hoy");
       await press("Escape");
       await expect.poll(() => where(page).then((at) => at.section)).toBe("sec-cover");
       await press("ArrowDown");
       await expect.poll(() => where(page).then((at) => at.section)).toBe("sec-services");
       await expect(page.getByText("Guardado en este navegador")).toBeVisible();
-      console.log(`[día 8] from the cover to the next section, by the keyboard: ${presses} presses after keyboardTo`);
+      console.log(
+        `[día 8] from the cover to the next section, by the keyboard: ${presses} presses after keyboardTo`,
+      );
     } finally {
       await page.context().close();
     }
@@ -20522,7 +20532,9 @@ describe("sprint 27 día 8 — el cierre, sin ratón", () => {
       await expect(headline, "Escape put back the words from before the writing").toHaveText(
         /^\s*Reserva hoy\s*$/,
       );
-      await expect(headline.locator("strong"), "Escape took the bold off the canvas").toHaveText("hoy");
+      await expect(headline.locator("strong"), "Escape took the bold off the canvas").toHaveText(
+        "hoy",
+      );
       // And the document says the same, read where the autosave writes it.
       await expect
         .poll(() => storedSession(page))

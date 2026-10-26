@@ -3828,13 +3828,26 @@ de página de gris al final, solo al llegar abajo, y la captura dice que se lee 
 página. Ningún desplazamiento horizontal (`scrollWidth` 721 = el ancho de maquetación).
 
 **La caminata del sprint 24 asevera desde hoy ±8 px** —una fila de la rejilla fina— al abrir y al
-cerrar a 1024, 1280 y 1600, y antes **el mecanismo**: el máximo de desplazamiento no baja al abrir.
+cerrar a 1024, 1280 y 1600, y antes **el mecanismo**: el sitio al final de la página mide lo que el
+visor ha crecido (±2 px). La primera versión comparaba el máximo de desplazamiento antes y después, y
+**el Linux de CI la tiró a 1280 por 15 px sin recorte ninguno**: allí la página remaquetada a 788 sale
+15 px más corta que a 1008 (en macOS, 10 más larga), así que el máximo bajaba por el remaquetado solo.
+La misma diferencia de métricas entre plataformas que la fila registró el 18 de octubre, midiendo lo
+que no era.
 Saboteando el arreglo apareció un defecto de la propia caminata: su espera guardaba el último ancho
 entre llamadas y la primera muestra tras abrir coincidía con la de antes, así que «estable» era
 verdad antes de que la tarjeta cambiara (la regla del sprint 25 día 8). Saboteada pasaba al abrir con
 el visor aún en 654 y caía al cerrar con el 155 de la apertura. Ahora espera a que el ancho sea
 **otro** y después a que ancho y visor se queden quietos; saboteada cae al abrir: «el máximo de
 desplazamiento bajó de 1950 a 1754 — el visor creció y la página no recibió el sitio».
+
+**Y una cosa que nadie buscaba: Biome llevaba desde el día 8 del 27 sin leer el `e2e`.** El fichero
+cruzó el mebibyte (1 048 576 bytes) que Biome procesa como máximo en `923ed23` —1 054 022 bytes; el día
+7 estaba en 1 047 834— y desde entonces `pnpm lint` lo saltaba con una advertencia que no es un
+error, así que CI seguía en verde sin leerlo. Apareció al confirmar un cambio que solo tocaba ese
+fichero: el gancho de Biome «no procesó ningún fichero» y se negó. `files.maxSize` pasa a 2 MiB en
+`biome.json`, y lo que Biome no había formateado en el día 8 son 24 líneas, formateadas aquí. Partir el
+fichero sigue fuera del sprint, como decía el plan; el número que lo hará volver es 2 MiB.
 
 **El ajuste 1 de David, medido y no construido, por decisión suya.** El ancho fijo no arregla el
 salto; compra que un texto no refluya entre estados del panel (filas de 8 px estables, ADR 0050).
