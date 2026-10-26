@@ -7634,10 +7634,116 @@ export function Editor({
       onSelectPage={(id) => onSelectPage(doc.pages[0]?.id === id ? undefined : id)}
       onBack={onBack}
       downloadState={state}
+      /*
+       * **Every modal goes here, never in `children`** (sprint 28 day 6). `children` sit inside the
+       * canvas card, and the card is `transform: scale(zoom)` whenever the canvas is narrower than
+       * the page it draws — a panel open at 1024, or a 320 px phone — which makes it the containing
+       * block of every `position: fixed` inside it. The six download-gate dialogs and the revert
+       * dialog lived there from the day each was written, and at zoom 1 nothing showed it: walked
+       * at 320 for the first time, the backdrop covered the card and nothing else, the header's
+       * «Descargar» stayed pressable behind an `aria-modal` dialog, and «Hay texto encima de otro
+       * texto» pushed its two buttons past its own box. At 1024 with «Estilo» open the whole
+       * dialog drew at 0.74 inside the canvas. The building screen moved out on 13 October for
+       * this same reason, and the shell's own note on `overlay` says so; the dialogs did not
+       * follow.
+       */
       overlay={
-        state === "preparing" || state === "downloading" ? (
-          <BuildingScreen returnFocusTo="download" />
-        ) : null
+        <>
+          {state === "preparing" || state === "downloading" ? (
+            <BuildingScreen returnFocusTo="download" />
+          ) : null}
+          {downloadDialog?.kind === "photosFailed" ? (
+            <PhotosFailedDialog
+              srcs={downloadDialog.srcs}
+              onRetry={() => {
+                setDownloadDialog(null);
+                onRetrySamples?.();
+              }}
+              onClose={() => setDownloadDialog(null)}
+            />
+          ) : null}
+          {downloadDialog?.kind === "tooManyPhotos" ? (
+            <TooManyPhotosDialog
+              count={downloadDialog.count}
+              max={downloadDialog.max}
+              onClose={() => setDownloadDialog(null)}
+            />
+          ) : null}
+          {downloadDialog?.kind === "unreadable" || downloadDialog?.kind === "lowContrast" ? (
+            <ContrastDialog
+              findings={downloadDialog.findings}
+              level={downloadDialog.kind === "unreadable" ? "block" : "warn"}
+              // The «arreglo en un clic», through the same verb the `Diseño` panel's audit calls:
+              // dropping the exception returns the element to the reference it overwrote, which is
+              // rule 6's own default rather than a colour this dialog picked. `fixException` is what
+              // reopens over a remaining finding instead of silently closing on one — see its own
+              // comment for the walk that found the gap.
+              onFix={fixException}
+              {...(downloadDialog.kind === "lowContrast"
+                ? { onDownloadAnyway: () => acceptAndContinue("contrast") }
+                : {})}
+              onCancel={() => setDownloadDialog(null)}
+            />
+          ) : null}
+          {downloadDialog?.kind === "overflows" ? (
+            <OverflowDialog
+              findings={downloadDialog.findings}
+              onDownloadAnyway={() => acceptAndContinue("overflow")}
+              onCancel={() => setDownloadDialog(null)}
+            />
+          ) : null}
+          {downloadDialog?.kind === "textOverText" ? (
+            <StackedTextDialog
+              findings={downloadDialog.findings}
+              onDownloadAnyway={() => acceptAndContinue("layout")}
+              onCancel={() => setDownloadDialog(null)}
+            />
+          ) : null}
+          {downloadDialog?.kind === "warn" ? (
+            <DownloadWarningDialog
+              document={doc}
+              photoUrls={photoUrls}
+              onReplacePhoto={(address) => {
+                setDownloadDialog(null);
+                replacePhoto(address);
+              }}
+              onDownloadAnyway={() => acceptAndContinue("photos")}
+              onCancel={() => setDownloadDialog(null)}
+            />
+          ) : null}
+          {revertFor ? (
+            <RevertDialog
+              sectionName={sectionDisplayName(doc, revertFor.sectionId)}
+              impact={revertFor.impact}
+              // The same Spanish names the fields and design panels use, from the catalog's own locale,
+              // so the dialog cannot call an element something the rest of the editor calls otherwise.
+              labelFor={(elementId) =>
+                elementLabels(doc, revertFor.sectionId).get(elementId) ?? elementId
+              }
+              onCancel={() => setRevertFor(null)}
+              onConfirm={(decisions) => {
+                /*
+                 * **Where the keyboard goes after a revert, which the dialog cannot answer itself.**
+                 * `useFocusTrap` returns focus to whatever had it, and what had it was the `<iframe>` —
+                 * so focusing it restores the element the frame's own document still holds, which is
+                 * «Volver a la original» on the hand-design bar. That works when the dialog is
+                 * cancelled and is wrong when it is confirmed: reverting puts the section back under the
+                 * catalog, the bar goes with it, and the button focus would return to no longer exists.
+                 *
+                 * Reverting also flips the section's `source`, which changes `chromeKey` and sends the
+                 * rebuild through the buffered swap — so this has to be the intent that survives two
+                 * documents rather than a `.focus()` here.
+                 */
+                focusTarget.current = {
+                  sectionId: revertFor.sectionId,
+                  within: '.rb-actions [data-action="handmade"]',
+                };
+                setRevertFor(null);
+                onRevertSection(revertFor.sectionId, decisions);
+              }}
+            />
+          ) : null}
+        </>
       }
       // Wrapped, not passed by reference: React hands a click handler the event, and
       // `requestDownload`'s optional parameter would have received it as the set of accepted
@@ -8006,97 +8112,6 @@ export function Editor({
             </button>
           ) : null}
         </div>
-      ) : null}
-      {downloadDialog?.kind === "photosFailed" ? (
-        <PhotosFailedDialog
-          srcs={downloadDialog.srcs}
-          onRetry={() => {
-            setDownloadDialog(null);
-            onRetrySamples?.();
-          }}
-          onClose={() => setDownloadDialog(null)}
-        />
-      ) : null}
-      {downloadDialog?.kind === "tooManyPhotos" ? (
-        <TooManyPhotosDialog
-          count={downloadDialog.count}
-          max={downloadDialog.max}
-          onClose={() => setDownloadDialog(null)}
-        />
-      ) : null}
-      {downloadDialog?.kind === "unreadable" || downloadDialog?.kind === "lowContrast" ? (
-        <ContrastDialog
-          findings={downloadDialog.findings}
-          level={downloadDialog.kind === "unreadable" ? "block" : "warn"}
-          // The «arreglo en un clic», through the same verb the `Diseño` panel's audit calls:
-          // dropping the exception returns the element to the reference it overwrote, which is
-          // rule 6's own default rather than a colour this dialog picked. `fixException` is what
-          // reopens over a remaining finding instead of silently closing on one — see its own
-          // comment for the walk that found the gap.
-          onFix={fixException}
-          {...(downloadDialog.kind === "lowContrast"
-            ? { onDownloadAnyway: () => acceptAndContinue("contrast") }
-            : {})}
-          onCancel={() => setDownloadDialog(null)}
-        />
-      ) : null}
-      {downloadDialog?.kind === "overflows" ? (
-        <OverflowDialog
-          findings={downloadDialog.findings}
-          onDownloadAnyway={() => acceptAndContinue("overflow")}
-          onCancel={() => setDownloadDialog(null)}
-        />
-      ) : null}
-      {downloadDialog?.kind === "textOverText" ? (
-        <StackedTextDialog
-          findings={downloadDialog.findings}
-          onDownloadAnyway={() => acceptAndContinue("layout")}
-          onCancel={() => setDownloadDialog(null)}
-        />
-      ) : null}
-      {downloadDialog?.kind === "warn" ? (
-        <DownloadWarningDialog
-          document={doc}
-          photoUrls={photoUrls}
-          onReplacePhoto={(address) => {
-            setDownloadDialog(null);
-            replacePhoto(address);
-          }}
-          onDownloadAnyway={() => acceptAndContinue("photos")}
-          onCancel={() => setDownloadDialog(null)}
-        />
-      ) : null}
-      {revertFor ? (
-        <RevertDialog
-          sectionName={sectionDisplayName(doc, revertFor.sectionId)}
-          impact={revertFor.impact}
-          // The same Spanish names the fields and design panels use, from the catalog's own locale,
-          // so the dialog cannot call an element something the rest of the editor calls otherwise.
-          labelFor={(elementId) =>
-            elementLabels(doc, revertFor.sectionId).get(elementId) ?? elementId
-          }
-          onCancel={() => setRevertFor(null)}
-          onConfirm={(decisions) => {
-            /*
-             * **Where the keyboard goes after a revert, which the dialog cannot answer itself.**
-             * `useFocusTrap` returns focus to whatever had it, and what had it was the `<iframe>` —
-             * so focusing it restores the element the frame's own document still holds, which is
-             * «Volver a la original» on the hand-design bar. That works when the dialog is
-             * cancelled and is wrong when it is confirmed: reverting puts the section back under the
-             * catalog, the bar goes with it, and the button focus would return to no longer exists.
-             *
-             * Reverting also flips the section's `source`, which changes `chromeKey` and sends the
-             * rebuild through the buffered swap — so this has to be the intent that survives two
-             * documents rather than a `.focus()` here.
-             */
-            focusTarget.current = {
-              sectionId: revertFor.sectionId,
-              within: '.rb-actions [data-action="handmade"]',
-            };
-            setRevertFor(null);
-            onRevertSection(revertFor.sectionId, decisions);
-          }}
-        />
       ) : null}
     </EditorShell>
   );

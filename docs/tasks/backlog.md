@@ -412,7 +412,10 @@ all three with axe at 390.
 **What this sprint leaves open:** ADR 0042 is `proposed` — David has not signed it; the
 real-iPhone Safari checklist in PR #250 (zoom on focus, the bottom bar and the home indicator,
 `dvh` against the browser's bar, the carousel, the ZIP download), whose findings come here with
-their measurement; the five download-gate dialogs, fixed by reading and not walked live; and the
+their measurement; ~~the five download-gate dialogs, fixed by reading and not walked live~~ —
+**walked on sprint 28 día 6 (26 October 2026)**, all six at 320, 390 and 1024 with «Estilo» open,
+and they were not fine: drawn inside the scaled canvas card, so at any zoom below 1 the backdrop
+covered the card alone and the dialog drew at the canvas's scale (REVIEW's sprint 28 día 6); and the
 canvas texts below 16px, which are the site's own type scale and may zoom an iPhone when tapped
 (ADR 0042 §7 names it).
 

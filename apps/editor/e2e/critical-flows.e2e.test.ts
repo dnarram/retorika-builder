@@ -32,6 +32,7 @@ import {
 } from "../src/app/landingHero.ts";
 import { BAR_INSET, BAR_STEP, type Point, TOOLBAR_GAP } from "../src/editor/barPosition.ts";
 import { VERB_SCALE } from "../src/editor/chromeScale.ts";
+import { DIALOG_KINDS, MAX_PHOTOS } from "../src/editor/downloadGate.ts";
 import { GUIDE_ZONE } from "../src/editor/guides.ts";
 import { HANDLE_TOUCH } from "../src/editor/handles.ts";
 import { NARROWEST_WIDTH, PHONE_BREAKPOINT } from "../src/editor/overflowCheck.ts";
@@ -636,7 +637,11 @@ async function motionSettled(page: Page): Promise<void> {
       document
         .getAnimations()
         .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
-        .map((animation) => animation.finished),
+        // A cancelled animation rejects `finished` with an AbortError rather than resolving it,
+        // and a cancelled animation is not moving either. Found on sprint 28 day 6: at 1024 with
+        // «Estilo» open, pressing «Descargar» cancels one in flight, and this guard threw instead
+        // of answering.
+        .map((animation) => animation.finished.catch(() => undefined)),
     ),
   );
 }
@@ -15419,6 +15424,287 @@ describe("nada sobresale en un móvil", () => {
       }, 300_000);
     });
   }
+  /**
+   * **Sprint 28 día 6 — las seis puertas de la descarga, abiertas de verdad en un teléfono.**
+   *
+   * Desde el sprint 21 el registro decía «the five download-gate dialogs, fixed by reading and not
+   * walked live»: el día 4 de aquel sprint les puso `min-h-0` y `max-h-full` leyendo el código, y la
+   * caminata de arriba solo abre el diálogo de la cuenta. El sexto, «Hay texto encima de otro
+   * texto», llegó en el sprint 25 y tampoco se midió en un móvil. Aquí se abren los seis —siete
+   * clases de puerta, porque el de contraste dibuja el bloqueo y el aviso— a 320 y a 390, con los
+   * mismos cuatro ojos que el resto de este `describe` y axe a 390.
+   *
+   * **Sembrados, no preparados con el ratón.** El plan decía preparar el contraste y el texto sobre
+   * texto a 1024 y luego `setViewportSize`, porque pintar con la barra flotante y arrastrar un
+   * texto son gestos de escritorio. Pero esta caminata no mide cómo se llega a la puerta —eso ya lo
+   * caminan las de contraste y la del sprint 25 a su ancho—, mide la puerta. Un documento con el
+   * estado exacto escrito en `localStorage`, en un contexto `isMobile` desde el primer píxel, es el
+   * mismo diálogo sin un cambio de ventana en medio: un `setViewportSize` sobre una página
+   * maquetada a 1024 deja abierta la pregunta de si lo que se mide es el móvil o el escritorio
+   * encogido, que es justo la que la cabecera de este `describe` cierra con `isMobile`.
+   *
+   * **Lo que se asevera además de lo de siempre:** la caja del diálogo cabe entera en la pantalla,
+   * en las dos dimensiones, y cada botón suyo que no está dentro de su propia lista desplazable
+   * —los del pie, que son la salida— también. `fit` mide solo el eje horizontal porque una página
+   * se desplaza en vertical; un diálogo fijo no, y un «Descargar igualmente» bajo el borde inferior
+   * es un diálogo sin salida.
+   */
+  describe("las seis puertas de la descarga cubren la pantalla", () => {
+    type Json = Record<string, unknown>;
+    type Element_ = {
+      id: string;
+      style?: Json;
+      value?: { kind: string; sample?: string; text?: string };
+    } & Json;
+    type Section_ = { id: string; content: Element_[]; layout?: Json | null } & Json;
+    type Doc = { pages: { sections: Section_[] }[] } & Json;
+
+    const corpus = (name: string): Doc =>
+      JSON.parse(
+        readFileSync(
+          join(import.meta.dirname, "..", "..", "..", "fixtures", "documents", `${name}.json`),
+          "utf8",
+        ),
+      ) as Doc;
+    const sections = (doc: Doc) => doc.pages.flatMap((page) => page.sections);
+    const elements = (doc: Doc) => sections(doc).flatMap((section) => section.content);
+    /** Every photograph a bank one: the document only *names* it, as a generated one does. */
+    const banked = (doc: Doc): Doc => {
+      for (const element of elements(doc)) {
+        if (element.value?.kind === "image") element.value.sample = "restaurante-bar-01";
+      }
+      return doc;
+    };
+    /** The headline of `estilo-por-elemento`, on its white surface, with one exact value. */
+    const styled = (style: Json): Doc => {
+      const doc = corpus("estilo-por-elemento");
+      const headline = elements(doc).find((element) => element.id === "el-headline");
+      if (!headline) throw new Error("estilo-por-elemento has no el-headline");
+      headline.style = { ...headline.style, ...style };
+      return doc;
+    };
+    const painted = (hex: string) => styled({ color: { exact: hex, exception: true } });
+
+    /**
+     * One document per gate, each the narrowest one that opens it and nothing earlier: the gate
+     * returns its first finding, so a document carrying a bank photograph would never reach the
+     * contrast warning, and one that overflowed at 320 would never reach texts on top of each
+     * other.
+     */
+    const GATES: { kind: string; title: string; doc: () => Doc; samples?: "fail" | "serve" }[] = [
+      {
+        kind: "photosFailed",
+        title: "Falta una foto y no podemos descargar",
+        doc: () => banked(corpus("barbershop-cover")),
+        samples: "fail",
+      },
+      {
+        kind: "tooManyPhotos",
+        title: "Demasiadas fotos para descargar",
+        // `MAX_PHOTOS` + 1 covers of one photograph each: the ceiling is a count of files, so how
+        // they are spread over sections is not what the gate reads.
+        doc: () => {
+          const doc = banked(corpus("barbershop-cover"));
+          const [page] = doc.pages;
+          const [cover] = page?.sections ?? [];
+          if (!page || !cover) throw new Error("barbershop-cover has no cover");
+          page.sections = Array.from({ length: MAX_PHOTOS + 1 }, (_unused, index) => ({
+            ...structuredClone(cover),
+            id: `sec-cover-${index + 1}`,
+          }));
+          return doc;
+        },
+        samples: "serve",
+      },
+      // 1,0:1 — the surface's own white. Below 3:1, so a block.
+      {
+        kind: "unreadable",
+        title: "Hay texto que no se puede leer",
+        doc: () => painted("#FFFFFF"),
+      },
+      {
+        kind: "warn",
+        title: "Antes de descargar",
+        doc: () => banked(corpus("barbershop-cover")),
+        samples: "serve",
+      },
+      // #8A8A8A on white measures 3,45:1 — between the two thresholds, so a warning.
+      { kind: "lowContrast", title: "Un texto se lee justo", doc: () => painted("#8A8A8A") },
+      {
+        kind: "overflows",
+        title: "Algo se sale en el móvil",
+        // 200 px, which is what the sprint 10 walk types into the toolbar's size field: the
+        // renderer breaks a long word rather than letting it run out, so a word alone does not.
+        doc: () => styled({ fontSize: { exact: "200px", exception: true } }),
+      },
+      {
+        kind: "textOverText",
+        title: "Hay texto encima de otro texto",
+        // The body moved up onto the headline's rows, which is what a drag does since sprint 25.
+        doc: () => {
+          const doc = corpus("physio-free-cover");
+          const [cover] = sections(doc);
+          const placements = (cover?.layout?.["placements"] ?? []) as Json[];
+          const body = placements.find((placement) => placement["elementId"] === "el-body");
+          if (!body) throw new Error("physio-free-cover has no body placement");
+          body["row"] = 1;
+          return doc;
+        },
+      },
+    ];
+
+    it("cubre cada clase de puerta que tiene un diálogo", () => {
+      expect(GATES.map((gate) => gate.kind)).toEqual([...DIALOG_KINDS]);
+    });
+
+    // A 1×1 PNG, so a served bank photograph is bytes a browser accepts as an image.
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==",
+      "base64",
+    );
+
+    /**
+     * The two phones of this `describe`, and a third screen that is not a phone at all: 1024 with
+     * «Estilo» open, where the canvas draws at 0.74. That is where the containing-block defect shows
+     * on a computer, and it is the same defect, so it is the same loop.
+     */
+    const SCREENS: { width: number; height: number; phone: boolean; panel?: string }[] = [
+      ...DEVICES.filter((each) => each.width < 768).map((each) => ({ ...each, phone: true })),
+      { width: 1024, height: 768, phone: false, panel: "Estilo" },
+    ];
+
+    for (const screen of SCREENS) {
+      const named = `${screen.width}×${screen.height}${screen.panel ? ` con «${screen.panel}»` : ""}`;
+      it(`abre las seis a ${named}: cada una cubre la pantalla y enseña su salida`, async () => {
+        const context = await browser.newContext({
+          viewport: { width: screen.width, height: screen.height },
+          ...(screen.phone ? { isMobile: true, hasTouch: true, deviceScaleFactor: 2 } : {}),
+        });
+        const found: string[] = [];
+        try {
+          for (const gate of GATES) {
+            const walker = await context.newPage();
+            if (gate.samples) {
+              await walker.route("**/api/muestras/**", (route) =>
+                gate.samples === "fail"
+                  ? route.fulfill({ status: 503, body: "no" })
+                  : route.fulfill({ status: 200, contentType: "image/png", body: png }),
+              );
+            }
+            await walker.addInitScript(
+              (session: string) => window.localStorage.setItem("retorika.session.v1", session),
+              JSON.stringify({
+                payloadVersion: 1,
+                savedAt: new Date().toISOString(),
+                answers: { businessName: "Barbería El Corte", sector: "peluqueria-barberia" },
+                documents: [gate.doc()],
+                openIndex: 0,
+              }),
+            );
+            await walker.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+            await walker.frameLocator(CANVAS).first().locator("[data-section]").first().waitFor();
+            await expect(walker.getByText("Guardado en este navegador")).toBeVisible();
+            if (screen.panel) {
+              await walker.getByRole("button", { name: screen.panel, exact: true }).click();
+              // The premise of this screen, asserted rather than assumed: a canvas at zoom 1 has no
+              // transform, and then this case would pass with the defect still in place.
+              await expect
+                .poll(() =>
+                  walker
+                    .getByTestId("canvas-card")
+                    .evaluate((card) => getComputedStyle(card).transform),
+                )
+                .toMatch(/^matrix\(0\.\d+/);
+            }
+
+            await walker.getByRole("button", { name: "Descargar", exact: true }).click();
+            const dialog = walker.locator('[role="dialog"], [role="alertdialog"]');
+            // Thirty seconds, like every other wait on this gate: the overflow measurement renders
+            // each page into a hidden 320 px frame first, forty-six covers of it in one case.
+            await expect(
+              dialog.getByText(gate.title),
+              `${gate.kind}: no llegó su diálogo`,
+            ).toBeVisible({ timeout: 30_000 });
+            await expect(dialog).toHaveCount(1);
+
+            const where = `la puerta «${gate.kind}»`;
+            // The page's own four eyes on a phone only. At 1024 `fit` reads the «Estilo» sheet's
+            // scrolled rows as cut by the editor's `main`, which is the panel scrolling and not
+            // anything a dialog did; this screen is here for the four checks below.
+            if (screen.phone) found.push(...(await problems(walker, screen.width, where)));
+            const exits = await dialog.evaluate(
+              (box, size: { width: number; height: number }) => {
+                const out: string[] = [];
+                const near = (a: number, b: number) => Math.abs(a - b) <= 0.5;
+                const corners = (rect: DOMRect) =>
+                  `${Math.round(rect.left)},${Math.round(rect.top)}–` +
+                  `${Math.round(rect.right)},${Math.round(rect.bottom)}`;
+                // (1) The backdrop is the window: a modal that leaves the header pressable is not
+                // one, whatever `aria-modal` says.
+                const backdrop = box.parentElement?.getBoundingClientRect();
+                if (
+                  !backdrop ||
+                  !near(backdrop.left, 0) ||
+                  !near(backdrop.top, 0) ||
+                  !near(backdrop.right, size.width) ||
+                  !near(backdrop.bottom, size.height)
+                ) {
+                  out.push(
+                    `el fondo cubre ${backdrop ? corners(backdrop) : "nada"}, no la ventana`,
+                  );
+                }
+                // (2) Drawn at the size it was laid out at, not through the canvas's scale.
+                const own = box.getBoundingClientRect();
+                const laidOut = (box as HTMLElement).offsetWidth;
+                if (!near(own.width, laidOut)) {
+                  out.push(`la caja se dibuja a ${(own.width / laidOut).toFixed(2)}`);
+                }
+                // (3) Inside the window, in both directions.
+                if (
+                  own.left < -0.5 ||
+                  own.top < -0.5 ||
+                  own.right > size.width + 0.5 ||
+                  own.bottom > size.height + 0.5
+                ) {
+                  out.push(`la caja ocupa ${corners(own)}`);
+                }
+                // (4) Every exit inside the box. A row's own button inside the list scrolls into
+                // view with the list, which is what the list's `overflow-y-auto` is for.
+                for (const button of box.querySelectorAll<HTMLElement>("button")) {
+                  let scroller: HTMLElement | null = button.parentElement;
+                  while (scroller && scroller !== box) {
+                    if (/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) break;
+                    scroller = scroller.parentElement;
+                  }
+                  if (scroller && scroller !== box) continue;
+                  const rect = button.getBoundingClientRect();
+                  if (
+                    rect.left < own.left - 0.5 ||
+                    rect.top < own.top - 0.5 ||
+                    rect.right > own.right + 0.5 ||
+                    rect.bottom > own.bottom + 0.5
+                  ) {
+                    const label = (button.textContent ?? "").trim() || button.ariaLabel;
+                    out.push(
+                      `«${label}» queda fuera de la caja (${corners(rect)} de ${corners(own)})`,
+                    );
+                  }
+                }
+                return out;
+              },
+              { width: screen.width, height: screen.height },
+            );
+            for (const line of exits) found.push(`${where} @ ${named}: ${line}`);
+            if (screen.width === 390) await axeSerious(walker, `${where} a 390`);
+            await walker.close();
+          }
+        } finally {
+          await context.close();
+        }
+        expect(found, found.join("\n")).toEqual([]);
+      }, 300_000);
+    }
+  });
 });
 
 /**
