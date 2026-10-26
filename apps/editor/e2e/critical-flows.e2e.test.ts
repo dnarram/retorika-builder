@@ -49,6 +49,18 @@ import { BASE_URL, QUESTIONNAIRE_URL, startEditorServer, stopEditorServer } from
 const PREVIEW = "iframe";
 
 /**
+ * **The editor's canvas by what it is**, for a wait that is taken on the way in from the cards.
+ *
+ * The three cards each hold a thumbnail `<iframe>` of the same generated site, `aria-hidden`
+ * because they are pictures; the canvas is the one frame a reader can reach, so this is its name
+ * and not «the first `iframe` on the page». Between the press on «Ver a tamaño real» and the
+ * editor's first paint, «the first» can be a thumbnail for as long as the cards are mounted — and
+ * a thumbnail has a cover too. Sprint 28 día 5, for the sprint 17 walk below; the other walks reach
+ * the editor by clicking and keep `PREVIEW`, which names the same frame once the editor is up.
+ */
+const CANVAS = 'iframe:not([aria-hidden="true"])';
+
+/**
  * **Sprint 27 día 2's two bounds** (ADR 0052 §2), each a measurement with room above it, both
  * taken on 23 October 2026 at 1440 × 900 with the design tools on.
  *
@@ -117,6 +129,55 @@ async function waitForBankPhoto(frame: FrameLocator): Promise<void> {
     frame.locator('[data-section="sec-gallery"] img[src^="blob:"]'),
     "the generated gallery's four photographs",
   ).toHaveCount(GALLERY_SAMPLE_COUNT);
+}
+
+/**
+ * Wait for the cover in the editor's canvas — and when it never comes, say what was on the page.
+ *
+ * Written on sprint 28 día 5 for the sprint 17 mouseless walk, which fell twice in CI on 23 and
+ * 24 October 2026 (the first attempts of #297 and #298) with the one line Playwright gives a bare
+ * `waitFor`: «waiting for locator('iframe').first()…[data-section="sec-cover"] to be visible»,
+ * thirty seconds, and nothing else — not which screen the page was on, not whether the editor had
+ * mounted, not whether its frame had a document yet. It passed on retry both times, so that line
+ * was all the record had. The next red says: every `<iframe>` with its title, size, readiness,
+ * wiring mark and section count; the heading and the focused element, which tell the cards from
+ * the editor; and the editor's own account, which the walk turns on with `probeOn`. Reads nothing
+ * on the green path.
+ */
+async function waitForCover(page: Page, frame: FrameLocator): Promise<void> {
+  try {
+    await frame.locator('[data-section="sec-cover"]').waitFor();
+  } catch (error) {
+    const frames = await page
+      .evaluate(() =>
+        [...document.querySelectorAll("iframe")].map((each) => {
+          const doc = each.contentDocument;
+          const box = each.getBoundingClientRect();
+          return {
+            title: each.title,
+            ariaHidden: each.getAttribute("aria-hidden"),
+            box: `${Math.round(box.width)}×${Math.round(box.height)}`,
+            srcdocLength: each.getAttribute("srcdoc")?.length ?? 0,
+            readyState: doc?.readyState ?? "(no document)",
+            wired: doc?.documentElement?.dataset["rbWired"] ?? null,
+            edit: doc?.documentElement?.dataset["rbEdit"] ?? null,
+            sections: doc?.querySelectorAll("[data-section]").length ?? -1,
+          };
+        }),
+      )
+      .catch(() => "(frames unreadable)");
+    const screen = await page
+      .evaluate(() => ({
+        heading: document.querySelector("h1")?.textContent?.replace(/\s+/g, " ").trim() ?? null,
+        focus: document.activeElement?.outerHTML.replace(/\s+/g, " ").slice(0, 160) ?? null,
+      }))
+      .catch(() => "(screen unreadable)");
+    const events = await probeReport(page).catch(() => "(probe unreadable)");
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `${message}\nframes on the page: ${JSON.stringify(frames)}\nscreen: ${JSON.stringify(screen)}\nthe editor's account:\n${events || "(nothing recorded)"}`,
+    );
+  }
 }
 
 /**
@@ -12395,6 +12456,7 @@ describe("sprint 17 día 7 — el recorrido entero sin tocar el ratón", () => {
   // --- RECORRIDO SIN RATÓN: INICIO ---
   it("monta una web, la edita, le da estilo y descarga el ZIP sin tocar el ratón", async () => {
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    await probeOn(context);
     const page = await context.newPage();
     try {
       await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
@@ -12433,8 +12495,10 @@ describe("sprint 17 día 7 — el recorrido entero sin tocar el ratón", () => {
         "«Ver a tamaño real» on a card",
       );
       await page.keyboard.press("Enter");
-      const frame = page.frameLocator(PREVIEW).first();
-      await frame.locator('[data-section="sec-cover"]').waitFor();
+      // The canvas by name, and the cover with an account if it never comes (sprint 28 día 5):
+      // this walk fell twice in CI right here, and «the first iframe» said nothing about why.
+      const frame = page.frameLocator(CANVAS);
+      await waitForCover(page, frame);
       await waitForBankPhoto(frame);
 
       // ---- editing it: into the canvas with Tab, and a verb pressed with the keyboard ----
