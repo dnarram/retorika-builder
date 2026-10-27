@@ -1357,18 +1357,23 @@ export function Variants({
               theme: withTypePair(history.present.document.theme, typePairId),
             });
           }}
-          // One letter from the gallery (ADR 0046), and it travels the same road as the three
-          // choices around it: `setTheme` on the open document, so undo, redo and autosave come
-          // for nothing. `withFamily` writes **one** font token and leaves the other, which is
-          // what lets an owner set the headings without the product deciding the text for them.
+          // One letter from the gallery (ADR 0046), chosen inside the chooser (sprint 29 día 1).
+          // `withFamily` writes **one** font token and leaves the other, which is what lets an
+          // owner set the headings without the product deciding the text for them. It travels
+          // through `chooseFamily` rather than `setTheme` because a chooser session is one step:
+          // forty rows under an arrow key amend the step they opened, «Hecho» settles it and Escape
+          // discards it — the three verbs below, on the open document only.
           onPickFamily={(key, family) => {
             dismissToast();
             dispatch({
-              type: "setTheme",
+              type: "chooseFamily",
               variant: openIndex,
+              key,
               theme: withFamily(history.present.document.theme, key, family),
             });
           }}
+          onSettleChooser={() => dispatch({ type: "settleChooser", variant: openIndex })}
+          onDiscardChooser={() => dispatch({ type: "discardChooser", variant: openIndex })}
           // The third choice of the Estilo panel, and the only one the panel hides until the design
           // tools are on — the "Encendido" column of the advanced dossier §4 begins «Añade **el
           // sistema**». It travels through `setTheme` like the other two, so it gets undo, redo and

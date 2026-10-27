@@ -2,10 +2,10 @@ import { SHIPPABLE_FAMILIES } from "@retorika/renderer";
 import { buildTheme, GALLERY_FAMILIES, withFamily, withTypePair } from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
 import {
-  chosenFamilyText,
+  familiesHelpText,
+  familyRowFor,
   galleryFaceCss,
   galleryRows,
-  galleryStartsOpen,
   toolbarFamilyLabel,
   typePairNoteText,
 } from "../src/editor/letterGallery.ts";
@@ -85,40 +85,71 @@ describe("galleryFaceCss", () => {
     expect(galleryFaceCss().match(/font-weight:400/g) ?? []).toHaveLength(8);
     expect(galleryFaceCss()).not.toContain("font-weight:700");
   });
+
+  it("declares only the families it is handed, which is what lets the chooser fetch as it scrolls", () => {
+    // A declared face downloads the moment text is laid out in it, on screen or not — so a sheet
+    // naming every family would fetch every face on open. The chooser hands over the revealed set
+    // and grows it (sprint 29 día 1).
+    const css = galleryFaceCss(["Spectral", "Figtree"]);
+    expect(css.match(/@font-face\{/g) ?? []).toHaveLength(2);
+    expect(css).toContain("font-family:'Spectral'");
+    expect(css).toContain("font-family:'Figtree'");
+    expect(css).not.toContain("Bitter");
+    expect(galleryFaceCss([])).toBe("");
+  });
+
+  it("refuses a family this product does not send, rather than drawing a specimen in a lie", () => {
+    expect(() => galleryFaceCss(["Comic Sans MS"])).toThrow(/no 400 face shipped/);
+  });
 });
 
-describe("chosenFamilyText", () => {
-  it("says both when both halves are chosen", () => {
-    const theme = withFamily(withFamily(start, "font.heading", "Figtree"), "font.body", "Bitter");
-    expect(chosenFamilyText(theme)).toBe("Figtree en los titulares y Bitter en el texto.");
+describe("familyRowFor", () => {
+  it("names a gallery family outright and draws the row in that very face", () => {
+    const theme = withFamily(start, "font.heading", "Spectral");
+    expect(familyRowFor(theme, "font.heading")).toEqual({
+      family: "Spectral",
+      text: "Spectral",
+      stack: "'Spectral'",
+    });
   });
 
-  it("says only the half that was chosen", () => {
-    // From `editorial-serif`, whose Georgia heading and system body are nobody's shipped face —
-    // `modern-sans` would not do, because **it already heads in Inter**, which is a gallery family,
-    // so a theme built on it reports two halves honestly before anybody has chosen anything.
-    const plain = withTypePair(start, "editorial-serif");
-    expect(chosenFamilyText(withFamily(plain, "font.heading", "Work Sans"))).toBe(
-      "Work Sans en los titulares.",
-    );
-    expect(chosenFamilyText(withFamily(plain, "font.body", "DM Sans"))).toBe(
-      "DM Sans en el texto.",
-    );
+  it("reads the pair's own Inter as the heading of a brand-new site, because it is", () => {
+    // `modern-sans` heads in Inter and this product sends Inter: the row says so before anybody
+    // has chosen anything, which is the truth of the document and not a quirk.
+    expect(familyRowFor(start, "font.heading").family).toBe("Inter");
   });
 
-  it("reports the pair's own Inter, because a pair that names a shipped family has chosen one", () => {
-    // `modern-sans` heads in Inter and this product sends Inter, so the line says so rather than
-    // pretending the choice is empty until somebody clicks. The same sentence, from the one place
-    // that composes it.
-    expect(chosenFamilyText(start)).toBe("Inter en los titulares.");
+  it("names a pair's system letter by the pair and never by the font, drawn in the theme's own stack", () => {
+    // `editorial-serif` heads in Georgia and bodies in system-ui: nothing ships for either, so the
+    // visitor gets whatever their machine has, and the row shows exactly that (issue #9).
+    const editorial = withTypePair(start, "editorial-serif");
+    const heading = familyRowFor(editorial, "font.heading");
+    expect(heading.family).toBeUndefined();
+    expect(heading.text).toBe("La letra de «Sobria y legible»");
+    expect(heading.stack).toBe(editorial["font.heading"]);
+    expect(familyRowFor(editorial, "font.body").stack).toBe(editorial["font.body"]);
   });
 
-  it("names the pair as the thing in charge when neither half was chosen", () => {
-    // `modern-sans` heads in Inter, which *is* a gallery family — so this case needs a theme whose
-    // two stacks begin with nothing we ship, and `editorial-serif` is one.
-    expect(chosenFamilyText(withTypePair(start, "editorial-serif"))).toBe(
-      es["editor.style.familyNeither"],
+  it("says a hand-edited letter is off the list, in the words the pairs group uses", () => {
+    const row = familyRowFor(
+      { ...start, "font.heading": "Comic Sans MS, sans-serif" },
+      "font.heading",
     );
+    expect(row).toEqual({
+      family: undefined,
+      text: es["editor.style.unknownLetter"],
+      stack: "Comic Sans MS, sans-serif",
+    });
+  });
+});
+
+describe("familiesHelpText", () => {
+  it("counts the families from the table rather than from the sentence", () => {
+    // «Las ocho letras…» was the copy until sprint 29, and eight stops being true on día 2.
+    expect(familiesHelpText()).toBe(
+      `${GALLERY_FAMILIES.length} letras que viajan con tu web: se ven igual en cualquier ordenador, porque se descargan con la página.`,
+    );
+    expect(familiesHelpText()).not.toContain("{n}");
   });
 });
 
@@ -134,29 +165,6 @@ describe("typePairNoteText", () => {
   it("keeps the old sentence for a theme nobody here produced", () => {
     expect(typePairNoteText({ ...start, "font.heading": "Comic Sans MS, sans-serif" })).toBe(
       es["editor.style.noTypePair"],
-    );
-  });
-});
-
-describe("galleryStartsOpen", () => {
-  it("stays closed for a site on one of the three pairs", () => {
-    // Including `modern-sans`, which heads in Inter — a family we send. «Some gallery family is
-    // named» is true of the default theme, so it cannot be the test on its own.
-    for (const id of ["editorial-serif", "modern-sans", "classic-display"]) {
-      expect(galleryStartsOpen(withTypePair(start, id)), id).toBe(false);
-    }
-  });
-
-  it("opens when the owner has left the pairs for a family of their own", () => {
-    // Otherwise the ticked row sits inside a collapsed group: a choice they cannot see and cannot
-    // take back.
-    expect(galleryStartsOpen(withFamily(start, "font.body", "Spectral"))).toBe(true);
-    expect(galleryStartsOpen(withFamily(start, "font.heading", "Bitter"))).toBe(true);
-  });
-
-  it("stays closed for a theme nobody here produced, where there is nothing to show ticked", () => {
-    expect(galleryStartsOpen({ ...start, "font.heading": "Comic Sans MS, sans-serif" })).toBe(
-      false,
     );
   });
 });

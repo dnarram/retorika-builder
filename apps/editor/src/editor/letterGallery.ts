@@ -1,6 +1,7 @@
 import { SHIPPABLE_FAMILIES } from "@retorika/renderer";
 import type { Theme } from "@retorika/schema";
 import { type FontKey, GALLERY_FAMILIES, identifyFamily, identifyTypePair } from "@retorika/tokens";
+import tokensEs from "@retorika/tokens/locales/es" with { type: "json" };
 import es from "../locales/es.json" with { type: "json" };
 
 /**
@@ -75,42 +76,89 @@ export function galleryRows(theme: Theme, key: FontKey): GalleryRow[] {
  * and the panel is a page at `/mis-webs/<id>`, where the same relative URL would ask for
  * `/mis-webs/fonts/…` and get a 404. Same bytes, same route, absolute path.
  *
- * **Mounted by the group and not by the panel**, so the faces are fetched when an owner opens the
- * gallery and never «just in case»: a declared `@font-face` downloads nothing until something is
- * drawn in it, and the specimens are the only things that are.
+ * **Only the families it is handed, and all of them by default.** A declared face downloads the
+ * moment text is *laid out* in it — not when that text scrolls into view — so a sheet declaring
+ * every family would fetch every face the instant a list of forty specimens mounted, inside an
+ * `overflow` or not. The chooser (sprint 29 día 1) therefore declares a face only once its row has
+ * come near the viewport, and grows the sheet from there; the two rows in the panel declare exactly
+ * the one or two faces they draw. The no-argument form is what the tests and the `fonts/[file]`
+ * route's own reasoning still rely on.
+ *
+ * A family that is not in the table is refused rather than skipped: a caller asking for a face this
+ * product does not send would otherwise draw a specimen in the system letter and call it the real
+ * one, which is the exact lie issue #9 was about.
  */
-export function galleryFaceCss(): string {
-  return GALLERY_FAMILIES.map(({ family }) => {
-    const row = SHIPPABLE_FAMILIES.find((candidate) => candidate.family === family);
-    const face = row?.faces.find((candidate) => candidate.weight === SPECIMEN_WEIGHT);
-    if (!face) throw new Error(`letterGallery: no ${SPECIMEN_WEIGHT} face shipped for "${family}"`);
-    if (!FAMILY_SHAPE.test(family)) throw new Error(`letterGallery: unwritable family "${family}"`);
-    if (!FILE_SHAPE.test(face.file))
-      throw new Error(`letterGallery: unwritable file "${face.file}"`);
-    return (
-      `@font-face{font-family:'${family}';` +
-      `src:url("/fonts/${face.file}") format("woff2");` +
-      `font-weight:${SPECIMEN_WEIGHT};font-style:normal;font-display:swap}`
-    );
-  }).join("\n");
+export function galleryFaceCss(
+  families: readonly string[] = GALLERY_FAMILIES.map((row) => row.family),
+): string {
+  return families
+    .map((family) => {
+      const row = SHIPPABLE_FAMILIES.find((candidate) => candidate.family === family);
+      const face = row?.faces.find((candidate) => candidate.weight === SPECIMEN_WEIGHT);
+      if (!face)
+        throw new Error(`letterGallery: no ${SPECIMEN_WEIGHT} face shipped for "${family}"`);
+      if (!FAMILY_SHAPE.test(family))
+        throw new Error(`letterGallery: unwritable family "${family}"`);
+      if (!FILE_SHAPE.test(face.file))
+        throw new Error(`letterGallery: unwritable file "${face.file}"`);
+      return (
+        `@font-face{font-family:'${family}';` +
+        `src:url("/fonts/${face.file}") format("woff2");` +
+        `font-weight:${SPECIMEN_WEIGHT};font-style:normal;font-display:swap}`
+      );
+    })
+    .join("\n");
 }
 
 /**
- * What the line beside the group says about the two choices as they stand.
+ * What one of the panel's two rows — «Titulares», «Texto» — says and is drawn in.
  *
- * Said out loud because the group is closed until an owner opens it, and a choice nobody can see is
- * a choice they cannot undo. The four cases are the four real states, and «ninguna» names the type
- * pair as the thing in charge rather than leaving a blank.
+ * Three honest states, and the row shows each in the letter it is actually about:
+ *
+ * - **A gallery family** is named outright, drawn in its own shipped face, and the chooser can be
+ *   opened to change it. `family` is set, which is also what tells the row to declare that face.
+ * - **A type pair's own letter** — Georgia on «Sobria y legible», Charter on «Clásica y seria» —
+ *   is named by the pair, never by the font, because the ZIP ships no file for it and the visitor
+ *   gets whatever their machine has (issue #9). Drawn in the theme's own stack, so what the row shows
+ *   is what that machine gives.
+ * - **A letter nobody here produced** — a hand-edited document — is said to be off the list, in the
+ *   same words the pairs group uses for the whole theme.
+ *
+ * `modern-sans` heads in Inter, which this product sends, so a brand-new site reads «Inter» in its
+ * first row before anybody has chosen anything. That is the truth of the document and not a quirk:
+ * the pair *is* Inter over the system sans.
  */
-export function chosenFamilyText(theme: Theme): string {
-  const heading = identifyFamily(theme, "font.heading")?.family;
-  const body = identifyFamily(theme, "font.body")?.family;
-  if (heading !== undefined && body !== undefined) {
-    return es["editor.style.familyBoth"].replace("{heading}", heading).replace("{body}", body);
+export interface FamilyRow {
+  /** The shipped family, when the stack begins with one; otherwise `undefined`. */
+  family: string | undefined;
+  /** What the row says. */
+  text: string;
+  /** The `font-family` the row's text is drawn in. */
+  stack: string;
+}
+
+export function familyRowFor(theme: Theme, key: FontKey): FamilyRow {
+  const family = identifyFamily(theme, key)?.family;
+  if (family !== undefined) return { family, text: family, stack: `'${family}'` };
+  const pair = identifyTypePair(theme);
+  if (pair !== undefined) {
+    const name = tokensEs[pair.nameKey as keyof typeof tokensEs] ?? pair.nameKey;
+    return {
+      family: undefined,
+      text: es["editor.style.pairLetter"].replace("{pair}", name),
+      stack: theme[key],
+    };
   }
-  if (heading !== undefined) return es["editor.style.familyHeading"].replace("{family}", heading);
-  if (body !== undefined) return es["editor.style.familyBody"].replace("{family}", body);
-  return es["editor.style.familyNeither"];
+  return { family: undefined, text: es["editor.style.unknownLetter"], stack: theme[key] };
+}
+
+/**
+ * The help line under the two rows, with the count read from the table rather than written into
+ * the sentence — «Las ocho letras…» was the copy until sprint 29, and eight stopped being true on
+ * día 2 of it.
+ */
+export function familiesHelpText(): string {
+  return es["editor.style.familiesHelp"].replace("{n}", String(GALLERY_FAMILIES.length));
 }
 
 /**
@@ -127,26 +175,6 @@ export function typePairNoteText(theme: Theme): string {
     identifyFamily(theme, "font.heading") !== undefined ||
     identifyFamily(theme, "font.body") !== undefined;
   return chosen ? es["editor.style.fromGallery"] : es["editor.style.noTypePair"];
-}
-
-/**
- * Whether the gallery is open the moment the panel appears.
- *
- * **Closed by default**, because the three pairs are the answer for the owner who wants one click,
- * and sixteen more rows above the fold would make the panel look like a font list rather than a
- * style panel. **Open when the owner has already left the pairs for a family of their own**: a
- * ticked row inside a collapsed group is a choice they cannot see and therefore cannot take back.
- *
- * The test is the pair's absence **and** a family chosen, not just a family chosen: `modern-sans`
- * heads in Inter, which this product sends, so «a gallery family is named» is true of the default
- * theme and would open the group for every site.
- */
-export function galleryStartsOpen(theme: Theme): boolean {
-  if (identifyTypePair(theme) !== undefined) return false;
-  return (
-    identifyFamily(theme, "font.heading") !== undefined ||
-    identifyFamily(theme, "font.body") !== undefined
-  );
 }
 
 /**

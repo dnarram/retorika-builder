@@ -12,12 +12,11 @@ import {
   TYPE_PAIRS,
 } from "@retorika/tokens";
 import tokensEs from "@retorika/tokens/locales/es" with { type: "json" };
-import { useId, useState } from "react";
+import { useId } from "react";
 import {
-  chosenFamilyText,
+  familiesHelpText,
+  familyRowFor,
   galleryFaceCss,
-  galleryRows,
-  galleryStartsOpen,
   typePairNoteText,
 } from "../editor/letterGallery.ts";
 import {
@@ -75,9 +74,10 @@ import es from "../locales/es.json" with { type: "json" };
  *
  * Nothing here holds an **answer**. Which palette is ticked is *deduced* from the document's own
  * theme, because a theme keeps values and not identities — see `identifyPalette`. That is why the
- * tick cannot go stale: there is no second copy of the answer to drift. The one `useState` in this
- * file is whether the gallery is unfolded, which is about this panel on this screen and says nothing
- * about the site; its starting value is deduced too (`galleryStartsOpen`).
+ * tick cannot go stale: there is no second copy of the answer to drift. There is no `useState` in
+ * this file at all since sprint 29 día 1: the gallery used to unfold here, and whether it was
+ * unfolded was the panel's one piece of state. It is a dialog now (`FontChooserDialog`), opened by
+ * the two rows below the pairs, and which half it is open for is `Editor.tsx`'s to remember.
  */
 
 export interface StylePanelProps {
@@ -85,13 +85,14 @@ export interface StylePanelProps {
   onPickPalette: (paletteId: string) => void;
   onPickTypePair: (typePairId: string) => void;
   /**
-   * One family, by its real name, for one of the two font tokens (ADR 0046).
+   * Open the letter chooser for one of the two font tokens (ADR 0046, sprint 29 día 1).
    *
-   * Separate from `onPickTypePair` because it is a separate choice and writes a single key: headings
-   * and text are chosen one at a time, so an owner can put Figtree over Spectral without the product
-   * deciding the other half for them.
+   * The choice itself is made in the dialog, which `Editor.tsx` mounts in the shell's `overlay`;
+   * this panel only says which half the owner pressed «Cambiar» on. Separate halves because they
+   * are separate choices: headings and text are chosen one at a time, so an owner can put Figtree
+   * over Spectral without the product deciding the other half for them.
    */
-  onPickFamily: (key: FontKey, family: string) => void;
+  onOpenChooser: (key: FontKey) => void;
   onPickScale: (scaleId: string) => void;
   /**
    * Whether the design tools are on for the person looking — nothing about the site.
@@ -119,17 +120,26 @@ function nameOf(nameKey: string): string {
  */
 const FAMILY_CHOICES: readonly {
   key: FontKey;
-  legendKey: "editor.style.familyHeadings" | "editor.style.familyText";
+  labelKey: "editor.style.familyRow.heading" | "editor.style.familyRow.body";
+  changeKey: "editor.style.changeHeading" | "editor.style.changeBody";
 }[] = [
-  { key: "font.heading", legendKey: "editor.style.familyHeadings" },
-  { key: "font.body", legendKey: "editor.style.familyText" },
+  {
+    key: "font.heading",
+    labelKey: "editor.style.familyRow.heading",
+    changeKey: "editor.style.changeHeading",
+  },
+  {
+    key: "font.body",
+    labelKey: "editor.style.familyRow.body",
+    changeKey: "editor.style.changeBody",
+  },
 ];
 
 export function StylePanel({
   theme,
   onPickPalette,
   onPickTypePair,
-  onPickFamily,
+  onOpenChooser,
   onPickScale,
   designTools,
   onClose,
@@ -137,13 +147,14 @@ export function StylePanel({
   const headingId = useId();
   const paletteGroup = useId();
   const typeGroup = useId();
-  const familyGroup = useId();
-  const galleryId = useId();
   const scaleGroup = useId();
-  const [galleryOpen, setGalleryOpen] = useState(() => galleryStartsOpen(theme));
   const current = identifyPalette(theme);
   const currentType = identifyTypePair(theme);
   const currentScale = identifyScale(theme);
+  const familyRows = FAMILY_CHOICES.map((choice) => ({
+    ...choice,
+    ...familyRowFor(theme, choice.key),
+  }));
 
   return (
     <aside
@@ -265,93 +276,54 @@ export function StylePanel({
       </fieldset>
 
       {/**
-       * The gallery of letters (ADR 0046): eight families the owner may choose **by name**, because
-       * this product sends their faces.
+       * The two halves of the letter (ADR 0046, sprint 29 día 1): what the headings and the text are
+       * set in today, each drawn in that very letter, and a «Cambiar» that opens the chooser for
+       * that half. **Two rows whatever the gallery holds** — eight families today, forty from día 3 —
+       * which is the point: the panel's height stopped depending on the number of families the day
+       * the list left it.
        *
-       * **Folded away until it is wanted, and not gated.** The three pairs above are the answer for
-       * an owner who wants one click; sixteen more rows above the fold would turn a style panel into
-       * a font list. But it is offered to everybody — the design tools gate `MEDIDAS` and nothing
-       * else here, because a letter is the owner's own branding and not a professional's tool.
+       * It is offered to everybody and not gated: the design tools gate `MEDIDAS` and nothing else
+       * here, because a letter is the owner's own branding and not a professional's tool.
        */}
-      <div className="flex flex-col gap-2">
-        <button
-          type="button"
-          aria-expanded={galleryOpen}
-          aria-controls={galleryId}
-          onClick={() => setGalleryOpen(!galleryOpen)}
-          className="ui-interactive flex items-center justify-between gap-3 rounded-ui border border-ui-border bg-ui-surface px-4 py-2.5 text-left hover:border-ui-border-strong"
-        >
-          <span className="flex flex-col gap-0.5">
-            <span className="text-[13px] font-semibold text-ui-ink">
-              {es["editor.style.exactFamily"]}
+      <div className="flex flex-col gap-[9px]">
+        {/* Declared for the one or two faces the rows draw, and only those: a declared face is a
+            download the moment text is laid out in it, so this sheet names what is on screen and
+            nothing «just in case». */}
+        <style>
+          {galleryFaceCss(familyRows.flatMap((row) => (row.family ? [row.family] : [])))}
+        </style>
+        {/* Not `panelRow` on these: that one lights its edge on hover because it is a thing you
+            press, and a row here is not — the button inside it is. */}
+        {familyRows.map((row) => (
+          <div
+            key={row.key}
+            className="flex h-14 items-center gap-3.5 rounded-ui border border-ui-border bg-ui-surface px-4"
+          >
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="text-[11px] font-bold tracking-[0.09em] text-ui-muted">
+                {es[row.labelKey]}
+              </span>
+              {/* Drawn in the letter the row is about: the shipped face when a family is named, the
+                  theme's own stack when a pair's system letter is — so what the row shows is what
+                  that machine gives, which is the rule since issue #9. */}
+              <span
+                className="truncate text-[16px] leading-tight text-ui-ink"
+                style={{ fontFamily: row.stack }}
+              >
+                {row.text}
+              </span>
             </span>
-            {/* Said whether the group is open or shut: a choice nobody can see is a choice nobody
-                can take back. */}
-            <span className="text-[12px] leading-snug text-ui-muted">
-              {chosenFamilyText(theme)}
-            </span>
-          </span>
-          <span aria-hidden="true" className="shrink-0 text-[15px] leading-none text-ui-muted">
-            {galleryOpen ? "\u2212" : "+"}
-          </span>
-        </button>
-
-        {galleryOpen ? (
-          <div id={galleryId} className="flex flex-col gap-3">
-            {/* The eight faces, from the editor's own `fonts/[file]` route, mounted with the group
-                and not with the panel. A declared `@font-face` downloads nothing until something is
-                drawn in it, and the specimens below are the only things that are — so opening this
-                group is what fetches them, which is «cargada solo al abrir el grupo» honoured by
-                construction rather than by a loader. */}
-            <style>{galleryFaceCss()}</style>
-            <p className="m-0 text-[12px] leading-snug text-ui-muted">
-              {es["editor.style.exactFamilyHelp"]}
-            </p>
-            {FAMILY_CHOICES.map(({ key, legendKey }) => (
-              <fieldset key={key} className="m-0 flex flex-col gap-1.5 border-0 p-0">
-                <legend className="mb-1 p-0 text-[11px] font-bold tracking-[0.09em] text-ui-muted">
-                  {es[legendKey]}
-                </legend>
-                {galleryRows(theme, key).map((row) => (
-                  <label
-                    key={row.family}
-                    className={
-                      "relative flex h-12 cursor-pointer items-center gap-3.5 px-4 " +
-                      (row.chosen ? panelRowSelected : panelRow)
-                    }
-                  >
-                    <input
-                      type="radio"
-                      name={`${familyGroup}-${key}`}
-                      checked={row.chosen}
-                      onChange={() => onPickFamily(key, row.family)}
-                      // Visually hidden rather than `display: none`, like the three groups above:
-                      // a hidden input leaves the tab order and the group, and arrow keys stop.
-                      className="absolute h-px w-px opacity-0"
-                    />
-                    {/* Drawn in the face the ZIP will carry, which is the whole reason this row may
-                        say the family's name out loud. */}
-                    <span
-                      aria-hidden="true"
-                      className="w-8 shrink-0 text-center text-[20px] leading-none text-ui-ink"
-                      style={{ fontFamily: `'${row.family}'` }}
-                    >
-                      {es["editor.style.specimen"]}
-                    </span>
-                    <span
-                      className={
-                        "text-[14px] " +
-                        (row.chosen ? "font-semibold text-ui-ink" : "font-medium text-ui-ink")
-                      }
-                    >
-                      {row.family}
-                    </span>
-                  </label>
-                ))}
-              </fieldset>
-            ))}
+            <button
+              type="button"
+              aria-label={es[row.changeKey]}
+              onClick={() => onOpenChooser(row.key)}
+              className="ui-interactive h-8 shrink-0 cursor-pointer rounded-ui-sm border border-ui-border bg-ui-surface px-3 text-[13px] font-semibold text-ui-ink hover:border-ui-border-strong"
+            >
+              {es["editor.style.change"]}
+            </button>
           </div>
-        ) : null}
+        ))}
+        <p className="m-0 text-[12px] leading-snug text-ui-muted">{familiesHelpText()}</p>
       </div>
 
       {designTools ? (

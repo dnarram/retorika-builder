@@ -4208,3 +4208,92 @@ las dos caminatas que comparan la lista exacta del ZIP con el favicon nuevo. La 
 9. **Fuera por el plan, y nombrados en él**: el cambio de diseño a 720 de alto, `overflow-x: clip`,
    los 172 px entre «Precios», `fetchpriority`, el logo como favicon o un PNG, y partir el `e2e` o
    renombrar su `let page`.
+
+## Sprint 29 — «La letra de la marca» (desde el 28 de octubre de 2026)
+
+David, con la #310 fusionada: su jefe quiere que la herramienta tenga «una muy amplia selección de
+fuentes» para titulares y textos, que el panel derecho deje de alargarse al crecer la lista, y que
+el cliente pueda importar la fuente de su marca cuando no esté. Cuatro decisiones suyas al planificar
+—unas cuarenta familias que «se navegan, no se recorren», con la sustituta de cada una escrita en la
+encuesta; las de nombre reservado siguen fuera y una línea discreta explica por qué; la fuente propia
+en uno o dos archivos y cuatro formatos con cinco condiciones; y la fuente propia viaja con la
+cuenta— y siete ajustes al aprobar, todos sobre bytes ajenos: tope de expansión del brotli, sesión en
+la ruta que inspecciona, el fichero de licencia también olfateado, el rango real de una variable, una
+sesión del diálogo como un paso del historial, la CSP del lienzo para `blob:`, y el tipo del bucket
+desde el olfateo. El plan está en `~/.claude/plans/pr310-fusionada-redespliegue-ejecutado-warm-llama.md`.
+
+### Día 1 — el selector, solo (PR de `feat/el-selector-de-letra`)
+
+**Un cambio de modelo de interacción va primero y solo.** La galería dejaba de caber en el panel: dos
+grupos de radios, una fila de 48 px por familia y por mitad, dieciséis hoy y ochenta con cuarenta.
+Antes de añadir una sola familia, la lista sale del panel y el panel se queda con **dos filas**,
+«Titulares» y «Texto», cada una con el nombre de la familia dibujado en su propia cara y un
+«Cambiar» (`aria-label` «Cambiar la letra de los titulares» / «…del texto»). Cuando la mitad no
+nombra una familia enviada, la fila la nombra por la pareja y nunca por la fuente —«La letra de
+«Clásica y seria»»— y se dibuja en la pila del tema, que es lo que esa máquina da (incidencia #9). La
+altura del panel ya no depende del número de familias.
+
+**«Cambiar» abre un diálogo en el `overlay`** (`FontChooserDialog.tsx`, el décimo `aria-modal`, con
+`useFocusTrap`): título por mitad, un campo de búsqueda con el foco inicial, tres chips de carácter
+que son radios nativos («Todas», «Sin remates», «Con remates»; un solo tabulador, las flechas
+cambian el filtro), un contador `aria-live` («8 letras», «1 letra», «Ninguna letra se llama así.»),
+y la lista: **un** grupo de radios con una fila de 64 px por familia donde **el nombre es el
+especimen** —dibujado en su cara a 18 px, sin el `Aa` oculto— y debajo, en la misma cara, **el nombre
+del negocio** (`doc.siteName`; «Así se leería tu web.» si está vacío), que es la condición de David.
+El pie es «Hecho». Se rechazaron el popover anclado (un `fixed` dentro de `children` lo captura el
+`scale` del lienzo, lo que el 28 día 6 acaba de pagar, y a 390 no cabe) y la lista con scroll dentro
+del panel (scroll dentro de scroll en la hoja móvil, ochenta filas montadas que descargan cuarenta
+caras al desplegar). Radio y sombra solo por tokens `--ui-*`; en móvil, hoja desde abajo a 85dvh.
+
+**La búsqueda no desmonta nada.** `fold()` sale de `Step2Sector.tsx` a `editor/fold.ts` (tercer uso
+con el del catálogo): «GARAMÓND» encuentra «EB Garamond». Las filas que no casan llevan el atributo
+`hidden` y no el `order:1; visibility:hidden` de la rejilla de sectores: aquí el campo está en una
+cabecera que no se desplaza y nada puede saltar, y un radio en `display:none` lo saltan las flechas,
+así que las flechas recorren solo los aciertos; el `preflight` de Tailwind pone `[hidden]` con
+`!important`, que es lo que deja al `flex` de la fila sin mando. Dicho en el componente, porque la
+próxima mano irá a por el truco de la rejilla.
+
+**Las caras llegan por fila** (condición 1 de David). `galleryFaceCss(families)` acepta la lista;
+el diálogo monta un `<style>` solo con las familias **reveladas**: las ocho primeras visibles y la
+elegida al abrir (`initiallyRevealed`), y después las que un `IntersectionObserver` sobre la lista
+(`rootMargin: 240px`) ve acercarse. El conjunto solo crece y se desmonta con el diálogo —por eso un
+`<style>` y no la API `FontFace`, que exige que se le diga que olvide—. Con ocho familias la primera
+pantalla es la tabla entera, así que lo que la caminata prueba hoy es la cota y no la pereza: nada
+servido antes de abrir, todo servido tras bajar la lista hasta el final. El día 2 la misma caminata
+deja de ser vacía sin cambiar una línea. Las dos filas del panel declaran solo las caras que dibujan.
+
+**Una sesión del diálogo es un paso del historial** (ajuste 5 de David). Elegir es en vivo —el
+`onChange` escribe el token y el lienzo repinta detrás; sin «Aplicar»—, pero cuarenta filas bajo una
+flecha serían cuarenta pasos. Tres verbos nuevos en `documentHistory.ts` sobre el mismo `amendable`
+con que el tecleo en un campo ya amalgama su paso: `chooseFamily` abre el paso y lo enmienda mientras
+la causa sea la misma mitad; `settleChooser` («Hecho») lo cierra; `discardChooser` (Escape) lo quita
+y **devuelve la letra que había al abrir**, y no toca nada si no hubo elección ni si la sesión ya se
+cerró. Deshacer y rehacer ya apagan `amendable`, así que un Ctrl+Z con el diálogo abierto no se come
+un paso ajeno. Nueve tests en `documentHistory.test.ts`; la caminata sin ratón baja cinco filas, pulsa
+Hecho y **un solo «Deshacer»** devuelve la letra; baja tres, Escape, y la letra y el historial están
+como al abrir, con el foco **de vuelta en «Cambiar»**, que es lo que esa caminata no afirmaba antes.
+
+**Lo que se quitó.** `galleryStartsOpen`, `chosenFamilyText` y la línea «{heading} en los titulares y
+{body} en el texto.» con sus tests y sus claves; «Las ocho letras…» pasa a `familiesHelp` con `{n}`
+leído de la tabla. `modalTrap` cuenta diez y sus dos registros que lo nombran se corrigieron
+(`useFocusTrap.ts`, `el-recorrido-de-la-cuenta.md`); los otros dos de la lista son prosa fechada de
+los sprints 17 y 25 y se quedan como estaban.
+
+**Tres cosas que el e2e encontró en el test y no en el producto**, en tres pasadas filtradas: el
+diálogo tiene once radios y no ocho, porque las tres chips también lo son (se cuenta el grupo de la
+lista por su nombre); el nombre accesible de cada fila incluía la palabra de la especie («Bitter Con
+remates»), y la especie es visual —las chips ya la dicen—, así que va `aria-hidden` y el radio se
+llama solo por la familia; y «Con remates» resolvía a cinco elementos, la chip y cuatro insignias (se
+pulsa dentro del grupo «Qué carácter»). La caminata sin ratón y la de 390 pasaron a la primera.
+Saboteos: sin la rama que enmienda, dos tests del historial en rojo; con la hoja ignorando la lista
+que se le da, dos de `letterGallery` en rojo. Ambos deshechos por script.
+
+**La caminata sin ratón deja de esperar «Figtree».** «La que sigue a EB Garamond» era Figtree con
+ocho familias alfabéticas; con cuarenta es la que admita la encuesta, así que la caminata lee del DOM
+la familia del radio siguiente al marcado antes de pulsar la flecha.
+
+**Medidas del día.** `pnpm test` 3096; `test:invariants` 27; `test:golden` 23 sin movimiento (la
+salida del renderer no cambia); `renderer:deps`, `schema:guard`, `secrets:scope` (112 módulos, 28 de
+cliente, sin cruce) y `size` iguales que ayer; `a11y` local 538 en 30 s; **e2e completo 256 verdes y
+1 omitido en 1042 s, a la primera**, tras tres pasadas filtradas del bloque del día (90, 21 y 15 s)
+que corrigieron el test y no el producto.
