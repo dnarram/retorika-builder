@@ -4456,3 +4456,12 @@ manda solo la de google/fonts. Antes la familia quedaba fuera igual, pero con el
   el defecto del `fieldset` y la del sabotaje.
 - Con el arreglo, la hoja a 390 px y el diálogo a 1440 px se miraron en captura, y «Hecho» es el
   elemento que hay bajo su propio centro.
+
+**Lo que encontró la CI y no el local.** Primero, la #313 no tuvo CI hasta que se fusionó la #312: el
+workflow solo corre para PR contra `main`, y el cambio de base no lo dispara. Se actualizó la rama con
+`main`, con el árbol idéntico al verificado. Después, `unit` cayó por un *timeout*: el test que compara
+byte a byte las caras con su origen tardaba 8,7 s en el runner con cobertura (1,3 s aquí), porque
+`toEqual` recorre cada `Uint8Array` elemento a elemento y hoy son 1,3 MB. Ahora compara con
+`Buffer.equals`, nativo: 4 ms. Se saboteó dos veces (la licencia del paquete y una cara de 700 en el
+sitio de la de 400) y las dos dieron rojo. Los otros diez jobs pasaron en la primera vuelta, el e2e
+incluido (20 min 55 s).

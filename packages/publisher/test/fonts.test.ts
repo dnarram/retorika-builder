@@ -389,6 +389,19 @@ describe("condition 2 — a face never travels without its licence", () => {
   });
 });
 
+/**
+ * Whether two byte strings are the same, compared natively.
+ *
+ * **Not `toEqual`**, which walks a `Uint8Array` element by element: over the twenty-five families of
+ * sprint 29 día 2 — fifty faces and twenty-five licences, about 1.3 MB — that took 8.7 s on the CI
+ * runner under coverage and timed the test out, where it took 1.3 s here. A diff of binary data says
+ * nothing a reader can use anyway; the message beside each assertion names the file.
+ */
+function sameBytes(actual: Uint8Array | undefined, expected: Uint8Array): boolean {
+  if (actual === undefined) return false;
+  return Buffer.from(actual.buffer, actual.byteOffset, actual.byteLength).equals(expected);
+}
+
 describe("condition 3 — the woff2 travel exactly as the package ships them", () => {
   it("**the generated data is byte-for-byte what the package ships**", () => {
     /**
@@ -404,21 +417,24 @@ describe("condition 3 — the woff2 travel exactly as the package ships them", (
     const seen = new Set<string>();
     for (const [name, source] of Object.entries(FONT_SOURCES)) {
       const dir = dirname(require_.resolve(`${source.package}/package.json`));
-      const face = new Uint8Array(readFileSync(join(dir, "files", source.file)));
-      expect(fontDataFor(name), `${name} must be the package's bytes, unmodified`).toEqual(face);
+      const face = readFileSync(join(dir, "files", source.file));
+      expect(
+        sameBytes(fontDataFor(name), face),
+        `${name} must be the package's bytes, unmodified`,
+      ).toBe(true);
       if (!seen.has(source.licencePath)) {
         seen.add(source.licencePath);
         const slug = source.package.replace(/^@fontsource\//, "");
-        const holders = new Uint8Array(readFileSync(join(LICENCES_DIR, `${slug}.txt`)));
-        expect(fontDataFor(source.licencePath), source.licencePath).toEqual(holders);
+        const holders = readFileSync(join(LICENCES_DIR, `${slug}.txt`));
+        expect(sameBytes(fontDataFor(source.licencePath), holders), source.licencePath).toBe(true);
         // **And not the package's.** The two texts differ for every family shipped today (measured
         // 27 October 2026), so equality with the holders' file is a statement about which one was read
         // — the sabotage of reading `LICENSE` again goes red here.
-        const packaged = new Uint8Array(readFileSync(join(dir, "LICENSE")));
+        const packaged = readFileSync(join(dir, "LICENSE"));
         expect(
-          fontDataFor(source.licencePath),
+          sameBytes(fontDataFor(source.licencePath), packaged),
           `${source.licencePath} is @fontsource's`,
-        ).not.toEqual(packaged);
+        ).toBe(false);
       }
     }
     // And nothing else is carried: a key with no source would be bytes nobody can account for.
@@ -446,8 +462,11 @@ describe("condition 3 — the woff2 travel exactly as the package ships them", (
       const dir = dirname(
         createRequire(import.meta.url).resolve(`${source?.package}/package.json`),
       );
-      const fromPackage = new Uint8Array(readFileSync(join(dir, "files", source?.file ?? "")));
-      expect(file.contents, `${name} must be the package's bytes, unmodified`).toEqual(fromPackage);
+      const fromPackage = readFileSync(join(dir, "files", source?.file ?? ""));
+      expect(
+        sameBytes(file.contents, fromPackage),
+        `${name} must be the package's bytes, unmodified`,
+      ).toBe(true);
     }
   });
 
