@@ -4465,3 +4465,67 @@ byte a byte las caras con su origen tardaba 8,7 s en el runner con cobertura (1,
 `Buffer.equals`, nativo: 4 ms. Se saboteó dos veces (la licencia del paquete y una cara de 700 en el
 sitio de la de 400) y las dos dieron rojo. Los otros diez jobs pasaron en la primera vuelta, el e2e
 incluido (20 min 55 s).
+
+### Día 3 — cuarenta familias (PR de `feat/cuarenta-familias`)
+
+**Dos decisiones tomadas por delegación de David** («decide como experto en el proyecto»), al abrir el
+día:
+
+- **La pila de Gelasio se queda completa** (`Gelasio, Georgia, Cambria, 'Times New Roman', Times,
+  serif`). Cumple su propósito mejor que la corta: el visitante sin la cara ve el mismo repliegue que
+  antes en cualquier sistema, y una web migrada y una elegida a mano publican lo mismo.
+- **La fila «Texto» se corrige hoy.** Una web en «Clásica y seria» con los titulares cambiados a otra
+  familia decía de su texto «Una letra que no está en esta lista», cuando es el Charter que la propia
+  pareja puso. Ahora cada mitad se nombra por la pareja cuya pila conserva. Si dos parejas comparten la
+  pila (la sans del sistema de «Sobria y legible» y de «Moderna y neutra»), la nombra la primera, y es
+  cierto de las dos.
+
+**Lo que ve el CEO.** **Cuarenta familias**: catorce sin remates, doce con remates, seis de remates
+gruesos y ocho de cartel. Hay un chip nuevo, **«De cartel»** (Oswald, Big Shoulders Display, Bricolage
+Grotesque, Syne, Unbounded, League Spartan, Fredoka, Yanone Kaffeesatz), y vuelve una didona: **Bodoni
+Moda**, la primera desde que salió Playfair. Bajo la lista, una línea dice **«Lato, Lora, Merriweather,
+Playfair Display, Raleway y otras no se incluyen por su licencia.»**
+
+**Las decisiones de juicio del día.**
+
+- **La composición es 14 · 12 · 6 · 8 = 40.** El objetivo del plan (unas 14, 10, 5 y 6) suma 35. Con el
+  cupo de sans cerrado ayer, llegar a «unas cuarenta» y al suelo del e2e significa que crecen las otras
+  tres especies.
+- **Ninguna familia de cartel con remates.** El repliegue de «de cartel» es sans-serif, así que una
+  display serif llegaría a un visitante sin su cara en la especie equivocada. Cinzel pasó la encuesta y
+  se queda fuera por eso; además es toda mayúsculas, mala letra para el texto. Un test del publisher
+  contrasta cada especie con la `category` del propio paquete.
+- **La línea de las conocidas no nombra cómo subir una fuente hasta que exista el botón.** El plan la
+  hacía nombrar «Importar una fuente…» hasta el día 5; eso es nombrar un control que nadie puede
+  pulsar. La cláusula de «Subir mi fuente» llega el día 5 en la misma PR que el botón, y un test impide
+  que se adelante. Tampoco nombra a Montserrat ni a Poppins, que se envían desde ayer, y otro test exige
+  que ninguna de las nombradas esté en la galería.
+
+**Lo que cuesta en el servidor**, medido como en la §6 de la 0046 (tres arranques de `next start` y la
+primera respuesta a una cara, en frío y en caliente):
+
+| | `fontData/` | `.next/server` | «Ready in» | primera 200 | en caliente |
+|---|---|---|---|---|---|
+| 25 familias | 1380 KB | 57 000 KB | 63, 58, 58 ms | 162–180 ms | 2–3 ms |
+| 40 familias | 2224 KB | 58 652 KB | 64, 58, 59 ms | 165–177 ms | 2–3 ms |
+
+**El arranque no se mueve.** Cuarenta familias cuestan 1,6 MB en el servidor construido y nada en el ZIP
+de un cliente, porque solo viajan las caras que el tema nombra. La pareja más pesada es ahora Vollkorn
+con Zilla Slab, 106,6 KB, bajo el techo de 120, que no se movió.
+
+**Saboteos, cuatro, todos en rojo y deshechos por script:**
+
+1. Bitter archivada como «de cartel»: rojo el test de especie contra `category`.
+2. La línea nombrando a Montserrat: rojo «solo nombra las que no están».
+3. La línea prometiendo «Subir mi fuente»: rojo «no promete lo que aún no existe».
+4. La fila «Texto» de vuelta a la pareja de todo el tema: rojo los dos tests nuevos.
+
+**Medidas del día.**
+
+- `pnpm test:coverage`: 3131.
+- `test:invariants`: 27.
+- `test:golden`: 23, sin movimiento.
+- `typecheck`, `lint`, `renderer:deps`, `schema:guard`, `secrets:scope` y `size`: en verde.
+- **e2e completo: 257 verdes y 1 omitido en 1048 s, a la primera.** Con 40 familias, la caminata de la
+  galería baja la lista fila a fila, comprueba que al abrir no se pide la cara del pie, que «GARAMÓND»
+  encuentra las dos Garamond y que «De cartel» filtra a sus ocho.

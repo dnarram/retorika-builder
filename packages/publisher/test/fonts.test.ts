@@ -2,7 +2,13 @@ import { readdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fontFilesFor, render, SHIPPABLE_FAMILIES } from "@retorika/renderer";
-import { flattenElements, parseDocument, type RetorikaDocument } from "@retorika/schema";
+import {
+  FONT_GALLERY,
+  type FontKind,
+  flattenElements,
+  parseDocument,
+  type RetorikaDocument,
+} from "@retorika/schema";
 import { GALLERY_FAMILIES, withFamily } from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
 import { readFontBundle } from "../src/fontBytes.ts";
@@ -376,6 +382,33 @@ describe("condition 2 — a face never travels without its licence", () => {
       // apostrophe, no hyphen and no accent, which is why it is a filter and not a preference.
       expect(family, `${family} does not match the pattern a stack may carry`).toMatch(
         /^[A-Za-z][A-Za-z0-9]*(?: [A-Za-z0-9]+)*$/,
+      );
+    }
+  });
+
+  /**
+   * **The species against the package's own `category`** (ADR 0055 §2). Google has no slab — it files
+   * them as `serif` — and files most headline families as `sans-serif`, so «slab» and «de cartel» are
+   * our judgement; what this holds is that the judgement never contradicts the letter's construction.
+   * In particular **a headline family must not be a serif**: `GENERIC_OF.display` falls back as a sans,
+   * and a serif display would reach a visitor without its face in the wrong species. Cinzel passed the
+   * survey and stays out on this test alone.
+   */
+  it("files every row under a species its own package agrees with", () => {
+    const read = createRequire(import.meta.url);
+    const agrees: Record<FontKind, readonly string[]> = {
+      sans: ["sans-serif"],
+      serif: ["serif"],
+      slab: ["serif"],
+      display: ["display", "sans-serif"],
+    };
+    for (const { family, kind } of FONT_GALLERY) {
+      const pkg = `@fontsource/${family.toLowerCase().replace(/ /g, "-")}`;
+      const meta = JSON.parse(
+        readFileSync(join(dirname(read.resolve(`${pkg}/package.json`)), "metadata.json"), "utf8"),
+      );
+      expect(agrees[kind], `${family} is filed as ${kind}; Google says ${meta.category}`).toContain(
+        meta.category,
       );
     }
   });

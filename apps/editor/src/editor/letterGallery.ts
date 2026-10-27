@@ -1,6 +1,12 @@
 import { SHIPPABLE_FAMILIES } from "@retorika/renderer";
 import type { FontKind, Theme } from "@retorika/schema";
-import { type FontKey, GALLERY_FAMILIES, identifyFamily, identifyTypePair } from "@retorika/tokens";
+import {
+  type FontKey,
+  GALLERY_FAMILIES,
+  identifyFamily,
+  identifyTypePair,
+  TYPE_PAIRS,
+} from "@retorika/tokens";
 import tokensEs from "@retorika/tokens/locales/es" with { type: "json" };
 import es from "../locales/es.json" with { type: "json" };
 
@@ -120,7 +126,11 @@ export function galleryFaceCss(
  * - **A type pair's own letter** — Georgia on «Sobria y legible», Charter on «Clásica y seria» —
  *   is named by the pair, never by the font, because the ZIP ships no file for it and the visitor
  *   gets whatever their machine has (issue #9). Drawn in the theme's own stack, so what the row shows
- *   is what that machine gives.
+ *   is what that machine gives. **Each half on its own** since sprint 29 día 3: a site on «Clásica y
+ *   seria» whose headings were changed to a gallery family still has the pair's Charter in its text,
+ *   and until then that row said «una letra que no está en esta lista» about a letter the product
+ *   itself had put there. Where two pairs share the half's stack — the system sans of «Sobria y
+ *   legible» and «Moderna y neutra» — the first in `TYPE_PAIRS` names it, which is true of both.
  * - **A letter nobody here produced** — a hand-edited document — is said to be off the list, in the
  *   same words the pairs group uses for the whole theme.
  *
@@ -140,7 +150,8 @@ export interface FamilyRow {
 export function familyRowFor(theme: Theme, key: FontKey): FamilyRow {
   const family = identifyFamily(theme, key)?.family;
   if (family !== undefined) return { family, text: family, stack: `'${family}'` };
-  const pair = identifyTypePair(theme);
+  const pair =
+    identifyTypePair(theme) ?? TYPE_PAIRS.find((candidate) => candidate.fonts[key] === theme[key]);
   if (pair !== undefined) {
     const name = tokensEs[pair.nameKey as keyof typeof tokensEs] ?? pair.nameKey;
     return {
