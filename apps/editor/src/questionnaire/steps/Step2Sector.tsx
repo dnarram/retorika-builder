@@ -3,6 +3,7 @@
 import { servesSector } from "@retorika/copybank";
 import { type Answers, SECTOR_IDS, type SectorId } from "@retorika/generator";
 import { useMemo, useState } from "react";
+import { fold } from "../../editor/fold.ts";
 import es from "../../locales/es.json" with { type: "json" };
 import {
   Card,
@@ -13,10 +14,6 @@ import {
   TextField,
   TitleBlock,
 } from "../ui.tsx";
-
-function fold(text: string): string {
-  return text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLocaleLowerCase("es");
-}
 
 export function Step2Sector({
   answers,

@@ -8,7 +8,7 @@ import {
   type RetorikaDocument,
   type Theme,
 } from "@retorika/schema";
-import { buildTheme, STARTING_PALETTE_ID } from "@retorika/tokens";
+import { buildTheme, type FontKey, STARTING_PALETTE_ID, withFamily } from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
 import {
   type Histories,
@@ -799,6 +799,135 @@ describe("setTheme", () => {
     expect(() => run(start(), { type: "setTheme", variant: 0, theme: partial as Theme })).toThrow(
       /not a complete theme/,
     );
+  });
+});
+
+describe("a letter chooser session, as one step", () => {
+  /**
+   * The three verbs behind the letter chooser (sprint 29 día 1). David's adjustment to the plan:
+   * with forty rows and a live preview, walking down with the arrows would write forty steps — so
+   * the first choice opens a step, the next ones amend it, «Hecho» closes it, and Escape returns
+   * the letter that was there when the dialog opened.
+   */
+  const choose = (family: string, key: FontKey = "font.heading", variant = 0): HistoryAction => ({
+    type: "chooseFamily",
+    variant,
+    key,
+    theme: withFamily(headingOf(variant), key, family),
+  });
+  // `theme` of the *current* state is what `Variants` composes with; the helper above needs a state
+  // to read it from, so the tests build the action inline where the state matters.
+  let state: Histories = start();
+  const headingOf = (variant: number) => {
+    const current = state[variant]?.present.document.theme;
+    if (!current) throw new Error("no theme");
+    return current;
+  };
+  const heading = (s: Histories) => s[0]?.present.document.theme["font.heading"];
+  const step = (family: string, key: FontKey = "font.heading") => {
+    state = run(state, choose(family, key));
+    return state;
+  };
+  const done = () => {
+    state = run(state, { type: "settleChooser", variant: 0 });
+    return state;
+  };
+  const cancel = () => {
+    state = run(state, { type: "discardChooser", variant: 0 });
+    return state;
+  };
+  const undo = () => {
+    state = run(state, { type: "undo", variant: 0 });
+    return state;
+  };
+
+  it("five choices in a row are one step, and one undo takes them all back", () => {
+    state = start();
+    const before = heading(state);
+    for (const family of ["Bitter", "DM Sans", "EB Garamond", "Figtree", "Spectral"]) step(family);
+    expect(heading(state)).toMatch(/^Spectral/);
+    expect(state[0]?.past).toHaveLength(1);
+    expect(state[0]?.amendable).toBe(true);
+    expect(heading(undo())).toBe(before);
+  });
+
+  it("«Hecho» closes the step, so the next choice opens its own", () => {
+    state = start();
+    step("Bitter");
+    done();
+    expect(state[0]?.amendable).toBe(false);
+    step("Spectral");
+    expect(state[0]?.past).toHaveLength(2);
+    expect(heading(undo())).toMatch(/^Bitter/);
+  });
+
+  it("the other half is its own session, even while the first is still open", () => {
+    state = start();
+    step("Bitter");
+    step("Spectral", "font.body");
+    expect(state[0]?.past).toHaveLength(2);
+    // And choosing for the headings again does not amend the body's step.
+    step("Figtree");
+    expect(state[0]?.past).toHaveLength(3);
+  });
+
+  it("Escape returns the letter that was there on open and leaves no step behind", () => {
+    state = start();
+    const before = heading(state);
+    const depth = state[0]?.past.length ?? 0;
+    step("Bitter");
+    step("Spectral");
+    cancel();
+    expect(heading(state)).toBe(before);
+    expect(state[0]?.past).toHaveLength(depth);
+    expect(state[0]?.future).toHaveLength(0);
+    expect(state[0]?.amendable).toBe(false);
+  });
+
+  it("Escape with nothing chosen touches nothing", () => {
+    state = start();
+    const before = state;
+    expect(cancel()).toBe(before);
+    expect(done()).toBe(before);
+  });
+
+  it("Escape does not reach back into a session «Hecho» already closed", () => {
+    state = start();
+    step("Bitter");
+    done();
+    cancel();
+    expect(heading(state)).toMatch(/^Bitter/);
+    expect(state[0]?.past).toHaveLength(1);
+  });
+
+  it("an undo pressed with the dialog open closes the session, so the next choice is a new step", () => {
+    // `amendable` is what an undo turns off: the restored snapshot may well carry this very cause,
+    // and amending it would turn the undo into an edit with nothing left to go back to.
+    state = start();
+    step("Bitter");
+    done();
+    step("Spectral");
+    undo();
+    expect(heading(state)).toMatch(/^Bitter/);
+    step("Figtree");
+    expect(state[0]?.past).toHaveLength(2);
+    expect(heading(undo())).toMatch(/^Bitter/);
+  });
+
+  it("choosing the family the token already names is not a step", () => {
+    state = start();
+    // A generated `restaurante-bar` is on `classic-display`, which heads in EB Garamond — a gallery
+    // family, so the chooser can ask for the letter the site already has.
+    const before = state;
+    expect(step("EB Garamond")).toBe(before);
+  });
+
+  it("is not a content cause and names no section", () => {
+    state = start();
+    step("Bitter");
+    const history = state[0];
+    if (!history) throw new Error("no history");
+    expect(wasSectionEverEdited(history, "sec-cover")).toBe(false);
   });
 });
 

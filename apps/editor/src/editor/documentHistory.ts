@@ -66,6 +66,7 @@ import {
   setVariant as setVariantInDoc,
   unbindList as unbindListInDoc,
 } from "@retorika/schema";
+import type { FontKey } from "@retorika/tokens";
 
 /**
  * Undo and redo, as a stack of whole documents rather than a log of commands with inverses.
@@ -146,6 +147,15 @@ export type SnapshotCause =
   /** The first cause that names no section, because a theme belongs to none of them: it restyles
    * every section at once, hand-designed ones included. `sectionOf` is what keeps that honest. */
   | { type: "setTheme" }
+  /**
+   * One half of the site's letter chosen in the letter chooser (sprint 29 día 1). Names no section,
+   * like `setTheme`, and unlike it names the half — because **a chooser session is one step**: the
+   * first choice opens it and every further choice for the same half amends it while the dialog is
+   * open, so forty rows under an arrow key are one press of «Deshacer». `settleChooser` closes the
+   * step, and `discardChooser` takes it away again, which is what Escape means: previewing is not
+   * choosing.
+   */
+  | { type: "chooseFamily"; key: FontKey }
   /** The other two causes that name no section: what a shared link says about the whole site
    * (ADR 0029). Neither writes a word onto the page, so neither is a content cause — the delete
    * toast asking «did somebody write here» must not start saying yes because a domain was typed. */
@@ -226,6 +236,12 @@ export type HistoryAction =
   | { type: "clearSlot"; variant: number; address: SlotAddress }
   | { type: "setSectionInMenu"; variant: number; sectionId: string; inMenu: boolean }
   | { type: "setTheme"; variant: number; theme: Theme }
+  /** The three verbs of a letter chooser session — see the `chooseFamily` cause. `theme` is the
+   * whole theme with the one token already rewritten, composed by `Variants` with `withFamily` the
+   * way `setTheme`'s callers compose theirs; `key` is what tells one session from the next. */
+  | { type: "chooseFamily"; variant: number; key: FontKey; theme: Theme }
+  | { type: "settleChooser"; variant: number }
+  | { type: "discardChooser"; variant: number }
   | { type: "setSiteDescription"; variant: number; text: string }
   | { type: "setSiteUrl"; variant: number; url: string | undefined }
   | { type: "setVariant"; variant: number; sectionId: string; variantId: string }
@@ -629,6 +645,76 @@ function setTheme(history: History, theme: Theme): History {
     future: [],
     amendable: false,
   };
+}
+
+/**
+ * One half of the letter, chosen in the chooser while it is open (sprint 29 día 1).
+ *
+ * The same document change as `setTheme` — one token rewritten, nothing else — with a different
+ * life in the stack: **the first choice of a session opens a step, and every further choice for the
+ * same half amends it**, exactly as consecutive keystrokes into one field amend `editText`'s step
+ * and through the same flag. David's adjustment to the sprint 29 plan says why in one line: with
+ * forty rows and a live preview, walking down with the arrows would write forty steps.
+ *
+ * `amendable` is still what an undo or a redo turns off, so a «Deshacer» pressed with the dialog
+ * open closes the session's step behind it and the next choice opens a fresh one — the restored
+ * snapshot may well carry this very cause, and amending it would turn the undo into an edit.
+ *
+ * Choosing the family the token already names is caught by identity like `setTheme`, with one more
+ * case it has to answer: inside an open session, choosing back the family the session *started*
+ * from amends the step to a document equal to the one before it. That is left as a step whose undo
+ * changes nothing visible rather than collapsed away — `discardChooser` is the verb for taking a
+ * session back, and a reducer that second-guessed which of the owner's choices «count» would be
+ * doing the dialog's job.
+ */
+function chooseFamily(history: History, key: FontKey, theme: Theme): History {
+  const document = setThemeInDoc(history.present.document, theme);
+  if (document === history.present.document) return history;
+  const present: Snapshot = { document, cause: { type: "chooseFamily", key } };
+  if (
+    history.amendable &&
+    history.present.cause?.type === "chooseFamily" &&
+    history.present.cause.key === key
+  ) {
+    return { ...history, present, future: [], amendable: true };
+  }
+  return {
+    past: [...history.past, history.present].slice(-LIMIT),
+    present,
+    future: [],
+    amendable: true,
+  };
+}
+
+/**
+ * «Hecho»: the session's step stops being open to amendment, so the next choice — in a reopened
+ * dialog, or for the other half — is its own step. A dialog closed without having chosen anything
+ * has no step to close, and the history is returned untouched so nothing re-renders for it.
+ */
+function settleChooser(history: History): History {
+  if (!history.amendable || history.present.cause?.type !== "chooseFamily") return history;
+  return { ...history, amendable: false };
+}
+
+/**
+ * Escape: the session's step is taken away, and the letter is what it was when the dialog opened.
+ *
+ * **Only the open session's own step**, which is what the two guards say: the present must be a
+ * `chooseFamily` snapshot *and* still amendable. A session already settled by «Hecho» is a choice
+ * made, and Escape in a later dialog must not reach back and unmake it; a step an undo restored is
+ * no longer amendable either, for the reason `chooseFamily` gives. Nothing to discard, nothing
+ * changes.
+ *
+ * The step's own `future` was already empty — opening it cleared the redo stack — so what is left
+ * is the stack exactly as it stood before the dialog opened, redo included only in the sense that
+ * there is nothing to redo. A previewed letter is not a step anybody can get back to, and that is
+ * the point.
+ */
+function discardChooser(history: History): History {
+  if (!history.amendable || history.present.cause?.type !== "chooseFamily") return history;
+  const before = history.past.at(-1);
+  if (!before) return history;
+  return { past: history.past.slice(0, -1), present: before, future: [], amendable: false };
 }
 
 /**
@@ -1217,6 +1303,12 @@ function apply(history: History, action: HistoryAction): History {
       return setSectionInMenu(history, action.sectionId, action.inMenu);
     case "setTheme":
       return setTheme(history, action.theme);
+    case "chooseFamily":
+      return chooseFamily(history, action.key, action.theme);
+    case "settleChooser":
+      return settleChooser(history);
+    case "discardChooser":
+      return discardChooser(history);
     case "setSiteDescription":
       return setSiteField(history, "siteDescription", action.text.trim(), {
         type: "setSiteDescription",

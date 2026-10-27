@@ -15324,19 +15324,25 @@ describe("nada sobresale en un móvil", () => {
           if (device.width === 390 && panel === "Estilo") {
             await axeSerious(walker, "el editor a 390 con la hoja de «Estilo» abierta");
             /**
-             * **Y con la galería desplegada, que es la mitad del panel que axe no veía** (sprint 24
-             * día 10, ADR 0046).
+             * **Y con el selector de letra abierto, que es la mitad del panel que axe no veía**
+             * (sprint 24 día 10, ADR 0046; un diálogo desde el sprint 29 día 1).
              *
-             * Las ocho familias están plegadas por defecto, así que una pasada sobre «Estilo»
-             * medía el panel sin dieciséis filas, cada una con su radio oculto y su especimen
-             * `aria-hidden`. En una hoja de 390 es justo donde un radio sin nombre accesible o un
-             * contraste flojo se esconderían.
+             * Las familias ya no se despliegan en el panel: «Cambiar» abre un diálogo con una fila
+             * por familia, cada una con su radio oculto y su nombre dibujado en su propia letra. En
+             * una hoja de 390 es justo donde un radio sin nombre accesible o un contraste flojo se
+             * esconderían.
              */
-            await walker.getByRole("button", { name: /Elegir la familia exacta/ }).click();
-            await expect(walker.getByRole("group", { name: "TITULARES" })).toBeVisible();
+            await walker.getByRole("button", { name: "Cambiar la letra de los titulares" }).click();
+            await expect(
+              walker.getByRole("dialog", { name: "La letra de los titulares" }),
+            ).toBeVisible();
             await expect.poll(settled, { timeout: 5_000 }).toBe(true);
-            await look("editor con la galería de letras");
-            await axeSerious(walker, "el editor a 390 con la galería de letras abierta");
+            await look("editor con el selector de letra");
+            await axeSerious(walker, "el editor a 390 con el selector de letra abierto");
+            await walker.keyboard.press("Escape");
+            await expect(
+              walker.getByRole("dialog", { name: "La letra de los titulares" }),
+            ).toBeHidden();
           }
         }
         await walker.getByRole("button", { name: "Secciones", exact: true }).click();
@@ -15765,6 +15771,35 @@ describe("sprint 24 día 6 — la letra se elige por su nombre", () => {
       .evaluate((node) => getComputedStyle(node as HTMLElement).fontFamily);
   }
 
+  /** The chooser for one half, by its title. */
+  const chooserFor = (page: Page, half: "titulares" | "texto") =>
+    page.getByRole("dialog", { name: `La letra de${half === "texto" ? "l" : " los"} ${half}` });
+
+  /**
+   * The dialog's box and its exit, both inside the window — the sprint 28 día 6 check, asked of
+   * the one dialog that holds a scrolling list: `min-h-0` is what keeps the list from pushing
+   * «Hecho» past the bottom edge, and a dialog whose exit is under the fold is a dialog without one.
+   */
+  async function fitsTheWindow(page: Page, dialog: Locator): Promise<void> {
+    const viewport = page.viewportSize();
+    if (!viewport) throw new Error("no viewport");
+    const box = await dialog.boundingBox();
+    expect(box, "the chooser has no box").not.toBeNull();
+    if (!box) return;
+    expect(box.x, "the chooser spills left").toBeGreaterThanOrEqual(-0.5);
+    expect(box.y, "the chooser spills up").toBeGreaterThanOrEqual(-0.5);
+    expect(box.x + box.width, "the chooser spills right").toBeLessThanOrEqual(viewport.width + 0.5);
+    expect(box.y + box.height, "the chooser spills down").toBeLessThanOrEqual(
+      viewport.height + 0.5,
+    );
+    const done = await dialog.getByRole("button", { name: "Hecho" }).boundingBox();
+    expect(done, "«Hecho» has no box").not.toBeNull();
+    if (done)
+      expect(done.y + done.height, "«Hecho» is under the fold").toBeLessThanOrEqual(
+        viewport.height + 0.5,
+      );
+  }
+
   it("offers every family it ships, sets the two halves apart, and downloads both whole", async () => {
     const context = await browser.newContext({ viewport: VIEWPORT });
     const studio = await context.newPage();
@@ -15783,22 +15818,45 @@ describe("sprint 24 día 6 — la letra se elige por su nombre", () => {
       await intoTheCanvas(studio);
       const frame = studio.frameLocator(PREVIEW).first();
 
-      // ---- folded away, and the seven letters nobody asked for stay where they are ----
+      /**
+       * ---- two rows, and the seven letters nobody asked for stay where they are ----
+       *
+       * Since sprint 29 día 1 the panel shows what each half is set in — drawn in that very
+       * letter — and a «Cambiar» per half; the list lives in a dialog. A generated restaurante is
+       * on «Clásica y seria», so the headings row reads «EB Garamond» and declares that one face;
+       * the text row is Charter, a system letter, named by the pair and not by the font.
+       */
       await studio.getByRole("button", { name: "Estilo", exact: true }).click();
-      const unfold = studio.getByRole("button", { name: /Elegir la familia exacta/ });
-      await expect(unfold).toHaveAttribute("aria-expanded", "false");
+      const change = studio.getByRole("button", { name: "Cambiar la letra de los titulares" });
+      await expect(change).toBeVisible();
+      await expect(studio.getByText("EB Garamond", { exact: true })).toBeVisible();
+      await expect(studio.getByText("La letra de «Clásica y seria»")).toBeVisible();
+      await expect(studio.getByText(/^8 letras que viajan con tu web/)).toBeVisible();
       expect(
         served.has("spectral-latin-400-normal.woff2"),
-        "a shut group must not drag a family in just in case",
+        "a shut chooser must not drag a family in just in case",
       ).toBe(false);
       // **Not `document.fonts.check`**, which answers «can this text be rendered» and so returns
       // true for a family nobody declared — the system letter can always render it. `status` is the
       // question: a face is «loaded» only once its bytes arrived.
       expect(await facesLoaded(studio)).not.toContain("Spectral");
 
-      // ---- opening it is what fetches them, and the route answers for every row ----
-      await unfold.click();
-      await expect(unfold).toHaveAttribute("aria-expanded", "true");
+      /**
+       * ---- opening the chooser is what fetches them, a screen at a time ----
+       *
+       * The dialog declares a face only for the rows that have come near the viewport — the first
+       * screen and the chosen one on open, then whatever the observer sees approaching. With eight
+       * families the first screen is the whole table, so what this proves today is the bound and
+       * not the laziness: every row's face arrives, in the file the ZIP will carry, and nothing
+       * arrived before the dialog opened. From día 2 the same walk scrolls the list to its foot
+       * before asking for every file, which is where the observer's half of the promise is held.
+       */
+      await change.click();
+      const chooser = chooserFor(studio, "titulares");
+      await expect(chooser).toBeVisible();
+      await expect(chooser.getByLabel("Buscar una letra")).toBeFocused();
+      await fitsTheWindow(studio, chooser);
+      await chooser.getByRole("radio").last().scrollIntoViewIfNeeded();
       await studio.evaluate(() => document.fonts.ready.then(() => undefined));
       for (const family of SHIPPED) {
         const file = `${family.toLowerCase().replace(/ /g, "-")}-latin-400-normal.woff2`;
@@ -15809,30 +15867,81 @@ describe("sprint 24 día 6 — la letra se elige por su nombre", () => {
       const loaded = await facesLoaded(studio);
       for (const family of SHIPPED) expect(loaded, `${family}'s specimen`).toContain(family);
 
-      // ---- ADR 0046's condition, in the panel itself: every row is offered, in both columns ----
-      const headings = studio.getByRole("group", { name: "TITULARES" });
-      const body = studio.getByRole("group", { name: "TEXTO" });
-      for (const group of [headings, body]) {
-        await expect(group.getByRole("radio")).toHaveCount(SHIPPED.length);
-      }
+      // ---- ADR 0046's condition, in the chooser itself: every row is offered, named, in its face ----
+      // The list's own group and not the dialog: the three kind chips are radios too.
+      const list = chooser.getByRole("group", { name: "La letra de los titulares" });
+      await expect(list.getByRole("radio")).toHaveCount(SHIPPED.length);
       for (const family of SHIPPED) {
-        await expect(headings.getByRole("radio", { name: family, exact: true })).toHaveCount(1);
-        await expect(body.getByRole("radio", { name: family, exact: true })).toHaveCount(1);
+        const radio = list.getByRole("radio", { name: family, exact: true });
+        await expect(radio).toHaveCount(1);
+        // The business's own name under each family, in that family — David's condition: a
+        // specimen is the owner's words in the letter, not «Aa».
+        const label = radio.locator("xpath=ancestor::label");
+        await expect(label).toContainText("Taberna Santo Domingo");
+        expect(
+          await label
+            .locator("span")
+            .first()
+            .evaluate((node) => getComputedStyle(node).fontFamily),
+          `${family}'s row is drawn in it`,
+        ).toContain(family);
       }
+      await expect(chooser.getByRole("radio", { name: "EB Garamond", exact: true })).toBeChecked();
 
-      // ---- the two halves, chosen one at a time ----
+      /**
+       * ---- the search navigates: accents and case do not matter, misses are hidden, the count says ----
+       */
+      const search = chooser.getByLabel("Buscar una letra");
+      await search.fill("GARAMÓND");
+      await expect(chooser.getByText("1 letra", { exact: true })).toBeVisible();
+      await expect(chooser.getByRole("radio", { name: "EB Garamond", exact: true })).toBeVisible();
+      await expect(chooser.getByRole("radio", { name: "Spectral", exact: true })).toBeHidden();
+      await search.fill("zzz");
+      await expect(chooser.getByText("Ninguna letra se llama así.")).toBeVisible();
+      await search.fill("");
+      // The chips' own group: each serif row carries the same word as its species badge.
+      const chips = chooser.getByRole("group", { name: "Qué carácter" });
+      await chips.getByText("Con remates", { exact: true }).click();
+      await expect(chooser.getByText("4 letras", { exact: true })).toBeVisible();
+      await expect(chooser.getByRole("radio", { name: "Figtree", exact: true })).toBeHidden();
+      await chips.getByText("Todas", { exact: true }).click();
+      await expect(chooser.getByText("8 letras", { exact: true })).toBeVisible();
+
+      /**
+       * ---- previewing is not choosing: Escape returns the letter that was there on open ----
+       */
+      await chooser.getByText("Spectral", { exact: true }).click();
+      await expect
+        .poll(() => fontOf(frame, '[data-section="sec-cover"] [data-id="el-headline"]'))
+        .toContain("Spectral");
+      await studio.keyboard.press("Escape");
+      await expect(chooser).toBeHidden();
+      await expect(change, "focus did not come back to «Cambiar»").toBeFocused();
+      await expect
+        .poll(() => fontOf(frame, '[data-section="sec-cover"] [data-id="el-headline"]'))
+        .toContain("EB Garamond");
+      await expect(studio.getByRole("button", { name: "Deshacer", exact: true })).toBeDisabled();
+
+      // ---- the two halves, chosen one at a time, «Hecho» each ----
       // Clicked by its label, like «Clásica y seria» a few walks up: the radio itself is visually
       // hidden, and the label is what an owner presses.
-      await headings.getByText("Spectral", { exact: true }).click();
+      await change.click();
+      await chooserFor(studio, "titulares").getByText("Spectral", { exact: true }).click();
       await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
-      await expect(headings.getByRole("radio", { name: "Spectral", exact: true })).toBeChecked();
+      await chooserFor(studio, "titulares").getByRole("button", { name: "Hecho" }).click();
+      await expect(chooserFor(studio, "titulares")).toBeHidden();
       expect(await fontOf(frame, '[data-section="sec-cover"] [data-id="el-headline"]')).toContain(
         "Spectral",
       );
 
-      await body.getByText("Figtree", { exact: true }).click();
+      await studio.getByRole("button", { name: "Cambiar la letra del texto" }).click();
+      const bodyChooser = chooserFor(studio, "texto");
+      await expect(
+        bodyChooser.getByRole("radio").filter({ has: studio.locator(":checked") }),
+      ).toHaveCount(0);
+      await bodyChooser.getByText("Figtree", { exact: true }).click();
       await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
-      await expect(body.getByRole("radio", { name: "Figtree", exact: true })).toBeChecked();
+      await bodyChooser.getByRole("button", { name: "Hecho" }).click();
       // Read on `body` and not on the cover's tagline: `p.rb-subtitle` is set in the **heading**
       // font, which is exactly the kind of thing a walk asserts wrongly once and then trusts.
       expect(await fontOf(frame, "body")).toContain("Figtree");
@@ -15842,12 +15951,9 @@ describe("sprint 24 día 6 — la letra se elige por su nombre", () => {
       );
 
       // ---- what the panel says about it, which is how an owner takes it back ----
-      await expect(
-        studio.getByText("Spectral en los titulares y Figtree en el texto."),
-      ).toBeVisible();
-      await expect(
-        studio.getByText("Has elegido la letra por su nombre, en la lista de abajo."),
-      ).toBeVisible();
+      await expect(studio.getByText("Spectral", { exact: true })).toBeVisible();
+      await expect(studio.getByText("Figtree", { exact: true })).toBeVisible();
+      await expect(studio.getByText("Has elegido la letra por su nombre.")).toBeVisible();
 
       // ---- the ZIP: four faces, two licences, and the right text beside each ----
       await studio.getByRole("button", { name: "Cerrar el estilo" }).click();
@@ -15927,12 +16033,11 @@ describe("sprint 24 día 6 — la letra se elige por su nombre", () => {
       // The two «Letra» buttons only exist with the design tools on (ADR 0032), so the choice is
       // made first and read afterwards.
       await studio.getByRole("button", { name: "Estilo", exact: true }).click();
-      await studio.getByRole("button", { name: /Elegir la familia exacta/ }).click();
-      await studio
-        .getByRole("group", { name: "TITULARES" })
-        .getByText("Libre Baskerville", { exact: true })
-        .click();
+      await studio.getByRole("button", { name: "Cambiar la letra de los titulares" }).click();
+      const chooser = chooserFor(studio, "titulares");
+      await chooser.getByText("Libre Baskerville", { exact: true }).click();
       await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
+      await chooser.getByRole("button", { name: "Hecho" }).click();
       await studio.getByRole("button", { name: "Cerrar el estilo" }).click();
 
       const frame = studio.frameLocator(PREVIEW).first();
@@ -15950,41 +16055,32 @@ describe("sprint 24 día 6 — la letra se elige por su nombre", () => {
     }
   }, 180_000);
 
-  it("is a sheet on a phone, with nothing spilling sideways", async () => {
+  it("is a sheet on a phone, with nothing spilling sideways and the exit on screen", async () => {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
     const studio = await context.newPage();
     try {
       await intoTheCanvas(studio);
       await studio.getByRole("button", { name: "Estilo", exact: true }).click();
-      await studio.getByRole("button", { name: /Elegir la familia exacta/ }).click();
-      await expect(studio.getByRole("group", { name: "TITULARES" }).getByRole("radio")).toHaveCount(
-        SHIPPED.length,
-      );
-      // Sixteen rows inside a sheet capped at 70% of the viewport: the sheet scrolls, and the one
-      // thing that must not happen is a row pushing the page sideways (ADR 0042).
-      expect(await overflowing(studio), "something spills at 390").toEqual([]);
+      // The panel itself is two rows now, whatever the gallery holds (sprint 29 día 1).
+      await expect(
+        studio.getByRole("button", { name: "Cambiar la letra del texto" }),
+      ).toBeVisible();
+      expect(await overflowing(studio), "something spills at 390 with the panel").toEqual([]);
+      await studio.getByRole("button", { name: "Cambiar la letra de los titulares" }).click();
+      const chooser = chooserFor(studio, "titulares");
+      await expect(
+        chooser.getByRole("group", { name: "La letra de los titulares" }).getByRole("radio"),
+      ).toHaveCount(SHIPPED.length);
+      // A sheet from the bottom, capped at 85% of the viewport: the list scrolls inside it, the
+      // box and «Hecho» fit, and no row pushes the page sideways (ADR 0042).
+      await fitsTheWindow(studio, chooser);
+      expect(await overflowing(studio), "something spills at 390 with the chooser").toEqual([]);
+      await axeSerious(studio, "el selector de letra a 390");
     } finally {
       await context.close();
     }
   }, 180_000);
 });
-
-/**
- * **Sprint 24 día 7 — un texto se elige antes de escribir en él** (ADR 0047).
- *
- * `contentEditable` stopped being permanent, which is the biggest-radius change of the sprint: until
- * today every text in the canvas was editable from the moment the frame was wired, so one gesture
- * meant two things and there was none left for «move this». These two walks hold the model itself —
- * the states, the gestures into and out of them, and the chrome that says which one you are in —
- * with the pointer and with the keyboard alone.
- *
- * **The keyboard half is not decoration.** A text was reachable by Tab before today *because* it
- * was editable; taking the attribute away would have taken that with it and left «escribir sin
- * ratón» impossible, and nothing in the suite would have gone red. It also found a defect that
- * would have shipped: entering writing from a text that already has focus fires no `focus` event,
- * so the capture never started and the field was never selected — typing appended instead of
- * replacing.
- */
 describe("sprint 24 día 7 — un texto se elige antes de escribir en él", () => {
   const VIEWPORT = { width: 1440, height: 900 };
   const HEADLINE = '[data-section="sec-cover"] [data-id="el-headline"]';
@@ -16893,30 +16989,93 @@ describe("sprint 24 día 10 — el cierre, sin ratón", () => {
       await page.keyboard.press("Enter");
       await tabUntil(
         page,
-        (at) => at.text.startsWith("Elegir la familia exacta"),
-        "la galería de letras",
+        (at) => at.label === "Cambiar la letra de los titulares",
+        "«Cambiar» de los titulares",
       );
       await page.keyboard.press("Enter");
       /**
        * **The group by its name, not the family by its own**, which is radio-group semantics rather
        * than a preference: Tab enters a group **at the checked one** and skips the rest, so aiming
-       * at «Bitter» walked straight past TITULARES — where this theme already has EB Garamond
-       * checked — and landed in TEXTO, where nothing is. The instrumented run said so in one line:
-       * `name: "_r_3_-font.body"`, `near: "AaBitter"`.
+       * at «Bitter» walked straight past the headings' radios — where this theme already has
+       * EB Garamond checked — and landed in the text's, where nothing is. The instrumented run said
+       * so in one line: `name: "_r_3_-font.body"`, `near: "AaBitter"`. Since sprint 29 día 1 the
+       * list is a dialog with one group per half, so the search field is where focus lands and the
+       * group is two Tabs on; the predicate is the same.
        *
-       * So the walk asks for the heading group and lets the arrow do the choosing from wherever the
-       * group's own state put the keyboard — which is what a person gets too.
+       * **Which family the arrow lands on is read from the DOM, not written here.** The rows are
+       * alphabetical (ADR 0046 §2), and with eight families «the one after EB Garamond» was Figtree;
+       * with the forty that día 2 and 3 bring it is whichever the survey admitted, so the walk asks
+       * the group for the radio after the checked one before pressing.
        */
       await tabUntil(
         page,
         (at) => at.tag === "INPUT" && at.type === "radio" && at.name.endsWith("-font.heading"),
-        "la galería de los titulares",
+        "la lista de letras de los titulares",
       );
+      const familiesInOrder = () =>
+        page.evaluate(() => {
+          const radios = [
+            ...document.querySelectorAll<HTMLInputElement>('input[name$="-font.heading"]'),
+          ].filter((radio) => !radio.closest("label")?.hidden);
+          return {
+            families: radios.map((radio) => radio.value),
+            checked: radios.findIndex((radio) => radio.checked),
+          };
+        });
+      const before = await styleOf();
+      const order = await familiesInOrder();
+      expect(order.checked, "no row is checked on open").toBeGreaterThanOrEqual(0);
+      const next = order.families[(order.checked + 1) % order.families.length] ?? "";
       await page.keyboard.press("ArrowDown");
-      // Alphabetical, so the one after «EB Garamond» is «Figtree» (ADR 0046 §2).
       await expect
         .poll(styleOf, { message: "la flecha no cambió la letra de los titulares" })
-        .toMatch(/Figtree/);
+        .toContain(next);
+      /**
+       * **Five rows down are one step** (David's adjustment to the sprint 29 plan): the session
+       * amends the step it opened, «Hecho» closes it, and one «Deshacer» takes all five back.
+       */
+      for (let press = 0; press < 4; press += 1) await page.keyboard.press("ArrowDown");
+      const fifth = order.families[(order.checked + 5) % order.families.length] ?? "";
+      await expect
+        .poll(styleOf, { message: "five arrows did not reach the fifth row" })
+        .toContain(fifth);
+      await tabUntil(page, (at) => at.text === "Hecho", "«Hecho»");
+      await page.keyboard.press("Enter");
+      await expect(
+        page.getByRole("button", { name: "Cambiar la letra de los titulares" }),
+        "focus did not come back to «Cambiar» after «Hecho»",
+      ).toBeFocused();
+      await tabUntil(page, (at) => at.label === "Deshacer" || at.text === "Deshacer", "«Deshacer»");
+      await page.keyboard.press("Enter");
+      await expect
+        .poll(styleOf, { message: "one undo did not take the whole session back" })
+        .toBe(before);
+      /**
+       * **And Escape is not choosing**: three rows down, Escape, and the letter is the one the
+       * dialog opened on, with nothing left in the history to undo for it.
+       */
+      await tabUntil(
+        page,
+        (at) => at.label === "Cambiar la letra de los titulares",
+        "«Cambiar» de los titulares, otra vez",
+      );
+      await page.keyboard.press("Enter");
+      await tabUntil(
+        page,
+        (at) => at.tag === "INPUT" && at.type === "radio" && at.name.endsWith("-font.heading"),
+        "la lista de letras de los titulares, otra vez",
+      );
+      for (let press = 0; press < 3; press += 1) await page.keyboard.press("ArrowDown");
+      await expect.poll(styleOf, { message: "three arrows changed nothing" }).not.toBe(before);
+      await page.keyboard.press("Escape");
+      await expect
+        .poll(styleOf, { message: "Escape did not return the letter the dialog opened on" })
+        .toBe(before);
+      await expect(
+        page.getByRole("button", { name: "Cambiar la letra de los titulares" }),
+        "focus did not come back to «Cambiar» after Escape",
+      ).toBeFocused();
+      await expect(page.getByRole("button", { name: "Deshacer", exact: true })).toBeDisabled();
       await tabUntil(page, (at) => at.label === "Cerrar el estilo", "el cierre del panel");
       await page.keyboard.press("Enter");
 

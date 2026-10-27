@@ -13,7 +13,7 @@ import { initialFocusIndex, tabDecision } from "./focusTrap.ts";
  *
  * David's adjustment of 4 October scoped that sprint's fix to its own new screens, leaving the
  * dialogs that already existed owed this as a backlog row. **Sprint 17 day 1 pays it:** every
- * `aria-modal` dialog calls this hook — nine of them since sprint 25 día 5 — and
+ * `aria-modal` dialog calls this hook — ten of them since sprint 29 día 1 — and
  * `test/modalTrap.test.ts` fails if the next one is written without it, naming every record that
  * carries the number. The row said «five» because the sixth, `PhotosFailedDialog`, was committed on 4
  * October 2026 — the same day as this hook, in a different commit — so nothing was wrong when it

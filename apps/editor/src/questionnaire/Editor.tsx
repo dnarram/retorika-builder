@@ -178,6 +178,7 @@ import {
   TooManyPhotosDialog,
 } from "./DownloadGateDialogs.tsx";
 import { FieldsPanel } from "./FieldsPanel.tsx";
+import { FontChooserDialog } from "./FontChooserDialog.tsx";
 import { PagesPanel } from "./PagesPanel.tsx";
 import { PhotosPanel } from "./PhotosPanel.tsx";
 import { RevertDialog } from "./RevertDialog.tsx";
@@ -601,6 +602,8 @@ export function Editor({
   onPickPalette,
   onPickTypePair,
   onPickFamily,
+  onSettleChooser,
+  onDiscardChooser,
   onPickScale,
   onSetElementStyle,
   onSetMark,
@@ -744,8 +747,12 @@ export function Editor({
   onPickTypePair: (typePairId: string) => void;
   /** One letter from the gallery, by its real name, for the headings or for the text (ADR 0046).
    * Writes one font token where a pair writes both, which is what makes the two halves separate
-   * choices. */
+   * choices. Since sprint 29 día 1 it is pressed inside the letter chooser, whose whole session is
+   * one history step: `onSettleChooser` is «Hecho» and `onDiscardChooser` is Escape, which takes
+   * the letter back to what it was when the dialog opened. */
   onPickFamily: (key: FontKey, family: string) => void;
+  onSettleChooser: () => void;
+  onDiscardChooser: () => void;
   onPickScale: (scaleId: string) => void;
   /** One property of one element's own style, from the floating toolbar (rule 6). `undefined`
    * takes the property away and lets the site's own rule show through again. Available with the
@@ -1149,6 +1156,12 @@ export function Editor({
   const [revertFor, setRevertFor] = useState<{ sectionId: string; impact: RevertImpact } | null>(
     null,
   );
+  /**
+   * Which half of the letter the chooser is open for, or none (sprint 29 día 1). About this screen,
+   * not the site: the choice itself goes straight into the document as it is made, and the dialog
+   * reads the theme back from `doc` like the panel does.
+   */
+  const [fontChooser, setFontChooser] = useState<FontKey | null>(null);
   /**
    * Which section is selected, and whether its composition menu is open — remembered across the
    * preview's re-renders, which is what makes trying compositions usable at all.
@@ -7720,6 +7733,22 @@ export function Editor({
               }}
             />
           ) : null}
+          {fontChooser ? (
+            <FontChooserDialog
+              theme={doc.theme}
+              fontKey={fontChooser}
+              siteName={doc.siteName}
+              onPick={(family) => onPickFamily(fontChooser, family)}
+              onDone={() => {
+                onSettleChooser();
+                setFontChooser(null);
+              }}
+              onCancel={() => {
+                onDiscardChooser();
+                setFontChooser(null);
+              }}
+            />
+          ) : null}
         </>
       }
       // Wrapped, not passed by reference: React hands a click handler the event, and
@@ -7830,7 +7859,7 @@ export function Editor({
             theme={doc.theme}
             onPickPalette={onPickPalette}
             onPickTypePair={onPickTypePair}
-            onPickFamily={onPickFamily}
+            onOpenChooser={setFontChooser}
             onPickScale={onPickScale}
             // `=== true` rather than truthiness, and the panel's prop is a plain boolean: the
             // three states of `designTools` matter to the rail, which has to keep the «Diseño»
