@@ -133,6 +133,25 @@ describe("familyRowFor", () => {
     expect(familyRowFor(editorial, "font.body").stack).toBe(editorial["font.body"]);
   });
 
+  /**
+   * **Each half named on its own** (sprint 29 día 3). A restaurante on «Clásica y seria» whose
+   * headings were changed to Gelasio still has the pair's Charter in its text; until día 3 that row
+   * said «una letra que no está en esta lista» about a letter the product had put there itself.
+   */
+  it("names a half by the pair whose letter it still is, when only the other half changed", () => {
+    const classic = withFamily(withTypePair(start, "classic-display"), "font.heading", "Gelasio");
+    expect(familyRowFor(classic, "font.heading").text).toBe("Gelasio");
+    const body = familyRowFor(classic, "font.body");
+    expect(body.family).toBeUndefined();
+    expect(body.text).toBe("La letra de «Clásica y seria»");
+    expect(body.stack).toBe(classic["font.body"]);
+  });
+
+  it("names a system sans two pairs share by the first of them, which is true of both", () => {
+    const theme = withFamily(withTypePair(start, "modern-sans"), "font.heading", "Gelasio");
+    expect(familyRowFor(theme, "font.body").text).toBe("La letra de «Sobria y legible»");
+  });
+
   it("says a hand-edited letter is off the list, in the words the pairs group uses", () => {
     const row = familyRowFor(
       { ...start, "font.heading": "Comic Sans MS, sans-serif" },

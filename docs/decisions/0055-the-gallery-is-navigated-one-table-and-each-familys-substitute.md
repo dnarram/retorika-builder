@@ -200,6 +200,64 @@ Measured today, the heaviest pair is **Zilla Slab and Libre Caslon Text, at 104.
 Garamond and Inter, at 98.7. The ceiling rises from **115 to 120 KB**, keeping about the 16 KB margin of
 ADR 0046 §5. A heavier family is then a red line with its own number beside it.
 
+### 8. Forty, on día 3 — the composition, the line, and what the server pays
+
+**The list is closed at forty: fourteen sans, twelve serifs, six slabs, eight headline families.**
+§4's target of about fourteen, ten, five and six adds up to thirty-five. David's «unas cuarenta» and
+the e2e's floor of forty are reached without breaking the sans quota, so the other three species grow.
+Fifteen rows were added, all admitted by the survey above, each with its substitute:
+
+| family | kind | substitute | faces 400 + 700 + licence, KB |
+|---|---|---|---|
+| Alegreya | serif | Crimson Pro | 48.1 |
+| Big Shoulders Display | display | Oswald | 30.2 |
+| Bodoni Moda | serif | Cormorant Garamond — the one didone, back since Playfair left | 30.8 |
+| Bricolage Grotesque | display | Syne | 45.7 |
+| Cormorant Garamond | serif | EB Garamond | 46.1 |
+| Fredoka | display | League Spartan | 33.2 |
+| Hepta Slab | slab | Zilla Slab | 45.1 |
+| League Spartan | display | Unbounded | 27.1 |
+| Literata | serif | Newsreader | 43.4 |
+| Oswald | display | Big Shoulders Display | 26.3 |
+| Solway | slab | Aleo | 44.0 |
+| Syne | display | Bricolage Grotesque | 28.7 |
+| Unbounded | display | League Spartan | 42.0 |
+| Vollkorn | serif | Crimson Pro | 53.3 |
+| Yanone Kaffeesatz | display | Oswald | 31.1 |
+
+**No headline family is built as a serif.** `GENERIC_OF.display` falls back as a sans, so a serif
+display would reach a visitor without its face in the wrong species. Cinzel passed the survey and stays
+out for this reason; it is also all capitals, a poor letter for the text half the chooser would offer it
+for. A publisher test now holds every row's species against the package's own `category`: a slab must
+be `serif`, and a headline family must be `display` or `sans-serif`.
+
+**The line about the families that are not here** is David's condition 2, under the chooser's list:
+«Lato, Lora, Merriweather, Playfair Display, Raleway y otras no se incluyen por su licencia.» The plan's
+draft named Montserrat and Poppins, which ship since día 2. A test holds every family the line names to
+not being in the table. **It does not yet say how to bring one in.** The plan had it name «Importar una
+fuente…» until the button existed. Development read that as an interface naming a control nobody can
+press, and left the clause out: «Subir mi fuente» is día 5's, and the line gains its clause in the same
+pull request as the button.
+
+**What the server pays**, measured as §6 of ADR 0046 measured it, on this machine on 27 October 2026.
+The editor was built with `pnpm build:editor`, `next start` was booted three times, Next's own «Ready
+in» was read, and the first and second request for a face were timed in-process:
+
+| | `fontData/` in the repository | `.next/server` | «Ready in», three boots | first 200 on a face | warm |
+|---|---|---|---|---|---|
+| twenty-five families (día 2, `main`) | 1 380 KB, 25 modules | 57 000 KB | 63, 58, 58 ms | 162–180 ms | 2–3 ms |
+| forty families (día 3) | 2 224 KB, 40 modules | 58 652 KB | 64, 58, 59 ms | 165–177 ms | 2–3 ms |
+
+**Start-up does not move.** The three boots are the number the plan said must not move, and they
+overlap. What forty families cost is about 1.6 MB in the built server and 0.8 MB more in the
+repository. In a client's ZIP they cost nothing, because only the faces a theme names travel. The
+lazy `import()` per family that §6 left room for is not needed. ADR 0046 measured two and eight
+families on 18 October against a different build of the editor; its rows remain the dated record they
+were, and are not this table's baseline.
+
+**The heaviest pair** is now Vollkorn and Zilla Slab, 106.6 KB, under the 120 KB ceiling, which did
+not move.
+
 ## What is preserved
 
 - **A document chooses a row and never names a file**, and the one `url()` is still minted in
@@ -214,13 +272,11 @@ ADR 0046 §5. A heavier family is then a red line with its own number beside it.
   with its substitute written, but a migration.
 - **Bitter's chip moves**, from «Con remates» to «Remates gruesos», for anyone who looked for it there.
 - **The plan's line about Montserrat and Poppins** is not written; día 3 writes a true one.
-- **1.3 MB of generated base64 in the repository**, against 467 KB, and about 2.1 MB at forty by the
-  same average.
+- **1.3 MB of generated base64 in the repository**, against 467 KB, and 2.2 MB at forty (§8).
 
 ## What this does not decide
 
-- **Which of the remaining admitted families enter on día 3**, and their substitutes — that half of día 3
-  is judgement, and starts with this survey on the table.
+- ~~Which of the remaining admitted families enter on día 3~~ — decided in §8.
 - **Shipping a reserved family whole** (sprint 30, with the numbers above).
 - **Own fonts** — ADR 0056, día 4.
 

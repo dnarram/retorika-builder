@@ -93,8 +93,9 @@ const MAX_BUNDLE_GZIP_BYTES = 20 * 1024;
  * and the licence beside them, weighed as the ZIP carries them — prints it, and **fails if this number
  * is below it**. Measured 27 October 2026 over the twenty-five rows of día 2: **Zilla Slab and Libre
  * Caslon Text, 104.3 KB**, where EB Garamond and Inter were 98.7. 120 keeps ADR 0046 §5's margin of
- * about 16 KB over it. A heavier family entering is then a red line with its own number beside it,
- * not a ceiling that quietly stopped meaning anything.
+ * about 16 KB over it. Over the forty rows of día 3 it is **Vollkorn and Zilla Slab, 106.6 KB**, and
+ * the ceiling held without moving. A heavier family entering is then a red line with its own number
+ * beside it, not a ceiling that quietly stopped meaning anything.
  */
 const MAX_FONT_GZIP_BYTES = 120 * 1024;
 

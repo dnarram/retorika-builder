@@ -35,11 +35,15 @@ describe("chooserRows", () => {
     // and go loses the checked one and the place the arrows start from.
     const rows = chooserRows(start, "font.heading", "gara", "all");
     expect(rows.map((row) => row.family)).toEqual(all);
-    expect(rows.filter((row) => row.visible).map((row) => row.family)).toEqual(["EB Garamond"]);
+    expect(rows.filter((row) => row.visible).map((row) => row.family)).toEqual([
+      "Cormorant Garamond",
+      "EB Garamond",
+    ]);
   });
 
   it("matches the family's name without caring about accents or case", () => {
-    expect(visibleCount(chooserRows(start, "font.heading", "GARAMÓND", "all"))).toBe(1);
+    // Two Garamonds since día 3: EB and Cormorant.
+    expect(visibleCount(chooserRows(start, "font.heading", "GARAMÓND", "all"))).toBe(2);
     expect(visibleCount(chooserRows(start, "font.heading", "  spec ", "all"))).toBe(1);
   });
 
@@ -68,7 +72,8 @@ describe("chooserRows", () => {
   it("offers a chip for each species the gallery has, in its own order, with «Todas» first", () => {
     // The slabs entered on día 2 and brought «Remates gruesos» with them; «De cartel» waits for the
     // first headline family, so no chip can narrow the list to nothing.
-    expect(KIND_FILTERS).toEqual(["all", "sans", "serif", "slab"]);
+    // «De cartel» arrived with the first headline families on día 3.
+    expect(KIND_FILTERS).toEqual(["all", "sans", "serif", "slab", "display"]);
     for (const kind of KIND_FILTERS.slice(1)) {
       expect(
         GALLERY_FAMILIES.some((row) => row.kind === kind),
@@ -85,7 +90,14 @@ describe("chooserRows", () => {
 
   it("files Bitter under the slabs, where until día 2 it read «Con remates»", () => {
     const slabs = chooserRows(start, "font.body", "", "slab").filter((row) => row.visible);
-    expect(slabs.map((row) => row.family)).toEqual(["Aleo", "Bitter", "Rokkitt", "Zilla Slab"]);
+    expect(slabs.map((row) => row.family)).toEqual([
+      "Aleo",
+      "Bitter",
+      "Hepta Slab",
+      "Rokkitt",
+      "Solway",
+      "Zilla Slab",
+    ]);
     const serifs = chooserRows(start, "font.body", "", "serif").filter((row) => row.visible);
     expect(serifs.some((row) => row.family === "Bitter")).toBe(false);
   });
@@ -113,22 +125,39 @@ describe("sampleLine", () => {
   });
 });
 
+describe("the line about the families that are not here", () => {
+  /**
+   * David's condition 2, held to the facts: every family the line names is one the gallery does not
+   * ship. The plan's draft named Montserrat and Poppins, which the survey found reserve no name and
+   * which ship since día 2 — had the line been written from the draft, this is what would have said so.
+   */
+  it("names only families that really are not in the gallery", () => {
+    const named = es["editor.style.chooser.notIncluded"].split(" y otras")[0]?.split(", ") ?? [];
+    expect(named.length).toBeGreaterThanOrEqual(3);
+    for (const family of named) expect(all, family).not.toContain(family);
+  });
+
+  it("promises no way of bringing one in until that way exists", () => {
+    expect(es["editor.style.chooser.notIncluded"]).not.toMatch(/subir|importar/i);
+  });
+});
+
 describe("initiallyRevealed", () => {
   it("declares the first screen of visible rows, and not the rest", () => {
     const rows = chooserRows(start, "font.heading", "", "all");
     const revealed = initiallyRevealed(rows);
-    // Twenty-five families since día 2, so the cap earns its keep: the first eight in the gallery's
-    // order, and the chosen one — Inter, on «Moderna y neutra» — wherever it falls.
+    // Forty families since día 3, so the cap earns its keep: the first eight in the gallery's order,
+    // and the chosen one — Inter, on «Moderna y neutra» — wherever it falls.
     expect([...revealed].sort()).toEqual(
       [
+        "Alegreya",
         "Aleo",
+        "Big Shoulders Display",
         "Bitter",
+        "Bodoni Moda",
+        "Bricolage Grotesque",
+        "Cormorant Garamond",
         "Crimson Pro",
-        "DM Sans",
-        "EB Garamond",
-        "Figtree",
-        "Fraunces",
-        "Gelasio",
         "Inter",
       ].sort(),
     );

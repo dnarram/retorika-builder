@@ -214,6 +214,13 @@ export function FontChooserDialog({
               />
             ))}
           </fieldset>
+          {/* David's condition 2: the families an owner may look for and not find are named, with
+              the reason. Under the list, where the search for one ends. It does not yet say how to
+              bring one in — «Subir mi fuente» is día 5's, and this line gains that clause in the
+              same pull request as the button, never before it exists. */}
+          <p className="m-0 mt-3 text-[12px] leading-snug text-ui-muted">
+            {es["editor.style.chooser.notIncluded"]}
+          </p>
         </div>
 
         <div className="flex justify-end">

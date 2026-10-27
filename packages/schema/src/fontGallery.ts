@@ -31,9 +31,11 @@ export type FontKind = (typeof FONT_KINDS)[number];
 
 /**
  * The generic keyword each species falls back to, so a visitor whose browser fetched no face at all
- * still gets a serif where a serif was chosen. A slab is a serif; a headline family is set as a sans
- * when it does not arrive, because a display serif would have to pass filter 3 like any other and the
- * survey found none that did.
+ * still gets a serif where a serif was chosen. A slab is a serif; a headline family falls back as a
+ * sans, which makes it a condition on the table rather than a guess: **no headline family here may be
+ * built as a serif**. Cinzel passed the survey and stays out for exactly this reason — its fallback
+ * would put a sans where its owner chose Roman capitals — and `packages/publisher/test/fonts.test.ts`
+ * holds every «display» row to Google's own `display` or `sans-serif` category.
  */
 export const GENERIC_OF: Readonly<Record<FontKind, "sans-serif" | "serif">> = {
   sans: "sans-serif",
@@ -90,40 +92,62 @@ export interface FontGalleryRow {
  *
  * Every row passed the four filters of ADR 0046 §3 in the survey of 27 October 2026
  * (`pnpm fonts:survey`, recorded in ADR 0055) — with filter 2 read from the holders' own licences and
- * from the author's repository, never from the package (ADR 0045, amended). Day 2 of sprint 29 is
- * twenty-five rows: fourteen sans, which is the whole of the composition's sans quota, seven serifs
- * and four slabs. «De cartel» enters on day 3.
+ * from the author's repository, never from the package (ADR 0045, amended). **Forty rows** since
+ * sprint 29 día 3: fourteen sans, which is the whole of the composition's sans quota, twelve serifs,
+ * six slabs and eight headline families. Every headline family is built as a sans, because
+ * `GENERIC_OF.display` falls back as one — see there.
  *
  * **Inter, Roboto and Open Sans are near neighbours**, and David asked that each one's substitute be
  * found among the other two: Inter and Roboto name each other, Open Sans names Roboto.
  */
 export const FONT_GALLERY: readonly FontGalleryRow[] = [
+  // Alegreya's calligraphic book face is an old-style; Crimson Pro is the nearest old-style text
+  // serif.
+  { family: "Alegreya", kind: "serif", substitute: "Crimson Pro" },
   { family: "Aleo", kind: "slab", substitute: "Bitter" },
+  // The two condensed gothics name each other.
+  { family: "Big Shoulders Display", kind: "display", substitute: "Oswald" },
   { family: "Bitter", kind: "slab", substitute: "Zilla Slab" },
+  // The one didone: its nearest high-contrast face is Cormorant's display Garamond.
+  { family: "Bodoni Moda", kind: "serif", substitute: "Cormorant Garamond" },
+  { family: "Bricolage Grotesque", kind: "display", substitute: "Syne" },
+  { family: "Cormorant Garamond", kind: "serif", substitute: "EB Garamond" },
   { family: "Crimson Pro", kind: "serif", substitute: "EB Garamond" },
   // DM Sans was drawn from Poppins, and Poppins is the closest thing to it in any table.
   { family: "DM Sans", kind: "sans", substitute: "Poppins" },
   { family: "EB Garamond", kind: "serif", substitute: "Crimson Pro" },
   { family: "Figtree", kind: "sans", substitute: "DM Sans" },
   { family: "Fraunces", kind: "serif", substitute: "Crimson Pro" },
-  // Gelasio stands on Georgia's metrics; the text serif nearest it in build and colour is the Caslon.
+  { family: "Fredoka", kind: "display", substitute: "League Spartan" },
+  // Gelasio stands on Georgia's metrics; the text serif nearest it in build and colour is the
+  // Caslon.
   { family: "Gelasio", kind: "serif", substitute: "Libre Caslon Text" },
+  { family: "Hepta Slab", kind: "slab", substitute: "Zilla Slab" },
   { family: "Inter", kind: "sans", substitute: "Roboto" },
   { family: "Karla", kind: "sans", substitute: "Work Sans" },
+  { family: "League Spartan", kind: "display", substitute: "Unbounded" },
   { family: "Libre Caslon Text", kind: "serif", substitute: "EB Garamond" },
   // Public Sans was drawn from Libre Franklin, so the two name each other.
   { family: "Libre Franklin", kind: "sans", substitute: "Public Sans" },
+  { family: "Literata", kind: "serif", substitute: "Newsreader" },
   { family: "Manrope", kind: "sans", substitute: "Figtree" },
   { family: "Montserrat", kind: "sans", substitute: "Poppins" },
   { family: "Newsreader", kind: "serif", substitute: "Spectral" },
   { family: "Nunito Sans", kind: "sans", substitute: "Figtree" },
   { family: "Open Sans", kind: "sans", substitute: "Roboto" },
+  { family: "Oswald", kind: "display", substitute: "Big Shoulders Display" },
   { family: "Poppins", kind: "sans", substitute: "Montserrat" },
   { family: "Public Sans", kind: "sans", substitute: "Libre Franklin" },
   { family: "Roboto", kind: "sans", substitute: "Inter" },
   { family: "Rokkitt", kind: "slab", substitute: "Zilla Slab" },
   { family: "Rubik", kind: "sans", substitute: "Nunito Sans" },
+  // Solway's rounded serifs are nearest Aleo's soft ones.
+  { family: "Solway", kind: "slab", substitute: "Aleo" },
   { family: "Spectral", kind: "serif", substitute: "Newsreader" },
+  { family: "Syne", kind: "display", substitute: "Bricolage Grotesque" },
+  { family: "Unbounded", kind: "display", substitute: "League Spartan" },
+  { family: "Vollkorn", kind: "serif", substitute: "Crimson Pro" },
   { family: "Work Sans", kind: "sans", substitute: "Karla" },
+  { family: "Yanone Kaffeesatz", kind: "display", substitute: "Oswald" },
   { family: "Zilla Slab", kind: "slab", substitute: "Bitter" },
 ];

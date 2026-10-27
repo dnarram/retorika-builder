@@ -15740,9 +15740,9 @@ describe("sprint 24 día 6 — la letra se elige por su nombre", () => {
    */
   const SHIPPED = FONT_GALLERY.map((row) => row.family);
 
-  it("walks a gallery that is really there: at least twenty-five families, four of them by name", () => {
-    expect(SHIPPED.length).toBeGreaterThanOrEqual(25);
-    for (const family of ["EB Garamond", "Gelasio", "Montserrat", "Zilla Slab"]) {
+  it("walks a gallery that is really there: at least forty families, four of them by name", () => {
+    expect(SHIPPED.length).toBeGreaterThanOrEqual(40);
+    for (const family of ["EB Garamond", "Gelasio", "Montserrat", "Oswald"]) {
       expect(SHIPPED, family).toContain(family);
     }
   });
@@ -15918,8 +15918,12 @@ describe("sprint 24 día 6 — la letra se elige por su nombre", () => {
        */
       const search = chooser.getByLabel("Buscar una letra");
       await search.fill("GARAMÓND");
-      await expect(chooser.getByText("1 letra", { exact: true })).toBeVisible();
+      // Two since día 3, EB and Cormorant: the accent and the case are what this proves.
+      await expect(chooser.getByText("2 letras", { exact: true })).toBeVisible();
       await expect(chooser.getByRole("radio", { name: "EB Garamond", exact: true })).toBeVisible();
+      await expect(
+        chooser.getByRole("radio", { name: "Cormorant Garamond", exact: true }),
+      ).toBeVisible();
       await expect(chooser.getByRole("radio", { name: "Spectral", exact: true })).toBeHidden();
       await search.fill("zzz");
       await expect(chooser.getByText("Ninguna letra se llama así.")).toBeVisible();
@@ -15935,6 +15939,11 @@ describe("sprint 24 día 6 — la letra se elige por su nombre", () => {
       await chips.getByText("Remates gruesos", { exact: true }).click();
       await expect(chooser.getByText(`${ofKind("slab")} letras`, { exact: true })).toBeVisible();
       await expect(chooser.getByRole("radio", { name: "Bitter", exact: true })).toBeVisible();
+      // And the headline families, which have their own chip since día 3.
+      await chips.getByText("De cartel", { exact: true }).click();
+      await expect(chooser.getByText(`${ofKind("display")} letras`, { exact: true })).toBeVisible();
+      await expect(chooser.getByRole("radio", { name: "Oswald", exact: true })).toBeVisible();
+      await expect(chooser.getByRole("radio", { name: "Inter", exact: true })).toBeHidden();
       await chips.getByText("Todas", { exact: true }).click();
       await expect(chooser.getByText(`${SHIPPED.length} letras`, { exact: true })).toBeVisible();
 

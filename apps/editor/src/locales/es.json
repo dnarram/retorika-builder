@@ -324,6 +324,7 @@
   "editor.style.chooser.none": "Ninguna letra se llama así.",
   "editor.style.chooser.sample": "Así se leería tu web.",
   "editor.style.chooser.travels": "Viaja con tu web y se ve igual en cualquier ordenador.",
+  "editor.style.chooser.notIncluded": "Lato, Lora, Merriweather, Playfair Display, Raleway y otras no se incluyen por su licencia.",
   "editor.style.chooser.done": "Hecho",
   "editor.style.system": "MEDIDAS",
   "editor.style.systemHelp": "El tamaño del texto, el aire entre las cosas y las esquinas, en toda la web.",

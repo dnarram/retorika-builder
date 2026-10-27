@@ -11,57 +11,87 @@
 // generator's own comment records all three. `packages/publisher/test/fonts.test.ts` compares these
 // bytes against their sources, so these files cannot drift from them.
 
+import alegreya from "./alegreya.ts";
 import aleo from "./aleo.ts";
+import bigShouldersDisplay from "./big-shoulders-display.ts";
 import bitter from "./bitter.ts";
+import bodoniModa from "./bodoni-moda.ts";
+import bricolageGrotesque from "./bricolage-grotesque.ts";
+import cormorantGaramond from "./cormorant-garamond.ts";
 import crimsonPro from "./crimson-pro.ts";
 import dmSans from "./dm-sans.ts";
 import ebGaramond from "./eb-garamond.ts";
 import figtree from "./figtree.ts";
 import fraunces from "./fraunces.ts";
+import fredoka from "./fredoka.ts";
 import gelasio from "./gelasio.ts";
+import heptaSlab from "./hepta-slab.ts";
 import inter from "./inter.ts";
 import karla from "./karla.ts";
+import leagueSpartan from "./league-spartan.ts";
 import libreCaslonText from "./libre-caslon-text.ts";
 import libreFranklin from "./libre-franklin.ts";
+import literata from "./literata.ts";
 import manrope from "./manrope.ts";
 import montserrat from "./montserrat.ts";
 import newsreader from "./newsreader.ts";
 import nunitoSans from "./nunito-sans.ts";
 import openSans from "./open-sans.ts";
+import oswald from "./oswald.ts";
 import poppins from "./poppins.ts";
 import publicSans from "./public-sans.ts";
 import roboto from "./roboto.ts";
 import rokkitt from "./rokkitt.ts";
 import rubik from "./rubik.ts";
+import solway from "./solway.ts";
 import spectral from "./spectral.ts";
+import syne from "./syne.ts";
+import unbounded from "./unbounded.ts";
+import vollkorn from "./vollkorn.ts";
 import workSans from "./work-sans.ts";
+import yanoneKaffeesatz from "./yanone-kaffeesatz.ts";
 import zillaSlab from "./zilla-slab.ts";
 
 const BASE64: Readonly<Record<string, string>> = {
+  ...alegreya,
   ...aleo,
+  ...bigShouldersDisplay,
   ...bitter,
+  ...bodoniModa,
+  ...bricolageGrotesque,
+  ...cormorantGaramond,
   ...crimsonPro,
   ...dmSans,
   ...ebGaramond,
   ...figtree,
   ...fraunces,
+  ...fredoka,
   ...gelasio,
+  ...heptaSlab,
   ...inter,
   ...karla,
+  ...leagueSpartan,
   ...libreCaslonText,
   ...libreFranklin,
+  ...literata,
   ...manrope,
   ...montserrat,
   ...newsreader,
   ...nunitoSans,
   ...openSans,
+  ...oswald,
   ...poppins,
   ...publicSans,
   ...roboto,
   ...rokkitt,
   ...rubik,
+  ...solway,
   ...spectral,
+  ...syne,
+  ...unbounded,
+  ...vollkorn,
   ...workSans,
+  ...yanoneKaffeesatz,
   ...zillaSlab,
 };
 
