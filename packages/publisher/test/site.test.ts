@@ -9,7 +9,8 @@ import {
   type RetorikaDocument,
 } from "@retorika/schema";
 import { describe, expect, it } from "vitest";
-import { buildSite, readFontBundle } from "../src/index.ts";
+import { buildSite } from "../src/index.ts";
+import { fixtureFontBundle } from "./fixtureFonts.ts";
 
 const FIXTURES_DIR = join(import.meta.dirname, "..", "..", "..", "fixtures");
 const DOCUMENTS_DIR = join(FIXTURES_DIR, "documents");
@@ -93,7 +94,7 @@ function withPages(doc: RetorikaDocument, slugs: string[]): RetorikaDocument {
  * `classic-display` one — which is the fixture that makes `buildSite` refuse to build without them.
  * Reading them is I/O, which is why the tests that walk the corpus are async from here on.
  */
-const fontsFor = (document: RetorikaDocument) => readFontBundle(document);
+const fontsFor = (document: RetorikaDocument) => fixtureFontBundle(document);
 
 describe("buildSite", () => {
   it("produces an index.html for every fixture", async () => {

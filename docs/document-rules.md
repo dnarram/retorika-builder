@@ -415,6 +415,32 @@ and is omitted for a download; this says where the owner is going to put the fil
 the other would put a sitemap in a ZIP. It exists because a preview image must be an absolute URL —
 every scraper refuses a relative one — and a ZIP does not know what domain it will be opened under.
 
+## A font the owner brought
+
+*Since schema 1.14.0 ([ADR 0056](decisions/0056-an-own-font-travels-like-a-photograph.md)).* An
+optional `fonts` array on the document, at most two records, each the shape of a face that travels
+in the ZIP beside the page the way a photograph does.
+
+| | |
+|---|---|
+| `id` | Eight lower-case hex digits, minted by the editor. The published file is named from it and from the face's role — `fonts/propia-<id>-<role>.<format>` — and never from anything the owner typed |
+| `family` | The name the stack names first, read from the file's own `name` table and sanitised to the pattern every family must have. Not a gallery row's name and not another own font's, case-insensitively; not a CSS keyword |
+| `kind` | Its species: `sans`, `serif`, `slab` or `display` |
+| `faces` | `[regular]`, `[regular, bold]` or `[variable]`, each with the `format` the server sniffed (`woff2`, `woff`, `ttf`, `otf`); a variable face carries `wght: [min, max]` from `fvar` |
+| `licence` | `{ declared: true, at }`: the owner's declaration that they hold a licence to publish it, and when. A literal `true` — the shape with `false` is refused, not stored |
+| `licenceFile` | `txt` or `pdf` when the owner attached the licence text, which travels beside the font |
+
+**It is a record, not bytes.** The faces live in the browser and with the account, as a photo's do.
+A theme selects an own font exactly as it selects a gallery row — by the first family of a stack,
+matched whole — and a font no stack names is allowed and ships nothing. The responsibility for the
+right to publish the font is the owner's: the product carries their declaration and the text they
+attach, and judges neither.
+
+**A template leaves without the owner's fonts.** The advanced dossier §9's third-party templates are
+phase 3 and nothing extracts one yet; when something does, the `fonts` record and the bytes stay with
+the owner, because the declaration in it is theirs and covers their web and no other. Written here,
+beside the field, so that the extraction finds the obligation where the field is.
+
 ## What never enters the document
 
 These keys are rejected by the schema, not ignored. A test asserts the rejection of each one.

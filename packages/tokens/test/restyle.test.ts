@@ -1,4 +1,4 @@
-import { type Theme, TOKEN_KEYS } from "@retorika/schema";
+import { type OwnFont, type Theme, TOKEN_KEYS } from "@retorika/schema";
 import { describe, expect, it } from "vitest";
 import {
   buildTheme,
@@ -6,6 +6,7 @@ import {
   DEFAULT_SCALE_ID,
   GALLERY_FAMILIES,
   identifyFamily,
+  identifyOwnFont,
   identifyPalette,
   identifyScale,
   identifyTypePair,
@@ -14,6 +15,7 @@ import {
   SCALES,
   TYPE_PAIRS,
   withFamily,
+  withOwnFont,
   withPalette,
   withScale,
   withTypePair,
@@ -367,5 +369,60 @@ describe("the Spanish names", () => {
     // Mockup 13 calls it «Neutro elegante». It is a white-on-near-black theme, and a name that
     // does not say so hides the one thing an owner most needs to know before clicking it.
     expect(es["palette.darkSlate"]).toContain("scura");
+  });
+});
+
+/** A font the owner brought (ADR 0056): chosen for one half like a gallery family, found like one. */
+describe("withOwnFont and identifyOwnFont", () => {
+  const casa: OwnFont = {
+    id: "3f9a7c21",
+    family: "Casa Trufa",
+    kind: "sans",
+    faces: [{ role: "regular", format: "woff2" }],
+    licence: { declared: true, at: "2026-10-27T18:00:00Z" },
+  };
+  const abuela: OwnFont = {
+    id: "0a1b2c3d",
+    family: "Abuela",
+    kind: "slab",
+    faces: [{ role: "variable", format: "ttf", wght: [300, 800] }],
+    licence: { declared: true, at: "2026-10-27T18:00:00Z" },
+  };
+
+  it("writes the family first and its species' fallback behind, for one half only", () => {
+    const next = withOwnFont(start, "font.heading", casa);
+    expect(next["font.heading"]).toBe(
+      "'Casa Trufa', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+    );
+    for (const key of TOKEN_KEYS) {
+      if (key !== "font.heading") expect(next[key], key).toBe(start[key]);
+    }
+  });
+
+  it("ends a slab's and a serif's stack in serif, a sans' and a headline family's in sans-serif", () => {
+    // The same two chains the gallery uses, which is what keeps a visitor with no face on a serif
+    // where a serif was chosen — from the table or from the owner's disk alike.
+    expect(withOwnFont(start, "font.body", abuela)["font.body"]).toBe(
+      "Abuela, Georgia, Cambria, 'Times New Roman', Times, serif",
+    );
+    const sansRow = GALLERY_FAMILIES.find((row) => row.kind === "sans" && row.family !== "Inter");
+    if (!sansRow) throw new Error("no sans row to compare with");
+    const tail = (stack: string) => stack.slice(stack.indexOf(","));
+    expect(tail(withOwnFont(start, "font.heading", casa)["font.heading"])).toBe(
+      tail(sansRow.stack),
+    );
+  });
+
+  it("is found again by the first family, and only among the fonts handed in", () => {
+    const theme = withOwnFont(start, "font.heading", casa);
+    expect(identifyOwnFont(theme, "font.heading", [abuela, casa])).toBe(casa);
+    expect(identifyOwnFont(theme, "font.heading", [abuela])).toBeUndefined();
+    expect(identifyOwnFont(theme, "font.heading", undefined)).toBeUndefined();
+    expect(identifyOwnFont(theme, "font.body", [casa])).toBeUndefined();
+    // A gallery choice is not an own font, and an own choice is not a gallery family.
+    expect(identifyFamily(theme, "font.heading")).toBeUndefined();
+    expect(
+      identifyOwnFont(withFamily(start, "font.heading", "Spectral"), "font.heading", [casa]),
+    ).toBeUndefined();
   });
 });

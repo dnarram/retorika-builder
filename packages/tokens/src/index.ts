@@ -12,11 +12,13 @@ export { PALETTES, STARTING_PALETTE_ID } from "./palettes.ts";
 
 export {
   identifyFamily,
+  identifyOwnFont,
   identifyPalette,
   identifyScale,
   identifyTypePair,
   RENDERED_COLOR_KEYS,
   withFamily,
+  withOwnFont,
   withPalette,
   withScale,
   withTypePair,
@@ -26,4 +28,4 @@ export { DEFAULT_SCALE_ID, SCALES } from "./scales.ts";
 export type { BuildThemeInput } from "./theme.ts";
 export { buildTheme } from "./theme.ts";
 export type { FontContrast, FontKey, GalleryFamily, TypePair } from "./typography.ts";
-export { familiesOf, GALLERY_FAMILIES, TYPE_PAIRS } from "./typography.ts";
+export { familiesOf, GALLERY_FAMILIES, ownFontStack, TYPE_PAIRS } from "./typography.ts";

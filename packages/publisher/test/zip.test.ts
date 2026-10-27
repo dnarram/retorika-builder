@@ -8,7 +8,8 @@ import {
   type RetorikaDocument,
 } from "@retorika/schema";
 import { describe, expect, it } from "vitest";
-import { buildSite, bundleToZip, readFontBundle, type SiteBundle } from "../src/index.ts";
+import { buildSite, bundleToZip, type SiteBundle } from "../src/index.ts";
+import { fixtureFontBundle } from "./fixtureFonts.ts";
 
 const FIXTURES_DIR = join(import.meta.dirname, "..", "..", "..", "fixtures");
 const DOCUMENTS_DIR = join(FIXTURES_DIR, "documents");
@@ -43,7 +44,7 @@ async function bundleFor(name: string, document: RetorikaDocument): Promise<Site
     siteId: name,
     baseUrl: "https://example.test",
     assets,
-    fonts: readFontBundle(document),
+    fonts: fixtureFontBundle(document),
   });
 }
 

@@ -1,5 +1,11 @@
-import { SHIPPABLE_FAMILIES } from "@retorika/renderer";
-import { fontFamilySlug } from "@retorika/schema";
+import { ownFacesFor, ownFontsFor, SHIPPABLE_FAMILIES } from "@retorika/renderer";
+import {
+  fontFamilySlug,
+  type OwnFont,
+  type OwnFontFormat,
+  type OwnLicenceFormat,
+  type RetorikaDocument,
+} from "@retorika/schema";
 
 /**
  * Where a shipped face's bytes and its licence come from, and the two rules that govern both
@@ -96,4 +102,50 @@ export function licencesFor(files: readonly string[]): string[] {
     paths.add(source.licencePath);
   }
   return [...paths].sort();
+}
+
+/**
+ * **A font the owner brought travels as it was uploaded, with the licence they attached** (ADR 0056).
+ *
+ * Rule two above has a different shape for it: there is no OFL to put beside the file, because the
+ * bytes are the owner's and the licence is theirs to hold. What travels instead is their declaration
+ * — `licence.declared` in the record, which `buildSite` checks itself and does not leave to the
+ * parser — and, when they attached one, the licence text, named from the record's `id` so that a
+ * document still names no file. The media types are the four the `fuentes` bucket admits (día 6),
+ * read from the format the server sniffed and never from the extension the owner's file had.
+ */
+export const OWN_FACE_TYPES: Readonly<Record<OwnFontFormat, string>> = {
+  woff2: "font/woff2",
+  woff: "font/woff",
+  ttf: "font/ttf",
+  otf: "font/otf",
+};
+
+export const OWN_LICENCE_TYPES: Readonly<Record<OwnLicenceFormat, string>> = {
+  txt: "text/plain; charset=utf-8",
+  pdf: "application/pdf",
+};
+
+/** Where the licence the owner attached is written in the bundle, or `undefined` when they
+ * attached none. The key `BuildSiteOptions.fonts` wants it under — a path, as an OFL's is. */
+export function ownLicencePath(font: Pick<OwnFont, "id" | "licenceFile">): string | undefined {
+  return font.licenceFile === undefined
+    ? undefined
+    : `fonts/LICENCIA-propia-${font.id}.${font.licenceFile}`;
+}
+
+/**
+ * Every key a caller has to supply in `BuildSiteOptions.fonts` for the owner's own fonts this
+ * document names: each face by its file name, each attached licence by its bundle path — the same
+ * two shapes `readFontBundle` uses for the table's faces and their OFLs. Nothing here is read from
+ * disk: the bytes are the owner's, held by the browser or the account, and resolving them is the
+ * caller's job exactly as it is for a photograph.
+ */
+export function ownFontKeysFor(doc: RetorikaDocument): string[] {
+  const keys = ownFacesFor(doc).map((face) => face.file);
+  for (const font of ownFontsFor(doc)) {
+    const licence = ownLicencePath(font);
+    if (licence !== undefined) keys.push(licence);
+  }
+  return keys;
 }

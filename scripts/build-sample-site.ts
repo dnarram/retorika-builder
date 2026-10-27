@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
-import { buildSite, bundleToZip, readFontBundle } from "@retorika/publisher";
+import { buildSite, bundleToZip, ownFontKeysFor, readFontBundle } from "@retorika/publisher";
 import { parseDocument, type RetorikaDocument } from "@retorika/schema";
 
 /**
@@ -84,10 +84,17 @@ for (const page of document.pages) {
   }
 }
 
+// A font the owner brought is read from `fonts/` beside the images, the way a fixture keeps its
+// own in fixtures/fonts: the bytes are the owner's and no package has them (ADR 0056).
+const fonts = readFontBundle(document);
+for (const key of ownFontKeysFor(document)) {
+  fonts.set(key, new Uint8Array(readFileSync(join(assetsRoot, "fonts", basename(key)))));
+}
+
 const bundle = buildSite(document, {
   siteId: `sample-${basename(documentPath, ".json")}`,
   assets,
-  fonts: readFontBundle(document),
+  fonts,
 });
 
 for (const file of bundle.files) {

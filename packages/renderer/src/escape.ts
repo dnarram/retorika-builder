@@ -111,19 +111,31 @@ export function cssThemeValue(key: string, value: string): string {
  *
  * 1. **The caller cannot choose the directory.** `fonts/` is written here, not passed in, so the only
  *    `url()` this renderer can emit anywhere points inside the folder the publisher writes.
- * 2. **The file name must end in `.woff2`**, lower-case, with no dots before it. That alone refuses
- *    `../`, an absolute path, a protocol, a second extension, and a query string.
+ * 2. **The file name must end in one of four extensions**, lower-case, with no dots before it: the
+ *    `woff2` the gallery ships and, since ADR 0056, the `woff`, `ttf` and `otf` an owner's own font
+ *    may arrive as — uploaded as it is, never converted. That alone refuses `../`, an absolute path,
+ *    a protocol, a second extension (`evil.woff2.ttf`), a query string, a collection (`.ttc`), an SVG
+ *    and an upper-case extension. The `format()` hint is this function's, read from the extension.
  * 3. **Neither pattern admits a character that could leave the rule**: no `"`, `'`, `)`, `;`, `{`,
  *    `}`, `/`, `\`, `:`, no whitespace in a file name, and nothing that could start `</style>`.
  *
  * **And the values never come from the document.** `fonts.ts` holds a closed table of family names
- * and file names; a theme *selects* a row from it by exact equality and can never name one. These
- * functions are the second lock on that, for the day somebody wires a document value in by mistake.
+ * and file names; a theme *selects* a row from it by exact equality and can never name one. An
+ * owner's own face is named from its record's `id` and the face's `role` — never from the owner's
+ * file name or the family they typed — so the same holds. These functions are the second lock on
+ * that, for the day somebody wires a document value in by mistake.
  */
 // The family pattern is the gallery's own filter 4 (ADR 0046 §3), so it lives beside the gallery in
 // `@retorika/schema` and both the filter and this lock read the one regex.
 const CSS_FONT_FAMILY = FONT_FAMILY_PATTERN;
-const CSS_FONT_FILE = /^[a-z0-9]+(?:-[a-z0-9]+)*\.woff2$/;
+const CSS_FONT_FILE = /^[a-z0-9]+(?:-[a-z0-9]+)*\.(woff2|woff|ttf|otf)$/;
+/** The `format()` hint per extension, which is what lets a browser skip a file it cannot read. */
+const CSS_FONT_FORMAT: Readonly<Record<string, string>> = {
+  woff2: "woff2",
+  woff: "woff",
+  ttf: "truetype",
+  otf: "opentype",
+};
 
 /** A shipped family's name, quoted for `font-family` inside `@font-face`. */
 export function cssFontFamilyName(family: string): string {
@@ -139,13 +151,15 @@ export function cssFontFamilyName(family: string): string {
 /** A shipped face's file, as the whole `src` value — directory included, so the caller cannot
  * choose one. The only `url()` this renderer is able to produce. */
 export function cssFontSrc(file: string): string {
-  if (!CSS_FONT_FILE.test(file)) {
+  const match = CSS_FONT_FILE.exec(file);
+  const format = match?.[1] === undefined ? undefined : CSS_FONT_FORMAT[match[1]];
+  if (format === undefined) {
     throw new Error(
       `Font file cannot be emitted into CSS: ${JSON.stringify(file)}. ` +
-        `Allowed: lower-case letters, digits and hyphens, ending in ".woff2".`,
+        `Allowed: lower-case letters, digits and hyphens, ending in ".woff2", ".woff", ".ttf" or ".otf".`,
     );
   }
-  return `url("fonts/${file}") format("woff2")`;
+  return `url("fonts/${file}") format("${format}")`;
 }
 
 /**

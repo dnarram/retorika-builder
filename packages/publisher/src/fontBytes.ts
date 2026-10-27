@@ -1,4 +1,4 @@
-import { fontFilesFor } from "@retorika/renderer";
+import { shippedFontFilesFor } from "@retorika/renderer";
 import type { RetorikaDocument } from "@retorika/schema";
 import { fontDataFor } from "./fontData/index.ts";
 import { licencesFor } from "./fonts.ts";
@@ -27,12 +27,17 @@ import { licencesFor } from "./fonts.ts";
  * a face by its file name, a licence by the path it takes in the bundle. One map, because they are one
  * obligation — the OFL requires the text to travel with the Font Software, so a caller that could
  * fetch one without the other would be a caller that could get it wrong.
+ *
+ * **The table's faces only.** A font the owner brought (ADR 0056) has no bytes in any package: they
+ * are the owner's, held by the browser or the account, and the caller adds them to this map under the
+ * keys `ownFontKeysFor` lists — the way it adds a photograph to `assets`. `buildSite` refuses a bundle
+ * that names one and was handed no bytes for it.
  */
 export function readFontBundle(doc: RetorikaDocument): Map<string, Uint8Array> {
   // Asked of the renderer rather than taken as a list, so a caller cannot hand over a set of faces
-  // that disagrees with the ones the stylesheet will name. `fontFilesFor` reads the theme and no more:
-  // no page is rendered to answer it.
-  const files = fontFilesFor(doc);
+  // that disagrees with the ones the stylesheet will name. `shippedFontFilesFor` reads the theme and
+  // no more: no page is rendered to answer it.
+  const files = shippedFontFilesFor(doc);
   const bytes = new Map<string, Uint8Array>();
   if (files.length === 0) return bytes;
 

@@ -593,3 +593,8 @@ it could not have seen a missing font before, because until this sprint there we
   than a laptop.
 - **Someone asking for a face we cannot ship** — the moment «tipografías propias» becomes a real
   request rather than a line in a dossier, this decision is its foundation and may need widening.
+
+  > *Reopened on this condition, 27 October 2026, and widened by one row-shape:*
+  > [ADR 0056](0056-an-own-font-travels-like-a-photograph.md). A font the owner uploads is a row the
+  > owner added to the table, selected the same way, shipped the same way, falling back the same way.
+  > The property this file built — a document chooses a row and never names a file — is kept whole.

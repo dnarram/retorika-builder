@@ -1,6 +1,12 @@
-import { FAVICON_PATH, faviconSvg, render } from "@retorika/renderer";
-import type { ContentElement, Page, RetorikaDocument } from "@retorika/schema";
-import { FONT_SOURCES, licencesFor } from "./fonts.ts";
+import { FAVICON_PATH, faviconSvg, ownFacesFor, ownFontsFor, render } from "@retorika/renderer";
+import type { ContentElement, OwnFont, Page, RetorikaDocument } from "@retorika/schema";
+import {
+  FONT_SOURCES,
+  licencesFor,
+  OWN_FACE_TYPES,
+  OWN_LICENCE_TYPES,
+  ownLicencePath,
+} from "./fonts.ts";
 import type { SiteManifest } from "./manifest.ts";
 import { buildRobotsTxt, buildSitemapXml } from "./metafiles.ts";
 
@@ -34,6 +40,11 @@ export interface BuildSiteOptions {
    * Resolution is the caller's job, exactly as it is for `assets`, so this function stays synchronous
    * and pure — the bytes live in an npm package and reading them is I/O. `readFontBundle` does that
    * for both callers.
+   *
+   * **A font the owner brought is in this same map** (ADR 0056): its faces under the file names
+   * `ownFontKeysFor` lists, and the licence they attached, if any, under its bundle path. Those bytes
+   * are the owner's — `readFontBundle` does not have them — so the caller puts them here the way it
+   * puts a photograph in `assets`, and a bundle that names one it was not handed is refused.
    *
    * Omitted is the same as empty, and a document naming no shippable face needs nothing here.
    */
@@ -137,6 +148,18 @@ function pagePaths(doc: RetorikaDocument): PageFile[] {
       };
     });
   });
+}
+
+/** The owner said they hold a licence for this font, or the product may not publish it — read
+ * from the record as data rather than trusted as a type, because the type is the parser's claim
+ * and this is the publisher's own. */
+function assertLicenceDeclared(font: OwnFont): void {
+  const declared: unknown = (font.licence as { declared?: unknown } | undefined)?.declared;
+  if (declared !== true) {
+    throw new Error(
+      `buildSite: the owner's font "${font.family}" (${font.id}) carries no licence declaration, so it cannot be published`,
+    );
+  }
 }
 
 function assertOrigin(baseUrl: string): void {
@@ -279,17 +302,42 @@ export function buildSite(doc: RetorikaDocument, options: BuildSiteOptions): Sit
   const fontBundleFiles: SiteFile[] = [];
   if (fontFiles.size > 0) {
     const supplied = options.fonts ?? new Map<string, Uint8Array>();
+    /**
+     * **A face the owner brought has a different obligation, and it is checked here, not only by
+     * the parser** (ADR 0056 §6). There is no OFL to put beside it — the bytes are theirs — so what
+     * the bundle requires is their declaration in the record, and this refuses a record without it
+     * however the document was assembled: a hand-built one that never met `parseDocument` must fail
+     * for the same reason a parsed one cannot exist. The file is matched to its record by the name
+     * the renderer minted, so a `fonts/propia-…` the record does not account for is refused too.
+     */
+    const ownByFile = new Map(ownFacesFor(rewrittenDoc).map((face) => [face.file, face]));
+    const shipped: string[] = [];
     for (const file of [...fontFiles].sort()) {
+      const own = ownByFile.get(file);
+      if (own !== undefined) {
+        assertLicenceDeclared(own.font);
+        const contents = supplied.get(file);
+        if (contents === undefined) {
+          throw new Error(`buildSite: missing the owner's font bytes for "${file}"`);
+        }
+        fontBundleFiles.push({
+          path: `fonts/${file}`,
+          contents,
+          contentType: OWN_FACE_TYPES[own.face.format],
+        });
+        continue;
+      }
       if (!Object.hasOwn(FONT_SOURCES, file)) {
         throw new Error(
-          `buildSite: the page asks for font "${file}", which this product does not ship`,
+          `buildSite: the page asks for font "${file}", which this product does not ship and the document does not declare`,
         );
       }
       const contents = supplied.get(file);
       if (contents === undefined) throw new Error(`buildSite: missing font bytes for "${file}"`);
       fontBundleFiles.push({ path: `fonts/${file}`, contents, contentType: "font/woff2" });
+      shipped.push(file);
     }
-    for (const path of licencesFor([...fontFiles])) {
+    for (const path of licencesFor(shipped)) {
       const contents = supplied.get(path);
       if (contents === undefined) {
         throw new Error(
@@ -297,6 +345,19 @@ export function buildSite(doc: RetorikaDocument, options: BuildSiteOptions): Sit
         );
       }
       fontBundleFiles.push({ path, contents, contentType: "text/plain; charset=utf-8" });
+    }
+    // The licence the owner attached, when they did: the record says it exists, so a bundle
+    // without it would be a bundle that lost a file the owner put there.
+    for (const font of ownFontsFor(rewrittenDoc)) {
+      const path = ownLicencePath(font);
+      if (path === undefined || font.licenceFile === undefined) continue;
+      const contents = supplied.get(path);
+      if (contents === undefined) {
+        throw new Error(
+          `buildSite: missing the licence the owner attached for "${font.family}" (${path})`,
+        );
+      }
+      fontBundleFiles.push({ path, contents, contentType: OWN_LICENCE_TYPES[font.licenceFile] });
     }
   }
 

@@ -3,7 +3,15 @@ import { buildCss, buildTree, pageTitleFor, resolvePage } from "./build.ts";
 import { treeToFragment } from "./dom.ts";
 import { fontFilesFor } from "./fonts.ts";
 
-export { fontFilesFor, SHIPPABLE_FAMILIES } from "./fonts.ts";
+export type { OwnFace } from "./fonts.ts";
+export {
+  fontFilesFor,
+  ownFaceFile,
+  ownFacesFor,
+  ownFontsFor,
+  SHIPPABLE_FAMILIES,
+  shippedFontFilesFor,
+} from "./fonts.ts";
 
 import { headMetaOf } from "./head.ts";
 import { pageToHtml } from "./html.ts";

@@ -90,6 +90,18 @@ export {
   fontFamilySlug,
   GENERIC_OF,
 } from "./fontGallery.ts";
+export type { OwnFont, OwnFontFace, OwnFontFormat, OwnLicenceFormat } from "./fonts.ts";
+export {
+  MAX_OWN_FONTS,
+  OWN_FONT_FORMATS,
+  OWN_FONT_ID_PATTERN,
+  OWN_LICENCE_FORMATS,
+  ownFamilyIssue,
+  ownFontCovers,
+  ownFontFaceSchema,
+  ownFontSchema,
+  ownFontsSchema,
+} from "./fonts.ts";
 export type { PresetLookup, Violation } from "./invariants.ts";
 export { checkInvariants, flattenElements } from "./invariants.ts";
 export type { InvariantId } from "./invariants-catalog.ts";

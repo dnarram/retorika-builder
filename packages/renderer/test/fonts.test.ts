@@ -1,8 +1,16 @@
-import { GENERIC_OF, type RetorikaDocument, TOKEN_KEYS } from "@retorika/schema";
+import { GENERIC_OF, type OwnFont, type RetorikaDocument, TOKEN_KEYS } from "@retorika/schema";
 import { familiesOf, GALLERY_FAMILIES, TYPE_PAIRS } from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
 import { cssFontFamilyName, cssFontSrc, cssThemeValue } from "../src/escape.ts";
-import { fontFaceCss, fontFilesFor, SHIPPABLE_FAMILIES } from "../src/fonts.ts";
+import {
+  fontFaceCss,
+  fontFilesFor,
+  ownFaceFile,
+  ownFacesFor,
+  ownFontsFor,
+  SHIPPABLE_FAMILIES,
+  shippedFontFilesFor,
+} from "../src/fonts.ts";
 import { loadCorpus } from "./corpus.ts";
 
 /**
@@ -367,10 +375,18 @@ describe("the two narrow functions refuse on their own", () => {
     "/etc/passwd.woff2",
     "http://evil/x.woff2",
     "evil.woff2?x=1",
-    "evil.woff",
-    "evil.ttf",
     "evil.css",
     "evil.woff2.css",
+    // The three formats an own font may arrive as are admitted below; what is still refused is a
+    // second extension, a collection, an SVG, an EOT, and any extension not in lower case.
+    "evil.woff2.ttf",
+    "evil.ttf.woff2",
+    "evil.svg",
+    "evil.ttc",
+    "evil.eot",
+    "evil.TTF",
+    "evil.WOFF2",
+    "evil.Woff",
     "Inter.woff2",
     "inter latin.woff2",
     'x.woff2") format("woff2"), url("http://evil/y.woff2',
@@ -382,6 +398,23 @@ describe("the two narrow functions refuse on their own", () => {
       expect(() => cssFontSrc(bad)).toThrow(/cannot be emitted into CSS/);
     });
   }
+
+  it("maps each of the four extensions to its format hint, and nothing else", () => {
+    // ADR 0056: an own font travels as it was uploaded, so the hint has to say what the file is —
+    // a browser that cannot read one format skips the file instead of downloading and failing.
+    expect(cssFontSrc("propia-3f9a7c21-regular.woff2")).toBe(
+      'url("fonts/propia-3f9a7c21-regular.woff2") format("woff2")',
+    );
+    expect(cssFontSrc("propia-3f9a7c21-bold.woff")).toBe(
+      'url("fonts/propia-3f9a7c21-bold.woff") format("woff")',
+    );
+    expect(cssFontSrc("propia-3f9a7c21-variable.ttf")).toBe(
+      'url("fonts/propia-3f9a7c21-variable.ttf") format("truetype")',
+    );
+    expect(cssFontSrc("propia-3f9a7c21-regular.otf")).toBe(
+      'url("fonts/propia-3f9a7c21-regular.otf") format("opentype")',
+    );
+  });
 
   it("cannot be pointed outside fonts/ even by a caller", () => {
     // The directory is written inside the function, so there is no parameter that could move it.
@@ -437,5 +470,184 @@ describe("the schema's font tokens are all accounted for", () => {
     for (const key of fontKeys) {
       expect(fontFilesFor(withFont(key as "font.heading", "Inter, sans-serif"))).toHaveLength(2);
     }
+  });
+});
+
+/**
+ * **A font the owner brought** (ADR 0056): the rules for it sit after the table's, its file is
+ * minted from the record and never from a name, and a stack selects it exactly as it selects a row.
+ */
+describe("an owner's own faces", () => {
+  const SANS = "system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+  const casa: OwnFont = {
+    id: "3f9a7c21",
+    family: "Casa Trufa",
+    kind: "sans",
+    faces: [
+      { role: "regular", format: "woff2" },
+      { role: "bold", format: "woff" },
+    ],
+    licence: { declared: true, at: "2026-10-27T18:00:00Z" },
+  };
+  const abuela: OwnFont = {
+    id: "0a1b2c3d",
+    family: "Letra de la Abuela",
+    kind: "serif",
+    faces: [{ role: "variable", format: "ttf", wght: [300, 800] }],
+    licence: { declared: true, at: "2026-10-27T18:00:00Z" },
+  };
+
+  /** Hand-assembled rather than parsed, so a test can hold a record the schema would refuse. */
+  function withOwn(
+    fonts: OwnFont[],
+    heading = `'Casa Trufa', ${SANS}`,
+    body = base.theme["font.body"],
+  ): RetorikaDocument {
+    return { ...base, fonts, theme: { ...base.theme, "font.heading": heading, "font.body": body } };
+  }
+
+  it("mints the file from the id and the role, never from the name", () => {
+    // The name is the owner's; the file is ours. A family the schema would refuse still produces a
+    // file that says nothing about it — and then the second lock refuses to emit the rule.
+    const evil: OwnFont = {
+      ...casa,
+      family: "../evil",
+      faces: [{ role: "regular", format: "ttf" }],
+    };
+    const doc = withOwn([evil], `'../evil', ${SANS}`);
+    expect(fontFilesFor(doc)).toEqual(["propia-3f9a7c21-regular.ttf"]);
+    expect(ownFaceFile(evil, { role: "regular", format: "ttf" })).toBe(
+      "propia-3f9a7c21-regular.ttf",
+    );
+    expect(() => fontFaceCss(doc)).toThrow(/cannot be emitted into CSS/);
+  });
+
+  it("emits one rule per face with the weight the role means, under the family's own name", () => {
+    const css = fontFaceCss(withOwn([casa])).join("\n");
+    expect(rulesIn(css)).toEqual([
+      [
+        "@font-face {",
+        "  font-family: 'Casa Trufa';",
+        "  font-style: normal;",
+        "  font-weight: 400;",
+        "  font-display: swap;",
+        '  src: url("fonts/propia-3f9a7c21-regular.woff2") format("woff2");',
+        "}",
+      ].join("\n"),
+      [
+        "@font-face {",
+        "  font-family: 'Casa Trufa';",
+        "  font-style: normal;",
+        "  font-weight: 700;",
+        "  font-display: swap;",
+        '  src: url("fonts/propia-3f9a7c21-bold.woff") format("woff");',
+        "}",
+      ].join("\n"),
+    ]);
+  });
+
+  it("declares a variable face's real range, read from fvar, and never 100 to the top", () => {
+    const css = fontFaceCss(withOwn([abuela], `'Letra de la Abuela', Georgia, serif`)).join("\n");
+    const rules = rulesIn(css);
+    expect(rules).toHaveLength(1);
+    expect(rules[0]).toContain("font-weight: 300 800;");
+    expect(rules[0]).toContain('url("fonts/propia-0a1b2c3d-variable.ttf") format("truetype")');
+    // A range that starts above 400 is emitted as it is: the page does not lie about what the file
+    // has, and the editor is where the owner is told «Normal» is missing.
+    const from500: OwnFont = {
+      ...abuela,
+      faces: [{ role: "variable", format: "ttf", wght: [500, 900] }],
+    };
+    const higher = fontFaceCss(withOwn([from500], `'Letra de la Abuela', Georgia, serif`)).join(
+      "\n",
+    );
+    expect(rulesIn(higher)[0]).toContain("font-weight: 500 900;");
+  });
+
+  it("a regular alone emits one rule at 400, and the browser is left to synthesise the bold", () => {
+    const alone: OwnFont = { ...casa, faces: [{ role: "regular", format: "otf" }] };
+    const css = fontFaceCss(withOwn([alone])).join("\n");
+    expect(rulesIn(css)).toHaveLength(1);
+    expect(css).toContain("font-weight: 400;");
+    expect(css).not.toContain("font-synthesis");
+  });
+
+  it("orders the table before the own, and the own by id whatever the document's order", () => {
+    const doc = withOwn(
+      [casa, abuela],
+      `'Letra de la Abuela', Georgia, serif`,
+      `'Casa Trufa', ${SANS}`,
+    );
+    const files = fontFilesFor(doc);
+    expect(files).toEqual([
+      "propia-0a1b2c3d-variable.ttf",
+      "propia-3f9a7c21-regular.woff2",
+      "propia-3f9a7c21-bold.woff",
+    ]);
+    // The same with a gallery family in the body: its faces come first, in the table's order.
+    const mixed = withOwn(
+      [casa, abuela],
+      `'Letra de la Abuela', Georgia, serif`,
+      "Inter, sans-serif",
+    );
+    expect(fontFilesFor(mixed)).toEqual([
+      "inter-latin-400-normal.woff2",
+      "inter-latin-700-normal.woff2",
+      "propia-0a1b2c3d-variable.ttf",
+    ]);
+    expect(shippedFontFilesFor(mixed)).toEqual([
+      "inter-latin-400-normal.woff2",
+      "inter-latin-700-normal.woff2",
+    ]);
+    const css = fontFaceCss(mixed).join("\n");
+    expect(css.indexOf("'Inter'")).toBeGreaterThanOrEqual(0);
+    expect(css.indexOf("'Inter'")).toBeLessThan(css.indexOf("'Letra de la Abuela'"));
+    // Reversing the owner's array moves nothing: INV_5's property, held for this channel too.
+    expect(fontFaceCss({ ...mixed, fonts: [abuela, casa] })).toEqual(fontFaceCss(mixed));
+  });
+
+  it("ships only the own fonts a stack names first, and nothing for a record nobody chose", () => {
+    const doc = withOwn([casa, abuela]);
+    expect(ownFontsFor(doc).map((font) => font.id)).toEqual(["3f9a7c21"]);
+    expect(ownFacesFor(doc).map((face) => face.file)).toEqual([
+      "propia-3f9a7c21-regular.woff2",
+      "propia-3f9a7c21-bold.woff",
+    ]);
+    // A stack that names an own family further down is a fallback, as for the table.
+    const fallback = withOwn([casa], `Georgia, 'Casa Trufa', serif`);
+    expect(fontFilesFor(fallback)).toEqual([]);
+    expect(fontFaceCss(fallback)).toEqual([]);
+  });
+
+  it("keeps matching exact, for the same reason the table does", () => {
+    for (const stack of [
+      "casa trufa, sans-serif",
+      "CASA TRUFA, sans-serif",
+      "Casa Trufa 2, sans-serif",
+    ]) {
+      expect(fontFilesFor(withOwn([casa], stack)), stack).toEqual([]);
+    }
+  });
+
+  it("emits nothing for a stack that names a family in no record and no row", () => {
+    // The renderer cannot tell a font that was removed from the record apart from a system family
+    // like Georgia, and does not try: it ships what the document declares and nothing else. The
+    // verb that removes a font (día 5) and migration 0015's `down` are where the stack is trimmed.
+    const doc = withOwn([], `'Casa Trufa', ${SANS}`);
+    expect(fontFilesFor(doc)).toEqual([]);
+    expect(fontFaceCss(doc)).toEqual([]);
+    const { fonts: _none, ...without } = doc;
+    expect(fontFilesFor(without as RetorikaDocument)).toEqual([]);
+  });
+
+  it("is what the corpus fixture publishes: the gallery's text face first, then the owner's", () => {
+    const fixture = loadCorpus().find((entry) => entry.name === "letra-propia");
+    if (!fixture) throw new Error("the letra-propia fixture is missing from the corpus");
+    expect(fontFilesFor(fixture.document)).toEqual([
+      "gelasio-latin-400-normal.woff2",
+      "gelasio-latin-700-normal.woff2",
+      "propia-3f9a7c21-regular.woff2",
+      "propia-3f9a7c21-bold.woff",
+    ]);
   });
 });

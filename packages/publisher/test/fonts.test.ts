@@ -16,6 +16,7 @@ import { FONT_DATA_KEYS, fontDataFor } from "../src/fontData/index.ts";
 import { FONT_SOURCES, licencesFor } from "../src/fonts.ts";
 import { copyrightNotice, reservesPresentedName } from "../src/licences.ts";
 import { buildSite } from "../src/site.ts";
+import { fixtureFontBundle } from "./fixtureFonts.ts";
 
 /**
  * The three conditions this sprint's plan attached to shipping the faces, each with its own test.
@@ -88,7 +89,7 @@ async function bundleFor(document: RetorikaDocument) {
   return buildSite(document, {
     siteId: "s",
     assets: assetsFor(document),
-    fonts: readFontBundle(document),
+    fonts: fixtureFontBundle(document),
   });
 }
 
@@ -135,7 +136,8 @@ describe("condition 1 — only the weights the pairs use, and only the latin sub
   it("puts a font in the bundle only when the page asks for one", async () => {
     for (const { name, document } of corpus()) {
       const bundle = await bundleFor(document);
-      const faces = bundle.files.filter((file) => file.path.endsWith(".woff2"));
+      // Any of the four formats: the table ships woff2 and an owner's own face arrives as it was.
+      const faces = bundle.files.filter((file) => /\.(woff2|woff|ttf|otf)$/.test(file.path));
       const asked = fontFilesFor(document);
       expect(faces.map((f) => f.path).sort(), name).toEqual(
         asked.map((file) => `fonts/${file}`).sort(),

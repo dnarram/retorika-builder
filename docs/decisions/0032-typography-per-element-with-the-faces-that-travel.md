@@ -95,6 +95,18 @@ here rather than presented as a consequence of something.
 
 - `SCHEMA_VERSION` 1.6.0 → 1.7.0, migration `0008`, additive: an optional property on an optional
   object, so every stored document is already valid under it.
+
+## Amendment — 27 October 2026
+
+**§2 is amended in its reading and not in its rule**
+([ADR 0056](0056-an-own-font-travels-like-a-photograph.md)). `fontFamily` still has no exact arm and
+an owner still cannot type a family. What §2 refused was described in three clauses — *«a name the
+owner types, a face that does not travel, and a letter the visitor may never see»* — and all three
+are about a **name**. A font the owner **uploads** is none of them: its name is read from the file's
+own `name` table, its face travels in the ZIP beside the page, and the visitor sees it. So «What this
+does not decide» above, which said the refusal's reason *«has not expired»*, is right about a typed
+family and silent about a shipped one; ADR 0056 decides the second as a row the owner added, selected
+by reference like any gallery family, and not as an exception to anything here.
 - The renderer emits `font-family` for an element, through the same rule-6 path and the same
   specificity the browser tests already prove.
 - **The type-level half of §2 arrived a day late, and this is the record of it.** `styleValueFor`

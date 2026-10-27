@@ -219,3 +219,11 @@ repository. In the client's ZIP they cost nothing: only the faces the theme name
   declares. **Libre Baskerville, admitted here, reserves its name**; it left on 27 October 2026 for
   Gelasio, with migration `0014`. Of the nine that «passed» and were not shipped, Source Sans 3 and
   Source Serif 4 do not pass that reading.
+- **§2, «a document never names a file», holds for a row that is not in the table**
+  ([ADR 0056](0056-an-own-font-travels-like-a-photograph.md)). A font the owner brought is a record in
+  the document — an id the editor minted, a family read from the file, the faces the server sniffed —
+  and the renderer mints its file as `fonts/propia-<id>-<role>.<format>` from the id and the role,
+  never from the owner's file name and never from the family they were shown. The same `cssFontSrc`
+  emits it, over a closed set of four extensions instead of one. §4's «no display family» and «both
+  weights or none» stand for the table; for an own font, a regular alone is admitted and the editor
+  says the bold will be synthesised.

@@ -1543,16 +1543,19 @@ describe("1.13.0 — Libre Baskerville reserves its name", () => {
     return { heading: migrated["font.heading"], body: migrated["font.body"] };
   };
 
-  it("is registered, and it is the one the chain ends at", () => {
+  it("is registered", () => {
+    // The end of the chain until 1.14.0, and the test said so; the end is asserted below now, by the
+    // step that is the end.
     expect(step("1.13.0").version).toBe("1.13.0");
-    expect(SCHEMA_VERSION).toBe("1.13.0");
   });
 
   /** David's condition (b), first half: the whole stack of Libre Baskerville becomes Gelasio's. */
   it("turns the whole Libre Baskerville stack into Gelasio's, and stamps the version", () => {
     const after = migrateToCurrent(before());
     expect(fontsOf(after).heading).toBe(GELASIO);
-    expect(after["schemaVersion"]).toBe("1.13.0");
+    // The stamp is this step's, read where this step leaves it: through the whole chain it said
+    // 1.13.0 until 1.14.0 landed, the form the `step` helper's comment warns about.
+    expect(upTo(before(), "1.13.0")["schemaVersion"]).toBe("1.13.0");
     expect(() => parseDocument(after)).not.toThrow();
   });
 
@@ -1628,5 +1631,145 @@ describe("1.13.0 — Libre Baskerville reserves its name", () => {
     for (const file of corpus) {
       expect(readFileSync(join(DOCUMENTS_DIR, file), "utf8"), file).not.toContain("Baskerville'");
     }
+  });
+});
+
+describe("1.14.0 — an own font travels like a photograph", () => {
+  const CASA =
+    "'Casa Trufa', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+  const GELASIO = "Gelasio, Georgia, Cambria, 'Times New Roman', Times, serif";
+  const casa = {
+    id: "3f9a7c21",
+    family: "Casa Trufa",
+    kind: "sans",
+    faces: [{ role: "regular", format: "woff2" }],
+    licence: { declared: true, at: "2026-10-27T18:00:00Z" },
+  };
+
+  /** A 1.13.0 site: no `fonts` key, because nothing could write one. */
+  function before(fonts: { heading?: string; body?: string } = {}): Record<string, unknown> {
+    return {
+      schemaVersion: "1.13.0",
+      id: "doc-trufa",
+      siteName: "Pastelería Trufa",
+      theme: {
+        ...theme,
+        ...(fonts.heading === undefined ? {} : { "font.heading": fonts.heading }),
+        ...(fonts.body === undefined ? {} : { "font.body": fonts.body }),
+      },
+      collections: [],
+      pages: [
+        {
+          id: "home",
+          slug: "index",
+          title: "Pastelería Trufa",
+          sections: [
+            {
+              id: "sec-cover",
+              preset: { catalogId: "cover", variantId: "image-right" },
+              source: "catalog",
+              layout: null,
+              content: [],
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  /** A 1.14.0 site whose owner brought a font and chose it for the headings. */
+  const after = (fonts: { heading?: string; body?: string } = { heading: CASA }) => ({
+    ...before(fonts),
+    schemaVersion: "1.14.0",
+    fonts: [casa],
+  });
+
+  const fontsOf = (doc: Record<string, unknown>) => {
+    const migrated = doc["theme"] as Theme;
+    return { heading: migrated["font.heading"], body: migrated["font.body"] };
+  };
+
+  it("is registered, and it is the one the chain ends at", () => {
+    expect(step("1.14.0").version).toBe("1.14.0");
+    expect(SCHEMA_VERSION).toBe("1.14.0");
+  });
+
+  it("seals a 1.13.0 document and moves nothing, because the key is optional", () => {
+    const input = before({ heading: GELASIO });
+    const migrated = migrateToCurrent(input);
+    expect(migrated["schemaVersion"]).toBe("1.14.0");
+    expect({ ...migrated, schemaVersion: "1.13.0" }).toEqual(input);
+    expect(Object.hasOwn(migrated, "fonts")).toBe(false);
+    expect(() => parseDocument(migrated)).not.toThrow();
+  });
+
+  it("migrating a migrated document changes nothing", () => {
+    const once = migrateToCurrent(before());
+    expect(migrateToCurrent(once)).toEqual(once);
+  });
+
+  it("leaves a document that already carries a font exactly as it is", () => {
+    const current = after();
+    expect(migrateToCurrent(current)).toEqual(current);
+    expect(() => parseDocument(current)).not.toThrow();
+  });
+
+  /**
+   * **`down` is lossy, and this is the loss, named:** the record goes, and the family goes out of
+   * every stack that names it first, in either half — what is left is the fallback the stack already
+   * carried, so the visitor who never received the face reads what they read before.
+   */
+  it("takes the fonts out on the way down, and the family out of every stack that named it", () => {
+    const down = step("1.14.0").down;
+    expect(down, "1.14.0 has no `down`").toBeDefined();
+    const back = down?.(after({ heading: CASA, body: CASA })) ?? {};
+    expect(back["schemaVersion"]).toBe("1.13.0");
+    expect(Object.hasOwn(back, "fonts")).toBe(false);
+    expect(fontsOf(back)).toEqual({
+      heading: "system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+      body: "system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+    });
+    expect(() => parseDocument(back)).not.toThrow();
+  });
+
+  it("leaves a stack alone on the way down when it names no own font first", () => {
+    const down = step("1.14.0").down;
+    const back = down?.(after({ heading: GELASIO, body: `Georgia, ${CASA}` })) ?? {};
+    expect(fontsOf(back)).toEqual({ heading: GELASIO, body: `Georgia, ${CASA}` });
+  });
+
+  it("falls a stack that was nothing but the family back to its species' generic", () => {
+    const down = step("1.14.0").down;
+    const serif = { ...casa, kind: "serif" };
+    const back = down?.({ ...after({ heading: "'Casa Trufa'" }), fonts: [serif] }) ?? {};
+    expect(fontsOf(back).heading).toBe("serif");
+    const display = { ...casa, kind: "display" };
+    const alsoBack = down?.({ ...after({ heading: "'Casa Trufa',   " }), fonts: [display] }) ?? {};
+    expect(fontsOf(alsoBack).heading).toBe("sans-serif");
+  });
+
+  it("round-trips a document that never had a font", () => {
+    const down = step("1.14.0").down;
+    const input = before({ heading: GELASIO });
+    expect(down?.(migrateToCurrent(input))).toEqual(input);
+  });
+
+  it("is the claim it rests on: no corpus fixture below 1.14.0 carries a fonts key", () => {
+    // The affected set of `up`, counted: a document that already had the key would be a document
+    // this version's `up` ought to have validated, and there is none. The one fixture that carries
+    // the key was written at 1.14.0.
+    const corpus = readdirSync(DOCUMENTS_DIR).filter((file) => file.endsWith(".json"));
+    expect(corpus.length).toBeGreaterThan(0);
+    let carrying = 0;
+    for (const file of corpus) {
+      const raw = JSON.parse(readFileSync(join(DOCUMENTS_DIR, file), "utf8")) as Record<
+        string,
+        unknown
+      >;
+      if (!Object.hasOwn(raw, "fonts")) continue;
+      carrying += 1;
+      expect(raw["schemaVersion"], file).toBe("1.14.0");
+    }
+    expect(carrying).toBe(1);
   });
 });

@@ -8,7 +8,8 @@ import {
   type RetorikaDocument,
 } from "@retorika/schema";
 import { describe, expect, it } from "vitest";
-import { buildSite, readFontBundle, type SiteBundle } from "../src/index.ts";
+import { buildSite, type SiteBundle } from "../src/index.ts";
+import { fixtureFontBundle } from "./fixtureFonts.ts";
 
 /**
  * The acceptance criterion of phase 0, as a test: "publicar un sitio de una sección …,
@@ -51,7 +52,7 @@ async function bundleFor(name: string, document: RetorikaDocument): Promise<Site
     siteId: name,
     baseUrl: "https://example.test",
     assets,
-    fonts: readFontBundle(document),
+    fonts: fixtureFontBundle(document),
   });
 }
 
