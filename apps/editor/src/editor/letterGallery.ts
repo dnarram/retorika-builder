@@ -1,5 +1,5 @@
 import { SHIPPABLE_FAMILIES } from "@retorika/renderer";
-import type { Theme } from "@retorika/schema";
+import type { FontKind, Theme } from "@retorika/schema";
 import { type FontKey, GALLERY_FAMILIES, identifyFamily, identifyTypePair } from "@retorika/tokens";
 import tokensEs from "@retorika/tokens/locales/es" with { type: "json" };
 import es from "../locales/es.json" with { type: "json" };
@@ -43,7 +43,7 @@ const FILE_SHAPE = /^[a-z0-9-]+\.woff2$/;
 export interface GalleryRow {
   /** The family's real name, which is what the row says out loud. */
   family: string;
-  kind: "sans" | "serif";
+  kind: FontKind;
   /** The face the specimen is drawn with, served by the editor's own `fonts/[file]` route. */
   file: string;
   /** Whether this is the family the theme's stack for that key begins with. */

@@ -82,6 +82,14 @@ export {
   gapRowsFor,
   measuredToFine,
 } from "./fineGrid.ts";
+export type { FontGalleryRow, FontKind } from "./fontGallery.ts";
+export {
+  FONT_FAMILY_PATTERN,
+  FONT_GALLERY,
+  FONT_KINDS,
+  fontFamilySlug,
+  GENERIC_OF,
+} from "./fontGallery.ts";
 export type { PresetLookup, Violation } from "./invariants.ts";
 export { checkInvariants, flattenElements } from "./invariants.ts";
 export type { InvariantId } from "./invariants-catalog.ts";

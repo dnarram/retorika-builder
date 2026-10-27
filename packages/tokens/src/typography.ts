@@ -1,4 +1,4 @@
-import type { TokenKey } from "@retorika/schema";
+import { FONT_GALLERY, type FontKind, GENERIC_OF, type TokenKey } from "@retorika/schema";
 
 export type FontKey = Extract<TokenKey, `font.${string}`>;
 
@@ -176,10 +176,10 @@ export interface GalleryFamily {
   family: string;
   /**
    * Which species it is, and it earns its place in the data rather than in a comment: the stack has
-   * to end in the matching generic keyword, so that a visitor whose browser fetched no face at all
-   * still gets a serif where a serif was chosen. Asserted over every row.
+   * to end in the generic keyword `GENERIC_OF` gives it, so that a visitor whose browser fetched no
+   * face at all still gets a serif where a serif was chosen. Asserted over every row.
    */
-  kind: "sans" | "serif";
+  kind: FontKind;
   /**
    * The stack a theme carries when this family is chosen — the family first, then the fallbacks.
    *
@@ -191,37 +191,39 @@ export interface GalleryFamily {
   stack: string;
 }
 
-/** Everything after the chosen family, by species. Two chains and not eight: with the face shipped
- * for every row, these run only when the file did not arrive, so what they owe is the species and
- * not a character. The sans chain is `modern-sans`'s own body stack and the serif one
- * `editorial-serif`'s own heading stack, minus its first family. */
-const SANS_FALLBACK = "system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
-const SERIF_FALLBACK = "Georgia, Cambria, 'Times New Roman', Times, serif";
+/** Everything after the chosen family, by the generic keyword its species falls back to. Two chains
+ * and not one per family: with the face shipped for every row, these run only when the file did not
+ * arrive, so what they owe is the species and not a character. The sans chain is `modern-sans`'s own
+ * body stack and the serif one `editorial-serif`'s own heading stack, minus its first family. */
+const FALLBACK: Readonly<Record<"sans-serif" | "serif", string>> = {
+  "sans-serif": "system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+  serif: "Georgia, Cambria, 'Times New Roman', Times, serif",
+};
 
 /**
- * The gallery, **alphabetical**, which is the order the owner reads and the order the renderer's own
- * table is in.
- *
- * Four sans and four serifs: an owner matching a brand needs a geometric and a grotesque to be
- * different things, and the weights are in ADR 0046 with the licence reading that admitted each one.
+ * **Where a pair already names a family first, the gallery's stack is that pair's own, verbatim** —
+ * see `GalleryFamily.stack`. Two families, and a test holds them to the pairs.
  */
-export const GALLERY_FAMILIES: readonly GalleryFamily[] = [
-  { family: "Bitter", kind: "serif", stack: `Bitter, ${SERIF_FALLBACK}` },
-  { family: "DM Sans", kind: "sans", stack: `'DM Sans', ${SANS_FALLBACK}` },
-  {
-    family: "EB Garamond",
-    kind: "serif",
-    // `classic-display`'s heading stack, verbatim — see `GalleryFamily.stack`.
-    stack: "'EB Garamond', Garamond, Baskerville, 'Big Caslon', Georgia, 'Times New Roman', serif",
-  },
-  { family: "Figtree", kind: "sans", stack: `Figtree, ${SANS_FALLBACK}` },
-  { family: "Gelasio", kind: "serif", stack: `Gelasio, ${SERIF_FALLBACK}` },
-  {
-    family: "Inter",
-    kind: "sans",
-    // `modern-sans`'s heading stack, verbatim — see `GalleryFamily.stack`.
-    stack: "Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
-  },
-  { family: "Spectral", kind: "serif", stack: `Spectral, ${SERIF_FALLBACK}` },
-  { family: "Work Sans", kind: "sans", stack: `'Work Sans', ${SANS_FALLBACK}` },
-];
+const VERBATIM_STACKS: Readonly<Record<string, string>> = {
+  // `classic-display`'s heading stack.
+  "EB Garamond":
+    "'EB Garamond', Garamond, Baskerville, 'Big Caslon', Georgia, 'Times New Roman', serif",
+  // `modern-sans`'s heading stack.
+  Inter: "Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+};
+
+/** A family as a stack names it: quoted when it has a space, bare when it is one word, which is how
+ * every stack written by hand here has spelled them since sprint 4. */
+const named = (family: string) => (family.includes(" ") ? `'${family}'` : family);
+
+/**
+ * The gallery, **derived from `FONT_GALLERY`** in `@retorika/schema` (ADR 0055), and so alphabetical:
+ * the order the owner reads and the order the renderer's own table is in. Until sprint 29 this was one
+ * of four parallel copies of the names; now the stack is the only thing this package adds — the
+ * family, then its species' fallback, or a pair's own stack where a pair names it.
+ */
+export const GALLERY_FAMILIES: readonly GalleryFamily[] = FONT_GALLERY.map(({ family, kind }) => ({
+  family,
+  kind,
+  stack: VERBATIM_STACKS[family] ?? `${named(family)}, ${FALLBACK[GENERIC_OF[kind]]}`,
+}));

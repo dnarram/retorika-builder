@@ -6,7 +6,7 @@ import { flattenElements, parseDocument, type RetorikaDocument } from "@retorika
 import { GALLERY_FAMILIES, withFamily } from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
 import { readFontBundle } from "../src/fontBytes.ts";
-import { FONT_DATA_KEYS, fontDataFor } from "../src/fontData.ts";
+import { FONT_DATA_KEYS, fontDataFor } from "../src/fontData/index.ts";
 import { FONT_SOURCES, licencesFor } from "../src/fonts.ts";
 import { copyrightNotice, reservesPresentedName } from "../src/licences.ts";
 import { buildSite } from "../src/site.ts";
@@ -389,6 +389,19 @@ describe("condition 2 — a face never travels without its licence", () => {
   });
 });
 
+/**
+ * Whether two byte strings are the same, compared natively.
+ *
+ * **Not `toEqual`**, which walks a `Uint8Array` element by element: over the twenty-five families of
+ * sprint 29 día 2 — fifty faces and twenty-five licences, about 1.3 MB — that took 8.7 s on the CI
+ * runner under coverage and timed the test out, where it took 1.3 s here. A diff of binary data says
+ * nothing a reader can use anyway; the message beside each assertion names the file.
+ */
+function sameBytes(actual: Uint8Array | undefined, expected: Uint8Array): boolean {
+  if (actual === undefined) return false;
+  return Buffer.from(actual.buffer, actual.byteOffset, actual.byteLength).equals(expected);
+}
+
 describe("condition 3 — the woff2 travel exactly as the package ships them", () => {
   it("**the generated data is byte-for-byte what the package ships**", () => {
     /**
@@ -404,21 +417,24 @@ describe("condition 3 — the woff2 travel exactly as the package ships them", (
     const seen = new Set<string>();
     for (const [name, source] of Object.entries(FONT_SOURCES)) {
       const dir = dirname(require_.resolve(`${source.package}/package.json`));
-      const face = new Uint8Array(readFileSync(join(dir, "files", source.file)));
-      expect(fontDataFor(name), `${name} must be the package's bytes, unmodified`).toEqual(face);
+      const face = readFileSync(join(dir, "files", source.file));
+      expect(
+        sameBytes(fontDataFor(name), face),
+        `${name} must be the package's bytes, unmodified`,
+      ).toBe(true);
       if (!seen.has(source.licencePath)) {
         seen.add(source.licencePath);
         const slug = source.package.replace(/^@fontsource\//, "");
-        const holders = new Uint8Array(readFileSync(join(LICENCES_DIR, `${slug}.txt`)));
-        expect(fontDataFor(source.licencePath), source.licencePath).toEqual(holders);
+        const holders = readFileSync(join(LICENCES_DIR, `${slug}.txt`));
+        expect(sameBytes(fontDataFor(source.licencePath), holders), source.licencePath).toBe(true);
         // **And not the package's.** The two texts differ for every family shipped today (measured
         // 27 October 2026), so equality with the holders' file is a statement about which one was read
         // — the sabotage of reading `LICENSE` again goes red here.
-        const packaged = new Uint8Array(readFileSync(join(dir, "LICENSE")));
+        const packaged = readFileSync(join(dir, "LICENSE"));
         expect(
-          fontDataFor(source.licencePath),
+          sameBytes(fontDataFor(source.licencePath), packaged),
           `${source.licencePath} is @fontsource's`,
-        ).not.toEqual(packaged);
+        ).toBe(false);
       }
     }
     // And nothing else is carried: a key with no source would be bytes nobody can account for.
@@ -446,9 +462,61 @@ describe("condition 3 — the woff2 travel exactly as the package ships them", (
       const dir = dirname(
         createRequire(import.meta.url).resolve(`${source?.package}/package.json`),
       );
-      const fromPackage = new Uint8Array(readFileSync(join(dir, "files", source?.file ?? "")));
-      expect(file.contents, `${name} must be the package's bytes, unmodified`).toEqual(fromPackage);
+      const fromPackage = readFileSync(join(dir, "files", source?.file ?? ""));
+      expect(
+        sameBytes(file.contents, fromPackage),
+        `${name} must be the package's bytes, unmodified`,
+      ).toBe(true);
     }
+  });
+
+  /**
+   * **One generated module per package, and none left behind** (ADR 0055). `pnpm fonts:generate`
+   * removes the module of a package the table no longer names; read from the directory and not from
+   * the index, because an orphan is exactly the file nothing imports.
+   */
+  it("keeps exactly one generated module per package, and none for a package no longer shipped", () => {
+    const modules = readdirSync(join(import.meta.dirname, "..", "src", "fontData"))
+      .filter((file) => file.endsWith(".ts") && file !== "index.ts")
+      .map((file) => file.slice(0, -".ts".length))
+      .sort();
+    expect(modules).toEqual(
+      shippedPackages()
+        .map(({ slug }) => slug)
+        .sort(),
+    );
+  });
+
+  /**
+   * **Every package pinned exactly, in this package's manifest and in the root's** — the condition
+   * ADR 0046 found broken the first time, when `pnpm install --frozen-lockfile` would have caught it in
+   * CI. The publisher's own manifest is what `fonts.test.ts` resolves from; the root's is what
+   * `scripts/generate-font-data.ts` resolves from. A range would let a different face in under a
+   * licence reading made of another one.
+   */
+  it("pins every shipped package exactly, in this package's manifest and in the root's", () => {
+    const manifest = (path: string) => JSON.parse(readFileSync(path, "utf8"));
+    const own = manifest(join(import.meta.dirname, "..", "package.json"));
+    const root = manifest(join(import.meta.dirname, "..", "..", "..", "package.json"));
+    const rootPins: Record<string, string> = { ...root.dependencies, ...root.devDependencies };
+    const packages = shippedPackages()
+      .map(({ pkg }) => pkg)
+      .sort();
+
+    for (const pkg of packages) {
+      const pinned = own.dependencies?.[pkg];
+      expect(pinned, `${pkg} is not pinned exactly in packages/publisher`).toMatch(
+        /^\d+\.\d+\.\d+$/,
+      );
+      expect(rootPins[pkg], `${pkg} is pinned differently in the root`).toBe(pinned);
+    }
+    // And nothing declared that the table does not ship: a stray face package is bytes nobody reads.
+    const fontsource = (deps: Record<string, string>) =>
+      Object.keys(deps)
+        .filter((name) => name.startsWith("@fontsource/"))
+        .sort();
+    expect(fontsource(own.dependencies)).toEqual(packages);
+    expect(fontsource(rootPins)).toEqual(packages);
   });
 
   it("keeps the package's own file name, so the ZIP says what it carries", () => {

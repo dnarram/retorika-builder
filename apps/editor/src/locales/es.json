@@ -317,6 +317,8 @@
   "editor.style.chooser.kind.all": "Todas",
   "editor.style.chooser.kind.sans": "Sin remates",
   "editor.style.chooser.kind.serif": "Con remates",
+  "editor.style.chooser.kind.slab": "Remates gruesos",
+  "editor.style.chooser.kind.display": "De cartel",
   "editor.style.chooser.count": "{n} letras",
   "editor.style.chooser.one": "1 letra",
   "editor.style.chooser.none": "Ninguna letra se llama así.",

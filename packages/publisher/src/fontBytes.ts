@@ -1,13 +1,13 @@
 import { fontFilesFor } from "@retorika/renderer";
 import type { RetorikaDocument } from "@retorika/schema";
-import { fontDataFor } from "./fontData.ts";
+import { fontDataFor } from "./fontData/index.ts";
 import { licencesFor } from "./fonts.ts";
 
 /**
  * The bytes for a set of faces, read from the packages they come from.
  *
  * **Separate from `buildSite`, and synchronous**, because in the end there is nothing to wait for: the
- * bytes live in `fontData.ts`, generated from the packages and checked against them by a test. It stays
+ * bytes live in `fontData/`, generated from the packages and checked against them by a test. It stays
  * a separate function anyway — `buildSite` takes a map exactly as it does for photos, so there is one
  * shape for "bytes the caller supplies" rather than two.
  *

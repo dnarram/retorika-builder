@@ -28,7 +28,8 @@ describe("galleryRows", () => {
     // anybody remembering to add it, and one removed stops being offered.
     const rows = galleryRows(start, "font.heading");
     expect(rows.map((row) => row.family)).toEqual(SHIPPABLE_FAMILIES.map((f) => f.family));
-    expect(rows).toHaveLength(8);
+    // A literal floor beside the derivation, so an empty table cannot pass as «every family».
+    expect(rows.length).toBeGreaterThanOrEqual(25);
   });
 
   it("keeps the gallery's own order, which is the order the owner reads", () => {
@@ -82,7 +83,9 @@ describe("galleryFaceCss", () => {
   });
 
   it("draws the specimens in the regular, which is half of what opening the group fetches", () => {
-    expect(galleryFaceCss().match(/font-weight:400/g) ?? []).toHaveLength(8);
+    expect(galleryFaceCss().match(/font-weight:400/g) ?? []).toHaveLength(
+      SHIPPABLE_FAMILIES.length,
+    );
     expect(galleryFaceCss()).not.toContain("font-weight:700");
   });
 

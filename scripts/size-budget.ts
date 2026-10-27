@@ -5,7 +5,7 @@ import { EMPTY_ANSWERS, generate, VARIANTS } from "@retorika/generator";
 import { hasSamplePhotos, recordById, sectorsInBank } from "@retorika/photobank";
 import { readSampleBytes } from "@retorika/photobank/server";
 import { buildSite, readFontBundle } from "@retorika/publisher";
-import { render } from "@retorika/renderer";
+import { render, SHIPPABLE_FAMILIES } from "@retorika/renderer";
 import { flattenElements, parseDocument, type RetorikaDocument } from "@retorika/schema";
 
 /**
@@ -71,8 +71,9 @@ const MAX_BUNDLE_GZIP_BYTES = 20 * 1024;
  * So there are two numbers, and each is sized from its own measurement. **Measured gzipped on 18
  * October 2026**, which is how this script weighs, not from the files on disk:
  *
- * - **115 KB of faces.** A bundle can carry **at most two families**, because the schema holds
- *   exactly two font tokens and the renderer ships a face only for a token's first family — and
+ * - **115 KB of faces** (120 since sprint 29, below). A bundle can carry **at most two
+ *   families**, because the schema holds exactly two font tokens and the renderer ships a face only
+ *   for a token's first family — and
  *   sprint 24 decided against a third slot. The heaviest pair the gallery can produce is **EB
  *   Garamond and Inter: 98.7 KB**, faces and both licences. 115 leaves 16.3 KB over that, and the
  *   heaviest single family is 50.0 KB, which is what every site on «Clásica y seria» measures today.
@@ -85,8 +86,17 @@ const MAX_BUNDLE_GZIP_BYTES = 20 * 1024;
  *
  * The per-page allowance below still grows the second number and not this one: a face is counted
  * once for the site, however many pages name it.
+ *
+ * **Since sprint 29 the ceiling checks itself** (ADR 0055). A gallery of twenty-five families, and
+ * forty after día 3, is no longer a table anybody re-weighs by hand when a row is added, so the script
+ * computes the heaviest pair the table can produce — every two distinct families, each with its faces
+ * and the licence beside them, weighed as the ZIP carries them — prints it, and **fails if this number
+ * is below it**. Measured 27 October 2026 over the twenty-five rows of día 2: **Zilla Slab and Libre
+ * Caslon Text, 104.3 KB**, where EB Garamond and Inter were 98.7. 120 keeps ADR 0046 §5's margin of
+ * about 16 KB over it. A heavier family entering is then a red line with its own number beside it,
+ * not a ceiling that quietly stopped meaning anything.
  */
-const MAX_FONT_GZIP_BYTES = 115 * 1024;
+const MAX_FONT_GZIP_BYTES = 120 * 1024;
 
 /**
  * What one more emitted page may add to the bundle (ADR 0040 §8), **measured on 13 October 2026**
@@ -254,6 +264,40 @@ for (const sector of sectorsInBank().filter(hasSamplePhotos).sort()) {
     }
     weigh(`${sector} · ${variant.id} ${variant.cover}`, site.document, assets, photographs);
   }
+}
+
+/**
+ * **The heaviest pair the gallery can produce**, against the faces' ceiling (ADR 0055).
+ *
+ * Each family is weighed the way a ZIP carries it — its faces and its licence, read through
+ * `readFontBundle` from a document whose heading names it, gzipped as everything here is — and the
+ * pair is the two heaviest distinct families: a theme holds two font tokens, the renderer ships a face
+ * only for a token's first family, and one family named twice is one family's bytes.
+ */
+{
+  const base = parseDocument(
+    JSON.parse(readFileSync(join(DOCUMENTS_DIR, "barbershop-cover.json"), "utf8")),
+  );
+  const weights = SHIPPABLE_FAMILIES.map(({ family }) => {
+    const document = { ...base, theme: { ...base.theme, "font.heading": `'${family}', serif` } };
+    let bytes = 0;
+    for (const contents of readFontBundle(document).values()) bytes += gzipSync(contents).length;
+    return { family, bytes };
+  }).sort((a, b) => b.bytes - a.bytes || a.family.localeCompare(b.family));
+  const [first, second] = weights;
+  if (first === undefined || second === undefined) {
+    throw new Error("size-budget: the gallery has fewer than two families to pair");
+  }
+  const pair = first.bytes + second.bytes;
+  const fits = pair <= MAX_FONT_GZIP_BYTES;
+  if (!fits) failed = true;
+  console.log(
+    `\n${fits ? "ok  " : "FAIL"} the heaviest pair the table can produce: ${first.family} ` +
+      `(${(first.bytes / 1024).toFixed(1)} KB) and ${second.family} ` +
+      `(${(second.bytes / 1024).toFixed(1)} KB), ${(pair / 1024).toFixed(1)} KB of faces and ` +
+      `licences, against ${MAX_FONT_GZIP_BYTES / 1024} KB` +
+      (fits ? "" : " — the ceiling is below the heaviest pair the table can produce"),
+  );
 }
 
 console.log(

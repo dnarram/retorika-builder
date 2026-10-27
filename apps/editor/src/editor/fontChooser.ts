@@ -1,5 +1,5 @@
-import type { Theme } from "@retorika/schema";
-import type { FontKey } from "@retorika/tokens";
+import { FONT_KINDS, type Theme } from "@retorika/schema";
+import { type FontKey, GALLERY_FAMILIES } from "@retorika/tokens";
 import es from "../locales/es.json" with { type: "json" };
 import { fold } from "./fold.ts";
 import { type GalleryRow, galleryRows } from "./letterGallery.ts";
@@ -26,7 +26,15 @@ import { type GalleryRow, galleryRows } from "./letterGallery.ts";
 /** The kinds a chip can narrow to. `"all"` first, then the gallery's own species in their order. */
 export type KindFilter = "all" | GalleryRow["kind"];
 
-export const KIND_FILTERS: readonly KindFilter[] = ["all", "sans", "serif"];
+/**
+ * «Todas», then **every species the gallery actually has**, in `FONT_KINDS`'s order — derived, so a
+ * chip never narrows to an empty list and the next species gets its chip the day its first family
+ * enters: «Remates gruesos» with the slabs on sprint 29 día 2, «De cartel» on día 3.
+ */
+export const KIND_FILTERS: readonly KindFilter[] = [
+  "all",
+  ...FONT_KINDS.filter((kind) => GALLERY_FAMILIES.some((row) => row.kind === kind)),
+];
 
 export interface ChooserRow extends GalleryRow {
   /** Whether the row matches the words typed and the chip pressed. The row stays mounted either

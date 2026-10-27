@@ -173,7 +173,13 @@ importers:
 
   .:
     dependencies:
+      '@fontsource/aleo':
+        specifier: 5.3.0
+        version: 5.3.0
       '@fontsource/bitter':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/crimson-pro':
         specifier: 5.3.0
         version: 5.3.0
       '@fontsource/dm-sans':
@@ -185,13 +191,58 @@ importers:
       '@fontsource/figtree':
         specifier: 5.3.0
         version: 5.3.0
+      '@fontsource/fraunces':
+        specifier: 5.3.0
+        version: 5.3.0
       '@fontsource/gelasio':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/karla':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/libre-caslon-text':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/libre-franklin':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/manrope':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/montserrat':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/newsreader':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/nunito-sans':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/open-sans':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/poppins':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/public-sans':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/roboto':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/rokkitt':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/rubik':
         specifier: 5.3.0
         version: 5.3.0
       '@fontsource/spectral':
         specifier: 5.3.0
         version: 5.3.0
       '@fontsource/work-sans':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/zilla-slab':
         specifier: 5.3.0
         version: 5.3.0
       '@retorika/db':
@@ -387,7 +438,13 @@ importers:
 
   packages/publisher:
     dependencies:
+      '@fontsource/aleo':
+        specifier: 5.3.0
+        version: 5.3.0
       '@fontsource/bitter':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/crimson-pro':
         specifier: 5.3.0
         version: 5.3.0
       '@fontsource/dm-sans':
@@ -399,16 +456,61 @@ importers:
       '@fontsource/figtree':
         specifier: 5.3.0
         version: 5.3.0
+      '@fontsource/fraunces':
+        specifier: 5.3.0
+        version: 5.3.0
       '@fontsource/gelasio':
         specifier: 5.3.0
         version: 5.3.0
       '@fontsource/inter':
         specifier: 5.2.8
         version: 5.2.8
+      '@fontsource/karla':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/libre-caslon-text':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/libre-franklin':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/manrope':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/montserrat':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/newsreader':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/nunito-sans':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/open-sans':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/poppins':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/public-sans':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/roboto':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/rokkitt':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/rubik':
+        specifier: 5.3.0
+        version: 5.3.0
       '@fontsource/spectral':
         specifier: 5.3.0
         version: 5.3.0
       '@fontsource/work-sans':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/zilla-slab':
         specifier: 5.3.0
         version: 5.3.0
       '@retorika/renderer':
@@ -552,8 +654,14 @@ packages:
   '@emnapi/runtime@1.11.3':
     resolution: {integrity: sha512-Xz4Tpyki7XyrpbUK1jR1AhdAdaXyhhY4lZ3neLodmhpuWfy2PAQN5B46sAiU4liOXGLkHypn/qU+jvfWSCYYLA==}
 
+  '@fontsource/aleo@5.3.0':
+    resolution: {integrity: sha512-HaDP0Ac6pej4H75ljAFFSueE1te66s+sCxuGQtSOcbKRbbPbjvab6n1ZqMv+EC428afijlpMfagO/pes9hk2/w==}
+
   '@fontsource/bitter@5.3.0':
     resolution: {integrity: sha512-RYfrDnaja7v6FO8AwknA5aw/BuVgLBJvwLIShkS42XUIxMbvi/yp47Ax/Xnn9OTVIGFiTXCbVsH0O9HhTTDtqA==}
+
+  '@fontsource/crimson-pro@5.3.0':
+    resolution: {integrity: sha512-PXQH0NGma2wwskZAySBH+s/ezAYBwyDH0I4oRURBu9u81nNUCm5DcNCJaUS9H0UR1y8qlslLfVRU6mnDBpffrA==}
 
   '@fontsource/dm-sans@5.3.0':
     resolution: {integrity: sha512-lYJtMXXO28q1z+yz+z8XKd0s4hXaa9QdkETzkyD760sidCv5heI86weYA0sx0Nc4pAMAQTUuyf4gO44cYKKS9g==}
@@ -564,17 +672,62 @@ packages:
   '@fontsource/figtree@5.3.0':
     resolution: {integrity: sha512-/iTcTXL1eRBGhvD7NN9dnKzXzWqDLVZVEUFI9xIxAC1G/hXU8tCyYeXCAuPOuvSYPInFUP7H6KLGgygmDfy1SA==}
 
+  '@fontsource/fraunces@5.3.0':
+    resolution: {integrity: sha512-LEHTOBiZufQzAvnAe2rZ8ZknbDS28Q9kzwb0L+gZJEmjLGr8hhZ/5NuHXwDuHBWhVXYoiGGXmrb0H6Ko/RrHTg==}
+
   '@fontsource/gelasio@5.3.0':
     resolution: {integrity: sha512-V95Jr9GxtSCkigiWKEDTIqajefhJHk8251aQYrMBmrdSeYnjgbKRYxLjGpr3/NjpOAf2bejIiZPwtzJ9Bcpsgw==}
 
   '@fontsource/inter@5.2.8':
     resolution: {integrity: sha512-P6r5WnJoKiNVV+zvW2xM13gNdFhAEpQ9dQJHt3naLvfg+LkF2ldgSLiF4T41lf1SQCM9QmkqPTn4TH568IRagg==}
 
+  '@fontsource/karla@5.3.0':
+    resolution: {integrity: sha512-zHBkxMumwFE+K4RgHQAv2xH0O2lAX9y4zPun5JEFZyNQQclZ5Oz/XvByE3CB5+rnxKEV5BXlZShIEfz0VILDmQ==}
+
+  '@fontsource/libre-caslon-text@5.3.0':
+    resolution: {integrity: sha512-zuGBMEtekNBbeH4YIbL2sUu8BZKFGr1o6b41v/QPnWaEAOgZHSf4ZFdr90YmRbE3uB5G1oAEIIACgwnFRk/F7w==}
+
+  '@fontsource/libre-franklin@5.3.0':
+    resolution: {integrity: sha512-owd+HDvD4hnGHG1jO3rHtg0BiNT0DJbZMaSqJ7g4r0646G5Q91MjTFWxZbpwg8njLu4BSH3EBqwkVSMLud6brg==}
+
+  '@fontsource/manrope@5.3.0':
+    resolution: {integrity: sha512-obJ1Dv3+uCA6HlHgW8u4BGYxJR9In2HW7gjJhlflEvkrj1X1iSEwu0fToL+JYGC/FEKFfIz1sBuPduvcL2gIAA==}
+
+  '@fontsource/montserrat@5.3.0':
+    resolution: {integrity: sha512-iQPDtZOnmM5ih4JBGaMSXisRap0ixb9bAUw2hDtY7EjVfaqiiNlKtVuJl9XclxUwtwMMHNcWXfQR6zI9x05+Tg==}
+
+  '@fontsource/newsreader@5.3.0':
+    resolution: {integrity: sha512-AFR6ZKY89GNL+9qBI2P2+66NhD5bhOj/v6fsLnFYLM4E0JnMB1yKb+Ro8cA64i1hwAWoBfTq5CHJGWH1toLDkw==}
+
+  '@fontsource/nunito-sans@5.3.0':
+    resolution: {integrity: sha512-CctNhebQ2YYJUwVMCAkHexQg7yedfz9s8JzaETALyc9QIQuDFRlNTWXux9H5PsNLgptPkrzRDomAdLJt1sDFpQ==}
+
+  '@fontsource/open-sans@5.3.0':
+    resolution: {integrity: sha512-V1bdMlGNyZrJwzrdusshMOw2YR0aqYDL7kOo9dkxUEKl8dFv66A9HLckOOXl572sG/7ohhDQrCrTFGSn9LZcSw==}
+
+  '@fontsource/poppins@5.3.0':
+    resolution: {integrity: sha512-cms1nM7U6SN8epIV1WMVOV8VsA645aSm3wHfzIQnkk188U341ThbJGSl2Sv54V29gnDbT2arMPfLzvVIIVCceQ==}
+
+  '@fontsource/public-sans@5.3.0':
+    resolution: {integrity: sha512-kjODI0S3zdv0mBYCIQ8TbBayaiqszpc2UbhJiO3bjIqVVXzcWfHSt2o3WBCLOY3juaGaQoy4MoWCcgmfI5hCuA==}
+
+  '@fontsource/roboto@5.3.0':
+    resolution: {integrity: sha512-BapRJOWYP+LZ21zp+wBQjfpPYKRoxc4LspJ/RLuI+HSMBD5u/X4O+ESDrSvEqDSy0rAl7GwBJ+09mdc16cVQ1Q==}
+
+  '@fontsource/rokkitt@5.3.0':
+    resolution: {integrity: sha512-47OPlVKvxhemOXptrKz9Xut09T/9Ftxy4reEuAdACr28elze7l1Prk5ipbqtK3dD5FgnAlPmb4HzgspSE8LyhA==}
+
+  '@fontsource/rubik@5.3.0':
+    resolution: {integrity: sha512-Nks2mn7vlE1jZVHuVgoKU2Ejqjvd+GJzLRdraCjo1xc79oo7O6vJ8pcvSfmKPGX3/Ln7nt09XWFzPeu2jWf0xQ==}
+
   '@fontsource/spectral@5.3.0':
     resolution: {integrity: sha512-2TL5WWGOZj4SIsBmPFEzKeA60tXXd1Qp1OqaaVEWkJL8IfSGLk6YmiusmC441iFkdJDIuFelu1r8lhCmQUU3mw==}
 
   '@fontsource/work-sans@5.3.0':
     resolution: {integrity: sha512-3cKV28+bEiLGdyOl0VgEGCFWE1XdZJu/K+nH4Jt76XC3T//XrRtm2EF7jA61GSMIy8sYp6ZFTE01nD3lLaBV9A==}
+
+  '@fontsource/zilla-slab@5.3.0':
+    resolution: {integrity: sha512-xbdDx5OESJDQqp3GIp4pjBgI+qpcg4AxnHLN15ekfJbG+ZYaOXg3uBjDpYlkuPQpey91afxHBNaqZgzluJ2FWA==}
 
   '@formatjs/ecma402-abstract@2.3.6':
     resolution: {integrity: sha512-HJnTFeRM2kVFVr5gr5kH1XP6K0JcJtE7Lzvtr3FS/so5f1kpsqqqxy5JF+FRaO6H2qmcMfAUIox7AJteieRtVw==}
@@ -2712,7 +2865,11 @@ snapshots:
       tslib: 2.8.1
     optional: true
 
+  '@fontsource/aleo@5.3.0': {}
+
   '@fontsource/bitter@5.3.0': {}
+
+  '@fontsource/crimson-pro@5.3.0': {}
 
   '@fontsource/dm-sans@5.3.0': {}
 
@@ -2720,13 +2877,43 @@ snapshots:
 
   '@fontsource/figtree@5.3.0': {}
 
+  '@fontsource/fraunces@5.3.0': {}
+
   '@fontsource/gelasio@5.3.0': {}
 
   '@fontsource/inter@5.2.8': {}
 
+  '@fontsource/karla@5.3.0': {}
+
+  '@fontsource/libre-caslon-text@5.3.0': {}
+
+  '@fontsource/libre-franklin@5.3.0': {}
+
+  '@fontsource/manrope@5.3.0': {}
+
+  '@fontsource/montserrat@5.3.0': {}
+
+  '@fontsource/newsreader@5.3.0': {}
+
+  '@fontsource/nunito-sans@5.3.0': {}
+
+  '@fontsource/open-sans@5.3.0': {}
+
+  '@fontsource/poppins@5.3.0': {}
+
+  '@fontsource/public-sans@5.3.0': {}
+
+  '@fontsource/roboto@5.3.0': {}
+
+  '@fontsource/rokkitt@5.3.0': {}
+
+  '@fontsource/rubik@5.3.0': {}
+
   '@fontsource/spectral@5.3.0': {}
 
   '@fontsource/work-sans@5.3.0': {}
+
+  '@fontsource/zilla-slab@5.3.0': {}
 
   '@formatjs/ecma402-abstract@2.3.6':
     dependencies:
