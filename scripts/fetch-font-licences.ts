@@ -174,13 +174,18 @@ export async function readHolderLicences(family: string, commit: string): Promis
   };
 }
 
-/** Why a reading keeps a family out, or `undefined` when both readings let it in. */
+/**
+ * Why a reading keeps a family out, or `undefined` when it may enter.
+ *
+ * Where the author's licence was located, the two readings must agree; where it was not, google/fonts'
+ * reading stands alone — a missing second text is not a discrepancy.
+ */
 export function holderVerdict(reading: HolderReading): string | undefined {
   const google = reservesPresentedName(reading.googleFonts.notice, reading.family);
-  const author =
-    reading.author !== null && "notice" in reading.author
-      ? reservesPresentedName(reading.author.notice, reading.family)
-      : false;
+  if (reading.author === null || !("notice" in reading.author)) {
+    return google ? "Reserved Font Name" : undefined;
+  }
+  const author = reservesPresentedName(reading.author.notice, reading.family);
   if (google && author) return "Reserved Font Name";
   if (google !== author) return "discrepancy between google/fonts and the author's licence";
   return undefined;
