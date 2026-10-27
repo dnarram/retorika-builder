@@ -12,8 +12,57 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 25 October 2026, **closing sprint 27 — «el teclado llega a todo, y el cromo mide lo
-que mide».** No theme named, so the inventory went first and David chose with four answers: the
+Last reviewed: 27 October 2026, **closing sprint 28 — «lo que ya existe, sin bordes».** The first
+sprint in four with a theme named by David: «reparar bugs… pulir lo que tenemos», no features. Eight
+days, fourteen things in and seven left out by name, four decisions of his before planning and five
+adjustments while approving. What changed for somebody using it: opening or closing a panel no longer
+moves the page being edited (día 1); the bar and the verbs stay on screen while the canvas scrolls
+(día 2); the sector search no longer jumps, Escape in an exact-pixel field restores before it blurs,
+and text in brand and danger colours is darker (día 3); a published site has its own icon, with
+[ADR 0054](../decisions/0054-a-published-site-carries-its-own-icon.md) (día 4); the suite waits for
+what moves instead of for silence (día 5); the download-gate dialogs cover the window at every zoom
+(día 6); and a row of a hand-designed section is a minimum its content pushes, by David's decision
+over three repairs (día 7, [ADR 0050](../decisions/0050-a-hand-designed-section-is-a-fine-grid-and-the-hand-decides-where.md)'s
+amendment). The record is `docs/design/REVIEW.md`, sprint 28.
+
+**What sprint 28 leaves open** — the full text, with every number, is the last section of REVIEW's
+sprint 28:
+
+1. **Escalating with a panel open still writes the panel's width.** At 1280 with «Diseño» open the
+   cover escalates with 13 rows for its two-line headline; closed, the headline is one line and the gap
+   under it goes from 16 to 95 px. Día 7 removed the readjustment on a commit; escalation measures the
+   live boxes (ADR 0050 día 2) and was not part of that decision. David's call, with two repairs and
+   their price in the row on the fixed layout width below.
+2. **Twelve signatures**: 0042, 0043, 0045–0054, all `proposed`.
+3. **The nine photographs at 1600 × 1072**, unchanged this sprint: the bank's nine are 1024 × 1024 and
+   one 866 × 942; the sixteen root PNGs are the 11 October ones, all 1024 wide. The exemption fails on
+   **1 December 2026** (#293, merged 25 October).
+4. **Safari and the favicon**, unverified on a device; joins PR #250's iPhone Safari checklist.
+5. **`lookAhead.ts` on a cold Render instance**, unmeasured: needs the deployment's URL.
+6. **The revert dialog** moved to `overlay` on día 6 and is not walked at a zoom below 1.
+7. **Native Tab from a text being written in**, and **outlines at scale** (accepted, ADR 0053), as
+   sprint 27 left them.
+
+**What this sprint found that nobody was looking for:**
+
+1. **The panel never moved the page by re-flowing it**: a lower zoom grows the frame's viewport and the
+   browser clamps the scroll (día 1). Two repairs the backlog had ruled out were aimed at the wrong cause.
+2. **CI's Linux lays the page out 15 px shorter at 788 than at 1008, where macOS lays it 10 px
+   longer** (día 1): a document height across a re-flow is not assertable on one platform.
+3. **The e2e file crossed Biome's 1 MiB `maxSize` on sprint 27 día 8 and was skipped with a warning**,
+   so CI stayed green without reading it (día 1). `maxSize` is 2 MiB; the file is at 53 % of it.
+4. **The sector search jumped up to 159.9 px, not 7.9**, and a chosen sector's label had been 4.37:1
+   on its card since the mockups were transcribed on 24 September (día 3).
+5. **`Control+z` is not Chromium's undo on macOS**: the sprint 26 walk's claim about the DOM was only
+   ever true on CI's Linux (día 5).
+6. **The six download-gate dialogs and the revert dialog lived inside the scaled canvas**: at any zoom
+   below 1 the backdrop covered the card alone, the header stayed live behind an `aria-modal`, and the
+   dialog drew at the canvas's scale (día 6).
+7. **The row readjustment ate the gap under a text**: one more letter with the panel open took 48 px
+   to 0 (día 7) — and escalation is the same defect through the other door (día 8).
+
+The review before that: 25 October 2026, **closing sprint 27 — «el teclado llega a todo, y el cromo
+mide lo que mide».** No theme named, so the inventory went first and David chose with four answers: the
 editor's keyboard and focus for días 2 to 6, the chrome at scale keeping its size on screen with three
 conditions of his own (día 7), the e2e limits accepted, and the nine photographs before 1 November with
 a reserve PR. The canvas is now **one Tab stop** whose sections' insides are stops only while they hold
@@ -32,7 +81,7 @@ number, is the last section of REVIEW's sprint 27:
    lines here that said it needed the CEO's are corrected.)
 2. **The nine photographs at 1600 × 1072.** None of the sixteen root PNGs reaches it (all 1024 wide,
    from 11 October). The bank's exemption fails from 1 November; **PR #293** moves it to 1 December and
-   is green. Recommended: merge it now rather than on the 30th.
+   is green. Recommended: merge it now rather than on the 30th. **Merged on 25 October 2026.**
 3. **Sprint 17's mouseless walk, intermittent in CI** at the same wait twice after día 4; passing in
    the runs of #299, #300 and #301. Cause not established. **Named on sprint 28 día 5 (26 October
    2026), not reproduced:** the two CI logs (attempt 1 of #297's and #298's runs) say only «waiting
@@ -1423,6 +1472,16 @@ open survives.
   that nothing reads «row × 8» verified first). **The fixed layout width stays unbuilt**, and this
   symptom no longer asks for it; its price is kept here for the day another one does — 0,707 at
   1024, 0,782 at 1280, 0,834 at 1600, against today's 0,738 / 1 / 1 with a panel open.
+
+  **And on the sprint 28 close (27 October 2026) another one does.** Escalation measures the live
+  boxes (ADR 0050 día 2), so a section escalated with a panel open writes the panel's width into its
+  rows: at 1280 with «Diseño» open the cover's headline is two lines and gets 13 rows; with the panel
+  closed it is one line, and the gap to the subheadline goes from **16 px to 95**. Escalated with the
+  panel closed, día 7 measured 52 and 48. Two repairs and their price: the fixed layout width, which
+  ends every panel-width measurement in the editor at the price of the three zooms above; or
+  escalation measuring at the width with no panel, which closes this door and leaves the canvas
+  re-flowing. Whose call: David's — día 7's decision was the readjustment on a commit, not how a
+  section is measured when it escalates.
 
 - ~~**Two of the application's own colours clear 4.5:1 by a hair, so any opacity on them fails.**~~
   **Closed on sprint 28 día 3 (26 October 2026), by David's decision of the same day**: brand and

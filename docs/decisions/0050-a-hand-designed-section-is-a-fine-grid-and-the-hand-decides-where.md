@@ -816,3 +816,11 @@ The fixed layout width David asked about on día 1 is **not built**, and this sy
 asks for it: with the span a floor, a text that wraps differently between panel states moves only
 what is under it, by what it grew. Its price stays in the record for the day another symptom asks —
 0,707 at 1024, 0,782 at 1280, 0,834 at 1600 — in `docs/tasks/backlog.md`.
+
+**Found on the sprint 28 close (27 October 2026), and not decided here.** Escalation still measures
+the live boxes (día 2's amendment), so a section escalated **with a panel open** writes the panel's
+width into its rows: at 1280 with «Diseño» open the cover's headline is two lines and gets 13 rows,
+and the gap to the subheadline is 16 px; with the panel closed the headline is one line and the gap
+is **95**. This amendment's decision was the readjustment on a commit; how a section is measured
+when it escalates is a decision of its own, and the backlog's row on the fixed layout width holds the
+two repairs and their price.

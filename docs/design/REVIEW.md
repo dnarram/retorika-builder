@@ -4138,3 +4138,73 @@ que la fila creciera de verdad.
 que se parte distinto entre estados del panel mueve solo lo que tiene debajo, y exactamente lo que
 creció. Sus tres zooms se quedan en el backlog por si otro síntoma lo pide. **No se midió** `lookAhead`
 en una instancia fría de Render: el plan lo dejaba a que David diera la URL, y no la dio.
+
+### Día 8 — el cierre (PR de `test/el-cierre-del-sprint-28`)
+
+**Las medidas de cierre.** La suite `e2e` completa: **256 pasan / 1 omitida, 1047,13 s**, a la primera,
+en batería bajo `caffeinate -i` y con nada en paralelo; es la primera ejecución completa con la
+caminata del sprint 25 día 6 reescrita el día 7 y con la del propio día 7. Lighthouse sobre las tres
+composiciones del restaurante, móvil: **v1 100 / 100 / 100 / 100, v2 99 / 100 / 100 / 100 y v3 99 / 100
+/ 100 / 100** (rendimiento, accesibilidad, buenas prácticas, SEO), y la ficha de
+`una-pagina-por-ficha` 100 en las cuatro. Buenas prácticas pasa de 96 a 100 en todas, que es el
+favicon del día 4; los dos 99 son el LCP de 2,18 s de las composiciones con la foto de fondo y a la
+izquierda (`largest-contentful-paint` 0,95), los mismos que el sprint 27 medía en v2 y v3. axe: **538**
+en verde, en local, porque el día 4 cambió la salida del renderizador.
+
+**El `link-text` de la landing, confirmado.** Lighthouse móvil sobre `/`: `link-text` en 1 y sin
+entradas, donde el 17 de octubre listaba «Empezar». El SEO de la landing pasa de 0,54 a **0,63**, y lo
+único que cae es `is-crawlable`, el `noindex, nofollow` que `layout.tsx` pone a propósito.
+Accesibilidad 100.
+
+**El ZIP, contra el del inicio del sprint.** Los diecinueve documentos del corpus, construidos como
+descarga con el publicador de `9cb3781` (la fusión de la #302) y con el de hoy. Los diecinueve ZIP
+difieren, y la diferencia es exactamente la que el ADR 0054 anunciaba: cada sitio gana `favicon.svg`
+(258 bytes; 259 en `edge-long-text-unicode`, cuya letra es una «Ñ» de dos bytes), y cada una de las
+**35 páginas** gana una línea, `<link rel="icon" type="image/svg+xml" href="favicon.svg">`, justo
+después de `<title>`; quitándola, el HTML es el del inicio byte a byte. Los otros 44 ficheros —letras,
+licencias, imágenes— no cambian. El guion de muestra (`pnpm site:sample`) no sirve para esto: no recoge
+las imágenes de las listas y se para en `assets/rosario.svg`. El que se usó lee cada `src` del
+documento.
+
+**Las nueve fotos, su estado** (el ajuste 4 de David). Nada cambió en el sprint. Las nueve del banco de
+`restaurante-bar` siguen bajo el suelo de 1600 × 1072 —ocho a 1024 × 1024 y la 07 a 866 × 942— y
+publicadas por la exención del ADR 0035, que deja de valer el **1 de diciembre** (la #293 se fusionó el
+25 de octubre). Las dieciséis PNG de la raíz del repositorio son las del 11 de octubre, todas de 1024 de
+ancho: ninguna llega al suelo, así que ninguna puede sustituir tal cual a una del banco. Quedan 35 días,
+y el remedio sigue siendo regenerar, nunca mover la fecha.
+
+**Lo que el cierre encontró al medir, y deja medido.** El día 7 quitó el reajuste del alto al escribir,
+pero escalar mide las cajas vivas (ADR 0050, día 2), así que **escalar con «Diseño» abierto todavía
+guarda el ancho del panel**. A 1280, la portada escalada con el panel abierto escribe 13 filas para el
+titular (104 px, a dos líneas) y el hueco hasta el subtítulo es de 16 px; al cerrar el panel el titular
+cabe en una línea (52 px) y el hueco pasa a **95 px**. Escalada con el panel cerrado, el día 7 midió 52
+y 48 en los dos estados. Es la otra puerta del mismo defecto, y lo decidido el día 7 no la cubre: David
+eligió quitar el reajuste del alto tras editar un texto, y cambiar cómo mide una sección al escalarse es
+otra decisión. Va primera en la lista de abajo.
+
+**Los números del registro, al día.** `Editor.tsx` tiene **8095** líneas al cierre, y el `e2e`
+**21 675** (1 118 465 bytes, el 53 % de los 2 MiB que Biome procesa desde el día 1); la suite cuenta
+257 pruebas. En CI, el sprint tuvo diecisiete ejecuciones y tres rojas, las tres con causa: el día 1, la
+maquetación de Linux en la caminata del panel; el día 2, «pasa por anchos intermedios» una vez; el día 4,
+las dos caminatas que comparan la lista exacta del ZIP con el favicon nuevo. La intermitente del sprint
+17 no volvió en ninguna.
+
+### Lo que el sprint 28 deja abierto
+
+1. **Escalar con un panel abierto guarda el ancho del panel**: el hueco bajo el titular pasa de 16 a 95
+   px al cerrarlo (arriba). Dos caminos con su precio, para David: el ancho fijo del día 1, que lo
+   arregla para toda medida del editor al precio de los tres zooms (0,707 / 0,782 / 0,834), o medir
+   al ancho sin panel solo al escalar, que arregla esta puerta y deja el lienzo remaquetando.
+2. **Doce firmas**, todas `proposed`: **0042, 0043, 0045, 0046, 0047, 0048, 0049, 0050, 0051, 0052,
+   0053 y 0054**.
+3. **Las nueve fotos**, antes del 1 de diciembre (arriba).
+4. **Safari y el favicon**: sin comprobar en un dispositivo. Se suma a la lista de Safari en iPhone de
+   la PR #250; si Safari no dibuja el SVG, el siguiente paso es un PNG al lado (ADR 0054).
+5. **`lookAhead` en una instancia fría de Render**: sin medir, porque hace falta la URL del despliegue.
+6. **El diálogo de «Volver a la original»** se mudó a `overlay` el día 6 y no se camina a zoom menor
+   que 1.
+7. **El Tab nativo desde un texto en escritura** sigue sin llegar al asa (del sprint 27).
+8. **Los contornos a escala**, aceptados como los dibuja Chromium (ADR 0053).
+9. **Fuera por el plan, y nombrados en él**: el cambio de diseño a 720 de alto, `overflow-x: clip`,
+   los 172 px entre «Precios», `fetchpriority`, el logo como favicon o un PNG, y partir el `e2e` o
+   renombrar su `let page`.
