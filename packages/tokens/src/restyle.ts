@@ -1,4 +1,4 @@
-import { type Theme, TOKEN_KEYS } from "@retorika/schema";
+import { type OwnFont, type Theme, TOKEN_KEYS } from "@retorika/schema";
 import { type ColorKey, PALETTES, type Palette } from "./palettes.ts";
 import type { RadiusKey, Scale, SizeKey, SpaceKey } from "./scales.ts";
 import { SCALES } from "./scales.ts";
@@ -7,6 +7,7 @@ import {
   familiesOf,
   GALLERY_FAMILIES,
   type GalleryFamily,
+  ownFontStack,
   TYPE_PAIRS,
   type TypePair,
 } from "./typography.ts";
@@ -146,6 +147,36 @@ export function withFamily(theme: Theme, key: FontKey, family: string): Theme {
 export function identifyFamily(theme: Theme, key: FontKey): GalleryFamily | undefined {
   const first = familiesOf(theme[key])[0];
   return GALLERY_FAMILIES.find((candidate) => candidate.family === first);
+}
+
+/**
+ * The same theme with **one** font token set to the stack of a font the owner brought (ADR 0056).
+ *
+ * The fifth verb, and the twin of `withFamily`: one key, the family first, the species' fallback
+ * behind it. It takes the record rather than a name, because the record is where the species is —
+ * and because a name alone is exactly the typed family ADR 0032 §2 refused, which this is not: the
+ * caller holds a record whose faces travel.
+ */
+export function withOwnFont(
+  theme: Theme,
+  key: FontKey,
+  font: Pick<OwnFont, "family" | "kind">,
+): Theme {
+  return { ...theme, [key]: ownFontStack(font) };
+}
+
+/**
+ * Which of the owner's fonts this theme's stack for `key` begins with, or `undefined` if none —
+ * the same first-family test `identifyFamily` applies to the gallery, and the renderer to both.
+ * The two cannot both answer: the schema refuses an own font named after a row.
+ */
+export function identifyOwnFont(
+  theme: Theme,
+  key: FontKey,
+  fonts: readonly OwnFont[] | undefined,
+): OwnFont | undefined {
+  const first = familiesOf(theme[key])[0];
+  return fonts?.find((candidate) => candidate.family === first);
 }
 
 /**

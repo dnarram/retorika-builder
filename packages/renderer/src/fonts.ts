@@ -1,4 +1,11 @@
-import { FONT_GALLERY, fontFamilySlug, type RetorikaDocument, TOKEN_KEYS } from "@retorika/schema";
+import {
+  FONT_GALLERY,
+  fontFamilySlug,
+  type OwnFont,
+  type OwnFontFace,
+  type RetorikaDocument,
+  TOKEN_KEYS,
+} from "@retorika/schema";
 import { cssFontFamilyName, cssFontSrc } from "./escape.ts";
 
 /**
@@ -105,9 +112,75 @@ const FONT_KEYS = TOKEN_KEYS.filter((key): key is "font.heading" | "font.body" =
  * order — never the document's, because the published bytes have to be a function of the document
  * and not of the order its keys happen to be written in (`INV_5`, and the golden corpus). */
 export function shippableFor(doc: RetorikaDocument): ShippableFamily[] {
+  const wanted = firstFamilies(doc);
+  return SHIPPABLE_FAMILIES.filter((candidate) => wanted.has(candidate.family));
+}
+
+function firstFamilies(doc: RetorikaDocument): Set<string> {
   const wanted = new Set<string>();
   for (const key of FONT_KEYS) wanted.add(firstFamily(doc.theme[key]));
-  return SHIPPABLE_FAMILIES.filter((candidate) => wanted.has(candidate.family));
+  return wanted;
+}
+
+/**
+ * One face of a font the owner brought (ADR 0056), with the file it is published as.
+ *
+ * **The file is minted from the record's `id` and the face's `role`, never from the owner's file
+ * name and never from the family they typed.** That is what keeps ADR 0046 §2's «a document never
+ * names a file» true for a font that did not come from the table: the only two things in the name
+ * are eight hex digits the editor minted and one of three words, so `../evil` as a family publishes
+ * `propia-3f9a7c21-regular.ttf` — and then fails `cssFontFamilyName`, the second lock, before any
+ * rule is emitted.
+ */
+export interface OwnFace {
+  /** `propia-<id>-<role>.<format>`, inside `fonts/`. */
+  file: string;
+  font: OwnFont;
+  face: OwnFontFace;
+}
+
+export function ownFaceFile(
+  font: Pick<OwnFont, "id">,
+  face: Pick<OwnFontFace, "role" | "format">,
+): string {
+  return `propia-${font.id}-${face.role}.${face.format}`;
+}
+
+/**
+ * The own fonts this document's theme asks for — those a stack names **first**, by the same exact
+ * equality a gallery row is selected by — **ordered by id**, never by the document's array. The
+ * owner's order is the chooser's business; the page's order has to be a function of the document's
+ * content (`INV_5`), and an array that was reordered by a drag must not move a byte of CSS.
+ *
+ * A font no stack names is allowed in the record and selects nothing here: it ships no rule and no
+ * file, exactly as a gallery row nobody chose.
+ */
+export function ownFontsFor(doc: RetorikaDocument): OwnFont[] {
+  const fonts = doc.fonts ?? [];
+  if (fonts.length === 0) return [];
+  const wanted = firstFamilies(doc);
+  return fonts
+    .filter((font) => wanted.has(font.family))
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+/** Every own face the page names, in the order the stylesheet emits them. */
+export function ownFacesFor(doc: RetorikaDocument): OwnFace[] {
+  return ownFontsFor(doc).flatMap((font) =>
+    font.faces.map((face) => ({ file: ownFaceFile(font, face), font, face })),
+  );
+}
+
+/**
+ * What a face's `font-weight` descriptor says: the one weight a static face carries, or **the range
+ * `fvar` declares** for a variable one — `300 800`, never `100 <max>` (David's adjustment 4, 27
+ * October 2026). The browser then matches 400 and 700 inside that range, and a range that starts at
+ * 500 has no 400 to match, which `ownFontCovers` in the schema says out loud and día 5 warns about.
+ */
+function faceWeight(face: OwnFontFace): string {
+  if (face.role === "regular") return "400";
+  if (face.role === "bold") return "700";
+  return `${face.wght[0]} ${face.wght[1]}`;
 }
 
 /**
@@ -128,7 +201,8 @@ export function shippableFor(doc: RetorikaDocument): ShippableFamily[] {
  */
 export function fontFaceCss(doc: RetorikaDocument): string[] {
   const families = shippableFor(doc);
-  if (families.length === 0) return [];
+  const own = ownFontsFor(doc);
+  if (families.length === 0 && own.length === 0) return [];
 
   const lines: string[] = [
     "/* Self-hosted faces. Relative to this file, so a double-clicked page finds them. */",
@@ -146,13 +220,37 @@ export function fontFaceCss(doc: RetorikaDocument): string[] {
       );
     }
   }
+  // **The table's rows first, then the owner's own, by id** (ADR 0056): a shipped family and an own
+  // font cannot share a name — the schema refuses the collision — so the order decides no match; it
+  // is stated so that the published bytes are a function of the document and not of a sort nobody
+  // wrote down.
+  for (const font of own) {
+    for (const face of font.faces) {
+      lines.push(
+        "@font-face {",
+        `  font-family: ${cssFontFamilyName(font.family)};`,
+        "  font-style: normal;",
+        `  font-weight: ${faceWeight(face)};`,
+        "  font-display: swap;",
+        `  src: ${cssFontSrc(ownFaceFile(font, face))};`,
+        "}",
+      );
+    }
+  }
   lines.push("");
   return lines;
 }
 
-/** Every file a page built from this document needs in `fonts/`, in the table's order. The channel
- * day 6's publisher writes from — parallel to `assets`, because a font has no element and therefore
- * no `src` for `collectAssets` to find. */
-export function fontFilesFor(doc: RetorikaDocument): string[] {
+/** The files of the table's faces a page built from this document needs in `fonts/`, in the
+ * table's order — what `readFontBundle` has bytes for. Own faces are the owner's bytes and are
+ * listed by `ownFacesFor`; `fontFilesFor` is both together. */
+export function shippedFontFilesFor(doc: RetorikaDocument): string[] {
   return shippableFor(doc).flatMap(({ faces }) => faces.map((face) => face.file));
+}
+
+/** Every file a page built from this document needs in `fonts/`: the table's faces in the table's
+ * order, then the owner's own by id. The channel the publisher writes from — parallel to `assets`,
+ * because a font has no element and therefore no `src` for `collectAssets` to find. */
+export function fontFilesFor(doc: RetorikaDocument): string[] {
+  return [...shippedFontFilesFor(doc), ...ownFacesFor(doc).map((face) => face.file)];
 }

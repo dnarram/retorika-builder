@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-import { buildSite, readFontBundle } from "@retorika/publisher";
+import { basename, join } from "node:path";
+import { buildSite, ownFontKeysFor, readFontBundle } from "@retorika/publisher";
 import { flattenElements, parseDocument } from "@retorika/schema";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
@@ -173,13 +173,18 @@ describe("the publisher -> serve contract", () => {
           }
         }
       }
+      // A site whose type pair names a face owes the ZIP those bytes; `buildSite` refuses without
+      // them, which is what keeps a published site complete. A font the owner brought is read from
+      // `fixtures/fonts/`, which stands in for the browser and the account (ADR 0056).
+      const fonts = readFontBundle(document);
+      for (const key of ownFontKeysFor(document)) {
+        fonts.set(key, new Uint8Array(readFileSync(join(fixtures, "fonts", basename(key)))));
+      }
       const bundle = buildSite(document, {
         siteId: "x",
         baseUrl: "https://x.example.com",
         assets,
-        // A site whose type pair names a face owes the ZIP those bytes; `buildSite` refuses without
-        // them, which is what keeps a published site complete.
-        fonts: readFontBundle(document),
+        fonts,
       });
 
       // If publisher ever writes a path serve would refuse, a published file becomes a

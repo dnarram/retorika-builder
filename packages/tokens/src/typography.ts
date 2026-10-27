@@ -1,4 +1,10 @@
-import { FONT_GALLERY, type FontKind, GENERIC_OF, type TokenKey } from "@retorika/schema";
+import {
+  FONT_GALLERY,
+  type FontKind,
+  GENERIC_OF,
+  type OwnFont,
+  type TokenKey,
+} from "@retorika/schema";
 
 export type FontKey = Extract<TokenKey, `font.${string}`>;
 
@@ -227,3 +233,14 @@ export const GALLERY_FAMILIES: readonly GalleryFamily[] = FONT_GALLERY.map(({ fa
   kind,
   stack: VERBATIM_STACKS[family] ?? `${named(family)}, ${FALLBACK[GENERIC_OF[kind]]}`,
 }));
+
+/**
+ * The stack a theme carries when a font the owner brought is chosen (ADR 0056): the family first,
+ * then its species' fallback chain — **the same two chains the gallery uses**, because what the
+ * chain owes is the species, and a visitor whose browser fetched no face reads a serif where a serif
+ * was chosen whether the face came from the table or from the owner's disk. The renderer selects
+ * the font by exact equality of this first family, as it selects a row.
+ */
+export function ownFontStack(font: Pick<OwnFont, "family" | "kind">): string {
+  return `${named(font.family)}, ${FALLBACK[GENERIC_OF[font.kind]]}`;
+}

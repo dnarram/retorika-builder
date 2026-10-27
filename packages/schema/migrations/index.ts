@@ -13,6 +13,7 @@ import theMenuIsCurated from "./0011-the-menu-is-curated.ts";
 import theSerifReservesNoName from "./0012-the-serif-reserves-no-name.ts";
 import aFreeSectionIsAFineGrid from "./0013-a-free-section-is-a-fine-grid.ts";
 import libreBaskervilleReservesItsName from "./0014-libre-baskerville-reserves-its-name.ts";
+import anOwnFontTravelsLikeAPhotograph from "./0015-an-own-font-travels-like-a-photograph.ts";
 
 export interface Migration {
   version: string;
@@ -37,6 +38,7 @@ export const MIGRATIONS: readonly Migration[] = [
   theSerifReservesNoName,
   aFreeSectionIsAFineGrid,
   libreBaskervilleReservesItsName,
+  anOwnFontTravelsLikeAPhotograph,
 ];
 
 /** `1.2.0` → `[1, 2, 0]`, for comparing two versions without a dependency. A missing or

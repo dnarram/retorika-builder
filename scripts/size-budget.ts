@@ -4,7 +4,7 @@ import { gzipSync } from "node:zlib";
 import { EMPTY_ANSWERS, generate, VARIANTS } from "@retorika/generator";
 import { hasSamplePhotos, recordById, sectorsInBank } from "@retorika/photobank";
 import { readSampleBytes } from "@retorika/photobank/server";
-import { buildSite, readFontBundle } from "@retorika/publisher";
+import { buildSite, ownFontKeysFor, readFontBundle } from "@retorika/publisher";
 import { render, SHIPPABLE_FAMILIES } from "@retorika/renderer";
 import { flattenElements, parseDocument, type RetorikaDocument } from "@retorika/schema";
 
@@ -117,6 +117,11 @@ const PER_PAGE_GZIP_BYTES = 4 * 1024;
 const FIXTURES_DIR = join(import.meta.dirname, "..", "fixtures");
 const DOCUMENTS_DIR = join(FIXTURES_DIR, "documents");
 
+/** A face the owner brought, or the licence they attached to it — named by the publisher from the
+ * record's id, so the prefix is a fact about the bundle and not a convention of this script. */
+const isOwnFontPath = (path: string): boolean =>
+  path.startsWith("fonts/propia-") || path.startsWith("fonts/LICENCIA-propia-");
+
 let failed = false;
 
 /**
@@ -141,15 +146,18 @@ function weigh(
   // script tag here is a regression rather than a judgement call.
   const scripts = (html.match(/<script\b/gi) ?? []).length;
 
-  const bundle = buildSite(document, {
-    siteId: "size",
-    assets,
-    fonts: readFontBundle(document),
-  });
+  // The owner's own faces, if the document names any, come from `fixtures/fonts/` — the directory
+  // that stands in for the browser and the account, as `fixtures/assets/` stands in for photographs.
+  const fonts = readFontBundle(document);
+  for (const key of ownFontKeysFor(document)) {
+    fonts.set(key, new Uint8Array(readFileSync(join(FIXTURES_DIR, "fonts", basename(key)))));
+  }
+  const bundle = buildSite(document, { siteId: "size", assets, fonts });
 
   const photoNames = new Set([...photographs].map((src) => basename(src)));
   let bundleBytes = 0;
   let fontBytes = 0;
+  let ownFontBytes = 0;
   let photoBytes = 0;
   // **Every emitted page against the page budget, not only the home page.** Until 13 October 2026
   // only `render(document, "html")` — the first page — was weighed, so a second page, let alone a
@@ -160,7 +168,11 @@ function weigh(
   for (const bundled of bundle.files) {
     const size = gzipSync(Buffer.from(bundled.contents)).length;
     bundleBytes += size;
-    if (bundled.path.startsWith("fonts/")) fontBytes += size;
+    // **The owner's own faces are weighed on their own line and never against the ceiling**
+    // (ADR 0056 §7): they are the owner's bytes, like a photograph, and a 400 KB `.ttf` is the
+    // owner's to decide on — the editor warns above 300 KB and refuses above 2 MB (día 5).
+    if (isOwnFontPath(bundled.path)) ownFontBytes += size;
+    else if (bundled.path.startsWith("fonts/")) fontBytes += size;
     if (bundled.path.startsWith("assets/") && photoNames.has(basename(bundled.path))) {
       photoBytes += size;
     }
@@ -171,7 +183,7 @@ function weigh(
   }
   // **Our bytes no longer include the faces**, which is the whole of the split: they answer to
   // `MAX_FONT_GZIP_BYTES` on their own line, and this number is the part we actually write.
-  const ourBytes = bundleBytes - photoBytes - fontBytes;
+  const ourBytes = bundleBytes - photoBytes - fontBytes - ownFontBytes;
   const bundleBudget = MAX_BUNDLE_GZIP_BYTES + PER_PAGE_GZIP_BYTES * Math.max(0, pages - 1);
 
   const over = heaviest.bytes > MAX_GZIP_BYTES;
@@ -181,7 +193,9 @@ function weigh(
   if (over || overBundle || overFonts || withScript) failed = true;
 
   const status = over || overBundle || overFonts || withScript ? "FAIL" : "ok";
-  const fonts = fontBytes === 0 ? "no fonts" : `${(fontBytes / 1024).toFixed(1)} KB of fonts`;
+  const fontsNote = fontBytes === 0 ? "no fonts" : `${(fontBytes / 1024).toFixed(1)} KB of fonts`;
+  const ownNote =
+    ownFontBytes === 0 ? "" : `   ${(ownFontBytes / 1024).toFixed(1)} KB the owner's own font`;
   const photos =
     photoNames.size === 0
       ? "no photographs"
@@ -195,7 +209,7 @@ function weigh(
     `${status.padEnd(4)} ${label.padEnd(38)} ${kb.padStart(6)} KB page   ` +
       `${(ourBytes / 1024).toFixed(1).padStart(6)} KB ours   ` +
       `${(bundleBytes / 1024).toFixed(1).padStart(6)} KB total   ` +
-      `${scripts} script tag(s)   ${fonts}   ${photos}${pageNote}`,
+      `${scripts} script tag(s)   ${fontsNote}${ownNote}   ${photos}${pageNote}`,
   );
 }
 
@@ -307,7 +321,8 @@ console.log(
     `plus ${PER_PAGE_GZIP_BYTES / 1024} KB per page after the first, ` +
     `and ${MAX_FONT_GZIP_BYTES / 1024} KB of faces on their own line. Zero JavaScript.\n` +
     "Photographs are reported, not budgeted here: the bank caps each approved one at " +
-    "200 KB (`MAX_IMAGE_BYTES`), and an owner's own photo is the owner's.",
+    "200 KB (`MAX_IMAGE_BYTES`), and an owner's own photo is the owner's — as is an owner's own " +
+    "font, reported on its line and capped by the editor at 2 MB per file (ADR 0056).",
 );
 
 if (failed) {

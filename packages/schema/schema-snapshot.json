@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.13.0",
+  "schemaVersion": "1.14.0",
   "document": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -125,6 +125,164 @@
           "radius.lg"
         ],
         "additionalProperties": false
+      },
+      "fonts": {
+        "maxItems": 2,
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}$"
+            },
+            "family": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "sans",
+                "serif",
+                "slab",
+                "display"
+              ]
+            },
+            "faces": {
+              "minItems": 1,
+              "maxItems": 2,
+              "type": "array",
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "role": {
+                        "type": "string",
+                        "const": "regular"
+                      },
+                      "format": {
+                        "type": "string",
+                        "enum": [
+                          "woff2",
+                          "woff",
+                          "ttf",
+                          "otf"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "role",
+                      "format"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "role": {
+                        "type": "string",
+                        "const": "bold"
+                      },
+                      "format": {
+                        "type": "string",
+                        "enum": [
+                          "woff2",
+                          "woff",
+                          "ttf",
+                          "otf"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "role",
+                      "format"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "role": {
+                        "type": "string",
+                        "const": "variable"
+                      },
+                      "format": {
+                        "type": "string",
+                        "enum": [
+                          "woff2",
+                          "woff",
+                          "ttf",
+                          "otf"
+                        ]
+                      },
+                      "wght": {
+                        "type": "array",
+                        "prefixItems": [
+                          {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 1000
+                          },
+                          {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 1000
+                          }
+                        ],
+                        "items": false,
+                        "minItems": 2,
+                        "maxItems": 2
+                      }
+                    },
+                    "required": [
+                      "role",
+                      "format",
+                      "wght"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            },
+            "licence": {
+              "type": "object",
+              "properties": {
+                "declared": {
+                  "type": "boolean",
+                  "const": true
+                },
+                "at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                }
+              },
+              "required": [
+                "declared",
+                "at"
+              ],
+              "additionalProperties": false
+            },
+            "licenceFile": {
+              "type": "string",
+              "enum": [
+                "txt",
+                "pdf"
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "family",
+            "kind",
+            "faces",
+            "licence"
+          ],
+          "additionalProperties": false
+        }
       },
       "pages": {
         "minItems": 1,

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ownFontsSchema } from "./fonts.ts";
 import { type MarkRun, marksSchema, markTextIssue } from "./marks.ts";
 import { roleSchema } from "./roles.ts";
 import { siteUrlIssue } from "./siteUrl.ts";
@@ -10,7 +11,7 @@ import { type ElementStyle, elementStyleSchema, themeSchema } from "./tokens.ts"
  * role or a token is additive and bumps the minor; removing or renaming one breaks and
  * bumps the major.
  */
-export const SCHEMA_VERSION = "1.13.0";
+export const SCHEMA_VERSION = "1.14.0";
 
 const idSchema = z.string().min(1).max(128);
 
@@ -398,6 +399,17 @@ export const documentSchema = z.strictObject({
       message: "siteUrl must be an https origin and nothing else, e.g. https://midominio.es",
     }),
   theme: themeSchema,
+  /**
+   * The fonts the owner brought, at most two (ADR 0056). Absent on every document written before
+   * 1.14.0 and on every document whose owner never imported one, which is the ordinary state.
+   *
+   * **A record, not bytes**, the way an image value is a `src` and not a photograph: the faces live
+   * in the browser and with the account, and travel into the ZIP beside the page. The theme's stack
+   * names the font by its `family`, exactly as it names a gallery row, and the renderer mints the
+   * file's name from the record's `id` and each face's `role` — so a document still never names a
+   * file (ADR 0046 §2). A font no stack names is allowed and ships nothing.
+   */
+  fonts: ownFontsSchema.optional(),
   pages: z.array(pageSchema).min(1),
   collections: z.array(collectionSchema),
 });

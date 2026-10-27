@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pastelería Trufa</title>
+<meta name="description" content="Los titulares con la fuente que la dueña subió; el texto con una de la galería">
+<meta property="og:title" content="Pastelería Trufa">
+<meta property="og:description" content="Los titulares con la fuente que la dueña subió; el texto con una de la galería">
+<style>
+:root {
+  --color-accent: #D97706;
+  --color-ink: #1C1917;
+  --color-muted: #57534E;
+  --color-primary: #7C2D12;
+  --color-secondary: #9A3412;
+  --color-surface: #FFFBEB;
+  --font-body: Gelasio, Georgia, Cambria, 'Times New Roman', Times, serif;
+  --font-heading: 'Karla 2', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --radius-lg: 16px;
+  --radius-md: 8px;
+  --radius-sm: 4px;
+  --size-body: 1rem;
+  --size-heading: 2.5rem;
+  --size-subheading: 1.5rem;
+  --space-lg: 24px;
+  --space-md: 16px;
+  --space-sm: 8px;
+  --space-xl: 48px;
+  --space-xs: 4px;
+}
+
+/* Self-hosted faces. Relative to this file, so a double-clicked page finds them. */
+@font-face {
+  font-family: 'Gelasio';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/gelasio-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: 'Gelasio';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("fonts/gelasio-latin-700-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: 'Karla 2';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/propia-3f9a7c21-regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: 'Karla 2';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("fonts/propia-3f9a7c21-bold.woff") format("woff");
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; font-family: var(--font-body); color: var(--color-ink);
+  background: var(--color-surface); }
+.rb-section { display: grid; grid-template-columns: repeat(12, 1fr);
+  gap: var(--space-md); padding: var(--space-xl); align-items: center; }
+.rb-section img { width: 100%; height: auto; border-radius: var(--radius-md); }
+.rb-section :is(h1, h2, h3, h4, h5, h6, p, a) { overflow-wrap: break-word; }
+.rb-section :is(h1, h2, h3, h4, h5, h6, p.rb-subtitle) { -webkit-hyphens: auto;
+  hyphens: auto; }
+.rb-section h1 { font-family: var(--font-heading); font-size: var(--size-heading);
+  color: var(--color-primary); margin: 0; }
+.rb-section h2 { font-family: var(--font-heading); font-size: var(--size-subheading);
+  color: var(--color-secondary); margin: 0; }
+.rb-section p.rb-subtitle { font-family: var(--font-heading);
+  font-size: var(--size-subheading); color: var(--color-secondary); margin: 0; }
+.rb-section h3 { font-family: var(--font-heading); font-size: var(--size-body);
+  color: var(--color-ink); margin: 0; }
+.rb-list { display: grid; gap: var(--space-md); margin: 0; padding: 0; list-style: none;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); }
+.rb-item { display: flex; flex-direction: column; gap: var(--space-xs);
+  padding-top: var(--space-sm); border-top: 1px solid var(--color-muted); }
+.rb-prices .rb-list { grid-template-columns: 1fr; gap: var(--space-sm); }
+.rb-gallery .rb-item img { aspect-ratio: 4 / 3; object-fit: cover; }
+.rb-team .rb-item img { aspect-ratio: 1 / 1; object-fit: cover; }
+.rb-cover img { aspect-ratio: 4 / 3; object-fit: cover; object-position: center; }
+.rb-cover.rb-image-background img { aspect-ratio: 3 / 2; }
+.rb-section p { font-size: var(--size-body); color: var(--color-muted); margin: 0; }
+.rb-section a:not([role=button]) { color: var(--color-primary); text-decoration: underline; }
+.rb-section [role=button] { display: inline-block; padding: var(--space-sm) var(--space-md);
+  background: var(--color-primary); color: var(--color-surface);
+  border-radius: var(--radius-sm); text-decoration: none; }
+.rb-panel { align-self: stretch; margin: calc(-1 * var(--space-md)); z-index: 1;
+  background: var(--color-surface); border-radius: var(--radius-lg); pointer-events: none; }
+.rb-panel ~ :not(img) { z-index: 2; }
+
+.rb-nav-wide { display: flex; flex-wrap: wrap; gap: var(--space-xl);
+  padding: var(--space-md) var(--space-xl); background: var(--color-surface); }
+.rb-nav { display: flex; flex-wrap: wrap; gap: var(--space-md); }
+.rb-nav + .rb-nav { padding-left: var(--space-xl);
+  border-left: 1px solid var(--color-muted); }
+.rb-nav-wide, .rb-nav-narrow { border-bottom: 1px solid var(--color-muted); }
+.rb-nav a { color: var(--color-primary); font-family: var(--font-heading);
+  font-size: var(--size-body); text-decoration: none; }
+.rb-nav a[aria-current=page] { text-decoration: underline; text-underline-offset: 6px;
+  text-decoration-thickness: 2px; }
+.rb-nav-narrow { padding: var(--space-md) var(--space-lg);
+  background: var(--color-surface); }
+.rb-nav-narrow > summary { color: var(--color-primary); font-family: var(--font-heading);
+  font-size: var(--size-body); cursor: pointer; }
+.rb-nav-narrow .rb-nav { flex-direction: column; gap: var(--space-sm);
+  padding: var(--space-md) 0 0; }
+.rb-nav-narrow .rb-nav + .rb-nav { padding-left: 0; border-left: 0;
+  border-top: 1px solid var(--color-muted); margin-top: var(--space-md); }
+
+@media (max-width: 720px) {
+  .rb-section { grid-template-columns: 1fr; padding: var(--space-lg); }
+  .rb-section > * { grid-column: 1 / -1 !important; grid-row: auto !important; }
+  .rb-section > img { order: -1; }
+  .rb-panel { display: none; }
+}
+
+.rb-nav-narrow { display: none; }
+@media (max-width: 720px) {
+  .rb-nav-wide { display: none; }
+  .rb-nav-narrow { display: block; }
+}
+</style>
+</head>
+<body>
+<main class="rb-page" data-page="home">
+  <section class="rb-section rb-cover rb-image-right" data-preset="cover" data-section="sec-letra-propia" data-variant="image-right" id="sec-letra-propia">
+    <h1 data-id="el-lp-headline" data-role="heading" data-slot="headline" style="grid-column:1/span 6;grid-row:1/span 1">
+      La letra de la casa, en la web de la casa
+    </h1>
+    <p class="rb-subtitle" data-id="el-lp-sub" data-role="subheading" data-slot="subheadline" style="grid-column:1/span 6;grid-row:2/span 1">
+      Los titulares con la fuente que la dueña subió; el texto con una de la galería
+    </p>
+    <p data-id="el-lp-body" data-role="body" data-slot="body" style="grid-column:1/span 6;grid-row:3/span 1">
+      Su fuente se llama «Karla 2» porque el archivo que subió se llamaba Karla, y Karla ya está en la galería: el editor le enseñó el nombre con el que viajaría y ella lo aceptó. Viaja en el ZIP con su licencia al lado, y el texto va en Gelasio, que viaja con la suya.
+    </p>
+    <img alt="Escaparate de la pastelería" data-id="el-lp-image" data-role="image" data-slot="image" src="assets/edge.svg" style="grid-column:7/span 6;grid-row:1/span 4">
+    <a data-id="el-lp-cta" data-role="button" data-slot="primaryAction" href="#encargos" role="button" style="grid-column:1/span 3;grid-row:4/span 1">
+      Encargar una tarta
+    </a>
+  </section>
+</main>
+</body>
+</html>
