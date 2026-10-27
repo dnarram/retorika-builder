@@ -88,17 +88,17 @@ export const SHIPPABLE_FAMILIES: readonly ShippableFamily[] = [
     ],
   },
   {
+    family: "Gelasio",
+    faces: [
+      { weight: 400, file: "gelasio-latin-400-normal.woff2" },
+      { weight: 700, file: "gelasio-latin-700-normal.woff2" },
+    ],
+  },
+  {
     family: "Inter",
     faces: [
       { weight: 400, file: "inter-latin-400-normal.woff2" },
       { weight: 700, file: "inter-latin-700-normal.woff2" },
-    ],
-  },
-  {
-    family: "Libre Baskerville",
-    faces: [
-      { weight: 400, file: "libre-baskerville-latin-400-normal.woff2" },
-      { weight: 700, file: "libre-baskerville-latin-700-normal.woff2" },
     ],
   },
   {

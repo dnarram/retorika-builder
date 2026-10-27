@@ -15737,8 +15737,8 @@ describe("sprint 24 día 6 — la letra se elige por su nombre", () => {
     "DM Sans",
     "EB Garamond",
     "Figtree",
+    "Gelasio",
     "Inter",
-    "Libre Baskerville",
     "Spectral",
     "Work Sans",
   ];
@@ -16035,7 +16035,7 @@ describe("sprint 24 día 6 — la letra se elige por su nombre", () => {
       await studio.getByRole("button", { name: "Estilo", exact: true }).click();
       await studio.getByRole("button", { name: "Cambiar la letra de los titulares" }).click();
       const chooser = chooserFor(studio, "titulares");
-      await chooser.getByText("Libre Baskerville", { exact: true }).click();
+      await chooser.getByText("Gelasio", { exact: true }).click();
       await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
       await chooser.getByRole("button", { name: "Hecho" }).click();
       await studio.getByRole("button", { name: "Cerrar el estilo" }).click();
@@ -16043,10 +16043,10 @@ describe("sprint 24 día 6 — la letra se elige por su nombre", () => {
       const frame = studio.frameLocator(PREVIEW).first();
       const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
       await headline.click();
-      // «Titular (Libre Baskerville)» in the name, «Titular» on the face of the button: the bar has
+      // «Titular (Gelasio)» in the name, «Titular» on the face of the button: the bar has
       // the width a section gives it, and the role word is also what tells this control from the
       // «Texto» colour swatch one group over.
-      const button = frame.getByRole("button", { name: "Letra — Titular (Libre Baskerville)" });
+      const button = frame.getByRole("button", { name: "Letra — Titular (Gelasio)" });
       await expect(button).toBeVisible();
       await expect(button).toHaveText("Titular");
       await expect(frame.getByRole("button", { name: "Letra — Texto" })).toBeVisible();

@@ -1389,9 +1389,10 @@ describe("1.12.0 — a free section is a fine grid", () => {
     (doc["pages"] as { sections: { layout: Record<string, unknown> | null }[] }[])[0]?.sections[0]
       ?.layout;
 
-  it("is registered, and it is the one the chain ends at", () => {
+  it("is registered", () => {
+    // The end of the chain until 1.13.0, and the test said so; the end is asserted below now, by the
+    // step that is the end.
     expect(step("1.12.0").version).toBe("1.12.0");
-    expect(SCHEMA_VERSION).toBe("1.12.0");
   });
 
   /**
@@ -1406,7 +1407,9 @@ describe("1.12.0 — a free section is a fine grid", () => {
 
   it("multiplies every column and span by eight, exactly, and says the grid is ninety-six", () => {
     const after = migrateToCurrent(before());
-    expect(after["schemaVersion"]).toBe("1.12.0");
+    // The stamp is this step's, read where this step leaves it: through the whole chain it said
+    // 1.12.0 until 1.13.0 landed, the form the `step` helper's comment warns about.
+    expect(upTo(before(), "1.12.0")["schemaVersion"]).toBe("1.12.0");
     const layout = layoutAfter(after);
     expect(layout?.["grid"]).toEqual({ columns: 96 });
     expect(layout?.["placements"]).toMatchObject([
@@ -1494,5 +1497,136 @@ describe("1.12.0 — a free section is a fine grid", () => {
       }
     }
     expect(withLayout.sort()).toEqual(["hidden-and-embed.json", "physio-free-cover.json"]);
+  });
+});
+
+describe("1.13.0 — Libre Baskerville reserves its name", () => {
+  const BASKERVILLE = "'Libre Baskerville', Georgia, Cambria, 'Times New Roman', Times, serif";
+  const GELASIO = "Gelasio, Georgia, Cambria, 'Times New Roman', Times, serif";
+
+  /** A site whose owner chose Libre Baskerville in the gallery before this version: the stack is
+   * resolved in its bytes, for whichever half it was chosen for. */
+  function before(
+    fonts: { heading?: string; body?: string } = { heading: BASKERVILLE },
+  ): Record<string, unknown> {
+    return {
+      schemaVersion: "1.12.0",
+      id: "doc-baskerville",
+      siteName: "Librería",
+      theme: {
+        ...theme,
+        ...(fonts.heading === undefined ? {} : { "font.heading": fonts.heading }),
+        ...(fonts.body === undefined ? {} : { "font.body": fonts.body }),
+      },
+      collections: [],
+      pages: [
+        {
+          id: "home",
+          slug: "index",
+          title: "Librería",
+          sections: [
+            {
+              id: "sec-cover",
+              preset: { catalogId: "cover", variantId: "image-right" },
+              source: "catalog",
+              layout: null,
+              content: [],
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  const fontsOf = (doc: Record<string, unknown>) => {
+    const migrated = doc["theme"] as Theme;
+    return { heading: migrated["font.heading"], body: migrated["font.body"] };
+  };
+
+  it("is registered, and it is the one the chain ends at", () => {
+    expect(step("1.13.0").version).toBe("1.13.0");
+    expect(SCHEMA_VERSION).toBe("1.13.0");
+  });
+
+  /** David's condition (b), first half: the whole stack of Libre Baskerville becomes Gelasio's. */
+  it("turns the whole Libre Baskerville stack into Gelasio's, and stamps the version", () => {
+    const after = migrateToCurrent(before());
+    expect(fontsOf(after).heading).toBe(GELASIO);
+    expect(after["schemaVersion"]).toBe("1.13.0");
+    expect(() => parseDocument(after)).not.toThrow();
+  });
+
+  /**
+   * **The fallback survives word for word**, which is David's other condition: a visitor who never
+   * received the face reads Georgia, as before. Asserted as a property of the two stacks rather than
+   * left to the literals above agreeing by eye.
+   */
+  it("keeps everything after the first family exactly as it was", () => {
+    const tail = (stack: string) => stack.slice(stack.indexOf(","));
+    expect(tail(GELASIO)).toBe(tail(BASKERVILLE));
+    expect(tail(GELASIO).startsWith(", Georgia,")).toBe(true);
+  });
+
+  it("swaps it in the text as well as in the headings, each half on its own", () => {
+    const body = "system-ui, sans-serif";
+    expect(fontsOf(migrateToCurrent(before({ body: BASKERVILLE, heading: body })))).toEqual({
+      heading: body,
+      body: GELASIO,
+    });
+    expect(fontsOf(migrateToCurrent(before({ heading: BASKERVILLE, body: BASKERVILLE })))).toEqual({
+      heading: GELASIO,
+      body: GELASIO,
+    });
+  });
+
+  /** David's condition (b), second half: migrated twice, identical. */
+  it("migrating a migrated document changes nothing", () => {
+    const once = migrateToCurrent(before());
+    expect(migrateToCurrent(once)).toEqual(once);
+  });
+
+  /** David's condition (b), third half: a document without it is not touched. */
+  it("leaves a document that never named Libre Baskerville exactly alone", () => {
+    for (const heading of ["Georgia, serif", GELASIO, `${BASKERVILLE}, fantasy`]) {
+      const was = before({ heading });
+      const after = migrateToCurrent(was);
+      expect(after["theme"], heading).toEqual(was["theme"]);
+    }
+  });
+
+  it("touches nothing else in the theme", () => {
+    const after = migrateToCurrent(before());
+    const was = before()["theme"] as Theme;
+    const now = after["theme"] as Theme;
+    for (const key of TOKEN_KEYS) {
+      if (key === "font.heading") continue;
+      expect(now[key], key).toBe(was[key]);
+    }
+  });
+
+  /**
+   * **The skip, asserted where it can fail**, as for 1.11.0: a document already at 1.13.0 that still
+   * names Libre Baskerville cannot be produced by the product, which is exactly what makes it the
+   * probe. Skipped, the stack stays; replayed, it becomes Gelasio.
+   */
+  it("does not re-apply itself to a document that is already 1.13.0", () => {
+    const already = { ...before(), schemaVersion: "1.13.0" };
+    expect(fontsOf(migrateToCurrent(already)).heading).toBe(BASKERVILLE);
+  });
+
+  it("goes back down to the stack 1.12.0 would have produced", () => {
+    const down = step("1.13.0").down;
+    expect(down, "1.13.0 has no `down`").toBeDefined();
+    expect(down?.(migrateToCurrent(before()))).toEqual(before());
+    const both = before({ heading: BASKERVILLE, body: BASKERVILLE });
+    expect(down?.(migrateToCurrent(both))).toEqual(both);
+  });
+
+  it("is the claim it rests on: no corpus fixture names Libre Baskerville", () => {
+    const corpus = readdirSync(DOCUMENTS_DIR).filter((file) => file.endsWith(".json"));
+    expect(corpus.length).toBeGreaterThan(0);
+    for (const file of corpus) {
+      expect(readFileSync(join(DOCUMENTS_DIR, file), "utf8"), file).not.toContain("Baskerville'");
+    }
   });
 });

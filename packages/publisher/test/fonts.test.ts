@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import { readFontBundle } from "../src/fontBytes.ts";
 import { FONT_DATA_KEYS, fontDataFor } from "../src/fontData.ts";
 import { FONT_SOURCES, licencesFor } from "../src/fonts.ts";
+import { copyrightNotice, reservesPresentedName } from "../src/licences.ts";
 import { buildSite } from "../src/site.ts";
 
 /**
@@ -28,6 +29,30 @@ import { buildSite } from "../src/site.ts";
  */
 
 const FIXTURES_DIR = join(import.meta.dirname, "..", "..", "..", "fixtures");
+const LICENCES_DIR = join(import.meta.dirname, "..", "licences");
+
+/** What `pnpm fonts:licences` recorded for each family: where each reading came from. */
+interface LicenceSource {
+  family: string;
+  read: string;
+  googleFonts: { commit: string; path: string };
+  author:
+    | { repository: string; commit: string; path: string; notice: string }
+    | { repository: string; located: false; reason: string }
+    | null;
+}
+
+const LICENCE_SOURCES: Record<string, LicenceSource> = JSON.parse(
+  readFileSync(join(LICENCES_DIR, "sources.json"), "utf8"),
+);
+
+/** Each shipped package once, with the family it carries and the slug its licence is filed under. */
+function shippedPackages(): { family: string; pkg: string; slug: string }[] {
+  return SHIPPABLE_FAMILIES.map(({ family, faces }) => {
+    const pkg = FONT_SOURCES[faces[0]?.file ?? ""]?.package ?? "";
+    return { family, pkg, slug: pkg.replace(/^@fontsource\//, "") };
+  });
+}
 const DOCUMENTS_DIR = join(FIXTURES_DIR, "documents");
 
 function corpus(): { name: string; document: RetorikaDocument }[] {
@@ -236,34 +261,76 @@ describe("condition 2 — a face never travels without its licence", () => {
   });
 
   /**
-   * **The filter, as a refusal over every row** (ADR 0045): no family this product ships may declare
-   * a Reserved Font Name.
+   * **The filter, as a refusal over every row** (ADR 0045): no family this product ships may present
+   * a name its holders reserve.
    *
-   * This replaces an assertion that recorded the opposite — «Playfair Display reserves its name and
-   * Inter does not» — written while we shipped a family that did. The reasoning beside it was that
-   * shipping `@fontsource`'s file unmodified let the reserved name travel; the licence's test is
-   * against the Original Version, and ours is one subset of four in woff2. So the question is
-   * answered by not shipping such a family at all, and this is where that becomes impossible to
-   * forget rather than a thing somebody has to remember when adding the next one.
+   * **Read from the holders' texts, never from the package's `LICENSE`.** Until sprint 29 this test
+   * read `@fontsource`'s file, whose copyright line is rebuilt from the fonts' name tables — and for
+   * Libre Baskerville that rebuilt line drops «with Reserved Font Name Libre Baskerville», which
+   * google/fonts' `OFL.txt` declares. The test passed for two sprints over a family it exists to
+   * refuse. Now it reads what `pnpm fonts:licences` brought in from google/fonts and from the
+   * author's own repository, with the commit each was read at, offline.
    *
-   * **The copyright line and not the licence body.** Every OFL's own §3 contains the phrase, so a
-   * search of the whole text says yes about every font in existence — which is the mistake made
-   * first, and caught before anything was written down.
+   * **Both readings must agree** (David, 27 October 2026): Adobe's `source-serif` reserves «Source»
+   * where google/fonts' text for Source Serif 4 does not, and a discrepancy keeps a family out until
+   * somebody resolves it.
+   *
+   * **The reserved name is compared with the presented one**, not the phrase searched for: Bitter's
+   * holders reserve «Bitter Pro» and we present «Bitter» — the reading David dated in ADR 0055.
+   * **The copyright notice and not the licence body**, because every OFL's own §3 contains the
+   * phrase — the mistake made first in sprint 24, and caught before anything was written down.
    */
-  it("ships no family that reserves its name, over every face in the table", () => {
-    const read = createRequire(import.meta.url);
-    const packages = new Set(Object.values(FONT_SOURCES).map((source) => source.package));
-    expect(packages.size, "the table ships no families at all").toBeGreaterThan(0);
+  it("ships no family whose holders reserve the name it presents, in either reading", () => {
+    const packages = shippedPackages();
+    expect(packages.length, "the table ships no families at all").toBeGreaterThan(0);
 
-    for (const pkg of packages) {
-      const licence = readFileSync(
-        join(dirname(read.resolve(`${pkg}/package.json`)), "LICENSE"),
-        "utf8",
+    for (const { family, slug } of packages) {
+      const licence = readFileSync(join(LICENCES_DIR, `${slug}.txt`), "utf8");
+      expect(licence, `${family} is not under the OFL`).toContain(
+        "SIL OPEN FONT LICENSE Version 1.1",
       );
-      const copyright = licence.slice(0, licence.indexOf("This Font Software is licensed"));
-      expect(copyright, `${pkg} declares a Reserved Font Name`).not.toContain("Reserved Font Name");
-      // And it is an OFL at all, which is the other half of what lets a client redistribute it.
-      expect(licence, `${pkg} is not under the OFL`).toContain("SIL OPEN FONT LICENSE Version 1.1");
+      expect(
+        reservesPresentedName(copyrightNotice(licence), family),
+        `${family}: google/fonts' licence reserves the name we present`,
+      ).toBe(false);
+
+      const author = LICENCE_SOURCES[slug]?.author;
+      if (author && "notice" in author) {
+        expect(
+          reservesPresentedName(author.notice, family),
+          `${family}: the author's licence reserves the name we present`,
+        ).toBe(false);
+      }
+    }
+  });
+
+  /**
+   * **Where every licence came from, so it can be checked by somebody else**: each family has the
+   * holders' text beside it and the commit it was read at, and nothing is kept for a family no longer
+   * shipped — which is how Libre Baskerville's licence left with it.
+   */
+  it("keeps the holders' licence of every shipped family, with its commit, and nothing else", () => {
+    const slugs = shippedPackages()
+      .map(({ slug }) => slug)
+      .sort();
+    const files = readdirSync(LICENCES_DIR)
+      .filter((file) => file.endsWith(".txt"))
+      .map((file) => file.slice(0, -".txt".length))
+      .sort();
+    expect(files).toEqual(slugs);
+    expect(Object.keys(LICENCE_SOURCES).sort()).toEqual(slugs);
+
+    for (const { family, slug } of shippedPackages()) {
+      const source = LICENCE_SOURCES[slug];
+      expect(source?.family, slug).toBe(family);
+      expect(source?.googleFonts.commit, `${family}: google/fonts commit`).toMatch(
+        /^[0-9a-f]{40}$/,
+      );
+      expect(source?.googleFonts.path, family).toMatch(/^ofl\/[a-z0-9]+\/OFL\.txt$/);
+      const author = source?.author;
+      if (author && "commit" in author) {
+        expect(author.commit, `${family}: author commit`).toMatch(/^[0-9a-f]{40}$/);
+      }
     }
   });
 
@@ -341,12 +408,33 @@ describe("condition 3 — the woff2 travel exactly as the package ships them", (
       expect(fontDataFor(name), `${name} must be the package's bytes, unmodified`).toEqual(face);
       if (!seen.has(source.licencePath)) {
         seen.add(source.licencePath);
-        const licence = new Uint8Array(readFileSync(join(dir, "LICENSE")));
-        expect(fontDataFor(source.licencePath), source.licencePath).toEqual(licence);
+        const slug = source.package.replace(/^@fontsource\//, "");
+        const holders = new Uint8Array(readFileSync(join(LICENCES_DIR, `${slug}.txt`)));
+        expect(fontDataFor(source.licencePath), source.licencePath).toEqual(holders);
+        // **And not the package's.** The two texts differ for every family shipped today (measured
+        // 27 October 2026), so equality with the holders' file is a statement about which one was read
+        // — the sabotage of reading `LICENSE` again goes red here.
+        const packaged = new Uint8Array(readFileSync(join(dir, "LICENSE")));
+        expect(
+          fontDataFor(source.licencePath),
+          `${source.licencePath} is @fontsource's`,
+        ).not.toEqual(packaged);
       }
     }
     // And nothing else is carried: a key with no source would be bytes nobody can account for.
     expect([...FONT_DATA_KEYS].sort()).toEqual([...Object.keys(FONT_SOURCES), ...seen].sort());
+  });
+
+  it("carries the holders' licence in the ZIP, byte for byte, and not the package's", async () => {
+    const doc = withHeading(plain(), "Gelasio, Georgia, serif");
+    const bundle = await bundleFor(doc);
+    const licence = bundle.files.find((file) => file.path === "fonts/OFL-Gelasio.txt");
+    expect(licence, "the Gelasio licence is not in the ZIP").toBeDefined();
+    expect(licence?.contents).toEqual(
+      new Uint8Array(readFileSync(join(LICENCES_DIR, "gelasio.txt"))),
+    );
+    const dir = dirname(createRequire(import.meta.url).resolve("@fontsource/gelasio/package.json"));
+    expect(licence?.contents).not.toEqual(new Uint8Array(readFileSync(join(dir, "LICENSE"))));
   });
 
   it("is byte-for-byte the file from `@fontsource` by the time it reaches the ZIP", async () => {

@@ -215,13 +215,13 @@ export const GALLERY_FAMILIES: readonly GalleryFamily[] = [
     stack: "'EB Garamond', Garamond, Baskerville, 'Big Caslon', Georgia, 'Times New Roman', serif",
   },
   { family: "Figtree", kind: "sans", stack: `Figtree, ${SANS_FALLBACK}` },
+  { family: "Gelasio", kind: "serif", stack: `Gelasio, ${SERIF_FALLBACK}` },
   {
     family: "Inter",
     kind: "sans",
     // `modern-sans`'s heading stack, verbatim — see `GalleryFamily.stack`.
     stack: "Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
   },
-  { family: "Libre Baskerville", kind: "serif", stack: `'Libre Baskerville', ${SERIF_FALLBACK}` },
   { family: "Spectral", kind: "serif", stack: `Spectral, ${SERIF_FALLBACK}` },
   { family: "Work Sans", kind: "sans", stack: `'Work Sans', ${SANS_FALLBACK}` },
 ];

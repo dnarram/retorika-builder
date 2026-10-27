@@ -4363,7 +4363,7 @@ export function Editor({
        * **The family joins the accessible name since the gallery exists** (ADR 0046, sprint 24
        * día 6): with eight families choosable by their real names, the question an owner asks of
        * these two buttons is which letter they are about to apply. The visible label stays the role
-       * word — this bar has the width a section gives it, and «Titular (Libre Baskerville)» is not a
+       * word — this bar has the width a section gives it, and «Titular (EB Garamond)» is not a
        * button that fits — so the name and the tooltip carry it, and only when the family is one we
        * send. `toolbarFamilyLabel` composes both, and a theme heading in Georgia still gets the role
        * word alone.

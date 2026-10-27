@@ -1,0 +1,114 @@
+{
+  "bitter": {
+    "family": "Bitter",
+    "read": "2026-10-27",
+    "googleFonts": {
+      "commit": "e7db6ca603fd4862010383ff17ffd6cc4ffac1c0",
+      "path": "ofl/bitter/OFL.txt"
+    },
+    "author": {
+      "repository": "https://github.com/solmatas/BitterPro",
+      "commit": "de749c69b5ffdb4b109c10d8fc331c3ecc4e39c5",
+      "path": "OFL.txt",
+      "notice": "Copyright 2011 The Bitter Project Authors (https://github.com/solmatas/BitterPro) with Reserved Font Name \"Bitter Pro\"."
+    }
+  },
+  "dm-sans": {
+    "family": "DM Sans",
+    "read": "2026-10-27",
+    "googleFonts": {
+      "commit": "e7db6ca603fd4862010383ff17ffd6cc4ffac1c0",
+      "path": "ofl/dmsans/OFL.txt"
+    },
+    "author": {
+      "repository": "https://github.com/googlefonts/dm-fonts",
+      "commit": "4412393b7d2de9fe7a92064c2dce9b5af5d7fd26",
+      "path": "Sans/LICENSE.txt",
+      "notice": "Copyright 2014-2017 Indian Type Foundry (info@indiantypefoundry.com). Copyright 2019 Google LLC."
+    }
+  },
+  "eb-garamond": {
+    "family": "EB Garamond",
+    "read": "2026-10-27",
+    "googleFonts": {
+      "commit": "e7db6ca603fd4862010383ff17ffd6cc4ffac1c0",
+      "path": "ofl/ebgaramond/OFL.txt"
+    },
+    "author": {
+      "repository": "https://github.com/octaviopardo/EBGaramond12",
+      "commit": "106a4a6d377987459ae5e68673a4570f13b957fb",
+      "path": "OFL.txt",
+      "notice": "Copyright 2017 The EB Garamond Project Authors (https://github.com/octaviopardo/EBGaramond12) Copyright 2025 Deborah Khodanovich (RCS citation glyphs)"
+    }
+  },
+  "figtree": {
+    "family": "Figtree",
+    "read": "2026-10-27",
+    "googleFonts": {
+      "commit": "e7db6ca603fd4862010383ff17ffd6cc4ffac1c0",
+      "path": "ofl/figtree/OFL.txt"
+    },
+    "author": {
+      "repository": "https://github.com/erikdkennedy/figtree",
+      "commit": "032dfa7fe219ef3a02890d6d3add84eacc9aebfe",
+      "path": "OFL.txt",
+      "notice": "Copyright 2022 The Figtree Project Authors (https://github.com/erikdkennedy/figtree)"
+    }
+  },
+  "gelasio": {
+    "family": "Gelasio",
+    "read": "2026-10-27",
+    "googleFonts": {
+      "commit": "e7db6ca603fd4862010383ff17ffd6cc4ffac1c0",
+      "path": "ofl/gelasio/OFL.txt"
+    },
+    "author": {
+      "repository": "https://github.com/SorkinType/Gelasio",
+      "commit": "7ab20e7e5c42791e603b9ee3201a0b49849cfdb2",
+      "path": "OFL.txt",
+      "notice": "Copyright 2022 The Gelasio Project Authors (https://github.com/SorkinType/Gelasio)"
+    }
+  },
+  "inter": {
+    "family": "Inter",
+    "read": "2026-10-27",
+    "googleFonts": {
+      "commit": "e7db6ca603fd4862010383ff17ffd6cc4ffac1c0",
+      "path": "ofl/inter/OFL.txt"
+    },
+    "author": {
+      "repository": "https://github.com/rsms/inter",
+      "commit": "353b61b9f4430d5f420d56605a6e7993e0941470",
+      "path": "LICENSE.txt",
+      "notice": "Copyright (c) 2016 The Inter Project Authors (https://github.com/rsms/inter)"
+    }
+  },
+  "spectral": {
+    "family": "Spectral",
+    "read": "2026-10-27",
+    "googleFonts": {
+      "commit": "e7db6ca603fd4862010383ff17ffd6cc4ffac1c0",
+      "path": "ofl/spectral/OFL.txt"
+    },
+    "author": {
+      "repository": "https://github.com/productiontype/Spectral",
+      "commit": "dbc06862d7030eedb1b01b60cdad8f6102f4ddfa",
+      "path": "ofl.txt",
+      "notice": "Copyright 2017 The Spectral Project Authors (https://github.com/productiontype/spectral)"
+    }
+  },
+  "work-sans": {
+    "family": "Work Sans",
+    "read": "2026-10-27",
+    "googleFonts": {
+      "commit": "e7db6ca603fd4862010383ff17ffd6cc4ffac1c0",
+      "path": "ofl/worksans/OFL.txt"
+    },
+    "author": {
+      "repository": "https://github.com/weiweihuanghuang/Work-Sans",
+      "commit": "b35c81086186162164947bd39574683073d9b268",
+      "path": "OFL.txt",
+      "notice": "Copyright 2019 The Work Sans Project Authors (https://github.com/weiweihuanghuang/Work-Sans)"
+    }
+  }
+}

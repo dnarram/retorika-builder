@@ -1,0 +1,3 @@
+# The holders' licence texts travel into clients' ZIPs byte for byte, and a test compares them with the
+# generated `fontData.ts`. Some arrive with CRLF line ends (google/fonts' DM Sans); never normalise them.
+packages/publisher/licences/*.txt -text

@@ -42,6 +42,12 @@
  * test ADR 0011 applies to a photograph. `licencePath` is per package, so two faces from one family
  * carry one licence file between them, and a test refuses a ZIP with a `woff2` and no licence beside
  * it.
+ *
+ * **Rule three, since sprint 29: the licence is the holders', not the package's.** The text that
+ * travels is google/fonts' `OFL.txt`, kept in `packages/publisher/licences/` with the commit it was
+ * read at. `@fontsource`'s `LICENSE` rebuilds its copyright line from the fonts' name tables and can
+ * drop a Reserved Font Name the holder declares — it dropped Libre Baskerville's, which shipped for
+ * two sprints because the filter read that line (ADR 0045, amended 27 October 2026).
  */
 
 export interface FontSource {
@@ -104,6 +110,16 @@ export const FONT_SOURCES: Readonly<Record<string, FontSource>> = {
     file: "figtree-latin-700-normal.woff2",
     licencePath: "fonts/OFL-Figtree.txt",
   },
+  "gelasio-latin-400-normal.woff2": {
+    package: "@fontsource/gelasio",
+    file: "gelasio-latin-400-normal.woff2",
+    licencePath: "fonts/OFL-Gelasio.txt",
+  },
+  "gelasio-latin-700-normal.woff2": {
+    package: "@fontsource/gelasio",
+    file: "gelasio-latin-700-normal.woff2",
+    licencePath: "fonts/OFL-Gelasio.txt",
+  },
   "inter-latin-400-normal.woff2": {
     package: "@fontsource/inter",
     file: "inter-latin-400-normal.woff2",
@@ -113,16 +129,6 @@ export const FONT_SOURCES: Readonly<Record<string, FontSource>> = {
     package: "@fontsource/inter",
     file: "inter-latin-700-normal.woff2",
     licencePath: "fonts/OFL-Inter.txt",
-  },
-  "libre-baskerville-latin-400-normal.woff2": {
-    package: "@fontsource/libre-baskerville",
-    file: "libre-baskerville-latin-400-normal.woff2",
-    licencePath: "fonts/OFL-LibreBaskerville.txt",
-  },
-  "libre-baskerville-latin-700-normal.woff2": {
-    package: "@fontsource/libre-baskerville",
-    file: "libre-baskerville-latin-700-normal.woff2",
-    licencePath: "fonts/OFL-LibreBaskerville.txt",
   },
   "spectral-latin-400-normal.woff2": {
     package: "@fontsource/spectral",
