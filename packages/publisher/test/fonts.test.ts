@@ -6,7 +6,7 @@ import { flattenElements, parseDocument, type RetorikaDocument } from "@retorika
 import { GALLERY_FAMILIES, withFamily } from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
 import { readFontBundle } from "../src/fontBytes.ts";
-import { FONT_DATA_KEYS, fontDataFor } from "../src/fontData.ts";
+import { FONT_DATA_KEYS, fontDataFor } from "../src/fontData/index.ts";
 import { FONT_SOURCES, licencesFor } from "../src/fonts.ts";
 import { copyrightNotice, reservesPresentedName } from "../src/licences.ts";
 import { buildSite } from "../src/site.ts";
@@ -449,6 +449,55 @@ describe("condition 3 — the woff2 travel exactly as the package ships them", (
       const fromPackage = new Uint8Array(readFileSync(join(dir, "files", source?.file ?? "")));
       expect(file.contents, `${name} must be the package's bytes, unmodified`).toEqual(fromPackage);
     }
+  });
+
+  /**
+   * **One generated module per package, and none left behind** (ADR 0055). `pnpm fonts:generate`
+   * removes the module of a package the table no longer names; read from the directory and not from
+   * the index, because an orphan is exactly the file nothing imports.
+   */
+  it("keeps exactly one generated module per package, and none for a package no longer shipped", () => {
+    const modules = readdirSync(join(import.meta.dirname, "..", "src", "fontData"))
+      .filter((file) => file.endsWith(".ts") && file !== "index.ts")
+      .map((file) => file.slice(0, -".ts".length))
+      .sort();
+    expect(modules).toEqual(
+      shippedPackages()
+        .map(({ slug }) => slug)
+        .sort(),
+    );
+  });
+
+  /**
+   * **Every package pinned exactly, in this package's manifest and in the root's** — the condition
+   * ADR 0046 found broken the first time, when `pnpm install --frozen-lockfile` would have caught it in
+   * CI. The publisher's own manifest is what `fonts.test.ts` resolves from; the root's is what
+   * `scripts/generate-font-data.ts` resolves from. A range would let a different face in under a
+   * licence reading made of another one.
+   */
+  it("pins every shipped package exactly, in this package's manifest and in the root's", () => {
+    const manifest = (path: string) => JSON.parse(readFileSync(path, "utf8"));
+    const own = manifest(join(import.meta.dirname, "..", "package.json"));
+    const root = manifest(join(import.meta.dirname, "..", "..", "..", "package.json"));
+    const rootPins: Record<string, string> = { ...root.dependencies, ...root.devDependencies };
+    const packages = shippedPackages()
+      .map(({ pkg }) => pkg)
+      .sort();
+
+    for (const pkg of packages) {
+      const pinned = own.dependencies?.[pkg];
+      expect(pinned, `${pkg} is not pinned exactly in packages/publisher`).toMatch(
+        /^\d+\.\d+\.\d+$/,
+      );
+      expect(rootPins[pkg], `${pkg} is pinned differently in the root`).toBe(pinned);
+    }
+    // And nothing declared that the table does not ship: a stray face package is bytes nobody reads.
+    const fontsource = (deps: Record<string, string>) =>
+      Object.keys(deps)
+        .filter((name) => name.startsWith("@fontsource/"))
+        .sort();
+    expect(fontsource(own.dependencies)).toEqual(packages);
+    expect(fontsource(rootPins)).toEqual(packages);
   });
 
   it("keeps the package's own file name, so the ZIP says what it carries", () => {

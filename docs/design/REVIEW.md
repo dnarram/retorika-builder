@@ -4365,3 +4365,94 @@ editor, en el navegador o en la cuenta, cambian solas al abrirse.
 Gelasio pesa 40,4 KB con su licencia frente a 41,5, y la pareja más pesada sigue siendo EB Garamond e
 Inter, con 98,7 KB. Las ocho licencias y `sources.json` ocupan unos 38 KB en el repositorio. **La
 migración del día 4 pasa a ser la 0015 (esquema 1.14.0).**
+
+### Día 2 — la galería se navega: una tabla, veinticinco familias (PR de `feat/la-galeria-se-navega`)
+
+**Lo que ve el CEO.** El selector de letra ofrece **veinticinco familias** en vez de ocho: catorce
+sin remates, siete con remates y cuatro de remates gruesos. Hay un chip nuevo, **«Remates gruesos»**,
+donde ahora está Bitter, que antes salía en «Con remates». Entre las nuevas están **Montserrat,
+Poppins, Roboto y Open Sans**, las que piden los clientes.
+
+**La encuesta, y lo que desmontó.** `pnpm fonts:survey` lee 109 candidatas desde los paquetes
+publicados, sin ejecutar nada ni escribir en el repositorio, y admite 78. El filtro 2 se lee de los
+titulares: el `OFL.txt` de google/fonts y la licencia del repositorio del autor, con el nombre
+reservado comparado con el presentado. Es la regla de la PR aparte de antes de este día, la de Libre
+Baskerville. El plan daba por hecho que Montserrat y Poppins reservaban su nombre y que Roboto era
+Apache: **no es así** en ninguna de las dos lecturas, y la línea preparada para la galería («Montserrat,
+Poppins, Lato y otras no se incluyen…») habría mentido. David decidió que las cuatro más pedidas entren
+**dentro del cupo de catorce sin remates**, con la sustituta de Inter, Roboto y Open Sans entre ellas.
+Quedan fuera:
+
+- **por nombre reservado:** Lato, Raleway, Lora, Merriweather, Source Sans 3, IBM Plex y PT;
+- **por discrepancia entre las dos lecturas:** Playfair Display y Source Serif 4;
+- **por no tener 700 real:** Bebas Neue, Anton y Archivo Black.
+
+Para el sprint 30 queda medido cuánto pesaría la cara completa de las reservadas más pedidas (Lato
++11 KB, Playfair +59, Raleway +99, Lora +131, Merriweather +183). Seguiría siendo un cambio de formato,
+que no cura el §3. La encuesta entera es el apéndice de la ADR 0055.
+
+**Una sola tabla.** `packages/schema/src/fontGallery.ts` es la única lista escrita a mano: familia,
+especie y sustituta. El renderer, los tokens y el publisher la derivan. Las ocho pilas y las dieciséis
+fuentes de hoy salen **idénticas byte a byte**, comparadas contra las escritas a mano, así que ningún
+documento cambia y ningún golden se mueve. Cada fila lleva su sustituta de la misma especie, ya en la
+tabla, como condición de David: retirar una familia queda en una migración mecánica, como la 0014. Un
+test lo exige fila por fila, junto con el cupo de catorce sin remates. Las especies son cuatro (sin
+remates, con remates, remates gruesos y de cartel), y los chips del selector salen de las que la tabla
+tiene: «De cartel» aparecerá sola el día 3, con la primera familia de titular.
+
+**Los bytes, partidos.** `fontData.ts` (467 KB en un solo módulo) pasa a ser `fontData/`: un módulo por
+paquete, de 27 a 76 KB, y un índice. En total son 1,3 MB. El generador borra el módulo de un paquete que
+la tabla ya no nombra, y un test rechaza un huérfano leyendo el directorio. Las diecisiete familias
+nuevas están fijadas exactas en los dos `package.json`, y un test lo comprueba. Sus licencias son las
+de los titulares, con su commit.
+
+**El techo de las caras se comprueba solo.** `pnpm size` pesa cada familia como la lleva un ZIP y
+falla si el techo queda por debajo de la pareja más pesada. Esa pareja es hoy **Zilla Slab con Libre
+Caslon Text, 104,3 KB**; antes era EB Garamond con Inter, 98,7 KB. El techo pasa de 115 a **120 KB**,
+con el margen de unos 16 KB de la 0046.
+
+**Un defecto que solo existía con más de ocho filas, y que encontró el e2e.** Con veinticinco familias
+la lista ya no cabe en el diálogo. **El `fieldset` que desplazaba la lista no recortaba lo que
+pintaba**: Chromium lo maqueta bien (la caja acababa en 800 px de una ventana de 900) y luego pinta sus
+filas por debajo, sobre «Hecho», que dejaba de recibir el clic. Se midió en el navegador con
+`elementFromPoint` y una captura, y se arregló: el `fieldset` sigue siendo el grupo y la leyenda, y un
+`div` a su alrededor hace el desplazamiento y el recorte. Ese `div` es también la raíz del
+`IntersectionObserver`.
+
+**La caminata de la galería prueba ahora la pereza, no solo la cota.** Con ocho familias la primera
+pantalla era la tabla entera. Ahora el e2e afirma que **abrir el diálogo no pide la cara del pie de la
+lista** (Zilla Slab), baja la lista fila a fila como una persona y entonces exige que llegue cada cara.
+Saltar de la cabeza al pie con un solo `scrollIntoView` dejaba sin ver las filas del medio, y el
+observador hace bien en no pedirlas. La lista de familias del e2e sale de la tabla, con un suelo literal
+de 25 y cuatro familias nombradas.
+
+**Saboteos, nueve, todos en rojo y deshechos por script:**
+
+- una sustituta de otra especie;
+- una sustituta que es la propia fila;
+- una decimoquinta familia sin remates;
+- un módulo huérfano `playfair-display.ts`;
+- un rango `^5.3.0` en el `package.json` de la raíz;
+- los chips escritos a mano en vez de derivados;
+- un techo de 100 KB, por debajo de la pareja más pesada;
+- un slab que cae a sin remates;
+- en el e2e, el diálogo revelando todas las filas al abrir, que dio «Zilla Slab… was fetched by
+  opening the dialog».
+
+**Un arreglo a la PR aparte, ya empujado a ella.** Cuando no se localiza la licencia del autor, ahora
+manda solo la de google/fonts. Antes la familia quedaba fuera igual, pero con el motivo de
+«discrepancia», cuando el motivo era el nombre reservado (Arvo, Passion One).
+
+**Medidas del día.**
+
+- `pnpm test`: 3126.
+- `test:invariants`: 27.
+- `test:golden`: 23, sin movimiento.
+- `typecheck` y `lint`: en verde.
+- `renderer:deps`, `schema:guard` («the document's shape is unchanged») y `secrets:scope` (112 módulos,
+  28 de cliente, sin cruce): en verde.
+- `size`: en verde, con la pareja más pesada en 104,3 KB frente a 120.
+- **e2e completo: 257 verdes y 1 omitido en 1052 s.** Antes hubo dos pasadas filtradas: la que encontró
+  el defecto del `fieldset` y la del sabotaje.
+- Con el arreglo, la hoja a 390 px y el diálogo a 1440 px se miraron en captura, y «Hecho» es el
+  elemento que hay bajo su propio centro.

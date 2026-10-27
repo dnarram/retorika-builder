@@ -1,3 +1,5 @@
+import { FONT_FAMILY_PATTERN } from "@retorika/schema";
+
 /**
  * Escaping, the separate problem of dangerous URL schemes, theme values inside <style>, and
  * document ids inside a CSS selector.
@@ -118,7 +120,9 @@ export function cssThemeValue(key: string, value: string): string {
  * and file names; a theme *selects* a row from it by exact equality and can never name one. These
  * functions are the second lock on that, for the day somebody wires a document value in by mistake.
  */
-const CSS_FONT_FAMILY = /^[A-Za-z][A-Za-z0-9]*(?: [A-Za-z0-9]+)*$/;
+// The family pattern is the gallery's own filter 4 (ADR 0046 §3), so it lives beside the gallery in
+// `@retorika/schema` and both the filter and this lock read the one regex.
+const CSS_FONT_FAMILY = FONT_FAMILY_PATTERN;
 const CSS_FONT_FILE = /^[a-z0-9]+(?:-[a-z0-9]+)*\.woff2$/;
 
 /** A shipped family's name, quoted for `font-family` inside `@font-face`. */

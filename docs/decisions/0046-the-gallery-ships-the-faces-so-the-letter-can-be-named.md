@@ -206,3 +206,16 @@ repository. In the client's ZIP they cost nothing: only the faces the theme name
   asserts the four filters over every row.
 - The record is `docs/design/REVIEW.md`, sprint 24, and the backlog's «tipografías propias» row is
   struck on the sprint's last day, when the owner can actually choose one.
+
+## Amendments — 27 October 2026
+
+- **§2: the table lives in `@retorika/schema`** ([ADR 0055](0055-the-gallery-is-navigated-one-table-and-each-familys-substitute.md)).
+  `FONT_GALLERY` is the one hand-written list; the renderer derives `SHIPPABLE_FAMILIES` from it and
+  keeps the derivation of faces and the only `url()`. The property this section states — a document
+  selects a row and never names a file — is unchanged.
+- **§3, filter 2, is read from the holders**
+  ([ADR 0045, amended](0045-the-serif-this-product-ships-reserves-no-name.md)). The reading above was
+  taken from `@fontsource`'s `LICENSE`, whose copyright line can drop a reservation the holder
+  declares. **Libre Baskerville, admitted here, reserves its name**; it left on 27 October 2026 for
+  Gelasio, with migration `0014`. Of the nine that «passed» and were not shipped, Source Sans 3 and
+  Source Serif 4 do not pass that reading.

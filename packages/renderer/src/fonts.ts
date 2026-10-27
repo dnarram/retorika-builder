@@ -1,20 +1,19 @@
-import { type RetorikaDocument, TOKEN_KEYS } from "@retorika/schema";
+import { FONT_GALLERY, fontFamilySlug, type RetorikaDocument, TOKEN_KEYS } from "@retorika/schema";
 import { cssFontFamilyName, cssFontSrc } from "./escape.ts";
 
 /**
  * Which faces a published page may carry, and the `@font-face` rules for them (ADR 0028, option A).
  *
- * **A closed table, inside the renderer, and both halves of that are forced.**
+ * **A closed table, and it cannot be derived from the document**, which is the whole safety property
+ * — **a document may *choose* a row from this table and can never *name* a file.**
  *
  * It cannot come from `@retorika/tokens`, where the type pairs are declared: `scripts/renderer-deps.ts`
  * admits `@retorika/schema` and `@retorika/catalog` and nothing else, because everything in this
- * package travels to the client's site. And it cannot be derived from the document, which is the whole
- * safety property — **a document may *choose* a row from this table and can never *name* a file.**
- *
- * So the table is a second copy of eight family names, and that is the cost. It is guarded from the
- * direction that still holds: `fonts.test.ts` asserts that every family a type pair asks for first is
- * a row here — a pair naming a face nobody ships is the defect ADR 0028 exists to prevent — and that
- * every row is reachable by a document and brings exactly its own faces.
+ * package travels to the client's site. Until sprint 29 that made it a second copy of the family names;
+ * since ADR 0055 the names live once, in `@retorika/schema`'s `FONT_GALLERY`, and this table is derived
+ * from them. `fonts.test.ts` still asserts that every family a type pair asks for first is a row here —
+ * a pair naming a face nobody ships is the defect ADR 0028 exists to prevent — and that every row is
+ * reachable by a document and brings exactly its own faces.
  *
  * **What it no longer asserts is the other direction**, that every row is named by a pair. Until
  * sprint 24 the table was two rows and both came from a pair, so "shipped but unnamed" meant bytes
@@ -50,72 +49,29 @@ export interface ShippableFamily {
  * `font-weight` — and by `p.rb-subtitle`, the cover's tagline, which is a `<p>` and therefore **400**.
  * Shipping only 700 would leave every tagline synthesising a lighter weight from the bold file, which
  * browsers do badly; shipping only 400 would have them synthesise the bold, which they do worse.
+ */
+const SHIPPED_WEIGHTS = [400, 700] as const;
+
+/**
+ * Every family this product can ship and its two faces, **derived from `FONT_GALLERY`** in
+ * `@retorika/schema` (ADR 0055) — the one hand-written list since sprint 29, where this was the second
+ * of four parallel copies. The file name is a function of the family's name, `@fontsource`'s own
+ * convention, so nothing per row is written here. What this package keeps is the derivation of faces
+ * and the only `url()` (`escape.ts`), which is what ADR 0046 §2 gave it.
  *
  * Only the face a stack asks for **first** is shipped for it. A family further down a stack is a
  * fallback, and a fallback that we ship is not a fallback — it is the choice, under another name.
  *
- * **Alphabetical by family**, because from ADR 0046 on this is a gallery the owner reads and not a
- * list of two: the order a published page emits its faces in is this one, which is why it is a
- * decision rather than the order the rows were added in.
+ * **Alphabetical by family**, because the gallery is: the order a published page emits its faces in is
+ * the table's, which is why it is a decision rather than the order the rows were added in.
  */
-export const SHIPPABLE_FAMILIES: readonly ShippableFamily[] = [
-  {
-    family: "Bitter",
-    faces: [
-      { weight: 400, file: "bitter-latin-400-normal.woff2" },
-      { weight: 700, file: "bitter-latin-700-normal.woff2" },
-    ],
-  },
-  {
-    family: "DM Sans",
-    faces: [
-      { weight: 400, file: "dm-sans-latin-400-normal.woff2" },
-      { weight: 700, file: "dm-sans-latin-700-normal.woff2" },
-    ],
-  },
-  {
-    family: "EB Garamond",
-    faces: [
-      { weight: 400, file: "eb-garamond-latin-400-normal.woff2" },
-      { weight: 700, file: "eb-garamond-latin-700-normal.woff2" },
-    ],
-  },
-  {
-    family: "Figtree",
-    faces: [
-      { weight: 400, file: "figtree-latin-400-normal.woff2" },
-      { weight: 700, file: "figtree-latin-700-normal.woff2" },
-    ],
-  },
-  {
-    family: "Gelasio",
-    faces: [
-      { weight: 400, file: "gelasio-latin-400-normal.woff2" },
-      { weight: 700, file: "gelasio-latin-700-normal.woff2" },
-    ],
-  },
-  {
-    family: "Inter",
-    faces: [
-      { weight: 400, file: "inter-latin-400-normal.woff2" },
-      { weight: 700, file: "inter-latin-700-normal.woff2" },
-    ],
-  },
-  {
-    family: "Spectral",
-    faces: [
-      { weight: 400, file: "spectral-latin-400-normal.woff2" },
-      { weight: 700, file: "spectral-latin-700-normal.woff2" },
-    ],
-  },
-  {
-    family: "Work Sans",
-    faces: [
-      { weight: 400, file: "work-sans-latin-400-normal.woff2" },
-      { weight: 700, file: "work-sans-latin-700-normal.woff2" },
-    ],
-  },
-];
+export const SHIPPABLE_FAMILIES: readonly ShippableFamily[] = FONT_GALLERY.map(({ family }) => ({
+  family,
+  faces: SHIPPED_WEIGHTS.map((weight) => ({
+    weight,
+    file: `${fontFamilySlug(family)}-latin-${weight}-normal.woff2`,
+  })),
+}));
 
 /**
  * The first family of a CSS font stack, unquoted.

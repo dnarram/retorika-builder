@@ -16,6 +16,7 @@ import { GALLERY_SAMPLE_COUNT } from "@retorika/generator";
 import {
   FINE_PER_COLUMN,
   FINE_TRACKS,
+  FONT_GALLERY,
   fineColumnOf,
   fineSpanOf,
   overlaps,
@@ -15732,16 +15733,19 @@ describe("nada sobresale en un móvil", () => {
 describe("sprint 24 día 6 — la letra se elige por su nombre", () => {
   const VIEWPORT = { width: 1440, height: 900 };
 
-  const SHIPPED = [
-    "Bitter",
-    "DM Sans",
-    "EB Garamond",
-    "Figtree",
-    "Gelasio",
-    "Inter",
-    "Spectral",
-    "Work Sans",
-  ];
+  /**
+   * Every family the gallery ships, **derived from the one table** since sprint 29 día 2 (ADR 0055),
+   * where it was a list of eight written here. Derived lists can be empty without anybody noticing,
+   * so the first test below holds it to a literal floor and four families by name.
+   */
+  const SHIPPED = FONT_GALLERY.map((row) => row.family);
+
+  it("walks a gallery that is really there: at least twenty-five families, four of them by name", () => {
+    expect(SHIPPED.length).toBeGreaterThanOrEqual(25);
+    for (const family of ["EB Garamond", "Gelasio", "Montserrat", "Zilla Slab"]) {
+      expect(SHIPPED, family).toContain(family);
+    }
+  });
 
   /**
    * Which of the gallery's faces this document has actually loaded, by family.
@@ -15831,7 +15835,9 @@ describe("sprint 24 día 6 — la letra se elige por su nombre", () => {
       await expect(change).toBeVisible();
       await expect(studio.getByText("EB Garamond", { exact: true })).toBeVisible();
       await expect(studio.getByText("La letra de «Clásica y seria»")).toBeVisible();
-      await expect(studio.getByText(/^8 letras que viajan con tu web/)).toBeVisible();
+      await expect(
+        studio.getByText(new RegExp(`^${SHIPPED.length} letras que viajan con tu web`)),
+      ).toBeVisible();
       expect(
         served.has("spectral-latin-400-normal.woff2"),
         "a shut chooser must not drag a family in just in case",
@@ -15846,17 +15852,38 @@ describe("sprint 24 día 6 — la letra se elige por su nombre", () => {
        *
        * The dialog declares a face only for the rows that have come near the viewport — the first
        * screen and the chosen one on open, then whatever the observer sees approaching. With eight
-       * families the first screen is the whole table, so what this proves today is the bound and
-       * not the laziness: every row's face arrives, in the file the ZIP will carry, and nothing
-       * arrived before the dialog opened. From día 2 the same walk scrolls the list to its foot
-       * before asking for every file, which is where the observer's half of the promise is held.
+       * families (día 1) the first screen was the whole table and this proved only the bound; with
+       * twenty-five it proves the laziness too: **the foot of the list is not fetched by opening**,
+       * and every row's face arrives once the list has been walked down to it.
        */
       await change.click();
       const chooser = chooserFor(studio, "titulares");
       await expect(chooser).toBeVisible();
       await expect(chooser.getByLabel("Buscar una letra")).toBeFocused();
       await fitsTheWindow(studio, chooser);
-      await chooser.getByRole("radio").last().scrollIntoViewIfNeeded();
+      // The list's own group and not the dialog: the kind chips are radios too.
+      const list = chooser.getByRole("group", { name: "La letra de los titulares" });
+      const frames = () =>
+        studio.evaluate(
+          () =>
+            new Promise<void>((done) =>
+              requestAnimationFrame(() => requestAnimationFrame(() => done())),
+            ),
+        );
+      await frames();
+      await studio.evaluate(() => document.fonts.ready.then(() => undefined));
+      const foot = SHIPPED.at(-1) ?? "";
+      expect(
+        served.has(`${foot.toLowerCase().replace(/ /g, "-")}-latin-400-normal.woff2`),
+        `${foot}, at the foot of the list, was fetched by opening the dialog`,
+      ).toBe(false);
+      // **Walked down a row at a time**, the way a person scrolls: a jump from the head to the foot
+      // would leave the middle rows never near the viewport, and the observer is right not to fetch
+      // what nobody saw — found on día 2, when the list first outgrew its screen.
+      for (const radio of await list.getByRole("radio").all()) {
+        await radio.scrollIntoViewIfNeeded();
+        await frames();
+      }
       await studio.evaluate(() => document.fonts.ready.then(() => undefined));
       for (const family of SHIPPED) {
         const file = `${family.toLowerCase().replace(/ /g, "-")}-latin-400-normal.woff2`;
@@ -15868,8 +15895,6 @@ describe("sprint 24 día 6 — la letra se elige por su nombre", () => {
       for (const family of SHIPPED) expect(loaded, `${family}'s specimen`).toContain(family);
 
       // ---- ADR 0046's condition, in the chooser itself: every row is offered, named, in its face ----
-      // The list's own group and not the dialog: the three kind chips are radios too.
-      const list = chooser.getByRole("group", { name: "La letra de los titulares" });
       await expect(list.getByRole("radio")).toHaveCount(SHIPPED.length);
       for (const family of SHIPPED) {
         const radio = list.getByRole("radio", { name: family, exact: true });
@@ -15901,11 +15926,17 @@ describe("sprint 24 día 6 — la letra se elige por su nombre", () => {
       await search.fill("");
       // The chips' own group: each serif row carries the same word as its species badge.
       const chips = chooser.getByRole("group", { name: "Qué carácter" });
+      const ofKind = (kind: string) => FONT_GALLERY.filter((row) => row.kind === kind).length;
       await chips.getByText("Con remates", { exact: true }).click();
-      await expect(chooser.getByText("4 letras", { exact: true })).toBeVisible();
+      await expect(chooser.getByText(`${ofKind("serif")} letras`, { exact: true })).toBeVisible();
       await expect(chooser.getByRole("radio", { name: "Figtree", exact: true })).toBeHidden();
+      // Bitter reads «Remates gruesos» since día 2, and its chip is where it is found.
+      await expect(chooser.getByRole("radio", { name: "Bitter", exact: true })).toBeHidden();
+      await chips.getByText("Remates gruesos", { exact: true }).click();
+      await expect(chooser.getByText(`${ofKind("slab")} letras`, { exact: true })).toBeVisible();
+      await expect(chooser.getByRole("radio", { name: "Bitter", exact: true })).toBeVisible();
       await chips.getByText("Todas", { exact: true }).click();
-      await expect(chooser.getByText("8 letras", { exact: true })).toBeVisible();
+      await expect(chooser.getByText(`${SHIPPED.length} letras`, { exact: true })).toBeVisible();
 
       /**
        * ---- previewing is not choosing: Escape returns the letter that was there on open ----

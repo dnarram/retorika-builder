@@ -1,3 +1,4 @@
+import { FONT_KINDS } from "@retorika/schema";
 import { buildTheme, GALLERY_FAMILIES, withFamily } from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
 import { fold } from "../src/editor/fold.ts";
@@ -64,11 +65,29 @@ describe("chooserRows", () => {
     expect(spectral).toMatchObject({ chosen: true, visible: false });
   });
 
-  it("offers the chips in the gallery's own order, with «Todas» first", () => {
-    expect(KIND_FILTERS).toEqual(["all", "sans", "serif"]);
-    for (const kind of KIND_FILTERS) {
-      expect(es[`editor.style.chooser.kind.${kind}`], kind).toBeTypeOf("string");
+  it("offers a chip for each species the gallery has, in its own order, with «Todas» first", () => {
+    // The slabs entered on día 2 and brought «Remates gruesos» with them; «De cartel» waits for the
+    // first headline family, so no chip can narrow the list to nothing.
+    expect(KIND_FILTERS).toEqual(["all", "sans", "serif", "slab"]);
+    for (const kind of KIND_FILTERS.slice(1)) {
+      expect(
+        GALLERY_FAMILIES.some((row) => row.kind === kind),
+        kind,
+      ).toBe(true);
     }
+  });
+
+  it("has a label for every species there is, including the one with no family yet", () => {
+    for (const kind of ["all", ...FONT_KINDS]) {
+      expect(es[`editor.style.chooser.kind.${kind}` as keyof typeof es], kind).toBeTypeOf("string");
+    }
+  });
+
+  it("files Bitter under the slabs, where until día 2 it read «Con remates»", () => {
+    const slabs = chooserRows(start, "font.body", "", "slab").filter((row) => row.visible);
+    expect(slabs.map((row) => row.family)).toEqual(["Aleo", "Bitter", "Rokkitt", "Zilla Slab"]);
+    const serifs = chooserRows(start, "font.body", "", "serif").filter((row) => row.visible);
+    expect(serifs.some((row) => row.family === "Bitter")).toBe(false);
   });
 });
 
@@ -95,12 +114,27 @@ describe("sampleLine", () => {
 });
 
 describe("initiallyRevealed", () => {
-  it("declares the first screen of visible rows", () => {
+  it("declares the first screen of visible rows, and not the rest", () => {
     const rows = chooserRows(start, "font.heading", "", "all");
     const revealed = initiallyRevealed(rows);
-    // Eight families today, so the first screen is the whole table; the cap earns its keep on día 2.
-    expect([...revealed].sort()).toEqual([...all].sort());
-    expect(revealed.size).toBeLessThanOrEqual(8);
+    // Twenty-five families since día 2, so the cap earns its keep: the first eight in the gallery's
+    // order, and the chosen one — Inter, on «Moderna y neutra» — wherever it falls.
+    expect([...revealed].sort()).toEqual(
+      [
+        "Aleo",
+        "Bitter",
+        "Crimson Pro",
+        "DM Sans",
+        "EB Garamond",
+        "Figtree",
+        "Fraunces",
+        "Gelasio",
+        "Inter",
+      ].sort(),
+    );
+    // And the foot of the list is not fetched by opening the dialog.
+    expect(revealed.has("Zilla Slab")).toBe(false);
+    expect(revealed.size).toBeLessThan(rows.length);
   });
 
   it("always includes the chosen family, even when the words hide it", () => {

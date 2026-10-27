@@ -99,14 +99,21 @@ function rawUrl(repository: string, commit: string, path: string): string | unde
  * several, the one whose path names a word of the family, then the shallowest.
  *
  * The one call to GitHub's API in this script, made only for a repository whose root the plain names
- * missed, so the unauthenticated limit is not a concern at the size of this table.
+ * missed. Unauthenticated, GitHub allows sixty an hour, which the table never reaches and the survey's
+ * hundred candidates can: so a refusal says so rather than passing for «no licence», and a
+ * `GITHUB_TOKEN` in the environment, when there is one, raises the limit.
  */
 async function licenceInTree(repository: string, commit: string, family: string) {
   const github = /^https:\/\/github\.com\/([^/]+\/[^/]+)$/.exec(repository);
   if (!github) return undefined;
+  const token = process.env["GITHUB_TOKEN"];
   const response = await fetch(
     `https://api.github.com/repos/${github[1]}/git/trees/${commit}?recursive=1`,
+    token ? { headers: { authorization: `Bearer ${token}` } } : undefined,
   );
+  if (response.status === 403 || response.status === 429) {
+    throw new Error("GitHub's API refused the tree (rate limit); set GITHUB_TOKEN and read again");
+  }
   if (!response.ok) return undefined;
   const { tree } = (await response.json()) as { tree: { path: string; type: string }[] };
   const familyWords = family.toLowerCase().split(" ");
@@ -133,16 +140,35 @@ async function readAuthor(repository: string, family: string): Promise<HolderRea
   } catch (error) {
     return { repository, located: false, reason: (error as Error).message };
   }
-  const nested = async () => {
-    const path = await licenceInTree(repository, commit, family);
-    return path === undefined ? [] : [path];
-  };
-  for (const path of [...AUTHOR_LICENCE_FILES, ...(await nested())]) {
+  const read = async (path: string) => {
     const url = rawUrl(repository, commit, path);
-    if (url === undefined) return { repository, located: false, reason: "host not supported" };
-    const bytes = await fetchBytes(url);
-    if (bytes === undefined) continue;
-    return { repository, commit, path, notice: copyrightNotice(new TextDecoder().decode(bytes)) };
+    if (url === undefined) throw new Error("host not supported");
+    return fetchBytes(url);
+  };
+  try {
+    for (const path of AUTHOR_LICENCE_FILES) {
+      const bytes = await read(path);
+      if (bytes !== undefined) {
+        return {
+          repository,
+          commit,
+          path,
+          notice: copyrightNotice(new TextDecoder().decode(bytes)),
+        };
+      }
+    }
+    const nested = await licenceInTree(repository, commit, family);
+    const bytes = nested === undefined ? undefined : await read(nested);
+    if (nested !== undefined && bytes !== undefined) {
+      return {
+        repository,
+        commit,
+        path: nested,
+        notice: copyrightNotice(new TextDecoder().decode(bytes)),
+      };
+    }
+  } catch (error) {
+    return { repository, located: false, reason: (error as Error).message };
   }
   return { repository, located: false, reason: "no licence file in the repository" };
 }

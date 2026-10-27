@@ -1,4 +1,4 @@
-import { type RetorikaDocument, TOKEN_KEYS } from "@retorika/schema";
+import { GENERIC_OF, type RetorikaDocument, TOKEN_KEYS } from "@retorika/schema";
 import { familiesOf, GALLERY_FAMILIES, TYPE_PAIRS } from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
 import { cssFontFamilyName, cssFontSrc, cssThemeValue } from "../src/escape.ts";
@@ -87,11 +87,11 @@ describe("the table does not drift from the stacks the tokens declare", () => {
     }
   });
 
-  it("the gallery the editor offers and the table that ships are the same eight families", () => {
-    // Two copies of eight names, in two packages that cannot import each other: the renderer may not
-    // reach `@retorika/tokens` (everything here travels to the client's site) and the gallery's
-    // stacks are the tokens' business. This is the seam, and ADR 0046's condition — the editor must
-    // offer every row — is this equality read from the editor's side.
+  it("the gallery the editor offers and the table that ships are the same families", () => {
+    // Two derivations of one list since ADR 0055, in two packages that cannot import each other: the
+    // renderer may not reach `@retorika/tokens` (everything here travels to the client's site) and
+    // the gallery's stacks are the tokens' business. This is the seam, and ADR 0046's condition — the
+    // editor must offer every row — is this equality read from the editor's side.
     expect(GALLERY_FAMILIES.map((f) => f.family).toSorted()).toEqual(
       SHIPPABLE_FAMILIES.map((f) => f.family).toSorted(),
     );
@@ -118,7 +118,7 @@ describe("the table does not drift from the stacks the tokens declare", () => {
     // described.
     for (const { family, kind, stack } of GALLERY_FAMILIES) {
       const last = familiesOf(stack).at(-1);
-      expect(last, family).toBe(kind === "serif" ? "serif" : "sans-serif");
+      expect(last, family).toBe(GENERIC_OF[kind]);
       // And the family it names first is itself, which is what makes the face travel.
       expect(familiesOf(stack)[0], family).toBe(family);
     }

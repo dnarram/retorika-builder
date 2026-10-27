@@ -83,7 +83,7 @@ export function FontChooserDialog({
   const titleId = `${id}-title`;
   const searchId = `${id}-search`;
   const container = useFocusTrap(true, onCancel);
-  const list = useRef<HTMLFieldSetElement>(null);
+  const list = useRef<HTMLDivElement>(null);
 
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<KindFilter>("all");
@@ -193,22 +193,28 @@ export function FontChooserDialog({
 
         {/* `min-h-0` is what lets a flex child shrink below its content and scroll, which is the
             lesson `DownloadGateDialogs.tsx` records: without it the list grows past the box and the
-            footer leaves the screen. */}
-        <fieldset
-          ref={list}
-          className="m-0 flex min-h-0 flex-col gap-1.5 overflow-y-auto border-0 p-0"
-        >
-          <legend className="sr-only">{title}</legend>
-          {rows.map((row) => (
-            <SpecimenRow
-              key={row.family}
-              row={row}
-              group={`${id}-${fontKey}`}
-              sample={sample}
-              onPick={onPick}
-            />
-          ))}
-        </fieldset>
+            footer leaves the screen.
+
+            **The scroller is a `div`, never the `fieldset`.** Chromium lays a scrolling fieldset out
+            correctly — its box ended at 800px of a 900px window, 1744px of rows inside — and then
+            paints its positioned children past the clip: twenty-five rows drew over «Hecho» and took
+            its click (sprint 29 día 2, the first time the list outgrew its box; eight rows fitted).
+            Each row is `relative` for its hidden radio, so the fieldset keeps the group and the
+            legend and the `div` around it does the clipping. It is also the observer's root. */}
+        <div ref={list} className="min-h-0 overflow-y-auto">
+          <fieldset className="m-0 flex flex-col gap-1.5 border-0 p-0">
+            <legend className="sr-only">{title}</legend>
+            {rows.map((row) => (
+              <SpecimenRow
+                key={row.family}
+                row={row}
+                group={`${id}-${fontKey}`}
+                sample={sample}
+                onPick={onPick}
+              />
+            ))}
+          </fieldset>
+        </div>
 
         <div className="flex justify-end">
           <button

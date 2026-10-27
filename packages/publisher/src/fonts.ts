@@ -1,3 +1,6 @@
+import { SHIPPABLE_FAMILIES } from "@retorika/renderer";
+import { fontFamilySlug } from "@retorika/schema";
+
 /**
  * Where a shipped face's bytes and its licence come from, and the two rules that govern both
  * (ADR 0028, option A).
@@ -65,92 +68,24 @@ export interface FontSource {
 }
 
 /**
- * Keyed by the name the renderer puts in `url("fonts/…")`, so the two tables meet at one point and
- * `fonts.test.ts` asserts they agree. The renderer cannot import this — it must not depend on the
- * publisher, and nothing in `packages/renderer` may read a file — so one guarded seam is the floor.
+ * Keyed by the name the renderer puts in `url("fonts/…")`, and **derived from the renderer's own
+ * table** since sprint 29 (ADR 0055): every name here is a function of the family's — the package is
+ * `@fontsource/<slug>`, the licence `fonts/OFL-<Name>.txt` — so the third of the four parallel copies
+ * becomes a derivation and the two tables cannot disagree. What stays hand-written is the pin of each
+ * package in this package's `package.json` and the root's, which a test reads.
  */
-export const FONT_SOURCES: Readonly<Record<string, FontSource>> = {
-  "bitter-latin-400-normal.woff2": {
-    package: "@fontsource/bitter",
-    file: "bitter-latin-400-normal.woff2",
-    licencePath: "fonts/OFL-Bitter.txt",
-  },
-  "bitter-latin-700-normal.woff2": {
-    package: "@fontsource/bitter",
-    file: "bitter-latin-700-normal.woff2",
-    licencePath: "fonts/OFL-Bitter.txt",
-  },
-  "dm-sans-latin-400-normal.woff2": {
-    package: "@fontsource/dm-sans",
-    file: "dm-sans-latin-400-normal.woff2",
-    licencePath: "fonts/OFL-DMSans.txt",
-  },
-  "dm-sans-latin-700-normal.woff2": {
-    package: "@fontsource/dm-sans",
-    file: "dm-sans-latin-700-normal.woff2",
-    licencePath: "fonts/OFL-DMSans.txt",
-  },
-  "eb-garamond-latin-400-normal.woff2": {
-    package: "@fontsource/eb-garamond",
-    file: "eb-garamond-latin-400-normal.woff2",
-    licencePath: "fonts/OFL-EBGaramond.txt",
-  },
-  "eb-garamond-latin-700-normal.woff2": {
-    package: "@fontsource/eb-garamond",
-    file: "eb-garamond-latin-700-normal.woff2",
-    licencePath: "fonts/OFL-EBGaramond.txt",
-  },
-  "figtree-latin-400-normal.woff2": {
-    package: "@fontsource/figtree",
-    file: "figtree-latin-400-normal.woff2",
-    licencePath: "fonts/OFL-Figtree.txt",
-  },
-  "figtree-latin-700-normal.woff2": {
-    package: "@fontsource/figtree",
-    file: "figtree-latin-700-normal.woff2",
-    licencePath: "fonts/OFL-Figtree.txt",
-  },
-  "gelasio-latin-400-normal.woff2": {
-    package: "@fontsource/gelasio",
-    file: "gelasio-latin-400-normal.woff2",
-    licencePath: "fonts/OFL-Gelasio.txt",
-  },
-  "gelasio-latin-700-normal.woff2": {
-    package: "@fontsource/gelasio",
-    file: "gelasio-latin-700-normal.woff2",
-    licencePath: "fonts/OFL-Gelasio.txt",
-  },
-  "inter-latin-400-normal.woff2": {
-    package: "@fontsource/inter",
-    file: "inter-latin-400-normal.woff2",
-    licencePath: "fonts/OFL-Inter.txt",
-  },
-  "inter-latin-700-normal.woff2": {
-    package: "@fontsource/inter",
-    file: "inter-latin-700-normal.woff2",
-    licencePath: "fonts/OFL-Inter.txt",
-  },
-  "spectral-latin-400-normal.woff2": {
-    package: "@fontsource/spectral",
-    file: "spectral-latin-400-normal.woff2",
-    licencePath: "fonts/OFL-Spectral.txt",
-  },
-  "spectral-latin-700-normal.woff2": {
-    package: "@fontsource/spectral",
-    file: "spectral-latin-700-normal.woff2",
-    licencePath: "fonts/OFL-Spectral.txt",
-  },
-  "work-sans-latin-400-normal.woff2": {
-    package: "@fontsource/work-sans",
-    file: "work-sans-latin-400-normal.woff2",
-    licencePath: "fonts/OFL-WorkSans.txt",
-  },
-  "work-sans-latin-700-normal.woff2": {
-    package: "@fontsource/work-sans",
-    file: "work-sans-latin-700-normal.woff2",
-    licencePath: "fonts/OFL-WorkSans.txt",
-  },
-};
+export const FONT_SOURCES: Readonly<Record<string, FontSource>> = Object.fromEntries(
+  SHIPPABLE_FAMILIES.flatMap(({ family, faces }) =>
+    faces.map(({ file }): [string, FontSource] => [
+      file,
+      {
+        package: `@fontsource/${fontFamilySlug(family)}`,
+        file,
+        licencePath: `fonts/OFL-${family.replaceAll(" ", "")}.txt`,
+      },
+    ]),
+  ),
+);
 
 /** The licence files the given faces oblige the bundle to carry, de-duplicated and sorted. */
 export function licencesFor(files: readonly string[]): string[] {
