@@ -77,6 +77,16 @@ bundle — it names every page whose icon «names no file in the bundle».
   renamed, it is 96 again and the test fails naming the composition.
 - The icon is **258 bytes** with a letter and 114 without; every page gains one line. `pnpm size` passes unchanged.
 
+## Measured at the sprint 28 close (27 October 2026)
+
+- **The ZIP differs from the sprint's start by exactly this.** The nineteen corpus documents built as
+  downloads with the publisher at `9cb3781` (the merge of #302, where sprint 28 started) and at the close:
+  every site gains `favicon.svg` (258 bytes; 259 for `edge-long-text-unicode`, whose letter is a
+  two-byte «Ñ»), and every one of the **35 pages** gains one line right after its `<title>`; removed,
+  each page is the start's byte for byte, and the other 44 files do not change.
+- Lighthouse, the same four pages: **best practices 100** on all four; performance 100 / 99 / 99 /
+  100, accessibility and SEO 100.
+
 ## What this does not decide
 
 - **Safari.** Whether Safari draws an SVG favicon is not established here: published sources from
