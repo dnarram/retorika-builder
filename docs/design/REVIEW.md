@@ -4297,3 +4297,71 @@ salida del renderer no cambia); `renderer:deps`, `schema:guard`, `secrets:scope`
 cliente, sin cruce) y `size` iguales que ayer; `a11y` local 538 en 30 s; **e2e completo 256 verdes y
 1 omitido en 1042 s, a la primera**, tras tres pasadas filtradas del bloque del día (90, 21 y 15 s)
 que corrigieron el test y no el producto.
+
+### Aparte, antes del día 2 — Libre Baskerville reservaba su nombre (PR de `fix/la-licencia-de-origen`)
+
+**Lo encontró la encuesta del día 2 antes de admitir una sola familia.** Para medir unas noventa
+candidatas, la encuesta leía, como la 0046, el `LICENSE` que trae cada paquete de `@fontsource`. Al
+cruzarlo con el `OFL.txt` que google/fonts distribuye junto a esos mismos ficheros, **diez de 92 no
+coinciden**: el `LICENSE` del paquete compone su línea de copyright con lo que dice cada fichero de
+fuente, y ahí se pierde la reserva de nombre que el titular declara. Una de las diez era **Libre
+Baskerville, que enviamos desde el sprint 24**: su `OFL.txt` dice «with Reserved Font Name Libre
+Baskerville», y lo que viaja es la porción latina en woff2 con ese nombre, el mismo caso que sacó a
+Playfair Display en la 0045. El filtro de la 0046 la dejó pasar porque leía el texto equivocado. Al
+preguntar dije «12 de 92»; recontado antes de escribirlo, son diez.
+
+**Las decisiones de David, el 27 de octubre**, en dos rondas de respuestas:
+
+- **Libre Baskerville se retira en esta PR, que se fusiona antes que la del día 2**, con migración.
+- **La sustituta es Gelasio**, por las métricas de Georgia: «es lo que menos mueve una web ya
+  descargada». Yo propuse primero Source Serif 4 y la retiré antes de escribir código: el `OFL.txt` de
+  google/fonts no reserva nombre, pero el `LICENSE.md` del propio Adobe reserva ‘Source’. Se ofreció
+  también la hermana de nombre, Libre Caslon Text, y no se eligió.
+- **Bitter se queda**, con la lectura fechada: reserva «Bitter Pro» y presentamos «Bitter».
+- **La licencia que viaja es la del titular** y vive en el repositorio con el commit del que salió.
+- **Una familia entra solo si google/fonts y el repositorio del autor coinciden** en no reservar el
+  nombre que presentamos. Si discrepan, queda fuera hasta que alguien lo aclare.
+
+**Lo que cambia.**
+
+- **Migración 0014, esquema 1.12.0 → 1.13.0.** Cambia la pila entera de Libre Baskerville por la de
+  Gelasio en cualquiera de las dos mitades, porque la galería dejaba elegirla para titulares o para
+  texto. La pila nueva lleva el repliegue de la antigua palabra por palabra (Georgia, Cambria, 'Times
+  New Roman', Times, serif), así que un visitante sin la cara ve lo mismo que veía. David escribió la
+  pila más corta («'Gelasio', Georgia, serif»); se construyó la de galería, que conserva todo el
+  repliegue y hace que una web migrada y una que elija Gelasio a mano publiquen lo mismo. Está dicho
+  en la ADR por si no era eso.
+- **Los diez tests de la migración incluyen los de la 0012 completos**, como pidió David: la pila
+  entera pasa a Gelasio, migrar dos veces da lo mismo y un documento sin ella no se toca. A eso se
+  suman cada mitad por separado, el salto sobre un documento que ya es 1.13.0, el `down` y el recuento
+  del corpus (ningún fixture la nombra).
+- **Las licencias de los titulares, en el repositorio.** `pnpm fonts:licences` trae el `OFL.txt` de
+  google/fonts de cada familia enviada a `packages/publisher/licences/`. Lo trae a un commit fijo, y en
+  `sources.json` quedan ese commit, el repositorio del autor (el que google/fonts nombra en su
+  `METADATA.pb`), el commit al que se leyó su licencia y su línea de copyright. Las ocho de hoy tienen
+  las dos lecturas. `fontData.ts` se genera desde esos ficheros, y un test comprueba byte a byte que el
+  ZIP lleva la del repositorio y no la de `@fontsource`; hoy difieren las ocho.
+- **El filtro compara el nombre reservado con el presentado**, en `packages/publisher/src/licences.ts`
+  y con sus propios tests: «Source Sans 3» usa ‘Source’, y «Bitter» no usa «Bitter Pro».
+
+**Para el CEO, por si un cliente pregunta: un ZIP ya descargado con Libre Baskerville no se puede
+corregir desde aquí.** El editor no publica en ningún servidor nuestro; una web solo sale de aquí como
+descarga, y la que esté en el disco o en el alojamiento de un cliente conserva la letra y la licencia
+con que se generó. Si ese cliente vuelve a descargar, la web sale en Gelasio. Las webs que siguen en el
+editor, en el navegador o en la cuenta, cambian solas al abrirse.
+
+**Saboteos, siete, todos en rojo y todos deshechos por script:**
+
+1. El generador vuelve a leer el `LICENSE` del paquete: rojo el test byte a byte y el del ZIP.
+2. Una reserva añadida al texto de google/fonts de Gelasio: rojo el filtro.
+3. Una reserva añadida solo a la línea del autor, la discrepancia: rojo el filtro.
+4. Una licencia huérfana `libre-baskerville.txt`: rojo el test que exige una licencia por familia y
+   ninguna más.
+5. La migración solo en titulares: rojo «cada mitad por separado».
+6. La migración sin repliegue: rojo «la pila entera pasa a Gelasio».
+7. La migración sin registrar: rojo todo lo que espera la versión actual.
+
+**Lo que cuesta.** Las webs que eligieron Libre Baskerville cambian de letra. En peso no cuesta nada:
+Gelasio pesa 40,4 KB con su licencia frente a 41,5, y la pareja más pesada sigue siendo EB Garamond e
+Inter, con 98,7 KB. Las ocho licencias y `sources.json` ocupan unos 38 KB en el repositorio. **La
+migración del día 4 pasa a ser la 0015 (esquema 1.14.0).**

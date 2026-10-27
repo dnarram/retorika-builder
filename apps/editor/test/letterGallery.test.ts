@@ -171,8 +171,8 @@ describe("typePairNoteText", () => {
 
 describe("toolbarFamilyLabel", () => {
   it("names the family behind the reference when it is one we send", () => {
-    const theme = withFamily(start, "font.heading", "Libre Baskerville");
-    expect(toolbarFamilyLabel(theme, "font.heading")).toBe("Letra — Titular (Libre Baskerville)");
+    const theme = withFamily(start, "font.heading", "Gelasio");
+    expect(toolbarFamilyLabel(theme, "font.heading")).toBe("Letra — Titular (Gelasio)");
   });
 
   it("gives the role word alone when the letter is not ours to name", () => {

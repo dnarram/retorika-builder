@@ -182,7 +182,7 @@ export function typePairNoteText(theme: Theme): string {
  *
  * **The role word stays, and the family joins it in the name only** (ADR 0032, ADR 0046). The
  * visible label is still «Titular» or «Texto»: a bar inside a section has the width a section gives
- * it, and «Titular (Libre Baskerville)» is not a button that fits. But the question an owner asks
+ * it, and «Titular (EB Garamond)» is not a button that fits. But the question an owner asks
  * here is which letter they are about to apply, so the name and the tooltip answer it — and only
  * when the family is one we send. A theme heading in Georgia gets the role word alone, because
  * naming a face we do not ship is the promise issue #9 forbade.

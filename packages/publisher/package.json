@@ -7,7 +7,7 @@
   "exports": {
     ".": "./src/index.ts"
   },
-  "comment": "No third-party runtime dependency beyond the eight font packages of the gallery, whose bytes are the deliverable: the woff2 files travel into the client's ZIP exactly as @fontsource ships them, and no family here reserves its name — a condition `test/fonts.test.ts` asserts over every row, since the latin slice we ship is a Modified Version under the OFL and §3 would not let a reserved name travel with it (ADR 0045). The ZIP itself is written by hand against node:zlib rather than pulled from a supply chain.",
+  "comment": "No third-party runtime dependency beyond the font packages of the gallery, whose bytes are the deliverable: the woff2 files travel into the client's ZIP exactly as @fontsource ships them, and no family here reserves the name it is presented under — a condition `test/fonts.test.ts` asserts over every row against the holders' own licence texts in `licences/`, never the package's rebuilt LICENSE, since the latin slice we ship is a Modified Version under the OFL and §3 would not let a reserved name travel with it (ADR 0045, amended sprint 29). The ZIP itself is written by hand against node:zlib rather than pulled from a supply chain.",
   "dependencies": {
     "@retorika/schema": "workspace:*",
     "@retorika/renderer": "workspace:*",
@@ -15,8 +15,8 @@
     "@fontsource/dm-sans": "5.3.0",
     "@fontsource/eb-garamond": "5.3.0",
     "@fontsource/figtree": "5.3.0",
+    "@fontsource/gelasio": "5.3.0",
     "@fontsource/inter": "5.2.8",
-    "@fontsource/libre-baskerville": "5.3.0",
     "@fontsource/spectral": "5.3.0",
     "@fontsource/work-sans": "5.3.0"
   },
