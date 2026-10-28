@@ -244,6 +244,16 @@ is read against the same cap as it streams, because a header is a claim.
    request so that the deployed number is one `curl` away; if it is above 200 ms there, the condition
    says a worker, and a worker on a tenth of a CPU still competes for the same tenth.
 
+   > **Measured on the deployment, 28 October 2026 (sprint 29 día 7).** The `curl` of
+   > `docs/runbook.md` §9 against `retorika-builder.onrender.com`, with a WOFF2 of 2,032,006 bytes
+   > built the same way (random literals between runs of zeros, expanding to about 8.4 MB). The first
+   > request met a sleeping instance and got no answer within 150 s; the next two read **462.9 ms
+   > and 378.7 ms**, and the four after them 53.5, 48.6, 35.7 and 50.8 ms. On this laptop, against the
+   > built editor (`next start`), the same file reads 5.9–7.2 ms. **The first two after waking are
+   > above 200 ms.** The condition was written for, and met on, the development server; whether the
+   > deployed number moves the decompression to a `worker_thread` is David's to decide, and is listed
+   > in `REVIEW.md` as the sprint leaves it. Nothing in the code changed.
+
 ### 11. What the download reads of the owner's bytes (día 5)
 
 `/api/download` reads two new kinds of part through **one** reader, `readFonts` — David's adjustment
@@ -323,6 +333,12 @@ the web exists.
   checkbox is a check. The interface makes the responsibility explicit; this ADR says where it lies.
 - **A 2 MB `.ttf` is a 2 MB page**, on the owner's line of the budget and nowhere else. The warning at
   300 KB is the product's whole opinion.
+  > **Measured on 28 October 2026 (sprint 29 día 7)**, Lighthouse mobile over the first composition
+  > with both halves in an own `.ttf`: 53 KB of faces scores 100; 194 KB, 95; 294 KB, 89; 404 KB, 82;
+  > 594 KB, 73 — two files of 297 KB, **neither of which the per-file warning names** — and 714 KB,
+  > 68. Protocol Part 8.5's floor of 95 is crossed near 190 KB of faces in all. Whether the warning
+  > should count the site's total, or start lower, is David's condition to revisit; `REVIEW.md`
+  > lists the three ways. The 53 KB case is now a permanent subject of `pnpm lighthouse`.
 - **A regular alone gets a synthesised bold**, said in the editor rather than prevented.
 - **Nothing is on screen today.** The engine lands first, as the gallery's did on sprint 24 día 5
   before día 6; a document with a `fonts` record cannot be produced by the editor until día 5, and a

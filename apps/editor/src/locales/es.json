@@ -280,6 +280,7 @@
   "editor.download.contrast.cancel": "Volver",
   "editor.download.fontsMissing.title": "Falta el archivo de tu fuente",
   "editor.download.fontsMissing.body": "Este navegador ya no tiene los archivos de {families}, así que tu web se los pide a ficheros que no tenemos. Quítala en Estilo, en la letra, y vuelve a subirla, o elige otra letra.",
+  "editor.download.fontsMissing.bodyAccount": "No hemos podido traer de tu cuenta los archivos de {families}. Recarga la página para volver a intentarlo. Si siguen sin llegar, quítala en Estilo, en la letra, y vuelve a subirla desde el ordenador donde la tengas, o elige otra letra.",
   "editor.download.fontsMissing.close": "Entendido",
   "editor.download.heavyFonts.title": "Tu letra pesa mucho",
   "editor.download.heavyFonts.body.one": "Un archivo de tu fuente pesa más de {limit} KB. Tu web tardará más en abrirse, sobre todo en un móvil.",
