@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import es from "../locales/es.json" with { type: "json" };
+import { accountSentence } from "./accountSentence.ts";
 import type { SwitchNotice } from "./designTools.ts";
 import { NARROWEST_DESKTOP, NARROWEST_WIDTH } from "./overflowCheck.ts";
 import { overscrollFor } from "./overscroll.ts";
@@ -112,25 +113,6 @@ export type SaveStatus = "saved" | "unsaved" | null;
  * and §5 adds the half that would otherwise be discovered on another computer: **the document
  * travels and the photos do not.** So the account label says both.
  */
-/**
- * What the indicator says once a site is in the account.
- *
- * Three claims, not one, because a save can land completely and still leave a photograph behind —
- * an upload the store refused, or one whose bytes are in another browser. Saying «Guardado en tu
- * cuenta» then would be true about the document and silent about the picture the owner is looking
- * at; saying «No guardado» would be false about their words. The count is the only sentence that
- * is true about both, and it is the one they can act on.
- *
- * `null` is the plain sentence rather than «0 fotos sin subir», because nothing has been counted
- * yet and a zero would be a claim nobody made.
- */
-function accountSentence(photosMissing: number | null): string {
-  if (photosMissing === null || photosMissing <= 0) return es["editor.saved.account"];
-  return photosMissing === 1
-    ? es["editor.saved.accountPhotosMissing.one"]
-    : es["editor.saved.accountPhotosMissing.many"].replace("{count}", String(photosMissing));
-}
-
 export type SavedWhere = "browser" | "account";
 
 const RAIL_ICONS = {
@@ -689,6 +671,7 @@ export function EditorShell({
   saveStatus,
   savedWhere = "browser",
   photosMissing = null,
+  fontsMissing = null,
   onSaveToAccount,
   rail,
   onRailChange,
@@ -754,6 +737,8 @@ export function EditorShell({
    * may only make the second one after looking. A site with no account passes `null` for ever.
    */
   photosMissing?: number | null | undefined;
+  /** The same for the owner's own fonts, counted by font, with the same `null` (sprint 29 día 6). */
+  fontsMissing?: number | null | undefined;
   /** Absent when there is no account configured at all, and then no button is drawn. */
   onSaveToAccount?: (() => void) | undefined;
   rail: RailItemId;
@@ -1210,12 +1195,15 @@ export function EditorShell({
 
           {/* The status: the save sentence and the account, together because below 1024 they are
               the row that drops under the rest — the whole row on a tablet, the third on a phone,
-              wrapping onto two lines at 320 when the sentence has a count in it. */}
+              wrapping onto two lines at 320 when the sentence has a count in it. **The sentence
+              itself may wrap on a phone since sprint 29 día 6**: with photographs and fonts both
+              short it measured 388–403 px in Chromium, wider than a 390 phone's row; each count
+              alone fits at 320 («· 1 foto sin subir» 262 px, «· 2 fuentes sin subir» 287 of 288). */}
           <div className="flex items-center gap-2.5 phone:order-3 phone:basis-full phone:flex-wrap phone:justify-between phone:gap-y-1 tablet:order-last tablet:basis-full tablet:justify-end">
             {saveStatus ? (
               <span
                 className={
-                  "inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] font-medium " +
+                  "inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] font-medium phone:whitespace-normal " +
                   (saveStatus === "saved" ? "text-ui-muted" : "text-ui-danger-deep")
                 }
               >
@@ -1243,7 +1231,7 @@ export function EditorShell({
                 {saveStatus !== "saved"
                   ? es["editor.unsaved"]
                   : savedWhere === "account"
-                    ? accountSentence(photosMissing)
+                    ? accountSentence(photosMissing, fontsMissing)
                     : es["editor.saved"]}
               </span>
             ) : null}

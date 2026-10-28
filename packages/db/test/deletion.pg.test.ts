@@ -10,7 +10,12 @@ import {
   purgeDueAccounts,
   requestDeletion,
 } from "../src/deletion.ts";
-import { photoObjectCountOf, photoObjectsOf, type RemoveObjects } from "../src/photos.ts";
+import {
+  type AccountBucket,
+  objectCountOf,
+  objectsOf,
+  type RemoveObjects,
+} from "../src/objects.ts";
 import { asUser, createUser, freshDatabase } from "./bootstrap.ts";
 
 /**
@@ -24,18 +29,27 @@ import { asUser, createUser, freshDatabase } from "./bootstrap.ts";
  * here is the sweep's decisions rather than the bytes: which paths it asks for, that it asks
  * **before** it ends the account, and that a remover which refuses leaves the account standing. The
  * remover is a function the caller provides, so a test can hand in one that records — or one that
- * throws — and the bucket itself never enters.
+ * throws — and the bucket itself never enters. Since ADR 0056 the owner's own fonts are files in a
+ * second bucket, `fuentes`, and the last block asserts the sweep empties it too, in its turn and
+ * before the transaction.
  */
 
-/** A remover that records what it was asked to delete. The sweep's own decisions are what these
- * cases are about, so this is all the bucket they need. */
-function recordingRemover(): { remove: RemoveObjects; asked: string[][] } {
+/** A remover that records what it was asked to delete, bucket by bucket. The sweep's own
+ * decisions are what these cases are about, so this is all the bucket they need. */
+function recordingRemover(): {
+  remove: RemoveObjects;
+  asked: string[][];
+  buckets: AccountBucket[];
+} {
   const asked: string[][] = [];
+  const buckets: AccountBucket[] = [];
   return {
-    remove: async (paths) => {
+    remove: async (bucket, paths) => {
+      buckets.push(bucket);
       asked.push([...paths]);
     },
     asked,
+    buckets,
   };
 }
 
@@ -50,6 +64,15 @@ async function withPhoto(owner: string, site: string, src = "foto-sec-cover-el-i
     insert into storage.objects (bucket_id, name, owner_id)
     values ('fotos', ${`${owner}/${site}/${src}`}, ${owner})`;
   return `${owner}/${site}/${src}`;
+}
+
+/** Stores a face of the owner's own font the way the editor would: `<owner>/<site>/<file>` in the
+ * `fuentes` bucket, under the name the renderer mints (ADR 0056). */
+async function withFont(owner: string, site: string, file = "propia-3f9a7c21-regular.woff2") {
+  await sql`
+    insert into storage.objects (bucket_id, name, owner_id)
+    values ('fuentes', ${`${owner}/${site}/${file}`}, ${owner})`;
+  return `${owner}/${site}/${file}`;
 }
 
 let sql: Sql;
@@ -358,14 +381,14 @@ describe("the photographs, which are the one part that is not a row (ADR 0037)",
     await withPhoto(alice, site, "foto-sec-gallery-el-item-1-photo.jpg");
     await withPhoto(bob, "22222222-2222-4222-8222-222222222222");
 
-    const found = await photoObjectsOf(sql, alice);
+    const found = await objectsOf(sql, "fotos", alice);
     expect(found).toHaveLength(2);
     expect(found).toContain(mine);
     for (const path of found) expect(path.startsWith(`${alice}/`)).toBe(true);
-    expect(await photoObjectCountOf(sql, alice)).toBe(2);
+    expect(await objectCountOf(sql, "fotos", alice)).toBe(2);
     // The sweep runs with a connection that bypasses row-level security, so the `where` clause is
     // the only thing scoping this. That is why it is asserted rather than assumed.
-    expect(await photoObjectCountOf(sql, bob)).toBe(1);
+    expect(await objectCountOf(sql, "fotos", bob)).toBe(1);
   });
 
   it("asks the remover for exactly this account's objects, before ending it", async () => {
@@ -384,6 +407,7 @@ describe("the photographs, which are the one part that is not a row (ADR 0037)",
     expect(result.photosDeleted).toBe(1);
     expect(result.skipped).toEqual([]);
     expect(remover.asked).toEqual([[path]]);
+    expect(remover.buckets).toEqual(["fotos"]);
   });
 
   it("skips an account whose photographs could not be removed, and ends the others", async () => {
@@ -479,5 +503,111 @@ describe("the photographs, which are the one part that is not a row (ADR 0037)",
     const result = await purgeAccountData(sql, user, remover.remove);
     expect(result.photosDeleted).toBe(1);
     expect(remover.asked).toEqual([[path]]);
+  });
+});
+
+describe("the owner's own fonts, in a second bucket (ADR 0056)", () => {
+  /** Past the window, so a confirmed sweep ends it. */
+  async function overdueWithSite(email: string): Promise<string> {
+    const user = await withSite(email);
+    await requestDeletion(sql, user);
+    await sql`
+      update public.accounts
+         set deletion_requested_at = now() - make_interval(days => ${GRACE_WINDOW_DAYS + 1})
+       where id = ${user}`;
+    return user;
+  }
+
+  it("finds one bucket's objects and never the other's", async () => {
+    // The two buckets share the owner's folder name, so the bucket in the `where` clause is the
+    // only thing keeping a font out of the photographs' list — and a remover handed the wrong list
+    // would ask one bucket to delete paths that only exist in the other, remove nothing, and
+    // report success.
+    const alice = await withSite("alice-fuentes@example.com");
+    const site = "66666666-6666-4666-8666-666666666666";
+    const photo = await withPhoto(alice, site);
+    const face = await withFont(alice, site);
+    const licence = await withFont(alice, site, "LICENCIA-propia-3f9a7c21.txt");
+    expect(await objectsOf(sql, "fotos", alice)).toEqual([photo]);
+    expect(await objectsOf(sql, "fuentes", alice)).toEqual([licence, face].sort());
+    expect(await objectCountOf(sql, "fuentes", alice)).toBe(2);
+  });
+
+  it("vacía también el bucket de fuentes, antes de la transacción", async () => {
+    /**
+     * **The order is asserted from inside the remover**, at the moment each bucket is asked: the
+     * account row and the login must still be there, because a removal that ran after the
+     * transaction would leave files whose only handle — the owner id in their path — no longer
+     * names anybody. A remover that merely recorded the paths would pass with the fonts removed
+     * after the ending, so this one looks.
+     */
+    const user = await overdueWithSite("con-fuente@example.com");
+    const site = "77777777-7777-4777-8777-777777777777";
+    const photo = await withPhoto(user, site);
+    const face = await withFont(user, site);
+    const bold = await withFont(user, site, "propia-3f9a7c21-bold.woff");
+
+    const seenWhileAsked: { bucket: AccountBucket; paths: string[]; accountRows: number }[] = [];
+    const remove: RemoveObjects = async (bucket, paths) => {
+      const [row] = await sql<{ count: string }[]>`
+        select count(*) from auth.users where id = ${user}`;
+      seenWhileAsked.push({ bucket, paths: [...paths], accountRows: Number(row?.count) });
+    };
+
+    const result = await purgeDueAccounts(sql, { confirm: true, removeObjects: remove });
+
+    expect(result.ended).toEqual([user]);
+    expect(result.photosDeleted).toBe(1);
+    expect(result.fontsDeleted).toBe(2);
+    expect(seenWhileAsked).toEqual([
+      { bucket: "fotos", paths: [photo], accountRows: 1 },
+      { bucket: "fuentes", paths: [bold, face].sort(), accountRows: 1 },
+    ]);
+    // And afterwards, ended for real.
+    const [authUser] = await sql<{ count: string }[]>`
+      select count(*) from auth.users where id = ${user}`;
+    expect(Number(authUser?.count)).toBe(0);
+  });
+
+  it("skips the account when the fonts cannot be removed, even after its photographs went", async () => {
+    // The photographs' bucket answered and the fonts' did not. The account stays, named, for the
+    // next run — which finds the fonts by the same query and nothing of the photographs, because
+    // they are already gone. A partial removal is the documented cost of the order.
+    const user = await overdueWithSite("fuente-rebelde@example.com");
+    const site = "88888888-8888-4888-8888-888888888888";
+    await withPhoto(user, site);
+    await withFont(user, site);
+    const remove: RemoveObjects = async (bucket) => {
+      if (bucket === "fuentes") throw new Error("fuentes is unreachable");
+    };
+
+    const result = await purgeDueAccounts(sql, { confirm: true, removeObjects: remove });
+
+    expect(result.ended).toEqual([]);
+    expect(result.skipped).toEqual([{ userId: user, reason: "fuentes is unreachable" }]);
+    expect(result.fontsDeleted).toBe(0);
+    const [account] = await sql<{ count: string }[]>`
+      select count(*) from public.accounts where id = ${user}`;
+    expect(Number(account?.count), "an account whose fonts stayed was ended anyway").toBe(1);
+  });
+
+  it("removes the fonts of an account whose data is forgotten without ending it", async () => {
+    const user = await withSite("solo-datos-fuente@example.com");
+    const face = await withFont(user, "99999999-9999-4999-8999-999999999999");
+    const remover = recordingRemover();
+    const result = await purgeAccountData(sql, user, remover.remove);
+    expect(result.fontsDeleted).toBe(1);
+    expect(result.photosDeleted).toBe(0);
+    expect(remover.buckets).toEqual(["fuentes"]);
+    expect(remover.asked).toEqual([[face]]);
+  });
+
+  it("counts the fonts in a dry run too, and removes nothing", async () => {
+    const user = await overdueWithSite("ensayo-fuente@example.com");
+    await withFont(user, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+    const result = await purgeDueAccounts(sql);
+    expect(result.due).toEqual([user]);
+    expect(result.fontsDeleted).toBe(0);
+    expect(await objectCountOf(sql, "fuentes", user)).toBe(1);
   });
 });

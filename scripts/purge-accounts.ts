@@ -1,7 +1,8 @@
 import {
+  ACCOUNT_BUCKETS,
   connect,
   GRACE_WINDOW_DAYS,
-  photoObjectCountOf,
+  objectCountOf,
   purgeDueAccounts,
   type RemoveObjects,
 } from "@retorika/db";
@@ -32,7 +33,9 @@ import { createClient } from "@supabase/supabase-js";
  * The photographs are **not rows**: they are files in a private Supabase Storage bucket, and
  * `delete from storage.objects` removes the bookkeeping while the bytes stay in the object store.
  * Removing a file needs the Storage API, and reaching it past the bucket's own policies needs a key
- * that bypasses them.
+ * that bypasses them. Since ADR 0056 (sprint 29 día 6) the owner's own fonts are files in a second
+ * bucket, `fuentes`, and the same remover empties both — photographs first, `ACCOUNT_BUCKETS`'
+ * order.
  *
  * So `packages/db` finds the objects in SQL — testable, like everything else there — and the
  * removing is here, where a secret is allowed to be. `purgeDueAccounts` refuses a confirmed run
@@ -47,7 +50,6 @@ import { createClient } from "@supabase/supabase-js";
 
 const confirm = process.argv.includes("--confirm");
 
-const PHOTO_BUCKET = "fotos";
 const URL_VAR = "NEXT_PUBLIC_SUPABASE_URL";
 const SERVICE_KEY_VAR = "SUPABASE_SERVICE_ROLE_KEY";
 
@@ -71,19 +73,20 @@ function storageRemover(): RemoveObjects {
   if (!url || !key) {
     throw new Error(
       `accounts:purge --confirm needs ${URL_VAR} and ${SERVICE_KEY_VAR} as well as DATABASE_URL. ` +
-        `Since ADR 0037 an account's photographs are files in the \`${PHOTO_BUCKET}\` bucket, and ` +
-        `removing a file needs the Storage API rather than SQL. A dry run needs neither.`,
+        `Since ADR 0037 an account's photographs, and since ADR 0056 its fonts, are files in the ` +
+        `\`${ACCOUNT_BUCKETS.join("` and `")}\` buckets, and removing a file needs the Storage ` +
+        `API rather than SQL. A dry run needs neither.`,
     );
   }
   const client = createClient(url, key, { auth: { persistSession: false } });
-  return async (paths) => {
+  return async (bucket, paths) => {
     for (let start = 0; start < paths.length; start += 100) {
       const batch = [...paths].slice(start, start + 100);
-      const { error } = await client.storage.from(PHOTO_BUCKET).remove(batch);
+      const { error } = await client.storage.from(bucket).remove(batch);
       // Thrown rather than reported: `purgeDueAccounts` decides what to do with a failure, and it
       // can only do that if it hears about one. A boolean nobody reads is how the last silent
       // failure in this area got in.
-      if (error) throw new Error(`storage.remove failed: ${error.message}`);
+      if (error) throw new Error(`storage.remove from ${bucket} failed: ${error.message}`);
     }
   };
 }
@@ -103,25 +106,27 @@ try {
     console.log(
       `accounts:purge: ${result.due.length} account(s) past the ${GRACE_WINDOW_DAYS}-day window:`,
     );
-    // The photograph count per account, so «--confirm» is not the first time anybody learns how
-    // much is about to leave the bucket. Counted rather than listed: a hundred paths to say «a
+    // The file count per account and bucket, so «--confirm» is not the first time anybody learns
+    // how much is about to leave the buckets. Counted rather than listed: a hundred paths to say «a
     // hundred» is noise, and a uuid is already all the dry run prints.
     for (const id of result.due) {
-      const photos = await photoObjectCountOf(sql, id);
-      console.log(`  ${id}  ${photos} photograph(s)`);
+      const photos = await objectCountOf(sql, "fotos", id);
+      const fonts = await objectCountOf(sql, "fuentes", id);
+      console.log(`  ${id}  ${photos} photograph(s), ${fonts} font file(s)`);
     }
     console.log("\nNothing was deleted. Re-run with --confirm to end them.");
   } else {
     console.log(
       `accounts:purge: ended ${result.ended.length} account(s), removed ` +
-        `${result.sitesDeleted} site(s) and ${result.photosDeleted} photograph(s).`,
+        `${result.sitesDeleted} site(s), ${result.photosDeleted} photograph(s) and ` +
+        `${result.fontsDeleted} font file(s).`,
     );
     for (const id of result.ended) console.log(`  ${id}`);
     if (result.skipped.length > 0) {
       // Named rather than summarised: each one is an account that asked to be deleted and was not,
       // which is the single failure protocol Part 15 wrote a clause about.
       console.log(
-        `\n${result.skipped.length} account(s) were NOT ended, because their photographs could ` +
+        `\n${result.skipped.length} account(s) were NOT ended, because their files could ` +
           `not be removed. Ending them anyway would leave files with nothing left to say whose ` +
           `they were. The next run tries again.`,
       );

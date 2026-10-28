@@ -7317,15 +7317,26 @@ describe("sprint 15 día 4 — el diálogo de la cuenta, y las cuatro cosas que 
      * red until the sentence moved. That is the guard doing its job rather than an obstacle: a
      * product cannot change what it claims without this line changing too.
      */
-    await expect(dialog.getByText(/Las fotos se guardan con la web/)).toBeVisible();
+    //
+    // **And again with ADR 0056 §12 (sprint 29 día 6)**, the same way and for the same reason: the
+    // owner's own fonts travel with the account now, so a sentence naming only the photographs
+    // claimed less than is true, and this line went red until it named the fonts too.
+    await expect(
+      dialog.getByText(/Las fotos y las fuentes que subas se guardan con la web/),
+    ).toBeVisible();
     await expect(dialog.getByText(/Las fotos se quedan en este navegador/)).toHaveCount(0);
 
     // §13 and §14, and since ADR 0037 the photographs are named in it — David's instruction while
     // approving the sprint: the notice listed the email address and nothing else, which stopped
-    // being the whole truth the moment a photograph left the browser.
-    await expect(dialog.getByText(/y las fotos de tus webs/)).toBeVisible();
-    await expect(dialog.getByText(/Lo tratan Supabase .* y Render .*Uni.n Europea/)).toBeVisible();
-    await expect(dialog.getByText(/se borra de verdad, con tus fotos/)).toBeVisible();
+    // being the whole truth the moment a photograph left the browser. Since ADR 0056 §12, the
+    // fonts beside them, in what is stored, who processes it and what deleting takes.
+    await expect(dialog.getByText(/y las fotos y las fuentes de tus webs/)).toBeVisible();
+    await expect(
+      dialog.getByText(
+        /Lo tratan Supabase \(base de datos, fotos y fuentes\) y Render .*Uni.n Europea/,
+      ),
+    ).toBeVisible();
+    await expect(dialog.getByText(/se borra de verdad, con tus fotos y tus fuentes/)).toBeVisible();
 
     await accountPage.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
@@ -7515,7 +7526,14 @@ describe("sprint 16 día 6 — guardar en la cuenta sube la foto", () => {
 describe.skipIf(process.env["RETORIKA_E2E_ACCOUNT"] !== "1")(
   "sprint 16 día 7 — contra un proyecto de verdad",
   () => {
-    it("saves a web with a photograph, signs in elsewhere, and the photograph is there", async () => {
+    /**
+     * **Since sprint 29 día 6 it carries the brand's letter too**: an own font brought before the
+     * save, and in the second browser the headings set in it and its faces loaded out of the
+     * `fuentes` bucket. This is the only walk that can show that half — `/mis-webs/[id]` checks the
+     * session on the server, which the mocked suite cannot answer — so it needs migration `0004`
+     * applied to the project it runs against.
+     */
+    it("saves a web with a photograph and its letter, signs in elsewhere, and both are there", async () => {
       const email = process.env["RETORIKA_E2E_EMAIL"];
       const password = process.env["RETORIKA_E2E_PASSWORD"];
       if (!email || !password) {
@@ -7549,6 +7567,29 @@ describe.skipIf(process.env["RETORIKA_E2E_ACCOUNT"] !== "1")(
           .setInputFiles(join(import.meta.dirname, "fixtures/cover-photo.jpg"));
         await expect(frame.locator(".rb-sample")).toHaveCount(0);
 
+        // The brand's letter, for the headings: Karla's two faces, travelling as «Karla 2».
+        const fonts = join(import.meta.dirname, "..", "..", "..", "fixtures", "fonts");
+        await first.getByRole("button", { name: "Estilo", exact: true }).click();
+        await first.getByRole("button", { name: "Cambiar la letra de los titulares" }).click();
+        const chooser = first.getByRole("dialog", { name: "La letra de los titulares" });
+        await chooser.getByRole("button", { name: /Subir mi fuente/ }).click();
+        const importer = first.getByRole("dialog", { name: "Subir la fuente de tu marca" });
+        await importer
+          .locator("input[data-font-files]")
+          .setInputFiles([
+            join(fonts, "propia-3f9a7c21-regular.woff2"),
+            join(fonts, "propia-3f9a7c21-bold.woff"),
+          ]);
+        await expect(importer.getByLabel("Nombre con el que viajará")).toHaveValue("Karla 2");
+        await importer
+          .getByRole("checkbox", {
+            name: "Confirmo que tengo licencia para usar esta fuente en mi web",
+          })
+          .check();
+        await importer.getByRole("button", { name: "Añadir" }).click();
+        await chooser.getByRole("button", { name: "Hecho" }).click();
+        await first.getByRole("button", { name: "Cerrar el estilo" }).click();
+
         await first.getByRole("button", { name: "Guardar en mi cuenta" }).click();
         const dialog = first.getByRole("dialog");
         await dialog.getByLabel(/Correo/).fill(email);
@@ -7579,10 +7620,37 @@ describe.skipIf(process.env["RETORIKA_E2E_ACCOUNT"] !== "1")(
           );
           // And it is the owner's, not the bank's: the badge is what the bank's would carry.
           await expect(theirs.locator(".rb-sample")).toHaveCount(0);
+          // The letter, on a machine that never had its files: the headings set in it, and both
+          // faces loaded inside the canvas from what came out of the `fuentes` bucket.
+          await expect
+            .poll(
+              () =>
+                theirs
+                  .locator('[data-section="sec-cover"] [data-id="el-headline"]')
+                  .evaluate((node) => getComputedStyle(node).fontFamily),
+              { timeout: 30_000 },
+            )
+            .toMatch(/^"Karla 2"/);
+          await expect
+            .poll(
+              () =>
+                theirs
+                  .locator("html")
+                  .evaluate(() =>
+                    document.fonts.ready.then(() =>
+                      [...document.fonts]
+                        .filter((face) => face.status === "loaded")
+                        .map((face) => `${face.family.replace(/['"]/g, "")} ${face.weight}`),
+                    ),
+                  ),
+              { timeout: 30_000 },
+            )
+            .toEqual(expect.arrayContaining(["Karla 2 400", "Karla 2 700"]));
           // Nothing is blocking the download, which is what a photograph that failed to arrive
           // would do.
           await second.getByRole("button", { name: "Descargar" }).click();
           await expect(second.getByText("Falta una foto")).toHaveCount(0);
+          await expect(second.getByText("Falta el archivo de tu fuente")).toHaveCount(0);
         } finally {
           await second.context().close();
         }
@@ -22186,4 +22254,277 @@ describe("sprint 29 día 5 — la fuente de la marca, de la subida al ZIP", () =
       await context.close();
     }
   }, 180_000);
+});
+
+/**
+ * **Sprint 29 día 6 — la fuente viaja con la cuenta** (ADR 0056 §12).
+ *
+ * The two moments that send an owner's own font up to the `fuentes` bucket, walked in the real
+ * editor: **the first save**, for a letter brought before the web was in the account, and **any
+ * save after it**, for one brought later — the second is the path that never ran for a web saved
+ * from the session until today, for photographs as much as for fonts. Asserted on what leaves the
+ * browser: the paths, the bytes, and the content type of each part, which is what the bucket's
+ * allowlist reads (David's adjustment 7).
+ *
+ * **What this cannot walk is the other half** — the web opened on another computer, drawn in the
+ * owner's letter. `/mis-webs/[id]` checks the session on the server (`auth/session.ts`), against
+ * the auth server, and in this suite that is a dead port only the browser's requests can be
+ * answered on. That half is the gated walk against a real project, `sprint 16 día 7`, which now
+ * carries a font; the fetch itself is `fetchSiteFonts`, tested in `fontStorage.test.ts`. Said here
+ * rather than left for the walk's title to imply.
+ */
+describe("sprint 29 día 6 — la fuente viaja con la cuenta", () => {
+  const FONTS = join(import.meta.dirname, "..", "..", "..", "fixtures", "fonts");
+  const REGULAR = join(FONTS, "propia-3f9a7c21-regular.woff2");
+  const BOLD = join(FONTS, "propia-3f9a7c21-bold.woff");
+  const LICENCE = join(FONTS, "LICENCIA-propia-3f9a7c21.txt");
+  const OWNER = "33333333-3333-4333-8333-333333333333";
+  const SITE = "44444444-4444-4444-8444-444444444444";
+  const EMAIL = "marca@example.com";
+
+  interface Stored {
+    contentType: string;
+    bytes: Buffer;
+  }
+  /** The fake project's state: the site's latest document, and every object stored, by full key. */
+  interface Project {
+    document: { fonts?: { id: string; family: string }[] } | null;
+    objects: Map<string, Stored>;
+    uploads: { key: string; contentType: string }[];
+  }
+
+  /** The file part of a multipart body — what storage-js sends for a `Blob`, typed by the part. */
+  function filePart(body: Buffer, header: string): Stored {
+    const boundary = /boundary=(?:"([^"]+)"|([^;]+))/.exec(header);
+    const delimiter = Buffer.from(`--${boundary?.[1] ?? boundary?.[2] ?? ""}`);
+    let at = body.indexOf(delimiter);
+    while (at !== -1) {
+      const next = body.indexOf(delimiter, at + delimiter.length);
+      if (next === -1) break;
+      const part = body.subarray(at + delimiter.length + 2, next - 2);
+      const split = part.indexOf("\r\n\r\n");
+      const head = part.subarray(0, split).toString("latin1");
+      if (/filename=/.test(head)) {
+        return {
+          contentType: /content-type:\s*([^\r\n]+)/i.exec(head)?.[1]?.trim() ?? "",
+          bytes: Buffer.from(part.subarray(split + 4)),
+        };
+      }
+      at = next;
+    }
+    throw new Error("no file part in the upload");
+  }
+
+  /** Supabase answered from memory, for the browser's requests only — see the note above. */
+  async function fakeSupabase(page: Page, project: Project): Promise<void> {
+    const user = { id: OWNER, aud: "authenticated", role: "authenticated", email: EMAIL };
+    const session = {
+      access_token: "token",
+      token_type: "bearer",
+      expires_in: 3600,
+      refresh_token: "refresh",
+      user,
+    };
+    await page.route("http://127.0.0.1:9/**", async (route) => {
+      const request = route.request();
+      const url = new URL(request.url());
+      const method = request.method();
+      const json = (body: unknown, status = 200) =>
+        route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
+      const path = url.pathname;
+      if (path.startsWith("/auth/v1/signup")) return json(session);
+      if (path.startsWith("/auth/v1/user")) return json(user);
+      if (path.startsWith("/rest/v1/accounts")) return json(method === "POST" ? [{}] : []);
+      if (path.startsWith("/rest/v1/sites")) {
+        if (method === "POST") {
+          project.document = request.postDataJSON().document;
+          return json({ id: SITE, version: 1 }, 201);
+        }
+        if (method === "PATCH") {
+          const body = request.postDataJSON();
+          project.document = body.document;
+          return json([{ version: body.version }]);
+        }
+        return json([]);
+      }
+      if (path.startsWith("/storage/v1/object/list/")) {
+        const bucket = path.slice("/storage/v1/object/list/".length);
+        const folder = `${bucket}/${request.postDataJSON().prefix}/`;
+        return json(
+          [...project.objects.keys()]
+            .filter((key) => key.startsWith(folder))
+            .map((key) => ({ name: key.slice(folder.length) })),
+        );
+      }
+      if (path.startsWith("/storage/v1/object/") && method === "POST") {
+        const key = decodeURIComponent(path.slice("/storage/v1/object/".length));
+        const stored = filePart(
+          request.postDataBuffer() ?? Buffer.alloc(0),
+          request.headers()["content-type"] ?? "",
+        );
+        project.objects.set(key, stored);
+        project.uploads.push({ key, contentType: stored.contentType });
+        return json({ Key: key });
+      }
+      // Anything else arrives nowhere and fails loudly, so this cannot pass on a path nobody wrote.
+      return json({ message: `unmocked ${method} ${path}` }, 404);
+    });
+  }
+
+  /** From the style panel, «Subir mi fuente» for one half, with these files, to «Hecho». */
+  async function bringALetter(
+    page: Page,
+    half: "heading" | "body",
+    files: string[],
+    licence: string | null,
+    travelsAs: string,
+  ): Promise<void> {
+    const opener =
+      half === "heading" ? "Cambiar la letra de los titulares" : "Cambiar la letra del texto";
+    const title = half === "heading" ? "La letra de los titulares" : "La letra del texto";
+    await page.getByRole("button", { name: opener }).click();
+    const chooser = page.getByRole("dialog", { name: title });
+    await expect(chooser).toBeVisible();
+    await chooser.getByRole("button", { name: /Subir mi fuente/ }).click();
+    const dialog = page.getByRole("dialog", { name: "Subir la fuente de tu marca" });
+    await expect(dialog).toBeVisible();
+    await dialog.locator("input[data-font-files]").setInputFiles(files);
+    await expect(dialog.getByLabel("Nombre con el que viajará")).toHaveValue(travelsAs);
+    if (licence) await dialog.locator("input[data-font-licence]").setInputFiles(licence);
+    await dialog
+      .getByRole("checkbox", {
+        name: "Confirmo que tengo licencia para usar esta fuente en mi web",
+      })
+      .check();
+    await dialog.getByRole("button", { name: "Añadir" }).click();
+    await expect(chooser.getByRole("radio", { name: travelsAs })).toBeChecked();
+    await chooser.getByRole("button", { name: "Hecho" }).click();
+    await expect(chooser).toBeHidden();
+  }
+
+  const fontUploads = (project: Project) =>
+    project.uploads.filter((upload) => upload.key.startsWith("fuentes/"));
+
+  it("la sube al primer guardado y en cualquier guardado después, tipada por sus bytes", async () => {
+    const project: Project = { document: null, objects: new Map(), uploads: [] };
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const studio = await context.newPage();
+    try {
+      await fakeSupabase(studio, project);
+      await intoTheCanvas(studio);
+
+      // ---- before the web is in the account: «Karla 2», regular, bold and licence ----
+      await studio.getByRole("button", { name: "Estilo", exact: true }).click();
+      await bringALetter(studio, "heading", [REGULAR, BOLD], LICENCE, "Karla 2");
+      await studio.getByRole("button", { name: "Cerrar el estilo" }).click();
+      expect(project.uploads, "nothing goes up before there is an account").toEqual([]);
+
+      // ---- the first save: the dialog sends the document, the editor then sends the font ----
+      await studio.getByRole("button", { name: "Guardar en mi cuenta" }).click();
+      const saveDialog = studio.getByRole("dialog");
+      // The sentence the owner reads before saving says what travels now (the honest-UI rule, in
+      // the direction of not claiming less than is true).
+      await expect(
+        saveDialog.getByText(/Las fotos y las fuentes que subas se guardan con la web/),
+      ).toBeVisible();
+      await studio.fill("#account-email", EMAIL);
+      await studio.fill("#account-password", "contrasena123");
+      await studio.getByRole("button", { name: /Crear la cuenta y guardar/ }).click();
+      await expect(saveDialog.getByText(/Guardada en tu cuenta/)).toBeVisible({ timeout: 15_000 });
+      await saveDialog.getByRole("button", { name: "Cerrar" }).click();
+
+      await expect
+        .poll(() => fontUploads(project).length, { message: "the first save sent no font" })
+        .toBe(3);
+      const id = /propia-([0-9a-f]{8})-regular\.woff2$/.exec(
+        fontUploads(project).find((upload) => upload.key.endsWith("-regular.woff2"))?.key ?? "",
+      )?.[1];
+      expect(id, JSON.stringify(project.uploads)).toMatch(/^[0-9a-f]{8}$/);
+      // Owner, then site, then the minted name; each part typed by the bytes, which is the type
+      // the bucket's allowlist will read.
+      expect(
+        fontUploads(project)
+          .map((upload) => `${upload.key} ${upload.contentType}`)
+          .sort(),
+      ).toEqual(
+        [
+          `fuentes/${OWNER}/${SITE}/LICENCIA-propia-${id}.txt text/plain`,
+          `fuentes/${OWNER}/${SITE}/propia-${id}-bold.woff font/woff`,
+          `fuentes/${OWNER}/${SITE}/propia-${id}-regular.woff2 font/woff2`,
+        ].sort(),
+      );
+      // Byte for byte the files that were chosen.
+      const stored = (file: string) =>
+        project.objects.get(`fuentes/${OWNER}/${SITE}/${file}`)?.bytes;
+      expect(stored(`propia-${id}-regular.woff2`)).toEqual(readFileSync(REGULAR));
+      expect(stored(`propia-${id}-bold.woff`)).toEqual(readFileSync(BOLD));
+      expect(stored(`LICENCIA-propia-${id}.txt`)).toEqual(readFileSync(LICENCE));
+      await expect(studio.getByText("Guardado en tu cuenta", { exact: true })).toBeVisible();
+
+      // ---- after it: «Karla 3», one regular, for the text — an ordinary save sends it ----
+      await studio.getByRole("button", { name: "Estilo", exact: true }).click();
+      await bringALetter(studio, "body", [REGULAR], null, "Karla 3");
+      await studio.getByRole("button", { name: "Cerrar el estilo" }).click();
+      await expect
+        .poll(() => fontUploads(project).length, {
+          message: "a letter brought after the first save never went up",
+        })
+        .toBe(4);
+      const later = fontUploads(project)[3];
+      expect(later?.key).toMatch(
+        new RegExp(`^fuentes/${OWNER}/${SITE}/propia-(?!${id})[0-9a-f]{8}-regular\\.woff2$`),
+      );
+      expect(later?.contentType).toBe("font/woff2");
+      // The account's document names both, which is what another computer will read and fetch by.
+      await expect
+        .poll(() => (project.document?.fonts ?? []).map((font) => font.family).sort())
+        .toEqual(["Karla 2", "Karla 3"]);
+      // And the indicator claims the account with nothing short.
+      await expect(studio.getByText("Guardado en tu cuenta", { exact: true })).toBeVisible();
+      await expect(studio.getByText(/fuentes? sin subir/)).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+
+  it("dice «1 fuente sin subir» cuando el bucket la rechaza, y no «No guardado»", async () => {
+    // The bucket refusing — migration `0004` not applied, a cap, the network — leaves the document
+    // saved and the font in this browser. The indicator says exactly that: the save landed, and one
+    // letter did not go with it. Counted by font: the regular and the bold are one «fuente».
+    const project: Project = { document: null, objects: new Map(), uploads: [] };
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const studio = await context.newPage();
+    try {
+      await fakeSupabase(studio, project);
+      // Registered after, so it is asked first: every upload to `fuentes` is refused.
+      await studio.route("http://127.0.0.1:9/storage/v1/object/fuentes/**", (route) =>
+        route.fulfill({
+          status: 400,
+          contentType: "application/json",
+          body: JSON.stringify({
+            statusCode: "404",
+            error: "Bucket not found",
+            message: "Bucket not found",
+          }),
+        }),
+      );
+      await intoTheCanvas(studio);
+      await studio.getByRole("button", { name: "Estilo", exact: true }).click();
+      await bringALetter(studio, "heading", [REGULAR, BOLD], null, "Karla 2");
+      await studio.getByRole("button", { name: "Cerrar el estilo" }).click();
+      await studio.getByRole("button", { name: "Guardar en mi cuenta" }).click();
+      await studio.fill("#account-email", EMAIL);
+      await studio.fill("#account-password", "contrasena123");
+      await studio.getByRole("button", { name: /Crear la cuenta y guardar/ }).click();
+      const saveDialog = studio.getByRole("dialog");
+      await expect(saveDialog.getByText(/Guardada en tu cuenta/)).toBeVisible({ timeout: 15_000 });
+      await saveDialog.getByRole("button", { name: "Cerrar" }).click();
+      await expect(
+        studio.getByText("Guardado en tu cuenta · 1 fuente sin subir", { exact: true }),
+      ).toBeVisible({ timeout: 15_000 });
+      await expect(studio.getByText("No guardado", { exact: true })).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
 });
