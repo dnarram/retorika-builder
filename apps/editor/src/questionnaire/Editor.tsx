@@ -630,6 +630,7 @@ export function Editor({
   onRetrySamples,
   savedWhere,
   photosMissing,
+  fontsMissing,
   onSaveToAccount,
   toast,
   onDismissToast,
@@ -811,6 +812,8 @@ export function Editor({
   /** Forwarded to the indicator: how many of this site's photographs are not in the account.
    * `null` means nothing has been counted, which is not the same as none missing. */
   photosMissing?: number | null | undefined;
+  /** The same for the owner's own fonts, counted by font (sprint 29 día 6). */
+  fontsMissing?: number | null | undefined;
   onSaveToAccount?: (() => void) | undefined;
   toast: DeleteToast | null;
   onDismissToast: () => void;
@@ -7872,6 +7875,7 @@ export function Editor({
       saveStatus={saveStatus}
       savedWhere={savedWhere}
       photosMissing={photosMissing}
+      fontsMissing={fontsMissing}
       onSaveToAccount={onSaveToAccount}
       rail={effectiveRail}
       onRailChange={showRail}

@@ -267,6 +267,45 @@ longer holds — a private window reloaded — **blocks** (`fontsMissing`, secon
 for its reason: the route would refuse, so «Descargar igualmente» could only fail); a face above
 300 KB **warns** (`heavyFonts`, last). One dialog draws both, as the contrast dialog draws its two.
 
+### 12. The account carries the fonts (día 6, 28 October 2026)
+
+David's decision 4, *«la fuente propia viaja con la cuenta en este sprint»*, built as ADR 0037 built
+it for the photographs, and differing from it in three places, each on purpose:
+
+1. **A second private bucket, `fuentes`** (`packages/db/migrations/0004-*.sql`), with
+   `file_size_limit` 2097152 — `MAX_FONT_BYTES`, asserted against the SQL by
+   `apps/editor/test/fontCaps.test.ts` — and `allowed_mime_types` the four face formats and the two
+   licence formats, the six types the editor can produce, crossed against `fontFileType` by the
+   same test. Four policies, 0003's with the bucket changed, over the same `<owner>/<site>/<file>`
+   folders; `packages/db/test/storage.pg.test.ts` runs every case over both buckets.
+2. **The content type comes from the bytes** (David's adjustment 7): `uploadFontFile` sniffs, and
+   stores only when the sniff agrees with the minted name, so a `File` whose `type` is empty or
+   `application/octet-stream` is stored as `font/woff2`, and bytes that are not what their name says
+   are not stored at all. `downloadFontFile` sniffs again on the way back.
+3. **The files go up after every accepted save, the first one included**, through
+   `reconcileSiteFonts` — `photoSyncPlan` reused over file names — rather than through the
+   «Guardar en mi cuenta» dialog the way the photographs do on the first save. The insert is an
+   accepted save by definition, so ADR 0037 §5's rule holds at that moment too. **And the save
+   indicator counts by font, not by file**: «· 1 fuente sin subir» for a regular and a bold that did
+   not make it, joined after the photographs' count when both are short.
+
+A site opened from the account fetches the files its document names that this browser does not hold,
+before anything else is drawn in them, and keeps them in `retorika.fonts` so a reload does not ask
+again. One that does not arrive is left to the download gate's `fontsMissing`, which already blocks
+and says what to do.
+
+The sweep (`packages/db/src/deletion.ts`) empties `fotos` and then `fuentes` before the transaction
+that ends an account, and skips the account if either refuses; `objects.ts` (once `photos.ts`) takes
+the bucket as a parameter. `scripts/purge-accounts.ts` counts both on a dry run.
+
+**Found while building it, and fixed with it:** a site saved *from* a session — the ordinary way,
+through «Guardar en mi cuenta» — reached the editor's push with no owner id, and the reconciliation
+read the owner from the props only a site opened *from* the account has. So since ADR 0037 day 4, a
+photograph added after the first save was never uploaded while the indicator said «Guardado en tu
+cuenta». The dialog now hands the owner back and the reconciliation reads the site it is given; the
+font day needed exactly that path, because the likeliest moment to bring a brand's letter is after
+the web exists.
+
 ## What is preserved
 
 - **A document chooses a row and never names a file.** Two places a row may come from; one property.
@@ -294,8 +333,7 @@ for its reason: the route would refuse, so «Descargar igualmente» could only f
 
 - ~~**The import**~~ — día 5, written in §10 and §11 above: the route and what bounds it, and what the
   download reads. The rest is in the code it names and in `REVIEW.md`.
-- **The bucket** — `fuentes`, its policies, the sweep, `contentType` from the sniff and never from
-  `File.type`: día 6, adjustment 7.
+- ~~**The bucket**~~ — día 6, written in §12 above.
 - **Converting to woff2 in the browser**, and **shipping the reserved-name families whole** (sprint 30).
 - **The CEO's sentence** for the checkbox — «Confirmo que tengo licencia para usar esta fuente en mi
   web», David's own words, and the line under it, «Tener esa licencia es responsabilidad tuya:
@@ -327,4 +365,9 @@ for its reason: the route would refuse, so «Descargar igualmente» could only f
   (IndexedDB `retorika.fonts`), `editor/fontImport.ts`, `questionnaire/ImportFontDialog.tsx`, the
   chooser's own rows, `withFontUrls` for the canvas and the 320 px measurement, and the schema's two
   verbs `addOwnFont` and `removeOwnFont`.
-- The record is `docs/design/REVIEW.md`, sprint 29 días 4 and 5, written at the close.
+- `packages/db` (día 6): migration `0004` (the `fuentes` bucket and four policies), `objects.ts`
+  (was `photos.ts`; the bucket a parameter, `ACCOUNT_BUCKETS`), `deletion.ts` over both buckets;
+  `scripts/purge-accounts.ts`; `apps/editor/src/account/fontStorage.ts`; `editor/accountSentence.ts`;
+  `docs/runbook.md` §6 and §7. **Migration `0004` is applied by David to development and production**,
+  like `0003`.
+- The record is `docs/design/REVIEW.md`, sprint 29 días 4 to 6, written at the close.

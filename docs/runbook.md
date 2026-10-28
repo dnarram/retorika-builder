@@ -307,7 +307,7 @@ account — and the browser's own copy keeps the edits meanwhile.
 ### How to run it
 
 ```sh
-# Says who is past the thirty days, how many photographs each has, and ends nobody.
+# Says who is past the thirty days, how many photographs and font files each has, and ends nobody.
 # Safe, the default, and it needs no secret beyond the database.
 DATABASE_URL="<el pooler, puerto 6543>" pnpm accounts:purge
 
@@ -329,6 +329,10 @@ admin API», which was true when it was written and is now half true:
   `delete from storage.objects` removes the bookkeeping while the bytes stay in the object store.
   Removing a file needs the Storage API, and reaching past the bucket's own policies needs the key
   that bypasses them.
+- **Nor are the owner's own fonts, since 28 October 2026** (ADR 0056, sprint 29 día 6). They are
+  files in a second private bucket, `fuentes` (migration `0004`), under the same
+  `<owner>/<site>/<file>` folders, and the same remover empties it: photographs first, then fonts,
+  both before the account is ended. The same key reaches both buckets; nothing new to configure.
 
 **A dry run still needs neither**, deliberately: asking «who is past the window» destroys nothing
 and should not require a key that could.
@@ -340,8 +344,9 @@ that records, so the order of operations is asserted without a bucket.
 
 ### If it says some accounts were NOT ended
 
-The sweep removes an account's photographs **before** it ends the account, and skips the account if
-that fails. The exit code is 1 and each one is named with the reason.
+The sweep removes an account's photographs and fonts **before** it ends the account, and skips the
+account if either bucket refuses. The exit code is 1 and each one is named with the reason, which
+says which bucket (`storage.remove from fuentes failed: …`).
 
 **That order is the decision, and it is the recoverable half of a choice between two failures.** A
 skipped account is past its window, has lost some of its photographs, and is ended by the next run:
@@ -369,8 +374,8 @@ was not is the one failure Part 15 wrote a clause about.
 3. **Check `public.audit_log` afterwards.** One `account_deleted` row per account, with
    `endedTheAccount: true` in its `detail` and a null `actor_id` — the fact kept, the person not
    (Part 17 against Part 15, and Part 15 wins; see `deletion.ts`).
-4. **Check the bucket afterwards.** Supabase → Storage → `fotos`. No folder named after an ended
-   account's id should be left. A folder that is still there with an account that is gone means the
+4. **Check both buckets afterwards.** Supabase → Storage → `fotos`, and then `fuentes`. No folder
+   named after an ended account's id should be left in either. A folder that is still there with an account that is gone means the
    sweep reported it ended while the removal did not happen, which the code is arranged to make
    impossible — so it is worth a look rather than a tidy-up.
 
@@ -455,6 +460,29 @@ The object is there and the editor cannot read it. Two causes worth separating:
   owner's photographs readable by anybody holding a URL.
 - **Do not re-upload somebody's photograph on their behalf** from the dashboard. The document names
   the file and the owner is the only one who knows which picture belongs there.
+
+### And a web that opens without its own font (sprint 29 día 6)
+
+The same four cases, in the `fuentes` bucket (migration `0004`, ADR 0056), with three differences
+worth knowing before looking:
+
+- **The owner is told in two places, for two different facts.** A face this browser does not hold
+  — not fetched from the account, or never uploaded — blocks the download with «Falta el archivo de
+  tu fuente», which says to remove the letter and upload it again. The top bar says «· N fuentes sin
+  subir» after a save, for a font the bucket does not have and this browser could not send — the
+  bucket refused it, or nobody here holds it — counted by font rather than by file.
+- **The file names are minted, never the owner's**: `propia-<id>-<regular|bold|variable>.<format>`
+  and `LICENCIA-propia-<id>.<txt|pdf>`, where `<id>` is the font record's eight hex digits in the
+  document's `fonts`. A file under any other name was not put there by the editor.
+- **Case B's caps are different numbers.** `select file_size_limit, allowed_mime_types from
+  storage.buckets where id = 'fuentes'` should be `2097152` and `{font/woff2, font/woff, font/ttf,
+  font/otf, text/plain, application/pdf}` — what `apps/editor/test/fontCaps.test.ts` asserts against
+  migration `0004`. The editor types every upload by its bytes, never by what the browser reports,
+  so a refusal for its content type means the bucket's row was edited or the bytes were not a font.
+
+Case C is the one to suspect first on the day this ships: **migration `0004` has to be applied to
+development and to production by hand**, like `0003` was, and until it is every font upload is
+refused and every web with an own font says «· 1 fuente sin subir».
 
 ---
 

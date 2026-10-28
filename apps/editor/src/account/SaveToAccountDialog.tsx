@@ -104,8 +104,12 @@ export function SaveToAccountDialog({
    * Fired only once a save has actually landed, so the indicator never claims it early — and it
    * carries the site's id and version, because the editor has to keep pushing later edits to it.
    * Handing back only "it worked" is what would leave the label true once and false afterwards.
+   *
+   * **And whose it is**, since sprint 29 día 6: every stored file's path begins with the owner, and
+   * without it the editor could push the document but not the photographs or fonts added after
+   * this save — which is what it silently did for photographs until then.
    */
-  onSaved: (site: { id: string; version: number }) => void;
+  onSaved: (site: { id: string; version: number; ownerId: string }) => void;
   onClose: () => void;
 }) {
   const [email, setEmail] = useState("");
@@ -197,7 +201,7 @@ export function SaveToAccountDialog({
       photos: report.uploaded.length,
       photosFailed: report.failed.length,
     });
-    onSaved({ id: created.id, version: created.version });
+    onSaved({ id: created.id, version: created.version, ownerId: user.id });
   }
 
   async function createAccountAndSave(event: React.FormEvent) {

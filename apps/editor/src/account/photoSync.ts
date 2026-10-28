@@ -12,6 +12,10 @@
  * letting it tidy up would delete the photographs of the version that won. That condition cannot
  * be expressed here — this function cannot see a save — so it is the caller's, and the caller has
  * a test that says so by name.
+ *
+ * **Since sprint 29 día 6 it also plans the owner's own fonts** (`fontStorage.ts`'s
+ * `reconcileSiteFonts`), as it is: nothing in it knows a `src` is a photograph, only that it is a
+ * file name in a site's folder.
  */
 
 export interface PhotoSyncPlan {

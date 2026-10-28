@@ -31,6 +31,7 @@ import {
 import { withFamily, withOwnFont, withPalette, withScale, withTypePair } from "@retorika/tokens";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { loadAccountDesignTools, saveAccountDesignTools } from "../account/designTools.ts";
+import { fetchSiteFonts, reconcileSiteFonts, siteFontFiles } from "../account/fontStorage.ts";
 import {
   downloadPhoto,
   listPhotoObjects,
@@ -405,11 +406,21 @@ export function Variants({
   );
   // Read once rather than per render: it is build-time configuration, not state.
   const [accountAvailable] = useState(() => authConfigured());
-  /** The site this editor pushes to, once there is one, with the version it last wrote. */
+  /**
+   * The site this editor pushes to, once there is one, with the version it last wrote — and whose
+   * it is, which every stored file's path begins with.
+   *
+   * **`ownerId` became required on 28 October 2026 (sprint 29 día 6)**, and that closed a gap the
+   * photographs had had since ADR 0037 day 4: a site saved *from* this session arrived here with
+   * no owner, the reconciliation read the owner from `initialAccountSite` — which only a site
+   * opened *from* the account has — and so a photograph added after the first save was never
+   * uploaded, while the indicator said «Guardado en tu cuenta». The font day needed the same path
+   * to work, because the likeliest moment to bring a brand's letter is after the web exists.
+   */
   const [accountSite, setAccountSite] = useState<{
     id: string;
     version: number;
-    ownerId?: string;
+    ownerId: string;
   } | null>(initialAccountSite ?? null);
   /**
    * Whether this editor was opened from the account rather than from this browser.
@@ -475,6 +486,11 @@ export function Variants({
    * the second one after looking. A site with no account has nothing to count and stays `null`.
    */
   const [photosMissing, setPhotosMissing] = useState<number | null>(null);
+  /**
+   * How many of this site's own fonts are not wholly in the account — by font, not by file — with
+   * the same `null` for «not looked yet» (sprint 29 día 6).
+   */
+  const [fontsMissing, setFontsMissing] = useState<number | null>(null);
   const accountOwnerId = initialAccountSite?.ownerId ?? null;
 
   /**
@@ -528,16 +544,15 @@ export function Variants({
    * three round trips around it and what to do when one of them says no.
    */
   const reconcilePhotos = useCallback(
-    async (document: RetorikaDocument) => {
-      if (accountSiteId === null || accountOwnerId === null) return;
+    async (document: RetorikaDocument, site: { id: string; ownerId: string }) => {
       const client = browserClient();
       const plan = photoSyncPlan({
         wanted: listOwnPhotoSrcs(document),
-        remote: (await listPhotoObjects(client, accountOwnerId, accountSiteId)).map((path) =>
-          path.slice(`${accountOwnerId}/${accountSiteId}/`.length),
+        remote: (await listPhotoObjects(client, site.ownerId, site.id)).map((path) =>
+          path.slice(`${site.ownerId}/${site.id}/`.length),
         ),
         local: [...(photoUrls.get(openIndex ?? 0)?.keys() ?? [])],
-        pathFor: (src) => photoObjectPath(accountOwnerId, accountSiteId, src),
+        pathFor: (src) => photoObjectPath(site.ownerId, site.id, src),
       });
 
       let failed = 0;
@@ -550,11 +565,7 @@ export function Variants({
         try {
           const blob = await (await fetch(url)).blob();
           const bytes = new Uint8Array(await blob.arrayBuffer());
-          const ok = await uploadPhoto(
-            client,
-            photoObjectPath(accountOwnerId, accountSiteId, src),
-            bytes,
-          );
+          const ok = await uploadPhoto(client, photoObjectPath(site.ownerId, site.id, src), bytes);
           if (!ok) failed += 1;
         } catch {
           // A revoked object URL, or the store refusing. Either way nothing was stored.
@@ -581,7 +592,39 @@ export function Variants({
        */
       setPhotosMissing(plan.missing.length + failed);
     },
-    [accountSiteId, accountOwnerId, photoUrls, openIndex],
+    [photoUrls, openIndex],
+  );
+
+  /**
+   * The same for the owner's own fonts (sprint 29 día 6), under the same rule: only after a save
+   * the database accepted. `reconcileSiteFonts` holds the arithmetic and the reporting, and is
+   * tested there; what is here is where the bytes are — the object URLs in `fontFiles`, one map for
+   * the whole browser — and what the indicator is told.
+   */
+  const reconcileFonts = useCallback(
+    async (document: RetorikaDocument, site: { id: string; ownerId: string }) => {
+      const { short } = await reconcileSiteFonts(
+        browserClient(),
+        { ownerId: site.ownerId, siteId: site.id },
+        document.fonts ?? [],
+        [...fontFiles.keys()],
+        async (file) => {
+          const handle = fontFiles.get(file);
+          return handle ? (await fetch(handle.url)).blob() : undefined;
+        },
+      );
+      setFontsMissing(short.length);
+    },
+    [fontFiles],
+  );
+
+  /** Both reconciliations, photographs first, for one accepted save. */
+  const reconcileAccount = useCallback(
+    async (document: RetorikaDocument, site: { id: string; ownerId: string }) => {
+      await reconcilePhotos(document, site);
+      await reconcileFonts(document, site);
+    },
+    [reconcilePhotos, reconcileFonts],
   );
 
   /**
@@ -615,7 +658,7 @@ export function Variants({
               version: accountSite.version,
               document,
             }),
-          () => reconcilePhotos(document),
+          () => reconcileAccount(document, accountSite),
         );
         if (result.ok) {
           setAccountSite({ ...accountSite, version: result.version });
@@ -631,7 +674,7 @@ export function Variants({
       })();
     }, SAVE_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [accountSite, histories, openIndex, openedFromAccount, reconcilePhotos]);
+  }, [accountSite, histories, openIndex, openedFromAccount, reconcileAccount]);
 
   /**
    * The design-tools switch (ADR 0025), and the window it is narrowed by.
@@ -825,17 +868,37 @@ export function Variants({
     // the object URLs every photograph on screen is using.
   }, [accountSiteId, initialOpenIndex]);
 
+  /**
+   * The files a site opened from the account names, read once: what the opening has to make sure
+   * this browser holds (sprint 29 día 6). Captured in a state initialiser rather than read from
+   * the props in the effect below, because `OpenFromAccount` hands in a new array on every render
+   * and an effect that listed it would re-run — and its cleanup revokes object URLs in use.
+   */
+  const [accountFontFiles] = useState(() =>
+    initialAccountSite === undefined
+      ? []
+      : siteFontFiles(initialDocuments?.[initialOpenIndex ?? 0]?.fonts ?? []),
+  );
+
   // The owner's own font files, put back once on mount the way the photographs are: every file the
   // browser kept, whichever document names it — a font that an undo brings back must still draw.
   // Merged into what is there, because a font added before this resolves is already in the map.
+  //
+  // **And for a site opened from the account, what this browser does not hold comes out of the
+  // owner's folder in the `fuentes` bucket** (sprint 29 día 6) — the step that makes «abre su web
+  // en otro ordenador y la letra de marca está» true. Only after the browser's own store answered,
+  // so a file already here is never fetched again; and kept in that store afterwards, so a reload
+  // does not ask the account twice. A file that does not arrive is left to the download gate's
+  // `fontsMissing`, which blocks and says what to do; a store that will not keep one is not «No
+  // guardado», because the bytes are in the account and a reload fetches them again.
   useEffect(() => {
     let cancelled = false;
     const created: string[] = [];
-    void loadFontFiles().then((stored) => {
-      if (cancelled || stored.length === 0) return;
+    const keep = (files: readonly StoredFontFile[]) => {
+      if (cancelled || files.length === 0) return;
       setFontFiles((current) => {
         const next = new Map(current);
-        for (const { file, bytes } of stored) {
+        for (const { file, bytes } of files) {
           if (next.has(file)) continue;
           const url = URL.createObjectURL(fontFileBlob(file, bytes));
           created.push(url);
@@ -843,12 +906,30 @@ export function Variants({
         }
         return next;
       });
-    });
+    };
+    void (async () => {
+      const stored = await loadFontFiles();
+      keep(stored);
+      if (cancelled || accountSiteId === null || accountOwnerId === null) return;
+      const held = new Set(stored.map((entry) => entry.file));
+      const wanted = accountFontFiles.filter((file) => !held.has(file));
+      if (wanted.length === 0) return;
+      const { fetched, failed } = await fetchSiteFonts(
+        browserClient(),
+        { ownerId: accountOwnerId, siteId: accountSiteId },
+        wanted,
+      );
+      record("fonts", { fetched: fetched.length, failed: failed.length });
+      keep(fetched);
+      if (fetched.length > 0) await saveFontFiles(fetched);
+    })();
     return () => {
       cancelled = true;
       for (const url of created) URL.revokeObjectURL(url);
     };
-  }, []);
+    // Three values that are constant for the life of this editor, listed for honesty rather than
+    // for re-running: a re-run would revoke, in its cleanup, the URLs every face on screen uses.
+  }, [accountSiteId, accountOwnerId, accountFontFiles]);
 
   /**
    * The bank's own photographs, fetched once each and then indistinguishable from an upload.
@@ -1121,7 +1202,11 @@ export function Variants({
       return next;
     });
     dispatch({ type: "addOwnFont", variant, font, theme: withOwnFont(theme, key, font) });
-    if (!(await saveFontFiles(files))) {
+    // «Si recargas la página, tendrás que subirla otra vez» is true only of a web that lives in this
+    // browser. One in the account sends the bytes held in memory on its next accepted save, and a
+    // reload fetches them back (sprint 29 día 6); if that upload fails, the indicator counts the
+    // font as «sin subir», which is the sentence that is true then.
+    if (!(await saveFontFiles(files)) && accountSite === null) {
       setSaveStatus("unsaved");
       setPhotoError(es["editor.font.import.notSaved"]);
     }
@@ -1605,6 +1690,7 @@ export function Variants({
           onRetrySamples={retrySamples}
           savedWhere={savedWhere}
           photosMissing={photosMissing}
+          fontsMissing={fontsMissing}
           onSaveToAccount={accountAvailable ? () => setAccountOpen(true) : undefined}
           toast={toast}
           onDismissToast={dismissToast}
@@ -1629,6 +1715,11 @@ export function Variants({
               pushedDocument.current = history.present.document;
               setAccountSite(site);
               setSavedWhere("account");
+              // And its files, now that it has a folder. The insert is a save the database
+              // accepted by definition, so this is the rule's own moment: the photographs the
+              // dialog already sent are found there and left alone, and the owner's fonts — which
+              // the dialog does not send — go up here, the same way every later save sends them.
+              void reconcileAccount(history.present.document, site);
             }}
             onClose={() => setAccountOpen(false)}
           />
