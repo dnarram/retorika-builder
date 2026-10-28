@@ -1,6 +1,6 @@
 "use client";
 
-import type { Theme } from "@retorika/schema";
+import type { OwnFont, Theme } from "@retorika/schema";
 import {
   type FontKey,
   identifyPalette,
@@ -17,6 +17,7 @@ import {
   familiesHelpText,
   familyRowFor,
   galleryFaceCss,
+  ownFaceCss,
   typePairNoteText,
 } from "../editor/letterGallery.ts";
 import {
@@ -82,6 +83,10 @@ import es from "../locales/es.json" with { type: "json" };
 
 export interface StylePanelProps {
   theme: Theme;
+  /** The fonts the owner brought and the object URLs of their faces, so a row whose half is set in
+   * one names it and draws it (sprint 29 día 5). */
+  fonts: readonly OwnFont[];
+  fontUrls: ReadonlyMap<string, string>;
   onPickPalette: (paletteId: string) => void;
   onPickTypePair: (typePairId: string) => void;
   /**
@@ -137,6 +142,8 @@ const FAMILY_CHOICES: readonly {
 
 export function StylePanel({
   theme,
+  fonts,
+  fontUrls,
   onPickPalette,
   onPickTypePair,
   onOpenChooser,
@@ -153,7 +160,7 @@ export function StylePanel({
   const currentScale = identifyScale(theme);
   const familyRows = FAMILY_CHOICES.map((choice) => ({
     ...choice,
-    ...familyRowFor(theme, choice.key),
+    ...familyRowFor(theme, choice.key, fonts),
   }));
 
   return (
@@ -233,7 +240,9 @@ export function StylePanel({
           {es["editor.style.typography"]}
         </legend>
         {currentType === undefined ? (
-          <p className="m-0 text-[12px] leading-snug text-ui-muted">{typePairNoteText(theme)}</p>
+          <p className="m-0 text-[12px] leading-snug text-ui-muted">
+            {typePairNoteText(theme, fonts)}
+          </p>
         ) : null}
         {TYPE_PAIRS.map((pair) => {
           const selected = currentType?.id === pair.id;
@@ -290,7 +299,10 @@ export function StylePanel({
             download the moment text is laid out in it, so this sheet names what is on screen and
             nothing «just in case». */}
         <style>
-          {galleryFaceCss(familyRows.flatMap((row) => (row.family ? [row.family] : [])))}
+          {`${galleryFaceCss(familyRows.flatMap((row) => (row.family ? [row.family] : [])))}\n${ownFaceCss(
+            familyRows.flatMap((row) => (row.own ? [row.own] : [])),
+            fontUrls,
+          )}`}
         </style>
         {/* Not `panelRow` on these: that one lights its edge on hover because it is a thing you
             press, and a row here is not — the button inside it is. */}

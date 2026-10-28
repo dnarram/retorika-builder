@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { FONT_FAMILY_PATTERN, FONT_GALLERY, FONT_KINDS } from "./fontGallery.ts";
+import type { RetorikaDocument } from "./document.ts";
+import { FONT_FAMILY_PATTERN, FONT_GALLERY, FONT_KINDS, GENERIC_OF } from "./fontGallery.ts";
 
 /**
  * A font the owner brought: the record of a face that travels in the ZIP as a photograph does
@@ -216,4 +217,53 @@ export function ownFontCovers(font: Pick<OwnFont, "faces">): { regular: boolean;
     }
   }
   return { regular, bold };
+}
+
+/**
+ * The document with one more font the owner brought, checked as the parser would check it: at most
+ * two, each name free (sprint 29 día 5). It throws rather than returning the document unchanged —
+ * a caller that offered a third font, or a taken name, has a bug the owner must not discover in the
+ * ZIP. The theme is not touched: choosing the font for a half is `setTheme`'s, and the editor makes
+ * the two one step.
+ */
+export function addOwnFont(doc: RetorikaDocument, font: OwnFont): RetorikaDocument {
+  const fonts = [...(doc.fonts ?? []), ownFontSchema.parse(font)];
+  const parsed = ownFontsSchema.safeParse(fonts);
+  if (!parsed.success) {
+    throw new Error(`addOwnFont: ${parsed.error.issues.map((issue) => issue.message).join("; ")}`);
+  }
+  return { ...doc, fonts: parsed.data };
+}
+
+const FONT_TOKENS = ["font.heading", "font.body"] as const;
+
+/** The first family of a stack, unquoted: the renderer's own reading. */
+function firstFamilyOf(stack: string): string {
+  return (stack.split(",")[0] ?? "").trim().replace(/^['"]|['"]$/g, "");
+}
+
+/**
+ * The document without one of its own fonts — «Quitar» in the letter chooser (sprint 29 día 5).
+ *
+ * **Every stack that names it first loses it**, which is the property ADR 0056 §8 says the schema
+ * cannot check and the verb that removes a font must keep: a stack naming a family nobody ships is
+ * the state ADR 0028 prevents. What is left is the fallback chain the stack already carried — the
+ * same rule as migration `0015`'s `down`, with the live table here because this is not a frozen
+ * step — and the species' generic keyword when nothing followed the family. The key goes when the
+ * last font goes, so a document that never had one and one that had one and lost it are the same
+ * shape. An id the document does not have is a caller's bug, and throws.
+ */
+export function removeOwnFont(doc: RetorikaDocument, id: string): RetorikaDocument {
+  const font = doc.fonts?.find((candidate) => candidate.id === id);
+  if (font === undefined) throw new Error(`removeOwnFont: no own font "${id}" in the document`);
+  const theme = { ...doc.theme };
+  for (const key of FONT_TOKENS) {
+    const stack = theme[key];
+    if (firstFamilyOf(stack) !== font.family) continue;
+    const tail = stack.slice(stack.indexOf(",") + 1).trim();
+    theme[key] = stack.includes(",") && tail !== "" ? tail : GENERIC_OF[font.kind];
+  }
+  const { fonts: _, ...rest } = doc;
+  const remaining = (doc.fonts ?? []).filter((candidate) => candidate.id !== id);
+  return remaining.length === 0 ? { ...rest, theme } : { ...rest, theme, fonts: remaining };
 }

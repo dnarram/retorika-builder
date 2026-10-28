@@ -82,6 +82,6 @@
 
 Los otros dos están hechos: el foco y Escape en las pantallas nuevas (días 3, 4 y 6) y el callejón
 de la foto de muestra (día 7). **Y los diálogos `aria-modal` antiguos ya tienen trampa de foco**,
-desde el día 1 del sprint 17: todos llaman al hook —diez desde el día 1 del sprint 29— y una
+desde el día 1 del sprint 17: todos llaman al hook —doce desde el día 5 del sprint 29— y una
 prueba de fuente falla si se escribe el siguiente sin ella. Eran seis y esta nota decía cinco, porque el sexto se escribió el 4 de octubre de
 2026, el mismo día que el hook y en otro commit.

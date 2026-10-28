@@ -1,5 +1,5 @@
-import { FONT_KINDS } from "@retorika/schema";
-import { buildTheme, GALLERY_FAMILIES, withFamily } from "@retorika/tokens";
+import { FONT_KINDS, type OwnFont } from "@retorika/schema";
+import { buildTheme, GALLERY_FAMILIES, withFamily, withOwnFont } from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
 import { fold } from "../src/editor/fold.ts";
 import {
@@ -7,6 +7,7 @@ import {
   countText,
   initiallyRevealed,
   KIND_FILTERS,
+  kindFiltersFor,
   sampleLine,
   visibleCount,
 } from "../src/editor/fontChooser.ts";
@@ -137,8 +138,14 @@ describe("the line about the families that are not here", () => {
     for (const family of named) expect(all, family).not.toContain(family);
   });
 
-  it("promises no way of bringing one in until that way exists", () => {
-    expect(es["editor.style.chooser.notIncluded"]).not.toMatch(/subir|importar/i);
+  it("names the way to bring one in, by the button's own words, now that it exists (día 5)", () => {
+    // Día 3 held this line to promising nothing; the button is here, so the line names it — by the
+    // label the button actually carries, so the two cannot drift apart.
+    expect(es["editor.style.chooser.notIncluded"]).toContain(
+      `«${es["editor.style.chooser.upload"]}»`,
+    );
+    expect(es["editor.style.chooser.notIncluded"]).toContain("{site}");
+    expect(es["editor.style.chooser.notIncludedSite"]).toBe("fonts.google.com");
   });
 });
 
@@ -181,5 +188,49 @@ describe("initiallyRevealed", () => {
     const revealed = initiallyRevealed(chooserRows(start, "font.heading", "zzz", "all"));
     // `modern-sans` heads in Inter, which is a gallery family and therefore chosen.
     expect([...revealed]).toEqual(["Inter"]);
+  });
+});
+
+describe("the owner's own fonts in the chooser (sprint 29 día 5)", () => {
+  const CASA: OwnFont = {
+    id: "3f9a7c21",
+    family: "Casa Trufa",
+    kind: "serif",
+    faces: [{ role: "regular", format: "ttf" }],
+    licence: { declared: true, at: "2026-10-28T09:00:00.000Z" },
+  };
+
+  it("puts them first, ticks the one the stack names, and leaves the gallery as it was", () => {
+    const theme = withOwnFont(start, "font.heading", CASA);
+    const rows = chooserRows(theme, "font.heading", "", "all", [CASA]);
+    expect(rows[0]).toMatchObject({ family: "Casa Trufa", chosen: true, visible: true, own: CASA });
+    expect(rows.slice(1).map((row) => row.family)).toEqual(all);
+    expect(rows.filter((row) => row.chosen)).toHaveLength(1);
+    // The other half does not name it, so nothing is ticked there.
+    expect(chooserRows(theme, "font.body", "", "all", [CASA])[0]?.chosen).toBe(false);
+  });
+
+  it("answers «Propias» and its own species' chip, and the search like any row", () => {
+    const own = chooserRows(start, "font.body", "", "own", [CASA]).filter((row) => row.visible);
+    expect(own.map((row) => row.family)).toEqual(["Casa Trufa"]);
+    const serifs = chooserRows(start, "font.body", "", "serif", [CASA]).filter(
+      (row) => row.visible,
+    );
+    expect(serifs[0]?.family).toBe("Casa Trufa");
+    expect(visibleCount(chooserRows(start, "font.body", "trufa", "all", [CASA]))).toBe(1);
+    expect(visibleCount(chooserRows(start, "font.body", "", "sans", [CASA]).slice(0, 1))).toBe(0);
+  });
+
+  it("offers «Propias» right after «Todas», and only once there is something to narrow to", () => {
+    expect(kindFiltersFor([])).toEqual(KIND_FILTERS);
+    expect(kindFiltersFor([CASA])).toEqual(["all", "own", ...KIND_FILTERS.slice(1)]);
+    expect(es["editor.style.chooser.kind.own"]).toBe("Propias");
+  });
+
+  it("never asks the gallery's sheet for an own face", () => {
+    const theme = withOwnFont(start, "font.heading", CASA);
+    expect(
+      initiallyRevealed(chooserRows(theme, "font.heading", "", "all", [CASA])).has("Casa Trufa"),
+    ).toBe(false);
   });
 });

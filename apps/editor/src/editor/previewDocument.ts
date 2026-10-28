@@ -53,3 +53,37 @@ export function withPhotoUrls(
     })),
   };
 }
+
+/** A face the owner brought, as the renderer writes its `src` — the one shape this substitutes. */
+const OWN_FACE_URL =
+  /url\("fonts\/(propia-[0-9a-f]{8}-(?:regular|bold|variable)\.(?:woff2|woff|ttf|otf))"\)/g;
+
+/** What an object URL looks like, and all it may look like before it is written into CSS: the
+ * scheme, an origin, a path of a UUID — nothing that could close the quotes or the `url()`. */
+const OBJECT_URL = /^blob:[A-Za-z0-9:/._-]+$/;
+
+/**
+ * The page's text — the first paint's html, or a patch's stylesheet — with each face the owner
+ * brought pointed at the object URL of its bytes (ADR 0056, sprint 29 día 5).
+ *
+ * The photographs' problem, met in the stylesheet: the renderer writes `url("fonts/propia-…")`,
+ * relative, which is what a ZIP needs, and a `srcDoc` frame would resolve it against the editor's
+ * own page and get a 404. The gallery's faces are answered by the editor's `fonts/[file]` route;
+ * the owner's are not on any server, so they are swapped here, in the text, **only where the map
+ * has the file** — a face whose bytes have not arrived keeps its relative name and the canvas draws
+ * the fallback, which is the truth about it.
+ *
+ * Text rather than a document, because the patch path hands `patchCanvas` a stylesheet string and
+ * the first paint an html string, and the `@font-face` rules are the same lines in both. An object
+ * URL is stable for as long as its entry lives, so `splitFontFaces` sees the same font sheet on a
+ * palette change and re-declares nothing (`patchCanvas.test.ts`).
+ */
+export function withFontUrls(text: string, fontUrls: ReadonlyMap<string, string>): string {
+  if (fontUrls.size === 0) return text;
+  return text.replace(OWN_FACE_URL, (whole, file: string) => {
+    const url = fontUrls.get(file);
+    if (url === undefined) return whole;
+    if (!OBJECT_URL.test(url)) throw new Error(`withFontUrls: "${url}" is not an object URL`);
+    return `url("${url}")`;
+  });
+}

@@ -24,10 +24,11 @@ import {
   foldsInto,
   listAnchorsTo,
   mintSectionId,
+  type OwnFont,
   type RetorikaDocument,
   type Section,
 } from "@retorika/schema";
-import { withFamily, withPalette, withScale, withTypePair } from "@retorika/tokens";
+import { withFamily, withOwnFont, withPalette, withScale, withTypePair } from "@retorika/tokens";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { loadAccountDesignTools, saveAccountDesignTools } from "../account/designTools.ts";
 import {
@@ -58,6 +59,14 @@ import {
   wasSectionEverEdited,
 } from "../editor/documentHistory.ts";
 import { PHOTO_CONTENT_TYPE } from "../editor/downloadGate.ts";
+import {
+  clearFontFiles,
+  type FontFileHandle,
+  fontFileBlob,
+  loadFontFiles,
+  type StoredFontFile,
+  saveFontFiles,
+} from "../editor/ownFonts.ts";
 import { listOwnPhotoSrcs } from "../editor/ownPhotos.ts";
 import { photoSources } from "../editor/photoSources.ts";
 import {
@@ -70,7 +79,7 @@ import {
   savePhoto,
   scopeKey,
 } from "../editor/photos.ts";
-import { withPhotoUrls } from "../editor/previewDocument.ts";
+import { withFontUrls, withPhotoUrls } from "../editor/previewDocument.ts";
 import { record } from "../editor/probe.ts";
 import { useMediaQuery } from "../editor/viewport.ts";
 import es from "../locales/es.json" with { type: "json" };
@@ -319,6 +328,7 @@ const SAVE_DEBOUNCE_MS = 500;
 /** One shared empty map, so a variant with no photos does not hand the editor a new object on
  * every render and re-run the preview's `useMemo` for nothing. */
 const EMPTY_PHOTOS: ReadonlyMap<string, string> = new Map();
+const NO_FONT_URLS: ReadonlyMap<string, string> = new Map();
 
 export function Variants({
   answers,
@@ -436,6 +446,17 @@ export function Variants({
    */
   const [photoUrls, setPhotoUrls] = useState<Map<number, Map<string, string>>>(new Map());
   const [photoError, setPhotoError] = useState<string | null>(null);
+  /**
+   * The files of the fonts the owner brought, by the name the renderer mints, with the object URL
+   * of their bytes (sprint 29 día 5). **One map for the three cards**, not one per card as the
+   * photographs need: a face's name carries its font's random id, so it is one file in the whole
+   * browser (`ownFonts.ts` says why).
+   */
+  const [fontFiles, setFontFiles] = useState<ReadonlyMap<string, FontFileHandle>>(new Map());
+  const fontUrls = useMemo(
+    () => new Map([...fontFiles].map(([file, handle]) => [file, handle.url])),
+    [fontFiles],
+  );
 
   /**
    * The site's id as a primitive, so everything below can depend on it honestly.
@@ -804,6 +825,31 @@ export function Variants({
     // the object URLs every photograph on screen is using.
   }, [accountSiteId, initialOpenIndex]);
 
+  // The owner's own font files, put back once on mount the way the photographs are: every file the
+  // browser kept, whichever document names it — a font that an undo brings back must still draw.
+  // Merged into what is there, because a font added before this resolves is already in the map.
+  useEffect(() => {
+    let cancelled = false;
+    const created: string[] = [];
+    void loadFontFiles().then((stored) => {
+      if (cancelled || stored.length === 0) return;
+      setFontFiles((current) => {
+        const next = new Map(current);
+        for (const { file, bytes } of stored) {
+          if (next.has(file)) continue;
+          const url = URL.createObjectURL(fontFileBlob(file, bytes));
+          created.push(url);
+          next.set(file, { url, size: bytes.byteLength });
+        }
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+      for (const url of created) URL.revokeObjectURL(url);
+    };
+  }, []);
+
   /**
    * The bank's own photographs, fetched once each and then indistinguishable from an upload.
    *
@@ -1045,6 +1091,39 @@ export function Variants({
     // anonymous session in the same browser, which is the collision `photoScope` describes.
     if (!(await savePhoto(photoScope(variant), src, result.photo.bytes))) {
       setSaveStatus("unsaved");
+    }
+  }
+
+  /**
+   * «Añadir» in the import dialog: the files get object URLs at once, so the preview draws the new
+   * letter in the same render that chooses it; the record and the stack go into the document as one
+   * step; and the bytes go to the browser's store, which says «No guardado» if it will not take them
+   * — the font is in the web either way, and the owner is told it will not survive a reload.
+   */
+  async function handleAddOwnFont(
+    variant: number,
+    key: "font.heading" | "font.body",
+    font: OwnFont,
+    files: readonly StoredFontFile[],
+  ) {
+    const theme = histories[variant]?.present.document.theme;
+    if (!theme) return;
+    setFontFiles((current) => {
+      const next = new Map(current);
+      for (const { file, bytes } of files) {
+        const previous = next.get(file);
+        if (previous) URL.revokeObjectURL(previous.url);
+        next.set(file, {
+          url: URL.createObjectURL(fontFileBlob(file, bytes)),
+          size: bytes.byteLength,
+        });
+      }
+      return next;
+    });
+    dispatch({ type: "addOwnFont", variant, font, theme: withOwnFont(theme, key, font) });
+    if (!(await saveFontFiles(files))) {
+      setSaveStatus("unsaved");
+      setPhotoError(es["editor.font.import.notSaved"]);
     }
   }
 
@@ -1374,6 +1453,25 @@ export function Variants({
           }}
           onSettleChooser={() => dispatch({ type: "settleChooser", variant: openIndex })}
           onDiscardChooser={() => dispatch({ type: "discardChooser", variant: openIndex })}
+          // The owner's own fonts (sprint 29 día 5): choosing one is the chooser's own session step,
+          // like a gallery row; adding and removing are steps of their own.
+          onPickOwnFont={(key, font) => {
+            dismissToast();
+            dispatch({
+              type: "chooseFamily",
+              variant: openIndex,
+              key,
+              theme: withOwnFont(history.present.document.theme, key, font),
+            });
+          }}
+          onAddOwnFont={(key, font, files) => {
+            dismissToast();
+            void handleAddOwnFont(openIndex, key, font, files);
+          }}
+          onRemoveOwnFont={(fontId) => {
+            dismissToast();
+            dispatch({ type: "removeOwnFont", variant: openIndex, fontId });
+          }}
           // The third choice of the Estilo panel, and the only one the panel hides until the design
           // tools are on — the "Encendido" column of the advanced dossier §4 begins «Añade **el
           // sistema**». It travels through `setTheme` like the other two, so it gets undo, redo and
@@ -1488,6 +1586,7 @@ export function Variants({
             setPageId(into === history.present.document.pages[0]?.id ? undefined : into);
           }}
           photoUrls={photoUrls.get(openIndex) ?? EMPTY_PHOTOS}
+          fontFiles={fontFiles}
           photoError={photoError}
           offers={offers}
           contactUnavailable={contactSection === undefined}
@@ -1608,10 +1707,13 @@ export function Variants({
             // against this page's URL — so the one screen whose entire job is to show three
             // attractive compositions showed three broken images. Found in the browser on the day
             // the generator first asked the bank; nothing before then had a photograph to break.
-            const html = render(
-              withPhotoUrls(history.present.document, photoUrls.get(index) ?? EMPTY_PHOTOS),
-              "html",
-            ).html;
+            const html = withFontUrls(
+              render(
+                withPhotoUrls(history.present.document, photoUrls.get(index) ?? EMPTY_PHOTOS),
+                "html",
+              ).html,
+              fontUrls.size === 0 ? NO_FONT_URLS : fontUrls,
+            );
             return (
               <div
                 // By position: the three variants are a fixed list that never reorders, and
@@ -1747,6 +1849,7 @@ export function Variants({
             // Day 3 of sprint 2 settled that starting over really starts over. The bytes live
             // somewhere `clearSession` cannot reach, so they are cleared here as well.
             void clearPhotos();
+            void clearFontFiles();
             onRestart();
           }}
           className="ui-interactive"

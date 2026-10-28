@@ -4,11 +4,18 @@ import { recordById } from "@retorika/photobank";
 import {
   type ElementAddress,
   type MeasuredBox,
+  type OwnFont,
   parseDocument,
   type RetorikaDocument,
   type Theme,
 } from "@retorika/schema";
-import { buildTheme, type FontKey, STARTING_PALETTE_ID, withFamily } from "@retorika/tokens";
+import {
+  buildTheme,
+  type FontKey,
+  STARTING_PALETTE_ID,
+  withFamily,
+  withOwnFont,
+} from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
 import {
   type Histories,
@@ -1945,5 +1952,57 @@ describe("addEntryPage — una página por ficha (ADR 0040)", () => {
       "comidas",
       "cenas",
     ]);
+  });
+});
+
+describe("a font the owner brought, added and removed (sprint 29 día 5)", () => {
+  const CASA: OwnFont = {
+    id: "3f9a7c21",
+    family: "Casa Trufa",
+    kind: "serif",
+    faces: [{ role: "variable", format: "woff2", wght: [300, 800] }],
+    licence: { declared: true, at: "2026-10-28T09:00:00.000Z" },
+  };
+  const theme = (s: Histories) => s[0]?.present.document.theme;
+  const add = (s: Histories): HistoryAction => ({
+    type: "addOwnFont",
+    variant: 0,
+    font: CASA,
+    theme: withOwnFont(theme(s) as Theme, "font.heading", CASA),
+  });
+
+  it("records the font and chooses it in one step, which one undo takes back whole", () => {
+    const before = start();
+    const added = run(before, add(before));
+    expect(added[0]?.present.document.fonts).toEqual([CASA]);
+    expect(theme(added)?.["font.heading"]).toMatch(/^'Casa Trufa', /);
+    expect(added[0]?.past).toHaveLength(1);
+    const undone = run(added, { type: "undo", variant: 0 });
+    expect(undone[0]?.present.document).toBe(before[0]?.present.document);
+  });
+
+  it("closes a chooser session open behind the import dialog rather than amending it", () => {
+    let state = start();
+    state = run(state, {
+      type: "chooseFamily",
+      variant: 0,
+      key: "font.heading",
+      theme: withFamily(theme(state) as Theme, "font.heading", "Bitter"),
+    });
+    state = run(state, add(state));
+    expect(state[0]?.past).toHaveLength(2);
+    expect(state[0]?.amendable).toBe(false);
+    // Escape in the chooser reopened afterwards cannot reach back past the font.
+    state = run(state, { type: "discardChooser", variant: 0 });
+    expect(state[0]?.present.document.fonts).toEqual([CASA]);
+  });
+
+  it("«Quitar» takes the family out of the stack, and undo brings back the record and the letter", () => {
+    const added = run(start(), add(start()));
+    const removed = run(added, { type: "removeOwnFont", variant: 0, fontId: CASA.id });
+    expect(removed[0]?.present.document.fonts).toBeUndefined();
+    expect(theme(removed)?.["font.heading"]).not.toMatch(/Casa Trufa/);
+    const undone = run(removed, { type: "undo", variant: 0 });
+    expect(undone[0]?.present.document).toBe(added[0]?.present.document);
   });
 });

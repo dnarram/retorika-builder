@@ -50,10 +50,11 @@ import { describe, expect, it } from "vitest";
 
 const SRC = fileURLToPath(new URL("../src", import.meta.url));
 
-/** How many `aria-modal` dialogs the application has. Ten since sprint 29 día 1, which added the
- * letter chooser; nine since sprint 25 día 5, which added the one that says two texts are sitting
- * on top of each other (ADR 0050 §6). */
-const MODAL_COUNT = 10;
+/** How many `aria-modal` dialogs the application has. Twelve since sprint 29 día 5, which added the
+ * import of an own font and the download's word about its files; ten since sprint 29 día 1, which
+ * added the letter chooser; nine since sprint 25 día 5, which added the one that says two texts are
+ * sitting on top of each other (ADR 0050 §6). */
+const MODAL_COUNT = 12;
 
 /**
  * The prose that names the count, so a failure says where to go. Listed rather than asserted on:

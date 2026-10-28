@@ -1,5 +1,6 @@
 import { render } from "@retorika/renderer";
 import type { RetorikaDocument } from "@retorika/schema";
+import { withFontUrls } from "./previewDocument.ts";
 
 /**
  * The other half of the advanced dossier §4's pre-publish review: «una revisión avisa de contraste
@@ -65,6 +66,13 @@ export interface OverflowProbe {
   /** The host document to build the hidden frame in. Injected rather than reached for, so the
    * measurement is testable and so nothing here assumes it runs in the top window. */
   hostDocument: Document;
+  /**
+   * The object URLs of the owner's own faces, by file (sprint 29 día 5). **The page is measured in
+   * the letter it will be read in**: without them the frame asks the editor for
+   * `fonts/propia-…`, gets a 404, and lays the page out in the fallback — a narrower or wider letter
+   * than the owner's, so a heading that overflows in their font could be measured as fitting.
+   */
+  fontUrls?: ReadonlyMap<string, string>;
 }
 
 /**
@@ -105,7 +113,10 @@ export async function measureOverflow(
   try {
     const findings: OverflowFinding[] = [];
     for (const page of doc.pages) {
-      const { html } = render(doc, "html", { pageId: page.id });
+      const html = withFontUrls(
+        render(doc, "html", { pageId: page.id }).html,
+        probe.fontUrls ?? new Map(),
+      );
       const measured = await measureOne(frame, html);
       for (const one of measured) findings.push({ pageId: page.id, ...one });
     }

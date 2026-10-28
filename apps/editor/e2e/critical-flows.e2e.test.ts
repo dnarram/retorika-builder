@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { inflateRawSync } from "node:zlib";
@@ -15439,7 +15439,9 @@ describe("nada sobresale en un móvil", () => {
    * caminata de arriba solo abre el diálogo de la cuenta. El sexto, «Hay texto encima de otro
    * texto», llegó en el sprint 25 y tampoco se midió en un móvil. Aquí se abren los seis —siete
    * clases de puerta, porque el de contraste dibuja el bloqueo y el aviso— a 320 y a 390, con los
-   * mismos cuatro ojos que el resto de este `describe` y axe a 390.
+   * mismos cuatro ojos que el resto de este `describe` y axe a 390. **Desde el sprint 29 día 5 son
+   * ocho puertas**: la fuente propia añade su bloqueo (faltan sus archivos) y su aviso (pesa más de
+   * 300 KB), las dos en un diálogo de dos niveles, como el de contraste.
    *
    * **Sembrados, no preparados con el ratón.** El plan decía preparar el contraste y el texto sobre
    * texto a 1024 y luego `setViewportSize`, porque pintar con la barra flotante y arrastrar un
@@ -15456,7 +15458,7 @@ describe("nada sobresale en un móvil", () => {
    * se desplaza en vertical; un diálogo fijo no, y un «Descargar igualmente» bajo el borde inferior
    * es un diálogo sin salida.
    */
-  describe("las seis puertas de la descarga cubren la pantalla", () => {
+  describe("las puertas de la descarga cubren la pantalla", () => {
     type Json = Record<string, unknown>;
     type Element_ = {
       id: string;
@@ -15498,12 +15500,31 @@ describe("nada sobresale en un móvil", () => {
      * contrast warning, and one that overflowed at 320 would never reach texts on top of each
      * other.
      */
-    const GATES: { kind: string; title: string; doc: () => Doc; samples?: "fail" | "serve" }[] = [
+    /**
+     * The owner's own font files to write into the browser's store before the editor opens, by
+     * file name and size (sprint 29 día 5). Zeros: the gate weighs bytes and the canvas draws the
+     * fallback for a face it cannot decode, which none of the four checks below reads.
+     */
+    type FontSeed = Record<string, number>;
+    const GATES: {
+      kind: string;
+      title: string;
+      doc: () => Doc;
+      samples?: "fail" | "serve";
+      fonts?: FontSeed;
+    }[] = [
       {
         kind: "photosFailed",
         title: "Falta una foto y no podemos descargar",
         doc: () => banked(corpus("barbershop-cover")),
         samples: "fail",
+      },
+      // The corpus fixture names «Karla 2» in its headings and this browser holds none of its
+      // files: the block, second, before any count.
+      {
+        kind: "fontsMissing",
+        title: "Falta el archivo de tu fuente",
+        doc: () => corpus("letra-propia"),
       },
       {
         kind: "tooManyPhotos",
@@ -15558,6 +15579,18 @@ describe("nada sobresale en un móvil", () => {
           return doc;
         },
       },
+      // The same fixture with all three of its files held, the regular above 300 KB: the last of
+      // the warnings.
+      {
+        kind: "heavyFonts",
+        title: "Tu letra pesa mucho",
+        doc: () => corpus("letra-propia"),
+        fonts: {
+          "propia-3f9a7c21-regular.woff2": 310 * 1024,
+          "propia-3f9a7c21-bold.woff": 17_340,
+          "LICENCIA-propia-3f9a7c21.txt": 4_384,
+        },
+      },
     ];
 
     it("cubre cada clase de puerta que tiene un diálogo", () => {
@@ -15582,7 +15615,7 @@ describe("nada sobresale en un móvil", () => {
 
     for (const screen of SCREENS) {
       const named = `${screen.width}×${screen.height}${screen.panel ? ` con «${screen.panel}»` : ""}`;
-      it(`abre las seis a ${named}: cada una cubre la pantalla y enseña su salida`, async () => {
+      it(`abre todas a ${named}: cada una cubre la pantalla y enseña su salida`, async () => {
         const context = await browser.newContext({
           viewport: { width: screen.width, height: screen.height },
           ...(screen.phone ? { isMobile: true, hasTouch: true, deviceScaleFactor: 2 } : {}),
@@ -15596,6 +15629,31 @@ describe("nada sobresale en un móvil", () => {
                 gate.samples === "fail"
                   ? route.fulfill({ status: 503, body: "no" })
                   : route.fulfill({ status: 200, contentType: "image/png", body: png }),
+              );
+            }
+            if (gate.fonts) {
+              // Written on a page of the same origin first and awaited, so the editor's own read
+              // on mount finds them — an init script cannot hold the page until a transaction ends.
+              await walker.goto(BASE_URL, { waitUntil: "domcontentloaded" });
+              await walker.evaluate(
+                (seed: Record<string, number>) =>
+                  new Promise<void>((done, fail) => {
+                    const open = indexedDB.open("retorika.fonts", 1);
+                    open.onupgradeneeded = () => open.result.createObjectStore("files");
+                    open.onerror = () => fail(open.error);
+                    open.onsuccess = () => {
+                      const tx = open.result.transaction("files", "readwrite");
+                      for (const [file, size] of Object.entries(seed)) {
+                        tx.objectStore("files").put({ file, bytes: new Uint8Array(size) }, file);
+                      }
+                      tx.oncomplete = () => {
+                        open.result.close();
+                        done();
+                      };
+                      tx.onerror = () => fail(tx.error);
+                    };
+                  }),
+                gate.fonts,
               );
             }
             await walker.addInitScript(
@@ -21871,4 +21929,261 @@ describe("sprint 28 día 7 — una fila es un mínimo", () => {
       await context.close();
     }
   }, 300_000);
+});
+
+/**
+ * **Sprint 29 día 5 — la fuente de la marca, de la subida al ZIP** (ADR 0056).
+ *
+ * The road an owner walks with their own letter, end to end: «Subir mi fuente» from the chooser,
+ * two real files — Karla's 400 woff2 and 700 woff, the corpus fixture's bytes — read by the editor's
+ * server, the name they will travel under («Karla 2», because «Karla» is a gallery row), the
+ * licence attached, «Añadir» held until the declaration is ticked, the canvas set in it, one
+ * «Deshacer» taking all of it back, and the ZIP carrying both faces and the licence beside the
+ * page — opened from `file://` with no network.
+ *
+ * **What would fail in silence, and what reads it.** The canvas is a `srcDoc` frame and the faces
+ * are `blob:` URLs: a Content-Security-Policy or a `sandbox` that refused `font-src blob:` would
+ * draw the fallback and nothing would go red (David's adjustment 6). So the frame's own
+ * `document.fonts` is asked which faces *loaded*, and the headline's computed family is read — not
+ * a screenshot. The files are chosen with `setInputFiles`, outside any keyboard walk: a file
+ * picker is the operating system's, and a walk cannot press its buttons.
+ */
+describe("sprint 29 día 5 — la fuente de la marca, de la subida al ZIP", () => {
+  const FONTS = join(import.meta.dirname, "..", "..", "..", "fixtures", "fonts");
+  const REGULAR = join(FONTS, "propia-3f9a7c21-regular.woff2");
+  const BOLD = join(FONTS, "propia-3f9a7c21-bold.woff");
+  const LICENCE = join(FONTS, "LICENCIA-propia-3f9a7c21.txt");
+  const HEADLINE = '[data-section="sec-cover"] [data-id="el-headline"]';
+
+  const chooser = (page: Page) => page.getByRole("dialog", { name: "La letra de los titulares" });
+  const importer = (page: Page) =>
+    page.getByRole("dialog", { name: "Subir la fuente de tu marca" });
+
+  /** The faces a document has *loaded* — bytes arrived and decoded — by family and weight. */
+  function loadedFaces(target: Page | FrameLocator): Promise<string[]> {
+    const read = () =>
+      document.fonts.ready.then(() =>
+        [...document.fonts]
+          .filter((face) => face.status === "loaded")
+          .map((face) => `${face.family.replace(/['"]/g, "")} ${face.weight}`)
+          .sort(),
+      );
+    return "evaluate" in target ? target.evaluate(read) : target.locator("html").evaluate(read);
+  }
+
+  /** From the canvas to a filled import dialog, ready for «Añadir». */
+  async function upToTheDeclaration(page: Page): Promise<Locator> {
+    await intoTheCanvas(page);
+    await page.getByRole("button", { name: "Estilo", exact: true }).click();
+    await page.getByRole("button", { name: "Cambiar la letra de los titulares" }).click();
+    await expect(chooser(page)).toBeVisible();
+    // The line about the families that are not here names the button, now that it exists.
+    await expect(chooser(page).getByRole("link", { name: "fonts.google.com" })).toHaveAttribute(
+      "href",
+      "https://fonts.google.com",
+    );
+    await expect(chooser(page).getByText(/traerlas con «Subir mi fuente»/)).toBeVisible();
+    await chooser(page)
+      .getByRole("button", { name: /Subir mi fuente/ })
+      .click();
+    const dialog = importer(page);
+    await expect(dialog).toBeVisible();
+    await expect(chooser(page)).toBeHidden();
+    await expect(dialog.getByRole("button", { name: "Elegir archivos" })).toBeFocused();
+    await dialog.locator("input[data-font-files]").setInputFiles([REGULAR, BOLD]);
+    return dialog;
+  }
+
+  it("sube la fuente, la dibuja en el lienzo, la deshace en un paso y la lleva al ZIP", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const studio = await context.newPage();
+    try {
+      const inspected: number[] = [];
+      studio.on("response", (response) => {
+        if (response.url().includes("/api/fuentes/inspeccionar")) inspected.push(response.status());
+      });
+      const dialog = await upToTheDeclaration(studio);
+      const frame = studio.frameLocator(PREVIEW).first();
+
+      // ---- what the server read, said back: the name it will travel under, and why ----
+      const name = dialog.getByLabel("Nombre con el que viajará");
+      await expect(name).toHaveValue("Karla 2");
+      await expect(
+        dialog.getByText("«Karla» ya es el nombre de otra letra, así que viajará como «Karla 2»."),
+      ).toBeVisible();
+      expect(inspected).toEqual([200, 200]);
+      await expect(dialog.getByText("propia-3f9a7c21-regular.woff2 · 13 KB")).toBeVisible();
+      await expect(dialog.getByText("propia-3f9a7c21-bold.woff · 17 KB")).toBeVisible();
+      // A regular and a bold: no note about a synthesised bold.
+      await expect(dialog.getByText(/se engrosarán de forma artificial/)).toHaveCount(0);
+
+      // ---- the licence travels, and «Añadir» waits for the declaration ----
+      await dialog.locator("input[data-font-licence]").setInputFiles(LICENCE);
+      await expect(dialog.getByText("Adjunta: LICENCIA-propia-3f9a7c21.txt")).toBeVisible();
+      const add = dialog.getByRole("button", { name: "Añadir" });
+      await expect(add).toBeDisabled();
+      await dialog
+        .getByRole("checkbox", {
+          name: "Confirmo que tengo licencia para usar esta fuente en mi web",
+        })
+        .check();
+      await expect(add).toBeEnabled();
+      const before = await frame
+        .locator(HEADLINE)
+        .evaluate((node) => getComputedStyle(node).fontFamily);
+      expect(before).toContain("EB Garamond");
+      await add.click();
+
+      // ---- back in the chooser, with the new font first and chosen ----
+      await expect(importer(studio)).toBeHidden();
+      await expect(chooser(studio)).toBeVisible();
+      await expect(chooser(studio).getByRole("radio", { name: "Karla 2" })).toBeChecked();
+      await expect(chooser(studio).getByRole("radio", { name: "Propias" })).toBeVisible();
+      await chooser(studio).getByRole("button", { name: "Hecho" }).click();
+
+      // ---- the canvas is set in it: both faces loaded from `blob:` inside the frame ----
+      await expect
+        .poll(() => frame.locator(HEADLINE).evaluate((node) => getComputedStyle(node).fontFamily))
+        .toMatch(/^"Karla 2"/);
+      await expect
+        .poll(() => loadedFaces(frame))
+        .toEqual(expect.arrayContaining(["Karla 2 400", "Karla 2 700"]));
+      // And the panel names it, drawn from the same bytes.
+      await expect(studio.getByText("Karla 2", { exact: true })).toBeVisible();
+
+      // ---- one «Deshacer» takes the font and the letter back together ----
+      await studio.getByRole("button", { name: "Deshacer", exact: true }).click();
+      await expect
+        .poll(() => frame.locator(HEADLINE).evaluate((node) => getComputedStyle(node).fontFamily))
+        .toContain("EB Garamond");
+      await studio.getByRole("button", { name: "Rehacer", exact: true }).click();
+      await expect
+        .poll(() => frame.locator(HEADLINE).evaluate((node) => getComputedStyle(node).fontFamily))
+        .toMatch(/^"Karla 2"/);
+
+      // ---- the ZIP: the owner's two faces and their licence, and no OFL for them ----
+      await studio.getByRole("button", { name: "Cerrar el estilo" }).click();
+      await studio.getByRole("button", { name: "Descargar", exact: true }).click();
+      const anyway = studio.getByRole("button", { name: "Descargar igualmente" });
+      await anyway.waitFor({ timeout: 30_000 });
+      const [download, response] = await Promise.all([
+        studio.waitForEvent("download"),
+        studio.waitForResponse((candidate) => candidate.url().includes("/api/download")),
+        anyway.click(),
+      ]);
+      expect(response.status()).toBe(200);
+      const dir = mkdtempSync(join(tmpdir(), "retorika-e2e-sprint29-dia5-"));
+      const zipPath = join(dir, download.suggestedFilename());
+      await download.saveAs(zipPath);
+      const entries = extractAll(new Uint8Array(readFileSync(zipPath)), dir);
+      const id = entries
+        .find((path) => /^fonts\/propia-[0-9a-f]{8}-regular\.woff2$/.test(path))
+        ?.slice("fonts/propia-".length, "fonts/propia-".length + 8);
+      expect(id, entries.join("\n")).toMatch(/^[0-9a-f]{8}$/);
+      // EB Garamond is gone from the headings and the text is the pair's system letter, so the
+      // owner's are the only files under `fonts/`.
+      expect(entries.filter((path) => path.startsWith("fonts/")).sort()).toEqual([
+        `fonts/LICENCIA-propia-${id}.txt`,
+        `fonts/propia-${id}-bold.woff`,
+        `fonts/propia-${id}-regular.woff2`,
+      ]);
+      // Byte for byte the files that were chosen: uploaded as they are, never converted.
+      expect(readFileSync(join(dir, `fonts/propia-${id}-regular.woff2`))).toEqual(
+        readFileSync(REGULAR),
+      );
+      expect(readFileSync(join(dir, `fonts/propia-${id}-bold.woff`))).toEqual(readFileSync(BOLD));
+      expect(readFileSync(join(dir, `fonts/LICENCIA-propia-${id}.txt`))).toEqual(
+        readFileSync(LICENCE),
+      );
+
+      // ---- and the site, from a stranger's disk with no network ----
+      const offline = await (await browser.newContext({ offline: true })).newPage();
+      const failed: string[] = [];
+      offline.on("requestfailed", (request) => failed.push(request.url()));
+      try {
+        await offline.goto(`file://${join(dir, "index.html")}`, { waitUntil: "load" });
+        expect(await loadedFaces(offline)).toEqual(["Karla 2 400", "Karla 2 700"]);
+        expect(failed, failed.join("\n")).toEqual([]);
+        // The letter is really the file's: without the file the headline sets in the fallback,
+        // and measures differently — the test ADR 0028 measured the gallery by. The text's own
+        // width through a range: a heading is a block, and its box is as wide whatever the letter.
+        // «Without» is the same page with `fonts/` gone from the disk, in a fresh context so that
+        // nothing is served from the first one's memory.
+        const textWidth = (page: Page) =>
+          page
+            .locator("h1")
+            .first()
+            .evaluate((h) =>
+              document.fonts.ready.then(() => {
+                const range = document.createRange();
+                range.selectNodeContents(h);
+                return range.getBoundingClientRect().width;
+              }),
+            );
+        const withFace = await textWidth(offline);
+        renameSync(join(dir, "fonts"), join(dir, "sin-fuentes"));
+        const bare = await (await browser.newContext({ offline: true })).newPage();
+        try {
+          await bare.goto(`file://${join(dir, "index.html")}`, { waitUntil: "load" });
+          expect(await loadedFaces(bare)).toEqual([]);
+          const withoutFace = await textWidth(bare);
+          expect(
+            Math.abs(withFace - withoutFace),
+            `${withFace} with the face against ${withoutFace} without`,
+          ).toBeGreaterThan(1);
+        } finally {
+          await bare.close();
+        }
+      } finally {
+        await offline.close();
+      }
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+
+  it("rechaza por sus bytes lo que no es una fuente, y lo dice", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const studio = await context.newPage();
+    try {
+      const dialog = await upToTheDeclaration(studio);
+      await expect(dialog.getByLabel("Nombre con el que viajará")).toHaveValue("Karla 2");
+      // A licence text renamed .ttf: refused on its first bytes, by the dialog, before the route.
+      await dialog.locator("input[data-font-files]").setInputFiles(LICENCE);
+      await expect(
+        dialog.getByText(/«LICENCIA-propia-3f9a7c21\.txt» no es una fuente/),
+      ).toBeVisible();
+      // And the earlier choice is gone with it: «Añadir» has nothing to add.
+      await expect(dialog.getByLabel("Nombre con el que viajará")).toHaveCount(0);
+      await expect(dialog.getByRole("button", { name: "Añadir" })).toBeDisabled();
+      // Escape is «Cancelar»: back to the chooser, with nothing written.
+      await studio.keyboard.press("Escape");
+      await expect(chooser(studio)).toBeVisible();
+      await expect(chooser(studio).getByRole("radio", { name: "Propias" })).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("es una hoja en un móvil: cabe, no se sale y pasa axe", async () => {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const studio = await context.newPage();
+    try {
+      const dialog = await upToTheDeclaration(studio);
+      await expect(dialog.getByLabel("Nombre con el que viajará")).toHaveValue("Karla 2");
+      const box = await dialog.boundingBox();
+      expect(box).not.toBeNull();
+      if (box) {
+        expect(box.x).toBeGreaterThanOrEqual(-0.5);
+        expect(box.x + box.width).toBeLessThanOrEqual(390.5);
+        expect(box.y + box.height).toBeLessThanOrEqual(844.5);
+      }
+      const add = await dialog.getByRole("button", { name: "Añadir" }).boundingBox();
+      expect(add && add.y + add.height <= 844.5, "«Añadir» is under the fold").toBe(true);
+      expect(await overflowing(studio), "something spills at 390 with the import").toEqual([]);
+      await axeSerious(studio, "el diálogo de la fuente propia a 390");
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
 });

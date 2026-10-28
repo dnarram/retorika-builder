@@ -190,6 +190,83 @@ are the owner's, and the licence they declared covers *their* web. A template th
 obligation beside the field, so that the extraction, whenever it is written, finds it there rather
 than in a sprint note; there is no code for it because there is no caller.
 
+### 10. The inspection route is public, and bounded (amended on día 5, 27 October 2026)
+
+**Decided by David, 27 October 2026, at the opening of día 5**, after development reported that the
+plan's adjustment 2 rested on something that is not so. Recorded here because the import is this
+ADR's, and because he asked that the limit and the number be written in it.
+
+**Adjustment 2 is not met to the letter, and this says so.** It read: *«la ruta de inspección no es
+pública. Exige la misma sesión que `/api/download`, lee `Content-Length` antes de bufferizar y corta
+en 2 MB»*. `/api/download` has **no session**: the questionnaire and the download are anonymous by
+ADR 0034 §2, and the route has called itself «a public, unauthenticated endpoint» since sprint 3. A
+session there would have meant an account before a brand letter — and the e2e runs Supabase on a dead
+port, so no walk could have uploaded a font. The second and third halves of the adjustment are met:
+`Content-Length` is read before a byte is buffered (411 without one, 413 above 2 MiB), and the body
+is read against the same cap as it streams, because a header is a claim.
+
+**What David chose instead: public, like the download, with three conditions.**
+
+1. **Same origin, with a fallback** (`apps/editor/src/app/api/publicGuard.ts`, `isSameOrigin`).
+   `Sec-Fetch-Site` decides alone when the browser sends it — `same-origin` passes; `same-site` does
+   not, a sibling subdomain being somebody else's page. Without it (Safari before 16.4), `Origin`
+   must equal this application's public origin as `publicOrigin` reads it behind Render's proxy.
+   Neither header: 403. It keeps another website from spending a visitor's browser on our
+   decompressor; it does not stop `curl`, which writes any header it likes. A test per variant.
+2. **Twenty requests a minute per address, shared by `/api/download` and this route** (the only two
+   public endpoints that do work proportional to a stranger's bytes): a token bucket in the
+   process's memory, a 429 with `Retry-After` past it, checked after the origin and before a byte of
+   the body is read. **In memory** because the editor is one service on Render's free plan
+   (`render.yaml`, `plan: free`); a second instance would allow twenty each. The address is
+   `CF-Connecting-IP`, then `True-Client-IP`, then the first entry of `X-Forwarded-For` — Render
+   serves through Cloudflare, which overwrites the first two and whose proxy only *appends* to the
+   third. **Read from Cloudflare's documentation and Render's community answers, not measured on
+   the deployment**; `docs/runbook.md` §9 says how to check it in a minute. A request with none of
+   them shares one bucket, `unknown`. At most ten thousand addresses are held; full buckets go first.
+3. **The CPU of the worst file the caps admit, measured.** A WOFF2 of 2,038,078 bytes (under
+   `MAX_FONT_BYTES`, 2,097,152) whose single stream expands to 8,388,468 bytes (under
+   `totalSfntSize` = `MAX_FONT_EXPANDED_BYTES`, 8,388,608): about 1.98 MB of random literals in
+   64 KB blocks between runs of zeros, so brotli cannot shorten most of it. Measured on 28 October
+   2026 on this project's development laptop, on mains power, against `next dev` started three
+   times, first request after each start and five after it, the inspection's own time read from the
+   route's `Server-Timing` header:
+
+   | | cold (first request) | warm |
+   |---|---|---|
+   | run 1 | 19.0 ms | 15.8–17.5 ms |
+   | run 2 | 17.4 ms | 15.7–17.8 ms |
+   | run 3 | 19.1 ms | 15.5–16.5 ms |
+
+   **Under the 200 ms David set, so the decompression stays in the request** and no `worker_thread`
+   is added. **What the number does not cover, said rather than rounded:** Render's free instance is
+   0.1 CPU (its pricing page), so the same work may take roughly ten times as long in wall time
+   there — an estimate, not a measurement. The route answers `Server-Timing: inspect;dur=…` on every
+   request so that the deployed number is one `curl` away; if it is above 200 ms there, the condition
+   says a worker, and a worker on a tenth of a CPU still competes for the same tenth.
+
+### 11. What the download reads of the owner's bytes (día 5)
+
+`/api/download` reads two new kinds of part through **one** reader, `readFonts` — David's adjustment
+3 is that a licence file is bytes from outside too:
+
+- a `font` part's name must be exactly a face file the stylesheet names (`ownFontKeysFor`), its size
+  at most `MAX_FONT_BYTES`, and its bytes **re-sniffed as the format the record declares** — a WOFF2
+  sent under a `.ttf` name is refused, never relabelled, because `format()` was written from the
+  record; a collection and markup fall to the same sniff;
+- a `fontLicence` part's name must be exactly the licence the record names, its size at most
+  `MAX_LICENCE_BYTES` (1 MiB), and its bytes a PDF (`%PDF`) or UTF-8 with no NUL, as the record says;
+- every key the document names must arrive, and nothing it does not name may.
+
+**The body cap grows by 10 MiB, not the plan's 4**: two fonts, two faces each at 2 MiB, and a licence
+of 1 MiB beside each — 4 × 2 + 2 × 1 = 10 MiB, the exact worst case of caps that are hard. Below it,
+a document the editor lets an owner build would meet a bare 413, the failure `MAX_PHOTOS` moved into
+`downloadGate.ts` to end.
+
+**The gate says it before the request.** A face the stylesheet names whose bytes this browser no
+longer holds — a private window reloaded — **blocks** (`fontsMissing`, second after `photosFailed`,
+for its reason: the route would refuse, so «Descargar igualmente» could only fail); a face above
+300 KB **warns** (`heavyFonts`, last). One dialog draws both, as the contrast dialog draws its two.
+
 ## What is preserved
 
 - **A document chooses a row and never names a file.** Two places a row may come from; one property.
@@ -215,13 +292,14 @@ than in a sprint note; there is no code for it because there is no caller.
 
 ## What this does not decide
 
-- **The import** — inspection on the server, the dialog, the preview over `blob:` URLs, the multipart
-  parts of `/api/download`, the sniffing of the licence file, the 300 KB warning and the 2 MB refusal:
-  día 5, with David's adjustments 1, 2, 3 and 6.
+- ~~**The import**~~ — día 5, written in §10 and §11 above: the route and what bounds it, and what the
+  download reads. The rest is in the code it names and in `REVIEW.md`.
 - **The bucket** — `fuentes`, its policies, the sweep, `contentType` from the sniff and never from
   `File.type`: día 6, adjustment 7.
 - **Converting to woff2 in the browser**, and **shipping the reserved-name families whole** (sprint 30).
-- **The CEO's sentence** for the checkbox.
+- **The CEO's sentence** for the checkbox — «Confirmo que tengo licencia para usar esta fuente en mi
+  web», David's own words, and the line under it, «Tener esa licencia es responsabilidad tuya:
+  nosotros no la comprobamos.» Sent with the día 5 pull request, which waits for it.
 
 ## Consequences
 
@@ -243,4 +321,10 @@ than in a sprint note; there is no code for it because there is no caller.
 - `scripts/size-budget.ts`: the owner's line; `scripts/build-sample-site.ts` reads `fonts/` beside
   the document.
 - `docs/document-rules.md`: «A font the owner brought», with the templates' obligation.
-- The record is `docs/design/REVIEW.md`, sprint 29 día 4, written at the close.
+- `apps/editor` (día 5): `editor/fontBytes.ts` (the sniff and the caps, browser and server),
+  `editor/fontInspect.ts` (server only), `app/api/fuentes/inspeccionar/route.ts`,
+  `app/api/publicGuard.ts` (origin and limit, shared with `/api/download`), `editor/ownFonts.ts`
+  (IndexedDB `retorika.fonts`), `editor/fontImport.ts`, `questionnaire/ImportFontDialog.tsx`, the
+  chooser's own rows, `withFontUrls` for the canvas and the 320 px measurement, and the schema's two
+  verbs `addOwnFont` and `removeOwnFont`.
+- The record is `docs/design/REVIEW.md`, sprint 29 días 4 and 5, written at the close.

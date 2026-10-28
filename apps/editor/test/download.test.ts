@@ -1,9 +1,19 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { inflateRawSync } from "node:zlib";
 import { EMPTY_ANSWERS, generate, VARIANTS } from "@retorika/generator";
 import { readSampleBytes } from "@retorika/photobank/server";
-import { flattenElements, type RetorikaDocument, type Section } from "@retorika/schema";
-import { describe, expect, it } from "vitest";
+import {
+  addOwnFont,
+  flattenElements,
+  type OwnFont,
+  type RetorikaDocument,
+  type Section,
+} from "@retorika/schema";
+import { withFamily, withOwnFont } from "@retorika/tokens";
+import { beforeEach, describe, expect, it } from "vitest";
 import { POST } from "../src/app/api/download/route.ts";
+import { PUBLIC_BYTES_LIMIT } from "../src/app/api/publicGuard.ts";
 
 /**
  * Just enough of a ZIP reader to pull one file back out by name — not an independent
@@ -35,6 +45,11 @@ function extractFile(bytes: Uint8Array, path: string): string {
   }
   throw new Error(`"${path}" not found in the ZIP`);
 }
+
+// Every request here comes from no address at all, so they share the «unknown» bucket — and this
+// file posts more than the twenty a minute the route allows one caller (sprint 29 día 5). The limit
+// has its own tests in `publicGuard.test.ts`; here each test starts with a full bucket.
+beforeEach(() => PUBLIC_BYTES_LIMIT.reset());
 
 /** The exact shape a real walk through the questionnaire produces. */
 const REAL_DOCUMENT: RetorikaDocument = generate({
@@ -249,11 +264,12 @@ describe("POST /api/download", () => {
 
   it("rejects a request whose declared Content-Length is over the cap", async () => {
     // The cap rose from 256 KB to 12 MB when photos started travelling with the document
-    // (ADR 0018). It is still a cap: the header is read before a byte of the body is.
+    // (ADR 0018), and to 22 MB when the owner's own fonts did (sprint 29 día 5: 10 MiB is their
+    // exact worst case). It is still a cap: the header is read before a byte of the body is.
     const response = await POST(
       new Request("http://localhost/api/download", {
         method: "POST",
-        headers: { "Content-Length": String(13 * 1024 * 1024) },
+        headers: { "Content-Length": String(22 * 1024 * 1024 + 1) },
         body: JSON.stringify({ document: REAL_DOCUMENT }),
       }),
     );
@@ -668,5 +684,134 @@ describe("POST /api/download", () => {
       expect(extractFile(zip, "index.html")).toContain('src="assets/passwd.jpg"');
       expect(() => extractFile(zip, "../../etc/passwd.jpg")).toThrow();
     });
+  });
+});
+
+describe("POST /api/download — the owner's own fonts (sprint 29 día 5)", () => {
+  /** The corpus fixture's bytes: Karla's 400 woff2 and 700 woff, as «Karla 2», with its OFL. */
+  const fixture = (file: string): Uint8Array =>
+    new Uint8Array(
+      readFileSync(fileURLToPath(new URL(`../../../fixtures/fonts/${file}`, import.meta.url))),
+    );
+  const REGULAR = fixture("propia-3f9a7c21-regular.woff2");
+  const BOLD = fixture("propia-3f9a7c21-bold.woff");
+  const LICENCE = fixture("LICENCIA-propia-3f9a7c21.txt");
+  const KARLA_2: OwnFont = {
+    id: "3f9a7c21",
+    family: "Karla 2",
+    kind: "sans",
+    faces: [
+      { role: "regular", format: "woff2" },
+      { role: "bold", format: "woff" },
+    ],
+    licence: { declared: true, at: "2026-10-28T09:00:00.000Z" },
+    licenceFile: "txt",
+  };
+  /** Karla 2 over the headings and Gelasio from the gallery under the text: one face of each kind. */
+  const WITH_FONT: RetorikaDocument = {
+    ...addOwnFont(REAL_DOCUMENT, KARLA_2),
+    theme: withFamily(
+      withOwnFont(REAL_DOCUMENT.theme, "font.heading", KARLA_2),
+      "font.body",
+      "Gelasio",
+    ),
+  };
+  type Part = { field: "font" | "fontLicence"; name: string; bytes: Uint8Array };
+  const ALL: Part[] = [
+    { field: "font", name: "propia-3f9a7c21-regular.woff2", bytes: REGULAR },
+    { field: "font", name: "propia-3f9a7c21-bold.woff", bytes: BOLD },
+    { field: "fontLicence", name: "LICENCIA-propia-3f9a7c21.txt", bytes: LICENCE },
+  ];
+
+  async function post(doc: RetorikaDocument, parts: readonly Part[]): Promise<Response> {
+    const base = request({ document: doc });
+    const form = await base.formData();
+    for (const part of parts) {
+      const buffer = new ArrayBuffer(part.bytes.byteLength);
+      new Uint8Array(buffer).set(part.bytes);
+      form.append(part.field, new File([buffer], part.name));
+    }
+    return POST(new Request(base.url, { method: "POST", body: form }));
+  }
+
+  it("packs the owner's two faces and their licence beside the shipped face and its OFL", async () => {
+    const response = await post(WITH_FONT, ALL);
+    expect(response.status, await response.clone().text()).toBe(200);
+    const fonts = fileNames(new Uint8Array(await response.arrayBuffer()))
+      .filter((name) => name.startsWith("fonts/"))
+      .sort();
+    expect(fonts).toEqual([
+      "fonts/LICENCIA-propia-3f9a7c21.txt",
+      "fonts/OFL-Gelasio.txt",
+      "fonts/gelasio-latin-400-normal.woff2",
+      "fonts/gelasio-latin-700-normal.woff2",
+      "fonts/propia-3f9a7c21-bold.woff",
+      "fonts/propia-3f9a7c21-regular.woff2",
+    ]);
+  });
+
+  it("refuses a part the document does not name, rather than dropping it", async () => {
+    const stray: Part = { field: "font", name: "propia-ffffffff-regular.woff2", bytes: REGULAR };
+    const response = await post(WITH_FONT, [...ALL, stray]);
+    expect(response.status).toBe(400);
+    expect(await response.text()).toMatch(/not named by the document/);
+  });
+
+  it("refuses bytes that are not the format the record declares — relabelled, never", async () => {
+    const swapped: Part[] = [
+      { field: "font", name: "propia-3f9a7c21-regular.woff2", bytes: BOLD },
+      { field: "font", name: "propia-3f9a7c21-bold.woff", bytes: BOLD },
+      ALL[2] as Part,
+    ];
+    const response = await post(WITH_FONT, swapped);
+    expect(response.status).toBe(400);
+    expect(await response.text()).toMatch(/is woff, not the woff2/);
+  });
+
+  it("refuses a collection and an SVG sent under a face's name", async () => {
+    for (const bytes of [
+      new TextEncoder().encode("ttcf\0\x02\0\0"),
+      new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"/>'),
+    ]) {
+      const parts: Part[] = [
+        { field: "font", name: "propia-3f9a7c21-regular.woff2", bytes },
+        ...ALL.slice(1),
+      ];
+      expect((await post(WITH_FONT, parts)).status).toBe(400);
+    }
+  });
+
+  it("refuses a document whose face was not sent", async () => {
+    const response = await post(WITH_FONT, [ALL[0] as Part, ALL[2] as Part]);
+    expect(response.status).toBe(400);
+    expect(await response.text()).toMatch(/propia-3f9a7c21-bold\.woff", which was not sent/);
+  });
+
+  it("sniffs the licence through the same reader: a binary or a PDF is not the .txt declared", async () => {
+    for (const bytes of [REGULAR, new TextEncoder().encode("%PDF-1.4\n")]) {
+      const parts: Part[] = [
+        ...ALL.slice(0, 2),
+        { field: "fontLicence", name: "LICENCIA-propia-3f9a7c21.txt", bytes },
+      ];
+      const response = await post(WITH_FONT, parts);
+      expect(response.status).toBe(400);
+      expect(await response.text()).toMatch(/is not the txt declared/);
+    }
+  });
+
+  it("refuses a face over 2 MB with a 413, before sniffing it", async () => {
+    const big = new Uint8Array(2 * 1024 * 1024 + 1);
+    big.set(REGULAR);
+    const parts: Part[] = [
+      { field: "font", name: "propia-3f9a7c21-regular.woff2", bytes: big },
+      ...ALL.slice(1),
+    ];
+    expect((await post(WITH_FONT, parts)).status).toBe(413);
+  });
+
+  it("takes no part for a font no stack names, which travels nowhere", async () => {
+    const unnamed = addOwnFont(REAL_DOCUMENT, KARLA_2);
+    expect((await post(unnamed, [])).status).toBe(200);
+    expect((await post(unnamed, [ALL[0] as Part])).status).toBe(400);
   });
 });
