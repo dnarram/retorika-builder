@@ -1,9 +1,10 @@
-import { SHIPPABLE_FAMILIES } from "@retorika/renderer";
-import type { FontKind, Theme } from "@retorika/schema";
+import { ownFaceFile, SHIPPABLE_FAMILIES } from "@retorika/renderer";
+import type { FontKind, OwnFont, Theme } from "@retorika/schema";
 import {
   type FontKey,
   GALLERY_FAMILIES,
   identifyFamily,
+  identifyOwnFont,
   identifyTypePair,
   TYPE_PAIRS,
 } from "@retorika/tokens";
@@ -116,6 +117,52 @@ export function galleryFaceCss(
     .join("\n");
 }
 
+/** What an object URL may look like before it is written into the editor's own stylesheet. */
+const OBJECT_URL = /^blob:[A-Za-z0-9:/._-]+$/;
+
+/** The `format()` hint per stored format, as the renderer writes it for the page. */
+const FORMAT_HINT: Readonly<Record<string, string>> = {
+  woff2: "woff2",
+  woff: "woff",
+  ttf: "truetype",
+  otf: "opentype",
+};
+
+/**
+ * The `@font-face` rules that draw the owner's own fonts **in the editor's own document** — the
+ * chooser's rows and the panel's — from the object URLs of their bytes (sprint 29 día 5).
+ *
+ * One face per font, the one a specimen is drawn in: the regular, or the variable file with the
+ * range `fvar` gave it. A font whose bytes have not arrived is left out rather than pointed at
+ * nothing, so its row draws the fallback — what the canvas does too. The family is checked
+ * against the pattern and the URL against `blob:` before either is written, the second lock this
+ * file keeps for the gallery's own sheet: the record was parsed, the URL was minted here, and
+ * neither is trusted on that account.
+ */
+export function ownFaceCss(
+  fonts: readonly OwnFont[],
+  fontUrls: ReadonlyMap<string, string>,
+): string {
+  return fonts
+    .flatMap((font) => {
+      const face = font.faces.find((candidate) => candidate.role !== "bold");
+      if (face === undefined) return [];
+      const url = fontUrls.get(ownFaceFile(font, face));
+      if (url === undefined) return [];
+      if (!FAMILY_SHAPE.test(font.family)) {
+        throw new Error(`letterGallery: unwritable family "${font.family}"`);
+      }
+      if (!OBJECT_URL.test(url)) throw new Error(`letterGallery: "${url}" is not an object URL`);
+      const weight = face.role === "variable" ? `${face.wght[0]} ${face.wght[1]}` : "400";
+      return [
+        `@font-face{font-family:'${font.family}';` +
+          `src:url("${url}") format("${FORMAT_HINT[face.format]}");` +
+          `font-weight:${weight};font-style:normal;font-display:swap}`,
+      ];
+    })
+    .join("\n");
+}
+
 /**
  * What one of the panel's two rows — «Titulares», «Texto» — says and is drawn in.
  *
@@ -141,26 +188,43 @@ export function galleryFaceCss(
 export interface FamilyRow {
   /** The shipped family, when the stack begins with one; otherwise `undefined`. */
   family: string | undefined;
+  /** The owner's own font, when the stack begins with one (sprint 29 día 5): named outright and
+   * drawn from its bytes, like a gallery family, because its face travels like one. */
+  own: OwnFont | undefined;
   /** What the row says. */
   text: string;
   /** The `font-family` the row's text is drawn in. */
   stack: string;
 }
 
-export function familyRowFor(theme: Theme, key: FontKey): FamilyRow {
+export function familyRowFor(
+  theme: Theme,
+  key: FontKey,
+  fonts: readonly OwnFont[] = [],
+): FamilyRow {
+  const own = identifyOwnFont(theme, key, fonts);
+  if (own !== undefined) {
+    return { family: undefined, own, text: own.family, stack: `'${own.family}'` };
+  }
   const family = identifyFamily(theme, key)?.family;
-  if (family !== undefined) return { family, text: family, stack: `'${family}'` };
+  if (family !== undefined) return { family, own: undefined, text: family, stack: `'${family}'` };
   const pair =
     identifyTypePair(theme) ?? TYPE_PAIRS.find((candidate) => candidate.fonts[key] === theme[key]);
   if (pair !== undefined) {
     const name = tokensEs[pair.nameKey as keyof typeof tokensEs] ?? pair.nameKey;
     return {
       family: undefined,
+      own: undefined,
       text: es["editor.style.pairLetter"].replace("{pair}", name),
       stack: theme[key],
     };
   }
-  return { family: undefined, text: es["editor.style.unknownLetter"], stack: theme[key] };
+  return {
+    family: undefined,
+    own: undefined,
+    text: es["editor.style.unknownLetter"],
+    stack: theme[key],
+  };
 }
 
 /**
@@ -181,10 +245,14 @@ export function familiesHelpText(): string {
  * a family below by its name, and then that sentence would be telling an owner their letter is
  * nowhere while it sits ticked a few rows down.
  */
-export function typePairNoteText(theme: Theme): string {
-  const chosen =
-    identifyFamily(theme, "font.heading") !== undefined ||
-    identifyFamily(theme, "font.body") !== undefined;
+export function typePairNoteText(theme: Theme, fonts: readonly OwnFont[] = []): string {
+  // An own font is chosen by name too (sprint 29 día 5): telling its owner the letter is «not in
+  // this list» while it sits ticked in the chooser would be the sentence this function exists to
+  // avoid.
+  const chosen = (["font.heading", "font.body"] as const).some(
+    (key) =>
+      identifyFamily(theme, key) !== undefined || identifyOwnFont(theme, key, fonts) !== undefined,
+  );
   return chosen ? es["editor.style.fromGallery"] : es["editor.style.noTypePair"];
 }
 

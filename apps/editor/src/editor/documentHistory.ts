@@ -8,6 +8,7 @@ import type {
   MarkRange,
   MarkRun,
   MobilePatchEdit,
+  OwnFont,
   PlacementEdit,
   RetorikaDocument,
   Section,
@@ -23,6 +24,7 @@ import {
   addEntryPage as addEntryPageToDoc,
   addEntry as addEntryToDoc,
   addItem as addItemToDoc,
+  addOwnFont as addOwnFontToDoc,
   applyMark as applyMarkInDoc,
   bindList as bindListInDoc,
   clearSlot as clearSlotInDoc,
@@ -50,6 +52,7 @@ import {
   removeEntry as removeEntryFromDoc,
   removeItem as removeItemFromDoc,
   removeMark as removeMarkInDoc,
+  removeOwnFont as removeOwnFontFromDoc,
   renameCollection as renameCollectionInDoc,
   renamePage as renamePageInDoc,
   revertSection as revertSectionInDoc,
@@ -156,6 +159,14 @@ export type SnapshotCause =
    * choosing.
    */
   | { type: "chooseFamily"; key: FontKey }
+  /**
+   * A font the owner brought, added and chosen for one half in one step (sprint 29 día 5): «Añadir»
+   * in the import dialog writes the record and the stack together, so one «Deshacer» takes back
+   * both and never leaves a record nobody chose or a stack naming a record that is gone.
+   * `removeOwnFont` is «Quitar», which also rewrites any stack that named it first.
+   */
+  | { type: "addOwnFont"; fontId: string }
+  | { type: "removeOwnFont"; fontId: string }
   /** The other two causes that name no section: what a shared link says about the whole site
    * (ADR 0029). Neither writes a word onto the page, so neither is a content cause — the delete
    * toast asking «did somebody write here» must not start saying yes because a domain was typed. */
@@ -242,6 +253,10 @@ export type HistoryAction =
   | { type: "chooseFamily"; variant: number; key: FontKey; theme: Theme }
   | { type: "settleChooser"; variant: number }
   | { type: "discardChooser"; variant: number }
+  /** `theme` is composed by `Variants` with `withOwnFont`, the way `chooseFamily`'s is with
+   * `withFamily`. */
+  | { type: "addOwnFont"; variant: number; font: OwnFont; theme: Theme }
+  | { type: "removeOwnFont"; variant: number; fontId: string }
   | { type: "setSiteDescription"; variant: number; text: string }
   | { type: "setSiteUrl"; variant: number; url: string | undefined }
   | { type: "setVariant"; variant: number; sectionId: string; variantId: string }
@@ -715,6 +730,33 @@ function discardChooser(history: History): History {
   const before = history.past.at(-1);
   if (!before) return history;
   return { past: history.past.slice(0, -1), present: before, future: [], amendable: false };
+}
+
+/**
+ * A font the owner brought, recorded and chosen for one half — one step, never amendable, so a
+ * chooser session open behind the import dialog is closed by it rather than amended into it. The
+ * schema's `addOwnFont` refuses a third font or a taken name; `setTheme` then writes the stack.
+ */
+function addOwnFont(history: History, font: OwnFont, theme: Theme): History {
+  const document = setThemeInDoc(addOwnFontToDoc(history.present.document, font), theme);
+  return {
+    past: [...history.past, history.present].slice(-LIMIT),
+    present: { document, cause: { type: "addOwnFont", fontId: font.id } },
+    future: [],
+    amendable: false,
+  };
+}
+
+/** «Quitar»: the record goes, and so does its family from any stack that named it first. Its bytes
+ * stay in the browser, so undoing this brings back a font that still draws (`ownFonts.ts`). */
+function removeOwnFont(history: History, fontId: string): History {
+  const document = removeOwnFontFromDoc(history.present.document, fontId);
+  return {
+    past: [...history.past, history.present].slice(-LIMIT),
+    present: { document, cause: { type: "removeOwnFont", fontId } },
+    future: [],
+    amendable: false,
+  };
 }
 
 /**
@@ -1309,6 +1351,10 @@ function apply(history: History, action: HistoryAction): History {
       return settleChooser(history);
     case "discardChooser":
       return discardChooser(history);
+    case "addOwnFont":
+      return addOwnFont(history, action.font, action.theme);
+    case "removeOwnFont":
+      return removeOwnFont(history, action.fontId);
     case "setSiteDescription":
       return setSiteField(history, "siteDescription", action.text.trim(), {
         type: "setSiteDescription",

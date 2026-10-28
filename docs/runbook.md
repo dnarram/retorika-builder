@@ -1,11 +1,12 @@
 # Runbook
 
 What to do when something breaks, written before it happens (protocol Part 17). Part 17 names
-four foreseeable cases. **Three of them are here**, and **five more** have been added that Part 17
+four foreseeable cases. **Three of them are here**, and **six more** have been added that Part 17
 could not have named because the stack they belong to did not exist when it was written: a paused
 or unreachable database, an account deleted that should not have been, running the sweep that
-ends accounts, a saved web that opens without one of its photographs, and an error that Sentry
-reports. **Eight cases in total** — counted against the headings each time this file grows,
+ends accounts, a saved web that opens without one of its photographs, an error that Sentry
+reports, and a public route that answers 403 or 429. **Nine cases in total** — counted against the
+headings each time this file grows,
 because the first draft of this paragraph said "a fifth" when there were two, the second said
 "five" the day a sixth was added, and the third went on saying "six" after §7 arrived — found on
 13 October 2026, the day §8 was written, by counting the headings as this sentence asks.
@@ -516,3 +517,63 @@ changed name between 10 and 11 and the old one went on type-checking as if it di
   is the thing to refuse in review.
 - **Do not set the DSN in `render.yaml` or in any file.** It is set in Render's dashboard;
   `sync: false` is the line that keeps it there.
+
+---
+
+## 9. A download or a font upload answers 403 or 429
+
+> **New with sprint 29 día 5** (ADR 0056 §10). The two public routes that work on a stranger's
+> bytes — `/api/download` and `/api/fuentes/inspeccionar` — share a limit of **twenty requests a
+> minute per address**, and the inspection route also refuses a request that does not come from a
+> page of this application. Neither needs an account: both are anonymous by ADR 0034 §2.
+
+### First question: which code, and from where?
+
+- **403** comes from the inspection route only, and means the request did not say it came from our
+  page: no `Sec-Fetch-Site: same-origin`, and no `Origin` equal to the public origin. From a browser
+  on the editor this should never happen. If an owner reports it, ask which browser: a browser that
+  sends neither header is one this product has not met, and `isSameOrigin` in
+  `apps/editor/src/app/api/publicGuard.ts` is where to read why. **If it is every owner at once,
+  check `APP_ORIGIN`** in Render's dashboard: the `Origin` fallback compares against it.
+- **429** is the limit. One owner pressing «Descargar» and uploading fonts in one minute should not
+  reach twenty; an office behind one address, several people at once, can. `Retry-After` says how
+  many seconds until the next token, and both places the editor meets it — the import dialog and
+  the download — say «Espera un minuto y vuelve a intentarlo» rather than «try again».
+
+### Checking that the limit counts addresses and not everybody together
+
+The address is read from `CF-Connecting-IP`, then `True-Client-IP`, then the first entry of
+`X-Forwarded-For`. That order was read from documentation, not measured on Render. If none of the
+three arrived, every request would land in one bucket called `unknown` — and the whole product would
+share twenty requests a minute. One minute settles it:
+
+```sh
+# From one connection: the 21st inside a minute should be 429.
+for i in $(seq 1 21); do
+  curl -s -o /dev/null -w "%{http_code} " -H "sec-fetch-site: same-origin" \
+    --data-binary @some-font.woff2 https://retorika-builder.onrender.com/api/fuentes/inspeccionar
+done; echo
+# Then, at once, from a different network (a phone's data): the first should be 200.
+```
+
+If the second network is refused too, the address is not being read: every caller is `unknown`.
+Look at what Render forwards by logging the three headers once from the route, and fix the order in
+`clientAddress` — not the limit.
+
+### Re-measuring the cost of an inspection
+
+Every answer of the inspection route carries `Server-Timing: inspect;dur=<ms>`, the time it held
+the process. ADR 0056 §10 measured 17–19 ms for the worst file the caps admit on the development
+laptop, and says the free instance's tenth of a CPU may make that ten times longer. To read it on
+the deployment, send that file (or any large `.woff2`) with the `curl` above and read the header.
+**Above 200 ms, David's condition is a `worker_thread`** with the same caps.
+
+### What not to touch
+
+- **Do not raise the limit to answer one complaint.** Twenty a minute is per address, and an office
+  behind one address is the case to look at first — a higher number is a higher number for a flood
+  too.
+- **Do not remove the origin check «because curl gets past it».** It is not there for `curl`; it is
+  there so that another website cannot spend its visitors' browsers on our decompressor.
+- **Do not run a second instance without moving the limit out of memory.** Each process counts on
+  its own, so two instances allow forty — `render.yaml` would say so before anybody noticed.

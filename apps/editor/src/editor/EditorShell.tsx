@@ -709,7 +709,7 @@ export function EditorShell({
   currentPageId: string | undefined;
   onSelectPage: (pageId: string) => void;
   onBack: () => void;
-  downloadState: "idle" | "preparing" | "downloading" | "error";
+  downloadState: "idle" | "preparing" | "downloading" | "error" | "busy";
   onDownload: () => void;
   /**
    * The building screen, drawn **outside** the shell's root so the root can be `inert` beneath it

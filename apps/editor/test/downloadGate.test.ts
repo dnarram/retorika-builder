@@ -5,6 +5,7 @@ import { EMPTY_ANSWERS, GALLERY_SAMPLE_COUNT, generate } from "@retorika/generat
 import {
   FINE_COLUMNS,
   MAX_PAGES,
+  type OwnFont,
   parseDocument,
   type RetorikaDocument,
   SCHEMA_VERSION,
@@ -538,5 +539,86 @@ describe("every gate kind has a dialog", () => {
         `downloadDialog?.kind === "${kind}"`,
       );
     }
+  });
+});
+
+describe("the gate with the owner's own fonts in it (sprint 29 día 5)", () => {
+  const CASA: OwnFont = {
+    id: "3f9a7c21",
+    family: "Casa Trufa",
+    kind: "serif",
+    faces: [
+      { role: "regular", format: "ttf" },
+      { role: "bold", format: "woff2" },
+    ],
+    licence: { declared: true, at: "2026-10-28T09:00:00.000Z" },
+    licenceFile: "pdf",
+  };
+  const named: RetorikaDocument = {
+    ...plain,
+    fonts: [CASA],
+    theme: { ...plain.theme, "font.heading": "'Casa Trufa', Georgia, serif" },
+  };
+  const files = (regular: number, bold = 40_000) =>
+    new Map([
+      ["propia-3f9a7c21-regular.ttf", { size: regular }],
+      ["propia-3f9a7c21-bold.woff2", { size: bold }],
+      ["LICENCIA-propia-3f9a7c21.pdf", { size: 90_000 }],
+    ]);
+
+  it("lets a font whose files are all here through", () => {
+    expect(downloadGateFor(counts({}), named, new Set(), [], [], files(40_000))).toEqual({
+      kind: "ready",
+    });
+  });
+
+  it("blocks when a file of a named font is gone — a face, or the licence the record names", () => {
+    for (const gone of ["propia-3f9a7c21-bold.woff2", "LICENCIA-propia-3f9a7c21.pdf"]) {
+      const held = files(40_000);
+      held.delete(gone);
+      expect(downloadGateFor(counts({}), named, new Set(), [], [], held), gone).toEqual({
+        kind: "fontsMissing",
+        families: ["Casa Trufa"],
+      });
+    }
+    // Before every warning, and «Descargar igualmente» cannot pass it: the route would refuse.
+    const gate = downloadGateFor(
+      counts({ sample: 2, total: 2 }),
+      named,
+      new Set(["photos", "contrast", "overflow", "layout", "fonts"]),
+      [],
+      [],
+      new Map(),
+    );
+    expect(gate.kind).toBe("fontsMissing");
+  });
+
+  it("asks nothing about a font no stack names, which travels nowhere", () => {
+    const unnamed = { ...plain, fonts: [CASA] };
+    expect(downloadGateFor(counts({}), unnamed, new Set(), [], [], new Map())).toEqual({
+      kind: "ready",
+    });
+  });
+
+  it("warns above 300 KB per face and not at it, last of the warnings, and goes past once accepted", () => {
+    expect(downloadGateFor(counts({}), named, new Set(), [], [], files(300 * 1024)).kind).toBe(
+      "ready",
+    );
+    expect(downloadGateFor(counts({}), named, new Set(), [], [], files(400 * 1024))).toEqual({
+      kind: "heavyFonts",
+      files: [{ family: "Casa Trufa", kb: 400, woff2: false }],
+    });
+    const photosFirst = downloadGateFor(
+      counts({ sample: 1, total: 1 }),
+      named,
+      new Set(),
+      [],
+      [],
+      files(400 * 1024),
+    );
+    expect(photosFirst.kind).toBe("warn");
+    expect(
+      downloadGateFor(counts({}), named, new Set(["fonts"]), [], [], files(400 * 1024)).kind,
+    ).toBe("ready");
   });
 });

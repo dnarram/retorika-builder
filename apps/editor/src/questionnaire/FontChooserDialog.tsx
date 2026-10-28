@@ -1,18 +1,18 @@
 "use client";
 
-import type { Theme } from "@retorika/schema";
-import type { FontKey } from "@retorika/tokens";
+import { MAX_OWN_FONTS, type OwnFont, type Theme } from "@retorika/schema";
+import { type FontKey, identifyOwnFont } from "@retorika/tokens";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   type ChooserRow,
   chooserRows,
   countText,
   initiallyRevealed,
-  KIND_FILTERS,
   type KindFilter,
+  kindFiltersFor,
   sampleLine,
 } from "../editor/fontChooser.ts";
-import { galleryFaceCss } from "../editor/letterGallery.ts";
+import { galleryFaceCss, ownFaceCss } from "../editor/letterGallery.ts";
 import { useFocusTrap } from "../editor/useFocusTrap.ts";
 import es from "../locales/es.json" with { type: "json" };
 import { TextField } from "./ui.tsx";
@@ -53,6 +53,12 @@ import { TextField } from "./ui.tsx";
  * `revealed`: the first screen and the chosen one on open, then whatever the `IntersectionObserver`
  * sees approaching. The set only grows, and it unmounts with the dialog — which is why this is a
  * `<style>` and not the `FontFace` API, which would have to be told to forget.
+ *
+ * **The owner's own fonts come first** (sprint 29 día 5, ADR 0056): at most two rows, in the same
+ * radio group, drawn from the object URLs of their bytes by `ownFaceCss` — never the gallery's
+ * sheet, which would refuse a family it does not ship — with «Tuya» where a gallery row names its
+ * species, a «Propias» chip once there is one, and «Quitar» beside the label rather than inside it.
+ * «Subir mi fuente» sits after the group: a button, not a row to choose, so the arrows walk past it.
  */
 export interface FontChooserDialogProps {
   theme: Theme;
@@ -60,7 +66,17 @@ export interface FontChooserDialogProps {
   fontKey: FontKey;
   /** The business's name, which is what every specimen is set in. */
   siteName: string;
+  /** The fonts the owner brought (sprint 29 día 5), listed first, and the object URLs their rows
+   * are drawn from. */
+  fonts: readonly OwnFont[];
+  fontUrls: ReadonlyMap<string, string>;
   onPick: (family: string) => void;
+  /** One of the owner's own fonts chosen — the same session step as a gallery row. */
+  onPickOwn: (font: OwnFont) => void;
+  /** «Subir mi fuente»: the dialog gives way to the import dialog for this same half. */
+  onUpload: () => void;
+  /** «Quitar»: the record goes, and any stack naming it first is rewritten. */
+  onRemove: (font: OwnFont) => void;
   /** «Hecho»: the session's step is closed and the dialog goes. */
   onDone: () => void;
   /** Escape: the letter returns to what it was on open, and the dialog goes. */
@@ -75,7 +91,12 @@ export function FontChooserDialog({
   theme,
   fontKey,
   siteName,
+  fonts,
+  fontUrls,
   onPick,
+  onPickOwn,
+  onUpload,
+  onRemove,
   onDone,
   onCancel,
 }: FontChooserDialogProps) {
@@ -86,11 +107,20 @@ export function FontChooserDialog({
   const list = useRef<HTMLDivElement>(null);
 
   const [query, setQuery] = useState("");
-  const [kind, setKind] = useState<KindFilter>("all");
+  const [chip, setKind] = useState<KindFilter>("all");
+  const chips = kindFiltersFor(fonts);
+  // «Propias» goes when the last own font does; a chip that is no longer offered reads as «Todas».
+  const kind = chips.includes(chip) ? chip : "all";
   const rows = useMemo(
-    () => chooserRows(theme, fontKey, query, kind),
-    [theme, fontKey, query, kind],
+    () => chooserRows(theme, fontKey, query, kind, fonts),
+    [theme, fontKey, query, kind, fonts],
   );
+  /** The own font whose «Quitar» is asking first, because the site uses it. */
+  const [removing, setRemoving] = useState<string | null>(null);
+  const inUse = (font: OwnFont): ("font.heading" | "font.body")[] =>
+    (["font.heading", "font.body"] as const).filter(
+      (key) => identifyOwnFont(theme, key, fonts)?.id === font.id,
+    );
   const [revealed, setRevealed] = useState(() => initiallyRevealed(rows));
 
   useEffect(() => {
@@ -112,6 +142,7 @@ export function FontChooserDialog({
       },
       { root, rootMargin: REVEAL_MARGIN },
     );
+    // Gallery rows only: an own font's face is declared by `ownFaceCss` from bytes in memory.
     for (const row of root.querySelectorAll<HTMLElement>("[data-family]")) observer.observe(row);
     return () => observer.disconnect();
     // The rows are all mounted on the first render and never change identity, so the observer is
@@ -134,7 +165,7 @@ export function FontChooserDialog({
         tabIndex={-1}
         className="flex max-h-full w-full max-w-[520px] flex-col gap-4 rounded-ui-xl bg-ui-surface p-6 shadow-ui-3 phone:max-h-[85dvh] phone:rounded-b-none"
       >
-        <style>{galleryFaceCss([...revealed])}</style>
+        <style>{`${galleryFaceCss([...revealed])}\n${ownFaceCss(fonts, fontUrls)}`}</style>
 
         <div className="flex flex-col gap-1">
           <h2 id={titleId} className="m-0 text-[17px] font-bold text-ui-ink">
@@ -162,7 +193,7 @@ export function FontChooserDialog({
               finds nothing new to learn here. */}
           <fieldset className="m-0 flex flex-wrap gap-2 border-0 p-0">
             <legend className="sr-only">{es["editor.style.chooser.kinds"]}</legend>
-            {KIND_FILTERS.map((option) => {
+            {chips.map((option) => {
               const selected = kind === option;
               return (
                 <label
@@ -204,23 +235,65 @@ export function FontChooserDialog({
         <div ref={list} className="min-h-0 overflow-y-auto">
           <fieldset className="m-0 flex flex-col gap-1.5 border-0 p-0">
             <legend className="sr-only">{title}</legend>
-            {rows.map((row) => (
-              <SpecimenRow
-                key={row.family}
-                row={row}
-                group={`${id}-${fontKey}`}
-                sample={sample}
-                onPick={onPick}
-              />
-            ))}
+            {rows.map((row) =>
+              row.own === undefined ? (
+                <SpecimenRow
+                  key={row.family}
+                  row={row}
+                  group={`${id}-${fontKey}`}
+                  sample={sample}
+                  onPick={onPick}
+                />
+              ) : (
+                <OwnRow
+                  key={row.own.id}
+                  row={row}
+                  font={row.own}
+                  group={`${id}-${fontKey}`}
+                  sample={sample}
+                  inUse={inUse(row.own)}
+                  confirming={removing === row.own.id}
+                  onPick={onPickOwn}
+                  onAskRemove={(font) => {
+                    if (inUse(font).length === 0) onRemove(font);
+                    else setRemoving(font.id);
+                  }}
+                  onConfirmRemove={(font) => {
+                    setRemoving(null);
+                    onRemove(font);
+                  }}
+                  onCancelRemove={() => setRemoving(null)}
+                />
+              ),
+            )}
           </fieldset>
+          {/* The owner's own letter, brought in (sprint 29 día 5). After the group and outside it:
+              it is a button, not a row to choose, so the arrows walk past it and Tab reaches it. Two
+              fonts at most (ADR 0056 §2), and the line under it says why it is off at two. */}
+          <div className="mt-3 flex flex-col gap-1">
+            <button
+              type="button"
+              onClick={onUpload}
+              disabled={fonts.length >= MAX_OWN_FONTS}
+              className="ui-interactive flex h-16 w-full shrink-0 cursor-pointer flex-col items-start justify-center gap-0.5 rounded-ui border border-dashed border-ui-border-strong bg-ui-surface px-4 text-left hover:border-ui-brand disabled:cursor-default disabled:opacity-60"
+            >
+              <span className="text-[15px] font-semibold text-ui-ink">
+                {es["editor.style.chooser.upload"]}
+              </span>
+              <span className="text-[12px] text-ui-muted">
+                {es["editor.style.chooser.uploadHelp"]}
+              </span>
+            </button>
+            {fonts.length >= MAX_OWN_FONTS ? (
+              <p className="m-0 text-[12px] leading-snug text-ui-muted">
+                {es["editor.style.chooser.uploadFull"]}
+              </p>
+            ) : null}
+          </div>
           {/* David's condition 2: the families an owner may look for and not find are named, with
-              the reason. Under the list, where the search for one ends. It does not yet say how to
-              bring one in — «Subir mi fuente» is día 5's, and this line gains that clause in the
-              same pull request as the button, never before it exists. */}
-          <p className="m-0 mt-3 text-[12px] leading-snug text-ui-muted">
-            {es["editor.style.chooser.notIncluded"]}
-          </p>
+              the reason — and, since the button above exists, the way to bring one in. Under the
+              list, where the search for one ends. */}
+          <NotIncludedLine />
         </div>
 
         <div className="flex justify-end">
@@ -296,5 +369,146 @@ function SpecimenRow({
         {es[`editor.style.chooser.kind.${row.kind}`]}
       </span>
     </label>
+  );
+}
+
+/** The line about the families that are not here, with fonts.google.com as a link — the editor's
+ * own page, so a new tab is the right way to leave it (nothing here publishes). */
+function NotIncludedLine() {
+  const [before, after] = es["editor.style.chooser.notIncluded"].split("{site}");
+  return (
+    <p className="m-0 mt-3 text-[12px] leading-snug text-ui-muted">
+      {before}
+      <a
+        href="https://fonts.google.com"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-ui-brand-deep underline"
+      >
+        {es["editor.style.chooser.notIncludedSite"]}
+      </a>
+      {after}
+    </p>
+  );
+}
+
+/**
+ * One of the owner's own fonts: the same specimen as a gallery row — its name in its own face, the
+ * business's name under it — with «TUYA» where a gallery row says its species, and «Quitar» beside
+ * it. **The button sits beside the `<label>` and never inside it**, because a button inside a label
+ * also checks the radio it labels: pressing «Quitar» would first choose the font it removes.
+ *
+ * «Quitar» asks first only when the site uses the font, and says where: removing it rewrites those
+ * stacks to their fallback (`removeOwnFont`), which is a change the owner sees on every page.
+ */
+function OwnRow({
+  row,
+  font,
+  group,
+  sample,
+  inUse,
+  confirming,
+  onPick,
+  onAskRemove,
+  onConfirmRemove,
+  onCancelRemove,
+}: {
+  row: ChooserRow;
+  font: OwnFont;
+  group: string;
+  sample: string;
+  inUse: readonly ("font.heading" | "font.body")[];
+  confirming: boolean;
+  onPick: (font: OwnFont) => void;
+  onAskRemove: (font: OwnFont) => void;
+  onConfirmRemove: (font: OwnFont) => void;
+  onCancelRemove: () => void;
+}) {
+  const where =
+    inUse.length === 2
+      ? es["editor.style.chooser.removeWhere.both"]
+      : inUse[0] === "font.heading"
+        ? es["editor.style.chooser.removeWhere.heading"]
+        : es["editor.style.chooser.removeWhere.body"];
+  return (
+    <div hidden={!row.visible} data-own-font={font.id} className="flex flex-col gap-1.5">
+      <div className="flex items-stretch gap-2">
+        <label
+          className={
+            "ui-interactive relative flex h-16 min-w-0 flex-1 shrink-0 cursor-pointer items-center justify-between gap-3 rounded-ui border px-4 " +
+            (row.chosen
+              ? "border-ui-brand bg-ui-brand-surface"
+              : "border-ui-border bg-ui-surface hover:border-ui-border-strong")
+          }
+        >
+          <input
+            type="radio"
+            name={group}
+            value={font.family}
+            checked={row.chosen}
+            onChange={() => onPick(font)}
+            className="absolute h-px w-px opacity-0"
+          />
+          <span
+            className="flex min-w-0 flex-col gap-0.5"
+            style={{ fontFamily: `'${font.family}'` }}
+          >
+            <span
+              className={
+                "truncate text-[18px] leading-tight text-ui-ink " +
+                (row.chosen ? "font-semibold" : "")
+              }
+            >
+              {font.family}
+            </span>
+            <span aria-hidden="true" className="truncate text-[13px] leading-tight text-ui-muted">
+              {sample}
+            </span>
+          </span>
+          <span
+            aria-hidden="true"
+            className="shrink-0 text-[11px] font-semibold tracking-[0.06em] text-ui-muted"
+          >
+            {es["editor.style.chooser.ownTag"]}
+          </span>
+        </label>
+        <button
+          type="button"
+          aria-label={es["editor.style.chooser.removeLabel"].replace("{family}", font.family)}
+          onClick={() => onAskRemove(font)}
+          className="ui-interactive shrink-0 cursor-pointer rounded-ui border border-ui-border bg-ui-surface px-3 text-[13px] font-semibold text-ui-ink hover:border-ui-border-strong"
+        >
+          {es["editor.style.chooser.remove"]}
+        </button>
+      </div>
+      {confirming ? (
+        <div
+          role="alert"
+          className="flex flex-col gap-2 rounded-ui-sm bg-ui-brand-surface px-3 py-2"
+        >
+          <p className="m-0 text-[13px] leading-snug text-ui-ink">
+            {es["editor.style.chooser.removeInUse"]
+              .replace("{family}", font.family)
+              .replace("{where}", where)}
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => onConfirmRemove(font)}
+              className="h-8 cursor-pointer rounded-ui-sm border-0 bg-ui-brand px-3 text-[13px] font-semibold text-white"
+            >
+              {es["editor.style.chooser.removeConfirm"]}
+            </button>
+            <button
+              type="button"
+              onClick={onCancelRemove}
+              className="ui-interactive h-8 cursor-pointer rounded-ui-sm border border-ui-border bg-ui-surface px-3 text-[13px] font-semibold text-ui-ink hover:border-ui-border-strong"
+            >
+              {es["editor.style.chooser.removeCancel"]}
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }

@@ -10,7 +10,7 @@ import {
   variantsFor,
 } from "@retorika/catalog";
 import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
-import { buildCss, render, sectionMenuEntries } from "@retorika/renderer";
+import { buildCss, ownFontsFor, render, sectionMenuEntries } from "@retorika/renderer";
 import {
   bindList,
   canFoldPage,
@@ -35,6 +35,7 @@ import {
   type MobilePatchEdit,
   marksAfterTrim,
   marksFor,
+  type OwnFont,
   type Placement,
   type PlacementEdit,
   type PresetShape,
@@ -133,6 +134,7 @@ import { toolbarFamilyLabel } from "../editor/letterGallery.ts";
 import { LOOK_AHEAD_DEADLINE_MS, lookAheadStep } from "../editor/lookAhead.ts";
 import { menuStateFor } from "../editor/menuState.ts";
 import { measureOverflow } from "../editor/overflowCheck.ts";
+import { type FontFileHandle, ownFontFiles, type StoredFontFile } from "../editor/ownFonts.ts";
 import {
   chrome,
   HISTORY_TOUCHED_ATTRIBUTE,
@@ -141,7 +143,7 @@ import {
   takeHistoryText,
 } from "../editor/patchCanvas.ts";
 import { countPhotos, listPhotos, type PhotoState } from "../editor/photoInventory.ts";
-import { withPhotoUrls } from "../editor/previewDocument.ts";
+import { withFontUrls, withPhotoUrls } from "../editor/previewDocument.ts";
 import { record, serialOf } from "../editor/probe.ts";
 import {
   axes,
@@ -172,6 +174,7 @@ import { DesignPanel } from "./DesignPanel.tsx";
 import {
   ContrastDialog,
   DownloadWarningDialog,
+  FontFilesDialog,
   OverflowDialog,
   PhotosFailedDialog,
   StackedTextDialog,
@@ -179,6 +182,7 @@ import {
 } from "./DownloadGateDialogs.tsx";
 import { FieldsPanel } from "./FieldsPanel.tsx";
 import { FontChooserDialog } from "./FontChooserDialog.tsx";
+import { ImportFontDialog } from "./ImportFontDialog.tsx";
 import { PagesPanel } from "./PagesPanel.tsx";
 import { PhotosPanel } from "./PhotosPanel.tsx";
 import { RevertDialog } from "./RevertDialog.tsx";
@@ -188,7 +192,9 @@ import { FieldError } from "./ui.tsx";
 
 /** `preparing` is the overflow measurement and the gate; `downloading` the request and the hold.
  * Both draw the building screen (`BuildingScreen.tsx`). */
-type DownloadState = "idle" | "preparing" | "downloading" | "error";
+/** `"busy"` is the shared limit of the two public routes (sprint 29 día 5): not a failure to try
+ * again at once, but a minute to wait — and the sentence says which. */
+type DownloadState = "idle" | "preparing" | "downloading" | "error" | "busy";
 
 /** One key for a (section, element) pair. A `Map` keyed by an object would compare by identity and
  * never hit, and the two ids together are what makes an address unique — element ids are unique
@@ -604,10 +610,14 @@ export function Editor({
   onPickFamily,
   onSettleChooser,
   onDiscardChooser,
+  onAddOwnFont,
+  onPickOwnFont,
+  onRemoveOwnFont,
   onPickScale,
   onSetElementStyle,
   onSetMark,
   photoUrls,
+  fontFiles,
   photoError,
   offers,
   contactUnavailable,
@@ -753,6 +763,13 @@ export function Editor({
   onPickFamily: (key: FontKey, family: string) => void;
   onSettleChooser: () => void;
   onDiscardChooser: () => void;
+  /** A font the owner brought, recorded and chosen for one half in one step, with the bytes of its
+   * files for the browser's store (sprint 29 día 5). `Variants` stores them and dispatches. */
+  onAddOwnFont: (key: FontKey, font: OwnFont, files: StoredFontFile[]) => void;
+  /** One of the owner's own fonts chosen in the chooser — the same session step as `onPickFamily`. */
+  onPickOwnFont: (key: FontKey, font: OwnFont) => void;
+  /** «Quitar»: the record goes and any stack naming it first is rewritten. */
+  onRemoveOwnFont: (fontId: string) => void;
   onPickScale: (scaleId: string) => void;
   /** One property of one element's own style, from the floating toolbar (rule 6). `undefined`
    * takes the property away and lets the site's own rule show through again. Available with the
@@ -774,6 +791,10 @@ export function Editor({
    * preview needs them because a bundle-relative path resolves against the parent page inside a
    * `srcDoc` iframe and 404s — the same trap `placeholder-image.ts` documents. */
   photoUrls: ReadonlyMap<string, string>;
+  /** The owner's own font files by the name the renderer mints, with the object URL of their bytes
+   * and their size — the preview swaps the URL in (`withFontUrls`), the download reads the bytes
+   * back through it, and the gate weighs the size (sprint 29 día 5). */
+  fontFiles: ReadonlyMap<string, FontFileHandle>;
   photoError: string | null;
   offers: readonly SectionOffer[];
   /** Whether to explain the absence of "Contacto y reservas" from `offers`. */
@@ -947,6 +968,14 @@ export function Editor({
    */
   const docNow = useRef(doc);
   const photoUrlsNow = useRef(photoUrls);
+  /** The object URLs of the owner's own faces, by file — read through a ref by `applyPatch` for the
+   * reason the photographs' are (sprint 29 día 5). */
+  const fontUrls = useMemo(
+    () => new Map([...fontFiles].map(([file, handle]) => [file, handle.url])),
+    [fontFiles],
+  );
+  const fontUrlsNow = useRef(fontUrls);
+  fontUrlsNow.current = fontUrls;
   const pageIdNow = useRef(pageId);
   docNow.current = doc;
   /** What a patch is made of besides the document (día 5): read through refs because `applyPatch`
@@ -1162,6 +1191,10 @@ export function Editor({
    * reads the theme back from `doc` like the panel does.
    */
   const [fontChooser, setFontChooser] = useState<FontKey | null>(null);
+  /** Which half the import dialog is bringing a font in for, or none (sprint 29 día 5). It opens
+   * from the chooser, which gives way to it, and the chooser comes back for the same half when it
+   * closes — with the new font chosen, or as it was. */
+  const [fontImport, setFontImport] = useState<FontKey | null>(null);
   /**
    * Which section is selected, and whether its composition menu is open — remembered across the
    * preview's re-renders, which is what makes trying compositions usable at all.
@@ -1472,7 +1505,9 @@ export function Editor({
     // It had been inline, and the three "elige por dónde empezar" cards rendered the raw document
     // instead — invisible for as long as a generated site's only image was the placeholder, and a
     // broken image on all three cards the moment the generator started asking the bank.
-    return render(withPhotoUrls(doc, photoUrls), "html", options).html;
+    // And the owner's own faces pointed at their bytes (sprint 29 día 5): the renderer writes
+    // `url("fonts/propia-…")`, which no route of the editor answers.
+    return withFontUrls(render(withPhotoUrls(doc, photoUrls), "html", options).html, fontUrls);
   });
 
   /**
@@ -1632,10 +1667,15 @@ export function Editor({
     const fresh = render(display, "dom", options);
     const cause = pendingCause.current;
     pendingCause.current = "edit";
-    const report = patchCanvas(iframeDoc, fresh, buildCss(display), {
-      cause,
-      focused: iframeDoc.activeElement,
-    });
+    const report = patchCanvas(
+      iframeDoc,
+      fresh,
+      withFontUrls(buildCss(display), fontUrlsNow.current),
+      {
+        cause,
+        focused: iframeDoc.activeElement,
+      },
+    );
     if (!report.ok) {
       // **There is no second route to fall back to** (sprint 27 día 1). Every refusal `patchCanvas`
       // could answer with was answered during sprint 26 — `structure` on día 3, `chrome` on día 4,
@@ -1789,7 +1829,7 @@ export function Editor({
     bumpEdit(iframeDoc);
   }, [designTools]);
   const toolsDrawn = useRef(designTools);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the four listed are what a patch is made of; everything else is read through refs or is the render's own
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the five listed are what a patch is made of; everything else is read through refs or is the render's own
   useEffect(() => {
     const iframeDoc = liveFrame()?.contentDocument;
     // Wired is a mark the document carries, not a ref's identity (sprint 18 día 5): under `swap`,
@@ -1804,7 +1844,9 @@ export function Editor({
       return;
     }
     applyPatch(iframeDoc);
-  }, [doc, photoUrls, pageId, previewEntryId]);
+    // `fontUrls` since sprint 29 día 5: an own face's bytes arrive from the browser's store after
+    // the first paint, and the sheet that names them has to be patched when they do.
+  }, [doc, photoUrls, fontUrls, pageId, previewEntryId]);
 
   /**
    * The grid stripes follow the selected section, **without** remounting the frame.
@@ -7479,7 +7521,27 @@ export function Editor({
         const blob = await (await fetch(url)).blob();
         form.append("photo", new File([blob], src, { type: blob.type }));
       }
+      // The owner's own fonts this site's stylesheet names (sprint 29 día 5): each face as a `font`
+      // part named by the file the renderer mints, and the licence they attached as `fontLicence`.
+      // A font no stack names travels nowhere, and the route refuses a part the document does not
+      // name — so only `ownFontsFor`'s, the renderer's own answer to «which ship».
+      for (const font of ownFontsFor(doc)) {
+        const { faces, licence } = ownFontFiles(font);
+        for (const [field, file] of [
+          ...faces.map((face) => ["font", face] as const),
+          ...(licence === undefined ? [] : [["fontLicence", licence] as const]),
+        ]) {
+          const handle = fontFiles.get(file);
+          if (!handle) continue;
+          const blob = await (await fetch(handle.url)).blob();
+          form.append(field, new File([blob], file, { type: blob.type }));
+        }
+      }
       const response = await fetch("/api/download", { method: "POST", body: form });
+      if (response.status === 429) {
+        setState("busy");
+        return;
+      }
       if (!response.ok) throw new Error(`download failed: ${response.status}`);
       const blob = await response.blob();
       // The hold: the building screen stays up for David's minimum, measured from the press, and
@@ -7523,8 +7585,15 @@ export function Editor({
     // 13 October 2026 the one with no signal at all — is covered too.
     buildingStartedAt.current = performance.now();
     setState("preparing");
-    const overflow = await measureOverflow(doc, { hostDocument: window.document });
-    const gate = downloadGateFor(countPhotos(doc), doc, accepted, overflow, failedSamples);
+    const overflow = await measureOverflow(doc, { hostDocument: window.document, fontUrls });
+    const gate = downloadGateFor(
+      countPhotos(doc),
+      doc,
+      accepted,
+      overflow,
+      failedSamples,
+      fontFiles,
+    );
     if (gate.kind === "ready") {
       void download();
       return;
@@ -7584,7 +7653,10 @@ export function Editor({
     // Deliberately without `failedSamples`: this re-check exists only to ask whether the colour
     // the owner just fixed is still a problem, and it filters to the two contrast kinds on the
     // next line. A photograph that failed to load is not something this fix could have changed.
-    const gate = downloadGateFor(countPhotos(fixed), fixed, acceptedWarnings);
+    // **With `fontFiles`**, though, and for the opposite reason: the font check runs before the
+    // contrast review, and an empty map would read every own font as missing and hide the very
+    // finding this asks about.
+    const gate = downloadGateFor(countPhotos(fixed), fixed, acceptedWarnings, [], [], fontFiles);
     setDownloadDialog(gate.kind === "unreadable" || gate.kind === "lowContrast" ? gate : null);
   }
 
@@ -7650,6 +7722,13 @@ export function Editor({
                 onRetrySamples?.();
               }}
               onClose={() => setDownloadDialog(null)}
+            />
+          ) : null}
+          {downloadDialog?.kind === "fontsMissing" || downloadDialog?.kind === "heavyFonts" ? (
+            <FontFilesDialog
+              gate={downloadDialog}
+              onDownloadAnyway={() => acceptAndContinue("fonts")}
+              onCancel={() => setDownloadDialog(null)}
             />
           ) : null}
           {downloadDialog?.kind === "tooManyPhotos" ? (
@@ -7738,7 +7817,18 @@ export function Editor({
               theme={doc.theme}
               fontKey={fontChooser}
               siteName={doc.siteName}
+              fonts={doc.fonts ?? []}
+              fontUrls={fontUrls}
               onPick={(family) => onPickFamily(fontChooser, family)}
+              onPickOwn={(font) => onPickOwnFont(fontChooser, font)}
+              onUpload={() => {
+                // What was chosen so far stays chosen: «Subir mi fuente» closes the session like
+                // «Hecho», and the import is a step of its own.
+                onSettleChooser();
+                setFontImport(fontChooser);
+                setFontChooser(null);
+              }}
+              onRemove={(font) => onRemoveOwnFont(font.id)}
               onDone={() => {
                 onSettleChooser();
                 setFontChooser(null);
@@ -7746,6 +7836,21 @@ export function Editor({
               onCancel={() => {
                 onDiscardChooser();
                 setFontChooser(null);
+              }}
+            />
+          ) : null}
+          {fontImport ? (
+            <ImportFontDialog
+              fontKey={fontImport}
+              existing={doc.fonts ?? []}
+              onAdd={(font, files) => {
+                onAddOwnFont(fontImport, font, files);
+                setFontImport(null);
+                setFontChooser(fontImport);
+              }}
+              onCancel={() => {
+                setFontImport(null);
+                setFontChooser(fontImport);
               }}
             />
           ) : null}
@@ -7857,6 +7962,8 @@ export function Editor({
         ) : effectiveRail === "style" ? (
           <StylePanel
             theme={doc.theme}
+            fonts={doc.fonts ?? []}
+            fontUrls={fontUrls}
             onPickPalette={onPickPalette}
             onPickTypePair={onPickTypePair}
             onOpenChooser={setFontChooser}
@@ -7979,6 +8086,7 @@ export function Editor({
     >
       <div className="flex flex-col gap-3 border-b border-ui-border px-4 py-3">
         {state === "error" ? <FieldError>{es["editor.downloadError"]}</FieldError> : null}
+        {state === "busy" ? <FieldError>{es["editor.downloadBusy"]}</FieldError> : null}
         {photoError ? <FieldError>{photoError}</FieldError> : null}
         {placeholders > 0 ? (
           <p className="m-0 text-[13px] font-medium text-[#92400E]">

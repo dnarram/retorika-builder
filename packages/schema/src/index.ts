@@ -92,6 +92,7 @@ export {
 } from "./fontGallery.ts";
 export type { OwnFont, OwnFontFace, OwnFontFormat, OwnLicenceFormat } from "./fonts.ts";
 export {
+  addOwnFont,
   MAX_OWN_FONTS,
   OWN_FONT_FORMATS,
   OWN_FONT_ID_PATTERN,
@@ -101,6 +102,7 @@ export {
   ownFontFaceSchema,
   ownFontSchema,
   ownFontsSchema,
+  removeOwnFont,
 } from "./fonts.ts";
 export type { PresetLookup, Violation } from "./invariants.ts";
 export { checkInvariants, flattenElements } from "./invariants.ts";

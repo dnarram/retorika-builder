@@ -1,13 +1,17 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { blankSection, GALLERY_ID } from "@retorika/catalog";
 import { EMPTY_ANSWERS, generateVariants } from "@retorika/generator";
+import { buildCss, render } from "@retorika/renderer";
 import {
   flattenElements,
   insertSection,
+  parseDocument,
   type RetorikaDocument,
   setElementImageSrc,
 } from "@retorika/schema";
 import { describe, expect, it } from "vitest";
-import { withPhotoUrls } from "../src/editor/previewDocument.ts";
+import { withFontUrls, withPhotoUrls } from "../src/editor/previewDocument.ts";
 
 /**
  * The swap every preview makes: a bundle-relative photo name becomes the object URL of its bytes.
@@ -123,5 +127,57 @@ describe("withPhotoUrls", () => {
 
     withPhotoUrls(named, new Map([["foto-sec-cover-el-image.jpg", "blob:abc"]]));
     expect(imageSrcs(named)).toEqual(before);
+  });
+});
+
+describe("withFontUrls — the owner's faces in the preview (sprint 29 día 5)", () => {
+  /** The corpus fixture: Gelasio from the gallery for the text, «Karla 2» the owner brought for
+   * the headings — one face of each kind in one stylesheet, which is the case that can go wrong. */
+  const OWN = parseDocument(
+    JSON.parse(
+      readFileSync(
+        fileURLToPath(new URL("../../../fixtures/documents/letra-propia.json", import.meta.url)),
+        "utf8",
+      ),
+    ),
+  );
+  const URLS = new Map([
+    [
+      "propia-3f9a7c21-regular.woff2",
+      "blob:http://localhost:3000/0b1c2d3e-aaaa-bbbb-cccc-0123456789ab",
+    ],
+  ]);
+
+  it("swaps only the faces it has bytes for, and leaves the gallery's to its route", () => {
+    const css = buildCss(OWN);
+    const swapped = withFontUrls(css, URLS);
+    expect(swapped).toContain(
+      'src: url("blob:http://localhost:3000/0b1c2d3e-aaaa-bbbb-cccc-0123456789ab") format("woff2");',
+    );
+    // The bold has not arrived: it keeps its relative name and the canvas draws the fallback.
+    expect(swapped).toContain('src: url("fonts/propia-3f9a7c21-bold.woff") format("woff");');
+    expect(swapped).toContain('src: url("fonts/gelasio-latin-400-normal.woff2") format("woff2");');
+    // Nothing else in the sheet moved.
+    expect(
+      swapped.replace(
+        URLS.get("propia-3f9a7c21-regular.woff2") as string,
+        "fonts/propia-3f9a7c21-regular.woff2",
+      ),
+    ).toBe(css);
+  });
+
+  it("works on the first paint's html exactly as on a patch's stylesheet", () => {
+    const html = render(OWN, "html").html;
+    expect(withFontUrls(html, URLS)).toContain(URLS.get("propia-3f9a7c21-regular.woff2"));
+  });
+
+  it("refuses to write anything but an object URL into the stylesheet", () => {
+    const hostile = new Map([["propia-3f9a7c21-regular.woff2", 'https://evil.example/x") ; }']]);
+    expect(() => withFontUrls(buildCss(OWN), hostile)).toThrow(/not an object URL/);
+  });
+
+  it("is the text itself with no own faces in it", () => {
+    const css = buildCss(generated());
+    expect(withFontUrls(css, URLS)).toBe(css);
   });
 });

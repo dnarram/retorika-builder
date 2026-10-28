@@ -1,5 +1,6 @@
 import { presetFor } from "@retorika/catalog";
-import { buildSite, bundleToZip, readFontBundle } from "@retorika/publisher";
+import { buildSite, bundleToZip, ownFontKeysFor, readFontBundle } from "@retorika/publisher";
+import { ownFacesFor, ownFontsFor } from "@retorika/renderer";
 import {
   checkAgainstPreset,
   DocumentValidationError,
@@ -7,11 +8,19 @@ import {
   listDeadDestinations,
   listEditableFields,
   MAX_PAGES,
+  type OwnLicenceFormat,
   parseDocument,
   type RetorikaDocument,
 } from "@retorika/schema";
 import { MAX_PHOTO_BYTES, MAX_PHOTOS } from "../../../editor/downloadGate.ts";
+import {
+  MAX_FONT_BYTES,
+  MAX_LICENCE_BYTES,
+  sniffFont,
+  sniffLicence,
+} from "../../../editor/fontBytes.ts";
 import { isAcceptedImage, sniffImage } from "../../../editor/imageBytes.ts";
+import { limited } from "../publicGuard.ts";
 
 /**
  * The ZIP, built in memory and sent straight in the response — Render's disk is ephemeral, so
@@ -36,7 +45,17 @@ export const runtime = "nodejs";
 // of this is the photos, which the browser has already resized and re-encoded (ADR 0018) — a
 // 1600px JPEG lands in the low hundreds of kilobytes, so the caps below are headroom rather
 // than a target.
-const MAX_BODY_BYTES = 12 * 1024 * 1024;
+//
+// **Plus the owner's own fonts, at their worst case, since sprint 29 día 5** — and unlike the
+// photographs that worst case is exact, because the font caps are hard: two fonts named by the two
+// stacks, two faces each, 2 MiB a face (`MAX_FONT_BYTES`), and a licence of 1 MiB beside each
+// (`MAX_LICENCE_BYTES`): 4 × 2 + 2 × 1 = 10 MiB. The plan said 4; below 10, a document the editor
+// lets an owner build would meet a bare 413 here, which is the failure `MAX_PHOTOS` moved to
+// `downloadGate.ts` to end. The limit per address in `publicGuard.ts` bounds how often.
+const MAX_BODY_BYTES = (12 + 10) * 1024 * 1024;
+/** Faces a request may carry: two fonts of two faces. A licence is one per font. */
+const MAX_FONT_PARTS = 4;
+const MAX_LICENCE_PARTS = 2;
 // MAX_PHOTO_BYTES moved to `downloadGate.ts` with ADR 0037, for the same reason MAX_PHOTOS is
 // there: the storage bucket now has a `file_size_limit` too, and a photograph that can be stored
 // and then not bundled is a save that lied.
@@ -211,7 +230,89 @@ async function readPhotos(form: FormData, doc: RetorikaDocument): Promise<Map<st
   return assets;
 }
 
+/**
+ * The owner's own font files, checked as strictly as the photographs are (ADR 0056, sprint 29
+ * día 5) — and through **one** reader for the faces and the licences, which is David's adjustment
+ * 3: a licence file is bytes from outside too.
+ *
+ * - A `font` part's name must be exactly one face file the document's stylesheet names
+ *   (`ownFontKeysFor`), and a `fontLicence` part's exactly one licence it names, under `fonts/`.
+ *   Anything else is refused rather than dropped, for the reason `readPhotos` gives.
+ * - Each face is at most `MAX_FONT_BYTES` and **re-sniffed**: its bytes must be the format the
+ *   record declares. A WOFF2 declared `ttf` is refused, never relabelled — the record is what the
+ *   renderer wrote `format()` from, so a mismatch is a page that asks the browser for the wrong
+ *   thing. A collection and markup are refused by the same sniff.
+ * - Each licence is at most `MAX_LICENCE_BYTES`; a PDF begins `%PDF`, a text is UTF-8 with no NUL,
+ *   and the sniff must agree with the extension the record declares.
+ * - Every key the document names must have arrived, or the bundle would be missing a file.
+ *
+ * The publisher checks the owner's declaration itself (`buildSite`); this is the bytes' half.
+ */
+async function readFonts(form: FormData, doc: RetorikaDocument): Promise<Map<string, Uint8Array>> {
+  const wanted = new Set(ownFontKeysFor(doc));
+  const formatOf = new Map(ownFacesFor(doc).map((face) => [face.file, face.face.format]));
+  const licenceOf = new Map<string, OwnLicenceFormat>(
+    ownFontsFor(doc).flatMap((font) =>
+      font.licenceFile === undefined
+        ? []
+        : [[`fonts/LICENCIA-propia-${font.id}.${font.licenceFile}`, font.licenceFile] as const],
+    ),
+  );
+  const faces = form.getAll("font").filter((entry): entry is File => entry instanceof File);
+  const licences = form
+    .getAll("fontLicence")
+    .filter((entry): entry is File => entry instanceof File);
+  if (faces.length > MAX_FONT_PARTS || licences.length > MAX_LICENCE_PARTS) {
+    throw new RequestError("too many font files", 413);
+  }
+
+  const bytes = new Map<string, Uint8Array>();
+  for (const [upload, kind] of [
+    ...faces.map((file) => [file, "face"] as const),
+    ...licences.map((file) => [file, "licence"] as const),
+  ]) {
+    const key = kind === "face" ? upload.name : `fonts/${upload.name}`;
+    if (!wanted.has(key) || (kind === "face") !== formatOf.has(key)) {
+      throw new RequestError(`font file "${upload.name}" is not named by the document`, 400);
+    }
+    if (bytes.has(key)) throw new RequestError(`font file "${upload.name}" was sent twice`, 400);
+    const cap = kind === "face" ? MAX_FONT_BYTES : MAX_LICENCE_BYTES;
+    if (upload.size > cap) {
+      throw new RequestError(`font file "${upload.name}" exceeds ${cap} bytes`, 413);
+    }
+    const data = new Uint8Array(await upload.arrayBuffer());
+    if (kind === "face") {
+      const sniffed = sniffFont(data);
+      if (sniffed !== formatOf.get(key)) {
+        throw new RequestError(
+          `font file "${upload.name}" is ${sniffed}, not the ${formatOf.get(key)} the document declares`,
+          400,
+        );
+      }
+    } else if (sniffLicence(data) !== licenceOf.get(key)) {
+      throw new RequestError(
+        `licence "${upload.name}" is not the ${licenceOf.get(key)} declared`,
+        400,
+      );
+    }
+    bytes.set(key, data);
+  }
+
+  for (const key of wanted) {
+    if (!bytes.has(key)) {
+      throw new RequestError(`the document names the font file "${key}", which was not sent`, 400);
+    }
+  }
+  return bytes;
+}
+
 export async function POST(request: Request): Promise<Response> {
+  // Twenty requests a minute per address, shared with `/api/fuentes/inspeccionar` (sprint 29 día 5,
+  // ADR 0056 §10): the two public routes that take a stranger's bytes and work on them. Before the
+  // length check, so a caller past the limit costs nothing more than a map lookup.
+  const tooMany = limited(request);
+  if (tooMany !== null) return tooMany;
+
   const contentLength = Number(request.headers.get("content-length") ?? 0);
   if (contentLength > MAX_BODY_BYTES) {
     return new Response("request too large", { status: 413 });
@@ -237,12 +338,14 @@ export async function POST(request: Request): Promise<Response> {
 
   let document: RetorikaDocument;
   let assets: Map<string, Uint8Array>;
+  let ownFonts: Map<string, Uint8Array>;
   try {
     document = parseDocument(rawDocument);
     assertBounds(document);
     assertPresetsMatch(document);
     assertNoDeadDestinations(document);
     assets = await readPhotos(form, document);
+    ownFonts = await readFonts(form, document);
   } catch (error) {
     if (error instanceof RequestError) {
       return new Response(error.message, { status: error.status });
@@ -264,7 +367,10 @@ export async function POST(request: Request): Promise<Response> {
   // over a set of faces that disagrees with the ones the page asks for.
   //
   // Empty for every site on `editorial-serif`, which is most of them — one Map allocation, no read.
-  const fonts = readFontBundle(document);
+  // The owner's own faces and licences join the table's in the same map, under the keys
+  // `ownFontKeysFor` named — the two sets cannot collide, since one is `propia-…` and `LICENCIA-…`
+  // and the other is `@fontsource`'s names and `OFL-…`.
+  const fonts = new Map([...readFontBundle(document), ...ownFonts]);
 
   // `siteUrl` is the owner's declared public address, and since 13 October 2026 (ADR 0029,
   // amended) it is what the ZIP's `sitemap.xml` is built on — as well as `og:url`. It is already

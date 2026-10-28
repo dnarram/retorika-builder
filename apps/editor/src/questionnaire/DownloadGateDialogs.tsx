@@ -7,6 +7,8 @@ import type {
   StyleException,
 } from "@retorika/schema";
 import { useId } from "react";
+import type { DownloadGate } from "../editor/downloadGate.ts";
+import { HEAVY_FONT_BYTES } from "../editor/fontBytes.ts";
 import type { OverflowFinding } from "../editor/overflowCheck.ts";
 import { listPhotos } from "../editor/photoInventory.ts";
 import { type ContrastFinding, formatRatio } from "../editor/styleReview.ts";
@@ -577,6 +579,117 @@ export function StackedTextDialog({
           >
             {es["editor.download.warning.downloadAnyway"]}
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * **The owner's own fonts, at the door of the ZIP** (sprint 29 día 5) — one dialog, two levels, as
+ * `ContrastDialog` has.
+ *
+ * - **`fontsMissing` blocks**: the stylesheet names a face this browser no longer holds, so
+ *   `/api/download` would refuse and «Descargar igualmente» could only fail — `PhotosFailedDialog`'s
+ *   lesson. What it offers is the way out, named rather than automated: removing the font and
+ *   uploading it again is the owner's to do, because only they have the file.
+ * - **`heavyFonts` warns**: a face above 300 KB is a slower page and not a broken one (David's
+ *   condition 2), and goes past like every other warning.
+ */
+export function FontFilesDialog({
+  gate,
+  onDownloadAnyway,
+  onCancel,
+}: {
+  gate: Extract<DownloadGate, { kind: "fontsMissing" | "heavyFonts" }>;
+  onDownloadAnyway: () => void;
+  onCancel: () => void;
+}) {
+  const titleId = useId();
+  const container = useFocusTrap(true, onCancel);
+  const limit = String(Math.round(HEAVY_FONT_BYTES / 1024));
+
+  return (
+    <div className="fixed inset-0 z-20 flex items-center justify-center bg-[#0F172A]/45 p-5">
+      <div
+        ref={container}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className="flex max-h-full w-full max-w-[520px] flex-col rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.28)]"
+      >
+        <h2 id={titleId} className="m-0 text-[17px] font-bold text-ui-ink">
+          {gate.kind === "fontsMissing"
+            ? es["editor.download.fontsMissing.title"]
+            : es["editor.download.heavyFonts.title"]}
+        </h2>
+        <p className="mt-2 mb-0 text-[14px] leading-snug text-ui-muted">
+          {gate.kind === "fontsMissing"
+            ? es["editor.download.fontsMissing.body"].replace(
+                "{families}",
+                gate.families.map((family) => `«${family}»`).join(", "),
+              )
+            : (gate.files.length === 1
+                ? es["editor.download.heavyFonts.body.one"]
+                : es["editor.download.heavyFonts.body.many"].replace(
+                    "{n}",
+                    String(gate.files.length),
+                  )
+              ).replace("{limit}", limit)}
+        </p>
+
+        {gate.kind === "heavyFonts" ? (
+          <>
+            <div className="mt-4 flex min-h-0 flex-col gap-2 overflow-y-auto">
+              {gate.files.map((file, index) => (
+                <div
+                  // biome-ignore lint/suspicious/noArrayIndexKey: two faces of one family share a name and a size can repeat
+                  key={index}
+                  className="rounded-[9px] border border-ui-border px-3 py-2.5 text-[13px] text-ui-ink"
+                >
+                  {es["editor.download.heavyFonts.file"]
+                    .replace("{family}", file.family)
+                    .replace("{kb}", String(file.kb))}
+                </div>
+              ))}
+            </div>
+            <p className="mt-4 mb-0 text-[12px] leading-snug text-ui-muted">
+              {/* The advice to convert only where it applies: a WOFF2 is already the lightest. */}
+              {gate.files.every((file) => file.woff2)
+                ? es["editor.download.heavyFonts.footWoff2"]
+                : es["editor.download.heavyFonts.foot"]}
+            </p>
+          </>
+        ) : null}
+
+        <div className="mt-5 flex justify-end gap-2.5">
+          {gate.kind === "fontsMissing" ? (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="h-10 cursor-pointer rounded-[10px] border-0 bg-ui-brand px-5 text-[14px] font-semibold text-white"
+            >
+              {es["editor.download.fontsMissing.close"]}
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={onCancel}
+                className="h-10 cursor-pointer rounded-[10px] border border-ui-border bg-white px-4 text-[14px] font-medium text-ui-ink"
+              >
+                {es["editor.download.contrast.cancel"]}
+              </button>
+              <button
+                type="button"
+                onClick={onDownloadAnyway}
+                className="h-10 cursor-pointer rounded-[10px] border-0 bg-ui-brand px-5 text-[14px] font-semibold text-white"
+              >
+                {es["editor.download.warning.downloadAnyway"]}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

@@ -1,5 +1,5 @@
-import { FONT_KINDS, type Theme } from "@retorika/schema";
-import { type FontKey, GALLERY_FAMILIES } from "@retorika/tokens";
+import { FONT_KINDS, type OwnFont, type Theme } from "@retorika/schema";
+import { type FontKey, GALLERY_FAMILIES, identifyOwnFont } from "@retorika/tokens";
 import es from "../locales/es.json" with { type: "json" };
 import { fold } from "./fold.ts";
 import { type GalleryRow, galleryRows } from "./letterGallery.ts";
@@ -23,8 +23,9 @@ import { type GalleryRow, galleryRows } from "./letterGallery.ts";
  * dialog and the panel keeps two rows that say what is chosen.
  */
 
-/** The kinds a chip can narrow to. `"all"` first, then the gallery's own species in their order. */
-export type KindFilter = "all" | GalleryRow["kind"];
+/** The kinds a chip can narrow to. `"all"` first, then the gallery's own species in their order;
+ * `"own"` narrows to the fonts the owner brought (sprint 29 día 5). */
+export type KindFilter = "all" | "own" | GalleryRow["kind"];
 
 /**
  * «Todas», then **every species the gallery actually has**, in `FONT_KINDS`'s order — derived, so a
@@ -36,10 +37,23 @@ export const KIND_FILTERS: readonly KindFilter[] = [
   ...FONT_KINDS.filter((kind) => GALLERY_FAMILIES.some((row) => row.kind === kind)),
 ];
 
-export interface ChooserRow extends GalleryRow {
+/**
+ * The chips for a document: the gallery's, with «Propias» after «Todas» once the owner has brought
+ * a font — and not before, because a chip that narrows to nothing is the one `KIND_FILTERS` exists
+ * not to offer.
+ */
+export function kindFiltersFor(fonts: readonly OwnFont[]): readonly KindFilter[] {
+  if (fonts.length === 0) return KIND_FILTERS;
+  const [all, ...species] = KIND_FILTERS;
+  return [all as KindFilter, "own", ...species];
+}
+
+export interface ChooserRow extends Omit<GalleryRow, "file"> {
   /** Whether the row matches the words typed and the chip pressed. The row stays mounted either
    * way — see `chooserRows`. */
   visible: boolean;
+  /** The owner's own font this row is, or `undefined` for a gallery row. */
+  own: OwnFont | undefined;
 }
 
 /**
@@ -60,12 +74,27 @@ export function chooserRows(
   key: FontKey,
   query: string,
   kind: KindFilter,
+  fonts: readonly OwnFont[] = [],
 ): ChooserRow[] {
   const needle = fold(query.trim());
-  return galleryRows(theme, key).map((row) => ({
-    ...row,
-    visible: (kind === "all" || row.kind === kind) && fold(row.family).includes(needle),
+  const matches = (family: string) => fold(family).includes(needle);
+  // **The owner's own fonts first** (sprint 29 día 5): a brand's letter is the one row an owner who
+  // uploaded it is looking for, and at most two of them cannot push the gallery out of reach. They
+  // answer their species' chip as well as «Propias», since a serif the owner brought is a serif.
+  const chosenOwn = identifyOwnFont(theme, key, fonts);
+  const own: ChooserRow[] = fonts.map((font) => ({
+    family: font.family,
+    kind: font.kind,
+    chosen: chosenOwn?.id === font.id,
+    visible: (kind === "all" || kind === "own" || font.kind === kind) && matches(font.family),
+    own: font,
   }));
+  const gallery = galleryRows(theme, key).map(({ file: _, ...row }) => ({
+    ...row,
+    visible: (kind === "all" || row.kind === kind) && matches(row.family),
+    own: undefined,
+  }));
+  return [...own, ...gallery];
 }
 
 export function visibleCount(rows: readonly ChooserRow[]): number {
@@ -120,6 +149,9 @@ const FIRST_SCREEN = 8;
 export function initiallyRevealed(rows: readonly ChooserRow[]): Set<string> {
   const revealed = new Set<string>();
   for (const row of rows) {
+    // An own font's face is in memory already and declared by `ownFaceCss`, never by the gallery's
+    // sheet, which would refuse a family it does not ship.
+    if (row.own !== undefined) continue;
     if (row.visible && revealed.size < FIRST_SCREEN) revealed.add(row.family);
     if (row.chosen) revealed.add(row.family);
   }

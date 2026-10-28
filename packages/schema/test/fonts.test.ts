@@ -1,6 +1,15 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { FONT_GALLERY } from "../src/fontGallery.ts";
-import { MAX_OWN_FONTS, type OwnFont, ownFamilyIssue, ownFontCovers } from "../src/fonts.ts";
+import {
+  addOwnFont,
+  MAX_OWN_FONTS,
+  type OwnFont,
+  ownFamilyIssue,
+  ownFontCovers,
+  removeOwnFont,
+} from "../src/fonts.ts";
 import { DocumentValidationError, parseDocument } from "../src/parse.ts";
 import { TOKEN_KEYS } from "../src/tokens.ts";
 
@@ -231,5 +240,59 @@ describe("ownFontCovers", () => {
     expect(variable([100, 600])).toEqual({ regular: true, bold: false });
     expect(variable([400, 400])).toEqual({ regular: true, bold: false });
     expect(variable([700, 700])).toEqual({ regular: false, bold: true });
+  });
+});
+
+describe("addOwnFont and removeOwnFont — the editor's two verbs (sprint 29 día 5)", () => {
+  const corpus = parseDocument(
+    JSON.parse(
+      readFileSync(
+        fileURLToPath(new URL("../../../fixtures/documents/letra-propia.json", import.meta.url)),
+        "utf8",
+      ),
+    ),
+  );
+  const second: OwnFont = { ...casa, id: "0badc0de", family: "Marca Serif", kind: "serif" };
+
+  it("adds a font and leaves the theme to setTheme", () => {
+    const added = addOwnFont(corpus, second);
+    expect(added.fonts?.map((font) => font.family)).toEqual(["Karla 2", "Marca Serif"]);
+    expect(added.theme).toBe(corpus.theme);
+    expect(() => parseDocument(added)).not.toThrow();
+  });
+
+  it("refuses a third font, a taken name and an incomplete record rather than storing them", () => {
+    const two = addOwnFont(corpus, second);
+    expect(() => addOwnFont(two, { ...second, id: "11111111", family: "Tercera" })).toThrow(
+      /addOwnFont/,
+    );
+    expect(() => addOwnFont(corpus, { ...second, family: "karla 2" })).toThrow(/already another/);
+    expect(() =>
+      addOwnFont(corpus, { ...second, licence: { declared: false } } as unknown as OwnFont),
+    ).toThrow();
+  });
+
+  it("removes a font and takes its family out of every stack that names it first", () => {
+    const removed = removeOwnFont(corpus, "3f9a7c21");
+    expect(removed.fonts).toBeUndefined();
+    expect("fonts" in removed).toBe(false);
+    // «Karla 2» headed the headings: what is left is the fallback chain the stack already carried.
+    expect(removed.theme["font.heading"]).toBe(
+      "system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+    );
+    // The text was Gelasio, a gallery row: untouched.
+    expect(removed.theme["font.body"]).toBe(corpus.theme["font.body"]);
+    expect(() => parseDocument(removed)).not.toThrow();
+  });
+
+  it("falls back to the species' generic when the stack was the family alone", () => {
+    const bare = { ...corpus, theme: { ...corpus.theme, "font.body": "'Karla 2'" } };
+    expect(removeOwnFont(bare, "3f9a7c21").theme["font.body"]).toBe("sans-serif");
+  });
+
+  it("keeps the other font, and refuses an id the document does not have", () => {
+    const two = addOwnFont(corpus, second);
+    expect(removeOwnFont(two, "3f9a7c21").fonts?.map((font) => font.id)).toEqual(["0badc0de"]);
+    expect(() => removeOwnFont(corpus, "ffffffff")).toThrow(/no own font/);
   });
 });

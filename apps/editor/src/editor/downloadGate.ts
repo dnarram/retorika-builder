@@ -1,11 +1,14 @@
 import { GALLERY_PHOTOS } from "@retorika/catalog";
+import { ownFontsFor } from "@retorika/renderer";
 import {
   MAX_PAGES,
   type OverlappingTexts,
   overlappingTexts,
   type RetorikaDocument,
 } from "@retorika/schema";
+import { HEAVY_FONT_BYTES } from "./fontBytes.ts";
 import type { OverflowFinding } from "./overflowCheck.ts";
+import { ownFontFiles } from "./ownFonts.ts";
 import type { PhotoCounts } from "./photoInventory.ts";
 import { type ContrastFinding, reviewStyle } from "./styleReview.ts";
 
@@ -102,7 +105,10 @@ export const PHOTO_CONTENT_TYPE = "image/jpeg";
  *    dragged one text onto another and the canvas showed it happening — so it is the least likely
  *    of the four to be news. A photograph under a heading says nothing here: that is design, and
  *    the renderer even draws a panel behind the words to keep them legible.
- * 7. **`"ready"`** — nothing to say; `download()` runs immediately.
+ * 7. **`"heavyFonts"`** — a face of the owner's own font above 300 KB (sprint 29 día 5). A slower
+ *    page and not a broken one, so a warning; **last**, because the import dialog said it already
+ *    when the file came in. Its block twin, `"fontsMissing"`, is checked with `"photosFailed"`.
+ * 8. **`"ready"`** — nothing to say; `download()` runs immediately.
  *
  * Two of the five now need the document rather than the counts, which is why this takes it. The
  * counts stay a separate argument rather than being recomputed here, so the gate and the «Fotos»
@@ -116,7 +122,7 @@ export const PHOTO_CONTENT_TYPE = "image/jpeg";
  * again, and answers with whatever is still true. A block is never in this set, which is what a
  * block means.
  */
-export type AcceptedWarning = "photos" | "contrast" | "overflow" | "layout";
+export type AcceptedWarning = "photos" | "contrast" | "overflow" | "layout" | "fonts";
 export type DownloadGate =
   | { kind: "ready" }
   /**
@@ -130,12 +136,29 @@ export type DownloadGate =
    * failure in two places — and fixed here, where the decision belongs.
    */
   | { kind: "photosFailed"; srcs: string[] }
+  /**
+   * A font the owner brought that the site's stylesheet names, and whose bytes this browser no
+   * longer has (sprint 29 día 5) — a private window reloaded, a store that would not take them.
+   * **A block, second, for `photosFailed`'s reason**: `/api/download` refuses a document that names
+   * a face it was not sent, so «Descargar igualmente» could only ever fail. The dialog says how out:
+   * remove the font and upload it again, or choose another letter.
+   */
+  | { kind: "fontsMissing"; families: string[] }
   | { kind: "tooManyPhotos"; count: number; max: number }
   | { kind: "unreadable"; findings: ContrastFinding[] }
   | { kind: "warn"; sample: number; empty: number }
   | { kind: "lowContrast"; findings: ContrastFinding[] }
   | { kind: "overflows"; findings: OverflowFinding[] }
-  | { kind: "textOverText"; findings: OverlappingTexts[] };
+  | { kind: "textOverText"; findings: OverlappingTexts[] }
+  /**
+   * A face of the owner's own font above 300 KB (David's condition 2): a slower page, not a broken
+   * one, so a warning and the last of them — the import dialog already said so when the file came
+   * in, and this says it again only because the ZIP is the moment it starts costing visitors.
+   */
+  | { kind: "heavyFonts"; files: { family: string; kb: number; woff2: boolean }[] };
+
+/** Size, by file name, of the owner's own font files the browser holds — what the gate weighs. */
+export type FontFileSizes = ReadonlyMap<string, { size: number }>;
 
 /**
  * **This stays pure and synchronous, and the measurement arrives as data.**
@@ -165,10 +188,25 @@ export function downloadGateFor(
    * opening a gate that is about to start a download.
    */
   failedSamples: readonly string[] = [],
+  /** The owner's own font files this browser holds, by name — runtime state like the two above. */
+  fontFiles: FontFileSizes = new Map(),
 ): DownloadGate {
   // First, and before even the photo count: this one makes the request impossible rather than
   // unwise, and no amount of «Descargar igualmente» can get past it.
   if (failedSamples.length > 0) return { kind: "photosFailed", srcs: [...failedSamples] };
+
+  // The same kind of impossibility for a font: only the ones the stylesheet names travel, so only
+  // those can be missing — every face, and the licence the record says was attached.
+  const fonts = ownFontsFor(doc);
+  const missing = fonts.filter((font) => {
+    const { faces, licence } = ownFontFiles(font);
+    return [...faces, ...(licence === undefined ? [] : [licence])].some(
+      (file) => !fontFiles.has(file),
+    );
+  });
+  if (missing.length > 0) {
+    return { kind: "fontsMissing", families: missing.map((font) => font.family) };
+  }
 
   const real = counts.own + counts.sample;
   if (real > MAX_PHOTOS) return { kind: "tooManyPhotos", count: real, max: MAX_PHOTOS };
@@ -191,6 +229,18 @@ export function downloadGateFor(
     const stacked = overlappingTexts(doc);
     if (stacked.length > 0) return { kind: "textOverText", findings: stacked };
   }
+  if (!accepted.has("fonts")) {
+    const heavy = fonts.flatMap((font) =>
+      ownFontFiles(font).faces.flatMap((file) => {
+        const size = fontFiles.get(file)?.size ?? 0;
+        if (size <= HEAVY_FONT_BYTES) return [];
+        return [
+          { family: font.family, kb: Math.round(size / 1024), woff2: file.endsWith(".woff2") },
+        ];
+      }),
+    );
+    if (heavy.length > 0) return { kind: "heavyFonts", files: heavy };
+  }
   return { kind: "ready" };
 }
 
@@ -208,12 +258,14 @@ export function downloadGateFor(
  */
 export const DIALOG_KINDS = [
   "photosFailed",
+  "fontsMissing",
   "tooManyPhotos",
   "unreadable",
   "warn",
   "lowContrast",
   "overflows",
   "textOverText",
+  "heavyFonts",
 ] as const;
 
 type KindWithDialog = (typeof DIALOG_KINDS)[number];

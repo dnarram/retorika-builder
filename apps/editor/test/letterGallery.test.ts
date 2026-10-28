@@ -1,11 +1,19 @@
 import { SHIPPABLE_FAMILIES } from "@retorika/renderer";
-import { buildTheme, GALLERY_FAMILIES, withFamily, withTypePair } from "@retorika/tokens";
+import type { OwnFont } from "@retorika/schema";
+import {
+  buildTheme,
+  GALLERY_FAMILIES,
+  withFamily,
+  withOwnFont,
+  withTypePair,
+} from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
 import {
   familiesHelpText,
   familyRowFor,
   galleryFaceCss,
   galleryRows,
+  ownFaceCss,
   toolbarFamilyLabel,
   typePairNoteText,
 } from "../src/editor/letterGallery.ts";
@@ -211,5 +219,65 @@ describe("toolbarFamilyLabel", () => {
     const theme = withFamily(start, "font.body", "Spectral");
     expect(toolbarFamilyLabel(theme, "font.body")).toContain("Texto");
     expect(toolbarFamilyLabel(theme, "font.body")).toBe("Letra — Texto (Spectral)");
+  });
+});
+
+describe("the owner's own fonts in the panel and the chooser (sprint 29 día 5)", () => {
+  const CASA: OwnFont = {
+    id: "3f9a7c21",
+    family: "Casa Trufa",
+    kind: "serif",
+    faces: [
+      { role: "regular", format: "ttf" },
+      { role: "bold", format: "woff" },
+    ],
+    licence: { declared: true, at: "2026-10-28T09:00:00.000Z" },
+  };
+  const VARIABLE: OwnFont = {
+    ...CASA,
+    id: "0badc0de",
+    family: "Marca Variable",
+    faces: [{ role: "variable", format: "woff2", wght: [300, 800] }],
+  };
+  const URLS = new Map([
+    [
+      "propia-3f9a7c21-regular.ttf",
+      "blob:http://localhost:3000/aaaaaaaa-0000-0000-0000-000000000001",
+    ],
+    [
+      "propia-0badc0de-variable.woff2",
+      "blob:http://localhost:3000/aaaaaaaa-0000-0000-0000-000000000002",
+    ],
+  ]);
+
+  it("declares one face per font from its object URL — the regular, or the variable with its range", () => {
+    const css = ownFaceCss([CASA, VARIABLE], URLS);
+    expect(css.split("\n")).toEqual([
+      '@font-face{font-family:\'Casa Trufa\';src:url("blob:http://localhost:3000/aaaaaaaa-0000-0000-0000-000000000001") format("truetype");font-weight:400;font-style:normal;font-display:swap}',
+      '@font-face{font-family:\'Marca Variable\';src:url("blob:http://localhost:3000/aaaaaaaa-0000-0000-0000-000000000002") format("woff2");font-weight:300 800;font-style:normal;font-display:swap}',
+    ]);
+  });
+
+  it("leaves out a font whose bytes have not arrived, and refuses a URL that is not an object URL", () => {
+    expect(ownFaceCss([CASA], new Map())).toBe("");
+    const hostile = new Map([["propia-3f9a7c21-regular.ttf", "https://evil.example/x.ttf"]]);
+    expect(() => ownFaceCss([CASA], hostile)).toThrow(/not an object URL/);
+  });
+
+  it("names an own font in the panel's row, drawn in its own face", () => {
+    const theme = withOwnFont(start, "font.heading", CASA);
+    expect(familyRowFor(theme, "font.heading", [CASA])).toEqual({
+      family: undefined,
+      own: CASA,
+      text: "Casa Trufa",
+      stack: "'Casa Trufa'",
+    });
+    // Without the record the stack is a letter nobody here produced, which is what it would be.
+    expect(familyRowFor(theme, "font.heading").text).toBe(es["editor.style.unknownLetter"]);
+  });
+
+  it("says the letter was chosen by name when it is the owner's own", () => {
+    const theme = withOwnFont(start, "font.body", CASA);
+    expect(typePairNoteText(theme, [CASA])).toBe(es["editor.style.fromGallery"]);
   });
 });

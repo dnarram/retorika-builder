@@ -436,6 +436,14 @@ matched whole — and a font no stack names is allowed and ships nothing. The re
 right to publish the font is the owner's: the product carries their declaration and the text they
 attach, and judges neither.
 
+**Removing a font rewrites the stacks that named it** (`removeOwnFont`, sprint 29 día 5). The schema
+cannot tell a stack that names a removed font from one that names a system family nobody sends, so
+the verb that removes the record is what keeps a stack from naming a font nobody ships — the state
+ADR 0028 prevents: every stack whose first family was
+that font loses it and keeps the fallback chain it carried — the same rule as migration `0015`'s
+`down`. Adding one (`addOwnFont`) is checked as the parser would check it, and the editor writes the
+record and the stack in one step, so one «Deshacer» takes back both.
+
 **A template leaves without the owner's fonts.** The advanced dossier §9's third-party templates are
 phase 3 and nothing extracts one yet; when something does, the `fonts` record and the bytes stay with
 the owner, because the declaration in it is theirs and covers their web and no other. Written here,
