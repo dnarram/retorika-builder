@@ -1,12 +1,19 @@
 import { readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
+import { createRequire } from "node:module";
 import type { AddressInfo } from "node:net";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { inflateSync } from "node:zlib";
 import { chromium } from "@playwright/test";
 import { EMPTY_ANSWERS, generate, VARIANTS } from "@retorika/generator";
 import { hasSamplePhotos, recordById } from "@retorika/photobank";
 import { readSampleBytes } from "@retorika/photobank/server";
-import { flattenElements, parseDocument } from "@retorika/schema";
+import {
+  flattenElements,
+  type OwnFont,
+  parseDocument,
+  type RetorikaDocument,
+} from "@retorika/schema";
 import { type LaunchedChrome, launch } from "chrome-launcher";
 import lighthouse from "lighthouse";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -61,9 +68,9 @@ type Measured = {
   auditSeconds: number;
 };
 
-/** A generated site of the sample sector, with its photograph read from the bank. */
-function sampleSite(variant: (typeof VARIANTS)[number]): SiteBundle {
-  const site = generate(
+/** The generated document of the sample sector, in one composition. */
+function sampleDocument(variant: (typeof VARIANTS)[number]): RetorikaDocument {
+  return generate(
     {
       ...EMPTY_ANSWERS,
       businessName: "Taberna del Puerto",
@@ -74,9 +81,13 @@ function sampleSite(variant: (typeof VARIANTS)[number]): SiteBundle {
       bookingLink: "https://reservas.example.com/taberna",
     },
     variant,
-  );
+  ).document;
+}
+
+/** Its photographs, read from the bank. */
+function sampleAssets(document: RetorikaDocument): Map<string, Uint8Array> {
   const assets = new Map<string, Uint8Array>();
-  for (const page of site.document.pages) {
+  for (const page of document.pages) {
     for (const section of page.sections) {
       for (const el of flattenElements(section.content)) {
         if (el.value?.kind !== "image" || el.value.src.startsWith("data:")) continue;
@@ -87,10 +98,16 @@ function sampleSite(variant: (typeof VARIANTS)[number]): SiteBundle {
       }
     }
   }
-  return buildSite(site.document, {
+  return assets;
+}
+
+/** A generated site of the sample sector, with its photograph read from the bank. */
+function sampleSite(variant: (typeof VARIANTS)[number]): SiteBundle {
+  const document = sampleDocument(variant);
+  return buildSite(document, {
     siteId: "lighthouse",
-    assets,
-    fonts: readFontBundle(site.document),
+    assets: sampleAssets(document),
+    fonts: readFontBundle(document),
   });
 }
 
@@ -122,6 +139,100 @@ function fichaSite(): { bundle: SiteBundle; path: string } {
     }),
     path: "/ensaladilla-rusa.html",
   };
+}
+
+/**
+ * A WOFF 1.0 file as the sfnt it wraps: each table inflated where it was compressed, the directory
+ * rebuilt, every table padded to four bytes. That is what an owner's `.ttf` is — the same glyphs
+ * with nothing squeezed out — so the sample site can be measured with the heaviest format an own
+ * font may travel as without carrying a new binary in the repository.
+ */
+function woffToTtf(woff: Uint8Array): Uint8Array {
+  const view = new DataView(woff.buffer, woff.byteOffset, woff.byteLength);
+  if (view.getUint32(0) !== 0x774f4646) throw new Error("woffToTtf: not a WOFF file");
+  const count = view.getUint16(12);
+  const tables: { tag: number; checksum: number; data: Uint8Array }[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const at = 44 + index * 20;
+    const offset = view.getUint32(at + 4);
+    const compressed = view.getUint32(at + 8);
+    const original = view.getUint32(at + 12);
+    const raw = woff.subarray(offset, offset + compressed);
+    tables.push({
+      tag: view.getUint32(at),
+      checksum: view.getUint32(at + 16),
+      data: compressed < original ? new Uint8Array(inflateSync(raw)) : raw,
+    });
+  }
+  const pad = (length: number) => (length + 3) & ~3;
+  const head = 12 + count * 16;
+  const out = new Uint8Array(head + tables.reduce((sum, table) => sum + pad(table.data.length), 0));
+  const sfnt = new DataView(out.buffer);
+  const power = 2 ** Math.floor(Math.log2(count));
+  sfnt.setUint32(0, view.getUint32(4));
+  sfnt.setUint16(4, count);
+  sfnt.setUint16(6, power * 16);
+  sfnt.setUint16(8, Math.log2(power));
+  sfnt.setUint16(10, count * 16 - power * 16);
+  let offset = head;
+  tables.forEach((table, index) => {
+    const at = 12 + index * 16;
+    sfnt.setUint32(at, table.tag);
+    sfnt.setUint32(at + 4, table.checksum);
+    sfnt.setUint32(at + 8, offset);
+    sfnt.setUint32(at + 12, table.data.length);
+    out.set(table.data, offset);
+    offset += pad(table.data.length);
+  });
+  return out;
+}
+
+/**
+ * The first composition with **both halves in an owner's own `.ttf`** (ADR 0056, sprint 29 día 7):
+ * the plan's close asks Lighthouse of «una fuente propia .ttf (la peor)», the format that travels
+ * uncompressed. The faces are Karla 400 and 700 from `@fontsource/karla`, its WOFF unwrapped to
+ * TrueType, under the family and stack of the corpus fixture `letra-propia.json`; Karla's licence
+ * is in this repository already. Measured, not merely built: the faces are what the page waits
+ * for, so this is the subject a heavy brand letter would move first.
+ */
+function ownTtfSite(): SiteBundle {
+  const fixtures = join(import.meta.dirname, "..", "..", "..", "fixtures");
+  const corpus = parseDocument(
+    JSON.parse(readFileSync(join(fixtures, "documents", "letra-propia.json"), "utf8")),
+  );
+  const font: OwnFont = {
+    id: "7f7f0a1b",
+    family: "Karla 2",
+    kind: "sans",
+    faces: [
+      { role: "regular", format: "ttf" },
+      { role: "bold", format: "ttf" },
+    ],
+    licence: { declared: true, at: "2026-10-28T12:00:00Z" },
+  };
+  // The fixture's stack for an own sans, for both halves: the tokens package writes it
+  // (`ownFontStack`) and the publisher cannot import tokens, so it is read rather than retyped.
+  const stack = corpus.theme["font.heading"];
+  const generated = sampleDocument(VARIANTS[0] as (typeof VARIANTS)[number]);
+  const document: RetorikaDocument = {
+    ...generated,
+    fonts: [font],
+    theme: { ...generated.theme, "font.heading": stack, "font.body": stack },
+  };
+  const karla = dirname(createRequire(import.meta.url).resolve("@fontsource/karla/package.json"));
+  const fonts = readFontBundle(document);
+  for (const [role, weight] of [
+    ["regular", 400],
+    ["bold", 700],
+  ] as const) {
+    const woff = readFileSync(join(karla, "files", `karla-latin-${weight}-normal.woff`));
+    fonts.set(`propia-${font.id}-${role}.ttf`, woffToTtf(new Uint8Array(woff)));
+  }
+  return buildSite(document, {
+    siteId: "lighthouse-propia",
+    assets: sampleAssets(document),
+    fonts,
+  });
 }
 
 function serve(bundle: SiteBundle): Promise<{ server: Server; origin: string }> {
@@ -248,6 +359,34 @@ describe("Part 8.5 — Lighthouse over a sample site, the three compositions", (
       ).toBe(BEST_PRACTICES);
     }, 120_000);
   }
+
+  it(`v1 in an owner's own .ttf: performance and accessibility at ${FLOOR * 100} or more`, async () => {
+    const bundle = ownTtfSite();
+    const faces = bundle.files.filter((file) => /^fonts\/propia-.*\.ttf$/.test(file.path));
+    // The subject is what it says: two TrueType faces, uncompressed, and nothing of the gallery.
+    expect(faces).toHaveLength(2);
+    // TrueType by its first bytes, not by its name: a WOFF under a `.ttf` name would measure the
+    // compressed format and call it the heaviest.
+    for (const face of faces) {
+      expect(Buffer.from(face.contents.subarray(0, 4)).toString("hex"), face.path).toBe("00010000");
+    }
+    expect(bundle.files.filter((file) => file.path.endsWith(".woff2"))).toEqual([]);
+    const kb = faces.reduce((sum, file) => sum + file.contents.byteLength, 0) / 1024;
+    const measured = await measure(`own .ttf · ${kb.toFixed(1)} KB of faces`, bundle);
+    console.log(report(measured));
+    expect(
+      measured.scores["performance"],
+      `${measured.label}: performance below ${FLOOR * 100} — ${report(measured)}`,
+    ).toBeGreaterThanOrEqual(FLOOR);
+    expect(
+      measured.scores["accessibility"],
+      `${measured.label}: accessibility below ${FLOOR * 100} — ${report(measured)}`,
+    ).toBeGreaterThanOrEqual(FLOOR);
+    expect(
+      measured.scores["best-practices"],
+      `${measured.label}: best practices short of full marks — ${report(measured)}`,
+    ).toBe(BEST_PRACTICES);
+  }, 120_000);
 
   it(`a page drawn per entry: performance and accessibility at ${FLOOR * 100} or more`, async () => {
     const { bundle, path } = fichaSite();
