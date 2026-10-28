@@ -4529,3 +4529,243 @@ con Zilla Slab, 106,6 KB, bajo el techo de 120, que no se movió.
 - **e2e completo: 257 verdes y 1 omitido en 1048 s, a la primera.** Con 40 familias, la caminata de la
   galería baja la lista fila a fila, comprueba que al abrir no se pide la cara del pie, que «GARAMÓND»
   encuentra las dos Garamond y que «De cartel» filtra a sus ocho.
+
+### Día 4 — el motor de la letra propia (PR de `feat/la-letra-propia`, ADR 0056)
+
+**Lo que ve el CEO: nada todavía**, como el sprint 24 día 5 antes del 6. El día es el motor y la ADR
+0056, «La letra propia viaja como una foto»; el botón, la inspección y la vista previa son del día 5.
+Un documento con letra propia que llegara a `/api/download` ese día se rechazaba con «missing the
+owner's font bytes»: no se publicaba a medias.
+
+**La decisión de fondo.** Una fuente propia es **una fila que el dueño añadió, no un valor que
+tecleó**. La ADR reabre la 0028 por su propia tercera condición, lee la 0032 §2 (sus tres cláusulas
+hablan de un nombre tecleado; esto es un fichero que viaja), conserva la 0046 §2 (el documento sigue
+sin nombrar un fichero: se acuña del id y del rol) y lee la 0026: no va detrás del interruptor. Escribe
+las cinco condiciones de David y su ajuste 4, y la obligación de las plantillas, que también recoge
+`document-rules.md`.
+
+**Esquema 1.14.0, migración 0015.** `fonts?`, dos registros como máximo: id de 8 hex, familia leída
+del fichero y distinta de la galería **sin distinguir mayúsculas**, caras `[regular]`,
+`[regular, bold]` o `[variable]` con formato olfateado y `wght: [min, max]`, declaración `true` literal
+con fecha, licencia adjunta opcional. `up` no mueve nada; `down` quita el registro y recorta la
+familia de cada pila, con pérdida declarada. **Lo que el esquema no puede comprobar se dijo:** una pila
+que nombra una propia ya retirada no se distingue de `Georgia, …`; lo guardan el verbo «Quitar» del
+día 5 y el `down`.
+
+**Renderer y publisher.** `cssFontSrc` admite cuatro extensiones con su `format()` y rechaza
+`evil.woff2.ttf`, `.svg`, `.ttc`, `.eot` y `.TTF`. Las reglas propias van tras las de la tabla y por id
+(INV_5). `buildSite` comprueba la declaración **él mismo**, sobre un documento construido a mano, y
+lleva la licencia adjunta en `fonts/LICENCIA-propia-<id>.<txt|pdf>`. `pnpm size` pesa la letra propia
+en su propia línea. **Corpus nuevo:** `letra-propia.json`, titulares en «Karla 2» con los bytes de
+Karla en `fixtures/fonts/` (400 en woff2 y 700 en woff, para ejercitar los dos `format()`). Es el único
+golden que se mueve.
+
+**Medidas del día.** `pnpm test` 3195; `test:invariants` 27; `test:golden` 24 (solo el nuevo); diez
+sabotajes, todos en rojo; `a11y` local 538; e2e filtrado al bloque del selector, 4 verdes.
+
+### Día 5 — importar una fuente (PR de `feat/importar-una-fuente`)
+
+**Lo que ve el CEO.** En Estilo, «Cambiar» la letra de los titulares o del texto, y al pie de la lista,
+**«Subir mi fuente»**. El cliente elige uno o dos archivos (o los arrastra) y ve el nombre con el que
+viajará («Karla» pasa a «Karla 2», y se le dice por qué). Puede adjuntar la licencia, y marca la
+casilla. Su letra aparece al instante en el lienzo, primera de la lista con el chip «Propias»; un solo
+«Deshacer» lo quita todo, y el ZIP la lleva.
+
+**La decisión de David al abrir el día: el ajuste 2 no se cumple al pie de la letra**, y la ADR 0056 §10
+lo escribe así. Pedía la misma sesión que `/api/download`, pero `/api/download` no tiene sesión: es
+anónima por la ADR 0034 §2. David eligió **pública con topes**, con tres condiciones:
+
+1. **Mismo origen, con repliegue:** `Sec-Fetch-Site` y, sin ella, `Origin`.
+2. **Veinte peticiones por minuto y dirección**, compartidas con `/api/download`.
+3. **CPU medida:** 17–19 ms en frío en `next dev`, bajo los 200 ms que mandaban a un `worker_thread`.
+
+**Lo demás, por ajuste.**
+
+- **Inspección en el servidor** (ajuste 1): brotli entero con su tope exacto, y la bomba de 1 KB a 50
+  MB, rechazada.
+- **CSP** (ajuste 6): el lienzo no tiene ninguna; el e2e lee las caras *cargadas* dentro del marco.
+- **Licencia olfateada** (ajuste 3), por el mismo `readFonts` de la descarga.
+- **La descarga reolfatea cada cara**: un woff2 declarado `ttf` se rechaza, no se reetiqueta.
+- **El cuerpo crece 10 MiB y no 4**, que es el peor caso exacto con los topes.
+- **La puerta:** `fontsMissing` bloquea y `heavyFonts` (más de 300 KB) avisa. Los modales pasan a doce.
+
+**La frase de la casilla.** La PR esperaba el visto bueno del CEO a «Confirmo que tengo licencia para
+usar esta fuente en mi web» y a la línea de debajo. David la fusionó el 28 de octubre; **el visto bueno
+no consta en este registro**, y se lista abajo para que quede escrito.
+
+**Medidas del día.** e2e completo **260 verdes y 1 omitido en 1078 s**, a la primera; dieciocho
+sabotajes, todos en rojo. Sin arreglar, solo anotado: la medida de 320 px pide las fotos del banco por
+su nombre relativo y les da 404, como ya hacía antes del día. **Hasta el día 6 la fuente no viajaba con
+la cuenta**, y se dijo.
+
+### Día 6 — la fuente viaja con la cuenta (PR de `feat/la-fuente-viaja-con-la-cuenta`, #317)
+
+**Lo que ve el CEO.** Sube la fuente de su marca, guarda la web en su cuenta y la abre en otro
+ordenador: los titulares salen en su letra y la descarga no se bloquea, la trajera antes de guardar la
+web o después.
+
+**Lo que se construyó** (ADR 0056 §12):
+
+- **El bucket.** Migración de base de datos `0004`, bucket privado `fuentes`, el de las fotos con el
+  bucket cambiado: 2 MiB (el `MAX_FONT_BYTES`, comprobado contra el SQL), los seis tipos que el editor
+  produce y las cuatro políticas. **David la aplicó en desarrollo y producción el 28 de octubre**, tras
+  redesplegar.
+- **El tipo sale de los bytes**, nunca de `File.type` (ajuste 7). Además se midió que storage-js manda
+  el tipo del propio `Blob` en la parte del multipart, no la opción `contentType`; se fijan los dos.
+- **La sincronía reutiliza `photoSyncPlan`** y corre tras cada guardado aceptado, también el primero.
+  El indicador cuenta **por fuente, no por fichero**: «Guardado en tu cuenta · 1 fuente sin subir».
+- **Al abrir desde la cuenta**, se bajan del bucket las caras que faltan y se guardan en el navegador.
+- **El barrido** vacía `fotos` y luego `fuentes` antes de la transacción, y se salta la cuenta si
+  cualquiera de los dos falla. `photos.ts` pasa a `objects.ts`, con el bucket como parámetro.
+
+**Lo que encontró, y arregló con ello.** Una web guardada desde la sesión —el camino normal, «Guardar
+en mi cuenta» al final del viaje— **no reconciliaba nunca**: la reconciliación leía el dueño de las
+props, que solo tiene una web abierta *desde* la cuenta. Desde el ADR 0037 día 4, una foto añadida
+después del primer guardado no subía, mientras el indicador decía «Guardado en tu cuenta». Para las
+fuentes era el caso principal.
+
+**Lo que la suite no puede andar, dicho en la PR.** `/mis-webs/[id]` comprueba la sesión en el
+servidor, y en la suite Supabase es un puerto muerto. La mitad «otro ordenador» se cubrió de tres
+maneras:
+
+- en la caminata protegida contra un proyecto real, que ahora lleva la fuente;
+- con `fetchSiteFonts` probado en unidad;
+- y verificada en Chromium contra un Supabase simulado al que llegan el navegador y el servidor.
+
+**Medidas del día.** `test:db` **85** en verde, con cada caso de storage repetido sobre los dos
+buckets. e2e completo **261 verdes, 1 rojo, 1 omitido**: el rojo fue la caminata que asevera la frase del
+diálogo de la cuenta, que se cambió a propósito; se actualizó y su bloque dio 4 de 4. Trece sabotajes,
+todos en rojo. **Un hallazgo de los sabotajes:** quitar solo el dueño del `with check` deja la suite en
+verde, porque un `update` que lee la fila comprueba también la fila nueva contra la política `select`.
+La propiedad está guardada dos veces.
+
+### Día 7 — colchón y cierre (PR de `test/el-cierre-del-sprint-29`)
+
+**Lo que el día 6 dejó corto, primero.** En una web abierta desde la cuenta, si las caras no llegan
+del bucket, la puerta decía «Este navegador ya no tiene los archivos de… Quítala y vuelve a
+subirla». Las dos cosas eran falsas ahí: el navegador nunca los tuvo, y quien abre su web en otro
+ordenador puede no tener el fichero a mano. Para esa web dice ahora **«No hemos podido traer de tu
+cuenta los archivos de {families}. Recarga la página para volver a intentarlo. Si siguen sin llegar,
+quítala en Estilo, en la letra, y vuelve a subirla desde el ordenador donde la tengas, o elige otra
+letra.»** Se verificó en Chromium contra el Supabase simulado: con el bucket rechazando, sale la frase
+nueva; al volver el bucket, **una recarga trae las caras y la descarga deja de bloquearse**, que es lo
+que la frase promete. Una web que vive en el navegador conserva la frase de antes.
+
+**Lighthouse, con una fuente propia `.ttf`.** La suite gana un quinto sujeto permanente: la composición
+v1 con las dos mitades en un `.ttf` propio. Son Karla 400 y 700, desenvueltas de WOFF a TrueType dentro
+de la prueba, así que no hay binario nuevo en el repositorio, y la prueba exige por los primeros bytes
+que sean TrueType (saboteado: rojo). Resultados, en móvil:
+
+| sujeto | rendimiento · accesibilidad · buenas prácticas · SEO | LCP | CLS |
+|---|---|---|---|
+| v1 imagen a la derecha | 100 · 100 · 100 · 100 | 1,65 s | 0,027 |
+| v2 imagen de fondo | 99 · 100 · 100 · 100 | 2,18 s | 0,000 |
+| v3 imagen a la izquierda | 99 · 100 · 100 · 100 | 2,18 s | 0,027 |
+| **v1 en un `.ttf` propio, 53,4 KB de caras** | **100 · 100 · 100 · 100** | 1,65 s | **0,000** |
+| una página por ficha | 100 · 100 · 100 · 100 | 0,90 s | 0,000 |
+
+**Y la peor, medida aparte: lo que pesa la letra decide el rendimiento.** Se rellenaron las dos caras
+con una tabla que el navegador descarta pero descarga, a varios pesos, sin dejar el relleno en el
+código:
+
+| caras, en total | rendimiento | LCP |
+|---|---|---|
+| 53 KB | 100 | 1,65 s |
+| 194 KB | 95 | 2,70 s |
+| 294 KB | 89 | 3,30 s |
+| 404 KB | 82 | 3,90 s |
+| 594 KB (cada cara 297 KB, **sin aviso**) | 73 | 4,88 s |
+| 714 KB (cada cara 357 KB, con aviso) | 68 | 5,48 s |
+
+El suelo de 95 del protocolo (Parte 8.5) se cruza hacia los **190 KB de caras en total**. El aviso de
+la condición 2 de David cuenta **por fichero a partir de 300 KB**, así que dos ficheros de 297 KB dejan
+una web de 73 sin decir nada, y la frase del aviso («Tu web tardará más en abrirse») es verdad mucho
+antes de aparecer. No se cambió: el umbral es una condición de David. Va primera en lo que deja abierto.
+
+**La inspección, en el despliegue.** Es la medida que el día 5 dejó como estimación. Con el `curl` del
+runbook §9 y un woff2 de 2 032 006 bytes que se expande a unos 8,4 MB (el peor que admiten los topes),
+leída de `Server-Timing`:
+
+- **en Render:** la primera petición encontró la instancia dormida y agotó 150 s sin respuesta; las
+  siguientes, **462,9 ms y 378,7 ms**, y después 53,5, 48,6, 35,7 y 50,8 ms;
+- **en este portátil**, con el editor construido: 5,9–7,2 ms.
+
+**Las dos primeras tras despertar superan los 200 ms** que la condición 3 de David puso para pasar a un
+`worker_thread`. La condición se escribió y se midió en el servidor de desarrollo, donde se cumple, así
+que la decisión no la dispara el número: es de David. La ADR 0056 §10 recoge la medida con fecha.
+
+**Las demás medidas de cierre.**
+
+- **e2e completo: 262 verdes y 1 omitida en 1086 s, a la primera**, con `caffeinate` y nada en paralelo.
+- `a11y` local: **538** en verde, en 30 s.
+- `test:db`: **85**, contra un Postgres temporal con contraseña. El Postgres.app de esta máquina
+  rechaza la autenticación «trust» de un proceso que no ha autorizado.
+- `pnpm test` 3345, `test:invariants` 27, `test:golden` 24 sin moverse. `typecheck`, `lint`,
+  `renderer:deps`, `schema:guard` y `secrets:scope` (121 módulos, 29 de cliente, sin cruce): en verde.
+- **`pnpm size`, las tres líneas.** Nuestros bytes, por debajo de 20 KB en todos (2,7 KB en
+  `letra-propia`). La galería, con la pareja más pesada en **Vollkorn y Zilla Slab, 106,6 KB** de 120.
+  Y la letra propia en su línea, **31,7 KB** en el corpus, fuera del techo.
+- **Arranques, como los midió la ADR 0055 §8.** `next start` del editor construido, tres veces:
+  «Ready in» **59, 56 y 57 ms** (el día 3, 64, 58 y 59). `.next/server` pesa 56 768 KB y `fontData/`
+  2 224 KB en 40 módulos. La primera respuesta a una cara se tomó con `curl` (145, 21 y 28 ms; en
+  caliente, 2 ms) y no en proceso como el día 3, así que no se compara con aquella columna.
+
+**El ZIP, contra el del inicio del sprint.** Son los diecinueve documentos del corpus, construidos como
+descarga con el publicador de `6845389` (la fusión de la #310) y con el de hoy, en un árbol desprendido
+con `pnpm install --offline` y el guion del cierre del 28.
+
+- **De 98 ficheros, cambian dos**: `fonts/OFL-EBGaramond.txt` en `menu-curado` y en `menu-y-paginas`.
+  Es la decisión de la #312: la licencia que viaja es la del titular. La línea de copyright que
+  @fontsource componía, con el nombre de un fichero colgado, pasa a ser la del autor, y el enlace pasa
+  de `scripts.sil.org/OFL` a `openfontlicense.org` (4519 → 4398 bytes).
+- **Las 35 páginas, todas las caras y todas las imágenes son las del inicio byte a byte.** La fila de
+  EB Garamond no cambió de sitio al reordenarse la tabla, que era lo que el plan quería comprobar.
+- **El corpus gana `letra-propia`**, con sus diez ficheros.
+
+**La CI del sprint.** Dieciséis ejecuciones del 27 al 28 de octubre:
+
+- **una roja**: el día 2, el *timeout* de la comparación byte a byte bajo cobertura, arreglado en la
+  misma PR;
+- **una cancelada**: la #312, sustituida por su siguiente empuje;
+- las otras catorce, en verde a la primera.
+
+**Los números del registro.**
+
+- `Editor.tsx`: **8244** líneas (8095 al cierre del 28). `Variants.tsx`: 1966.
+- El `e2e`: **22 530** líneas y 1 163 177 bytes, el 55 % de los 2 MiB que Biome procesa.
+- Del inicio a `213edfc`: diecisiete commits, 193 ficheros, +18 710 / −1 122.
+
+**Las nueve fotos.** Nada cambió en el sprint. Las dieciséis PNG de la raíz siguen siendo las del 11
+de octubre, todas de 1024 de ancho, y la exención del ADR 0035 deja de valer el **1 de diciembre**:
+quedan 34 días.
+
+### Lo que el sprint 29 deja abierto
+
+1. **El peso de la letra propia contra el suelo de Lighthouse** (arriba): el aviso por fichero a partir
+   de 300 KB deja pasar una web de 73. Tres caminos para David:
+   - avisar por el **total de caras** que la web envía, hacia los 190 KB;
+   - **bajar el umbral por fichero**, hacia los 95 KB;
+   - o **dejarlo como está**, porque son bytes del dueño y la web solo tarda más.
+2. **La inspección en Render pasa de 200 ms en las dos primeras peticiones tras despertar** (463 y 379
+   ms). La condición 3 dice `worker_thread`, y la ADR 0056 §10 ya advertía que un worker en una décima
+   de CPU compite por la misma décima. Es decisión de David.
+3. **El orden de las cabeceras de dirección en Render**, sin medir: hace falta una segunda red (runbook
+   §9).
+4. **La frase de la casilla**: confirmar que el CEO dio su visto bueno, que este registro no recoge.
+5. **La caminata protegida contra el proyecto real**, con la `0004` ya aplicada: los pasos 5c y 8 de
+   `docs/tasks/el-recorrido-de-la-cuenta.md`. Es la única prueba de la mitad «otro ordenador» contra
+   Supabase de verdad.
+6. **Catorce firmas**, todas `proposed`: **0042, 0043, 0045, 0046, 0047, 0048, 0049, 0050, 0051, 0052,
+   0053, 0054, 0055 y 0056**.
+7. **Las nueve fotos**, antes del 1 de diciembre.
+8. **Sin arreglar, solo anotado:** la medida de 320 px pide las fotos del banco por su nombre relativo
+   y les da 404 (día 5). Y `buildSite` acepta un WOFF bajo un nombre `.ttf`: lo vio el sabotaje de
+   Lighthouse. Un dueño no puede llegar ahí, porque `/api/download` reolfatea cada cara antes, pero el
+   publicador confía en los bytes que le dan.
+9. **Del sprint 28, y fuera de este por el plan:** escalar con un panel abierto guarda el ancho del
+   panel; Safari y el favicon; `lookAhead` en una instancia fría (la URL ya está en el runbook); el
+   diálogo de «Volver a la original» a zoom menor que 1; el Tab nativo desde un texto en escritura; los
+   contornos a escala.
+10. **Fuera por el plan, y nombrados en él:** familias monoespaciadas, convertir a woff2 en el
+    navegador, enviar enteras las de nombre reservado (el apéndice de la ADR 0055 deja los pesos para
+    el sprint 30) y las plantillas, cuya obligación ya está en `document-rules.md`.

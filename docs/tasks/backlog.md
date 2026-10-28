@@ -12,7 +12,69 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 27 October 2026, **closing sprint 28 — «lo que ya existe, sin bordes».** The first
+Last reviewed: 28 October 2026, **closing sprint 29 — «la letra de la marca».** David's boss asked for
+a very wide choice of letter for headings and text, a chooser that does not lengthen the right panel,
+and a way for a client to bring the brand's own font. Seven days, four decisions of his before
+planning and seven adjustments while approving, all of them about bytes from outside. What changed for
+somebody using it: the letter is chosen in a dialog that is navigated rather than scrolled, drawn with
+the business's own name (día 1); **forty families** in four species, each with its substitute written
+down ([ADR 0055](../decisions/0055-the-gallery-is-navigated-one-table-and-each-familys-substitute.md), días 2–3); a
+family that reserves its name is out, and Libre Baskerville, shipped since sprint 24, was retired for
+Gelasio by migration `0014` (the separate PR before día 2); **the owner's own font** — uploaded,
+inspected on the server, declared, drawn on the canvas and shipped in the ZIP
+([ADR 0056](../decisions/0056-an-own-font-travels-like-a-photograph.md), días 4–5); and it **travels
+with the account** in a `fuentes` bucket (día 6). The record is `docs/design/REVIEW.md`, sprint 29.
+
+**What sprint 29 leaves open** — the full text, with every number, is the last section of REVIEW's
+sprint 29:
+
+1. **An own font's weight against the Lighthouse floor.** Measured on día 7: 53 KB of faces scores
+   100, 194 KB 95, 294 KB 89, 594 KB 73 — two files of 297 KB that the per-file warning at 300 KB
+   never names. David's condition 2 to revisit: warn on the site's total (near 190 KB), start lower per
+   file (near 95 KB), or leave it, since the bytes are the owner's.
+2. **The inspection route on Render** reads 463 and 379 ms for the first two requests after the
+   instance wakes, then 36–54 ms; David's condition 3 says a `worker_thread` above 200 ms, measured
+   and met on the development server. His call (ADR 0056 §10's dated note).
+3. **The client-address header order on Render**, unmeasured: needs a second network (runbook §9).
+4. **The checkbox sentence**: the día 5 PR waited for the CEO's approval and was merged; the approval
+   is not on record.
+5. **The gated walk against the real project**, now that migration `0004` is applied: steps 5c and 8
+   of `docs/tasks/el-recorrido-de-la-cuenta.md` are the only proof of «otro ordenador» against
+   Supabase itself.
+6. **Fourteen signatures**: 0042, 0043, 0045–0056, all `proposed`.
+7. **The nine photographs at 1600 × 1072**, unchanged: the exemption fails on **1 December 2026**.
+8. **Noted, not fixed:** the 320 px measurement asks for bank photographs by their relative name and
+   gets 404s (día 5); `buildSite` accepts a WOFF under a `.ttf` name — unreachable by an owner, since
+   `/api/download` re-sniffs every face first, but the publisher trusts its caller's bytes.
+9. **From sprint 28, out of this sprint by its plan:** escalating with a panel open still writes the
+   panel's width; Safari and the favicon; `lookAhead.ts` on a cold Render instance (the URL is now in
+   the runbook); the revert dialog below zoom 1; native Tab from a text being written in; outlines at
+   scale.
+
+**What this sprint found that nobody was looking for:**
+
+1. **`@fontsource`'s LICENSE drops the Reserved Font Names the holders declare** (10 of 92), and Libre
+   Baskerville, shipped since sprint 24, reserves its own (the separate PR before día 2). The licence
+   that travels is now the holder's, kept in the repository with its commit.
+2. **Montserrat, Poppins and Roboto reserve nothing** — the plan's draft line would have lied (día 2).
+3. **A `fieldset` that scrolls does not clip what it paints** in Chromium: rows drew over «Hecho»
+   past twenty-five families (día 2).
+4. **`/api/download` has no session**, so the plan's adjustment 2 rested on something that is not so;
+   David chose public with three conditions (día 5).
+5. **A site saved from the session never reconciled its files with the account**: since ADR 0037 day
+   4 a photograph added after the first save was never uploaded while the indicator said «Guardado en
+   tu cuenta» (día 6).
+6. **storage-js sends a `Blob`'s own type in the multipart part**, not the `contentType` option (día
+   6).
+7. **An `update` that reads the row checks the new row against the `select` policy too**, so the
+   storage policies' `with check` is guarded twice and a sabotage of it alone stays green (día 6).
+8. **The account pages check the session on the server**, so no mocked walk can open a saved site; a
+   mock both the browser and `next dev` reach is how it was seen (días 6 and 7).
+9. **Postgres.app refuses «trust» to a process it has not been told about**; `pnpm test:db` ran
+   against a temporary Postgres with a password.
+10. **Lighthouse's score falls with the faces' weight long before the warning speaks** (día 7, above).
+
+The review before that: 27 October 2026, **closing sprint 28 — «lo que ya existe, sin bordes».** The first
 sprint in four with a theme named by David: «reparar bugs… pulir lo que tenemos», no features. Eight
 days, fourteen things in and seven left out by name, four decisions of his before planning and five
 adjustments while approving. What changed for somebody using it: opening or closing a panel no longer
@@ -1979,6 +2041,12 @@ open survives.
   is against the **Original Version**, and the latin slice in woff2 is a Modified Version twice over
   ([ADR 0045](../decisions/0045-the-serif-this-product-ships-reserves-no-name.md)): the family is gone,
   EB Garamond took its place, and migration `0012` moved the documents that already named it.
+
+  **And on sprint 29 (27–28 October 2026) the premise moved again**: forty families
+  ([ADR 0055](../decisions/0055-the-gallery-is-navigated-one-table-and-each-familys-substitute.md)), and the owner's own
+  font — uploaded, inspected, declared and shipped in the ZIP beside the page, travelling with the
+  account ([ADR 0056](../decisions/0056-an-own-font-travels-like-a-photograph.md)). «Whatever the
+  visitor's machine has» is now true only of a stack whose first family nobody sends.
 - ~~**A second undo pressed immediately after the first can be lost, while the canvas re-renders.**
   Found by measuring the shortcut that sprint 12 day 3 built, not by supposing: undoing replaces the
   canvas `<iframe>`'s document, and with it the `keydown` listener `wireInteractions` installs on
