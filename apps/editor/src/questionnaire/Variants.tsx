@@ -1691,6 +1691,7 @@ export function Variants({
           savedWhere={savedWhere}
           photosMissing={photosMissing}
           fontsMissing={fontsMissing}
+          fontsFromAccount={openedFromAccount}
           onSaveToAccount={accountAvailable ? () => setAccountOpen(true) : undefined}
           toast={toast}
           onDismissToast={dismissToast}

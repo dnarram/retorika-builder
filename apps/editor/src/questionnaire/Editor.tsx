@@ -631,6 +631,7 @@ export function Editor({
   savedWhere,
   photosMissing,
   fontsMissing,
+  fontsFromAccount = false,
   onSaveToAccount,
   toast,
   onDismissToast,
@@ -814,6 +815,12 @@ export function Editor({
   photosMissing?: number | null | undefined;
   /** The same for the owner's own fonts, counted by font (sprint 29 día 6). */
   fontsMissing?: number | null | undefined;
+  /**
+   * Whether this editor was opened from the account, which is where a missing font's files are
+   * fetched from — so the download gate's `fontsMissing` says «recarga» rather than «ya no
+   * tiene» (sprint 29 día 7).
+   */
+  fontsFromAccount?: boolean | undefined;
   onSaveToAccount?: (() => void) | undefined;
   toast: DeleteToast | null;
   onDismissToast: () => void;
@@ -7730,6 +7737,7 @@ export function Editor({
           {downloadDialog?.kind === "fontsMissing" || downloadDialog?.kind === "heavyFonts" ? (
             <FontFilesDialog
               gate={downloadDialog}
+              fromAccount={fontsFromAccount}
               onDownloadAnyway={() => acceptAndContinue("fonts")}
               onCancel={() => setDownloadDialog(null)}
             />

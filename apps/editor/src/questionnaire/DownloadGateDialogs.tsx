@@ -593,15 +593,23 @@ export function StackedTextDialog({
  *   `/api/download` would refuse and «Descargar igualmente» could only fail — `PhotosFailedDialog`'s
  *   lesson. What it offers is the way out, named rather than automated: removing the font and
  *   uploading it again is the owner's to do, because only they have the file.
+ *   **For a web opened from the account it says something else** (sprint 29 día 7): there the
+ *   files were asked of the owner's folder and did not arrive, so «este navegador ya no los tiene»
+ *   would be false — it never had them — and «vuelve a subirla» sends somebody who may be on a
+ *   computer without the file to do something they cannot. A reload asks the account again, so
+ *   that comes first, and uploading from where the file is comes second.
  * - **`heavyFonts` warns**: a face above 300 KB is a slower page and not a broken one (David's
  *   condition 2), and goes past like every other warning.
  */
 export function FontFilesDialog({
   gate,
+  fromAccount = false,
   onDownloadAnyway,
   onCancel,
 }: {
   gate: Extract<DownloadGate, { kind: "fontsMissing" | "heavyFonts" }>;
+  /** The web was opened from the account, where its fonts' files are fetched from. */
+  fromAccount?: boolean;
   onDownloadAnyway: () => void;
   onCancel: () => void;
 }) {
@@ -626,10 +634,11 @@ export function FontFilesDialog({
         </h2>
         <p className="mt-2 mb-0 text-[14px] leading-snug text-ui-muted">
           {gate.kind === "fontsMissing"
-            ? es["editor.download.fontsMissing.body"].replace(
-                "{families}",
-                gate.families.map((family) => `«${family}»`).join(", "),
-              )
+            ? es[
+                fromAccount
+                  ? "editor.download.fontsMissing.bodyAccount"
+                  : "editor.download.fontsMissing.body"
+              ].replace("{families}", gate.families.map((family) => `«${family}»`).join(", "))
             : (gate.files.length === 1
                 ? es["editor.download.heavyFonts.body.one"]
                 : es["editor.download.heavyFonts.body.many"].replace(
