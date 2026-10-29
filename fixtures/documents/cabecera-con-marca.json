@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.15.0",
+  "schemaVersion": "1.16.0",
   "id": "doc-cabecera-con-marca",
   "siteName": "Taberna Santo Domingo",
   "theme": {
@@ -445,7 +445,9 @@
     "brand": {
       "name": true,
       "logo": {
-        "src": "assets/logo.png"
+        "src": "assets/logo.png",
+        "width": 96,
+        "height": 96
       }
     },
     "hairline": true

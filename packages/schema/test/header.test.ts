@@ -4,6 +4,7 @@ import type { RetorikaDocument, Section } from "../src/document.ts";
 import {
   deletePage,
   deleteSection,
+  LOGO_MAX_EDGE,
   menuLabelIssue,
   pageToSection,
   parseDocument,
@@ -276,5 +277,20 @@ describe("setHeader", () => {
       documentWith({ brand: { logo: { src: "data:image/png;base64,AAAA" } } }),
     ).toThrow();
     expect(() => documentWith({ brand: { logo: { src: "../evil.png" } } })).toThrow();
+  });
+
+  it("keeps a logo's size as both sides or neither, whole pixels up to the edge it is kept at", () => {
+    const logo = (size: Record<string, unknown>) =>
+      documentWith({ brand: { logo: { src: "logo-3f9a7c21.png", ...size } } });
+    expect(() => logo({})).not.toThrow();
+    expect(() => logo({ width: 512, height: 205 })).not.toThrow();
+    expect(() => logo({ width: 1, height: LOGO_MAX_EDGE })).not.toThrow();
+    // One side alone is a ratio nobody can draw.
+    expect(() => logo({ width: 512 })).toThrow();
+    expect(() => logo({ height: 205 })).toThrow();
+    // Nothing the editor keeps is larger than its edge, nor empty, nor a fraction of a pixel.
+    expect(() => logo({ width: LOGO_MAX_EDGE + 1, height: 205 })).toThrow();
+    expect(() => logo({ width: 0, height: 205 })).toThrow();
+    expect(() => logo({ width: 512.5, height: 205 })).toThrow();
   });
 });

@@ -1858,18 +1858,19 @@ describe("1.15.0 — the header is the owner's", () => {
     };
   }
 
-  it("is registered, and it is the one the chain ends at", () => {
+  it("is registered", () => {
+    // The end of the chain until 1.16.0, and the test said so; the end is asserted below now, by the
+    // step that is the end.
     expect(step("1.15.0").version).toBe("1.15.0");
-    expect(SCHEMA_VERSION).toBe("1.15.0");
   });
 
   it("seals a 1.14.0 document and moves nothing, because every new key is optional", () => {
     const input = before();
-    const migrated = migrateToCurrent(input);
+    const migrated = upTo(input, "1.15.0");
     expect(migrated["schemaVersion"]).toBe("1.15.0");
     expect({ ...migrated, schemaVersion: "1.14.0" }).toEqual(input);
     expect(Object.hasOwn(migrated, "header")).toBe(false);
-    expect(() => parseDocument(migrated)).not.toThrow();
+    expect(() => parseDocument(migrateToCurrent(input))).not.toThrow();
   });
 
   it("migrating a migrated document changes nothing", () => {
@@ -1877,10 +1878,10 @@ describe("1.15.0 — the header is the owner's", () => {
     expect(migrateToCurrent(once)).toEqual(once);
   });
 
-  it("leaves a document whose owner shaped the header exactly as it is", () => {
+  it("leaves a document whose owner shaped the header exactly as it is, apart from the later seals", () => {
     const current = after();
-    expect(migrateToCurrent(current)).toEqual(current);
-    expect(() => parseDocument(current)).not.toThrow();
+    expect(migrateToCurrent(current)).toEqual({ ...current, schemaVersion: SCHEMA_VERSION });
+    expect(() => parseDocument(migrateToCurrent(current))).not.toThrow();
   });
 
   /** **`down` is lossy, and this is the loss, named:** the header and every label go; `inMenu` stays,
@@ -1920,7 +1921,119 @@ describe("1.15.0 — the header is the owner's", () => {
           page.menuLabel !== undefined || page.sections.some((s) => s.menuLabel !== undefined),
       );
       if (raw.header === undefined && !labelled) continue;
-      expect(raw.schemaVersion, file).toBe("1.15.0");
+      // 1.15.0 or later: `cabecera-con-marca` moved to 1.16.0 when its logo gained a size.
+      expect(["1.15.0", "1.16.0"], file).toContain(raw.schemaVersion);
     }
+  });
+});
+
+/**
+ * `0017` — the logo keeps its size (ADR 0059, note of sprint 30 día 7): `header.brand.logo` may
+ * carry the `width` and `height` the editor kept it at. `up` seals and moves nothing — the size is in
+ * the bytes, which a migration never sees, so a logo saved before today keeps publishing as it did —
+ * and `down` takes the two numbers off and keeps the file.
+ */
+describe("1.16.0 — the logo keeps its size", () => {
+  /** A 1.15.0 site whose header shows a logo kept on día 5: a file, no size. */
+  function before(): Record<string, unknown> {
+    return {
+      schemaVersion: "1.15.0",
+      id: "doc-logo",
+      siteName: "Taberna Santo Domingo",
+      theme,
+      collections: [],
+      pages: [
+        {
+          id: "home",
+          slug: "index",
+          title: "Taberna Santo Domingo",
+          sections: [
+            {
+              id: "sec-cover",
+              preset: { catalogId: "cover", variantId: "image-right" },
+              source: "catalog",
+              layout: null,
+              content: [],
+            },
+          ],
+        },
+      ],
+      header: { brand: { name: true, logo: { src: "logo-3f9a7c21.png" } }, sticky: true },
+    };
+  }
+
+  /** The same site after its owner uploaded the logo again: a new name, and the size it was kept at. */
+  function after(): Record<string, unknown> {
+    return {
+      ...before(),
+      schemaVersion: "1.16.0",
+      header: {
+        brand: { name: true, logo: { src: "logo-0c4e9b17.png", width: 512, height: 205 } },
+        sticky: true,
+      },
+    };
+  }
+
+  it("is registered, and it is the one the chain ends at", () => {
+    expect(step("1.16.0").version).toBe("1.16.0");
+    expect(SCHEMA_VERSION).toBe("1.16.0");
+  });
+
+  it("seals a 1.15.0 document and moves nothing, because both keys are optional", () => {
+    const input = before();
+    const migrated = migrateToCurrent(input);
+    expect(migrated["schemaVersion"]).toBe("1.16.0");
+    expect({ ...migrated, schemaVersion: "1.15.0" }).toEqual(input);
+    expect(() => parseDocument(migrated)).not.toThrow();
+  });
+
+  it("migrating a migrated document changes nothing", () => {
+    const once = migrateToCurrent(before());
+    expect(migrateToCurrent(once)).toEqual(once);
+  });
+
+  it("leaves a logo that carries its size exactly as it is", () => {
+    const current = after();
+    expect(migrateToCurrent(current)).toEqual(current);
+    expect(() => parseDocument(current)).not.toThrow();
+  });
+
+  /** **`down` is lossy, and this is the loss, named:** the two numbers go, the file stays — the logo
+   * as día 5 stored it, which 1.15.0 publishes 40px tall with its width found on arrival. */
+  it("takes the size off on the way down and keeps the file", () => {
+    const down = step("1.16.0").down;
+    expect(down, "1.16.0 has no `down`").toBeDefined();
+    const back = down?.(after()) ?? {};
+    expect(back["schemaVersion"]).toBe("1.15.0");
+    expect(back["header"]).toEqual({
+      brand: { name: true, logo: { src: "logo-0c4e9b17.png" } },
+      sticky: true,
+    });
+    expect(() => parseDocument(migrateToCurrent(back))).not.toThrow();
+  });
+
+  it("round-trips a document whose logo has no size, and one with no header at all", () => {
+    const down = step("1.16.0").down;
+    const input = before();
+    expect(down?.(migrateToCurrent(input))).toEqual(input);
+    const { header: _, ...headless } = input;
+    expect(down?.(migrateToCurrent(headless))).toEqual(headless);
+  });
+
+  it("is the claim it rests on: the one corpus fixture with a size was written at 1.16.0", () => {
+    // The affected set of `up`, counted: a logo with a size below 1.16.0 would be one this version's
+    // `up` ought to have validated, and there is none.
+    const corpus = readdirSync(DOCUMENTS_DIR).filter((file) => file.endsWith(".json"));
+    let carrying = 0;
+    for (const file of corpus) {
+      const raw = JSON.parse(readFileSync(join(DOCUMENTS_DIR, file), "utf8")) as {
+        schemaVersion: string;
+        header?: { brand?: { logo?: { width?: number } } };
+      };
+      if (raw.header?.brand?.logo?.width === undefined) continue;
+      carrying += 1;
+      expect(raw.schemaVersion, file).toBe("1.16.0");
+    }
+    expect(carrying).toBe(1);
   });
 });

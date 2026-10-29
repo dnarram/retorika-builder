@@ -1206,7 +1206,12 @@ export function Variants({
       return next;
     });
     const brand = histories[variant]?.present.document.header?.brand ?? {};
-    dispatch({ type: "setHeader", variant, patch: { brand: { ...brand, logo: { src } } } });
+    const { width, height } = result.logo;
+    dispatch({
+      type: "setHeader",
+      variant,
+      patch: { brand: { ...brand, logo: { src, width, height } } },
+    });
     if (!(await savePhoto(photoScope(variant), src, result.logo.bytes))) {
       setSaveStatus("unsaved");
     }

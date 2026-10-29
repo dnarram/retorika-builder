@@ -724,6 +724,8 @@ describe("the logo's palette (sprint 6 day 6)", () => {
 });
 
 describe("the header a generated site is born with (ADR 0057, ADR 0059)", () => {
+  /** A wide wordmark as `prepareLogo` keeps it: 512px on its long side. */
+  const LOGO = { src: "logo-3f9a7c21.png", width: 512, height: 205 };
   const taberna = answers({
     businessName: "Taberna Santo Domingo",
     sector: "restaurante-bar",
@@ -738,16 +740,21 @@ describe("the header a generated site is born with (ADR 0057, ADR 0059)", () => 
     expect(document.header?.action).toEqual({ kind: "section", sectionId: "sec-contact" });
   });
 
-  it("carries the logo the questionnaire kept, by the name it was kept under, and never the file", () => {
-    const { document } = generate({ ...taberna, logoSrc: "logo-3f9a7c21.png" });
-    expect(document.header?.brand).toEqual({ name: true, logo: { src: "logo-3f9a7c21.png" } });
+  it("carries the logo the questionnaire kept, by the name and size it was kept at, and never the file", () => {
+    const { document } = generate({ ...taberna, keptLogo: LOGO });
+    expect(document.header?.brand).toEqual({
+      name: true,
+      logo: { src: "logo-3f9a7c21.png", width: 512, height: 205 },
+    });
   });
 
   it("refuses a logo name that is not a raster file, rather than publishing a document that names one", () => {
     // The schema's own pattern (ADR 0059): an SVG is a vector for scripts, and a document cannot
     // even name one. `generate` ends in `parseDocument`, so this is the generator throwing, not a
     // document that reaches the editor.
-    expect(() => generate({ ...taberna, logoSrc: "logo-3f9a7c21.svg" })).toThrow();
+    expect(() =>
+      generate({ ...taberna, keptLogo: { ...LOGO, src: "logo-3f9a7c21.svg" } }),
+    ).toThrow();
   });
 
   it("has no button when the answers produced no contact section", () => {
@@ -757,8 +764,8 @@ describe("the header a generated site is born with (ADR 0057, ADR 0059)", () => 
   });
 
   it("is the same document for the same answers, logo included", () => {
-    const once = generate({ ...taberna, logoSrc: "logo-3f9a7c21.png" }).document;
-    const twice = generate({ ...taberna, logoSrc: "logo-3f9a7c21.png" }).document;
+    const once = generate({ ...taberna, keptLogo: LOGO }).document;
+    const twice = generate({ ...taberna, keptLogo: LOGO }).document;
     expect(twice).toEqual(once);
   });
 });

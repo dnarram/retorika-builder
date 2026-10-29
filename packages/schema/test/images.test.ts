@@ -131,6 +131,20 @@ describe("rewriteImageSources", () => {
     expect(out.header?.brand).toEqual({ logo: { src: "assets/logo-3f9a7c21.png" } });
   });
 
+  it("keeps the logo's size when it rewrites the logo's name", () => {
+    // The publisher moves the logo under `assets/`; a size dropped on the way would publish an
+    // `<img>` with no width again, the shift sprint 30 día 7 stored the size to remove.
+    const doc = documentWith({
+      brand: { logo: { src: "logo-3f9a7c21.png", width: 512, height: 205 } },
+    });
+    const out = rewriteImageSources(doc, (src) => `assets/${src}`);
+    expect(out.header?.brand?.logo).toEqual({
+      src: "assets/logo-3f9a7c21.png",
+      width: 512,
+      height: 205,
+    });
+  });
+
   it("rewrites only the logo when only the logo moves, and keeps the brand's name beside it", () => {
     const doc = documentWith({ brand: { name: true, logo: { src: "logo-3f9a7c21.png" } } });
     const out = rewriteImageSources(doc, (src) => (src.startsWith("logo-") ? "blob:x" : src));

@@ -93,6 +93,34 @@ export const menuLabelSchema = z
  */
 export const LOGO_SRC_PATTERN = /^(?:assets\/)?[A-Za-z0-9][A-Za-z0-9._-]*\.(?:png|jpe?g|webp)$/;
 
+/**
+ * The longest edge a logo is kept at, in pixels. The editor draws every logo it keeps onto a canvas
+ * of at most this side (`prepareLogo`); it is shown 40px tall in the bar, so 512 is already more
+ * than a 2x and a 3x screen will ask for of a wide wordmark.
+ */
+export const LOGO_MAX_EDGE = 512;
+
+const logoEdgeSchema = z.number().int().min(1).max(LOGO_MAX_EDGE);
+
+/**
+ * The logo the header shows: its file, and **the size it was kept at** (sprint 30 día 7, ADR 0059's
+ * note). The size is what lets the published `<img>` carry `width` and `height`, so a browser knows
+ * the logo's width before its bytes arrive and the business name beside it does not jump sideways
+ * when they do — the shift Lighthouse measured on día 5 (`unsized-images`, CLS 0.023). **Both or
+ * neither**: a logo kept before the size was stored has neither and publishes as it did, 40px tall
+ * and its width found on arrival; one with a single side would be a ratio nobody can draw.
+ */
+export const headerLogoSchema = z
+  .strictObject({
+    src: z.string().regex(LOGO_SRC_PATTERN),
+    width: logoEdgeSchema.optional(),
+    height: logoEdgeSchema.optional(),
+  })
+  .refine((logo) => (logo.width === undefined) === (logo.height === undefined), {
+    message: "a logo carries both its width and its height, or neither",
+  });
+export type HeaderLogo = z.infer<typeof headerLogoSchema>;
+
 export const headerActionSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("section"), sectionId: z.string().min(1).max(128) }),
   z.strictObject({ kind: z.literal("page"), pageId: z.string().min(1).max(128) }),
@@ -120,7 +148,7 @@ export const headerSchema = z.strictObject({
   brand: z
     .strictObject({
       name: z.boolean().optional(),
-      logo: z.strictObject({ src: z.string().regex(LOGO_SRC_PATTERN) }).optional(),
+      logo: headerLogoSchema.optional(),
     })
     .optional(),
   sticky: z.boolean().optional(),

@@ -22914,6 +22914,18 @@ describe("sprint 30 día 5 — el logo viaja como una foto", () => {
       expect(index).toMatch(new RegExp(`<img [^>]*class="rb-logo"[^>]*src="${firstLogo}"`));
       // Empty alt beside the name, so a screen reader hears «Taberna Santo Domingo» once (ADR 0057 §6).
       expect(index).toMatch(/<img alt="" class="rb-logo"/);
+      // And the size it was kept at, read off the PNG's own header (sprint 30 día 7): with both
+      // attributes the browser lays the name out before the logo arrives, and nothing jumps.
+      const keptSize = (zip: Uint8Array, entry: string): RegExp => {
+        const png = extractFileBytes(zip, entry);
+        const view = new DataView(png.buffer, png.byteOffset, png.byteLength);
+        // The IHDR chunk follows the 8-byte signature and its own length and type: width at 16.
+        const [width, height] = [view.getUint32(16), view.getUint32(20)];
+        return new RegExp(
+          `<img [^>]*class="rb-logo" height="${height}" src="${entry}" width="${width}"`,
+        );
+      };
+      expect(index).toMatch(keptSize(first, firstLogo));
 
       // 5. «Menú» → Marca: the logo on the bar's colour; «Quitar» takes it off the canvas.
       await studio.getByRole("button", { name: "Menú", exact: true }).click();
@@ -22951,6 +22963,9 @@ describe("sprint 30 día 5 — el logo viaja como una foto", () => {
       await expect(panel.getByRole("button", { name: "Cambiar" })).toBeVisible();
       const second = await downloadZip("second");
       expect(logoEntryOf(second)).not.toBe(firstLogo);
+      // Uploaded from «Menú» this time, which is the other writer of the size.
+      const secondIndex = new TextDecoder().decode(extractFileBytes(second, "index.html"));
+      expect(secondIndex).toMatch(keptSize(second, logoEntryOf(second)));
 
       // 8. «Fotos» lists it first, as «Logo», the owner's.
       await studio.getByRole("button", { name: "Fotos", exact: true }).click();

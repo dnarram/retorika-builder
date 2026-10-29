@@ -254,3 +254,39 @@ protects the part we author, and a logo is the owner's bytes. What bounds it is 
 - `scripts/size-budget.ts`, `scripts/build-sample-site.ts`: through the walk.
 - `docs/runbook.md` §7 B, `docs/tasks/el-recorrido-de-la-cuenta.md` step 2 («ahora son cinco»).
 - The record is `docs/design/REVIEW.md`, sprint 30 día 5.
+
+## Note — sprint 30 día 7: the logo keeps its size
+
+Día 5 left the logo with `height="40"` and no `width`, because the document did not keep its size:
+Lighthouse marked it as an unsized image (`unsized-images`, 0.5) on the fixed-header subject, and §7
+promised a width «from the image». The sprint 30 plan had written `<img … width height>` for this
+day's renderer, so the close finishes it rather than deciding something new.
+
+**`header.brand.logo` may carry `width` and `height`**, the pixels `prepareLogo` drew it at — whole
+numbers from 1 to `LOGO_MAX_EDGE` (512, moved into the schema so the editor and the document read one
+constant), **both or neither**, refused at parse otherwise. The renderer writes both as attributes;
+the stylesheet still draws the logo 40px tall with `width: auto`, and the browser takes the ratio from
+the attributes before a byte of the image arrives. A logo kept between día 5 and today has neither and
+publishes as it did, `height="40"`, until its owner uploads it again: the size lives in the bytes, and
+migration `0017` (1.15.0 → 1.16.0) seals and moves nothing, as `0016` did — `down` takes the two
+numbers off and keeps the file. Question 1 hands the generator `keptLogo` — the name and the size in
+one value, so there is no size without a file — and «Menú» and «Fotos» write the size with the name.
+So **«Every stored document, byte for byte. No schema change»** under «What is preserved» held for día
+5 and no longer describes the sprint: the shape gained two optional numbers, and no stored document
+changed.
+
+**Measured, and one thing día 5 got wrong.** With the request for the logo held back 1.5 s, the día 5
+markup draws the logo 0px wide and moves the name 40px sideways when it lands (a shift of 0.0005);
+today's draws it 40px wide from the first frame and nothing moves. Lighthouse's `unsized-images` is
+gone from the subject. **But the CLS of 0.023 that día 5 put down to the logo was not the logo's**:
+holding the logo back did not move it, and holding the site's letter back moved it exactly to the
+letter's arrival. Lighthouse's own root-cause label named the logo — the one media element in the
+header — and the record repeated it. The cause was the bar's `line-height: normal`, which ADR 0057's
+note of today fixes.
+
+Consequences of the note: `packages/schema` (`headerLogoSchema`, `LOGO_MAX_EDGE`, `HeaderLogo`;
+`rewriteImageSources` keeps the size; migration `0017` with its round trip; snapshot), `packages/renderer`
+(`brandNode`), `packages/generator` (`Answers.keptLogo` for `logoSrc`), `apps/editor` (`prepareLogo`'s
+edge from the schema and never a side of 0; `Step1Name`, `Variants`), the `cabecera-con-marca` fixture
+at 1.16.0 with its 96×96, and the walk «sprint 30 día 5», which now reads both sides off the PNG in the
+ZIP for each of the two writers. Day by day in `docs/design/REVIEW.md`, sprint 30 día 7.

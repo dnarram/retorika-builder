@@ -99,11 +99,11 @@ describe("headerStateFor", () => {
 
   it("switches the name without touching the logo, and drops an emptied brand", () => {
     const doc = fixture("cabecera-con-marca");
-    expect(brandNamePatch(doc, false)).toEqual({ brand: { logo: { src: "assets/logo.png" } } });
+    // The logo travels whole, its kept size included (sprint 30 día 7).
+    const logo = { src: "assets/logo.png", width: 96, height: 96 };
+    expect(brandNamePatch(doc, false)).toEqual({ brand: { logo } });
     const nameless = setHeader(doc, brandNamePatch(doc, false));
-    expect(brandNamePatch(nameless, true)).toEqual({
-      brand: { logo: { src: "assets/logo.png" }, name: true },
-    });
+    expect(brandNamePatch(nameless, true)).toEqual({ brand: { logo, name: true } });
     const plain = setHeader(fixture("menu-explicito"), { brand: { name: true } });
     expect(brandNamePatch(plain, false)).toEqual({ brand: undefined });
     expect(setHeader(plain, brandNamePatch(plain, false)).header?.brand).toBeUndefined();
