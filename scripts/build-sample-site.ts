@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { buildSite, bundleToZip, ownFontKeysFor, readFontBundle } from "@retorika/publisher";
-import { parseDocument, type RetorikaDocument } from "@retorika/schema";
+import { imageSourcesOf, parseDocument, type RetorikaDocument } from "@retorika/schema";
 
 /**
  * pnpm site:sample <fixture-name | path/to/document.json> [out-dir]
@@ -72,16 +72,12 @@ if (existsSync(out) && readdirSync(out).length > 0) {
 
 const document: RetorikaDocument = parseDocument(JSON.parse(readFileSync(documentPath, "utf8")));
 
-// The fixtures keep their images in fixtures/assets and refer to them as "assets/<name>".
+// The fixtures keep their images in fixtures/assets and refer to them as "assets/<name>" — the
+// header's logo among them, through the schema's one walk (ADR 0059).
 const assets = new Map<string, Uint8Array>();
-for (const page of document.pages) {
-  for (const section of page.sections) {
-    for (const el of section.content) {
-      if (el.value?.kind === "image") {
-        assets.set(el.value.src, new Uint8Array(readFileSync(join(assetsRoot, el.value.src))));
-      }
-    }
-  }
+for (const source of imageSourcesOf(document)) {
+  if (source.src.startsWith("data:")) continue;
+  assets.set(source.src, new Uint8Array(readFileSync(join(assetsRoot, source.src))));
 }
 
 // A font the owner brought is read from `fonts/` beside the images, the way a fixture keeps its

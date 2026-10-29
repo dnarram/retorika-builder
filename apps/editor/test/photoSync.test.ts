@@ -1,5 +1,8 @@
+import { EMPTY_ANSWERS, generate } from "@retorika/generator";
+import { setHeader } from "@retorika/schema";
 import { describe, expect, it } from "vitest";
 import { afterAcceptedSave, photoSyncPlan } from "../src/account/photoSync.ts";
+import { listOwnPhotoSrcs } from "../src/editor/ownPhotos.ts";
 
 /**
  * The arithmetic that decides what the account's copy of a site's photographs is missing, and what
@@ -24,6 +27,23 @@ function plan(state: { wanted?: string[]; remote?: string[]; local?: string[] })
 }
 
 describe("photoSyncPlan", () => {
+  it("never removes the logo from the bucket while the document names it (ADR 0059)", () => {
+    // Through `listOwnPhotoSrcs`, as the editor calls it, and not through a hand-written `wanted`:
+    // the property under test is that the walk the reconciliation reads knows the logo. Sabotaged
+    // — the logo dropped from that walk — `remove` names its object and this goes red.
+    const doc = setHeader(
+      generate({ ...EMPTY_ANSWERS, businessName: "Taberna", sector: "restaurante-bar" }).document,
+      { brand: { logo: { src: "logo-3f9a7c21.png" } } },
+    );
+    const result = plan({ wanted: listOwnPhotoSrcs(doc), remote: ["logo-3f9a7c21.png"] });
+    expect(result.remove).toEqual([]);
+    expect(result.missing).toEqual([]);
+    // And it is uploaded like a photograph when the bucket lacks it and this browser holds it.
+    expect(plan({ wanted: listOwnPhotoSrcs(doc), local: ["logo-3f9a7c21.png"] }).upload).toEqual([
+      "logo-3f9a7c21.png",
+    ]);
+  });
+
   it("uploads a photograph the document names, the bucket lacks and this browser holds", () => {
     expect(plan({ wanted: ["a.jpg"], local: ["a.jpg"] })).toEqual({
       upload: ["a.jpg"],

@@ -132,6 +132,8 @@ export {
   UNLABELLED_SECTIONS,
 } from "./header.ts";
 export { setHeader, setHeaderAction, setMenuLabel } from "./headerVerbs.ts";
+export type { ImageSource } from "./images.ts";
+export { imageSourcesOf, rewriteImageSources } from "./images.ts";
 export type { PresetLookup, Violation } from "./invariants.ts";
 export { checkInvariants, flattenElements } from "./invariants.ts";
 export type { InvariantId } from "./invariants-catalog.ts";

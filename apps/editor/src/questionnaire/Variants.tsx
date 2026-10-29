@@ -15,6 +15,7 @@ import {
   contactSectionFor,
   footerSectionFor,
   generateVariants,
+  withSectorMenuLabel,
 } from "@retorika/generator";
 import { hasSamplePhotos } from "@retorika/photobank";
 import { render } from "@retorika/renderer";
@@ -59,7 +60,6 @@ import {
   wasPlacementEverMoved,
   wasSectionEverEdited,
 } from "../editor/documentHistory.ts";
-import { PHOTO_CONTENT_TYPE } from "../editor/downloadGate.ts";
 import {
   clearFontFiles,
   type FontFileHandle,
@@ -73,9 +73,13 @@ import { photoSources } from "../editor/photoSources.ts";
 import {
   clearPhotos,
   loadPhotos,
+  logoSrcFor,
+  mintLogoId,
   type PhotoScope,
   photoBlob,
   photoSrcFor,
+  photoType,
+  prepareLogo,
   preparePhoto,
   savePhoto,
   scopeKey,
@@ -850,7 +854,9 @@ export function Variants({
           if (variant === undefined) continue;
           const forVariant = new Map(next.get(variant) ?? []);
           if (forVariant.has(photo.src)) continue;
-          const url = URL.createObjectURL(photoBlob(photo.bytes));
+          // Typed by its bytes: a photograph is the JPEG `preparePhoto` wrote, the logo the PNG
+          // `prepareLogo` wrote (ADR 0059), and the store keeps bytes, not types.
+          const url = URL.createObjectURL(photoBlob(photo.bytes, photoType(photo.bytes)));
           created.push(url);
           forVariant.set(photo.src, url);
           next.set(variant, forVariant);
@@ -1097,8 +1103,9 @@ export function Variants({
         // Writing anyway is safe because "cancelled" here does not mean unmounted — in the
         // double-mount it is the same live component — and a `setState` on a genuinely
         // unmounted one is a no-op in React 19, not a warning.
-        // The content type is the source's: the bank stores WebP and an owner's photograph is
-        // always the JPEG `preparePhoto` re-encoded. Neither is guessed from the name.
+        // The content type is the source's: the bank stores WebP, and an owner's bytes are the
+        // JPEG `preparePhoto` re-encoded or the PNG `prepareLogo` wrote (ADR 0059) — read off the
+        // bytes, which `downloadPhoto` has already sniffed. Neither is guessed from the name.
         const landed = arrived.flatMap((photo) =>
           photo.bytes === null
             ? []
@@ -1109,7 +1116,7 @@ export function Variants({
                   url: URL.createObjectURL(
                     photoBlob(
                       photo.bytes,
-                      photo.source.kind === "bank" ? "image/webp" : PHOTO_CONTENT_TYPE,
+                      photo.source.kind === "bank" ? "image/webp" : photoType(photo.bytes),
                     ),
                   ),
                 },
@@ -1173,6 +1180,50 @@ export function Variants({
     if (!(await savePhoto(photoScope(variant), src, result.photo.bytes))) {
       setSaveStatus("unsaved");
     }
+  }
+
+  /**
+   * The logo, from «Menú» or from the «Fotos» panel (ADR 0059): prepared as a PNG, named by a fresh
+   * id, shown at once through the same object-URL map the photographs use, written into the
+   * header as one history step, and kept in this browser's store under this card's scope — the
+   * path a photograph takes, with one difference: the name is minted anew on every upload rather
+   * than per slot, so no cache can show the old mark under the new document (`logoSrcFor`).
+   */
+  async function handlePickLogo(variant: number, file: File) {
+    setPhotoError(null);
+    const result = await prepareLogo(file);
+    if (!result.ok) {
+      setPhotoError(es[`editor.logo.${result.error.reason}` as keyof typeof es]);
+      return;
+    }
+    const src = logoSrcFor(mintLogoId());
+    const url = URL.createObjectURL(photoBlob(result.logo.bytes, result.logo.type));
+    setPhotoUrls((current) => {
+      const next = new Map(current);
+      const forVariant = new Map(next.get(variant) ?? []);
+      forVariant.set(src, url);
+      next.set(variant, forVariant);
+      return next;
+    });
+    const brand = histories[variant]?.present.document.header?.brand ?? {};
+    dispatch({ type: "setHeader", variant, patch: { brand: { ...brand, logo: { src } } } });
+    if (!(await savePhoto(photoScope(variant), src, result.logo.bytes))) {
+      setSaveStatus("unsaved");
+    }
+  }
+
+  /** «Quitar»: the header forgets the logo. The bytes stay in this browser's store, harmless and
+   * unreferenced; the account's reconciliation removes its object on the next accepted save, since
+   * the document no longer names it. A brand with nothing left in it drops its key. */
+  function handleRemoveLogo(variant: number) {
+    const brand = histories[variant]?.present.document.header?.brand;
+    if (!brand?.logo) return;
+    const { logo: _, ...rest } = brand;
+    dispatch({
+      type: "setHeader",
+      variant,
+      patch: { brand: Object.keys(rest).length === 0 ? undefined : rest },
+    });
   }
 
   /**
@@ -1254,7 +1305,10 @@ export function Variants({
       variantForInsertion(doc, catalogId),
       mintSectionId(doc, `sec-${catalogId}`),
     );
-    return withBankHeadline(catalogId, section);
+    // The sector's own word for the entry, where the bank has one — «Carta» for a restaurant's
+    // prices (ADR 0059, David's adjustment 6): the same word `generate` writes for the sections a
+    // site is born with, so a section added later reads as one born with the site.
+    return withSectorMenuLabel(answers.sector, withBankHeadline(catalogId, section));
   }
 
   /**
@@ -1262,9 +1316,10 @@ export function Variants({
    * one for this sector.
    *
    * **The name in the menu and the heading on the page are two different things**, and this is
-   * where they part. The menu says «Precios» to everyone, because that is what the section is;
-   * the page says «Nuestra carta» to a restaurant and «Tarifas» to a gym, because that is what
-   * the owner would have written. Only the bank knows the second, and it knows it per sector.
+   * where they part. The menu says «Precios» — or the sector's word, «Carta», since ADR 0059 —
+   * because that is what the section is; the page says «Nuestra carta» to a restaurant and
+   * «Tarifas» to a gym, because that is what the owner would have written. Only the bank knows
+   * the second, and it knows it per sector.
    *
    * Falls back to the marker `blankSection` already put there, which is what happens for every
    * section the bank has no heading for — and, until those entries are read and approved, for
@@ -1408,6 +1463,14 @@ export function Variants({
           onPickPhoto={(address, file) => {
             dismissToast();
             void handlePickPhoto(openIndex, address, file);
+          }}
+          onPickLogo={(file) => {
+            dismissToast();
+            void handlePickLogo(openIndex, file);
+          }}
+          onRemoveLogo={() => {
+            dismissToast();
+            handleRemoveLogo(openIndex);
           }}
           onFillSlot={(fill) => {
             dismissToast();

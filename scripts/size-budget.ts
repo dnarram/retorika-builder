@@ -6,7 +6,7 @@ import { hasSamplePhotos, recordById, sectorsInBank } from "@retorika/photobank"
 import { readSampleBytes } from "@retorika/photobank/server";
 import { buildSite, ownFontKeysFor, readFontBundle } from "@retorika/publisher";
 import { HEADER_SCRIPT, headerDrawn, render, SHIPPABLE_FAMILIES } from "@retorika/renderer";
-import { flattenElements, parseDocument, type RetorikaDocument } from "@retorika/schema";
+import { imageSourcesOf, parseDocument, type RetorikaDocument } from "@retorika/schema";
 
 /**
  * The published-page weight budget of protocol Part 8.5.
@@ -230,15 +230,16 @@ for (const file of readdirSync(DOCUMENTS_DIR)
   .sort()) {
   const document = parseDocument(JSON.parse(readFileSync(join(DOCUMENTS_DIR, file), "utf8")));
   const assets = new Map<string, Uint8Array>();
-  for (const page of document.pages) {
-    for (const section of page.sections) {
-      for (const el of flattenElements(section.content)) {
-        if (el.value?.kind !== "image" || el.value.src.startsWith("data:")) continue;
-        assets.set(el.value.src, new Uint8Array(readFileSync(join(FIXTURES_DIR, el.value.src))));
-      }
-    }
+  // **The owner's logo is the owner's bytes** (ADR 0059), weighed with the photographs and never
+  // against our budget: the fixture's is 429 bytes, but a real one is whatever the owner brought,
+  // bounded by the editor at 512px of PNG. Named through the schema's one walk, like everything.
+  const photographs = new Set<string>();
+  for (const source of imageSourcesOf(document)) {
+    if (source.src.startsWith("data:")) continue;
+    assets.set(source.src, new Uint8Array(readFileSync(join(FIXTURES_DIR, source.src))));
+    if (source.kind === "logo") photographs.add(source.src);
   }
-  weigh(file, document, assets, new Set());
+  weigh(file, document, assets, photographs);
 }
 
 /**
@@ -273,20 +274,20 @@ for (const sector of sectorsInBank().filter(hasSamplePhotos).sort()) {
     const site = generate(answers, variant);
     const assets = new Map<string, Uint8Array>();
     const photographs = new Set<string>();
-    for (const page of site.document.pages) {
-      for (const section of page.sections) {
-        for (const el of flattenElements(section.content)) {
-          if (el.value?.kind !== "image" || el.value.src.startsWith("data:")) continue;
-          // A `sample` that resolves to a bank record is a photograph; the catalog's marker
-          // resolves to nothing and is a `data:` URI anyway, so it never reaches here.
-          const record = el.value.sample === undefined ? undefined : recordById(el.value.sample);
-          if (!record) {
-            throw new Error(`size-budget: ${el.value.src} is neither a bank sample nor inline`);
-          }
-          assets.set(el.value.src, readSampleBytes(record.id));
-          photographs.add(el.value.src);
-        }
+    for (const source of imageSourcesOf(site.document)) {
+      if (source.src.startsWith("data:")) continue;
+      // A `sample` that resolves to a bank record is a photograph; the catalog's marker resolves
+      // to nothing and is a `data:` URI anyway, so it never reaches here. These answers carry no
+      // logo (`EMPTY_ANSWERS`), so a logo here is a generator that invented one.
+      const record =
+        source.kind === "element" && source.sample !== undefined
+          ? recordById(source.sample)
+          : undefined;
+      if (!record) {
+        throw new Error(`size-budget: ${source.src} is neither a bank sample nor inline`);
       }
+      assets.set(source.src, readSampleBytes(record.id));
+      photographs.add(source.src);
     }
     weigh(`${sector} · ${variant.id} ${variant.cover}`, site.document, assets, photographs);
   }

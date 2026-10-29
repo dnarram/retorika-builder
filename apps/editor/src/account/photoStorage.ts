@@ -1,5 +1,5 @@
 import type { Client } from "../auth/clients.ts";
-import { PHOTO_CONTENT_TYPE } from "../editor/downloadGate.ts";
+import { PHOTO_CONTENT_TYPES } from "../editor/downloadGate.ts";
 import { isAcceptedImage, sniffImage } from "../editor/imageBytes.ts";
 
 /**
@@ -65,6 +65,13 @@ export async function uploadPhoto(
   path: string,
   bytes: Uint8Array,
 ): Promise<boolean> {
+  // **The content type comes from the bytes** (ADR 0059; the rule the fonts bucket set with David's
+  // adjustment 7): a photograph is the JPEG `preparePhoto` wrote and the logo the PNG `prepareLogo`
+  // wrote, and the bucket's `allowed_mime_types` is exactly those two. Bytes that are neither are
+  // not sent at all — the bucket would refuse them, and a refusal here says so without a round trip.
+  const kind = sniffImage(bytes);
+  const type = (PHOTO_CONTENT_TYPES as readonly string[]).includes(kind) ? kind : undefined;
+  if (type === undefined) return false;
   // A fresh, concrete ArrayBuffer: a Uint8Array is typed over the generic ArrayBufferLike, which
   // BlobPart does not accept. `photoBlob` and the download route each take the same step and each
   // say so where they take it.
@@ -72,8 +79,8 @@ export async function uploadPhoto(
   new Uint8Array(buffer).set(bytes);
   const { error } = await client.storage
     .from(PHOTO_BUCKET)
-    .upload(path, new Blob([buffer], { type: PHOTO_CONTENT_TYPE }), {
-      contentType: PHOTO_CONTENT_TYPE,
+    .upload(path, new Blob([buffer], { type }), {
+      contentType: type,
       upsert: true,
       cacheControl: "0",
     });
@@ -84,7 +91,7 @@ export async function uploadPhoto(
  * Reads one photograph back, or `null`.
  *
  * **The bytes are sniffed before anyone makes an image of them.** Nothing of ours uploads anything
- * but a re-encoded JPEG, and the bucket's `allowed_mime_types` says so too — but the bucket trusts
+ * but a re-encoded JPEG or the logo's PNG, and the bucket's `allowed_mime_types` says so too — but the bucket trusts
  * the content type the uploader declares, and this is the side that does not have to. The same
  * reasoning `/api/download` gives for re-sniffing bytes the browser already checked: one side is
  * the convenience, the other is the guarantee.

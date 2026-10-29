@@ -3,7 +3,7 @@ import { basename, join } from "node:path";
 import { FAVICON_PATH, faviconSvg, render } from "@retorika/renderer";
 import {
   type ContentElement,
-  flattenElements,
+  imageSourcesOf,
   invariantTestName,
   parseDocument,
   type RetorikaDocument,
@@ -36,13 +36,9 @@ function loadCorpus(): { name: string; document: RetorikaDocument }[] {
  */
 function assetsFor(doc: RetorikaDocument): Map<string, Uint8Array> {
   const assets = new Map<string, Uint8Array>();
-  for (const page of doc.pages) {
-    for (const section of page.sections) {
-      for (const el of flattenElements(section.content)) {
-        if (el.value?.kind !== "image" || el.value.src.startsWith("data:")) continue;
-        assets.set(el.value.src, new Uint8Array(readFileSync(join(FIXTURES_DIR, el.value.src))));
-      }
-    }
+  for (const source of imageSourcesOf(doc)) {
+    if (source.src.startsWith("data:")) continue;
+    assets.set(source.src, new Uint8Array(readFileSync(join(FIXTURES_DIR, source.src))));
   }
   return assets;
 }
@@ -153,6 +149,31 @@ describe("buildSite", () => {
     const file = bundle.files.find((f) => f.path === "assets/barbershop.svg");
     expect(file?.contents).toEqual(assets.get("assets/barbershop.svg"));
     expect(file?.contentType).toBe("image/svg+xml");
+  });
+
+  it("bundles the header's logo under assets/ and points every page's header at it (ADR 0059)", async () => {
+    const entry = corpus.find((candidate) => candidate.name === "cabecera-con-marca");
+    if (!entry) throw new Error("fixture cabecera-con-marca is missing");
+    const assets = assetsFor(entry.document);
+    const fonts = await fontsFor(entry.document);
+    const bundle = buildSite(entry.document, { siteId: "s", assets, fonts });
+    const logo = bundle.files.find((file) => file.path === "assets/logo.png");
+    expect(logo?.contents).toEqual(assets.get("assets/logo.png"));
+    expect(logo?.contentType).toBe("image/png");
+    expect(bundle.manifest.assets).toContain("assets/logo.png");
+    const pages = bundle.files.filter((file) => file.path.endsWith(".html"));
+    expect(pages.length).toBeGreaterThan(1);
+    for (const page of pages) {
+      expect(new TextDecoder().decode(page.contents), page.path).toMatch(
+        /<img [^>]*class="rb-logo"[^>]*src="assets\/logo\.png"/,
+      );
+    }
+    // The logo is a src the document names, so a bundle without its bytes is refused like one
+    // without a photograph's — the same line, through the same walk.
+    const withoutLogo = new Map([...assets].filter(([src]) => src !== "assets/logo.png"));
+    expect(() => buildSite(entry.document, { siteId: "s", assets: withoutLogo, fonts })).toThrow(
+      /missing asset.*assets\/logo\.png/,
+    );
   });
 
   it("throws on a missing asset rather than publishing a broken image", () => {

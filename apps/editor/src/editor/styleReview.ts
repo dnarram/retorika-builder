@@ -5,7 +5,7 @@ import type {
   StyleException,
 } from "@retorika/schema";
 import { listHeaderStyleExceptions, listStyleExceptions } from "@retorika/schema";
-import { AA_NORMAL_TEXT, contrastRatio } from "@retorika/tokens";
+import { AA_NORMAL_TEXT, contrastRatio, relativeLuminance } from "@retorika/tokens";
 import { backgroundOf } from "./textToolbar.ts";
 
 /**
@@ -98,9 +98,8 @@ export function reviewStyle(doc: RetorikaDocument): StyleReview {
   // A transparent bar sits on the cover's surface. The button's words sit on the button, which is
   // `color.primary` on a surface bar and `color.surface` on a coloured one.
   const headerExceptions = listHeaderStyleExceptions(doc);
-  const barExact = headerExceptions.find((e) => e.part === "bar" && e.property === "color")?.exact;
   const scheme = doc.header?.look?.background ?? "surface";
-  const bar = barExact ?? doc.theme[HEADER_BACKGROUND_TOKEN[scheme]];
+  const bar = headerBarBackground(doc);
   const buttonBackground =
     scheme === "surface" || scheme === "transparent"
       ? doc.theme["color.primary"]
@@ -124,6 +123,53 @@ const HEADER_BACKGROUND_TOKEN: Record<
   secondary: "color.secondary",
   ink: "color.ink",
 };
+
+/** The colour the bar is actually painted, as a hex: the exact one the owner wrote, or the scheme's
+ * token resolved in this theme. What the brand, the links and the logo are judged against. */
+export function headerBarBackground(doc: RetorikaDocument): string {
+  const exact = listHeaderStyleExceptions(doc).find(
+    (e) => e.part === "bar" && e.property === "color",
+  )?.exact;
+  return exact ?? doc.theme[HEADER_BACKGROUND_TOKEN[doc.header?.look?.background ?? "surface"]];
+}
+
+/**
+ * The level below which the logo is said to be hard to see on its bar (ADR 0059, David's
+ * adjustment 4 of the sprint 30 plan): **3:1, WCAG 1.4.11's minimum for a graphical object**, and
+ * not the 4.5:1 text is held to. A logo is a graphic, not text; and what is measured is the mean
+ * luminance of a whole mark, which for a logo of several colours lands in the middle and would
+ * fail 4.5 against every bar while reading perfectly well. The same number as
+ * `CONTRAST_BLOCKS_BELOW`, deliberately — one floor in this file — but it **warns**, never blocks:
+ * a faint logo is taste, not a dead link, and the owner is looking at it in the panel.
+ */
+export const LOGO_CONTRAST_WARNS_BELOW = 3;
+
+export interface LogoFinding {
+  src: string;
+  /** The contrast of the logo's mean luminance against the bar it sits on. */
+  ratio: number;
+  /** The bar's colour, for the dialog's swatch. */
+  background: string;
+}
+
+/**
+ * Whether the logo is hard to see on the bar: its mean luminance (from the bytes, computed by
+ * `logoLuminanceOf` in the editor's session — never stored) against the bar's colour, through the
+ * WCAG contrast formula over two luminances. `undefined` when there is no logo, when its bytes
+ * have not been read, or when it reads well enough.
+ */
+export function reviewLogo(
+  doc: RetorikaDocument,
+  luminance: number | null,
+): LogoFinding | undefined {
+  const src = doc.header?.brand?.logo?.src;
+  if (src === undefined || luminance === null) return undefined;
+  const background = headerBarBackground(doc);
+  const behind = relativeLuminance(background);
+  const ratio = (Math.max(luminance, behind) + 0.05) / (Math.min(luminance, behind) + 0.05);
+  if (ratio >= LOGO_CONTRAST_WARNS_BELOW) return undefined;
+  return { src, ratio, background };
+}
 
 /**
  * A header part's exception in the shape the gate's dialog already lists — addressed to `header` as

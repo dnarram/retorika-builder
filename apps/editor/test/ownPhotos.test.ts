@@ -7,6 +7,7 @@ import {
   parseDocument,
   type RetorikaDocument,
   setElementImageSrc,
+  setHeader,
 } from "@retorika/schema";
 import { describe, expect, it } from "vitest";
 import { listOwnPhotoSrcs } from "../src/editor/ownPhotos.ts";
@@ -73,6 +74,20 @@ describe("listOwnPhotoSrcs", () => {
   it("lists a photograph the owner put there", () => {
     const doc = withUpload(generated("restaurante-bar"), "foto-sec-cover-el-image.jpg");
     expect(listOwnPhotoSrcs(doc)).toEqual(["foto-sec-cover-el-image.jpg"]);
+  });
+
+  it("lists the header's logo, first, as the owner's (ADR 0059)", () => {
+    // This list is what the account's reconciliation keeps, and the plan removes from the bucket
+    // whatever the document does not name — so a logo left out here is a logo deleted on the save
+    // after the one that uploaded it. `photoSync.test.ts` holds the other half of that sentence.
+    const doc = setHeader(withUpload(generated("restaurante-bar"), "foto-sec-cover-el-image.jpg"), {
+      brand: { name: true, logo: { src: "logo-3f9a7c21.png" } },
+    });
+    expect(listOwnPhotoSrcs(doc)).toEqual(["logo-3f9a7c21.png", "foto-sec-cover-el-image.jpg"]);
+    // A brand with a name and no logo adds nothing.
+    expect(
+      listOwnPhotoSrcs(setHeader(generated("restaurante-bar"), { brand: { name: true } })),
+    ).toEqual([]);
   });
 
   it("excludes a bank photograph even though its src is an ordinary file name", () => {

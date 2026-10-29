@@ -12,6 +12,7 @@ import {
   type RetorikaDocument,
   sectionToPage,
   setElementImageSrc,
+  setHeader,
 } from "@retorika/schema";
 import { describe, expect, it } from "vitest";
 import { countPhotos, listPhotos } from "../src/editor/photoInventory.ts";
@@ -102,6 +103,26 @@ describe("what a generated site has", () => {
       own: 0,
       total: 1 + GALLERY_SAMPLE_COUNT,
     });
+  });
+
+  it("lists the header's logo first, as «Logo», the owner's, on the first page (ADR 0059)", () => {
+    const doc = setHeader(generated(), { brand: { logo: { src: "logo-3f9a7c21.png" } } });
+    const [logo, ...rest] = listPhotos(doc);
+    expect(logo).toMatchObject({
+      kind: "logo",
+      sectionId: "header",
+      elementId: "logo",
+      sectionName: "Logo",
+      src: "logo-3f9a7c21.png",
+      alt: "Taberna Santo Domingo",
+      state: "own",
+      pageId: doc.pages[0]?.id,
+    });
+    expect(rest.every((photo) => photo.kind === "element")).toBe(true);
+    // Counted as the owner's: it is one more file the download carries, so it counts against
+    // `MAX_PHOTOS` exactly as the route will count the part it arrives in.
+    expect(countPhotos(doc).own).toBe(1);
+    expect(countPhotos(doc).total).toBe(1 + 1 + GALLERY_SAMPLE_COUNT);
   });
 
   it("says where that photograph is, in words the owner would recognise", () => {

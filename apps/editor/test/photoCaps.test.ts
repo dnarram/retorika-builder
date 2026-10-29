@@ -1,7 +1,12 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { MAX_PHOTO_BYTES, PHOTO_CONTENT_TYPE } from "../src/editor/downloadGate.ts";
+import {
+  LOGO_CONTENT_TYPE,
+  MAX_PHOTO_BYTES,
+  PHOTO_CONTENT_TYPE,
+  PHOTO_CONTENT_TYPES,
+} from "../src/editor/downloadGate.ts";
 
 /**
  * Two numbers that have to be one number, and a content type that has to be one content type.
@@ -21,18 +26,13 @@ import { MAX_PHOTO_BYTES, PHOTO_CONTENT_TYPE } from "../src/editor/downloadGate.
  * it fails loudly if the migration is renamed.
  */
 
-const MIGRATION = join(
-  import.meta.dirname,
-  "..",
-  "..",
-  "..",
-  "packages",
-  "db",
-  "migrations",
-  "0003-the-photos-bucket-and-its-policies.sql",
+const MIGRATIONS = join(import.meta.dirname, "..", "..", "..", "packages", "db", "migrations");
+const sql = readFileSync(join(MIGRATIONS, "0003-the-photos-bucket-and-its-policies.sql"), "utf8");
+/** The row's types were rewritten once, by the migration that let the logo in (ADR 0059). */
+const typesSql = readFileSync(
+  join(MIGRATIONS, "0005-the-photos-bucket-admits-the-logo.sql"),
+  "utf8",
 );
-
-const sql = readFileSync(MIGRATION, "utf8");
 
 describe("the bucket and the download agree about one photograph", () => {
   it("declares the same size cap the download route enforces", () => {
@@ -42,12 +42,18 @@ describe("the bucket and the download agree about one photograph", () => {
     expect(MAX_PHOTO_BYTES).toBe(2 * 1024 * 1024);
   });
 
-  it("accepts only the content type the editor actually produces", () => {
+  it("accepts only the content types the editor actually produces", () => {
     // `preparePhoto` re-encodes every upload through a canvas to JPEG whatever the picker
-    // accepted, so the bucket is narrower than the picker on purpose. Changing the output format
-    // has to fail here rather than at somebody's upload.
+    // accepted, and `prepareLogo` to PNG (ADR 0059), so the bucket is narrower than the picker on
+    // purpose. Changing an output format has to fail here rather than at somebody's upload. 0003
+    // wrote the first list; 0005 rewrote it, and the rewrite is what the database has.
     expect(sql).toContain(`array['${PHOTO_CONTENT_TYPE}']`);
+    expect(typesSql).toContain(
+      `set allowed_mime_types = array['${PHOTO_CONTENT_TYPES.join("', '")}']`,
+    );
+    expect(typesSql).toMatch(/where id = 'fotos'/);
     expect(PHOTO_CONTENT_TYPE).toBe("image/jpeg");
+    expect(LOGO_CONTENT_TYPE).toBe("image/png");
   });
 
   it("keeps the bucket private, because no published site ever reads from it", () => {

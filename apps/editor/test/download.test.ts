@@ -352,8 +352,12 @@ describe("POST /api/download", () => {
         ...cover,
         id: `${cover.id}-${i}`,
       }));
+      // Without the header a generated site is born with (ADR 0059): its button points at the
+      // contact section, which forty-one covers do not include, and the invariants would answer
+      // 400 before the bound ever counted. This test is about the bound.
+      const { header: _, ...withoutHeader } = REAL_DOCUMENT;
       const withTooMany: RetorikaDocument = {
-        ...REAL_DOCUMENT,
+        ...withoutHeader,
         pages: [
           {
             ...(REAL_DOCUMENT.pages[0] as RetorikaDocument["pages"][number]),
@@ -683,6 +687,58 @@ describe("POST /api/download", () => {
       const zip = new Uint8Array(await response.arrayBuffer());
       expect(extractFile(zip, "index.html")).toContain('src="assets/passwd.jpg"');
       expect(() => extractFile(zip, "../../etc/passwd.jpg")).toThrow();
+    });
+  });
+
+  describe("the owner's logo (ADR 0059)", () => {
+    /** The real document with a logo in its header, as question 1 leaves it since día 5. */
+    const withLogo = (src: string): RetorikaDocument => ({
+      ...REAL_DOCUMENT,
+      header: { ...REAL_DOCUMENT.header, brand: { name: true, logo: { src } } },
+    });
+    const pngBytes = (size = 64): Uint8Array => {
+      const bytes = new Uint8Array(size);
+      bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
+      return bytes;
+    };
+
+    it("bundles the logo under assets/ and points the header at it", async () => {
+      const response = await POST(
+        request({ document: withLogo("logo-3f9a7c21.png") }, [
+          { src: "logo-3f9a7c21.png", bytes: pngBytes() },
+        ]),
+      );
+      expect(response.status).toBe(200);
+      const zip = new Uint8Array(await response.arrayBuffer());
+      expect(extractFile(zip, "index.html")).toMatch(
+        /<img [^>]*class="rb-logo"[^>]*src="assets\/logo-3f9a7c21\.png"/,
+      );
+      expect(fileNames(zip)).toContain("assets/logo-3f9a7c21.png");
+    });
+
+    it("refuses a document that names a logo the request did not send", async () => {
+      const response = await POST(request({ document: withLogo("logo-3f9a7c21.png") }));
+      expect(response.status).toBe(400);
+      expect(await response.text()).toContain("logo-3f9a7c21.png");
+    });
+
+    it("refuses an SVG renamed .png as the logo, by its bytes", async () => {
+      // The schema already refuses a `.svg` name; this is the file that lies about itself, which
+      // only the sniff catches — and it is the sniff the route runs, not the browser's.
+      const response = await POST(
+        request({ document: withLogo("logo-3f9a7c21.png") }, [
+          { src: "logo-3f9a7c21.png", bytes: new TextEncoder().encode("<svg onload=alert(1)/>") },
+        ]),
+      );
+      expect(response.status).toBe(400);
+      expect(await response.text()).toContain("not a JPEG");
+    });
+
+    it("refuses a logo the document does not name, like any other stray file", async () => {
+      const response = await POST(
+        request({ document: REAL_DOCUMENT }, [{ src: "logo-3f9a7c21.png", bytes: pngBytes() }]),
+      );
+      expect(response.status).toBe(400);
     });
   });
 });

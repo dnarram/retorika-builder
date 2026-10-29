@@ -14,6 +14,7 @@ import {
 } from "@retorika/renderer";
 import type { Header, HeaderAction, HeaderLayout, Page, RetorikaDocument } from "@retorika/schema";
 import es from "../locales/es.json" with { type: "json" };
+import { headerBarBackground } from "./styleReview.ts";
 
 /**
  * What the site's header holds, read for the «Menú» panel (ADR 0057, sprint 30 días 3–4).
@@ -94,6 +95,10 @@ export interface HeaderState {
   action: string | null;
   /** Whether the business name is shown in the bar. */
   brandName: boolean;
+  /** The logo's file name, when the header shows one (ADR 0059). */
+  logoSrc: string | undefined;
+  /** The colour the bar is painted, for the swatch the logo is shown on in the panel. */
+  barBackground: string;
   /** The title of the page being edited, for the sentence that says whose sections these are. */
   pageTitle: string;
   pagesMenu: MenuBlock;
@@ -249,6 +254,8 @@ export function headerStateFor(doc: RetorikaDocument, pageId: string | undefined
     sections: sectionsDrawn ? sections : null,
     action: action?.label ?? null,
     brandName: settings.brandName,
+    logoSrc: settings.logo?.src,
+    barBackground: headerBarBackground(doc),
     pageTitle: page.title,
     pagesMenu: { mode: modeOf(doc.header?.pages?.shown), count: pages.length, drawn: pagesDrawn },
     sectionsMenu: {
@@ -313,6 +320,16 @@ export function menuModePatch(
   const { shown: _, ...rest } = doc.header?.[menu] ?? {};
   const next = mode === "auto" ? rest : { ...rest, shown: mode === "always" };
   return { [menu]: Object.keys(next).length === 0 ? undefined : next };
+}
+
+/**
+ * The header with the brand's name switched, keeping the logo: `name` is written only when on, and
+ * a brand with nothing left in it drops its key, so a header nobody decided reads as none.
+ */
+export function brandNamePatch(doc: RetorikaDocument, name: boolean): Partial<Header> {
+  const { name: _, ...rest } = doc.header?.brand ?? {};
+  const next = name ? { ...rest, name: true } : rest;
+  return { brand: Object.keys(next).length === 0 ? undefined : next };
 }
 
 /** The header with the sections' phone row chosen, keeping the rest of `sections`. */

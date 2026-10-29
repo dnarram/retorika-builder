@@ -24,6 +24,7 @@ import {
   flattenElements,
   type Header,
   type HeaderAction,
+  imageSourcesOf,
   isHandDesigned,
   type ListItem,
   listEditableFields,
@@ -134,6 +135,7 @@ import { GUIDE_ZONE, type Guide, guidesFor, type Rect } from "../editor/guides.t
 import { HANDLE_TOUCH, handlesFor } from "../editor/handles.ts";
 import { ACCEPTED_IMAGE_ACCEPT } from "../editor/imageBytes.ts";
 import { toolbarFamilyLabel } from "../editor/letterGallery.ts";
+import { logoLuminanceOf } from "../editor/logoImage.ts";
 import { LOOK_AHEAD_DEADLINE_MS, lookAheadStep } from "../editor/lookAhead.ts";
 import { menuStateFor } from "../editor/menuState.ts";
 import { measureOverflow } from "../editor/overflowCheck.ts";
@@ -167,6 +169,7 @@ import {
 } from "../editor/sectionKeys.ts";
 import { offersMatching } from "../editor/sectionSearch.ts";
 import { keepsItsOwnUndo, shortcutFor } from "../editor/shortcuts.ts";
+import { reviewLogo } from "../editor/styleReview.ts";
 import { insertedTextFor, liveFrameOf, offsetFor, textFrameOf } from "../editor/textEdits.ts";
 import { hasAnyControl, toolbarFor } from "../editor/textToolbar.ts";
 import { chosenHintText, clickAction, textKeyAction } from "../editor/twoStates.ts";
@@ -573,6 +576,8 @@ export function Editor({
   onMoveSection,
   onInsertSection,
   onPickPhoto,
+  onPickLogo,
+  onRemoveLogo,
   onFillSlot,
   onClearSlot,
   onSetSectionInMenu,
@@ -654,6 +659,10 @@ export function Editor({
   /** The owner chose a file for this image element. Preparing and storing it is `Variants`'
    * business; this component only reports which element was clicked. */
   onPickPhoto: (address: ElementAddress, file: File) => void;
+  /** The owner chose a file for the header's logo, or took it away (ADR 0059). Preparing, naming
+   * and storing it is `Variants`' business, as it is for a photograph. */
+  onPickLogo: (file: File) => void;
+  onRemoveLogo: () => void;
   onFillSlot: (fill: SlotFill) => void;
   onClearSlot: (address: SlotAddress) => void;
   /** A section in or out of the menu (ADR 0043). Not a content edit: nothing the section says
@@ -1174,6 +1183,38 @@ export function Editor({
   // for it is remembered here until a file comes back.
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingImage = useRef<ElementAddress | null>(null);
+  /** A second input for the logo (ADR 0059): a different preparation (`prepareLogo`, PNG) and no
+   * element to remember, so it shares nothing with the photographs' but the pattern. */
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  /**
+   * How light the logo is on average (ADR 0059, David's adjustment 4), read from its bytes
+   * whenever the document's logo or the URL of its bytes changes — a new upload, a session
+   * restored from IndexedDB, a site opened from the account — and never stored. `null` while there
+   * is no logo or its bytes have not arrived, in which case nothing is said about it.
+   */
+  const [logoLuminance, setLogoLuminance] = useState<number | null>(null);
+  const logoSrc = doc.header?.brand?.logo?.src;
+  const logoUrl = logoSrc === undefined ? undefined : photoUrls.get(logoSrc);
+  useEffect(() => {
+    if (logoUrl === undefined) {
+      setLogoLuminance(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const blob = await (await fetch(logoUrl)).blob();
+        const luminance = await logoLuminanceOf(blob);
+        if (!cancelled) setLogoLuminance(luminance);
+      } catch {
+        // A revoked object URL: the next render brings a live one or no logo at all.
+        if (!cancelled) setLogoLuminance(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [logoUrl]);
   // Which section's fields are open, if any. Not tied to selection: clicking a word to edit it
   // selects the section too, and a form sliding in every time someone touches a sentence would
   // be in the way rather than at hand.
@@ -1435,6 +1476,14 @@ export function Editor({
     const input = fileInputRef.current;
     if (!input) return;
     // Cleared first, so picking the same file twice in a row still fires a change.
+    input.value = "";
+    input.click();
+  }
+
+  /** Open the file picker for the logo, from «Menú» or from the «Fotos» panel's logo row. */
+  function replaceLogo() {
+    const input = logoInputRef.current;
+    if (!input) return;
     input.value = "";
     input.click();
   }
@@ -7608,14 +7657,10 @@ export function Editor({
    */
   function referencedPhotos(): string[] {
     const srcs = new Set<string>();
-    for (const page of doc.pages) {
-      for (const section of page.sections) {
-        for (const element of flattenElements(section.content)) {
-          if (element.value?.kind === "image" && photoUrls.has(element.value.src)) {
-            srcs.add(element.value.src);
-          }
-        }
-      }
+    // The schema's one walk (ADR 0059): the logo travels in the same multipart body, as a `photo`
+    // part named by its `src`, and the route refuses a document that names one it was not sent.
+    for (const source of imageSourcesOf(doc)) {
+      if (photoUrls.has(source.src)) srcs.add(source.src);
     }
     return [...srcs];
   }
@@ -7708,6 +7753,7 @@ export function Editor({
       overflow,
       failedSamples,
       fontFiles,
+      logoLuminance,
     );
     if (gate.kind === "ready") {
       void download();
@@ -7771,7 +7817,15 @@ export function Editor({
     // **With `fontFiles`**, though, and for the opposite reason: the font check runs before the
     // contrast review, and an empty map would read every own font as missing and hide the very
     // finding this asks about.
-    const gate = downloadGateFor(countPhotos(fixed), fixed, acceptedWarnings, [], [], fontFiles);
+    const gate = downloadGateFor(
+      countPhotos(fixed),
+      fixed,
+      acceptedWarnings,
+      [],
+      [],
+      fontFiles,
+      logoLuminance,
+    );
     setDownloadDialog(gate.kind === "unreadable" || gate.kind === "lowContrast" ? gate : null);
   }
 
@@ -7858,6 +7912,9 @@ export function Editor({
             <ContrastDialog
               findings={downloadDialog.findings}
               level={downloadDialog.kind === "unreadable" ? "block" : "warn"}
+              {...(downloadDialog.kind === "lowContrast" && downloadDialog.logo
+                ? { logo: { finding: downloadDialog.logo, url: logoUrl } }
+                : {})}
               // The «arreglo en un clic», through the same verb the `Diseño` panel's audit calls:
               // dropping the exception returns the element to the reference it overwrote, which is
               // rule 6's own default rather than a colour this dialog picked. `fixException` is what
@@ -8039,6 +8096,10 @@ export function Editor({
           <MenuPanel
             doc={doc}
             pageId={pageId}
+            logoUrl={logoUrl}
+            logoFaint={reviewLogo(doc, logoLuminance) !== undefined}
+            onChangeLogo={replaceLogo}
+            onRemoveLogo={onRemoveLogo}
             onSetHeader={onSetHeader}
             onSetHeaderAction={onSetHeaderAction}
             onSetMenuLabel={onSetMenuLabel}
@@ -8060,9 +8121,15 @@ export function Editor({
             photoUrls={photoUrls}
             photosMissing={photosMissing}
             onReplacePhoto={replacePhoto}
+            onChangeLogo={replaceLogo}
             onGoToPhoto={(photo) => {
               // The panel is also a way of finding a photograph: show the page it is on and select
-              // its section, which scrolls the canvas to it.
+              // its section, which scrolls the canvas to it. The logo's place is «Menú», where its
+              // block is (ADR 0059).
+              if (photo.kind === "logo") {
+                showRail("menu");
+                return;
+              }
               onSelectPage(doc.pages[0]?.id === photo.pageId ? undefined : photo.pageId);
               selectedSection.current = photo.sectionId;
             }}
@@ -8242,6 +8309,17 @@ export function Editor({
           const address = pendingImage.current;
           pendingImage.current = null;
           if (file && address) onPickPhoto(address, file);
+        }}
+      />
+      <input
+        ref={logoInputRef}
+        type="file"
+        accept={ACCEPTED_IMAGE_ACCEPT}
+        className="hidden"
+        data-testid="logo-input"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) onPickLogo(file);
         }}
       />
       {/*

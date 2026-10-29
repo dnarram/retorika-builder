@@ -5,6 +5,7 @@ import { render } from "@retorika/renderer";
 import { parseDocument, type RetorikaDocument, setHeader, setMenuLabel } from "@retorika/schema";
 import { describe, expect, it } from "vitest";
 import {
+  brandNamePatch,
   headerStateFor,
   type MenuMode,
   menuModePatch,
@@ -62,6 +63,32 @@ describe("headerStateFor", () => {
     expect(home.pageTitle).toBe(doc.pages[0]?.title);
     // The button's destination is not also in the menu: one destination, one place.
     expect(home.sections).not.toContain("Contacto");
+  });
+
+  it("names the logo and the bar it sits on, as the page draws them (ADR 0059)", () => {
+    const doc = fixture("cabecera-con-marca");
+    const state = headerStateFor(doc, undefined);
+    expect(state.logoSrc).toBe("assets/logo.png");
+    // The swatch's colour is the bar's: `surface` by default, resolved in this theme.
+    expect(state.barBackground).toBe(doc.theme["color.surface"]);
+    const page = new DOMParser().parseFromString(render(doc, "html").html, "text/html");
+    expect(page.querySelector("img.rb-logo")?.getAttribute("src")).toBe(state.logoSrc);
+    // Painted `ink`, the swatch follows.
+    const dark = setHeader(doc, { look: { background: "ink" } });
+    expect(headerStateFor(dark, undefined).barBackground).toBe(doc.theme["color.ink"]);
+    expect(headerStateFor(fixture("menu-explicito"), undefined).logoSrc).toBeUndefined();
+  });
+
+  it("switches the name without touching the logo, and drops an emptied brand", () => {
+    const doc = fixture("cabecera-con-marca");
+    expect(brandNamePatch(doc, false)).toEqual({ brand: { logo: { src: "assets/logo.png" } } });
+    const nameless = setHeader(doc, brandNamePatch(doc, false));
+    expect(brandNamePatch(nameless, true)).toEqual({
+      brand: { logo: { src: "assets/logo.png" }, name: true },
+    });
+    const plain = setHeader(fixture("menu-explicito"), { brand: { name: true } });
+    expect(brandNamePatch(plain, false)).toEqual({ brand: undefined });
+    expect(setHeader(plain, brandNamePatch(plain, false)).header?.brand).toBeUndefined();
   });
 
   it("says no menu is drawn where none is, and no header where there is none", () => {

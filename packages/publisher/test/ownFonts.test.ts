@@ -1,7 +1,12 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { render } from "@retorika/renderer";
-import { type OwnFont, parseDocument, type RetorikaDocument } from "@retorika/schema";
+import {
+  imageSourcesOf,
+  type OwnFont,
+  parseDocument,
+  type RetorikaDocument,
+} from "@retorika/schema";
 import { describe, expect, it } from "vitest";
 import { readFontBundle } from "../src/fontBytes.ts";
 import { OWN_FACE_TYPES, ownFontKeysFor, ownLicencePath } from "../src/fonts.ts";
@@ -23,13 +28,9 @@ const fixture = (): RetorikaDocument =>
 
 const assetsFor = (document: RetorikaDocument): Map<string, Uint8Array> => {
   const assets = new Map<string, Uint8Array>();
-  for (const page of document.pages) {
-    for (const section of page.sections) {
-      for (const el of section.content) {
-        if (el.value?.kind !== "image" || el.value.src.startsWith("data:")) continue;
-        assets.set(el.value.src, new Uint8Array(readFileSync(join(FIXTURES_DIR, el.value.src))));
-      }
-    }
+  for (const source of imageSourcesOf(document)) {
+    if (source.src.startsWith("data:")) continue;
+    assets.set(source.src, new Uint8Array(readFileSync(join(FIXTURES_DIR, source.src))));
   }
   return assets;
 };

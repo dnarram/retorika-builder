@@ -12,6 +12,7 @@ import {
   type Section,
   type StyleValue,
   setElementStyle,
+  setHeader,
   setPlacement,
   type Theme,
   TOKEN_KEYS,
@@ -277,6 +278,73 @@ describe("the gate with the contrast review in it", () => {
  * showed the photo warning, and «Descargar igualmente» downloaded — so the second warning was never
  * said at all. Both were true; the owner was told one of them.
  */
+describe("the gate with the logo in it (ADR 0059)", () => {
+  const withLogo = setHeader(plain, { brand: { logo: { src: "logo-3f9a7c21.png" } } });
+
+  it("warns, never blocks, about a white logo on the surface bar, through the contrast dialog", () => {
+    const gate = downloadGateFor(
+      counts({ own: 1, total: 1 }),
+      withLogo,
+      new Set(),
+      [],
+      [],
+      new Map(),
+      1,
+    );
+    expect(gate.kind).toBe("lowContrast");
+    if (gate.kind === "lowContrast") {
+      expect(gate.findings).toEqual([]);
+      expect(gate.logo).toMatchObject({ src: "logo-3f9a7c21.png" });
+    }
+  });
+
+  it("is ready for a dark logo, and for a logo whose bytes have not been read", () => {
+    expect(
+      downloadGateFor(counts({ own: 1, total: 1 }), withLogo, new Set(), [], [], new Map(), 0).kind,
+    ).toBe("ready");
+    expect(
+      downloadGateFor(counts({ own: 1, total: 1 }), withLogo, new Set(), [], [], new Map(), null)
+        .kind,
+    ).toBe("ready");
+  });
+
+  it("goes past it with the contrast acceptance, which is the dialog it was shown in", () => {
+    const gate = downloadGateFor(
+      counts({ own: 1, total: 1 }),
+      withLogo,
+      new Set(["contrast"]),
+      [],
+      [],
+      new Map(),
+      1,
+    );
+    expect(gate.kind).toBe("ready");
+  });
+
+  it("rides beside a low-contrast text in the one dialog rather than opening a second", () => {
+    const both = setElementStyle(
+      withLogo,
+      { sectionId: "sec-cover", elementId: "el-headline" },
+      "color",
+      { exact: "#949494", exception: true },
+    );
+    const gate = downloadGateFor(
+      counts({ own: 1, total: 1 }),
+      both,
+      new Set(),
+      [],
+      [],
+      new Map(),
+      1,
+    );
+    expect(gate.kind).toBe("lowContrast");
+    if (gate.kind === "lowContrast") {
+      expect(gate.findings).toHaveLength(1);
+      expect(gate.logo).toBeDefined();
+    }
+  });
+});
+
 describe("two warnings are two warnings", () => {
   const justLegible = "#808080";
 

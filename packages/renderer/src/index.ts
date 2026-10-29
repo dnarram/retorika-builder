@@ -1,4 +1,4 @@
-import { flattenElements, type RetorikaDocument } from "@retorika/schema";
+import { imageSourcesOf, type RetorikaDocument } from "@retorika/schema";
 import { buildCss, buildTree, pageTitleFor, resolvePage } from "./build.ts";
 import { treeToFragment } from "./dom.ts";
 import { fontFilesFor } from "./fonts.ts";
@@ -158,22 +158,15 @@ function titleFor(page: { title: string }, siteName: string): string {
 }
 
 /**
- * Every image the page references, items included.
+ * Every image the site references: the elements, items included, and the header's logo.
  *
  * It used to walk `section.content` only, which missed an image inside a list item — and
  * `buildSite` uses this list to check, after rendering, that everything the page asks for is in
- * the bundle. So a card's photo was rewritten and bundled correctly by `rewriteImages`, which
- * does recurse, and then skipped by the very check meant to catch a rewrite going wrong. Nothing
- * had photos in cards yet; uploads make that a matter of time rather than of luck.
+ * the bundle. So a card's photo was rewritten and bundled correctly by the publisher's rewrite,
+ * which does recurse, and then skipped by the very check meant to catch a rewrite going wrong.
+ * Since ADR 0059 the walk is the schema's own `imageSourcesOf`, which is also where the logo —
+ * the first `src` outside `sections[].content` — is learned once for every reader.
  */
 function collectAssets(doc: RetorikaDocument): AssetRef[] {
-  const assets: AssetRef[] = [];
-  for (const page of doc.pages) {
-    for (const section of page.sections) {
-      for (const el of flattenElements(section.content)) {
-        if (el.value?.kind === "image") assets.push({ src: el.value.src, alt: el.value.alt });
-      }
-    }
-  }
-  return assets;
+  return imageSourcesOf(doc).map((source) => ({ src: source.src, alt: source.alt }));
 }

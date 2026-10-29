@@ -12,6 +12,7 @@ import {
 } from "@retorika/schema";
 import { useId, useState } from "react";
 import {
+  brandNamePatch,
   headerStateFor,
   type MenuBlock,
   type MenuMode,
@@ -27,6 +28,7 @@ import {
   panelCard,
   panelRow,
   panelRowSelected,
+  SmallButton,
 } from "../editor/panelKit.tsx";
 import es from "../locales/es.json" with { type: "json" };
 
@@ -35,9 +37,9 @@ import es from "../locales/es.json" with { type: "json" };
  * destination is the button, and how the bar sits. Opened from the rail and by pressing the header
  * in the canvas (sprint 30 día 3); its controls arrived on día 4.
  *
- * **Four blocks, top to bottom, in the order an owner decides them**: the pages menu, the sections
- * menu of the page being edited, the button, the layout. The brand is read out above them until día
- * 5 gives it its own block with the logo, and the look is día 6's.
+ * **Five blocks, top to bottom, in the order an owner decides them**: the brand (name and logo,
+ * ADR 0059, día 5), the pages menu, the sections menu of the page being edited, the button, the
+ * layout. The look is día 6's.
  *
  * **Every sentence is asked of the renderer** through `headerStateFor` — the counts, whether a menu
  * is drawn, what an empty «Se lee como…» falls back to, whether a fixed bar lets go on a phone. The
@@ -51,6 +53,15 @@ export interface MenuPanelProps {
   doc: RetorikaDocument;
   /** The page the canvas is drawing; its sections are the sections menu shown. */
   pageId: string | undefined;
+  /** The object URL of the logo's bytes, when the document names a logo and this browser holds
+   * it — the same map the canvas draws from. */
+  logoUrl: string | undefined;
+  /** The logo is hard to see on the bar it sits on (`reviewLogo`, ADR 0059): said here, where the
+   * owner is looking at it, and again before the download. */
+  logoFaint: boolean;
+  /** Open the picker for the logo. `Editor` owns the one hidden input, as it does for photographs. */
+  onChangeLogo: () => void;
+  onRemoveLogo: () => void;
   onSetHeader: (patch: Partial<Header>) => void;
   onSetHeaderAction: (action: HeaderAction | null) => void;
   /** `null` goes back to the derived label. Called only with a label the schema accepts. */
@@ -71,6 +82,10 @@ const checkboxClass = "h-[16px] w-[16px] shrink-0 accent-[var(--ui-brand)]";
 export function MenuPanel({
   doc,
   pageId,
+  logoUrl,
+  logoFaint,
+  onChangeLogo,
+  onRemoveLogo,
   onSetHeader,
   onSetHeaderAction,
   onSetMenuLabel,
@@ -100,9 +115,66 @@ export function MenuPanel({
           {es["editor.menuPanel.noHeader"]}
         </p>
       )}
-      <p className={noteClass}>
-        {state.brandName ? es["editor.menuPanel.brandShown"] : es["editor.menuPanel.brandHidden"]}
-      </p>
+      {/* 0. The brand: the business name, and the logo on the bar it will sit on (ADR 0059). */}
+      <fieldset className={blockClass}>
+        <legend className={legendClass}>{es["editor.menuPanel.brandBlock"]}</legend>
+        <Check
+          label={es["editor.menuPanel.brand"]}
+          checked={state.brandName}
+          onChange={(name) => onSetHeader(brandNamePatch(doc, name))}
+          notes={[]}
+        />
+        <div className="flex items-center gap-3">
+          {state.logoSrc === undefined ? null : (
+            // The logo on the bar's own colour, at the height the page draws it: what the owner
+            // sees here is what the visitor sees, dark bar or light. Decorative — the words beside
+            // it say what it is.
+            <span
+              data-testid="logo-swatch"
+              style={{ background: state.barBackground }}
+              className="flex h-14 w-20 shrink-0 items-center justify-center rounded-ui-sm border border-ui-border"
+            >
+              {logoUrl === undefined ? null : (
+                <img src={logoUrl} alt="" className="max-h-10 max-w-[64px] object-contain" />
+              )}
+            </span>
+          )}
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <span className="text-[13px] font-semibold text-ui-ink">
+              {es["editor.menuPanel.logo"]}
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {state.logoSrc === undefined ? (
+                <SmallButton label={es["editor.menuPanel.logoUpload"]} onClick={onChangeLogo} />
+              ) : (
+                <>
+                  <SmallButton label={es["editor.menuPanel.logoChange"]} onClick={onChangeLogo} />
+                  <SmallButton
+                    label={es["editor.menuPanel.logoRemove"]}
+                    onClick={onRemoveLogo}
+                    danger
+                  />
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+        <p className={noteClass}>
+          {state.logoSrc === undefined
+            ? es["editor.menuPanel.logoNone"]
+            : es["editor.menuPanel.logoShown"]}
+        </p>
+        {logoFaint ? (
+          <p className="m-0 text-[12px] leading-snug text-[#92400E]">
+            {es["editor.menuPanel.logoFaint"]}
+          </p>
+        ) : null}
+        <p className={noteClass}>
+          {state.brandName || state.logoSrc !== undefined
+            ? es["editor.menuPanel.brandNote"]
+            : es["editor.menuPanel.brandNothing"]}
+        </p>
+      </fieldset>
 
       {/* 1. The pages menu — its switch, then every page in the order of «Páginas», which is the
           order the menu publishes (ADR 0057, David's decision 2). */}

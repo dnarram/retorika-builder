@@ -29,16 +29,17 @@ let bobSite: string;
 
 /**
  * The two buckets, each with the file the editor would store first and the content types its
- * migration admits. Photographs: JPEG and nothing else, because `preparePhoto` re-encodes every
- * upload (`photoCaps.test.ts` ties it to the editor). Fonts: the four formats a face travels as and
- * the two a licence may (`fontCaps.test.ts` ties them to `FONT_MEDIA_TYPES`).
+ * migration admits. Photographs: JPEG, because `preparePhoto` re-encodes every upload, and PNG
+ * since migration `0005`, because the logo is one (ADR 0059; `photoCaps.test.ts` ties both to the
+ * editor). Fonts: the four formats a face travels as and the two a licence may (`fontCaps.test.ts`
+ * ties them to `FONT_MEDIA_TYPES`).
  */
 const BUCKETS = [
   {
     bucket: "fotos",
-    migration: "0003",
+    migration: "0003 (and 0005 for the types)",
     file: "foto-sec-cover-el-image.jpg",
-    types: ["image/jpeg"],
+    types: ["image/jpeg", "image/png"],
   },
   {
     bucket: "fuentes",

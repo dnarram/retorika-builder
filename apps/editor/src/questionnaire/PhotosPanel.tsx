@@ -3,7 +3,12 @@
 import type { ElementAddress, RetorikaDocument } from "@retorika/schema";
 import { useId } from "react";
 import { PANEL_WIDTH, PanelClose, panelCard, panelRow } from "../editor/panelKit.tsx";
-import { countPhotos, listPhotos, type PhotoState } from "../editor/photoInventory.ts";
+import {
+  countPhotos,
+  listPhotos,
+  type PhotoEntry,
+  type PhotoState,
+} from "../editor/photoInventory.ts";
 import es from "../locales/es.json" with { type: "json" };
 
 /**
@@ -22,6 +27,7 @@ import es from "../locales/es.json" with { type: "json" };
 export function PhotosPanel({
   document: doc,
   onReplacePhoto,
+  onChangeLogo,
   onGoToPhoto,
   photoUrls,
   photosMissing = null,
@@ -31,9 +37,12 @@ export function PhotosPanel({
   /** Open the file picker for this image. `Editor` owns the one hidden input the canvas already
    * uses, so this is the same upload path and not a second one. */
   onReplacePhoto: (address: ElementAddress) => void;
+  /** Open the picker for the header's logo (ADR 0059), which this panel lists as «Logo»: the same
+   * input «Menú» opens, so there is one way a logo comes in. */
+  onChangeLogo: () => void;
   /** Show the page this photograph is on and scroll it into view, so the panel is also a way of
-   * finding one. */
-  onGoToPhoto: (photo: { pageId: string; sectionId: string }) => void;
+   * finding one — or, for the logo, open «Menú», where its block is. */
+  onGoToPhoto: (photo: Pick<PhotoEntry, "kind" | "pageId" | "sectionId">) => void;
   /** Object URLs for photographs already uploaded, keyed by the `src` the document carries —
    * the same map the preview needs, for the same reason: a bundle-relative path resolves against
    * the parent page inside a `srcDoc` iframe and 404s. */
@@ -132,7 +141,10 @@ export function PhotosPanel({
                     <img
                       src={photoUrls.get(photo.src) ?? photo.src}
                       alt=""
-                      className="h-10 w-14 shrink-0 rounded-ui-sm border border-ui-border object-cover"
+                      className={`h-10 w-14 shrink-0 rounded-ui-sm border border-ui-border ${
+                        // A logo is shown whole, not cropped: its shape is the point of it.
+                        photo.kind === "logo" ? "object-contain" : "object-cover"
+                      }`}
                     />
                     <span className="flex min-w-0 flex-col">
                       {/* Wrapped rather than truncated: this is the label that says which
@@ -151,7 +163,9 @@ export function PhotosPanel({
 
                   <button
                     type="button"
-                    onClick={() => onReplacePhoto(address)}
+                    onClick={() =>
+                      photo.kind === "logo" ? onChangeLogo() : onReplacePhoto(address)
+                    }
                     className="ui-interactive shrink-0 cursor-pointer rounded-ui-sm px-2 py-1 text-[12px] font-semibold text-ui-brand-deep hover:bg-ui-brand-surface"
                   >
                     {es["editor.photos.change"]}
