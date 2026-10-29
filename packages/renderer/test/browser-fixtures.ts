@@ -28,8 +28,11 @@ import {
 import {
   type ContentElement,
   type Page as DocumentPage,
+  HEADER_BACKGROUNDS,
+  HEADER_LAYOUTS,
   parseDocument,
   type RetorikaDocument,
+  SECTIONS_ROWS,
   type Section,
 } from "@retorika/schema";
 import {
@@ -886,6 +889,85 @@ export function scaleCombinations(): Combination[] {
       (combination) => combination.text === "long",
     ),
   ];
+}
+
+/**
+ * Set 5 (sprint 30 día 2) — the header: the five background schemes over every palette, and the
+ * three layouts with the sections' row and the fixed bar over the fixed palette.
+ *
+ * Two questions, two draws. **Colour**: a scheme writes its entries in `color.surface` on a coloured
+ * bar, and `contrast.test.ts` proves the pairs arithmetically; axe here measures what Chromium
+ * composited, over every palette, at both widths — including `transparent`, whose words sit over the
+ * cover's own `color.surface`, and whose one unprovable case (a transparent bar over a photograph) is
+ * the download review's business and not drawn here. **Structure**: the layouts, the row of its own
+ * and the fixed bar change the landmarks' arrangement and nothing about colour, so one palette.
+ *
+ * On the teaser case's document, which is the one that draws both menus (ADR 0043), with a brand and
+ * a button so every part of the header is on the page.
+ *
+ * Rough size: 5 schemes × 5 palettes + 3 layouts × 2 rows × 2 fixed ≈ 37 documents.
+ */
+export function headerCombinations(): Combination[] {
+  const base = baseDocument();
+  const [page] = base.pages;
+  const [section] = page?.sections ?? [];
+  if (!page || !section) throw new Error("the base fixture has no section");
+  const teaser = PRESET_CASES[TEASER_ID];
+  if (!teaser) throw new Error("no teaser case");
+  const variantId = teaser.variants[0] ?? "stacked";
+
+  const make = (id: string, paletteId: string, header: RetorikaDocument["header"]): Combination => {
+    const document = parseDocument({
+      ...base,
+      theme: buildTheme({
+        paletteId,
+        typePairId: FIXED_TYPE_PAIR[0].id,
+        scaleId: DEFAULT_SCALE_ID,
+      }),
+      header: {
+        brand: { name: true },
+        action: { kind: "section", sectionId: "sec-contact" },
+        ...header,
+      },
+      pages: [
+        { ...page, sections: teaser.sections(section, variantId, "standard") },
+        ...(teaser.extraPages?.("standard") ?? []),
+      ],
+    });
+    return {
+      id,
+      catalogId: TEASER_ID,
+      variantId,
+      paletteId,
+      typePairId: FIXED_TYPE_PAIR[0].id,
+      scaleId: DEFAULT_SCALE_ID,
+      text: "standard",
+      document,
+    };
+  };
+
+  const combinations: Combination[] = [];
+  for (const background of HEADER_BACKGROUNDS) {
+    for (const palette of PALETTES) {
+      combinations.push(
+        make(`header/${background}/${palette.id}`, palette.id, { look: { background } }),
+      );
+    }
+  }
+  for (const layout of HEADER_LAYOUTS) {
+    for (const row of SECTIONS_ROWS) {
+      for (const sticky of [false, true]) {
+        combinations.push(
+          make(`header/${layout}/${row}${sticky ? "/fixed" : ""}`, FIXED_PALETTE[0].id, {
+            layout,
+            sticky,
+            sections: { row },
+          }),
+        );
+      }
+    }
+  }
+  return combinations;
 }
 
 /**

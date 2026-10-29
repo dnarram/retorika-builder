@@ -58,14 +58,22 @@ export function nodeToHtml(node: RenderNode, indent = 0): string {
 /**
  * A complete, self-contained page.
  *
- * ADR 0001: the CSS is inlined and there is no script tag, so the file works when opened
- * by double-clicking it, with no server and no network.
+ * ADR 0001: the CSS is inlined, so the file works when opened by double-clicking it, with no
+ * server and no network. Since ADR 0058 a page that draws a header carries one inline script, and
+ * no page carries a second.
  */
 export function pageToHtml(
   body: readonly RenderNode[],
   css: string,
   title: string,
   meta: HeadMeta,
+  /**
+   * The one script a page may carry (ADR 0058), as a constant string the renderer owns. Undefined
+   * on every page that draws no header — which keeps «zero JavaScript when no section needs it» a
+   * sentence about those pages that is still literally true. Inline rather than a file: the page
+   * opens from `file://`, and one more request is one more thing to go wrong there.
+   */
+  script?: string,
 ): string {
   return [
     "<!doctype html>",
@@ -84,6 +92,7 @@ export function pageToHtml(
     "</head>",
     "<body>",
     ...body.map((node) => nodeToHtml(node)),
+    ...(script === undefined ? [] : [`<script>${script}</script>`]),
     "</body>",
     "</html>",
     "",

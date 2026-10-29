@@ -336,3 +336,185 @@ describe("determinism and the two targets", () => {
     expect(fragment.querySelector("main")?.id).toBe("rb-main");
   });
 });
+
+/**
+ * **The look** (sprint 30 día 2): each option a data attribute the stylesheet reads, each value a
+ * token, and the pairs the schemes write proved in `packages/tokens/test/contrast.test.ts`.
+ */
+describe("the look, as attributes and rules", () => {
+  const header = (doc: RetorikaDocument) => draw(doc).querySelector("header");
+  const css = (doc: RetorikaDocument) => render(doc, "html").css;
+
+  it("writes the defaults: surface, links at the far side of a left brand, medium gap, body size", () => {
+    const h = header(site(3));
+    expect(h?.getAttribute("data-bg")).toBe("surface");
+    expect(h?.getAttribute("data-align")).toBe("end");
+    expect(h?.getAttribute("data-gap")).toBe("md");
+    expect(h?.getAttribute("data-size")).toBe("body");
+    for (const absent of ["data-uppercase", "data-hover", "data-sticky", "data-hairline"]) {
+      expect(h?.hasAttribute(absent), absent).toBe(false);
+    }
+    // A centred or stacked bar centres its links unless told otherwise.
+    expect(header(site(3, [], { layout: "centered" }))?.getAttribute("data-align")).toBe("center");
+    expect(
+      header(site(3, [], { layout: "stacked", look: { align: "end" } }))?.getAttribute(
+        "data-align",
+      ),
+    ).toBe("end");
+  });
+
+  it("writes every option the owner chose", () => {
+    const h = header(
+      site(3, [], {
+        sticky: true,
+        hairline: false,
+        look: {
+          background: "ink",
+          align: "start",
+          gap: "lg",
+          uppercase: true,
+          hoverUnderline: true,
+          size: "small",
+        },
+      }),
+    );
+    expect(h?.getAttribute("data-bg")).toBe("ink");
+    expect(h?.getAttribute("data-align")).toBe("start");
+    expect(h?.getAttribute("data-gap")).toBe("lg");
+    expect(h?.getAttribute("data-size")).toBe("small");
+    expect(h?.getAttribute("data-hairline")).toBe("none");
+    for (const present of ["data-uppercase", "data-hover", "data-sticky"]) {
+      expect(h?.hasAttribute(present), present).toBe(true);
+    }
+  });
+
+  it("writes the coloured schemes in surface, with the button inverted", () => {
+    const sheet = css(site(3));
+    for (const bg of ["primary", "secondary", "ink"]) {
+      expect(sheet).toContain(
+        `.rb-header[data-bg=${bg}] { background: var(--color-${bg}); border-bottom: 0; }`,
+      );
+    }
+    expect(sheet).toContain(
+      ".rb-header:is([data-bg=primary], [data-bg=secondary], [data-bg=ink])\n  :is(.rb-brand, .rb-nav a, .rb-nav-narrow > summary) { color: var(--color-surface); }",
+    );
+    expect(sheet).toContain(
+      ".rb-header:is([data-bg=primary], [data-bg=secondary], [data-bg=ink]) .rb-nav-action {\n  background: var(--color-surface); color: var(--color-primary); }",
+    );
+    // Never `ink` on `secondary`: measured 1.23 in dark-slate and refused.
+    expect(sheet).not.toMatch(/data-bg=secondary\][^\n]*color: var\(--color-ink\)/);
+  });
+
+  it("lays a transparent bar over the cover and opens room under it (adjustment 1a)", () => {
+    const sheet = css(site(3));
+    expect(sheet).toContain(
+      ".rb-header[data-bg=transparent] { position: absolute; left: 0; right: 0; top: 0; z-index: 2;",
+    );
+    expect(sheet).toContain(
+      ".rb-header[data-bg=transparent] + main > .rb-section:first-child {\n  padding-top: calc(var(--space-xl) + var(--rb-header-h)); }",
+    );
+    expect(sheet).toContain(
+      "html { --rb-header-h: calc(2 * var(--space-md) + max(40px, 1.5 * var(--size-body))); }",
+    );
+  });
+
+  it("fixes the bar with sticky, and every section makes room for it when an anchor lands", () => {
+    const sheet = css(site(3));
+    expect(sheet).toContain(".rb-header[data-sticky] { position: sticky; top: 0; z-index: 2; }");
+    expect(sheet).toContain(
+      ".rb-header[data-sticky] ~ main [data-section] { scroll-margin-top: var(--rb-header-h); }",
+    );
+    expect(sheet).toContain(
+      ".rb-header[data-sticky][data-scrolled] { box-shadow: 0 1px 0 var(--color-muted),",
+    );
+  });
+
+  it("never fixes a transparent bar without the script's mark, and turns it to surface once scrolled (adjustment 1b)", () => {
+    const sheet = css(site(3));
+    expect(sheet).toContain(".rb-header[data-sticky][data-bg=transparent] { position: absolute; }");
+    expect(sheet).toContain(
+      "html[data-rb-js] .rb-header[data-sticky][data-bg=transparent] { position: fixed; }",
+    );
+    expect(sheet).toContain(
+      ".rb-header[data-sticky][data-bg=transparent][data-scrolled] { background: var(--color-surface);\n  border-bottom: 1px solid var(--color-muted); }",
+    );
+  });
+
+  it("scrolls smoothly only for somebody who has not asked for less motion", () => {
+    const sheet = css(site(3));
+    expect(sheet).toContain(
+      "@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }",
+    );
+    expect(sheet.match(/scroll-behavior/g)).toHaveLength(1);
+  });
+
+  it("lets a fixed bar go on a phone that shows the sections' row, and says so on the header", () => {
+    const withRow = header(site(3, [], { sticky: true }));
+    expect(withRow?.hasAttribute("data-phone-row")).toBe(true);
+    const hidden = header(site(3, [], { sticky: true, sections: { mobile: "hidden" } }));
+    expect(hidden?.hasAttribute("data-phone-row")).toBe(false);
+    expect(css(site(3))).toContain(
+      "  .rb-header[data-sticky][data-phone-row] { position: static; }",
+    );
+  });
+
+  it("marks each part, so a rule of the owner's own can reach it", () => {
+    const page = draw(
+      site(3, [{ id: "p2", slug: "carta", title: "La carta" }], {
+        brand: { name: true },
+        action: { kind: "section", sectionId: "sec-contact" },
+      }),
+    );
+    expect(page.querySelector(".rb-brand")?.getAttribute("data-part")).toBe("brand");
+    expect(page.querySelector(".rb-nav-action")?.getAttribute("data-part")).toBe("action");
+    expect(page.querySelector('nav[aria-label="Páginas"]')?.getAttribute("data-part")).toBe(
+      "pagesLinks",
+    );
+    expect(page.querySelector('nav[aria-label="Secciones"]')?.getAttribute("data-part")).toBe(
+      "sectionsLinks",
+    );
+  });
+});
+
+describe("rule 6 on the header's parts", () => {
+  it("emits a reference as var() and an exact value literally, part by part, after every scheme rule", () => {
+    const doc = site(3, [], {
+      brand: { name: true },
+      style: {
+        bar: { color: { exact: "#123456", exception: true }, padding: { ref: "space.lg" } },
+        pagesLinks: { color: { ref: "color.ink" } },
+        sectionsLinks: { fontSize: { exact: "14px", exception: true } },
+        brand: { fontFamily: { ref: "font.body" } },
+      },
+    });
+    const { css } = render(doc, "html");
+    expect(css).toContain("/* rule 6: the header's own style */");
+    // The bar reads `color` as its background.
+    expect(css).toContain(
+      ".rb-header[data-layout][data-bg] { background: #123456; padding: var(--space-lg); }",
+    );
+    expect(css).toContain(
+      ".rb-header[data-layout] [data-part=brand] { font-family: var(--font-body); }",
+    );
+    expect(css).toContain(
+      ".rb-header[data-layout] [data-part=pagesLinks] a[href] { color: var(--color-ink); }",
+    );
+    expect(css).toContain(
+      ".rb-header[data-layout] [data-part=sectionsLinks] a[href] { font-size: 14px; }",
+    );
+    expect(css.indexOf("/* rule 6: the header's own style */")).toBeGreaterThan(
+      css.indexOf("[data-bg=ink] { background"),
+    );
+    // Parts in HEADER_PARTS order: bar, brand, pagesLinks, sectionsLinks.
+    const at = (part: string) =>
+      css.indexOf(`[data-part=${part}]`, css.indexOf("/* rule 6: the header's"));
+    expect(at("brand")).toBeLessThan(at("pagesLinks"));
+    expect(at("pagesLinks")).toBeLessThan(at("sectionsLinks"));
+  });
+
+  it("emits nothing for a header with no style, and the same bytes twice", () => {
+    expect(render(site(3), "html").css).not.toContain("the header's own style");
+    const doc = site(3, [], { style: { action: { borderRadius: { ref: "radius.lg" } } } });
+    expect(render(doc, "html").css).toBe(render(doc, "html").css);
+  });
+});

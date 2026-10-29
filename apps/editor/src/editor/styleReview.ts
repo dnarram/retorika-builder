@@ -1,5 +1,10 @@
-import type { RetorikaDocument, StyleException } from "@retorika/schema";
-import { listStyleExceptions } from "@retorika/schema";
+import type {
+  HeaderBackground,
+  HeaderPart,
+  RetorikaDocument,
+  StyleException,
+} from "@retorika/schema";
+import { listHeaderStyleExceptions, listStyleExceptions } from "@retorika/schema";
 import { AA_NORMAL_TEXT, contrastRatio } from "@retorika/tokens";
 import { backgroundOf } from "./textToolbar.ts";
 
@@ -71,23 +76,74 @@ export interface StyleReview {
 export function reviewStyle(doc: RetorikaDocument): StyleReview {
   const blocking: ContrastFinding[] = [];
   const warning: ContrastFinding[] = [];
-
-  for (const exception of listStyleExceptions(doc)) {
-    if (exception.property !== "color" || exception.hidden) continue;
-
-    const background = doc.theme[backgroundOf(exception.role)];
+  const judge = (exception: StyleException, background: string) => {
     const ratio = contrastRatio(exception.exact, background);
-    if (ratio >= CONTRAST_WARNS_BELOW) continue;
-
+    if (ratio >= CONTRAST_WARNS_BELOW) return;
     const finding: ContrastFinding = {
       exception,
       ratio,
       level: ratio < CONTRAST_BLOCKS_BELOW ? "block" : "warn",
     };
     (finding.level === "block" ? blocking : warning).push(finding);
+  };
+
+  for (const exception of listStyleExceptions(doc)) {
+    if (exception.property !== "color" || exception.hidden) continue;
+    judge(exception, doc.theme[backgroundOf(exception.role)]);
+  }
+
+  // **The header's parts, against the bar they sit on** (ADR 0057, sprint 30 día 2). The bar's own
+  // `color` is its background and makes no legibility claim by itself; the words — brand, links,
+  // button — are judged against it: the exact background the owner wrote, or the scheme's token.
+  // A transparent bar sits on the cover's surface. The button's words sit on the button, which is
+  // `color.primary` on a surface bar and `color.surface` on a coloured one.
+  const headerExceptions = listHeaderStyleExceptions(doc);
+  const barExact = headerExceptions.find((e) => e.part === "bar" && e.property === "color")?.exact;
+  const scheme = doc.header?.look?.background ?? "surface";
+  const bar = barExact ?? doc.theme[HEADER_BACKGROUND_TOKEN[scheme]];
+  const buttonBackground =
+    scheme === "surface" || scheme === "transparent"
+      ? doc.theme["color.primary"]
+      : doc.theme["color.surface"];
+  for (const exception of headerExceptions) {
+    if (exception.property !== "color" || exception.part === "bar") continue;
+    judge(asStyleException(doc, exception), exception.part === "action" ? buttonBackground : bar);
   }
 
   return { blocking, warning };
+}
+
+/** The token each scheme paints the bar with; `transparent` shows the cover's surface through it. */
+const HEADER_BACKGROUND_TOKEN: Record<
+  HeaderBackground,
+  "color.surface" | "color.primary" | "color.secondary" | "color.ink"
+> = {
+  surface: "color.surface",
+  transparent: "color.surface",
+  primary: "color.primary",
+  secondary: "color.secondary",
+  ink: "color.ink",
+};
+
+/**
+ * A header part's exception in the shape the gate's dialog already lists — addressed to `header` as
+ * its section and the part as its element, so the dialog can take the owner to the «Menú» panel the
+ * way it takes them to a section. A part is a link or a button for the purpose of the sentence.
+ */
+function asStyleException(
+  doc: RetorikaDocument,
+  exception: { part: HeaderPart; property: StyleException["property"]; exact: string },
+): StyleException {
+  return {
+    pageId: doc.pages[0]?.id ?? "",
+    sectionId: "header",
+    elementId: exception.part,
+    slot: exception.part,
+    role: exception.part === "action" ? "button" : "link",
+    property: exception.property,
+    exact: exception.exact,
+    hidden: false,
+  };
 }
 
 /** How the ratio is written for a person: one decimal, with a Spanish comma, never «3.4». */

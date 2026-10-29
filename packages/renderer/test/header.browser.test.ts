@@ -212,15 +212,16 @@ describe("the header with a keyboard", () => {
     try {
       await tab(page);
       await page.keyboard.press("Enter");
-      const landed = await page.evaluate(() => {
-        const main = document.querySelector("main");
-        return {
-          hash: location.hash,
-          top: main ? Math.round(main.getBoundingClientRect().top) : null,
-        };
-      });
-      expect(landed.hash).toBe("#rb-main");
-      expect(landed.top).toBeLessThanOrEqual(0);
+      // Polled: the page scrolls smoothly (ADR 0057, David's point 7), so the landing is a moment
+      // later than the press — read at once, `<main>` was still 101px down.
+      await expect.poll(() => page.evaluate(() => location.hash)).toBe("#rb-main");
+      await expect
+        .poll(() =>
+          page.evaluate(() =>
+            Math.round(document.querySelector("main")?.getBoundingClientRect().top ?? 1),
+          ),
+        )
+        .toBeLessThanOrEqual(0);
     } finally {
       await page.context().close();
     }

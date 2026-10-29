@@ -1,4 +1,5 @@
 import { gzipSync } from "node:zlib";
+import { HEADER_SCRIPT } from "@retorika/renderer";
 import { describe, expect, it } from "vitest";
 import { landingSampleHtml } from "../src/app/landingSample.ts";
 
@@ -23,10 +24,13 @@ const html = landingSampleHtml();
 
 describe("the landing's sample site", () => {
   it("is a complete, self-contained document", () => {
-    // ADR 0001's shape: the CSS inlined, no script. The same string a client's own file would be.
+    // ADR 0001's shape: the CSS inlined. The same string a client's own file would be — which since
+    // ADR 0058 carries the header's one constant script where a header is drawn, and this sample
+    // draws one. One, the header's, and never a second.
     expect(html.startsWith("<!doctype html>")).toBe(true);
     expect(html).toContain("<style>");
-    expect(html).not.toContain("<script");
+    expect(html.match(/<script\b/g)).toHaveLength(1);
+    expect(html).toContain(`<script>${HEADER_SCRIPT}</script>`);
   });
 
   it("is the sample business two other suites already measure", () => {

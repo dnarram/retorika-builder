@@ -212,3 +212,9 @@ sections differently, each with David's own reason of 28 October 2026:
 
 «What this does not decide» named an own label and an order as «still refused, for ADR 0023's
 reasons». Both are now decided the other way, in ADR 0057 and not here.
+
+## Amendment — the page carries the header's script (29 October 2026, ADR 0058)
+
+«It still costs no JavaScript» (What is preserved) is read as ADR 0023's amendment of the same day
+reads it: true of the menu, no longer true of a page that draws a header, which carries the one
+constant script [ADR 0058](0058-a-published-page-carries-one-script-and-it-is-constant.md) decides.

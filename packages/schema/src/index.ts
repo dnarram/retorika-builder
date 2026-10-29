@@ -206,8 +206,13 @@ export {
   siteUrlIssue,
 } from "./siteUrl.ts";
 export { mintSlug, SLUG_PATTERN, slugFrom } from "./slug.ts";
-export type { StyleException } from "./style.ts";
-export { listStyleExceptions, setElementStyle, styleFor } from "./style.ts";
+export type { HeaderStyleException, StyleException } from "./style.ts";
+export {
+  listHeaderStyleExceptions,
+  listStyleExceptions,
+  setElementStyle,
+  styleFor,
+} from "./style.ts";
 export { setTheme } from "./theme.ts";
 export type { ElementStyle, StyleProperty, StyleValue, Theme, TokenKey } from "./tokens.ts";
 export {

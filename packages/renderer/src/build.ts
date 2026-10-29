@@ -1,4 +1,4 @@
-import { COVER_ID, FOOTER_ID, presetFor, TEASER_ID } from "@retorika/catalog";
+import { FOOTER_ID, presetFor, TEASER_ID } from "@retorika/catalog";
 import {
   type Collection,
   type ContentElement,
@@ -15,7 +15,6 @@ import {
   ROW_STEP_PX,
   type Section,
   SORTED_TOKEN_KEYS,
-  STYLE_PROPERTIES,
   type StyleProperty,
   tokenToCssVariable,
 } from "@retorika/schema";
@@ -26,6 +25,7 @@ import { h1SectionIds } from "./headings.ts";
 import { commentNode, element, inlineElement, type RenderNode } from "./nodes.ts";
 import type { ResolvedRenderOptions } from "./options.ts";
 import { textElement } from "./runs.ts";
+import { styleDeclarations } from "./styleCss.ts";
 
 /**
  * Document -> node tree. Layout, grid and tokens live here and nowhere else (Part 3.2).
@@ -860,18 +860,6 @@ function fineGridCss(doc: RetorikaDocument): string[] {
   ];
 }
 
-/** The CSS property each of rule 6's five properties writes. Written out rather than derived by
- * camel-to-kebab, so adding one is a decision somebody makes here rather than a transformation that
- * happens to produce something — which is exactly how `fontFamily` arrived (ADR 0032), with the
- * typechecker naming this table as one of the three places that had to answer. */
-const CSS_PROPERTY: Record<StyleProperty, string> = {
-  color: "color",
-  fontSize: "font-size",
-  fontFamily: "font-family",
-  padding: "padding",
-  borderRadius: "border-radius",
-};
-
 /**
  * Document rule 6, finally emitted: an element's own style.
  *
@@ -915,20 +903,11 @@ function elementStyleCss(doc: RetorikaDocument): string[] {
       // A hidden element is not rendered at all, so a rule for it would match nothing and only
       // weigh the page down — the same reason `listDeadDestinations` ignores one.
       if (!el.hidden && el.style) {
-        const declarations: string[] = [];
-        for (const property of STYLE_PROPERTIES) {
-          const value = el.style[property];
-          if (value === undefined) continue;
-          const css =
-            "ref" in value
-              ? `var(${tokenToCssVariable(value.ref)})`
-              : // The boundary check `theme-css-values.md` reserved for this day. Since day 2 the
-                // schema admits only a hex triple or a plain length, so it can no longer fire for a
-                // document that parsed — which is the right relationship between a gate and a
-                // guard, not a reason to drop the guard.
-                cssThemeValue(`${el.id}.${property}`, value.exact);
-          declarations.push(`${CSS_PROPERTY[property]}: ${css}`);
-        }
+        // `styleDeclarations` keeps the boundary check `theme-css-values.md` reserved for this day:
+        // since sprint 9 day 2 the schema admits only a hex triple or a plain length, so it can no
+        // longer fire for a document that parsed — which is the right relationship between a gate
+        // and a guard, not a reason to drop the guard.
+        const declarations = styleDeclarations(el.style, el.id);
         if (declarations.length > 0) {
           rules.push(
             `  [data-section="${cssAttributeValue(sectionId)}"] ` +

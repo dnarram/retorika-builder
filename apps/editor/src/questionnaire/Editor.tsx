@@ -6787,6 +6787,12 @@ export function Editor({
       // to do, and the key legend is the thing that hides there (see `.rb-keys`).
       "@media (hover: none) and (pointer: coarse) { [data-rb-text]:hover { outline-color:",
       "  transparent; } }",
+      // The published page scrolls smoothly where a header is drawn (ADR 0057, día 2); the canvas
+      // must not. The editor scrolls the frame itself — to the section the hand chose, to the bar it
+      // just drew — and measures where things landed in the next frame; an animation under those
+      // reads put the verbs' handle 39px from where the sprint 20 walk expects it. `!important`
+      // because the renderer's rule sits on `html` too, and this sheet is the editor's to win.
+      "html { scroll-behavior: auto !important; }",
       "[data-section] { position: relative; cursor: pointer; }",
       `[data-section].rb-selected { outline: ${screenPx(2)} solid #156FE7; outline-offset: ${screenPx(-2)}; }`,
       /*

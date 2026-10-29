@@ -143,6 +143,10 @@ describe("bundleToZip", () => {
     }
   });
 
+  // Every document of the corpus, zipped and unzipped: the loop's time is the corpus's size times a
+  // deflate of the fonts two of its documents ship — 0.5 s on the laptop on 29 October 2026, and the
+  // 5 s default hit on a cold CI runner that morning with no change to the corpus. The bound below
+  // is the loop's, and the same one is on the two INV_5 loops beside it.
   it("decompresses every entry to the original contents", async () => {
     for (const { name, document } of corpus) {
       const bundle = await bundleFor(name, document);
@@ -151,7 +155,7 @@ describe("bundleToZip", () => {
         expect(byName.get(file.path), `${name}: ${file.path}`).toEqual(file.contents);
       }
     }
-  });
+  }, 30_000);
 
   it(`${invariantTestName("INV_5")} (ZIP bytes)`, async () => {
     for (const { name, document } of corpus) {
@@ -159,7 +163,7 @@ describe("bundleToZip", () => {
         bundleToZip(await bundleFor(name, document)),
       );
     }
-  });
+  }, 30_000);
 
   it("uses a fixed timestamp and no extra fields", async () => {
     for (const { name, document } of corpus) {

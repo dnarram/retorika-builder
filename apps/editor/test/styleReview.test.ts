@@ -221,3 +221,80 @@ describe("formatRatio", () => {
     expect(formatRatio(12)).toBe("12,0");
   });
 });
+
+/**
+ * **The header's parts, against the bar they sit on** (ADR 0057, sprint 30 día 2): the words are
+ * judged against the scheme's background, or the exact one the owner painted the bar with; the bar's
+ * own colour is a background and makes no legibility claim; the button's words are judged against the
+ * button. The findings arrive addressed to `header` and the part, which is where the «Menú» panel is.
+ */
+describe("the header's parts", () => {
+  const headerDoc = (header: RetorikaDocument["header"]): RetorikaDocument =>
+    parseDocument({
+      schemaVersion: SCHEMA_VERSION,
+      id: "doc-cabecera",
+      siteName: "Barbería El Corte",
+      theme,
+      header,
+      pages: [{ id: "home", slug: "index", title: "Inicio", sections: [section] }],
+      collections: [],
+    });
+
+  it("judges a link colour against the scheme's background, and finds white on white unreadable", () => {
+    const review = reviewStyle(headerDoc({ style: { pagesLinks: { color: exact("#FFFFFF") } } }));
+    expect(
+      review.blocking.map((f) => [f.exception.sectionId, f.exception.elementId, f.exception.role]),
+    ).toEqual([["header", "pagesLinks", "link"]]);
+    // The same white on an `ink` bar is the proved pair, and nothing is said.
+    expect(
+      reviewStyle(
+        headerDoc({
+          look: { background: "ink" },
+          style: { pagesLinks: { color: exact("#FFFFFF") } },
+        }),
+      ).blocking,
+    ).toEqual([]);
+  });
+
+  it("judges the words against the exact bar the owner painted, when there is one", () => {
+    const dark = headerDoc({
+      style: { bar: { color: exact("#111111") }, brand: { color: exact("#222222") } },
+    });
+    const review = reviewStyle(dark);
+    expect(review.blocking.map((f) => f.exception.elementId)).toEqual(["brand"]);
+    // The bar's own colour is a background: it is listed nowhere as a finding.
+    expect(
+      [...review.blocking, ...review.warning].some((f) => f.exception.elementId === "bar"),
+    ).toBe(false);
+  });
+
+  it("judges the button's words against the button, which inverts on a coloured bar", () => {
+    // On a surface bar the button is `color.primary`: blue words on a blue button block.
+    const onSurface = headerDoc({ style: { action: { color: exact(theme["color.primary"]) } } });
+    expect(reviewStyle(onSurface).blocking.map((f) => f.exception.role)).toEqual(["button"]);
+    // On a primary bar the button is `color.surface`: the same blue words read fine.
+    const onPrimary = headerDoc({
+      look: { background: "primary" },
+      style: { action: { color: exact(theme["color.primary"]) } },
+    });
+    expect(reviewStyle(onPrimary).blocking).toEqual([]);
+  });
+
+  it("warns between the two thresholds, as it does for an element", () => {
+    const review = reviewStyle(
+      headerDoc({ style: { sectionsLinks: { color: exact(greyAt(3.6)) } } }),
+    );
+    expect(review.blocking).toEqual([]);
+    expect(review.warning.map((f) => [f.exception.elementId, f.level])).toEqual([
+      ["sectionsLinks", "warn"],
+    ]);
+  });
+
+  it("says nothing about a header dressed in references, or in sizes", () => {
+    const refs = headerDoc({
+      look: { background: "secondary" },
+      style: { pagesLinks: { color: { ref: "color.ink" } }, bar: { padding: exact("12px") } },
+    });
+    expect(reviewStyle(refs)).toEqual({ blocking: [], warning: [] });
+  });
+});

@@ -7,6 +7,7 @@ import {
   closeCombination,
   contrastCombinations,
   geometryCombinations,
+  headerCombinations,
   openCombination,
 } from "./browser-fixtures.ts";
 
@@ -106,6 +107,16 @@ describe("axe — geometry (every section, one palette, structural rules)", () =
 
 describe("axe — contrast (every palette, every type pair, one composition)", () => {
   checkAxe(contrastCombinations());
+});
+
+/**
+ * The header (ADR 0057, sprint 30 día 2): its five schemes over every palette — the pairs the
+ * stylesheet writes, as Chromium composites them — and its layouts, row and fixed bar over one. The
+ * same assertion as above: no serious or critical violation, contrast measured everywhere, nothing
+ * left unmeasured.
+ */
+describe("axe — the header (every scheme over every palette; the layouts, the row and the fixed bar)", () => {
+  checkAxe(headerCombinations());
 });
 
 /**

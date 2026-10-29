@@ -698,8 +698,8 @@ describe("the two versions of the menu", () => {
     expect(css).toContain("  .rb-header[data-sections] .rb-nav-row { display: flex;");
   });
 
-  it("costs no JavaScript", () => {
-    expect(render(twoMenus(), "html").html).not.toContain("<script");
+  it("costs one script, the header's, and no page carries a second (ADR 0058)", () => {
+    expect(render(twoMenus(), "html").html.match(/<script/g)).toHaveLength(1);
   });
 });
 

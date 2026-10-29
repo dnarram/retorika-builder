@@ -50,10 +50,19 @@ describe("plain links", () => {
 
   it("never removes the browser's focus indicator or adds state colours", () => {
     for (const { name, document } of corpus) {
-      // The one rule allowed to name focus is the skip link's (ADR 0057): `.rb-skip:focus-visible`
-      // is what brings the link on screen, and it sets `top`, never the outline. Cut out before the
-      // sweep so the sweep still forbids every other mention.
-      const css = styleOf(render(document, "html").html).replace(/\.rb-skip[\s\S]*?\}\n/g, "");
+      // The rules allowed to name a state are the header's (ADR 0057): `.rb-skip:focus-visible`
+      // brings the link on screen and sets `top`; `[data-hover]` underlines an entry the owner asked
+      // underlined. Neither touches the outline or a colour — asserted below — and both are cut out
+      // before the sweep, so the sweep still forbids every other mention.
+      const full = styleOf(render(document, "html").html);
+      const headerRules = full.match(/^\.rb-(?:skip|header)[^\n]*\n(?:[ ][^\n]*\n)*/gm) ?? [];
+      for (const rule of headerRules) {
+        if (!/:(?:hover|focus-visible)/.test(rule)) continue;
+        expect(rule, `${name}: a header state rule touches the outline or a colour`).not.toMatch(
+          /outline|color:/,
+        );
+      }
+      const css = headerRules.reduce((rest, rule) => rest.replace(rule, ""), full);
       for (const forbidden of ["outline", ":focus", ":focus-visible", ":visited", ":hover"]) {
         expect(css.includes(forbidden), `${name}: ${forbidden}`).toBe(false);
       }
