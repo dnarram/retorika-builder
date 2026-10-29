@@ -2,12 +2,15 @@
 
 import {
   FINE_PER_COLUMN,
+  type HeaderPart,
+  listHeaderStyleExceptions,
   listStyleExceptions,
   type MobilePatchEdit,
   type Placement,
   type PlacementEdit,
   type RetorikaDocument,
   type StyleException,
+  type StyleProperty,
 } from "@retorika/schema";
 import { useId, useState } from "react";
 import {
@@ -19,6 +22,7 @@ import {
   stepTo,
 } from "../editor/designTree.ts";
 import { PANEL_WIDTH, PanelClose, panelCard } from "../editor/panelKit.tsx";
+import { headerPartName } from "../editor/styleReview.ts";
 import es from "../locales/es.json" with { type: "json" };
 
 /**
@@ -228,6 +232,7 @@ export function DesignPanel({
   onMoveUpOnMobile,
   onPreviewMobile,
   onClearException,
+  onClearHeaderException,
   onEscalate,
   onClose,
 }: {
@@ -249,6 +254,9 @@ export function DesignPanel({
   /** Drop one exception and let the system show through again — the whole of the «arreglo en un
    * clic», and the same act day 6's contrast review will offer from its own dialog. */
   onClearException: (exception: StyleException) => void;
+  /** The same «Volver al sistema» for a part of the header (sprint 30 día 6), which is not an
+   * element and has its own verb. */
+  onClearHeaderException: (part: HeaderPart, property: StyleProperty) => void;
   /**
    * «Diseñar a mano», offered from here as well as from the section's own header (ADR 0025's
    * amendment, accepted 1 October 2026).
@@ -290,6 +298,10 @@ export function DesignPanel({
    * vanished from this list when somebody hid its element is one that comes back unannounced.
    */
   const exceptions = listStyleExceptions(doc);
+  /** The header's own, after the elements': the bar sits above the first section, but its parts
+   * are written in «Menú» and not in any section, so they close the list rather than open it. */
+  const headerExceptions = listHeaderStyleExceptions(doc);
+  const exceptionCount = exceptions.length + headerExceptions.length;
 
   const rows = sectionId === null ? [] : designRows(doc, sectionId);
   /** Which of the four things this panel has to say. Decided in `designTree.ts` so it can be tested
@@ -489,11 +501,11 @@ export function DesignPanel({
         section — and because it is the one thing this panel can say when nothing is selected.
       */}
       <Family
-        title={`${es["editor.design.exceptions"]}${exceptions.length > 0 ? ` (${exceptions.length})` : ""}`}
+        title={`${es["editor.design.exceptions"]}${exceptionCount > 0 ? ` (${exceptionCount})` : ""}`}
         open={exceptionsOpen}
         onToggle={() => setExceptionsOpen((value) => !value)}
       >
-        {exceptions.length === 0 ? (
+        {exceptionCount === 0 ? (
           // Not an empty box. The sentence says what being empty *means*, which is the promise
           // rule 6 makes and the reason somebody would want it to stay empty.
           <p className="m-0 text-[12px] leading-snug text-ui-muted">
@@ -528,6 +540,29 @@ export function DesignPanel({
                 <button
                   type="button"
                   onClick={() => onClearException(exception)}
+                  className="ui-interactive shrink-0 cursor-pointer rounded-ui-sm border border-ui-border bg-ui-surface px-2 py-1 text-[11px] font-medium text-ui-ink hover:border-ui-border-strong hover:bg-ui-bg"
+                >
+                  {es["editor.design.exceptionBack"]}
+                </button>
+              </div>
+            ))}
+            {headerExceptions.map((exception) => (
+              <div
+                key={`header/${exception.part}/${exception.property}`}
+                className="flex items-center justify-between gap-2 rounded-ui-sm border border-ui-border px-2.5 py-2"
+              >
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="truncate text-[12px] text-ui-ink">
+                    {headerPartName(exception.part)}
+                  </span>
+                  <span className="text-[11px] text-ui-muted">
+                    {es[`editor.design.exceptionOf.${exception.property}` as keyof typeof es]}:{" "}
+                    <code className="font-mono">{exception.exact}</code>
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onClearHeaderException(exception.part, exception.property)}
                   className="ui-interactive shrink-0 cursor-pointer rounded-ui-sm border border-ui-border bg-ui-surface px-2 py-1 text-[11px] font-medium text-ui-ink hover:border-ui-border-strong hover:bg-ui-bg"
                 >
                   {es["editor.design.exceptionBack"]}

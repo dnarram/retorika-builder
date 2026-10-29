@@ -48,7 +48,7 @@ reach cannot carry anybody's words into a page.
 | Without the script | With it |
 |---|---|
 | The `<details>` opens and closes from its `<summary>` | Escape closes it and gives the focus back to «Menú»; a press outside closes it |
-| Anchors land; a fixed bar is `sticky` and sections make room by the stylesheet's **estimate** of its height (`--rb-header-h`) | `--rb-header-h` is the bar's real `offsetHeight` |
+| Anchors land; a fixed bar is `sticky` and sections make room by the stylesheet's **estimate** of its height (`--rb-header-h`) | `--rb-header-h` is the bar's real `offsetHeight`, measured again whenever the bar changes size (see the note of sprint 30 día 6 below) |
 | A fixed bar has no shadow | `data-scrolled` once the page has scrolled, and the stylesheet draws the shadow |
 | No entry says which section is in view | The entry of the section most in view carries `aria-current="location"` (`IntersectionObserver`; nothing on a browser without one) |
 | A **transparent** bar that is also fixed is **not fixed**: it lies over the cover and scrolls away with it | `data-rb-js` on `<html>` is written first, and only under that mark is a transparent bar fixed — turning to the `surface` scheme once scrolled |
@@ -115,3 +115,16 @@ for node as before.
 - `packages/renderer/test`: `headerScript.test.ts`, `header-script.browser.test.ts`, `parity.test.ts`
   (the declared divergence), `menu.test.ts` («costs no JavaScript» inverted).
 - Day by day in `docs/design/REVIEW.md`, sprint 30 día 2.
+
+## Note — sprint 30 día 6: the measure follows the bar, not only the window
+
+The script measured the bar once, when it ran, and again on `resize`. **The día 6 walk found an
+anchor landing 3 px under a fixed bar in the ZIP opened from disk**: the site's own letter arrives
+after the script has run, the bar grew from 66 to 69 px, and nothing announced it with a `resize`.
+The measure now also runs from a `ResizeObserver` on the bar's **border box** (what `offsetHeight`
+reads; the default content box misses a change of padding), where the browser has one — the same
+progressive shape as the `IntersectionObserver` of row 4: without it, the window's `resize` and the
+stylesheet's estimate are what they were. Still constant, still one script; 0.8 KB gzipped against
+the 2 KB of §3. Nothing in the decision changes; the row above says what the script does now.
+`header-script.browser.test.ts` grows the bar after the script and asserts the new height (red
+before, green after); the four goldens with a header move by that one line.

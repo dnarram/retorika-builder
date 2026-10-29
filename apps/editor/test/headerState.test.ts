@@ -2,15 +2,33 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { render } from "@retorika/renderer";
-import { parseDocument, type RetorikaDocument, setHeader, setMenuLabel } from "@retorika/schema";
+import {
+  HEADER_ALIGNMENTS,
+  HEADER_BACKGROUNDS,
+  HEADER_GAPS,
+  HEADER_PARTS,
+  HEADER_SIZES,
+  listHeaderStyleExceptions,
+  parseDocument,
+  type RetorikaDocument,
+  setHeader,
+  setMenuLabel,
+} from "@retorika/schema";
 import { describe, expect, it } from "vitest";
 import {
   brandNamePatch,
+  headerColorInForce,
+  headerExact,
   headerStateFor,
+  headerStylePatch,
+  lookPatch,
   type MenuMode,
   menuModePatch,
   menuStatusText,
+  SCHEME_TOKENS,
+  schemeSwatch,
   sectionsMobilePatch,
+  sectionsRowPatch,
 } from "../src/editor/headerState.ts";
 import es from "../src/locales/es.json" with { type: "json" };
 
@@ -278,5 +296,171 @@ describe("the rows and the button", () => {
     const state = headerStateFor(doc, "page-donde-estamos");
     const chosen = state.actionChoices.find((choice) => choice.key === state.actionKey);
     expect(chosen).toMatchObject({ label: "Contacto", where: "Taberna Santo Domingo" });
+  });
+});
+
+/** The published page of `doc` as a DOM, and the text of its stylesheet. */
+function published(doc: RetorikaDocument, pageId?: string) {
+  const page = new DOMParser().parseFromString(
+    render(doc, "html", pageId === undefined ? {} : { pageId }).html,
+    "text/html",
+  );
+  const css = [...page.querySelectorAll("style")]
+    .map((style) => style.textContent ?? "")
+    .join("\n");
+  const header = page.querySelector("header.rb-header");
+  if (!header) throw new Error("published: the page draws no header");
+  return { page, css, header };
+}
+
+/** The declarations of the stylesheet rule whose selector is exactly `selector`, joined. */
+function rule(css: string, selector: string): string {
+  const start = css.indexOf(`${selector} {`);
+  if (start < 0) return "";
+  return css.slice(start, css.indexOf("}", start));
+}
+
+describe("the look (sprint 30 día 6): every option reaches the published page", () => {
+  const doc = fixture("cabecera-con-marca");
+  const options = [
+    ...HEADER_BACKGROUNDS.map((background) => ({
+      attribute: "data-bg",
+      value: background,
+      look: { background },
+    })),
+    ...HEADER_ALIGNMENTS.map((align) => ({
+      attribute: "data-align",
+      value: align,
+      look: { align },
+    })),
+    ...HEADER_GAPS.map((gap) => ({ attribute: "data-gap", value: gap, look: { gap } })),
+    ...HEADER_SIZES.map((size) => ({ attribute: "data-size", value: size, look: { size } })),
+  ];
+
+  it.each(options)(
+    "$attribute=$value: the panel's state, the attribute and a rule for it",
+    ({ attribute, value, look }) => {
+      const chosen = setHeader(doc, lookPatch(doc, look));
+      const state = headerStateFor(chosen, undefined);
+      const { css, header } = published(chosen);
+      // What the panel shows as chosen is what the page carries…
+      expect(Object.values(state.look)).toContain(value);
+      expect(header.getAttribute(attribute)).toBe(value);
+      // …and the stylesheet acts on it — except on the two values that are the base rules
+      // themselves: the `surface` bar and the `md` gap are `.rb-header` and `.rb-nav` unadorned.
+      if (
+        !(attribute === "data-bg" && value === "surface") &&
+        !(attribute === "data-gap" && value === "md") &&
+        !(attribute === "data-size" && value === "body")
+      ) {
+        expect(css).toContain(`[${attribute}=${value}]`);
+      }
+    },
+  );
+
+  it.each([
+    ["uppercase", "data-uppercase", "text-transform: uppercase"],
+    ["hoverUnderline", "data-hover", "text-decoration: underline"],
+  ] as const)(
+    "«%s» writes its attribute, and its rule says what the switch says",
+    (key, attribute, declaration) => {
+      const on = setHeader(doc, lookPatch(doc, { [key]: true }));
+      expect(headerStateFor(on, undefined).look[key]).toBe(true);
+      const { css, header } = published(on);
+      expect(header.hasAttribute(attribute)).toBe(true);
+      const selectorAt = css.indexOf(`.rb-header[${attribute}]`);
+      expect(selectorAt).toBeGreaterThan(-1);
+      expect(css.slice(selectorAt, css.indexOf("}", selectorAt))).toContain(declaration);
+      // Off again leaves the document as it was: no `false`, and no empty `look`.
+      const off = setHeader(on, lookPatch(on, { [key]: false }));
+      expect(off.header).toEqual(doc.header);
+      expect(published(off).header.hasAttribute(attribute)).toBe(false);
+    },
+  );
+
+  it("the swatches are the renderer's pairs: each scheme's bar and words, read off its stylesheet", () => {
+    const { css } = published(doc);
+    for (const background of HEADER_BACKGROUNDS) {
+      const tokens = SCHEME_TOKENS[background];
+      const bar = tokens.bar.replace("color.", "--color-");
+      const text = tokens.text.replace("color.", "--color-");
+      if (background === "surface") {
+        expect(rule(css, ".rb-header")).toContain(`background: var(${bar})`);
+        expect(rule(css, ".rb-nav a")).toContain(`color: var(${text})`);
+      } else if (background === "transparent") {
+        // Nothing of its own: the page's surface shows through, and its words are the base ones.
+        expect(rule(css, ".rb-header[data-bg=transparent]")).toContain("background: transparent");
+        expect(rule(css, ".rb-brand")).toContain(`color: var(${text})`);
+      } else {
+        expect(rule(css, `.rb-header[data-bg=${background}]`)).toContain(`background: var(${bar})`);
+        const coloured = css.indexOf(
+          ":is(.rb-brand, .rb-nav a, .rb-nav-narrow > summary) { color:",
+        );
+        expect(css.slice(coloured, css.indexOf("}", coloured))).toContain(`var(${text})`);
+      }
+      const swatch = schemeSwatch(doc, background);
+      expect(swatch).toEqual({ bar: doc.theme[tokens.bar], text: doc.theme[tokens.text] });
+    }
+  });
+
+  it("«Secciones en su propia fila» is the page's `data-sections`, and keeps the rest of `sections`", () => {
+    const shared = setHeader(doc, sectionsRowPatch(doc, "shared"));
+    expect(headerStateFor(shared, undefined).sectionsRow).toBe("shared");
+    expect(published(shared).header.getAttribute("data-sections")).toBe("shared");
+    expect(shared.header?.sections).toEqual({ ...doc.header?.sections, row: "shared" });
+    const own = setHeader(shared, sectionsRowPatch(shared, "own"));
+    expect(published(own).header.getAttribute("data-sections")).toBe("own");
+  });
+});
+
+describe("the exact values behind the switch (sprint 30 día 6)", () => {
+  const doc = fixture("cabecera-con-marca");
+
+  it("offers exactly the parts the page draws", () => {
+    for (const page of doc.pages) {
+      const state = headerStateFor(doc, page.id);
+      const { header } = published(doc, page.id);
+      const drawnParts = new Set(
+        [...header.querySelectorAll("[data-part]")]
+          // A nav that is drawn with no entry in it offers nothing to colour.
+          .filter((node) => node.querySelector("a") !== null || node.tagName !== "NAV")
+          .map((node) => node.getAttribute("data-part")),
+      );
+      expect(state.parts).toEqual(
+        HEADER_PARTS.filter((part) => part === "bar" || drawnParts.has(part)),
+      );
+    }
+  });
+
+  it("writes a marked exception the page paints, and «Volver al sistema» leaves no trace", () => {
+    const colored = setHeader(doc, headerStylePatch(doc, "action", "color", "#123456"));
+    const sized = setHeader(colored, headerStylePatch(colored, "action", "fontSize", "19px"));
+    expect(headerExact(sized, "action", "color")).toBe("#123456");
+    expect(listHeaderStyleExceptions(sized)).toEqual([
+      { part: "action", property: "color", exact: "#123456" },
+      { part: "action", property: "fontSize", exact: "19px" },
+    ]);
+    const { css } = published(sized);
+    const own = rule(css, ".rb-header[data-layout] [data-part=action]");
+    expect(own).toContain("#123456");
+    expect(own).toContain("19px");
+    // One property back, then the whole part in one step.
+    const oneBack = setHeader(sized, headerStylePatch(sized, "action", "fontSize", undefined));
+    expect(listHeaderStyleExceptions(oneBack)).toHaveLength(1);
+    const back = setHeader(sized, headerStylePatch(sized, "action", undefined, undefined));
+    expect(back.header).toEqual(doc.header);
+  });
+
+  it("starts each colour input from the colour in force, never from black", () => {
+    expect(headerColorInForce(doc, "bar")).toBe(doc.theme["color.surface"]);
+    expect(headerColorInForce(doc, "brand")).toBe(doc.theme["color.primary"]);
+    expect(headerColorInForce(doc, "action")).toBe(doc.theme["color.surface"]);
+    const ink = setHeader(doc, lookPatch(doc, { background: "ink" }));
+    expect(headerColorInForce(ink, "bar")).toBe(doc.theme["color.ink"]);
+    expect(headerColorInForce(ink, "pagesLinks")).toBe(doc.theme["color.surface"]);
+    // On a coloured bar the button inverts: surface, with primary words.
+    expect(headerColorInForce(ink, "action")).toBe(doc.theme["color.primary"]);
+    const exact = setHeader(ink, headerStylePatch(ink, "bar", "color", "#abcdef"));
+    expect(headerColorInForce(exact, "bar")).toBe("#abcdef");
   });
 });

@@ -5146,3 +5146,80 @@ accesibilidad 100, best practices 100, SEO 100, **LCP 1,35 s, CLS 0,023**; las t
 va con `height` y sin `width` (el documento no guarda sus medidas), así que cuenta como «imagen sin
 tamaño» (`unsized-images` 0,5) y es el CLS de 0,023 — por debajo del 0,1 de «bueno» y sin mover la
 nota; guardar el ancho, o `aspect-ratio`, es una decisión para el cierre.
+
+### Día 6 — el aspecto de la cabecera, y los exactos tras el interruptor (PR de `feat/el-aspecto-de-la-cabecera`)
+
+**El panel «Menú» gana el bloque Aspecto**, debajo de Disposición. «Fondo de la barra»: cinco opciones
+dibujadas con la paleta de la web —la barra con un «Aa» del color que toman sus palabras—: «Como la
+página», «Principal», «Secundario», «Oscuro» y «Transparente», esta con un borde discontinuo y, al
+elegirla, la frase «La barra va encima de la primera sección de cada página. Sobre una foto no podemos
+comprobar que se lea». Después «Dónde van los enlaces» (izquierda, centro, derecha), «Separación entre
+enlaces» (poca, normal, mucha), «Tamaño de la letra» (normal, más pequeña), «En mayúsculas», «Subrayar
+al pasar» (con la nota de que el enlace no cambia de color: se subraya, también con el teclado) y
+«Secciones en su propia fila», que el día 4 no ofrecía, solo cuando el menú de secciones se dibuja.
+Todo por `setHeader` con el `look` entero (`lookPatch`): un interruptor apagado quita su clave, y un
+`look` vacío la suya, así que encender y apagar «En mayúsculas» deja el documento como estaba. Una
+alineación elegida se guarda aunque coincida con la de la disposición: el dueño la pulsó, y una que
+siguiera en silencio al siguiente cambio de disposición sería el panel deshaciendo una decisión. En la
+hoja del móvil los fondos van en dos columnas; a 390 nada se sale.
+
+**Con las herramientas de diseño, «A mano»**: por cada parte que la página dibuja (barra, marca, enlaces
+de páginas, enlaces de secciones, botón; `state.parts`, comprobado contra los `data-part` publicados)
+el color exacto con el `<input type="color">` de la plataforma, que empieza en el color en vigor y
+nunca en negro, y el tamaño en píxeles (8–200) salvo la barra, cuyo color es su fondo. Los dos escriben
+al **`change` nativo** y no al `onChange` de React, que es `input`: arrastrar por la rueda abriría un
+paso de historia por píxel, y teclear «120» publicaría una barra de 12 px por el camino. «Volver al
+sistema» quita la parte entera en un paso. **«Diseño» → «Fuera del sistema»** lista ahora también las
+de la cabecera, como «Cabecera · botón» y su valor, después de las de los elementos, y las devuelve al
+sistema con su propio verbo. **Y el «Arreglar» del diálogo de contraste** sobre una parte de la cabecera
+llamaba a `setElementStyle` con la sección «header», que lanza: estaba ahí desde el día 2 y era
+inalcanzable mientras nada escribía excepciones de cabecera; hoy lo es, y va por `setHeader`. Las
+filas del diálogo nombran la parte («Cabecera · botón») en vez de su clave.
+
+**La barra transparente sobre una foto** (`headerOverPhoto`): en cada página cuya primera sección es
+una portada `image-background` con la foto sin ocultar, aviso y nunca bloqueo, **dentro del diálogo del
+contraste que ya existía** (`lowContrast.overPhoto`, los títulos de las páginas): una fila sin
+«Arreglar» —lo que se lee ahí depende de una foto, y la salida es otro fondo en «Menú»— y, si no hay
+nada más que decir, su propio título («La cabecera va sobre una foto»). Ningún modal nuevo:
+`modalTrap` sigue en 12. `image-right` no avisa: la foto va al lado de las palabras, no bajo la barra.
+
+**Lo que encontró la caminata, y está arreglado en el renderer (ADR 0058, nota del día 6).** En el ZIP
+abierto desde el disco, con la cabecera fija, un enlace de sección dejaba su sección **3 px debajo de la
+barra**: el script medía la barra una vez, al correr, y en `resize`; la letra propia llega después y
+la barra pasa de 66 a 69 px sin que nada lo anuncie. Ahora mide también desde un `ResizeObserver` sobre
+la **caja de borde** de la barra. La primera versión observaba la caja por defecto, la de contenido,
+que no ve un cambio de relleno: la prueba nueva pasaba fichero a fichero por suerte (la primera entrega
+llegaba después del cambio) y la suite a11y completa, más lenta, la puso en rojo; con `box:
+'border-box'` verde, y saboteada en la suite completa, roja. 0,8 KB gzip contra 2 KB; los cuatro goldens
+con cabecera se mueven en esa línea y en nada más (diff leído).
+
+**Tests**: `headerState.test.ts` (+20: cada fondo, alineación, separación y tamaño llegan al atributo
+publicado y a una regla de la hoja; mayúsculas y subrayado con su declaración, y apagados sin rastro;
+las muestras contra los pares leídos de la hoja del renderer; la fila propia; las partes que se ofrecen
+contra los `data-part` publicados; una excepción que la hoja pinta y «Volver al sistema» sin rastro; el
+color en vigor en barra clara y oscura, con el botón invertido), `downloadGate.test.ts` (+4: avisa sobre
+`image-background` nombrando la página, no sobre `image-right` con la misma foto, no con la foto oculta
+ni bajo un fondo opaco, y la aceptación del contraste lo pasa), `styleReview.test.ts` (la etiqueta de la
+parte), `header-script.browser.test.ts` (+1: la barra crece tras el script). **Saboteos**, deshechos por
+copia: seis en `headerState.ts` (el par de un fondo, una parte omitida, `false` guardado, el borrado de
+la parte, el botón sin invertir, la fila), cuatro en `styleReview.ts` (la variante —que **no** dio rojo
+a la primera: la prueba de `image-right` usaba una portada sin foto; rehecha con la misma foto—, la foto
+oculta, el «transparent», la etiqueta) y el `border-box` del script. e2e: nueva «sprint 30 día 6» (fondo
+«Principal» pintado con la primaria de la paleta y sus entradas en la de superficie; mayúsculas; fija;
+el lienzo bajado y la barra en `top: 0`; con las herramientas, el botón a `#5a1a1a` desde «A mano»,
+listado en «Fuera del sistema» como «Cabecera · botón» y devuelto al sistema; una segunda página
+convertida; el ZIP abierto por `file://` sin ninguna petición fallida: barra `primary` y `sticky`, un
+enlace de sección que la deja bajo la barra y no debajo de ella con `data-scrolled` puesto, y a 390
+Escape cierra el `<details>` y deja el foco en su `<summary>`). Las cuatro caminatas del sprint 30
+verdes, en 32 s. El panel visto a 1440 y a 390 con capturas temporales, ya quitadas: «Botón» salía
+cortado como «Bot» junto a «Volver al sistema»; el nombre va ahora en su propia línea.
+
+**Medidas.** `pnpm test` 3549 (170 ficheros); `typecheck`, `lint` (0 errores), invariantes, golden,
+`renderer:deps`, `size` (script 0,8 KB); `test:a11y` local 626.
+
+**No hecho, y dicho.** El logo oscuro sobre «Oscuro» (la memoria del día 5 lo pedía para esta caminata)
+no se camina en e2e: `reviewLogo` contra el color de la barra ya está cubierto por las pruebas del día 5
+y por `headerColorInForce`/`headerBarBackground` hoy; el `rootMargin` del `IntersectionObserver` sigue
+tomando el alto de la barra al arrancar (3 px de diferencia en el caso medido, sin efecto visible en
+qué sección se marca); y la e2e completa no se ha corrido hoy (el plan la pide los días 3 y 5, y el
+cierre del 7).

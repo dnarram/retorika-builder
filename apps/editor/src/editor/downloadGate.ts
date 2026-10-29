@@ -10,7 +10,13 @@ import { HEAVY_FONT_BYTES } from "./fontBytes.ts";
 import type { OverflowFinding } from "./overflowCheck.ts";
 import { ownFontFiles } from "./ownFonts.ts";
 import type { PhotoCounts } from "./photoInventory.ts";
-import { type ContrastFinding, type LogoFinding, reviewLogo, reviewStyle } from "./styleReview.ts";
+import {
+  type ContrastFinding,
+  headerOverPhoto,
+  type LogoFinding,
+  reviewLogo,
+  reviewStyle,
+} from "./styleReview.ts";
 
 /**
  * What pressing «Descargar» does, decided before the request is ever made.
@@ -155,9 +161,12 @@ export type DownloadGate =
   /**
    * An exact colour between 3:1 and 4.5:1, **and since ADR 0059 the logo when it is hard to see
    * on its bar** (`logo`, under 3:1 by its mean luminance): the same dialog, the same «tú decides»,
-   * and the same `contrast` acceptance — one warning about things that read badly, not two.
+   * and the same `contrast` acceptance — one warning about things that read badly, not two. **And
+   * since sprint 30 día 6 the transparent bar over a cover photograph** (`overPhoto`, the titles of
+   * the pages where it lies so): the one pair nothing can measure, said in the same dialog rather
+   * than in a thirteenth, for the same reason the logo joined it.
    */
-  | { kind: "lowContrast"; findings: ContrastFinding[]; logo?: LogoFinding }
+  | { kind: "lowContrast"; findings: ContrastFinding[]; logo?: LogoFinding; overPhoto?: string[] }
   | { kind: "overflows"; findings: OverflowFinding[] }
   | { kind: "textOverText"; findings: OverlappingTexts[] }
   /**
@@ -235,8 +244,14 @@ export function downloadGateFor(
   }
   if (!accepted.has("contrast")) {
     const logo = reviewLogo(doc, logoLuminance);
-    if (review.warning.length > 0 || logo) {
-      return { kind: "lowContrast", findings: review.warning, ...(logo ? { logo } : {}) };
+    const overPhoto = headerOverPhoto(doc);
+    if (review.warning.length > 0 || logo || overPhoto.length > 0) {
+      return {
+        kind: "lowContrast",
+        findings: review.warning,
+        ...(logo ? { logo } : {}),
+        ...(overPhoto.length > 0 ? { overPhoto } : {}),
+      };
     }
   }
   if (!accepted.has("overflow") && overflow.length > 0) {
