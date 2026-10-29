@@ -11,7 +11,7 @@ import type { DownloadGate } from "../editor/downloadGate.ts";
 import { HEAVY_FONT_BYTES } from "../editor/fontBytes.ts";
 import type { OverflowFinding } from "../editor/overflowCheck.ts";
 import { listPhotos } from "../editor/photoInventory.ts";
-import { type ContrastFinding, formatRatio } from "../editor/styleReview.ts";
+import { type ContrastFinding, formatRatio, type LogoFinding } from "../editor/styleReview.ts";
 import { useFocusTrap } from "../editor/useFocusTrap.ts";
 import es from "../locales/es.json" with { type: "json" };
 import { StateChip } from "./PhotosPanel.tsx";
@@ -314,12 +314,17 @@ export function DownloadWarningDialog({
 export function ContrastDialog({
   findings,
   level,
+  logo,
   onFix,
   onDownloadAnyway,
   onCancel,
 }: {
   findings: readonly ContrastFinding[];
   level: "block" | "warn";
+  /** The logo, when it is hard to see on its bar (ADR 0059): a row of its own, with the bar's
+   * colour under it and no «Arreglar» — the fix is another logo or another background, both in
+   * «Menú». With no text finding beside it the dialog's words are about the logo alone. */
+  logo?: { finding: LogoFinding; url: string | undefined } | undefined;
   onFix: (exception: StyleException) => void;
   /** Absent for the block, which is what makes it a block. */
   onDownloadAnyway?: () => void;
@@ -328,11 +333,19 @@ export function ContrastDialog({
   const titleId = useId();
   const container = useFocusTrap(true, onCancel);
   const blocking = level === "block";
+  const logoAlone = !blocking && findings.length === 0 && logo !== undefined;
   const prefix = blocking ? "editor.download.unreadable" : "editor.download.lowContrast";
-  const body =
-    findings.length === 1
+  const title = logoAlone
+    ? es["editor.download.lowContrast.logo.title"]
+    : es[`${prefix}.title` as keyof typeof es];
+  const body = logoAlone
+    ? es["editor.download.lowContrast.logo.body"]
+    : findings.length === 1
       ? es[`${prefix}.body.one` as keyof typeof es]
       : es[`${prefix}.body.many` as keyof typeof es].replace("{n}", String(findings.length));
+  const foot = logoAlone
+    ? es["editor.download.lowContrast.logo.foot"]
+    : es[`${prefix}.foot` as keyof typeof es];
 
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-[#0F172A]/45 p-5">
@@ -345,11 +358,38 @@ export function ContrastDialog({
         className="flex max-h-full w-full max-w-[520px] flex-col rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.28)]"
       >
         <h2 id={titleId} className="m-0 text-[17px] font-bold text-ui-ink">
-          {es[`${prefix}.title` as keyof typeof es]}
+          {title}
         </h2>
         <p className="mt-2 mb-0 text-[14px] leading-snug text-ui-muted">{body}</p>
 
         <div className="mt-4 flex min-h-0 flex-col gap-2 overflow-y-auto">
+          {logo === undefined ? null : (
+            <div
+              data-testid="logo-finding"
+              className="flex items-center gap-3 rounded-[9px] border border-ui-border px-3 py-2.5"
+            >
+              <span
+                aria-hidden="true"
+                style={{ background: logo.finding.background }}
+                className="flex h-10 w-14 shrink-0 items-center justify-center rounded-ui-sm border border-black/10"
+              >
+                {logo.url === undefined ? null : (
+                  <img src={logo.url} alt="" className="max-h-8 max-w-[48px] object-contain" />
+                )}
+              </span>
+              <span className="flex min-w-0 flex-col">
+                <span className="text-[13px] text-ui-ink">
+                  {es["editor.download.lowContrast.logo.row"]}
+                </span>
+                <span className="text-[12px] text-ui-muted">
+                  {es["editor.download.contrast.ratio"].replace(
+                    "{ratio}",
+                    formatRatio(logo.finding.ratio),
+                  )}
+                </span>
+              </span>
+            </div>
+          )}
           {findings.map((finding) => (
             <div
               key={`${finding.exception.sectionId}/${finding.exception.elementId}`}
@@ -386,9 +426,7 @@ export function ContrastDialog({
           ))}
         </div>
 
-        <p className="mt-4 mb-0 text-[12px] leading-snug text-ui-muted">
-          {es[`${prefix}.foot` as keyof typeof es]}
-        </p>
+        <p className="mt-4 mb-0 text-[12px] leading-snug text-ui-muted">{foot}</p>
 
         <div className="mt-5 flex justify-end gap-2.5">
           <button

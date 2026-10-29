@@ -5,7 +5,7 @@ import { fontFilesFor, render, SHIPPABLE_FAMILIES } from "@retorika/renderer";
 import {
   FONT_GALLERY,
   type FontKind,
-  flattenElements,
+  imageSourcesOf,
   parseDocument,
   type RetorikaDocument,
 } from "@retorika/schema";
@@ -74,13 +74,9 @@ function corpus(): { name: string; document: RetorikaDocument }[] {
 
 function assetsFor(document: RetorikaDocument): Map<string, Uint8Array> {
   const assets = new Map<string, Uint8Array>();
-  for (const page of document.pages) {
-    for (const section of page.sections) {
-      for (const el of flattenElements(section.content)) {
-        if (el.value?.kind !== "image" || el.value.src.startsWith("data:")) continue;
-        assets.set(el.value.src, new Uint8Array(readFileSync(join(FIXTURES_DIR, el.value.src))));
-      }
-    }
+  for (const source of imageSourcesOf(document)) {
+    if (source.src.startsWith("data:")) continue;
+    assets.set(source.src, new Uint8Array(readFileSync(join(FIXTURES_DIR, source.src))));
   }
   return assets;
 }

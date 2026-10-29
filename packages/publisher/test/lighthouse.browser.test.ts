@@ -10,6 +10,7 @@ import { hasSamplePhotos, recordById } from "@retorika/photobank";
 import { readSampleBytes } from "@retorika/photobank/server";
 import {
   flattenElements,
+  imageSourcesOf,
   type OwnFont,
   parseDocument,
   type RetorikaDocument,
@@ -123,13 +124,9 @@ function fichaSite(): { bundle: SiteBundle; path: string } {
     JSON.parse(readFileSync(join(fixtures, "documents", "una-pagina-por-ficha.json"), "utf8")),
   );
   const assets = new Map<string, Uint8Array>();
-  for (const page of document.pages) {
-    for (const section of page.sections) {
-      for (const el of flattenElements(section.content)) {
-        if (el.value?.kind !== "image" || el.value.src.startsWith("data:")) continue;
-        assets.set(el.value.src, readFileSync(join(fixtures, el.value.src)));
-      }
-    }
+  for (const source of imageSourcesOf(document)) {
+    if (source.src.startsWith("data:")) continue;
+    assets.set(source.src, readFileSync(join(fixtures, source.src)));
   }
   return {
     bundle: buildSite(document, {
@@ -232,6 +229,34 @@ function ownTtfSite(): SiteBundle {
     siteId: "lighthouse-propia",
     assets: sampleAssets(document),
     fonts,
+  });
+}
+
+/**
+ * The corpus's `cabecera-con-marca` **with the bar fixed and its logo in it** (ADR 0059, sprint 30
+ * día 5): three pages, brand and button, the sections' own row, the header's script, and a 429-byte
+ * PNG above the fold with no `loading="lazy"`. The plan asked for this subject because a fixed bar
+ * over the cover and an image in the header are the two things this sprint put in front of the
+ * largest contentful paint, and «LCP puede moverse: se mide».
+ */
+function brandSite(): SiteBundle {
+  const fixtures = join(import.meta.dirname, "..", "..", "..", "fixtures");
+  const corpus = parseDocument(
+    JSON.parse(readFileSync(join(fixtures, "documents", "cabecera-con-marca.json"), "utf8")),
+  );
+  const document: RetorikaDocument = parseDocument({
+    ...corpus,
+    header: { ...corpus.header, sticky: true },
+  });
+  const assets = new Map<string, Uint8Array>();
+  for (const source of imageSourcesOf(document)) {
+    if (source.src.startsWith("data:")) continue;
+    assets.set(source.src, readFileSync(join(fixtures, source.src)));
+  }
+  return buildSite(document, {
+    siteId: "lighthouse-marca",
+    assets,
+    fonts: readFontBundle(document),
   });
 }
 
@@ -373,6 +398,32 @@ describe("Part 8.5 — Lighthouse over a sample site, the three compositions", (
     expect(bundle.files.filter((file) => file.path.endsWith(".woff2"))).toEqual([]);
     const kb = faces.reduce((sum, file) => sum + file.contents.byteLength, 0) / 1024;
     const measured = await measure(`own .ttf · ${kb.toFixed(1)} KB of faces`, bundle);
+    console.log(report(measured));
+    expect(
+      measured.scores["performance"],
+      `${measured.label}: performance below ${FLOOR * 100} — ${report(measured)}`,
+    ).toBeGreaterThanOrEqual(FLOOR);
+    expect(
+      measured.scores["accessibility"],
+      `${measured.label}: accessibility below ${FLOOR * 100} — ${report(measured)}`,
+    ).toBeGreaterThanOrEqual(FLOOR);
+    expect(
+      measured.scores["best-practices"],
+      `${measured.label}: best practices short of full marks — ${report(measured)}`,
+    ).toBe(BEST_PRACTICES);
+  }, 120_000);
+
+  it(`a fixed header with a logo: performance and accessibility at ${FLOOR * 100} or more`, async () => {
+    const bundle = brandSite();
+    const index = new TextDecoder().decode(
+      bundle.files.find((file) => file.path === "index.html")?.contents ?? new Uint8Array(),
+    );
+    // The subject is what it says: the bar fixed, the logo in it, the script after it.
+    expect(index).toContain('<header class="rb-header"');
+    expect(index).toContain('data-sticky=""');
+    expect(index).toMatch(/<img [^>]*class="rb-logo"[^>]*src="assets\/logo\.png"/);
+    expect(index).toContain("<script>");
+    const measured = await measure("cabecera-con-marca · fija, con logo", bundle);
     console.log(report(measured));
     expect(
       measured.scores["performance"],

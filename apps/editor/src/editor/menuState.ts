@@ -1,4 +1,5 @@
 import {
+  actionEntry,
   hasMenu,
   MENU_MIN_ENTRIES,
   menuIsCurated,
@@ -70,9 +71,17 @@ export type MenuNote = "none" | "gone" | "notYet" | "yours";
 export function menuStateFor(doc: RetorikaDocument, pageId: string | undefined): MenuState {
   const home = doc.pages[0];
   const page = doc.pages.find((candidate) => candidate.id === pageId) ?? home;
-  const pages = pageMenuEntries(doc).length;
-  const sections = page ? sectionMenuEntries(page).length : 0;
-  const destinations = home ? pages + sectionMenuEntries(home).length : 0;
+  // **The button's destination is not in the menu it would otherwise sit in** (ADR 0057 §5), so the
+  // two counts a panel says out loud leave it out, as the published strip does — a generated site
+  // is born with its contact section as the button (ADR 0059), and «quedan 2 secciones» beside a
+  // strip of one would be a number nobody could match to the page. The threshold's own count below
+  // is the renderer's and keeps every destination: it decides whether a menu is drawn at all.
+  const action = page ? actionEntry(doc, page) : undefined;
+  const pages = pageMenuEntries(doc).filter((entry) => entry.pageId !== action?.pageId).length;
+  const sections = page
+    ? sectionMenuEntries(page).filter((entry) => entry.sectionId !== action?.sectionId).length
+    : 0;
+  const destinations = home ? pageMenuEntries(doc).length + sectionMenuEntries(home).length : 0;
   const curated = menuIsCurated(doc);
   const drawn = hasMenu(doc);
 

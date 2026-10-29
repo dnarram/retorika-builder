@@ -22,6 +22,7 @@ import {
   generate,
   generateVariants,
   SECTOR_IDS,
+  sectorMenuLabel,
   VARIANTS,
 } from "../src/index.ts";
 
@@ -719,5 +720,106 @@ describe("the logo's palette (sprint 6 day 6)", () => {
     const once = generate(answers({ ...MINIMAL, logoPaletteId: "warm-terracotta" }));
     const twice = generate(answers({ ...MINIMAL, logoPaletteId: "warm-terracotta" }));
     expect(once.document.theme).toEqual(twice.document.theme);
+  });
+});
+
+describe("the header a generated site is born with (ADR 0057, ADR 0059)", () => {
+  const taberna = answers({
+    businessName: "Taberna Santo Domingo",
+    sector: "restaurante-bar",
+    services: ["Comidas"],
+    mainAction: "book",
+    bookingLink: "https://reservas.example.com/taberna",
+  });
+
+  it("shows the business name, and points the button at the contact section", () => {
+    const { document } = generate(taberna);
+    expect(document.header?.brand).toEqual({ name: true });
+    expect(document.header?.action).toEqual({ kind: "section", sectionId: "sec-contact" });
+  });
+
+  it("carries the logo the questionnaire kept, by the name it was kept under, and never the file", () => {
+    const { document } = generate({ ...taberna, logoSrc: "logo-3f9a7c21.png" });
+    expect(document.header?.brand).toEqual({ name: true, logo: { src: "logo-3f9a7c21.png" } });
+  });
+
+  it("refuses a logo name that is not a raster file, rather than publishing a document that names one", () => {
+    // The schema's own pattern (ADR 0059): an SVG is a vector for scripts, and a document cannot
+    // even name one. `generate` ends in `parseDocument`, so this is the generator throwing, not a
+    // document that reaches the editor.
+    expect(() => generate({ ...taberna, logoSrc: "logo-3f9a7c21.svg" })).toThrow();
+  });
+
+  it("has no button when the answers produced no contact section", () => {
+    const { document } = generate(answers({ ...taberna, mainAction: "visit" }));
+    expect(document.header?.action).toBeUndefined();
+    expect(document.header?.brand).toEqual({ name: true });
+  });
+
+  it("is the same document for the same answers, logo included", () => {
+    const once = generate({ ...taberna, logoSrc: "logo-3f9a7c21.png" }).document;
+    const twice = generate({ ...taberna, logoSrc: "logo-3f9a7c21.png" }).document;
+    expect(twice).toEqual(once);
+  });
+});
+
+describe("the sector's own word for an entry (David's adjustment 6)", () => {
+  it("writes «Reservar» as the contact section's own label for a restaurant", () => {
+    const { document } = generate(
+      answers({
+        businessName: "X",
+        sector: "restaurante-bar",
+        mainAction: "book",
+        bookingLink: "https://reservas.example.com",
+      }),
+    );
+    expect(findSection(document, "contact").menuLabel).toBe("Reservar");
+    // And it is what the contact pill would put back (the editor's «Añadir sección»).
+    expect(
+      contactSectionFor(
+        answers({
+          businessName: "X",
+          sector: "restaurante-bar",
+          mainAction: "book",
+          bookingLink: "https://reservas.example.com",
+        }),
+      )?.menuLabel,
+    ).toBe("Reservar");
+  });
+
+  it.each(["peluqueria-barberia", "estetica", "fisioterapia"] as const)(
+    "writes «Pedir cita» for %s",
+    (sector) => {
+      const { document } = generate(
+        answers({ businessName: "X", sector, mainAction: "call", phone: "+34600000000" }),
+      );
+      expect(findSection(document, "contact").menuLabel).toBe("Pedir cita");
+    },
+  );
+
+  it("knows a restaurant's prices section is its «Carta», for the day the owner adds one", () => {
+    expect(sectorMenuLabel("restaurante-bar", "prices")).toBe("Carta");
+    expect(sectorMenuLabel("tienda", "prices")).toBeUndefined();
+  });
+
+  it("invents no word for a sector that has none: the catalog's neutral entry stands", () => {
+    const { document } = generate(
+      answers({ businessName: "X", sector: "tienda", mainAction: "call", phone: "+34600000000" }),
+    );
+    for (const section of sectionsOf(document)) {
+      expect(section.menuLabel, section.id).toBeUndefined();
+    }
+    expect(sectorMenuLabel("otro", "contact")).toBeUndefined();
+    expect(sectorMenuLabel(null, "contact")).toBeUndefined();
+  });
+
+  it("never labels a section that lends no entry, whatever the sector", () => {
+    // The schema refuses a label on a cover, a footer or an avance; a word for one of those in the
+    // bank would make every restaurant site unparseable, so the bank is checked against the rule.
+    for (const sector of [...SECTOR_IDS, "otro"] as const) {
+      for (const catalogId of ["cover", "footer", "teaser"]) {
+        expect(sectorMenuLabel(sector, catalogId), `${sector}/${catalogId}`).toBeUndefined();
+      }
+    }
   });
 });

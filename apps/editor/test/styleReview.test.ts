@@ -8,12 +8,15 @@ import {
   type Theme,
   TOKEN_KEYS,
 } from "@retorika/schema";
-import { contrastRatio, PALETTES, withFamily } from "@retorika/tokens";
+import { contrastRatio, PALETTES, relativeLuminance, withFamily } from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
 import {
   CONTRAST_BLOCKS_BELOW,
   CONTRAST_WARNS_BELOW,
   formatRatio,
+  headerBarBackground,
+  LOGO_CONTRAST_WARNS_BELOW,
+  reviewLogo,
   reviewStyle,
 } from "../src/editor/styleReview.ts";
 
@@ -296,5 +299,64 @@ describe("the header's parts", () => {
       style: { pagesLinks: { color: { ref: "color.ink" } }, bar: { padding: exact("12px") } },
     });
     expect(reviewStyle(refs)).toEqual({ blocking: [], warning: [] });
+  });
+});
+
+describe("the logo on its bar (ADR 0059, David's adjustment 4)", () => {
+  const logoDoc = (header: RetorikaDocument["header"]): RetorikaDocument =>
+    parseDocument({
+      schemaVersion: SCHEMA_VERSION,
+      id: "doc-logo",
+      siteName: "Barbería El Corte",
+      theme,
+      header: { ...header, brand: { ...header?.brand, logo: { src: "logo-3f9a7c21.png" } } },
+      pages: [{ id: "home", slug: "index", title: "Inicio", sections: [section] }],
+      collections: [],
+    });
+  const white = 1;
+  const black = 0;
+
+  it("warns about a white logo on the light surface bar, and says nothing on an ink bar", () => {
+    const light = reviewLogo(logoDoc({}), white);
+    expect(light).toMatchObject({ src: "logo-3f9a7c21.png", background: theme["color.surface"] });
+    expect(light?.ratio).toBeLessThan(LOGO_CONTRAST_WARNS_BELOW);
+    expect(reviewLogo(logoDoc({ look: { background: "ink" } }), white)).toBeUndefined();
+    // And the mirror: a black mark reads on surface, not on ink.
+    expect(reviewLogo(logoDoc({}), black)).toBeUndefined();
+    expect(reviewLogo(logoDoc({ look: { background: "ink" } }), black)).toBeDefined();
+  });
+
+  it("holds the logo to 3:1 — WCAG's line for a graphic — and not to text's 4.5", () => {
+    expect(LOGO_CONTRAST_WARNS_BELOW).toBe(3);
+    expect(LOGO_CONTRAST_WARNS_BELOW).toBe(CONTRAST_BLOCKS_BELOW);
+    // The luminance of a logo darker than this theme's surface, just either side of 3:1 against
+    // it — from the formula's inverse, so «just» is a measured 0.002 and not a guess.
+    const behind = relativeLuminance(theme["color.surface"]);
+    expect(contrastRatio("#000000", theme["color.surface"])).toBeGreaterThan(3);
+    const justUnder = (behind + 0.05) / 3 - 0.05 + 0.002;
+    const justOver = (behind + 0.05) / 3 - 0.05 - 0.002;
+    expect(reviewLogo(logoDoc({}), justUnder)).toBeDefined();
+    expect(reviewLogo(logoDoc({}), justOver)).toBeUndefined();
+  });
+
+  it("says nothing without a logo, or before its bytes have been read", () => {
+    expect(reviewLogo(logoDoc({}), null)).toBeUndefined();
+    const noLogo = parseDocument({
+      schemaVersion: SCHEMA_VERSION,
+      id: "doc-sin-logo",
+      siteName: "Barbería El Corte",
+      theme,
+      header: { brand: { name: true } },
+      pages: [{ id: "home", slug: "index", title: "Inicio", sections: [section] }],
+      collections: [],
+    });
+    expect(reviewLogo(noLogo, white)).toBeUndefined();
+  });
+
+  it("judges against the exact bar the owner painted, when there is one", () => {
+    const painted = logoDoc({ style: { bar: { color: exact("#111111") } } });
+    expect(headerBarBackground(painted)).toBe("#111111");
+    expect(reviewLogo(painted, white)).toBeUndefined();
+    expect(reviewLogo(painted, black)?.background).toBe("#111111");
   });
 });

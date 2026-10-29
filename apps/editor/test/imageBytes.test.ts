@@ -56,11 +56,21 @@ describe("sniffImage", () => {
     expect(sniffImage(bytes([0x00, 0x00, 0x00, 0x18], "ftypisom"))).toBe("unknown");
   });
 
-  it("refuses an SVG, which is the one that matters", () => {
+  it("refuses an SVG, which is the one that matters — and names it, so the refusal can say so", () => {
     // Not an oversight: an SVG is a document and can carry a script, and it would be opened
-    // from the filesystem with the published page's own origin.
-    expect(sniffImage(bytes('<svg xmlns="http://www.w3.org/2000/svg"></svg>'))).toBe("unknown");
-    expect(sniffImage(bytes('<?xml version="1.0"?><svg></svg>'))).toBe("unknown");
+    // from the filesystem with the published page's own origin. Named rather than «unknown» since
+    // ADR 0059, because a logo very often *is* one and the message is «exporta tu logo en PNG».
+    for (const svg of [
+      '<svg xmlns="http://www.w3.org/2000/svg"></svg>',
+      '<?xml version="1.0"?><svg></svg>',
+      '  \n<SVG viewBox="0 0 1 1"/>',
+      "<!-- exported --><svg/>",
+    ]) {
+      expect(sniffImage(bytes(svg)), svg).toBe("image/svg+xml");
+      expect(isAcceptedImage(sniffImage(bytes(svg))), svg).toBe(false);
+    }
+    // After a byte-order mark, which an editor on Windows writes without asking.
+    expect(sniffImage(bytes([0xef, 0xbb, 0xbf], "<svg/>"))).toBe("image/svg+xml");
   });
 
   it("refuses an SVG however it was renamed, because the name is never read", () => {
@@ -69,7 +79,10 @@ describe("sniffImage", () => {
   });
 
   it("refuses HTML, a PDF, a ZIP and an executable", () => {
-    expect(sniffImage(bytes("<!doctype html>"))).toBe("unknown");
+    // HTML is markup too, and is reported as such: the one message for all of it is the one
+    // that helps, and `isAcceptedImage` is false either way.
+    expect(sniffImage(bytes("<!doctype html>"))).toBe("image/svg+xml");
+    expect(isAcceptedImage(sniffImage(bytes("<!doctype html>")))).toBe(false);
     expect(sniffImage(bytes("%PDF-1.7"))).toBe("unknown");
     expect(sniffImage(bytes("PK", [0x03, 0x04]))).toBe("unknown");
     expect(sniffImage(bytes([0x7f], "ELF"))).toBe("unknown");

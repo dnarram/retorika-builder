@@ -9,6 +9,7 @@ import {
   parseDocument,
   type RetorikaDocument,
   setElementImageSrc,
+  setHeader,
 } from "@retorika/schema";
 import { describe, expect, it } from "vitest";
 import { withFontUrls, withPhotoUrls } from "../src/editor/previewDocument.ts";
@@ -73,6 +74,17 @@ describe("withPhotoUrls", () => {
     );
     const swapped = withPhotoUrls(named, new Map([["foto-sec-cover-el-image.jpg", "blob:abc"]]));
     expect(imageSrcs(swapped)).toContain("blob:abc");
+  });
+
+  it("swaps the header's logo, which lives outside every section (ADR 0059)", () => {
+    const doc = setHeader(generated(), { brand: { logo: { src: "logo-3f9a7c21.png" } } });
+    const swapped = withPhotoUrls(doc, new Map([["logo-3f9a7c21.png", "blob:logo"]]));
+    expect(swapped.header?.brand?.logo?.src).toBe("blob:logo");
+    expect(doc.header?.brand?.logo?.src).toBe("logo-3f9a7c21.png");
+    // The photographs are left alone when only the logo has bytes, and vice versa.
+    expect(imageSrcs(swapped)).toEqual(imageSrcs(doc));
+    const onlyPhoto = withPhotoUrls(doc, new Map([["otra.jpg", "blob:x"]]));
+    expect(onlyPhoto.header?.brand?.logo?.src).toBe("logo-3f9a7c21.png");
   });
 
   it("swaps a photograph inside a list item, where a gallery keeps them", () => {

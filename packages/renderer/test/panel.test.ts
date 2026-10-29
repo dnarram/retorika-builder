@@ -216,6 +216,9 @@ describe("the panel behind text over an image", () => {
       const page = parse(render(document, "html").html);
       for (const img of page.querySelectorAll("img")) {
         if (img.closest(".rb-item")) continue;
+        // The header's logo (ADR 0059) is no section's image: it sits in the brand, above `<main>`,
+        // and no panel is ever computed against it.
+        if (img.closest(".rb-header")) continue;
         expect(img.parentElement?.tagName, `${name}: ${img.getAttribute("alt")}`).toBe("SECTION");
       }
     }

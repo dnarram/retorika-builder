@@ -36,7 +36,26 @@ const WEBP = [0x57, 0x45, 0x42, 0x50];
 const FTYP = [0x66, 0x74, 0x79, 0x70];
 const HEIC_BRANDS = ["heic", "heix", "hevc", "heim", "heis", "hevm", "mif1", "msf1"];
 
-export type ImageKind = AcceptedImageType | "image/heic" | "unknown";
+/**
+ * Markup — an SVG, or anything else that opens with a tag or an XML prologue — recognised only so
+ * the refusal can name it (ADR 0059: «Un SVG no vale aún; exporta tu logo en PNG»). A designer's
+ * logo very often *is* an SVG, and «ese archivo no es una foto» would send them looking for the
+ * wrong fault. It is never accepted, whatever it says about itself: a bundled SVG runs its scripts
+ * with the page's own origin, and no sanitiser exists here yet. Read off the first bytes after an
+ * optional byte-order mark and whitespace, case-insensitively.
+ */
+const MARKUP_OPENINGS = ["<?xml", "<svg", "<!doctype", "<!--"];
+const UTF8_BOM = [0xef, 0xbb, 0xbf];
+
+function looksLikeMarkup(bytes: Uint8Array): boolean {
+  const from = startsWith(bytes, UTF8_BOM) ? UTF8_BOM.length : 0;
+  const head = String.fromCharCode(...bytes.subarray(from, from + 64))
+    .trimStart()
+    .toLowerCase();
+  return MARKUP_OPENINGS.some((opening) => head.startsWith(opening));
+}
+
+export type ImageKind = AcceptedImageType | "image/heic" | "image/svg+xml" | "unknown";
 
 /** The format these bytes actually are, whatever the file was called. */
 export function sniffImage(bytes: Uint8Array): ImageKind {
@@ -49,6 +68,7 @@ export function sniffImage(bytes: Uint8Array): ImageKind {
     const brand = String.fromCharCode(...bytes.slice(8, 12));
     if (HEIC_BRANDS.includes(brand)) return "image/heic";
   }
+  if (looksLikeMarkup(bytes)) return "image/svg+xml";
   return "unknown";
 }
 

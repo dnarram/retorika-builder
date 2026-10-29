@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   colourDistance,
   dominantColour,
+  meanLuminance,
   nearestPalette,
   paletteForLogo,
   parseHex,
@@ -243,5 +244,34 @@ describe("the neutral start is not a colour a logo chooses (ADR 0041)", () => {
   it("sends a logo in Retorika's own blue to classic-blue, never to the neutral palette", () => {
     expect(nearestPalette(parseHex("#156FE7"))?.paletteId).toBe("classic-blue");
     expect(paletteForLogo(solid("#156FE7", 16))).toBe("classic-blue");
+  });
+});
+
+describe("meanLuminance (ADR 0059)", () => {
+  it("reads white as 1, black as 0, and a mid grey as WCAG does", () => {
+    expect(meanLuminance(solid("#FFFFFF"))).toBeCloseTo(1, 5);
+    expect(meanLuminance(solid("#000000"))).toBeCloseTo(0, 5);
+    // #808080 is 0.2159 in WCAG's own tables — linear, not the 0.5 a naive average would give.
+    expect(meanLuminance(solid("#808080"))).toBeCloseTo(0.2159, 3);
+  });
+
+  it("is null for a wholly transparent image: nothing is visible, so nothing is light or dark", () => {
+    expect(meanLuminance(solid("#FFFFFF", 64, 0))).toBeNull();
+    expect(meanLuminance(new Uint8ClampedArray())).toBeNull();
+  });
+
+  it("weighs a pixel by its alpha, so a transparent ground counts for nothing", () => {
+    // A white mark on a transparent field reads as white, however small the mark: on the bar, the
+    // field is the bar. Half the pixels opaque white, half transparent black.
+    const data = new Uint8ClampedArray(8 * 4);
+    for (let i = 0; i < 8; i += 1) {
+      const white = i < 4;
+      data.set([white ? 255 : 0, white ? 255 : 0, white ? 255 : 0, white ? 255 : 0], i * 4);
+    }
+    expect(meanLuminance(data)).toBeCloseTo(1, 5);
+    // And a half-transparent black pixel beside an opaque white one pulls the mean down by a third,
+    // not a half: it shows half of itself.
+    const mixed = new Uint8ClampedArray([255, 255, 255, 255, 0, 0, 0, 128]);
+    expect(meanLuminance(mixed)).toBeCloseTo(255 / (255 + 128), 3);
   });
 });

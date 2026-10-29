@@ -5,6 +5,7 @@ import {
   type Section,
 } from "@retorika/schema";
 import type { Answers, SectorId } from "./answers.ts";
+import { withSectorMenuLabel } from "./menuLabels.ts";
 import {
   buildContact,
   buildCover,
@@ -19,6 +20,7 @@ import { VARIANTS, type VariantChoice } from "./variants.ts";
 export type { Answers, MainAction, SectorId } from "./answers.ts";
 export { EMPTY_ANSWERS, SECTOR_IDS } from "./answers.ts";
 export { hasLocationSection, LOCATION_SECTION_ID, visitAnchor } from "./destination.ts";
+export { sectorMenuLabel, withSectorMenuLabel } from "./menuLabels.ts";
 export { GALLERY_SAMPLE_COUNT } from "./sections.ts";
 export type { VariantChoice } from "./variants.ts";
 export { VARIANTS } from "./variants.ts";
@@ -72,9 +74,9 @@ export function generate(
   const contact = buildContact(answers, sector);
   const footer = buildFooter(answers);
 
-  const sections = [cover, services, gallery, location, contact, footer].filter(
-    (s) => s !== undefined,
-  );
+  const sections = [cover, services, gallery, location, contact, footer]
+    .filter((s) => s !== undefined)
+    .map((s) => withSectorMenuLabel(sector, s));
 
   const document: RetorikaDocument = {
     schemaVersion: SCHEMA_VERSION,
@@ -90,6 +92,7 @@ export function generate(
       },
     ],
     collections: [],
+    header: headerFor(answers, contact),
   };
 
   // Still nothing to add here, for two different reasons now.
@@ -109,6 +112,27 @@ export function generate(
 }
 
 /**
+ * The header a generated site is born with (ADR 0057, ADR 0059; sprint 30 plan, día 5): the
+ * business name in the bar, the logo beside it when question 1 kept one, and the one button
+ * pointing at the contact section when the answers produced one — «Reservar» or «Pedir cita» where
+ * the sector has the word, «Contacto» where it does not, since the button reads the destination's
+ * own entry and nothing else (ADR 0057 §5).
+ *
+ * **Only a generated site is born this way.** A site saved before this day keeps the header it had —
+ * none — because migration `0016` sealed and moved nothing; what changes here is what the five
+ * answers produce from now on, which is what the `menu-y-paginas` fixture and the e2e lists record.
+ */
+function headerFor(answers: Answers, contact: Section | undefined): RetorikaDocument["header"] {
+  return {
+    brand: {
+      name: true,
+      ...(answers.logoSrc === null ? {} : { logo: { src: answers.logoSrc } }),
+    },
+    ...(contact === undefined ? {} : { action: { kind: "section", sectionId: contact.id } }),
+  };
+}
+
+/**
  * The contact section this questionnaire's answers justify, or `undefined` when they justify
  * none — exactly the rule `generate` already applies, exposed so the editor can apply it too.
  *
@@ -121,7 +145,11 @@ export function generate(
  * than offering a section that would be born with a dead button in it.
  */
 export function contactSectionFor(answers: Answers): Section | undefined {
-  return buildContact(answers, effectiveSector(answers));
+  const sector = effectiveSector(answers);
+  const contact = buildContact(answers, sector);
+  // With the sector's word as its entry («Reservar», «Pedir cita»), exactly as `generate` wrote
+  // it: a contact section put back from the pill is the same section the site was born with.
+  return contact === undefined ? undefined : withSectorMenuLabel(sector, contact);
 }
 
 /**

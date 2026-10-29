@@ -8,12 +8,13 @@
 
 1. Crear **dos** proyectos de Supabase en una región de la **UE** (ADR 0034 §14), uno de desarrollo
    y uno de producción. La Parte 15 exige claves distintas para cada entorno.
-2. Aplicar las migraciones — **ahora son cuatro** —, desde el panel de Supabase o con
+2. Aplicar las migraciones — **ahora son cinco** —, desde el panel de Supabase o con
    `DATABASE_URL` puesta, pegando en orden:
    `packages/db/migrations/0001-accounts-sites-and-the-audit-log.sql`,
    `packages/db/migrations/0002-every-auth-user-gets-an-account-row.sql`,
-   `packages/db/migrations/0003-the-photos-bucket-and-its-policies.sql` y
-   `packages/db/migrations/0004-the-fonts-bucket-and-its-policies.sql`.
+   `packages/db/migrations/0003-the-photos-bucket-and-its-policies.sql`,
+   `packages/db/migrations/0004-the-fonts-bucket-and-its-policies.sql` y
+   `packages/db/migrations/0005-the-photos-bucket-admits-the-logo.sql`.
    **La `0002` no es opcional**: sin ella `public.accounts` no tiene fila para nadie, y entonces ni
    el borrado de cuenta ni el interruptor de herramientas pueden guardarse. Tu cuenta de ahora, que
    se creó antes de que existiera, la arregla el relleno que la propia migración lleva dentro.
@@ -25,6 +26,11 @@
    forma que la `0003`: sin ella una web con la fuente de tu marca dice «· 1 fuente sin subir» y en
    otro ordenador la descarga se bloquea con «Falta el archivo de tu fuente». **Hay que aplicarla en
    los dos proyectos antes de redesplegar el día 6.**
+   **La `0005` deja entrar el PNG en el bucket `fotos`** (ADR 0059, sprint 30 día 5): es una sola
+   línea sobre la fila que creó la `0003`, porque el logo se guarda como PNG para no perder la
+   transparencia. Sin ella las fotos siguen subiendo y solo el logo se queda fuera: la barra dice
+   «· 1 foto sin subir» y en otro ordenador la web se abre sin su logo (runbook §7, caso B). **Hay
+   que aplicarla en los dos proyectos antes de redesplegar el día 5.**
 3. Pegar en Render las **cuatro** variables obligatorias que `.env.example` nombra —
    `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
    `SUPABASE_SERVICE_ROLE_KEY`—. **Yo no veo ninguna.** (Esta lista decía «cinco» y estaba mal

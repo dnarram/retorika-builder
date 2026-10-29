@@ -2127,8 +2127,15 @@ describe("the header's verbs (sprint 30 día 4)", () => {
 
   it("a switch, a layout and a button are one step each, and the same value opens none", () => {
     const initial = start();
+    // A generated site is born with a header since ADR 0059 — the brand's name and the button to
+    // its contact section — so a patch adds to it rather than creating it.
+    const born = initial[0]?.present.document.header;
+    expect(born).toEqual({
+      brand: { name: true },
+      action: { kind: "section", sectionId: "sec-contact" },
+    });
     const sticky = run(initial, { type: "setHeader", variant: 0, patch: { sticky: true } });
-    expect(sticky[0]?.present.document.header).toEqual({ sticky: true });
+    expect(sticky[0]?.present.document.header).toEqual({ ...born, sticky: true });
     expect(sticky[0]?.past).toHaveLength(1);
     expect(sticky[0]?.present.cause).toEqual({ type: "setHeader" });
     expect(run(sticky, { type: "setHeader", variant: 0, patch: { sticky: true } })).toBe(sticky);
@@ -2144,7 +2151,7 @@ describe("the header's verbs (sprint 30 día 4)", () => {
       sectionId: target.sectionId,
     });
     const none = run(button, { type: "setHeaderAction", variant: 0, action: null });
-    expect(none[0]?.present.document.header).toBeUndefined();
+    expect(none[0]?.present.document.header).toEqual({ brand: { name: true } });
     expect(none[0]?.past).toHaveLength(2);
   });
 

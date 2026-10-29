@@ -5045,3 +5045,104 @@ rojo en el «Deshacer».
 s**, sin ninguna caminata existente reescrita (la del día 3 pasó tal cual con el panel nuevo);
 `typecheck`, `lint` (0 errores), invariantes, goldens (sin cambio), `secrets:scope` y `renderer:deps` en
 verde. La salida del renderer no se movió, así que a11y no hacía falta.
+
+### Día 5 — el logo viaja como una foto (PR de `feat/el-logo-viaja-como-una-foto`, ADR 0059)
+
+**El logo de la pregunta 1 se queda.** Hasta hoy se decodificaba a 64×64 para elegir la paleta y se
+tiraba; `autosave.ts` lo omitía, el generador consumía un id de paleta, y la ADR 0054 escribió al elegir
+la letra del favicon que «el documento no guarda ningún logo». Desde hoy `prepareLogo` lo dibuja en un
+lienzo de hasta 512 px de lado y escribe **PNG, siempre** —nunca JPEG, que no tiene alfa y convierte un
+logo sobre fondo transparente en una caja blanca sobre una barra `primary` o `ink`—, con el nombre
+`logo-<8 hex>.png` acuñado con `crypto.getRandomValues` (nada del nombre del fichero del dueño entra en
+él, la regla de la 0056), y **acuñado de nuevo en cada subida** para que ninguna caché enseñe la marca
+vieja bajo el documento nuevo. La pregunta 1 lo guarda en el almacén de fotos bajo las tres tarjetas
+(`v0`, `v1`, `v2`) antes de que existan, y al generador le llega **un nombre** (`Answers.logoSrc`), como
+le llega el id de la paleta y nunca el color: sigue siendo una función pura de sus respuestas, y las
+mismas respuestas dan el mismo documento, logo incluido. Si el almacén no lo acepta (ventana privada),
+se queda la paleta y se suelta el nombre, y la frase bajo el botón lo dice: ningún documento nombra un
+logo que nadie tiene.
+
+**Doce recorredores, una función.** El logo es el primer `src` fuera de `sections[].content`, y doce
+sitios recorrían `pages → sections → flattenElements` por su cuenta. Ahora hay una sola,
+`imageSourcesOf` en `packages/schema/src/images.ts` (el logo primero, los elementos en orden de
+lectura), con `rewriteImageSources` al lado para los dos que reescriben un `src` (el publisher y la
+vista previa). La llaman trece: `collectAssets`, `buildSite`, el `referencedPhotoSrcs` de la ruta, el
+`referencedPhotos` del editor, `withPhotoUrls`, `listOwnPhotoSrcs` (y por ella `photoSources` y la
+reconciliación), `listPhotos`, los dos bucles de `size-budget.ts`, `build-sample-site.ts` y las cinco
+suites del publisher que resuelven fixtures. El que importaba era `listOwnPhotoSrcs`: `photoSyncPlan`
+borra del bucket lo que el documento no nombra, así que un recorredor que olvidase el logo lo borraba
+en el guardado siguiente al que lo subió. **Saboteado** —el logo fuera de ese recorredor— y el test del
+plan de sincronía, escrito contra esa función por su nombre, va a rojo.
+
+**Lo que ve el CEO.** Su logo arriba a la izquierda, a 40 px, junto al nombre, enlazando a Inicio en
+todas las páginas menos la primera; en el lienzo (objeto URL por `withPhotoUrls`), en el ZIP
+(`assets/logo-….png`, `<img alt="" class="rb-logo" …>` con el `alt` derivado del nombre en cada
+render) y, una vez aplicada la migración 0005, en otro ordenador (sube con cada guardado aceptado como
+una foto, con el tipo leído de los bytes). La web generada **nace con cabecera**: el nombre, el logo si
+lo hay, y el botón hacia Contacto si existe, que en un restaurante dice **«Reservar»** y en una
+peluquería, un centro de estética o un fisio **«Pedir cita»** — el verbo del ajuste 6, escrito por el
+generador como `menuLabel` del destino, de modo que si el dueño quita el botón la entrada vuelve al menú
+con esa palabra, editable. «Carta» es la sección de precios de un restaurante (así la llama el banco de
+textos; la de servicios es «Qué ponemos»), y la web generada no trae precios: la palabra se aplica
+cuando el dueño añade la sección desde la píldora, y a `contactSectionFor`, que es la que la píldora
+devuelve. Un sector sin palabra no inventa ninguna, con su test.
+
+**El panel «Menú» gana el bloque Marca** encima del menú de páginas: «Nombre del negocio» (casilla),
+el logo sobre una muestra del color real de la barra, «Subir tu logo» / «Cambiar» / «Quitar»; la
+frase «Lo que marques aquí se ve al principio de la cabecera y lleva a Inicio» o, sin nada, «Sin nombre
+ni logo, la cabecera empieza por el menú». «Fotos» lo lista el primero como «Logo», tuyo, y su
+«Cambiar» abre el mismo selector. **Un SVG no entra**: el esquema rechaza el nombre, `sniffImage`
+reconoce el marcado (`<?xml`, `<svg`, `<!doctype`, `<!--`, tras BOM y espacios) para poder decir «Un
+SVG no vale aún; exporta tu logo en PNG» en vez de «no es una foto», y la ruta vuelve a olfatear: un
+SVG renombrado `.png` cae por sus bytes.
+
+**El logo sobre fondo oscuro (ajuste 4).** De la misma muestra de 64×64 sale la luminancia media
+ponderada por alfa (`meanLuminance`); vive en la sesión del editor junto a `photoUrls`, recalculada de
+los bytes al subir o al abrir, nunca en el documento. `reviewLogo` la compara con el color real de la
+barra y **por debajo de 3:1 —el mínimo de WCAG 1.4.11 para un gráfico, no el 4,5 del texto— avisa**:
+en el bloque Marca («Tu logo se ve poco sobre este fondo») y en la revisión previa a la descarga, en
+el mismo diálogo del contraste, con su fila (el logo sobre la muestra de la barra y la ratio) y sin
+bloquear. Un PNG blanco sobre `surface` avisa; sobre `ink` no. Es una media, y se dice: un logo de dos
+colores a caballo de la barra lee como bien.
+
+**Decidido por el día y dicho en la ADR**: PNG por lienzo siempre, en vez del «tal cual» del plan
+para PNG/WebP ≤ 512 px y ≤ 300 KB, porque lo que un lienzo da es la propiedad de la 0018 —sin
+metadatos— y un PNG guardado byte a byte conservaría sus chunks `tEXt`/`eXIf`/XMP; lo que cuesta
+(un PNG de lienzo no está optimizado) va en la línea del dueño del presupuesto. **La cuenta** del
+bucket sí hacía falta: `fotos` admitía solo `image/jpeg`; la migración **0005** reescribe la lista a
+`{image/jpeg, image/png}` con un `update` sobre la fila de la 0003, `photoCaps.test.ts` la lee junto a
+la 0003 y `storage.pg.test.ts` la asevera contra Postgres. **La aplica David en los dos proyectos**;
+hasta entonces las fotos suben y solo el logo se queda fuera («· 1 foto sin subir», runbook §7 B).
+Y `menuStateFor` deja fuera de las cuentas que «Campos» y «Páginas» dicen en voz alta el destino del
+botón, como hace la tira: con la web generada naciendo con botón, «quedan 2 secciones» junto a una
+tira de una era un número que nadie podía casar con la página.
+
+**Tests**: schema `images.test.ts` (6), publisher `site.test.ts` (+1: el logo en `assets/` y el ZIP
+rechazado sin sus bytes), generador (+11: la cabecera con que nace, el logo por nombre, un `.svg` que
+el generador rechaza, el mismo documento dos veces, los verbos por sector, «Carta», el sector sin
+palabra, ningún sector etiqueta portada/pie/avance), editor (+29: olfateo del marcado con BOM y
+espacios, `meanLuminance` ×3, propias ×1, inventario ×1, vista previa ×1, ruta ×4, plan de sincronía
+×1, `reviewLogo` ×4, puerta ×4, estado de la cabecera ×2, almacén ×2, `menuState` ×1), db (la lista
+del bucket). e2e: nueva «sprint 30 día 5» (pregunta 1 con logo y su frase; logo cargado a 40 px junto
+al nombre; «Reservar» en el botón y fuera de la tira; precios desde la píldora lee «Carta»; ZIP con
+`assets/logo-<hex>.png` PNG de verdad y `alt=""` junto al nombre; «Quitar»; un SVG renombrado `.png`
+rechazado con su frase; el logo de vuelta con nombre nuevo; «Fotos» lo lista primero), y **ocho
+caminatas reescritas** por la cabecera con que nace la web generada: sprint 6 día 7 (tres imágenes en
+el ZIP sin red, el logo cargado; la fila del logo tiene su «Cambiar» y el selector de fotos ya no es
+el primero), sprint 11 día 7 (un script, el constante), sprint 23 día 3 y 4 («Contacto» en el botón y
+de vuelta como «Reservar»), día 7 (las listas del ZIP), sprint 30 día 3 (pulsa el botón) y día 4 (el
+botón nace en «Reservar»); más `PHOTO_INPUT` porque hay dos `<input type="file">` ocultos. **Saboteos**,
+deshechos por copia: el logo fuera de `listOwnPhotoSrcs` (dos en rojo, el del plan de sincronía entre
+ellos); el generador sin palabra de sector (cuatro en rojo).
+
+**Medidas.** `pnpm test` 3525 (170 ficheros); `typecheck`, `lint` (0 errores), invariantes, un golden
+(leído: la línea del `<img>`), `renderer:deps`, `schema:guard` (la forma no cambia), `secrets:scope`,
+`size` (el logo en la línea del dueño, 0,4 KB; script 0,7 KB); `test:db` 85 contra un Postgres propio
+con la 0005; `test:a11y` local 625. **e2e completa: 264 verdes y 1 omitida en 1100 s**, con una
+caminata que fue a rojo por lo esperado (la del sprint 11 aseveraba cero scripts) y se reescribió.
+**Lighthouse** con el quinto sujeto, `cabecera-con-marca` **fija y con logo**: performance 100,
+accesibilidad 100, best practices 100, SEO 100, **LCP 1,35 s, CLS 0,023**; las tres composiciones 99 /
+98 / 98 y la letra propia 99 como el 29. Lo que Lighthouse señala y queda medido sin arreglar: el logo
+va con `height` y sin `width` (el documento no guarda sus medidas), así que cuenta como «imagen sin
+tamaño» (`unsized-images` 0,5) y es el CLS de 0,023 — por debajo del 0,1 de «bueno» y sin mover la
+nota; guardar el ancho, o `aspect-ratio`, es una decisión para el cierre.

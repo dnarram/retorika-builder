@@ -40,6 +40,18 @@ export interface Answers {
    * because a `File` is not serialisable, and keeps everything else.
    */
   logoPaletteId: string | null;
+  /**
+   * The file the logo's bytes are kept under, minted in the browser the moment the file is chosen
+   * (`logo-<8 hex>.png`, ADR 0059), or `null` for no logo — or for a logo that could not be kept.
+   *
+   * **A name, never the bytes**, for the same reason `logoPaletteId` is an id and not a colour: the
+   * generator stays a pure function of its answers, and what it writes into the document is the
+   * reference the header carries (`header.brand.logo.src`). The bytes travel the path a photograph
+   * travels — IndexedDB, the preview's object URL, the multipart form, the account's bucket — and
+   * this is the one string that ties them to the document. Serialisable, so unlike `logo` it
+   * survives a reload of the questionnaire.
+   */
+  logoSrc: string | null;
   sector: SectorId | null;
   otherSectorDescription: string;
   services: string[];
@@ -59,6 +71,7 @@ export const EMPTY_ANSWERS: Answers = {
   businessName: "",
   logo: null,
   logoPaletteId: null,
+  logoSrc: null,
   sector: null,
   otherSectorDescription: "",
   services: [],

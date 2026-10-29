@@ -1,4 +1,4 @@
-import type { ContentElement, RetorikaDocument } from "@retorika/schema";
+import { type RetorikaDocument, rewriteImageSources } from "@retorika/schema";
 
 /**
  * A copy of the document with every photograph's bundle name swapped for the object URL of its
@@ -19,39 +19,16 @@ import type { ContentElement, RetorikaDocument } from "@retorika/schema";
  * found 404ing in sprint 5. One function now, so the next screen cannot get it wrong separately.
  *
  * Recursive into list items: a gallery keeps each photograph inside one, and every walk in this
- * repository that forgot to look there has been a defect.
+ * repository that forgot to look there has been a defect. **And into the header** (ADR 0059): the
+ * logo is a `src` the preview has to swap like any photograph's, through the schema's one rewrite,
+ * so that a frame drawn from `srcDoc` shows the logo and not a 404 against the editor's own root.
  */
 export function withPhotoUrls(
   doc: RetorikaDocument,
   photoUrls: ReadonlyMap<string, string>,
 ): RetorikaDocument {
   if (photoUrls.size === 0) return doc;
-
-  const swap = (element: ContentElement): ContentElement => {
-    if (element.items) {
-      return {
-        ...element,
-        items: element.items.map((item) => ({
-          ...item,
-          elements: item.elements.map(swap),
-        })),
-      };
-    }
-    if (element.value?.kind !== "image") return element;
-    const url = photoUrls.get(element.value.src);
-    return url ? { ...element, value: { ...element.value, src: url } } : element;
-  };
-
-  return {
-    ...doc,
-    pages: doc.pages.map((page) => ({
-      ...page,
-      sections: page.sections.map((section) => ({
-        ...section,
-        content: section.content.map(swap),
-      })),
-    })),
-  };
+  return rewriteImageSources(doc, (src) => photoUrls.get(src) ?? src);
 }
 
 /** A face the owner brought, as the renderer writes its `src` — the one shape this substitutes. */

@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { buildSite, ownFontKeysFor, readFontBundle } from "@retorika/publisher";
-import { flattenElements, parseDocument } from "@retorika/schema";
+import { imageSourcesOf, parseDocument } from "@retorika/schema";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { objectKeyFor, siteIdFromHost } from "../src/routing.ts";
@@ -164,14 +164,11 @@ describe("the publisher -> serve contract", () => {
     for (const file of readdirSync(documentsDir).filter((f) => f.endsWith(".json"))) {
       const document = parseDocument(JSON.parse(readFileSync(join(documentsDir, file), "utf8")));
       const assets = new Map<string, Uint8Array>();
-      for (const page of document.pages) {
-        for (const section of page.sections) {
-          // A `data:` URI is the whole image, inline: no file, nothing to serve.
-          for (const el of flattenElements(section.content)) {
-            if (el.value?.kind !== "image" || el.value.src.startsWith("data:")) continue;
-            assets.set(el.value.src, new Uint8Array(readFileSync(join(fixtures, el.value.src))));
-          }
-        }
+      // A `data:` URI is the whole image, inline: no file, nothing to serve. The schema's one walk
+      // (ADR 0059) names the header's logo beside the elements, so it is read from `fixtures/` too.
+      for (const source of imageSourcesOf(document)) {
+        if (source.src.startsWith("data:")) continue;
+        assets.set(source.src, new Uint8Array(readFileSync(join(fixtures, source.src))));
       }
       // A site whose type pair names a face owes the ZIP those bytes; `buildSite` refuses without
       // them, which is what keeps a published site complete. A font the owner brought is read from

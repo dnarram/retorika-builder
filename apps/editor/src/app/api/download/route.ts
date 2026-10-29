@@ -5,6 +5,7 @@ import {
   checkAgainstPreset,
   DocumentValidationError,
   flattenElements,
+  imageSourcesOf,
   listDeadDestinations,
   listEditableFields,
   MAX_PAGES,
@@ -169,18 +170,15 @@ function assertNoDeadDestinations(doc: RetorikaDocument): void {
 }
 
 /** Every image src the document actually references, data: URIs excluded — those are inline and
- * need no file. This is the set a request is allowed to send bytes for, and must send them all. */
+ * need no file. This is the set a request is allowed to send bytes for, and must send them all.
+ * The header's logo is in it (ADR 0059), through the schema's one walk: a `photo` part named after
+ * the logo is read, sniffed and bundled exactly as a photograph is, and a document that names a
+ * logo the request did not send is refused like one missing a photograph. */
 function referencedPhotoSrcs(doc: RetorikaDocument): Set<string> {
   const srcs = new Set<string>();
-  for (const page of doc.pages) {
-    for (const section of page.sections) {
-      for (const element of flattenElements(section.content)) {
-        const value = element.value;
-        if (value?.kind !== "image") continue;
-        if (value.src.startsWith("data:")) continue;
-        srcs.add(value.src);
-      }
-    }
+  for (const source of imageSourcesOf(doc)) {
+    if (source.src.startsWith("data:")) continue;
+    srcs.add(source.src);
   }
   return srcs;
 }

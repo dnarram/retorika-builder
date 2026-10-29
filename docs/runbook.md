@@ -421,13 +421,15 @@ editing anything also uploads them, because every accepted save reconciles.
 ### B. The upload was refused at the time
 
 The indicator said «· N fotos sin subir» when it was saved. Usually the bucket's own caps: a file
-over 2 MiB, or a content type that is not `image/jpeg`. The editor re-encodes every upload to JPEG
-under those limits, so this means something else reached the bucket, or the bucket's row was edited
-by hand.
+over 2 MiB, or a content type that is not `image/jpeg` — or, for the logo, `image/png` (ADR 0059,
+sprint 30). The editor re-encodes every photograph to JPEG and the logo to PNG under those limits,
+so this means something else reached the bucket, or the bucket's row was edited by hand.
 
 Check the bucket's row: `select file_size_limit, allowed_mime_types from storage.buckets where id =
-'fotos'`. It should be `2097152` and `{image/jpeg}` — the same two numbers
-`apps/editor/test/photoCaps.test.ts` asserts against migration `0003`.
+'fotos'`. It should be `2097152` and `{image/jpeg,image/png}` — the numbers
+`apps/editor/test/photoCaps.test.ts` asserts against migrations `0003` and `0005`. **`{image/jpeg}`
+alone means migration `0005` was never applied here**: every photograph still saves and the logo
+alone is refused, which the indicator counts as «· 1 foto sin subir».
 
 ### C. Migration `0003` was never applied here
 

@@ -95,6 +95,10 @@ bundle — it names every page whose icon «names no file in the bundle».
   says so, is a PNG beside the SVG, which needs a rasteriser at build time.
 - **The owner's logo as the icon.** The document keeps no logo. That arrives with a logo the
   document stores, and a PNG path for it.
+  > **Since ADR 0059 (sprint 30 día 5, 29 October 2026) the document stores one**: `header.brand.logo.src`,
+  > a PNG of at most 512px kept and bundled like a photograph. The «siguiente paso» now has
+  > something to draw from; what it still needs is a rasteriser at build time for the PNG beside
+  > the SVG, and a decision on how a mark that is not square becomes a tab icon. Not decided here.
 - **`apple-touch-icon`, a dark-mode variant, `manifest.webmanifest`.** None was asked for.
 
 ## Consequences

@@ -443,7 +443,10 @@
     },
     "layout": "brand-left",
     "brand": {
-      "name": true
+      "name": true,
+      "logo": {
+        "src": "assets/logo.png"
+      }
     },
     "hairline": true
   }

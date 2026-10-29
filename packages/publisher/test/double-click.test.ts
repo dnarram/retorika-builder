@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   type ContentElement,
-  flattenElements,
+  imageSourcesOf,
   type Page,
   parseDocument,
   type RetorikaDocument,
@@ -37,16 +37,13 @@ function loadCorpus(): { name: string; document: RetorikaDocument }[] {
 
 async function bundleFor(name: string, document: RetorikaDocument): Promise<SiteBundle> {
   const assets = new Map<string, Uint8Array>();
-  for (const page of document.pages) {
-    for (const section of page.sections) {
-      // A `data:` URI is a complete image inline in the HTML, not a file the bundle needs — the
-      // same skip `buildSite`'s own `toBundle` makes. Reached the day a fixture arrived carrying
-      // the catalog's placeholder photograph.
-      for (const el of flattenElements(section.content)) {
-        if (el.value?.kind !== "image" || el.value.src.startsWith("data:")) continue;
-        assets.set(el.value.src, new Uint8Array(readFileSync(join(FIXTURES_DIR, el.value.src))));
-      }
-    }
+  // A `data:` URI is a complete image inline in the HTML, not a file the bundle needs — the same
+  // skip `buildSite`'s own `toBundle` makes. Reached the day a fixture arrived carrying the
+  // catalog's placeholder photograph. `imageSourcesOf` is the schema's one walk (ADR 0059), so the
+  // header's logo is resolved from `fixtures/assets/` exactly as a photograph is.
+  for (const source of imageSourcesOf(document)) {
+    if (source.src.startsWith("data:")) continue;
+    assets.set(source.src, new Uint8Array(readFileSync(join(FIXTURES_DIR, source.src))));
   }
   return buildSite(document, {
     siteId: name,

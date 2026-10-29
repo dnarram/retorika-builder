@@ -125,6 +125,28 @@ describe("uploadPhoto", () => {
     expect(body.type).toBe("image/jpeg");
   });
 
+  it("types the upload by its bytes: the logo's PNG goes up as image/png (ADR 0059)", async () => {
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2]);
+    const { client, calls } = recorder({});
+    expect(await uploadPhoto(client, `${OWNER}/${SITE}/logo-3f9a7c21.png`, png)).toBe(true);
+    const upload = call(calls, "upload");
+    expect((upload.args[1] as Blob).type).toBe("image/png");
+    expect(upload.args[2]).toMatchObject({ contentType: "image/png" });
+  });
+
+  it("sends nothing the bucket would refuse: bytes that are neither JPEG nor PNG", async () => {
+    // WebP is a format the picker accepts and nothing of ours ever writes; markup is what an SVG
+    // renamed `.png` is. Neither reaches the bucket, and the caller hears `false` without a round
+    // trip — the same answer a refused upload gives.
+    const webp = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50]);
+    const svg = new TextEncoder().encode("<svg/>");
+    for (const bytes of [webp, svg, new Uint8Array([1, 2, 3])]) {
+      const { client, calls } = recorder({});
+      expect(await uploadPhoto(client, `${OWNER}/${SITE}/logo-3f9a7c21.png`, bytes)).toBe(false);
+      expect(calls.filter((entry) => entry.method === "upload")).toEqual([]);
+    }
+  });
+
   it("replaces the object in a slot rather than failing on it", async () => {
     // `photoSrcFor` is stable per slot, so changing the cover photograph writes the same key.
     // Without `upsert` the second upload would fail and the owner would be told their own

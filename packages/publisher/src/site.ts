@@ -1,5 +1,11 @@
 import { FAVICON_PATH, faviconSvg, ownFacesFor, ownFontsFor, render } from "@retorika/renderer";
-import type { ContentElement, OwnFont, Page, RetorikaDocument } from "@retorika/schema";
+import {
+  imageSourcesOf,
+  type OwnFont,
+  type Page,
+  type RetorikaDocument,
+  rewriteImageSources,
+} from "@retorika/schema";
 import {
   FONT_SOURCES,
   licencesFor,
@@ -188,24 +194,6 @@ function assetPathFor(src: string): { path: string; contentType: string } {
   return { path: `assets/${name}`, contentType };
 }
 
-/** A copy with every image src rewritten. Links are left exactly as the document has them. */
-function rewriteImages(
-  elements: readonly ContentElement[],
-  toBundle: (src: string) => string,
-): ContentElement[] {
-  return elements.map((el) => {
-    const copy: ContentElement = { ...el };
-    if (el.value?.kind === "image") copy.value = { ...el.value, src: toBundle(el.value.src) };
-    if (el.items) {
-      copy.items = el.items.map((item) => ({
-        ...item,
-        elements: rewriteImages(item.elements, toBundle),
-      }));
-    }
-    return copy;
-  });
-}
-
 /**
  * A validated document becomes the exact set of files that constitute its website.
  *
@@ -250,16 +238,12 @@ export function buildSite(doc: RetorikaDocument, options: BuildSiteOptions): Sit
   // sliced down to one page has no such page in it, so every teaser published as a bare link with
   // no heading, no summary and no accessible name. Every unit test passed, because they all hand
   // the renderer a whole document; the browser walk is what found it.
-  const rewrittenDoc: RetorikaDocument = {
-    ...doc,
-    pages: doc.pages.map((page) => ({
-      ...page,
-      sections: page.sections.map((section) => ({
-        ...section,
-        content: rewriteImages(section.content, toBundle),
-      })),
-    })),
-  };
+  //
+  // **The walk is the schema's** (ADR 0059): `imageSourcesOf` is what names the header's logo
+  // beside the elements, so the logo is bundled under `assets/` and its `src` rewritten by the
+  // same two lines that do it for a photograph, and a walk of this file's own could not forget it.
+  for (const source of imageSourcesOf(doc)) toBundle(source.src);
+  const rewrittenDoc = rewriteImageSources(doc, toBundle);
 
   const encoder = new TextEncoder();
   /**

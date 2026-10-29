@@ -228,3 +228,33 @@ export function paletteForLogo(pixels: Uint8ClampedArray): string | null {
   if (!colour) return null;
   return nearestPalette(colour)?.paletteId ?? null;
 }
+
+/**
+ * How light these pixels are on average: the WCAG relative luminance of each visible pixel,
+ * weighted by its alpha, from 0 (black) to 1 (white) — or `null` when nothing is visible at all.
+ *
+ * **Weighted by alpha rather than cut at `MIN_ALPHA`**, unlike `dominantColour`: the question there
+ * is which *hue* the brand has, and a translucent fringe would vote for a colour it only half has;
+ * the question here is how the mark reads against the bar behind it, and a half-transparent pixel
+ * shows half of itself. The transparent field of a PNG logo counts for nothing, which is right —
+ * on the bar it is the bar.
+ *
+ * It is a mean, and a mean is a blunt instrument: a logo of black letters and a white shape
+ * averages to grey, which reads against anything. That is why `styleReview.ts` compares it against
+ * the 3:1 of WCAG 1.4.11 (graphics) and not the 4.5:1 of text, and warns rather than blocks.
+ */
+export function meanLuminance(pixels: Uint8ClampedArray): number | null {
+  let weighted = 0;
+  let weight = 0;
+  for (let i = 0; i + 3 < pixels.length; i += 4) {
+    const alpha = (pixels[i + 3] ?? 0) / 255;
+    if (alpha === 0) continue;
+    const luminance =
+      0.2126 * toLinear(pixels[i] ?? 0) +
+      0.7152 * toLinear(pixels[i + 1] ?? 0) +
+      0.0722 * toLinear(pixels[i + 2] ?? 0);
+    weighted += luminance * alpha;
+    weight += alpha;
+  }
+  return weight === 0 ? null : weighted / weight;
+}

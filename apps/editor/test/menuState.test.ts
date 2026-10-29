@@ -92,6 +92,17 @@ describe("the counts", () => {
 
   it("falls back to the home page when no page is open", () => {
     expect(menuStateFor(threeSections(), undefined).sections).toBe(3);
+    // The button's destination is out of the count, as it is out of the strip (ADR 0057 §5; a
+    // generated site is born this way since ADR 0059). The threshold's count keeps it.
+    const doc = threeSections();
+    const target = doc.pages[0]?.sections.find((s) => s.preset.catalogId !== "cover");
+    if (!target) throw new Error("no section to point the button at");
+    const withButton = menuStateFor(
+      { ...doc, header: { action: { kind: "section", sectionId: target.id } } },
+      undefined,
+    );
+    expect(withButton.sections).toBe(2);
+    expect(withButton.destinations).toBe(3);
   });
 
   it("counts the pages menu without «Inicio», which is a way back and not an entry", () => {

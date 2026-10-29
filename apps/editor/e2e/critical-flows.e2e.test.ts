@@ -64,12 +64,19 @@ const PREVIEW = "iframe";
 const CANVAS = 'iframe:not([aria-hidden="true"])';
 
 /**
+ * The editor's hidden input for a photograph. Not the questionnaire's `#logo`, and since sprint 30
+ * día 5 not the editor's second hidden input either — the logo's (`data-testid="logo-input"`),
+ * which prepares a PNG rather than a JPEG and remembers no element.
+ */
+const PHOTO_INPUT = 'input[type="file"]:not(#logo):not([data-testid="logo-input"])';
+
+/**
  * **Sprint 27 día 2's two bounds** (ADR 0052 §2), each a measurement with room above it, both
  * taken on 23 October 2026 at 1440 × 900 with the design tools on.
  *
  * `DAY2_CANVAS_STOPS`: Tab stops from the canvas's first stop to the rail — the page's skip link
- * and its navigation links (sprint 30 día 1 added the first; the generated site draws four of the
- * second), a pill, the door, its insides (each text followed by the grip of the bar that
+ * and its navigation links (sprint 30 día 1 added the first; the generated site draws three of the
+ * second and, since día 5, the button to its contact section), a pill, the door, its insides (each text followed by the grip of the bar that
  * opened on it, the photograph followed by its badge), one pill per gap. **Measured 22**;
  * seventy-five before día 2. `DAY2_PAST_THE_CANVAS`: presses from inside a hand-designed section
  * to «Diseño» and to «Colocación» in the rail, which the sprint 24 walk bounded at two hundred for
@@ -1343,9 +1350,9 @@ describe("regression — the preview is a canvas, not a browsable site", () => {
     await frame.locator('[data-section="sec-cover"]').waitFor();
 
     const entries = frame.locator(".rb-nav-wide a");
-    // The generated site reaches four menu entries on its own — «Servicios», «Galería», «Dónde
-    // estamos» and «Contacto», each the short name of its kind (ADR 0057) — so the menu is in the
-    // preview from the first render.
+    // The generated site reaches four destinations on its own — «Servicios», «Galería», «Dónde
+    // estamos», each the short name of its kind (ADR 0057), and the contact section as the bar's
+    // button, «Reservar» (ADR 0059) — so the menu is in the preview from the first render.
     await expect(entries.first()).toBeVisible();
 
     const framesBefore = page.frames().length;
@@ -1565,10 +1572,15 @@ describe("día 7 — dos conversiones desde el editor, y el ZIP resultante abier
       ]);
       await expect(offlinePage.locator('.rb-nav-wide nav[aria-label="Secciones"] a')).toHaveText([
         // By the short name of each kind, never by the heading (ADR 0057): the bank's gallery is
-        // «Galería» and the contact section «Contacto», whatever their headlines say.
+        // «Galería», whatever its headline says. The contact section is not in the strip: it is the
+        // bar's one button, with the restaurant's own word for it (ADR 0059, día 5).
         "Galería",
-        "Contacto",
       ]);
+      await expect(offlinePage.locator(".rb-header .rb-nav-action")).toHaveText("Reservar");
+      await expect(offlinePage.locator(".rb-header .rb-nav-action")).toHaveAttribute(
+        "href",
+        "#sec-contact",
+      );
       // No «Inicio» on the page it would link to — a link that reloads the page you are on.
       await expect(offlinePage.locator(".rb-nav-wide a", { hasText: "Inicio" })).toHaveCount(0);
 
@@ -1727,7 +1739,7 @@ describe("sprint 6 día 7 — fotos subidas desde el panel y desde el aviso, log
       // `.rb-menu-choice` «element(s) not found», because the bank photograph arrived while the
       // «Añadir sección aquí» menu was open and took the whole document with it.
       await waitForBankPhoto(frame);
-      const fileInput = walkPage.locator('input[type="file"]:not(#logo)');
+      const fileInput = walkPage.locator(PHOTO_INPUT);
 
       // Since ADR 0039 (12 October 2026) a generated restaurante site carries the bank's own
       // gallery of four. This walk is about the two doors onto `replacePhoto` and the bytes that
@@ -1757,12 +1769,21 @@ describe("sprint 6 día 7 — fotos subidas desde el panel y desde el aviso, log
       await walkPage.getByRole("button", { name: "Fotos", exact: true }).click();
       await expect(walkPage.getByText(/fotos todavía no son tuyas/)).toBeVisible();
       const panelRows = walkPage.locator('ul li:has(button:has-text("Cambiar"))');
-      await expect(panelRows).toHaveCount(2);
-      await panelRows.first().getByRole("button", { name: "Cambiar" }).click();
+      // Three rows since día 5 of sprint 30: the logo question 1 kept is listed first, as «Logo»,
+      // with its own «Cambiar» (ADR 0059); then the two photographs this walk is about.
+      await expect(panelRows).toHaveCount(3);
+      await expect(panelRows.first()).toContainText("Logo");
+      // The first *photograph* row, not the first row: the logo's «Cambiar» opens the logo's own
+      // picker, and this door is the photographs'.
+      const photoRows = panelRows.filter({ hasNotText: "Logo" });
+      await expect(photoRows).toHaveCount(2);
+      await photoRows.first().getByRole("button", { name: "Cambiar" }).click();
       await fileInput.setInputFiles(join(import.meta.dirname, "fixtures/gallery-photo.jpg"));
       // Written into IndexedDB and re-encoded before the chip updates; waited for rather than
       // asserted immediately, the same margin sprint 6 day 5's own walk needed to measure.
-      await expect(walkPage.getByText("1 de 2 fotos todavía no son tuyas.")).toBeVisible();
+      // «de 3» since sprint 30 día 5: the logo question 1 kept is one of the site's images, the
+      // owner's from the start (ADR 0059), so the count has one more that is already theirs.
+      await expect(walkPage.getByText("1 de 3 fotos todavía no son tuyas.")).toBeVisible();
 
       // The warning's own «Cambiar» (day 5) — one photograph still unfilled, so pressing
       // «Descargar» opens it rather than downloading, and this is the other door onto the same
@@ -1826,13 +1847,23 @@ describe("sprint 6 día 7 — fotos subidas desde el panel y desde el aviso, log
       const zip = new Uint8Array(readFileSync(zipPath));
       const entries = listZipEntries(zip);
       // Two real photographs, no placeholder — the ZIP's own proof that every "Sin foto" from the
-      // panel became a real file, not just a document field that says so.
-      expect(entries.filter((entry) => entry.startsWith("assets/")).sort()).toEqual(
+      // panel became a real file, not just a document field that says so. And the logo question 1
+      // kept (ADR 0059): one PNG under a name minted in the browser, never the file's own.
+      const logoEntry = entries.find((entry) => /^assets\/logo-[0-9a-f]{8}\.png$/.test(entry));
+      expect(logoEntry, `no logo among ${entries.join(", ")}`).toBeDefined();
+      expect(
+        entries.filter((entry) => entry.startsWith("assets/") && entry !== logoEntry).sort(),
+      ).toEqual(
         [
           "assets/foto-sec-cover-el-image.jpg",
           "assets/foto-sec-gallery-el-item-1-photo.jpg",
         ].sort(),
       );
+      // A real PNG, lossless: `prepareLogo` writes nothing else.
+      const logoBytes = extractFileBytes(zip, logoEntry as string);
+      expect([...logoBytes.subarray(0, 8)]).toEqual([
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+      ]);
 
       /**
        * **What the canvas dropped, proven on the bytes that travel** (ADR 0018, ADR 0037 §4).
@@ -1876,7 +1907,12 @@ describe("sprint 6 día 7 — fotos subidas desde el panel y desde el aviso, log
         // headline — not the terracotta `restaurante-bar`'s own sector default would have used.
         await expect(offlinePage.locator("h1")).toHaveCSS("color", "rgb(29, 78, 216)");
         const images = offlinePage.locator("img");
-        await expect(images).toHaveCount(2);
+        // The cover, the gallery's photograph, and the logo in the header (ADR 0059) — loaded from
+        // the ZIP, with no server behind the page: `failed` below is the proof.
+        await expect(images).toHaveCount(3);
+        const logo = offlinePage.locator("header.rb-header img.rb-logo");
+        await expect(logo).toHaveAttribute("src", logoEntry as string);
+        await imageLoaded(logo);
         for (const src of await images.evaluateAll((els) =>
           els.map((el) => el.getAttribute("src")),
         )) {
@@ -4280,10 +4316,14 @@ describe("sprint 11 día 7 — el recorrido completo del sprint", () => {
         await offlinePage.waitForTimeout(500); // let @font-face settle before reading document.fonts
 
         // The <script> an owner typed is text on the published page and never an element — the
-        // same claim ADR 0024 was built on, satisfied again under this sprint's own capture.
-        expect(await offlinePage.evaluate(() => document.querySelectorAll("script").length)).toBe(
-          0,
-        );
+        // same claim ADR 0024 was built on, satisfied again under this sprint's own capture. The
+        // one script on the page is the header's constant (ADR 0058): since sprint 30 día 5 a
+        // generated site is born with a header (ADR 0059), so this went from zero to exactly that.
+        expect(
+          await offlinePage.evaluate(() =>
+            [...document.querySelectorAll("script")].map((s) => s.textContent ?? ""),
+          ),
+        ).toEqual([HEADER_SCRIPT]);
         expect(dialogs).toEqual([]);
         await expect(offlinePage.locator('[data-id="el-headline"]')).toHaveText(
           "Reformas Vega <script>alert(1)</script>",
@@ -4479,7 +4519,7 @@ describe("sprint 12 día 7 — el recorrido completo del sprint", () => {
 
       const frame = walk.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
-      const fileInput = walk.locator('input[type="file"]:not(#logo)');
+      const fileInput = walk.locator(PHOTO_INPUT);
 
       // ---- day 2: the slot nothing could reach ----------------------------------------------
       // «Qué hago» has one card and the catalog gives it no description: `0..1`, so absent from the
@@ -7474,7 +7514,7 @@ describe("sprint 16 día 6 — guardar en la cuenta sube la foto", () => {
       // decode, and the walk failed on the badge still being there — which is the product behaving
       // correctly about a file that was not a photograph.
       await page
-        .locator('input[type="file"]:not(#logo)')
+        .locator(PHOTO_INPUT)
         .setInputFiles(join(import.meta.dirname, "fixtures/cover-photo.jpg"));
       // The «Foto de ejemplo» badge goes when the photograph stops being one, which is the
       // product's own signal that the upload landed in the document. The gallery's four keep
@@ -7572,7 +7612,7 @@ describe.skipIf(process.env["RETORIKA_E2E_ACCOUNT"] !== "1")(
         await waitForBankPhoto(frame);
         await frame.locator('[data-section="sec-cover"] img').first().click();
         await first
-          .locator('input[type="file"]:not(#logo)')
+          .locator(PHOTO_INPUT)
           .setInputFiles(join(import.meta.dirname, "fixtures/cover-photo.jpg"));
         await expect(frame.locator(".rb-sample")).toHaveCount(0);
 
@@ -7965,7 +8005,9 @@ describe("sprint 23 día 3 — quitar una sección del menú", () => {
       await intoTheCanvas(visitor);
       const frame = visitor.frameLocator(PREVIEW).first();
       const sections = frame.locator('.rb-nav-wide nav[aria-label="Secciones"] a');
-      await expect(sections).toHaveText(["Servicios", "Galería", "Dónde estamos", "Contacto"]);
+      // «Contacto» no está en la tira: desde el sprint 30 día 5 la web generada nace con esa
+      // sección como botón de la cabecera («Reservar»), y un destino está en un solo sitio.
+      await expect(sections).toHaveText(["Servicios", "Galería", "Dónde estamos"]);
 
       // Abrir los campos de «Dónde estamos», que es donde vive el interruptor.
       await frame.locator('[data-section="sec-location"]').click();
@@ -7981,7 +8023,7 @@ describe("sprint 23 día 3 — quitar una sección del menú", () => {
       );
 
       await toggle.uncheck();
-      await expect(sections).toHaveText(["Servicios", "Galería", "Contacto"]);
+      await expect(sections).toHaveText(["Servicios", "Galería"]);
 
       /**
        * **Y la sección sigue ahí.** Esta es la aserción que separa «fuera del menú» de «fuera de
@@ -7994,7 +8036,7 @@ describe("sprint 23 día 3 — quitar una sección del menú", () => {
 
       // Un paso del historial como cualquier otro.
       await visitor.getByRole("button", { name: "Deshacer" }).click();
-      await expect(sections).toHaveText(["Servicios", "Galería", "Dónde estamos", "Contacto"]);
+      await expect(sections).toHaveText(["Servicios", "Galería", "Dónde estamos"]);
     } finally {
       await visitor.context().close();
     }
@@ -8018,6 +8060,19 @@ describe("sprint 23 día 4 — las páginas en el menú y el umbral curado", () 
     try {
       await intoTheCanvas(visitor);
       const frame = visitor.frameLocator(PREVIEW).first();
+
+      // Sin el botón de la cabecera, primero: desde el sprint 30 día 5 la web generada nace con
+      // «Contacto» como botón, fuera de la tira, y esta caminata es sobre el umbral de la tira y
+      // las frases del cajón de campos, que cuentan las secciones que hay en ella. «Ninguno» deja
+      // el documento en la forma con la que se escribió cada número de abajo.
+      await visitor.getByRole("button", { name: "Menú", exact: true }).click();
+      await visitor
+        .getByRole("complementary", { name: "La cabecera de tu web" })
+        .getByRole("group", { name: "Botón destacado" })
+        .getByText("Ninguno", { exact: true })
+        .click();
+      await expect(frame.locator(".rb-header .rb-nav-action")).toHaveCount(0);
+      await visitor.getByRole("button", { name: "Cerrar la cabecera" }).click();
 
       // Convertir «Qué ponemos» en página es lo que hace aparecer el segundo menú: hasta aquí no
       // hay a dónde ir, y la tira de páginas no se dibuja.
@@ -8091,7 +8146,9 @@ describe("sprint 23 día 4 — las páginas en el menú y el umbral curado", () 
       // Sin cerrar nada: el cajón sigue abierto y el clic en la sección siguiente llega.
       await openFields("sec-location");
       await sectionToggle.uncheck();
-      await expect(sections).toHaveText(["Contacto"]);
+      // «Reservar»: the word the generator gave the contact section as its own entry (ADR 0059),
+      // which came back to the strip with it when the button was set to «Ninguno» above.
+      await expect(sections).toHaveText(["Reservar"]);
       await expect(visitor.locator("aside")).toContainText("lo has decidido tú");
 
       /**
@@ -8106,7 +8163,7 @@ describe("sprint 23 día 4 — las páginas en el menú y el umbral curado", () 
 
       // Un paso del historial como cualquier otro: el menú vuelve con su único destino.
       await visitor.getByRole("button", { name: "Deshacer" }).click();
-      await expect(sections).toHaveText(["Contacto"]);
+      await expect(sections).toHaveText(["Reservar"]);
 
       /**
        * **axe a 390 sobre las dos palancas que el sprint añadió** (día 5, y una laguna que el
@@ -22548,10 +22605,12 @@ describe("sprint 30 día 3 — la cabecera se elige en el lienzo", () => {
         await visitor.mouse.click(box.x + (dx ?? box.width / 2), box.y + box.height / 2);
       };
 
-      // 1. «Contacto» takes the canvas to the contact section and chooses it — no navigation of
-      //    the frame, no second editor.
+      // 1. The bar's button — «Reservar», the contact section's own entry since día 5 (ADR 0059)
+      //    — takes the canvas to the contact section and chooses it: no navigation of the frame,
+      //    no second editor. A button is a header link like any other to the canvas.
       const framesBefore = visitor.frames().length;
-      await pressAt(frame.locator(".rb-nav-wide a", { hasText: "Contacto" }));
+      await expect(frame.locator(".rb-header .rb-nav-action")).toHaveText("Reservar");
+      await pressAt(frame.locator(".rb-header .rb-nav-action"));
       const contact = frame.locator('[data-section="sec-contact"]');
       await expect(contact).toHaveClass(/rb-selected/);
       // At the top of the frame — or, for a section near the end, as high as the page can scroll:
@@ -22588,8 +22647,8 @@ describe("sprint 30 día 3 — la cabecera se elige en el lienzo", () => {
       await expect(frame.locator('[data-section="sec-cover"]')).toHaveClass(/rb-selected/);
       await expect(header).not.toHaveClass(/rb-selected/);
 
-      // 4. Tab from the header's last entry goes on into the page: past at most the pill above the
-      //    first section, to the cover.
+      // 4. Tab from the header's last entry goes on into the page: past the button (día 5) and at
+      //    most the pill above the first section, to the cover.
       await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
       await frame.locator(".rb-nav-wide a").last().focus();
       const focusedSection = () =>
@@ -22597,7 +22656,7 @@ describe("sprint 30 día 3 — la cabecera se elige en el lienzo", () => {
           .locator("body")
           .evaluate(() => (document.activeElement as HTMLElement | null)?.dataset["section"] ?? "");
       let reached = "";
-      for (let press = 0; press < 3 && reached === ""; press += 1) {
+      for (let press = 0; press < 4 && reached === ""; press += 1) {
         await visitor.keyboard.press("Tab");
         reached = await focusedSection();
       }
@@ -22728,17 +22787,22 @@ describe("sprint 30 día 4 — el panel «Menú»", () => {
       await expect(frame.locator('.rb-nav-wide nav[aria-label="Secciones"]')).toHaveCount(1);
       await expect(panel.getByText("No se dibuja, aunque tenga destinos.")).toBeVisible();
 
-      // 5. The button: «Contacto» leaves the sections menu for the bar's one button.
+      // 5. The button: born pointing at the contact section with the restaurant's own word for it,
+      //    «Reservar» (ADR 0059, día 5), and out of the sections menu for it. «Ninguno» puts the
+      //    entry back in the strip — with that word, editable like any other — and choosing it
+      //    again takes it out.
       const actionGroup = panel.getByRole("group", { name: "Botón destacado" });
-      await actionGroup.getByText("Contacto", { exact: true }).click();
-      await expect(frame.locator(".rb-nav-action")).toHaveText("Contacto");
-      await expect(sectionsNav.filter({ hasText: "Contacto" })).toHaveCount(0);
+      await expect(frame.locator(".rb-nav-action")).toHaveText("Reservar");
+      await expect(sectionsNav.filter({ hasText: "Reservar" })).toHaveCount(0);
       await expect(
-        panel.getByText("Se lee «Contacto»; sale del menú porque ya está en el botón."),
+        panel.getByText("Se lee «Reservar»; sale del menú porque ya está en el botón."),
       ).toBeVisible();
       await actionGroup.getByText("Ninguno", { exact: true }).click();
       await expect(frame.locator(".rb-nav-action")).toHaveCount(0);
-      await expect(sectionsNav.filter({ hasText: "Contacto" })).toHaveCount(1);
+      await expect(sectionsNav.filter({ hasText: "Reservar" })).toHaveCount(1);
+      await actionGroup.getByText("Reservar", { exact: true }).click();
+      await expect(frame.locator(".rb-nav-action")).toHaveText("Reservar");
+      await expect(sectionsNav.filter({ hasText: "Reservar" })).toHaveCount(0);
 
       // 6. On a phone, a sheet: no taller than 70% of the screen, above the rail's bar, nothing
       //    spilling sideways, its own content scrolling inside it.
@@ -22761,4 +22825,140 @@ describe("sprint 30 día 4 — el panel «Menú»", () => {
       await context.close();
     }
   }, 240_000);
+});
+
+/**
+ * **Sprint 30 día 5 — the logo travels like a photograph** (ADR 0059). Question 1 keeps the file it
+ * used to decode and discard; the generated site is born with it in the header beside the name,
+ * with the contact section as the bar's button under the restaurant's own word; a prices section
+ * added later reads «Carta»; the ZIP carries the logo as a PNG under a name the browser minted and
+ * every page points at it; «Menú» takes it away and brings one back under a new name; and an SVG
+ * renamed `.png` is refused by its bytes, with the one sentence that helps. The `file://` half —
+ * the logo loading from the ZIP with no server — is the sprint 6 walk's, which uploads the same
+ * logo and now counts three images.
+ */
+describe("sprint 30 día 5 — el logo viaja como una foto", () => {
+  it("se queda desde la pregunta 1, va en el ZIP, se quita y se cambia desde «Menú», y un SVG disfrazado no entra", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 950 } });
+    const studio = await context.newPage();
+    const dir = mkdtempSync(join(tmpdir(), "retorika-e2e-logo-"));
+    try {
+      // 1. Question 1 keeps the logo, and the line under the button says it will be on the site.
+      await studio.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+      await studio.fill("#nombre", "Taberna Santo Domingo");
+      await studio.locator("#logo").setInputFiles(join(import.meta.dirname, "fixtures/logo.png"));
+      await expect(studio.getByText(/Hemos sacado los colores de tu logo/)).toBeVisible();
+      await expect(studio.getByText(/Y lo verás arriba a la izquierda de tu web/)).toBeVisible();
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByText("Restaurante y bar", { exact: true }).click();
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByText("Comidas", { exact: true }).click();
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.fill("#direccion", "Cta. de Santo Domingo, 2, Ronda");
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByText("Que reserven", { exact: true }).click();
+      await studio.fill("#enlace", "https://reservas.example.com/taberna");
+      await studio.getByRole("button", { name: "Crear mi web" }).click();
+      await studio.getByText("Ver a tamaño real →").first().click();
+      const frame = studio.frameLocator(PREVIEW).first();
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+      await waitForBankPhoto(frame);
+
+      // 2. The canvas: the logo in the header, loaded and 40px tall, the name beside it, and the
+      //    contact section as the button with the restaurant's word (David's adjustment 6).
+      const logo = frame.locator("header.rb-header img.rb-logo");
+      await expect(logo).toHaveCount(1);
+      await imageLoaded(logo);
+      expect(await logo.evaluate((el) => el.getBoundingClientRect().height)).toBeCloseTo(40, 0);
+      await expect(frame.locator(".rb-header .rb-brand-name")).toHaveText("Taberna Santo Domingo");
+      await expect(frame.locator(".rb-header .rb-nav-action")).toHaveText("Reservar");
+      const sectionsNav = frame.locator('.rb-nav-wide nav[aria-label="Secciones"] a');
+      await expect(sectionsNav.filter({ hasText: "Reservar" })).toHaveCount(0);
+
+      // 3. «Carta»: a prices section added from the pill takes the restaurant's word for its entry,
+      //    where the catalog says «Precios» to everyone else.
+      await frame.getByRole("button", { name: "Añadir sección aquí" }).last().click();
+      await frame.locator(".rb-menu-search").fill("precios");
+      await frame.locator(".rb-menu-list .rb-menu-choice", { hasText: "Precios" }).click();
+      await expect(frame.locator('[data-preset="prices"]')).toBeVisible();
+      await expect(sectionsNav.filter({ hasText: "Carta" })).toHaveCount(1);
+      await expect(sectionsNav.filter({ hasText: "Precios" })).toHaveCount(0);
+
+      // 4. The ZIP: the logo under assets/, a PNG under a name the browser minted — never the
+      //    file's own — and the page pointing at it.
+      const downloadZip = async (tag: string): Promise<Uint8Array> => {
+        await studio.getByRole("button", { name: "Descargar" }).click();
+        const downloadAnyway = studio.getByRole("button", { name: "Descargar igualmente" });
+        await downloadAnyway.waitFor();
+        const [download] = await Promise.all([
+          studio.waitForEvent("download"),
+          downloadAnyway.click(),
+        ]);
+        const zipPath = join(dir, `${tag}-${download.suggestedFilename()}`);
+        await download.saveAs(zipPath);
+        return new Uint8Array(readFileSync(zipPath));
+      };
+      const logoEntryOf = (zip: Uint8Array): string => {
+        const entries = listZipEntries(zip);
+        const found = entries.find((entry) => /^assets\/logo-[0-9a-f]{8}\.png$/.test(entry));
+        if (!found) throw new Error(`no logo among ${entries.join(", ")}`);
+        return found;
+      };
+      const first = await downloadZip("first");
+      const firstLogo = logoEntryOf(first);
+      expect(listZipEntries(first)).not.toContain("assets/logo.png");
+      expect([...extractFileBytes(first, firstLogo).subarray(0, 8)]).toEqual([
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+      ]);
+      const index = new TextDecoder().decode(extractFileBytes(first, "index.html"));
+      expect(index).toMatch(new RegExp(`<img [^>]*class="rb-logo"[^>]*src="${firstLogo}"`));
+      // Empty alt beside the name, so a screen reader hears «Taberna Santo Domingo» once (ADR 0057 §6).
+      expect(index).toMatch(/<img alt="" class="rb-logo"/);
+
+      // 5. «Menú» → Marca: the logo on the bar's colour; «Quitar» takes it off the canvas.
+      await studio.getByRole("button", { name: "Menú", exact: true }).click();
+      const panel = studio.getByRole("complementary", { name: "La cabecera de tu web" });
+      await expect(panel).toBeVisible();
+      await expect(panel.getByTestId("logo-swatch").locator("img")).toHaveCount(1);
+      await panel.getByRole("button", { name: "Quitar" }).click();
+      await expect(logo).toHaveCount(0);
+      await expect(panel.getByTestId("logo-swatch")).toHaveCount(0);
+      await expect(frame.locator(".rb-header .rb-brand-name")).toHaveText("Taberna Santo Domingo");
+
+      // 6. An SVG renamed `.png` is refused by its bytes — the picker's filter never saw it — with
+      //    the sentence that names what to export. Nothing reaches the canvas.
+      const disguised = join(dir, "logo.png");
+      writeFileSync(
+        disguised,
+        '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
+      );
+      const [chooser] = await Promise.all([
+        studio.waitForEvent("filechooser"),
+        panel.getByRole("button", { name: "Subir tu logo" }).click(),
+      ]);
+      await chooser.setFiles(disguised);
+      await expect(studio.getByText("Un SVG no vale aún; exporta tu logo en PNG.")).toBeVisible();
+      await expect(logo).toHaveCount(0);
+
+      // 7. The real logo comes back, under a new name: nothing cached can show the old mark.
+      const [again] = await Promise.all([
+        studio.waitForEvent("filechooser"),
+        panel.getByRole("button", { name: "Subir tu logo" }).click(),
+      ]);
+      await again.setFiles(join(import.meta.dirname, "fixtures/logo.png"));
+      await expect(logo).toHaveCount(1);
+      await imageLoaded(logo);
+      await expect(panel.getByRole("button", { name: "Cambiar" })).toBeVisible();
+      const second = await downloadZip("second");
+      expect(logoEntryOf(second)).not.toBe(firstLogo);
+
+      // 8. «Fotos» lists it first, as «Logo», the owner's.
+      await studio.getByRole("button", { name: "Fotos", exact: true }).click();
+      const rows = studio.locator('ul li:has(button:has-text("Cambiar"))');
+      await expect(rows.first()).toContainText("Logo");
+      await expect(rows.first()).toContainText("Tu foto");
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
 });

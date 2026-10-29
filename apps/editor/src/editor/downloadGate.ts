@@ -10,7 +10,7 @@ import { HEAVY_FONT_BYTES } from "./fontBytes.ts";
 import type { OverflowFinding } from "./overflowCheck.ts";
 import { ownFontFiles } from "./ownFonts.ts";
 import type { PhotoCounts } from "./photoInventory.ts";
-import { type ContrastFinding, reviewStyle } from "./styleReview.ts";
+import { type ContrastFinding, type LogoFinding, reviewLogo, reviewStyle } from "./styleReview.ts";
 
 /**
  * What pressing «Descargar» does, decided before the request is ever made.
@@ -56,14 +56,19 @@ export const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
 
 /**
  * The content type every stored photograph has, because `preparePhoto` re-encodes to it whatever
- * the picker accepted. The bucket's `allowed_mime_types` is this and nothing else, and the same
- * test ties them together — so changing the output format fails loudly there rather than silently
- * at somebody's upload.
+ * the picker accepted — and the one the logo has, because `prepareLogo` re-encodes to **PNG**: a
+ * JPEG has no alpha, and a logo flattened onto white is a white box on a coloured bar (ADR 0059).
+ * The bucket's `allowed_mime_types` is these two and nothing else (migrations `0003` and `0005`),
+ * and `photoCaps.test.ts` ties them together — so changing an output format fails loudly there
+ * rather than silently at somebody's upload.
  *
  * Named here rather than imported from `photos.ts` so that nothing which only needs the *number*
  * has to load a module built around `document.createElement`.
  */
 export const PHOTO_CONTENT_TYPE = "image/jpeg";
+export const LOGO_CONTENT_TYPE = "image/png";
+/** Everything the editor ever writes into the `fotos` bucket. */
+export const PHOTO_CONTENT_TYPES = [PHOTO_CONTENT_TYPE, LOGO_CONTENT_TYPE] as const;
 
 /**
  * The three things a download attempt can turn out to be, decided from the same counts the
@@ -147,7 +152,12 @@ export type DownloadGate =
   | { kind: "tooManyPhotos"; count: number; max: number }
   | { kind: "unreadable"; findings: ContrastFinding[] }
   | { kind: "warn"; sample: number; empty: number }
-  | { kind: "lowContrast"; findings: ContrastFinding[] }
+  /**
+   * An exact colour between 3:1 and 4.5:1, **and since ADR 0059 the logo when it is hard to see
+   * on its bar** (`logo`, under 3:1 by its mean luminance): the same dialog, the same «tú decides»,
+   * and the same `contrast` acceptance — one warning about things that read badly, not two.
+   */
+  | { kind: "lowContrast"; findings: ContrastFinding[]; logo?: LogoFinding }
   | { kind: "overflows"; findings: OverflowFinding[] }
   | { kind: "textOverText"; findings: OverlappingTexts[] }
   /**
@@ -190,6 +200,12 @@ export function downloadGateFor(
   failedSamples: readonly string[] = [],
   /** The owner's own font files this browser holds, by name — runtime state like the two above. */
   fontFiles: FontFileSizes = new Map(),
+  /**
+   * The logo's mean luminance, read from its bytes by the editor (`logoLuminanceOf`), or `null`
+   * when there is no logo or its bytes have not been read. Runtime state like the three above: the
+   * document holds the logo's name, never its pixels.
+   */
+  logoLuminance: number | null = null,
 ): DownloadGate {
   // First, and before even the photo count: this one makes the request impossible rather than
   // unwise, and no amount of «Descargar igualmente» can get past it.
@@ -217,8 +233,11 @@ export function downloadGateFor(
   if (!accepted.has("photos") && counts.sample + counts.empty > 0) {
     return { kind: "warn", sample: counts.sample, empty: counts.empty };
   }
-  if (!accepted.has("contrast") && review.warning.length > 0) {
-    return { kind: "lowContrast", findings: review.warning };
+  if (!accepted.has("contrast")) {
+    const logo = reviewLogo(doc, logoLuminance);
+    if (review.warning.length > 0 || logo) {
+      return { kind: "lowContrast", findings: review.warning, ...(logo ? { logo } : {}) };
+    }
   }
   if (!accepted.has("overflow") && overflow.length > 0) {
     return { kind: "overflows", findings: [...overflow] };

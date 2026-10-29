@@ -35,6 +35,10 @@ export type PhotoRejection =
   | { reason: "unsupported" }
   | { reason: "undecodable" };
 
+/** A logo's refusals are a photograph's plus one: markup, named so the message can say what to
+ * export instead (ADR 0059). A photograph that is an SVG is simply «no es una foto». */
+export type LogoRejection = PhotoRejection | { reason: "svg" };
+
 export interface PreparedPhoto {
   bytes: Uint8Array;
   type: AcceptedImageType;
@@ -43,6 +47,7 @@ export interface PreparedPhoto {
 }
 
 export type PhotoResult = { ok: true; photo: PreparedPhoto } | { ok: false; error: PhotoRejection };
+export type LogoResult = { ok: true; logo: PreparedPhoto } | { ok: false; error: LogoRejection };
 
 /**
  * A `Blob` of these bytes.
@@ -80,11 +85,49 @@ export function photoSrcFor(sectionId: string, elementId: string): string {
   return `foto-${sectionId}-${elementId}.${extensionFor(OUTPUT_TYPE)}`;
 }
 
-function scaled(width: number, height: number): { width: number; height: number } {
+function scaled(width: number, height: number, maxEdge: number): { width: number; height: number } {
   const longest = Math.max(width, height);
-  if (longest <= MAX_EDGE) return { width, height };
-  const ratio = MAX_EDGE / longest;
+  if (longest <= maxEdge) return { width, height };
+  const ratio = maxEdge / longest;
   return { width: Math.round(width * ratio), height: Math.round(height * ratio) };
+}
+
+/**
+ * Recognised bytes, decoded and drawn onto a canvas no larger than `maxEdge` a side — the step a
+ * photograph and the logo share, before each is encoded its own way. `undefined` for bytes that
+ * will not decode: truncated, or a format the browser cannot read.
+ */
+async function drawScaled(
+  // Over a concrete `ArrayBuffer`, which is what `file.arrayBuffer()` gives and what `BlobPart`
+  // accepts; the generic `ArrayBufferLike` a bare `Uint8Array` is typed over is not one.
+  original: Uint8Array<ArrayBuffer>,
+  kind: AcceptedImageType,
+  maxEdge: number,
+): Promise<{ canvas: HTMLCanvasElement; width: number; height: number } | undefined> {
+  let bitmap: ImageBitmap;
+  try {
+    // `from-image` applies the EXIF rotation a phone writes rather than encoding it, which is why
+    // a photo taken sideways comes out upright instead of on its side. Browsers that do not know
+    // the option ignore it.
+    bitmap = await createImageBitmap(new Blob([original], { type: kind }), {
+      imageOrientation: "from-image",
+    });
+  } catch {
+    return undefined;
+  }
+
+  const size = scaled(bitmap.width, bitmap.height, maxEdge);
+  const canvas = document.createElement("canvas");
+  canvas.width = size.width;
+  canvas.height = size.height;
+  const context = canvas.getContext("2d");
+  if (!context) {
+    bitmap.close();
+    return undefined;
+  }
+  context.drawImage(bitmap, 0, 0, size.width, size.height);
+  bitmap.close();
+  return { canvas, ...size };
 }
 
 /**
@@ -101,33 +144,11 @@ export async function preparePhoto(file: File): Promise<PhotoResult> {
   if (kind === "image/heic") return { ok: false, error: { reason: "heic" } };
   if (!isAcceptedImage(kind)) return { ok: false, error: { reason: "unsupported" } };
 
-  let bitmap: ImageBitmap;
-  try {
-    // `from-image` applies the EXIF rotation a phone writes rather than encoding it, which is why
-    // a photo taken sideways comes out upright instead of on its side. Browsers that do not know
-    // the option ignore it.
-    bitmap = await createImageBitmap(new Blob([original], { type: kind }), {
-      imageOrientation: "from-image",
-    });
-  } catch {
-    // Recognised bytes that still will not decode: truncated, or a format the browser cannot read.
-    return { ok: false, error: { reason: "undecodable" } };
-  }
-
-  const size = scaled(bitmap.width, bitmap.height);
-  const canvas = document.createElement("canvas");
-  canvas.width = size.width;
-  canvas.height = size.height;
-  const context = canvas.getContext("2d");
-  if (!context) {
-    bitmap.close();
-    return { ok: false, error: { reason: "undecodable" } };
-  }
-  context.drawImage(bitmap, 0, 0, size.width, size.height);
-  bitmap.close();
+  const drawn = await drawScaled(original, kind, MAX_EDGE);
+  if (!drawn) return { ok: false, error: { reason: "undecodable" } };
 
   const blob = await new Promise<Blob | null>((resolve) => {
-    canvas.toBlob(resolve, OUTPUT_TYPE, OUTPUT_QUALITY);
+    drawn.canvas.toBlob(resolve, OUTPUT_TYPE, OUTPUT_QUALITY);
   });
   if (!blob) return { ok: false, error: { reason: "undecodable" } };
 
@@ -136,10 +157,102 @@ export async function preparePhoto(file: File): Promise<PhotoResult> {
     photo: {
       bytes: new Uint8Array(await blob.arrayBuffer()),
       type: OUTPUT_TYPE,
-      width: size.width,
-      height: size.height,
+      width: drawn.width,
+      height: drawn.height,
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// The logo (ADR 0059)
+// ---------------------------------------------------------------------------
+
+/**
+ * The longest edge a logo is kept at. It is drawn at 40px tall in the bar (`.rb-logo`), so 512px
+ * is already more than a 2x and a 3x screen will ever ask for of a wide wordmark; above it the
+ * file grows and nothing on screen improves. The sprint 30 plan wrote «≤ 512 px de lado».
+ */
+export const LOGO_MAX_EDGE = 512;
+
+/**
+ * **PNG, always, whatever went in — and never JPEG.** A JPEG has no alpha channel: a logo with a
+ * transparent ground flattened to white is a white box on a `primary` or `ink` bar, which is the
+ * one thing a brand mark must not be. PNG is lossless, keeps the alpha, and — because it comes
+ * out of a canvas like a photograph's JPEG — carries **no metadata**: the same property ADR 0018
+ * gives a photograph, which the plan's «se guardan tal cual» would have given up for a PNG or WebP
+ * kept byte for byte. One output type also means one extension and one content type for the
+ * bucket (`LOGO_CONTENT_TYPE`, migration `0005`). What it costs is said in the ADR: a canvas's PNG
+ * is not an optimised PNG, and a small palette file can come out larger than it went in — on the
+ * owner's line of the weight budget, never ours.
+ */
+const LOGO_OUTPUT_TYPE: AcceptedImageType = "image/png";
+
+/**
+ * Eight lower-case hex digits from `crypto.getRandomValues` — the only thing of the owner's that
+ * enters the file name, so a logo called `../evil.png` or `Logo Final (2).PNG` publishes as
+ * `logo-3f9a7c21.png` and nothing of its name is ever read (the rule ADR 0056 set for a font).
+ */
+export function mintLogoId(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(4));
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * The `src` the document carries for a logo, which is also its file name in IndexedDB, in the
+ * bucket (`<owner>/<site>/logo-<id>.png`) and under `assets/` in the ZIP. **Minted anew for every
+ * upload** rather than stable like `photoSrcFor`'s: a photograph replaces the one in its slot, but
+ * a logo replaced gets a new name so that no cached copy — the bucket's, a browser's — can show
+ * the old mark under the new document.
+ */
+export function logoSrcFor(id: string): string {
+  return `logo-${id}.${extensionFor(LOGO_OUTPUT_TYPE)}`;
+}
+
+/**
+ * A logo file from the picker, turned into the PNG the header shows.
+ *
+ * The same sniff as a photograph's, with one more name in the refusals: markup is «svg», so the
+ * message can say «exporta tu logo en PNG» instead of «no es una foto» to the one person most
+ * likely to be holding a vector. No EXIF rotation is applied — a logo is not a phone photograph —
+ * but `drawScaled` applies it anyway and it costs nothing when there is none.
+ */
+export async function prepareLogo(file: File): Promise<LogoResult> {
+  if (file.size > MAX_UPLOAD_BYTES) return { ok: false, error: { reason: "tooLarge" } };
+
+  const original = new Uint8Array(await file.arrayBuffer());
+  const kind = sniffImage(original);
+  if (kind === "image/heic") return { ok: false, error: { reason: "heic" } };
+  if (kind === "image/svg+xml") return { ok: false, error: { reason: "svg" } };
+  if (!isAcceptedImage(kind)) return { ok: false, error: { reason: "unsupported" } };
+
+  const drawn = await drawScaled(original, kind, LOGO_MAX_EDGE);
+  if (!drawn) return { ok: false, error: { reason: "undecodable" } };
+
+  const blob = await new Promise<Blob | null>((resolve) => {
+    drawn.canvas.toBlob(resolve, LOGO_OUTPUT_TYPE);
+  });
+  if (!blob) return { ok: false, error: { reason: "undecodable" } };
+
+  return {
+    ok: true,
+    logo: {
+      bytes: new Uint8Array(await blob.arrayBuffer()),
+      type: LOGO_OUTPUT_TYPE,
+      width: drawn.width,
+      height: drawn.height,
+    },
+  };
+}
+
+/**
+ * The content type stored bytes should be given back as — read off the bytes, because the store
+ * keeps bytes and not types. A photograph is the JPEG `preparePhoto` wrote and the logo the PNG
+ * `prepareLogo` wrote; a record written before either existed is a JPEG too. Never guessed from
+ * the name.
+ */
+export function photoType(bytes: Uint8Array): AcceptedImageType {
+  const kind = sniffImage(bytes);
+  return isAcceptedImage(kind) ? kind : OUTPUT_TYPE;
 }
 
 // ---------------------------------------------------------------------------

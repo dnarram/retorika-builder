@@ -9,6 +9,7 @@ import {
   type Page,
   type RetorikaDocument,
 } from "@retorika/schema";
+import { safeUrl } from "./escape.ts";
 import es from "./locales/es.json" with { type: "json" };
 import {
   hasMenu,
@@ -274,7 +275,9 @@ function brandNode(
     children.push(
       element("img", {
         class: "rb-logo",
-        src: settings.logo.src,
+        // Through `safeUrl` like every `src` and `href` the page writes: the schema already
+        // refuses anything but a raster file name here, and the renderer does not rely on it.
+        src: safeUrl(settings.logo.src),
         alt: settings.brandName ? "" : doc.siteName,
         height: "40",
       }),

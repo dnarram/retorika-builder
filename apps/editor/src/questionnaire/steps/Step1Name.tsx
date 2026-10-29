@@ -1,10 +1,12 @@
 "use client";
 
-import type { Answers } from "@retorika/generator";
+import { type Answers, VARIANTS } from "@retorika/generator";
 import { PALETTES } from "@retorika/tokens";
 import tokensEs from "@retorika/tokens/locales/es" with { type: "json" };
 import { useState } from "react";
+import { ACCEPTED_IMAGE_ACCEPT } from "../../editor/imageBytes.ts";
 import { paletteFromLogoFile } from "../../editor/logoImage.ts";
+import { logoSrcFor, mintLogoId, prepareLogo, savePhoto } from "../../editor/photos.ts";
 import es from "../../locales/es.json" with { type: "json" };
 import {
   Card,
@@ -31,6 +33,8 @@ export function Step1Name({
   // is the one thing on this screen that does not answer instantly, and a line that changes from
   // «Leyendo los colores…» to what was found is how the promise above it stops being a claim.
   const [reading, setReading] = useState(false);
+  /** Why the chosen file was not taken, in the owner's terms, or `null`. */
+  const [rejection, setRejection] = useState<string | null>(null);
 
   function handleNext() {
     if (answers.businessName.trim() === "") {
@@ -41,22 +45,42 @@ export function Step1Name({
   }
 
   /**
-   * The logo is read the moment it is chosen, and what is kept is the palette it chose.
+   * The logo is read the moment it is chosen: its palette, as since sprint 6, **and its bytes are
+   * kept** (ADR 0059) — as a PNG of at most 512px, under the name the document will carry, in this
+   * browser's photo store for each of the three cards the generator is about to make. That store
+   * is where the editor puts a session's photographs back from on a reload, so the logo reaches
+   * the cards by exactly the path a photograph takes, and the generator stays a pure function of
+   * its answers: it is handed a name (`logoSrc`), never a file.
    *
-   * Here rather than at generation time because the generator must stay a pure function of its
-   * answers — no canvas, no image decoding, no clock (`INV_5` and the golden corpus both rest on
-   * it). The file itself goes no further than this screen: `autosave.ts` has always dropped it,
-   * and now there is nothing else that wants it.
+   * A file that cannot be kept — markup, an unreadable file — is not kept at all, and says why.
+   * A store that will not take the bytes (a private window) keeps the palette and drops the name,
+   * so no document ever names a logo nobody holds; the line under the button says so.
    */
   async function chooseLogo(file: File | null) {
+    setRejection(null);
     if (!file) {
-      update({ logo: null, logoPaletteId: null });
+      update({ logo: null, logoSrc: null, logoPaletteId: null });
       return;
     }
-    update({ logo: file, logoPaletteId: null });
+    update({ logo: file, logoSrc: null, logoPaletteId: null });
     setReading(true);
     try {
-      update({ logoPaletteId: await paletteFromLogoFile(file) });
+      const prepared = await prepareLogo(file);
+      if (!prepared.ok) {
+        setRejection(es[`editor.logo.${prepared.error.reason}` as keyof typeof es]);
+        update({ logo: null, logoSrc: null, logoPaletteId: null });
+        return;
+      }
+      const src = logoSrcFor(mintLogoId());
+      const kept = (
+        await Promise.all(
+          VARIANTS.map((_, variant) =>
+            savePhoto({ kind: "variant", variant }, src, prepared.logo.bytes),
+          ),
+        )
+      ).every(Boolean);
+      const logoPaletteId = await paletteFromLogoFile(file);
+      update({ logoSrc: kept ? src : null, logoPaletteId });
     } finally {
       setReading(false);
     }
@@ -69,11 +93,18 @@ export function Step1Name({
     if (!answers.logo) return es["questionnaire.step1.logo.help"];
     if (reading) return es["questionnaire.step1.logo.help.reading"];
     const chosen = PALETTES.find((palette) => palette.id === answers.logoPaletteId);
-    if (!chosen) return es["questionnaire.step1.logo.help.noPalette"];
-    return es["questionnaire.step1.logo.help.palette"].replace(
-      "{palette}",
-      tokensEs[chosen.nameKey as keyof typeof tokensEs] ?? chosen.id,
-    );
+    const colours = chosen
+      ? es["questionnaire.step1.logo.help.palette"].replace(
+          "{palette}",
+          tokensEs[chosen.nameKey as keyof typeof tokensEs] ?? chosen.id,
+        )
+      : es["questionnaire.step1.logo.help.noPalette"];
+    // And whether the mark itself will be on the site: kept, or not kept and why (ADR 0059).
+    return `${colours} ${
+      answers.logoSrc === null
+        ? es["questionnaire.step1.logo.notKept"]
+        : es["questionnaire.step1.logo.kept"]
+    }`;
   }
 
   return (
@@ -144,6 +175,7 @@ export function Step1Name({
               {es["questionnaire.step1.logo.title"]}
             </span>
             <span style={{ fontSize: 13, lineHeight: 1.45, color: "#64748B" }}>{logoHelp()}</span>
+            {rejection ? <FieldError>{rejection}</FieldError> : null}
           </div>
           <label
             htmlFor="logo"
@@ -167,7 +199,9 @@ export function Step1Name({
           <input
             id="logo"
             type="file"
-            accept="image/*"
+            // The three raster formats and nothing else, which is a filter on the picker and not a
+            // check; `prepareLogo` reads the bytes, and an SVG dropped in anyway is refused by name.
+            accept={ACCEPTED_IMAGE_ACCEPT}
             onChange={(event) => void chooseLogo(event.target.files?.[0] ?? null)}
             style={{ position: "absolute", width: 1, height: 1, opacity: 0 }}
           />

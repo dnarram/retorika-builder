@@ -1,6 +1,7 @@
 import { PLACEHOLDER_SAMPLE_ID, presetFor } from "@retorika/catalog";
 import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
 import { type ElementAddress, flattenElements, type RetorikaDocument } from "@retorika/schema";
+import es from "../locales/es.json" with { type: "json" };
 
 /**
  * Every photograph in the site, and which of them are not the owner's yet.
@@ -28,6 +29,13 @@ import { type ElementAddress, flattenElements, type RetorikaDocument } from "@re
 export type PhotoState = "empty" | "sample" | "own";
 
 export interface PhotoEntry extends ElementAddress {
+  /**
+   * An image element, or the header's logo (ADR 0059). The logo is listed here because this is
+   * the one place that sees every image of the site at once, and it is an image of the site; its
+   * «address» is the header and not an element — `sectionId: "header"`, `elementId: "logo"` —
+   * which no verb that takes an `ElementAddress` is ever handed. The panel branches on `kind`.
+   */
+  kind: "element" | "logo";
   pageId: string;
   /** The page's own title, which is what the owner sees in the tabs. */
   pageTitle: string;
@@ -65,6 +73,25 @@ function sectionNameOf(catalogId: string): string {
 export function listPhotos(doc: RetorikaDocument): PhotoEntry[] {
   const photos: PhotoEntry[] = [];
 
+  // The logo first: the first image a visitor meets on every page, drawn above `<main>`, and
+  // always the owner's — nobody else can put one there. Its page is the first, which is where the
+  // header is edited from and the only page every site has.
+  const logo = doc.header?.brand?.logo;
+  const home = doc.pages[0];
+  if (logo && home) {
+    photos.push({
+      kind: "logo",
+      pageId: home.id,
+      pageTitle: home.title,
+      sectionId: "header",
+      sectionName: es["editor.photos.logo"],
+      elementId: "logo",
+      src: logo.src,
+      alt: doc.siteName,
+      state: "own",
+    });
+  }
+
   for (const page of doc.pages) {
     for (const section of page.sections) {
       let sectionName: string;
@@ -88,6 +115,7 @@ export function listPhotos(doc: RetorikaDocument): PhotoEntry[] {
         if (element.value?.kind !== "image") continue;
         const itemNumber = itemOf.get(element.id);
         photos.push({
+          kind: "element",
           pageId: page.id,
           pageTitle: page.title,
           sectionId: section.id,
