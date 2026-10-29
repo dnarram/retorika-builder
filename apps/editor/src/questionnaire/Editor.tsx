@@ -22,6 +22,8 @@ import {
   fineTrack,
   fineTrackSpan,
   flattenElements,
+  type Header,
+  type HeaderAction,
   isHandDesigned,
   type ListItem,
   listEditableFields,
@@ -32,6 +34,7 @@ import {
   type MarkRange,
   type MarkRun,
   type MeasuredBox,
+  type MenuLabelTarget,
   type MobilePatchEdit,
   marksAfterTrim,
   marksFor,
@@ -574,6 +577,9 @@ export function Editor({
   onClearSlot,
   onSetSectionInMenu,
   onSetPageInMenu,
+  onSetHeader,
+  onSetHeaderAction,
+  onSetMenuLabel,
   onSetSiteDescription,
   onSetSiteUrl,
   onSetVariant,
@@ -655,6 +661,11 @@ export function Editor({
   onSetSectionInMenu: (sectionId: string, inMenu: boolean) => void;
   /** The page half of the same decision (ADR 0043 §3), dispatched from «Páginas». */
   onSetPageInMenu: (pageId: string, inMenu: boolean) => void;
+  /** The site's header (ADR 0057), from «Menú»: its switches and layout, its button, and an entry's
+   * own words. Site-wide like the theme, so none of the three is a content edit. */
+  onSetHeader: (patch: Partial<Header>) => void;
+  onSetHeaderAction: (action: HeaderAction | null) => void;
+  onSetMenuLabel: (target: MenuLabelTarget, label: string | null) => void;
   /** What a shared link says about the whole site (ADR 0029). Site-wide like the theme, so neither
    * names a section. */
   onSetSiteDescription: (text: string) => void;
@@ -8025,7 +8036,16 @@ export function Editor({
             onClose={() => showFields(null)}
           />
         ) : effectiveRail === "menu" ? (
-          <MenuPanel doc={doc} pageId={pageId} onClose={() => showRail("sections")} />
+          <MenuPanel
+            doc={doc}
+            pageId={pageId}
+            onSetHeader={onSetHeader}
+            onSetHeaderAction={onSetHeaderAction}
+            onSetMenuLabel={onSetMenuLabel}
+            onSetPageInMenu={onSetPageInMenu}
+            onSetSectionInMenu={onSetSectionInMenu}
+            onClose={() => showRail("sections")}
+          />
         ) : effectiveRail === "share" ? (
           <SharePanel
             doc={doc}

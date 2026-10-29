@@ -91,7 +91,7 @@ export function FieldsPanel({
   const headingId = useId();
 
   const { sectionRows, lines } = groupedFields(rows);
-  const note = menuNoteText(menu);
+  const note = menuNoteText(menu, "sections");
 
   function commit(row: FieldRow, text: string, href: string, anchored?: readonly MarkRun[]) {
     // A line's row carries its own address, and the order a created slot is placed by is the

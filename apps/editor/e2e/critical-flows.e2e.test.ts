@@ -22642,3 +22642,123 @@ describe("sprint 30 día 3 — la cabecera se elige en el lienzo", () => {
     }
   }, 120_000);
 });
+
+/**
+ * **Sprint 30 día 4 — the «Menú» panel** (ADR 0057). An entry's own words typed into «Se lee como…»
+ * reach the canvas's header as they are typed and the ZIP as they were left, one letter warns and
+ * writes nothing, and the whole word is one «Deshacer»; «Nunca» on the pages menu of a three-page
+ * site leaves only the sections; a button takes its destination out of the menu; and on a phone the
+ * panel is a sheet that leaves the canvas showing above it.
+ */
+describe("sprint 30 día 4 — el panel «Menú»", () => {
+  it("nombra una entrada, apaga un menú, elige el botón, y en el móvil es una hoja", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 950 } });
+    const studio = await context.newPage();
+    try {
+      await intoTheCanvas(studio);
+      const frame = studio.frameLocator(PREVIEW).first();
+      const sectionsNav = frame.locator('.rb-nav-wide nav[aria-label="Secciones"] a');
+      await expect(sectionsNav.filter({ hasText: "Servicios" })).toHaveCount(1);
+
+      await studio.getByRole("button", { name: "Menú", exact: true }).click();
+      const panel = studio.getByRole("complementary", { name: "La cabecera de tu web" });
+      await expect(panel).toBeVisible();
+
+      // 1. «Se lee como…»: one letter warns and writes nothing; the word reaches the canvas as it
+      //    is typed; one «Deshacer» takes the whole word back, and «Rehacer» returns it.
+      const field = panel.getByRole("textbox", { name: "Cómo se lee «Qué hago» en el menú" });
+      await expect(field).toHaveAttribute("placeholder", "Servicios");
+      await field.click();
+      await field.pressSequentially("C", { delay: 60 });
+      await expect(panel.getByText("Entre 2 y 20 letras", { exact: false })).toBeVisible();
+      await expect(field).toHaveAttribute("aria-invalid", "true");
+      await expect(sectionsNav.filter({ hasText: "Servicios" })).toHaveCount(1);
+      await field.pressSequentially("arta", { delay: 60 });
+      await expect(panel.getByText("Entre 2 y 20 letras", { exact: false })).toHaveCount(0);
+      await expect(sectionsNav.filter({ hasText: "Carta" })).toHaveCount(1);
+      await expect(sectionsNav.filter({ hasText: "Servicios" })).toHaveCount(0);
+      await field.blur();
+      await studio.getByRole("button", { name: "Deshacer", exact: true }).click();
+      await expect(sectionsNav.filter({ hasText: "Servicios" })).toHaveCount(1);
+      await expect(field).toHaveValue("");
+      await studio.getByRole("button", { name: "Rehacer", exact: true }).click();
+      await expect(sectionsNav.filter({ hasText: "Carta" })).toHaveCount(1);
+      await expect(field).toHaveValue("Carta");
+
+      // 2. The ZIP says «Carta» where the canvas does.
+      await studio.getByRole("button", { name: "Descargar" }).click();
+      const downloadAnyway = studio.getByRole("button", { name: "Descargar igualmente" });
+      await downloadAnyway.waitFor();
+      const [download] = await Promise.all([
+        studio.waitForEvent("download"),
+        downloadAnyway.click(),
+      ]);
+      const dir = mkdtempSync(join(tmpdir(), "retorika-e2e-menu-panel-"));
+      const zipPath = join(dir, download.suggestedFilename());
+      await download.saveAs(zipPath);
+      const index = new TextDecoder().decode(
+        extractFileBytes(new Uint8Array(readFileSync(zipPath)), "index.html"),
+      );
+      // The published page is indented, so an entry's words sit on a line of their own.
+      expect(index).toMatch(/<nav[^>]*aria-label="Secciones"[^>]*>[\s\S]*?>\s*Carta\s*<\/a>/);
+      expect(index).not.toMatch(/>\s*Servicios\s*<\/a>/);
+
+      // 3. Three pages, as an owner makes them: two sections converted from the canvas.
+      for (const sectionId of ["sec-services", "sec-location"]) {
+        await frame.locator(`[data-section="${sectionId}"]`).click();
+        await frame
+          .locator(
+            `[data-section="${sectionId}"] .rb-action[aria-label="Convertir esta sección en página"]`,
+          )
+          .click();
+        await expect(frame.locator(`[data-section="${sectionId}"]`)).toHaveCount(0);
+        await studio.locator('[data-testid="page-tabs"] button').first().click();
+      }
+      const pagesNav = frame.locator('.rb-nav-wide nav[aria-label="Páginas"]');
+      await expect(pagesNav.locator("a")).toHaveCount(2);
+
+      // 4. «Nunca» on the pages menu: the canvas keeps only the sections.
+      await studio.getByRole("button", { name: "Menú", exact: true }).click();
+      await expect(panel).toBeVisible();
+      await panel
+        .getByRole("radiogroup", { name: "Menú de páginas" })
+        .getByText("Nunca", { exact: true })
+        .click();
+      await expect(pagesNav).toHaveCount(0);
+      await expect(frame.locator('.rb-nav-wide nav[aria-label="Secciones"]')).toHaveCount(1);
+      await expect(panel.getByText("No se dibuja, aunque tenga destinos.")).toBeVisible();
+
+      // 5. The button: «Contacto» leaves the sections menu for the bar's one button.
+      const actionGroup = panel.getByRole("group", { name: "Botón destacado" });
+      await actionGroup.getByText("Contacto", { exact: true }).click();
+      await expect(frame.locator(".rb-nav-action")).toHaveText("Contacto");
+      await expect(sectionsNav.filter({ hasText: "Contacto" })).toHaveCount(0);
+      await expect(
+        panel.getByText("Se lee «Contacto»; sale del menú porque ya está en el botón."),
+      ).toBeVisible();
+      await actionGroup.getByText("Ninguno", { exact: true }).click();
+      await expect(frame.locator(".rb-nav-action")).toHaveCount(0);
+      await expect(sectionsNav.filter({ hasText: "Contacto" })).toHaveCount(1);
+
+      // 6. On a phone, a sheet: no taller than 70% of the screen, above the rail's bar, nothing
+      //    spilling sideways, its own content scrolling inside it.
+      await studio.setViewportSize({ width: 390, height: 844 });
+      await expect(panel).toBeVisible();
+      await motionSettled(studio);
+      const sheet = await panel.boundingBox();
+      if (!sheet) throw new Error("the sheet has no box");
+      expect(sheet.height).toBeLessThanOrEqual(844 * 0.7 + 1);
+      expect(sheet.y + sheet.height).toBeLessThanOrEqual(844 - 56 + 1);
+      expect(sheet.x).toBeGreaterThanOrEqual(-0.5);
+      expect(sheet.x + sheet.width).toBeLessThanOrEqual(390.5);
+      expect(
+        await panel.evaluate((el) => el.scrollHeight > el.clientHeight),
+        "the panel is longer than the sheet and should scroll inside it",
+      ).toBe(true);
+      expect(await overflowing(studio), "something spills at 390 with «Menú»").toEqual([]);
+      await axeSerious(studio, "el panel «Menú» a 390");
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+});

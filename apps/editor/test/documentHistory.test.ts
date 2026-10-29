@@ -19,6 +19,7 @@ import {
 import { describe, expect, it } from "vitest";
 import {
   type Histories,
+  type History,
   type HistoryAction,
   historiesReducer,
   initHistories,
@@ -2004,5 +2005,156 @@ describe("a font the owner brought, added and removed (sprint 29 día 5)", () =>
     expect(theme(removed)?.["font.heading"]).not.toMatch(/Casa Trufa/);
     const undone = run(removed, { type: "undo", variant: 0 });
     expect(undone[0]?.present.document).toBe(added[0]?.present.document);
+  });
+});
+
+describe("the header's verbs (sprint 30 día 4)", () => {
+  const doc = () => {
+    const document = start()[0]?.present.document;
+    if (!document) throw new Error("no document");
+    return document;
+  };
+  /** A section of the generated home page that lends a menu entry — any that is not the cover or
+   * the footer. */
+  const labelled = () => {
+    const section = doc().pages[0]?.sections.find(
+      (candidate) => !["cover", "footer", "teaser"].includes(candidate.preset.catalogId),
+    );
+    if (!section) throw new Error("no section lends an entry");
+    return { kind: "section" as const, sectionId: section.id };
+  };
+  const label = (target: { kind: "section"; sectionId: string }, text: string | null) =>
+    ({ type: "setMenuLabel", variant: 0, target, label: text }) as const;
+  const labelOf = (state: Histories, sectionId: string) =>
+    state[0]?.present.document.pages[0]?.sections.find((section) => section.id === sectionId)
+      ?.menuLabel;
+
+  it("typing a word into «Se lee como…» is one step, and one «Deshacer» takes it all back", () => {
+    const target = labelled();
+    const state = run(
+      start(),
+      label(target, "Ca"),
+      label(target, "Car"),
+      label(target, "Cart"),
+      label(target, "Carta"),
+    );
+    expect(labelOf(state, target.sectionId)).toBe("Carta");
+    expect(state[0]?.past).toHaveLength(1);
+    expect(labelOf(run(state, { type: "undo", variant: 0 }), target.sectionId)).toBeUndefined();
+  });
+
+  it("another entry, or anything in between, opens a step of its own", () => {
+    const target = labelled();
+    const home = { kind: "page" as const, pageId: doc().pages[0]?.id ?? "" };
+    const state = run(start(), label(target, "Carta"), {
+      type: "setMenuLabel",
+      variant: 0,
+      target: home,
+      label: "Portada",
+    });
+    expect(state[0]?.past).toHaveLength(2);
+    const after = run(
+      start(),
+      label(target, "Ca"),
+      { type: "setHeader", variant: 0, patch: { sticky: true } },
+      label(target, "Carta"),
+    );
+    expect(after[0]?.past).toHaveLength(3);
+  });
+
+  it("typing after an undo opens a new step, even back onto a step of the same entry", () => {
+    const target = labelled();
+    // Undone to the label's own step: its cause names this very entry, and only `amendable` —
+    // which an undo turns off — keeps the next keystroke from rewriting the step it came back to.
+    const undone = run(
+      start(),
+      label(target, "Carta"),
+      { type: "setHeader", variant: 0, patch: { sticky: true } },
+      { type: "undo", variant: 0 },
+    );
+    expect(undone[0]?.present.cause).toEqual({ type: "setMenuLabel", target });
+    const state = run(undone, label(target, "Menú"));
+    expect(state[0]?.past).toHaveLength(2);
+    expect(labelOf(run(state, { type: "undo", variant: 0 }), target.sectionId)).toBe("Carta");
+  });
+
+  it("two sections, or two pages, are two entries", () => {
+    const one = doc();
+    const home = one.pages[0];
+    if (!home) throw new Error("no page");
+    const [first, second] = home.sections.filter(
+      (candidate) => !["cover", "footer", "teaser"].includes(candidate.preset.catalogId),
+    );
+    if (!first || !second) throw new Error("fewer than two sections lend an entry");
+    const sections = run(
+      start(),
+      label({ kind: "section", sectionId: first.id }, "Carta"),
+      label({ kind: "section", sectionId: second.id }, "Menú"),
+    );
+    expect(sections[0]?.past).toHaveLength(2);
+
+    const pages = initHistories([
+      parseDocument({
+        ...one,
+        pages: [
+          home,
+          { ...home, id: "p2", slug: "precios", title: "Precios", sections: [] },
+          { ...home, id: "p3", slug: "carta", title: "Nuestra carta", sections: [] },
+        ],
+      }),
+    ]);
+    const typed = run(
+      pages,
+      {
+        type: "setMenuLabel",
+        variant: 0,
+        target: { kind: "page", pageId: "p2" },
+        label: "Tarifas",
+      },
+      { type: "setMenuLabel", variant: 0, target: { kind: "page", pageId: "p3" }, label: "Carta" },
+    );
+    expect(typed[0]?.past).toHaveLength(2);
+  });
+
+  it("an empty box goes back to the derived word, and an unchanged one opens no step", () => {
+    const target = labelled();
+    const once = run(start(), label(target, "Carta"));
+    const cleared = run(once, { type: "setHeader", variant: 0, patch: {} }, label(target, ""));
+    expect(labelOf(cleared, target.sectionId)).toBeUndefined();
+    const initial = start();
+    expect(run(initial, label(target, null))).toBe(initial);
+  });
+
+  it("a switch, a layout and a button are one step each, and the same value opens none", () => {
+    const initial = start();
+    const sticky = run(initial, { type: "setHeader", variant: 0, patch: { sticky: true } });
+    expect(sticky[0]?.present.document.header).toEqual({ sticky: true });
+    expect(sticky[0]?.past).toHaveLength(1);
+    expect(sticky[0]?.present.cause).toEqual({ type: "setHeader" });
+    expect(run(sticky, { type: "setHeader", variant: 0, patch: { sticky: true } })).toBe(sticky);
+
+    const target = labelled();
+    const button = run(initial, {
+      type: "setHeaderAction",
+      variant: 0,
+      action: { kind: "section", sectionId: target.sectionId },
+    });
+    expect(button[0]?.present.document.header?.action).toEqual({
+      kind: "section",
+      sectionId: target.sectionId,
+    });
+    const none = run(button, { type: "setHeaderAction", variant: 0, action: null });
+    expect(none[0]?.present.document.header).toBeUndefined();
+    expect(none[0]?.past).toHaveLength(2);
+  });
+
+  it("none of them makes a section count as written into", () => {
+    const target = labelled();
+    const state = run(start(), label(target, "Carta"), {
+      type: "setHeaderAction",
+      variant: 0,
+      action: { kind: "section", sectionId: target.sectionId },
+    });
+    expect(wasSectionEverEdited(state[0] as History, target.sectionId)).toBe(false);
   });
 });

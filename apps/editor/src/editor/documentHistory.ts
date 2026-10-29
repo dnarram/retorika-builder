@@ -3,10 +3,13 @@ import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
 import type {
   ElementAddress,
   EntryField,
+  Header,
+  HeaderAction,
   ListItem,
   Mark,
   MarkRange,
   MarkRun,
+  MenuLabelTarget,
   MobilePatchEdit,
   OwnFont,
   PlacementEdit,
@@ -61,6 +64,9 @@ import {
   setElementStyle as setElementStyleInDoc,
   setElementText,
   setEntryField as setEntryFieldInDoc,
+  setHeaderAction as setHeaderActionInDoc,
+  setHeader as setHeaderInDoc,
+  setMenuLabel as setMenuLabelInDoc,
   setMobilePatch as setMobilePatchInDoc,
   setPageInMenu as setPageInMenuInDoc,
   setPlacement as setPlacementInDoc,
@@ -147,6 +153,17 @@ export type SnapshotCause =
    * cause: it writes no word into any section, the same as renaming one. */
   | { type: "setPageInMenu"; pageId: string }
   | { type: "deletePage"; pageId: string }
+  /**
+   * The site's header (ADR 0057), from the «Menú» panel (sprint 30 día 4). **None of the three names
+   * a section through `sectionId`, and none is a content cause**: a header writes no word into any
+   * section, and a delete toast must not start waiting because a menu was switched on. `setMenuLabel`
+   * carries its target under its own key for the amendment below — typing «Carta» into «Se lee
+   * como…» is one step, like typing into a field of the canvas — and `sectionOf` deliberately does
+   * not read it.
+   */
+  | { type: "setHeader" }
+  | { type: "setHeaderAction" }
+  | { type: "setMenuLabel"; target: MenuLabelTarget }
   /** The first cause that names no section, because a theme belongs to none of them: it restyles
    * every section at once, hand-designed ones included. `sectionOf` is what keeps that honest. */
   | { type: "setTheme" }
@@ -337,6 +354,12 @@ export type HistoryAction =
   | { type: "movePage"; variant: number; pageId: string; toIndex: number }
   | { type: "setPageInMenu"; variant: number; pageId: string; inMenu: boolean }
   | { type: "deletePage"; variant: number; pageId: string }
+  /** `patch` replaces whole top-level keys of the header, as the schema's `setHeader` does. */
+  | { type: "setHeader"; variant: number; patch: Partial<Header> }
+  | { type: "setHeaderAction"; variant: number; action: HeaderAction | null }
+  /** `null` or an empty string goes back to the derived label. Dispatched on every keystroke that
+   * leaves a valid label (or none), and amended while the owner keeps typing into the same field. */
+  | { type: "setMenuLabel"; variant: number; target: MenuLabelTarget; label: string | null }
   | { type: "addCollection"; variant: number; name: string }
   | { type: "renameCollection"; variant: number; collectionId: string; name: string }
   | { type: "deleteCollection"; variant: number; collectionId: string }
@@ -1148,6 +1171,56 @@ function setPageInMenu(history: History, pageId: string, inMenu: boolean): Histo
   return step(history, document, { type: "setPageInMenu", pageId });
 }
 
+/**
+ * The header's switches, layout and button (ADR 0057) — one step each, guarded on identity like
+ * every verb here: the schema's verbs hand back the same document when nothing would change, so a
+ * radio pressed on the value it already holds opens no step.
+ */
+function setHeader(history: History, patch: Partial<Header>): History {
+  const document = setHeaderInDoc(history.present.document, patch);
+  if (document === history.present.document) return history;
+  return step(history, document, { type: "setHeader" });
+}
+
+function setHeaderAction(history: History, action: HeaderAction | null): History {
+  const document = setHeaderActionInDoc(history.present.document, action);
+  if (document === history.present.document) return history;
+  return step(history, document, { type: "setHeaderAction" });
+}
+
+function sameLabel(cause: SnapshotCause, target: MenuLabelTarget): boolean {
+  if (cause?.type !== "setMenuLabel") return false;
+  if (cause.target.kind === "page" && target.kind === "page") {
+    return cause.target.pageId === target.pageId;
+  }
+  if (cause.target.kind === "section" && target.kind === "section") {
+    return cause.target.sectionId === target.sectionId;
+  }
+  return false;
+}
+
+/**
+ * An entry's own words, typed into «Se lee como…». **Amended while the owner keeps typing into the
+ * same entry**, exactly as `editText` amends a field of the canvas: «Carta» is one step and one
+ * press of «Deshacer», not five. The panel dispatches only labels the schema accepts — two to twenty
+ * letters, or none — so a keystroke that leaves one letter in the box writes nothing and the
+ * previous valid label stands until the next one.
+ */
+function setMenuLabel(history: History, target: MenuLabelTarget, label: string | null): History {
+  const document = setMenuLabelInDoc(history.present.document, target, label);
+  if (document === history.present.document) return history;
+  const present: Snapshot = { document, cause: { type: "setMenuLabel", target } };
+  if (history.amendable && sameLabel(history.present.cause, target)) {
+    return { ...history, present, future: [], amendable: true };
+  }
+  return {
+    past: [...history.past, history.present].slice(-LIMIT),
+    present,
+    future: [],
+    amendable: true,
+  };
+}
+
 function deletePage(history: History, pageId: string): History {
   return step(history, deletePageFromDoc(history.present.document, pageId), {
     type: "deletePage",
@@ -1397,6 +1470,12 @@ function apply(history: History, action: HistoryAction): History {
       return setPageInMenu(history, action.pageId, action.inMenu);
     case "deletePage":
       return deletePage(history, action.pageId);
+    case "setHeader":
+      return setHeader(history, action.patch);
+    case "setHeaderAction":
+      return setHeaderAction(history, action.action);
+    case "setMenuLabel":
+      return setMenuLabel(history, action.target, action.label);
     case "addCollection":
       return addCollection(history, action.name);
     case "renameCollection":
