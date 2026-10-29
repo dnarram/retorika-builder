@@ -315,6 +315,7 @@ export function ContrastDialog({
   findings,
   level,
   logo,
+  overPhoto,
   onFix,
   onDownloadAnyway,
   onCancel,
@@ -325,6 +326,10 @@ export function ContrastDialog({
    * colour under it and no «Arreglar» — the fix is another logo or another background, both in
    * «Menú». With no text finding beside it the dialog's words are about the logo alone. */
   logo?: { finding: LogoFinding; url: string | undefined } | undefined;
+  /** The titles of the pages whose transparent bar lies over the cover's photograph (sprint 30
+   * día 6): a row with no «Arreglar», for the logo's reason — what reads there depends on a
+   * photograph, and the way back is a background chosen in «Menú». */
+  overPhoto?: readonly string[] | undefined;
   onFix: (exception: StyleException) => void;
   /** Absent for the block, which is what makes it a block. */
   onDownloadAnyway?: () => void;
@@ -333,19 +338,30 @@ export function ContrastDialog({
   const titleId = useId();
   const container = useFocusTrap(true, onCancel);
   const blocking = level === "block";
-  const logoAlone = !blocking && findings.length === 0 && logo !== undefined;
+  // With no text finding, the dialog's words are about the header: the photograph under a
+  // transparent bar first, since it is the wider of the two, then the logo.
+  const alone = !blocking && findings.length === 0;
+  const about =
+    alone && overPhoto !== undefined && overPhoto.length > 0
+      ? "editor.download.lowContrast.overPhoto"
+      : alone && logo !== undefined
+        ? "editor.download.lowContrast.logo"
+        : undefined;
   const prefix = blocking ? "editor.download.unreadable" : "editor.download.lowContrast";
-  const title = logoAlone
-    ? es["editor.download.lowContrast.logo.title"]
-    : es[`${prefix}.title` as keyof typeof es];
-  const body = logoAlone
-    ? es["editor.download.lowContrast.logo.body"]
-    : findings.length === 1
-      ? es[`${prefix}.body.one` as keyof typeof es]
-      : es[`${prefix}.body.many` as keyof typeof es].replace("{n}", String(findings.length));
-  const foot = logoAlone
-    ? es["editor.download.lowContrast.logo.foot"]
-    : es[`${prefix}.foot` as keyof typeof es];
+  const title =
+    about !== undefined
+      ? es[`${about}.title` as keyof typeof es]
+      : es[`${prefix}.title` as keyof typeof es];
+  const body =
+    about !== undefined
+      ? es[`${about}.body` as keyof typeof es]
+      : findings.length === 1
+        ? es[`${prefix}.body.one` as keyof typeof es]
+        : es[`${prefix}.body.many` as keyof typeof es].replace("{n}", String(findings.length));
+  const foot =
+    about !== undefined
+      ? es[`${about}.foot` as keyof typeof es]
+      : es[`${prefix}.foot` as keyof typeof es];
 
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-[#0F172A]/45 p-5">
@@ -390,9 +406,25 @@ export function ContrastDialog({
               </span>
             </div>
           )}
+          {overPhoto === undefined || overPhoto.length === 0 ? null : (
+            <div
+              data-testid="over-photo-finding"
+              className="flex flex-col gap-0.5 rounded-[9px] border border-ui-border px-3 py-2.5"
+            >
+              <span className="text-[13px] text-ui-ink">
+                {es["editor.download.lowContrast.overPhoto.row"].replace(
+                  "{pages}",
+                  overPhoto.map((title) => `«${title}»`).join(", "),
+                )}
+              </span>
+              <span className="text-[12px] text-ui-muted">
+                {es["editor.download.lowContrast.overPhoto.why"]}
+              </span>
+            </div>
+          )}
           {findings.map((finding) => (
             <div
-              key={`${finding.exception.sectionId}/${finding.exception.elementId}`}
+              key={`${finding.exception.sectionId}/${finding.exception.elementId}/${finding.exception.property}`}
               className="flex items-center justify-between gap-3 rounded-[9px] border border-ui-border px-3 py-2.5"
             >
               <span className="flex min-w-0 items-center gap-2.5">

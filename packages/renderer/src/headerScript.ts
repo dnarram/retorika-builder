@@ -15,7 +15,11 @@
  *    absolute and scrolls away with the cover; with it, it is fixed and turns to `surface` once the
  *    page has scrolled.
  * 1. `--rb-header-h` from the bar's own `offsetHeight`, so an anchor lands under a fixed bar of the
- *    height it really has and not the estimate's.
+ *    height it really has and not the estimate's — **and again whenever the bar changes size**
+ *    (a `ResizeObserver` on its **border box**, which is what `offsetHeight` measures — the default
+ *    content box misses a change of padding; where there is one), not only when the window does: the site's own letter
+ *    arrives after the script has run and makes the bar taller (66 → 69 px, measured by the sprint
+ *    30 día 6 walk in the ZIP), and an anchor then landed 3 px under the bar.
  * 2. Escape, and a pointer outside, close the phone's open `<details>` and give the focus back to
  *    its `<summary>` — the two things a `<details>` does not do by itself.
  * 3. `data-scrolled` on a fixed bar once the page has scrolled: the stylesheet draws the shadow.
@@ -35,6 +39,7 @@ export const HEADER_SCRIPT = [
   "h.setAttribute('data-rb-js','');",
   "var measure=function(){h.style.setProperty('--rb-header-h',b.offsetHeight+'px')};",
   "measure();addEventListener('resize',measure);",
+  "if('ResizeObserver' in window)new ResizeObserver(measure).observe(b,{box:'border-box'});",
   "var det=b.querySelector('details.rb-nav-narrow');",
   "if(det){var sum=det.querySelector('summary');",
   "d.addEventListener('keydown',function(e){if(e.key==='Escape'&&det.open){det.open=false;if(sum)sum.focus()}});",

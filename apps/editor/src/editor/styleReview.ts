@@ -1,3 +1,5 @@
+import { COVER_ID } from "@retorika/catalog";
+import { headerDrawn } from "@retorika/renderer";
 import type {
   HeaderBackground,
   HeaderPart,
@@ -6,6 +8,7 @@ import type {
 } from "@retorika/schema";
 import { listHeaderStyleExceptions, listStyleExceptions } from "@retorika/schema";
 import { AA_NORMAL_TEXT, contrastRatio, relativeLuminance } from "@retorika/tokens";
+import es from "../locales/es.json" with { type: "json" };
 import { backgroundOf } from "./textToolbar.ts";
 
 /**
@@ -172,6 +175,34 @@ export function reviewLogo(
 }
 
 /**
+ * The pages whose transparent bar lies over a photograph — the one pair the palettes cannot prove
+ * (ADR 0057 §look, the sprint 30 plan's `headerOverPhoto`). **A warning, never a block**: the owner
+ * chose a bar over their cover on purpose, and whether the words read depends on a photograph no
+ * arithmetic here can see. The bar lies over the first section of every page, so every page is
+ * asked: a cover with its photograph behind the text and that photograph not hidden. An
+ * `image-right` cover puts the photograph beside the words, not under the bar, and says nothing.
+ */
+export function headerOverPhoto(doc: RetorikaDocument): string[] {
+  if (doc.header?.look?.background !== "transparent" || !headerDrawn(doc)) return [];
+  return doc.pages
+    .filter((page) => {
+      const first = page.sections[0];
+      return (
+        first !== undefined &&
+        first.preset.catalogId === COVER_ID &&
+        first.preset.variantId === "image-background" &&
+        first.content.some((element) => element.role === "image" && !element.hidden)
+      );
+    })
+    .map((page) => page.title);
+}
+
+/** How a part is named to a person — «Cabecera · botón» — in the audit and in the review alike. */
+export function headerPartName(part: HeaderPart): string {
+  return es["editor.header.partOf"].replace("{part}", es[`editor.header.part.${part}`]);
+}
+
+/**
  * A header part's exception in the shape the gate's dialog already lists — addressed to `header` as
  * its section and the part as its element, so the dialog can take the owner to the «Menú» panel the
  * way it takes them to a section. A part is a link or a button for the purpose of the sentence.
@@ -188,6 +219,7 @@ function asStyleException(
     role: exception.part === "action" ? "button" : "link",
     property: exception.property,
     exact: exception.exact,
+    label: headerPartName(exception.part),
     hidden: false,
   };
 }

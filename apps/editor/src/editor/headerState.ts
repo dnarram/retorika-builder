@@ -12,7 +12,16 @@ import {
   sectionLabel,
   sectionMenuEntries,
 } from "@retorika/renderer";
-import type { Header, HeaderAction, HeaderLayout, Page, RetorikaDocument } from "@retorika/schema";
+import type {
+  Header,
+  HeaderAction,
+  HeaderBackground,
+  HeaderLayout,
+  HeaderPart,
+  Page,
+  RetorikaDocument,
+  StyleProperty,
+} from "@retorika/schema";
 import es from "../locales/es.json" with { type: "json" };
 import { headerBarBackground } from "./styleReview.ts";
 
@@ -119,7 +128,17 @@ export interface HeaderState {
   phoneRow: boolean;
   /** The bar lies transparent over the cover (ADR 0057 §look; chosen on día 6). */
   transparent: boolean;
+  /** Whether the sections take a row of their own under the bar at every width (día 6). */
+  sectionsRow: "shared" | "own";
+  /** The look as the renderer reads it, every gap filled by its default (día 6). */
+  look: HeaderLook;
+  /** The parts this page draws, in `HEADER_PARTS` order — the ones the exact controls are offered
+   * for, since a colour on a part nobody sees is a decision about nothing. */
+  parts: HeaderPart[];
 }
+
+type LookKeys = NonNullable<Header["look"]>;
+export type HeaderLook = { [K in keyof LookKeys]-?: Exclude<LookKeys[K], undefined> };
 
 function modeOf(shown: boolean | undefined): MenuMode {
   if (shown === undefined) return "auto";
@@ -274,6 +293,22 @@ export function headerStateFor(doc: RetorikaDocument, pageId: string | undefined
     sectionsMobile: settings.sectionsMobile,
     phoneRow: headerPhoneRow(doc, settings),
     transparent: settings.background === "transparent",
+    sectionsRow: settings.sectionsRow,
+    look: {
+      background: settings.background,
+      align: settings.align,
+      gap: settings.gap,
+      uppercase: settings.uppercase,
+      hoverUnderline: settings.hoverUnderline,
+      size: settings.size,
+    },
+    parts: [
+      "bar",
+      ...(settings.brandName || settings.logo !== undefined ? (["brand"] as const) : []),
+      ...(pagesDrawn ? (["pagesLinks"] as const) : []),
+      ...(sectionsDrawn ? (["sectionsLinks"] as const) : []),
+      ...(action ? (["action"] as const) : []),
+    ],
   };
 }
 
@@ -338,4 +373,111 @@ export function sectionsMobilePatch(
   mobile: "row" | "hidden",
 ): Partial<Header> {
   return { sections: { ...(doc.header?.sections ?? {}), mobile } };
+}
+
+/** The header with the sections' row chosen at every width, keeping the rest of `sections`. */
+export function sectionsRowPatch(doc: RetorikaDocument, row: "shared" | "own"): Partial<Header> {
+  return { sections: { ...(doc.header?.sections ?? {}), row } };
+}
+
+/**
+ * The header with part of its look changed, keeping the rest — `setHeader` is shallow at the top
+ * level, so the whole `look` goes in. A switch turned off drops its key rather than writing `false`,
+ * and a look with nothing left in it drops its own, so turning «En mayúsculas» on and off again
+ * leaves the document as it was. A chosen alignment, gap or size is kept even when it equals the
+ * default: the owner pressed it, and an alignment that silently followed the next layout change
+ * would be the panel undoing a choice.
+ */
+export function lookPatch(
+  doc: RetorikaDocument,
+  change: Partial<NonNullable<Header["look"]>>,
+): Partial<Header> {
+  const next: Record<string, unknown> = { ...(doc.header?.look ?? {}), ...change };
+  for (const key of Object.keys(next)) {
+    if (next[key] === false || next[key] === undefined) delete next[key];
+  }
+  return { look: Object.keys(next).length === 0 ? undefined : next };
+}
+
+/**
+ * What each background scheme paints, as the panel's swatches draw it: the bar's colour and the
+ * colour its words take, in this site's palette. **The renderer's pairs**, written once more because
+ * they live in CSS (`headerCss`) and a swatch needs hex; `headerState.test.ts` reads the renderer's
+ * stylesheet and fails if the two disagree. A transparent bar shows the page's own surface through
+ * it, which is what the swatch can honestly show — over a photograph nobody can say.
+ */
+export const SCHEME_TOKENS: Record<
+  HeaderBackground,
+  {
+    bar: "color.surface" | "color.primary" | "color.secondary" | "color.ink";
+    text: "color.primary" | "color.surface";
+  }
+> = {
+  surface: { bar: "color.surface", text: "color.primary" },
+  primary: { bar: "color.primary", text: "color.surface" },
+  secondary: { bar: "color.secondary", text: "color.surface" },
+  ink: { bar: "color.ink", text: "color.surface" },
+  transparent: { bar: "color.surface", text: "color.primary" },
+};
+
+export function schemeSwatch(
+  doc: RetorikaDocument,
+  background: HeaderBackground,
+): { bar: string; text: string } {
+  const tokens = SCHEME_TOKENS[background];
+  return { bar: doc.theme[tokens.bar], text: doc.theme[tokens.text] };
+}
+
+/** The exact value the owner wrote for one part, or `undefined` when it follows the system. */
+export function headerExact(
+  doc: RetorikaDocument,
+  part: HeaderPart,
+  property: StyleProperty,
+): string | undefined {
+  const value = doc.header?.style?.[part]?.[property];
+  return value !== undefined && "exact" in value ? value.exact : undefined;
+}
+
+/**
+ * The colour a part is painted **right now**, for the `<input type="color">` to start from — the
+ * exact one if the owner wrote it, otherwise the scheme's. An input with nothing assigned shows
+ * black, a colour the page does not have (the toolbar's lesson, sprint 9). The bar's colour is its
+ * background; the button's words sit on the button, which inverts on a coloured bar.
+ */
+export function headerColorInForce(doc: RetorikaDocument, part: HeaderPart): string {
+  const exact = headerExact(doc, part, "color");
+  if (exact !== undefined) return exact;
+  const background = doc.header?.look?.background ?? "surface";
+  const tokens = SCHEME_TOKENS[background];
+  if (part === "bar") return doc.theme[tokens.bar];
+  if (part === "action") {
+    return doc.theme[tokens.text === "color.primary" ? "color.surface" : "color.primary"];
+  }
+  return doc.theme[tokens.text];
+}
+
+/**
+ * The header with one part's property set to an exact value — rule 6's marked exception — or, with
+ * `undefined`, back to the system; with no property at all, the whole part back to the system in
+ * one step. A part with nothing left drops its key, and a `style` with no part left drops its own,
+ * so «Volver al sistema» leaves the document exactly as it was before.
+ */
+export function headerStylePatch(
+  doc: RetorikaDocument,
+  part: HeaderPart,
+  property: StyleProperty | undefined,
+  exact: string | undefined,
+): Partial<Header> {
+  const style = { ...(doc.header?.style ?? {}) };
+  const own: Record<string, unknown> = property === undefined ? {} : { ...(style[part] ?? {}) };
+  if (property === undefined) {
+    // Every exact value of the part goes; a reference, which nothing here writes, would stay.
+    for (const [key, value] of Object.entries(style[part] ?? {})) {
+      if (value !== undefined && !("exact" in value)) own[key] = value;
+    }
+  } else if (exact === undefined) delete own[property];
+  else own[property] = { exact, exception: true };
+  if (Object.keys(own).length === 0) delete style[part];
+  else (style as Record<string, unknown>)[part] = own;
+  return { style: Object.keys(style).length === 0 ? undefined : style };
 }

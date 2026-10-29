@@ -93,6 +93,45 @@ describe("the script's mark and measure", () => {
   });
 });
 
+describe("the measure follows the bar", () => {
+  /**
+   * **Found by the sprint 30 día 6 walk, in the ZIP opened from disk**: the script measured the bar
+   * once, when it ran, and the site's own letter arrived after — the bar grew from 66 to 69 px, the
+   * variable stayed at 66, and an anchor landed 3 px under a fixed bar. A bar grows after the script
+   * for reasons nothing in the page announces with a `resize`: a font swapping in, a logo decoding.
+   */
+  it("writes the new height when the bar grows after the script has run", async () => {
+    const page = await open(withHeader({ sticky: true }), 1280);
+    try {
+      const grown = await page.evaluate(async () => {
+        const bar = document.querySelector<HTMLElement>(".rb-header");
+        if (!bar) throw new Error("no bar");
+        const before = bar.offsetHeight;
+        // Padding, so only the border box grows: the observer's default content box would not see
+        // it (sabotaged: without `box: 'border-box'` this reads the old height).
+        bar.style.paddingTop = `${before}px`;
+        // A ResizeObserver delivers with a later rendering update, not synchronously. Up to two
+        // seconds, by timers. **Green file by file even when the script watched the content box**:
+        // there the first delivery could land after this change and read the new height by luck;
+        // the full suite, slower, caught it, and is where the sabotage was run.
+        const variable = () => document.documentElement.style.getPropertyValue("--rb-header-h");
+        for (let wait = 0; wait < 40 && variable() !== `${bar.offsetHeight}px`; wait += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        return {
+          grew: bar.offsetHeight > before,
+          h: document.documentElement.style.getPropertyValue("--rb-header-h"),
+          offset: bar.offsetHeight,
+        };
+      });
+      expect(grown.grew).toBe(true);
+      expect(grown.h).toBe(`${grown.offset}px`);
+    } finally {
+      await page.context().close();
+    }
+  });
+});
+
 describe("the phone's menu", () => {
   it("closes on Escape and gives the focus back to «Menú», and closes on a press outside", async () => {
     const page = await open(withHeader({}), 390);

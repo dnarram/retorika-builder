@@ -22962,3 +22962,180 @@ describe("sprint 30 día 5 — el logo viaja como una foto", () => {
     }
   }, 300_000);
 });
+
+/**
+ * **Sprint 30 día 6 — the look of the header, chosen in «Menú»** (ADR 0057 §look). The bar painted
+ * `primary`, its entries in capitals and fixed: in the canvas the bar stays at the top while the
+ * page goes under it; with the design tools on, the button takes an exact colour that «Diseño»
+ * lists as «Cabecera · botón» and gives back to the system; and the ZIP, opened from `file://`,
+ * keeps the bar fixed, lands an anchor below it rather than under it, and at 390 closes the menu
+ * with Escape and gives the focus back to «Menú».
+ */
+describe("sprint 30 día 6 — el aspecto de la cabecera", () => {
+  it("fondo principal, mayúsculas y fija: en el lienzo, en «Fuera del sistema» y en el ZIP abierto", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 950 } });
+    const studio = await context.newPage();
+    const dir = mkdtempSync(join(tmpdir(), "retorika-e2e-aspecto-"));
+    /** `rgb(r, g, b)` for a `#rrggbb`, which is how `getComputedStyle` writes a colour back. */
+    const rgbOf = (hex: string) => {
+      const n = Number.parseInt(hex.trim().slice(1), 16);
+      return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
+    };
+    try {
+      await intoTheCanvas(studio);
+      const frame = studio.frameLocator(PREVIEW).first();
+      const header = frame.locator("header.rb-header");
+      const token = (name: string) =>
+        frame
+          .locator("body")
+          .evaluate(
+            (_, key) => getComputedStyle(document.documentElement).getPropertyValue(key).trim(),
+            name,
+          );
+
+      await studio.getByRole("button", { name: "Menú", exact: true }).click();
+      const panel = studio.getByRole("complementary", { name: "La cabecera de tu web" });
+      await expect(panel).toBeVisible();
+
+      // 1. «Principal»: the bar is painted the palette's primary, its words the surface.
+      await panel
+        .getByRole("radiogroup", { name: "Fondo de la barra" })
+        .getByText("Principal", { exact: true })
+        .click();
+      await expect(header).toHaveAttribute("data-bg", "primary");
+      await expect(header).toHaveCSS("background-color", rgbOf(await token("--color-primary")));
+      const entry = frame.locator('.rb-nav-wide nav[aria-label="Secciones"] a').first();
+      await expect(entry).toHaveCSS("color", rgbOf(await token("--color-surface")));
+
+      // 2. «En mayúsculas» and «Se queda arriba al bajar».
+      await panel.getByRole("checkbox", { name: "En mayúsculas" }).check();
+      await expect(entry).toHaveCSS("text-transform", "uppercase");
+      await panel.getByRole("checkbox", { name: "Se queda arriba al bajar" }).check();
+      await expect(header).toHaveAttribute("data-sticky", "");
+
+      // 3. Down the canvas, and the bar is still at its top.
+      await frame.locator("body").evaluate(() => window.scrollTo(0, 1400));
+      await expect
+        .poll(() =>
+          header.evaluate((el) => ({
+            scrolled: window.scrollY > 600,
+            top: Math.round(el.getBoundingClientRect().top),
+          })),
+        )
+        .toEqual({ scrolled: true, top: 0 });
+      await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
+
+      // 4. With the design tools on, the button's words take an exact colour from «A mano»; «Diseño»
+      //    lists it as «Cabecera · botón» and gives it back to the system.
+      await studio.getByRole("switch", { name: "Herramientas de diseño" }).click();
+      await studio.getByRole("button", { name: "Sí, enciéndelas" }).click();
+      await studio.getByRole("button", { name: "Menú", exact: true }).click();
+      await expect(panel).toBeVisible();
+      await panel.getByLabel("Color exacto de «Botón»").fill("#5a1a1a");
+      const action = frame.locator(".rb-header .rb-nav-action");
+      await expect(action).toHaveCSS("color", "rgb(90, 26, 26)");
+      await studio.getByRole("button", { name: "Diseño", exact: true }).click();
+      const design = studio.locator("aside").first();
+      await design.getByRole("button", { name: /Fuera del sistema \(1\)/ }).click();
+      await expect(design.getByText("Cabecera · botón")).toBeVisible();
+      await expect(design.getByText("#5a1a1a")).toBeVisible();
+      await design.getByRole("button", { name: "Volver al sistema" }).click();
+      await expect(action).toHaveCSS("color", rgbOf(await token("--color-primary")));
+
+      // 5. A second page, so a phone has pages to fold into «Menú»: «Dónde estamos» converted.
+      await frame.locator('[data-section="sec-location"]').click();
+      await frame
+        .locator(
+          '[data-section="sec-location"] .rb-action[aria-label="Convertir esta sección en página"]',
+        )
+        .click();
+      await expect(frame.locator('[data-section="sec-location"]')).toHaveCount(0);
+      await studio.locator('[data-testid="page-tabs"] button').first().click();
+      await expect(frame.locator('[data-section="sec-cover"]')).toBeVisible();
+
+      // 6. The ZIP, opened from disk: the bar fixed, an anchor landing below it, Escape at 390.
+      await studio.getByRole("button", { name: "Descargar" }).click();
+      const downloadAnyway = studio.getByRole("button", { name: "Descargar igualmente" });
+      await downloadAnyway.waitFor();
+      const [download] = await Promise.all([
+        studio.waitForEvent("download"),
+        downloadAnyway.click(),
+      ]);
+      const zipPath = join(dir, download.suggestedFilename());
+      await download.saveAs(zipPath);
+      const bytes = new Uint8Array(readFileSync(zipPath));
+      for (const name of listZipEntries(bytes)) {
+        const filePath = join(dir, name);
+        mkdirSync(dirname(filePath), { recursive: true });
+        writeFileSync(filePath, extractFileBytes(bytes, name));
+      }
+
+      const offline = await (
+        await browser.newContext({ viewport: { width: 1280, height: 800 } })
+      ).newPage();
+      const failed: string[] = [];
+      offline.on("requestfailed", (request) => failed.push(request.url()));
+      try {
+        await offline.goto(`file://${join(dir, "index.html")}`, { waitUntil: "load" });
+        const bar = offline.locator("header.rb-header");
+        await expect(bar).toHaveAttribute("data-bg", "primary");
+        await expect(bar).toHaveAttribute("data-sticky", "");
+        await expect(bar).toHaveCSS("position", "sticky");
+
+        // An entry of the sections menu: the page scrolls, the bar stays at the top, and the
+        // section lands below the bar — `scroll-margin-top` — not under it.
+        const link = offline.locator('.rb-nav-wide nav[aria-label="Secciones"] a').first();
+        const target = ((await link.getAttribute("href")) ?? "").replace(/^#/, "");
+        expect(target).toMatch(/^sec-/);
+        await link.click();
+        /** The target's top once the (smooth) scroll has stopped: two equal readings in a row. */
+        let last = Number.NaN;
+        await expect
+          .poll(async () => {
+            const now = await offline.evaluate(
+              (id) => document.getElementById(id)?.getBoundingClientRect().top ?? Number.NaN,
+              target,
+            );
+            const settled = now === last;
+            last = now;
+            return settled;
+          })
+          .toBe(true);
+        const landed = await offline.evaluate((id) => {
+          const head = document.querySelector<HTMLElement>("header.rb-header");
+          const section = document.getElementById(id);
+          if (!head || !section) throw new Error("no header or no target");
+          return {
+            scrolled: window.scrollY > 0,
+            barTop: Math.round(head.getBoundingClientRect().top),
+            clear: section.getBoundingClientRect().top >= head.offsetHeight - 1,
+            scrolledShadow: head.hasAttribute("data-scrolled"),
+          };
+        }, target);
+        expect(landed).toEqual({ scrolled: true, barTop: 0, clear: true, scrolledShadow: true });
+
+        // At 390 the pages fold into «Menú»: Escape closes it and gives the focus back.
+        await offline.setViewportSize({ width: 390, height: 844 });
+        await offline.evaluate(() => window.scrollTo(0, 0));
+        const summary = offline.locator("details.rb-nav-narrow > summary");
+        await expect(summary).toBeVisible();
+        await summary.click();
+        const open = () =>
+          offline.locator("details.rb-nav-narrow").evaluate((d) => (d as HTMLDetailsElement).open);
+        await expect.poll(open).toBe(true);
+        await offline.keyboard.press("Escape");
+        await expect.poll(open).toBe(false);
+        expect(
+          await offline.evaluate(() =>
+            document.activeElement?.matches("details.rb-nav-narrow > summary"),
+          ),
+        ).toBe(true);
+        expect(failed, "a request failed from file://").toEqual([]);
+      } finally {
+        await offline.context().close();
+      }
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+});

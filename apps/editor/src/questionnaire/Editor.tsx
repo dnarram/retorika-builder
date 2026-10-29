@@ -24,6 +24,7 @@ import {
   flattenElements,
   type Header,
   type HeaderAction,
+  type HeaderPart,
   imageSourcesOf,
   isHandDesigned,
   type ListItem,
@@ -55,6 +56,7 @@ import {
   type StyleValue,
   type SurplusDecision,
   setElementStyle,
+  setHeader,
   shiftMarks,
   styleFor,
   type TextEdit,
@@ -133,6 +135,7 @@ import {
 } from "../editor/EditorShell.tsx";
 import { GUIDE_ZONE, type Guide, guidesFor, type Rect } from "../editor/guides.ts";
 import { HANDLE_TOUCH, handlesFor } from "../editor/handles.ts";
+import { headerStylePatch } from "../editor/headerState.ts";
 import { ACCEPTED_IMAGE_ACCEPT } from "../editor/imageBytes.ts";
 import { toolbarFamilyLabel } from "../editor/letterGallery.ts";
 import { logoLuminanceOf } from "../editor/logoImage.ts";
@@ -7799,17 +7802,27 @@ export function Editor({
    * document fresh.
    */
   function fixException(exception: StyleException) {
-    const fixed = setElementStyle(
-      doc,
-      { sectionId: exception.sectionId, elementId: exception.elementId },
-      exception.property,
-      undefined,
-    );
-    onSetElementStyle(
-      { sectionId: exception.sectionId, elementId: exception.elementId },
-      exception.property,
-      undefined,
-    );
+    let fixed: RetorikaDocument;
+    if (exception.sectionId === "header") {
+      // A part of the header, addressed as `styleReview` addresses it: its own verb, since a part is
+      // not an element and `setElementStyle` would throw looking for a section called «header».
+      const part = exception.elementId as HeaderPart;
+      const patch = headerStylePatch(doc, part, exception.property, undefined);
+      fixed = setHeader(doc, patch);
+      onSetHeader(patch);
+    } else {
+      fixed = setElementStyle(
+        doc,
+        { sectionId: exception.sectionId, elementId: exception.elementId },
+        exception.property,
+        undefined,
+      );
+      onSetElementStyle(
+        { sectionId: exception.sectionId, elementId: exception.elementId },
+        exception.property,
+        undefined,
+      );
+    }
 
     // Deliberately without `failedSamples`: this re-check exists only to ask whether the colour
     // the owner just fixed is still a problem, and it filters to the two contrast kinds on the
@@ -7914,6 +7927,9 @@ export function Editor({
               level={downloadDialog.kind === "unreadable" ? "block" : "warn"}
               {...(downloadDialog.kind === "lowContrast" && downloadDialog.logo
                 ? { logo: { finding: downloadDialog.logo, url: logoUrl } }
+                : {})}
+              {...(downloadDialog.kind === "lowContrast" && downloadDialog.overPhoto
+                ? { overPhoto: downloadDialog.overPhoto }
                 : {})}
               // The «arreglo en un clic», through the same verb the `Diseño` panel's audit calls:
               // dropping the exception returns the element to the reference it overwrote, which is
@@ -8098,6 +8114,7 @@ export function Editor({
             pageId={pageId}
             logoUrl={logoUrl}
             logoFaint={reviewLogo(doc, logoLuminance) !== undefined}
+            designTools={designTools === true}
             onChangeLogo={replaceLogo}
             onRemoveLogo={onRemoveLogo}
             onSetHeader={onSetHeader}
@@ -8255,6 +8272,9 @@ export function Editor({
                 exception.property,
                 undefined,
               )
+            }
+            onClearHeaderException={(part, property) =>
+              onSetHeader(headerStylePatch(doc, part, property, undefined))
             }
             onSetPlacement={(elementId, edit) => {
               if (designSectionId) onSetPlacement(designSectionId, elementId, edit);

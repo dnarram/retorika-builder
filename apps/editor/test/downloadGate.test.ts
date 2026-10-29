@@ -20,6 +20,7 @@ import {
 import { PALETTES } from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
 import {
+  type AcceptedWarning,
   DIALOG_KINDS,
   downloadGateFor,
   EVERY_KIND_HAS_A_DIALOG,
@@ -342,6 +343,84 @@ describe("the gate with the logo in it (ADR 0059)", () => {
       expect(gate.findings).toHaveLength(1);
       expect(gate.logo).toBeDefined();
     }
+  });
+});
+
+/**
+ * **A transparent bar over a cover photograph** (sprint 30 día 6, `headerOverPhoto`): the one pair the
+ * palettes cannot prove, so a warning in the contrast dialog and never a block — and only where the
+ * bar really lies over a photograph.
+ */
+describe("the gate with a transparent bar over a photograph", () => {
+  const overCover = parseDocument(
+    JSON.parse(
+      readFileSync(
+        join(
+          import.meta.dirname,
+          "..",
+          "..",
+          "..",
+          "fixtures",
+          "documents",
+          "image-background-full.json",
+        ),
+        "utf8",
+      ),
+    ),
+  );
+  const transparent = { brand: { name: true }, look: { background: "transparent" as const } };
+  const gateOf = (doc: RetorikaDocument, accepted: ReadonlySet<AcceptedWarning> = new Set()) =>
+    downloadGateFor(counts({ own: 1, total: 1 }), doc, accepted);
+
+  it("warns, naming the page, over an `image-background` cover", () => {
+    const gate = gateOf(setHeader(overCover, transparent));
+    expect(gate.kind).toBe("lowContrast");
+    if (gate.kind === "lowContrast") {
+      expect(gate.findings).toEqual([]);
+      expect(gate.overPhoto).toEqual([overCover.pages[0]?.title]);
+    }
+  });
+
+  it("says nothing over an `image-right` cover, whose photograph is beside the words", () => {
+    // The same cover, the same photograph, only the variant changed — so what is asked is the
+    // variant and nothing else.
+    const beside = parseDocument({
+      ...overCover,
+      pages: overCover.pages.map((page) => ({
+        ...page,
+        sections: page.sections.map((section) => ({
+          ...section,
+          preset: { ...section.preset, variantId: "image-right" },
+        })),
+      })),
+    });
+    expect(beside.pages[0]?.sections[0]?.content.some((element) => element.role === "image")).toBe(
+      true,
+    );
+    expect(gateOf(setHeader(beside, transparent)).kind).toBe("ready");
+  });
+
+  it("says nothing over the same cover with its photograph hidden, or under an opaque bar", () => {
+    const hidden = parseDocument({
+      ...overCover,
+      pages: overCover.pages.map((page) => ({
+        ...page,
+        sections: page.sections.map((section) => ({
+          ...section,
+          content: section.content.map((element) =>
+            element.role === "image" ? { ...element, hidden: true } : element,
+          ),
+        })),
+      })),
+    });
+    expect(gateOf(setHeader(hidden, transparent)).kind).toBe("ready");
+    expect(
+      gateOf(setHeader(overCover, { ...transparent, look: { background: "primary" } })).kind,
+    ).toBe("ready");
+  });
+
+  it("goes past it with the contrast acceptance, which is the dialog it is shown in", () => {
+    expect(gateOf(setHeader(overCover, transparent), new Set(["contrast"])).kind).toBe("ready");
   });
 });
 

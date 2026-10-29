@@ -1,26 +1,37 @@
 "use client";
 
 import {
+  HEADER_ALIGNMENTS,
+  HEADER_BACKGROUNDS,
+  HEADER_GAPS,
+  HEADER_SIZES,
   type Header,
   type HeaderAction,
   type HeaderLayout,
+  type HeaderPart,
   MENU_LABEL_MAX,
   MENU_LABEL_MIN,
   type MenuLabelTarget,
   menuLabelIssue,
   type RetorikaDocument,
 } from "@retorika/schema";
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   brandNamePatch,
+  headerColorInForce,
+  headerExact,
   headerStateFor,
+  headerStylePatch,
+  lookPatch,
   type MenuBlock,
   type MenuMode,
   menuModePatch,
   menuStatusText,
   type PageRow,
   type SectionRow,
+  schemeSwatch,
   sectionsMobilePatch,
+  sectionsRowPatch,
 } from "../editor/headerState.ts";
 import {
   PANEL_WIDTH,
@@ -37,9 +48,10 @@ import es from "../locales/es.json" with { type: "json" };
  * destination is the button, and how the bar sits. Opened from the rail and by pressing the header
  * in the canvas (sprint 30 día 3); its controls arrived on día 4.
  *
- * **Five blocks, top to bottom, in the order an owner decides them**: the brand (name and logo,
+ * **Six blocks, top to bottom, in the order an owner decides them**: the brand (name and logo,
  * ADR 0059, día 5), the pages menu, the sections menu of the page being edited, the button, the
- * layout. The look is día 6's.
+ * layout, and the look (día 6) — and under the look, with the design tools on, the exact colour
+ * and size of each part, rule 6's marked exceptions behind the same switch the text toolbar's are.
  *
  * **Every sentence is asked of the renderer** through `headerStateFor` — the counts, whether a menu
  * is drawn, what an empty «Se lee como…» falls back to, whether a fixed bar lets go on a phone. The
@@ -59,6 +71,9 @@ export interface MenuPanelProps {
   /** The logo is hard to see on the bar it sits on (`reviewLogo`, ADR 0059): said here, where the
    * owner is looking at it, and again before the download. */
   logoFaint: boolean;
+  /** The design switch (ADR 0025): with it on, each part of the header takes an exact colour and
+   * size, as a text does from its toolbar. Off, the look is the closed choices and nothing else. */
+  designTools: boolean;
   /** Open the picker for the logo. `Editor` owns the one hidden input, as it does for photographs. */
   onChangeLogo: () => void;
   onRemoveLogo: () => void;
@@ -73,6 +88,14 @@ export interface MenuPanelProps {
 
 const LAYOUTS: readonly HeaderLayout[] = ["brand-left", "centered", "stacked"];
 const MODES: readonly MenuMode[] = ["auto", "always", "never"];
+/** The exact controls a part takes: a colour for all five, a size in pixels for the four with words
+ * — the bar has none of its own, and its colour is its background. */
+const SIZED_PARTS: ReadonlySet<HeaderPart> = new Set([
+  "brand",
+  "pagesLinks",
+  "sectionsLinks",
+  "action",
+]);
 
 const blockClass = "m-0 flex min-w-0 flex-col gap-2 rounded-ui border border-ui-border p-3";
 const legendClass = "float-left mb-1 w-full p-0 text-[13px] font-bold text-ui-ink";
@@ -84,6 +107,7 @@ export function MenuPanel({
   pageId,
   logoUrl,
   logoFaint,
+  designTools,
   onChangeLogo,
   onRemoveLogo,
   onSetHeader,
@@ -337,6 +361,130 @@ export function MenuPanel({
           notes={state.transparent ? [es["editor.menuPanel.hairlineTransparent"]] : []}
         />
       </fieldset>
+
+      {/* 5. The look (día 6): the bar's colour from the palette, where the links go, how far apart,
+          in capitals or not, underlined on hover, and the size of the letter. Every option a token,
+          every pair one the palettes are proved against — except a bar over a photograph. */}
+      <fieldset className={blockClass}>
+        <legend className={legendClass}>{es["editor.menuPanel.look"]}</legend>
+        <div role="radiogroup" aria-label={es["editor.menuPanel.background"]}>
+          <p className="m-0 mb-1 text-[12px] font-semibold text-ui-ink" aria-hidden="true">
+            {es["editor.menuPanel.background"]}
+          </p>
+          <div className="grid grid-cols-3 gap-1.5 phone:grid-cols-2">
+            {HEADER_BACKGROUNDS.map((background) => {
+              const swatch = schemeSwatch(doc, background);
+              const checked = state.look.background === background;
+              return (
+                <label
+                  key={background}
+                  className={`relative flex cursor-pointer flex-col items-stretch gap-1 p-1.5 ${
+                    checked ? panelRowSelected : panelRow
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name={`${groupId}-background`}
+                    checked={checked}
+                    onChange={() => onSetHeader(lookPatch(doc, { background }))}
+                    className="absolute h-px w-px opacity-0"
+                  />
+                  {/* The bar's colour with a word in the colour its words take, from this site's
+                      palette. A transparent bar shows the page through it: dashed, over the
+                      page's own colour, since what is really under it is the cover. */}
+                  <span
+                    aria-hidden="true"
+                    style={{ background: swatch.bar, color: swatch.text }}
+                    className={`flex h-7 items-center justify-center rounded-ui-sm text-[13px] font-bold ${
+                      background === "transparent"
+                        ? "border border-dashed border-ui-border-strong"
+                        : "border border-black/10"
+                    }`}
+                  >
+                    Aa
+                  </span>
+                  <span
+                    className={`text-center text-[12px] leading-tight ${
+                      checked ? "font-semibold text-ui-brand-deep" : "text-ui-ink"
+                    }`}
+                  >
+                    {es[`editor.menuPanel.background.${background}`]}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+          {state.transparent ? (
+            <p className={`${noteClass} mt-1.5`}>{es["editor.menuPanel.backgroundTransparent"]}</p>
+          ) : null}
+        </div>
+        <Segments
+          name={`${groupId}-align`}
+          label={es["editor.menuPanel.align"]}
+          options={HEADER_ALIGNMENTS}
+          value={state.look.align}
+          labelOf={(align) => es[`editor.menuPanel.align.${align}`]}
+          onSelect={(align) => onSetHeader(lookPatch(doc, { align }))}
+        />
+        <Segments
+          name={`${groupId}-gap`}
+          label={es["editor.menuPanel.gap"]}
+          options={HEADER_GAPS}
+          value={state.look.gap}
+          labelOf={(gap) => es[`editor.menuPanel.gap.${gap}`]}
+          onSelect={(gap) => onSetHeader(lookPatch(doc, { gap }))}
+        />
+        <Segments
+          name={`${groupId}-size`}
+          label={es["editor.menuPanel.size"]}
+          options={HEADER_SIZES}
+          value={state.look.size}
+          labelOf={(size) => es[`editor.menuPanel.size.${size}`]}
+          onSelect={(size) => onSetHeader(lookPatch(doc, { size }))}
+        />
+        <Check
+          label={es["editor.menuPanel.uppercase"]}
+          checked={state.look.uppercase}
+          onChange={(uppercase) => onSetHeader(lookPatch(doc, { uppercase }))}
+          notes={[]}
+        />
+        <Check
+          label={es["editor.menuPanel.hoverUnderline"]}
+          checked={state.look.hoverUnderline}
+          onChange={(hoverUnderline) => onSetHeader(lookPatch(doc, { hoverUnderline }))}
+          notes={[es["editor.menuPanel.hoverUnderlineNote"]]}
+        />
+        {state.sectionsMenu.drawn ? (
+          <Check
+            label={es["editor.menuPanel.sectionsRow"]}
+            checked={state.sectionsRow === "own"}
+            onChange={(own) => onSetHeader(sectionsRowPatch(doc, own ? "own" : "shared"))}
+            notes={[es["editor.menuPanel.sectionsRowNote"]]}
+          />
+        ) : null}
+
+        {designTools ? (
+          <fieldset className="m-0 mt-1 flex min-w-0 flex-col gap-2 border-0 border-t border-ui-border p-0 pt-3">
+            <legend className="float-left mb-1 w-full p-0 text-[12px] font-semibold text-ui-ink">
+              {es["editor.menuPanel.exact"]}
+            </legend>
+            <p className={noteClass}>{es["editor.menuPanel.exactHelp"]}</p>
+            {state.parts.map((part) => (
+              <ExactPart
+                key={part}
+                part={part}
+                color={headerColorInForce(doc, part)}
+                colorExact={headerExact(doc, part, "color")}
+                sizeExact={SIZED_PARTS.has(part) ? headerExact(doc, part, "fontSize") : null}
+                onSet={(property, exact) =>
+                  onSetHeader(headerStylePatch(doc, part, property, exact))
+                }
+                onClear={() => onSetHeader(headerStylePatch(doc, part, undefined, undefined))}
+              />
+            ))}
+          </fieldset>
+        ) : null}
+      </fieldset>
     </aside>
   );
 }
@@ -373,6 +521,147 @@ function ModeSwitch({
         ))}
       </div>
       <p className={noteClass}>{menuStatusText(block, menu)}</p>
+    </div>
+  );
+}
+
+/** A short row of radios with its name above it — alignment, gap, size. */
+function Segments<T extends string>({
+  name,
+  label,
+  options,
+  value,
+  labelOf,
+  onSelect,
+}: {
+  name: string;
+  label: string;
+  options: readonly T[];
+  value: T;
+  labelOf: (option: T) => string;
+  onSelect: (option: T) => void;
+}) {
+  return (
+    <div role="radiogroup" aria-label={label}>
+      <p className="m-0 mb-1 text-[12px] font-semibold text-ui-ink" aria-hidden="true">
+        {label}
+      </p>
+      <div className={`grid gap-1.5 ${options.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
+        {options.map((option) => (
+          <Segment
+            key={option}
+            name={name}
+            label={labelOf(option)}
+            checked={value === option}
+            onSelect={() => onSelect(option)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * One part's exact colour and size — the text toolbar's two exact controls, the same platform
+ * `<input type="color">` (it can only produce `#rrggbb`, which is what the schema admits) and the
+ * same whole pixels from 8 to 200. Both commit on the **native** `change` — the picker closing, the
+ * field left or Enter pressed — and not on React's `onChange`, which is the `input` event: dragging
+ * across the colour wheel would open a step of history per pixel, and typing «120» would publish a
+ * 12px bar on the way. «Volver al sistema» appears once the part holds anything of its own, and
+ * drops both in one step.
+ */
+function ExactPart({
+  part,
+  color,
+  colorExact,
+  sizeExact,
+  onSet,
+  onClear,
+}: {
+  part: HeaderPart;
+  /** The colour in force, exact or the scheme's: what the input starts from. */
+  color: string;
+  colorExact: string | undefined;
+  /** The exact size, `undefined` when none, `null` for the bar, which takes no size. */
+  sizeExact: string | undefined | null;
+  onSet: (property: "color" | "fontSize", exact: string | undefined) => void;
+  onClear: () => void;
+}) {
+  const name = es[`editor.menuPanel.exact.part.${part}`];
+  const onSetNow = useRef(onSet);
+  onSetNow.current = onSet;
+  const colorInput = useRef<HTMLInputElement>(null);
+  const sizeInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const colorNode = colorInput.current;
+    const sizeNode = sizeInput.current;
+    const onColor = () => {
+      if (colorNode) onSetNow.current("color", colorNode.value);
+    };
+    const onSize = () => {
+      if (!sizeNode) return;
+      const raw = sizeNode.value.trim();
+      if (raw === "") return onSetNow.current("fontSize", undefined);
+      const number = Number(raw);
+      if (!Number.isFinite(number) || number < 8 || number > 200) return;
+      onSetNow.current("fontSize", `${Math.round(number)}px`);
+    };
+    colorNode?.addEventListener("change", onColor);
+    sizeNode?.addEventListener("change", onSize);
+    return () => {
+      colorNode?.removeEventListener("change", onColor);
+      sizeNode?.removeEventListener("change", onSize);
+    };
+  }, []);
+  // Uncontrolled, so a value the owner is still choosing is never overwritten mid-gesture; what the
+  // document holds is written in whenever it changes — a new scheme, or «Volver al sistema».
+  useEffect(() => {
+    if (colorInput.current) colorInput.current.value = color;
+  }, [color]);
+  const sizeShown =
+    typeof sizeExact === "string" && sizeExact.endsWith("px") ? sizeExact.slice(0, -2) : "";
+  useEffect(() => {
+    if (sizeInput.current) sizeInput.current.value = sizeShown;
+  }, [sizeShown]);
+  const own = colorExact !== undefined || (sizeExact !== null && sizeExact !== undefined);
+  return (
+    <div
+      data-part={part}
+      className="flex flex-wrap items-center gap-2 rounded-ui border border-ui-border bg-ui-surface p-2"
+    >
+      {/* The name on a line of its own: beside the two inputs and «Volver al sistema», «Botón»
+          was cut to «Bot» at the panel's width (seen on día 6). */}
+      <span className="w-full min-w-0 text-[13px] font-semibold text-ui-ink">{name}</span>
+      <input
+        ref={colorInput}
+        type="color"
+        defaultValue={color}
+        aria-label={es[
+          part === "bar" ? "editor.menuPanel.exactBarColor" : "editor.menuPanel.exactColor"
+        ].replace("{part}", name)}
+        className={`h-8 w-10 shrink-0 cursor-pointer rounded-ui-sm border bg-white p-0.5 ${
+          colorExact === undefined ? "border-ui-border" : "border-ui-brand"
+        }`}
+      />
+      {sizeExact === null ? null : (
+        <input
+          ref={sizeInput}
+          type="number"
+          min={8}
+          max={200}
+          placeholder="px"
+          defaultValue={sizeShown}
+          aria-label={es["editor.menuPanel.exactSize"].replace("{part}", name)}
+          className={`w-16 shrink-0 rounded-ui-sm border bg-white px-2 py-1 text-[13px] phone:text-base text-ui-ink ${
+            sizeExact === undefined ? "border-ui-border" : "border-ui-brand"
+          }`}
+        />
+      )}
+      {own ? (
+        <span className="ml-auto">
+          <SmallButton label={es["editor.design.exceptionBack"]} onClick={onClear} />
+        </span>
+      ) : null}
     </div>
   );
 }
