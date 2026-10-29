@@ -28,12 +28,47 @@ const doc = parseDocument(
 );
 
 describe("canvasLinkTarget", () => {
-  it("names the page for a page's slug, fragment or not", () => {
+  it("names the page for a page's slug, and the section for a fragment that names one there", () => {
     expect(canvasLinkTarget(doc, "./index.html")).toEqual({ kind: "page", pageId: "home" });
+    // Since sprint 30 día 3 a fragment that names a section of that page is the section — what the
+    // header's button writes from another page (ADR 0057) — and one that names nothing is the page.
     expect(canvasLinkTarget(doc, "./index.html#sec-prices")).toEqual({
+      kind: "section",
+      pageId: "home",
+      sectionId: "sec-prices",
+    });
+    expect(canvasLinkTarget(doc, "./index.html#sec-ficha")).toEqual({
       kind: "page",
       pageId: "home",
     });
+    expect(canvasLinkTarget(doc, "./index.html#")).toEqual({ kind: "page", pageId: "home" });
+  });
+
+  it("reads `./index.html` as the first page whatever it is slugged, since that is its file", () => {
+    const renamed = {
+      ...doc,
+      pages: doc.pages.map((p, i) => (i === 0 ? { ...p, slug: "inicio" } : p)),
+    };
+    expect(canvasLinkTarget(renamed, "./index.html")).toEqual({ kind: "page", pageId: "home" });
+    expect(canvasLinkTarget(renamed, "./inicio.html")).toEqual({ kind: "page", pageId: "home" });
+  });
+
+  it("names a section of the page being drawn for a bare fragment, and nothing on another page", () => {
+    // The renderer writes a section's anchor local to its own page (ADR 0043 §1).
+    expect(canvasLinkTarget(doc, "#sec-prices")).toEqual({
+      kind: "section",
+      pageId: "home",
+      sectionId: "sec-prices",
+    });
+    expect(canvasLinkTarget(doc, "#sec-prices", "home")).toMatchObject({ kind: "section" });
+    expect(canvasLinkTarget(doc, "#sec-prices", "page-ficha-carta")).toEqual({ kind: "none" });
+    expect(canvasLinkTarget(doc, "#sec-ficha", "page-ficha-carta")).toEqual({
+      kind: "section",
+      pageId: "page-ficha-carta",
+      sectionId: "sec-ficha",
+    });
+    // The skip link's destination is `<main>`, not a section: nothing to choose.
+    expect(canvasLinkTarget(doc, "#rb-main")).toEqual({ kind: "none" });
   });
 
   it("names the entry for an entry's slug, so a hand-typed link to a ficha moves the canvas there", () => {

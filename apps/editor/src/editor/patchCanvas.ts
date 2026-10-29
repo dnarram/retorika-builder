@@ -220,6 +220,17 @@ function ownKey(el: Element): string | null {
   // link the document had dropped stayed on the page. Measured on día 3's patch run as «Qué
   // ponemos» twice in one strip, `#sec-services` beside `./que-ponemos.html`. With the strip and
   // the list in the chain, `m:wide/nav:Páginas/a:./que-ponemos.html` names exactly one node.
+  // **The header and its parts** (ADR 0057, sprint 30 día 3). The skip link and the header are two
+  // roots of `<body>` that come and go with the menu; keyed, a header that arrives or leaves can
+  // never be morphed into `<main>` by position. The brand and the button are links outside any
+  // `<nav>`, so the href rule below never reached them; and the sections' row is a second `<nav>`
+  // named «Secciones» beside the one in the wide bar, which the ancestor chain alone would key the
+  // same — `h:row` tells them apart.
+  if (el.classList.contains("rb-skip")) return "h:skip";
+  if (el.tagName === "HEADER" && el.classList.contains("rb-header")) return "h:header";
+  if (el.classList.contains("rb-brand")) return "h:brand";
+  if (el.classList.contains("rb-nav-action")) return "h:action";
+  if (el.classList.contains("rb-nav-row")) return "h:row";
   if (el.classList.contains("rb-nav-wide")) return "m:wide";
   if (el.classList.contains("rb-nav-narrow")) return "m:narrow";
   if (el.tagName === "NAV") {

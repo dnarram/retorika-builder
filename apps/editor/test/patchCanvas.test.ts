@@ -422,7 +422,8 @@ describe("patchCanvas — an edit is a patch", () => {
     // Every menu link keyed apart from its twins: the strip and the list are in the chain.
     const keys = [...live.querySelectorAll("nav a")].map((a) => keyOf(a));
     expect(new Set(keys).size).toBe(keys.length);
-    expect(keys[0]).toMatch(/^m:(wide|narrow)\/nav:[^/]+\/a:/);
+    // Inside the header since ADR 0057, so the header leads the chain.
+    expect(keys[0]).toMatch(/^h:header\/m:(wide|narrow)\/nav:[^/]+\/a:/);
 
     const folded = pageToSection(doc, "page-que-ponemos");
     const report = patchCanvas(live, freshFrom(folded), buildCss(folded), rules);
@@ -445,6 +446,47 @@ describe("patchCanvas — an edit is a patch", () => {
     const wide = [...live.querySelectorAll(".rb-nav-wide a")].map((a) => a.textContent?.trim());
     expect(wide.filter((label) => label === "Servicios")).toHaveLength(1);
     expect(wide).not.toContain("Qué ponemos");
+  });
+
+  /**
+   * **The header's parts each have a key of their own** (ADR 0057, sprint 30 día 3): the skip link
+   * and the header as roots of `<body>`, the brand and the button outside any `<nav>`, and the
+   * sections' row apart from the wide bar's own «Secciones». And a header that leaves takes nothing
+   * of `<main>` with it — keyed, it cannot be morphed into the page by position.
+   */
+  it("keys the header's parts apart, and a header that leaves leaves <main> whole", () => {
+    const base = menuFixture();
+    const doc = parseDocument({
+      ...base,
+      header: {
+        brand: { name: true },
+        action: { kind: "page", pageId: "page-donde-estamos" },
+        sections: { row: "own", shown: true },
+      },
+    });
+    const live = settled(doc);
+    const keyed = (selector: string) =>
+      [...live.querySelectorAll(selector)].map((el) => keyOf(el) ?? "(none)");
+    expect(keyed(".rb-skip")).toEqual(["h:skip"]);
+    expect(keyed("header.rb-header")).toEqual(["h:header"]);
+    expect(keyed(".rb-brand")).toEqual(["h:header/h:brand"]);
+    expect(keyed(".rb-nav-action")).toEqual(["h:header/h:action"]);
+    expect(keyed(".rb-nav-row")).toEqual(["h:header/h:row"]);
+    const all = [...live.querySelectorAll("header *")].map((el) => keyOf(el)).filter(Boolean);
+    expect(new Set(all).size).toBe(all.length);
+
+    const sectionsBefore = [...live.querySelectorAll("[data-section]")];
+    const bare = parseDocument({
+      ...base,
+      header: { pages: { shown: false }, sections: { shown: false } },
+    });
+    const report = patchCanvas(live, freshFrom(bare), buildCss(bare), rules);
+    expect(report).toMatchObject({ ok: true, structural: true });
+    expect(live.querySelector("header")).toBeNull();
+    expect(live.querySelector(".rb-skip")).toBeNull();
+    expect(live.body.firstElementChild?.tagName).toBe("MAIN");
+    // The very same section nodes: kept by key, not rebuilt by position.
+    expect([...live.querySelectorAll("[data-section]")]).toEqual(sectionsBefore);
   });
 
   it("patches a changed skeleton too and says so: a section gone, the chrome beside it kept", () => {
