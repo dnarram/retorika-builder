@@ -127,7 +127,7 @@ describe("the one sentence beyond the count", () => {
   it("says nothing when the site is over the threshold", () => {
     const state = menuStateFor(threeSections(), "home");
     expect(state.note).toBe("none");
-    expect(menuNoteText(state)).toBeUndefined();
+    expect(menuNoteText(state, "sections")).toBeUndefined();
   });
 
   it("says the menu is not drawn yet when nobody has decided and it is short", () => {
@@ -138,7 +138,7 @@ describe("the one sentence beyond the count", () => {
     ]);
     const state = menuStateFor(doc, "home");
     expect(state).toMatchObject({ destinations: 2, curated: false, drawn: false, note: "notYet" });
-    expect(menuNoteText(state)).toBe(
+    expect(menuNoteText(state, "sections")).toBe(
       es["editor.menu.notYet"].replace("{n}", "2").replace("{min}", "3"),
     );
   });
@@ -157,7 +157,7 @@ describe("the one sentence beyond the count", () => {
     ]);
     const state = menuStateFor(doc, "home");
     expect(state).toMatchObject({ destinations: 2, curated: true, drawn: true, note: "yours" });
-    expect(menuNoteText(state)).toContain("lo has decidido tú");
+    expect(menuNoteText(state, "sections")).toContain("lo has decidido tú");
   });
 
   it("uses the singular where only one link is left", () => {
@@ -168,7 +168,7 @@ describe("the one sentence beyond the count", () => {
     ]);
     const state = menuStateFor(doc, "home");
     expect(state.destinations).toBe(1);
-    expect(menuNoteText(state)).toBe(es["editor.menu.yoursOne"].replace("{min}", "3"));
+    expect(menuNoteText(state, "sections")).toBe(es["editor.menu.yoursOne"].replace("{min}", "3"));
   });
 
   it("says there is no menu at all when nothing is left", () => {
@@ -178,7 +178,54 @@ describe("the one sentence beyond the count", () => {
     ]);
     const state = menuStateFor(doc, "home");
     expect(state).toMatchObject({ destinations: 0, drawn: false, note: "gone" });
-    expect(menuNoteText(state)).toBe(es["editor.menu.gone"]);
+    expect(menuNoteText(state, "sections")).toBe(es["editor.menu.gone"]);
+  });
+});
+
+/**
+ * **The fourth clause** (ADR 0057, sprint 30 día 4): once the owner chose «Siempre» or «Nunca» for a
+ * menu in «Menú», the threshold no longer decides it, and the sentence beside the switch in «Campos»
+ * or «Páginas» must stop counting towards it — each panel asked about its own menu.
+ */
+describe("the owner's word in «Menú» overrides the sentence about the threshold", () => {
+  const short = () =>
+    documentWith([
+      section("sec-cover", "cover", "Taberna"),
+      section("sec-services", "services", "Qué ponemos"),
+      section("sec-contact", "contact", "Te esperamos"),
+    ]);
+
+  it("«Siempre» on a short menu says nothing more than the count, and the page has it", () => {
+    const doc = { ...short(), header: { sections: { shown: true } } };
+    const state = menuStateFor(doc, "home");
+    // The threshold's own reading is unchanged — it is just no longer what the panel says.
+    expect(state.note).toBe("notYet");
+    expect(menuNoteText(state, "sections")).toBeUndefined();
+    expect(render(doc, "html").html).toContain('aria-label="Secciones"');
+    // The other menu is still «Automático», so its panel still speaks of the threshold.
+    expect(menuNoteText(state, "pages")).toBe(
+      es["editor.menu.notYet"].replace("{n}", "2").replace("{min}", "3"),
+    );
+  });
+
+  it("«Nunca» says the switch beside it changes nothing a visitor sees", () => {
+    const doc = { ...threeSections(), header: { pages: { shown: false } } };
+    const state = menuStateFor(doc, "home");
+    expect(menuNoteText(state, "pages")).toBe(es["editor.menu.off"]);
+    expect(menuNoteText(state, "sections")).toBeUndefined();
+  });
+
+  it("«Siempre» with nothing left says it draws nothing all the same", () => {
+    const doc = {
+      ...documentWith([
+        section("sec-cover", "cover", "Taberna"),
+        { ...section("sec-services", "services", "Qué ponemos"), inMenu: false },
+      ]),
+      header: { sections: { shown: true } },
+    };
+    const state = menuStateFor(doc, "home");
+    expect(menuNoteText(state, "sections")).toBe(es["editor.menu.emptyAlways"]);
+    expect(render(doc, "html").html).not.toContain('aria-label="Secciones"');
   });
 });
 

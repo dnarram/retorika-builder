@@ -111,7 +111,7 @@ export function PagesPanel({
   }, [editing]);
 
   const full = doc.pages.length >= MAX_PAGES;
-  const menuNote = menuNoteText(menu);
+  const menuNote = menuNoteText(menu, "pages");
 
   function commitRename(pageId: string) {
     const title = draft.trim();

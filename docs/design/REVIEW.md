@@ -4964,3 +4964,84 @@ invariantes y `secrets:scope` en verde. La salida del renderer no se movió (nin
 no hacía falta. Saboteos, deshechos copiando el fichero guardado: sin la clave `h:header` → dos tests
 de `patchCanvas` en rojo; una entrada que no elige su sección → la caminata en rojo.
 
+
+### Día 4 — el panel «Menú» (PR de `feat/el-panel-menu`)
+
+**El panel del día 3 deja de ser de solo lectura.** Cuatro bloques, de arriba abajo, en el orden en que
+el dueño decide:
+
+1. **Menú de páginas** — «Automático / Siempre / Nunca» (`shown` ausente, `true`, `false`), y debajo lo
+   que eso hace ahora en la página que se edita: «Automático: se dibuja con 4 destinos», «Automático:
+   todavía no se dibuja, porque en Inicio el menú tendría menos de 3 enlaces», «Se dibuja con 1
+   destino», «No se dibuja, aunque tenga destinos» y, con «Siempre» y nada que mostrar, «No hay nada que
+   mostrar…». Debajo, las páginas en el orden de «Páginas» con su casilla —**el mismo `setPageInMenu`
+   que la fila de «Páginas», que se conserva**: dos sitios, un verbo, un estado— y «Se lee como…».
+   Inicio sin casilla («Inicio aparece cuando no estás en ella») y con su campo, que el renderer lee
+   donde dibuja la vuelta; una página por ficha, en gris con su razón.
+2. **Navegador de secciones** — el mismo interruptor; «En la página «…»»: todas las secciones, las que
+   entran con casilla (`setSectionInMenu`, el de «Campos») y «Se lee como…», las que no en gris con su
+   razón («Es la portada», «Abre la página…», «Es el pie», «Es el avance de otra página»); y «En el
+   móvil: fila debajo de la barra / no se muestra».
+3. **Botón destacado** — «Ninguno», «Una página», «Una sección» de esta página; un botón elegido en otra
+   página se sigue viendo elegido, con el título de su página («Contacto (en «Taberna Santo
+   Domingo»)»), en vez de un «Ninguno» que no es verdad.
+   «Se lee «Contacto»; sale del menú porque ya está en el botón» solo cuando el destino estaba en un
+   menú que se dibuja; si no, «Se lee «Contacto».».
+4. **Disposición** — tres tarjetas con su dibujo; «Se queda arriba al bajar» con «En el móvil solo la
+   barra» o, si el móvil enseña la fila de secciones, lo que el día 2 decidió y el panel debía decir:
+   «En el móvil no se queda arriba: con la fila de secciones debajo taparía demasiado…»; con fondo
+   transparente, la nota del ajuste 1b; «Línea bajo la cabecera», con su nota en transparente.
+
+**Cada frase la pregunta al renderer**: `headerState.ts` lee `headerSettings`, las entradas,
+`actionEntry` y dos funciones que el renderer exporta desde hoy sin mover un byte de su salida
+(`headerPhoneRow`, la regla de `data-phone-row`, y `homeMenuLabel`, la palabra de la vuelta a Inicio);
+los goldens no se movieron. Lo único que el editor añade es clasificar *por qué* una sección no entra,
+después de que el renderer haya dicho que no entra.
+
+**La cuarta cláusula llega a «Campos» y «Páginas».** Su frase sobre el umbral («todavía no se muestra»,
+«aparece porque lo has decidido tú») describía una regla que deja de aplicarse en cuanto el dueño elige
+«Siempre» o «Nunca» para ese menú. `menuNoteText` pregunta ahora por el menú de su panel: con «Nunca»,
+«En «Menú» este menú está en «Nunca»: no se dibuja, quede lo que quede en él»; con «Siempre», nada más
+que la cuenta, salvo que no quede nada.
+
+**Tres causas nuevas en el historial**, ninguna de contenido: `setHeader`, `setHeaderAction`,
+`setMenuLabel`. **El tecleo en «Se lee como…» amalgama** como un campo del lienzo (`amendable` + misma
+entrada): «Carta» es un paso y un «Deshacer». Se despacha en cada tecla que deja una etiqueta válida o
+vacía; una letra sola, o veintiuna, no escribe nada, avisa «Entre 2 y 20 letras. Mientras tanto se queda
+lo último válido.» y el lienzo sigue con la última válida; al salir del campo vuelve a lo que el documento
+tiene. Vacío vuelve a la derivada, que es el marcador.
+
+**Decidido por el día y no por el plan, dicho aquí**: (1) la caminata renombra «Servicios» y no
+«Precios»: la web generada de la caminata no tiene precios; (2) la marca sigue siendo una frase hasta el
+día 5, que trae su bloque, pero la frase del día 3 («Se ve a la izquierda…») era falsa con «Todo
+centrado» y «Marca arriba», y ahora dice «El nombre del negocio se ve en la cabecera y lleva a Inicio»;
+(3) `sections.row` («fila propia» en ancho) no tiene control: el plan del día no lo nombra, y queda para
+el bloque Aspecto del día 6; (4) las opciones del botón van bajo «Una página» / «Una sección», porque una
+etiqueta no dice qué es: en la caminata, «Carta» y «Dónde estamos» eran páginas y «Galería» una sección.
+
+**Mirado en el navegador**, con capturas temporales en la caminata que se quitaron por script: el panel a
+1440 entero y la hoja a 390. La frase de la marca y la mezcla de páginas y secciones en el botón salieron
+de mirarlo, no de los tests.
+
+**Tests**: `headerState.test.ts` (+13: las cuentas y el estado de los dos interruptores contra el HTML
+publicado en cuatro fixtures × nueve parejas de modos × cada página; «Siempre» sin destinos y sin
+`<nav>`; «Automático» bajo el umbral; los parches no dejan rastro; filas, razones, el botón en otra
+página, «sale del menú» para página y sección), `documentHistory.test.ts` (+7: una palabra un paso;
+otra entrada u otra cosa en medio, otro paso; tras deshacer hasta un paso de la misma entrada, paso
+nuevo; vacío vuelve a la derivada; interruptor, disposición y botón un paso y ninguno si no cambia;
+nada de esto cuenta como contenido), `menuState.test.ts` (+3, la cuarta cláusula). e2e «sprint 30 día
+4»: una letra avisa y no escribe; «Carta» en el lienzo al teclear, un «Deshacer» devuelve «Servicios»,
+«Rehacer» trae «Carta»; «Carta» en el ZIP; tres páginas convirtiendo dos secciones, «Nunca» en páginas y
+solo queda «Secciones»; «Contacto» al botón sale del menú y vuelve con «Ninguno»; a 390 la hoja ≤ 70 % de
+alto sobre la barra del rail, se desplaza por dentro, sin desborde y axe sin graves. **Saboteos**,
+deshechos copiando el fichero guardado: cuenta que incluye el botón, `drawn` que ignora el cero (dos),
+«sale del menú» que ignora el interruptor (página y sección — la de página sobrevivió al primer intento
+y ganó su test), «Automático» que escribe `shown`, no amalgamar, amalgamar entre páginas, entre
+secciones, o sin mirar `amendable` (los tres últimos sobrevivieron al primer intento y ganaron sus
+casos), y las tres ramas de la cuarta cláusula: todos en rojo. En la caminata, no amalgamar la pone en
+rojo en el «Deshacer».
+
+**Medidas.** `pnpm test` 3483 (169 ficheros); e2e completa **264 verdes y 1 omitida a la primera, 1094
+s**, sin ninguna caminata existente reescrita (la del día 3 pasó tal cual con el panel nuevo);
+`typecheck`, `lint` (0 errores), invariantes, goldens (sin cambio), `secrets:scope` y `renderer:deps` en
+verde. La salida del renderer no se movió, así que a11y no hacía falta.

@@ -42,8 +42,16 @@ export interface MenuState {
   drawn: boolean;
   /** The threshold, so a sentence can say the number instead of restating it in Spanish. */
   threshold: number;
-  /** Which of the three things worth saying out loud is true, or none of them. */
+  /** Which of the three things worth saying out loud is true, or none of them — **for a menu whose
+   * `shown` nobody wrote**. The owner's word in the «Menú» panel overrides it; see `menuNoteText`. */
   note: MenuNote;
+  /**
+   * The owner's word on each menu from the «Menú» panel (ADR 0057), or `undefined` for «Automático».
+   * The fourth clause of «will my site show a menu»: present, it answers for that menu and the
+   * threshold is silent — so the sentence about the threshold must be too.
+   */
+  pagesShown: boolean | undefined;
+  sectionsShown: boolean | undefined;
 }
 
 /**
@@ -76,6 +84,8 @@ export function menuStateFor(doc: RetorikaDocument, pageId: string | undefined):
     drawn,
     threshold: MENU_MIN_ENTRIES,
     note: noteFor({ destinations, drawn, threshold: MENU_MIN_ENTRIES }),
+    pagesShown: doc.header?.pages?.shown,
+    sectionsShown: doc.header?.sections?.shown,
   };
 }
 
@@ -120,8 +130,20 @@ export function pagesLeftText(state: MenuState): string {
  * Both panels show it, because both panels change the number it is about. `min` is the threshold
  * read off the renderer rather than typed into Spanish, so the day somebody argues three down to
  * two the copy follows without being edited.
+ *
+ * **`menu` is which menu the panel's switch feeds**, and since ADR 0057 it changes the answer: once
+ * the owner chose «Siempre» or «Nunca» for that menu in «Menú», the threshold no longer decides it,
+ * and a sentence counting towards three would describe a rule that is not being applied. «Nunca»
+ * says the switch here changes nothing a visitor sees; «Siempre» says nothing more than the count
+ * already does, unless there is nothing to count.
  */
-export function menuNoteText(state: MenuState): string | undefined {
+export function menuNoteText(state: MenuState, menu: "pages" | "sections"): string | undefined {
+  const shown = menu === "pages" ? state.pagesShown : state.sectionsShown;
+  if (shown === false) return es["editor.menu.off"];
+  if (shown === true) {
+    const left = menu === "pages" ? state.pages : state.sections;
+    return left === 0 ? es["editor.menu.emptyAlways"] : undefined;
+  }
   const min = String(state.threshold);
   const n = String(state.destinations);
   if (state.note === "gone") return es["editor.menu.gone"];

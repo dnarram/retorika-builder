@@ -42,7 +42,13 @@ export { fontFaceCss } from "./fonts.ts";
  * be telling somebody a number while they decide.
  */
 export type { ActionEntry, HeaderSettings } from "./header.ts";
-export { actionEntry, headerDrawn, headerSettings } from "./header.ts";
+export {
+  actionEntry,
+  headerDrawn,
+  headerPhoneRow,
+  headerSettings,
+  homeMenuLabel,
+} from "./header.ts";
 export { HEADER_SCRIPT } from "./headerScript.ts";
 export type { PageEntry, SectionEntry } from "./menu.ts";
 export {

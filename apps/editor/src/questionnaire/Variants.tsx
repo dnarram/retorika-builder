@@ -1425,6 +1425,18 @@ export function Variants({
             dismissToast();
             dispatch({ type: "setPageInMenu", variant: openIndex, pageId, inMenu });
           }}
+          onSetHeader={(patch) => {
+            dismissToast();
+            dispatch({ type: "setHeader", variant: openIndex, patch });
+          }}
+          onSetHeaderAction={(action) => {
+            dismissToast();
+            dispatch({ type: "setHeaderAction", variant: openIndex, action });
+          }}
+          onSetMenuLabel={(target, label) => {
+            dismissToast();
+            dispatch({ type: "setMenuLabel", variant: openIndex, target, label });
+          }}
           onSetSiteDescription={(text) => {
             dismissToast();
             dispatch({ type: "setSiteDescription", variant: openIndex, text });

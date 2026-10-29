@@ -179,8 +179,12 @@ export function headerDrawn(doc: RetorikaDocument): boolean {
 
 /** Whether the phone shows the sections as a row under the bar: the row is drawn and not hidden
  * there. Read by the stylesheet through `data-phone-row`, so a fixed bar can let go on a phone where
- * the row would make it taller than the bound (see `headerMobileCss`). */
-function phoneRow(doc: RetorikaDocument, settings: HeaderSettings): boolean {
+ * the row would make it taller than the bound (see `headerMobileCss`) — and exported for the
+ * editor's «Menú» panel, whose «Se queda arriba al bajar» has to say so (sprint 30 día 4). */
+export function headerPhoneRow(
+  doc: RetorikaDocument,
+  settings: HeaderSettings = headerSettings(doc),
+): boolean {
   return (
     settings.sectionsShown &&
     settings.sectionsMobile === "row" &&
@@ -205,6 +209,12 @@ function navNode(
   );
 }
 
+/** What the way back to the first page is called: the owner's own word, or «Inicio». Exported for
+ * the «Menú» panel, whose «Se lee como…» shows it as the word an empty box goes back to. */
+export function homeMenuLabel(home: Pick<Page, "menuLabel">): string {
+  return home.menuLabel ?? es["nav.home"];
+}
+
 function pagesLinks(
   doc: RetorikaDocument,
   current: Page,
@@ -217,8 +227,7 @@ function pagesLinks(
   // no way back. On the home page it is left out rather than pointed at `./index.html`, because a
   // link that reloads the page you are on is worse than no link. Its words are the first page's
   // own label when the owner wrote one.
-  const inicio =
-    onHome || !home ? [] : [element("a", { href: ENTRY_FILE }, [home.menuLabel ?? es["nav.home"]])];
+  const inicio = onHome || !home ? [] : [element("a", { href: ENTRY_FILE }, [homeMenuLabel(home)])];
   return [
     ...inicio,
     ...pageMenuEntries(doc)
@@ -295,7 +304,7 @@ function lookAttributes(doc: RetorikaDocument, settings: HeaderSettings): Record
     ...(settings.hoverUnderline ? { "data-hover": "" } : {}),
     ...(settings.sticky ? { "data-sticky": "" } : {}),
     ...(settings.hairline ? {} : { "data-hairline": "none" }),
-    ...(phoneRow(doc, settings) ? { "data-phone-row": "" } : {}),
+    ...(headerPhoneRow(doc, settings) ? { "data-phone-row": "" } : {}),
   };
 }
 
