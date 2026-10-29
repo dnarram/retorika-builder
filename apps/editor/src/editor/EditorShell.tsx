@@ -202,6 +202,26 @@ const RAIL_ICONS = {
       <path d="M3 9h18" />
     </svg>
   ),
+  // A bar with three short marks under it: the header of a page and its entries — the thing the
+  // panel is about (ADR 0057), not the three-line «hamburger», which on a phone means «open a menu»
+  // and would promise the rail item does something it does not.
+  menu: (
+    <svg
+      width="21"
+      height="21"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.7}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3" y="4" width="18" height="6" rx="1.5" />
+      <path d="M5 15h3M10.5 15h3M16 15h3" />
+      <path d="M3 20h18" />
+    </svg>
+  ),
   share: (
     <svg
       width="21"
@@ -255,6 +275,7 @@ export type RailItemId =
   | "sections"
   | "style"
   | "pages"
+  | "menu"
   | "photos"
   | "share"
   | "design"
@@ -264,12 +285,12 @@ export type RailItemId =
  * **A resting rail item has no box, and that is the change.**
  *
  * Every item used to sit in its own 46px square with a visible 1px border, selected or not — seven
- * boxes down the edge of the screen, each one drawing attention it had not earned, and a selected
- * state that amounted to "the box turns blue". Boxing what is not chosen is the habit that dates a
+ * boxes down the edge of the screen at the time (eight items since sprint 30 added «Menú»), each one
+ * drawing attention it had not earned, and a selected state that amounted to "the box turns blue". Boxing what is not chosen is the habit that dates a
  * toolbar faster than any colour does.
  *
  * Now the square is drawn **only** when the item is chosen or the pointer is on it, so the rail at
- * rest is seven icons and seven words, and the one box that exists means something. The geometry
+ * rest is icons and words, and the one box that exists means something. The geometry
  * REVIEW.md records — 80px rail, 46×46 target — is untouched: this is paint, not layout, and the
  * press target is the same size it always was.
  *
@@ -1311,6 +1332,14 @@ export function EditorShell({
             label={es["editor.rail.pages"]}
             active={rail === "pages"}
             onSelect={() => onRailChange("pages")}
+          />
+          {/* The header of the site (ADR 0057, sprint 30 día 3), beside «Páginas» because the two
+              menus it governs are the pages' and the sections'. */}
+          <RailButton
+            icon="menu"
+            label={es["editor.rail.menu"]}
+            active={rail === "menu"}
+            onSelect={() => onRailChange("menu")}
           />
           <RailButton
             icon="share"

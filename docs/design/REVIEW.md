@@ -4914,3 +4914,53 @@ only for somebody who has not asked for less motion» va a rojo; interpolar `sit
 one constant» y las cuatro paridades con cabecera van a rojo (nueve). Y una lección repetida que costó
 un rato: deshacer el segundo saboteo con `git checkout -- index.ts` devolvió el fichero a `HEAD` y se
 llevó el trabajo del día en él; se reescribió desde el diff. La memoria ya lo decía.
+
+### Día 3 — la cabecera se elige en el lienzo, solo el modelo (PR de `feat/la-cabecera-se-elige-en-el-lienzo`)
+
+**El modelo de interacción va primero y solo**, antes del panel que lo necesita (memoria
+`feedback-interaction-model-change-goes-first-and-alone`). Tres cosas nuevas en el lienzo:
+
+- **Una entrada de la cabecera lleva a su sección y la elige.** `canvasLinkTarget` gana el destino
+  `section`: `#sec-x` en la página que se dibuja, o `./pagina.html#sec-x` en otra; y `./index.html` es
+  la primera página se llame como se llame (es su fichero, y la marca enlaza ahí). En la misma página,
+  `wireLinks` solo actúa **desde la cabecera**: un botón `#sec-x` del dueño dentro de una sección se
+  pulsa para editar sus palabras, y robarle el clic para desplazar sería el editor llevando la contraria
+  a la mano. En otra página, la elige el asentamiento del redibujado y `applyPatch` la trae a la vista
+  después de poner la página arriba (`scrollToSectionAfterPatch`). Una sección cerca del final no puede
+  subir hasta arriba: la caminata asevera «arriba del todo, o el marco en su máximo», medido con
+  «Contacto» a 350 px y el marco al fondo.
+- **La cabecera se elige** al pulsarla fuera de sus entradas y de su «Menú» del móvil: contorno como el
+  de una sección, ninguna sección elegida (sus verbos se van), y se abre «Menú» en el rail. Elegir una
+  sección la desmarca. `headerChosen` es un ref aparte de `selectedSection` y no un id de sección
+  falso: todo lector de ese ref recorre `[data-section]`. No es parada de Tab propia hoy: sus entradas
+  ya lo son, y «Menú» está en el rail.
+- **Claves de morphdom para sus partes**: `h:skip` y `h:header` como raíces del `<body>` que van y
+  vienen con el menú (con clave, una cabecera que se va no puede convertirse en `<main>` por posición),
+  `h:brand` y `h:action` fuera de todo `<nav>`, y `h:row` para separar la fila de secciones de la
+  «Secciones» de la barra ancha. Test: las claves no se repiten, y una cabecera que se va deja las mismas
+  secciones, nodo a nodo.
+
+**El rail gana «Menú»** (octavo destino, junto a «Páginas»), con un icono de barra y entradas y no el
+de tres rayas, que en un móvil promete «abrir un menú». **Decidido por el día y no por el plan**: el
+plan lo quería vacío hasta el día 4, pero esta noche se redespliega y un panel que abre sobre nada es un
+botón muerto. Enseña, solo lectura, lo que la cabecera lleva —nombre del negocio, entradas del menú de
+páginas y del navegador de secciones de la página que se edita, botón destacado— y cada palabra la
+pregunta al renderer (`headerState.ts`, con un test que la compara con lo que la página publicada
+dibuja). No promete nada: el día 4 cambia cada línea por el control que la cambia. `chromeScale.test.ts`
+vigila el panel desde hoy.
+
+**Tres cosas que la caminata encontró, todas de la caminata y ninguna del editor**, sondeadas antes de
+tocar nada (un `console.log` temporal y `--silent=false`, quitado por script): (1) «Contacto» no sube
+hasta arriba porque la página no puede bajar más; (2) tras «Ver en móvil» el marco aún anima su ancho
+(379 → 330 → 320 px, sin ningún parche) y el clic caía donde el `<summary>` ya no estaba: se espera
+`deviceArrived`; (3) convertir la sección deja el lienzo desplazado y el `<summary>` 80 px por encima de
+la vista del marco, así que el clic caía en el cromo del editor: un clic sintético sobre el mismo
+`<summary>` lo abría y nada lo cancelaba; se sube el marco antes de pulsar.
+
+**Medidas.** `pnpm test` 3460 (169 ficheros); e2e completa **263 verdes y 1 omitida a la primera, 1087
+s**, con **ninguna caminata existente reescrita** (las del menú de los sprints 5, 7 y 23 pasaron tal
+cual); paradas del lienzo con herramientas, 23 (tope 30), sin cambio; `typecheck`, `lint` (0 errores),
+invariantes y `secrets:scope` en verde. La salida del renderer no se movió (ningún golden), así que a11y
+no hacía falta. Saboteos, deshechos copiando el fichero guardado: sin la clave `h:header` → dos tests
+de `patchCanvas` en rojo; una entrada que no elige su sección → la caminata en rojo.
+

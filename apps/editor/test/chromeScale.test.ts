@@ -37,6 +37,8 @@ const CHROME = [
   "questionnaire/CollectionsPanel.tsx",
   "questionnaire/DesignPanel.tsx",
   "questionnaire/SharePanel.tsx",
+  // The eighth rail panel (ADR 0057, sprint 30 día 3): under the scale from the day it exists.
+  "questionnaire/MenuPanel.tsx",
 ].map((f) => readFileSync(join(EDITOR, f), "utf8"));
 
 /**

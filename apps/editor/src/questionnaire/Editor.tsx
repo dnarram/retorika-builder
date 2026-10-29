@@ -183,6 +183,7 @@ import {
 import { FieldsPanel } from "./FieldsPanel.tsx";
 import { FontChooserDialog } from "./FontChooserDialog.tsx";
 import { ImportFontDialog } from "./ImportFontDialog.tsx";
+import { MenuPanel } from "./MenuPanel.tsx";
 import { PagesPanel } from "./PagesPanel.tsx";
 import { PhotosPanel } from "./PhotosPanel.tsx";
 import { RevertDialog } from "./RevertDialog.tsx";
@@ -1222,6 +1223,22 @@ export function Editor({
    */
   const selectedSection = useRef<string | null>(null);
   /**
+   * **The header is chosen** (ADR 0057, sprint 30 día 3) — the site's header in the canvas, which is
+   * not a section: it has no verbs, no fields drawer and no place in the arrows' order, and choosing
+   * it opens «Menú». A ref beside `selectedSection` rather than a fake section id, because every
+   * reader of that one walks `[data-section]` and a header among them would be a section that is
+   * not one. Choosing a section clears it, and choosing it clears the section.
+   */
+  const headerChosen = useRef(false);
+  /** A section an entry of the header named on another page, scrolled to once that page is drawn:
+   * `applyPatch` puts a changed page at the top, so the scroll has to come after it. */
+  const scrollToSectionAfterPatch = useRef<string | null>(null);
+  /** Registered by `wireSelection`: choose this section as a click would. `wireLinks` lives outside
+   * that closure and needs the one `select` there is. */
+  const chooseSectionNow = useRef<(section: HTMLElement) => void>(() => {});
+  /** Opens «Menú» — reassigned every render, so a listener wired once calls today's `showRail`. */
+  const openMenuPanel = useRef<() => void>(() => {});
+  /**
    * Where each section's verbs have been dragged to, for as long as this session lasts.
    *
    * **Not in the document, and that is the decision rather than an implementation detail.** A
@@ -1377,6 +1394,7 @@ export function Editor({
     // section and then reached for the panel does not have to click it again.
     if (item === "design" && designSectionId === null) setDesignSectionId(selectedSection.current);
   }
+  openMenuPanel.current = () => showRail("menu");
 
   /**
    * The rail item actually shown.
@@ -1707,6 +1725,15 @@ export function Editor({
     const pageChanged = patchedPageId.current !== page;
     patchedPageId.current = page;
     if (pageChanged) iframeDoc.defaultView?.scrollTo(0, 0);
+    // A header entry named a section of the page just drawn (sprint 30 día 3): the selection was
+    // settled by the redraw above, and the reading position comes after the page's own top.
+    const wanted = scrollToSectionAfterPatch.current;
+    if (wanted !== null) {
+      scrollToSectionAfterPatch.current = null;
+      iframeDoc
+        .querySelector<HTMLElement>(`[data-section="${CSS.escape(wanted)}"]`)
+        ?.scrollIntoView({ block: "start" });
+    }
     record("patch", { ...report, cause, ms, redrawMs, pageChanged });
     bumpEdit(iframeDoc);
   }
@@ -2104,12 +2131,39 @@ export function Editor({
         // inside the editor. `./<slug>.html` is the published form, and the slug is the only part
         // of it anybody here needs.
         const href = anchor.getAttribute?.("href") ?? "";
-        const destination = canvasLinkTarget(docNow.current, href);
+        const currentPageId = pageIdNow.current ?? docNow.current.pages[0]?.id;
+        const destination = canvasLinkTarget(docNow.current, href, currentPageId);
         // A card's title link never reaches here: `wireEditing` unwraps it, so the click edits the
         // title (David's adjustment). What does reach here with an entry's slug is a link the owner
         // typed by hand to a ficha, and that moves the canvas to the ficha, the way a menu entry
         // moves it to a page. `canvasLinks.ts` makes the decision and is tested.
         if (destination.kind === "none") return;
+        /*
+         * **A section: the canvas goes to it and chooses it** (sprint 30 día 3) — what the header's
+         * sections menu and its button do for a visitor, done for the owner. On this page, only from
+         * the header: an owner's own `#sec-x` button inside a section is pressed to edit its words,
+         * and a click that scrolled away instead would be the editor overruling the hand. On another
+         * page from anywhere, as a page link already did: the page is drawn, the section is settled
+         * as chosen by the redraw, and `applyPatch` scrolls to it after putting the page at the top.
+         */
+        if (destination.kind === "section") {
+          const inHeader =
+            typeof (anchor as { closest?: unknown }).closest === "function" &&
+            (anchor as unknown as Element).closest(".rb-header") !== null;
+          if (destination.pageId === currentPageId) {
+            if (!inHeader) return;
+            const section = iframeDoc.querySelector<HTMLElement>(
+              `[data-section="${CSS.escape(destination.sectionId)}"]`,
+            );
+            if (!section) return;
+            section.scrollIntoView({ block: "start" });
+            chooseSectionNow.current(section);
+            return;
+          }
+          selectedSection.current = destination.sectionId;
+          headerChosen.current = false;
+          scrollToSectionAfterPatch.current = destination.sectionId;
+        }
         if (destination.kind === "entry") {
           setEntryByPage((previous) => ({
             ...previous,
@@ -2847,6 +2901,9 @@ export function Editor({
           el.remove();
         }
       }
+      // A section chosen is the header not chosen (sprint 30 día 3): one thing in the canvas at a time.
+      iframeDoc.querySelector(".rb-header")?.classList.remove("rb-selected");
+      headerChosen.current = false;
       target.classList.add("rb-selected");
 
       const sectionId = target.dataset.section;
@@ -3045,6 +3102,33 @@ export function Editor({
     // Delegated (ADR 0051 §5, día 3): one click and one focusin on the document, dispatched to the
     // section the event concerns — so a section that arrives with an edit is heard at once.
     delegate(iframeDoc, "click", "[data-section]", (section) => select(section, "click"));
+    chooseSectionNow.current = (section) => select(section, "click");
+
+    /**
+     * **The header is chosen by pressing it** (ADR 0057, sprint 30 día 3), anywhere but on an entry
+     * or the phone's «Menú»: an entry takes the canvas to its section or page (`wireLinks`), and the
+     * `<summary>` opens the phone's menu as it does for a visitor. Choosing it unchooses the section
+     * — the verbs and the compositions go with it — draws the outline, and opens «Menú», which is
+     * where the header is shaped. Not a Tab stop of its own on día 3: its entries already are, and
+     * «Menú» is in the rail.
+     */
+    delegate(iframeDoc, "click", ".rb-header", (header, event) => {
+      const target = event.target as { closest?: (selector: string) => unknown } | null;
+      if (typeof target?.closest === "function" && target.closest("a, summary") !== null) return;
+      selectHeader(header);
+    });
+    function selectHeader(header: HTMLElement) {
+      record("select", { sectionId: "header", via: "click", serial: serialOf(iframeDoc) });
+      for (const section of sectionsNow()) {
+        section.classList.remove("rb-selected");
+        for (const el of section.querySelectorAll(".rb-actions, .rb-compositions")) el.remove();
+      }
+      selectedSection.current = null;
+      compositionMenuOpen.current = false;
+      headerChosen.current = true;
+      header.classList.add("rb-selected");
+      openMenuPanel.current();
+    }
 
     /*
      * Clicking into a section's text, or Tab-ing to it, moves the keyboard's place as well —
@@ -6795,6 +6879,10 @@ export function Editor({
       "html { scroll-behavior: auto !important; }",
       "[data-section] { position: relative; cursor: pointer; }",
       `[data-section].rb-selected { outline: ${screenPx(2)} solid #156FE7; outline-offset: ${screenPx(-2)}; }`,
+      // The header is chosen like a section and drawn like one (sprint 30 día 3): the same pointer,
+      // the same outline. Its entries keep the pointer a link has.
+      ".rb-header { cursor: pointer; }",
+      `.rb-header.rb-selected { outline: ${screenPx(2)} solid #156FE7; outline-offset: ${screenPx(-2)}; }`,
       /*
        * **The focus ring, and why it is not the selection outline** (sprint 17 day 3). Where the
        * keyboard *is* and which section is *chosen* are two different facts that are often the same
@@ -7936,6 +8024,8 @@ export function Editor({
             onEditText={onEditText}
             onClose={() => showFields(null)}
           />
+        ) : effectiveRail === "menu" ? (
+          <MenuPanel doc={doc} pageId={pageId} onClose={() => showRail("sections")} />
         ) : effectiveRail === "share" ? (
           <SharePanel
             doc={doc}

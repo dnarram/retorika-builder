@@ -22523,3 +22523,122 @@ describe("sprint 29 día 6 — la fuente viaja con la cuenta", () => {
     }
   }, 300_000);
 });
+
+/**
+ * **Sprint 30 día 3 — the header is chosen in the canvas** (ADR 0057). The model alone, before the
+ * «Menú» panel has a control: an entry of the header takes the canvas to its section and chooses
+ * it; pressing the header anywhere else chooses the header and opens «Menú»; choosing a section
+ * unchooses it; Tab from the header's last entry goes on into the page; and on a phone the
+ * «Menú» disclosure opens as it does for a visitor, without choosing anything, and its entries take
+ * the canvas to their page. Every press is made where the thing is drawn (`page.mouse` on its box).
+ */
+describe("sprint 30 día 3 — la cabecera se elige en el lienzo", () => {
+  it("lleva a la sección, elige la cabecera, deja seguir con Tab, y en el móvil abre «Menú»", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 950 } });
+    const visitor = await context.newPage();
+    try {
+      await intoTheCanvas(visitor);
+      const frame = visitor.frameLocator(PREVIEW).first();
+      const header = frame.locator("header.rb-header");
+      await expect(header).toBeVisible();
+      /** Press `locator` where it is drawn — at `dx` from its left edge, or at its centre. */
+      const pressAt = async (locator: Locator, dx?: number) => {
+        const box = await locator.boundingBox();
+        if (!box) throw new Error("not drawn, so it cannot be pressed");
+        await visitor.mouse.click(box.x + (dx ?? box.width / 2), box.y + box.height / 2);
+      };
+
+      // 1. «Contacto» takes the canvas to the contact section and chooses it — no navigation of
+      //    the frame, no second editor.
+      const framesBefore = visitor.frames().length;
+      await pressAt(frame.locator(".rb-nav-wide a", { hasText: "Contacto" }));
+      const contact = frame.locator('[data-section="sec-contact"]');
+      await expect(contact).toHaveClass(/rb-selected/);
+      // At the top of the frame — or, for a section near the end, as high as the page can scroll:
+      // «Contacto» is the last but one, and measured at 350px with the frame at its bottom.
+      const landing = () =>
+        contact.evaluate((el) => {
+          const view = el.ownerDocument.defaultView as Window;
+          const max = el.ownerDocument.documentElement.scrollHeight - view.innerHeight;
+          const top = Math.round(el.getBoundingClientRect().top);
+          return {
+            scrolled: view.scrollY > 0,
+            inView: top >= -1 && top < view.innerHeight,
+            atTopOrBottom: Math.abs(top) <= 1 || Math.abs(view.scrollY - max) <= 1,
+          };
+        });
+      await expect.poll(landing).toEqual({ scrolled: true, inView: true, atTopOrBottom: true });
+      expect(visitor.frames().length).toBe(framesBefore);
+      await expect(header).not.toHaveClass(/rb-selected/);
+
+      // 2. Pressing the header away from its entries chooses it, unchooses the section, and opens
+      //    «Menú», which says what the header holds.
+      await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
+      await pressAt(header, 12);
+      await expect(header).toHaveClass(/rb-selected/);
+      await expect(frame.locator("[data-section].rb-selected")).toHaveCount(0);
+      await expect(frame.locator(".rb-actions")).toHaveCount(0);
+      const panel = visitor.getByRole("complementary", { name: "La cabecera de tu web" });
+      await expect(panel).toBeVisible();
+      await expect(panel).toContainText("Navegador de secciones");
+      await expect(panel).toContainText("Contacto");
+
+      // 3. Choosing a section unchooses the header: one thing in the canvas at a time.
+      await pressAt(frame.locator('[data-section="sec-cover"]'), 6);
+      await expect(frame.locator('[data-section="sec-cover"]')).toHaveClass(/rb-selected/);
+      await expect(header).not.toHaveClass(/rb-selected/);
+
+      // 4. Tab from the header's last entry goes on into the page: past at most the pill above the
+      //    first section, to the cover.
+      await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
+      await frame.locator(".rb-nav-wide a").last().focus();
+      const focusedSection = () =>
+        frame
+          .locator("body")
+          .evaluate(() => (document.activeElement as HTMLElement | null)?.dataset["section"] ?? "");
+      let reached = "";
+      for (let press = 0; press < 3 && reached === ""; press += 1) {
+        await visitor.keyboard.press("Tab");
+        reached = await focusedSection();
+      }
+      expect(reached, "Tab from the header never reached a section").toBe("sec-cover");
+
+      // 5. A second page, so the phone has pages to fold: «Qué ponemos» converted, as an owner does.
+      await frame.locator('[data-section="sec-services"]').click();
+      await frame
+        .locator(
+          '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+        )
+        .click();
+      await expect(frame.locator('.rb-nav-wide nav[aria-label="Páginas"] a')).toHaveText([
+        "Qué ponemos",
+      ]);
+
+      // 6. On the phone, «Menú» opens as it does for a visitor and chooses nothing; its entry takes
+      //    the canvas to the page.
+      await visitor.getByRole("button", { name: "Ver en móvil" }).click();
+      // The card animates its width; pressed mid-way, the summary was measured at 379px and pressed
+      // where it no longer was (probed: the frame went 379 → 330 → 320 while nothing was patched).
+      await deviceArrived(visitor, NARROWEST_WIDTH);
+      const summary = frame.locator("details.rb-nav-narrow > summary");
+      await expect(summary).toBeVisible();
+      // To the top first: converting the section left the frame scrolled, the header 80px above its
+      // viewport, and a press at the summary's box landed on the editor's chrome over the frame —
+      // probed, with a synthetic click on the same summary opening it and nothing cancelling it.
+      await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
+      await pressAt(summary);
+      await expect
+        .poll(() =>
+          frame.locator("details.rb-nav-narrow").evaluate((d) => (d as HTMLDetailsElement).open),
+        )
+        .toBe(true);
+      await expect(header).not.toHaveClass(/rb-selected/);
+      await pressAt(frame.locator("details.rb-nav-narrow nav a", { hasText: "Qué ponemos" }));
+      await expect(visitor.locator('[data-testid="page-tabs"] [aria-current="page"]')).toHaveText(
+        "Qué ponemos",
+      );
+    } finally {
+      await context.close();
+    }
+  }, 120_000);
+});
