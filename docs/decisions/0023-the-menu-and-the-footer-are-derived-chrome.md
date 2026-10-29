@@ -151,3 +151,11 @@ sentences here are read differently from that day:
 «Exactly one navigation landmark» was amended by ADR 0043 (two, named). «It costs no JavaScript» is
 still true of everything this ADR describes; the first script a published page carries is ADR 0058's
 decision, and nothing of the menu needs it.
+
+## Amendment — the page carries the header's script (29 October 2026, ADR 0058)
+
+«It costs no JavaScript» holds for the menu — its lists, its `<details>`, its anchors — and stops
+holding for the **page**: since [ADR 0058](0058-a-published-page-carries-one-script-and-it-is-constant.md)
+a page that draws a header carries one constant inline script, which marks the section in view, closes
+the phone's menu on Escape and shadows a fixed bar. A page that draws no header carries none. The
+`<input type="checkbox">` trick is still rejected, and for the same reason.

@@ -4847,3 +4847,70 @@ el `fetch` a `/api/download` nunca llegaba a salir.
 document.ts` dejaba `headerSchema` sin inicializar a quien entraba por `invariants.ts`; `header.ts`
 quedó puro (forma, cotas, `withoutActionTo`, `retargetAction`) y los verbos que acaban en
 `parseDocument` viven en `headerVerbs.ts`.
+
+### Día 2 — el primer script, y el aspecto por tokens (PR de `feat/el-primer-script-y-el-aspecto`, ADR 0058)
+
+**ADR 0058 — una página publicada lleva un script, constante y prescindible, y solo donde se dibuja
+cabecera.** Tres de los seis puntos de David no se pueden cumplir sin él: Escape que cierra el menú del
+móvil y devuelve el foco, la sección a la vista marcada en el navegador, y la sombra de la barra fija al
+bajar. `headerScript.ts` exporta una cadena; la diana `html` la escribe como último hijo del `<body>`
+solo cuando `headerDrawn`; la diana `dom` nunca (el lienzo lo parchea morphdom, que pelearía cada
+atributo que el script escribe): es la única divergencia entre las dos dianas y `parity.test.ts` la
+asevera como tal —último nodo, la constante, presente donde y solo donde hay cabecera— y compara todo lo
+demás nodo a nodo. **Nada del documento entra en él**: dos documentos, uno con `<script>` en el nombre
+del negocio, llevan los mismos bytes. Pesa **0,7 KB gzip** contra 2 KB (un cuarto de los 8 del protocolo
+8.5), con línea propia en `pnpm size`, que ahora falla si el número de `<script` de una página no es el
+que `headerDrawn` dice: uno o cero. Cuatro escrituras y nada más: `data-rb-js` en `<html>`,
+`--rb-header-h` real, `data-scrolled` en la barra fija, `aria-current="location"` en la entrada de la
+sección más a la vista (`IntersectionObserver`). Las ADR 0023 y 0043 enmiendan su «costs no JavaScript».
+
+**El aspecto, como atributos que la hoja lee y tokens que la paleta prueba.** `data-bg` (cinco
+esquemas), `data-align`, `data-gap`, `data-size`, `data-uppercase`, `data-hover`, `data-sticky`,
+`data-hairline="none"`, y `data-phone-row`. **Las parejas se midieron antes de escribirse** sobre las
+cinco paletas: `surface` sobre `secondary` 5,47 mínimo (classic-blue) y `surface` sobre `ink` 9,28
+(forest-emerald) entran en `CONTRAST_PAIRS`; `ink` sobre `secondary`, lo que decía el plan, mide **1,23**
+en dark-slate y se descarta — los tres esquemas de color escriben sus entradas en `surface`, y el botón se
+invierte (`surface` con palabras `primary`), porque un botón `primary` sobre una barra `primary` no es un
+botón (y mide 1,77 sobre `ink`). **Transparente** (ajuste 1a): la barra sale del flujo y la portada abre
+`padding-top: calc(var(--space-xl) + var(--rb-header-h))`. **Fija** (punto 8): `sticky`, `scroll-margin-top`
+en toda sección, sombra de dos capas de la paleta al bajar; **transparente y fija no se juntan sin
+script** (ajuste 1b): la base la deja `absolute`, `html[data-rb-js]` la fija, y con `data-scrolled` toma
+`surface`. **Suave** bajo `prefers-reduced-motion: no-preference`. **Estilo por parte** (regla 6):
+`data-part` en marca, navegaciones y botón; selectores de (0,3,0) o más al final de la hoja, después de
+todo esquema; la barra lee `color` como su fondo. `styleCss.ts` saca la tabla de propiedades de
+`build.ts` porque `header.ts` la necesitaba y `build.ts` importa `header.ts`.
+
+**La revisión previa a la descarga juzga la cabecera.** `listHeaderStyleExceptions` en el esquema;
+`reviewStyle` compara las palabras de cada parte contra la barra (la exacta del dueño o el token del
+esquema; transparente sobre `surface`) y las del botón contra el botón, que se invierte en barra de
+color; el fondo exacto de la barra no es hallazgo. Las lecturas llegan dirigidas a `header` y la parte.
+
+**La matriz a11y gana la cabecera**: cinco esquemas × cinco paletas, y tres disposiciones × dos filas ×
+fija o no, sobre el documento del avance con marca y botón (37 documentos, dos anchos, axe con el
+contraste medido en lo compuesto).
+
+**Dos cosas que el navegador encontró.** (1) Con `justify-content: flex-end` en una caja que se desplaza
+en horizontal, las entradas desbordan por el **principio**, donde ningún desplazamiento llega: la fila del
+móvil dejó de desplazarse el día que llegó la alineación; en móvil va siempre `flex-start`. (2) Con el
+desplazamiento suave, leer la posición justo después de Enter en «Saltar al contenido» da 101 px: las
+aserciones se sondean. **Y una fila en móvil con barra fija**: una fija no puede fijarse a medias, y
+barra más fila pasan el 15 %: con `data-phone-row` la barra fija se suelta en el móvil (`position:
+static`), y el panel lo dirá el día 4.
+
+**Y dos de la suite e2e completa.** (1) `html { scroll-behavior: smooth }` entraba en el lienzo con la
+hoja del renderer, y el editor desplaza el marco por su cuenta y mide en el fotograma siguiente: la
+caminata del sprint 20 día 2 midió el asa de los verbos a 39 px de donde la espera. El lienzo lleva
+`html { scroll-behavior: auto !important }` en la hoja del editor: la web publicada se desplaza suave; la
+herramienta, al instante. (2) El recorrido del sprint 10 aseveraba cero `<script>` en el ZIP abierto desde
+disco contra un `<script>` tecleado en un texto marcado; ahora asevera que el único script de la página es
+la constante de la cabecera, lo que sigue probando lo mismo y algo más.
+
+**Tests**: `headerScript.test.ts` (5), `header-script.browser.test.ts` (8: marca y medida, Escape y
+fuera, sin script el `<details>` sigue, la sección a la vista se mueve, `data-scrolled` y la sombra, el
+ancla no queda tapada, transparente fija con script y no sin él), `header.test.ts` (+11),
+`styleReview.test.ts` (+5), `contrast.test.ts` prueba las dos parejas nuevas en las cinco paletas,
+`landingSample` y `menu.test` pasan de «sin script» a «uno, el de la cabecera». Saboteos hechos y deshechos por script: quitar el guard de `prefers-reduced-motion` → «scrolls smoothly
+only for somebody who has not asked for less motion» va a rojo; interpolar `siteName` en el script → «is
+one constant» y las cuatro paridades con cabecera van a rojo (nueve). Y una lección repetida que costó
+un rato: deshacer el segundo saboteo con `git checkout -- index.ts` devolvió el fichero a `HEAD` y se
+llevó el trabajo del día en él; se reescribió desde el diff. La memoria ya lo decía.

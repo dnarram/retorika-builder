@@ -1,5 +1,6 @@
 import type { ContentElement, RetorikaDocument } from "./document.ts";
 import type { ElementAddress } from "./fields.ts";
+import { HEADER_PARTS, type HeaderPart } from "./header.ts";
 import type { Role } from "./roles.ts";
 import {
   type ElementStyle,
@@ -259,3 +260,32 @@ const EXACT_TEXT: Partial<Record<StyleProperty, string>> = {
   padding: "must be a length such as 16px",
   borderRadius: "must be a length such as 8px",
 };
+
+/** One exact value on one part of the header (ADR 0057, rule 6 on the bar). */
+export interface HeaderStyleException {
+  part: HeaderPart;
+  property: StyleProperty;
+  exact: string;
+}
+
+/**
+ * Every exact value on the header's parts, in `HEADER_PARTS` order and `STYLE_PROPERTIES` order
+ * within a part — the header's half of the audit `listStyleExceptions` is for elements. Apart rather
+ * than folded into that list, because a part is not an element: it has no page, no section, no slot
+ * and no role, and a reader that pretended otherwise would be printing invented addresses.
+ */
+export function listHeaderStyleExceptions(doc: RetorikaDocument): HeaderStyleException[] {
+  const out: HeaderStyleException[] = [];
+  const style = doc.header?.style;
+  if (!style) return out;
+  for (const part of HEADER_PARTS) {
+    const own = style[part];
+    if (!own) continue;
+    for (const property of STYLE_PROPERTIES) {
+      const value = own[property];
+      if (value === undefined || !("exact" in value)) continue;
+      out.push({ part, property, exact: value.exact });
+    }
+  }
+  return out;
+}

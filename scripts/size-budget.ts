@@ -5,7 +5,7 @@ import { EMPTY_ANSWERS, generate, VARIANTS } from "@retorika/generator";
 import { hasSamplePhotos, recordById, sectorsInBank } from "@retorika/photobank";
 import { readSampleBytes } from "@retorika/photobank/server";
 import { buildSite, ownFontKeysFor, readFontBundle } from "@retorika/publisher";
-import { render, SHIPPABLE_FAMILIES } from "@retorika/renderer";
+import { HEADER_SCRIPT, headerDrawn, render, SHIPPABLE_FAMILIES } from "@retorika/renderer";
 import { flattenElements, parseDocument, type RetorikaDocument } from "@retorika/schema";
 
 /**
@@ -100,6 +100,15 @@ const MAX_BUNDLE_GZIP_BYTES = 20 * 1024;
 const MAX_FONT_GZIP_BYTES = 120 * 1024;
 
 /**
+ * The header's script (ADR 0058), the one script a published page may carry: a constant, weighed
+ * once because it is the same bytes on every page of every site. Protocol Part 8.5 allows 8 KB
+ * gzipped per interactive section; the ADR holds this one to a quarter of that, and the number is
+ * printed with the budget so a growth is a line somebody reads rather than a byte nobody notices.
+ */
+const MAX_SCRIPT_GZIP_BYTES = 2 * 1024;
+const scriptBytes = gzipSync(Buffer.from(HEADER_SCRIPT, "utf8")).length;
+
+/**
  * What one more emitted page may add to the bundle (ADR 0040 §8), **measured on 13 October 2026**
  * rather than chosen: a page drawn per entry of the twelve-entry fixture `una-pagina-por-ficha`
  * gzips to 1.7 KB (22.6 KB of ours for 13 files, 2.4 of them the home page), and the heaviest
@@ -122,7 +131,7 @@ const DOCUMENTS_DIR = join(FIXTURES_DIR, "documents");
 const isOwnFontPath = (path: string): boolean =>
   path.startsWith("fonts/propia-") || path.startsWith("fonts/LICENCIA-propia-");
 
-let failed = false;
+let failed = scriptBytes > MAX_SCRIPT_GZIP_BYTES;
 
 /**
  * One site, weighed: the page, the bytes we author, the photographs, and the whole download.
@@ -142,9 +151,11 @@ function weigh(
   const bytes = gzipSync(Buffer.from(html, "utf8")).length;
   const kb = (bytes / 1024).toFixed(1);
 
-  // Zero JavaScript unless a section genuinely needs it. No cover variant does, so any
-  // script tag here is a regression rather than a judgement call.
+  // Zero JavaScript unless something genuinely needs it (ADR 0001). Since ADR 0058 a page that
+  // draws a header carries exactly one inline script — the header's, a constant — and a page that
+  // draws none carries none. Any other count is a regression rather than a judgement call.
   const scripts = (html.match(/<script\b/gi) ?? []).length;
+  const allowedScripts = headerDrawn(document) ? 1 : 0;
 
   // The owner's own faces, if the document names any, come from `fixtures/fonts/` — the directory
   // that stands in for the browser and the account, as `fixtures/assets/` stands in for photographs.
@@ -189,7 +200,7 @@ function weigh(
   const over = heaviest.bytes > MAX_GZIP_BYTES;
   const overBundle = ourBytes > bundleBudget;
   const overFonts = fontBytes > MAX_FONT_GZIP_BYTES;
-  const withScript = scripts > 0;
+  const withScript = scripts !== allowedScripts;
   if (over || overBundle || overFonts || withScript) failed = true;
 
   const status = over || overBundle || overFonts || withScript ? "FAIL" : "ok";
@@ -316,10 +327,11 @@ for (const sector of sectorsInBank().filter(hasSamplePhotos).sort()) {
 }
 
 console.log(
-  `\nBudget: ${MAX_GZIP_BYTES / 1024} KB gzipped per emitted page, ` +
+  `\n${scriptBytes > MAX_SCRIPT_GZIP_BYTES ? "FAIL" : "ok  "} the header's script: ${(scriptBytes / 1024).toFixed(1)} KB gzipped, against ${MAX_SCRIPT_GZIP_BYTES / 1024} KB (ADR 0058)` +
+    `\nBudget: ${MAX_GZIP_BYTES / 1024} KB gzipped per emitted page, ` +
     `${MAX_BUNDLE_GZIP_BYTES / 1024} KB of our own bytes per bundle — faces excluded — ` +
     `plus ${PER_PAGE_GZIP_BYTES / 1024} KB per page after the first, ` +
-    `and ${MAX_FONT_GZIP_BYTES / 1024} KB of faces on their own line. Zero JavaScript.\n` +
+    `and ${MAX_FONT_GZIP_BYTES / 1024} KB of faces on their own line. One script, the header's, only where a header is drawn.\n` +
     "Photographs are reported, not budgeted here: the bank caps each approved one at " +
     "200 KB (`MAX_IMAGE_BYTES`), and an owner's own photo is the owner's — as is an owner's own " +
     "font, reported on its line and capped by the editor at 2 MB per file (ADR 0056).",

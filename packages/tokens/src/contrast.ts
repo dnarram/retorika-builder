@@ -96,6 +96,13 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   { fg: "color.secondary", bg: "color.surface" },
   { fg: "color.muted", bg: "color.surface" },
   { fg: "color.surface", bg: "color.primary" },
+  // The header's two other backgrounds (ADR 0057, sprint 30 día 2): the bar on `color.secondary`
+  // or on `color.ink` writes its entries in `color.surface`. Measured over the five palettes on 29
+  // October 2026 before being written here: surface on secondary 5.47 at its lowest (classic-blue),
+  // surface on ink 9.28 (forest-emerald). `color.ink` on `color.secondary` — the plan's first
+  // thought — measured 1.23 in dark-slate and was refused; the schemes read these two instead.
+  { fg: "color.surface", bg: "color.secondary" },
+  { fg: "color.surface", bg: "color.ink" },
 ];
 
 /** The foregrounds proved against this background, in the order above. Empty is a real answer: a

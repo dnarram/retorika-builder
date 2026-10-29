@@ -2,6 +2,8 @@ import { flattenElements, type RetorikaDocument } from "@retorika/schema";
 import { buildCss, buildTree, pageTitleFor, resolvePage } from "./build.ts";
 import { treeToFragment } from "./dom.ts";
 import { fontFilesFor } from "./fonts.ts";
+import { headerDrawn } from "./header.ts";
+import { HEADER_SCRIPT } from "./headerScript.ts";
 
 export type { OwnFace } from "./fonts.ts";
 export {
@@ -41,6 +43,7 @@ export { fontFaceCss } from "./fonts.ts";
  */
 export type { ActionEntry, HeaderSettings } from "./header.ts";
 export { actionEntry, headerDrawn, headerSettings } from "./header.ts";
+export { HEADER_SCRIPT } from "./headerScript.ts";
 export type { PageEntry, SectionEntry } from "./menu.ts";
 export {
   hasMenu,
@@ -117,7 +120,13 @@ export function render(
   // On a page drawn per entry the words are the entry's title field (ADR 0040 §4).
   const title = titleFor({ title: pageTitleFor(doc, page, resolved.entryId) }, doc.siteName);
   return {
-    html: pageToHtml(tree, css, title, headMetaOf(doc, title, resolved.pagePath)),
+    html: pageToHtml(
+      tree,
+      css,
+      title,
+      headMetaOf(doc, title, resolved.pagePath),
+      headerDrawn(doc) ? HEADER_SCRIPT : undefined,
+    ),
     css,
     assets: collectAssets(doc),
     fonts: fontFilesFor(doc),

@@ -2,6 +2,8 @@ import { presetFor } from "@retorika/catalog";
 import { arbitraryDocument } from "@retorika/schema/testing";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
+import { headerDrawn } from "../src/header.ts";
+import { HEADER_SCRIPT } from "../src/headerScript.ts";
 import { escapeHtml, render } from "../src/index.ts";
 import { loadCorpus } from "./corpus.ts";
 
@@ -164,9 +166,22 @@ function assertParity(
   // text at this level is the page skeleton's: the newline between two roots, and the
   // `"\n</body>\n</html>\n"` tail that an HTML parser folds back into the body. Dropped here
   // on the html side, and asserted absent on the dom side so the rule cannot hide a real text root.
-  const roots = [...parsed.body.childNodes].filter(
+  const allRoots = [...parsed.body.childNodes].filter(
     (node) => !(node.nodeType === node.TEXT_NODE && (node.nodeValue ?? "").trim() === ""),
   );
+  // **The one divergence the two targets have, and it is a decision** (ADR 0058): a page that
+  // draws a header ends its body with the header's script, and the dom target — the editor's canvas
+  // — never carries it. Asserted as exactly that: the last root, the constant, present where and
+  // only where a header is drawn; then set aside so everything before it is still compared node for
+  // node.
+  const last = allRoots.at(-1);
+  const scriptRoot = last && (last as Element).tagName === "SCRIPT" ? (last as Element) : undefined;
+  expect(scriptRoot !== undefined, `${label}: script present ≠ header drawn`).toBe(
+    headerDrawn(doc),
+  );
+  if (scriptRoot)
+    expect(scriptRoot.textContent, `${label}: not the header's script`).toBe(HEADER_SCRIPT);
+  const roots = scriptRoot ? allRoots.slice(0, -1) : allRoots;
   expect(
     [...fragment.childNodes].every((node) => node.nodeType === node.ELEMENT_NODE),
     `${label}: the dom target has a non-element root`,

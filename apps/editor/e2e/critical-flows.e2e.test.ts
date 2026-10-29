@@ -13,6 +13,7 @@ import {
   type Page,
 } from "@playwright/test";
 import { GALLERY_SAMPLE_COUNT } from "@retorika/generator";
+import { HEADER_SCRIPT } from "@retorika/renderer";
 import {
   FINE_PER_COLUMN,
   FINE_TRACKS,
@@ -4064,12 +4065,15 @@ describe("sprint 10 día 7 — el recorrido completo del sprint", () => {
         await offlinePage.goto(`file://${filePath}`, { waitUntil: "load" });
         await expect(offlinePage).toHaveTitle("Taberna del Puerto");
 
-        // Nothing ran, and there is nothing that could: the <script> typed into a marked run is
-        // text on the page, not a script element — the same claim the day 4 browser test makes
-        // against a hand-written fixture, proven here against one a person actually typed.
-        expect(await offlinePage.evaluate(() => document.querySelectorAll("script").length)).toBe(
-          0,
-        );
+        // Nothing of the owner's ran, and there is nothing that could: the <script> typed into a
+        // marked run is text on the page, not a script element — the same claim the day 4 browser
+        // test makes against a hand-written fixture, proven here against one a person actually
+        // typed. The one script on the page is the header's constant (ADR 0058), and nothing else.
+        expect(
+          await offlinePage.evaluate(() =>
+            [...document.querySelectorAll("script")].map((s) => s.textContent ?? ""),
+          ),
+        ).toEqual([HEADER_SCRIPT]);
         expect(dialogs).toEqual([]);
 
         const publishedSub = offlinePage.locator('[data-id="el-subheadline"]');
