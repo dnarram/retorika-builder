@@ -1,4 +1,5 @@
 import type { Page, RetorikaDocument } from "./document.ts";
+import { withoutActionTo } from "./header.ts";
 import { parseDocument } from "./parse.ts";
 
 /**
@@ -115,8 +116,17 @@ export function deletePage(doc: RetorikaDocument, pageId: string): RetorikaDocum
   if (at === 0) {
     throw new Error(`deletePage: "${pageId}" is the first page, which is the site's entry`);
   }
-  return withPages(
-    doc,
-    doc.pages.filter((_page, index) => index !== at),
-  );
+  // The header's button goes with the page, or with any section on it (ADR 0057) — see
+  // `deleteSection` for why it cannot be left pointing at what is gone.
+  const gone = doc.pages[at];
+  const header = withoutActionTo(doc.header, {
+    pageIds: new Set([pageId]),
+    sectionIds: new Set(gone?.sections.map((section) => section.id) ?? []),
+  });
+  const { header: _, ...rest } = doc;
+  return parseDocument({
+    ...rest,
+    ...(header === undefined ? {} : { header }),
+    pages: doc.pages.filter((_page, index) => index !== at),
+  });
 }

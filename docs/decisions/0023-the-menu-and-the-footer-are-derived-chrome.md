@@ -128,3 +128,26 @@ a person: anybody building a site, David included, can say how many pages they e
 whether a menu of two read as missing something. **The threshold is testable against a document; it
 is only the surprise that needed a stranger.** So this is not closed and not unanswerable: it is
 owed to whoever next builds a site with three pages and writes down what the menu looked like.
+
+## Amendment — the header is the owner's (28 October 2026, ADR 0057)
+
+[ADR 0057](0057-the-header-is-the-owners.md) decides the question this ADR deferred under «What would
+reopen this»: a place in the document to store what the owner decides about navigation. Three
+sentences here are read differently from that day:
+
+- **«The menu is derived, never document content.»** The *destinations* still are — a page is an
+  entry because it exists, a section because it is on the page being drawn — and the document still
+  holds no URL. What it holds since 1.15.0 is a `header` of references and preferences (which menus,
+  their layout, a brand, one button by id) and a `menuLabel` an owner may write over the derived
+  word. The reasoning that a written menu is «the same words on every page, wrong on all of them the
+  day a page is renamed» stands against a menu written as text, and this is not one.
+- **«Each home section contributes an anchor named by its heading.»** Named by **the short name of
+  its kind** («Servicios», «Contacto»), or by the owner's own label — never by its heading, which is a
+  sentence and not a name. ADR 0057 §2.
+- **«An avance contributes the entry of the page it points at, in the place the converted section
+  used to occupy»** — already withdrawn in ADR 0043, and its remainder («the avances decide the
+  pages' order») withdrawn in ADR 0057 §3: the pages menu reads `doc.pages`.
+
+«Exactly one navigation landmark» was amended by ADR 0043 (two, named). «It costs no JavaScript» is
+still true of everything this ADR describes; the first script a published page carries is ADR 0058's
+decision, and nothing of the menu needs it.

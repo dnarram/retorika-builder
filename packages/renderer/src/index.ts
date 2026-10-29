@@ -39,12 +39,16 @@ export { fontFaceCss } from "./fonts.ts";
  * either would drift the first time one changed, and the copy in the editor is the one that would
  * be telling somebody a number while they decide.
  */
+export type { ActionEntry, HeaderSettings } from "./header.ts";
+export { actionEntry, headerDrawn, headerSettings } from "./header.ts";
 export type { PageEntry, SectionEntry } from "./menu.ts";
 export {
   hasMenu,
   MENU_MIN_ENTRIES,
   menuIsCurated,
+  pageLabel,
   pageMenuEntries,
+  sectionLabel,
   sectionMenuEntries,
 } from "./menu.ts";
 export type { DomRenderOptions, RenderOptions } from "./options.ts";

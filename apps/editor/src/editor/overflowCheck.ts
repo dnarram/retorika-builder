@@ -147,6 +147,17 @@ function measureOne(frame: HTMLIFrameElement, html: string): Promise<PageFinding
  * Exported for the tests, which run this against a real page in a real browser rather than
  * against a mock of one — the only way to check a claim about layout.
  */
+/** Whether an ancestor below `<body>` clips this element's sideways overflow by scrolling it. */
+export function insideScroller(el: Element, inner: Document): boolean {
+  const view = inner.defaultView;
+  if (!view) return false;
+  for (let node = el.parentElement; node && node !== inner.body; node = node.parentElement) {
+    const overflowX = view.getComputedStyle(node).overflowX;
+    if (overflowX === "auto" || overflowX === "scroll") return true;
+  }
+  return false;
+}
+
 export function findOverflow(inner: Document, width: number): PageFinding[] {
   const findings: PageFinding[] = [];
   const seen = new Set<string>();
@@ -154,6 +165,13 @@ export function findOverflow(inner: Document, width: number): PageFinding[] {
   for (const el of inner.querySelectorAll("body *")) {
     const right = el.getBoundingClientRect().right;
     if (right <= width + TOLERANCE) continue;
+    // **Inside a strip that scrolls sideways on purpose, nothing is past the edge** (ADR 0057): the
+    // header's row of sections on a phone is `overflow-x: auto`, its entries run past 320px by
+    // design and the visitor drags them in, and the page itself does not scroll — the row clips
+    // them. Measured before this clause: a generated site's four entries put the row's last link at
+    // 380px and the gate refused the download of a page that scrolled nowhere. The container
+    // itself is still judged, so a strip wider than the screen is still a finding.
+    if (insideScroller(el, inner)) continue;
 
     const section = el.closest("[data-section]")?.getAttribute("data-section") ?? undefined;
     // One finding per section, not per element: a section that overflows usually overflows in

@@ -950,9 +950,13 @@ export function EditorShell({
           The same boxes, the same classes: `header`, `nav` and `main` are `display: block` like a
           `div`, and every one of them sets its own `flex`. The canvas's sections are not touched —
           they stay `role="group"`, which is David's sprint 17 decision and the reason naming them
-          was never the answer. */}
+          was never the answer. Named since sprint 30 día 1, like the `<main>` and the `<nav>`: the
+          client's page in the canvas now has a `<header>` of its own (ADR 0057), and two unnamed
+          banners in one document are axe's `landmark-unique` the moment the second exists. */}
+      {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: a <header> at the top of the body is the banner landmark, and it has to carry a name to be told apart from the canvas page's own (ADR 0057, sprint 30 día 1); axe itself asked for it */}
       <header
         ref={header}
+        aria-label={es["editor.header.label"]}
         className="flex h-[58px] shrink-0 items-center border-b border-ui-border bg-ui-surface px-4 phone:h-auto phone:flex-wrap phone:gap-x-2.5 phone:gap-y-2 phone:px-3 phone:py-2 tablet:h-auto tablet:flex-wrap tablet:gap-x-2.5 tablet:gap-y-2 tablet:py-2"
       >
         <button

@@ -29,7 +29,7 @@ export {
   PLACEHOLDER_SAMPLE_ID,
   placeholderImageSrc,
 } from "./placeholder-image.ts";
-export { CATALOG, presetFor, variantsFor } from "./presets.ts";
+export { CATALOG, menuLabelOf, presetFor, variantsFor } from "./presets.ts";
 export type { PricesVariant } from "./prices.ts";
 export {
   PRICES_ID,

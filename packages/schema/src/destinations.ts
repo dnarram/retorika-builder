@@ -118,9 +118,47 @@ export interface DeadDestination {
   text: string;
 }
 
+/**
+ * The header's button, read as a destination like any link the owner wrote (ADR 0057).
+ *
+ * It lives outside every page and is drawn on all of them, so it is reported under a sectionId of
+ * `"header"` and the slot `"action"` — words the editor can take somebody to, since the «Menú»
+ * panel is where the button is chosen. `href` is what the renderer will write for it: a local anchor
+ * when the section is on the page being drawn, a link into the page otherwise; here it is judged
+ * once, by whether the destination exists at all, because the renderer builds the href from the
+ * destination and cannot build a dead one from a live destination.
+ */
+function headerDestination(
+  doc: RetorikaDocument,
+): { dead: boolean; href: string; entry: DeadDestination } | undefined {
+  const action = doc.header?.action;
+  if (!action) return undefined;
+  const entry: DeadDestination = {
+    pageId: doc.pages[0]?.id ?? "",
+    sectionId: "header",
+    elementId: "action",
+    slot: "action",
+    role: "button",
+    text: "",
+  };
+  if (action.kind === "section") {
+    const owner = doc.pages.find((page) => page.sections.some((s) => s.id === action.sectionId));
+    if (!owner) return { dead: true, href: `#${action.sectionId}`, entry };
+    return { dead: false, href: `#${action.sectionId}`, entry };
+  }
+  const page = doc.pages.find((candidate) => candidate.id === action.pageId);
+  if (!page || page.binding) return { dead: true, href: "", entry };
+  return { dead: false, href: hrefForPage(page), entry };
+}
+
 export function listDeadDestinations(doc: RetorikaDocument): DeadDestination[] {
   const links = reachable(doc);
   const dead: DeadDestination[] = [];
+  // The invariants make a dangling action unrepresentable through `parseDocument`; this is the
+  // guarantee that stays whether or not anything can trigger it, because the download route is a
+  // public endpoint and the filter is the validation, not the trust.
+  const action = headerDestination(doc);
+  if (action?.dead) dead.push(action.entry);
   for (const page of doc.pages) {
     for (const section of page.sections) {
       for (const element of flattenElements(section.content)) {
@@ -191,6 +229,10 @@ function linksMatching(
   accepts: (href: string) => boolean,
 ): DeadDestination[] {
   const pointing: DeadDestination[] = [];
+  // The header's button counts among what points here: deleting the page or the section it names
+  // takes the button away, and the person deciding is owed that in the same count.
+  const action = headerDestination(doc);
+  if (action && !action.dead && accepts(action.href)) pointing.push(action.entry);
   for (const page of doc.pages) {
     for (const section of page.sections) {
       for (const element of flattenElements(section.content)) {

@@ -66,8 +66,9 @@ const CANVAS = 'iframe:not([aria-hidden="true"])';
  * **Sprint 27 día 2's two bounds** (ADR 0052 §2), each a measurement with room above it, both
  * taken on 23 October 2026 at 1440 × 900 with the design tools on.
  *
- * `DAY2_CANVAS_STOPS`: Tab stops from the canvas's first stop to the rail — the page's three
- * navigation links, a pill, the door, its insides (each text followed by the grip of the bar that
+ * `DAY2_CANVAS_STOPS`: Tab stops from the canvas's first stop to the rail — the page's skip link
+ * and its navigation links (sprint 30 día 1 added the first; the generated site draws four of the
+ * second), a pill, the door, its insides (each text followed by the grip of the bar that
  * opened on it, the photograph followed by its badge), one pill per gap. **Measured 22**;
  * seventy-five before día 2. `DAY2_PAST_THE_CANVAS`: presses from inside a hand-designed section
  * to «Diseño» and to «Colocación» in the rail, which the sprint 24 walk bounded at two hundred for
@@ -1341,8 +1342,9 @@ describe("regression — the preview is a canvas, not a browsable site", () => {
     await frame.locator('[data-section="sec-cover"]').waitFor();
 
     const entries = frame.locator(".rb-nav-wide a");
-    // The generated site reaches three menu entries on its own — «Qué ponemos», «Dónde estamos»
-    // and «Te esperamos» — so the menu is in the preview from the first render.
+    // The generated site reaches four menu entries on its own — «Servicios», «Galería», «Dónde
+    // estamos» and «Contacto», each the short name of its kind (ADR 0057) — so the menu is in the
+    // preview from the first render.
     await expect(entries.first()).toBeVisible();
 
     const framesBefore = page.frames().length;
@@ -1561,9 +1563,10 @@ describe("día 7 — dos conversiones desde el editor, y el ZIP resultante abier
         "Dónde estamos",
       ]);
       await expect(offlinePage.locator('.rb-nav-wide nav[aria-label="Secciones"] a')).toHaveText([
-        // The bank's gallery (ADR 0039) is a section with a heading, so the menu lists it.
-        "Un vistazo a Taberna Santo Domingo",
-        "Te esperamos",
+        // By the short name of each kind, never by the heading (ADR 0057): the bank's gallery is
+        // «Galería» and the contact section «Contacto», whatever their headlines say.
+        "Galería",
+        "Contacto",
       ]);
       // No «Inicio» on the page it would link to — a link that reloads the page you are on.
       await expect(offlinePage.locator(".rb-nav-wide a", { hasText: "Inicio" })).toHaveCount(0);
@@ -1968,7 +1971,9 @@ describe("sprint 7 día 3 — deshacer una conversión desde «Páginas»", () =
 
       // And the derived menu followed: «Qué ponemos» is an anchor on this page again rather than
       // an entry pointing at a file that no longer exists.
-      await expect(frame.locator(".rb-nav-wide a", { hasText: "Qué ponemos" })).toHaveAttribute(
+      // Under its kind's name, «Servicios» (ADR 0057): the page was called «Qué ponemos» after its
+      // headline, the section back on the home page is named by what it is.
+      await expect(frame.locator(".rb-nav-wide a", { hasText: "Servicios" })).toHaveAttribute(
         "href",
         "#sec-services",
       );
@@ -7956,12 +7961,7 @@ describe("sprint 23 día 3 — quitar una sección del menú", () => {
       await intoTheCanvas(visitor);
       const frame = visitor.frameLocator(PREVIEW).first();
       const sections = frame.locator('.rb-nav-wide nav[aria-label="Secciones"] a');
-      await expect(sections).toHaveText([
-        "Qué ponemos",
-        "Un vistazo a Taberna Santo Domingo",
-        "Dónde estamos",
-        "Te esperamos",
-      ]);
+      await expect(sections).toHaveText(["Servicios", "Galería", "Dónde estamos", "Contacto"]);
 
       // Abrir los campos de «Dónde estamos», que es donde vive el interruptor.
       await frame.locator('[data-section="sec-location"]').click();
@@ -7977,11 +7977,7 @@ describe("sprint 23 día 3 — quitar una sección del menú", () => {
       );
 
       await toggle.uncheck();
-      await expect(sections).toHaveText([
-        "Qué ponemos",
-        "Un vistazo a Taberna Santo Domingo",
-        "Te esperamos",
-      ]);
+      await expect(sections).toHaveText(["Servicios", "Galería", "Contacto"]);
 
       /**
        * **Y la sección sigue ahí.** Esta es la aserción que separa «fuera del menú» de «fuera de
@@ -7994,12 +7990,7 @@ describe("sprint 23 día 3 — quitar una sección del menú", () => {
 
       // Un paso del historial como cualquier otro.
       await visitor.getByRole("button", { name: "Deshacer" }).click();
-      await expect(sections).toHaveText([
-        "Qué ponemos",
-        "Un vistazo a Taberna Santo Domingo",
-        "Dónde estamos",
-        "Te esperamos",
-      ]);
+      await expect(sections).toHaveText(["Servicios", "Galería", "Dónde estamos", "Contacto"]);
     } finally {
       await visitor.context().close();
     }
@@ -8096,7 +8087,7 @@ describe("sprint 23 día 4 — las páginas en el menú y el umbral curado", () 
       // Sin cerrar nada: el cajón sigue abierto y el clic en la sección siguiente llega.
       await openFields("sec-location");
       await sectionToggle.uncheck();
-      await expect(sections).toHaveText(["Te esperamos"]);
+      await expect(sections).toHaveText(["Contacto"]);
       await expect(visitor.locator("aside")).toContainText("lo has decidido tú");
 
       /**
@@ -8111,7 +8102,7 @@ describe("sprint 23 día 4 — las páginas en el menú y el umbral curado", () 
 
       // Un paso del historial como cualquier otro: el menú vuelve con su único destino.
       await visitor.getByRole("button", { name: "Deshacer" }).click();
-      await expect(sections).toHaveText(["Te esperamos"]);
+      await expect(sections).toHaveText(["Contacto"]);
 
       /**
        * **axe a 390 sobre las dos palancas que el sprint añadió** (día 5, y una laguna que el

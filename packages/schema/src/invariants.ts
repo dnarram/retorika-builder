@@ -1,4 +1,5 @@
 import type { ContentElement, RetorikaDocument, Section } from "./document.ts";
+import { UNLABELLED_SECTIONS } from "./header.ts";
 import { isContainerRole } from "./roles.ts";
 
 /**
@@ -148,7 +149,70 @@ export function checkInvariants(doc: RetorikaDocument, lookup?: PresetLookup): V
       }
       sectionIds.add(section.id);
 
+      // A label for a place the menu never names is a word nobody reads (ADR 0057): the cover and
+      // the h1 are the top of the page, the footer is chrome, an avance borrows its words from the
+      // page it points at.
+      if (section.menuLabel !== undefined && UNLABELLED_SECTIONS.has(section.preset.catalogId)) {
+        violations.push({
+          rule: 1,
+          path,
+          message: `a "${section.preset.catalogId}" section lends no menu entry, so it cannot carry a menu label`,
+        });
+      }
+
       checkSection(section, path, violations);
+    }
+  }
+
+  /**
+   * **The header's button points at a place that exists** (ADR 0057) — rule 5 for the one reference
+   * the document holds outside its pages. A section that is gone, a page that is gone, the entry
+   * page (a button to where every visitor starts is a button to nowhere they are not), or a page
+   * drawn per entry (which has no file of its own, ADR 0040): each would publish a dead button, and
+   * a dead button is the one thing the download gate refuses. The verbs that remove or convert a
+   * destination re-point or drop the action first, so none of these can be reached from the editor.
+   */
+  const action = doc.header?.action;
+  if (action?.kind === "section" && !sectionIds.has(action.sectionId)) {
+    violations.push({
+      rule: 5,
+      path: "header.action",
+      message: `the header's button points at section "${action.sectionId}", which is not in the document`,
+    });
+  }
+  if (action?.kind === "section" && sectionIds.has(action.sectionId)) {
+    const target = doc.pages
+      .flatMap((page) => page.sections)
+      .find((s) => s.id === action.sectionId);
+    if (target && UNLABELLED_SECTIONS.has(target.preset.catalogId)) {
+      violations.push({
+        rule: 1,
+        path: "header.action",
+        message: `the header's button points at a "${target.preset.catalogId}" section, which is no destination`,
+      });
+    }
+  }
+  if (action?.kind === "page") {
+    const at = doc.pages.findIndex((page) => page.id === action.pageId);
+    if (at < 0) {
+      violations.push({
+        rule: 5,
+        path: "header.action",
+        message: `the header's button points at page "${action.pageId}", which is not in the document`,
+      });
+    } else if (at === 0) {
+      violations.push({
+        rule: 1,
+        path: "header.action",
+        message:
+          "the header's button points at the entry page, which is where every visitor already starts",
+      });
+    } else if (doc.pages[at]?.binding) {
+      violations.push({
+        rule: 5,
+        path: "header.action",
+        message: `the header's button points at page "${action.pageId}", which is drawn once per entry and has no file of its own`,
+      });
     }
   }
 

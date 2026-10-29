@@ -3,6 +3,7 @@ import { CONTACT_ID, CONTACT_VARIANTS, contactPreset } from "./contact.ts";
 import { COVER_ID, COVER_VARIANTS, coverPreset } from "./cover.ts";
 import { FOOTER_ID, FOOTER_VARIANTS, footerPreset } from "./footer.ts";
 import { GALLERY_ID, GALLERY_VARIANTS, galleryPreset } from "./gallery.ts";
+import es from "./locales/es.json" with { type: "json" };
 import { LOCATION_ID, LOCATION_VARIANTS, locationPreset } from "./location.ts";
 import { PRICES_ID, PRICES_VARIANTS, pricesPreset } from "./prices.ts";
 import { SERVICES_ID, SERVICES_VARIANTS, servicesPreset } from "./services.ts";
@@ -72,4 +73,24 @@ export function variantsFor(catalogId: string): readonly string[] {
     );
   }
   return variants;
+}
+
+/**
+ * The short name the menu calls a section of this kind by (ADR 0057): «Servicios», «Galería»,
+ * «Contacto» — a word, where `section.<id>.name` is a phrase for a chooser («Horario y ubicación»).
+ *
+ * **Never the section's heading.** A heading is a sentence the owner wrote for the top of a block
+ * («Te esperamos»); a menu entry is a name for a place. David's decision of 28 October 2026: the
+ * entry derives from the kind, and the owner may write their own on top (`menuLabel`), which the
+ * renderer prefers. The three kinds that lend no entry — cover, footer, avance — have no label here
+ * and asking for one throws, the way an unknown section does: a word invented here would be a word
+ * published on a client's site that nobody chose.
+ */
+export function menuLabelOf(catalogId: string): string {
+  const key = `section.${catalogId}.menuLabel` as keyof typeof es;
+  const label = es[key];
+  if (typeof label !== "string" || label === "") {
+    throw new Error(`menuLabelOf: "${catalogId}" lends no menu entry and has no short name`);
+  }
+  return label;
 }
