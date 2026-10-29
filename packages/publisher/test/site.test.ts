@@ -243,6 +243,12 @@ describe("buildSite", () => {
     }
   });
 
+  /**
+   * Every document of the corpus, built twice: a loop whose time is the corpus's size times a
+   * deflate of the fonts two of its documents ship. Measured 0.5 s on 29 October 2026 on the
+   * laptop, and 5 s — the default, hit — on a cold CI runner the same morning, with no change to the
+   * corpus that day. The bound is the loop's, not the default's.
+   */
   it(`${invariantTestName("INV_5")} (publisher bundle)`, async () => {
     for (const { name, document } of corpus) {
       const options = {
@@ -253,7 +259,7 @@ describe("buildSite", () => {
       };
       expect(buildSite(document, options), name).toEqual(buildSite(document, options));
     }
-  });
+  }, 30_000);
 
   it("emits sitemap.xml only with a baseUrl, and robots.txt always", () => {
     const assets = assetsFor(barbershop);
