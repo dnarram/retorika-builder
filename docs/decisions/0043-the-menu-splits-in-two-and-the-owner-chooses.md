@@ -186,3 +186,29 @@ somebody who has decided for themselves.
   `menu-curado`, the fixture that records it, which is itself the proof that `inMenu` is absent by
   default and no stored document changed.
 - Day by day in `docs/design/REVIEW.md`, sprint 23.
+
+## Amendment — the header is the owner's (28 October 2026, ADR 0057)
+
+[ADR 0057](0057-the-header-is-the-owners.md) withdraws two sentences of this ADR and reads two
+sections differently, each with David's own reason of 28 October 2026:
+
+- **§3, «no name of its own»** — withdrawn. An owner may write a `menuLabel` of two to twenty
+  characters over the derived word, and the derived word is no longer the heading but the short name
+  of the section's kind. His reason: *lo que no debía mentir era el destino, y sigue sin poder
+  hacerlo* — the entry is the section's id, a label is not a copy of anything and cannot go stale,
+  and if the section is deleted the entry goes with it. «No reordering» stands for the sections; for
+  the pages, see the next point.
+- **§1, «in the order the home page's avances give»** and «What is preserved: an avance still decides
+  where its page sits» — withdrawn. The pages menu reads `doc.pages`, the order «Páginas» already
+  lets the owner move. Two orders for one list was a panel whose «Subir» moved the tabs and not the
+  menu.
+- **§1, «inside one `<details>` on a narrow one»** — the pages fold into the one disclosure; the
+  sections of the page being drawn are a horizontal row under the bar, or hidden, as the owner
+  chooses. There is still exactly one `<details>`, and it still holds everything that folds.
+- **§4–§5, the threshold** — unchanged as the *default*. Each menu now also takes the owner's word
+  (`header.pages.shown`, `header.sections.shown`), and where that word is written the threshold is
+  silent for that menu. The two bounds of §5 — nothing emitted for zero destinations, the pages
+  strip drawn only where it leads somewhere the visitor is not — stand.
+
+«What this does not decide» named an own label and an order as «still refused, for ADR 0023's
+reasons». Both are now decided the other way, in ADR 0057 and not here.

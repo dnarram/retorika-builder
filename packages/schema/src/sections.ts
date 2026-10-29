@@ -1,4 +1,5 @@
 import type { ContentElement, ContentValue, Page, RetorikaDocument, Section } from "./document.ts";
+import { withoutActionTo } from "./header.ts";
 import { flattenElements } from "./invariants.ts";
 import { parseDocument } from "./parse.ts";
 import type { Role } from "./roles.ts";
@@ -72,8 +73,14 @@ export function deleteSection(doc: RetorikaDocument, sectionId: string): Retorik
   const found = findSection(doc, sectionId);
   if (!found) throw new Error(`deleteSection: no section "${sectionId}"`);
 
+  // The header's button goes with the section it pointed at (ADR 0057): left in place it would be a
+  // reference to nothing, which the invariants refuse — and a delete that threw would look like a
+  // delete that did not work.
+  const header = withoutActionTo(doc.header, { sectionIds: new Set([sectionId]) });
+  const { header: _, ...rest } = doc;
   return parseDocument({
-    ...doc,
+    ...rest,
+    ...(header === undefined ? {} : { header }),
     pages: doc.pages.map((page) =>
       page.id === found.page.id
         ? { ...page, sections: page.sections.filter((section) => section.id !== sectionId) }

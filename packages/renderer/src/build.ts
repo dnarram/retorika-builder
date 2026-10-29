@@ -21,8 +21,8 @@ import {
 } from "@retorika/schema";
 import { cssAttributeValue, cssThemeValue, safeUrl } from "./escape.ts";
 import { fontFaceCss } from "./fonts.ts";
+import { headerCss, headerMobileCss, headerNodes } from "./header.ts";
 import { h1SectionIds } from "./headings.ts";
-import { menuNodes } from "./menu.ts";
 import { commentNode, element, inlineElement, type RenderNode } from "./nodes.ts";
 import type { ResolvedRenderOptions } from "./options.ts";
 import { textElement } from "./runs.ts";
@@ -667,11 +667,15 @@ export function buildTree(doc: RetorikaDocument, options: ResolvedRenderOptions)
 
   return [
     // Before `<main>`, so a keyboard or screen-reader user reaches the navigation first, which is
-    // where every page's structure is announced.
-    ...menuNodes(doc, page),
+    // where every page's structure is announced — and, first of all, the link that skips it.
+    ...headerNodes(doc, page),
     element(
       "main",
       {
+        // The skip link's destination (ADR 0057). Always present, header or not: a stable id costs
+        // nothing and a page whose `<main>` is addressable only on some sites is a rule with an
+        // exception. `rb-` so no section id (`sec-…`) can ever collide with it.
+        id: "rb-main",
         class: "rb-page",
         "data-page": page.id,
         // Which entry this drawing is of, for the editor only (ADR 0033 §10's rule, applied to
@@ -1065,47 +1069,10 @@ export function buildCss(doc: RetorikaDocument): string {
     "  background: var(--color-surface); border-radius: var(--radius-lg); pointer-events: none; }",
     ".rb-panel ~ :not(img) { z-index: 2; }",
     "",
-    // The menu that writes itself (ADR 0023). Two versions alternated by the media query at the
-    // bottom of this stylesheet, so that at any width exactly one is in the accessibility tree.
-    //
-    // `color.primary` on `color.surface` is the one pair every palette is proved against
-    // (`packages/tokens/test/contrast.test.ts`), which is why the strip uses the page's own
-    // background rather than a tinted bar of its own. Underlined on hover only would leave the
-    // entries relying on colour alone, so they are not styled as links at all: they are a strip of
-    // navigation, and the current one is marked by weight and a rule under it rather than by hue.
-    //
-    // **Since ADR 0043 the bar holds two menus side by side**, so the padding and the page's own
-    // background belong to the bar and the gap between entries to each menu. Side by side rather
-    // than stacked: two strips would push the cover a line further under the fold on every page of
-    // every site, which is the same worry the cover's own block already carries.
-    ".rb-nav-wide { display: flex; flex-wrap: wrap; gap: var(--space-xl);",
-    "  padding: var(--space-md) var(--space-xl); background: var(--color-surface); }",
-    ".rb-nav { display: flex; flex-wrap: wrap; gap: var(--space-md); }",
-    // What tells the two groups apart for an eye: the accessible name does it for a screen reader,
-    // and this does it without adding a word of copy to every published page. Decorative, so the
-    // text contrast minimum does not apply — the same `color.muted` hairline `.rb-item` uses.
-    ".rb-nav + .rb-nav { padding-left: var(--space-xl);",
-    "  border-left: 1px solid var(--color-muted); }",
-    // A hairline under the strip, so it reads as a bar rather than as the page's top padding —
-    // the same `color.muted` rule `.rb-item` already separates cards with, which keeps one visual
-    // idiom instead of two. Decorative, so the contrast minimum for text does not apply to it.
-    ".rb-nav-wide, .rb-nav-narrow { border-bottom: 1px solid var(--color-muted); }",
-    ".rb-nav a { color: var(--color-primary); font-family: var(--font-heading);",
-    "  font-size: var(--size-body); text-decoration: none; }",
-    // Not colour alone: the entry for the page you are on carries a rule under it as well.
-    ".rb-nav a[aria-current=page] { text-decoration: underline; text-underline-offset: 6px;",
-    "  text-decoration-thickness: 2px; }",
-    ".rb-nav-narrow { padding: var(--space-md) var(--space-lg);",
-    "  background: var(--color-surface); }",
-    ".rb-nav-narrow > summary { color: var(--color-primary); font-family: var(--font-heading);",
-    "  font-size: var(--size-body); cursor: pointer; }",
-    // Inside the disclosure the strip stacks, and its own padding would double the summary's.
-    ".rb-nav-narrow .rb-nav { flex-direction: column; gap: var(--space-sm);",
-    "  padding: var(--space-md) 0 0; }",
-    // The two menus stack inside the disclosure, so the rule between them turns with them.
-    ".rb-nav-narrow .rb-nav + .rb-nav { padding-left: 0; border-left: 0;",
-    "  border-top: 1px solid var(--color-muted); margin-top: var(--space-md); }",
-    "",
+    // The header (ADR 0057; `header.ts`): the brand, the two menus and the button, with the strip's
+    // own rules that used to sit here. Only for a site that draws one — the eighteen corpus sites
+    // without a menu stop carrying rules for a strip they never drew.
+    ...headerCss(doc),
     // Below 320px is where the dossier's pre-publish check looks for overflow, so the
     // grid collapses before it can happen rather than being patched afterwards.
     //
@@ -1123,20 +1090,10 @@ export function buildCss(doc: RetorikaDocument): string {
     "  .rb-panel { display: none; }",
     "}",
     "",
-    // The two menus, alternated. `display: none` and not `visibility` or a clip: only `display:
-    // none` takes an element out of the accessibility tree, and the whole point of emitting two is
-    // that a screen reader is never told about a navigation landmark it cannot reach. The a11y
-    // matrix asserts exactly one `<nav>` at each width, which is what makes this a guarantee
-    // rather than an intention.
-    //
-    // Wide first and narrow in the query, matching how every other rule in this stylesheet is
-    // written: the desktop shape is the default and 720px patches it (document rule 7).
-    ".rb-nav-narrow { display: none; }",
-    "@media (max-width: 720px) {",
-    "  .rb-nav-wide { display: none; }",
-    "  .rb-nav-narrow { display: block; }",
-    "}",
-    "",
+    // The header below 720px, in its own query after the shared one — wide first and narrow in the
+    // query, matching how every other rule in this stylesheet is written: the desktop shape is the
+    // default and 720px patches it (document rule 7). See `headerMobileCss` for what alternates.
+    ...headerMobileCss(doc),
     // Rule 6's per-element style, and then rule 7's per-element patches — both only for the
     // documents that carry any, so a site that uses neither publishes exactly the bytes it always
     // did. Style before patches because it applies at every width and the patches are the mobile

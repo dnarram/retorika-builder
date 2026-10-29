@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.14.0",
+  "schemaVersion": "1.15.0",
   "document": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -284,6 +284,1083 @@
           "additionalProperties": false
         }
       },
+      "header": {
+        "type": "object",
+        "properties": {
+          "pages": {
+            "type": "object",
+            "properties": {
+              "shown": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          },
+          "sections": {
+            "type": "object",
+            "properties": {
+              "shown": {
+                "type": "boolean"
+              },
+              "row": {
+                "type": "string",
+                "enum": [
+                  "shared",
+                  "own"
+                ]
+              },
+              "mobile": {
+                "type": "string",
+                "enum": [
+                  "row",
+                  "hidden"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          "action": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "section"
+                  },
+                  "sectionId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  }
+                },
+                "required": [
+                  "kind",
+                  "sectionId"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "const": "page"
+                  },
+                  "pageId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  }
+                },
+                "required": [
+                  "kind",
+                  "pageId"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "layout": {
+            "type": "string",
+            "enum": [
+              "brand-left",
+              "centered",
+              "stacked"
+            ]
+          },
+          "brand": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "boolean"
+              },
+              "logo": {
+                "type": "object",
+                "properties": {
+                  "src": {
+                    "type": "string",
+                    "pattern": "^(?:assets\\/)?[A-Za-z0-9][A-Za-z0-9._-]*\\.(?:png|jpe?g|webp)$"
+                  }
+                },
+                "required": [
+                  "src"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          },
+          "sticky": {
+            "type": "boolean"
+          },
+          "hairline": {
+            "type": "boolean"
+          },
+          "look": {
+            "type": "object",
+            "properties": {
+              "background": {
+                "type": "string",
+                "enum": [
+                  "surface",
+                  "primary",
+                  "secondary",
+                  "ink",
+                  "transparent"
+                ]
+              },
+              "align": {
+                "type": "string",
+                "enum": [
+                  "start",
+                  "center",
+                  "end"
+                ]
+              },
+              "gap": {
+                "type": "string",
+                "enum": [
+                  "sm",
+                  "md",
+                  "lg"
+                ]
+              },
+              "uppercase": {
+                "type": "boolean"
+              },
+              "hoverUnderline": {
+                "type": "boolean"
+              },
+              "size": {
+                "type": "string",
+                "enum": [
+                  "body",
+                  "small"
+                ]
+              }
+            },
+            "additionalProperties": false
+          },
+          "style": {
+            "type": "object",
+            "properties": {
+              "bar": {
+                "type": "object",
+                "properties": {
+                  "color": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "ref": {
+                            "type": "string",
+                            "enum": [
+                              "color.primary",
+                              "color.secondary",
+                              "color.surface",
+                              "color.ink",
+                              "color.muted"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "ref"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "exact": {
+                            "type": "string",
+                            "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
+                          },
+                          "exception": {
+                            "type": "boolean",
+                            "const": true
+                          }
+                        },
+                        "required": [
+                          "exact",
+                          "exception"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "fontSize": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "ref": {
+                            "type": "string",
+                            "enum": [
+                              "size.heading",
+                              "size.subheading",
+                              "size.body"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "ref"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "exact": {
+                            "type": "string",
+                            "pattern": "^(?:0|\\d{1,4}(?:\\.\\d{1,3})?px)$"
+                          },
+                          "exception": {
+                            "type": "boolean",
+                            "const": true
+                          }
+                        },
+                        "required": [
+                          "exact",
+                          "exception"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "fontFamily": {
+                    "type": "object",
+                    "properties": {
+                      "ref": {
+                        "type": "string",
+                        "enum": [
+                          "font.heading",
+                          "font.body"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "ref"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "padding": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "ref": {
+                            "type": "string",
+                            "enum": [
+                              "space.xs",
+                              "space.sm",
+                              "space.md",
+                              "space.lg",
+                              "space.xl"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "ref"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "exact": {
+                            "type": "string",
+                            "pattern": "^(?:0|\\d{1,4}(?:\\.\\d{1,3})?px)$"
+                          },
+                          "exception": {
+                            "type": "boolean",
+                            "const": true
+                          }
+                        },
+                        "required": [
+                          "exact",
+                          "exception"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "borderRadius": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "ref": {
+                            "type": "string",
+                            "enum": [
+                              "radius.sm",
+                              "radius.md",
+                              "radius.lg"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "ref"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "exact": {
+                            "type": "string",
+                            "pattern": "^(?:0|\\d{1,4}(?:\\.\\d{1,3})?px)$"
+                          },
+                          "exception": {
+                            "type": "boolean",
+                            "const": true
+                          }
+                        },
+                        "required": [
+                          "exact",
+                          "exception"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              },
+              "brand": {
+                "type": "object",
+                "properties": {
+                  "color": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "ref": {
+                            "type": "string",
+                            "enum": [
+                              "color.primary",
+                              "color.secondary",
+                              "color.surface",
+                              "color.ink",
+                              "color.muted"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "ref"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "exact": {
+                            "type": "string",
+                            "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
+                          },
+                          "exception": {
+                            "type": "boolean",
+                            "const": true
+                          }
+                        },
+                        "required": [
+                          "exact",
+                          "exception"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "fontSize": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "ref": {
+                            "type": "string",
+                            "enum": [
+                              "size.heading",
+                              "size.subheading",
+                              "size.body"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "ref"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "exact": {
+                            "type": "string",
+                            "pattern": "^(?:0|\\d{1,4}(?:\\.\\d{1,3})?px)$"
+                          },
+                          "exception": {
+                            "type": "boolean",
+                            "const": true
+                          }
+                        },
+                        "required": [
+                          "exact",
+                          "exception"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "fontFamily": {
+                    "type": "object",
+                    "properties": {
+                      "ref": {
+                        "type": "string",
+                        "enum": [
+                          "font.heading",
+                          "font.body"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "ref"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "padding": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "ref": {
+                            "type": "string",
+                            "enum": [
+                              "space.xs",
+                              "space.sm",
+                              "space.md",
+                              "space.lg",
+                              "space.xl"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "ref"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "exact": {
+                            "type": "string",
+                            "pattern": "^(?:0|\\d{1,4}(?:\\.\\d{1,3})?px)$"
+                          },
+                          "exception": {
+                            "type": "boolean",
+                            "const": true
+                          }
+                        },
+                        "required": [
+                          "exact",
+                          "exception"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "borderRadius": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "ref": {
+                            "type": "string",
+                            "enum": [
+                              "radius.sm",
+                              "radius.md",
+                              "radius.lg"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "ref"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "exact": {
+                            "type": "string",
+                            "pattern": "^(?:0|\\d{1,4}(?:\\.\\d{1,3})?px)$"
+                          },
+                          "exception": {
+                            "type": "boolean",
+                            "const": true
+                          }
+                        },
+                        "required": [
+                          "exact",
+                          "exception"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              },
+              "pagesLinks": {
+                "type": "object",
+                "properties": {
+                  "color": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "ref": {
+                            "type": "string",
+                            "enum": [
+                              "color.primary",
+                              "color.secondary",
+                              "color.surface",
+                              "color.ink",
+                              "color.muted"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "ref"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "exact": {
+                            "type": "string",
+                            "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
+                          },
+                          "exception": {
+                            "type": "boolean",
+                            "const": true
+                          }
+                        },
+                        "required": [
+                          "exact",
+                          "exception"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "fontSize": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "ref": {
+                            "type": "string",
+                            "enum": [
+                              "size.heading",
+                              "size.subheading",
+                              "size.body"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "ref"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "exact": {
+                            "type": "string",
+                            "pattern": "^(?:0|\\d{1,4}(?:\\.\\d{1,3})?px)$"
+                          },
+                          "exception": {
+                            "type": "boolean",
+                            "const": true
+                          }
+                        },
+                        "required": [
+                          "exact",
+                          "exception"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "fontFamily": {
+                    "type": "object",
+                    "properties": {
+                      "ref": {
+                        "type": "string",
+                        "enum": [
+                          "font.heading",
+                          "font.body"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "ref"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "padding": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "ref": {
+                            "type": "string",
+                            "enum": [
+                              "space.xs",
+                              "space.sm",
+                              "space.md",
+                              "space.lg",
+                              "space.xl"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "ref"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "exact": {
+                            "type": "string",
+                            "pattern": "^(?:0|\\d{1,4}(?:\\.\\d{1,3})?px)$"
+                          },
+                          "exception": {
+                            "type": "boolean",
+                            "const": true
+                          }
+                        },
+                        "required": [
+                          "exact",
+                          "exception"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "borderRadius": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "ref": {
+                            "type": "string",
+                            "enum": [
+                              "radius.sm",
+                              "radius.md",
+                              "radius.lg"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "ref"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "exact": {
+                            "type": "string",
+                            "pattern": "^(?:0|\\d{1,4}(?:\\.\\d{1,3})?px)$"
+                          },
+                          "exception": {
+                            "type": "boolean",
+                            "const": true
+                          }
+                        },
+                        "required": [
+                          "exact",
+                          "exception"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              },
+              "sectionsLinks": {
+                "type": "object",
+                "properties": {
+                  "color": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "ref": {
+                            "type": "string",
+                            "enum": [
+                              "color.primary",
+                              "color.secondary",
+                              "color.surface",
+                              "color.ink",
+                              "color.muted"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "ref"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "exact": {
+                            "type": "string",
+                            "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
+                          },
+                          "exception": {
+                            "type": "boolean",
+                            "const": true
+                          }
+                        },
+                        "required": [
+                          "exact",
+                          "exception"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "fontSize": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "ref": {
+                            "type": "string",
+                            "enum": [
+                              "size.heading",
+                              "size.subheading",
+                              "size.body"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "ref"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "exact": {
+                            "type": "string",
+                            "pattern": "^(?:0|\\d{1,4}(?:\\.\\d{1,3})?px)$"
+                          },
+                          "exception": {
+                            "type": "boolean",
+                            "const": true
+                          }
+                        },
+                        "required": [
+                          "exact",
+                          "exception"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "fontFamily": {
+                    "type": "object",
+                    "properties": {
+                      "ref": {
+                        "type": "string",
+                        "enum": [
+                          "font.heading",
+                          "font.body"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "ref"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "padding": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "ref": {
+                            "type": "string",
+                            "enum": [
+                              "space.xs",
+                              "space.sm",
+                              "space.md",
+                              "space.lg",
+                              "space.xl"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "ref"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "exact": {
+                            "type": "string",
+                            "pattern": "^(?:0|\\d{1,4}(?:\\.\\d{1,3})?px)$"
+                          },
+                          "exception": {
+                            "type": "boolean",
+                            "const": true
+                          }
+                        },
+                        "required": [
+                          "exact",
+                          "exception"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "borderRadius": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "ref": {
+                            "type": "string",
+                            "enum": [
+                              "radius.sm",
+                              "radius.md",
+                              "radius.lg"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "ref"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "exact": {
+                            "type": "string",
+                            "pattern": "^(?:0|\\d{1,4}(?:\\.\\d{1,3})?px)$"
+                          },
+                          "exception": {
+                            "type": "boolean",
+                            "const": true
+                          }
+                        },
+                        "required": [
+                          "exact",
+                          "exception"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              },
+              "action": {
+                "type": "object",
+                "properties": {
+                  "color": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "ref": {
+                            "type": "string",
+                            "enum": [
+                              "color.primary",
+                              "color.secondary",
+                              "color.surface",
+                              "color.ink",
+                              "color.muted"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "ref"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "exact": {
+                            "type": "string",
+                            "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$"
+                          },
+                          "exception": {
+                            "type": "boolean",
+                            "const": true
+                          }
+                        },
+                        "required": [
+                          "exact",
+                          "exception"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "fontSize": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "ref": {
+                            "type": "string",
+                            "enum": [
+                              "size.heading",
+                              "size.subheading",
+                              "size.body"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "ref"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "exact": {
+                            "type": "string",
+                            "pattern": "^(?:0|\\d{1,4}(?:\\.\\d{1,3})?px)$"
+                          },
+                          "exception": {
+                            "type": "boolean",
+                            "const": true
+                          }
+                        },
+                        "required": [
+                          "exact",
+                          "exception"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "fontFamily": {
+                    "type": "object",
+                    "properties": {
+                      "ref": {
+                        "type": "string",
+                        "enum": [
+                          "font.heading",
+                          "font.body"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "ref"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "padding": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "ref": {
+                            "type": "string",
+                            "enum": [
+                              "space.xs",
+                              "space.sm",
+                              "space.md",
+                              "space.lg",
+                              "space.xl"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "ref"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "exact": {
+                            "type": "string",
+                            "pattern": "^(?:0|\\d{1,4}(?:\\.\\d{1,3})?px)$"
+                          },
+                          "exception": {
+                            "type": "boolean",
+                            "const": true
+                          }
+                        },
+                        "required": [
+                          "exact",
+                          "exception"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "borderRadius": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "ref": {
+                            "type": "string",
+                            "enum": [
+                              "radius.sm",
+                              "radius.md",
+                              "radius.lg"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "ref"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "exact": {
+                            "type": "string",
+                            "pattern": "^(?:0|\\d{1,4}(?:\\.\\d{1,3})?px)$"
+                          },
+                          "exception": {
+                            "type": "boolean",
+                            "const": true
+                          }
+                        },
+                        "required": [
+                          "exact",
+                          "exception"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
       "pages": {
         "minItems": 1,
         "type": "array",
@@ -455,6 +1532,9 @@
                   },
                   "inMenu": {
                     "type": "boolean"
+                  },
+                  "menuLabel": {
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -488,6 +1568,9 @@
             },
             "inMenu": {
               "type": "boolean"
+            },
+            "menuLabel": {
+              "type": "string"
             }
           },
           "required": [

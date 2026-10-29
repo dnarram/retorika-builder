@@ -81,24 +81,48 @@ body { margin: 0; font-family: var(--font-body); color: var(--color-ink);
   background: var(--color-surface); border-radius: var(--radius-lg); pointer-events: none; }
 .rb-panel ~ :not(img) { z-index: 2; }
 
-.rb-nav-wide { display: flex; flex-wrap: wrap; gap: var(--space-xl);
-  padding: var(--space-md) var(--space-xl); background: var(--color-surface); }
+.rb-skip { position: absolute; left: var(--space-md); top: -100px; z-index: 3;
+  padding: var(--space-sm) var(--space-md); background: var(--color-surface);
+  color: var(--color-primary); font-family: var(--font-heading); font-size: var(--size-body);
+  border-radius: var(--radius-sm); text-decoration: underline; }
+.rb-skip:focus-visible { top: var(--space-md); }
+.rb-header { position: relative; display: flex; flex-wrap: wrap; align-items: center;
+  gap: var(--space-md) var(--space-xl); padding: var(--space-md) var(--space-xl);
+  background: var(--color-surface); border-bottom: 1px solid var(--color-muted); }
+.rb-brand { display: flex; align-items: center; gap: var(--space-sm); min-width: 0;
+  max-width: 100%; color: var(--color-primary); font-family: var(--font-heading);
+  font-size: var(--size-body); font-weight: 700; text-decoration: none; }
+.rb-brand-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rb-logo { height: 40px; width: auto; flex: none; }
+.rb-nav-wide { display: flex; flex-wrap: wrap; gap: var(--space-xl); margin-left: auto; }
 .rb-nav { display: flex; flex-wrap: wrap; gap: var(--space-md); }
-.rb-nav + .rb-nav { padding-left: var(--space-xl);
-  border-left: 1px solid var(--color-muted); }
-.rb-nav-wide, .rb-nav-narrow { border-bottom: 1px solid var(--color-muted); }
+.rb-nav + .rb-nav { padding-left: var(--space-xl); border-left: 1px solid var(--color-muted); }
 .rb-nav a { color: var(--color-primary); font-family: var(--font-heading);
   font-size: var(--size-body); text-decoration: none; }
 .rb-nav a[aria-current=page] { text-decoration: underline; text-underline-offset: 6px;
   text-decoration-thickness: 2px; }
-.rb-nav-narrow { padding: var(--space-md) var(--space-lg);
-  background: var(--color-surface); }
+.rb-nav-action { display: inline-block; padding: var(--space-sm) var(--space-md);
+  background: var(--color-primary); color: var(--color-surface); font-family: var(--font-heading);
+  font-size: var(--size-body); border-radius: var(--radius-sm); text-decoration: none;
+  white-space: nowrap; }
+.rb-brand + .rb-nav-action, .rb-header > .rb-nav-action:first-child { margin-left: auto; }
+.rb-nav-narrow { padding: 0; }
 .rb-nav-narrow > summary { color: var(--color-primary); font-family: var(--font-heading);
   font-size: var(--size-body); cursor: pointer; }
-.rb-nav-narrow .rb-nav { flex-direction: column; gap: var(--space-sm);
-  padding: var(--space-md) 0 0; }
-.rb-nav-narrow .rb-nav + .rb-nav { padding-left: 0; border-left: 0;
-  border-top: 1px solid var(--color-muted); margin-top: var(--space-md); }
+.rb-nav-narrow .rb-nav { position: absolute; left: 0; right: 0; top: 100%; z-index: 2;
+  flex-direction: column; flex-wrap: nowrap; gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+  background: var(--color-surface); border-bottom: 1px solid var(--color-muted); }
+.rb-nav-row { flex-basis: 100%; }
+.rb-header[data-sections=shared] .rb-nav-row { display: none; }
+.rb-header[data-layout=centered] { justify-content: center; }
+.rb-header[data-layout=centered] .rb-nav-wide,
+.rb-header[data-layout=centered] .rb-nav-action { margin-left: 0; }
+.rb-header[data-layout=stacked] { justify-content: center; }
+.rb-header[data-layout=stacked] .rb-brand { flex-basis: 100%; justify-content: center; }
+.rb-header[data-layout=stacked] .rb-nav-wide,
+.rb-header[data-layout=stacked] .rb-nav-action { margin-left: 0; }
+.rb-header[data-layout=stacked] .rb-nav-row { justify-content: center; }
 
 @media (max-width: 720px) {
   .rb-section { grid-template-columns: 1fr; padding: var(--space-lg); }
@@ -109,46 +133,59 @@ body { margin: 0; font-family: var(--font-body); color: var(--color-ink);
 
 .rb-nav-narrow { display: none; }
 @media (max-width: 720px) {
+  .rb-header { gap: var(--space-sm) var(--space-md); padding: var(--space-sm) var(--space-lg); }
+  .rb-brand { flex: 1 1 0; }
   .rb-nav-wide { display: none; }
-  .rb-nav-narrow { display: block; }
+  .rb-nav-narrow { display: block; margin-left: auto; }
+  .rb-nav-action + .rb-nav-narrow { margin-left: 0; }
+  .rb-header[data-sections] .rb-nav-row { display: flex; flex-wrap: nowrap; overflow-x: auto;
+    padding-bottom: var(--space-xs); }
+  .rb-header .rb-nav-row a { white-space: nowrap; }
+  .rb-header[data-sections] .rb-nav-row[data-mobile=hidden] { display: none; }
+  .rb-header[data-layout=stacked] .rb-brand { flex-basis: 0; }
 }
 </style>
 </head>
 <body>
-<div class="rb-nav-wide">
-  <nav aria-label="Páginas" class="rb-nav">
-    <a href="./que-ponemos.html">
-      Qué ponemos
-    </a>
-    <a href="./donde-estamos.html">
-      Dónde estamos
-    </a>
-  </nav>
-  <nav aria-label="Secciones" class="rb-nav">
+<a class="rb-skip" href="#rb-main">
+  Saltar al contenido
+</a>
+<header class="rb-header" data-layout="brand-left" data-sections="shared">
+  <div class="rb-nav-wide">
+    <nav aria-label="Páginas" class="rb-nav">
+      <a href="./que-ponemos.html">
+        Qué ponemos
+      </a>
+      <a href="./donde-estamos.html">
+        Dónde estamos
+      </a>
+    </nav>
+    <nav aria-label="Secciones" class="rb-nav">
+      <a href="#sec-contact">
+        Contacto
+      </a>
+    </nav>
+  </div>
+  <details class="rb-nav-narrow">
+    <summary>
+      Menú
+    </summary>
+    <nav aria-label="Páginas" class="rb-nav">
+      <a href="./que-ponemos.html">
+        Qué ponemos
+      </a>
+      <a href="./donde-estamos.html">
+        Dónde estamos
+      </a>
+    </nav>
+  </details>
+  <nav aria-label="Secciones" class="rb-nav rb-nav-row" data-mobile="row">
     <a href="#sec-contact">
-      Te esperamos
+      Contacto
     </a>
   </nav>
-</div>
-<details class="rb-nav-narrow">
-  <summary>
-    Menú
-  </summary>
-  <nav aria-label="Páginas" class="rb-nav">
-    <a href="./que-ponemos.html">
-      Qué ponemos
-    </a>
-    <a href="./donde-estamos.html">
-      Dónde estamos
-    </a>
-  </nav>
-  <nav aria-label="Secciones" class="rb-nav">
-    <a href="#sec-contact">
-      Te esperamos
-    </a>
-  </nav>
-</details>
-<main class="rb-page" data-page="home">
+</header>
+<main class="rb-page" data-page="home" id="rb-main">
   <section class="rb-section rb-cover rb-image-right" data-preset="cover" data-section="sec-cover" data-variant="image-right" id="sec-cover">
     <h1 data-id="el-headline" data-role="heading" data-slot="headline" style="grid-column:1/span 6;grid-row:1/span 1">
       Taberna Santo Domingo

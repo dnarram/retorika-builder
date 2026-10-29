@@ -4769,3 +4769,81 @@ quedan 34 días.
 10. **Fuera por el plan, y nombrados en él:** familias monoespaciadas, convertir a woff2 en el
     navegador, enviar enteras las de nombre reservado (el apéndice de la ADR 0055 deja los pesos para
     el sprint 30) y las plantillas, cuya obligación ya está en `document-rules.md`.
+
+## Sprint 30 — «La cabecera es del dueño» (desde el 29 de octubre de 2026)
+
+David, con la #318 fusionada: el apartado anterior a la primera sección —el menú de navegación de la
+web en creación— dividido en dos, un menú de páginas y un navegador de secciones, los dos opcionales,
+y «completa personalización de ambos»: qué aparece, cómo se lee, cómo se ve y dónde va. Cuatro
+decisiones suyas al planificar —la etiqueta se deriva del nombre corto del tipo y nunca del titular,
+con un «Se lee como…» opcional encima; el orden del menú de páginas es el del panel «Páginas»; marca
+con nombre y logo, el logo solo rasterizado hasta que exista un sanitizador de SVG; un botón destacado
+opcional—, seis cosas que una cabecera profesional tiene y la petición no nombraba (móvil, sección
+activa, desplazamiento suave, cabecera fija, dos `<nav>`, estética por tokens con el contraste
+comprobado) y seis ajustes al aprobar: `transparent` exige `padding-top` en la portada y no se fija sin
+script; «Saltar al contenido» como primer foco; el nombre largo no rompe los 72 px; el logo sobre fondo
+oscuro avisa; el `alt` del logo se deriva y no se guarda; el verbo del botón lo pone el generador por
+sector. Tres ADR en el sprint, una decisión cada una: 0057 (la cabecera), 0058 (el primer script),
+0059 (el logo viaja como una foto). El plan está en la memoria del proyecto (`project-sprint-30-plan`).
+
+### Día 1 — la cabecera es del dueño (PR de `feat/la-cabecera-es-del-dueno`, ADR 0057)
+
+**El motor, sin interfaz.** El esquema gana `header` (dos menús con la palabra del dueño sobre si se
+dibujan, la fila propia o compartida de las secciones y su móvil, un botón, tres disposiciones, la
+marca, `sticky`, `hairline`, y `look` y `style` declarados ya para que la migración sea una) y
+`menuLabel` en secciones y páginas; versión 1.14.0 → 1.15.0, migración `0016` que sella y no mueve
+nada (conjunto afectado cero, contado), `down` con pérdida declarada. Los invariantes rechazan un botón
+a una sección o página que no existe, a la portada de la web, a una página por ficha, al pie, a un
+avance o a la portada; `deleteSection` y `deletePage` lo retiran, `sectionToPage` lo lleva a la página
+que nace y `pageToSection` lo devuelve. `listDeadDestinations`, `listLinksTo` y `listAnchorsTo` lo leen.
+El catálogo gana `section.<id>.menuLabel` («Servicios», «Dónde estamos», «Opiniones», «Precios»,
+«Galería», «Equipo», «Contacto») y `menuLabelOf`, que lanza para portada, pie y avance.
+
+**El renderer dibuja la cabecera** desde un solo camino: `menu.ts` decide las listas (orden
+`doc.pages`, etiqueta `menuLabel ?? menuLabelOf(kind)`, una sección sin titular ya entra), `header.ts`
+la barra: `<a class="rb-skip" href="#rb-main">` primero en el `<body>`, `<header>` con marca
+(`<span>` en Inicio, enlace fuera; `alt` derivado del nombre y vacío cuando el nombre va al lado),
+tira ancha, botón, `<details>` solo con las páginas y una fila de secciones que en móvil se desplaza
+en horizontal o se oculta. `<main id="rb-main">` siempre. La CSS de cabecera viaja solo donde se dibuja.
+
+**Los veinte goldens se mueven una vez y el diff se leyó entero**: los dieciocho sin menú pierden las
+26 líneas de CSS del nav que nunca usaron y ganan el `id` del `<main>`; `menu-y-paginas` y `menu-curado`
+ganan el `<header>`, el salto y la fila; ninguno gana un menú por la regla de las secciones sin
+titular. Dos fixtures nuevos: `cabecera-con-marca` (tres páginas, marca, botón a Contacto, «Carta» y
+«Dónde» como etiquetas propias, fila propia) y `menu-explicito` (una página, dos destinos bajo el umbral
+con «siempre»).
+
+**Tres cosas que el navegador encontró y la lectura no**, todas corregidas el mismo día: (1) la regla
+base que oculta la fila cuando comparte barra pesaba (0,3,0) y la del móvil que la enseña (0,2,0), así
+que la fila nunca aparecía a 320 — ahora `.rb-header[data-sections] .rb-nav-row`; (2) la marca a su
+anchura natural partía la barra en dos líneas a 320 (107 px) — `flex: 1 1 0` en móvil la deja en 56
+con «Taberna Santo Domingo» y un logo; (3) un `<details>` que es un ítem flex mide lo que su `summary`
+(87 px) y Chromium maqueta su contenido cerrado igual: un título largo de página asomaba 6 px por el
+borde derecho de 320 sin verse. El menú abierto cuelga ahora bajo toda la barra (`position: absolute;
+left: 0; right: 0; top: 100%`) y su columna no envuelve (`flex-wrap: nowrap`, que envuelta medía su
+línea por la entrada más larga: 26 px fuera).
+
+**Lo que cambió para quien edita hoy, sin panel aún**: la frase del cajón de campos deja de decir «que
+es su título» (ya no lo es); el e2e nombra las entradas por su tipo. **Tests**: `schema/test/header.test.ts`
+(20), `catalog/test/menuLabel.test.ts` (3), `renderer/test/header.test.ts` (26),
+`header.browser.test.ts` (4: barra ≤ 72 px a 320×568 con logo, orden de teclado con el salto primero y
+la marca segunda, Enter en el salto aterriza en `<main>`), `menu-keyboard` con el salto como primer Tab,
+`migrations.test.ts` con el bloque de la 1.15.0. Saboteos: sin la pasada de cabecera en
+`listDeadDestinations`, «la acción a una sección borrada es un destino muerto» va a rojo; sin recorte en
+`setMenuLabel`, «escribe la palabra recortada» va a rojo.
+
+**Dos cosas que la suite e2e completa encontró y las unitarias no.** (1) El botón de la cabecera se
+llamaba `.rb-action`, que es la clase de los verbos del cromo del lienzo dentro del mismo marco: la CSS
+publicada les cambiaba la medida y la caminata del sprint 20 día 1 midió un verbo a 36 px donde la
+escala dice otra cosa. Se llama `rb-nav-action`. (2) Dieciséis descargas no llegaban: la puerta mide el
+desborde a 320 px antes de pedir el ZIP, y la fila de secciones del móvil es `overflow-x: auto` a
+propósito — cuatro entradas ponían el último enlace a 380 px dentro de una fila que recorta y de una
+página que no se desplaza, y la puerta lo contaba como desborde. `findOverflow` del editor y
+`measureOverflow` del renderer ignoran ahora lo que un desplazador horizontal recorta; el contenedor
+sigue juzgándose y `scrollWidth` sigue diciendo si la página se desplaza. Sondeado antes de arreglarlo:
+el `fetch` a `/api/download` nunca llegaba a salir.
+
+**Un ciclo de importación encontrado al correr los tests**: `document.ts → header.ts → parse.ts →
+document.ts` dejaba `headerSchema` sin inicializar a quien entraba por `invariants.ts`; `header.ts`
+quedó puro (forma, cotas, `withoutActionTo`, `retargetAction`) y los verbos que acaban en
+`parseDocument` viven en `headerVerbs.ts`.

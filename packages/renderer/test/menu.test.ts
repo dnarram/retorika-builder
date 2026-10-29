@@ -135,12 +135,12 @@ describe("the pages of the site", () => {
   });
 
   /**
-   * **What the split gave up, said as a test.** ADR 0023 made converting invisible to a visitor by
-   * keeping the entry in the slot the section held. Pages and anchors are now two lists, so the
-   * entry moves from one to the other; what survives is the order *among the pages*, which is the
-   * half the avances still decide.
+   * **The order is the pages' own** (ADR 0057, David's decision of 28 October 2026). ADR 0043 let the
+   * avances decide it, which left «Páginas» with a «Subir» that moved the tabs and not the menu.
+   * Now what the owner sees in the panel is what the site publishes, whatever order the avances
+   * happen to sit in on the home page.
    */
-  it("keeps the pages in the order their avances are in", () => {
+  it("keeps the pages in the order the pages are in, whatever order their avances take", () => {
     const doc = documentWith(
       [
         section("sec-cover", "cover", "Taberna"),
@@ -153,8 +153,8 @@ describe("the pages of the site", () => {
         { id: "p-second", slug: "segunda", title: "La segunda" },
       ],
     );
-    // Document order of the pages is first, second; the avances ask for second, first.
-    expect(pageMenuEntries(doc).map((entry) => entry.label)).toEqual(["La segunda", "La primera"]);
+    // Document order of the pages is first, second; the avances ask for second, first — and lose.
+    expect(pageMenuEntries(doc).map((entry) => entry.label)).toEqual(["La primera", "La segunda"]);
   });
 
   it("appends a page nothing points at, rather than leaving it with no way in", () => {
@@ -244,10 +244,13 @@ describe("the sections of the page you are on", () => {
   it("is the page's own sections, in the page's own order", () => {
     const home = threeSections().pages[0];
     expect(home).toBeDefined();
+    // By the short name of each kind, never by the heading («Te esperamos» is a heading, «Contacto»
+    // is a place) — ADR 0057. That «Dónde estamos» is both here is the catalog's word coinciding
+    // with the heading the fixture happens to write.
     expect(sectionMenuEntries(home as NonNullable<typeof home>).map((e) => e.label)).toEqual([
-      "Qué ponemos",
+      "Servicios",
       "Dónde estamos",
-      "Te esperamos",
+      "Contacto",
     ]);
   });
 
@@ -261,8 +264,9 @@ describe("the sections of the page you are on", () => {
     expect(labels.some((label) => label.startsWith("©"))).toBe(false);
   });
 
-  it("leaves out a section with no heading to be called by", () => {
-    // There is no honest word for it, and inventing one is what this whole mechanism avoids.
+  it("names a section with no heading by its kind, like every other", () => {
+    // ADR 0043 had to leave it out for want of a word; the word is now the kind's (ADR 0057), so a
+    // gallery with no title is still «Galería» in the menu — which is what it is.
     const doc = documentWith([
       section("sec-cover", "cover", "Taberna"),
       section("sec-services", "services", "Qué ponemos"),
@@ -271,9 +275,20 @@ describe("the sections of the page you are on", () => {
     ]);
     const home = doc.pages[0] as NonNullable<(typeof doc.pages)[0]>;
     expect(sectionMenuEntries(home).map((entry) => entry.label)).toEqual([
-      "Qué ponemos",
-      "Te esperamos",
+      "Servicios",
+      "Galería",
+      "Contacto",
     ]);
+  });
+
+  it("prefers the owner's own label to the kind's", () => {
+    const doc = documentWith([
+      section("sec-cover", "cover", "Taberna"),
+      { ...section("sec-prices", "prices", "Lo que cuesta"), menuLabel: "Carta" },
+      section("sec-contact", "contact", "Te esperamos"),
+    ]);
+    const home = doc.pages[0] as NonNullable<(typeof doc.pages)[0]>;
+    expect(sectionMenuEntries(home).map((entry) => entry.label)).toEqual(["Carta", "Contacto"]);
   });
 
   /**
@@ -288,7 +303,7 @@ describe("the sections of the page you are on", () => {
       section("sec-contact", "contact", "Te esperamos"),
     ]);
     const home = doc.pages[0] as NonNullable<(typeof doc.pages)[0]>;
-    expect(sectionMenuEntries(home).map((entry) => entry.label)).toEqual(["Te esperamos"]);
+    expect(sectionMenuEntries(home).map((entry) => entry.label)).toEqual(["Contacto"]);
     // And the section is still on the page, with its heading and its anchor.
     const drawn = draw(doc);
     expect(drawn.querySelector('[data-section="sec-location"]')).not.toBeNull();
@@ -316,7 +331,7 @@ describe("the sections of the page you are on", () => {
       [{ id: "p2", slug: "que-ponemos", title: "Qué ponemos" }],
     );
     const home = doc.pages[0] as NonNullable<(typeof doc.pages)[0]>;
-    expect(sectionMenuEntries(home).map((entry) => entry.label)).toEqual(["Te esperamos"]);
+    expect(sectionMenuEntries(home).map((entry) => entry.label)).toEqual(["Contacto"]);
   });
 
   /**
@@ -454,9 +469,7 @@ describe("the curated threshold", () => {
     expect(sectionMenuEntries(home)).toHaveLength(1);
     expect(sectionMenuEntries(home).length).toBeLessThan(MENU_MIN_ENTRIES);
     expect(hasMenu(doc)).toBe(true);
-    expect(strip(draw(doc))).toEqual([
-      { label: "Te esperamos", href: "#sec-contact", current: false },
-    ]);
+    expect(strip(draw(doc))).toEqual([{ label: "Contacto", href: "#sec-contact", current: false }]);
   });
 
   /**
@@ -583,7 +596,7 @@ describe("where an entry points, which depends on the page being drawn", () => {
     ]);
     expect(strip(draw(converted()), "Secciones")).toEqual([
       { label: "Dónde estamos", href: "#sec-location", current: false },
-      { label: "Te esperamos", href: "#sec-contact", current: false },
+      { label: "Contacto", href: "#sec-contact", current: false },
     ]);
   });
 
@@ -621,34 +634,72 @@ describe("where an entry points, which depends on the page being drawn", () => {
 });
 
 describe("the two versions of the menu", () => {
-  it("emits a wide strip and a narrow disclosure with the same entries", () => {
-    const page = draw(threeSections());
-    const wide = [...page.querySelectorAll(".rb-nav-wide a")].map((a) => a.textContent?.trim());
-    const narrow = [...page.querySelectorAll(".rb-nav-narrow a")].map((a) => a.textContent?.trim());
-    expect(narrow).toEqual(wide);
+  /** Three pages, so both menus are drawn and the phone has something to fold. */
+  const twoMenus = () =>
+    documentWith(
+      [
+        section("sec-cover", "cover", "Taberna"),
+        teaserSection("sec-a", "./carta.html", "Ver más"),
+        teaserSection("sec-b", "./donde.html", "Ver más"),
+        section("sec-contact", "contact", "Te esperamos"),
+      ],
+      [
+        { id: "p2", slug: "carta", title: "Nuestra carta" },
+        { id: "p3", slug: "donde", title: "Dónde estamos" },
+      ],
+    );
+
+  /**
+   * **The pages fold, the sections do not** (ADR 0057, amending ADR 0043 §1). The phone's
+   * disclosure holds the pages alone; the sections of the page you are on are a row under the bar.
+   * Added together, the two phone copies are exactly the wide bar.
+   */
+  it("emits a wide strip, and for the phone a disclosure of the pages plus a row of the sections", () => {
+    const page = draw(twoMenus());
+    const text = (nodes: NodeListOf<Element>) => [...nodes].map((a) => a.textContent?.trim());
+    const wide = text(page.querySelectorAll(".rb-nav-wide a"));
+    const folded = text(page.querySelectorAll(".rb-nav-narrow a"));
+    const row = text(page.querySelectorAll(".rb-nav-row a"));
+    expect(folded).toEqual(["Nuestra carta", "Dónde estamos"]);
+    expect(row).toEqual(["Contacto"]);
+    expect([...folded, ...row]).toEqual(wide);
   });
 
-  it("collapses with <details>, and puts no <input> on a published page", () => {
+  it("collapses the pages with <details>, and puts no <input> on a published page", () => {
     // ADR 0016 left the `field` role unused precisely so that no orphan input reaches a client's
     // site; the checkbox-toggle trick would put one there by the back door.
-    const page = draw(threeSections());
+    const page = draw(twoMenus());
     expect(page.querySelector(".rb-nav-narrow")?.tagName).toBe("DETAILS");
     expect(page.querySelector(".rb-nav-narrow > summary")?.textContent?.trim()).toBe("Menú");
+    expect(page.querySelectorAll("details")).toHaveLength(1);
     expect(page.querySelectorAll("input")).toHaveLength(0);
   });
 
-  it("hides exactly one of them at each width, with display: none", () => {
+  it("draws no disclosure for a one-page site, whose whole phone menu is the row", () => {
+    // Nothing to fold: an empty `<details>` would be a button that opens onto nothing.
+    const page = draw(threeSections());
+    expect(page.querySelector("details")).toBeNull();
+    expect([...page.querySelectorAll(".rb-nav-row a")].map((a) => a.textContent?.trim())).toEqual([
+      "Servicios",
+      "Dónde estamos",
+      "Contacto",
+    ]);
+  });
+
+  it("hides exactly one copy at each width, with display: none", () => {
     // `display: none` and not `visibility` or a clip: it is the only one that takes an element out
     // of the accessibility tree, which is what makes two menus "alternated" rather than "announced".
     // That one landmark is in the tree is asserted in a real browser by the a11y matrix.
-    const { css } = render(threeSections(), "html");
+    const { css } = render(twoMenus(), "html");
     expect(css).toContain(".rb-nav-narrow { display: none; }");
+    expect(css).toContain(".rb-header[data-sections=shared] .rb-nav-row { display: none; }");
     expect(css).toContain("  .rb-nav-wide { display: none; }");
-    expect(css).toContain("  .rb-nav-narrow { display: block; }");
+    expect(css).toContain("  .rb-nav-narrow { display: block;");
+    expect(css).toContain("  .rb-header[data-sections] .rb-nav-row { display: flex;");
   });
 
   it("costs no JavaScript", () => {
-    expect(render(threeSections(), "html").html).not.toContain("<script");
+    expect(render(twoMenus(), "html").html).not.toContain("<script");
   });
 });
 
@@ -738,7 +789,7 @@ describe("a page drawn per entry (ADR 0040)", () => {
     expect(pageMenuEntries(doc)).toEqual([]);
     const home = doc.pages[0] as NonNullable<(typeof doc.pages)[0]>;
     expect(sectionMenuEntries(home).map((entry) => entry.label)).toEqual([
-      "Qué hacemos",
+      "Servicios",
       "Dónde estamos",
       "Contacto",
     ]);

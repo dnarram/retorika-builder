@@ -48,8 +48,10 @@ interface Stop {
   tag: string;
   text: string;
   href: string;
-  /** Which copy of the menu the stop is in, so a hidden one cannot pass for the visible one. */
-  where: "wide" | "narrow" | "elsewhere";
+  /** Which copy of the menu the stop is in, so a hidden one cannot pass for the visible one.
+   * `row` is the sections row under the bar (ADR 0057), which the phone shows instead of folding
+   * the sections into the disclosure; `skip` is the link that jumps the whole header. */
+  where: "wide" | "narrow" | "row" | "skip" | "elsewhere";
   outline: string;
 }
 
@@ -65,11 +67,15 @@ async function tab(page: Page): Promise<Stop> {
       tag: el.tagName.toLowerCase(),
       text: (el.textContent ?? "").trim(),
       href: el.getAttribute("href") ?? "",
-      where: el.closest(".rb-nav-wide")
-        ? ("wide" as const)
-        : el.closest(".rb-nav-narrow")
-          ? ("narrow" as const)
-          : ("elsewhere" as const),
+      where: el.classList.contains("rb-skip")
+        ? ("skip" as const)
+        : el.closest(".rb-nav-wide")
+          ? ("wide" as const)
+          : el.closest(".rb-nav-narrow")
+            ? ("narrow" as const)
+            : el.closest(".rb-nav-row")
+              ? ("row" as const)
+              : ("elsewhere" as const),
       outline: getComputedStyle(el).outlineStyle,
     };
   });
@@ -83,9 +89,26 @@ async function open(width: number): Promise<Page> {
 }
 
 describe("the two menus, with a keyboard and nothing else", () => {
-  it("walks the wide bar in reading order: the pages, then this page's sections", async () => {
+  it("walks the wide bar in reading order: the skip link, the pages, then this page's sections", async () => {
     const page = await open(1280);
     try {
+      // **«Saltar al contenido» is the first Tab on every page that draws a header** (ADR 0057,
+      // WCAG 2.4.1): off-screen until it has focus, on screen the moment it does, and Enter lands
+      // in `<main>`.
+      const skip = await tab(page);
+      expect([skip.tag, skip.text, skip.href, skip.where]).toEqual([
+        "a",
+        "Saltar al contenido",
+        "#rb-main",
+        "skip",
+      ]);
+      const onScreen = await page.evaluate(() => {
+        const el = document.activeElement as HTMLElement;
+        const box = el.getBoundingClientRect();
+        return box.top >= 0 && box.bottom <= window.innerHeight && box.width > 0;
+      });
+      expect(onScreen, "the skip link is not on screen while focused").toBe(true);
+
       const first = await tab(page);
       const second = await tab(page);
       const third = await tab(page);
@@ -93,7 +116,7 @@ describe("the two menus, with a keyboard and nothing else", () => {
       expect([first, second, third].map((stop) => [stop.text, stop.href])).toEqual([
         ["Qué ponemos", "./que-ponemos.html"],
         ["Dónde estamos", "./donde-estamos.html"],
-        ["Te esperamos", "#sec-contact"],
+        ["Contacto", "#sec-contact"],
       ]);
       // The pages first and the sections after, which is the order the bar is drawn in.
       for (const stop of [first, second, third]) {
@@ -115,8 +138,10 @@ describe("the two menus, with a keyboard and nothing else", () => {
     const wide = await open(1280);
     try {
       const stops: Stop[] = [];
-      for (let i = 0; i < 6; i += 1) stops.push(await tab(wide));
+      for (let i = 0; i < 7; i += 1) stops.push(await tab(wide));
       expect(stops.filter((stop) => stop.where === "narrow")).toEqual([]);
+      // The phone's row of sections is not in the tab order on a wide screen either.
+      expect(stops.filter((stop) => stop.where === "row")).toEqual([]);
       // And the summary of the hidden disclosure is never one of the stops.
       expect(stops.map((stop) => stop.text)).not.toContain("Menú");
     } finally {
@@ -126,7 +151,7 @@ describe("the two menus, with a keyboard and nothing else", () => {
     const phone = await open(390);
     try {
       const stops: Stop[] = [];
-      for (let i = 0; i < 4; i += 1) stops.push(await tab(phone));
+      for (let i = 0; i < 5; i += 1) stops.push(await tab(phone));
       expect(stops.filter((stop) => stop.where === "wide")).toEqual([]);
     } finally {
       await phone.context().close();
@@ -136,6 +161,7 @@ describe("the two menus, with a keyboard and nothing else", () => {
   it("opens the phone's disclosure with Enter and walks the same destinations", async () => {
     const page = await open(390);
     try {
+      expect((await tab(page)).where).toBe("skip");
       const summary = await tab(page);
       expect(summary.tag).toBe("summary");
       expect(summary.text).toBe("Menú");
@@ -155,9 +181,10 @@ describe("the two menus, with a keyboard and nothing else", () => {
       expect([first, second, third].map((stop) => [stop.text, stop.href])).toEqual([
         ["Qué ponemos", "./que-ponemos.html"],
         ["Dónde estamos", "./donde-estamos.html"],
-        ["Te esperamos", "#sec-contact"],
+        ["Contacto", "#sec-contact"],
       ]);
-      for (const stop of [first, second, third]) expect(stop.where, stop.text).toBe("narrow");
+      // The pages inside the disclosure; the section in the row under the bar (ADR 0057).
+      expect([first.where, second.where, third.where]).toEqual(["narrow", "narrow", "row"]);
     } finally {
       await page.context().close();
     }
@@ -173,6 +200,7 @@ describe("the two menus, with a keyboard and nothing else", () => {
     const page = await context.newPage();
     try {
       await page.setContent(render(fixture("menu-curado"), "html").html);
+      expect((await tab(page)).where).toBe("skip");
       const first = await tab(page);
       expect([first.text, first.href, first.where]).toEqual([
         "Qué ponemos",

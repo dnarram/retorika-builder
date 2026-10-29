@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ownFontsSchema } from "./fonts.ts";
+import { headerSchema, menuLabelSchema } from "./header.ts";
 import { type MarkRun, marksSchema, markTextIssue } from "./marks.ts";
 import { roleSchema } from "./roles.ts";
 import { siteUrlIssue } from "./siteUrl.ts";
@@ -11,7 +12,7 @@ import { type ElementStyle, elementStyleSchema, themeSchema } from "./tokens.ts"
  * role or a token is additive and bumps the minor; removing or renaming one breaks and
  * bumps the major.
  */
-export const SCHEMA_VERSION = "1.14.0";
+export const SCHEMA_VERSION = "1.15.0";
 
 const idSchema = z.string().min(1).max(128);
 
@@ -260,6 +261,14 @@ export const sectionSchema = z.strictObject({
    * write the boolean and never delete the key.
    */
   inMenu: z.boolean().optional(),
+  /**
+   * The words the menu calls this section by, when the owner chose them (ADR 0057). Absent, the
+   * entry reads the short name of the section's kind from the catalog («Galería», «Contacto») —
+   * never its heading, which is a sentence and not a name. A label can disagree with the heading
+   * and that is allowed: what must not lie is the destination, and the destination is this
+   * section's id. Trimmed, 2 to 20 characters; deleted rather than emptied.
+   */
+  menuLabel: menuLabelSchema.optional(),
 });
 export type Section = z.infer<typeof sectionSchema>;
 
@@ -308,6 +317,9 @@ export const pageSchema = z.strictObject({
    * write the boolean and never delete the key.
    */
   inMenu: z.boolean().optional(),
+  /** The words the menu calls this page by, when the owner chose them (ADR 0057); absent, its
+   * title. On the first page it renames «Inicio». Same bounds as a section's. */
+  menuLabel: menuLabelSchema.optional(),
 });
 export type Page = z.infer<typeof pageSchema>;
 
@@ -410,6 +422,12 @@ export const documentSchema = z.strictObject({
    * file (ADR 0046 §2). A font no stack names is allowed and ships nothing.
    */
   fonts: ownFontsSchema.optional(),
+  /**
+   * The header the owner shaped (ADR 0057): which menus, how laid out, a brand and one button.
+   * Absent on every document written before 1.15.0 and on every one whose owner never opened
+   * «Menú», and absent means exactly the navigation ADR 0043 derived — see `header.ts`.
+   */
+  header: headerSchema.optional(),
   pages: z.array(pageSchema).min(1),
   collections: z.array(collectionSchema),
 });

@@ -50,14 +50,28 @@ async function measureOverflow(page: Page): Promise<Overflow> {
         if (value !== null) return `${tag}[${name}="${value}"]`;
       }
       const cls = el.getAttribute("class");
-      return cls ? `${tag}.${cls.split(/\s+/).join(".")}` : tag;
+      if (cls) return `${tag}.${cls.split(/\s+/).join(".")}`;
+      // A bare tag names nothing: a menu link has no class and no data attribute, so its words are
+      // the only way to tell which one ran past the edge.
+      const words = (el.textContent ?? "").trim().replace(/\s+/g, " ").slice(0, 40);
+      return words ? `${tag} «${words}»` : tag;
+    };
+    // Inside a strip that scrolls sideways on purpose — the header's row of sections on a phone
+    // (ADR 0057) — an entry past the edge is dragged in by the visitor and clipped by the row; the
+    // row itself is still judged, and `scrollWidth` below still says whether the page scrolls.
+    const insideScroller = (el: Element): boolean => {
+      for (let node = el.parentElement; node && node !== document.body; node = node.parentElement) {
+        const overflowX = getComputedStyle(node).overflowX;
+        if (overflowX === "auto" || overflowX === "scroll") return true;
+      }
+      return false;
     };
     const innerWidth = window.innerWidth;
     let offender: { selector: string; right: number } | null = null;
     for (const el of document.querySelectorAll("body *")) {
       const right = el.getBoundingClientRect().right;
       // Half a pixel of tolerance for sub-pixel rounding, never more.
-      if (right > innerWidth + 0.5) {
+      if (right > innerWidth + 0.5 && !insideScroller(el)) {
         offender = { selector: describe(el), right: Math.round(right * 10) / 10 };
         break;
       }

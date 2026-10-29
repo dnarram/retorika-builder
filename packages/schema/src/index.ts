@@ -104,6 +104,34 @@ export {
   ownFontsSchema,
   removeOwnFont,
 } from "./fonts.ts";
+export type {
+  Header,
+  HeaderAction,
+  HeaderBackground,
+  HeaderLayout,
+  HeaderPart,
+  MenuLabelIssue,
+  MenuLabelTarget,
+} from "./header.ts";
+export {
+  HEADER_ALIGNMENTS,
+  HEADER_BACKGROUNDS,
+  HEADER_GAPS,
+  HEADER_LAYOUTS,
+  HEADER_PARTS,
+  HEADER_SIZES,
+  headerActionSchema,
+  headerSchema,
+  LOGO_SRC_PATTERN,
+  MENU_LABEL_MAX,
+  MENU_LABEL_MIN,
+  menuLabelIssue,
+  menuLabelSchema,
+  SECTIONS_ON_MOBILE,
+  SECTIONS_ROWS,
+  UNLABELLED_SECTIONS,
+} from "./header.ts";
+export { setHeader, setHeaderAction, setMenuLabel } from "./headerVerbs.ts";
 export type { PresetLookup, Violation } from "./invariants.ts";
 export { checkInvariants, flattenElements } from "./invariants.ts";
 export type { InvariantId } from "./invariants-catalog.ts";

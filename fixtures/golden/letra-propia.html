@@ -95,41 +95,16 @@ body { margin: 0; font-family: var(--font-body); color: var(--color-ink);
   background: var(--color-surface); border-radius: var(--radius-lg); pointer-events: none; }
 .rb-panel ~ :not(img) { z-index: 2; }
 
-.rb-nav-wide { display: flex; flex-wrap: wrap; gap: var(--space-xl);
-  padding: var(--space-md) var(--space-xl); background: var(--color-surface); }
-.rb-nav { display: flex; flex-wrap: wrap; gap: var(--space-md); }
-.rb-nav + .rb-nav { padding-left: var(--space-xl);
-  border-left: 1px solid var(--color-muted); }
-.rb-nav-wide, .rb-nav-narrow { border-bottom: 1px solid var(--color-muted); }
-.rb-nav a { color: var(--color-primary); font-family: var(--font-heading);
-  font-size: var(--size-body); text-decoration: none; }
-.rb-nav a[aria-current=page] { text-decoration: underline; text-underline-offset: 6px;
-  text-decoration-thickness: 2px; }
-.rb-nav-narrow { padding: var(--space-md) var(--space-lg);
-  background: var(--color-surface); }
-.rb-nav-narrow > summary { color: var(--color-primary); font-family: var(--font-heading);
-  font-size: var(--size-body); cursor: pointer; }
-.rb-nav-narrow .rb-nav { flex-direction: column; gap: var(--space-sm);
-  padding: var(--space-md) 0 0; }
-.rb-nav-narrow .rb-nav + .rb-nav { padding-left: 0; border-left: 0;
-  border-top: 1px solid var(--color-muted); margin-top: var(--space-md); }
-
 @media (max-width: 720px) {
   .rb-section { grid-template-columns: 1fr; padding: var(--space-lg); }
   .rb-section > * { grid-column: 1 / -1 !important; grid-row: auto !important; }
   .rb-section > img { order: -1; }
   .rb-panel { display: none; }
 }
-
-.rb-nav-narrow { display: none; }
-@media (max-width: 720px) {
-  .rb-nav-wide { display: none; }
-  .rb-nav-narrow { display: block; }
-}
 </style>
 </head>
 <body>
-<main class="rb-page" data-page="home">
+<main class="rb-page" data-page="home" id="rb-main">
   <section class="rb-section rb-cover rb-image-right" data-preset="cover" data-section="sec-letra-propia" data-variant="image-right" id="sec-letra-propia">
     <h1 data-id="el-lp-headline" data-role="heading" data-slot="headline" style="grid-column:1/span 6;grid-row:1/span 1">
       La letra de la casa, en la web de la casa

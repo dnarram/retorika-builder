@@ -1689,18 +1689,17 @@ describe("1.14.0 — an own font travels like a photograph", () => {
     return { heading: migrated["font.heading"], body: migrated["font.body"] };
   };
 
-  it("is registered, and it is the one the chain ends at", () => {
+  it("is registered", () => {
     expect(step("1.14.0").version).toBe("1.14.0");
-    expect(SCHEMA_VERSION).toBe("1.14.0");
   });
 
   it("seals a 1.13.0 document and moves nothing, because the key is optional", () => {
     const input = before({ heading: GELASIO });
-    const migrated = migrateToCurrent(input);
+    const migrated = upTo(input, "1.14.0");
     expect(migrated["schemaVersion"]).toBe("1.14.0");
     expect({ ...migrated, schemaVersion: "1.13.0" }).toEqual(input);
     expect(Object.hasOwn(migrated, "fonts")).toBe(false);
-    expect(() => parseDocument(migrated)).not.toThrow();
+    expect(() => parseDocument(migrateToCurrent(input))).not.toThrow();
   });
 
   it("migrating a migrated document changes nothing", () => {
@@ -1708,10 +1707,10 @@ describe("1.14.0 — an own font travels like a photograph", () => {
     expect(migrateToCurrent(once)).toEqual(once);
   });
 
-  it("leaves a document that already carries a font exactly as it is", () => {
+  it("leaves a document that already carries a font exactly as it is, apart from the later seals", () => {
     const current = after();
-    expect(migrateToCurrent(current)).toEqual(current);
-    expect(() => parseDocument(current)).not.toThrow();
+    expect(migrateToCurrent(current)).toEqual({ ...current, schemaVersion: SCHEMA_VERSION });
+    expect(() => parseDocument(migrateToCurrent(current))).not.toThrow();
   });
 
   /**
@@ -1771,5 +1770,157 @@ describe("1.14.0 — an own font travels like a photograph", () => {
       expect(raw["schemaVersion"], file).toBe("1.14.0");
     }
     expect(carrying).toBe(1);
+  });
+});
+
+/**
+ * `0016` — the header is the owner's (ADR 0057): a document may carry a `header`, and a section or a
+ * page a `menuLabel`. The same questions as `0015`: `up` seals and moves nothing, a document nobody
+ * touched round-trips exactly, what the «Menú» panel writes parses, and `down` leaves a 1.14.0
+ * document the old chain accepts — minus the header and the labels, which is the loss it declares.
+ */
+describe("1.15.0 — the header is the owner's", () => {
+  /** A 1.14.0 site of two pages, nothing decided about the header. */
+  function before(): Record<string, unknown> {
+    return {
+      schemaVersion: "1.14.0",
+      id: "doc-cabecera",
+      siteName: "Taberna Santo Domingo",
+      theme,
+      collections: [],
+      pages: [
+        {
+          id: "home",
+          slug: "index",
+          title: "Taberna Santo Domingo",
+          sections: [
+            {
+              id: "sec-cover",
+              preset: { catalogId: "cover", variantId: "image-right" },
+              source: "catalog",
+              layout: null,
+              content: [],
+            },
+            {
+              id: "sec-prices",
+              preset: { catalogId: "prices", variantId: "stacked" },
+              source: "catalog",
+              layout: null,
+              content: [],
+            },
+            {
+              id: "sec-contact",
+              preset: { catalogId: "contact", variantId: "stacked" },
+              source: "catalog",
+              layout: null,
+              content: [],
+            },
+          ],
+        },
+        {
+          id: "p2",
+          slug: "donde-estamos",
+          title: "Dónde estamos",
+          sections: [
+            {
+              id: "sec-location",
+              preset: { catalogId: "location", variantId: "stacked" },
+              source: "catalog",
+              layout: null,
+              content: [],
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  /** The same site after its owner opened «Menú»: both menus on, a brand, a button at the contact
+   * section, «Carta» for the prices and «Dónde» for the second page. */
+  function after(): Record<string, unknown> {
+    const input = before();
+    const pages = input["pages"] as Record<string, unknown>[];
+    const home = pages[0] as { sections: Record<string, unknown>[] };
+    (home.sections[1] as Record<string, unknown>)["menuLabel"] = "Carta";
+    (pages[1] as Record<string, unknown>)["menuLabel"] = "Dónde";
+    return {
+      ...input,
+      schemaVersion: "1.15.0",
+      header: {
+        pages: { shown: true },
+        sections: { shown: true, row: "own", mobile: "row" },
+        action: { kind: "section", sectionId: "sec-contact" },
+        layout: "brand-left",
+        brand: { name: true },
+        sticky: false,
+        hairline: true,
+      },
+    };
+  }
+
+  it("is registered, and it is the one the chain ends at", () => {
+    expect(step("1.15.0").version).toBe("1.15.0");
+    expect(SCHEMA_VERSION).toBe("1.15.0");
+  });
+
+  it("seals a 1.14.0 document and moves nothing, because every new key is optional", () => {
+    const input = before();
+    const migrated = migrateToCurrent(input);
+    expect(migrated["schemaVersion"]).toBe("1.15.0");
+    expect({ ...migrated, schemaVersion: "1.14.0" }).toEqual(input);
+    expect(Object.hasOwn(migrated, "header")).toBe(false);
+    expect(() => parseDocument(migrated)).not.toThrow();
+  });
+
+  it("migrating a migrated document changes nothing", () => {
+    const once = migrateToCurrent(before());
+    expect(migrateToCurrent(once)).toEqual(once);
+  });
+
+  it("leaves a document whose owner shaped the header exactly as it is", () => {
+    const current = after();
+    expect(migrateToCurrent(current)).toEqual(current);
+    expect(() => parseDocument(current)).not.toThrow();
+  });
+
+  /** **`down` is lossy, and this is the loss, named:** the header and every label go; `inMenu` stays,
+   * because 1.14.0 holds it — what is left is the menu ADR 0043 derived. */
+  it("takes the header and the labels out on the way down, and leaves a 1.14.0 document", () => {
+    const down = step("1.15.0").down;
+    expect(down, "1.15.0 has no `down`").toBeDefined();
+    const back = down?.(after()) ?? {};
+    expect(back["schemaVersion"]).toBe("1.14.0");
+    expect(Object.hasOwn(back, "header")).toBe(false);
+    const pages = back["pages"] as Record<string, unknown>[];
+    const home = pages[0] as { sections: Record<string, unknown>[] };
+    expect(Object.hasOwn(home.sections[1] ?? {}, "menuLabel")).toBe(false);
+    expect(Object.hasOwn(pages[1] ?? {}, "menuLabel")).toBe(false);
+    expect(back).toEqual(before());
+    expect(() => parseDocument(migrateToCurrent(back))).not.toThrow();
+  });
+
+  it("round-trips a document that never shaped its header", () => {
+    const down = step("1.15.0").down;
+    const input = before();
+    expect(down?.(migrateToCurrent(input))).toEqual(input);
+  });
+
+  it("is the claim it rests on: no corpus fixture below 1.15.0 carries a header or a label", () => {
+    // The affected set of `up`, counted. A fixture that carries either was written at 1.15.0.
+    const corpus = readdirSync(DOCUMENTS_DIR).filter((file) => file.endsWith(".json"));
+    expect(corpus.length).toBeGreaterThan(0);
+    for (const file of corpus) {
+      const raw = JSON.parse(readFileSync(join(DOCUMENTS_DIR, file), "utf8")) as {
+        schemaVersion: string;
+        header?: unknown;
+        pages: { menuLabel?: string; sections: { menuLabel?: string }[] }[];
+      };
+      const labelled = raw.pages.some(
+        (page) =>
+          page.menuLabel !== undefined || page.sections.some((s) => s.menuLabel !== undefined),
+      );
+      if (raw.header === undefined && !labelled) continue;
+      expect(raw.schemaVersion, file).toBe("1.15.0");
+    }
   });
 });

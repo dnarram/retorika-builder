@@ -50,7 +50,10 @@ describe("plain links", () => {
 
   it("never removes the browser's focus indicator or adds state colours", () => {
     for (const { name, document } of corpus) {
-      const css = styleOf(render(document, "html").html);
+      // The one rule allowed to name focus is the skip link's (ADR 0057): `.rb-skip:focus-visible`
+      // is what brings the link on screen, and it sets `top`, never the outline. Cut out before the
+      // sweep so the sweep still forbids every other mention.
+      const css = styleOf(render(document, "html").html).replace(/\.rb-skip[\s\S]*?\}\n/g, "");
       for (const forbidden of ["outline", ":focus", ":focus-visible", ":visited", ":hover"]) {
         expect(css.includes(forbidden), `${name}: ${forbidden}`).toBe(false);
       }

@@ -1,5 +1,6 @@
 import { hrefForPage, listLinksTo } from "./destinations.ts";
 import type { ContentElement, Page, RetorikaDocument, Section } from "./document.ts";
+import { retargetAction } from "./header.ts";
 import { parseDocument } from "./parse.ts";
 import { findSection, mintSectionId } from "./sections.ts";
 import { mintSlug } from "./slug.ts";
@@ -132,7 +133,21 @@ export function sectionToPage(
      * clause — the page is deleted and the section comes back carrying its own copy.
      */
     ...(found.section.inMenu !== undefined ? { inMenu: found.section.inMenu } : {}),
+    // And so does its own label (ADR 0057): a section the owner called «Carta» makes a page the
+    // menu calls «Carta». The section keeps its copy too — on its own page it is the h1 and lends
+    // no anchor, so the word there is silent, and it is what comes back when the page folds.
+    ...(found.section.menuLabel !== undefined ? { menuLabel: found.section.menuLabel } : {}),
   };
+
+  // The header's button follows the section onto its page (ADR 0057), the way `retarget` below
+  // turns the owner's own `#sec-x` into `./pagina.html`: a button that stayed at the section id
+  // would point at a place on another page, and one that was dropped would be a decision undone by
+  // a verb that has nothing to do with it.
+  const header = retargetAction(
+    doc.header,
+    { kind: "section", sectionId },
+    { kind: "page", pageId },
+  );
 
   const href = hrefForPage(newPage);
   // **The section keeps its own id and the avance gets a new one.** The other way round was tried
@@ -147,6 +162,7 @@ export function sectionToPage(
 
   return parseDocument({
     ...doc,
+    ...(header === undefined ? {} : { header }),
     pages: [
       ...doc.pages.map((page) =>
         retarget(
@@ -277,8 +293,25 @@ export function pageToSection(doc: RetorikaDocument, pageId: string): RetorikaDo
   const first = page.sections[0];
   const backTo = first ? `#${first.id}` : "";
 
+  // The inverse of the rewrite `sectionToPage` did to the header's button: back to the section
+  // the page was made from, which is its first (ADR 0057). A page folding with no sections has no
+  // section to point at, and `parseDocument` would refuse a button at a page that is gone — so the
+  // button goes, which is what the owner would see happen to a button at a page they emptied.
+  const header =
+    first === undefined
+      ? doc.header?.action?.kind === "page" && doc.header.action.pageId === pageId
+        ? (({ action: _, ...rest }) => rest)(doc.header)
+        : doc.header
+      : retargetAction(
+          doc.header,
+          { kind: "page", pageId },
+          { kind: "section", sectionId: first.id },
+        );
+  const { header: _dropped, ...rest } = doc;
+
   return parseDocument({
-    ...doc,
+    ...rest,
+    ...(header === undefined ? {} : { header }),
     pages: doc.pages
       .filter((candidate) => candidate.id !== pageId)
       .map((candidate) => {

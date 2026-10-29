@@ -88,6 +88,18 @@ left implicit.
 
 ---
 
+### Rule 5 and the header (28 October 2026, ADR 0057)
+
+Rule 5 leaves nowhere for a site-wide *element* to live, and ADR 0023 drew the right conclusion:
+the menu is derived chrome. Since 1.15.0 the document carries a `header` — which menus are drawn, how
+the bar is laid out, a brand, and **one destination by id** drawn as a button — and a `menuLabel` on a
+section or a page. None of it is an element: it holds references, as a placement holds an element's
+id, and preferences, as the theme holds tokens. The destination is checked like every other reference
+(the invariants refuse a button at a place the document does not hold), and the verbs that remove or
+move a destination act on the button first. The rule is not amended; this is the reading
+[ADR 0057](decisions/0057-the-header-is-the-owners.md) gives it, written here so the next reader
+does not have to derive it.
+
 ## The role vocabulary, v1
 
 Nine roles and one container:

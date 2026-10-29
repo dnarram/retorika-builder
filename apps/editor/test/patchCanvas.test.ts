@@ -415,9 +415,9 @@ describe("patchCanvas — an edit is a patch", () => {
   it("drops the menu's links the document dropped: folding a page back leaves one «Qué ponemos», in each strip", () => {
     const doc = menuFixture();
     const live = settled(doc);
-    const before = [...live.querySelectorAll(".rb-nav-wide a, .rb-nav-narrow a")].map((a) =>
-      a.getAttribute("href"),
-    );
+    const before = [
+      ...live.querySelectorAll(".rb-nav-wide a, .rb-nav-narrow a, .rb-nav-row a"),
+    ].map((a) => a.getAttribute("href"));
     expect(before).toContain("./que-ponemos.html");
     // Every menu link keyed apart from its twins: the strip and the list are in the chain.
     const keys = [...live.querySelectorAll("nav a")].map((a) => keyOf(a));
@@ -429,17 +429,22 @@ describe("patchCanvas — an edit is a patch", () => {
     expect(report).toMatchObject({ ok: true, structural: true });
 
     const expected = [
-      ...freshFrom(folded).querySelectorAll(".rb-nav-wide a, .rb-nav-narrow a"),
+      ...freshFrom(folded).querySelectorAll(".rb-nav-wide a, .rb-nav-narrow a, .rb-nav-row a"),
     ].map((a) => a.getAttribute("href"));
-    const after = [...live.querySelectorAll(".rb-nav-wide a, .rb-nav-narrow a")].map((a) =>
-      a.getAttribute("href"),
+    const after = [...live.querySelectorAll(".rb-nav-wide a, .rb-nav-narrow a, .rb-nav-row a")].map(
+      (a) => a.getAttribute("href"),
     );
     expect(after).toEqual(expected);
     expect(after).not.toContain("./que-ponemos.html");
+    // Twice: once in the wide bar and once in the phone's row (ADR 0057 — the sections no longer
+    // fold into the disclosure, which holds the pages alone).
     expect(after.filter((href) => href === "#sec-services")).toHaveLength(2);
-    // And the texts: «Qué ponemos» once per strip, not twice.
+    // And the texts: the folded section is back in the bar once, under its kind's name («Servicios»,
+    // ADR 0057 — the menu names a section by what it is, never by its heading), and the page it was
+    // («Qué ponemos») is gone from the bar rather than kept beside it.
     const wide = [...live.querySelectorAll(".rb-nav-wide a")].map((a) => a.textContent?.trim());
-    expect(wide.filter((label) => label === "Qué ponemos")).toHaveLength(1);
+    expect(wide.filter((label) => label === "Servicios")).toHaveLength(1);
+    expect(wide).not.toContain("Qué ponemos");
   });
 
   it("patches a changed skeleton too and says so: a section gone, the chrome beside it kept", () => {
