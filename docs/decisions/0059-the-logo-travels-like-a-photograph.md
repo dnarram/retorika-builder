@@ -284,6 +284,14 @@ letter's arrival. Lighthouse's own root-cause label named the logo — the one m
 header — and the record repeated it. The cause was the bar's `line-height: normal`, which ADR 0057's
 note of today fixes.
 
+**And the weight, with a real brand kit**, as «What is lost» asked of this day. Retorika's own two
+delivered PNGs, through the path `prepareLogo` takes in Chromium: the mark, 244×252 and 45.3 KB, comes
+out at 53.3 KB (+18 %, a canvas's PNG is not optimised); the wordmark, 898×254 and 149.8 KB, at 512×145
+and 66.3 KB. What decides it is the edge: 512px on the long side for something drawn 40px tall is 12.8
+times the height of a square logo, and at three times the drawn height (120px) the two would be 14.8
+and 48.1 KB. Not changed here — it changes what is kept and the schema's bound — and left to David in
+the sprint's open list.
+
 Consequences of the note: `packages/schema` (`headerLogoSchema`, `LOGO_MAX_EDGE`, `HeaderLogo`;
 `rewriteImageSources` keeps the size; migration `0017` with its round trip; snapshot), `packages/renderer`
 (`brandNode`), `packages/generator` (`Answers.keptLogo` for `logoSrc`), `apps/editor` (`prepareLogo`'s

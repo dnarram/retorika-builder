@@ -5223,3 +5223,177 @@ y por `headerColorInForce`/`headerBarBackground` hoy; el `rootMargin` del `Inter
 tomando el alto de la barra al arrancar (3 px de diferencia en el caso medido, sin efecto visible en
 qué sección se marca); y la e2e completa no se ha corrido hoy (el plan la pide los días 3 y 5, y el
 cierre del 7).
+
+### Día 7 — colchón y cierre (PR de `test/el-cierre-del-sprint-30`)
+
+**Lo que el día 5 dejó corto, primero: el logo guarda su tamaño.** El día 5 dejó el `<img>` del logo
+con `height="40"` y sin `width`, porque el documento no guardaba sus medidas: Lighthouse lo marcaba como
+imagen sin tamaño (`unsized-images` 0,5) y el registro lo dejó «para el cierre». El plan del día 5 ya
+había escrito `<img … width height>`, así que el cierre lo termina. `header.brand.logo` puede llevar
+`width` y `height`, los píxeles a los que `prepareLogo` lo dibujó —enteros de 1 a `LOGO_MAX_EDGE`, 512,
+que pasa al esquema para que editor y documento lean una sola constante—, **los dos o ninguno**, y el
+esquema rechaza uno solo. El renderer escribe los dos; la hoja lo sigue dibujando a 40 px de alto con
+`width: auto`, y el navegador saca la proporción de los atributos antes de que llegue un solo byte. Un
+logo guardado entre el día 5 y hoy no lleva medidas y se publica como entonces hasta que su dueño lo
+vuelva a subir: el tamaño está en los bytes y una migración no los ve. Esquema 1.15.0 → **1.16.0**,
+migración `0017` que sella y no mueve nada; `down` quita los dos números y deja el fichero. La pregunta 1
+le da al generador `keptLogo` —nombre y tamaño en un solo valor, para que no exista un tamaño sin
+fichero— en lugar de `logoSrc`, y «Menú» y «Fotos» escriben el tamaño con el nombre. Con la petición del
+logo retenida 1,5 s, el marcado del día 5 lo dibujaba con 0 px de ancho y movía el nombre 40 px de lado
+al llegar; el de hoy lo dibuja a 40 px desde el primer fotograma y no se mueve nada.
+
+**Y lo que encontró al medirlo: el CLS no era del logo.** Con el logo ya medido, el sujeto de cabecera
+fija seguía en **0,023**. Se midió en Chromium reteniendo cada petición por turnos (un guion de sondeo
+con `PerformanceObserver` sobre `layout-shift` y un `ResizeObserver` en la barra, fuera del repositorio):
+retener el logo no movía nada; retener la letra llevaba el desplazamiento justo al momento en que la
+letra llegaba. Cada línea de la barra tomaba `line-height: normal`, que es el ascendente y el
+descendente de cada letra —18 px en la de reserva, 21 en EB Garamond—, y la barra pasaba de **87 a
+90 px** al llegar la cara, empujando toda la página 3 px. Es lo mismo que la caminata del día 6 encontró
+como un ancla 3 px bajo la barra y curó volviendo a medir; esto quita el crecimiento. Lighthouse
+nombraba como causa raíz al único elemento de imagen de la cabecera, el logo, y el registro del día 5 lo
+repitió: **era la letra**. `.rb-header` lleva ahora `line-height: 1.3`, un número, así que cada línea es
+su tamaño por 1,3 en la letra que la esté dibujando; 1,3 es el `normal` de EB Garamond, la letra de
+titular del corpus, y la barra cargada conserva sus 90 px. Lo que queda (0,0075 en el sondeo) es el texto
+de la portada cambiando de alto con la letra, la misma clase de desplazamiento que las composiciones
+llevan desde antes de este sprint: es el texto de lectura de la página, no la cabecera. Notas en la ADR
+0059 (el tamaño) y en la ADR 0057 (la línea).
+
+**Tests del arreglo**: esquema (los dos o ninguno, las cotas, la reescritura del `src` conserva el
+tamaño, el bloque de la 1.16.0 con ida y vuelta y su afirmación sobre el corpus), renderer (los dos
+atributos, o solo `height`), generador (nombre y tamaño), y `header.browser.test.ts` gana una prueba
+que cambia la letra por una de métricas muy distintas a 1280 y a 390 y asevera que la barra no se mueve,
+**con su propio control**: el mismo cambio con la barra devuelta a `normal` tiene que moverla, así que
+no puede pasar en una máquina cuyas letras coincidan por casualidad. La caminata del día 5 lee los dos
+lados del PNG del ZIP para cada uno de los dos escritores (pregunta 1 y «Menú»). **Saboteos**, deshechos
+por copia y cada uno en rojo en su aserción: el renderer, la reescritura, el refinamiento del esquema,
+el generador, los dos escritores del editor (e2e) y la `line-height` (rojo en los dos anchos: 87 → 109
+y 107 → 129 px con la letra de prueba). Los cuatro goldens con cabecera se mueven en esa declaración y
+`cabecera-con-marca` además en el `<img>` (`height="96" … width="96"`); diff leído.
+
+**Lo que la lista del plan pedía ver en el navegador y ninguna caminata había visto.** Se leyó la lista
+«en el navegador real» del plan contra todas las suites. Transparente y fija con y sin script, la
+sección a la vista, Escape y las anclas ya estaban caminadas en Chromium (`header-script.browser.test.ts`
+y la caminata del día 6); cuatro cosas vivían solo en tests unitarios de las funciones de debajo. La
+caminata nueva **«sprint 30 día 7»**, sobre la segunda tarjeta (portada `image-background`): un logo
+blanco sobre fondo transparente en la barra clara avisa en «Menú» («Tu logo se ve poco sobre este
+fondo») y en la descarga con su propio diálogo, **y descarga**; su PNG en el ZIP es RGBA con la esquina
+transparente, y sobre una barra «Principal» el lienzo enseña la primaria a través de esa esquina (leída
+de una captura), no una caja blanca; «Oscuro» calla el aviso en el panel y en la descarga; «Transparente»
+sobre la foto de portada da la nota del panel y «La cabecera va sobre una foto» en la descarga; y «Se lee
+como…» con 21 letras avisa y no escribe nada, y vaciado vuelve a «Servicios». `fixtures/logo-blanco.png`
+(160×64, 250 bytes) sale del codificador de `scripts/png.ts`. Saboteada cuatro veces, cada una en rojo en
+su aserción: un relleno blanco bajo el lienzo del logo, `reviewLogo` callado, `headerOverPhoto` callado y
+el tope de la etiqueta subido en cinco.
+
+**El logo de una marca de verdad, medido** (la ADR 0059 lo dejó para hoy: «a real brand kit's PNG is
+the thing to measure on día 7»). Los dos PNG entregados de Retorika, por el mismo camino que
+`prepareLogo` en Chromium:
+
+| fichero del dueño | sale del lienzo (≤ 512 de lado) | a 3× los 40 px que se dibuja (120 de alto) |
+|---|---|---|
+| la marca, 244×252, 45,3 KB | 244×252, **53,3 KB** (+18 %) | 116×120, 14,8 KB |
+| la marca con texto, 898×254, 149,8 KB | 512×145, **66,3 KB** | 424×120, 48,1 KB |
+
+El PNG de lienzo no está optimizado, y lo que manda es el tope: **512 de lado para algo que se dibuja a
+40 px de alto** es 12,8 veces el alto de un logo cuadrado. No se cambió (cambia lo que se guarda y la
+cota del esquema); va a lo que el sprint deja abierto.
+
+**Lighthouse, tres ejecuciones** con los cinco sujetos (rendimiento · accesibilidad · buenas prácticas ·
+SEO; CLS en rango):
+
+| sujeto | notas | LCP | CLS antes del arreglo (hoy) | CLS después |
+|---|---|---|---|---|
+| v1 imagen a la derecha | 99 · 100 · 100 · 100 | 1,80 s | 0,027 | 0,000–0,009 |
+| v2 imagen de fondo | 98 · 100 · 100 · 100 | 2,33–2,40 s | 0,000 | 0,011 |
+| v3 imagen a la izquierda | 98 · 100 · 100 · 100 | 2,33 s | 0,027 | 0,009 |
+| v1 en un `.ttf` propio | 99 · 100 · 100 · 100 | 1,80 s | 0,000 | 0,000–0,002 |
+| **`cabecera-con-marca`, fija y con logo** | **100 · 100 · 100 · 100** | **1,35 s** | **0,023** | **0,000–0,008** |
+| una página por ficha | 100 · 100 · 100 · 100 | 0,90 s | 0,000 | 0,000 |
+
+El CLS se mueve de una ejecución a otra según la letra llegue antes o después de la primera pintura;
+por eso tres. `unsized-images` ya no aparece en ningún sujeto. Las tres composiciones están en 99 / 98 /
+98 desde el día 5 (100 / 99 / 99 al cierre del 29) y su LCP sube unos 0,15 s: la web generada nace con
+cabecera y script desde ese día. Por encima del suelo de 95, y dicho.
+
+**Las demás medidas de cierre.**
+
+- **e2e completo: 267 verdes y 1 omitida en 1120 s, a la primera**, con `caffeinate -i -m`, en batería y
+  nada en paralelo.
+- `a11y` local: **628** en verde, en 49 s.
+- `test:db`: **85**, contra un Postgres temporal con contraseña (la `0005` del día 5 incluida).
+- `pnpm test` **3559** (170 ficheros), `test:invariants` 27, `test:golden` 26. `typecheck`, `lint` (0
+  errores), `renderer:deps`, `schema:guard` sobre el rango del sprint y `secrets:scope` (123 módulos, 30
+  de cliente, sin cruce): en verde.
+- `pnpm size`: el script de la cabecera **0,8 KB gzip** contra 2 KB; nuestros bytes, por debajo de 20 KB
+  en todos (13,3 KB en `cabecera-con-marca`, el más pesado con cabecera); la galería, 106,6 KB de 120.
+- **La barra a 320×568** con «Taberna Santo Domingo» y un logo: **56 px** (8 + 40 + 8), y **65** como la
+  lee `header.browser.test.ts` —la cabecera menos la fila de secciones, así que suma el hueco de 8 px
+  sobre la fila y el filete—, de los 72 del ajuste 3; el nombre cortado con elipsis y sin desborde. Lo
+  mismo con y sin la `line-height` de hoy, medido las dos veces.
+
+**El ZIP, contra el del inicio del sprint.** Los veinte documentos del corpus de `316770f` (la fusión de
+la #318), construidos como descarga con el publicador de entonces y con el de hoy, en un árbol
+desprendido con `pnpm install --offline` y el guion del cierre del 28.
+
+- **De 108 ficheros, cambian 36, y son las 36 páginas**: ninguna cara, imagen, favicon ni `robots.txt`.
+- **Las dieciocho webs sin menú** (y las doce fichas de `una-pagina-por-ficha`) pierden la CSS del nav
+  que nunca dibujaban —el bloque de reglas y su parte del `@media (max-width: 720px)`— y su `<main>` gana
+  `id="rb-main"`. Nada más.
+- **Las dos con menú** (`menu-y-paginas`, `menu-curado`) ganan «Saltar al contenido», el `<header>`, los
+  `data-part`, el `<details>` solo con las páginas y la fila de secciones fuera de él, la hoja de la
+  cabecera y el script. **La única palabra que cambia** es la entrada de la sección de contacto de
+  `menu-y-paginas`: «Te esperamos» (su titular) pasa a «Contacto» (el nombre corto del tipo, decisión 1
+  de David). El orden de páginas es el mismo: en estos documentos `doc.pages` y los avances coinciden.
+- **El corpus gana `cabecera-con-marca` y `menu-explicito`**, con nueve y seis ficheros.
+
+**La CI del sprint.** Trece ejecuciones del 29 de octubre:
+
+- **dos rojas, por la misma causa**: el empuje a `main` tras la #319 y la primera ejecución de la PR del
+  día 2 — los bucles del corpus del publicador pasaban de 5 s en un ejecutor frío (`INV_5` del paquete y
+  la descompresión del ZIP); arreglado en la PR del día 2 con 30 s;
+- las otras once, en verde a la primera.
+
+**Los números del registro.**
+
+- `Editor.tsx`: **8458** líneas (8244 al cierre del 29). `Variants.tsx`: 2046 (1966). `MenuPanel.tsx`,
+  nuevo: 972. `headerState.ts`: 483. `header.ts` del renderer: 637; `headerScript.ts`: 60.
+- El `e2e`: **23 338** líneas y 1 209 633 bytes, el 58 % de los 2 MiB que Biome procesa.
+- Del inicio a `0ecfb56`: quince commits (nueve sin contar las fusiones), 144 ficheros, +13 221 / −1 352.
+
+**Las nueve fotos.** Nada cambió en el sprint. Las dieciséis PNG de la raíz siguen siendo las del 11 de
+octubre, y la exención de la ADR 0035 deja de valer el **1 de diciembre**: quedan 32 días.
+
+### Lo que el sprint 30 deja abierto
+
+1. **Diecisiete firmas**, todas `proposed`: **0042, 0043, 0045, 0046, 0047, 0048, 0049, 0050, 0051,
+   0052, 0053, 0054, 0055, 0056, 0057, 0058 y 0059**. Las tres de este sprint llevan nota del cierre
+   (0057: la línea de la barra; 0058: la medida que sigue a la barra, del día 6; 0059: el tamaño del
+   logo y el CLS mal atribuido).
+2. **Las nueve fotos**, antes del 1 de diciembre.
+3. **El tope del logo** (arriba): 512 px de lado para algo que se dibuja a 40 de alto. Con la marca de
+   Retorika, 53 KB que a 3× el alto (120 px) serían 15. Para David: topar por alto (3× = 120 px) o
+   dejarlo, que son bytes del dueño en su línea del presupuesto.
+4. **Los logos guardados entre el día 5 y hoy no llevan tamaño** hasta que su dueño los vuelva a subir.
+   El editor podría escribirlo al abrir la web (tiene los bytes), pero sería cambiar el documento sin
+   que nadie lo pida; no se hizo.
+5. **Lo que queda del CLS es el texto de lectura**: el mismo `line-height: normal`, ahora en la portada
+   (0,009–0,011 en las composiciones). Darle un número a todo el texto de la web cambia el aspecto de
+   cada párrafo publicado; es una decisión de diseño, no un arreglo de cierre.
+6. **El rendimiento de las composiciones** bajó un punto desde el día 5 (99 / 98 / 98) y su LCP unos
+   0,15 s: la cabecera y su script en la web generada. Por encima del suelo; medido y dicho.
+7. **La caminata protegida contra el proyecto real** (pasos 5c y 8 de `el-recorrido-de-la-cuenta.md`)
+   es ahora también la única prueba del logo «en otro ordenador» contra Supabase de verdad, con la
+   `0005` aplicada por David.
+8. **La cabecera no se ha visto en Safari ni en un iPhone**: la barra fija, el `<details>` con Escape, el
+   `ResizeObserver` con `box: 'border-box'`. Va a la lista del iPhone (PR #250).
+9. **Sin arreglar, solo anotado:** el `rootMargin` del `IntersectionObserver` sigue tomando el alto de la
+   barra al arrancar (3 px de diferencia medida el día 6, sin efecto en qué sección se marca).
+10. **Del sprint 29, sin tocar por el plan:** el peso de la letra propia contra Lighthouse, la inspección
+    en Render, el orden de las cabeceras de dirección en Render, el visto bueno del CEO a la frase de la
+    casilla, y lo anotado (la medida de 320 y las fotos del banco; `buildSite` y un WOFF bajo `.ttf`).
+    **Del 28:** escalar con un panel abierto guarda su ancho; Safari y el favicon; `lookAhead` en frío;
+    el diálogo de «Volver a la original» a zoom menor que 1; el Tab nativo desde un texto en escritura;
+    los contornos a escala.
+11. **Fuera por el plan, y nombrados en él:** el logo SVG con su sanitizador; el favicon y la `og:image`
+    desde el logo (nota en la 0054); la sección activa en el lienzo; el estilo por entrada; un orden de
+    menú distinto del de las páginas; desplegables; el parche móvil de la cabecera.

@@ -12,7 +12,71 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 28 October 2026, **closing sprint 29 — «la letra de la marca».** David's boss asked for
+Last reviewed: 30 October 2026, **closing sprint 30 — «la cabecera es del dueño».** David asked for the
+strip above the first section to become two menus — one of pages, one of the page's sections — each
+optional, and for full control of both: what they show, how each entry reads, how they look and where
+they sit. Seven days, four decisions of his before planning, six points a professional header has that
+the request did not name, and six adjustments while approving. What changed for somebody using it: the
+header is the owner's, with short labels and «Se lee como…», the pages in the order of «Páginas», a
+brand, one button, three layouts, and its own phone layout
+([ADR 0057](../decisions/0057-the-header-is-the-owners.md), día 1); the published page carries its
+first script, one constant string, only where a header is drawn
+([ADR 0058](../decisions/0058-a-published-page-carries-one-script-and-it-is-constant.md), día 2); the
+header is chosen in the canvas (día 3) and shaped in the «Menú» panel (día 4); the logo of question 1
+is kept, travels like a photograph and stands in the bar, and the generated site is born with a header
+whose button says «Reservar» or «Pedir cita»
+([ADR 0059](../decisions/0059-the-logo-travels-like-a-photograph.md), día 5); the bar's look is chosen
+by tokens with exact values behind the switch and reviewed before a download (día 6); and the close
+stored the logo's size (schema 1.16.0) and gave the bar's lines a number, which took Lighthouse's CLS
+on the fixed header from 0.023 to 0.000–0.008 (día 7). The record is `docs/design/REVIEW.md`, sprint 30.
+
+**What sprint 30 leaves open** — the full text, with every number, is the last section of REVIEW's
+sprint 30:
+
+1. **Seventeen signatures**: 0042, 0043, 0045–0059, all `proposed`; 0057, 0058 and 0059 carry notes from
+   días 6 and 7.
+2. **The nine photographs**, unchanged: the exemption fails on **1 December 2026**.
+3. **The logo's edge**: kept at 512px on its long side and drawn 40px tall. Retorika's own mark comes out
+   of the canvas at 53 KB; at three times the drawn height (120px) it would be 15 KB. David's call:
+   cap by height, or leave it on the owner's line of the budget.
+4. **Logos saved between día 5 and día 7 carry no size** until uploaded again; writing it on open would
+   change a document nobody asked to change.
+5. **What is left of the CLS is the reading text's `line-height: normal`** (0.009–0.011 on the
+   compositions): giving all text a number changes every published paragraph — a design decision.
+6. **The compositions score 99 / 98 / 98 since día 5** (100 / 99 / 99 at sprint 29's close), LCP up
+   about 0.15 s: the generated site's header and script. Above the floor.
+7. **The gated walk against the real project** is now also the only proof of the logo «en otro
+   ordenador» against Supabase itself, with migration `0005` applied.
+8. **The header has not been seen in Safari or on an iPhone**: the fixed bar, Escape on the `<details>`,
+   `ResizeObserver` with `box: 'border-box'`. The iPhone list of PR #250.
+9. **Noted, not fixed:** the `IntersectionObserver`'s `rootMargin` takes the bar's height at start (3px
+   measured on día 6, no effect on which section is marked).
+10. **From sprint 29, untouched by this plan:** an own font's weight against Lighthouse; the inspection
+    on Render; the client-address header order on Render; the CEO's approval of the checkbox sentence;
+    the 320 px measurement's 404s and a WOFF under `.ttf` in `buildSite`. **From sprint 28:** the
+    panel's width when escalating, Safari and the favicon, `lookAhead.ts` cold, the revert dialog below
+    zoom 1, native Tab from a text being written in, outlines at scale.
+11. **Out by the plan, named in it:** an SVG logo with its sanitiser; the favicon and `og:image` from the
+    logo (ADR 0054's note); the section in view in the canvas; style per entry; a menu order other than
+    the pages'; dropdowns; a phone patch for the header.
+
+**What this sprint found that nobody was looking for:**
+
+1. **Lighthouse's root-cause label blamed the logo for a shift the letter caused**, and día 5's record
+   repeated it: holding each request back in turn found the bar's `line-height: normal` (día 7).
+2. **`ResizeObserver` watches the content box by default**, which misses a change of padding; a test of
+   it passed file by file on timing and failed only in the full a11y suite (día 6).
+3. **«Arreglar» on a header part called `setElementStyle` with section «header»**, which throws: latent
+   since día 2, reachable from día 6 (día 6).
+4. **The published stylesheet and the canvas share a frame**: `.rb-action` resized the editor's verbs
+   (día 1) and `scroll-behavior: smooth` moved its measurements (día 2).
+5. **A `<details>` that is a flex item lays out its closed content**: a long page title stuck out 6px at
+   320 without being seen (día 1).
+6. **`justify-content: flex-end` in a horizontal scroller overflows at the start**, where no scroll
+   reaches (día 2).
+7. **A cold CI runner took more than 5 s on the publisher's corpus loops** (día 2; 30 s since).
+
+The review before that: 28 October 2026, **closing sprint 29 — «la letra de la marca».** David's boss asked for
 a very wide choice of letter for headings and text, a chooser that does not lengthen the right panel,
 and a way for a client to bring the brand's own font. Seven days, four decisions of his before
 planning and seven adjustments while approving, all of them about bytes from outside. What changed for
