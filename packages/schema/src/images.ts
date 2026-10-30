@@ -108,7 +108,7 @@ export function rewriteImageSources(
     const src = map(logo.src);
     if (src !== logo.src) {
       changed = true;
-      header = { ...header, brand: { ...header.brand, logo: { src } } };
+      header = { ...header, brand: { ...header.brand, logo: { ...logo, src } } };
     }
   }
 

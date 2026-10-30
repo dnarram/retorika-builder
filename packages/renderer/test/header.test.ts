@@ -193,6 +193,24 @@ describe("the brand", () => {
     expect(draw(renamed).querySelector("img.rb-logo")?.getAttribute("alt")).toBe("Casa Trufa");
   });
 
+  it("gives the logo its kept size as width and height, and only its height when it has none", () => {
+    // Sprint 30 día 7: with both attributes the browser has the logo's ratio before its bytes, so
+    // the name beside it is laid out where it stays (`.rb-logo` still draws it 40px tall).
+    const sized = { src: "assets/logo.png", width: 512, height: 205 };
+    const img = draw(site(3, [], { brand: { logo: sized, name: true } })).querySelector(
+      "img.rb-logo",
+    );
+    expect(img?.getAttribute("width")).toBe("512");
+    expect(img?.getAttribute("height")).toBe("205");
+    // A logo kept before the size was stored publishes as día 5 did.
+    const unsized = { src: "assets/logo.png" };
+    const old = draw(site(3, [], { brand: { logo: unsized, name: true } })).querySelector(
+      "img.rb-logo",
+    );
+    expect(old?.hasAttribute("width")).toBe(false);
+    expect(old?.getAttribute("height")).toBe("40");
+  });
+
   it("draws a header for the brand alone, under the threshold", () => {
     const doc = site(1, [], { brand: { name: true } });
     expect(headerDrawn(doc)).toBe(true);

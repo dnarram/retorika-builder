@@ -50,7 +50,7 @@ export function Step1Name({
    * browser's photo store for each of the three cards the generator is about to make. That store
    * is where the editor puts a session's photographs back from on a reload, so the logo reaches
    * the cards by exactly the path a photograph takes, and the generator stays a pure function of
-   * its answers: it is handed a name (`logoSrc`), never a file.
+   * its answers: it is handed a name and a size (`keptLogo`), never a file.
    *
    * A file that cannot be kept — markup, an unreadable file — is not kept at all, and says why.
    * A store that will not take the bytes (a private window) keeps the palette and drops the name,
@@ -59,16 +59,16 @@ export function Step1Name({
   async function chooseLogo(file: File | null) {
     setRejection(null);
     if (!file) {
-      update({ logo: null, logoSrc: null, logoPaletteId: null });
+      update({ logo: null, keptLogo: null, logoPaletteId: null });
       return;
     }
-    update({ logo: file, logoSrc: null, logoPaletteId: null });
+    update({ logo: file, keptLogo: null, logoPaletteId: null });
     setReading(true);
     try {
       const prepared = await prepareLogo(file);
       if (!prepared.ok) {
         setRejection(es[`editor.logo.${prepared.error.reason}` as keyof typeof es]);
-        update({ logo: null, logoSrc: null, logoPaletteId: null });
+        update({ logo: null, keptLogo: null, logoPaletteId: null });
         return;
       }
       const src = logoSrcFor(mintLogoId());
@@ -80,7 +80,8 @@ export function Step1Name({
         )
       ).every(Boolean);
       const logoPaletteId = await paletteFromLogoFile(file);
-      update({ logoSrc: kept ? src : null, logoPaletteId });
+      const { width, height } = prepared.logo;
+      update({ keptLogo: kept ? { src, width, height } : null, logoPaletteId });
     } finally {
       setReading(false);
     }
@@ -101,7 +102,7 @@ export function Step1Name({
       : es["questionnaire.step1.logo.help.noPalette"];
     // And whether the mark itself will be on the site: kept, or not kept and why (ADR 0059).
     return `${colours} ${
-      answers.logoSrc === null
+      answers.keptLogo === null
         ? es["questionnaire.step1.logo.notKept"]
         : es["questionnaire.step1.logo.kept"]
     }`;

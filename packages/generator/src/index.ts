@@ -126,7 +126,7 @@ function headerFor(answers: Answers, contact: Section | undefined): RetorikaDocu
   return {
     brand: {
       name: true,
-      ...(answers.logoSrc === null ? {} : { logo: { src: answers.logoSrc } }),
+      ...(answers.keptLogo === null ? {} : { logo: { ...answers.keptLogo } }),
     },
     ...(contact === undefined ? {} : { action: { kind: "section", sectionId: contact.id } }),
   };

@@ -4,6 +4,7 @@ import {
   type HeaderAction,
   type HeaderBackground,
   type HeaderLayout,
+  type HeaderLogo,
   type HeaderPart,
   hrefForPage,
   type Page,
@@ -71,7 +72,7 @@ export interface HeaderSettings {
   sectionsMobile: "row" | "hidden";
   layout: HeaderLayout;
   brandName: boolean;
-  logo: { src: string } | undefined;
+  logo: HeaderLogo | undefined;
   action: HeaderAction | undefined;
   sticky: boolean;
   hairline: boolean;
@@ -261,8 +262,14 @@ function sectionsLinks(current: Page, taken: ActionEntry | undefined): RenderNod
  *
  * **The logo's `alt` is derived, never stored** (David's adjustment 5): the business name when the
  * name is not written beside it, and empty when it is — a screen reader then hears the name once,
- * as the link's text, rather than «Taberna Taberna». `height` is written as an attribute as well as
- * in the stylesheet, so the bar has its height before the image arrives and nothing jumps.
+ * as the link's text, rather than «Taberna Taberna».
+ *
+ * **Its size, as attributes, so nothing moves when it arrives.** A logo that carries the size it was
+ * kept at (sprint 30 día 7) writes both: the stylesheet still draws it 40px tall with `width: auto`,
+ * and the browser takes the ratio from the two attributes before a byte of the image is there — so
+ * the business name beside it is laid out where it will stay. One kept before the size was stored
+ * writes only `height="40"`, as on día 5: the bar has its height before the image arrives, and the
+ * name moves sideways once, when it does (Lighthouse's `unsized-images`, CLS 0.023 measured).
  */
 function brandNode(
   doc: RetorikaDocument,
@@ -279,7 +286,9 @@ function brandNode(
         // refuses anything but a raster file name here, and the renderer does not rely on it.
         src: safeUrl(settings.logo.src),
         alt: settings.brandName ? "" : doc.siteName,
-        height: "40",
+        ...(settings.logo.width === undefined || settings.logo.height === undefined
+          ? { height: "40" }
+          : { width: String(settings.logo.width), height: String(settings.logo.height) }),
       }),
     );
   }
@@ -447,9 +456,17 @@ export function headerCss(doc: RetorikaDocument): string[] {
     // as a bar rather than as the page's top padding — the same `color.muted` rule `.rb-item`
     // separates cards with. Decorative, so the text contrast minimum does not apply to it.
     // `position: relative` is for the phone's open menu, which hangs under the whole bar (below).
+    //
+    // **`line-height` is a number, never `normal`** (sprint 30 día 7, measured). `normal` takes each
+    // font's own ascent and descent, so a line of the bar was 18px in the fallback letter and 21px in
+    // EB Garamond: when the site's letter arrived, the bar grew 87 → 90px and pushed the whole page
+    // down — the 0.023 of Lighthouse's CLS on the fixed-header subject, which día 5 read as the logo's.
+    // A unitless factor makes every line `size × 1.3` in whichever letter is drawing it, so the bar
+    // has its final height before the letter arrives. 1.3 is EB Garamond's own `normal`, the corpus's
+    // heading letter, so the bar keeps the height it had once loaded.
     ".rb-header { position: relative; display: flex; flex-wrap: wrap; align-items: center;",
     "  gap: var(--space-md) var(--space-xl); padding: var(--space-md) var(--space-xl);",
-    "  background: var(--color-surface); border-bottom: 1px solid var(--color-muted); }",
+    "  background: var(--color-surface); border-bottom: 1px solid var(--color-muted); line-height: 1.3; }",
     ".rb-header[data-hairline=none] { border-bottom: 0; }",
     // The brand never breaks the bar's height: one line, cut with an ellipsis before it wraps
     // (David's adjustment 3, measured with «Taberna Santo Domingo» and a logo at 320px). `min-width:

@@ -229,3 +229,23 @@ section's own button is, so one site has one idea of a button.
 - `apps/editor`: nothing of the panel yet — the model of the canvas is día 3 and the panel día 4. The
   fields drawer's sentence stops claiming the entry «es su título», because it is not.
 - Day by day in `docs/design/REVIEW.md`, sprint 30.
+
+## Note — sprint 30 día 7: a line of the bar is a number
+
+The fixed-header subject of Lighthouse kept a CLS of 0.023 after the logo had its size (ADR 0059,
+note of today). Measured in Chromium with each request held back in turn: **the page moves when the
+site's letter arrives, and only then**. Every line of the bar took `line-height: normal`, which is the
+letter's own ascent and descent — 18px in the fallback, 21px in EB Garamond — so the bar grew from 87
+to 90px when the face landed and pushed everything under it down by 3px. It is also what the día 6
+walk had met as an anchor landing 3px under a fixed bar (ADR 0058's note), cured there by measuring
+again; this removes the growth itself.
+
+`.rb-header` now sets `line-height: 1.3`, a number, so every line in it is its size times 1.3 in
+whichever letter is drawing it and the bar has its final height before the letter arrives. 1.3 is EB
+Garamond's own `normal`, so the corpus's bar keeps the height it had once loaded. On the subject the
+CLS went from 0.023 to 0.008; what is left is the cover's own text changing height with the letter,
+the same shift the three compositions have carried since before this sprint, which is the page's
+reading text and not the header's to fix. `header.browser.test.ts` swaps the letter for one with
+very different metrics at 1280 and 390 and asserts the bar does not move, with a control — the same
+swap with the bar forced back to `normal` must move it — so it cannot pass on a machine whose fonts
+happen to agree. The four goldens with a header move by that one declaration.

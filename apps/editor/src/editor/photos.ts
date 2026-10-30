@@ -1,3 +1,4 @@
+import { LOGO_MAX_EDGE } from "@retorika/schema";
 import { type AcceptedImageType, extensionFor, isAcceptedImage, sniffImage } from "./imageBytes.ts";
 
 /**
@@ -89,7 +90,11 @@ function scaled(width: number, height: number, maxEdge: number): { width: number
   const longest = Math.max(width, height);
   if (longest <= maxEdge) return { width, height };
   const ratio = maxEdge / longest;
-  return { width: Math.round(width * ratio), height: Math.round(height * ratio) };
+  // Never a side of 0: a 2000×1 strip would round to nothing, and a canvas of no width gives no file.
+  return {
+    width: Math.max(1, Math.round(width * ratio)),
+    height: Math.max(1, Math.round(height * ratio)),
+  };
 }
 
 /**
@@ -168,13 +173,6 @@ export async function preparePhoto(file: File): Promise<PhotoResult> {
 // ---------------------------------------------------------------------------
 
 /**
- * The longest edge a logo is kept at. It is drawn at 40px tall in the bar (`.rb-logo`), so 512px
- * is already more than a 2x and a 3x screen will ever ask for of a wide wordmark; above it the
- * file grows and nothing on screen improves. The sprint 30 plan wrote «≤ 512 px de lado».
- */
-export const LOGO_MAX_EDGE = 512;
-
-/**
  * **PNG, always, whatever went in — and never JPEG.** A JPEG has no alpha channel: a logo with a
  * transparent ground flattened to white is a white box on a `primary` or `ink` bar, which is the
  * one thing a brand mark must not be. PNG is lossless, keeps the alpha, and — because it comes
@@ -225,6 +223,9 @@ export async function prepareLogo(file: File): Promise<LogoResult> {
   if (kind === "image/svg+xml") return { ok: false, error: { reason: "svg" } };
   if (!isAcceptedImage(kind)) return { ok: false, error: { reason: "unsupported" } };
 
+  // The schema's own edge (sprint 30 día 7): it is drawn 40px tall in the bar, so 512px is already
+  // more than a 2x and a 3x screen ask for of a wide wordmark, and the size the document keeps for
+  // the `<img>` can never be one this function did not produce.
   const drawn = await drawScaled(original, kind, LOGO_MAX_EDGE);
   if (!drawn) return { ok: false, error: { reason: "undecodable" } };
 

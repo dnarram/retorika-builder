@@ -100,6 +100,24 @@ move a destination act on the button first. The rule is not amended; this is the
 [ADR 0057](decisions/0057-the-header-is-the-owners.md) gives it, written here so the next reader
 does not have to derive it.
 
+**What the rest of sprint 30 added to that reading (closing it, 30 October 2026).**
+
+- **The logo is the one file the header names**, and it is still no element
+  ([ADR 0059](decisions/0059-the-logo-travels-like-a-photograph.md)): no role, no section, no place
+  on a grid. `header.brand.logo` is a file name, as an image element's `src` is, and since 1.16.0 the
+  size it was kept at — two numbers about that file, both or neither, never a position. Its words are
+  not stored at all: the `alt` is derived from `siteName` at every render. So nothing with content of
+  its own floats above the site, which is what the rule exists to forbid; what floats is a set of
+  references to things the document already holds.
+- **Rule 6 holds for the header by parts, not by entries.** Its look is a closed set of choices that
+  resolve to tokens (`header.look`); an exact colour or size is stored per **part** — bar, brand,
+  page links, section links, button — as a marked exception in `header.style`, listed in «Fuera del
+  sistema» and reviewed for contrast before a download, exactly as an element's are. There is no
+  exception per entry: a part is what the contrast review can prove.
+- **Rule 7 does not reach the header.** Its phone layout is its own derivation — the pages fold into
+  a `<details>`, the sections become a row or hide — with no patch and no `breakpoints`; ADR 0057
+  names it among what it does not decide.
+
 ## The role vocabulary, v1
 
 Nine roles and one container:

@@ -90,7 +90,7 @@ html { --rb-header-h: calc(2 * var(--space-md) + max(40px, 1.5 * var(--size-body
 @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
 .rb-header { position: relative; display: flex; flex-wrap: wrap; align-items: center;
   gap: var(--space-md) var(--space-xl); padding: var(--space-md) var(--space-xl);
-  background: var(--color-surface); border-bottom: 1px solid var(--color-muted); }
+  background: var(--color-surface); border-bottom: 1px solid var(--color-muted); line-height: 1.3; }
 .rb-header[data-hairline=none] { border-bottom: 0; }
 .rb-brand { display: flex; align-items: center; gap: var(--space-sm); min-width: 0;
   max-width: 100%; color: var(--color-primary); font-family: var(--font-heading);
@@ -196,7 +196,7 @@ html[data-rb-js] .rb-header[data-sticky][data-bg=transparent] { position: fixed;
 </a>
 <header class="rb-header" data-align="end" data-bg="surface" data-gap="md" data-layout="brand-left" data-phone-row="" data-sections="own" data-size="body">
   <span class="rb-brand" data-part="brand">
-    <img alt="" class="rb-logo" height="40" src="assets/logo.png">
+    <img alt="" class="rb-logo" height="96" src="assets/logo.png" width="96">
     <span class="rb-brand-name">
       Taberna Santo Domingo
     </span>

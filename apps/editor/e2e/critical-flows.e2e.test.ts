@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { inflateRawSync } from "node:zlib";
+import { inflateRawSync, inflateSync } from "node:zlib";
 import AxeBuilder from "@axe-core/playwright";
 import {
   type Browser,
@@ -22914,6 +22914,18 @@ describe("sprint 30 día 5 — el logo viaja como una foto", () => {
       expect(index).toMatch(new RegExp(`<img [^>]*class="rb-logo"[^>]*src="${firstLogo}"`));
       // Empty alt beside the name, so a screen reader hears «Taberna Santo Domingo» once (ADR 0057 §6).
       expect(index).toMatch(/<img alt="" class="rb-logo"/);
+      // And the size it was kept at, read off the PNG's own header (sprint 30 día 7): with both
+      // attributes the browser lays the name out before the logo arrives, and nothing jumps.
+      const keptSize = (zip: Uint8Array, entry: string): RegExp => {
+        const png = extractFileBytes(zip, entry);
+        const view = new DataView(png.buffer, png.byteOffset, png.byteLength);
+        // The IHDR chunk follows the 8-byte signature and its own length and type: width at 16.
+        const [width, height] = [view.getUint32(16), view.getUint32(20)];
+        return new RegExp(
+          `<img [^>]*class="rb-logo" height="${height}" src="${entry}" width="${width}"`,
+        );
+      };
+      expect(index).toMatch(keptSize(first, firstLogo));
 
       // 5. «Menú» → Marca: the logo on the bar's colour; «Quitar» takes it off the canvas.
       await studio.getByRole("button", { name: "Menú", exact: true }).click();
@@ -22951,6 +22963,9 @@ describe("sprint 30 día 5 — el logo viaja como una foto", () => {
       await expect(panel.getByRole("button", { name: "Cambiar" })).toBeVisible();
       const second = await downloadZip("second");
       expect(logoEntryOf(second)).not.toBe(firstLogo);
+      // Uploaded from «Menú» this time, which is the other writer of the size.
+      const secondIndex = new TextDecoder().decode(extractFileBytes(second, "index.html"));
+      expect(secondIndex).toMatch(keptSize(second, logoEntryOf(second)));
 
       // 8. «Fotos» lists it first, as «Logo», the owner's.
       await studio.getByRole("button", { name: "Fotos", exact: true }).click();
@@ -23134,6 +23149,188 @@ describe("sprint 30 día 6 — el aspecto de la cabecera", () => {
       } finally {
         await offline.context().close();
       }
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+});
+
+/**
+ * **Sprint 30 día 7 — what the plan's list asked to see in a browser and no walk had seen.** The
+ * close read the plan's «en el navegador real» list against every suite: the transparent bar with
+ * and without its script, the section in view, Escape and the anchors were already walked in
+ * Chromium (`header-script.browser.test.ts`, the día 6 walk); these four were not, and lived only in
+ * unit tests of the functions behind them.
+ *
+ * 1. A white logo on the light bar warns in «Menú» and in the download, **and does not block**.
+ * 2. Its PNG keeps the transparent ground — in the ZIP, and on a `primary` bar, where the canvas
+ *    shows the bar through the logo's corner rather than a white box.
+ * 3. «Oscuro» silences the warning, in the panel and in the download.
+ * 4. «Transparente» over a cover photograph warns in the download with its own dialog.
+ * 5. «Se lee como…» with 21 letters warns and writes nothing; emptied, the entry reads its derived
+ *    word again.
+ */
+describe("sprint 30 día 7 — lo que la lista pedía y nadie había caminado", () => {
+  it("un logo blanco avisa sin bloquear y sin caja blanca; la barra transparente sobre una foto avisa; 21 letras avisan", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 950 } });
+    const studio = await context.newPage();
+    const dir = mkdtempSync(join(tmpdir(), "retorika-e2e-cierre-"));
+    /** `[r, g, b]` for a `#rrggbb`. */
+    const rgbOf = (hex: string) => {
+      const n = Number.parseInt(hex.trim().slice(1), 16);
+      return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    };
+    /**
+     * The first pixel of an 8-bit PNG as `[r, g, b, a]`. The first pixel of the first row comes out
+     * the same under all five filter types (everything it would subtract is zero), so no unfiltering
+     * is needed: inflate the IDAT chunks and skip the row's filter byte.
+     */
+    const firstPixel = (png: Uint8Array): number[] => {
+      const view = new DataView(png.buffer, png.byteOffset, png.byteLength);
+      expect(png[24], "bit depth").toBe(8);
+      const colour = png[25];
+      expect([2, 6], "colour type").toContain(colour);
+      const idat: Uint8Array[] = [];
+      for (let at = 8; at < png.length; ) {
+        const length = view.getUint32(at);
+        const type = String.fromCharCode(...png.subarray(at + 4, at + 8));
+        if (type === "IDAT") idat.push(png.subarray(at + 8, at + 8 + length));
+        at += 12 + length;
+      }
+      const raw = inflateSync(Buffer.concat(idat));
+      const pixel = [...raw.subarray(1, 1 + (colour === 6 ? 4 : 3))];
+      return colour === 6 ? pixel : [...pixel, 255];
+    };
+    try {
+      // The second card: its cover is a photograph under the words (`image-background`, v2).
+      await studio.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+      await studio.fill("#nombre", "Taberna Santo Domingo");
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByText("Restaurante y bar", { exact: true }).click();
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByText("Comidas", { exact: true }).click();
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.fill("#direccion", "Cta. de Santo Domingo, 2, Ronda");
+      await studio.getByRole("button", { name: "Siguiente" }).click();
+      await studio.getByText("Que reserven", { exact: true }).click();
+      await studio.fill("#enlace", "https://reservas.example.com/taberna");
+      await studio.getByRole("button", { name: "Crear mi web" }).click();
+      await studio.getByText("Ver a tamaño real →").nth(1).click();
+      const frame = studio.frameLocator(CANVAS);
+      const cover = frame.locator('[data-section="sec-cover"]');
+      await cover.waitFor();
+      await expect(cover).toHaveAttribute("data-variant", "image-background");
+      await waitForBankPhoto(frame);
+      const header = frame.locator("header.rb-header");
+      const primary = rgbOf(
+        await frame
+          .locator("body")
+          .evaluate(() =>
+            getComputedStyle(document.documentElement).getPropertyValue("--color-primary"),
+          ),
+      );
+
+      await studio.getByRole("button", { name: "Menú", exact: true }).click();
+      const panel = studio.getByRole("complementary", { name: "La cabecera de tu web" });
+      await expect(panel).toBeVisible();
+      const background = (name: string) =>
+        panel
+          .getByRole("radiogroup", { name: "Fondo de la barra" })
+          .getByText(name, { exact: true })
+          .click();
+
+      /** «Descargar», past the sample texts every generated site has, and past `dialog` when one
+       * is expected — and when none is, the download starts from the first «Descargar igualmente». */
+      const downloadZip = async (tag: string, dialog?: string): Promise<Uint8Array> => {
+        await studio.getByRole("button", { name: "Descargar" }).click();
+        const anyway = studio.getByRole("button", { name: "Descargar igualmente" });
+        await anyway.waitFor();
+        if (dialog !== undefined) {
+          await anyway.click();
+          const warning = studio.getByRole("alertdialog", { name: dialog });
+          await expect(warning).toBeVisible();
+          const [download] = await Promise.all([
+            studio.waitForEvent("download"),
+            warning.getByRole("button", { name: "Descargar igualmente" }).click(),
+          ]);
+          const path = join(dir, `${tag}-${download.suggestedFilename()}`);
+          await download.saveAs(path);
+          return new Uint8Array(readFileSync(path));
+        }
+        const [download] = await Promise.all([studio.waitForEvent("download"), anyway.click()]);
+        const path = join(dir, `${tag}-${download.suggestedFilename()}`);
+        await download.saveAs(path);
+        return new Uint8Array(readFileSync(path));
+      };
+
+      // 1. A white mark on a transparent ground, onto the light bar: «Menú» says it under the
+      //    swatch, and the download says it in the contrast dialog — and downloads.
+      const [chooser] = await Promise.all([
+        studio.waitForEvent("filechooser"),
+        panel.getByRole("button", { name: "Subir tu logo" }).click(),
+      ]);
+      await chooser.setFiles(join(import.meta.dirname, "fixtures/logo-blanco.png"));
+      const logo = header.locator("img.rb-logo");
+      await expect(logo).toHaveCount(1);
+      await imageLoaded(logo);
+      const faint = panel.getByText("Tu logo se ve poco sobre este fondo.");
+      await expect(faint).toBeVisible();
+      const warned = await downloadZip("faint", "Tu logo se ve poco");
+      await expect(studio.getByRole("alertdialog")).toHaveCount(0);
+
+      // 2. The ground stays transparent: in the ZIP the PNG is RGBA and its corner is clear…
+      const logoEntry = listZipEntries(warned).find((entry) =>
+        /^assets\/logo-[0-9a-f]{8}\.png$/.test(entry),
+      );
+      if (!logoEntry) throw new Error(`no logo among ${listZipEntries(warned).join(", ")}`);
+      const png = extractFileBytes(warned, logoEntry);
+      expect(png[25], "the logo lost its alpha channel").toBe(6);
+      expect(firstPixel(png)[3], "the logo's corner is not transparent").toBe(0);
+      // …and on a `primary` bar the canvas shows the bar through that corner, not a white box.
+      await background("Principal");
+      await expect(header).toHaveAttribute("data-bg", "primary");
+      await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
+      const corner = firstPixel(new Uint8Array(await logo.screenshot()));
+      for (const [i, channel] of primary.entries()) {
+        expect(
+          Math.abs((corner[i] ?? 0) - channel),
+          `corner ${corner} on primary ${primary}`,
+        ).toBeLessThanOrEqual(2);
+      }
+
+      // 3. «Oscuro»: the white mark reads, and neither the panel nor the download says otherwise.
+      await background("Oscuro");
+      await expect(header).toHaveAttribute("data-bg", "ink");
+      await expect(faint).toHaveCount(0);
+      await downloadZip("dark");
+      await expect(studio.getByRole("alertdialog", { name: "Tu logo se ve poco" })).toHaveCount(0);
+
+      // 4. «Transparente» over the cover's photograph: the panel's note, and the download's own
+      //    dialog — a warning with no «Arreglar», since what reads there depends on a photograph.
+      await background("Transparente");
+      await expect(header).toHaveAttribute("data-bg", "transparent");
+      await expect(
+        panel.getByText("Sobre una foto no podemos comprobar que se lea", { exact: false }),
+      ).toBeVisible();
+      await downloadZip("over-photo", "La cabecera va sobre una foto");
+
+      // 5. «Se lee como…» with 21 letters: the bound is said, nothing is written, the entry keeps
+      //    its word; emptied, the entry reads the derived word again.
+      const sectionsNav = frame.locator('.rb-nav-wide nav[aria-label="Secciones"] a');
+      const field = panel.getByRole("textbox", { name: "Cómo se lee «Qué hago» en el menú" });
+      await expect(field).toHaveAttribute("placeholder", "Servicios");
+      await field.fill("Nuestra carta de hoy!");
+      await expect(field).toHaveValue("Nuestra carta de hoy!");
+      await expect(panel.getByText("Entre 2 y 20 letras", { exact: false })).toBeVisible();
+      await expect(field).toHaveAttribute("aria-invalid", "true");
+      await expect(sectionsNav.filter({ hasText: "Nuestra carta" })).toHaveCount(0);
+      await expect(sectionsNav.filter({ hasText: "Servicios" })).toHaveCount(1);
+      await field.fill("Carta");
+      await expect(sectionsNav.filter({ hasText: "Carta" })).toHaveCount(1);
+      await field.fill("");
+      await expect(panel.getByText("Entre 2 y 20 letras", { exact: false })).toHaveCount(0);
+      await expect(sectionsNav.filter({ hasText: "Servicios" })).toHaveCount(1);
+      await expect(sectionsNav.filter({ hasText: "Carta" })).toHaveCount(0);
     } finally {
       await context.close();
     }

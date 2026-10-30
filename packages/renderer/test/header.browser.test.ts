@@ -119,6 +119,73 @@ describe("the header on the smallest phone", () => {
   });
 });
 
+describe("the bar's height when the site's letter arrives", () => {
+  /**
+   * Sprint 30 día 7, measured before it was written: with `line-height: normal` a line of the bar
+   * took the letter's own ascent and descent, 18px in the fallback and 21px in EB Garamond, so the
+   * bar grew 87 → 90px when the face arrived and pushed the whole page down — Lighthouse's 0.023 on
+   * the fixed-header subject. The bar's line-height is a number now, and this swaps the letter for
+   * one with very different metrics and asserts the bar does not move.
+   *
+   * **It carries its own control**, so it cannot pass on a machine whose fonts happen to agree: the
+   * same swap with the bar forced back to `normal` must change its height, which is what proves the
+   * probe letter really is drawing and really is taller.
+   */
+  const PROBE_FACE = join(ASSETS_DIR, "..", "fonts", "propia-3f9a7c21-regular.woff2");
+
+  async function barHeights(width: number): Promise<{ fixed: number[]; normal: number[] }> {
+    const page = await open(fixture("cabecera-con-marca"), width, 900);
+    try {
+      await page.route("**/probe.woff2", (route) =>
+        route.fulfill({ contentType: "font/woff2", body: readFileSync(PROBE_FACE) }),
+      );
+      return await page.evaluate(async () => {
+        const header = document.querySelector<HTMLElement>("header.rb-header");
+        if (!header) throw new Error("no header");
+        const style = (css: string) => {
+          const el = document.createElement("style");
+          el.textContent = css;
+          document.head.append(el);
+          return el;
+        };
+        const measure = () => header.getBoundingClientRect().height;
+        const swap = async () => {
+          const face = style(
+            `@font-face { font-family: "Probe"; src: url("/probe.woff2") format("woff2");
+               ascent-override: 140%; descent-override: 60%; }
+             html:root { --font-heading: "Probe"; --font-body: "Probe"; }`,
+          );
+          await document.fonts.load('16px "Probe"');
+          const faces = [...document.fonts].map((f) => `${f.family}:${f.status}`);
+          if (!faces.some((f) => /^"?Probe"?:loaded$/.test(f)))
+            throw new Error(`the probe letter did not load, so nothing was measured: ${faces}`);
+          const height = measure();
+          face.remove();
+          return height;
+        };
+        const fixed = [measure(), await swap()];
+        const reset = style(".rb-header, .rb-header * { line-height: normal !important; }");
+        const normal = [measure(), await swap()];
+        reset.remove();
+        return { fixed, normal };
+      });
+    } finally {
+      await page.context().close();
+    }
+  }
+
+  for (const width of [1280, 390]) {
+    it(`keeps its height at ${width}px whichever letter draws it`, async () => {
+      const { fixed, normal } = await barHeights(width);
+      // The control: with `normal`, the taller letter makes a taller bar.
+      expect(normal[1], `control did not move: ${normal.join(" → ")}`).toBeGreaterThan(
+        (normal[0] ?? 0) + 2,
+      );
+      expect(fixed[1], `the bar moved: ${fixed.join(" → ")}`).toBe(fixed[0]);
+    });
+  }
+});
+
 describe("the sections' row on a phone", () => {
   /** One page, five headed sections: more entries than 320px holds on one line. */
   function fiveSections(): RetorikaDocument {
