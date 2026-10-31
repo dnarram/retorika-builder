@@ -1878,9 +1878,15 @@ describe("1.15.0 — the header is the owner's", () => {
     expect(migrateToCurrent(once)).toEqual(once);
   });
 
-  it("leaves a document whose owner shaped the header exactly as it is, apart from the later seals", () => {
+  it("leaves a document whose owner shaped the header exactly as it is, apart from the later steps", () => {
     const current = after();
-    expect(migrateToCurrent(current)).toEqual({ ...current, schemaVersion: SCHEMA_VERSION });
+    const header = current["header"] as Record<string, unknown>;
+    // 1.17.0 absorbed `sections.row`: the own row is `position: "row"` from there on (0018).
+    expect(migrateToCurrent(current)).toEqual({
+      ...current,
+      header: { ...header, sections: { shown: true, mobile: "row", position: "row" } },
+      schemaVersion: SCHEMA_VERSION,
+    });
     expect(() => parseDocument(migrateToCurrent(current))).not.toThrow();
   });
 
@@ -1921,8 +1927,9 @@ describe("1.15.0 — the header is the owner's", () => {
           page.menuLabel !== undefined || page.sections.some((s) => s.menuLabel !== undefined),
       );
       if (raw.header === undefined && !labelled) continue;
-      // 1.15.0 or later: `cabecera-con-marca` moved to 1.16.0 when its logo gained a size.
-      expect(["1.15.0", "1.16.0"], file).toContain(raw.schemaVersion);
+      // 1.15.0 or later: `cabecera-con-marca` moved to 1.16.0 when its logo gained a size, and to
+      // 1.17.0 when its row became a position.
+      expect(["1.15.0", "1.16.0", "1.17.0"], file).toContain(raw.schemaVersion);
     }
   });
 });
@@ -1974,17 +1981,17 @@ describe("1.16.0 — the logo keeps its size", () => {
     };
   }
 
-  it("is registered, and it is the one the chain ends at", () => {
+  it("is registered", () => {
+    // The end of the chain until 1.17.0; the end is asserted by the step that is the end.
     expect(step("1.16.0").version).toBe("1.16.0");
-    expect(SCHEMA_VERSION).toBe("1.16.0");
   });
 
   it("seals a 1.15.0 document and moves nothing, because both keys are optional", () => {
     const input = before();
-    const migrated = migrateToCurrent(input);
+    const migrated = upTo(input, "1.16.0");
     expect(migrated["schemaVersion"]).toBe("1.16.0");
     expect({ ...migrated, schemaVersion: "1.15.0" }).toEqual(input);
-    expect(() => parseDocument(migrated)).not.toThrow();
+    expect(() => parseDocument(migrateToCurrent(input))).not.toThrow();
   });
 
   it("migrating a migrated document changes nothing", () => {
@@ -1994,8 +2001,8 @@ describe("1.16.0 — the logo keeps its size", () => {
 
   it("leaves a logo that carries its size exactly as it is", () => {
     const current = after();
-    expect(migrateToCurrent(current)).toEqual(current);
-    expect(() => parseDocument(current)).not.toThrow();
+    expect(migrateToCurrent(current)).toEqual({ ...current, schemaVersion: SCHEMA_VERSION });
+    expect(() => parseDocument(migrateToCurrent(current))).not.toThrow();
   });
 
   /** **`down` is lossy, and this is the loss, named:** the two numbers go, the file stays — the logo
@@ -2020,7 +2027,7 @@ describe("1.16.0 — the logo keeps its size", () => {
     expect(down?.(migrateToCurrent(headless))).toEqual(headless);
   });
 
-  it("is the claim it rests on: the one corpus fixture with a size was written at 1.16.0", () => {
+  it("is the claim it rests on: the one corpus fixture with a size was written at 1.16.0 or later", () => {
     // The affected set of `up`, counted: a logo with a size below 1.16.0 would be one this version's
     // `up` ought to have validated, and there is none.
     const corpus = readdirSync(DOCUMENTS_DIR).filter((file) => file.endsWith(".json"));
@@ -2032,8 +2039,139 @@ describe("1.16.0 — the logo keeps its size", () => {
       };
       if (raw.header?.brand?.logo?.width === undefined) continue;
       carrying += 1;
-      expect(raw.schemaVersion, file).toBe("1.16.0");
+      // `cabecera-con-marca`, moved on to 1.17.0 when its row became a position.
+      expect(["1.16.0", "1.17.0"], file).toContain(raw.schemaVersion);
     }
     expect(carrying).toBe(1);
+  });
+});
+
+/**
+ * `0018` — each menu has its place (ADR 0060, sprint 31 día 2). `up` absorbs the one place key
+ * 1.16.0 had — `sections.row: "own"` is `position: "row"`, `"shared"` is the bar an absent position
+ * already means — and seals the rest; `down` puts the row back and drops what 1.16.0 cannot hold.
+ */
+describe("1.17.0 — each menu has its place", () => {
+  /** A 1.16.0 site whose sections menu takes a row of its own. */
+  function before(): Record<string, unknown> {
+    return {
+      schemaVersion: "1.16.0",
+      id: "doc-rail",
+      siteName: "Taberna Santo Domingo",
+      theme,
+      collections: [],
+      pages: [
+        {
+          id: "home",
+          slug: "index",
+          title: "Taberna Santo Domingo",
+          sections: [
+            {
+              id: "sec-cover",
+              preset: { catalogId: "cover", variantId: "image-right" },
+              source: "catalog",
+              layout: null,
+              content: [],
+            },
+          ],
+        },
+      ],
+      header: { sections: { shown: true, row: "own", mobile: "hidden" }, brand: { name: true } },
+    };
+  }
+
+  /** The same site at 1.17.0, after its owner put the pages in a left rail with the brand. */
+  function after(): Record<string, unknown> {
+    return {
+      ...before(),
+      schemaVersion: "1.17.0",
+      header: {
+        pages: { shown: true, position: "left" },
+        sections: { shown: true, position: "fold", mobile: "fold" },
+        brandWithPages: true,
+        brand: { name: true },
+      },
+    };
+  }
+
+  it("is registered, and it is the one the chain ends at", () => {
+    expect(step("1.17.0").version).toBe("1.17.0");
+    expect(SCHEMA_VERSION).toBe("1.17.0");
+  });
+
+  it("turns the own row into a position and moves nothing else", () => {
+    const migrated = migrateToCurrent(before());
+    expect(migrated["schemaVersion"]).toBe("1.17.0");
+    expect(migrated["header"]).toEqual({
+      sections: { shown: true, mobile: "hidden", position: "row" },
+      brand: { name: true },
+    });
+    expect(() => parseDocument(migrated)).not.toThrow();
+  });
+
+  it("drops a shared row without a word in its place: the bar is what absent means", () => {
+    const shared = { ...before(), header: { sections: { shown: true, row: "shared" } } };
+    expect(migrateToCurrent(shared)["header"]).toEqual({ sections: { shown: true } });
+  });
+
+  it("seals a document with no row, and migrating a migrated document changes nothing", () => {
+    const { header: _, ...headless } = before();
+    expect(migrateToCurrent(headless)).toEqual({ ...headless, schemaVersion: "1.17.0" });
+    const once = migrateToCurrent(before());
+    expect(migrateToCurrent(once)).toEqual(once);
+    const current = after();
+    expect(migrateToCurrent(current)).toEqual(current);
+    expect(() => parseDocument(current)).not.toThrow();
+  });
+
+  /** **`down` is lossy, and this is the loss, named:** a rail, the disclosure, the pages menu's
+   * place, the brand going with it and a phone's disclosure have no word in 1.16.0, and go. */
+  it("takes every place 1.16.0 cannot hold away on the way down, and keeps the rest", () => {
+    const down = step("1.17.0").down;
+    expect(down, "1.17.0 has no `down`").toBeDefined();
+    const back = down?.(after()) ?? {};
+    expect(back["schemaVersion"]).toBe("1.16.0");
+    expect(back["header"]).toEqual({
+      pages: { shown: true },
+      sections: { shown: true },
+      brand: { name: true },
+    });
+    const row = down?.(migrateToCurrent(before())) ?? {};
+    expect(row["header"]).toEqual({
+      sections: { shown: true, mobile: "hidden", row: "own" },
+      brand: { name: true },
+    });
+  });
+
+  it("round-trips a document with a row of its own, one with no header, and one with empty menus", () => {
+    const down = step("1.17.0").down;
+    const input = before();
+    expect(down?.(migrateToCurrent(input))).toEqual(input);
+    const { header: _, ...headless } = input;
+    expect(down?.(migrateToCurrent(headless))).toEqual(headless);
+    // An empty object the document already held is not this step's to tidy away.
+    const empty = { ...input, header: { pages: {}, sections: {} } };
+    expect(down?.(migrateToCurrent(empty))).toEqual(empty);
+    // And a header that held only what 1.16.0 cannot keep goes with it.
+    expect(
+      down?.({ ...after(), header: { pages: { position: "right" }, brandWithPages: true } }),
+    ).not.toHaveProperty("header");
+  });
+
+  it("is the claim it rests on: the one corpus fixture with a row was moved by this `up`", () => {
+    const corpus = readdirSync(DOCUMENTS_DIR).filter((file) => file.endsWith(".json"));
+    let placed = 0;
+    for (const file of corpus) {
+      const raw = JSON.parse(readFileSync(join(DOCUMENTS_DIR, file), "utf8")) as {
+        schemaVersion: string;
+        header?: { sections?: { row?: string; position?: string } };
+      };
+      expect(raw.header?.sections?.row, `${file} still carries \`row\``).toBeUndefined();
+      if (raw.header?.sections?.position === undefined) continue;
+      placed += 1;
+      expect(raw.schemaVersion, file).toBe("1.17.0");
+      expect(raw.header.sections.position, file).toBe("row");
+    }
+    expect(placed).toBe(1);
   });
 });

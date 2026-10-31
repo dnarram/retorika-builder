@@ -1,7 +1,14 @@
 import { teaserSection } from "@retorika/catalog";
 import { type RetorikaDocument, type Section, type Theme, TOKEN_KEYS } from "@retorika/schema";
 import { describe, expect, it } from "vitest";
-import { actionEntry, headerDrawn, headerSettings } from "../src/header.ts";
+import {
+  actionEntry,
+  headerDrawn,
+  headerSettings,
+  RAIL_FOLD_WIDTH,
+  RAIL_WIDTH,
+  TWO_RAILS_FOLD_WIDTH,
+} from "../src/header.ts";
 import { render } from "../src/index.ts";
 
 /**
@@ -100,8 +107,10 @@ describe("a document with no header draws what it always drew", () => {
     expect(settings).toMatchObject({
       pagesShown: true,
       sectionsShown: true,
-      sectionsRow: "shared",
+      pagesPosition: "bar",
+      sectionsPosition: "bar",
       sectionsMobile: "row",
+      brandWithPages: false,
       layout: "brand-left",
       brandName: false,
       hairline: true,
@@ -300,16 +309,19 @@ describe("the three layouts and the sections' row", () => {
 
   it("keeps the sections in the bar and gives the phone a row, by default", () => {
     const page = draw(site(3));
-    expect(page.querySelector("header")?.getAttribute("data-sections")).toBe("shared");
+    expect(page.querySelector("header")?.getAttribute("data-sections")).toBe("bar");
+    expect(page.querySelector("header")?.getAttribute("data-pages")).toBe("bar");
     expect(page.querySelector('.rb-nav-wide nav[aria-label="Secciones"]')).not.toBeNull();
     expect(page.querySelector("nav.rb-nav-row")?.getAttribute("data-mobile")).toBe("row");
   });
 
   it("takes the sections out of the bar when they have a row of their own", () => {
     const page = draw(
-      site(3, [{ id: "p2", slug: "carta", title: "La carta" }], { sections: { row: "own" } }),
+      site(3, [{ id: "p2", slug: "carta", title: "La carta" }], {
+        sections: { position: "row" },
+      }),
     );
-    expect(page.querySelector("header")?.getAttribute("data-sections")).toBe("own");
+    expect(page.querySelector("header")?.getAttribute("data-sections")).toBe("row");
     expect(page.querySelector('.rb-nav-wide nav[aria-label="Secciones"]')).toBeNull();
     expect(texts(page.querySelectorAll("nav.rb-nav-row a"))).toEqual([
       "Servicios",
@@ -325,7 +337,7 @@ describe("the three layouts and the sections' row", () => {
   });
 
   it("marks a row the phone hides, when the row is the owner's at every other width", () => {
-    const page = draw(site(3, [], { sections: { row: "own", mobile: "hidden" } }));
+    const page = draw(site(3, [], { sections: { position: "row", mobile: "hidden" } }));
     expect(page.querySelector("nav.rb-nav-row")?.getAttribute("data-mobile")).toBe("hidden");
     expect(render(site(3), "html").css).toContain(
       "  .rb-header[data-sections] .rb-nav-row[data-mobile=hidden] { display: none; }",
@@ -339,7 +351,7 @@ describe("determinism and the two targets", () => {
       brand: { name: true },
       action: { kind: "page", pageId: "p2" },
       layout: "stacked",
-      sections: { row: "own" },
+      sections: { position: "row" },
     });
     expect(render(doc, "html").html).toBe(render(doc, "html").html);
   });
@@ -534,5 +546,180 @@ describe("rule 6 on the header's parts", () => {
     expect(render(site(3), "html").css).not.toContain("the header's own style");
     const doc = site(3, [], { style: { action: { borderRadius: { ref: "radius.lg" } } } });
     expect(render(doc, "html").css).toBe(render(doc, "html").css);
+  });
+});
+
+/**
+ * **Each menu has its place** (ADR 0060, sprint 31 día 2). A menu placed `left` or `right` gets a copy
+ * in a rail; the bar keeps every copy it had, because the bar is where a rail falls on a narrower
+ * screen; which copy is seen is the stylesheet's `display: none`, measured in a real browser on día 3.
+ * What is pinned here is the markup and the rules: where each menu's copies land, when the brand
+ * goes with the pages, when the bar has nothing left, and that a site without a rail carries none of
+ * it.
+ */
+describe("each menu has its place (ADR 0060)", () => {
+  const PAGES = [{ id: "p2", slug: "carta", title: "La carta" }];
+  const placed = (header: RetorikaDocument["header"]) => site(3, PAGES, header);
+  const railOf = (page: Document, side: string) =>
+    page.querySelector(`header > .rb-rail[data-side="${side}"]`);
+  const labelsIn = (root: Element | null) =>
+    [...(root?.querySelectorAll(":scope > nav") ?? [])].map((nav) =>
+      nav.getAttribute("aria-label"),
+    );
+
+  it("puts each menu's copy where its place says, for every pair of places", () => {
+    for (const pages of ["bar", "left", "right"] as const) {
+      for (const sections of ["bar", "row", "left", "right"] as const) {
+        const where = `pages ${pages}, sections ${sections}`;
+        const page = draw(placed({ pages: { position: pages }, sections: { position: sections } }));
+        const header = page.querySelector("header");
+        expect(header?.getAttribute("data-pages"), where).toBe(pages);
+        expect(header?.getAttribute("data-sections"), where).toBe(sections);
+        // The bar always keeps the pages, and the sections unless their place is a row of their own.
+        expect(labelsIn(page.querySelector(".rb-nav-wide")), where).toEqual(
+          sections === "row" ? ["Páginas"] : ["Páginas", "Secciones"],
+        );
+        expect(page.querySelector("nav.rb-nav-row") !== null, where).toBe(true);
+        // A rail per side that holds something, pages before sections when they share one.
+        const sides = (["left", "right"] as const).filter(
+          (side) => pages === side || sections === side,
+        );
+        expect(header?.getAttribute("data-rails") ?? null, where).toBe(
+          sides.length === 0 ? null : sides.join(" "),
+        );
+        for (const side of ["left", "right"] as const) {
+          const expected = [
+            ...(pages === side ? ["Páginas"] : []),
+            ...(sections === side ? ["Secciones"] : []),
+          ];
+          if (expected.length === 0) expect(railOf(page, side), where).toBeNull();
+          else expect(labelsIn(railOf(page, side)), `${where}, ${side}`).toEqual(expected);
+        }
+      }
+    }
+  });
+
+  it("keeps the rails inside the header, so the header is still the sibling `~ main` reads", () => {
+    const page = draw(placed({ pages: { position: "left" }, sections: { position: "right" } }));
+    expect(page.querySelectorAll("header > .rb-rail")).toHaveLength(2);
+    expect(page.querySelector("header ~ main#rb-main")).not.toBeNull();
+    // One banner holds the whole of the site's navigation.
+    expect(page.querySelectorAll("header")).toHaveLength(1);
+    expect(page.querySelectorAll("body > nav, main nav")).toHaveLength(0);
+  });
+
+  it("sends the brand and the button to the pages' rail, and keeps the bar's copies to fall back on", () => {
+    const page = draw(
+      placed({
+        pages: { position: "left" },
+        brandWithPages: true,
+        brand: { name: true },
+        // A section and not the one page: a page in the button leaves the pages menu (one
+        // destination, one place), and an empty pages menu has no rail to take the brand to.
+        action: { kind: "section", sectionId: "sec-contact" },
+      }),
+    );
+    const header = page.querySelector("header");
+    expect(header?.getAttribute("data-brand")).toBe("pages");
+    const rail = railOf(page, "left");
+    expect([...(rail?.children ?? [])].map((child) => child.className)).toEqual([
+      "rb-brand",
+      "rb-nav",
+      "rb-nav-action",
+    ]);
+    expect(header?.querySelector(":scope > .rb-brand")).not.toBeNull();
+    expect(header?.querySelector(":scope > .rb-nav-action")).not.toBeNull();
+  });
+
+  it("leaves the brand in the bar where the pages are not drawn in a rail", () => {
+    for (const header of [
+      { pages: { position: "bar" as const }, brandWithPages: true, brand: { name: true } },
+      {
+        pages: { position: "left" as const, shown: false },
+        brandWithPages: true,
+        brand: { name: true },
+      },
+    ]) {
+      const page = draw(placed(header));
+      expect(page.querySelector("header")?.hasAttribute("data-brand")).toBe(false);
+      expect(page.querySelector(".rb-rail .rb-brand")).toBeNull();
+    }
+  });
+
+  it("collapses the bar only when everything it would draw stands in a rail", () => {
+    const bar = (header: RetorikaDocument["header"]) =>
+      draw(placed(header)).querySelector("header")?.getAttribute("data-bar") ?? null;
+    const everything = {
+      pages: { position: "left" as const },
+      sections: { position: "right" as const },
+      brandWithPages: true,
+      brand: { name: true },
+    };
+    expect(bar(everything)).toBe("none");
+    // The sections in the bar, in a row, or the brand left behind: the bar still has words.
+    expect(bar({ ...everything, sections: { position: "bar" } })).toBeNull();
+    expect(bar({ ...everything, sections: { position: "row" } })).toBeNull();
+    expect(bar({ ...everything, brandWithPages: false })).toBeNull();
+    // And with nothing in a rail there is no collapsing at all.
+    expect(bar({ brand: { name: true } })).toBeNull();
+  });
+
+  it("writes the rail's stylesheet only for a site that has one, from the widths that hold it", () => {
+    const without = render(site(3), "html").css;
+    expect(without).not.toContain(".rb-rail");
+    expect(without).not.toContain("data-rails");
+    const { css } = render(
+      placed({ pages: { position: "left" }, sections: { position: "right" } }),
+      "html",
+    );
+    expect(css).toContain(
+      ".rb-rail { display: none; position: fixed; top: 0; bottom: 0; z-index: 2;",
+    );
+    expect(css).toContain(`width: ${RAIL_WIDTH}px;`);
+    // Scrolls down when its entries outgrow the window, never across: a sideways scroller would
+    // exempt every entry from the overflow walk.
+    expect(css).toContain("overflow: hidden auto;");
+    expect(css).toContain(
+      `@media (min-width: ${RAIL_FOLD_WIDTH}px) {\n  .rb-rail { display: flex; }`,
+    );
+    expect(css).toContain(
+      `  .rb-header[data-rails~=left], .rb-header[data-rails~=left] ~ main { margin-left: ${RAIL_WIDTH}px; }`,
+    );
+    expect(css).toContain(
+      `@media (min-width: ${RAIL_FOLD_WIDTH}px) and (max-width: ${TWO_RAILS_FOLD_WIDTH - 1}px) {`,
+    );
+    expect(css).toContain(`@media (min-width: ${TWO_RAILS_FOLD_WIDTH}px) {`);
+    // The pages' copy hidden in the bar, the sections that follow it draw no line beside nothing.
+    expect(css).toContain(
+      "  .rb-header[data-pages=right] .rb-nav-wide > .rb-nav + .rb-nav { padding-left: 0; border-left: 0; }",
+    );
+    // A collapsed bar leaves no room for itself in an anchor's landing.
+    expect(css).toContain(
+      '  .rb-header[data-layout][data-bar=none]:not([data-rails="left right"])[data-sticky] ~ main [data-section] { scroll-margin-top: 0; }',
+    );
+    expect(RAIL_FOLD_WIDTH - RAIL_WIDTH).toBeGreaterThanOrEqual(768);
+    expect(TWO_RAILS_FOLD_WIDTH - 2 * RAIL_WIDTH).toBeGreaterThanOrEqual(768);
+  });
+
+  it("renders the same bytes twice for every pair of places", () => {
+    for (const pages of ["bar", "left", "right"] as const) {
+      for (const sections of ["bar", "row", "left", "right"] as const) {
+        const doc = placed({
+          pages: { position: pages },
+          sections: { position: sections },
+          brandWithPages: true,
+          brand: { name: true },
+        });
+        const first = render(doc, "html");
+        const second = render(doc, "html");
+        expect(second.html, `${pages}/${sections}`).toBe(first.html);
+        expect(second.css, `${pages}/${sections}`).toBe(first.css);
+      }
+    }
+  });
+
+  it("refuses to draw the disclosure until it exists, rather than publish an empty place", () => {
+    expect(() => draw(placed({ sections: { position: "fold" } }))).toThrow(/día 3/);
+    expect(() => draw(placed({ sections: { mobile: "fold" } }))).toThrow(/día 3/);
   });
 });

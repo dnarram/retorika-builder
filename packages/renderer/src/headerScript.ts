@@ -20,11 +20,19 @@
  *    content box misses a change of padding; where there is one), not only when the window does: the site's own letter
  *    arrives after the script has run and makes the bar taller (66 → 69 px, measured by the sprint
  *    30 día 6 walk in the ZIP), and an anchor then landed 3 px under the bar.
- * 2. Escape, and a pointer outside, close the phone's open `<details>` and give the focus back to
- *    its `<summary>` — the two things a `<details>` does not do by itself.
+ * 2. Escape, and a pointer outside, close an open `<details>` of the header — the phone's «Menú» and,
+ *    from sprint 31, the «Ir a…» disclosure — and give the focus back to its `<summary>`: the two
+ *    things a `<details>` does not do by itself.
  * 3. `data-scrolled` on a fixed bar once the page has scrolled: the stylesheet draws the shadow.
  * 4. The entry of the section most in view carries `aria-current="location"` (an
- *    `IntersectionObserver`; nothing on a browser without one, and nothing wrong either).
+ *    `IntersectionObserver`; nothing on a browser without one, and nothing wrong either) — every copy
+ *    of it, in the bar, in a row or in a rail.
+ *
+ * **Read across the page, not only inside the bar** (ADR 0060, sprint 31 día 2): a menu in a rail is
+ * the header's child but not the bar's, and a disclosure may stand apart from it. The bar is still
+ * what is measured: a rail is fixed and takes no height, so a header whose menus all stand in rails
+ * measures 0 and no anchor lands under a ghost. The observer's top margin is the bar's height only
+ * when the bar is fixed over the page — otherwise it scrolls away and covers nothing.
  *
  * No network, no `eval`, no state outside the DOM, no reading of anything but the header and the
  * sections the header already links to. Omitted by the `dom` target: the editor's canvas is patched
@@ -40,13 +48,13 @@ export const HEADER_SCRIPT = [
   "var measure=function(){h.style.setProperty('--rb-header-h',b.offsetHeight+'px')};",
   "measure();addEventListener('resize',measure);",
   "if('ResizeObserver' in window)new ResizeObserver(measure).observe(b,{box:'border-box'});",
-  "var det=b.querySelector('details.rb-nav-narrow');",
-  "if(det){var sum=det.querySelector('summary');",
+  "[].slice.call(d.querySelectorAll('details.rb-nav-narrow,details.rb-nav-fold')).forEach(function(det){var sum=det.querySelector('summary');",
   "d.addEventListener('keydown',function(e){if(e.key==='Escape'&&det.open){det.open=false;if(sum)sum.focus()}});",
-  "d.addEventListener('click',function(e){if(det.open&&!det.contains(e.target))det.open=false});}",
-  "if(b.hasAttribute('data-sticky')){var scrolled=function(){if(scrollY>0)b.setAttribute('data-scrolled','');else b.removeAttribute('data-scrolled')};",
+  "d.addEventListener('click',function(e){if(det.open&&!det.contains(e.target))det.open=false})});",
+  "var fixed=b.hasAttribute('data-sticky');",
+  "if(fixed){var scrolled=function(){if(scrollY>0)b.setAttribute('data-scrolled','');else b.removeAttribute('data-scrolled')};",
   "scrolled();addEventListener('scroll',scrolled,{passive:true});}",
-  "var links=[].slice.call(b.querySelectorAll('.rb-nav a[href^=\"#\"]')),bySection=new Map(),sections=[];",
+  "var links=[].slice.call(d.querySelectorAll('.rb-nav a[href^=\"#\"]')),bySection=new Map(),sections=[];",
   "links.forEach(function(a){var s=d.getElementById(a.getAttribute('href').slice(1));if(!s)return;",
   "if(!bySection.has(s)){bySection.set(s,[]);sections.push(s)}bySection.get(s).push(a)});",
   "if(sections.length&&'IntersectionObserver' in window){var seen=new Map(),mark=function(){",
@@ -54,7 +62,7 @@ export const HEADER_SCRIPT = [
   "links.forEach(function(a){a.removeAttribute('aria-current')});",
   "if(best)bySection.get(best).forEach(function(a){a.setAttribute('aria-current','location')})};",
   "var io=new IntersectionObserver(function(es){es.forEach(function(e){seen.set(e.target,e.isIntersecting?e.intersectionRatio:0)});mark()},",
-  "{rootMargin:'-'+b.offsetHeight+'px 0px -40% 0px',threshold:[0,.25,.5,.75,1]});",
+  "{rootMargin:'-'+(fixed?b.offsetHeight:0)+'px 0px -40% 0px',threshold:[0,.25,.5,.75,1]});",
   "sections.forEach(function(s){io.observe(s)});}",
   "})();",
 ].join("");

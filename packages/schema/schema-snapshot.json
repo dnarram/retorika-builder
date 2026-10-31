@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.16.0",
+  "schemaVersion": "1.17.0",
   "document": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -292,6 +292,14 @@
             "properties": {
               "shown": {
                 "type": "boolean"
+              },
+              "position": {
+                "type": "string",
+                "enum": [
+                  "bar",
+                  "left",
+                  "right"
+                ]
               }
             },
             "additionalProperties": false
@@ -302,22 +310,29 @@
               "shown": {
                 "type": "boolean"
               },
-              "row": {
+              "position": {
                 "type": "string",
                 "enum": [
-                  "shared",
-                  "own"
+                  "bar",
+                  "row",
+                  "left",
+                  "right",
+                  "fold"
                 ]
               },
               "mobile": {
                 "type": "string",
                 "enum": [
                   "row",
-                  "hidden"
+                  "hidden",
+                  "fold"
                 ]
               }
             },
             "additionalProperties": false
+          },
+          "brandWithPages": {
+            "type": "boolean"
           },
           "action": {
             "oneOf": [

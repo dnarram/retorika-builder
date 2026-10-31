@@ -692,7 +692,7 @@ describe("the two versions of the menu", () => {
     // That one landmark is in the tree is asserted in a real browser by the a11y matrix.
     const { css } = render(twoMenus(), "html");
     expect(css).toContain(".rb-nav-narrow { display: none; }");
-    expect(css).toContain(".rb-header[data-sections=shared] .rb-nav-row { display: none; }");
+    expect(css).toContain(".rb-header:not([data-sections=row]) .rb-nav-row { display: none; }");
     expect(css).toContain("  .rb-nav-wide { display: none; }");
     expect(css).toContain("  .rb-nav-narrow { display: block;");
     expect(css).toContain("  .rb-header[data-sections] .rb-nav-row { display: flex;");

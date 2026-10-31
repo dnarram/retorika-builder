@@ -19,7 +19,10 @@ import type {
   HeaderLayout,
   HeaderPart,
   Page,
+  PagesPosition,
   RetorikaDocument,
+  SectionsOnMobile,
+  SectionsPosition,
   StyleProperty,
 } from "@retorika/schema";
 import es from "../locales/es.json" with { type: "json" };
@@ -123,13 +126,18 @@ export interface HeaderState {
   layout: HeaderLayout;
   sticky: boolean;
   hairline: boolean;
-  sectionsMobile: "row" | "hidden";
+  sectionsMobile: SectionsOnMobile;
   /** A fixed bar lets go on a phone, because the sections' row is under it there (día 2). */
   phoneRow: boolean;
   /** The bar lies transparent over the cover (ADR 0057 §look; chosen on día 6). */
   transparent: boolean;
-  /** Whether the sections take a row of their own under the bar at every width (día 6). */
-  sectionsRow: "shared" | "own";
+  /** Where the sections menu sits (ADR 0060, sprint 31): `row` is the line of their own under the bar
+   * that día 6's «Secciones en su propia fila» chooses; the rails and the disclosure arrive in the
+   * panel on día 5. */
+  sectionsPosition: SectionsPosition;
+  /** Where the pages menu sits, and whether the brand and the button go with it into a rail. */
+  pagesPosition: PagesPosition;
+  brandWithPages: boolean;
   /** The look as the renderer reads it, every gap filled by its default (día 6). */
   look: HeaderLook;
   /** The parts this page draws, in `HEADER_PARTS` order — the ones the exact controls are offered
@@ -293,7 +301,9 @@ export function headerStateFor(doc: RetorikaDocument, pageId: string | undefined
     sectionsMobile: settings.sectionsMobile,
     phoneRow: headerPhoneRow(doc, settings),
     transparent: settings.background === "transparent",
-    sectionsRow: settings.sectionsRow,
+    sectionsPosition: settings.sectionsPosition,
+    pagesPosition: settings.pagesPosition,
+    brandWithPages: settings.brandWithPages,
     look: {
       background: settings.background,
       align: settings.align,
@@ -375,9 +385,42 @@ export function sectionsMobilePatch(
   return { sections: { ...(doc.header?.sections ?? {}), mobile } };
 }
 
-/** The header with the sections' row chosen at every width, keeping the rest of `sections`. */
-export function sectionsRowPatch(doc: RetorikaDocument, row: "shared" | "own"): Partial<Header> {
-  return { sections: { ...(doc.header?.sections ?? {}), row } };
+/**
+ * The header with a menu's place chosen, keeping the rest of that menu's object — `setHeader` is
+ * shallow at the top level, so `{ sections: { position } }` alone would drop `shown` and `mobile`.
+ * **Back to the bar drops the key** rather than writing `"bar"`: absent is the bar (ADR 0060), and a
+ * place chosen and then undone leaves the document as it was. A menu object left with nothing in it
+ * goes with it.
+ */
+function placed<T extends "pages" | "sections">(
+  doc: RetorikaDocument,
+  menu: T,
+  position: string,
+): Partial<Header> {
+  const { position: _, ...rest } = (doc.header?.[menu] ?? {}) as Record<string, unknown>;
+  const next = position === "bar" ? rest : { ...rest, position };
+  return { [menu]: Object.keys(next).length === 0 ? undefined : next } as Partial<Header>;
+}
+
+/** The header with the sections menu's place chosen (sprint 31). */
+export function sectionsPositionPatch(
+  doc: RetorikaDocument,
+  position: SectionsPosition,
+): Partial<Header> {
+  return placed(doc, "sections", position);
+}
+
+/** The header with the pages menu's place chosen (sprint 31). */
+export function pagesPositionPatch(
+  doc: RetorikaDocument,
+  position: PagesPosition,
+): Partial<Header> {
+  return placed(doc, "pages", position);
+}
+
+/** «La marca y el botón van con el menú de páginas» on or off; off drops the key. */
+export function brandWithPagesPatch(on: boolean): Partial<Header> {
+  return { brandWithPages: on ? true : undefined };
 }
 
 /**

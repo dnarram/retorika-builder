@@ -17,6 +17,7 @@ import {
 import { describe, expect, it } from "vitest";
 import {
   brandNamePatch,
+  brandWithPagesPatch,
   headerColorInForce,
   headerExact,
   headerStateFor,
@@ -25,10 +26,11 @@ import {
   type MenuMode,
   menuModePatch,
   menuStatusText,
+  pagesPositionPatch,
   SCHEME_TOKENS,
   schemeSwatch,
   sectionsMobilePatch,
-  sectionsRowPatch,
+  sectionsPositionPatch,
 } from "../src/editor/headerState.ts";
 import es from "../src/locales/es.json" with { type: "json" };
 
@@ -228,9 +230,9 @@ describe("the patches the panel writes", () => {
   it("keeps the rest of `sections` when the switch or the phone row changes", () => {
     const doc = fixture("cabecera-con-marca");
     const never = setHeader(doc, menuModePatch(doc, "sections", "never"));
-    expect(never.header?.sections).toEqual({ shown: false, row: "own", mobile: "row" });
+    expect(never.header?.sections).toEqual({ shown: false, position: "row", mobile: "row" });
     const hidden = setHeader(never, sectionsMobilePatch(never, "hidden"));
-    expect(hidden.header?.sections).toEqual({ shown: false, row: "own", mobile: "hidden" });
+    expect(hidden.header?.sections).toEqual({ shown: false, position: "row", mobile: "hidden" });
   });
 });
 
@@ -404,12 +406,35 @@ describe("the look (sprint 30 día 6): every option reaches the published page",
   });
 
   it("«Secciones en su propia fila» is the page's `data-sections`, and keeps the rest of `sections`", () => {
-    const shared = setHeader(doc, sectionsRowPatch(doc, "shared"));
-    expect(headerStateFor(shared, undefined).sectionsRow).toBe("shared");
-    expect(published(shared).header.getAttribute("data-sections")).toBe("shared");
-    expect(shared.header?.sections).toEqual({ ...doc.header?.sections, row: "shared" });
-    const own = setHeader(shared, sectionsRowPatch(shared, "own"));
-    expect(published(own).header.getAttribute("data-sections")).toBe("own");
+    const bar = setHeader(doc, sectionsPositionPatch(doc, "bar"));
+    expect(headerStateFor(bar, undefined).sectionsPosition).toBe("bar");
+    expect(published(bar).header.getAttribute("data-sections")).toBe("bar");
+    // Back to the bar drops the key rather than writing it: absent is the bar (ADR 0060).
+    const { position: _, ...rest } = doc.header?.sections ?? {};
+    expect(bar.header?.sections).toEqual(rest);
+    const row = setHeader(bar, sectionsPositionPatch(bar, "row"));
+    expect(published(row).header.getAttribute("data-sections")).toBe("row");
+    expect(row.header?.sections).toEqual({ ...rest, position: "row" });
+  });
+
+  it("places the pages menu in a rail with the brand, and undoing both leaves the document as it was", () => {
+    const left = setHeader(doc, pagesPositionPatch(doc, "left"));
+    expect(left.header?.pages).toEqual({ ...doc.header?.pages, position: "left" });
+    const withBrand = setHeader(left, brandWithPagesPatch(true));
+    const state = headerStateFor(withBrand, undefined);
+    expect([state.pagesPosition, state.brandWithPages]).toEqual(["left", true]);
+    expect(published(withBrand).header.getAttribute("data-pages")).toBe("left");
+    expect(published(withBrand).header.getAttribute("data-brand")).toBe("pages");
+    const undone = setHeader(
+      setHeader(withBrand, brandWithPagesPatch(false)),
+      pagesPositionPatch(withBrand, "bar"),
+    );
+    expect(undone.header).toEqual(doc.header);
+    // And a menu object left with nothing in it goes with its last key.
+    const bare = fixture("barbershop-cover");
+    const there = setHeader(bare, pagesPositionPatch(bare, "right"));
+    expect(there.header).toEqual({ pages: { position: "right" } });
+    expect(setHeader(there, pagesPositionPatch(there, "bar")).header).toBeUndefined();
   });
 });
 

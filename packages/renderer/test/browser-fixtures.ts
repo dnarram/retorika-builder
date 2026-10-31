@@ -32,7 +32,6 @@ import {
   HEADER_LAYOUTS,
   parseDocument,
   type RetorikaDocument,
-  SECTIONS_ROWS,
   type Section,
 } from "@retorika/schema";
 import {
@@ -954,14 +953,16 @@ export function headerCombinations(): Combination[] {
       );
     }
   }
+  // The bar's two places for the sections — beside the pages, or a row of their own — which is what
+  // `sections.row` was until 1.17.0. The rails and the disclosure join this matrix on sprint 31 día 3.
   for (const layout of HEADER_LAYOUTS) {
-    for (const row of SECTIONS_ROWS) {
+    for (const position of ["bar", "row"] as const) {
       for (const sticky of [false, true]) {
         combinations.push(
-          make(`header/${layout}/${row}${sticky ? "/fixed" : ""}`, FIXED_PALETTE[0].id, {
+          make(`header/${layout}/${position}${sticky ? "/fixed" : ""}`, FIXED_PALETTE[0].id, {
             layout,
             sticky,
-            sections: { row },
+            sections: { position },
           }),
         );
       }

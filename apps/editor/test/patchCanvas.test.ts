@@ -461,7 +461,7 @@ describe("patchCanvas — an edit is a patch", () => {
       header: {
         brand: { name: true },
         action: { kind: "page", pageId: "page-donde-estamos" },
-        sections: { row: "own", shown: true },
+        sections: { position: "row", shown: true },
       },
     });
     const live = settled(doc);

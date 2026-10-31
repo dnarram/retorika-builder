@@ -128,3 +128,13 @@ stylesheet's estimate are what they were. Still constant, still one script; 0.8 
 the 2 KB of §3. Nothing in the decision changes; the row above says what the script does now.
 `header-script.browser.test.ts` grows the bar after the script and asserts the new height (red
 before, green after); the four goldens with a header move by that one line.
+
+## Note — sprint 31 día 2: across the page, and 815 bytes (ADR 0060)
+
+A menu in a rail is the header's child and not the bar's, and the «Ir a…» disclosure of día 3 stands
+apart from both, so the script reads the disclosures (`details.rb-nav-narrow`, `details.rb-nav-fold`)
+and the section links across the page rather than inside the bar, and marks every copy of the entry in
+view. It still measures the bar, and only the bar, for `--rb-header-h`: a rail is fixed and takes no
+height, so a header whose menus all stand in rails measures 0. Its observer keeps clear of the bar only
+when the bar is fixed over the page. Still one constant string with nothing of the document in it;
+**815 bytes gzipped**, from 794.

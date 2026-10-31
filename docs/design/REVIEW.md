@@ -5547,3 +5547,78 @@ nuevo con 8, `resizeBox.test.ts` con uno más); `typecheck`, `lint` (0 errores),
 **268 verdes y 1 omitida, 1121 s**, con nada en paralelo y `caffeinate -i`; la primera corrida dio 19
 rojas y la segunda una (la carrera del defecto 3). Caminata nueva «sprint 31 día 1». La salida del
 renderer no se movió: ni golden ni a11y hacían falta.
+
+### Día 2 — cada menú tiene su sitio: el esquema y el motor del raíl (PR de `feat/cada-menu-tiene-su-sitio`, ADR 0060)
+
+**El motor, sin interfaz.** Cada menú tiene una posición de un vocabulario cerrado: las páginas en la
+barra, a la izquierda o a la derecha; las secciones en la barra, en su fila, a la izquierda, a la
+derecha o en el desplegable «Ir a…». **Cada palabra es una zona** donde el arrastre futuro soltará un
+menú, y la ADR 0060 deja escrito que no habrá posición sin zona ni zona sin posición. Ausente es la
+barra, que es la cabecera de hoy. `sections.row` desaparece: `"own"` pasa a `position: "row"`, y
+`"shared"` era la barra. Esquema 1.16.0 → 1.17.0 y migración `0018`, que sella y solo mueve esa clave.
+El conjunto afectado está contado: un fixture, `cabecera-con-marca`, movido por la propia `up`. La
+`down` devuelve la fila y declara lo que pierde: los raíles, el desplegable, la posición de las
+páginas, `brandWithPages` y el `fold` del móvil. `schema:guard` en verde.
+
+**El raíl es un mecanismo para los dos menús.** Una columna fija de 240 px, del alto de la ventana,
+con `overflow: hidden auto`. Hereda el esquema de la barra, y un fondo `transparent` se dibuja
+`surface`. `<main>` y la barra le dejan su ancho. Va dentro del `<header>`, después de la barra y antes
+de `<main>`: un solo `banner`, y el teclado recorre salto, barra, raíles y página. Con los dos menús al
+mismo lado se apilan con un filete encima del segundo; en lados opuestos son tres columnas. **La barra
+conserva todas sus copias**, porque es donde cae un raíl: desde 1024 px los raíles se ven y por debajo
+caen todos; con dos raíles, entre 1024 y 1247 cae primero el de secciones. Qué copia se ve lo decide
+`display: none`. El raíl está oculto por defecto, así que en una tableta o un móvil no existe para nadie
+y la cabecera del teléfono es exactamente la del sprint 30. La CSS del raíl solo viaja en una web que lo
+usa.
+
+**La marca y el botón van con las páginas** si el dueño lo marca, y solo donde el menú de páginas se
+dibuja en un raíl; si no, la marca se queda en la barra. **La barra que se queda sin nada que dibujar
+en escritorio colapsa** (`data-bar="none"`): sin relleno, filete, fondo ni sombra, y ningún ancla le
+guarda sitio. Sigue siendo el `<header>` que contiene los raíles.
+
+**El script lee la página entera**: los `<details>` y los enlaces de sección donde estén, también en un
+raíl. Mide solo la barra, que con todo en raíles mide 0, y el observador solo se aparta de una barra
+fija. Pesa 815 B gzip de 2048; antes, 794. El desplegable `fold` lo dibuja el día 3. Hasta entonces el
+renderer lanza un error explícito ante un documento que lo nombre: nada del editor puede escribirlo
+antes del panel del día 5, y una caja vacía publicada sería peor.
+
+**Medido en Chromium antes de llamarlo hecho**, con `cabecera-con-marca` con las páginas y la marca a
+la izquierda y las secciones a la derecha:
+
+| Ancho | Raíles | Barra | `<main>` | Menús visibles |
+|---|---|---|---|---|
+| 1440 | izquierda y derecha | 0 px, colapsada | 960 px, desde x=240 | Páginas a la izquierda, Secciones a la derecha |
+| 1100 | izquierda | 54 px, desde x=240 | 860 px | Páginas a la izquierda, Secciones en la barra |
+| 900 | ninguno | 73 px | 900 px | las dos en la barra |
+| 390 | ninguno | 90 px | 390 px | la fila de secciones; las páginas en «Menú» |
+
+Sin desplazamiento horizontal a ningún ancho. **Lo que la mirada encontró y la lectura no**: a 1100,
+con el menú de páginas en el raíl, su copia oculta en la barra seguía haciendo de «hermano anterior», y
+el filete que separa los dos menús se dibujaba junto a nada. El combinador `+` casa con un hermano con
+`display: none`. Arreglado, con su prueba.
+
+**Una web guardada no cambia de aspecto.** Los cuatro goldens con cabecera se mueven en tres líneas
+cada uno, y el diff se leyó entero: el texto del script, el selector que oculta la fila
+(`[data-sections=shared]` → `:not([data-sections=row])`) y los atributos de la cabecera (`data-pages="bar"`
+nuevo, y `data-sections` de `shared` a `bar`, o de `own` a `row` en `cabecera-con-marca`). Los dieciocho
+sin cabecera no cambian un byte. El color exacto de «Barra» viste también el raíl, y su selector solo se
+alarga en una web con raíl, para que una guardada con estilo propio conserve sus bytes.
+
+**En el editor**, el estado del panel lee las posiciones, y «Secciones en su propia fila» escribe
+`position: "row"`; al desmarcarla quita la clave, porque ausente es la barra. Entran tres constructores
+de parche con el mismo patrón que `sectionsMobilePatch`, porque `setHeader` es superficial: el de las
+páginas, el de las secciones y el de `brandWithPages`. La interfaz «Dónde va» es del día 5.
+
+**Pruebas y saboteos.** Esquema: el vocabulario se acepta, `row` y cualquier palabra fuera de él se
+rechazan, y una posición sobrevive a `shown: false`. Migración `0018`: registrada, mueve la fila, sella,
+idempotente, `down` con su pérdida nombrada, ida y vuelta, y «la afirmación en que descansa». Renderer:
+la matriz de 3 × 4 posiciones con dónde cae cada menú, la marca con las páginas, la barra que colapsa, la
+CSS ausente sin raíl, el determinismo sobre la matriz, `~ main` que sigue casando y el error de `fold`.
+Saboteos, deshechos copiando el fichero guardado: `overflow: auto` en el raíl y sin el `display: none`
+de partida, los dos en rojo. La medida en navegador de esos dos —dos «Páginas» visibles a 390, una
+entrada larga dentro del raíl— entra en la matriz del día 3.
+
+**Medidas.** `pnpm test` 3593 (171 ficheros); `typecheck`, `lint` (0 errores), invariantes, golden,
+`renderer:deps`, `schema:guard` y `size` (el script en 0,8 KB de 2) en verde. `test:a11y` local 628,
+porque cambió la salida del renderer. e2e completa **268 verdes y 1 omitida, 1127 s, a la primera**, con
+nada en paralelo y `caffeinate -i`.
