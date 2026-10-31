@@ -5397,3 +5397,140 @@ octubre, y la exención de la ADR 0035 deja de valer el **1 de diciembre**: qued
 11. **Fuera por el plan, y nombrados en él:** el logo SVG con su sanitizador; el favicon y la `og:image`
     desde el logo (nota en la 0054); la sección activa en el lienzo; el estilo por entrada; un orden de
     menú distinto del de las páginas; desplegables; el parche móvil de la cabecera.
+
+## Sprint 31 — «Cada menú tiene su sitio» (desde el 31 de octubre de 2026)
+
+David, con la #325 fusionada: el menú de páginas y el navegador de secciones, que vivían juntos en la
+cabecera (ADR 0057), pasan a ser **dos elementos independientes**, cada uno con su posición en la
+página; y el navegador gana disposiciones entre las que elegir, con transiciones propias. Tres reglas
+que no se pierden: ninguna web guardada cambia de aspecto hasta que el dueño elija; todo accesible por
+teclado y con axe; el menú en móvil se pliega aunque en escritorio vaya en un lateral. Cuatro decisiones
+suyas al planificar —un selector de posiciones fijas que son exactamente las zonas de un arrastre
+futuro; el lateral como raíl fijo con margen en `<main>`, y **el hueco del editor resuelto antes**; la
+marca y el botón van con el menú de páginas tras una casilla; del navegador, solo la columna lateral y
+el desplegable «Ir a…», puntos y píldora al backlog con su motivo— y cuatro ajustes al aprobar: la nota
+del lateral se deriva de `layoutWidth`; el `top` del desplegable es siempre la suma del alto de la barra
+y un espacio, y un test lo pilla si alguien cambia el signo; el desplegable y la leyenda no caen sobre
+un raíl derecho; el día 4 baja a Opus. Dos ADR: 0061 (el lienzo a 1280, día 1) y 0060 (cada menú tiene
+su sitio, día 2). El plan está en la memoria del proyecto (`project-sprint-31-plan`).
+
+### Día 1 — el lienzo maqueta a 1280 y se escala, solo el modelo (PR de `feat/el-lienzo-maqueta-a-1280`, ADR 0061)
+
+**Por qué el sprint empieza por el lienzo y no por la cabecera.** El lienzo maquetaba al ancho que
+dejaban los paneles, con suelo en 721. Medido en Chromium antes de tocar nada:
+
+| Ventana | Hueco sin panel | Hueco con «Menú» (340 px) |
+|---|---|---|
+| 1024 | 752 | 532 → maquetado a 721, zoom 0,7379 |
+| 1280 | 1008 | 788 |
+| 1440 | 1168 | 948 |
+| 1680 | 1408 | 1188 |
+
+Un raíl lateral que se pliega por debajo de 1024 no se habría visto en el lienzo a 1280 ni con el panel
+cerrado, y a 1440 solo con el panel cerrado: el dueño elegiría «Columna izquierda» y vería la columna
+plegarse en el momento de elegirla. Lo que David no admitía: que el lienzo enseñe otra cosa sin decirlo.
+
+**El arreglo: el ancho fijo pendiente del sprint 28.** En escritorio la tarjeta maqueta a **1280** —el
+ancho al que se mide la web publicada— y se escala al hueco. Abrir un panel cambia el zoom y nada más.
+Por debajo del suelo de legibilidad de David (0,6) el lienzo cede ancho y no legibilidad:
+`min(1280, max(hueco / 0,6, 721))`, en `desktopLayoutWidth`. Medido después:
+
+| Ventana | Sin panel | Con «Menú» |
+|---|---|---|
+| 1024 | 1253 px, zoom 0,6, «Vista a 1253 px» | 887 px, zoom 0,6, «Vista a 887 px» |
+| 1280 | 1280, zoom 0,7875 | 1280, zoom 0,6156 |
+| 1440 | 1280, zoom 0,9125 | 1280, zoom 0,7406 |
+| 1680 | 1280, zoom 1 | 1280, zoom 0,9281 |
+
+**Cuando el lienzo no es la página de 1280, lo dice**: «Vista a N px», en el hueco de 24 px sobre la
+tarjeta. La primera versión la puso encima de la tarjeta y la captura a 1024 la enseñó tapando la línea
+de ayuda del lienzo («Se descarga…»); ahora vive en el hueco, en un envoltorio propio para que la fila
+conserve sus dos hijos (las caminatas leen el primero como el lienzo y el último como el panel), y el
+área del lienzo mide lo mismo que antes, aseverado: arriba a 82 px, 532 de ancho a 1024 con panel. En un
+móvil con la vista de escritorio (721 px) el hueco de 12 px crece a 24 solo mientras se dibuja la nota.
+
+**Lo que se encoge, y lo que se gana.** La vista previa a 1440 sin panel pasa de 1,0 a 0,91, y a 1280
+de 1,0 a 0,79. A cambio, un texto deja de refluir al abrir un panel, una sección escalada con un panel
+abierto se mide al ancho del visitante —**se cierra el punto 1 abierto del sprint 28**—, y el raíl del
+día 2 se verá en el lienzo con el panel que lo elige abierto.
+
+**El espacio tras la página es visible en reposo** (`.rb-overscroll`, sprint 28 día 1). Era cero a zoom 1,
+«el caso normal», y el zoom 1 ya no lo es: 78 px del marco a 1440 sin panel, 221 a 1280, 545 a 1024; cero
+solo a 1680 sin panel. Gris de mesa tras la última sección, visto solo al llegar al final. Se queda; la
+ADR 0061 §4 escribe cómo acotarlo si molesta, y por qué no se predice.
+
+**El redibujado del cromo al redimensionar** (ADR 0053): ahora el zoom cambia con la ventana, no solo con
+un panel. Medido: 40 pasos de ventana en 57 ms dieron 2 redibujados de 1,0–1,1 ms. Sin cambios.
+
+**Encontrado y no tocado**: a 1024 con «Menú» abierto la pestaña de la página se queda en «·» en la
+barra superior. Es la barra del editor, y el diff de este día no la toca: solo cambia la fila
+del lienzo. Queda anotado para quien abra la barra superior.
+
+**Diecinueve caminatas en rojo en la primera e2e completa**, y el plan esperaba una. Cada rojo se
+separó antes de tocar nada: ¿suposición de la caminata, o defecto del editor a zoom menor que 1? Un
+zoom menor que 1 no es nuevo —1024 con un panel lo tiene desde que el lienzo aprendió a escalar— pero
+era el caso que nadie caminaba, y desde hoy es el de todo portátil.
+
+| Causa | Caminatas | Qué se hizo |
+|---|---|---|
+| Defecto: el área del lienzo se desplazaba por script | cabecera del sprint 30 día 3 | `overflow: clip`; pasa sin cambios |
+| Defecto: un redibujado sin edición cerraba lo abierto | barrido de palabras del cromo | el ofrecimiento y el menú de insertar sobreviven; pasa sin cambios |
+| Defecto: el mismo redibujado se llevaba el teclado | «Campos de esta sección» lleva el foco, y Esc lo trae | el verbo con el foco se recuerda por su sección y su acción; pasa sin cambios |
+| Defecto: escalar a media página movía la sección | «escalar una sección a media página no la mueve» | punto de lectura; pasa sin cambios |
+| Premisa falsa por diseño | el mecanismo de «Campos»; la segunda puerta del sprint 25 día 2 | reescritas: el sitio crece al menos lo que el visor; el panel no estrecha y, cerrado, nada se mueve |
+| Medían el marco contra números de pantalla | trece: verbos del sprint 20 día 1; grupo de verbos con teclado y ratón; barra del texto con asa y arrastre; los dos dedos del sprint 20 día 5; el arrastre del sprint 24 día 8 y el dedo del día 9; bordes, imán y asas del sprint 25; el arrastre del sprint 27 día 5 | reescritas con el zoom medido desde fuera (`canvasZoom`) y cada valor en su unidad (`nearInFrame`, un píxel del marco de tolerancia, fijado antes de medir) |
+
+**Caminatas reescritas: dieciséis** — las quince de la tabla y la del sprint 28 día 7, invertida antes
+de la primera corrida. Ninguna se movió a una ventana donde el zoom vuelva a ser 1: el caso que puede
+fallar es el del portátil.
+
+**Los cuatro defectos, con su medida.**
+
+1. **El área del lienzo era desplazable por script.** Bajo un zoom la tarjeta mide en maquetación
+   `alto × (1 / zoom − 1)` más que la caja que la contiene, y esa caja era `overflow: hidden`: recorta,
+   pero se puede desplazar. El `scrollIntoView` del propio lienzo la desplazaba: a 1440 sin panel,
+   **83 px** exactos (868 × (1 / 0,9125 − 1)), la página recortada por arriba bajo la fila del editor
+   y la pulsación sobre la cabecera cayendo en la fila. `overflow: clip` pinta igual y no se desplaza.
+2. **Un redibujado sin edición cerraba lo que el dueño tenía abierto.** Desde la ADR 0053 un cambio de
+   zoom redibuja el cromo, y desde hoy el zoom cambia con la ventana. El ofrecimiento de escalar
+   comparte `compositionMenuOpen` con el menú de composiciones y solo se sabía reabrir este (en una
+   sección con composiciones se reabría el menú equivocado); el menú de insertar vive dentro de un
+   hueco que `drawGaps` repinta de cero. Los dos vuelven tras un redibujado que no cambió la
+   estructura de la página, el menú de insertar con lo que había escrito en su buscador.
+3. **El mismo redibujado se llevaba el teclado.** «Cerrar los campos» devolvía el foco a «Campos»; al
+   cerrarse el panel el zoom cambia (0,74 → 0,91 a 1440), el cromo se redibuja un fotograma después,
+   el grupo de verbos de la sección elegida se reconstruye y el botón con el foco se sustituye por su
+   gemelo: el foco caía al `body`. **Esta caminata pasó una vez tras el arreglo 1, ganando la
+   carrera, y falló siempre después**, sola y en la suite: tres corridas seguidas en verde tras el
+   arreglo. `redrawChrome` recuerda el verbo por su sección y su `data-action` y se lo devuelve
+   cuando nada más ha tomado el foco.
+4. **Escalar a media página bajaba la sección 49 px**, el alto entero de «Diseñada a mano». La
+   promesa descansaba en el anclaje de desplazamiento del navegador. Instrumentado: Chromium anclaba
+   en un elemento de dentro de la sección (que la escalada mueve hasta una fila de 8 px), y un
+   desplazamiento hecho por programa durante la entrada de la barra apagaba el anclaje hasta el
+   final de la entrada — reproducido en una página sin editor. **No depende del zoom**: a 1680 × 1050,
+   zoom 1, fallaba igual; lo que decide es que la sección quepa en el visor del marco, y el lienzo a
+   1280 lo hizo más alto en todo portátil (852 px del marco a 1440 × 900, antes 774). Safari no ancla
+   nunca. El editor guarda ahora el punto de lectura antes del parche y lo devuelve antes de enfocar;
+   la barra que cae a su altura o por encima entra sin animación. Arriba del todo no se guarda nada y
+   la barra sigue llegando a la vista.
+
+**Hallazgo, sin tocar**: en la portada de «Foto a la derecha», con el lienzo a 1280, el centro de la
+sección cae en el hueco entre las dos columnas: los textos acaban 7 px a su izquierda y la foto
+empieza 7 px a su derecha, de pantalla. El imán del centro solo gana a menos de 1,3 px de él; a
+cuatro, por cualquier lado, gana —con razón— la línea del vecino. La caminata del imán pasaba a 1168
+porque el empate caía del lado bueno; ahora usa la portada de «Foto de fondo», donde la línea central
+de la foto es el centro. Si el centro de una sección partida en dos debe imantar antes que los bordes
+de sus columnas es una pregunta de diseño, y queda para quien la quiera hacer.
+
+**Saboteos**, todos deshechos copiando el fichero guardado, nunca con `checkout`: la fórmula vieja del
+ancho → la caminata nueva («1168» donde pide 1280) y la del sprint 28 día 7 en rojo; sin punto de
+lectura → la escalada vuelve a decir 49 px; el desplazamiento de la barra del texto aplicado a
+cualquier sección → la caminata de la barra en rojo; sin el tirón del imán en el arrastre → «no se
+imantó», a 4 px; el orden y el umbral de `readingPoint.ts`, cada uno su prueba unitaria en rojo.
+
+**Medidas.** `pnpm test` 3572 (171 ficheros: `canvasZoom.test.ts` reescrito, `readingPoint.test.ts`
+nuevo con 8); `typecheck`, `lint` (0 errores), invariantes y `secrets:scope` en verde. e2e completa
+**268 verdes y 1 omitida, 1121 s**, con nada en paralelo y `caffeinate -i`; la primera corrida dio 19
+rojas y la segunda una (la carrera del defecto 3). Caminata nueva «sprint 31 día 1». La salida del
+renderer no se movió: ni golden ni a11y hacían falta.
