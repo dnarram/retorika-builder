@@ -74,6 +74,27 @@ describe("edgeAt", () => {
     expect(edgeAt({ x: 1, y: 1 }, button, chosen)).toBe("nw");
     expect(edgeAt({ x: 59, y: 29 }, button, chosen)).toBe("se");
   });
+
+  /**
+   * **The middle half is the element's, however small and however zoomed** (sprint 31 día 1). A
+   * one-line text at a zoom of 0.616 — a 1280 laptop with a panel open — is 20 px of the frame,
+   * and the six screen pixels of zone are 9.75 of the frame: before the cap they left half a pixel
+   * in the middle, and a press there to write began a resize instead. Measured in the walk that
+   * found it, which failed on Linux and passed on macOS by a quarter of a pixel.
+   */
+  it("keeps the middle half of a short element for the hand", () => {
+    const zoomed = { outside: EDGE_ZONE / 0.615625, inside: EDGE_ZONE / 0.615625 };
+    const line = { left: 48, right: 640, top: 300, bottom: 320 };
+    expect(edgeAt({ x: 344, y: 310 }, line, zoomed), "the middle of the line").toBeNull();
+    expect(edgeAt({ x: 344, y: 306 }, line, zoomed), "a quarter in, still the line").toBeNull();
+    expect(edgeAt({ x: 344, y: 304 }, line, zoomed)).toBe("top");
+    expect(edgeAt({ x: 344, y: 316 }, line, zoomed)).toBe("bottom");
+    // From outside, the zone keeps its whole reach: the edge is still where the hand looks for it.
+    expect(edgeAt({ x: 344, y: 291 }, line, zoomed)).toBe("top");
+    expect(edgeAt({ x: 344, y: 329 }, line, zoomed)).toBe("bottom");
+    // Along the other axis the line is wide, so its sides keep the full inner reach.
+    expect(edgeAt({ x: 57, y: 310 }, line, zoomed)).toBe("left");
+  });
 });
 
 describe("cursorFor", () => {

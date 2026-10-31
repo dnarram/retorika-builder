@@ -5529,8 +5529,21 @@ lectura → la escalada vuelve a decir 49 px; el desplazamiento de la barra del 
 cualquier sección → la caminata de la barra en rojo; sin el tirón del imán en el arrastre → «no se
 imantó», a 4 px; el orden y el umbral de `readingPoint.ts`, cada uno su prueba unitaria en rojo.
 
-**Medidas.** `pnpm test` 3572 (171 ficheros: `canvasZoom.test.ts` reescrito, `readingPoint.test.ts`
-nuevo con 8); `typecheck`, `lint` (0 errores), invariantes y `secrets:scope` en verde. e2e completa
+**Y un quinto, que solo vio el Linux de CI.** La caminata del sprint 28 día 7 reescrita no conseguía
+entrar a escribir en el cuerpo de la portada con «Diseño» abierto. Medido en local antes de tocar nada:
+a zoom 0,616 el cuerpo, de una línea, mide 20 px del marco (12,3 de pantalla), y las zonas de estirar
+de un elemento elegido entran 6 px de pantalla —9,75 del marco— por arriba y por abajo: quedaba **medio
+píxel** libre en el centro. La pulsación de macOS caía en él por un cuarto de píxel; la de Linux, no, y
+empezaba un estirado. A un dueño con un portátil de 1280 y un panel abierto le pasaría igual con
+cualquier texto de una línea. `edgeAt` limita ahora el alcance interior de la zona a un cuarto del
+elemento en cada eje: la mitad central es siempre el elemento, el borde se sigue cogiendo desde fuera
+con su alcance entero, y una caja del tamaño de un titular no cambia. Prueba unitaria nueva, saboteada
+(sin el tope, roja). La otra roja de esa corrida de CI —«escribe en la cuenta aunque la sesión empiece
+con el editor ya abierto»— no pasa por nada de este día, pasó tres de tres en local y en la e2e de CI
+de la #327; se vigila en la siguiente corrida.
+
+**Medidas.** `pnpm test` 3573 (171 ficheros: `canvasZoom.test.ts` reescrito, `readingPoint.test.ts`
+nuevo con 8, `resizeBox.test.ts` con uno más); `typecheck`, `lint` (0 errores), invariantes y `secrets:scope` en verde. e2e completa
 **268 verdes y 1 omitida, 1121 s**, con nada en paralelo y `caffeinate -i`; la primera corrida dio 19
 rojas y la segunda una (la carrera del defecto 3). Caminata nueva «sprint 31 día 1». La salida del
 renderer no se movió: ni golden ni a11y hacían falta.

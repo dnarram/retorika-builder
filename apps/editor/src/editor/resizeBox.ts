@@ -70,10 +70,25 @@ function distanceToLine(value: number, line: number, inner: 1 | -1, zone: EdgeZo
  * rather than from whichever this function happened to test first.
  */
 export function edgeAt(point: Point, box: EdgeBox, zone: EdgeZone): Edge | null {
-  const toLeft = distanceToLine(point.x, box.left, 1, zone);
-  const toRight = distanceToLine(point.x, box.right, -1, zone);
-  const toTop = distanceToLine(point.y, box.top, 1, zone);
-  const toBottom = distanceToLine(point.y, box.bottom, -1, zone);
+  /*
+   * **The middle half of an element is always the element** (sprint 31 día 1, measured). The zone
+   * reaches its six screen pixels inside on every side, divided by the canvas zoom; at 0.616 — a
+   * 1280 laptop with a panel open, since ADR 0061 — a one-line text is 20 px of the frame and 12 of
+   * the screen, the two zones took 19.5 of its 20 px, and a press to start writing in it began a
+   * resize instead (half a frame pixel was left, and Linux's rounding of the press missed it). So
+   * the inner reach is capped, per axis, at a quarter of the element: an edge is still taken from
+   * outside at full width, and what the hand presses in the middle is the element — to choose it,
+   * to write in it, to drag it. Every box the size of a headline is untouched: 6 is under a quarter.
+   */
+  const across = {
+    outside: zone.outside,
+    inside: Math.min(zone.inside, (box.right - box.left) / 4),
+  };
+  const down = { outside: zone.outside, inside: Math.min(zone.inside, (box.bottom - box.top) / 4) };
+  const toLeft = distanceToLine(point.x, box.left, 1, across);
+  const toRight = distanceToLine(point.x, box.right, -1, across);
+  const toTop = distanceToLine(point.y, box.top, 1, down);
+  const toBottom = distanceToLine(point.y, box.bottom, -1, down);
 
   // Within the element's own extent on the other axis, plus the outside margin, so the zones form a
   // frame around the box and not two infinite bands crossing the page.

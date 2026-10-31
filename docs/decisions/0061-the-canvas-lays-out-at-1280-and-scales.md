@@ -132,12 +132,12 @@ starts there.
   («pasa por anchos intermedios», `deviceArrived`) are the check, and `canvasZoom.test.ts` pins the
   formula at the eight measured rooms and its two boundaries (768 and 433).
 
-### 6. Four defects a zoom under 1 had all along, now every laptop's case — fixed here
+### 6. Five defects a zoom under 1 had all along, now every laptop's case — fixed here
 
 A zoom under 1 is not new: a 1024 window with a panel open has drawn the canvas at 0.738 since the
 canvas learned to zoom. It was the case nobody walked. This decision makes it the case of every
-laptop, and the full e2e suite run against the change found four defects that had been living
-there. They are fixed in the same change, because shipping the width without them would ship them
+laptop, and the full e2e suite run against the change found five defects that had been living
+there — the fifth only on CI's Linux. They are fixed in the same change, because shipping the width without them would ship them
 to the most common screen.
 
 1. **The box that holds the card was scrollable by script.** Under a zoom the card is laid out
@@ -173,6 +173,13 @@ to the most common screen.
    the top of the view and its offset, taken before a patch and put back after the chrome is drawn,
    with a bar that lands at or above it arriving without its entrance. At the very top of the page
    nothing is taken, and the bar still arrives in view.
+4. **A one-line text could barely be pressed into writing.** The resize zones of a chosen element
+   reach six screen pixels inside on every side, divided by the zoom; at 0.616 a one-line text is
+   20 px of the frame (12 of the screen) and the two zones took 19.5 of them. A press to write began
+   a resize. Measured: half a frame pixel left in the middle — macOS's press landed in it by a
+   quarter of a pixel, Linux's did not, and only CI saw it. `edgeAt` now caps the inner reach at a
+   quarter of the element per axis, so the middle half is always the element; the outer reach is
+   whole, and a box the size of a headline is untouched.
 
 None of them touches the published site.
 
@@ -220,6 +227,7 @@ None of them touches the published site.
 - `apps/editor/src/editor/overflowCheck.ts`: `DESKTOP_LAYOUT_WIDTH`, `CANVAS_ZOOM_FLOOR`,
   `desktopLayoutWidth`. `EditorShell.tsx`: the formula and the «Vista a N px» notice.
   `locales/es.json`: `editor.canvas.viewWidth`.
+- `resizeBox.ts`: the inner edge zone capped at a quarter of the element (§6.4), with its test.
 - `EditorShell.tsx` also: `canvas-area` is `overflow: clip` (§6.1). `Editor.tsx`: the escalation
   offer, the insertion menu and the keyboard's verb survive a redraw (§6.2); the reading point is taken in `applyPatch`,
   honoured by `wireHandmade` and put back in `redrawChrome` (§6.3), with `readingPoint.ts` and its

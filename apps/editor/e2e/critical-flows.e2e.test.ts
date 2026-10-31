@@ -22289,7 +22289,7 @@ describe("sprint 28 día 7 — una fila es un mínimo (y el panel ya no estrecha
       const ctaBefore = (await boxOf(frame, "el-cta")).y;
       const bodyBefore = (await boxOf(frame, "el-body")).height;
       const gapBodyBefore = await gapBetween(frame, "el-body", "el-cta");
-      // Con el panel abierto el cuerpo de la portada ya ocupa dos líneas; este ocupa cuatro.
+      // El cuerpo de la portada ocupa una línea —el panel ya no lo estrecha—; este ocupa varias.
       await intoWriting(body);
       await page.keyboard.type(
         "Pásate a comer o a tomar algo, con tiempo y sin prisa, cuando quieras y con quien quieras. " +
