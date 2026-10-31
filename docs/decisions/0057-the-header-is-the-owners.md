@@ -249,3 +249,14 @@ reading text and not the header's to fix. `header.browser.test.ts` swaps the let
 very different metrics at 1280 and 390 and asserts the bar does not move, with a control — the same
 swap with the bar forced back to `normal` must move it — so it cannot pass on a machine whose fonts
 happen to agree. The four goldens with a header move by that one declaration.
+
+## Note — sprint 31 día 2: each menu has its place (ADR 0060)
+
+§7's shape — skip link, then one bar before `<main>` — gains up to two **rails** after the bar,
+inside the `<header>`: a menu placed `left` or `right` gets a copy in a fixed column beside the
+content, and `sections.row` is absorbed into `sections.position` (`"own"` is `"row"`, `"shared"` the bar,
+which an absent position means). The bar keeps every copy it had, because the bar is where a rail
+falls — under 1024 px every rail does — and a bar left with nothing to draw on a wide screen collapses
+to no height and stays the element that holds the rails. «What this does not decide» loses its silence
+on where the menus sit: ADR 0060 decides it. Nothing else here moves; the phone's header is exactly
+the one this ADR drew.
