@@ -32,12 +32,23 @@ import {
   HERO_PHONE_WIDTH,
   HERO_WINDOW,
 } from "../src/app/landingHero.ts";
-import { BAR_INSET, BAR_STEP, type Point, TOOLBAR_GAP } from "../src/editor/barPosition.ts";
+import {
+  BAR_INSET,
+  BAR_STEP,
+  type Point,
+  TOOLBAR_GAP,
+  toolbarPoint,
+} from "../src/editor/barPosition.ts";
 import { VERB_SCALE } from "../src/editor/chromeScale.ts";
 import { DIALOG_KINDS, MAX_PHOTOS } from "../src/editor/downloadGate.ts";
 import { GUIDE_ZONE } from "../src/editor/guides.ts";
 import { HANDLE_TOUCH } from "../src/editor/handles.ts";
-import { NARROWEST_WIDTH, PHONE_BREAKPOINT } from "../src/editor/overflowCheck.ts";
+import {
+  CANVAS_ZOOM_FLOOR,
+  DESKTOP_LAYOUT_WIDTH,
+  NARROWEST_WIDTH,
+  PHONE_BREAKPOINT,
+} from "../src/editor/overflowCheck.ts";
 import { BASE_URL, QUESTIONNAIRE_URL, startEditorServer, stopEditorServer } from "./server.ts"; /**
  * The preview frame. One per editor, three on the landing page's cards.
  *
@@ -254,7 +265,9 @@ async function expectModalTrap(
   }
 }
 
-async function intoTheCanvas(page: Page): Promise<void> {
+/** The five questions answered and one of the three proposals opened — the first by default; the
+ * second is the one whose cover is a photograph under the words (`image-background`). */
+async function intoTheCanvas(page: Page, card = 0): Promise<void> {
   await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
   await page.fill("#nombre", "Taberna Santo Domingo");
   await page.getByRole("button", { name: "Siguiente" }).click();
@@ -267,7 +280,7 @@ async function intoTheCanvas(page: Page): Promise<void> {
   await page.getByText("Que reserven", { exact: true }).click();
   await page.fill("#enlace", "https://reservas.example.com/taberna");
   await page.getByRole("button", { name: "Crear mi web" }).click();
-  await page.getByText("Ver a tamaño real →").first().click();
+  await page.getByText("Ver a tamaño real →").nth(card).click();
   const frame = page.frameLocator(PREVIEW).first();
   await frame.locator('[data-section="sec-cover"]').waitFor();
   await waitForBankPhoto(frame);
@@ -670,6 +683,42 @@ async function motionSettled(page: Page): Promise<void> {
  * the media query reads. Before the click's `requestAnimationFrame` the first two hold at the
  * *old* width, so the target width is what tells «not started» from «arrived».
  */
+/**
+ * **The zoom the canvas is drawn at, measured from outside** (ADR 0061, sprint 31 día 1).
+ *
+ * Since the canvas lays out at 1280 and scales, every laptop window draws it under 1 — 0.79 at a
+ * 1280 window, 0.91 at 1440 — where the walks written before were at 1. So a box read inside the
+ * frame is in the *page's* pixels and a mouse move is in the *screen's*, and the walks that compared
+ * one with the other were comparing two units. This is the conversion: the frame's box on the
+ * editor's page over its own layout width — what `zoomOf` in `Editor.tsx` reads, taken here from
+ * outside so a walk does not take the editor's word for it (the sprint 27 día 7 walk's way).
+ */
+function canvasZoom(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const frame = document.querySelector<HTMLIFrameElement>(
+      '[data-testid="canvas-card"] iframe:not([aria-hidden="true"])',
+    );
+    const view = frame?.contentWindow;
+    return frame && view && view.innerWidth > 0
+      ? frame.getBoundingClientRect().width / view.innerWidth
+      : 1;
+  });
+}
+
+/**
+ * **Lo cerca que tiene que estar una posición del cromo, en píxeles del marco** (sprint 31 día 1,
+ * ADR 0061). Con el lienzo escalado, las distancias del cromo son `N / zoom` px del marco (N en
+ * pantalla, ADR 0053) y un arrastre de la mano mide `recorrido / zoom`, así que las posiciones dejan
+ * de ser enteras y lo que el navegador redondea (`offsetLeft`) se aparta hasta medio píxel. Un píxel
+ * del marco de tolerancia es ese redondeo y nada más; fijado antes de medir.
+ */
+function nearInFrame(actual: number | undefined, want: number, what: string): void {
+  expect(
+    Math.abs((actual ?? Number.NaN) - want),
+    `${what}: ${actual} donde se esperaba ${Math.round(want * 10) / 10}`,
+  ).toBeLessThanOrEqual(1);
+}
+
 async function deviceArrived(page: Page, width: number): Promise<void> {
   await expect
     .poll(
@@ -2664,10 +2713,11 @@ describe("sprint 8 — el modo estudio: encender, diseñar a mano, colocar, y vo
       // widths and call the difference a regression. (It did, the first time this was written.)
       await studio.getByRole("button", { name: "Cerrar el diseño" }).click();
       // **Polled rather than sampled once, since the canvas learned to zoom.** Closing the panel
-      // gives the canvas its room back, and the card animates from the scale it was holding to 1
-      // over 200ms — so a measurement taken the instant the click resolves catches the card
-      // mid-flight and reports the headline 364px wide instead of 448, which is the old box times
-      // the 0.8125 «Diseño» was zoomed to. Only the moment it is allowed to be true moved.
+      // gives the canvas its room back, and the card animates from the scale it was holding to the
+      // one the room allows (0.788 at 1280 since ADR 0061; it was 1 when this was written) over
+      // 200ms — so a measurement taken the instant the click resolves catches the card mid-flight
+      // and reports the headline 364px wide instead of 448, which is the old box times the 0.8125
+      // «Diseño» was zoomed to. Only the moment it is allowed to be true moved.
       //
       // Measured inside the section for the same reason as above: the headline's place on the page
       // is 44px lower than it was before the escalation, and that is the bar now taking room in the
@@ -3841,19 +3891,29 @@ function placedIn(frame: FrameLocator, sectionId: string): Promise<Placed[]> {
 }
 
 /**
- * One catalog column's step in pixels — eight units and the gutter after them — measured from the
- * section's own resolved tracks rather than computed from `column-gap`, which a free section no
- * longer has (its gutters are tracks of their own, ADR 0050).
+ * One catalog column's step — eight units and the gutter after them — **as it is drawn on screen**:
+ * measured from the section's own resolved tracks rather than computed from `column-gap`, which a
+ * free section no longer has (its gutters are tracks of their own, ADR 0050), and multiplied by the
+ * canvas zoom.
+ *
+ * **On screen, because every caller hands it to a pointer or a finger** (sprint 31 día 1). Until
+ * ADR 0061 these walks ran at zoom 1 and a track's pixels were the screen's; with the canvas laid
+ * out at 1280 and drawn at 0.9125 in a 1440 window, a hand that travelled one column of the frame
+ * landed three units past it.
  */
 function columnStepOf(frame: FrameLocator, sectionId: string): Promise<number> {
   return frame.locator(`[data-section="${sectionId}"]`).evaluate((node, tracksInFineGrid) => {
     const style = getComputedStyle(node as HTMLElement);
     const tracks = style.gridTemplateColumns.split(" ").map((entry) => Number.parseFloat(entry));
+    const view = node.ownerDocument.defaultView as Window;
+    const host = view.frameElement as HTMLElement | null;
+    const zoom =
+      host && view.innerWidth > 0 ? host.getBoundingClientRect().width / view.innerWidth : 1;
     if (tracks.length === tracksInFineGrid) {
       // Eight units and the gutter: the first nine tracks.
-      return tracks.slice(0, 9).reduce((total, width) => total + width, 0);
+      return tracks.slice(0, 9).reduce((total, width) => total + width, 0) * zoom;
     }
-    return (tracks[0] ?? 0) + (Number.parseFloat(style.columnGap) || 0);
+    return ((tracks[0] ?? 0) + (Number.parseFloat(style.columnGap) || 0)) * zoom;
   }, FINE_TRACKS);
 }
 
@@ -9500,7 +9560,8 @@ describe("abrir un panel no tapa la página ni la convierte en otra", () => {
    *
    * This guard asserts the two things David asked for, which are the two that are not taste: the
    * panel does not cover the page, and the page stays the page. The zoom is how the second is
-   * kept — `EditorShell` holds the layout width at `NARROWEST_DESKTOP` and scales the card down —
+   * kept — `EditorShell` lays the card out at `DESKTOP_LAYOUT_WIDTH` (1280, ADR 0061; it was the
+   * room floored at `NARROWEST_DESKTOP` until sprint 31 día 1) and scales it down —
    * but the assertion is on the outcome, not on the mechanism, so a better mechanism would still
    * pass.
    *
@@ -9839,14 +9900,26 @@ describe("abrir un panel no tapa la página ni la convierte en otra", () => {
           opened?.visible,
           `@${width}: al abrir «Campos» la sección se fue de la vista (top ${opened?.top}, alto de ventana ${opened?.viewport})`,
         ).toBe(true);
-        // Desde el sprint 28 día 1 sí se exige: la página recibe al final exactamente el sitio que
-        // el visor gana, así que nada se recorta y el anclaje del navegador absorbe el remaquetado.
-        // Primero el mecanismo, para que el rojo lo nombre; luego la consecuencia. A 1280 y 1600 el
-        // visor no crece y el sitio es 0; a 1024 crece 255 y el sitio mide 255.
+        // Desde el sprint 28 día 1 sí se exige: la página recibe al final el sitio que el visor
+        // gana, así que nada se recorta y el anclaje del navegador absorbe el remaquetado. Primero
+        // el mecanismo, para que el rojo lo nombre; luego la consecuencia.
+        //
+        // **Desde el sprint 31 día 1 (ADR 0061) se asevera lo que el sitio *crece*, no lo que
+        // mide.** Hasta entonces el lienzo estaba a zoom 1 antes de abrir, el sitio era 0 y «el
+        // sitio mide lo que el visor creció» era lo mismo que «crece lo mismo». Ahora el lienzo
+        // maqueta a 1280 y ya está escalado antes de abrir: a 1280 pasa de 0,7875 a 0,6156 y el
+        // visor y el sitio crecen lo mismo (245 px del marco a 800 de alto); a 1600 de 1 a 0,8656
+        // (107); a 1024 el zoom está en su suelo de 0,6 en los dos estados y lo que cambia es el
+        // ancho (1253 → 887), así que el sitio no se mueve y el visor **encoge** 19 px del marco:
+        // la línea de ayuda que va encima del marco, fuera de él, pasa a dos renglones a 887
+        // (medido: 27 → 38 px de pantalla). La invariante que nunca deja recortar es que el sitio
+        // crezca **al menos** lo que crezca el visor, y es la que se asevera; saboteada sin sitio,
+        // a 1280 el visor crece 245 y el sitio 0, y va a rojo.
         const grown = (opened?.viewport ?? 0) - (before?.viewport ?? 0);
+        const roomGrown = (opened?.room ?? 0) - (before?.room ?? 0);
         expect(
-          Math.abs((opened?.room ?? 0) - grown),
-          `@${width}: al abrir «Campos» el visor creció ${grown} px y el sitio al final de la página mide ${opened?.room}`,
+          grown - roomGrown,
+          `@${width}: al abrir «Campos» el visor creció ${grown} px y el sitio al final de la página ${roomGrown} (de ${before?.room} a ${opened?.room})`,
         ).toBeLessThanOrEqual(2);
         expect(
           Math.abs((opened?.top ?? 0) - (before?.top ?? 0)),
@@ -10039,9 +10112,10 @@ describe("lo que el cromo del editor dibuja dentro del lienzo, y el aviso del in
      * 1024`, así que a 320 o 768 de ventana las herramientas **no se ofrecen** y medirlas ahí sería
      * medir un editor que por diseño no las tiene. Solo las herramientas: el editor sin ellas sí
      * cabe en esos anchos desde el sprint 21 (ADR 0042), y lo mide «nada sobresale en un móvil»
-     * con el cromo que allí existe. Y el lienzo de escritorio es
-     * `max(disponible, NARROWEST_DESKTOP)` con el suelo en 721: por debajo **se escala, no se
-     * estrecha**. A un lienzo de 320 solo se llega con el conmutador de móvil.
+     * con el cromo que allí existe. Y el lienzo de escritorio maqueta a 1280 y **se escala, no se
+     * estrecha** (ADR 0061, sprint 31 día 1; hasta entonces era `max(disponible, 721)`): por debajo
+     * del suelo de legibilidad 0,6 baja de ancho, nunca de 721. A un lienzo de 320 solo se llega con
+     * el conmutador de móvil.
      *
      * **Móvil se mide a un solo ancho de ventana, y no pierde nada.** `layoutWidth` es
      * `NARROWEST_WIDTH` —320— en modo móvil *sea cual sea* la ventana, y `getBoundingClientRect`
@@ -11256,6 +11330,18 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
      * Arriba del todo no hay nada que ceder, y ahí el contenido sí baja 44px — en 180ms y con la
      * misma curva que usan el panel y el raíl, que es lo que dirección pidió para que se lea como
      * una llegada y no como un salto.
+     *
+     * **Sprint 31 día 1: el anclaje del navegador no lo conseguía siempre, y ahora lo consigue el
+     * editor** (`readingPoint`). Con el lienzo a 1280 (ADR 0061) el visor del marco mide 852 px a
+     * 1440 × 900 donde medía 774, la sección cabe entera en él, y esta caminata se puso roja: la
+     * sección bajó 49 px, el alto entero de la barra. Instrumentado: Chromium anclaba en un
+     * elemento de dentro de la sección (la escalada lo mueve hasta una fila de 8 px), y un
+     * desplazamiento hecho por programa durante la entrada de la barra apagaba el anclaje hasta el
+     * final de la entrada — reproducido en una página sin editor. A 1680 × 1050, con zoom 1, fallaba
+     * igual: lo que decide es que la sección quepa, no el zoom. Safari no ancla nunca. El editor
+     * toma ahora el punto de lectura antes del parche, deja entrar sin animación la barra que cae
+     * a su altura o por encima, y devuelve la sección a su sitio antes de enfocar. Saboteado (sin
+     * punto de lectura), esta caminata vuelve a decir 49 px.
      */
     const walker = await (await browser.newContext()).newPage();
     try {
@@ -14011,7 +14097,12 @@ describe("sprint 20 día 1 — los verbos crecen y dicen su nombre", () => {
   const VIEWPORT = { width: 1440, height: 900 };
   const GROWN = `matrix(${VERB_SCALE.grow}, 0, 0, ${VERB_SCALE.grow}, 0, 0)`;
 
-  /** Everything about one verb and the word beside it, read inside the frame in one pass. */
+  /**
+   * Everything about one verb and the word beside it, read inside the frame in one pass — and its
+   * sizes **on screen**, which is what the scale declares (ADR 0053): the frame's pixels times the
+   * zoom. Until sprint 31 día 1 the canvas was at zoom 1 at this window and the two were one
+   * number; since ADR 0061 it is drawn at 0.9125 here and a 32 px verb is 35 px of the frame.
+   */
   function verb(page: Page, action: string) {
     return page
       .frameLocator(PREVIEW)
@@ -14020,10 +14111,14 @@ describe("sprint 20 día 1 — los verbos crecen y dicen su nombre", () => {
       .evaluate((el) => {
         const tip = el.nextElementSibling;
         const svg = el.querySelector("svg");
+        const view = el.ownerDocument.defaultView as Window;
+        const host = view.frameElement as HTMLElement | null;
+        const zoom =
+          host && view.innerWidth > 0 ? host.getBoundingClientRect().width / view.innerWidth : 1;
         return {
-          width: Math.round(el.getBoundingClientRect().width),
-          height: Math.round(el.getBoundingClientRect().height),
-          icon: svg ? Math.round(svg.getBoundingClientRect().width) : -1,
+          width: Math.round(el.getBoundingClientRect().width * zoom),
+          height: Math.round(el.getBoundingClientRect().height * zoom),
+          icon: svg ? Math.round(svg.getBoundingClientRect().width * zoom) : -1,
           transform: getComputedStyle(el).transform,
           transition: getComputedStyle(el).transitionDuration,
           wordIsSibling: tip?.classList.contains("rb-tip") === true,
@@ -14330,34 +14425,44 @@ describe("sprint 20 día 2 — el grupo de verbos se mueve, con un asa", () => {
       expect(start?.styleLeft, "el grupo nace movido en vez de en su esquina").toBe("");
 
       // Intro: la esquina siguiente. Nace arriba a la derecha, así que la siguiente es abajo a la
-      // derecha — las dos coordenadas salidas de la medida, no de una constante copiada.
+      // derecha — las dos coordenadas salidas de la medida, no de una constante copiada. El margen
+      // es el de pantalla, en píxeles del marco (ADR 0053): ocho entre el zoom.
+      const inset = BAR_INSET / (await canvasZoom(walker));
       await walker.keyboard.press("Enter");
       const corner = {
-        left: (start?.hostWidth ?? 0) - (start?.barWidth ?? 0) - BAR_INSET,
-        top: (start?.hostHeight ?? 0) - (start?.barHeight ?? 0) - BAR_INSET,
+        left: (start?.hostWidth ?? 0) - (start?.barWidth ?? 0) - inset,
+        top: (start?.hostHeight ?? 0) - (start?.barHeight ?? 0) - inset,
       };
-      await expect.poll(() => placed(walker).then((p) => p?.top)).toBe(corner.top);
-      expect((await placed(walker))?.left).toBe(corner.left);
+      await expect
+        .poll(() => placed(walker).then((p) => Math.abs((p?.top ?? Number.NaN) - corner.top)))
+        .toBeLessThanOrEqual(1);
+      nearInFrame((await placed(walker))?.left, corner.left, "Intro: a lo ancho");
       // Y abajo del todo la palabra ya no cabe debajo: se pone encima.
       expect((await placed(walker))?.low, "la palabra sigue debajo con la barra abajo").toBe(true);
 
-      // Las flechas, a pasos de `BAR_STEP`.
+      // Las flechas, a pasos de `BAR_STEP` — píxeles del marco, que es lo que la flecha suma.
       for (let press = 0; press < 3; press += 1) await walker.keyboard.press("ArrowLeft");
-      await expect.poll(() => placed(walker).then((p) => p?.left)).toBe(corner.left - 3 * BAR_STEP);
+      await expect
+        .poll(() =>
+          placed(walker).then((p) =>
+            Math.abs((p?.left ?? Number.NaN) - (corner.left - 3 * BAR_STEP)),
+          ),
+        )
+        .toBeLessThanOrEqual(1);
 
       // Y se para en el borde en vez de salirse.
       for (let press = 0; press < 10; press += 1) await walker.keyboard.press("ArrowDown");
-      expect((await placed(walker))?.top).toBe(corner.top);
+      nearInFrame((await placed(walker))?.top, corner.top, "el borde de abajo");
 
       // Inicio: a su esquina, y olvidado — lo dice el `style` vacío, no solo la coordenada.
       await walker.keyboard.press("Home");
       await expect.poll(() => placed(walker).then((p) => p?.styleLeft)).toBe("");
-      expect((await placed(walker))?.top).toBe(BAR_INSET);
+      nearInFrame((await placed(walker))?.top, inset, "Inicio");
 
       // Movido otra vez, para preguntar lo que de verdad importa: si sobrevive.
       for (let press = 0; press < 2; press += 1) await walker.keyboard.press("ArrowLeft");
       const moved = await placed(walker);
-      expect(moved?.left).toBe((start?.left ?? 0) - 2 * BAR_STEP);
+      nearInFrame(moved?.left, (start?.left ?? 0) - 2 * BAR_STEP, "dos flechas desde la esquina");
 
       /**
        * **Sobrevive a un verbo**, que es la pregunta de verdad: cada edición tira el marco entero y
@@ -14405,15 +14510,18 @@ describe("sprint 20 día 2 — el grupo de verbos se mueve, con un asa", () => {
       };
 
       // Arrastrada 200 a la izquierda y 120 abajo: el grupo hace el mismo recorrido que la mano,
-      // no salta para ponerse bajo el puntero.
+      // no salta para ponerse bajo el puntero. La mano se mueve en pantalla y el grupo se mide en
+      // el marco, así que el recorrido esperado es el de la mano entre el zoom (ADR 0061).
+      const zoom = await canvasZoom(walker);
+      const inset = BAR_INSET / zoom;
       const from = await grab();
       await walker.mouse.move(from.x, from.y);
       await walker.mouse.down();
       await walker.mouse.move(from.x - 200, from.y + 120, { steps: 8 });
       await walker.mouse.up();
       const after = await placed(walker);
-      expect(after?.left).toBe((before?.left ?? 0) - 200);
-      expect(after?.top).toBe((before?.top ?? 0) + 120);
+      nearInFrame(after?.left, (before?.left ?? 0) - 200 / zoom, "arrastrado a lo ancho");
+      nearInFrame(after?.top, (before?.top ?? 0) + 120 / zoom, "arrastrado a lo alto");
       // Y la selección que hubiera en la página es la misma: arrastrar no escribe ni selecciona.
       expect(after?.selection).toBe(before?.selection);
 
@@ -14424,8 +14532,12 @@ describe("sprint 20 día 2 — el grupo de verbos se mueve, con un asa", () => {
       await walker.mouse.move(again.x - 4_000, again.y + 4_000, { steps: 6 });
       await walker.mouse.up();
       const clamped = await placed(walker);
-      expect(clamped?.left).toBe(BAR_INSET);
-      expect(clamped?.top).toBe((clamped?.hostHeight ?? 0) - (clamped?.barHeight ?? 0) - BAR_INSET);
+      nearInFrame(clamped?.left, inset, "parado en el borde izquierdo");
+      nearInFrame(
+        clamped?.top,
+        (clamped?.hostHeight ?? 0) - (clamped?.barHeight ?? 0) - inset,
+        "parado en el borde de abajo",
+      );
 
       /*
        * Un clic sin recorrido no es un arrastre: es la esquina siguiente. Se pregunta por `top` y
@@ -14435,8 +14547,10 @@ describe("sprint 20 día 2 — el grupo de verbos se mueve, con un asa", () => {
        */
       const press = await grab();
       await walker.mouse.click(press.x, press.y);
-      await expect.poll(() => placed(walker).then((p) => p?.top)).toBe(BAR_INSET);
-      expect((await placed(walker))?.left).toBe(BAR_INSET);
+      await expect
+        .poll(() => placed(walker).then((p) => Math.abs((p?.top ?? Number.NaN) - inset)))
+        .toBeLessThanOrEqual(1);
+      nearInFrame((await placed(walker))?.left, inset, "un clic: arriba a la izquierda");
 
       /**
        * **Y lo que el grupo abre va con él.** Un menú que se quedara en la esquina mientras su
@@ -14566,7 +14680,15 @@ describe("sprint 20 día 3 — la barra flotante se mueve, y recuerda el desplaz
   const HEADLINE = '[data-section="sec-cover"] [data-id="el-headline"]';
   const SUBHEADLINE = '[data-section="sec-cover"] [data-id="el-subheadline"]';
 
-  /** La barra, el texto que la abrió y dónde está puesta — todo dentro del marco, de una vez. */
+  /**
+   * La barra, el texto que la abrió y dónde está puesta — todo dentro del marco, de una vez.
+   *
+   * **Sin redondear, y respecto a la caja que la coloca** (sprint 31 día 1). A zoom 1 cada medida
+   * era entera y `offsetTop` no perdía nada; con el lienzo a 0,9125 (ADR 0061) la distancia al
+   * texto es `TOOLBAR_GAP / zoom` y un arrastre `recorrido / zoom`, y redondear por separado las
+   * cuatro medidas de una cuenta sumaba su error. Las cajas, restadas de la de su contenedor,
+   * dan lo mismo que `offsetTop` sin el redondeo.
+   */
   function bar(page: Page, selector: string) {
     return page
       .frameLocator(PREVIEW)
@@ -14576,12 +14698,16 @@ describe("sprint 20 día 3 — la barra flotante se mueve, y recuerda el desplaz
         const floating = el.ownerDocument.querySelector<HTMLElement>(".rb-toolbar");
         if (!floating) return null;
         const active = el.ownerDocument.activeElement;
+        const host = (floating.offsetParent as HTMLElement | null) ?? el.ownerDocument.body;
+        const origin = host.getBoundingClientRect();
+        const box = floating.getBoundingClientRect();
+        const words = (el as HTMLElement).getBoundingClientRect();
         return {
-          top: Math.round(floating.offsetTop),
-          left: Math.round(floating.offsetLeft),
-          elementTop: Math.round((el as HTMLElement).offsetTop),
-          elementHeight: (el as HTMLElement).offsetHeight,
-          barHeight: floating.offsetHeight,
+          top: box.top - origin.top - host.clientTop,
+          left: box.left - origin.left - host.clientLeft,
+          elementTop: words.top - origin.top - host.clientTop,
+          elementHeight: words.height,
+          barHeight: box.height,
           focusedId: (active as HTMLElement | null)?.dataset?.["id"] ?? null,
           selection: el.ownerDocument.getSelection()?.toString() ?? "",
         };
@@ -14610,15 +14736,21 @@ describe("sprint 20 día 3 — la barra flotante se mueve, y recuerda el desplaz
       await expect(frame.locator(".rb-toolbar")).toHaveCount(1);
 
       // Nace encima de las palabras, que es lo que dice la aritmética que ahora vive en un módulo.
+      // La distancia es la de pantalla, en píxeles del marco: `TOOLBAR_GAP` entre el zoom.
+      const gap = TOOLBAR_GAP / (await canvasZoom(walker));
       const start = await bar(walker, HEADLINE);
       expect(start, "no hay barra que medir").not.toBeNull();
-      const aboveTheText = (start?.elementTop ?? 0) - (start?.barHeight ?? 0) - TOOLBAR_GAP;
-      const belowTheText = (start?.elementTop ?? 0) + (start?.elementHeight ?? 0) + TOOLBAR_GAP;
-      expect(start?.top).toBe(aboveTheText);
+      const aboveTheText = (start?.elementTop ?? 0) - (start?.barHeight ?? 0) - gap;
+      const belowTheText = (start?.elementTop ?? 0) + (start?.elementHeight ?? 0) + gap;
+      nearInFrame(start?.top, aboveTheText, "nace encima de las palabras");
+      const away = (want: number) => (b: { top: number } | null) =>
+        Math.abs((b?.top ?? Number.NaN) - want);
 
       // El asa: al otro lado del texto, que es la única mudanza grande que esta barra tiene.
       await frame.locator('.rb-toolbar [data-action="grip"]').click();
-      await expect.poll(() => bar(walker, HEADLINE).then((b) => b?.top)).toBe(belowTheText);
+      await expect
+        .poll(() => bar(walker, HEADLINE).then(away(belowTheText)))
+        .toBeLessThanOrEqual(1);
 
       /**
        * **Y aquí está la razón de que se guarde un desplazamiento y no una posición.** El
@@ -14631,20 +14763,50 @@ describe("sprint 20 día 3 — la barra flotante se mueve, y recuerda el desplaz
         .poll(async () => {
           const at = await bar(walker, SUBHEADLINE);
           if (!at) return null;
-          return at.top - (at.elementTop - at.barHeight - TOOLBAR_GAP);
+          return Math.abs(at.top - (at.elementTop - at.barHeight - gap) - nudge);
         })
-        .toBe(nudge);
+        .toBeLessThanOrEqual(1);
 
-      // Y es de esta sección: un texto de otra abre donde siempre.
+      /**
+       * Y es de esta sección: un texto de otra abre donde siempre — **donde la aritmética del
+       * editor lo pone sin ningún desplazamiento**, que no es siempre «encima» (sprint 31 día 1).
+       * `toolbarPoint` lo baja cuando encima no cabe en lo que se ve, y con el lienzo a 0,9125
+       * (ADR 0061) la barra mide más píxeles del marco: la de «Servicios» pasó al otro lado, 57 px
+       * más abajo de lo que la fórmula de «encima» decía. Se compara con la regla del módulo —que
+       * tiene sus pruebas— alimentada con lo que la página mide, franja visible incluida; un
+       * desplazamiento que se filtrara de la portada la apartaría de ella el tamaño del
+       * desplazamiento.
+       */
       const OTHER = '[data-section="sec-services"] [data-id="el-services-headline"]';
       await frame.locator(OTHER).click();
+      const unnudged = () =>
+        frame.locator(OTHER).evaluate((el) => {
+          const floating = el.ownerDocument.querySelector<HTMLElement>(".rb-toolbar");
+          const section = el.closest<HTMLElement>("[data-section]");
+          const view = el.ownerDocument.defaultView;
+          if (!floating || !section || !view) return null;
+          const origin = section.getBoundingClientRect();
+          const words = (el as HTMLElement).getBoundingClientRect();
+          return {
+            at: floating.getBoundingClientRect().top - origin.top - section.clientTop,
+            geometry: {
+              elementTop: words.top - origin.top - section.clientTop,
+              elementLeft: words.left - origin.left - section.clientLeft,
+              elementHeight: (el as HTMLElement).offsetHeight,
+              barWidth: floating.offsetWidth,
+              barHeight: floating.offsetHeight,
+              hostWidth: section.clientWidth,
+              view: { top: -origin.top, height: view.innerHeight },
+            },
+          };
+        });
       await expect
         .poll(async () => {
-          const at = await bar(walker, OTHER);
-          if (!at) return null;
-          return at.top - (at.elementTop - at.barHeight - TOOLBAR_GAP);
+          const read = await unnudged();
+          if (!read) return null;
+          return Math.abs(read.at - toolbarPoint({ ...read.geometry, gap }).point.y);
         })
-        .toBe(0);
+        .toBeLessThanOrEqual(1);
 
       /**
        * **Una sola parada de Tab, y es el asa.**
@@ -14682,8 +14844,8 @@ describe("sprint 20 día 3 — la barra flotante se mueve, y recuerda el desplaz
       await walker.keyboard.press("ArrowUp");
       await walker.keyboard.press("ArrowUp");
       await expect
-        .poll(() => bar(walker, HEADLINE).then((b) => b?.top))
-        .toBe(belowTheText - 2 * BAR_STEP);
+        .poll(() => bar(walker, HEADLINE).then(away(belowTheText - 2 * BAR_STEP)))
+        .toBeLessThanOrEqual(1);
 
       /**
        * **Y dos pulsaciones del asa la devuelven a su sitio**, olvidando las flechas para toda la
@@ -14693,9 +14855,13 @@ describe("sprint 20 día 3 — la barra flotante se mueve, y recuerda el desplaz
        * del asa: la primera la pasa al otro lado, la segunda la trae al sitio calculado.
        */
       await walker.keyboard.press("Enter");
-      await expect.poll(() => bar(walker, HEADLINE).then((b) => b?.top)).toBe(belowTheText);
+      await expect
+        .poll(() => bar(walker, HEADLINE).then(away(belowTheText)))
+        .toBeLessThanOrEqual(1);
       await walker.keyboard.press("Enter");
-      await expect.poll(() => bar(walker, HEADLINE).then((b) => b?.top)).toBe(aboveTheText);
+      await expect
+        .poll(() => bar(walker, HEADLINE).then(away(aboveTheText)))
+        .toBeLessThanOrEqual(1);
       // Y `Inicio` ya es de la barra: va a su primer control, y la barra no se mueve.
       await walker.keyboard.press("Home");
       const onTheFirst = await walker
@@ -14714,7 +14880,7 @@ describe("sprint 20 día 3 — la barra flotante se mueve, y recuerda el desplaz
         inToolbar: true,
         first: true,
       });
-      expect((await bar(walker, HEADLINE))?.top).toBe(aboveTheText);
+      nearInFrame((await bar(walker, HEADLINE))?.top, aboveTheText, "Inicio movió la barra");
     } finally {
       await context.close();
     }
@@ -14753,9 +14919,12 @@ describe("sprint 20 día 3 — la barra flotante se mueve, y recuerda el desplaz
       await walker.mouse.move(from.x + 150, from.y + 40, { steps: 8 });
       await walker.mouse.up();
 
+      // La mano se mueve en pantalla y la barra se mide en el marco: el recorrido esperado es el
+      // de la mano entre el zoom (ADR 0061).
+      const zoom = await canvasZoom(walker);
       const dragged = await bar(walker, HEADLINE);
-      expect(dragged?.left).toBe((before?.left ?? 0) + 150);
-      expect(dragged?.top).toBe((before?.top ?? 0) + 40);
+      nearInFrame(dragged?.left, (before?.left ?? 0) + 150 / zoom, "arrastrada a lo ancho");
+      nearInFrame(dragged?.top, (before?.top ?? 0) + 40 / zoom, "arrastrada a lo alto");
       expect(dragged?.focusedId, "arrastrar la barra le quitó el teclado al texto").toBe(
         "el-headline",
       );
@@ -14767,8 +14936,16 @@ describe("sprint 20 día 3 — la barra flotante se mueve, y recuerda el desplaz
       await afterTheEdit(walker, async () => {
         await frame.locator('.rb-toolbar-mark[data-mark="strong"]').click();
       });
-      await expect.poll(() => bar(walker, HEADLINE).then((b) => b?.top)).toBe(dragged?.top);
-      expect((await bar(walker, HEADLINE))?.left).toBe(dragged?.left);
+      await expect
+        .poll(() =>
+          bar(walker, HEADLINE).then((b) => Math.abs((b?.top ?? Number.NaN) - (dragged?.top ?? 0))),
+        )
+        .toBeLessThanOrEqual(1);
+      nearInFrame(
+        (await bar(walker, HEADLINE))?.left,
+        dragged?.left ?? 0,
+        "tras un botón, a lo ancho",
+      );
       await expect(frame.locator(`${HEADLINE} strong`)).toHaveCount(1);
     } finally {
       await context.close();
@@ -15084,11 +15261,14 @@ describe("sprint 20 día 5 — el cierre, con las dos barras movidas", () => {
       const tapped = await cluster(walker);
       expect(tapped?.top, "un toque no movió el grupo de esquina").not.toBe(start?.top);
 
+      // El dedo recorre píxeles de pantalla y el grupo se mide en los del marco: el recorrido
+      // esperado es el del dedo entre el zoom (ADR 0061; a 1440 el lienzo está a 0,9125).
+      const zoom = await canvasZoom(walker);
       const again = await centreOf(walker, '.rb-actions [data-action="grip"]');
       await finger(context, walker, again, { x: again.x - 120, y: again.y - 60 });
       const dragged = await cluster(walker);
-      expect(dragged?.left, "el dedo no arrastró el grupo").toBe((tapped?.left ?? 0) - 120);
-      expect(dragged?.top).toBe((tapped?.top ?? 0) - 60);
+      nearInFrame(dragged?.left, (tapped?.left ?? 0) - 120 / zoom, "el dedo no arrastró el grupo");
+      nearInFrame(dragged?.top, (tapped?.top ?? 0) - 60 / zoom, "el dedo, a lo alto");
       // Y sigue dentro de su sección, que es lo mismo que se le pide a un ratón.
       expect(dragged?.insideLeft).toBeGreaterThanOrEqual(0);
       expect(dragged?.insideRight).toBeGreaterThanOrEqual(0);
@@ -15114,10 +15294,14 @@ describe("sprint 20 día 5 — el cierre, con las dos barras movidas", () => {
       const barAt = () =>
         frame.locator(".rb-toolbar").evaluate((el) => Math.round((el as HTMLElement).offsetTop));
       const before = await barAt();
+      const zoom = await canvasZoom(walker);
       const grip = await centreOf(walker, '.rb-toolbar [data-action="grip"]');
       await finger(context, walker, grip, { x: grip.x, y: grip.y + 48 });
 
-      await expect.poll(barAt).toBe(before + 48);
+      // 48 px de dedo son `48 / zoom` del marco, donde la barra se mide (ADR 0061).
+      await expect
+        .poll(() => barAt().then((at) => Math.abs(at - (before + 48 / zoom))))
+        .toBeLessThanOrEqual(1);
       expect(await words(), "arrastrar con el dedo se llevó las palabras elegidas").toBe(chosen);
       await expect(frame.locator(".rb-toolbar")).toHaveCount(1);
     } finally {
@@ -16545,11 +16729,15 @@ describe("sprint 24 día 8 — un elemento se arrastra a su celda", () => {
        * seven pixels of it, reported as a drag that overshot. Against the section's own content box
        * a scroll cancels out, and after the press there is no scroll left to come.
        *
-       * At a window of 1440 with no panel the canvas is at zoom 1, so a pixel of the screen is a
-       * pixel of the frame and the pointer's delta is comparable with the element's.
+       * **On screen, which is where the hand is** (sprint 31 día 1). Until ADR 0061 the canvas was
+       * at zoom 1 at a 1440 window and a pixel of the screen was a pixel of the frame; it is drawn at
+       * 0.9125 now, so the element's travel, read in the frame, is multiplied by the zoom before it
+       * is compared with the pointer's — and with `GUIDE_ZONE`, which is six pixels of the screen
+       * and which the editor divides by the zoom itself.
        */
       const DX = 137;
       const DY = 30;
+      const zoom = await canvasZoom(page);
       const grab = await subject.boundingBox();
       await page.mouse.move(
         (grab?.x ?? 0) + (grab?.width ?? 0) / 2,
@@ -16572,11 +16760,11 @@ describe("sprint 24 día 8 — un elemento se arrastra a su celda", () => {
        */
       const carried = await boxOf(frame, "sec-cover", mover?.id as string);
       expect(
-        Math.abs((carried?.x ?? 0) - (startedAt?.x ?? 0) - DX),
+        Math.abs(((carried?.x ?? 0) - (startedAt?.x ?? 0)) * zoom - DX),
         "no siguió a la mano a lo ancho",
       ).toBeLessThanOrEqual(GUIDE_ZONE);
       expect(
-        Math.abs((carried?.y ?? 0) - (startedAt?.y ?? 0) - DY),
+        Math.abs(((carried?.y ?? 0) - (startedAt?.y ?? 0)) * zoom - DY),
         "no siguió a la mano a lo alto",
       ).toBeLessThanOrEqual(GUIDE_ZONE);
       // No ghost anywhere: the element *is* the preview now (ADR 0048 §5, amended).
@@ -16594,14 +16782,15 @@ describe("sprint 24 día 8 — un elemento se arrastra a su celda", () => {
        */
       const landed = await boxOf(frame, "sec-cover", mover?.id as string);
       // Media unidad por el redondeo a la celda, más lo que el imán haya tirado: once píxeles es el
-      // presupuesto honesto de los dos juntos (ADR 0050, enmiendas de los días 3 y 5).
+      // presupuesto honesto de los dos juntos (ADR 0050, enmiendas de los días 3 y 5) — de pantalla,
+      // como la mano: media unidad del marco a 1280 de maquetación son 4,8 en pantalla a 0,9125.
       const BUDGET = GUIDE_ZONE + 5;
       expect(
-        Math.abs((landed?.x ?? 0) - (startedAt?.x ?? 0) - DX),
+        Math.abs(((landed?.x ?? 0) - (startedAt?.x ?? 0)) * zoom - DX),
         "no se quedó donde se soltó, a lo ancho",
       ).toBeLessThanOrEqual(BUDGET);
       expect(
-        Math.abs((landed?.y ?? 0) - (startedAt?.y ?? 0) - DY),
+        Math.abs(((landed?.y ?? 0) - (startedAt?.y ?? 0)) * zoom - DY),
         "no se quedó donde se soltó, a lo alto",
       ).toBeLessThanOrEqual(BUDGET);
       // Which is fourteen units right and four rows down, read off the document itself.
@@ -17011,7 +17200,11 @@ describe("sprint 24 día 9 — el teclado lo mueve y lo dice", () => {
         // Eight units and their gutter (ADR 0050): the first nine tracks of the fine grid.
         return tracks.slice(0, 9).reduce((total, width) => total + width, 0);
       });
-      await finger(context, page, centre, { x: centre.x + step, y: centre.y });
+      // The column is measured in the frame and the finger travels on the screen: one column of
+      // the page is `step × zoom` of glass (sprint 31 día 1; at 1440 the canvas is at 0.9125 since
+      // ADR 0061, and a finger that travelled `step` landed three units past the column).
+      const zoom = await canvasZoom(page);
+      await finger(context, page, centre, { x: centre.x + step * zoom, y: centre.y });
       await expect
         .poll(
           async () =>
@@ -17670,6 +17863,7 @@ describe("sprint 25 día 2 — escalar mide la sección viva", () => {
 
       await frame.locator(`[data-section="${second}"]`).click();
       const wide = await sectionWidth(frame, second as string);
+      const zoomClosed = await canvasZoom(page);
       await page.getByRole("button", { name: "Diseño", exact: true }).click();
       // El panel está en su estado de oferta: la segunda puerta del ADR 0025 enmendado, con las
       // mismas palabras que la del lienzo y el mismo verbo detrás.
@@ -17677,18 +17871,22 @@ describe("sprint 25 día 2 — escalar mide la sección viva", () => {
       await expect(panel.getByRole("button", { name: "Diseñar a mano" })).toBeVisible();
 
       /**
-       * **Se espera a que el lienzo se estreche, y se mide después**; la caminata lo aprendió dos
-       * veces. Abrir el panel estrecha la sección —a 1440 pasa de 1168 px a 948: los 340 del panel
-       * menos el margen de la fila, que baja de `px-24` a `px-6` al abrirlo— así que medir antes
-       * compara dos anchos y acusa a la escalada de haber estrechado 220 px lo que estrechó el
-       * panel. Y que el botón esté visible no basta: el ancho lo decide un `ResizeObserver` y un
-       * render después, y la primera medición llegaba antes que ellos.
+       * **Se espera a que el lienzo cambie de zoom, y la sección no cambia de ancho** (sprint 31 día
+       * 1, ADR 0061; hasta entonces aquí se esperaba a que el panel la estrechase).
+       *
+       * Abrir el panel estrechaba la sección —a 1440 de 1168 px a 948— y escalar con él abierto
+       * medía las cajas a ese ancho: el punto 1 abierto del sprint 28, un hueco bajo el titular que
+       * pasaba de 16 a 95 px al cerrar el panel. El lienzo maqueta ahora a 1280 y el panel baja el
+       * zoom (0,9125 → 0,7406): la sección mide lo mismo en el marco, y es lo que se asevera. Se
+       * espera al zoom —que llega con un `ResizeObserver` y un render— antes de medir nada.
        */
       await expect
-        .poll(() => sectionWidth(frame, second as string), {
-          message: "el panel no estrechó el lienzo",
-        })
-        .toBeLessThan(wide - 1);
+        .poll(() => canvasZoom(page), { message: "el panel no bajó el zoom del lienzo" })
+        .toBeLessThan(zoomClosed - 0.01);
+      expect(
+        Math.abs((await sectionWidth(frame, second as string)) - wide),
+        `con «Diseño» abierto la sección pasó de ${wide} px a otro ancho en el marco: el panel la estrechó, y escalar ahora mediría al ancho del panel`,
+      ).toBeLessThanOrEqual(1);
       const beforeSecond = await boxesIn(frame, second as string);
       expect(beforeSecond.length, `${second} no tiene elementos colocados`).toBeGreaterThan(0);
       await afterTheEdit(page, async () => {
@@ -17699,6 +17897,17 @@ describe("sprint 25 día 2 — escalar mide la sección viva", () => {
       await expect(live.locator(`[data-section="${second}"]`)).toHaveClass(/rb-free/);
 
       nothingMoved(beforeSecond, await boxesIn(live, second as string), "panel Diseño");
+
+      // **Y cerrado el panel, nada se mueve**: la medida que el sprint 28 dejó abierta. Escalada
+      // con el panel abierto, la sección guardaba sus filas al ancho del panel y al cerrarlo el
+      // texto volvía a una línea con las filas de dos debajo. Con un solo ancho de maquetación no
+      // hay segundo ancho que guardar.
+      await page.getByRole("button", { name: "Cerrar el diseño" }).click();
+      await expect(page.locator("aside")).toHaveCount(0);
+      await expect
+        .poll(() => canvasZoom(page), { message: "cerrado el panel el lienzo no recuperó su zoom" })
+        .toBeCloseTo(zoomClosed, 3);
+      nothingMoved(beforeSecond, await boxesIn(live, second as string), "panel Diseño, cerrado");
     } finally {
       await context.close();
     }
@@ -17956,8 +18165,8 @@ describe("sprint 25 día 4 — los bordes estiran la caja", () => {
 describe("sprint 25 día 5 — las guías y el aviso de texto sobre texto", () => {
   const VIEWPORT = { width: 1440, height: 900 };
 
-  async function handDesigned(page: Page): Promise<FrameLocator> {
-    await intoTheCanvas(page);
+  async function handDesigned(page: Page, card = 0): Promise<FrameLocator> {
+    await intoTheCanvas(page, card);
     await studioToolsOn(page);
     const frame = page.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').click();
@@ -17974,7 +18183,17 @@ describe("sprint 25 día 5 — las guías y el aviso de texto sobre texto", () =
     const context = await browser.newContext({ viewport: VIEWPORT });
     const page = await context.newPage();
     try {
-      const frame = await handDesigned(page);
+      /*
+       * **La segunda propuesta, cuya portada es una foto bajo las palabras** (sprint 31 día 1). En
+       * la primera la foto va a la derecha y los textos a la izquierda, y el centro de la sección
+       * cae en el hueco entre las dos columnas: con el lienzo maquetado a 1280 (ADR 0061) los textos
+       * acaban 7 px a su izquierda y la foto empieza 7 px a su derecha, de pantalla. A cuatro
+       * píxeles del centro, por cualquier lado, hay entonces una línea de vecino más cerca que el
+       * centro, y el imán la elige con razón. Esta caminata pasaba a 1168 porque ese empate caía del
+       * lado bueno. Con la foto de fondo la línea central de la foto *es* el centro, y lo que se
+       * pregunta —¿se imanta al centro, lo dibuja, lo suelta ahí?— vuelve a tener una sola respuesta.
+       */
+      const frame = await handDesigned(page, 1);
       const cover = frame.locator('[data-section="sec-cover"]');
       const cta = cover.locator('[data-id="el-cta"]');
 
@@ -17987,7 +18206,14 @@ describe("sprint 25 día 5 — las guías y el aviso de texto sobre texto", () =
        * arrastró el elemento 176 px a la izquierda de donde creía y midió una guía horizontal como
        * si fuera vertical. Un sistema de coordenadas por caminata, y éste es el de Playwright.
        */
+      // Into view first: this cover is taller than the first proposal's, and its button starts
+      // below a 900 px window — a `page.mouse` press there lands on nothing.
+      await cta.scrollIntoViewIfNeeded();
       const sectionBox = await cover.boundingBox();
+      // El relleno se lee en píxeles del marco y la caja en los de la página: con el lienzo a
+      // 0,9125 (ADR 0061, sprint 31 día 1) el uno se multiplica por el zoom antes de sumarlo a la
+      // otra, o el centro sale desplazado medio relleno de más.
+      const zoom = await canvasZoom(page);
       const padding = await cover.evaluate((node) => {
         const style = getComputedStyle(node as HTMLElement);
         return {
@@ -17997,11 +18223,37 @@ describe("sprint 25 día 5 — las guías y el aviso de texto sobre texto", () =
       });
       const centre =
         (sectionBox?.x ?? 0) +
-        padding.left +
-        ((sectionBox?.width ?? 0) - padding.left - padding.right) / 2;
+        padding.left * zoom +
+        ((sectionBox?.width ?? 0) - (padding.left + padding.right) * zoom) / 2;
 
-      // El botón, arrastrado hasta que su propio centro queda a cuatro píxeles del de la sección:
-      // dentro del umbral de seis, así que la guía tiene que ganar.
+      /**
+       * El botón, arrastrado hasta que su propio centro queda a cuatro píxeles del de la sección:
+       * dentro del umbral de seis, así que la guía tiene que ganar — **llegando por el lado donde
+       * ninguna línea de un vecino está al alcance** (sprint 31 día 1). Con la portada maquetada a
+       * 1280 (ADR 0061) el borde de la foto cae 8 px del marco a la izquierda del centro, y llegando
+       * por la izquierda el imán elegía, con razón, la línea más cercana: la del vecino. A 1168 no
+       * había nada cerca y el lado daba igual. Las líneas de los vecinos se miden aquí, y el lado se
+       * elige con ellas; si ninguno sirviera la caminata lo dice en vez de medir otra guía.
+       */
+      const neighbourLines = (
+        await cover
+          .locator(":scope > [data-id]:not([data-id='el-cta'])")
+          .evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).dataset["id"] ?? ""))
+      ).filter((id) => id !== "");
+      const lines: number[] = [];
+      for (const id of neighbourLines) {
+        const other = await cover.locator(`:scope > [data-id="${id}"]`).boundingBox();
+        if (other) lines.push(other.x, other.x + other.width / 2, other.x + other.width);
+      }
+      // Una línea que es el centro mismo —la de la foto de fondo— no compite: imantar a ella es
+      // imantar al centro.
+      const competing = lines.filter((line) => Math.abs(line - centre) > 1);
+      const clearOf = (x: number) => competing.every((line) => Math.abs(line - x) > GUIDE_ZONE);
+      const approach = [-4, 4].find((offset) => clearOf(centre + offset));
+      expect(
+        approach,
+        `a cuatro píxeles del centro, por los dos lados, hay una línea de un vecino al alcance del imán: ${JSON.stringify(lines.map((x) => Math.round(x - centre)))}`,
+      ).toBeDefined();
       const box = await cta.boundingBox();
       const from = {
         x: (box?.x ?? 0) + (box?.width ?? 0) / 2,
@@ -18009,7 +18261,7 @@ describe("sprint 25 día 5 — las guías y el aviso de texto sobre texto", () =
       };
       await page.mouse.move(from.x, from.y);
       await page.mouse.down();
-      await page.mouse.move(centre - 4, from.y + 24, { steps: 12 });
+      await page.mouse.move(centre + (approach ?? 4), from.y + 24, { steps: 12 });
 
       // **La guía se ve**, que es la mitad que ningún número puede contar: una línea de un píxel
       // dentro de la sección, en el centro de su contenido.
@@ -18024,9 +18276,11 @@ describe("sprint 25 día 5 — las guías y el aviso de texto sobre texto", () =
           .map((box) => box.left),
       );
       expect(vertical, "no se dibujó ninguna guía vertical").toHaveLength(1);
+      // La guía se mide dentro del marco, desde su borde izquierdo: en la página es ese número por
+      // el zoom, a partir de donde empieza la sección (que empieza donde el marco).
       const frameOffset = sectionBox?.x ?? 0;
       expect(
-        Math.abs((vertical[0] ?? 0) + frameOffset - centre),
+        Math.abs((vertical[0] ?? 0) * zoom + frameOffset - centre),
         "la guía no está en el centro",
       ).toBeLessThanOrEqual(1);
 
@@ -18307,13 +18561,23 @@ describe("sprint 25 día 7 — las asas en táctil, y el móvil sin solape", () 
     return frame.locator('[data-section="sec-cover"]').evaluate((node) => {
       const section = node as HTMLElement;
       const host = section.getBoundingClientRect();
+      // **Measured on screen**, which is where a finger lands and what WCAG's 44 is about: the
+      // frame's pixels times the zoom (sprint 31 día 1). The editor draws the handle at
+      // `HANDLE_TOUCH / zoom` of the frame (ADR 0053); since ADR 0061 that is 55.9 px of the frame
+      // at a 1280 window, and the same 44 on the glass.
+      const view = section.ownerDocument.defaultView as Window;
+      const frameHost = view.frameElement as HTMLElement | null;
+      const zoom =
+        frameHost && view.innerWidth > 0
+          ? frameHost.getBoundingClientRect().width / view.innerWidth
+          : 1;
       return [...section.querySelectorAll<HTMLElement>(".rb-handle")].map((handle) => {
         const rect = handle.getBoundingClientRect();
         const match = handle.className.match(/rb-handle-([a-z]+)/);
         return {
           edge: match === null ? "" : (match[1] ?? ""),
-          width: rect.width,
-          height: rect.height,
+          width: rect.width * zoom,
+          height: rect.height * zoom,
           // Media asa fuera de la sección es media asa recortada: `html { overflow-x: clip }` se
           // come lo que sobresale, y el ajuste 6 de David es dibujarlas hacia dentro.
           inside:
@@ -18486,11 +18750,15 @@ describe("sprint 25 día 7 — las asas en táctil, y el móvil sin solape", () 
       for (const handle of drawn) {
         // Cuarenta y cuatro, que es el número de WCAG 2.5.5 y el de las dos plataformas. El punto
         // que se dibuja mide doce; lo que un dedo tiene que acertar son estos.
-        expect(handle.width, `el asa ${handle.edge} no mide el objetivo de lado`).toBe(
+        // Cerca y no igual: la maquetación redondea a 1/64 de píxel del marco, y multiplicado por
+        // el zoom deja centésimas.
+        expect(handle.width, `el asa ${handle.edge} no mide el objetivo de lado`).toBeCloseTo(
           HANDLE_TOUCH,
+          1,
         );
-        expect(handle.height, `el asa ${handle.edge} no mide el objetivo de alto`).toBe(
+        expect(handle.height, `el asa ${handle.edge} no mide el objetivo de alto`).toBeCloseTo(
           HANDLE_TOUCH,
+          1,
         );
         expect(handle.inside, `el asa ${handle.edge} sobresale de la sección`).toBe(true);
         // Y no se anuncian: el teclado redimensiona por los cuatro steppers del panel (WCAG 2.5.7),
@@ -18521,6 +18789,8 @@ describe("sprint 25 día 7 — las asas en táctil, y el móvil sin solape", () 
       // el dedo aterriza y por tanto dónde empieza la cuenta hacia abajo.
       const held = await boxOf(frame, "sec-cover", "el-headline");
       const DROP = 120;
+      // El dedo baja 120 px de pantalla; el área se mide en el marco, donde eso es `120 / zoom`.
+      const zoom = await canvasZoom(page);
       await finger(context, page, grab, { x: grab.x + step * 2, y: grab.y + DROP });
 
       const placedNow = async () =>
@@ -18555,7 +18825,7 @@ describe("sprint 25 día 7 — las asas en táctil, y el móvil sin solape", () 
         before?.rowSpan ?? 0,
       );
       expect(
-        Math.abs(bottom - ((held?.y ?? 0) + (held?.h ?? 0) + DROP)),
+        Math.abs(bottom - ((held?.y ?? 0) + (held?.h ?? 0) + DROP / zoom)),
         "el fondo del área no acabó donde la mano",
       ).toBeLessThanOrEqual(ROW_STEP_PX);
 
@@ -20978,15 +21248,18 @@ describe("sprint 27 día 5 — escalar es un paso", () => {
         "un cambio llegó con la mano encima",
       ).toBe(0);
 
-      // **And it landed where it was let go**, with sprint 24 día 8's honest budget.
+      // **And it landed where it was let go**, with sprint 24 día 8's honest budget — on screen,
+      // where the hand is: the travel read in the frame times the zoom (sprint 31 día 1; at 1440
+      // the canvas is at 0.9125 since ADR 0061, and 137 px of hand are 150 of the frame).
+      const zoom = await canvasZoom(page);
       const landed = await boxOf(frame, "sec-cover", mover.id);
       const BUDGET = GUIDE_ZONE + 5;
       expect(
-        Math.abs((landed?.x ?? 0) - (startedAt?.x ?? 0) - DX),
+        Math.abs(((landed?.x ?? 0) - (startedAt?.x ?? 0)) * zoom - DX),
         "no se quedó donde se soltó, a lo ancho",
       ).toBeLessThanOrEqual(BUDGET);
       expect(
-        Math.abs((landed?.y ?? 0) - (startedAt?.y ?? 0) - DY),
+        Math.abs(((landed?.y ?? 0) - (startedAt?.y ?? 0)) * zoom - DY),
         "no se quedó donde se soltó, a lo alto",
       ).toBeLessThanOrEqual(BUDGET);
 
@@ -21882,23 +22155,29 @@ describe("sprint 28 día 3 — Escape en un campo de píxeles exactos", () => {
 
 /**
  * **Sprint 28 día 7 — una fila es un mínimo, y el contenido empuja** (ADR 0050, enmienda del 26 de
- * octubre de 2026; decisión de David del mismo día, opción 3 de tres).
+ * octubre de 2026; decisión de David del mismo día, opción 3 de tres). **Reescrita el día 1 del
+ * sprint 31 (ADR 0061): el panel ya no estrecha la sección.**
  *
- * El día 1 del sprint dejó una medida pendiente, la del síntoma del ancho fijo que David no quiso
- * construir: a 1280, con «Diseño» abierto, un titular de dos líneas y algo colocado justo debajo;
- * cerrar el panel; ¿cuánto se separa o se monta, en píxeles de pantalla? **52 px**, medido antes de
- * escribir esto: el panel estrecha la sección de 912 a 692 px, el titular pasa a dos líneas, y el
- * reajuste del alto del sprint 25 día 6 escribía 13 filas donde había 7; cerrado el panel el titular
- * vuelve a una línea y las seis filas de más se quedan vacías entre él y el subtítulo. Y de camino,
- * con el panel abierto, **una letra más en el titular bajaba el hueco de 48 px a 0**: el reajuste
- * ceñía las filas al contenido crecido y se comía las dos filas vacías de debajo.
+ * El día 1 del sprint 28 dejó una medida pendiente, la del síntoma del ancho fijo que David no quiso
+ * construir entonces: a 1280, con «Diseño» abierto, un titular de dos líneas y algo colocado justo
+ * debajo; cerrar el panel; ¿cuánto se separa o se monta? **52 px**, medido antes de escribir la
+ * primera versión: el panel estrechaba la sección de 912 a 692 px, el titular pasaba a dos líneas, y
+ * el reajuste del alto del sprint 25 día 6 escribía 13 filas donde había 7. La decisión fue quitar el
+ * reajuste: `rowSpan` es un mínimo, la fila mide ocho píxeles o lo que su contenido necesite, en el
+ * editor y en la web publicada por igual.
  *
- * La decisión es quitar el reajuste: `rowSpan` es un mínimo, la fila mide ocho píxeles o lo que su
- * contenido necesite, en el editor y en la web publicada por igual (`grid-auto-rows: minmax(8px,
- * auto)` ya lo decía). Las tres aserciones de aquí son sus tres condiciones; la tercera es la de
- * siempre, que vigila que la rejilla que se lee para soltar es la resuelta y no fila × 8.
+ * **Lo que la caminata aseveraba como premisa —«con «Diseño» abierto el titular pasa a dos líneas»—
+ * es hoy falso por diseño, y esa falsedad es la prueba del punto 1 abierto del sprint 28.** El
+ * lienzo maqueta a 1280 y se escala (ADR 0061), así que abrir un panel cambia el zoom y no la
+ * sección: el titular sigue en una línea, el hueco hasta el subtítulo no se mueve y las filas no
+ * cambian. Las medidas se toman **dentro del marco** (`getBoundingClientRect` del documento del
+ * lienzo), porque con el panel abierto el zoom es 0,616 y sin él 0,788, y una caja leída en píxeles
+ * de pantalla compararía dos zooms y llamaría regresión a la diferencia. Las tres condiciones de
+ * David siguen aquí: una letra más no mueve el hueco, un cuerpo que crece empuja el botón, y lo que
+ * se suelta cae donde la mano lo dejó —con el arrastre convertido a píxeles de pantalla por el zoom
+ * leído de la tarjeta, no supuesto.
  */
-describe("sprint 28 día 7 — una fila es un mínimo", () => {
+describe("sprint 28 día 7 — una fila es un mínimo (y el panel ya no estrecha la sección, sprint 31 día 1)", () => {
   const VIEWPORT = { width: 1280, height: 900 };
   /** Una fila: la diferencia que no se ve y que una línea de texto nunca alcanza. */
   const ONE_ROW = ROW_STEP_PX;
@@ -21917,12 +22196,17 @@ describe("sprint 28 día 7 — una fila es un mínimo", () => {
     return page.frameLocator(PREVIEW).first();
   }
 
-  /** La caja de un elemento de la portada, en píxeles del marco — que a 1280 son los de pantalla,
-   * con y sin panel, porque la sección sigue más ancha que `NARROWEST_DESKTOP` y el zoom es 1. */
+  /** La caja de un elemento de la portada, **en píxeles del marco**: leída dentro del documento del
+   * lienzo, donde el `scale()` de la tarjeta no existe. A 1280 el zoom es 0,788 sin panel y 0,616
+   * con «Diseño» abierto (ADR 0061), así que `boundingBox()` —píxeles de pantalla— daría dos
+   * medidas distintas de la misma geometría. */
   async function boxOf(frame: FrameLocator, id: string) {
-    const box = await frame.locator(`[data-section="sec-cover"] [data-id="${id}"]`).boundingBox();
-    expect(box, `no encuentro la caja de ${id}`).not.toBeNull();
-    return box as { x: number; y: number; width: number; height: number };
+    const locator = frame.locator(`[data-section="sec-cover"] [data-id="${id}"]`);
+    await expect(locator, `no encuentro la caja de ${id}`).toHaveCount(1);
+    return locator.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return { x: r.x, y: r.y, width: r.width, height: r.height };
+    });
   }
   /** El hueco entre el borde inferior de uno y el superior del siguiente. */
   async function gapBetween(frame: FrameLocator, above: string, below: string): Promise<number> {
@@ -21939,7 +22223,7 @@ describe("sprint 28 día 7 — una fila es un mínimo", () => {
     await expect(target).toContainText(words);
   }
 
-  it("el hueco bajo un texto no cambia al escribir con el panel abierto, ni al cerrarlo", async () => {
+  it("abrir el panel no estrecha la sección, y el hueco bajo un texto no cambia al escribir ni al cerrarlo", async () => {
     const context = await browser.newContext({ viewport: VIEWPORT });
     const page = await context.newPage();
     try {
@@ -21950,24 +22234,45 @@ describe("sprint 28 día 7 — una fila es un mínimo", () => {
 
       // Sin panel: una línea de titular, y el hueco hasta el subtítulo tal como lo trajo escalar.
       const oneLine = (await boxOf(frame, "el-headline")).height;
+      const widthClosed = (await boxOf(frame, "el-headline")).width;
       const gapClosed = await gapBetween(frame, "el-headline", "el-subheadline");
       const rowsClosed = await rowsOf(frame, "el-headline");
+      const zoomClosed = await canvasZoom(page);
 
-      // «Diseño» abierto: la sección se estrecha y el titular pasa a dos líneas. La premisa de la
-      // medida de David, aseverada: sin dos líneas no hay fila crecida que medir.
+      // «Diseño» abierto: **el zoom baja y la sección no se estrecha** (ADR 0061). Lo que esta
+      // caminata aseveraba al revés hasta el sprint 31 día 1 —«el titular pasa a dos líneas»— es la
+      // premisa del punto 1 abierto del sprint 28, y aquí se asevera que ya no ocurre: la tarjeta
+      // se escala, el titular mide lo mismo dentro del marco, sigue en una línea, y el hueco y las
+      // filas no se mueven. Sondeado, porque el zoom llega con la transición de la tarjeta.
       await headline.click();
       await page.getByRole("button", { name: "Diseño", exact: true }).click();
       await expect(page.locator("aside")).toBeVisible();
       await expect
-        .poll(async () => (await boxOf(frame, "el-headline")).height, {
-          message: "con «Diseño» abierto a 1280 el titular no pasó a dos líneas",
+        .poll(canvasZoom.bind(null, page), {
+          message: "con «Diseño» abierto la tarjeta no bajó de zoom",
         })
-        .toBeGreaterThan(oneLine * 1.5);
+        .toBeLessThan(zoomClosed);
+      const openBox = await boxOf(frame, "el-headline");
+      expect(
+        Math.abs(openBox.width - widthClosed),
+        `con «Diseño» abierto el titular pasó de ${widthClosed} a ${openBox.width} px de ancho dentro del marco: el panel estrechó la sección`,
+      ).toBeLessThanOrEqual(1);
+      expect(openBox.height, "con «Diseño» abierto el titular dejó de ser una línea").toBeLessThan(
+        oneLine * 1.5,
+      );
       const gapOpen = await gapBetween(frame, "el-headline", "el-subheadline");
+      expect(
+        Math.abs(gapOpen - gapClosed),
+        `abrir «Diseño» movió el hueco titular→subtítulo de ${gapClosed} a ${gapOpen} px`,
+      ).toBeLessThanOrEqual(1);
+      expect(
+        await rowsOf(frame, "el-headline"),
+        "abrir el panel cambió las filas del titular",
+      ).toBe(rowsClosed);
 
       // ---- una letra más, con el panel abierto: el subtítulo no se acerca ----
       // Entrar en escritura selecciona las palabras enteras (ADR 0047), así que se teclean todas y
-      // una más; en el ancho con panel siguen siendo dos líneas.
+      // una más.
       await intoWriting(headline);
       await page.keyboard.type("Taberna Santo Domingos");
       await committed(page, headline, "Domingos");
@@ -21984,7 +22289,7 @@ describe("sprint 28 día 7 — una fila es un mínimo", () => {
       const ctaBefore = (await boxOf(frame, "el-cta")).y;
       const bodyBefore = (await boxOf(frame, "el-body")).height;
       const gapBodyBefore = await gapBetween(frame, "el-body", "el-cta");
-      // Con el panel abierto el cuerpo de la portada ya ocupa dos líneas; este ocupa cuatro.
+      // El cuerpo de la portada ocupa una línea —el panel ya no lo estrecha—; este ocupa varias.
       await intoWriting(body);
       await page.keyboard.type(
         "Pásate a comer o a tomar algo, con tiempo y sin prisa, cuando quieras y con quien quieras. " +
@@ -22011,11 +22316,17 @@ describe("sprint 28 día 7 — una fila es un mínimo", () => {
       await cta.click();
       await expect(cta).toHaveClass(/rb-chosen/);
       const from = await boxOf(frame, "el-cta");
-      const centre = { x: from.x + from.width / 2, y: from.y + from.height / 2 };
+      // El ratón se mueve en píxeles de pantalla y la caja se lee en los del marco: el centro sale
+      // de `boundingBox()` (pantalla) y la caída de 40 px del marco se escala con el zoom leído.
+      const onScreen = await cta.boundingBox();
+      expect(onScreen, "no encuentro el botón en pantalla").not.toBeNull();
+      const screen = onScreen as { x: number; y: number; width: number; height: number };
+      const centre = { x: screen.x + screen.width / 2, y: screen.y + screen.height / 2 };
       const DROP = 40;
+      const zoom = await canvasZoom(page);
       await page.mouse.move(centre.x, centre.y);
       await page.mouse.down();
-      await page.mouse.move(centre.x, centre.y + DROP, { steps: 10 });
+      await page.mouse.move(centre.x, centre.y + DROP * zoom, { steps: 10 });
       await page.mouse.up();
       await expect
         .poll(async () => (await boxOf(frame, "el-cta")).y, {
@@ -22032,14 +22343,18 @@ describe("sprint 28 día 7 — una fila es un mínimo", () => {
         "el botón se movió de lado sin que nadie lo moviera",
       ).toBe(0);
 
-      // ---- cerrar el panel: una línea otra vez, y el hueco de antes ----
+      // ---- cerrar el panel: el zoom vuelve, la sección no cambia, el hueco es el de antes ----
       await page.getByRole("button", { name: "Cerrar el diseño" }).click();
       await expect(page.locator("aside")).toHaveCount(0);
       await expect
-        .poll(async () => (await boxOf(frame, "el-headline")).height, {
-          message: "cerrado el panel el titular no volvió a una línea",
+        .poll(canvasZoom.bind(null, page), {
+          message: "cerrado el panel la tarjeta no recuperó su zoom",
         })
-        .toBeLessThan(oneLine * 1.5);
+        .toBeCloseTo(zoomClosed, 3);
+      expect(
+        (await boxOf(frame, "el-headline")).height,
+        "cerrado el panel el titular no es una línea",
+      ).toBeLessThan(oneLine * 1.5);
       const gapAfter = await gapBetween(frame, "el-headline", "el-subheadline");
       expect(
         Math.abs(gapAfter - gapClosed),
@@ -23335,4 +23650,73 @@ describe("sprint 30 día 7 — lo que la lista pedía y nadie había caminado", 
       await context.close();
     }
   }, 300_000);
+});
+
+/**
+ * **Sprint 31 día 1 — el lienzo maqueta a 1280 y se escala** (ADR 0061).
+ *
+ * Lo que el plan pidió ver con el panel que elige la posición de un menú abierto: el lienzo es la
+ * página de 1280 que ve un visitante a cualquier ventana de portátil, más pequeña cuando hay panel
+ * y nunca distinta; y donde no puede serlo —por debajo del suelo de legibilidad de David, 0,6— lo
+ * dice. Medido antes de escribir el cambio: a 1280 con «Menú» el marco maquetaba a 788 y a 1440 sin
+ * panel a 1168, cada ventana una página distinta.
+ */
+describe("sprint 31 día 1 — el lienzo maqueta a 1280 y se escala", () => {
+  /** El ancho al que maqueta el marco, lo que dice la etiqueta y dónde está respecto a la tarjeta. */
+  function canvasNow(page: Page) {
+    return page.evaluate(() => {
+      const card = document.querySelector<HTMLElement>('[data-testid="canvas-card"]');
+      const frame = card?.querySelector<HTMLIFrameElement>("iframe");
+      const note = document.querySelector<HTMLElement>('[data-testid="canvas-view-width"]');
+      return {
+        layout: frame?.contentWindow?.innerWidth ?? -1,
+        note: note?.textContent ?? null,
+        noteAboveCard:
+          note && card
+            ? note.getBoundingClientRect().bottom <= card.getBoundingClientRect().top + 0.5
+            : null,
+      };
+    });
+  }
+
+  it("a 1440 y a 1280 es la página de 1280 con panel o sin él, y a 1024 con panel dice a qué ancho maqueta", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+
+      // 1440 sin panel: la página de 1280, a 0,9125, sin nada que decir.
+      await expect
+        .poll(() => canvasNow(page))
+        .toMatchObject({ layout: DESKTOP_LAYOUT_WIDTH, note: null });
+      expect(await canvasZoom(page)).toBeCloseTo(0.9125, 3);
+
+      // 1280 con «Menú»: la misma página, más pequeña — 788 px de hueco, a 0,6156, sobre el suelo.
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await page.getByRole("button", { name: "Menú", exact: true }).click();
+      await expect(
+        page.getByRole("complementary", { name: "La cabecera de tu web" }),
+      ).toBeVisible();
+      await expect
+        .poll(() => canvasNow(page))
+        .toMatchObject({ layout: DESKTOP_LAYOUT_WIDTH, note: null });
+      expect(await canvasZoom(page)).toBeGreaterThanOrEqual(CANVAS_ZOOM_FLOOR);
+
+      // 1024 con «Menú»: 532 px de hueco; a 1280 serían 0,42, así que maqueta a 887 y lo dice,
+      // fuera de la tarjeta y encima de ella — sin tapar la línea de ayuda que va dentro.
+      await page.setViewportSize({ width: 1024, height: 900 });
+      await expect
+        .poll(() => canvasNow(page))
+        .toEqual({ layout: 887, note: "Vista a 887 px", noteAboveCard: true });
+      expect(await canvasZoom(page)).toBeCloseTo(CANVAS_ZOOM_FLOOR, 2);
+
+      // Y de vuelta a 1280, la etiqueta se va: solo existe mientras el lienzo no es la página.
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await expect
+        .poll(() => canvasNow(page))
+        .toMatchObject({ layout: DESKTOP_LAYOUT_WIDTH, note: null });
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
 });

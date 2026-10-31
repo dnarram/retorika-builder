@@ -619,6 +619,7 @@
   "editor.drag.order": "Arrastra arriba o abajo para cambiar el orden",
   "editor.drag.rows": "La sección no crece más hacia abajo",
   "editor.canvas.chosenHint": "Doble clic o Intro para escribir",
+  "editor.canvas.viewWidth": "Vista a {px} px",
   "editor.canvasKeys.title": "Teclas del lienzo",
   "editor.canvasKeys.move": "\u2191 \u2193 cambiar de secci\u00f3n",
   "editor.canvasKeys.inside": "Tab: lo de esta secci\u00f3n, y despu\u00e9s fuera del lienzo",

@@ -154,6 +154,12 @@ import { countPhotos, listPhotos, type PhotoState } from "../editor/photoInvento
 import { withFontUrls, withPhotoUrls } from "../editor/previewDocument.ts";
 import { record, serialOf } from "../editor/probe.ts";
 import {
+  atOrAboveReading,
+  keepReadingPoint as putReadingPointBack,
+  readingPointOf,
+  readingSectionOf,
+} from "../editor/readingPoint.ts";
+import {
   axes,
   cursorFor,
   EDGE_ZONE,
@@ -1288,6 +1294,26 @@ export function Editor({
   /** A section an entry of the header named on another page, scrolled to once that page is drawn:
    * `applyPatch` puts a changed page at the top, so the scroll has to come after it. */
   const scrollToSectionAfterPatch = useRef<string | null>(null);
+  /**
+   * **The reading point of a patch: the section at the top of the view, and how far from the top it
+   * was, taken before the patch and put back after the chrome is drawn** (sprint 31 día 1).
+   *
+   * «The same page, patched, keeps its scroll by doing nothing at all» relied on the browser's
+   * scroll anchoring, and measured, the browser does not keep it. Escalating a section mid-page,
+   * with that section fitting inside the frame's viewport, moved it down 49 px: Chromium anchored on
+   * an element inside the section (which the escalation moves up to one 8 px row), and a
+   * programmatic scroll during «Diseñada a mano»'s entrance switched anchoring off for the rest of
+   * the entrance — reproduced on a bare page. At zoom 1 and 774 px of viewport the section did not
+   * fit and anchoring happened to work; ADR 0061 made the frame's viewport taller on every laptop
+   * (852 px at 1440 × 900), and a 1680 × 1050 window had it already. Safari has no scroll anchoring
+   * at all. So the editor keeps the promise itself: `applyPatch` writes this, `wireHandmade` lets a
+   * bar that arrives at or above it appear without its entrance (above what is being read there is
+   * no arrival to watch, and the moving margin is what defeated the anchoring), and `redrawChrome`
+   * puts the section back where it was before anything that may focus — and scroll — runs. At the
+   * very top of the page nothing is written: there is nothing to give there, and the bar arrives in
+   * view, as direction asked.
+   */
+  const readingPoint = useRef<{ sectionId: string; top: number } | null>(null);
   /** Registered by `wireSelection`: choose this section as a click would. `wireLinks` lives outside
    * that closure and needs the one `select` there is. */
   const chooseSectionNow = useRef<(section: HTMLElement) => void>(() => {});
@@ -1754,6 +1780,10 @@ export function Editor({
       ...(previewEntryId === undefined ? {} : { entryId: previewEntryId }),
       document: inertDoc.current,
     };
+    // The reading point, before anything moves (see `readingPoint`): only on the page already
+    // drawn, and only once the page has been scrolled — at the top there is nothing to keep.
+    readingPoint.current =
+      patchedPageId.current === (pageId ?? null) ? readingPointOf(iframeDoc) : null;
     const started = performance.now();
     const fresh = render(display, "dom", options);
     const cause = pendingCause.current;
@@ -1781,6 +1811,7 @@ export function Editor({
     // The chrome follows the page (día 3): after every patch, structural or not, because a text
     // that grew moved the gap below it and a section that arrived has no verbs yet.
     const redrawMs = redrawChrome(iframeDoc);
+    readingPoint.current = null;
     // Another page starts at the top (sprint 26 día 4): the one rule of the reading position that
     // is left, the document being never replaced and so never restored. The same page, patched,
     // keeps its scroll by doing nothing at all.
@@ -1810,6 +1841,26 @@ export function Editor({
    */
   function redrawChrome(iframeDoc: Document): number {
     const started = performance.now();
+    /*
+     * **The verb the keyboard is on, read before anything is redrawn** (sprint 31 día 1). Settling
+     * the selection rebuilds the chosen section's verbs, so a focused verb is replaced by its twin
+     * and the focus falls to the body. An edit names where the keyboard goes next (`focusTarget`);
+     * a redraw with no edit named nothing, and those used to be rare. Since ADR 0061 the zoom
+     * changes when a panel closes at every laptop width, and `onZoomChange` redraws: «Cerrar los
+     * campos» put the keyboard back on «Campos» and the redraw took it away a frame later — the
+     * sprint 17 día 5 walk, «closing the panel lost the keyboard». So the verb is remembered by
+     * what survives a rebuild — its section and its `data-action` — and given the keyboard back
+     * after the selection has settled, when nothing else has taken it.
+     */
+    const active = iframeDoc.activeElement as HTMLElement | null;
+    const onVerb =
+      active?.closest(".rb-actions") && active.dataset["action"]
+        ? {
+            element: active,
+            sectionId: active.closest<HTMLElement>("[data-section]")?.dataset["section"] ?? null,
+            action: active.dataset["action"],
+          }
+        : null;
     writeZoom(iframeDoc);
     prepareTexts(iframeDoc);
     prepareDraggables(iframeDoc);
@@ -1817,6 +1868,10 @@ export function Editor({
     drawLines(iframeDoc);
     drawPhotoChrome(iframeDoc);
     wireHandmade(iframeDoc);
+    // After the last drawing that adds height above a section, and before anything that may
+    // focus — and so scroll — runs (`readingPoint`).
+    const keptBy = putReadingPointBack(iframeDoc, readingPoint.current);
+    if (keptBy !== 0) record("reading", { sectionId: readingPoint.current?.sectionId, keptBy });
     // After every drawing that can add a button to a section, and before the settles that may
     // focus one: the stops of the holder are `0` and the rest `-1` (ADR 0052 §2).
     applyCanvasStops(iframeDoc);
@@ -1827,6 +1882,17 @@ export function Editor({
       placingElementIdNow.current,
     );
     settleSelection.current();
+    if (
+      onVerb?.sectionId &&
+      !onVerb.element.isConnected &&
+      (iframeDoc.activeElement === null || iframeDoc.activeElement === iframeDoc.body)
+    ) {
+      iframeDoc
+        .querySelector<HTMLElement>(
+          `[data-section="${CSS.escape(onVerb.sectionId)}"] .rb-actions [data-action="${CSS.escape(onVerb.action)}"]`,
+        )
+        ?.focus({ preventScroll: true });
+    }
     settleEditing(iframeDoc);
     settleWriting(iframeDoc);
     settleDragging(iframeDoc);
@@ -3319,8 +3385,33 @@ export function Editor({
       if (remembered) {
         const target = sectionsNow().find((section) => section.dataset.section === remembered);
         if (target) {
+          /*
+           * **Which of the two popups was open, read before `select` clears them** (sprint 31 día
+           * 1). The composition menu and the escalation offer share `compositionMenuOpen`, and this
+           * tail only knew how to reopen the first: after a redraw the offer simply vanished — or,
+           * on a section with compositions, came back as the *other* menu. A redraw that did not
+           * rebuild the section used to be rare (a panel opening); since ADR 0061 the zoom changes
+           * with the window, so resizing the window redrew the chrome and closed the offer under
+           * the owner's hand. Found by the chrome-words sweep, which resizes with each state open.
+           * After a patch that rebuilt the section the old offer is gone and this reads `false`,
+           * which is the behaviour that was there before.
+           */
+          const offerWasOpen = target.querySelector(".rb-escalate") !== null;
           select(target, "restore");
-          if (compositionMenuOpen.current) {
+          if (
+            compositionMenuOpen.current &&
+            offerWasOpen &&
+            designToolsNow.current &&
+            !isHandDesigned(docNow.current, remembered)
+          ) {
+            const offer = escalateOffer(remembered);
+            target.appendChild(offer);
+            anchorPopup(offer, target);
+            const opener = target.querySelector<HTMLElement>(
+              '.rb-actions [data-action="handmade"]',
+            );
+            if (opener) wirePopup(offer, opener);
+          } else if (compositionMenuOpen.current) {
             const compositions = compositionsFor(docNow.current, remembered);
             if (compositions.length > 0) {
               const menu = compositionMenu(remembered, compositions);
@@ -3427,6 +3518,28 @@ export function Editor({
    * document.
    */
   function drawGaps(iframeDoc: Document) {
+    /*
+     * **An open insertion menu survives the redraw** (sprint 31 día 1). The gaps are drawn from a
+     * clean slate, and the menu lives inside its gap, so every redraw closed it. A redraw with no
+     * edit used to be rare — a panel opening; since ADR 0061 the zoom changes with the window and
+     * `onZoomChange` redraws the chrome, so resizing the window shut the menu under the owner's
+     * hand, search text and all — found by the chrome-words sweep, which resizes with each state
+     * open. So: which gap held it, what was typed, and whether the keyboard was in it, read before
+     * the slate is cleared and put back after. Only while the page has as many sections as it had:
+     * after a structural patch the index no longer names the same place, and the menu closes as
+     * before.
+     */
+    const gapsBefore = [...iframeDoc.querySelectorAll<HTMLElement>(".rb-gap")];
+    const openMenu = iframeDoc.querySelector<HTMLElement>(".rb-gap .rb-menu");
+    const reopen = openMenu
+      ? {
+          index: gapsBefore.findIndex((row) => row.contains(openMenu)),
+          sections: iframeDoc.querySelectorAll("[data-section]").length,
+          query: openMenu.querySelector<HTMLInputElement>(".rb-menu-search")?.value ?? "",
+          focused: openMenu.contains(iframeDoc.activeElement),
+        }
+      : null;
+
     // Drawn from a clean slate, like `.rb-menu`, `.rb-toolbar` and `.rb-hole` already are: a second
     // pass over a document that has its gaps must replace them, never add a second row of pills
     // under each. `wireOnce`'s mark is what stops the second pass; this is what makes one harmless.
@@ -3607,6 +3720,22 @@ export function Editor({
 
     for (const [index, section] of sections.entries()) section.before(gap(index));
     sections[sections.length - 1]?.after(gap(sections.length));
+
+    // The menu that was open, back in the gap that held it, with what had been typed in it.
+    if (reopen && reopen.index >= 0 && reopen.sections === sections.length) {
+      const row = iframeDoc.querySelectorAll<HTMLElement>(".rb-gap")[reopen.index];
+      const pill = row?.querySelector<HTMLElement>(".rb-pill");
+      if (row && pill) {
+        const panel = menu(reopen.index, pill);
+        row.appendChild(panel);
+        const search = panel.querySelector<HTMLInputElement>(".rb-menu-search");
+        if (search && reopen.query !== "") {
+          search.value = reopen.query;
+          search.dispatchEvent(new (iframeDoc.defaultView ?? window).Event("input"));
+        }
+        if (reopen.focused) search?.focus({ preventScroll: true });
+      }
+    }
 
     /**
      * **The room after the page, so that zooming out clamps nothing** (sprint 28 día 1,
@@ -6735,7 +6864,15 @@ export function Editor({
       // Only a bar that was not there a document ago plays its entrance — see `barredSections`.
       // Measured after inserting, because the height is 44px in the canvas's desktop width and 75
       // at 320 once «Volver a la original» wraps, and only the DOM knows which.
-      if (!barredSections.current.has(sectionId)) {
+      //
+      // **And not one that lands at or above what is being read** (sprint 31 día 1,
+      // `readingPoint`): there `redrawChrome` gives the height back to the scroll at once, so
+      // nothing is seen to arrive, and an entrance would move the section down frame by frame
+      // after it had been put back — the moving margin is what defeated the browser's anchoring.
+      if (
+        !barredSections.current.has(sectionId) &&
+        !atOrAboveReading(element, readingSectionOf(iframeDoc, readingPoint.current))
+      ) {
         bar.style.setProperty("--rb-enter-offset", `${bar.offsetHeight}px`);
         bar.classList.add("rb-handmade-in");
       }
