@@ -31,7 +31,7 @@ import {
   type SectionRow,
   schemeSwatch,
   sectionsMobilePatch,
-  sectionsRowPatch,
+  sectionsPositionPatch,
 } from "../editor/headerState.ts";
 import {
   PANEL_WIDTH,
@@ -457,8 +457,8 @@ export function MenuPanel({
         {state.sectionsMenu.drawn ? (
           <Check
             label={es["editor.menuPanel.sectionsRow"]}
-            checked={state.sectionsRow === "own"}
-            onChange={(own) => onSetHeader(sectionsRowPatch(doc, own ? "own" : "shared"))}
+            checked={state.sectionsPosition === "row"}
+            onChange={(own) => onSetHeader(sectionsPositionPatch(doc, own ? "row" : "bar"))}
             notes={[es["editor.menuPanel.sectionsRowNote"]]}
           />
         ) : null}

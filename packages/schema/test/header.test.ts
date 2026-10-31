@@ -6,8 +6,11 @@ import {
   deleteSection,
   LOGO_MAX_EDGE,
   menuLabelIssue,
+  PAGES_POSITIONS,
   pageToSection,
   parseDocument,
+  SECTIONS_ON_MOBILE,
+  SECTIONS_POSITIONS,
   sectionToPage,
   setHeader,
   setHeaderAction,
@@ -292,5 +295,48 @@ describe("setHeader", () => {
     expect(() => logo({ width: LOGO_MAX_EDGE + 1, height: 205 })).toThrow();
     expect(() => logo({ width: 0, height: 205 })).toThrow();
     expect(() => logo({ width: 512.5, height: 205 })).toThrow();
+  });
+});
+
+/**
+ * **Each menu has its place, from a closed vocabulary** (ADR 0060, sprint 31 día 2). Every word is a
+ * zone a future drag will drop a menu on, and nothing outside the words is a place: an unknown
+ * position is refused, and so is the key 1.16.0 had, `sections.row`, which `position: "row"` replaced.
+ */
+describe("where each menu sits", () => {
+  it("takes every position of the vocabulary, for each menu", () => {
+    for (const position of PAGES_POSITIONS) {
+      expect(() => documentWith({ pages: { position } }), position).not.toThrow();
+    }
+    for (const position of SECTIONS_POSITIONS) {
+      expect(() => documentWith({ sections: { position } }), position).not.toThrow();
+    }
+    for (const mobile of SECTIONS_ON_MOBILE) {
+      expect(() => documentWith({ sections: { mobile } }), mobile).not.toThrow();
+    }
+    expect(PAGES_POSITIONS).toEqual(["bar", "left", "right"]);
+    expect(SECTIONS_POSITIONS).toEqual(["bar", "row", "left", "right", "fold"]);
+    expect(SECTIONS_ON_MOBILE).toEqual(["row", "hidden", "fold"]);
+  });
+
+  it("refuses a place that is not a zone, and the row key 1.17.0 replaced", () => {
+    const raw = (header: Record<string, unknown>) =>
+      documentWith(header as RetorikaDocument["header"]);
+    expect(() => raw({ pages: { position: "row" } })).toThrow();
+    expect(() => raw({ pages: { position: "fold" } })).toThrow();
+    expect(() => raw({ sections: { position: "top" } })).toThrow();
+    expect(() => raw({ sections: { row: "own" } })).toThrow();
+    expect(() => raw({ sections: { row: "shared" } })).toThrow();
+  });
+
+  it("keeps a position beside `shown: false`, and the brand's place as a plain preference", () => {
+    // A place the owner chose stays while the menu is off, the way `mobile` always has.
+    expect(() =>
+      documentWith({ pages: { shown: false, position: "left" }, brandWithPages: true }),
+    ).not.toThrow();
+    expect(() => documentWith({ brandWithPages: false })).not.toThrow();
+    expect(() =>
+      documentWith({ brandWithPages: "yes" } as unknown as RetorikaDocument["header"]),
+    ).toThrow();
   });
 });

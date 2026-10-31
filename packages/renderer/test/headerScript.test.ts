@@ -90,6 +90,24 @@ describe("the header's script", () => {
     expect(html.indexOf("<script>")).toBeGreaterThan(html.indexOf("</main>"));
   });
 
+  /**
+   * **Across the page, not only inside the bar** (ADR 0060, sprint 31 día 2): a menu in a rail is the
+   * header's child but not the bar's, and the «Ir a…» disclosure of día 3 stands apart from both. The
+   * bar is what it measures and what it marks scrolled; the links and the disclosures it reads off the
+   * whole document; and the observer only keeps clear of a bar that is fixed over the page.
+   */
+  it("reads the menus and their disclosures across the page, and keeps clear only of a fixed bar", () => {
+    expect(HEADER_SCRIPT).toContain(
+      "d.querySelectorAll('details.rb-nav-narrow,details.rb-nav-fold')",
+    );
+    expect(HEADER_SCRIPT).toContain(`d.querySelectorAll('.rb-nav a[href^="#"]')`);
+    expect(HEADER_SCRIPT).not.toContain("b.querySelector('details");
+    expect(HEADER_SCRIPT).not.toContain("b.querySelectorAll('.rb-nav");
+    expect(HEADER_SCRIPT).toContain("rootMargin:'-'+(fixed?b.offsetHeight:0)+'px");
+    // And it still parses: hand-minified text is the one place a typo would reach every site.
+    expect(() => new Function(HEADER_SCRIPT)).not.toThrow();
+  });
+
   it("never reaches the dom target, which is the editor's canvas", () => {
     const fragment = render(site("Taberna", 3), "dom");
     expect(fragment.querySelector("script")).toBeNull();

@@ -48,6 +48,9 @@ export {
   headerPhoneRow,
   headerSettings,
   homeMenuLabel,
+  RAIL_FOLD_WIDTH,
+  RAIL_WIDTH,
+  TWO_RAILS_FOLD_WIDTH,
 } from "./header.ts";
 export { HEADER_SCRIPT } from "./headerScript.ts";
 export type { PageEntry, SectionEntry } from "./menu.ts";

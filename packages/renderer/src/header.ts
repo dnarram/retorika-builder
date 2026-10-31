@@ -8,7 +8,10 @@ import {
   type HeaderPart,
   hrefForPage,
   type Page,
+  type PagesPosition,
   type RetorikaDocument,
+  type SectionsOnMobile,
+  type SectionsPosition,
 } from "@retorika/schema";
 import { safeUrl } from "./escape.ts";
 import es from "./locales/es.json" with { type: "json" };
@@ -42,8 +45,18 @@ import { styleDeclarations } from "./styleCss.ts";
  *   <a class="rb-nav-action" href="…">Reservar</a>                 the one button, every width
  *   <details class="rb-nav-narrow"><summary>Menú</summary> <nav Páginas> </details>   phones
  *   <nav class="rb-nav rb-nav-row" aria-label="Secciones">…</nav>  a row of its own, or the phone's
+ *   <div class="rb-rail" data-side="left|right">[brand] <nav …> [<nav …>] [button]</div>   0–2 rails
  * </header>
  * ```
+ *
+ * **Each menu has its place, and the rail is one mechanism for both** (ADR 0060, sprint 31). A menu
+ * placed `left` or `right` gets a copy in a rail — a fixed column the height of the window, beside
+ * the content, `<main>` and the bar keeping its width free — and **the bar keeps every copy it had**,
+ * because the bar is where a rail falls: below 1024 px every rail does, and between 1024 and 1247 the
+ * sections' rail does when the two menus sit on opposite sides. Which copy is seen at a width is
+ * `display: none`, the one way to take a landmark out of the accessibility tree. With the pages in a
+ * rail the owner may send the brand and the button there too (`brandWithPages`); a bar left with
+ * nothing to draw on a wide screen collapses to nothing (`data-bar="none"`).
  *
  * **The pages menu folds, the sections menu does not.** On a phone the pages go behind a `<summary>`
  * — a disclosure every browser exposes as a button with its expanded state, and the only one that
@@ -68,8 +81,10 @@ import { styleDeclarations } from "./styleCss.ts";
 export interface HeaderSettings {
   pagesShown: boolean;
   sectionsShown: boolean;
-  sectionsRow: "shared" | "own";
-  sectionsMobile: "row" | "hidden";
+  pagesPosition: PagesPosition;
+  sectionsPosition: SectionsPosition;
+  sectionsMobile: SectionsOnMobile;
+  brandWithPages: boolean;
   layout: HeaderLayout;
   brandName: boolean;
   logo: HeaderLogo | undefined;
@@ -98,8 +113,10 @@ export function headerSettings(doc: RetorikaDocument): HeaderSettings {
   return {
     pagesShown: header.pages?.shown ?? derived,
     sectionsShown: header.sections?.shown ?? derived,
-    sectionsRow: header.sections?.row ?? "shared",
+    pagesPosition: header.pages?.position ?? "bar",
+    sectionsPosition: header.sections?.position ?? "bar",
     sectionsMobile: header.sections?.mobile ?? "row",
+    brandWithPages: header.brandWithPages ?? false,
     layout,
     brandName: header.brand?.name ?? false,
     logo: header.brand?.logo,
@@ -119,6 +136,19 @@ export function headerSettings(doc: RetorikaDocument): HeaderSettings {
  * (`packages/publisher/src/site.ts`). Written out rather than imported: everything in this package
  * travels to the client's site and the dependency allowlist admits two packages. */
 const ENTRY_FILE = "./index.html";
+
+/**
+ * **The rail's width, and the two widths under which rails fall into the bar** (ADR 0060). Exported
+ * because the editor's «Menú» panel says, from the canvas's own layout width, whether the column is
+ * seen there — and a sentence about what the owner sees must read the numbers that draw it.
+ *
+ * 240 px, under the plan's ceiling of 256: at 1024 px a window then keeps 784 for the content, over
+ * the 768 the overflow suite already proves. Two rails on opposite sides need 1248 for the same 768
+ * between them, so under it the sections' rail falls first; under 1024 every rail does.
+ */
+export const RAIL_WIDTH = 240;
+export const RAIL_FOLD_WIDTH = 1024;
+export const TWO_RAILS_FOLD_WIDTH = 1248;
 
 /** The href that reaches `page` from wherever the visitor is: the entry file for the first page. */
 function hrefTo(doc: RetorikaDocument, page: Page): string {
@@ -307,7 +337,8 @@ function brandNode(
 function lookAttributes(doc: RetorikaDocument, settings: HeaderSettings): Record<string, string> {
   return {
     "data-layout": settings.layout,
-    "data-sections": settings.sectionsRow,
+    "data-pages": settings.pagesPosition,
+    "data-sections": settings.sectionsPosition,
     "data-bg": settings.background,
     "data-align": settings.align,
     "data-gap": settings.gap,
@@ -327,31 +358,52 @@ function lookAttributes(doc: RetorikaDocument, settings: HeaderSettings): Record
 export function headerNodes(doc: RetorikaDocument, current: Page): RenderNode[] {
   if (!headerDrawn(doc)) return [];
   const settings = headerSettings(doc);
+  // **The disclosure is día 3's** (ADR 0060). The schema holds `fold` from 1.17.0, the one migration
+  // the sprint costs, and nothing in the editor can write it before the panel of día 5 — so a
+  // document that names it reaches this renderer only by hand, and an explicit error is the honest
+  // answer: an empty place is what would be published otherwise.
+  if (settings.sectionsPosition === "fold" || settings.sectionsMobile === "fold") {
+    throw new Error(
+      "The sections menu's «Ir a…» disclosure (`fold`) is drawn from sprint 31 día 3 (ADR 0060); this renderer does not draw it yet.",
+    );
+  }
   const action = actionEntry(doc, current);
   const pages = settings.pagesShown ? pagesLinks(doc, current, action) : [];
   const sections = settings.sectionsShown ? sectionsLinks(current, action) : [];
   const brand = brandNode(doc, current, settings);
   if (!brand && !action && pages.length === 0 && sections.length === 0) return [];
 
+  // Which rail holds what, on this page: a menu with no entries here has no rail here either.
+  const pagesSide: "left" | "right" | null =
+    settings.pagesPosition === "bar" || pages.length === 0 ? null : settings.pagesPosition;
+  const sectionsSide: "left" | "right" | null =
+    (settings.sectionsPosition === "left" || settings.sectionsPosition === "right") &&
+    sections.length > 0
+      ? settings.sectionsPosition
+      : null;
+  // The brand and the button go with the pages only where the pages are drawn in a rail (David's
+  // condition): with the pages menu off or in the bar, the brand stays where it was.
+  const brandGoes =
+    settings.brandWithPages && pagesSide !== null && (brand !== undefined || action !== undefined);
+  const buttonNode = (entry: ActionEntry) =>
+    element("a", { class: "rb-nav-action", "data-part": "action", href: entry.href }, [
+      entry.label,
+    ]);
+
   const children: RenderNode[] = [];
   if (brand) children.push(brand);
 
-  // The wide bar: the pages, and the sections when they share it. Left out entirely when it would
-  // hold nothing — an empty strip is not navigation, and nothing is announced for it.
+  // The wide bar: the pages, and the sections when their place is the bar or a rail — a rail's
+  // copy here is where it falls on a narrower screen. Left out entirely when it would hold nothing:
+  // an empty strip is not navigation, and nothing is announced for it.
   const wide: RenderNode[] = [];
   if (pages.length > 0) wide.push(navNode(es["nav.pages"], "pagesLinks", pages));
-  if (sections.length > 0 && settings.sectionsRow === "shared") {
+  if (sections.length > 0 && settings.sectionsPosition !== "row") {
     wide.push(navNode(es["nav.sections"], "sectionsLinks", sections));
   }
   if (wide.length > 0) children.push(element("div", { class: "rb-nav-wide" }, wide));
 
-  if (action) {
-    children.push(
-      element("a", { class: "rb-nav-action", "data-part": "action", href: action.href }, [
-        action.label,
-      ]),
-    );
-  }
+  if (action) children.push(buttonNode(action));
 
   // The phone's disclosure holds the pages alone. A `<details>` and never a checkbox (ADR 0016), and
   // never an empty one: with no pages there is nothing to fold, and the row below is the whole menu.
@@ -364,10 +416,10 @@ export function headerNodes(doc: RetorikaDocument, current: Page): RenderNode[] 
     );
   }
 
-  // The sections as a row of their own: at every width when the owner gave them one, and on the
-  // phone when they share the bar and the owner kept them. `data-mobile` is what the stylesheet
-  // reads to hide the row below 720px; the wide copy inside the bar is hidden there regardless.
-  const rowAtAllWidths = settings.sectionsRow === "own";
+  // The sections as a row of their own: at every width when that is their place, and on the phone
+  // when the owner kept them there. `data-mobile` is what the stylesheet reads to hide the row below
+  // 720px; the wide copy inside the bar is hidden there regardless.
+  const rowAtAllWidths = settings.sectionsPosition === "row";
   const rowOnPhone = settings.sectionsMobile === "row";
   if (sections.length > 0 && (rowAtAllWidths || rowOnPhone)) {
     const row = navNode(
@@ -380,9 +432,53 @@ export function headerNodes(doc: RetorikaDocument, current: Page): RenderNode[] 
     children.push(row);
   }
 
+  // **The rails, after the bar and before `<main>`**: a keyboard reaches the skip link, the bar, the
+  // rails and then the page — the order the eye reads a page with a column at its side, and the
+  // reason a rail on the right still comes before the content in the document. Fresh nodes, as the
+  // phone's disclosure takes: a copy is its own element, never a second parent for the same one.
+  const rails: ("left" | "right")[] = [];
+  for (const side of ["left", "right"] as const) {
+    const held: RenderNode[] = [];
+    if (brandGoes && pagesSide === side) {
+      const ownBrand = brandNode(doc, current, settings);
+      if (ownBrand) held.push(ownBrand);
+    }
+    if (pagesSide === side) {
+      held.push(navNode(es["nav.pages"], "pagesLinks", pagesLinks(doc, current, action)));
+    }
+    if (sectionsSide === side) {
+      held.push(navNode(es["nav.sections"], "sectionsLinks", sectionsLinks(current, action)));
+    }
+    if (brandGoes && pagesSide === side && action) held.push(buttonNode(action));
+    if (held.length === 0) continue;
+    rails.push(side);
+    children.push(element("div", { class: "rb-rail", "data-side": side }, held));
+  }
+
+  // **A bar with nothing left to draw on a wide screen collapses** (David's condition): every menu
+  // here is in a rail, and the brand and the button went with the pages or were never there. It is
+  // still the element that holds the rails — one banner for the site's navigation, the copies it
+  // falls back to — but at the widths where the rails stand it is no height at all.
+  const barEmpty =
+    rails.length > 0 &&
+    (brand === undefined || brandGoes) &&
+    (action === undefined || brandGoes) &&
+    (pages.length === 0 || pagesSide !== null) &&
+    (sections.length === 0 || sectionsSide !== null);
+
   return [
     element("a", { class: "rb-skip", href: "#rb-main" }, [es["nav.skip"]]),
-    element("header", { class: "rb-header", ...lookAttributes(doc, settings) }, children),
+    element(
+      "header",
+      {
+        class: "rb-header",
+        ...lookAttributes(doc, settings),
+        ...(rails.length > 0 ? { "data-rails": rails.join(" ") } : {}),
+        ...(brandGoes ? { "data-brand": "pages" } : {}),
+        ...(barEmpty ? { "data-bar": "none" } : {}),
+      },
+      children,
+    ),
   ];
 }
 
@@ -408,6 +504,12 @@ const PART_SELECTOR: Record<HeaderPart, string> = {
 function headerStyleCss(doc: RetorikaDocument): string[] {
   const style = doc.header?.style;
   if (!style) return [];
+  // **The rail is the bar's** (ADR 0060): one colour behind the words, wherever the words stand —
+  // and only for a document that has a rail, so a saved site without one keeps its exact bytes.
+  const selectorOf = (part: HeaderPart) =>
+    part === "bar" && usesRail(headerSettings(doc))
+      ? `${PART_SELECTOR.bar}, ${PART_SELECTOR.bar} .rb-rail`
+      : PART_SELECTOR[part];
   const rules: string[] = [];
   for (const part of HEADER_PARTS) {
     const own = style[part];
@@ -418,7 +520,7 @@ function headerStyleCss(doc: RetorikaDocument): string[] {
       part === "bar" ? { color: "background" } : {},
     );
     if (declarations.length > 0) {
-      rules.push(`${PART_SELECTOR[part]} { ${declarations.join("; ")}; }`);
+      rules.push(`${selectorOf(part)} { ${declarations.join("; ")}; }`);
     }
   }
   return rules.length === 0 ? [] : ["/* rule 6: the header's own style */", ...rules];
@@ -515,7 +617,7 @@ export function headerCss(doc: RetorikaDocument): string[] {
     // The sections row: a full line of its own under the bar. Shown at every width when the owner
     // gave the sections their own row; otherwise it is the phone's copy and hidden here.
     ".rb-nav-row { flex-basis: 100%; }",
-    ".rb-header[data-sections=shared] .rb-nav-row { display: none; }",
+    ".rb-header:not([data-sections=row]) .rb-nav-row { display: none; }",
     // Three layouts. Centred puts everything on one centred line; stacked gives the brand a line
     // of its own and centres the rest under it.
     ".rb-header[data-layout=centered] { justify-content: center; }",
@@ -584,8 +686,105 @@ export function headerCss(doc: RetorikaDocument): string[] {
     "html[data-rb-js] .rb-header[data-sticky][data-bg=transparent] { position: fixed; }",
     ".rb-header[data-sticky][data-bg=transparent][data-scrolled] { background: var(--color-surface);",
     "  border-bottom: 1px solid var(--color-muted); }",
+    ...railCss(doc),
     ...headerStyleCss(doc),
     "",
+  ];
+}
+
+/** Whether this document places a menu in a rail at all — the stylesheet's rail block travels only
+ * then, so no site that does not use a column carries a byte of it. */
+function usesRail(settings: HeaderSettings): boolean {
+  return (
+    settings.pagesPosition !== "bar" ||
+    settings.sectionsPosition === "left" ||
+    settings.sectionsPosition === "right"
+  );
+}
+
+/**
+ * **The rail** (ADR 0060): one column, fixed beside the content, the same for both menus. Hidden by
+ * default and shown from `RAIL_FOLD_WIDTH` up, so under it — tablets, phones — no rail exists for
+ * anybody and the bar's copies are the menu; between `RAIL_FOLD_WIDTH` and `TWO_RAILS_FOLD_WIDTH` the
+ * sections' rail of a two-rail page falls into the bar as well.
+ *
+ * - **`overflow: hidden auto` and not `auto`**: one non-visible axis turns the other `auto`, and a box
+ *   that scrolls sideways exempts what is inside it from the overflow walk (`insideScroller`). A rail
+ *   scrolls down when its entries outgrow the window, and never across.
+ * - **The bar's scheme**, background and words, because a rail is the bar standing up: a
+ *   `transparent` bar's rail is `surface`, since nothing lies under a column to show through.
+ * - **`<main>` and the bar both keep the rail's width free**, so a full-height column never covers
+ *   the brand or the first section. The rails are fixed, so the header's own margin does not move
+ *   them.
+ * - **z-index 2**, under the skip link's 3: the first Tab stop is drawn over a rail on the left.
+ */
+function railCss(doc: RetorikaDocument): string[] {
+  const settings = headerSettings(doc);
+  if (!usesRail(settings)) return [];
+  const wide = `@media (min-width: ${RAIL_FOLD_WIDTH}px)`;
+  const between = `@media (min-width: ${RAIL_FOLD_WIDTH}px) and (max-width: ${TWO_RAILS_FOLD_WIDTH - 1}px)`;
+  const both = `@media (min-width: ${TWO_RAILS_FOLD_WIDTH}px)`;
+  // The bar collapses where every rail it relies on stands: from 1024 with one rail, from 1248 with
+  // two. `[data-layout]` is for weight, to win over the fixed transparent bar's own scheme.
+  const collapse = (header: string) => [
+    `  ${header} { padding: 0; border-bottom: 0; background: transparent; box-shadow: none; }`,
+    `  ${header}[data-sticky] ~ main [data-section] { scroll-margin-top: 0; }`,
+    `  ${header}[data-bg=transparent] + main > .rb-section:first-child { padding-top: var(--space-xl); }`,
+  ];
+  return [
+    "/* the rail (ADR 0060) */",
+    `.rb-rail { display: none; position: fixed; top: 0; bottom: 0; z-index: 2; box-sizing: border-box;`,
+    `  width: ${RAIL_WIDTH}px; flex-direction: column; align-items: flex-start; gap: var(--space-lg);`,
+    "  padding: var(--space-xl) var(--space-lg); overflow: hidden auto;",
+    "  background: var(--color-surface); line-height: 1.3; }",
+    ".rb-rail[data-side=left] { left: 0; border-right: 1px solid var(--color-muted); }",
+    ".rb-rail[data-side=right] { right: 0; border-left: 1px solid var(--color-muted); }",
+    ".rb-rail > .rb-nav { flex-direction: column; flex-wrap: nowrap; }",
+    // Stacked, the two menus are told apart by a rule above the second, not beside it.
+    ".rb-rail > .rb-nav + .rb-nav { align-self: stretch; padding-left: 0; border-left: 0;",
+    "  padding-top: var(--space-lg); border-top: 1px solid var(--color-muted); }",
+    ".rb-rail > .rb-nav-action { margin-left: 0; }",
+    ".rb-header[data-hairline=none] .rb-rail,",
+    ".rb-header:is([data-bg=primary], [data-bg=secondary], [data-bg=ink]) .rb-rail {",
+    "  border-left: 0; border-right: 0; }",
+    ".rb-header[data-bg=primary] .rb-rail { background: var(--color-primary); }",
+    ".rb-header[data-bg=secondary] .rb-rail { background: var(--color-secondary); }",
+    ".rb-header[data-bg=ink] .rb-rail { background: var(--color-ink); }",
+    ".rb-header:is([data-bg=primary], [data-bg=secondary], [data-bg=ink]) .rb-rail > .rb-nav + .rb-nav {",
+    "  border-top-color: var(--color-surface); }",
+    `${wide} {`,
+    "  .rb-rail { display: flex; }",
+    // The bar's copy of whatever stands in a rail, and the brand and button that went with the pages.
+    "  .rb-header[data-pages=left] .rb-nav-wide > [data-part=pagesLinks],",
+    "  .rb-header[data-pages=right] .rb-nav-wide > [data-part=pagesLinks],",
+    "  .rb-header[data-sections=left] .rb-nav-wide > [data-part=sectionsLinks],",
+    "  .rb-header[data-sections=right] .rb-nav-wide > [data-part=sectionsLinks],",
+    "  .rb-header[data-brand=pages] > .rb-brand, .rb-header[data-brand=pages] > .rb-nav-action {",
+    "    display: none; }",
+    // With the pages' copy hidden, the sections are the first thing in the strip: `+` still
+    // matches a hidden sibling, and the rule that tells the two menus apart drew a line beside
+    // nothing (seen in Chromium at 1100 px on sprint 31 día 2, before this line).
+    "  .rb-header[data-pages=left] .rb-nav-wide > .rb-nav + .rb-nav,",
+    "  .rb-header[data-pages=right] .rb-nav-wide > .rb-nav + .rb-nav { padding-left: 0; border-left: 0; }",
+    `  .rb-header[data-rails~=left], .rb-header[data-rails~=left] ~ main { margin-left: ${RAIL_WIDTH}px; }`,
+    `  .rb-header[data-rails~=right], .rb-header[data-rails~=right] ~ main { margin-right: ${RAIL_WIDTH}px; }`,
+    ...collapse('.rb-header[data-layout][data-bar=none]:not([data-rails="left right"])'),
+    "}",
+    // Two rails, too narrow for both: the sections' rail falls into the bar, and its side's margin
+    // with it.
+    `${between} {`,
+    '  .rb-header[data-rails="left right"][data-sections=left] > .rb-rail[data-side=left],',
+    '  .rb-header[data-rails="left right"][data-sections=right] > .rb-rail[data-side=right] {',
+    "    display: none; }",
+    '  .rb-header[data-rails="left right"] .rb-nav-wide > [data-part=sectionsLinks] { display: flex; }',
+    '  .rb-header[data-rails="left right"][data-sections=left],',
+    '  .rb-header[data-rails="left right"][data-sections=left] ~ main { margin-left: 0; }',
+    '  .rb-header[data-rails="left right"][data-sections=right],',
+    '  .rb-header[data-rails="left right"][data-sections=right] ~ main { margin-right: 0; }',
+    "}",
+    `${both} {`,
+    ...collapse('.rb-header[data-layout][data-bar=none][data-rails="left right"]'),
+    "}",
   ];
 }
 
@@ -618,7 +817,7 @@ export function headerMobileCss(doc: RetorikaDocument): string[] {
     "  .rb-nav-narrow { display: block; margin-left: auto; }",
     "  .rb-nav-action + .rb-nav-narrow { margin-left: 0; }",
     // `[data-sections]` is here for weight and not for its value: the rule above that hides the
-    // row on a wide screen names `[data-sections=shared]` and weighs (0,3,0), and a plain
+    // row on a wide screen names `:not([data-sections=row])` and weighs (0,3,0), and a plain
     // `.rb-header .rb-nav-row` (0,2,0) lost to it at every width — found in the browser, where the
     // phone's row was simply not there. The hidden case below weighs the same and comes later.
     // `justify-content: flex-start` whatever the owner's alignment: in a box that scrolls sideways,

@@ -172,7 +172,7 @@ describe("the section in view", () => {
   it('carries aria-current="location" on its entry, and the entry moves as the page scrolls', async () => {
     // The sections share the bar here, so the wide `<nav Secciones>` is the one marked.
     const page = await open(
-      withHeader({ sections: { row: "shared", shown: true }, action: undefined }),
+      withHeader({ sections: { position: "bar", shown: true }, action: undefined }),
       1280,
     );
     try {

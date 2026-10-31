@@ -113,6 +113,9 @@ export type {
   HeaderPart,
   MenuLabelIssue,
   MenuLabelTarget,
+  PagesPosition,
+  SectionsOnMobile,
+  SectionsPosition,
 } from "./header.ts";
 export {
   HEADER_ALIGNMENTS,
@@ -130,8 +133,9 @@ export {
   MENU_LABEL_MIN,
   menuLabelIssue,
   menuLabelSchema,
+  PAGES_POSITIONS,
   SECTIONS_ON_MOBILE,
-  SECTIONS_ROWS,
+  SECTIONS_POSITIONS,
   UNLABELLED_SECTIONS,
 } from "./header.ts";
 export { setHeader, setHeaderAction, setMenuLabel } from "./headerVerbs.ts";

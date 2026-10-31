@@ -46,10 +46,27 @@ export const HEADER_ALIGNMENTS = ["start", "center", "end"] as const;
 export const HEADER_GAPS = ["sm", "md", "lg"] as const;
 export const HEADER_SIZES = ["body", "small"] as const;
 
-/** Whether the sections menu shares the bar with the pages menu or takes a row of its own. */
-export const SECTIONS_ROWS = ["shared", "own"] as const;
-/** What becomes of the sections menu on a phone: a horizontal row under the bar, or nothing. */
-export const SECTIONS_ON_MOBILE = ["row", "hidden"] as const;
+/**
+ * **Where each menu sits, from a closed vocabulary — and every word of it is a zone** (ADR 0060,
+ * sprint 31). The positions are exactly the places a future drag gesture will drop a menu on, so no
+ * position exists without a zone to drop it on and no zone without a position: a menu's place is a
+ * reference to a zone of the page, never a coordinate, which is what rule 4 has refused three times.
+ *
+ * `bar` is the header as it was — the strip above `<main>`, the menus side by side — and an absent
+ * position means it, so every document written before 1.17.0 publishes the header it always did.
+ * `left` and `right` are the rail: one column, fixed beside the content, the same mechanism for both
+ * menus (on the same side they stack in it). The sections menu has two more: `row`, its own line
+ * under the bar (what `sections.row: "own"` was until 1.17.0), and `fold`, a disclosure «Ir a…» on
+ * its own (drawn from sprint 31 día 3).
+ */
+export const PAGES_POSITIONS = ["bar", "left", "right"] as const;
+export type PagesPosition = (typeof PAGES_POSITIONS)[number];
+export const SECTIONS_POSITIONS = ["bar", "row", "left", "right", "fold"] as const;
+export type SectionsPosition = (typeof SECTIONS_POSITIONS)[number];
+/** What becomes of the sections menu on a phone, whatever its place on a wide screen: a horizontal
+ * row under the bar, nothing, or the «Ir a…» disclosure beside «Menú» (sprint 31). */
+export const SECTIONS_ON_MOBILE = ["row", "hidden", "fold"] as const;
+export type SectionsOnMobile = (typeof SECTIONS_ON_MOBILE)[number];
 
 /** The parts of the header an owner may dress one by one (rule 6, read by the renderer from day 2). */
 export const HEADER_PARTS = ["bar", "brand", "pagesLinks", "sectionsLinks", "action"] as const;
@@ -130,15 +147,25 @@ export type HeaderAction = z.infer<typeof headerActionSchema>;
 export const headerSchema = z.strictObject({
   /** The pages menu. `shown` absent means the derivation ADR 0043 fixed: the threshold of three,
    * waived once the owner has curated. Present, it is the owner's word and the threshold is silent. */
-  pages: z.strictObject({ shown: z.boolean().optional() }).optional(),
-  /** The sections menu of the page being drawn — same reading of `shown`. */
+  pages: z
+    .strictObject({
+      shown: z.boolean().optional(),
+      position: z.enum(PAGES_POSITIONS).optional(),
+    })
+    .optional(),
+  /** The sections menu of the page being drawn — same reading of `shown`. A `position` kept while
+   * `shown` is false is a preference the owner made, and stays for when the menu comes back. */
   sections: z
     .strictObject({
       shown: z.boolean().optional(),
-      row: z.enum(SECTIONS_ROWS).optional(),
+      position: z.enum(SECTIONS_POSITIONS).optional(),
       mobile: z.enum(SECTIONS_ON_MOBILE).optional(),
     })
     .optional(),
+  /** «La marca y el botón van con el menú de páginas» (ADR 0060): with the pages menu in a rail, the
+   * brand and the button go into that rail too. Honoured only where the pages menu is drawn in a
+   * rail; anywhere else the brand stays in the bar, and a key that does nothing is not an error. */
+  brandWithPages: z.boolean().optional(),
   /** One destination drawn as a button, with the same words its menu entry would have. The
    * destination leaves the menu it would otherwise sit in: one destination, one place. */
   action: headerActionSchema.optional(),
