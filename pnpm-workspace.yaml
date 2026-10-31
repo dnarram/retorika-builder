@@ -52,6 +52,7 @@ overrides:
   "vite@<8.3.3": ">=8.3.3"
   "fast-uri@<3.1.9": ">=3.1.9"
   "zod@<4.6.6": "^4.6.6"
+  "glob@>=9.0.0 <14.0.2": "^14.0.2"
 # `fast-uri` below 3.1.9 is GHSA-w74x-v6f9-j3xg and GHSA-wjr9-j795-jxcr, both moderate: a scheme
 # spoofed through percent-encoding, and a host confused by unchecked WHATWG canonicalization. It
 # arrives twice, under `lighthouse` (`ajv`, and `ajv-formats`'s own `ajv`) — the protocol's Part 8.5
@@ -66,3 +67,16 @@ overrides:
 # the install; a development tool that reaches no client's site. `^4.6.6` rather than `>=` because
 # that dependency's own range stops at the major, and an override must not take it past what it
 # accepts.
+# `glob` from 9.0.0 to 14.0.1 is GHSA-3g3m-2fjr-6pw4 (moderate: an `AbortSignal` cancellation can be
+# bypassed and the walk goes on after its timeout), and the `minimatch` it brings, below 11.0.1, is
+# GHSA-g3hv-75wg-m249 (moderate: a denial of service by amplifying glob parts). Both arrive one way,
+# `@sentry/nextjs` → `@sentry/bundler-plugins` → `glob` 13.0.6 → `minimatch` 10.2.6, and neither is
+# ever run here: the bundler plugin is Sentry's build-time source-map uploader, and
+# `apps/editor/next.config.ts` does not call `withSentryConfig` — so it reaches no client's site and
+# not even our build, ADR 0001 again. Pinned rather than excepted because 14.0.2 is published, and
+# **this is the one line here that takes a dependency past the range it asks for**: the bundler
+# plugin wants `^13.0.6`, in its latest release (11.10.0) as in ours, so no upgrade of Sentry closes
+# it. What it uses is `import { glob } from "glob"` — the named async walk, the same from 9 to 14 —
+# and `glob` 14 asks for `minimatch ^11.0.0`, which retires the second advisory with no line of its
+# own. Checked on 31 October 2026 with the editor's production build and the observability tests,
+# which load `@sentry/nextjs`.
