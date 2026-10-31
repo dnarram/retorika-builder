@@ -43,6 +43,41 @@ export const PHONE_BREAKPOINT = 720;
 export const NARROWEST_DESKTOP = PHONE_BREAKPOINT + 1;
 
 /**
+ * The width the desktop canvas lays out at, whatever the window (ADR 0061, sprint 31 día 1).
+ *
+ * It used to be «whatever room the panels leave, floored at `NARROWEST_DESKTOP`» — so the same
+ * document was a different page at every window size and with every panel: at a 1440 window the
+ * frame was 1168 wide with no panel and 948 with one, and a header rail that folds below 1024 would
+ * have folded in the canvas the moment the owner chose it (measured 30 October 2026, the sprint 31
+ * plan's table). The published site is measured at 1280 — the overflow suite, Lighthouse — so the
+ * canvas shows that page and scales it to the room there is.
+ */
+export const DESKTOP_LAYOUT_WIDTH = 1280;
+
+/**
+ * The least the preview may be zoomed out to and still be read: David's floor, set on 26 October
+ * 2026 while approving sprint 28 («fija un suelo de legibilidad, propongo 0,6»). Under it the canvas
+ * gives up width rather than legibility (`desktopLayoutWidth`), and says so on the card.
+ */
+export const CANVAS_ZOOM_FLOOR = 0.6;
+
+/**
+ * The layout width for the room a desktop canvas has: `DESKTOP_LAYOUT_WIDTH` wherever that still
+ * zooms at or above `CANVAS_ZOOM_FLOOR` (768 px of room and up), narrower where it would not — down
+ * to the width the floor allows, never under `NARROWEST_DESKTOP`, which is the page still being the
+ * desktop page. The two floors meet at 433 px of room; below that the desktop floor wins and the
+ * zoom goes under 0.6, as it did before this function existed (a 768 tablet with a panel open).
+ *
+ * Measured on 30 October 2026 in Chromium before this was written: room 1008 / 788 at a 1280
+ * window (no panel / «Menú»), 1168 / 948 at 1440, 1408 / 1188 at 1680, 752 / 532 at 1024 — so the
+ * zooms this gives are 0.79 / 0.62, 0.91 / 0.74, 1 / 0.93, and 0.6 / 0.6 with the width lowered to
+ * 1253 and 887.
+ */
+export function desktopLayoutWidth(available: number): number {
+  return Math.min(DESKTOP_LAYOUT_WIDTH, Math.max(available / CANVAS_ZOOM_FLOOR, NARROWEST_DESKTOP));
+}
+
+/**
  * Half a pixel, and never more — the same tolerance the browser harness uses.
  *
  * Sub-pixel rounding puts a box a few hundredths past its parent on perfectly ordinary layouts,

@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import es from "../locales/es.json" with { type: "json" };
 import { accountSentence } from "./accountSentence.ts";
 import type { SwitchNotice } from "./designTools.ts";
-import { NARROWEST_DESKTOP, NARROWEST_WIDTH } from "./overflowCheck.ts";
+import { DESKTOP_LAYOUT_WIDTH, desktopLayoutWidth, NARROWEST_WIDTH } from "./overflowCheck.ts";
 import { overscrollFor } from "./overscroll.ts";
 
 /**
@@ -795,17 +795,28 @@ export function EditorShell({
    * silently became the phone layout, while the device toggle still read desktop. At 1280px
    * «Listas» did it too, at 717.
    *
-   * So the layout width is held at `NARROWEST_DESKTOP` and the card is scaled down to the room
-   * there is. The page stays the page; it only gets smaller. And the floor is the least zoom-out
-   * that keeps it desktop, which is «la mayor área de edición dentro de las posibilidades» stated
-   * as a number rather than a preference.
+   * So the layout width was held at `NARROWEST_DESKTOP` and the card scaled down to the room there
+   * is — until sprint 31 día 1 (ADR 0061), when the room stopped deciding the width at all. Held at
+   * the floor, the canvas was still a different page at every window and with every panel: 1168
+   * wide at a 1440 window, 948 with a panel open, 1008 and 788 at 1280 (measured 30 October 2026).
+   * A hand-designed section escalated with a panel open wrote the panel's width into its rows
+   * (sprint 28's open item), and the header rail of sprint 31, which folds below 1024, would have
+   * folded in the canvas the moment the owner chose it. **The canvas lays out at
+   * `DESKTOP_LAYOUT_WIDTH` — 1280, the width the published page is measured at — and scales to the
+   * room there is**: what the owner sees is what a visitor at 1280 sees, smaller when a panel is
+   * open and never different.
    *
-   * **Measured, not assumed**: `ResizeObserver` on the box the card lives in. The width depends on
+   * Under David's legibility floor of 0.6 the canvas gives up width before legibility
+   * (`desktopLayoutWidth`), and the card says so («Vista a N px», below), so the one place the
+   * canvas is not the 1280 page is the one place it says it is not.
+   *
+   * **Measured, not assumed**: `ResizeObserver` on the box the card lives in. The room depends on
    * the window, the rail, and which panel is open — three things no constant here could predict,
    * and the previous attempt to predict one is what varied by 200px between panels.
    *
    * `zoom` is never above 1: a preview magnified past its own size would be showing the owner
-   * something no visitor will ever see.
+   * something no visitor will ever see — so at a 1680 window with no panel the card is 1280 wide
+   * at zoom 1, with the table's grey either side.
    */
   const canvasArea = useRef<HTMLDivElement>(null);
   const [available, setAvailable] = useState(0);
@@ -921,11 +932,17 @@ export function EditorShell({
     return () => observer.disconnect();
   }, []);
 
-  // Before the first measurement `available` is 0, and the fallback is "no zoom": a card at its
-  // natural width for one frame is a far better first paint than one scaled by a guess.
-  const layoutWidth =
-    device === "mobile" ? NARROWEST_WIDTH : Math.max(available, NARROWEST_DESKTOP);
+  // Before the first measurement `available` is 0, and the fallback is "no zoom": a card at the
+  // narrowest desktop width for one frame is a far better first paint than one scaled by a guess.
+  const layoutWidth = device === "mobile" ? NARROWEST_WIDTH : desktopLayoutWidth(available);
   const zoom = available > 0 && layoutWidth > available ? available / layoutWidth : 1;
+  // The one state in which the desktop canvas is not the 1280 page (ADR 0061): under the
+  // legibility floor it is laid out narrower, and the card says at what width. Not before the
+  // first measurement, which would announce the fallback as a fact.
+  const viewWidth =
+    device === "desktop" && available > 0 && layoutWidth < DESKTOP_LAYOUT_WIDTH
+      ? Math.round(layoutWidth)
+      : null;
 
   // After the card has its new `transform` and height in the DOM, which is what the canvas
   // measures, and **before the browser lays them out**, so the room the page is given arrives in
@@ -1405,47 +1422,82 @@ export function EditorShell({
           // `tablet:`/`studio:` where this said `sm:`: the wide gutters start at 721 instead of
           // 640, and on a phone the row keeps 8px a side so the 320px mobile canvas sits at zoom 1
           // from a 336px window up.
-          className={`flex flex-grow gap-6 overflow-hidden pt-6 phone:px-2 phone:pt-3 ${
-            panel ? "px-6" : "px-6 tablet:px-24 studio:px-24"
-          }`}
+          // On a phone the gutter above the canvas is 12px, too short for the width notice; it grows
+          // to the desktop's 24 only while the notice is drawn (the desktop view on a phone).
+          className={`flex flex-grow gap-6 overflow-hidden pt-6 phone:px-2 ${
+            viewWidth === null ? "phone:pt-3" : ""
+          } ${panel ? "px-6" : "px-6 tablet:px-24 studio:px-24"}`}
         >
-          <div
-            ref={canvasArea}
-            data-testid="canvas-area"
-            className="flex flex-grow justify-center overflow-hidden"
-          >
+          {/* **The width notice lives in the gutter above the card, never over it** (ADR 0061 §2).
+              Over the card it covered the canvas's own hint line at 1024 — measured in the first
+              screenshot of sprint 31 día 1. The gutter is the row's 24px top padding, which the
+              row's `overflow: hidden` does not clip (it clips at the padding box), so a box anchored
+              to the bottom-full of this wrapper sits there without moving the card a pixel.
+
+              A wrapper and not a sibling: the walks read the row's children — the first is the
+              canvas, the last the open panel — so the row keeps exactly the children it had.
+              `min-w-0` here and on `canvas-area` because the card is laid out wider than the room
+              (1280 in 532) and a flex item's automatic minimum is its content's. */}
+          <div className="relative flex min-w-0 flex-grow">
+            {viewWidth !== null && (
+              <p
+                data-testid="canvas-view-width"
+                className="pointer-events-none absolute bottom-full left-1/2 mb-[2px] -translate-x-1/2 whitespace-nowrap rounded-ui border border-ui-border bg-ui-surface px-2 py-px text-[11px] leading-4 font-medium text-ui-muted"
+              >
+                {es["editor.canvas.viewWidth"].replace("{px}", String(viewWidth))}
+              </p>
+            )}
+            {/* **`overflow: clip`, never `hidden`: the box that holds the card clips it and is not
+                a scroll container** (sprint 31 día 1, measured). Under a zoom the card is laid out
+                `100 / zoom %` tall and scaled back, and `transform` takes no layout space — so the
+                card's layout box is taller than this one by `height × (1 / zoom − 1)`. With
+                `hidden` that excess was scrollable by script, and the canvas's own
+                `scrollIntoView` (an entry of the header taking the canvas to its section) scrolled
+                *this* box too: at 1440 with no panel it sat 83 px down, exactly 868 × (1 / 0.9125 −
+                1), the page's top was cut off under the editor's row, and a press on the header
+                landed on the row. It had been there at 1024 with a panel open since the canvas
+                learned to zoom; ADR 0061 made a zoom under 1 every laptop's case and the sprint 30
+                día 3 walk found it. `clip` paints the same and cannot be scrolled by anything. It is
+                not a scroll container, so the flex minimum that `hidden` used to zero is zeroed by
+                `min-w-0` instead. */}
             <div
-              data-testid="canvas-card"
-              className={`flex shrink-0 flex-col overflow-hidden rounded-ui bg-ui-surface shadow-ui-1 ${
-                changingDevice ? "ui-reflow" : ""
-              }`}
-              // Ends the moment the width has actually arrived. Nothing schedules a fallback: a
-              // run with reduced motion never starts a transition, and leaving the class on an
-              // idle card costs nothing — it only matters while a width is changing.
-              onTransitionEnd={(event) => {
-                if (event.propertyName === "width") setChangingDevice(false);
-              }}
-              // **The width the pre-download gate measures, imported rather than written again.**
-              // This was 400 from the day the chrome was built — a number with no recorded reason,
-              // chosen because it is narrow enough for the renderer's own responsive CSS to take
-              // over, which 720 already decides. Meanwhile `overflowCheck` warns about what sticks
-              // out **at 320**, and its own words are «Míralo en la vista de móvil» — sending the
-              // owner to a canvas where the thing it just measured does not happen. Mockup 14 draws
-              // the phone frame at 330px with 12px of padding, so the page inside it is about 304:
-              // the drawing was never 400 either. One number, and it lives where the gate is.
-              style={{
-                width: layoutWidth,
-                // `transform` takes no layout space, so the card still *occupies* `layoutWidth`
-                // and overflows its container evenly on both sides; scaling about the top centre
-                // then pulls it back to exactly the space there is. The height is divided by the
-                // same factor so the shrunk card still fills the row instead of leaving a band of
-                // grey below it.
-                height: zoom < 1 ? `${100 / zoom}%` : "100%",
-                transform: zoom < 1 ? `scale(${zoom})` : undefined,
-                transformOrigin: "top center",
-              }}
+              ref={canvasArea}
+              data-testid="canvas-area"
+              className="flex min-w-0 flex-grow justify-center overflow-clip"
             >
-              {children}
+              <div
+                data-testid="canvas-card"
+                className={`flex shrink-0 flex-col overflow-hidden rounded-ui bg-ui-surface shadow-ui-1 ${
+                  changingDevice ? "ui-reflow" : ""
+                }`}
+                // Ends the moment the width has actually arrived. Nothing schedules a fallback: a
+                // run with reduced motion never starts a transition, and leaving the class on an
+                // idle card costs nothing — it only matters while a width is changing.
+                onTransitionEnd={(event) => {
+                  if (event.propertyName === "width") setChangingDevice(false);
+                }}
+                // **The width the pre-download gate measures, imported rather than written again.**
+                // This was 400 from the day the chrome was built — a number with no recorded reason,
+                // chosen because it is narrow enough for the renderer's own responsive CSS to take
+                // over, which 720 already decides. Meanwhile `overflowCheck` warns about what sticks
+                // out **at 320**, and its own words are «Míralo en la vista de móvil» — sending the
+                // owner to a canvas where the thing it just measured does not happen. Mockup 14 draws
+                // the phone frame at 330px with 12px of padding, so the page inside it is about 304:
+                // the drawing was never 400 either. One number, and it lives where the gate is.
+                style={{
+                  width: layoutWidth,
+                  // `transform` takes no layout space, so the card still *occupies* `layoutWidth`
+                  // and overflows its container evenly on both sides; scaling about the top centre
+                  // then pulls it back to exactly the space there is. The height is divided by the
+                  // same factor so the shrunk card still fills the row instead of leaving a band of
+                  // grey below it.
+                  height: zoom < 1 ? `${100 / zoom}%` : "100%",
+                  transform: zoom < 1 ? `scale(${zoom})` : undefined,
+                  transformOrigin: "top center",
+                }}
+              >
+                {children}
+              </div>
             </div>
           </div>
           {panel}
