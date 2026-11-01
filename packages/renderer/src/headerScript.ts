@@ -22,7 +22,9 @@
  *    30 día 6 walk in the ZIP), and an anchor then landed 3 px under the bar.
  * 2. Escape, and a pointer outside, close an open `<details>` of the header — the phone's «Menú» and,
  *    from sprint 31, the «Ir a…» disclosure — and give the focus back to its `<summary>`: the two
- *    things a `<details>` does not do by itself.
+ *    things a `<details>` does not do by itself. **Choosing an entry closes it too** (sprint 31 día
+ *    3): «Ir a…» holds anchors on the page being read, and a panel left open over the section the
+ *    visitor asked for covers it. The click closes it and the browser still follows the link.
  * 3. `data-scrolled` on a fixed bar once the page has scrolled: the stylesheet draws the shadow.
  * 4. The entry of the section most in view carries `aria-current="location"` (an
  *    `IntersectionObserver`; nothing on a browser without one, and nothing wrong either) — every copy
@@ -50,7 +52,7 @@ export const HEADER_SCRIPT = [
   "if('ResizeObserver' in window)new ResizeObserver(measure).observe(b,{box:'border-box'});",
   "[].slice.call(d.querySelectorAll('details.rb-nav-narrow,details.rb-nav-fold')).forEach(function(det){var sum=det.querySelector('summary');",
   "d.addEventListener('keydown',function(e){if(e.key==='Escape'&&det.open){det.open=false;if(sum)sum.focus()}});",
-  "d.addEventListener('click',function(e){if(det.open&&!det.contains(e.target))det.open=false})});",
+  "d.addEventListener('click',function(e){if(det.open&&(!det.contains(e.target)||e.target.closest('a')))det.open=false})});",
   "var fixed=b.hasAttribute('data-sticky');",
   "if(fixed){var scrolled=function(){if(scrollY>0)b.setAttribute('data-scrolled','');else b.removeAttribute('data-scrolled')};",
   "scrolled();addEventListener('scroll',scrolled,{passive:true});}",

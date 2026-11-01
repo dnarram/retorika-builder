@@ -6,6 +6,7 @@ import {
   closeCombination,
   contrastCombinations,
   geometryCombinations,
+  headerCombinations,
   longTextCombinations,
   openCombination,
   scaleCombinations,
@@ -186,6 +187,53 @@ describe("overflow — geometry (every section, one palette, one type pair)", ()
  * fit breaks rather than sticking out. That protection is what this suite is standing on, which is
  * exactly why it has to be measured in a browser and not reasoned about.
  */
+/**
+ * **Each menu's place** (ADR 0060, sprint 31 día 3): the header combinations with a rail or «Ir a…»,
+ * at the phone, at the width a rail stands from, at the width two rails stand from, and at the
+ * reference — 320, 1024, 1248, 1280 — with every disclosure open, since an open panel is where an
+ * entry would run past the edge.
+ *
+ * **And neither a rail nor the disclosure's panel scrolls sideways.** `measureOverflow` exempts what
+ * is inside a box that does, so a column with `overflow: auto` would hide its own entries from this
+ * suite — asserted on the computed style, because a column with nothing too wide in it scrolls
+ * nowhere and would pass any measurement of its scroll.
+ */
+describe("overflow — each menu's place (rails and «Ir a…»)", () => {
+  const placed = headerCombinations().filter((c) => /\/(pages-|three-columns\/|fold\/)/.test(c.id));
+  for (const c of placed) {
+    for (const width of [320, 1024, 1248, 1280]) {
+      it(`${c.id} @ ${width}px`, async () => {
+        const page = await openCombination(browser, c, width);
+        try {
+          await page.evaluate(() => {
+            for (const d of document.querySelectorAll("details")) {
+              (d as HTMLDetailsElement).open = true;
+            }
+          });
+          const { scrollWidth, innerWidth, offender } = await measureOverflow(page);
+          const where = `${c.id} @ ${width}px`;
+          expect(
+            offender,
+            `${where}: ${offender?.selector} ends at ${offender?.right}px, past the ${innerWidth}px viewport`,
+          ).toBeNull();
+          expect(scrollWidth, `${where}: page scrolls horizontally`).toBeLessThanOrEqual(
+            innerWidth,
+          );
+          const scrollers = await page.evaluate(() =>
+            [...document.querySelectorAll<HTMLElement>(".rb-rail, .rb-nav-fold > .rb-nav")]
+              .filter((el) => el.checkVisibility())
+              .map((el) => `${el.className}: ${getComputedStyle(el).overflowX}`)
+              .filter((line) => /: (auto|scroll)$/.test(line)),
+          );
+          expect(scrollers, `${where}: scrolls sideways`).toEqual([]);
+        } finally {
+          await closeCombination(page);
+        }
+      });
+    }
+  }
+});
+
 describe("overflow — the scale (every section, the widest scale)", () => {
   for (const c of scaleCombinations()) {
     for (const width of WIDTHS) checkFits(c, width);

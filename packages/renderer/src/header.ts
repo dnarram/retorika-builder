@@ -43,6 +43,7 @@ import { styleDeclarations } from "./styleCss.ts";
  *   <a class="rb-brand" href="./index.html">[logo] Name</a>        a <span> on the home page
  *   <div class="rb-nav-wide"> <nav Páginas> <nav Secciones> </div>  wide screens
  *   <a class="rb-nav-action" href="…">Reservar</a>                 the one button, every width
+ *   <details class="rb-nav-fold"><summary>Ir a…</summary> <nav Secciones> </details>   «Ir a…»
  *   <details class="rb-nav-narrow"><summary>Menú</summary> <nav Páginas> </details>   phones
  *   <nav class="rb-nav rb-nav-row" aria-label="Secciones">…</nav>  a row of its own, or the phone's
  *   <div class="rb-rail" data-side="left|right">[brand] <nav …> [<nav …>] [button]</div>   0–2 rails
@@ -56,7 +57,9 @@ import { styleDeclarations } from "./styleCss.ts";
  * sections' rail does when the two menus sit on opposite sides. Which copy is seen at a width is
  * `display: none`, the one way to take a landmark out of the accessibility tree. With the pages in a
  * rail the owner may send the brand and the button there too (`brandWithPages`); a bar left with
- * nothing to draw on a wide screen collapses to nothing (`data-bar="none"`).
+ * nothing to draw on a wide screen collapses to nothing (`data-bar="none"`). The sections have one
+ * place more, **«Ir a…»** (`fold`, sprint 31 día 3): a disclosure fixed under the bar on a wide
+ * screen, and a word beside «Menú» on a phone, whichever of the two the owner chose it for.
  *
  * **The pages menu folds, the sections menu does not.** On a phone the pages go behind a `<summary>`
  * — a disclosure every browser exposes as a button with its expanded state, and the only one that
@@ -358,15 +361,6 @@ function lookAttributes(doc: RetorikaDocument, settings: HeaderSettings): Record
 export function headerNodes(doc: RetorikaDocument, current: Page): RenderNode[] {
   if (!headerDrawn(doc)) return [];
   const settings = headerSettings(doc);
-  // **The disclosure is día 3's** (ADR 0060). The schema holds `fold` from 1.17.0, the one migration
-  // the sprint costs, and nothing in the editor can write it before the panel of día 5 — so a
-  // document that names it reaches this renderer only by hand, and an explicit error is the honest
-  // answer: an empty place is what would be published otherwise.
-  if (settings.sectionsPosition === "fold" || settings.sectionsMobile === "fold") {
-    throw new Error(
-      "The sections menu's «Ir a…» disclosure (`fold`) is drawn from sprint 31 día 3 (ADR 0060); this renderer does not draw it yet.",
-    );
-  }
   const action = actionEntry(doc, current);
   const pages = settings.pagesShown ? pagesLinks(doc, current, action) : [];
   const sections = settings.sectionsShown ? sectionsLinks(current, action) : [];
@@ -395,15 +389,36 @@ export function headerNodes(doc: RetorikaDocument, current: Page): RenderNode[] 
 
   // The wide bar: the pages, and the sections when their place is the bar or a rail — a rail's
   // copy here is where it falls on a narrower screen. Left out entirely when it would hold nothing:
-  // an empty strip is not navigation, and nothing is announced for it.
+  // an empty strip is not navigation, and nothing is announced for it. A row of their own and the
+  // disclosure are places of their own at every wide width, so neither leaves a copy here.
   const wide: RenderNode[] = [];
   if (pages.length > 0) wide.push(navNode(es["nav.pages"], "pagesLinks", pages));
-  if (sections.length > 0 && settings.sectionsPosition !== "row") {
+  if (
+    sections.length > 0 &&
+    settings.sectionsPosition !== "row" &&
+    settings.sectionsPosition !== "fold"
+  ) {
     wide.push(navNode(es["nav.sections"], "sectionsLinks", sections));
   }
   if (wide.length > 0) children.push(element("div", { class: "rb-nav-wide" }, wide));
 
   if (action) children.push(buttonNode(action));
+
+  // **«Ir a…»** (ADR 0060, sprint 31 día 3): the sections behind a `<summary>`, one element for both
+  // of its places. On a wide screen it is the sections' place when the owner chose `fold`, fixed
+  // under the bar; on a phone it is the sections' place when the owner chose `fold` there, in the bar
+  // beside «Menú». `data-mobile` is what the stylesheet reads for the phone, as on the row. After the
+  // button and before «Menú», so the keyboard meets it where the eye does on both: under the button
+  // on a wide screen, and left of «Menú» on a phone, which keeps the edge of the screen for the menu.
+  const foldWide = settings.sectionsPosition === "fold" && sections.length > 0;
+  if (sections.length > 0 && (foldWide || settings.sectionsMobile === "fold")) {
+    children.push(
+      element("details", { class: "rb-nav-fold", "data-mobile": settings.sectionsMobile }, [
+        element("summary", {}, [es["nav.goTo"]]),
+        navNode(es["nav.sections"], "sectionsLinks", sectionsLinks(current, action)),
+      ]),
+    );
+  }
 
   // The phone's disclosure holds the pages alone. A `<details>` and never a checkbox (ADR 0016), and
   // never an empty one: with no pages there is nothing to fold, and the row below is the whole menu.
@@ -456,15 +471,16 @@ export function headerNodes(doc: RetorikaDocument, current: Page): RenderNode[] 
   }
 
   // **A bar with nothing left to draw on a wide screen collapses** (David's condition): every menu
-  // here is in a rail, and the brand and the button went with the pages or were never there. It is
-  // still the element that holds the rails — one banner for the site's navigation, the copies it
-  // falls back to — but at the widths where the rails stand it is no height at all.
+  // here is in a rail or in the disclosure, and the brand and the button went with the pages or were
+  // never there. It is still the element that holds the rails and the disclosure — one banner for
+  // the site's navigation, the copies it falls back to — but at the widths where they stand it is no
+  // height at all.
   const barEmpty =
-    rails.length > 0 &&
+    (rails.length > 0 || foldWide) &&
     (brand === undefined || brandGoes) &&
     (action === undefined || brandGoes) &&
     (pages.length === 0 || pagesSide !== null) &&
-    (sections.length === 0 || sectionsSide !== null);
+    (sections.length === 0 || sectionsSide !== null || foldWide);
 
   return [
     element("a", { class: "rb-skip", href: "#rb-main" }, [es["nav.skip"]]),
@@ -551,8 +567,15 @@ export function headerCss(doc: RetorikaDocument): string[] {
     // and a line of text — for the anchors to land under a fixed bar and for the cover to make
     // room under a transparent one. The script refines it with `offsetHeight` where it runs.
     "html { --rb-header-h: calc(2 * var(--space-md) + max(40px, 1.5 * var(--size-body))); }",
-    // Smooth, and only for somebody who has not asked their system for less motion (David's point 7).
-    "@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }",
+    // **Motion, and only for somebody who has not asked their system for less** (David's point 7 on
+    // sprint 30, and his third condition on sprint 31): the smooth scroll, and the rule under the
+    // current entry fading in and out as the visitor moves through the page. Every `transition` and
+    // `animation` of the header lives in a block like this one — the rail's and the disclosure's in
+    // their own, emitted with them — and `header.test.ts` walks the sheet to hold it.
+    "@media (prefers-reduced-motion: no-preference) {",
+    "  html { scroll-behavior: smooth; }",
+    "  .rb-nav a { transition: text-decoration-color 200ms ease-out; }",
+    "}",
     // The bar. One flex row that wraps: brand, the wide strip pushed to the far side, the button,
     // and — on its own line when it has one — the sections row. A hairline under it, so it reads
     // as a bar rather than as the page's top padding — the same `color.muted` rule `.rb-item`
@@ -583,8 +606,11 @@ export function headerCss(doc: RetorikaDocument): string[] {
     // What tells the two groups apart for an eye: the accessible name does it for a screen reader,
     // and this does it without adding a word of copy to every published page.
     ".rb-nav + .rb-nav { padding-left: var(--space-xl); border-left: 1px solid var(--color-muted); }",
+    // **The rule under every entry is always there, in no colour** (sprint 31 día 3): a colour is what
+    // a transition can move, and `none` → `underline` is not. At rest the page looks as it did; the
+    // current entry's rule below takes the entry's own colour back with the shorthand.
     ".rb-nav a { color: var(--color-primary); font-family: var(--font-heading);",
-    "  font-size: var(--size-body); text-decoration: none; }",
+    "  font-size: var(--size-body); text-decoration: underline transparent; text-underline-offset: 6px; }",
     // Not colour alone: the entry for the page you are on carries a rule under it as well, and so
     // does the entry of the section in view once the script marks it (`aria-current="location"`).
     ".rb-nav a[aria-current] { text-decoration: underline; text-underline-offset: 6px;",
@@ -687,6 +713,7 @@ export function headerCss(doc: RetorikaDocument): string[] {
     ".rb-header[data-sticky][data-bg=transparent][data-scrolled] { background: var(--color-surface);",
     "  border-bottom: 1px solid var(--color-muted); }",
     ...railCss(doc),
+    ...foldCss(doc),
     ...headerStyleCss(doc),
     "",
   ];
@@ -700,6 +727,27 @@ function usesRail(settings: HeaderSettings): boolean {
     settings.sectionsPosition === "left" ||
     settings.sectionsPosition === "right"
   );
+}
+
+/** Whether this document puts the sections behind «Ir a…» at any width — the disclosure's block
+ * travels only then, like the rail's. */
+function usesFold(settings: HeaderSettings): boolean {
+  return settings.sectionsPosition === "fold" || settings.sectionsMobile === "fold";
+}
+
+/**
+ * The rules that collapse a bar with nothing left to draw (`data-bar="none"`), for the widths where
+ * what it gave away stands elsewhere. `[data-layout]` is for weight, to win over the fixed
+ * transparent bar's own scheme. **`--rb-header-h` is zero on the header itself**, so what hangs from
+ * the bar's height inside it — the disclosure's `top` — reads the height the bar really has even
+ * where no script measures it, as in the editor's canvas; what lies outside it gets its own zero.
+ */
+function collapseBar(header: string): string[] {
+  return [
+    `  ${header} { --rb-header-h: 0px; padding: 0; border-bottom: 0; background: transparent; box-shadow: none; }`,
+    `  ${header}[data-sticky] ~ main [data-section] { scroll-margin-top: 0; }`,
+    `  ${header}[data-bg=transparent] + main > .rb-section:first-child { padding-top: var(--space-xl); }`,
+  ];
 }
 
 /**
@@ -725,12 +773,7 @@ function railCss(doc: RetorikaDocument): string[] {
   const between = `@media (min-width: ${RAIL_FOLD_WIDTH}px) and (max-width: ${TWO_RAILS_FOLD_WIDTH - 1}px)`;
   const both = `@media (min-width: ${TWO_RAILS_FOLD_WIDTH}px)`;
   // The bar collapses where every rail it relies on stands: from 1024 with one rail, from 1248 with
-  // two. `[data-layout]` is for weight, to win over the fixed transparent bar's own scheme.
-  const collapse = (header: string) => [
-    `  ${header} { padding: 0; border-bottom: 0; background: transparent; box-shadow: none; }`,
-    `  ${header}[data-sticky] ~ main [data-section] { scroll-margin-top: 0; }`,
-    `  ${header}[data-bg=transparent] + main > .rb-section:first-child { padding-top: var(--space-xl); }`,
-  ];
+  // two (`collapseBar`).
   return [
     "/* the rail (ADR 0060) */",
     `.rb-rail { display: none; position: fixed; top: 0; bottom: 0; z-index: 2; box-sizing: border-box;`,
@@ -752,6 +795,17 @@ function railCss(doc: RetorikaDocument): string[] {
     ".rb-header[data-bg=ink] .rb-rail { background: var(--color-ink); }",
     ".rb-header:is([data-bg=primary], [data-bg=secondary], [data-bg=ink]) .rb-rail > .rb-nav + .rb-nav {",
     "  border-top-color: var(--color-surface); }",
+    // **In a column the current entry is marked by a bar at its edge**, not by the rule under it: a
+    // list read down is scanned along its edge. Every entry keeps the bar's room, in no colour, so
+    // nothing moves when the mark arrives — and the negative margin keeps the words in line with the
+    // brand and the button above and below them.
+    ".rb-rail .rb-nav a { padding-left: var(--space-sm); margin-left: calc(-1 * var(--space-sm));",
+    "  box-shadow: inset 3px 0 0 transparent; }",
+    ".rb-rail .rb-nav a[aria-current] { text-decoration-color: transparent;",
+    "  box-shadow: inset 3px 0 0 currentColor; }",
+    "@media (prefers-reduced-motion: no-preference) {",
+    "  .rb-rail .rb-nav a { transition: text-decoration-color 200ms ease-out, box-shadow 200ms ease-out; }",
+    "}",
     `${wide} {`,
     "  .rb-rail { display: flex; }",
     // The bar's copy of whatever stands in a rail, and the brand and button that went with the pages.
@@ -768,7 +822,7 @@ function railCss(doc: RetorikaDocument): string[] {
     "  .rb-header[data-pages=right] .rb-nav-wide > .rb-nav + .rb-nav { padding-left: 0; border-left: 0; }",
     `  .rb-header[data-rails~=left], .rb-header[data-rails~=left] ~ main { margin-left: ${RAIL_WIDTH}px; }`,
     `  .rb-header[data-rails~=right], .rb-header[data-rails~=right] ~ main { margin-right: ${RAIL_WIDTH}px; }`,
-    ...collapse('.rb-header[data-layout][data-bar=none]:not([data-rails="left right"])'),
+    ...collapseBar('.rb-header[data-layout][data-bar=none]:not([data-rails="left right"])'),
     "}",
     // Two rails, too narrow for both: the sections' rail falls into the bar, and its side's margin
     // with it.
@@ -783,7 +837,96 @@ function railCss(doc: RetorikaDocument): string[] {
     '  .rb-header[data-rails="left right"][data-sections=right] ~ main { margin-right: 0; }',
     "}",
     `${both} {`,
-    ...collapse('.rb-header[data-layout][data-bar=none][data-rails="left right"]'),
+    ...collapseBar('.rb-header[data-layout][data-bar=none][data-rails="left right"]'),
+    "}",
+  ];
+}
+
+/**
+ * **«Ir a…»** (ADR 0060, sprint 31 día 3): the sections behind one `<summary>`, in two places. Hidden
+ * by default, like the rail, and shown where the owner put it.
+ *
+ * - **On a wide screen** (`data-sections=fold`, from 721 px) it floats, fixed, at the far side of the
+ *   page — **under the bar, always**: its distance from the top is the bar's height *plus* a space
+ *   (David's adjustment 2 and his erratum, with the sign written out). A fixed bar stays above it at
+ *   every scroll; a bar in the flow is above it at the top of the page and scrolls away from it after.
+ *   A bare `top: var(--space-md)` would have drawn it inside the bar at the top of the page, over the
+ *   button. `header.browser.test.ts` measures the empty intersection and the sum.
+ * - **On a phone** (`data-mobile=fold`, to 720 px) it is a word in the bar beside «Menú», and its open
+ *   panel hangs under the whole bar as «Menú»'s does: one line, not the second row ADR 0043 refused.
+ * - **The side** is the header's `data-rails`, never a measurement (adjustment 3): with the sections
+ *   in the disclosure the only rail is the pages', so the disclosure takes the side that rail leaves
+ *   free — the right unless the rail is there.
+ * - **Its open panel is bounded by the window** and scrolls inside itself, down and never across, for
+ *   the reason the rail does: a sideways scroller exempts its entries from the overflow walk.
+ * - **The bar's scheme**, as the phone's «Menú» panel takes it — background and words, and `surface`
+ *   for a transparent bar, since what floats over the page has nothing under it to show through.
+ */
+function foldCss(doc: RetorikaDocument): string[] {
+  const settings = headerSettings(doc);
+  if (!usesFold(settings)) return [];
+  const coloured = ":is([data-bg=primary], [data-bg=secondary], [data-bg=ink])";
+  const placed = ".rb-header[data-sections=fold] .rb-nav-fold";
+  return [
+    "/* «Ir a…» (ADR 0060) */",
+    ".rb-nav-fold { display: none; padding: 0; }",
+    ".rb-nav-fold > summary { color: var(--color-primary); font-family: var(--font-heading);",
+    "  font-size: var(--size-body); cursor: pointer; }",
+    ".rb-nav-fold > .rb-nav { position: absolute; left: 0; right: 0; top: 100%; z-index: 2;",
+    "  flex-direction: column; flex-wrap: nowrap; gap: var(--space-sm);",
+    "  padding: var(--space-md) var(--space-lg);",
+    "  background: var(--color-surface); border-bottom: 1px solid var(--color-muted); }",
+    ".rb-header[data-size=small] .rb-nav-fold > summary { font-size: calc(var(--size-body) * 0.875); }",
+    ".rb-header[data-uppercase] .rb-nav-fold > summary { text-transform: uppercase; letter-spacing: 0.06em; }",
+    `.rb-header${coloured} .rb-nav-fold > summary { color: var(--color-surface); }`,
+    ".rb-header[data-bg=primary] .rb-nav-fold > :is(summary, .rb-nav) { background: var(--color-primary); }",
+    ".rb-header[data-bg=secondary] .rb-nav-fold > :is(summary, .rb-nav) { background: var(--color-secondary); }",
+    ".rb-header[data-bg=ink] .rb-nav-fold > :is(summary, .rb-nav) { background: var(--color-ink); }",
+    // Its panel comes in: from 4 px above, out of nothing — one `animation` on the element, filled
+    // backwards (sprint 22's two traps: two animations on one box fight, and an unfilled one flashes
+    // its end state for a frame).
+    "@keyframes rb-fold-in { from { opacity: 0; transform: translateY(-4px); } }",
+    "@media (prefers-reduced-motion: no-preference) {",
+    "  .rb-nav-fold[open] > .rb-nav { animation: rb-fold-in 200ms ease-out backwards; }",
+    "}",
+    "@media (min-width: 721px) {",
+    `  ${placed} { display: block; position: fixed; z-index: 2;`,
+    "    top: calc(var(--rb-header-h) + var(--space-md)); right: var(--space-md); }",
+    `  ${placed} > summary { padding: var(--space-sm) var(--space-md); background: var(--color-surface);`,
+    "    border: 1px solid var(--color-muted); border-radius: var(--radius-sm);",
+    "    box-shadow: 0 8px 24px -16px var(--color-ink); }",
+    // `width: max-content` because an absolute box sizes to its containing block, which here is the
+    // `<details>` — as wide as «Ir a…» — and every entry would wrap to that. Bounded by the window,
+    // the summary above it and a space below.
+    `  ${placed} > .rb-nav { left: auto; right: 0; top: calc(100% + var(--space-xs));`,
+    "    box-sizing: border-box; width: max-content; min-width: 100%;",
+    "    max-width: min(320px, calc(100vw - 2 * var(--space-md)));",
+    "    max-height: calc(100vh - var(--rb-header-h) - 4 * var(--space-md) - 1.5 * var(--size-body));",
+    "    overflow: hidden auto; border: 1px solid var(--color-muted); border-radius: var(--radius-sm);",
+    "    box-shadow: 0 8px 24px -16px var(--color-ink); }",
+    `  .rb-header${coloured} .rb-nav-fold > :is(summary, .rb-nav) { border: 0; }`,
+    // Nothing left in the bar but the disclosure, and no rail: the bar is no height from here.
+    ...collapseBar(".rb-header[data-layout][data-bar=none]:not([data-rails])"),
+    "}",
+    ...(usesRail(settings)
+      ? [
+          `@media (min-width: ${RAIL_FOLD_WIDTH}px) {`,
+          `  .rb-header[data-sections=fold][data-rails=right] .rb-nav-fold { right: auto; left: var(--space-md); }`,
+          `  .rb-header[data-sections=fold][data-rails=right] .rb-nav-fold > .rb-nav { right: auto; left: 0; }`,
+          "}",
+        ]
+      : []),
+    "@media (max-width: 720px) {",
+    // **The bar's words close up when «Ir a…» joins them.** Measured at 320 px with «Taberna Santo
+    // Domingo», its logo, «Contacto», «Ir a…» and «Menú»: at the phone's usual 16 px between them the
+    // brand had 21 px left and its 40 px logo ran 3 px over the button. At 8 px it has 45: the logo
+    // whole and the name cut to nothing, which is what the ellipsis is for.
+    "  .rb-header:has(> .rb-nav-fold[data-mobile=fold]) { column-gap: var(--space-sm); }",
+    "  .rb-header[data-sections] .rb-nav-fold[data-mobile=fold] { display: block; }",
+    "  .rb-nav-fold[data-mobile=fold] { margin-left: auto; }",
+    // A hidden sibling still matches `+` (sprint 31 día 2), so the rule names the one that is drawn.
+    "  .rb-nav-action + .rb-nav-fold[data-mobile=fold],",
+    "  .rb-nav-fold[data-mobile=fold] + .rb-nav-narrow { margin-left: 0; }",
     "}",
   ];
 }

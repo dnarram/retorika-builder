@@ -9,6 +9,7 @@ import {
   geometryCombinations,
   headerCombinations,
   openCombination,
+  railCombinations,
 } from "./browser-fixtures.ts";
 
 /**
@@ -71,9 +72,9 @@ function describeNode(kind: string, rule: Result, node: NodeResult): string {
 /** One axe run, shared by both sets below: open the page, analyze, assert. A plain loop rather
  * than it.each in both callers, as before — it.each truncates interpolated values at about
  * forty characters, which made different combinations share a test name. */
-function checkAxe(combinations: Combination[]) {
+function checkAxe(combinations: Combination[], widths: readonly number[] = WIDTHS) {
   for (const c of combinations) {
-    for (const width of WIDTHS) {
+    for (const width of widths) {
       it(`${c.id} @ ${width}px`, async () => {
         const page = await openCombination(browser, c, width);
         try {
@@ -117,6 +118,89 @@ describe("axe — contrast (every palette, every type pair, one composition)", (
  */
 describe("axe — the header (every scheme over every palette; the layouts, the row and the fixed bar)", () => {
   checkAxe(headerCombinations());
+});
+
+/**
+ * **A rail at the one width where it stands alone** (ADR 0060): 1024, where one rail is up and the
+ * sections' rail of a two-rail page has fallen into the bar beside the pages' copy hidden for its own
+ * rail — the arrangement neither 1280 nor 320 draws.
+ */
+describe("axe — the rails at 1024, where a rail stands or falls", () => {
+  checkAxe(railCombinations(), [1024]);
+});
+
+/**
+ * **Each menu is announced once, from wherever it stands** (ADR 0060, sprint 31 día 3): the twin of
+ * the test below for a page whose menus have places of their own. The bar keeps a copy of every menu
+ * a rail holds, because the bar is where a rail falls, and the claim is that at every width exactly
+ * one of the copies is in the tree — and that it is the one the width calls for: the rail from 1024
+ * (the sections' rail of a two-rail page from 1248), the bar above 720, «Menú» and the row or «Ir a…»
+ * on a phone. Every disclosure is opened first, for the reason the test below gives.
+ */
+describe("each menu is announced once, from wherever it stands", () => {
+  const placed = headerCombinations().filter((c) => /\/(pages-|three-columns\/|fold\/)/.test(c.id));
+
+  type Where = "rail" | "bar" | "row" | "fold" | "menu";
+  const expected = (c: Combination, width: number): Record<string, Where> => {
+    const header = c.document.header;
+    const pages = header?.pages?.position ?? "bar";
+    const sections = header?.sections?.position ?? "bar";
+    const mobile = header?.sections?.mobile ?? "row";
+    const twoRails =
+      pages !== "bar" && (sections === "left" || sections === "right") && pages !== sections;
+    const sectionsRail =
+      (sections === "left" || sections === "right") && width >= (twoRails ? 1248 : 1024);
+    if (width <= 720) return { Páginas: "menu", Secciones: mobile === "fold" ? "fold" : "row" };
+    return {
+      Páginas: pages !== "bar" && width >= 1024 ? "rail" : "bar",
+      Secciones: sectionsRail
+        ? "rail"
+        : sections === "row"
+          ? "row"
+          : sections === "fold"
+            ? "fold"
+            : "bar",
+    };
+  };
+
+  for (const c of placed) {
+    for (const width of [1280, 1100, 1023, 320]) {
+      it(`${c.id} @ ${width}px`, async () => {
+        const page = await openCombination(browser, c, width);
+        try {
+          await page.evaluate(() => {
+            for (const d of document.querySelectorAll("details")) {
+              (d as HTMLDetailsElement).open = true;
+            }
+          });
+          const announced = await page.evaluate(() =>
+            [...document.querySelectorAll("nav")]
+              .filter((el) => el.checkVisibility())
+              .map((el) => [
+                el.getAttribute("aria-label") ?? "",
+                el.closest(".rb-rail")
+                  ? "rail"
+                  : el.closest("details.rb-nav-fold")
+                    ? "fold"
+                    : el.closest("details.rb-nav-narrow")
+                      ? "menu"
+                      : el.closest(".rb-nav-wide")
+                        ? "bar"
+                        : "row",
+              ]),
+          );
+          expect(
+            Object.fromEntries(announced),
+            `${c.id} @ ${width}px announced ${JSON.stringify(announced)}`,
+          ).toEqual(expected(c, width));
+          // Once each: an object built from the pairs would hide a second copy.
+          expect(announced, `${c.id} @ ${width}px`).toHaveLength(2);
+        } finally {
+          await closeCombination(page);
+        }
+      });
+    }
+  }
 });
 
 /**

@@ -32,6 +32,7 @@ import {
   HEADER_LAYOUTS,
   parseDocument,
   type RetorikaDocument,
+  SECTIONS_POSITIONS,
   type Section,
 } from "@retorika/schema";
 import {
@@ -904,7 +905,14 @@ export function scaleCombinations(): Combination[] {
  * On the teaser case's document, which is the one that draws both menus (ADR 0043), with a brand and
  * a button so every part of the header is on the page.
  *
- * Rough size: 5 schemes × 5 palettes + 3 layouts × 2 rows × 2 fixed ≈ 37 documents.
+ * **Each menu's place** (ADR 0060, sprint 31 día 3) joins it twice. As structure: the sections' five
+ * places beside the pages in the bar and in a right rail, at the bar's default look. As colour: the
+ * three-column page (pages and brand in a left rail, sections in a right one) and the disclosure, each
+ * over the five schemes on the fixed palette — a rail and a floating «Ir a…» draw their own background
+ * from the bar's scheme, and that is a pair Chromium composites somewhere new.
+ *
+ * Rough size: 5 schemes × 5 palettes + 3 layouts × 2 places × 2 fixed + 8 places + 2 × 5 schemes
+ * ≈ 55 documents. `railCombinations()` is the subset that draws a rail.
  */
 export function headerCombinations(): Combination[] {
   const base = baseDocument();
@@ -914,6 +922,14 @@ export function headerCombinations(): Combination[] {
   const teaser = PRESET_CASES[TEASER_ID];
   if (!teaser) throw new Error("no teaser case");
   const variantId = teaser.variants[0] ?? "stacked";
+  // **The button goes to a page, not to «Contacto»** (sprint 31 día 3). The home page's one section
+  // that lends a menu entry is «Contacto» — the rest are the cover and three avances — and a button
+  // takes its destination out of every menu, so with the button there this whole matrix drew no
+  // sections menu at all: the row of sprint 30's layouts was never on the page it was measured on,
+  // found when the rails' landmark test below asked where «Secciones» was announced. A page as the
+  // destination leaves «Contacto» to the sections and two pages to the pages menu.
+  const lastPage = teaser.extraPages?.("standard").at(-1);
+  if (!lastPage) throw new Error("the teaser case has no page for the button to go to");
 
   const make = (id: string, paletteId: string, header: RetorikaDocument["header"]): Combination => {
     const document = parseDocument({
@@ -925,7 +941,7 @@ export function headerCombinations(): Combination[] {
       }),
       header: {
         brand: { name: true },
-        action: { kind: "section", sectionId: "sec-contact" },
+        action: { kind: "page", pageId: lastPage.id },
         ...header,
       },
       pages: [
@@ -954,7 +970,7 @@ export function headerCombinations(): Combination[] {
     }
   }
   // The bar's two places for the sections — beside the pages, or a row of their own — which is what
-  // `sections.row` was until 1.17.0. The rails and the disclosure join this matrix on sprint 31 día 3.
+  // `sections.row` was until 1.17.0.
   for (const layout of HEADER_LAYOUTS) {
     for (const position of ["bar", "row"] as const) {
       for (const sticky of [false, true]) {
@@ -968,7 +984,49 @@ export function headerCombinations(): Combination[] {
       }
     }
   }
+  // Each menu's place (ADR 0060): the sections' five beside the pages in the bar and in a right
+  // rail. The two the loop above already drew (pages in the bar, sections in it or in a row) are not
+  // drawn twice.
+  for (const pages of ["bar", "right"] as const) {
+    for (const sections of SECTIONS_POSITIONS) {
+      if (pages === "bar" && (sections === "bar" || sections === "row")) continue;
+      combinations.push(
+        make(`header/pages-${pages}/sections-${sections}`, FIXED_PALETTE[0].id, {
+          pages: { position: pages },
+          sections: { position: sections },
+        }),
+      );
+    }
+  }
+  // The rail's and the disclosure's own backgrounds, from the bar's five schemes.
+  for (const background of HEADER_BACKGROUNDS) {
+    combinations.push(
+      make(`header/three-columns/${background}`, FIXED_PALETTE[0].id, {
+        look: { background },
+        pages: { position: "left" },
+        sections: { position: "right" },
+        brandWithPages: true,
+      }),
+      make(`header/fold/${background}`, FIXED_PALETTE[0].id, {
+        look: { background },
+        sections: { position: "fold", mobile: "fold" },
+      }),
+    );
+  }
   return combinations;
+}
+
+/** The header combinations that draw a rail: the ones a width between 1024 and 1247 says something
+ * new about, since that is where a rail stands alone or falls. */
+export function railCombinations(): Combination[] {
+  return headerCombinations().filter((combination) => {
+    const header = combination.document.header;
+    return (
+      (header?.pages?.position ?? "bar") !== "bar" ||
+      header?.sections?.position === "left" ||
+      header?.sections?.position === "right"
+    );
+  });
 }
 
 /**

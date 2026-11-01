@@ -316,10 +316,13 @@ function published(doc: RetorikaDocument, pageId?: string) {
 }
 
 /** The declarations of the stylesheet rule whose selector is exactly `selector`, joined. */
+/** The top-level rule for `selector` — at the start of a line, so a rule of the same selector inside
+ * an `@media` block (indented) is not the one read: since sprint 31 día 3 the first `.rb-nav a {` of
+ * the sheet is its transition, under `prefers-reduced-motion`, and not its colours. */
 function rule(css: string, selector: string): string {
-  const start = css.indexOf(`${selector} {`);
+  const start = css.indexOf(`\n${selector} {`);
   if (start < 0) return "";
-  return css.slice(start, css.indexOf("}", start));
+  return css.slice(start + 1, css.indexOf("}", start));
 }
 
 describe("the look (sprint 30 día 6): every option reaches the published page", () => {

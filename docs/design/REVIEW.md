@@ -5622,3 +5622,121 @@ entrada larga dentro del raíl— entra en la matriz del día 3.
 `renderer:deps`, `schema:guard` y `size` (el script en 0,8 KB de 2) en verde. `test:a11y` local 628,
 porque cambió la salida del renderer. e2e completa **268 verdes y 1 omitida, 1127 s, a la primera**, con
 nada en paralelo y `caffeinate -i`.
+
+### Día 3 — «Ir a…», las transiciones y las matrices del navegador real (PR de `feat/ir-a-y-las-transiciones`, ADR 0060 §7–8)
+
+**El desplegable es un solo elemento con dos sitios.** Un `<details>` con «Ir a…» en la cabecera,
+después del botón y antes de «Menú», guarda las secciones de la página. En escritorio, si el dueño eligió
+`fold`, flota fijo al lado lejano de la página, **debajo de la barra siempre**: su distancia arriba es el
+alto de la barra más `space.md`, con el signo de la errata escrito en la ADR. Con la barra fija queda
+debajo a cualquier altura; con la barra en el flujo, debajo arriba del todo. En el móvil, si el dueño
+eligió `fold` allí, es una palabra en la barra junto a «Menú», y su panel cuelga bajo toda la barra como
+el de «Menú»: una fila, no dos, así que una barra fija sigue fija. Su panel abierto no pasa de la
+ventana y se desplaza hacia abajo dentro de sí, nunca de lado. Lleva el esquema de la barra, como el
+panel de «Menú». La CSS solo viaja en una web que lo usa. El error explícito del día 2 desaparece.
+
+**El lado lo decide `data-rails`.** Con las secciones en el desplegable, el único raíl posible es el de
+páginas, así que el desplegable va al lado que ese raíl deja libre: a la derecha, o a la izquierda
+cuando las páginas están a la derecha. El plan escribía además una regla para apartarlo 240 px de un
+raíl derecho con otro izquierdo; con las secciones plegadas esa pareja no puede existir, y la regla
+sería código muerto. No se escribe, y la ADR lo dice.
+
+**Elegir una entrada lo cierra.** El script cierra el desplegable al pulsar una de sus entradas, y la
+página va igualmente a la sección: un panel abierto encima taparía lo que el visitante pidió. Escape y
+pulsar fuera lo cierran como a «Menú». Pesa 829 B gzip de 2048; antes, 815.
+
+**Las transiciones**, todas dentro de `@media (prefers-reduced-motion: no-preference)`, 200 ms cada una:
+
+- el subrayado de la entrada actual aparece y se va con un fundido; toda entrada lleva ya un subrayado
+  sin color, porque un color se puede animar y `none` no, y en reposo la página es la misma;
+- en un raíl, la entrada actual se marca con una barra en su borde en lugar del subrayado, con el mismo
+  fundido;
+- el panel del desplegable entra desde 4 px más arriba, con una sola animación rellenada hacia atrás.
+
+Un test recorre la hoja entera y exige que toda `transition` y toda `animation` estén dentro de esa
+consulta, con su propio control.
+
+**Medido en Chromium antes de llamarlo hecho**, con `cabecera-con-marca` y su logo:
+
+| Caso | Ancho | Barra | «Ir a…» | Panel abierto |
+|---|---|---|---|---|
+| barra en el flujo | 1280 | 73 px | arriba en 89 = 73 + 16, a la derecha | 1157–1264, bajo el resumen |
+| páginas en un raíl derecho | 1280 | 73 px, hasta 1040 | a la izquierda, x = 16 | 16–123 |
+| sola en la barra | 1280 | 0 px, colapsada | arriba en 16 | bajo el resumen |
+| móvil | 390 | 57 px | junto a «Menú», en la misma fila | todo el ancho, desde 56 |
+| móvil | 320 | 57 px | junto a «Menú», en la misma fila | todo el ancho, desde 56 |
+
+**Lo que la mirada encontró y la lectura no**: a 320, con «Taberna Santo Domingo», logo, «Contacto»,
+«Ir a…» y «Menú», a los 16 px de hueco de siempre la marca se quedaba en 21 px y su logo de 40 se
+montaba 3 px sobre el botón. Con «Ir a…» en la barra el hueco baja a 8 px y la marca tiene 45: el logo
+entero y el nombre cortado del todo, que es para lo que está la elipsis. Su prueba lo mide.
+
+**Lo que encontraron las matrices.** El arnés de accesibilidad de la cabecera daba su botón a
+«Contacto», la única sección de su página que presta una entrada al menú. Un botón saca su destino de
+todos los menús, así que desde el sprint 30 esa matriz no dibujaba ningún menú de secciones, y sus
+disposiciones «en su propia fila» no tenían fila. Lo descubrió la prueba nueva al preguntar desde dónde
+se anunciaba «Secciones». El botón va ahora a una página, y la matriz crece con los sitios.
+
+**Las matrices nuevas**:
+
+- **axe**: las cinco posiciones de secciones junto a las páginas en la barra y en un raíl derecho, y la
+  página de tres columnas y el desplegable sobre los cinco fondos, a 320 y 1280; el subconjunto con raíl,
+  además a 1024.
+- **Landmarks**: a 1280, 1100, 1023 y 320, cada menú se anuncia una vez, y desde el sitio que pide el
+  ancho.
+- **Cabecera**:
+  - un raíl con logo y diez entradas a 1280×720, de 240 px y sin nada de lado;
+  - el mismo a 1280×400, desplazándose dentro de sí y no la página;
+  - tres columnas a 1280, con 800 px de contenido, y a 1247 las secciones en la barra;
+  - un raíl a 1024, con 784 px de contenido, y a 1023 en la barra;
+  - «Ir a…» sin tocar barra, botón, marca ni raíl, cerrado y abierto, a 0 y a 600 px de scroll, con la
+    barra fija y en el flujo, y su `top` en píxeles igual a la suma;
+  - a 320, la barra en 72 px o menos con las cinco piezas en una fila, sin montarse ninguna;
+  - a 390, el panel bajo la barra, con la barra fija y sin fijar.
+- **Desborde**: los mismos sitios a 320, 1024, 1248 y 1280, con todo desplegable abierto, y ni un raíl ni
+  el panel desplazándose de lado.
+- **Teclado**: a 1280 las paradas están en los raíles y a 1023 en la barra, nunca en las dos; «Ir a…»
+  se abre con Intro a 1280 y a 390.
+- **Script**: «Ir a…» se cierra con Escape, al pulsar fuera y al elegir una entrada, a 1280 y a 390;
+  `aria-current` se mueve en un raíl; y un ancla aterriza en el borde de arriba cuando la barra ha
+  colapsado en el raíl.
+
+**Saboteos**, deshechos copiando el fichero guardado:
+
+| Saboteo | Lo que se puso en rojo |
+|---|---|
+| el signo del `top` del desplegable cambiado a menos | 9 pruebas de «Ir a…» a 1280 |
+| el raíl con `overflow: auto` | 36 del desborde de los sitios |
+| la transición del raíl fuera de su consulta | la prueba que recorre la hoja |
+| el raíl sin su `display: none` de partida | 24 de los landmarks |
+| el script sin el cierre al elegir | las 2 de elegir una entrada |
+
+**Una web guardada no cambia de aspecto.** Los cuatro goldens con cabecera se mueven en tres cambios
+cada uno, y el diff se leyó entero: el bloque de movimiento, que gana la transición del subrayado; la
+regla base de una entrada, con el subrayado sin color; y el script, con su cláusula nueva. Los dieciocho
+sin cabecera no cambian un byte.
+
+**En el editor**, nada nuevo hoy. La prueba del estado del panel leía la primera regla `.rb-nav a`
+de la hoja, que ahora es su transición, y lee la de nivel superior. La frase del panel sobre la barra
+fija en el móvil se ajusta el día 5, junto con la opción «Ir a…» que nombraría: hoy esa opción no
+existe en el panel.
+
+**La e2e, y una carrera que no era de hoy.** La primera e2e completa dio una roja: «is a sheet on a
+phone…», del sprint 24 día 6. axe leía en el panel «Estilo» la etiqueta de cada fila, `--ui-muted`,
+como #6a788d sobre blanco: 4,48 de contraste, y ese color no existe en ningún fichero. Lo que se midió:
+
+| Dónde | Rama del día 3 | `main` del día |
+|---|---|---|
+| e2e completa | roja 3 veces de 4 | verde 1 de 1 |
+| la caminata sola, en su bloque o con la CPU seis veces más lenta | verde 7 de 7 | verde 1 de 1 |
+
+Un registrador pasivo de animaciones la atrapó en la tercera roja. Abrir el selector de letra vuelve a
+lanzar la entrada del propio «Estilo»: `ui-enter-right` en su `<aside>`, desde opacidad 0, 211 ms.
+Empieza entre 16 y 42 ms después de la pulsación, en `main` igual que en la rama. Con el servidor ya
+caliente, axe leía las etiquetas a través de esa entrada, a una opacidad de 0,91. La caminata espera
+ahora a `motionSettled` antes de axe, que es la regla del propio fichero. Que el panel se vuelva a
+desvanecer detrás del velo al abrir el selector es cosa del panel y no de hoy: queda anotado para David.
+
+**Medidas.** `pnpm test` 3604 (171 ficheros); `typecheck`, `lint` (0 errores), invariantes, golden,
+`renderer:deps` y `size` (el script en 0,8 KB de 2) en verde. `test:a11y` local 846, antes 628. e2e
+completa con la espera, dos veces seguidas: **268 verdes y 1 omitida, 1125 y 1127 s**.

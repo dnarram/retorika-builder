@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { type Browser, chromium, type Page } from "@playwright/test";
-import { parseDocument, type RetorikaDocument } from "@retorika/schema";
+import { type Header, parseDocument, type RetorikaDocument } from "@retorika/schema";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { render } from "../src/index.ts";
 import { DOCUMENTS_DIR } from "./corpus.ts";
@@ -50,8 +50,9 @@ interface Stop {
   href: string;
   /** Which copy of the menu the stop is in, so a hidden one cannot pass for the visible one.
    * `row` is the sections row under the bar (ADR 0057), which the phone shows instead of folding
-   * the sections into the disclosure; `skip` is the link that jumps the whole header. */
-  where: "wide" | "narrow" | "row" | "skip" | "elsewhere";
+   * the sections into the disclosure; `skip` is the link that jumps the whole header; `rail` and
+   * `fold` are the column and «Ir a…» of ADR 0060. */
+  where: "wide" | "narrow" | "row" | "rail" | "fold" | "skip" | "elsewhere";
   outline: string;
 }
 
@@ -69,22 +70,29 @@ async function tab(page: Page): Promise<Stop> {
       href: el.getAttribute("href") ?? "",
       where: el.classList.contains("rb-skip")
         ? ("skip" as const)
-        : el.closest(".rb-nav-wide")
-          ? ("wide" as const)
-          : el.closest(".rb-nav-narrow")
-            ? ("narrow" as const)
-            : el.closest(".rb-nav-row")
-              ? ("row" as const)
-              : ("elsewhere" as const),
+        : el.closest(".rb-rail")
+          ? ("rail" as const)
+          : el.closest(".rb-nav-fold")
+            ? ("fold" as const)
+            : el.closest(".rb-nav-wide")
+              ? ("wide" as const)
+              : el.closest(".rb-nav-narrow")
+                ? ("narrow" as const)
+                : el.closest(".rb-nav-row")
+                  ? ("row" as const)
+                  : ("elsewhere" as const),
       outline: getComputedStyle(el).outlineStyle,
     };
   });
 }
 
-async function open(width: number): Promise<Page> {
+async function open(width: number, header?: Header): Promise<Page> {
   const context = await browser.newContext({ viewport: { width, height: 900 } });
   const page = await context.newPage();
-  await page.setContent(render(fixture("menu-y-paginas"), "html").html);
+  const doc = fixture("menu-y-paginas");
+  await page.setContent(
+    render(header === undefined ? doc : parseDocument({ ...doc, header }), "html").html,
+  );
   return page;
 }
 
@@ -211,6 +219,71 @@ describe("the two menus, with a keyboard and nothing else", () => {
       expect((await tab(page)).where).toBe("elsewhere");
     } finally {
       await context.close();
+    }
+  });
+
+  /**
+   * **A menu in a rail is walked in its rail, and in the bar where the rail falls** (ADR 0060). The
+   * bar keeps a copy of every menu a rail holds; at 1280 that copy is out of the tab order, and at
+   * 1023 the rail's is — the same claim as the narrow copy above, for the copies the places add.
+   */
+  it("walks the rails' copies at 1280 and the bar's at 1023, never both", async () => {
+    const placed: Header = { pages: { position: "left" }, sections: { position: "right" } };
+    for (const [width, where] of [
+      [1280, "rail"],
+      [1023, "wide"],
+    ] as const) {
+      const page = await open(width, placed);
+      try {
+        expect((await tab(page)).where).toBe("skip");
+        const stops = [await tab(page), await tab(page), await tab(page)];
+        expect(
+          stops.map((stop) => [stop.text, stop.href, stop.where]),
+          `${width}px`,
+        ).toEqual([
+          ["Qué ponemos", "./que-ponemos.html", where],
+          ["Dónde estamos", "./donde-estamos.html", where],
+          ["Contacto", "#sec-contact", where],
+        ]);
+        for (const stop of stops)
+          expect(stop.outline, `${stop.text} has no focus ring`).not.toBe("none");
+        expect((await tab(page)).where, `${width}px: the next stop is the page`).toBe("elsewhere");
+      } finally {
+        await page.context().close();
+      }
+    }
+  });
+
+  it("opens «Ir a…» with Enter, after the pages on a wide screen and before «Menú» on a phone", async () => {
+    const folded: Header = { sections: { position: "fold", mobile: "fold" } };
+    const wide = await open(1280, folded);
+    try {
+      expect((await tab(wide)).where).toBe("skip");
+      expect((await tab(wide)).text).toBe("Qué ponemos");
+      expect((await tab(wide)).text).toBe("Dónde estamos");
+      const summary = await tab(wide);
+      expect([summary.tag, summary.text, summary.where]).toEqual(["summary", "Ir a…", "fold"]);
+      expect(summary.outline, "the summary has no focus ring").not.toBe("none");
+      await wide.keyboard.press("Enter");
+      const entry = await tab(wide);
+      expect([entry.text, entry.href, entry.where]).toEqual(["Contacto", "#sec-contact", "fold"]);
+    } finally {
+      await wide.context().close();
+    }
+
+    const phone = await open(390, folded);
+    try {
+      expect((await tab(phone)).where).toBe("skip");
+      const fold = await tab(phone);
+      expect([fold.tag, fold.text]).toEqual(["summary", "Ir a…"]);
+      const menu = await tab(phone);
+      expect([menu.tag, menu.text]).toEqual(["summary", "Menú"]);
+      await phone.keyboard.press("Shift+Tab");
+      await phone.keyboard.press("Enter");
+      const entry = await tab(phone);
+      expect([entry.text, entry.href, entry.where]).toEqual(["Contacto", "#sec-contact", "fold"]);
+    } finally {
+      await phone.context().close();
     }
   });
 });
