@@ -473,9 +473,21 @@ describe("the look, as attributes and rules", () => {
   it("scrolls smoothly only for somebody who has not asked for less motion", () => {
     const sheet = css(site(3));
     expect(sheet).toContain(
-      "@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }",
+      "@media (prefers-reduced-motion: no-preference) {\n  html { scroll-behavior: smooth; }",
     );
     expect(sheet.match(/scroll-behavior/g)).toHaveLength(1);
+  });
+
+  it("keeps the rule under every entry, in no colour, so the current one can fade in (sprint 31 día 3)", () => {
+    const sheet = css(site(3));
+    expect(sheet).toContain(
+      "  font-size: var(--size-body); text-decoration: underline transparent; text-underline-offset: 6px; }",
+    );
+    // The shorthand in the current entry's rule and in the hover rule gives the colour back.
+    expect(sheet).toContain(".rb-nav a[aria-current] { text-decoration: underline;");
+    expect(sheet).toContain(
+      ".rb-header[data-hover] .rb-nav a:hover, .rb-header[data-hover] .rb-nav a:focus-visible {\n  text-decoration: underline;",
+    );
   });
 
   it("lets a fixed bar go on a phone that shows the sections' row, and says so on the header", () => {
@@ -552,7 +564,8 @@ describe("rule 6 on the header's parts", () => {
 /**
  * **Each menu has its place** (ADR 0060, sprint 31 día 2). A menu placed `left` or `right` gets a copy
  * in a rail; the bar keeps every copy it had, because the bar is where a rail falls on a narrower
- * screen; which copy is seen is the stylesheet's `display: none`, measured in a real browser on día 3.
+ * screen; which copy is seen is the stylesheet's `display: none`, measured in a real browser since día 3
+ * (`a11y.browser.test.ts`, «each menu is announced once, from wherever it stands»).
  * What is pinned here is the markup and the rules: where each menu's copies land, when the brand
  * goes with the pages, when the bar has nothing left, and that a site without a rail carries none of
  * it.
@@ -569,17 +582,21 @@ describe("each menu has its place (ADR 0060)", () => {
 
   it("puts each menu's copy where its place says, for every pair of places", () => {
     for (const pages of ["bar", "left", "right"] as const) {
-      for (const sections of ["bar", "row", "left", "right"] as const) {
+      for (const sections of ["bar", "row", "left", "right", "fold"] as const) {
         const where = `pages ${pages}, sections ${sections}`;
         const page = draw(placed({ pages: { position: pages }, sections: { position: sections } }));
         const header = page.querySelector("header");
         expect(header?.getAttribute("data-pages"), where).toBe(pages);
         expect(header?.getAttribute("data-sections"), where).toBe(sections);
-        // The bar always keeps the pages, and the sections unless their place is a row of their own.
+        // The bar always keeps the pages, and the sections unless their place is a row of their own
+        // or the disclosure — places of their own at every wide width.
         expect(labelsIn(page.querySelector(".rb-nav-wide")), where).toEqual(
-          sections === "row" ? ["Páginas"] : ["Páginas", "Secciones"],
+          sections === "row" || sections === "fold" ? ["Páginas"] : ["Páginas", "Secciones"],
         );
         expect(page.querySelector("nav.rb-nav-row") !== null, where).toBe(true);
+        expect(labelsIn(page.querySelector("header > details.rb-nav-fold")), where).toEqual(
+          sections === "fold" ? ["Secciones"] : [],
+        );
         // A rail per side that holds something, pages before sections when they share one.
         const sides = (["left", "right"] as const).filter(
           (side) => pages === side || sections === side,
@@ -703,7 +720,7 @@ describe("each menu has its place (ADR 0060)", () => {
 
   it("renders the same bytes twice for every pair of places", () => {
     for (const pages of ["bar", "left", "right"] as const) {
-      for (const sections of ["bar", "row", "left", "right"] as const) {
+      for (const sections of ["bar", "row", "left", "right", "fold"] as const) {
         const doc = placed({
           pages: { position: pages },
           sections: { position: sections },
@@ -717,9 +734,204 @@ describe("each menu has its place (ADR 0060)", () => {
       }
     }
   });
+});
 
-  it("refuses to draw the disclosure until it exists, rather than publish an empty place", () => {
-    expect(() => draw(placed({ sections: { position: "fold" } }))).toThrow(/día 3/);
-    expect(() => draw(placed({ sections: { mobile: "fold" } }))).toThrow(/día 3/);
+/**
+ * **«Ir a…»** (ADR 0060, sprint 31 día 3): the sections behind one `<summary>`, fixed under the bar on
+ * a wide screen and a word beside «Menú» on a phone. One element for both places; which one shows is
+ * the stylesheet's, read in a real browser by `header.browser.test.ts`. What is pinned here is the
+ * markup, the one sum its distance from the top is, and that no site without it carries a byte of it.
+ */
+describe("«Ir a…», the sections' disclosure", () => {
+  const PAGES = [{ id: "p2", slug: "carta", title: "La carta" }];
+  const fold = (page: Document) => page.querySelector("header > details.rb-nav-fold");
+
+  it("holds this page's sections behind «Ir a…», after the button and before «Menú»", () => {
+    const page = draw(
+      site(3, PAGES, {
+        sections: { position: "fold" },
+        // A section, so the pages menu keeps its one page and «Menú» is drawn; the button's own
+        // section leaves the disclosure, as it leaves every menu (one destination, one place).
+        action: { kind: "section", sectionId: "sec-contact" },
+      }),
+    );
+    const disclosure = fold(page);
+    expect(disclosure?.querySelector(":scope > summary")?.textContent?.trim()).toBe("Ir a…");
+    expect(disclosure?.querySelector(":scope > nav")?.getAttribute("aria-label")).toBe("Secciones");
+    expect(texts(disclosure?.querySelectorAll("nav a") ?? [])).toEqual([
+      "Servicios",
+      "Dónde estamos",
+    ]);
+    expect(disclosure?.getAttribute("data-mobile")).toBe("row");
+    const order = [...(page.querySelector("header")?.children ?? [])].map((el) => el.className);
+    expect(order.indexOf("rb-nav-fold")).toBe(order.indexOf("rb-nav-action") + 1);
+    expect(order.indexOf("rb-nav-narrow")).toBe(order.indexOf("rb-nav-fold") + 1);
+    // No copy of the sections in the strip, and the phone's row is still drawn for the phone.
+    expect(page.querySelector('.rb-nav-wide nav[aria-label="Secciones"]')).toBeNull();
+    expect(page.querySelector("nav.rb-nav-row")?.getAttribute("data-mobile")).toBe("row");
+  });
+
+  it("is the phone's place wherever the wide one is, and only the phone's", () => {
+    for (const position of ["bar", "row", "left", "right", "fold"] as const) {
+      const page = draw(site(3, PAGES, { sections: { position, mobile: "fold" } }));
+      expect(fold(page)?.getAttribute("data-mobile"), position).toBe("fold");
+      // The phone's row is the other answer to the same question, so it is not drawn.
+      expect(page.querySelector("nav.rb-nav-row[data-mobile]"), position).toBe(
+        position === "row" ? page.querySelector("nav.rb-nav-row") : null,
+      );
+    }
+    // A fixed bar stays fixed on a phone that folds the sections: one line, not two.
+    expect(
+      draw(site(3, [], { sticky: true, sections: { mobile: "fold" } }))
+        .querySelector("header")
+        ?.hasAttribute("data-phone-row"),
+    ).toBe(false);
+  });
+
+  it("is drawn only where it has something to hold", () => {
+    expect(fold(draw(site(3, [], { sections: { position: "fold", mobile: "hidden" } })))).not.toBe(
+      null,
+    );
+    expect(fold(draw(site(3, [], { sections: { position: "bar", mobile: "hidden" } })))).toBeNull();
+    // A page with no headed section: no disclosure on it, as there is no row on it.
+    const away = draw(site(3, PAGES, { sections: { position: "fold", mobile: "fold" } }), "p2");
+    expect(fold(away)).toBeNull();
+    expect(away.querySelector("nav.rb-nav-row")).toBeNull();
+  });
+
+  it("collapses a bar it leaves with nothing, with or without a rail", () => {
+    const bar = (header: RetorikaDocument["header"]) =>
+      draw(site(3, PAGES, header))
+        .querySelector("header")
+        ?.getAttribute("data-bar") ?? null;
+    expect(bar({ pages: { shown: false }, sections: { position: "fold" } })).toBe("none");
+    expect(
+      bar({
+        pages: { position: "left" },
+        sections: { position: "fold" },
+        brandWithPages: true,
+        brand: { name: true },
+      }),
+    ).toBe("none");
+    // The brand left behind, or the pages in the bar: the bar still has words.
+    expect(
+      bar({ pages: { shown: false }, sections: { position: "fold" }, brand: { name: true } }),
+    ).toBeNull();
+    expect(bar({ sections: { position: "fold" } })).toBeNull();
+    // Folded on the phone only, the sections are still the bar's on a wide screen.
+    expect(bar({ pages: { shown: false }, sections: { position: "bar", mobile: "fold" } })).toBe(
+      null,
+    );
+  });
+
+  it("hangs under the bar by the bar's height plus a space, never minus (David's erratum)", () => {
+    const { css } = render(site(3, [], { sections: { position: "fold" } }), "html");
+    expect(css).toContain(
+      "    top: calc(var(--rb-header-h) + var(--space-md)); right: var(--space-md); }",
+    );
+    expect(css).not.toMatch(/--rb-header-h\)\s*-\s*var\(--space-md\)/);
+    // A collapsed bar is zero on the header itself, which is what the disclosure inherits.
+    expect(css).toContain(
+      "  .rb-header[data-layout][data-bar=none]:not([data-rails]) { --rb-header-h: 0px;",
+    );
+  });
+
+  it("takes the side a rail leaves free, by the header's attribute and only where rails stand", () => {
+    const right = render(
+      site(3, PAGES, { pages: { position: "right" }, sections: { position: "fold" } }),
+      "html",
+    ).css;
+    expect(right).toContain(
+      `@media (min-width: ${RAIL_FOLD_WIDTH}px) {\n  .rb-header[data-sections=fold][data-rails=right] .rb-nav-fold { right: auto; left: var(--space-md); }`,
+    );
+    // No rail, no rule for one.
+    expect(render(site(3, [], { sections: { position: "fold" } }), "html").css).not.toContain(
+      "data-rails=right] .rb-nav-fold",
+    );
+  });
+
+  it("closes up the phone's bar only where it joins it", () => {
+    const { css } = render(site(3, [], { sections: { mobile: "fold" } }), "html");
+    expect(css).toContain(
+      "  .rb-header:has(> .rb-nav-fold[data-mobile=fold]) { column-gap: var(--space-sm); }",
+    );
+    // The rule for the gap after a drawn disclosure names the drawn one: `+` matches a hidden one.
+    expect(css).toContain("  .rb-nav-fold[data-mobile=fold] + .rb-nav-narrow { margin-left: 0; }");
+  });
+
+  it("writes its stylesheet only for a site that uses it", () => {
+    const without = render(site(3, PAGES, { pages: { position: "left" } }), "html").css;
+    expect(without).not.toContain("rb-nav-fold");
+    expect(without).not.toContain("rb-fold-in");
+  });
+});
+
+/**
+ * **Motion, only for somebody who has not asked for less** (David's third condition on sprint 31, as
+ * the smooth scroll was on sprint 30). Walked over the stylesheet rather than spot-checked: a
+ * `transition` or an `animation` written one block too far out runs for everybody.
+ */
+describe("the header's motion", () => {
+  /** Every `transition` and `animation` declaration of a sheet, with the @-rules around it. */
+  function motionIn(sheet: string): { declaration: string; within: string[] }[] {
+    const text = sheet.replace(/\/\*[\s\S]*?\*\//g, "");
+    const found: { declaration: string; within: string[] }[] = [];
+    const preludes: string[] = [];
+    let start = 0;
+    const take = (end: number) => {
+      const segment = text.slice(start, end).trim();
+      if (/^(transition|animation)\s*:/.test(segment)) {
+        found.push({ declaration: segment, within: preludes.filter((p) => p.startsWith("@")) });
+      }
+    };
+    for (let i = 0; i < text.length; i += 1) {
+      const ch = text[i];
+      if (ch === "{") {
+        preludes.push(text.slice(start, i).trim());
+        start = i + 1;
+      } else if (ch === "}" || ch === ";") {
+        take(i);
+        if (ch === "}") preludes.pop();
+        start = i + 1;
+      }
+    }
+    return found;
+  }
+
+  const QUERY = "@media (prefers-reduced-motion: no-preference)";
+  const EVERYTHING = site(3, [{ id: "p2", slug: "carta", title: "La carta" }], {
+    pages: { position: "left" },
+    sections: { position: "fold", mobile: "fold" },
+  });
+
+  it("finds every transition and animation inside the no-preference query", () => {
+    for (const [what, doc] of [
+      ["the bar alone", site(3)],
+      ["a rail and the disclosure", EVERYTHING],
+    ] as const) {
+      const motion = motionIn(render(doc, "html").css);
+      expect(motion.length, what).toBeGreaterThan(0);
+      for (const { declaration, within } of motion) {
+        expect(within, `${what}: ${declaration}`).toContain(QUERY);
+      }
+    }
+  });
+
+  it("moves the current entry's rule, the rail's mark and the disclosure's panel", () => {
+    const declarations = motionIn(render(EVERYTHING, "html").css).map((m) => m.declaration);
+    expect(declarations).toEqual([
+      "transition: text-decoration-color 200ms ease-out",
+      "transition: text-decoration-color 200ms ease-out, box-shadow 200ms ease-out",
+      "animation: rb-fold-in 200ms ease-out backwards",
+    ]);
+  });
+
+  it("would catch a transition written outside the query", () => {
+    // The walker's own control: the same sheet with one block's query taken off must be refused.
+    const sheet = render(site(3), "html").css.replace(
+      "@media (prefers-reduced-motion: no-preference) {\n  html { scroll-behavior: smooth; }",
+      "@media all {\n  html { scroll-behavior: smooth; }",
+    );
+    expect(motionIn(sheet).some(({ within }) => !within.includes(QUERY))).toBe(true);
   });
 });

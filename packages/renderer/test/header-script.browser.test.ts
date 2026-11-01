@@ -199,6 +199,132 @@ describe("the section in view", () => {
   });
 });
 
+/**
+ * **«Ir a…» and the rail** (ADR 0060, sprint 31 día 3): what the script does for the two places the
+ * bar did not have — the disclosure closes the three ways a visitor expects, and the mark of the
+ * section in view moves in a column as it does in the bar.
+ */
+describe("«Ir a…»", () => {
+  const FOLD = { sections: { position: "fold" as const, mobile: "fold" as const, shown: true } };
+  const isOpen = (page: Page) =>
+    page.evaluate(() => document.querySelector<HTMLDetailsElement>("details.rb-nav-fold")?.open);
+
+  for (const width of [1280, 390]) {
+    it(`closes on Escape with the focus back on «Ir a…», and on a press outside, at ${width}px`, async () => {
+      const page = await open(withHeader({ ...FOLD, action: undefined }), width);
+      try {
+        const summary = page.locator("details.rb-nav-fold > summary");
+        await summary.click();
+        expect(await isOpen(page)).toBe(true);
+        await page.keyboard.press("Escape");
+        expect(await isOpen(page)).toBe(false);
+        expect(
+          await page.evaluate(() => document.activeElement?.closest("details")?.className ?? ""),
+        ).toBe("rb-nav-fold");
+        await summary.click();
+        expect(await isOpen(page)).toBe(true);
+        await page.mouse.click(width / 2, 600);
+        expect(await isOpen(page)).toBe(false);
+      } finally {
+        await page.context().close();
+      }
+    });
+
+    it(`closes when an entry is chosen, and the page still goes there, at ${width}px`, async () => {
+      const page = await open(withHeader({ ...FOLD, action: undefined }), width);
+      try {
+        await page.locator("details.rb-nav-fold > summary").click();
+        const entry = page.locator('details.rb-nav-fold a[href="#sec-contact"]');
+        await entry.click();
+        expect(await isOpen(page)).toBe(false);
+        // Nothing fixed above it, so the section lands at the top of the window.
+        await expect
+          .poll(() =>
+            page.evaluate(() =>
+              Math.round(document.querySelector("#sec-contact")?.getBoundingClientRect().top ?? 99),
+            ),
+          )
+          .toBe(0);
+      } finally {
+        await page.context().close();
+      }
+    });
+  }
+});
+
+describe("the rail", () => {
+  it('carries aria-current="location" on the entry in the column, and marks it by its edge', async () => {
+    const page = await open(
+      withHeader({ sections: { position: "right", shown: true }, action: undefined }),
+      1280,
+    );
+    try {
+      const anchors = await page.evaluate(() =>
+        [...document.querySelectorAll('.rb-rail .rb-nav[aria-label="Secciones"] a')].map(
+          (a) => a.getAttribute("href") ?? "",
+        ),
+      );
+      expect(anchors.length).toBeGreaterThanOrEqual(2);
+      const [, second] = anchors as [string, string];
+      await page.evaluate((id) => document.querySelector(id)?.scrollIntoView(), second);
+      await expect.poll(() => current(page)).toEqual([second]);
+      // Once the fade is done, the mark is the bar at the entry's edge in the entry's own colour,
+      // and the rule under it is gone.
+      await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
+      const look = await page.evaluate((id) => {
+        const a = document.querySelector<HTMLElement>(`.rb-rail a[href="${id}"]`);
+        if (!a) throw new Error("no rail entry");
+        const style = getComputedStyle(a);
+        return { shadow: style.boxShadow, line: style.textDecorationColor, color: style.color };
+      }, second);
+      expect(look.shadow).toContain(look.color);
+      expect(look.shadow).toContain("inset");
+      expect(look.line).toBe("rgba(0, 0, 0, 0)");
+    } finally {
+      await page.context().close();
+    }
+  });
+
+  /**
+   * **David's condition (c)**: with every menu in a rail and nothing fixed above the page, no anchor
+   * lands under a ghost. The bar is fixed here on purpose — the owner's «se queda arriba» — and has
+   * collapsed, so what sticks is nothing at all, and the measure says so.
+   */
+  it("lands an anchor at the top of the window when the bar has collapsed into the rail", async () => {
+    const page = await open(
+      withHeader({
+        sticky: true,
+        pages: { position: "left", shown: true },
+        sections: { position: "left", shown: true, mobile: "row" },
+        brandWithPages: true,
+      }),
+      1280,
+    );
+    try {
+      expect(
+        await page.evaluate(() => document.documentElement.style.getPropertyValue("--rb-header-h")),
+      ).toBe("0px");
+      const href = await page.evaluate(
+        () =>
+          document
+            .querySelector('.rb-rail .rb-nav[aria-label="Secciones"] a')
+            ?.getAttribute("href") ?? "",
+      );
+      await page.locator(`.rb-rail a[href="${href}"]`).click();
+      await expect
+        .poll(() =>
+          page.evaluate(
+            (id) => Math.round(document.querySelector(id)?.getBoundingClientRect().top ?? 99),
+            href,
+          ),
+        )
+        .toBe(0);
+    } finally {
+      await page.context().close();
+    }
+  });
+});
+
 describe("a fixed bar", () => {
   it("gains data-scrolled once the page has scrolled, and loses it at the top", async () => {
     const page = await open(withHeader({ sticky: true, sections: { mobile: "hidden" } }), 1280);

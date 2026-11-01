@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { type Browser, chromium, type Page } from "@playwright/test";
-import { parseDocument, type RetorikaDocument } from "@retorika/schema";
+import { type Header, parseDocument, type RetorikaDocument } from "@retorika/schema";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { render } from "../src/index.ts";
 import { ASSETS_DIR, DOCUMENTS_DIR } from "./corpus.ts";
@@ -41,6 +41,89 @@ function withLogo(): RetorikaDocument {
     ...doc,
     header: { ...doc.header, brand: { name: true, logo: { src: "assets/portada.png" } } },
   });
+}
+
+/** `withLogo` with each menu placed: the corpus's long name, a logo, «Contacto» as the button. */
+function placed(header: Partial<Header>): RetorikaDocument {
+  const doc = withLogo();
+  return parseDocument({ ...doc, header: { ...doc.header, ...header } });
+}
+
+/**
+ * The home page with eight sections that lend an entry — «Servicios» and seven more, the last as
+ * long as a label may be (20 characters) — so a column has more than a window holds when it is short.
+ */
+function eightSections(doc: RetorikaDocument): RetorikaDocument {
+  const home = doc.pages[0];
+  const services = home?.sections.find((s) => s.id === "sec-services-home");
+  if (!home || !services) throw new Error("no home page or no services section");
+  const labels = [
+    "Carta del día",
+    "Vinos de la casa",
+    "Raciones",
+    "Postres",
+    "Menú de grupos",
+    "Terraza",
+    "Reservas para grupos",
+  ];
+  const more = labels.map((menuLabel, i) => ({ ...services, id: `sec-extra-${i}`, menuLabel }));
+  const at = home.sections.indexOf(services) + 1;
+  return parseDocument({
+    ...doc,
+    pages: [
+      { ...home, sections: [...home.sections.slice(0, at), ...more, ...home.sections.slice(at)] },
+      ...doc.pages.slice(1),
+    ],
+  });
+}
+
+type Box = { left: number; top: number; right: number; bottom: number };
+
+/** The boxes of the given selectors as drawn — `null` for one that is absent or not rendered. */
+async function boxes(
+  page: Page,
+  selectors: Record<string, string>,
+): Promise<Record<string, Box | null>> {
+  return page.evaluate((wanted) => {
+    const out: Record<string, { left: number; top: number; right: number; bottom: number } | null> =
+      {};
+    for (const [name, selector] of Object.entries(wanted)) {
+      const el = document.querySelector<HTMLElement>(selector);
+      if (!el?.checkVisibility()) {
+        out[name] = null;
+        continue;
+      }
+      const r = el.getBoundingClientRect();
+      out[name] = { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+    }
+    return out;
+  }, selectors);
+}
+
+/** Whether two boxes share any area. Touching edges do not count: a box under another, flush, is
+ * exactly what «under the bar» means. */
+function overlap(a: Box | null | undefined, b: Box | null | undefined): boolean {
+  if (!a || !b) return false;
+  return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+}
+
+/** Opens «Ir a…» and waits for its panel to finish coming in: measured mid-way, it is 4 px higher
+ * than where it stays (the animation's start), and read as covering the bar's last pixels. */
+async function openFold(page: Page): Promise<void> {
+  await page.click(".rb-nav-fold > summary");
+  await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
+}
+
+/** What a token resolves to on this page, in pixels. */
+async function tokenPx(page: Page, token: string): Promise<number> {
+  return page.evaluate((name) => {
+    const probe = document.createElement("div");
+    probe.style.height = `var(${name})`;
+    document.body.append(probe);
+    const px = probe.getBoundingClientRect().height;
+    probe.remove();
+    return px;
+  }, token);
 }
 
 async function open(
@@ -293,4 +376,320 @@ describe("the header with a keyboard", () => {
       await page.context().close();
     }
   });
+
+  it("walks skip link, pages, button, the sections' rail on the right, then the page (ADR 0060)", async () => {
+    // The home page, where the brand is a span and no stop (above). **The order of the document is
+    // the order of reading**: the rail stands at the right edge of the screen and is reached after
+    // the bar and before the content, which is where it sits in the markup — the eye reads a page
+    // with a column beside it the same way, header first, then the column, then the page.
+    const page = await open(placed({ sections: { shown: true, position: "right" } }), 1280, 900);
+    try {
+      const stops = [];
+      for (let i = 0; i < 6; i += 1) stops.push(await tab(page));
+      expect(stops.slice(0, 5).map((s) => [s.text, s.href])).toEqual([
+        ["Saltar al contenido", "#rb-main"],
+        ["Qué ponemos", "./que-ponemos.html"],
+        ["Dónde", "./donde-estamos.html"],
+        ["Contacto", "#sec-contact"],
+        ["Servicios", "#sec-services-home"],
+      ]);
+      const where = await page.evaluate(() => ({
+        rail: document.activeElement?.closest(".rb-rail") !== null,
+        main: document.activeElement?.closest("main") !== null,
+      }));
+      expect(where, `sixth stop: ${JSON.stringify(stops[5])}`).toEqual({ rail: false, main: true });
+      // The fifth was the rail's copy, not the bar's hidden one.
+      await page.keyboard.press("Shift+Tab");
+      expect(
+        await page.evaluate(() =>
+          document.activeElement?.closest(".rb-rail")?.getAttribute("data-side"),
+        ),
+      ).toBe("right");
+    } finally {
+      await page.context().close();
+    }
+  });
+});
+
+describe("the rail (ADR 0060)", () => {
+  /** The pages, the brand and the eight sections in one left rail: the fullest column there is. */
+  const fullest = () =>
+    eightSections(
+      placed({
+        pages: { shown: true, position: "left" },
+        sections: { shown: true, position: "left" },
+        brandWithPages: true,
+      }),
+    );
+
+  async function railFacts(page: Page) {
+    return page.evaluate(() => {
+      const rail = document.querySelector<HTMLElement>('.rb-rail[data-side="left"]');
+      if (!rail?.checkVisibility()) throw new Error("no rail drawn");
+      const r = rail.getBoundingClientRect();
+      const entries = [...rail.querySelectorAll<HTMLElement>("a, .rb-brand")];
+      return {
+        width: rail.offsetWidth,
+        entries: rail.querySelectorAll(".rb-nav a").length,
+        widest: Math.max(...entries.map((el) => el.getBoundingClientRect().right)) - r.left,
+        railRight: r.right - r.left,
+        bottom: r.bottom,
+        scrollsDown: rail.scrollHeight > rail.clientHeight,
+        scrollsAcross: rail.scrollWidth > rail.clientWidth,
+        logoLoaded: [...rail.querySelectorAll<HTMLImageElement>("img.rb-logo")].every(
+          (img) => img.complete && img.naturalWidth > 0,
+        ),
+        pageScroll: document.documentElement.scrollWidth - innerWidth,
+      };
+    });
+  }
+
+  it("holds a logo and ten entries at 1280×720 inside its 240px, and nothing runs across", async () => {
+    const page = await open(fullest(), 1280, 720);
+    try {
+      const facts = await railFacts(page);
+      expect(facts.logoLoaded, "the logo did not load, so nothing was measured").toBe(true);
+      // Two pages and eight sections.
+      expect(facts.entries).toBe(10);
+      expect(facts.width).toBeLessThanOrEqual(256);
+      // No entry, the long one and the brand with its long name included, is wider than the rail.
+      expect(facts.widest).toBeLessThanOrEqual(facts.railRight + 0.5);
+      expect(facts.scrollsAcross).toBe(false);
+      expect(facts.bottom).toBeLessThanOrEqual(720);
+      expect(facts.pageScroll).toBe(0);
+    } finally {
+      await page.context().close();
+    }
+  });
+
+  it("scrolls down inside itself, and never the page, when the window is shorter than it", async () => {
+    const page = await open(fullest(), 1280, 400);
+    try {
+      const facts = await railFacts(page);
+      expect(facts.scrollsDown, "at 400px tall the column fitted, so nothing was proved").toBe(
+        true,
+      );
+      expect(facts.scrollsAcross).toBe(false);
+      expect(facts.bottom).toBeLessThanOrEqual(400);
+      // The last entry is reachable: scrolled into view inside the rail, it is inside the window.
+      const last = await page.evaluate(() => {
+        const rail = document.querySelector<HTMLElement>('.rb-rail[data-side="left"]');
+        const link = [...(rail?.querySelectorAll<HTMLElement>(".rb-nav a") ?? [])].at(-1);
+        if (!rail || !link) throw new Error("no last entry");
+        rail.scrollTop = rail.scrollHeight;
+        return { bottom: link.getBoundingClientRect().bottom, pageY: scrollY };
+      });
+      expect(last.bottom).toBeLessThanOrEqual(400);
+      expect(last.pageY).toBe(0);
+    } finally {
+      await page.context().close();
+    }
+  });
+
+  /** `<main>`'s width and which menus stand in a rail, at one width. */
+  async function columns(doc: RetorikaDocument, width: number) {
+    const page = await open(doc, width, 900);
+    try {
+      return await page.evaluate(() => ({
+        main: Math.round(document.querySelector("main")?.getBoundingClientRect().width ?? 0),
+        rails: [...document.querySelectorAll<HTMLElement>(".rb-rail")]
+          .filter((rail) => rail.checkVisibility())
+          .map((rail) => rail.getAttribute("data-side")),
+        inBar: [...document.querySelectorAll<HTMLElement>(".rb-nav-wide > nav")]
+          .filter((nav) => nav.checkVisibility())
+          .map((nav) => nav.getAttribute("aria-label")),
+        scroll: document.documentElement.scrollWidth - innerWidth,
+      }));
+    } finally {
+      await page.context().close();
+    }
+  }
+
+  it("stands as three columns at 1280 and lets the sections fall into the bar at 1247", async () => {
+    const doc = placed({
+      pages: { shown: true, position: "left" },
+      sections: { shown: true, position: "right" },
+    });
+    expect(await columns(doc, 1280)).toEqual({
+      main: 800,
+      rails: ["left", "right"],
+      inBar: [],
+      scroll: 0,
+    });
+    expect(await columns(doc, 1247)).toEqual({
+      main: 1247 - 240,
+      rails: ["left"],
+      inBar: ["Secciones"],
+      scroll: 0,
+    });
+  });
+
+  it("stands at 1024 with 784 for the content, and falls into the bar at 1023", async () => {
+    const doc = placed({ pages: { shown: true, position: "right" } });
+    expect(await columns(doc, 1024)).toEqual({
+      main: 784,
+      rails: ["right"],
+      inBar: [],
+      scroll: 0,
+    });
+    expect(await columns(doc, 1023)).toEqual({
+      main: 1023,
+      rails: [],
+      inBar: ["Páginas"],
+      scroll: 0,
+    });
+  });
+});
+
+/**
+ * **«Ir a…» covers nothing of the header** (David's condition on planning sprint 31, and his
+ * adjustment 2 with its erratum on approving it). On a wide screen it floats under the bar; measured
+ * here against the bar, the button and a right rail, closed and open, with a fixed bar at the top and
+ * further down, and with a bar in the flow at the top of the page — the case a `top` without the bar's
+ * height would have drawn over the button. And the sum itself, in pixels: its top is the bar's bottom
+ * plus `space.md`. With the sign turned, both go red: the disclosure rises into the bar.
+ */
+describe("«Ir a…» under the bar", () => {
+  const FOLD = { sections: { shown: true, position: "fold" as const, mobile: "fold" as const } };
+  const cases: [string, Partial<Header>][] = [
+    ["a bar in the flow", FOLD],
+    ["a fixed bar", { ...FOLD, sticky: true }],
+    ["the pages in a right rail", { ...FOLD, pages: { shown: true, position: "right" } }],
+    [
+      "the pages in a right rail, with the brand",
+      {
+        ...FOLD,
+        pages: { shown: true, position: "right" },
+        brandWithPages: true,
+      },
+    ],
+  ];
+
+  for (const [name, header] of cases) {
+    for (const scrolled of [0, 600]) {
+      it(`covers neither the bar nor the button nor a rail at 1280, ${name}, scrolled ${scrolled}px`, async () => {
+        const page = await open(placed(header), 1280, 720);
+        try {
+          await page.evaluate((y) => window.scrollTo({ top: y, behavior: "instant" }), scrolled);
+          const md = await tokenPx(page, "--space-md");
+          for (const state of ["closed", "open"] as const) {
+            if (state === "open") await openFold(page);
+            const b = await boxes(page, {
+              header: "header.rb-header",
+              action: "header > .rb-nav-action",
+              rail: ".rb-rail",
+              fold: ".rb-nav-fold",
+              panel: ".rb-nav-fold[open] > .rb-nav",
+              brand: "header > .rb-brand",
+            });
+            const where = `${name}, scrolled ${scrolled}, ${state}: ${JSON.stringify(b)}`;
+            expect(b.fold, where).not.toBeNull();
+            if (state === "open") expect(b.panel, where).not.toBeNull();
+            for (const part of [b.fold, b.panel]) {
+              // The header box is the bar: zero tall when it has collapsed, and then nothing to cover.
+              expect(overlap(part, b.header), where).toBe(false);
+              expect(overlap(part, b.action), where).toBe(false);
+              expect(overlap(part, b.brand), where).toBe(false);
+              expect(overlap(part, b.rail), where).toBe(false);
+            }
+            // The sum, in pixels, wherever the bar is: under it by `space.md` when it is in view.
+            const barBottom = Math.max(0, b.header?.bottom ?? 0);
+            const barHeight = (b.header?.bottom ?? 0) - (b.header?.top ?? 0);
+            const expectedTop = scrolled === 0 || header.sticky ? barBottom + md : barHeight + md;
+            expect(b.fold?.top ?? 0, where).toBeGreaterThanOrEqual(expectedTop - 1);
+            expect(b.fold?.top ?? 0, where).toBeLessThanOrEqual(expectedTop + 1);
+          }
+        } finally {
+          await page.context().close();
+        }
+      });
+    }
+  }
+
+  it("goes to the free side when the pages' rail is on the right", async () => {
+    const page = await open(placed(cases[2]?.[1] ?? {}), 1280, 720);
+    try {
+      const b = await boxes(page, { fold: ".rb-nav-fold", rail: ".rb-rail" });
+      expect(b.rail?.left).toBe(1280 - 240);
+      expect(b.fold?.left).toBeLessThan(640);
+    } finally {
+      await page.context().close();
+    }
+  });
+
+  it("is no height of bar when it has the bar to itself, and hangs a space from the top", async () => {
+    const page = await open(
+      placed({ ...FOLD, brand: undefined, action: undefined, pages: { shown: false } }),
+      1280,
+      720,
+    );
+    try {
+      const md = await tokenPx(page, "--space-md");
+      const b = await boxes(page, { header: "header.rb-header", fold: ".rb-nav-fold" });
+      expect((b.header?.bottom ?? -1) - (b.header?.top ?? 0)).toBe(0);
+      expect(Math.round(b.fold?.top ?? 0)).toBe(Math.round(md));
+    } finally {
+      await page.context().close();
+    }
+  });
+});
+
+describe("«Ir a…» on the phone", () => {
+  const FOLD = { sections: { shown: true, position: "fold" as const, mobile: "fold" as const } };
+
+  it("keeps the bar at or under 72px at 320 with a long name, a logo, the button, «Ir a…» and «Menú»", async () => {
+    const page = await open(placed(FOLD), 320, 568);
+    try {
+      const b = await boxes(page, {
+        header: "header.rb-header",
+        logo: "header > .rb-brand img.rb-logo",
+        action: "header > .rb-nav-action",
+        fold: "header > .rb-nav-fold > summary",
+        menu: "header > .rb-nav-narrow > summary",
+      });
+      const where = JSON.stringify(b);
+      for (const part of ["logo", "action", "fold", "menu"])
+        expect(b[part], `${part}: ${where}`).not.toBeNull();
+      expect((b.header?.bottom ?? 99) - (b.header?.top ?? 0), where).toBeLessThanOrEqual(72);
+      // One line: the four share it, in this order, none over the next.
+      expect((b.logo?.right ?? 999) <= (b.action?.left ?? 0), where).toBe(true);
+      expect((b.action?.right ?? 999) <= (b.fold?.left ?? 0), where).toBe(true);
+      expect((b.fold?.right ?? 999) <= (b.menu?.left ?? 0), where).toBe(true);
+      expect(b.menu?.right ?? 999, where).toBeLessThanOrEqual(320);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+        320,
+      );
+    } finally {
+      await page.context().close();
+    }
+  });
+
+  for (const sticky of [false, true]) {
+    it(`hangs its panel under the bar at 390, covering none of it${sticky ? ", fixed" : ""}`, async () => {
+      const page = await open(placed({ ...FOLD, sticky }), 390, 800);
+      try {
+        await openFold(page);
+        const b = await boxes(page, {
+          header: "header.rb-header",
+          action: "header > .rb-nav-action",
+          menu: "header > .rb-nav-narrow > summary",
+          panel: ".rb-nav-fold[open] > .rb-nav",
+        });
+        const where = JSON.stringify(b);
+        expect(b.panel, where).not.toBeNull();
+        expect(b.panel?.top ?? 0, where).toBeGreaterThanOrEqual((b.header?.bottom ?? 0) - 1);
+        expect(overlap(b.panel, b.action), where).toBe(false);
+        expect(overlap(b.panel, b.menu), where).toBe(false);
+        expect(b.panel?.right ?? 999, where).toBeLessThanOrEqual(390);
+        // A fixed bar stays fixed with «Ir a…» on the phone: one line, not the row's two.
+        expect(
+          await page.evaluate(
+            () => getComputedStyle(document.querySelector("header") as Element).position,
+          ),
+        ).toBe(sticky ? "sticky" : "relative");
+      } finally {
+        await page.context().close();
+      }
+    });
+  }
 });
