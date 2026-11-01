@@ -5721,5 +5721,22 @@ de la hoja, que ahora es su transición, y lee la de nivel superior. La frase de
 fija en el móvil se ajusta el día 5, junto con la opción «Ir a…» que nombraría: hoy esa opción no
 existe en el panel.
 
+**La e2e, y una carrera que no era de hoy.** La primera e2e completa dio una roja: «is a sheet on a
+phone…», del sprint 24 día 6. axe leía en el panel «Estilo» la etiqueta de cada fila, `--ui-muted`,
+como #6a788d sobre blanco: 4,48 de contraste, y ese color no existe en ningún fichero. Lo que se midió:
+
+| Dónde | Rama del día 3 | `main` del día |
+|---|---|---|
+| e2e completa | roja 3 veces de 4 | verde 1 de 1 |
+| la caminata sola, en su bloque o con la CPU seis veces más lenta | verde 7 de 7 | verde 1 de 1 |
+
+Un registrador pasivo de animaciones la atrapó en la tercera roja. Abrir el selector de letra vuelve a
+lanzar la entrada del propio «Estilo»: `ui-enter-right` en su `<aside>`, desde opacidad 0, 211 ms.
+Empieza entre 16 y 42 ms después de la pulsación, en `main` igual que en la rama. Con el servidor ya
+caliente, axe leía las etiquetas a través de esa entrada, a una opacidad de 0,91. La caminata espera
+ahora a `motionSettled` antes de axe, que es la regla del propio fichero. Que el panel se vuelva a
+desvanecer detrás del velo al abrir el selector es cosa del panel y no de hoy: queda anotado para David.
+
 **Medidas.** `pnpm test` 3604 (171 ficheros); `typecheck`, `lint` (0 errores), invariantes, golden,
-`renderer:deps` y `size` (el script en 0,8 KB de 2) en verde. `test:a11y` local 846, antes 628.
+`renderer:deps` y `size` (el script en 0,8 KB de 2) en verde. `test:a11y` local 846, antes 628. e2e
+completa con la espera, dos veces seguidas: **268 verdes y 1 omitida, 1125 y 1127 s**.

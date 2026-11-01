@@ -16477,6 +16477,14 @@ describe("sprint 24 día 6 — la letra se elige por su nombre", () => {
       // box and «Hecho» fit, and no row pushes the page sideways (ADR 0042).
       await fitsTheWindow(studio, chooser);
       expect(await overflowing(studio), "something spills at 390 with the chooser").toEqual([]);
+      // **Settled before axe reads a colour** (sprint 31 día 3, measured). Opening the chooser
+      // restarts «Estilo»'s own entrance (`ui-enter-right` on its `<aside>`, from opacity 0, 211 ms:
+      // recorded starting 16–42 ms after the click, on main as on the branch), and on a warm server
+      // axe read the panel's labels through it — `--ui-muted` at about 0.91, #6a788d on white, 4.48.
+      // Red in three of four full runs of the día 3 branch and never alone or in its own block,
+      // which is what a race with the server's speed looks like. The restart itself is the panel's
+      // business and is written down for David, not changed here.
+      await motionSettled(studio);
       await axeSerious(studio, "el selector de letra a 390");
     } finally {
       await context.close();
