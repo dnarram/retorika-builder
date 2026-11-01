@@ -5740,3 +5740,52 @@ desvanecer detrás del velo al abrir el selector es cosa del panel y no de hoy: 
 **Medidas.** `pnpm test` 3604 (171 ficheros); `typecheck`, `lint` (0 errores), invariantes, golden,
 `renderer:deps` y `size` (el script en 0,8 KB de 2) en verde. `test:a11y` local 846, antes 628. e2e
 completa con la espera, dos veces seguidas: **268 verdes y 1 omitida, 1125 y 1127 s**.
+
+### Día 4 — el raíl se elige en el lienzo, solo el modelo (PR de `feat/el-rail-se-elige-en-el-lienzo`, ADR 0060 §9)
+
+**El lienzo ya enseñaba el raíl donde lo verá un visitante.** El `<iframe>` llena la tarjeta y la página
+se desplaza dentro de él, así que una columna o un desplegable fijos en la web publicada lo son igual
+en el lienzo. Lo que faltaba era lo que el editor necesita para sostenerlos.
+
+**Las claves del parche.** El raíl izquierdo, el derecho y «Ir a…» tienen clave propia: `h:rail-left`,
+`h:rail-right` y `h:fold`. Sin ellas, la marca y el botón que van con las páginas tenían la misma clave
+que los de la barra, y morphdom guarda un nodo por clave. La prueba se escribió primero y salió roja; sin
+las claves, la marca del raíl y la de la barra comparten clave. Con ellas, pasar de la barra a los raíles
+y volver deja la cabecera igual que un render nuevo y las mismas secciones, sin reconstruir ninguna.
+
+**Elegir en el lienzo.**
+
+- Pulsar un raíl o «Ir a…» fuera de sus entradas elige la cabecera, como pulsar la barra: los dos viven
+  dentro de ella. El contorno se dibuja también a su alrededor, porque con todo en raíles la barra no
+  tiene alto y su contorno no enseñaría nada.
+- Una entrada del raíl lleva el lienzo a su sección y la elige, como las de la barra.
+- «Ir a…» se abre con su resumen sin elegir nada. Elegir una sección lo cierra, porque la elección
+  redibuja la cabecera desde el documento, donde nada está abierto. Escribí una línea para cerrarlo, la
+  saboteé y la caminata siguió verde: la quité.
+- La leyenda de teclas se aparta del raíl, que es el ajuste 3 de David: a la derecha con un raíl a la
+  izquierda, en el centro con dos. Lo lee de `data-rails` y de los anchos del renderer, nunca de una
+  medida.
+
+**La caminata «sprint 31 día 4»**, a 1440, con el lienzo maquetando a 1280:
+
+- Con la página «Qué ponemos» convertida, como hace un dueño, y las páginas, la marca, el botón y las
+  secciones en un raíl izquierdo: el raíl mide 240, la portada empieza en 240 y mide 1040, y ninguna
+  píldora de añadir sección cae bajo la columna.
+- Pulsar el raíl elige la cabecera, la contornea y abre «Menú».
+- Su «Reservar» lleva el lienzo a «Contacto» y lo elige.
+- Tab desde su última entrada llega a la portada, y la leyenda aparece a la derecha del raíl.
+- La barra de texto del titular queda dentro de su sección de 1040.
+- Con «Ir a…»: debajo de la barra, se abre sin elegir nada, una entrada lleva a su sección y lo cierra,
+  y la cabecera elegida lo contornea.
+
+**Saboteos**, deshechos copiando el fichero guardado: sin el contorno del raíl y del desplegable, las
+dos caminatas en rojo; sin la regla de la leyenda, la primera en rojo; sin las claves, la prueba de
+claves en rojo.
+
+**Lo que la caminata enseñó del modelo de siempre.** Tab desde el raíl entra en la página por la
+sección que tiene el teclado, no por la primera, y por el camino pasa por cada píldora de añadir
+sección. Es como funcionaba con la barra; la caminata elige la portada antes, como la del sprint 30.
+
+**Medidas.** `pnpm test` 3605 (171 ficheros); `typecheck` y `lint` (0 errores) en verde. La salida del
+renderer no cambia: ni goldens ni `test:a11y`. e2e completa **270 verdes y 1 omitida, 1134 s, a la
+primera**, con las dos caminatas nuevas. **Caminatas reescritas: ninguna.**

@@ -200,3 +200,26 @@ the one section of its page that lends a menu entry, and a button takes its dest
 menu — so since sprint 30 the matrix had drawn no sections menu at all, and its «row» layouts no row.
 The button goes to a page now, and the matrix grows by the places: eight beside the pages in the bar
 and in a right rail, and the three-column page and the disclosure over the five schemes.
+
+## Note — sprint 31 día 4: the places in the canvas
+
+**9. A rail and «Ir a…» are chosen in the canvas as the bar is.** The canvas is one `<iframe>` that
+fills the card, and the page scrolls inside it, so a column or a disclosure fixed in the published page
+is fixed in the canvas the same way: the owner sees the rail where a visitor at 1280 will. What día 4
+adds is what the editor needed to hold them:
+
+- **Each has a key of its own** for the patch: `h:rail-left`, `h:rail-right` and `h:fold`. Without them
+  a rail and the disclosure were transparent to the chain, and the brand and the button that went with
+  the pages were keyed exactly as the bar's — `h:header/h:brand` twice — when morphdom keeps one node
+  per key. The test that says so was written red first.
+- **A press on a rail or on «Ir a…», away from an entry, chooses the header**, as a press on the bar
+  always did — both are inside it. The outline is drawn round them too: with every menu in a rail the
+  bar is no height, and an outline round it alone would show nothing chosen.
+- **An entry of the rail is a header link** and takes the canvas to its section, as the bar's do.
+  «Ir a…» opens from its summary and chooses nothing. Choosing a section closes it, because the choice
+  draws the header again from the document, where nothing is open; the editor needed no line of its own
+  for it — one was written, sabotaged, stayed green, and was taken out.
+- **The key legend stands clear of a rail** (David's adjustment 3): at the right when a rail stands on
+  the left, in the middle when two stand. Read from `data-rails` and the renderer's own widths, which
+  write its `@media` — never from a measurement.
+

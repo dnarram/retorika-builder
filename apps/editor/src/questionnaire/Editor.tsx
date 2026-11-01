@@ -10,7 +10,14 @@ import {
   variantsFor,
 } from "@retorika/catalog";
 import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
-import { buildCss, ownFontsFor, render, sectionMenuEntries } from "@retorika/renderer";
+import {
+  buildCss,
+  ownFontsFor,
+  RAIL_FOLD_WIDTH,
+  render,
+  sectionMenuEntries,
+  TWO_RAILS_FOLD_WIDTH,
+} from "@retorika/renderer";
 import {
   bindList,
   canFoldPage,
@@ -7083,6 +7090,11 @@ export function Editor({
       // the same outline. Its entries keep the pointer a link has.
       ".rb-header { cursor: pointer; }",
       `.rb-header.rb-selected { outline: ${screenPx(2)} solid #156FE7; outline-offset: ${screenPx(-2)}; }`,
+      // **And its places that stand apart from the bar** (ADR 0060, sprint 31 día 4): a rail and
+      // «Ir a…» are the header's, chosen with it, so they wear its outline — with every menu in a
+      // rail the bar is no height at all, and an outline round it alone would show nothing chosen.
+      `.rb-header.rb-selected .rb-rail, .rb-header.rb-selected .rb-nav-fold { outline: ${screenPx(2)} solid #156FE7;`,
+      `  outline-offset: ${screenPx(-2)}; }`,
       /*
        * **The focus ring, and why it is not the selection outline** (sprint 17 day 3). Where the
        * keyboard *is* and which section is *chosen* are two different facts that are often the same
@@ -7132,6 +7144,19 @@ export function Editor({
       "  background: #0F172A; color: #FFFFFF; pointer-events: none;",
       `  font: 500 ${screenPx(12)}/1.45 ${UI_FONT}; box-shadow: ${CHROME_SCALE.shadow2}; }`,
       ".rb-keys span:first-child { font-weight: 700; letter-spacing: 0.02em; }",
+      /*
+       * **Clear of a rail** (ADR 0060, David's adjustment 3 on approving sprint 31): a column fixed
+       * at the left edge is where the legend sits, so with a rail standing there it goes to the right,
+       * and with two standing it goes to the middle, between them. Read from the header's own
+       * `data-rails` and the widths the rails stand from — the renderer's constants, which write its
+       * `@media` — never from a measurement. With two rails, between the two widths only the pages'
+       * rail stands, so it is the pages' side that counts there.
+       */
+      `@media (min-width: ${RAIL_FOLD_WIDTH}px) {`,
+      '  .rb-header[data-rails=left] ~ .rb-keys, .rb-header[data-rails="left right"][data-pages=left] ~ .rb-keys {',
+      `    left: auto; right: ${screenPx(12)}; } }`,
+      `@media (min-width: ${TWO_RAILS_FOLD_WIDTH}px) {`,
+      '  .rb-header[data-rails="left right"] ~ .rb-keys { left: 50%; right: auto; transform: translateX(-50%); } }',
       // Inset within the section, not hung outside it like the corner handles: the cover is
       // the first section, with no room above it, and a button hanging above the top of the
       // page there would sit outside the iframe's own visible area — covered by whatever the
