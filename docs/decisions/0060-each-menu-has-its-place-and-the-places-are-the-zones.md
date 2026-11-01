@@ -48,7 +48,7 @@ fixture that carried it. `"shared"` was the bar, which an absent position alread
 «Ir a…» disclosure beside «Menú» — whatever their place on a wide screen. The disclosure itself,
 `fold` at any width, is drawn from día 3; until then the renderer refuses a document that names it with
 an explicit error, because an empty place is what would be published otherwise, and nothing in the
-editor can write it before the panel of día 5.
+editor can write it before the panel of día 5. (Drawn on día 3, and the error gone: §7.)
 
 ### 2. The rail is one mechanism for both menus
 
@@ -159,3 +159,44 @@ the document in it, **815 bytes gzipped** of the 2 KB (794 before).
   `sectionsPositionPatch` and `brandWithPagesPatch`; «Secciones en su propia fila» writes
   `position: "row"`. The panel's «Dónde va» is día 5's.
 - Day by day in `docs/design/REVIEW.md`, sprint 31 día 2.
+
+## Note — sprint 31 día 3: «Ir a…» and the motion
+
+**7. The disclosure is one element with two places.** `details.rb-nav-fold`, inside the header after
+the button and before «Menú», holds this page's sections behind «Ir a…» (`nav.goTo` in the renderer's
+locale). On a wide screen (`data-sections=fold`, from 721 px) it is fixed at the far side of the page,
+and its distance from the top is **the bar's height plus `space.md`** — David's adjustment 2, with the
+sign of his erratum written out: a fixed bar stays above it at every scroll, a bar in the flow is above
+it at the top of the page. On a phone (`data-mobile=fold`, to 720 px) it is a word in the bar beside
+«Menú», its panel hanging under the whole bar as «Menú»'s does: one line, not the second row ADR 0043
+refused, so a fixed bar stays fixed. The bar's words close up from 16 to 8 px there, measured at 320 px:
+at 16 the brand had 21 px left and its 40 px logo ran 3 px over the button; at 8 it has 45. Its open
+panel is bounded by the window and scrolls down inside itself, never across (§2's reason). It takes the
+bar's scheme as «Menú»'s panel does — not rule 6's exact colour for «Barra», which stays the bar's and
+the rail's. The stylesheet travels only in a document that uses it.
+
+- **The side, by `data-rails`** (adjustment 3). With the sections in the disclosure the one rail a page
+  can have is the pages', so the disclosure takes the side that rail leaves free: the right, or the left
+  when the pages stand on the right (from 1024, where they do). The plan also wrote a rule shifting it
+  240 px clear of a right rail beside a left one; with the sections folded that pair cannot exist, so
+  the rule would be dead and is not written.
+- **A bar it leaves with nothing collapses** as §5 says, from 721 when no rail stands, and
+  `--rb-header-h` is `0px` on the collapsed header itself — so the disclosure inherits the bar's real
+  height even where no script measures it, as in the editor's canvas.
+- **Choosing an entry closes it** (ADR 0058's script, 829 B gzipped of the 2 KB): «Ir a…» holds anchors
+  on the page being read, and a panel left open covers the section the visitor asked for. Escape and a
+  press outside close it as they close «Menú».
+
+**8. Motion, only for somebody who has not asked for less** (David's third condition). Every
+`transition` and `animation` of the header is inside `@media (prefers-reduced-motion: no-preference)`,
+held by a test that walks the stylesheet: the rule under the current entry fades in and out (every entry
+carries an underline in no colour, since a colour is what a transition can move and `none` is not — the
+page at rest is unchanged); in a rail the current entry is marked by a bar at its edge instead of the
+rule under it, faded the same way; the disclosure's panel comes in from 4 px above, one animation filled
+backwards. 200 ms each.
+
+**Found on the way, in the harness.** The header's accessibility matrix gave its button to «Contacto»,
+the one section of its page that lends a menu entry, and a button takes its destination out of every
+menu — so since sprint 30 the matrix had drawn no sections menu at all, and its «row» layouts no row.
+The button goes to a page now, and the matrix grows by the places: eight beside the pages in the bar
+and in a right rail, and the three-column page and the disclosure over the five schemes.
