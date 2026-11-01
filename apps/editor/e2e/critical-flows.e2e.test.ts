@@ -23728,3 +23728,213 @@ describe("sprint 31 día 1 — el lienzo maqueta a 1280 y se escala", () => {
     }
   }, 180_000);
 });
+
+/**
+ * **Sprint 31 día 4 — el raíl y «Ir a…» se eligen en el lienzo** (ADR 0060). Solo el modelo: el
+ * panel que escribe un sitio es del día 5, así que cada caminata escribe en la sesión de su propio
+ * navegador lo que ese panel escribirá, y recarga — el mismo documento que el dueño tendrá, por otra
+ * puerta.
+ *
+ * Con las páginas, la marca y el botón en un raíl izquierdo y las secciones con ellas, pulsar el raíl
+ * elige la cabecera y abre «Menú»; una entrada del raíl lleva el lienzo a su sección y la elige; Tab
+ * desde el raíl entra en la página; la barra de texto de un titular se queda dentro de su sección,
+ * que mide 1280 − 240; y la leyenda de teclas no cae sobre el raíl. Con «Ir a…», el resumen abre el
+ * desplegable sin elegir nada, una entrada lleva a su sección y lo cierra, y la cabecera elegida
+ * dibuja su contorno también alrededor de él.
+ */
+describe("sprint 31 día 4 — el raíl se elige en el lienzo", () => {
+  /** Press `locator` where it is drawn, at a fraction of its box (the centre by default). */
+  const pressAt = async (page: Page, locator: Locator, fx = 0.5, fy = 0.5) => {
+    const box = await locator.boundingBox();
+    if (!box) throw new Error("not drawn, so it cannot be pressed");
+    await page.mouse.click(box.x + box.width * fx, box.y + box.height * fy);
+  };
+
+  /** The open document's header, rewritten in this browser's session, and the editor reloaded on
+   * it: what the «Dónde va» of día 5 will write, written here so the canvas can be walked first. */
+  async function placeMenus(page: Page, header: Record<string, unknown>): Promise<void> {
+    await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+    await page.evaluate((patch) => {
+      const raw = localStorage.getItem("retorika.session.v1");
+      if (!raw) throw new Error("no session to place the menus in");
+      const session = JSON.parse(raw) as {
+        openIndex: number;
+        documents: { header?: Record<string, unknown> }[];
+      };
+      const doc = session.documents[session.openIndex];
+      if (!doc) throw new Error("no open document");
+      doc.header = { ...(doc.header ?? {}), ...patch };
+      localStorage.setItem("retorika.session.v1", JSON.stringify(session));
+    }, header);
+    await page.reload({ waitUntil: "networkidle" });
+    await page.frameLocator(PREVIEW).first().locator('[data-section="sec-cover"]').waitFor();
+  }
+
+  /** A box inside the frame, in the frame's own pixels: the page's, before the canvas scales it. */
+  const inFrame = (locator: Locator) =>
+    locator.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+    });
+
+  it("elige la cabecera desde el raíl, lleva a una sección desde él, y deja seguir con Tab", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      // A second page, so the pages menu has something to stand in the rail: «Qué ponemos»
+      // converted, as an owner does (the sprint 30 día 3 walk's way).
+      await frame.locator('[data-section="sec-services"]').click();
+      await frame
+        .locator(
+          '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+        )
+        .click();
+      await expect(frame.locator('.rb-nav-wide nav[aria-label="Páginas"] a')).toHaveText([
+        "Qué ponemos",
+      ]);
+      await sessionHolds(page, (raw) => raw.includes('"slug":"que-ponemos"'), "guardó la página");
+      await placeMenus(page, {
+        pages: { shown: true, position: "left" },
+        sections: { shown: true, position: "left" },
+        brandWithPages: true,
+      });
+
+      const rail = frame.locator('.rb-rail[data-side="left"]');
+      await expect(rail).toBeVisible();
+      // Everything in one column, in the order of the markup, and the bar with nothing left.
+      expect(
+        await rail.evaluate((el) =>
+          [...el.children].map((child) => child.getAttribute("aria-label") ?? child.className),
+        ),
+      ).toEqual(["rb-brand", "Páginas", "Secciones", "rb-nav-action"]);
+      const header = frame.locator("header.rb-header");
+      expect(await header.getAttribute("data-bar")).toBe("none");
+      const railBox = await inFrame(rail);
+      expect(railBox.right - railBox.left).toBe(240);
+      const cover = frame.locator('[data-section="sec-cover"]');
+      const coverBox = await inFrame(cover);
+      expect(coverBox.left).toBe(240);
+      expect(coverBox.right - coverBox.left).toBe(1280 - 240);
+      // The pill that adds a section lives in `<main>` with the sections, so the rail's margin moves
+      // it too: no pill under the column.
+      const pills = await frame
+        .locator(".rb-pill")
+        .evaluateAll((els) => els.map((el) => el.getBoundingClientRect().left));
+      expect(pills.length).toBeGreaterThan(0);
+      for (const left of pills) expect(left).toBeGreaterThanOrEqual(railBox.right);
+
+      // 1. Pressing the rail away from its entries chooses the header, draws the outline round the
+      //    rail — the bar is no height, and an outline round it alone would show nothing — and opens
+      //    «Menú».
+      await pressAt(page, rail, 0.5, 0.92);
+      await expect(header).toHaveClass(/rb-selected/);
+      expect(await rail.evaluate((el) => getComputedStyle(el).outlineStyle)).toBe("solid");
+      await expect(frame.locator("[data-section].rb-selected")).toHaveCount(0);
+      await expect(
+        page.getByRole("complementary", { name: "La cabecera de tu web" }),
+      ).toBeVisible();
+
+      // 2. The rail's way to «Contacto» — the button that went with the pages — takes the canvas to
+      //    the section and chooses it, as the bar's did on sprint 30 día 3.
+      const contact = frame.locator('[data-section="sec-contact"]');
+      await pressAt(page, rail.locator('a[href="#sec-contact"]').first());
+      await expect(contact).toHaveClass(/rb-selected/);
+      await expect(header).not.toHaveClass(/rb-selected/);
+      await expect
+        .poll(() =>
+          contact.evaluate((el) => {
+            const view = el.ownerDocument.defaultView as Window;
+            const top = Math.round(el.getBoundingClientRect().top);
+            return { scrolled: view.scrollY > 0, inView: top >= -1 && top < view.innerHeight };
+          }),
+        )
+        .toEqual({ scrolled: true, inView: true });
+
+      // 3. Tab from the rail's last entry goes on into the page — past at most the pill above the
+      //    first section — and the key legend that arrives with the section stands clear of the
+      //    rail, at the right (David's adjustment 3). The cover is chosen first, as on sprint 30
+      //    día 3: Tab enters the page at the section the keyboard holds, and step 2 gave it
+      //    «Contacto», five pills further down.
+      await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
+      await pressAt(page, cover, 0.02, 0.5);
+      await expect(cover).toHaveClass(/rb-selected/);
+      await rail.locator("a").last().focus();
+      const focusedSection = () =>
+        frame
+          .locator("body")
+          .evaluate(() => (document.activeElement as HTMLElement | null)?.dataset["section"] ?? "");
+      let reached = "";
+      for (let press = 0; press < 4 && reached === ""; press += 1) {
+        await page.keyboard.press("Tab");
+        reached = await focusedSection();
+      }
+      expect(reached, "Tab from the rail never reached a section").toBe("sec-cover");
+      const legend = frame.locator(".rb-keys");
+      await expect(legend).toBeVisible();
+      const legendBox = await inFrame(legend);
+      expect(legendBox.left, JSON.stringify(legendBox)).toBeGreaterThan(railBox.right);
+      expect(legendBox.right).toBeLessThanOrEqual(1280);
+
+      // 4. The text bar of a headline stays inside its section, which a rail made 1040 wide.
+      await frame.locator('[data-section="sec-cover"] [data-id="el-headline"]').click();
+      const bar = frame.locator(".rb-toolbar");
+      await expect(bar).toBeVisible();
+      const barBox = await inFrame(bar);
+      const coverNow = await inFrame(cover);
+      expect(barBox.left, JSON.stringify({ barBox, coverNow })).toBeGreaterThanOrEqual(
+        coverNow.left - 0.5,
+      );
+      expect(barBox.right, JSON.stringify({ barBox, coverNow })).toBeLessThanOrEqual(
+        coverNow.right + 0.5,
+      );
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("abre «Ir a…» sin elegir nada, lleva a la sección y se cierra, y se dibuja con la cabecera elegida", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      await placeMenus(page, { sections: { shown: true, position: "fold", mobile: "row" } });
+      const frame = page.frameLocator(PREVIEW).first();
+      const header = frame.locator("header.rb-header");
+      const fold = frame.locator("details.rb-nav-fold");
+      const summary = fold.locator("summary");
+      await expect(summary).toBeVisible();
+      await expect(summary).toHaveText("Ir a…");
+      // Under the bar, by the bar's height plus a space: nothing of the bar under it.
+      const barBox = await inFrame(header);
+      expect((await inFrame(summary)).top).toBeGreaterThanOrEqual(barBox.bottom);
+      const isOpen = () => fold.evaluate((d) => (d as HTMLDetailsElement).open);
+
+      // 1. The summary opens it as it does for a visitor, and chooses nothing.
+      await pressAt(page, summary);
+      await expect.poll(isOpen).toBe(true);
+      await expect(header).not.toHaveClass(/rb-selected/);
+
+      // 2. An entry takes the canvas to its section, chooses it, and closes the disclosure, as the
+      //    published page's script does. The canvas has no script: what closes it here is the
+      //    choice itself, which draws the header again from the document, where nothing is open —
+      //    probed on día 4, a press on any section closed it, so the editor needed no line of its
+      //    own (written, sabotaged, still green, taken out).
+      const entry = fold.locator("nav a").last();
+      const target = ((await entry.getAttribute("href")) ?? "").slice(1);
+      expect(target).not.toBe("");
+      await pressAt(page, entry);
+      await expect(frame.locator(`[data-section="${target}"]`)).toHaveClass(/rb-selected/);
+      await expect.poll(isOpen).toBe(false);
+
+      // 3. Choosing the header draws its outline round «Ir a…» too.
+      await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
+      await pressAt(page, header, 0.01);
+      await expect(header).toHaveClass(/rb-selected/);
+      expect(await fold.evaluate((el) => getComputedStyle(el).outlineStyle)).toBe("solid");
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+});

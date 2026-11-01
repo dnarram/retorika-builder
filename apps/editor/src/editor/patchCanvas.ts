@@ -231,6 +231,12 @@ function ownKey(el: Element): string | null {
   if (el.classList.contains("rb-brand")) return "h:brand";
   if (el.classList.contains("rb-nav-action")) return "h:action";
   if (el.classList.contains("rb-nav-row")) return "h:row";
+  // **Each menu's place** (ADR 0060, sprint 31 día 4). A rail holds copies of what the bar holds —
+  // the brand and the button that went with the pages, a `<nav>` of either menu — and «Ir a…» holds a
+  // «Secciones» beside a rail's or the row's. Unkeyed, a `<div>` and a `<details>` are transparent to
+  // the chain, and the rail's brand was `h:header/h:brand` like the bar's.
+  if (el.classList.contains("rb-rail")) return `h:rail-${el.getAttribute("data-side") ?? ""}`;
+  if (el.classList.contains("rb-nav-fold")) return "h:fold";
   if (el.classList.contains("rb-nav-wide")) return "m:wide";
   if (el.classList.contains("rb-nav-narrow")) return "m:narrow";
   if (el.tagName === "NAV") {

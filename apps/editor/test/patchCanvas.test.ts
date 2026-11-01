@@ -489,6 +489,64 @@ describe("patchCanvas — an edit is a patch", () => {
     expect([...live.querySelectorAll("[data-section]")]).toEqual(sectionsBefore);
   });
 
+  /**
+   * **Each menu's place keys apart too** (ADR 0060, sprint 31 día 4). A rail holds copies of what
+   * the bar holds — the brand and the button that went with the pages, a `<nav>` of either menu — and
+   * «Ir a…» holds a «Secciones» beside the rail's or the row's. Without a key of their own the rail and
+   * the disclosure are unkeyed `<div>` and `<details>`, transparent to the chain, so the brand in the
+   * rail was `h:header/h:brand` like the bar's, and morphdom keeps one node per key.
+   */
+  it("keys the rails and «Ir a…» apart from the bar, and moving a menu leaves <main> whole", () => {
+    const base = menuFixture();
+    const placed = parseDocument({
+      ...base,
+      header: {
+        brand: { name: true },
+        action: { kind: "page", pageId: "page-donde-estamos" },
+        pages: { position: "left", shown: true },
+        sections: { position: "right", shown: true, mobile: "fold" },
+        brandWithPages: true,
+      },
+    });
+    const live = settled(placed);
+    const keyed = (selector: string) =>
+      [...live.querySelectorAll(selector)].map((el) => keyOf(el) ?? "(none)");
+    expect(keyed(".rb-rail")).toEqual(["h:header/h:rail-left", "h:header/h:rail-right"]);
+    expect(keyed("details.rb-nav-fold")).toEqual(["h:header/h:fold"]);
+    expect(keyed(".rb-brand")).toEqual(["h:header/h:brand", "h:header/h:rail-left/h:brand"]);
+    expect(keyed(".rb-nav-action")).toEqual(["h:header/h:action", "h:header/h:rail-left/h:action"]);
+    const all = [...live.querySelectorAll("header *")].map((el) => keyOf(el)).filter(Boolean);
+    expect(all.length).toBeGreaterThan(10);
+    expect(new Set(all).size, all.join("\n")).toBe(all.length);
+
+    // The bar again, and the rails again: no rail left behind, none missing, and the very same
+    // section nodes throughout — kept by key, not rebuilt by position.
+    const sectionsBefore = [...live.querySelectorAll("[data-section]")];
+    const inBar = parseDocument({
+      ...placed,
+      header: { ...placed.header, pages: { shown: true }, sections: { shown: true } },
+    });
+    expect(patchCanvas(live, freshFrom(inBar), buildCss(inBar), rules)).toMatchObject({
+      ok: true,
+      structural: true,
+    });
+    expect(live.querySelectorAll(".rb-rail, details.rb-nav-fold")).toHaveLength(0);
+    expect(live.querySelector("header")?.hasAttribute("data-rails")).toBe(false);
+    expect(patchCanvas(live, freshFrom(placed), buildCss(placed), rules)).toMatchObject({
+      ok: true,
+      structural: true,
+    });
+    expect(keyed(".rb-rail")).toEqual(["h:header/h:rail-left", "h:header/h:rail-right"]);
+    // What a fresh render draws, inside and on the header — the attributes as a set, since
+    // morphdom appends the ones it adds and their order means nothing.
+    const attributes = (el: Element | null | undefined) =>
+      Object.fromEntries([...(el?.attributes ?? [])].map((a) => [a.name, a.value]));
+    const fresh = freshFrom(placed).querySelector("header");
+    expect(live.querySelector("header")?.innerHTML).toBe(fresh?.innerHTML);
+    expect(attributes(live.querySelector("header"))).toEqual(attributes(fresh));
+    expect([...live.querySelectorAll("[data-section]")]).toEqual(sectionsBefore);
+  });
+
   it("patches a changed skeleton too and says so: a section gone, the chrome beside it kept", () => {
     const doc = fixture();
     const live = settled(doc);
