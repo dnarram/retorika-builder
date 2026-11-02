@@ -5862,3 +5862,64 @@ La revisión de los paneles se escribió primero y salió roja.
 completa **271 verdes y 1 omitida, 1139 s, a la primera**. **Caminatas reescritas: ninguna.** El día
 entero corrió en Opus 5.5: el plan repartía la mecánica a Sonnet, pero los constructores de parche
 existían desde el día 2 y lo demás era el copy y qué se ofrece cuándo.
+
+### Día 6 — el móvil del raíl, la revisión previa y el e2e (PR de `feat/el-movil-del-rail`, ADR 0060 §11)
+
+**Una web en columnas es, en el móvil, la cabecera del sprint 30**, y ahora está medido, no supuesto.
+Son tres disposiciones de columnas por los tres sitios del móvil para las secciones, a 320 × 568 y a
+390 × 844, todas con la barra fija:
+
+- no hay columna, y la marca y el botón vuelven a la barra;
+- la barra mide 72 px o menos, por debajo del 15 % de 568;
+- nada se monta sobre lo siguiente de la barra ni pasa del borde;
+- la barra fija sigue fija con «Ir a…» y sin secciones, y se suelta con la fila, como siempre.
+
+Sin la regla que estrecha el hueco del móvil con «Ir a…», los tres casos de «Ir a…» a 320 se ponen en
+rojo.
+
+**Un solo desplegable abierto, sin un byte.** En el móvil «Ir a…» y «Menú» cuelgan sus paneles de la
+misma barra. La pulsación que abre uno es una pulsación fuera del otro, también con Intro o Espacio
+sobre un `<summary>`, y el script ya cerraba al pulsar fuera. Medido con puntero y con teclado, con
+Escape devolviendo el foco al resumen del que cerró. Saboteado el cierre de fuera, se pone en rojo.
+
+**Lighthouse con columnas.** Un sujeto nuevo: `cabecera-con-marca` con dos raíles e «Ir a…», en el
+perfil móvil de Lighthouse, donde no hay columna. Mide lo que cuestan unas columnas a un teléfono que
+nunca las enseña:
+
+| Sujeto | Rendimiento | Accesibilidad | Buenas prácticas | SEO | LCP | CLS |
+|---|---|---|---|---|---|---|
+| barra fija con logo | 100 | 100 | 100 | 100 | 1,35 s | 0,008 |
+| en columnas | 100 | 100 | 100 | 100 | 1,35 s | 0,000 |
+
+En columnas aparecen dos auditorías por debajo de la nota completa: CSS sin usar y CSS sin minificar, a
+0,5 cada una. Es la hoja de los raíles, que viaja y no se aplica.
+
+**La revisión previa a la descarga y el raíl.** Nada nuevo que hacer: la columna lleva el color exacto
+de la barra y una parte se juzga contra él esté donde esté. Ahora hay una prueba que lo dice y que lee
+la hoja: el día que la columna deje de llevarlo, se pone en rojo.
+
+**El backlog.** Los puntos y la píldora entran en «Recorded against the thing it challenges», cada uno
+con las palabras de David, buscadas en su mensaje y no en el plan. Las dos filas del sprint 28 sobre
+el ancho fijo del lienzo, que el día 1 resolvió con la ADR 0061, quedan cerradas apuntando a ella.
+
+**Una línea que sí hacía falta.** El día 4 quité del editor la línea que cierra «Ir a…» al elegir una
+entrada, porque la caminata de escritorio seguía verde sin ella. Allí cerraba otra cosa: un redibujado
+de la cabecera unos 800 ms después de elegir. En la vista de móvil del lienzo ese redibujado no llega,
+el panel se quedaba abierto sobre la sección elegida, y la caminata de hoy se puso en rojo. La línea ha
+vuelto; saboteada, esta caminata se pone en rojo. La nota de la ADR y el comentario de la caminata del
+día 4 están corregidos.
+
+**La caminata «sprint 31 día 6».** Todo se elige desde el panel: las páginas, la marca y el botón a la
+izquierda, las secciones a la derecha, «Ir a…» en el móvil y la barra fija.
+
+- En la vista de móvil del lienzo: ninguna columna, «Ir a…» junto a «Menú», y una entrada lleva el
+  lienzo a su sección, la elige y lo cierra.
+- El ZIP, abierto desde el disco sin red, a 390: columnas plegadas; una entrada lleva a su sección, a la
+  vista y no debajo de la barra, que sigue fija; abierto otra vez, Escape lo cierra con el foco en su
+  resumen; ninguna petición fallida.
+- El mismo ZIP a 1280: las dos columnas en pie y `<main>` en 240 con 800 de ancho.
+
+**Medidas.** `pnpm test` 3613 (171 ficheros); `typecheck`, `lint` (0 errores), invariantes, golden
+(ningún byte distinto: el script solo cambia en su comentario), `renderer:deps` y `size` en verde.
+`test:a11y` local 866, antes 846. `pnpm lighthouse` 8 de 8. e2e completa **272 verdes y 1 omitida,
+1147 s, a la primera**. **Caminatas reescritas: ninguna**; la del día 4 solo cambia su comentario.

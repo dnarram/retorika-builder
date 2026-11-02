@@ -216,9 +216,11 @@ adds is what the editor needed to hold them:
   always did — both are inside it. The outline is drawn round them too: with every menu in a rail the
   bar is no height, and an outline round it alone would show nothing chosen.
 - **An entry of the rail is a header link** and takes the canvas to its section, as the bar's do.
-  «Ir a…» opens from its summary and chooses nothing. Choosing a section closes it, because the choice
-  draws the header again from the document, where nothing is open; the editor needed no line of its own
-  for it — one was written, sabotaged, stayed green, and was taken out.
+  «Ir a…» opens from its summary and chooses nothing, and choosing one of its entries closes it, as the
+  published page's script does. *Corrected on día 6*: día 4 took out the line that closes it, because
+  its desktop walk stayed green without — a redraw of the header some 800 ms after the choice closed it
+  there. The phone view of the canvas has no such redraw, and día 6's walk went red; the line is back
+  and that walk guards it.
 - **The key legend stands clear of a rail** (David's adjustment 3): at the right when a rail stands on
   the left, in the middle when two stand. Read from `data-rails` and the renderer's own widths, which
   write its `@media` — never from a measurement.
@@ -250,4 +252,24 @@ beside the row and nothing, and the fixed bar's sentence names it as a way to ke
   links on a bar painted near-black read on the bar and vanish in the panel. The pages hang in «Menú» on
   every phone and the sections only behind «Ir a…»; the worse of the two backgrounds is the finding.
   The gap existed for «Menú» since sprint 30 día 6; día 3's disclosure widened it.
+
+## Note — sprint 31 día 6: the columns on a phone
+
+**11. A page in columns is the phone header ADR 0057 drew**, measured rather than assumed: for three
+arrangements of columns and each of the sections' three phone places, at 320 × 568 and 390 × 844, no
+column, the brand and the button back in the bar, the bar at or under 72 px — under 15 % of 568 —
+nothing over the next thing in it and nothing past the edge, and a fixed bar that stays fixed except
+over the sections' row.
+
+- **One disclosure open at a time, for no byte.** On a phone «Ir a…» and «Menú» hang their panels from
+  the same bar. The press that opens one is a press outside the other — Enter and Space on a `<summary>`
+  are a click — and §6's script already closes on a press outside. Measured by pointer and by keyboard,
+  with Escape giving the focus back to the summary of the one it closed; sabotaged, it goes red.
+- **What columns cost a phone that never shows them**, by Lighthouse's mobile preset on
+  `cabecera-con-marca` with two rails and «Ir a…»: 100 in all four categories, LCP 1.35 s, CLS 0.000,
+  against the same site with a fixed bar at 100, 1.35 s and 0.008. Two audits fall short of full marks
+  that the bar does not: unused and unminified CSS, at 0.5 each — the rails' stylesheet, carried and
+  never applied.
+- **Dots and a floating pill** are in the backlog's «Recorded against the thing it challenges», with
+  David's words.
 

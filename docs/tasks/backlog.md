@@ -158,7 +158,10 @@ sprint 28:
    cover escalates with 13 rows for its two-line headline; closed, the headline is one line and the gap
    under it goes from 16 to 95 px. Día 7 removed the readjustment on a commit; escalation measures the
    live boxes (ADR 0050 día 2) and was not part of that decision. David's call, with two repairs and
-   their price in the row on the fixed layout width below.
+   their price in the row on the fixed layout width below. **Closed on 31 October 2026, sprint 31
+   día 1** ([ADR 0061](../decisions/0061-the-canvas-lays-out-at-1280-and-scales.md)): the canvas lays
+   the page out at 1280 whatever panel is open, so escalating with one open measures the boxes a
+   visitor at 1280 sees; a panel only lowers the zoom.
 2. **Twelve signatures**: 0042, 0043, 0045–0054, all `proposed`.
 3. **The nine photographs at 1600 × 1072**, unchanged this sprint: the bank's nine are 1024 × 1024 and
    one 866 × 942; the sixteen root PNGs are the 11 October ones, all 1024 wide. The exemption fails on
@@ -1382,6 +1385,8 @@ open survives.
 |---|---|
 | **Moving images freely — and now it is the second time.** Conchi asked for it; it collides with document rule 4, and rule 5 already named the hole it would open. This row existed so «the next person hears it as the second time», and **the next person asked on 30 September 2026**: «más libertad en la posición», one of his seven. It arrives in a different shape, which is the useful half — **the grid exists** (sprint 8, ADR 0025 §7) and he had the design tools on, so what he was refused was not placement but placement off the grid. **Rule 4 stands.** What two owners out of three now say is that the grid as built did not read as the answer, and whether he ever opened the `Diseño` panel is not recorded. | [`docs/document-rules.md`](../document-rules.md), the note under rule 4, and [the session](../sessions/2026-09-30-taller.md) |
 | **The design review's own open list** — the third cover composition, `location`'s `split` gap, and the rest. *(Mockup 13's palettes were named here until sprint 7 day 1 and had been resolved since 28 September: the Estilo panel ships their names from `packages/tokens/src/locales/es.json`.)* | [`docs/design/REVIEW.md`](../design/REVIEW.md), "Still open" |
+| **Dots like a slideshow, for the section navigator** — refused to this list by David on 30 October 2026, planning sprint 31, with the pill below, in his words: «los puntos no se entienden en táctil sin etiqueta visible». The sprint built the column and «Ir a…» instead. | [ADR 0060](../decisions/0060-each-menu-has-its-place-and-the-places-are-the-zones.md), «What this does not decide» |
+| **A floating pill at the bottom, for the section navigator** — refused with the dots, in David's words: «la píldora choca con la barra inferior de Safari y con widgets de terceros, y su función ya la cubren la fila y el desplegable». A pages menu at the bottom of the page meets the same objection and nobody asked for it. | [ADR 0060](../decisions/0060-each-menu-has-its-place-and-the-places-are-the-zones.md), «What this does not decide» |
 | **The price — still two answers, and still a coincidence.** Two sessions answered it and they overlap at 50 €. **The third session was the one that could have made that a price rather than a coincidence, and the answer was not recorded.** The question was the fifth of the five and it is blank. | [`docs/design/HANDOFF.md`](../design/HANDOFF.md), the open-questions table, and [the session](../sessions/2026-09-30-taller.md) |
 
 ## No home but this one
@@ -1598,6 +1603,16 @@ open survives.
   that nothing reads «row × 8» verified first). **The fixed layout width stays unbuilt**, and this
   symptom no longer asks for it; its price is kept here for the day another one does — 0,707 at
   1024, 0,782 at 1280, 0,834 at 1600, against today's 0,738 / 1 / 1 with a panel open.
+
+  **Built on 31 October 2026, sprint 31 día 1, and this row is closed** ([ADR 0061](../decisions/0061-the-canvas-lays-out-at-1280-and-scales.md)).
+  Another one did ask: a column beside the content (ADR 0060) folds under 1024, and with the layout
+  width following the room, an owner at 1280 with «Menú» open would never have seen the column they
+  had just chosen. The canvas now lays the page out at **1280**, the width the published page is
+  measured at, and scales it to the room, with David's legibility floor of **0,6**: under 768
+  available pixels it lays out narrower and the card says «Vista a N px». Measured on the day: 0,79 at
+  a 1280 window and 0,616 with a panel, 0,91 and 0,74 at 1440; 1024 with a panel lays out at 887. The
+  walks that mixed the page's pixels with the screen's were rewritten (sixteen), and five real defects
+  a zoom under 1 had always had were found and fixed — REVIEW, sprint 31 día 1.
 
   **And on the sprint 28 close (27 October 2026) another one does.** Escalation measures the live
   boxes (ADR 0050 día 2), so a section escalated with a panel open writes the panel's width into its
