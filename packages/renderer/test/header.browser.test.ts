@@ -693,3 +693,91 @@ describe("«Ir a…» on the phone", () => {
     });
   }
 });
+
+/**
+ * **The rail on a phone** (ADR 0060 §3, sprint 31 día 6): no column exists under 1024, so a page whose
+ * menus stand in columns on a wide screen is the phone header ADR 0057 drew — the brand and the button
+ * back in the bar, the pages behind «Menú», the sections where the owner put them on a phone. Measured
+ * for each of the three phone places over three arrangements of columns, every bar fixed: the bar at
+ * or under 72 px — under 15 % of 568 —, nothing past the edge, nothing over the next thing in the bar,
+ * and a fixed bar that stays fixed except under the sections' row, where it lets go as it always has.
+ */
+describe("the rail on a phone", () => {
+  const arrangements: [string, Partial<Header>, "left" | "right" | "fold"][] = [
+    [
+      "pages and brand left, sections right",
+      { pages: { shown: true, position: "left" }, brandWithPages: true },
+      "right",
+    ],
+    ["pages right, sections left", { pages: { shown: true, position: "right" } }, "left"],
+    ["pages left, sections behind «Ir a…»", { pages: { shown: true, position: "left" } }, "fold"],
+  ];
+
+  for (const [name, header, sectionsAt] of arrangements) {
+    for (const mobile of ["row", "hidden", "fold"] as const) {
+      for (const [width, height] of [
+        [320, 568],
+        [390, 844],
+      ] as const) {
+        it(`${name}, sections on a phone: ${mobile} — at ${width}×${height}`, async () => {
+          const page = await open(
+            placed({
+              ...header,
+              sticky: true,
+              sections: { shown: true, position: sectionsAt, mobile },
+            }),
+            width,
+            height,
+          );
+          try {
+            const b = await boxes(page, {
+              header: "header.rb-header",
+              row: "header > .rb-nav-row",
+              logo: "header > .rb-brand img.rb-logo",
+              brand: "header > .rb-brand",
+              action: "header > .rb-nav-action",
+              fold: "header > .rb-nav-fold > summary",
+              menu: "header > .rb-nav-narrow > summary",
+            });
+            const where = `${name} / ${mobile} @ ${width}: ${JSON.stringify(b)}`;
+            const facts = await page.evaluate(() => ({
+              rails: [...document.querySelectorAll<HTMLElement>(".rb-rail")].filter((rail) =>
+                rail.checkVisibility(),
+              ).length,
+              position: getComputedStyle(document.querySelector("header") as Element).position,
+              scrollWidth: document.documentElement.scrollWidth,
+              logoLoaded: [...document.images].every((img) => img.complete && img.naturalWidth > 0),
+            }));
+            expect(facts.logoLoaded, "an image did not load, so nothing was measured").toBe(true);
+            // No column, and the brand and the button back in the bar.
+            expect(facts.rails, where).toBe(0);
+            expect(b.brand, where).not.toBeNull();
+            expect(b.action, where).not.toBeNull();
+            expect(b.menu, where).not.toBeNull();
+            // The sections where the owner put them on a phone.
+            expect(b.row !== null, where).toBe(mobile === "row");
+            expect(b.fold !== null, where).toBe(mobile === "fold");
+            // The bar, without the row that scrolls with the page: at or under 72, under 15 % of the
+            // height — and one line, nothing over the next thing in it, nothing past the edge.
+            const rowHeight = b.row ? b.row.bottom - b.row.top : 0;
+            const bar = (b.header?.bottom ?? 999) - (b.header?.top ?? 0) - rowHeight;
+            expect(bar, where).toBeLessThanOrEqual(72);
+            expect(bar, where).toBeLessThan(0.15 * height);
+            const line = [b.logo, b.action, b.fold, b.menu].filter(
+              (box): box is Box => box !== null && box !== undefined,
+            );
+            for (let i = 1; i < line.length; i += 1) {
+              expect((line[i - 1]?.right ?? 0) <= (line[i]?.left ?? 0) + 0.5, where).toBe(true);
+            }
+            expect(b.menu?.right ?? 999, where).toBeLessThanOrEqual(width);
+            expect(facts.scrollWidth, where).toBeLessThanOrEqual(width);
+            // Fixed stays fixed, except over the row, where bar and row would pass the bound.
+            expect(facts.position, where).toBe(mobile === "row" ? "static" : "sticky");
+          } finally {
+            await page.context().close();
+          }
+        });
+      }
+    }
+  }
+});
