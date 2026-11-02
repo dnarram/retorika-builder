@@ -118,6 +118,26 @@ does not have to derive it.
   a `<details>`, the sections become a row or hide — with no patch and no `breakpoints`; ADR 0057
   names it among what it does not decide.
 
+**What sprint 31 added (closing it, 3 November 2026): a menu has a place, and a place is a zone.**
+
+- **Rule 4 reads the same for a menu as for an element: a reference, never a coordinate.** Since
+  1.17.0 each menu has a `position` from a closed vocabulary — the pages `bar`, `left`, `right`; the
+  sections those and `row` and `fold` — and **every word is a zone of the page** where a future drag
+  will drop a menu, with no position that has no zone and no zone that has no position
+  ([ADR 0060](decisions/0060-each-menu-has-its-place-and-the-places-are-the-zones.md) §1). There is
+  no `x` and no `y`; the gesture, when it comes, chooses among the places and never makes one. This is
+  the fourth time rule 4 has been asked for a coordinate, in a new shape — a menu belongs to the whole
+  site and to no section — and the answer is the one the three times above gave it: a finer set of
+  places, not freedom off them. **The rule is not amended.**
+- **Rule 5 keeps the reading above.** A rail is a copy of a menu inside the header, after the bar
+  and before `<main>`, and the bar keeps every copy it had; nothing floats above the site that the
+  document does not already hold as a reference.
+- **Rule 7 still does not reach the header, and the header has widths of its own.** A column stands
+  from 1024 px and two on opposite sides from 1248 (`RAIL_FOLD_WIDTH`, `TWO_RAILS_FOLD_WIDTH`), and
+  the phone is the header's 720 as before. All three are the header's own `@media` blocks, never
+  `breakpoints`: the document keeps its one breakpoint, and an owner's patch never moves a menu.
+  Under 1024 a page in columns is the phone header ADR 0057 drew, measured on sprint 31 día 6.
+
 ## The role vocabulary, v1
 
 Nine roles and one container:

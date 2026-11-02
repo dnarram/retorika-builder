@@ -5923,3 +5923,99 @@ izquierda, las secciones a la derecha, «Ir a…» en el móvil y la barra fija.
 (ningún byte distinto: el script solo cambia en su comentario), `renderer:deps` y `size` en verde.
 `test:a11y` local 866, antes 846. `pnpm lighthouse` 8 de 8. e2e completa **272 verdes y 1 omitida,
 1147 s, a la primera**. **Caminatas reescritas: ninguna**; la del día 4 solo cambia su comentario.
+
+### Día 7 — colchón y cierre (PR de `test/el-cierre-del-sprint-31`)
+
+**Nada de los días 5 y 6 quedó corto**: el colchón no se usó. El cierre mide, compara y escribe.
+
+**El lienzo, en las seis ventanas que pidió el plan**, medido en el editor real con una web generada:
+
+| Ventana | Sin panel | Con «Menú» |
+|---|---|---|
+| 1280 | 1280 a 0,788 | 1280 a 0,616 |
+| 1440 | 1280 a 0,913 | 1280 a 0,741 |
+| 1680 | 1280 a 1 | 1280 a 0,928 |
+
+En ninguna aparece «Vista a N px»: las seis están sobre el suelo de 0,6. Antes del sprint, a 1280 con
+panel el lienzo maquetaba a 788 y a 1440 sin panel a 1168: cada ventana, una web distinta.
+
+**El raíl y la barra, en la página publicada**, con `cabecera-con-marca`, su logo, las páginas, la
+marca, el botón y ocho secciones en una columna izquierda:
+
+| Ventana | Raíl | Barra |
+|---|---|---|
+| 1280 × 720 | 240 px, diez entradas, 606 px de contenido: cabe | 0 px, colapsada |
+| 1280 × 400 | se desplaza dentro de sí, nunca de lado | 0 px |
+| 320 × 568 | no existe | 57 px, con logo, botón, «Ir a…» y «Menú» en una fila |
+
+**El script**, 0,8 KB de los 2 de la ADR 0058: 794 B al empezar el sprint, 815 tras el día 2 y 829 tras
+el día 3, medidos con la compresión de `pnpm size`. El día 6 no añadió ni un byte.
+
+**El ZIP contra el inicio del sprint** (`3f71552`), construyendo los 22 documentos del corpus con el
+publicador de cada árbol:
+
+- cambian **10 de 123 ficheros**: todas las páginas de las cuatro webs con cabecera;
+- **las dieciocho sin cabecera no cambian un byte**;
+- cada página cambia en los mismos **cinco sitios** y en nada más, y el diff se leyó entero:
+  1. el bloque de movimiento gana la transición del subrayado;
+  2. la regla base de una entrada lleva el subrayado sin color;
+  3. el selector que oculta la fila pasa de `[data-sections=shared]` a `:not([data-sections=row])`;
+  4. la cabecera gana `data-pages="bar"`, y `data-sections` pasa de `shared` a `bar`, o de `own` a `row`;
+  5. el script, con lo de los días 2 y 3.
+
+En reposo una web guardada se ve igual: los goldens, axe y el desborde lo dicen.
+
+**Lighthouse**, los ocho sujetos en el perfil móvil:
+
+| Sujeto | Rendimiento | Accesibilidad | Buenas prácticas | SEO | LCP | CLS |
+|---|---|---|---|---|---|---|
+| v1 image-right | 99 | 100 | 100 | 100 | 1,80 s | 0,009 |
+| v2 image-background | 98 | 100 | 100 | 100 | 2,40 s | 0,000 |
+| v3 image-left | 98 | 100 | 100 | 100 | 2,33 s | 0,009 |
+| letra propia `.ttf` | 99 | 100 | 100 | 100 | 1,80 s | 0,002 |
+| cabecera fija con logo | 100 | 100 | 100 | 100 | 1,35 s | 0,008 |
+| cabecera en columnas | 100 | 100 | 100 | 100 | 1,35 s | 0,009 |
+| página por ficha | 100 | 100 | 100 | 100 | 0,90 s | 0,000 |
+
+El sujeto en columnas midió 0,000 de CLS el día 6 y 0,009 hoy: el mismo margen que las composiciones.
+
+**Suites del cierre**, una tras otra y nada en paralelo:
+
+| Suite | Resultado |
+|---|---|
+| `pnpm test` | 3613 en verde, 171 ficheros |
+| `typecheck`, `lint` | en verde, 0 errores |
+| invariantes, golden, `renderer:deps` | en verde |
+| `schema:guard 3f71552..HEAD` | la forma cambió con su migración, su prueba y su versión |
+| `secrets:scope` | 124 módulos, 30 de cliente, ninguno cruza |
+| `size` | 27 de 27 dentro, el script en 0,8 KB |
+| `test:a11y` local | 866 en verde, 628 al empezar el sprint |
+| `pnpm lighthouse` | 8 de 8 |
+| e2e completa | **272 verdes y 1 omitida, 1149 s, a la primera**, con `caffeinate -i` |
+
+### Lo que el sprint 31 deja abierto
+
+1. **Diecinueve firmas**: 0042, 0043 y de la 0045 a la 0061, todas `proposed`. La 0060 y la 0061 son
+   de este sprint; la 0060 lleva las notas §7 a §11 y una corrección a §9.
+2. **Las nueve fotografías a 1600 × 1072**, sin cambios: la exención caduca el **1 de diciembre de
+   2026**.
+3. **Cuatro decisiones de diseño del sprint, para confirmar o deshacer**:
+   - en una columna, la entrada actual se marca con una barra en su borde y no con el subrayado;
+   - los paneles de «Menú» e «Ir a…» llevan el esquema de la barra y no su color exacto; la revisión
+     juzga cada enlace contra los dos desde el día 5;
+   - solo se anima el panel de «Ir a…», no el de «Menú»;
+   - la casilla de la marca solo se ofrece con las páginas en una columna, una lectura más estrecha de
+     la condición de David.
+4. **El lienzo no lleva script**: allí `--rb-header-h` es la estimación de la hoja, y «Ir a…» se coloca
+   bajo la barra por ella. Con una barra de una línea coinciden; con una de dos líneas no se ha medido.
+5. **Abrir el selector de letra vuelve a lanzar la entrada de «Estilo»**, un fundido desde nada detrás
+   del velo del diálogo. Pasa en `main` igual; la caminata lo espera y el panel sigue igual.
+6. **Un teléfono carga la hoja de las columnas y nunca la aplica**: Lighthouse marca CSS sin usar y sin
+   minificar a 0,5, con todas las notas en 100.
+7. **El gesto de arrastrar un menú a su zona**: otro sprint, sobre las zonas que fija la ADR 0060.
+8. **La cabecera en columnas no se ha visto en Safari ni en un iPhone**: entra en la lista de la PR
+   #250.
+9. **Del sprint 30, sin tocar**: el tope del logo, los logos guardados sin tamaño, el `line-height:
+   normal` del texto, las composiciones en 99 / 98 / 98, la caminata contra el proyecto real y el
+   `rootMargin` tomado al empezar. Del 29 y el 28, lo que lista el backlog, menos el ancho del panel al
+   escalar, que cerró la ADR 0061.

@@ -12,7 +12,65 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 30 October 2026, **closing sprint 30 — «la cabecera es del dueño».** David asked for the
+Last reviewed: 3 November 2026, **closing sprint 31 — «cada menú tiene su sitio».** David asked for the
+pages menu and the section navigator to become two independent elements, each with its own place on the
+page and not tied to one bar above it, and for the navigator to gain dispositions of its own with their
+transitions. Seven days, four decisions of his before planning and four adjustments while approving.
+What changed for somebody using it: the canvas lays the page out at 1280 and scales it, so a panel
+makes it smaller and never different
+([ADR 0061](../decisions/0061-the-canvas-lays-out-at-1280-and-scales.md), día 1); each menu has a
+place from a closed vocabulary whose every word is a zone a future drag will drop it on — the bar, a
+row, a column of 240 px at either side, or «Ir a…» — with the bar keeping every copy, since the bar is
+where a column falls under 1024 px
+([ADR 0060](../decisions/0060-each-menu-has-its-place-and-the-places-are-the-zones.md), schema 1.17.0,
+día 2); «Ir a…» and the motion, all under `prefers-reduced-motion` (día 3); the columns and «Ir a…»
+chosen in the canvas (día 4); «Dónde va» in the «Menú» panel, with a note read from the width the
+canvas lays out at (día 5); the phone measured and Lighthouse with columns (día 6). The record is
+`docs/design/REVIEW.md`, sprint 31.
+
+**What sprint 31 leaves open** — the full text, with every number, is the last section of REVIEW's
+sprint 31:
+
+1. **Nineteen signatures**: 0042, 0043, 0045–0061, all `proposed`; 0060 and 0061 are new, and 0060
+   carries notes §7–§11 and a correction to §9.
+2. **The nine photographs**, unchanged: the exemption fails on **1 December 2026**.
+3. **Four design calls of the sprint, to confirm or reverse**: a column marks the current entry by a
+   bar at its edge instead of the rule under it; the panels of «Menú» and «Ir a…» wear the bar's
+   scheme and not an exact colour painted on the bar (the review judges a link against both since
+   día 5); only «Ir a…»'s panel animates; «La marca y el botón van con el menú de páginas» is offered
+   only with the pages in a column, a narrower reading of his condition.
+4. **The canvas carries no script**, so `--rb-header-h` there is the stylesheet's estimate and «Ir a…»
+   stands under the bar by it; with a bar of one line the two agree, and a bar on two lines has not
+   been measured in the canvas.
+5. **Opening the font chooser restarts «Estilo»'s entrance**, a fade from nothing behind the dialog's
+   veil (found día 3, on `main` as on the branch). The walk now waits for it; the panel is unchanged.
+6. **A phone carries the columns' stylesheet and never applies it**: Lighthouse marks unused and
+   unminified CSS at 0.5 each, with every score at 100.
+7. **The drag gesture**: another sprint, on the zones ADR 0060 fixes.
+8. **The header in columns has not been seen in Safari or on an iPhone**: the PR #250 list grows by it.
+9. **From sprint 30, untouched**: the logo's edge, logos saved without a size, the reading text's
+   `line-height: normal`, the compositions at 99 / 98 / 98, the gated walk, the `rootMargin` taken at
+   start; and sprint 29's and 28's items as listed below, less the panel's width when escalating,
+   which ADR 0061 closed.
+
+**What this sprint found that nobody was looking for:**
+
+1. **The header's accessibility matrix had drawn no sections menu since sprint 30**: its button took
+   the one section that lends an entry, and its «row» layouts had no row (día 3).
+2. **A walk red only in the full suite was a race with the server's speed**: opening the font chooser
+   restarts «Estilo»'s entrance and axe read the labels through it; a probe added before the read made
+   it pass, a passive recorder caught it (día 3).
+3. **An unkeyed column made morphdom's keys collide** — the brand in a column keyed like the bar's
+   (día 4).
+4. **The panels of «Menú» and «Ir a…» never wore the bar's exact colour, and the download's review
+   never looked at them** (since sprint 30 día 6; día 5).
+5. **A guard taken out because a walk stayed green without it was green by a side effect on one view**:
+   a redraw closed «Ir a…» on the desktop canvas and not in the phone view (día 4, put back on día 6).
+6. **A zoom under 1 had five defects nobody had walked**, since it was every laptop's case only once
+   the canvas laid out at 1280 (día 1); and `overflow: hidden` is scrollable by script (día 1), and
+   `+` matches a hidden sibling (día 2).
+
+The review before that: 30 October 2026, **closing sprint 30 — «la cabecera es del dueño».** David asked for the
 strip above the first section to become two menus — one of pages, one of the page's sections — each
 optional, and for full control of both: what they show, how each entry reads, how they look and where
 they sit. Seven days, four decisions of his before planning, six points a professional header has that
