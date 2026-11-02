@@ -25,6 +25,10 @@
  *    things a `<details>` does not do by itself. **Choosing an entry closes it too** (sprint 31 día
  *    3): «Ir a…» holds anchors on the page being read, and a panel left open over the section the
  *    visitor asked for covers it. The click closes it and the browser still follows the link.
+ *    **And one is open at a time** (sprint 31 día 6): on a phone «Ir a…» and «Menú» hang their
+ *    panels from the same bar, and the press that opens one is a press outside the other — Enter
+ *    and Space on a `<summary>` are a click too — so the rule above already closes it. Measured by
+ *    `header-script.browser.test.ts`; nothing was added for it.
  * 3. `data-scrolled` on a fixed bar once the page has scrolled: the stylesheet draws the shadow.
  * 4. The entry of the section most in view carries `aria-current="location"` (an
  *    `IntersectionObserver`; nothing on a browser without one, and nothing wrong either) — every copy

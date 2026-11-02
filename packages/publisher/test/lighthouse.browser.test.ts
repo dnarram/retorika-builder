@@ -239,14 +239,14 @@ function ownTtfSite(): SiteBundle {
  * over the cover and an image in the header are the two things this sprint put in front of the
  * largest contentful paint, and «LCP puede moverse: se mide».
  */
-function brandSite(): SiteBundle {
+function brandSite(places: RetorikaDocument["header"] = {}): SiteBundle {
   const fixtures = join(import.meta.dirname, "..", "..", "..", "fixtures");
   const corpus = parseDocument(
     JSON.parse(readFileSync(join(fixtures, "documents", "cabecera-con-marca.json"), "utf8")),
   );
   const document: RetorikaDocument = parseDocument({
     ...corpus,
-    header: { ...corpus.header, sticky: true },
+    header: { ...corpus.header, sticky: true, ...places },
   });
   const assets = new Map<string, Uint8Array>();
   for (const source of imageSourcesOf(document)) {
@@ -424,6 +424,41 @@ describe("Part 8.5 — Lighthouse over a sample site, the three compositions", (
     expect(index).toMatch(/<img [^>]*class="rb-logo"[^>]*src="assets\/logo\.png"/);
     expect(index).toContain("<script>");
     const measured = await measure("cabecera-con-marca · fija, con logo", bundle);
+    console.log(report(measured));
+    expect(
+      measured.scores["performance"],
+      `${measured.label}: performance below ${FLOOR * 100} — ${report(measured)}`,
+    ).toBeGreaterThanOrEqual(FLOOR);
+    expect(
+      measured.scores["accessibility"],
+      `${measured.label}: accessibility below ${FLOOR * 100} — ${report(measured)}`,
+    ).toBeGreaterThanOrEqual(FLOOR);
+    expect(
+      measured.scores["best-practices"],
+      `${measured.label}: best practices short of full marks — ${report(measured)}`,
+    ).toBe(BEST_PRACTICES);
+  }, 120_000);
+
+  /**
+   * **The same site with each menu in a column** (ADR 0060, sprint 31 día 6): the pages, the brand
+   * and the button in a left rail, the sections in a right one, «Ir a…» on a phone. Lighthouse's
+   * preset is a phone, where no column exists — so what is measured is what a column costs a phone
+   * that never shows it: two copies of each menu in the markup, the rail's stylesheet, the
+   * disclosure's. LCP and CLS are measured as for the bar.
+   */
+  it(`the menus in columns, on a phone: performance and accessibility at ${FLOOR * 100} or more`, async () => {
+    const bundle = brandSite({
+      pages: { shown: true, position: "left" },
+      sections: { shown: true, position: "right", mobile: "fold" },
+      brandWithPages: true,
+    });
+    const index = new TextDecoder().decode(
+      bundle.files.find((file) => file.path === "index.html")?.contents ?? new Uint8Array(),
+    );
+    // The subject is what it says: two rails, and the phone's «Ir a…».
+    expect(index).toContain('data-rails="left right"');
+    expect(index).toContain('<details class="rb-nav-fold" data-mobile="fold">');
+    const measured = await measure("cabecera-con-marca · en columnas", bundle);
     console.log(report(measured));
     expect(
       measured.scores["performance"],

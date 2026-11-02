@@ -252,6 +252,66 @@ describe("«Ir a…»", () => {
   }
 });
 
+/**
+ * **One disclosure open at a time** (sprint 31 día 6). On a phone «Ir a…» and «Menú» share the bar,
+ * and their panels hang from it in the same place: two open would lay one over the other. Nothing
+ * was added for it — the press that opens one is a press outside the other, which the script already
+ * closes; a `<summary>` opened with Enter or Space is pressed too, as a click. Measured here, so the
+ * day that stops being true is the day this goes red.
+ */
+describe("«Ir a…» and «Menú» on a phone", () => {
+  const BOTH = { sections: { position: "fold" as const, mobile: "fold" as const, shown: true } };
+  const openOf = (page: Page) =>
+    page.evaluate(() => ({
+      fold: document.querySelector<HTMLDetailsElement>("details.rb-nav-fold")?.open ?? null,
+      menu: document.querySelector<HTMLDetailsElement>("details.rb-nav-narrow")?.open ?? null,
+    }));
+
+  it("closes the one that was open when the other opens, by pointer and by keyboard", async () => {
+    const page = await open(withHeader({ ...BOTH, action: undefined }), 390);
+    try {
+      await page.locator("details.rb-nav-fold > summary").click();
+      expect(await openOf(page)).toEqual({ fold: true, menu: false });
+      await page.locator("details.rb-nav-narrow > summary").click();
+      expect(await openOf(page)).toEqual({ fold: false, menu: true });
+
+      await page.locator("details.rb-nav-fold > summary").focus();
+      await page.keyboard.press("Enter");
+      expect(await openOf(page)).toEqual({ fold: true, menu: false });
+      await page.locator("details.rb-nav-narrow > summary").focus();
+      await page.keyboard.press(" ");
+      expect(await openOf(page)).toEqual({ fold: false, menu: true });
+    } finally {
+      await page.context().close();
+    }
+  });
+
+  it("gives the focus back to the summary of the one Escape closed", async () => {
+    const page = await open(withHeader({ ...BOTH, action: undefined }), 390);
+    try {
+      for (const which of ["rb-nav-fold", "rb-nav-narrow"] as const) {
+        await page.locator(`details.${which} > summary`).focus();
+        await page.keyboard.press("Enter");
+        // Into the panel, as a keyboard visitor does, and out with Escape.
+        await page.keyboard.press("Tab");
+        expect(
+          await page.evaluate(() => document.activeElement?.closest("details")?.className),
+        ).toBe(which);
+        await page.keyboard.press("Escape");
+        expect(await openOf(page)).toEqual({ fold: false, menu: false });
+        expect(
+          await page.evaluate(() => {
+            const el = document.activeElement;
+            return el?.tagName === "SUMMARY" ? el.parentElement?.className : el?.tagName;
+          }),
+        ).toBe(which);
+      }
+    } finally {
+      await page.context().close();
+    }
+  });
+});
+
 describe("the rail", () => {
   it('carries aria-current="location" on the entry in the column, and marks it by its edge', async () => {
     const page = await open(

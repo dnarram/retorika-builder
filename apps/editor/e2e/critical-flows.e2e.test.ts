@@ -23917,10 +23917,10 @@ describe("sprint 31 día 4 — el raíl se elige en el lienzo", () => {
       await expect(header).not.toHaveClass(/rb-selected/);
 
       // 2. An entry takes the canvas to its section, chooses it, and closes the disclosure, as the
-      //    published page's script does. The canvas has no script: what closes it here is the
-      //    choice itself, which draws the header again from the document, where nothing is open —
-      //    probed on día 4, a press on any section closed it, so the editor needed no line of its
-      //    own (written, sabotaged, still green, taken out).
+      //    published page's script does. The canvas has no script, so `wireLinks` closes it. On
+      //    día 4 that line was taken out because this walk stayed green without it — a redraw of
+      //    the header some 800 ms after the choice closed it here; día 6's phone view has no such
+      //    redraw, went red, and the line came back. That walk is the one that guards it.
       const entry = fold.locator("nav a").last();
       const target = ((await entry.getAttribute("href")) ?? "").slice(1);
       expect(target).not.toBe("");
@@ -24089,6 +24089,185 @@ describe("sprint 31 día 5 — el panel «Dónde va»", () => {
       );
       expect(boxes[0], JSON.stringify(boxes)).toBe(boxes[1]);
       expect(boxes[2] ?? 0, JSON.stringify(boxes)).toBeGreaterThan(boxes[0] ?? 0);
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+});
+
+/**
+ * **Sprint 31 día 6 — el móvil del raíl** (ADR 0060 §3). Una web con las páginas, la marca y el botón
+ * en una columna izquierda, las secciones en la derecha y «Ir a…» en el móvil, elegido todo desde el
+ * panel. En la vista de móvil del lienzo no hay columna: «Ir a…» está en la barra junto a «Menú», se
+ * abre, una entrada lleva el lienzo a su sección y lo cierra. El ZIP abierto desde el disco sin red:
+ * a 390 la columna plegada, «Ir a…» lleva a su sección y Escape lo cierra con el foco en su resumen;
+ * a 1280 las dos columnas en pie.
+ */
+describe("sprint 31 día 6 — el móvil del raíl", () => {
+  it("pliega las columnas en el móvil del lienzo y del ZIP, y «Ir a…» lleva y se cierra", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    const dir = mkdtempSync(join(tmpdir(), "retorika-movil-del-rail-"));
+    const pressAt = async (locator: Locator) => {
+      const box = await locator.boundingBox();
+      if (!box) throw new Error("not drawn, so it cannot be pressed");
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    };
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      await frame.locator('[data-section="sec-services"]').click();
+      await frame
+        .locator(
+          '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+        )
+        .click();
+      await expect(frame.locator('.rb-nav-wide nav[aria-label="Páginas"] a')).toHaveText([
+        "Qué ponemos",
+      ]);
+
+      // 1. Everything placed from the panel, as an owner does.
+      await page.getByRole("button", { name: "Menú", exact: true }).click();
+      const panel = page.getByRole("complementary", { name: "La cabecera de tu web" });
+      await panel
+        .getByRole("radiogroup", { name: "Dónde va el menú de páginas" })
+        .getByText("Columna izquierda", { exact: true })
+        .click();
+      await panel
+        .getByRole("checkbox", { name: "La marca y el botón van con el menú de páginas" })
+        .check();
+      await panel
+        .getByRole("radiogroup", { name: "Dónde va el navegador de secciones" })
+        .getByText("Columna derecha", { exact: true })
+        .click();
+      await panel
+        .getByRole("radiogroup", { name: "En el móvil" })
+        .getByText("Desplegable «Ir a…»", { exact: true })
+        .click();
+      // Fixed, so the phone can show it stays fixed with «Ir a…» — one line, not the row's two.
+      await panel.getByRole("checkbox", { name: "Se queda arriba al bajar" }).check();
+      await expect(panel.getByText("En el móvil solo la barra.")).toBeVisible();
+      await expect(frame.locator(".rb-rail")).toHaveCount(2);
+      await panel.getByRole("button", { name: "Cerrar la cabecera" }).click();
+
+      // 2. The phone view of the canvas: no column, «Ir a…» beside «Menú», and an entry of it takes
+      //    the canvas to its section and closes it.
+      await page.getByRole("button", { name: "Ver en móvil" }).click();
+      await deviceArrived(page, NARROWEST_WIDTH);
+      await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
+      const visibleRails = () =>
+        frame
+          .locator(".rb-rail")
+          .evaluateAll((rails) => rails.filter((rail) => rail.checkVisibility()).length);
+      expect(await visibleRails()).toBe(0);
+      const summary = frame.locator("details.rb-nav-fold > summary");
+      await expect(summary).toBeVisible();
+      await expect(frame.locator("details.rb-nav-narrow > summary")).toBeVisible();
+      await pressAt(summary);
+      const isOpen = () =>
+        frame.locator("details.rb-nav-fold").evaluate((d) => (d as HTMLDetailsElement).open);
+      await expect.poll(isOpen).toBe(true);
+      const entry = frame.locator("details.rb-nav-fold nav a").last();
+      const target = ((await entry.getAttribute("href")) ?? "").slice(1);
+      expect(target).not.toBe("");
+      await pressAt(entry);
+      const section = frame.locator(`[data-section="${target}"]`);
+      await expect(section).toHaveClass(/rb-selected/);
+      await expect.poll(isOpen).toBe(false);
+      await expect
+        .poll(() =>
+          section.evaluate((el) => {
+            const view = el.ownerDocument.defaultView as Window;
+            const top = el.getBoundingClientRect().top;
+            return view.scrollY > 0 && top >= -1 && top < view.innerHeight;
+          }),
+        )
+        .toBe(true);
+
+      // 3. The ZIP, from the disk with no network.
+      await sessionHolds(page, (raw) => raw.includes('"mobile":"fold"'), "guardó «Ir a…»");
+      await page.getByRole("button", { name: "Descargar" }).click();
+      const anyway = page.getByRole("button", { name: "Descargar igualmente" });
+      await anyway.waitFor();
+      const [download] = await Promise.all([page.waitForEvent("download"), anyway.click()]);
+      const zipPath = join(dir, download.suggestedFilename());
+      await download.saveAs(zipPath);
+      extractAll(new Uint8Array(readFileSync(zipPath)), dir);
+      const index = `file://${join(dir, "index.html")}`;
+
+      //    At 390: the columns folded, «Ir a…» in the bar; an entry takes the page to its section
+      //    and closes it; opened again, Escape closes it with the focus back on its summary.
+      const phone = await (
+        await browser.newContext({ viewport: { width: 390, height: 844 } })
+      ).newPage();
+      const failed: string[] = [];
+      phone.on("requestfailed", (request) => failed.push(request.url()));
+      try {
+        await phone.goto(index, { waitUntil: "load" });
+        expect(
+          await phone.evaluate(
+            () =>
+              [...document.querySelectorAll<HTMLElement>(".rb-rail")].filter((rail) =>
+                rail.checkVisibility(),
+              ).length,
+          ),
+        ).toBe(0);
+        const fold = phone.locator("details.rb-nav-fold");
+        const openNow = () => fold.evaluate((d) => (d as HTMLDetailsElement).open);
+        await phone.locator("details.rb-nav-fold > summary").click();
+        expect(await openNow()).toBe(true);
+        const href = (await fold.locator("nav a").last().getAttribute("href")) ?? "";
+        await fold.locator("nav a").last().click();
+        expect(await openNow()).toBe(false);
+        // In view and not under the bar, which stays fixed on a phone with «Ir a…» (one line, not
+        // the row's two). Not necessarily at its top: a section near the end lands as high as the
+        // page can scroll.
+        await expect
+          .poll(() =>
+            phone.evaluate((id) => {
+              const bar = document.querySelector("header")?.getBoundingClientRect();
+              const top = document.querySelector(id)?.getBoundingClientRect().top ?? 999;
+              return {
+                scrolled: scrollY > 0,
+                clear: top >= (bar?.bottom ?? 0) - 2,
+                inView: top < innerHeight,
+                fixed: getComputedStyle(document.querySelector("header") as Element).position,
+              };
+            }, href),
+          )
+          .toEqual({ scrolled: true, clear: true, inView: true, fixed: "sticky" });
+        await phone.locator("details.rb-nav-fold > summary").click();
+        expect(await openNow()).toBe(true);
+        await phone.keyboard.press("Escape");
+        expect(await openNow()).toBe(false);
+        expect(await phone.evaluate(() => document.activeElement?.parentElement?.className)).toBe(
+          "rb-nav-fold",
+        );
+        expect(failed, "the downloaded site asked for something it does not carry").toEqual([]);
+      } finally {
+        await phone.context().close();
+      }
+
+      //    At 1280: both columns standing, `<main>` between them.
+      const wide = await (
+        await browser.newContext({ viewport: { width: 1280, height: 800 } })
+      ).newPage();
+      try {
+        await wide.goto(index, { waitUntil: "load" });
+        expect(
+          await wide.evaluate(() => ({
+            rails: [...document.querySelectorAll<HTMLElement>(".rb-rail")]
+              .filter((rail) => rail.checkVisibility())
+              .map((rail) => rail.getAttribute("data-side")),
+            main: (() => {
+              const r = document.querySelector("main")?.getBoundingClientRect();
+              return r ? [Math.round(r.left), Math.round(r.width)] : null;
+            })(),
+          })),
+        ).toEqual({ rails: ["left", "right"], main: [240, 800] });
+      } finally {
+        await wide.context().close();
+      }
     } finally {
       await context.close();
     }

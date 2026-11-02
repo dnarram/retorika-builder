@@ -1,3 +1,4 @@
+import { render } from "@retorika/renderer";
 import {
   parseDocument,
   type RetorikaDocument,
@@ -326,6 +327,27 @@ describe("the header's parts", () => {
         JSON.stringify(sections),
       ).toEqual(["sectionsLinks"]);
     }
+  });
+
+  /**
+   * **A column is the bar standing up** (ADR 0060 §2): it wears the bar's exact colour, so a part is
+   * judged against that colour whether it stands in the bar or in a column — the same finding, with
+   * nothing to add for a rail (sprint 31 día 6). The stylesheet is read too: the day the column stops
+   * wearing the bar's colour this goes red, rather than the review judging against a colour the
+   * column no longer has.
+   */
+  it("judges a part against the bar's colour, which a column wears too", () => {
+    const railed = headerDoc({
+      pages: { position: "left" },
+      brandWithPages: true,
+      brand: { name: true },
+      style: { bar: { color: exact("#111111") }, brand: { color: exact("#222222") } },
+    });
+    expect(reviewStyle(railed).blocking.map((f) => f.exception.elementId)).toEqual(["brand"]);
+    expect(headerBarBackground(railed)).toBe("#111111");
+    expect(render(railed, "html").css).toContain(
+      ".rb-header[data-layout][data-bg], .rb-header[data-layout][data-bg] .rb-rail { background: #111111; }",
+    );
   });
 
   it("says nothing about a header dressed in references, or in sizes", () => {

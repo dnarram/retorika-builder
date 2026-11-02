@@ -2295,6 +2295,13 @@ export function Editor({
               `[data-section="${CSS.escape(destination.sectionId)}"]`,
             );
             if (!section) return;
+            // **«Ir a…» closes when an entry is chosen** (ADR 0060 §7), as the published page's
+            // script closes it — the canvas carries no script. Taken out on día 4, when the
+            // desktop walk stayed green without it: there the choice was followed by a redraw of
+            // the header from the document, where nothing is open, some 800 ms later. Measured
+            // again on día 6 in the phone view of the canvas, where no such redraw follows and the
+            // panel stayed open over the section chosen. Closed here, at once, wherever it hangs.
+            (anchor as unknown as Element).closest("details")?.removeAttribute("open");
             section.scrollIntoView({ block: "start" });
             chooseSectionNow.current(section);
             return;
