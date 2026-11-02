@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   actionEntry,
   headerDrawn,
+  headerPlaces,
   headerSettings,
   RAIL_FOLD_WIDTH,
   RAIL_WIDTH,
@@ -716,6 +717,28 @@ describe("each menu has its place (ADR 0060)", () => {
     );
     expect(RAIL_FOLD_WIDTH - RAIL_WIDTH).toBeGreaterThanOrEqual(768);
     expect(TWO_RAILS_FOLD_WIDTH - 2 * RAIL_WIDTH).toBeGreaterThanOrEqual(768);
+  });
+
+  it("tells the editor where the menus stand from the header it draws (sprint 31 día 5)", () => {
+    for (const pages of ["bar", "left", "right"] as const) {
+      for (const sections of ["bar", "row", "left", "right", "fold"] as const) {
+        for (const brandWithPages of [false, true]) {
+          const doc = placed({
+            pages: { position: pages },
+            sections: { position: sections },
+            brandWithPages,
+            brand: { name: true },
+          });
+          const home = doc.pages[0];
+          if (!home) throw new Error("no home page");
+          const header = draw(doc).querySelector("header");
+          const where = `${pages}/${sections}/${brandWithPages}`;
+          const answer = headerPlaces(doc, home);
+          expect(answer.rails.join(" "), where).toBe(header?.getAttribute("data-rails") ?? "");
+          expect(answer.barEmpty, where).toBe(header?.getAttribute("data-bar") === "none");
+        }
+      }
+    }
   });
 
   it("renders the same bytes twice for every pair of places", () => {

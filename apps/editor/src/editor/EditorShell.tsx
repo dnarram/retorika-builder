@@ -706,6 +706,7 @@ export function EditorShell({
   children,
   overlay,
   onZoomChange,
+  onLayoutWidthChange,
 }: {
   siteName: string;
   /** Every page of the open document, in document order, for the tabs. */
@@ -742,6 +743,13 @@ export function EditorShell({
    * out, so the viewport and the room grow in the same layout.
    */
   onZoomChange?: (zoom: number, overscroll: number) => void;
+  /**
+   * **The width the canvas lays the page out at, each time it changes** (sprint 31 día 5): the number
+   * the card's «Vista a N px» says, for the «Menú» panel's sentence about whether a column is seen in
+   * the canvas (David's adjustment 1). Born here, where the room is measured, and handed to whoever
+   * draws the panel — the panel is `panel`, and cannot read the room it is part of.
+   */
+  onLayoutWidthChange?: (layoutWidth: number) => void;
   device: "desktop" | "mobile";
   onDeviceChange: (device: "desktop" | "mobile") => void;
   canUndo: boolean;
@@ -955,6 +963,12 @@ export function EditorShell({
   useLayoutEffect(() => {
     zoomChanged.current?.(zoom, overscroll);
   }, [zoom, overscroll]);
+  // Not before the first measurement, for the reason `viewWidth` gives: the fallback is not a fact.
+  const layoutChanged = useRef(onLayoutWidthChange);
+  layoutChanged.current = onLayoutWidthChange;
+  useEffect(() => {
+    if (available > 0) layoutChanged.current?.(layoutWidth);
+  }, [available, layoutWidth]);
 
   const building = downloadState === "preparing" || downloadState === "downloading";
 

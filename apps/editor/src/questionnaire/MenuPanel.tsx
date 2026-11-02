@@ -13,11 +13,18 @@ import {
   MENU_LABEL_MIN,
   type MenuLabelTarget,
   menuLabelIssue,
+  PAGES_POSITIONS,
+  type PagesPosition,
   type RetorikaDocument,
+  SECTIONS_ON_MOBILE,
+  SECTIONS_POSITIONS,
+  type SectionsPosition,
 } from "@retorika/schema";
 import { useEffect, useId, useRef, useState } from "react";
 import {
   brandNamePatch,
+  brandWithPagesPatch,
+  columnNote,
   headerColorInForce,
   headerExact,
   headerStateFor,
@@ -28,6 +35,7 @@ import {
   menuModePatch,
   menuStatusText,
   type PageRow,
+  pagesPositionPatch,
   type SectionRow,
   schemeSwatch,
   sectionsMobilePatch,
@@ -65,6 +73,10 @@ export interface MenuPanelProps {
   doc: RetorikaDocument;
   /** The page the canvas is drawing; its sections are the sections menu shown. */
   pageId: string | undefined;
+  /** The width the canvas lays the page out at and the view it is in — what the sentence about a
+   * column reads, so it says what the canvas shows (David's adjustment 1 on sprint 31). */
+  layoutWidth: number;
+  device: "desktop" | "mobile";
   /** The object URL of the logo's bytes, when the document names a logo and this browser holds
    * it — the same map the canvas draws from. */
   logoUrl: string | undefined;
@@ -105,6 +117,8 @@ const checkboxClass = "h-[16px] w-[16px] shrink-0 accent-[var(--ui-brand)]";
 export function MenuPanel({
   doc,
   pageId,
+  layoutWidth,
+  device,
   logoUrl,
   logoFaint,
   designTools,
@@ -211,6 +225,36 @@ export function MenuPanel({
           menu="pages"
           onChange={(mode) => onSetHeader(menuModePatch(doc, "pages", mode))}
         />
+        {/* Where it goes (ADR 0060): offered while it is drawn, since a place for a menu nobody
+            sees is a decision about nothing. Then the brand and the button with it, offered only
+            where that does something — drawn and in a column, with a brand or a button to send. */}
+        {state.pagesMenu.drawn ? (
+          <>
+            <Places
+              name={`${groupId}-pages-place`}
+              label={es["editor.menuPanel.wherePages"]}
+              options={PAGES_POSITIONS}
+              value={state.pagesPosition}
+              onSelect={(position) => onSetHeader(pagesPositionPatch(doc, position))}
+            />
+            {state.pagesPosition === "bar" ? null : (
+              <p className={noteClass}>{columnNote(state.pagesFoldWidth, layoutWidth, device)}</p>
+            )}
+            {state.brandWithPagesOffered ? (
+              <Check
+                label={es["editor.menuPanel.brandWithPages"]}
+                checked={state.brandWithPages}
+                onChange={(on) => onSetHeader(brandWithPagesPatch(on))}
+                notes={[
+                  es["editor.menuPanel.brandWithPagesNote"].replace(
+                    "{width}",
+                    String(state.pagesFoldWidth),
+                  ),
+                ]}
+              />
+            ) : null}
+          </>
+        ) : null}
         <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
           {state.pageRows.map((row) => (
             <PageEntryRow
@@ -234,6 +278,22 @@ export function MenuPanel({
           menu="sections"
           onChange={(mode) => onSetHeader(menuModePatch(doc, "sections", mode))}
         />
+        {state.sectionsMenu.drawn ? (
+          <>
+            <Places
+              name={`${groupId}-sections-place`}
+              label={es["editor.menuPanel.whereSections"]}
+              options={SECTIONS_POSITIONS}
+              value={state.sectionsPosition}
+              onSelect={(position) => onSetHeader(sectionsPositionPatch(doc, position))}
+            />
+            {sectionsPlaceNotes(state, layoutWidth, device).map((note) => (
+              <p key={note} className={noteClass}>
+                {note}
+              </p>
+            ))}
+          </>
+        ) : null}
         <p className="m-0 text-[12px] font-semibold text-ui-ink">
           {es["editor.menuPanel.sectionsOf"].replace("{page}", state.pageTitle)}
         </p>
@@ -251,16 +311,12 @@ export function MenuPanel({
           <p className="m-0 mb-1 text-[12px] font-semibold text-ui-ink" aria-hidden="true">
             {es["editor.menuPanel.sectionsMobile"]}
           </p>
-          <div className="grid grid-cols-2 gap-1.5">
-            {(["row", "hidden"] as const).map((mobile) => (
+          <div className="grid grid-cols-3 gap-1.5">
+            {SECTIONS_ON_MOBILE.map((mobile) => (
               <Segment
                 key={mobile}
                 name={`${groupId}-mobile`}
-                label={
-                  mobile === "row"
-                    ? es["editor.menuPanel.mobileRow"]
-                    : es["editor.menuPanel.mobileHidden"]
-                }
+                label={es[MOBILE_LABEL[mobile]]}
                 checked={state.sectionsMobile === mobile}
                 onSelect={() => onSetHeader(sectionsMobilePatch(doc, mobile))}
               />
@@ -321,6 +377,9 @@ export function MenuPanel({
       {/* 4. How the bar sits: three layouts drawn as what they are, fixed or not, a line or not. */}
       <fieldset className={blockClass}>
         <legend className={legendClass}>{es["editor.menuPanel.layout"]}</legend>
+        {state.barEmpty ? (
+          <p className={noteClass}>{es["editor.menuPanel.notes.barEmpty"]}</p>
+        ) : null}
         <div className="grid grid-cols-3 gap-1.5">
           {LAYOUTS.map((layout) => (
             <label
@@ -417,6 +476,11 @@ export function MenuPanel({
           {state.transparent ? (
             <p className={`${noteClass} mt-1.5`}>{es["editor.menuPanel.backgroundTransparent"]}</p>
           ) : null}
+          {state.transparent && state.rails.length > 0 ? (
+            <p className={`${noteClass} mt-1.5`}>
+              {es["editor.menuPanel.notes.transparentColumn"]}
+            </p>
+          ) : null}
         </div>
         <Segments
           name={`${groupId}-align`}
@@ -454,14 +518,6 @@ export function MenuPanel({
           onChange={(hoverUnderline) => onSetHeader(lookPatch(doc, { hoverUnderline }))}
           notes={[es["editor.menuPanel.hoverUnderlineNote"]]}
         />
-        {state.sectionsMenu.drawn ? (
-          <Check
-            label={es["editor.menuPanel.sectionsRow"]}
-            checked={state.sectionsPosition === "row"}
-            onChange={(own) => onSetHeader(sectionsPositionPatch(doc, own ? "row" : "bar"))}
-            notes={[es["editor.menuPanel.sectionsRowNote"]]}
-          />
-        ) : null}
 
         {designTools ? (
           <fieldset className="m-0 mt-1 flex min-w-0 flex-col gap-2 border-0 border-t border-ui-border p-0 pt-3">
@@ -486,6 +542,152 @@ export function MenuPanel({
         ) : null}
       </fieldset>
     </aside>
+  );
+}
+
+const MOBILE_LABEL = {
+  row: "editor.menuPanel.mobileRow",
+  hidden: "editor.menuPanel.mobileHidden",
+  fold: "editor.menuPanel.mobileFold",
+} as const;
+
+/**
+ * What the sections' place does, said under its cards: with the pages in the other column, the width
+ * the two need; in a column, what the canvas shows of it (`columnNote`); behind «Ir a…», where it
+ * floats.
+ */
+function sectionsPlaceNotes(
+  state: ReturnType<typeof headerStateFor>,
+  layoutWidth: number,
+  device: "desktop" | "mobile",
+): string[] {
+  const position = state.sectionsPosition;
+  if (position === "fold") return [es["editor.menuPanel.notes.fold"]];
+  if (position !== "left" && position !== "right") return [];
+  const width = state.sectionsFoldWidth;
+  return [
+    ...(state.rails.length === 2
+      ? [es["editor.menuPanel.notes.columnOpposite"].replace("{width}", String(width))]
+      : []),
+    columnNote(width, layoutWidth, device),
+  ];
+}
+
+/**
+ * **«Dónde va»** (ADR 0060): one card per place, each drawn as the page it makes — the places are the
+ * zones a future drag will drop a menu on, so what the owner picks here is shaped like where it goes.
+ * Radios underneath, so the arrows walk the places and a screen reader hears one group with a name.
+ */
+function Places<T extends PagesPosition | SectionsPosition>({
+  name,
+  label,
+  options,
+  value,
+  onSelect,
+}: {
+  name: string;
+  label: string;
+  options: readonly T[];
+  value: T;
+  onSelect: (position: T) => void;
+}) {
+  return (
+    <div role="radiogroup" aria-label={label}>
+      <p className="m-0 mb-1 text-[12px] font-semibold text-ui-ink" aria-hidden="true">
+        {es["editor.menuPanel.where"]}
+      </p>
+      <div className="grid grid-cols-3 gap-1.5 phone:grid-cols-2">
+        {options.map((position) => (
+          <label
+            key={position}
+            className={`relative flex cursor-pointer flex-col items-center gap-1.5 px-1.5 py-2 ${
+              value === position ? panelRowSelected : panelRow
+            }`}
+          >
+            <input
+              type="radio"
+              name={name}
+              checked={value === position}
+              onChange={() => onSelect(position)}
+              className="absolute h-px w-px opacity-0"
+            />
+            <PlaceSketch place={position} />
+            <span className="text-center text-[12px] leading-tight font-medium text-ui-ink">
+              {es[`editor.menuPanel.position.${position}`]}
+            </span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A place drawn as the page it makes: the bar across the top, the page's lines under it, and the
+ * menu in the brand's colour where it goes — in the bar, in a row under it, in a column at either
+ * side, or in a box hanging under the bar.
+ */
+function PlaceSketch({ place }: { place: PagesPosition | SectionsPosition }) {
+  const brand = "var(--ui-brand)";
+  const quiet = "#CBD5E1";
+  const tint = "#E8F1FE";
+  // The page's own lines, moved over by a column on either side.
+  const left = place === "left" ? 18 : 6;
+  const right = place === "right" ? 46 : 58;
+  const top = place === "row" ? 17 : 13;
+  const entries = (x: number, y: number, vertical: boolean) =>
+    [0, 1, 2].map((i) => (
+      <rect
+        key={i}
+        x={vertical ? x : x + i * 7}
+        y={vertical ? y + i * 5 : y}
+        width={vertical ? 8 : 5}
+        height="2.5"
+        rx="1"
+        fill={brand}
+      />
+    ));
+  return (
+    <svg width="64" height="32" viewBox="0 0 64 32" aria-hidden="true">
+      <rect x="0.5" y="0.5" width="63" height="31" rx="3" fill="white" stroke="#E3E8F0" />
+      <rect x="1" y="1" width="62" height="8" rx="2" fill="#F1F5F9" />
+      <rect x="4" y="3.75" width="8" height="2.5" rx="1" fill={quiet} />
+      {place === "bar" ? entries(36, 3.75, false) : null}
+      {place === "row" ? (
+        <>
+          <rect x="1" y="9" width="62" height="5" fill={tint} />
+          {entries(22, 10.25, false)}
+        </>
+      ) : null}
+      {place === "left" ? (
+        <>
+          <rect x="1" y="9" width="13" height="22" fill={tint} />
+          {entries(3.5, 12, true)}
+        </>
+      ) : null}
+      {place === "right" ? (
+        <>
+          <rect x="50" y="9" width="13" height="22" fill={tint} />
+          {entries(52.5, 12, true)}
+        </>
+      ) : null}
+      {place === "fold" ? (
+        <>
+          <rect x="44" y="11" width="16" height="17" rx="2" fill="white" stroke={brand} />
+          {entries(48, 14, true)}
+        </>
+      ) : null}
+      <rect
+        x={left}
+        y={top}
+        width={Math.min(right, place === "fold" ? 40 : right) - left}
+        height="3"
+        rx="1"
+        fill={quiet}
+      />
+      <rect x={left} y={top + 6} width={(right - left) * 0.7} height="2.5" rx="1" fill={quiet} />
+      <rect x={left} y={top + 11} width={(right - left) * 0.55} height="2.5" rx="1" fill={quiet} />
+    </svg>
   );
 }
 

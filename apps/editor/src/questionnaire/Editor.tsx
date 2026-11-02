@@ -148,7 +148,7 @@ import { toolbarFamilyLabel } from "../editor/letterGallery.ts";
 import { logoLuminanceOf } from "../editor/logoImage.ts";
 import { LOOK_AHEAD_DEADLINE_MS, lookAheadStep } from "../editor/lookAhead.ts";
 import { menuStateFor } from "../editor/menuState.ts";
-import { measureOverflow } from "../editor/overflowCheck.ts";
+import { DESKTOP_LAYOUT_WIDTH, measureOverflow } from "../editor/overflowCheck.ts";
 import { type FontFileHandle, ownFontFiles, type StoredFontFile } from "../editor/ownFonts.ts";
 import {
   chrome,
@@ -888,6 +888,9 @@ export function Editor({
   const [device, setDevice] = useState<"desktop" | "mobile">(() =>
     isPhoneViewport() ? "mobile" : "desktop",
   );
+  /** The width the shell lays the canvas out at (ADR 0061), for the «Menú» panel's sentence about
+   * whether a column is seen there (sprint 31 día 5). 1280 until the shell has measured. */
+  const [layoutWidth, setLayoutWidth] = useState(DESKTOP_LAYOUT_WIDTH);
   /**
    * **One frame, and its document outlives every edit** (ADR 0051; `swap` retired on sprint 27
    * día 1). It is mounted once, given the first document's html as `srcDoc`, and from then on the
@@ -8013,6 +8016,7 @@ export function Editor({
        * probe. The edit serial does not move: nothing was edited, and a walk waiting for an edit
        * must not be woken by a panel.
        */
+      onLayoutWidthChange={setLayoutWidth}
       onZoomChange={(zoom, overscroll) => {
         const live = liveDoc();
         // `documentElement` and not only the document: between the frame's mounting and the
@@ -8274,6 +8278,8 @@ export function Editor({
           <MenuPanel
             doc={doc}
             pageId={pageId}
+            layoutWidth={layoutWidth}
+            device={device}
             logoUrl={logoUrl}
             logoFaint={reviewLogo(doc, logoLuminance) !== undefined}
             designTools={designTools === true}
