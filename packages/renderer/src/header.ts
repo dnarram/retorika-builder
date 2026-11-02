@@ -498,6 +498,23 @@ export function headerNodes(doc: RetorikaDocument, current: Page): RenderNode[] 
   ];
 }
 
+/**
+ * **Where this page's menus stand on a wide screen**, as the header itself says it: the rails that
+ * hold something here, and whether the bar has anything left to draw (ADR 0060). Read off the very
+ * header `headerNodes` draws — its `data-rails` and `data-bar` — so the «Menú» panel's sentences about
+ * a column cannot describe a page the published one is not (sprint 31 día 5).
+ */
+export function headerPlaces(
+  doc: RetorikaDocument,
+  current: Page,
+): { rails: ("left" | "right")[]; barEmpty: boolean } {
+  const header = headerNodes(doc, current).find((node) => node.tag === "header");
+  const rails = (header?.attributes["data-rails"] ?? "")
+    .split(" ")
+    .filter((side): side is "left" | "right" => side === "left" || side === "right");
+  return { rails, barEmpty: header?.attributes["data-bar"] === "none" };
+}
+
 /** The parts' selectors for rule 6, each weighing at least (0,3,0) so an owner's exact value wins
  * over every scheme rule above it — which weighs (0,3,1) at most and comes earlier, so a tie is
  * won here too. The bar is the element itself; a nav part is its links; brand and button are the

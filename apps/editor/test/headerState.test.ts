@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { render } from "@retorika/renderer";
+import { RAIL_FOLD_WIDTH, render, TWO_RAILS_FOLD_WIDTH } from "@retorika/renderer";
 import {
   HEADER_ALIGNMENTS,
   HEADER_BACKGROUNDS,
@@ -9,8 +9,10 @@ import {
   HEADER_PARTS,
   HEADER_SIZES,
   listHeaderStyleExceptions,
+  PAGES_POSITIONS,
   parseDocument,
   type RetorikaDocument,
+  SECTIONS_POSITIONS,
   setHeader,
   setMenuLabel,
 } from "@retorika/schema";
@@ -18,6 +20,7 @@ import { describe, expect, it } from "vitest";
 import {
   brandNamePatch,
   brandWithPagesPatch,
+  columnNote,
   headerColorInForce,
   headerExact,
   headerStateFor,
@@ -32,6 +35,7 @@ import {
   sectionsMobilePatch,
   sectionsPositionPatch,
 } from "../src/editor/headerState.ts";
+import { DESKTOP_LAYOUT_WIDTH } from "../src/editor/overflowCheck.ts";
 import es from "../src/locales/es.json" with { type: "json" };
 
 /**
@@ -408,7 +412,7 @@ describe("the look (sprint 30 día 6): every option reaches the published page",
     }
   });
 
-  it("«Secciones en su propia fila» is the page's `data-sections`, and keeps the rest of `sections`", () => {
+  it("«En su fila» is the page's `data-sections`, and keeps the rest of `sections`", () => {
     const bar = setHeader(doc, sectionsPositionPatch(doc, "bar"));
     expect(headerStateFor(bar, undefined).sectionsPosition).toBe("bar");
     expect(published(bar).header.getAttribute("data-sections")).toBe("bar");
@@ -438,6 +442,131 @@ describe("the look (sprint 30 día 6): every option reaches the published page",
     const there = setHeader(bare, pagesPositionPatch(bare, "right"));
     expect(there.header).toEqual({ pages: { position: "right" } });
     expect(setHeader(there, pagesPositionPatch(there, "bar")).header).toBeUndefined();
+  });
+});
+
+/**
+ * **«Dónde va»** (ADR 0060, sprint 31 día 5): every card writes a place the published page carries,
+ * the brand's checkbox is offered only where ticking it changes the page, and the sentence about a
+ * column says what the canvas shows at the width it lays the page out at — David's adjustment 1:
+ * «en el lienzo se ve siempre» is true at 1280 and a lie under the floor.
+ */
+describe("«Dónde va» (sprint 31 día 5)", () => {
+  const doc = fixture("cabecera-con-marca");
+
+  it("writes, card by card, the place the page carries, and «En la barra» leaves no key", () => {
+    for (const position of PAGES_POSITIONS) {
+      const placed = setHeader(doc, pagesPositionPatch(doc, position));
+      expect(headerStateFor(placed, undefined).pagesPosition, position).toBe(position);
+      expect(published(placed).header.getAttribute("data-pages"), position).toBe(position);
+      expect("position" in (placed.header?.pages ?? {}), position).toBe(position !== "bar");
+    }
+    for (const position of SECTIONS_POSITIONS) {
+      const placed = setHeader(doc, sectionsPositionPatch(doc, position));
+      expect(headerStateFor(placed, undefined).sectionsPosition, position).toBe(position);
+      expect(published(placed).header.getAttribute("data-sections"), position).toBe(position);
+      expect("position" in (placed.header?.sections ?? {}), position).toBe(position !== "bar");
+      // The rest of `sections` — its switch, its phone — is kept, whatever the place.
+      expect(placed.header?.sections?.shown, position).toBe(doc.header?.sections?.shown);
+      expect(placed.header?.sections?.mobile, position).toBe(doc.header?.sections?.mobile);
+    }
+  });
+
+  it("offers the brand and the button with the pages only where ticking it changes the page", () => {
+    const left = setHeader(doc, pagesPositionPatch(doc, "left"));
+    const offered = (d: RetorikaDocument) => headerStateFor(d, undefined).brandWithPagesOffered;
+    expect(offered(left)).toBe(true);
+    // In the bar the renderer ignores it: no box to tick.
+    expect(offered(doc)).toBe(false);
+    // With the pages menu not drawn, nothing goes anywhere.
+    expect(offered(setHeader(left, menuModePatch(left, "pages", "never")))).toBe(false);
+    // With no brand and no button, there is nothing to send.
+    const bare = setHeader(left, { brand: undefined, action: undefined });
+    expect(offered(bare)).toBe(false);
+    // And where it is offered, ticking it is a change the page shows.
+    const ticked = setHeader(left, brandWithPagesPatch(true));
+    expect(published(left).header.hasAttribute("data-brand")).toBe(false);
+    expect(published(ticked).header.getAttribute("data-brand")).toBe("pages");
+  });
+
+  it("puts the sections behind «Ir a…» on a phone too, and a fixed bar stays fixed there", () => {
+    const folded = setHeader(doc, sectionsMobilePatch(doc, "fold"));
+    expect(folded.header?.sections).toEqual({ ...doc.header?.sections, mobile: "fold" });
+    const state = headerStateFor(folded, undefined);
+    expect(state.sectionsMobile).toBe("fold");
+    expect(state.phoneRow).toBe(false);
+    expect(
+      published(folded).header.querySelector("details.rb-nav-fold")?.getAttribute("data-mobile"),
+    ).toBe("fold");
+    // The sentence under «Se queda arriba al bajar» names the way to keep it fixed on a phone.
+    expect(es["editor.menuPanel.stickyPhoneRow"]).toContain(es["editor.menuPanel.mobileFold"]);
+  });
+
+  it("knows the columns and the empty bar from the page itself", () => {
+    const allIn = setHeader(doc, {
+      ...pagesPositionPatch(doc, "left"),
+      ...sectionsPositionPatch(doc, "left"),
+      ...brandWithPagesPatch(true),
+    });
+    const state = headerStateFor(allIn, undefined);
+    expect([state.rails, state.barEmpty]).toEqual([["left"], true]);
+    expect(published(allIn).header.getAttribute("data-bar")).toBe("none");
+    expect(state.sectionsFoldWidth).toBe(RAIL_FOLD_WIDTH);
+    // On opposite sides the sections' column needs the width two columns need.
+    const opposite = setHeader(allIn, sectionsPositionPatch(allIn, "right"));
+    const two = headerStateFor(opposite, undefined);
+    expect(two.rails).toEqual(["left", "right"]);
+    expect([two.pagesFoldWidth, two.sectionsFoldWidth]).toEqual([
+      RAIL_FOLD_WIDTH,
+      TWO_RAILS_FOLD_WIDTH,
+    ]);
+    expect(published(opposite).header.getAttribute("data-rails")).toBe("left right");
+  });
+
+  it("says what the canvas shows of a column, from the width it lays the page out at", () => {
+    const fill = (key: keyof typeof es, values: Record<string, number>) =>
+      Object.entries(values).reduce(
+        (text, [name, value]) => text.replace(`{${name}}`, String(value)),
+        es[key] as string,
+      );
+    // At 1280: seen from its width, and always in the canvas.
+    expect(columnNote(RAIL_FOLD_WIDTH, DESKTOP_LAYOUT_WIDTH, "desktop")).toBe(
+      fill("editor.menuPanel.notes.column", {
+        width: RAIL_FOLD_WIDTH,
+        canvas: DESKTOP_LAYOUT_WIDTH,
+      }),
+    );
+    // Under the floor and still over its width: how wide, and seen.
+    expect(columnNote(RAIL_FOLD_WIDTH, 1100, "desktop")).toBe(
+      fill("editor.menuPanel.notes.columnHere", { n: 1100 }),
+    );
+    // At its width exactly it stands, as the stylesheet's `min-width` says.
+    expect(columnNote(RAIL_FOLD_WIDTH, RAIL_FOLD_WIDTH, "desktop")).toBe(
+      fill("editor.menuPanel.notes.columnHere", { n: RAIL_FOLD_WIDTH }),
+    );
+    // Under it: folded, and what brings it back — the width of 1024 + panel, measured on día 1.
+    expect(columnNote(RAIL_FOLD_WIDTH, 887, "desktop")).toBe(
+      fill("editor.menuPanel.notes.columnFolded", { n: 887 }),
+    );
+    // Two columns need more: at 1100 the sections' folds.
+    expect(columnNote(TWO_RAILS_FOLD_WIDTH, 1100, "desktop")).toBe(
+      fill("editor.menuPanel.notes.columnFolded", { n: 1100 }),
+    );
+    // In the phone view there is no column, whatever the width.
+    expect(columnNote(RAIL_FOLD_WIDTH, 320, "mobile")).toBe(
+      fill("editor.menuPanel.notes.columnPhone", { width: RAIL_FOLD_WIDTH }),
+    );
+    // No sentence carries a number of its own: every width is the renderer's or the canvas's.
+    for (const key of [
+      "editor.menuPanel.notes.column",
+      "editor.menuPanel.notes.columnHere",
+      "editor.menuPanel.notes.columnFolded",
+      "editor.menuPanel.notes.columnPhone",
+      "editor.menuPanel.notes.columnOpposite",
+      "editor.menuPanel.brandWithPagesNote",
+    ] as const) {
+      expect(es[key], key).not.toMatch(/\d/);
+    }
   });
 });
 

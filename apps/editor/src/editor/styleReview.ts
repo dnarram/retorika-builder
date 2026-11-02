@@ -1,5 +1,5 @@
 import { COVER_ID } from "@retorika/catalog";
-import { headerDrawn } from "@retorika/renderer";
+import { headerDrawn, headerSettings } from "@retorika/renderer";
 import type {
   HeaderBackground,
   HeaderPart,
@@ -107,9 +107,28 @@ export function reviewStyle(doc: RetorikaDocument): StyleReview {
     scheme === "surface" || scheme === "transparent"
       ? doc.theme["color.primary"]
       : doc.theme["color.surface"];
+  // **And the panels that hang from the bar** (sprint 31 día 5): the phone's «Menú» and «Ir a…» are
+  // drawn in the scheme's colour, never in an exact one painted on the bar, so a link that reads on
+  // the bar can vanish in its panel. The pages hang in «Menú» on every phone; the sections hang in a
+  // panel only behind «Ir a…». The worse of the two is the finding.
+  const panel = doc.theme[HEADER_BACKGROUND_TOKEN[scheme]];
+  const settings = headerSettings(doc);
+  const sectionsInPanel =
+    settings.sectionsPosition === "fold" || settings.sectionsMobile === "fold";
   for (const exception of headerExceptions) {
     if (exception.property !== "color" || exception.part === "bar") continue;
-    judge(asStyleException(doc, exception), exception.part === "action" ? buttonBackground : bar);
+    const behind =
+      exception.part === "action"
+        ? [buttonBackground]
+        : exception.part === "pagesLinks" || (exception.part === "sectionsLinks" && sectionsInPanel)
+          ? [bar, panel]
+          : [bar];
+    const worst = behind.reduce((low, background) =>
+      contrastRatio(exception.exact, background) < contrastRatio(exception.exact, low)
+        ? background
+        : low,
+    );
+    judge(asStyleException(doc, exception), worst);
   }
 
   return { blocking, warning };

@@ -223,3 +223,31 @@ adds is what the editor needed to hold them:
   the left, in the middle when two stand. Read from `data-rails` and the renderer's own widths, which
   write its `@media` — never from a measurement.
 
+## Note — sprint 31 día 5: the panel says where
+
+**10. «Dónde va», in the «Menú» panel, per menu.** The pages menu offers three places and the
+sections five, each a card drawn as the page it makes — the zones of §1, shaped like where they put the
+menu. A menu's places are offered while it is drawn, as its rows are. «Secciones en su propia fila» is
+retired: «En su fila» is one of the five cards. On a phone the sections gain «Desplegable «Ir a…»»
+beside the row and nothing, and the fixed bar's sentence names it as a way to keep the bar fixed there.
+
+- **«La marca y el botón van con el menú de páginas» is offered only where ticking it changes the
+  page**: the pages menu drawn, standing in a column, and a brand or a button to send. David's
+  condition said «solo si el menú de páginas se muestra»; in the bar the renderer ignores the key, and
+  a box that changes nothing when ticked is the panel saying what the page does not do. The key is kept
+  when the pages go back to the bar, as `position` is kept under `shown: false`: a preference that
+  applies again when it can.
+- **What the canvas shows of a column is said from the width it lays the page out at** (David's
+  adjustment 1). The shell hands the editor the same `layoutWidth` its «Vista a N px» reads, and the
+  sentence uses the renderer's `RAIL_FOLD_WIDTH` and `TWO_RAILS_FOLD_WIDTH`, which write the
+  stylesheet's `@media`: seen always at 1280; seen, and how wide, under the floor and over the width;
+  folded, and what brings it back, under the width; and no column in the phone view. With the two menus
+  on opposite sides, the width two columns need is said too. No sentence carries a number of its own.
+- **What the editor knows of the columns is the renderer's**: `headerPlaces` reads the rails and the
+  empty bar off the very header `headerNodes` draws.
+- **The download's review judges a link against the panel it hangs in as well.** The phone's «Menú»
+  and «Ir a…» are drawn in the bar's scheme, never in an exact colour painted on the bar (§7), so white
+  links on a bar painted near-black read on the bar and vanish in the panel. The pages hang in «Menú» on
+  every phone and the sections only behind «Ir a…»; the worse of the two backgrounds is the finding.
+  The gap existed for «Menú» since sprint 30 día 6; día 3's disclosure widened it.
+

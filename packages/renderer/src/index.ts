@@ -46,6 +46,7 @@ export {
   actionEntry,
   headerDrawn,
   headerPhoneRow,
+  headerPlaces,
   headerSettings,
   homeMenuLabel,
   RAIL_FOLD_WIDTH,

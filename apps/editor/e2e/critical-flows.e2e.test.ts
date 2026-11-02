@@ -23938,3 +23938,159 @@ describe("sprint 31 día 4 — el raíl se elige en el lienzo", () => {
     }
   }, 180_000);
 });
+
+/**
+ * **Sprint 31 día 5 — «Dónde va»** (ADR 0060). Con el panel «Menú» abierto a 1440 —donde el lienzo
+ * maqueta a 1280 y se escala, que es la razón del día 1—, las páginas van a la columna izquierda y
+ * se ven en el lienzo; la casilla de la marca se lleva el logo con ellas; las secciones van a la
+ * derecha y la nota dice el ancho que necesitan dos columnas. El ZIP, abierto desde el disco sin red,
+ * lleva las dos columnas, deja a `<main>` su sitio y marca en la columna la sección que se lee. Con
+ * «Ir a…» el desplegable aparece en el lienzo. Y a 390 la hoja pone las tarjetas en dos columnas.
+ */
+describe("sprint 31 día 5 — el panel «Dónde va»", () => {
+  it("coloca cada menú desde el panel abierto, se lleva el logo, y el ZIP lo publica", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    const dir = mkdtempSync(join(tmpdir(), "retorika-donde-va-"));
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      // A second page, so the pages menu has something to place: «Qué ponemos», converted.
+      await frame.locator('[data-section="sec-services"]').click();
+      await frame
+        .locator(
+          '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+        )
+        .click();
+      await expect(frame.locator('.rb-nav-wide nav[aria-label="Páginas"] a')).toHaveText([
+        "Qué ponemos",
+      ]);
+      await page.getByRole("button", { name: "Menú", exact: true }).click();
+      const panel = page.getByRole("complementary", { name: "La cabecera de tu web" });
+      await expect(panel).toBeVisible();
+      const [chooser] = await Promise.all([
+        page.waitForEvent("filechooser"),
+        panel.getByRole("button", { name: "Subir tu logo" }).click(),
+      ]);
+      await chooser.setFiles(join(import.meta.dirname, "fixtures/logo.png"));
+      await expect(frame.locator("header img.rb-logo")).toHaveCount(1);
+
+      // 1. The pages to the left column, with the panel open: the canvas still lays the page out at
+      //    1280, so the column stands in it, and the note says so.
+      const pagesPlace = panel.getByRole("radiogroup", { name: "Dónde va el menú de páginas" });
+      const brandWith = panel.getByRole("checkbox", {
+        name: "La marca y el botón van con el menú de páginas",
+      });
+      // Offered only where it does something: not while the pages are in the bar.
+      await expect(brandWith).toHaveCount(0);
+      await pagesPlace.getByText("Columna izquierda", { exact: true }).click();
+      const leftRail = frame.locator('.rb-rail[data-side="left"]');
+      await expect(leftRail).toBeVisible();
+      await expect(
+        panel.getByText("En el lienzo se ve siempre, porque el lienzo enseña tu web a 1280 px."),
+      ).toBeVisible();
+
+      // …and at 1024 with the panel open, under the floor: the canvas lays the page out at 887, the
+      //    column folds in the canvas as it would in such a window, and the note says that and what
+      //    brings it back (David's adjustment 1) — the same width the card's «Vista a N px» reads.
+      await page.setViewportSize({ width: 1024, height: 900 });
+      await expect(
+        panel.getByText(
+          "En esta ventana el lienzo enseña tu web a 887 px, y la columna se pliega en la barra.",
+          { exact: false },
+        ),
+      ).toBeVisible();
+      await expect(leftRail).toBeHidden();
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await expect(leftRail).toBeVisible();
+      await expect(
+        panel.getByText("En el lienzo se ve siempre, porque el lienzo enseña tu web a 1280 px."),
+      ).toBeVisible();
+
+      // 2. The brand and the button with the pages: the logo goes into the column.
+      await brandWith.check();
+      await expect(frame.locator("header.rb-header")).toHaveAttribute("data-brand", "pages");
+      await expect(leftRail.locator("img.rb-logo")).toBeVisible();
+
+      // 3. The sections to the right column: three columns, and what two columns need.
+      const sectionsPlace = panel.getByRole("radiogroup", {
+        name: "Dónde va el navegador de secciones",
+      });
+      await sectionsPlace.getByText("Columna derecha", { exact: true }).click();
+      const rightRail = frame.locator('.rb-rail[data-side="right"]');
+      await expect(rightRail).toBeVisible();
+      await expect(
+        panel.getByText("el navegador necesita 1248 px", { exact: false }),
+      ).toBeVisible();
+      const railEntries = await rightRail
+        .locator("a")
+        .evaluateAll((links) => links.map((a) => a.getAttribute("href") ?? ""));
+      expect(railEntries.length).toBeGreaterThan(0);
+
+      // 4. The ZIP, opened from the disk with no network: both columns, `<main>` between them,
+      //    and the section being read marked in the right column as the page scrolls.
+      await sessionHolds(page, (raw) => raw.includes('"brandWithPages":true'), "guardó la marca");
+      await page.getByRole("button", { name: "Descargar" }).click();
+      const anyway = page.getByRole("button", { name: "Descargar igualmente" });
+      await anyway.waitFor();
+      const [download] = await Promise.all([page.waitForEvent("download"), anyway.click()]);
+      const zipPath = join(dir, download.suggestedFilename());
+      await download.saveAs(zipPath);
+      extractAll(new Uint8Array(readFileSync(zipPath)), dir);
+      const offline = await (
+        await browser.newContext({ viewport: { width: 1280, height: 800 } })
+      ).newPage();
+      const failed: string[] = [];
+      offline.on("requestfailed", (request) => failed.push(request.url()));
+      try {
+        await offline.goto(`file://${join(dir, "index.html")}`, { waitUntil: "load" });
+        const columns = await offline.evaluate(() => ({
+          rails: [...document.querySelectorAll<HTMLElement>(".rb-rail")]
+            .filter((rail) => rail.checkVisibility())
+            .map((rail) => rail.getAttribute("data-side")),
+          logo: document.querySelector('.rb-rail[data-side="left"] img.rb-logo') !== null,
+          main: (() => {
+            const r = document.querySelector("main")?.getBoundingClientRect();
+            return r ? [Math.round(r.left), Math.round(r.width)] : null;
+          })(),
+        }));
+        expect(columns).toEqual({ rails: ["left", "right"], logo: true, main: [240, 800] });
+        const marked = () =>
+          offline.evaluate(
+            () =>
+              document
+                .querySelector('.rb-rail[data-side="right"] a[aria-current="location"]')
+                ?.getAttribute("href") ?? "",
+          );
+        for (const href of railEntries.slice(0, 2)) {
+          await offline.evaluate((id) => document.querySelector(id)?.scrollIntoView(), href);
+          await expect
+            .poll(marked, { message: `the right column never marked ${href}` })
+            .toBe(href);
+        }
+        expect(failed, "the downloaded site asked for something it does not carry").toEqual([]);
+      } finally {
+        await offline.context().close();
+      }
+
+      // 5. «Ir a…» for the sections: the disclosure in the canvas, and the note that says where.
+      await sectionsPlace.getByText("Desplegable «Ir a…»", { exact: true }).click();
+      await expect(frame.locator("details.rb-nav-fold > summary")).toBeVisible();
+      await expect(rightRail).toHaveCount(0);
+      await expect(panel.getByText("flota debajo de la barra", { exact: false })).toBeVisible();
+
+      // 6. On a phone the panel is a sheet, and the places stand two to a row.
+      await page.setViewportSize({ width: 390, height: 844 });
+      const cards = pagesPlace.locator("label");
+      await expect(cards).toHaveCount(3);
+      await cards.first().scrollIntoViewIfNeeded();
+      const boxes = await cards.evaluateAll((labels) =>
+        labels.map((label) => Math.round(label.getBoundingClientRect().top)),
+      );
+      expect(boxes[0], JSON.stringify(boxes)).toBe(boxes[1]);
+      expect(boxes[2] ?? 0, JSON.stringify(boxes)).toBeGreaterThan(boxes[0] ?? 0);
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+});

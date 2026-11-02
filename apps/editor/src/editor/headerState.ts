@@ -4,13 +4,16 @@ import {
   actionEntry,
   headerDrawn,
   headerPhoneRow,
+  headerPlaces,
   headerSettings,
   homeMenuLabel,
   MENU_MIN_ENTRIES,
   pageLabel,
   pageMenuEntries,
+  RAIL_FOLD_WIDTH,
   sectionLabel,
   sectionMenuEntries,
+  TWO_RAILS_FOLD_WIDTH,
 } from "@retorika/renderer";
 import type {
   Header,
@@ -26,6 +29,7 @@ import type {
   StyleProperty,
 } from "@retorika/schema";
 import es from "../locales/es.json" with { type: "json" };
+import { DESKTOP_LAYOUT_WIDTH } from "./overflowCheck.ts";
 import { headerBarBackground } from "./styleReview.ts";
 
 /**
@@ -131,13 +135,24 @@ export interface HeaderState {
   phoneRow: boolean;
   /** The bar lies transparent over the cover (ADR 0057 §look; chosen on día 6). */
   transparent: boolean;
-  /** Where the sections menu sits (ADR 0060, sprint 31): `row` is the line of their own under the bar
-   * that día 6's «Secciones en su propia fila» chooses; the rails and the disclosure arrive in the
-   * panel on día 5. */
+  /** Where the sections menu sits (ADR 0060, sprint 31), chosen in the panel's «Dónde va». */
   sectionsPosition: SectionsPosition;
   /** Where the pages menu sits, and whether the brand and the button go with it into a rail. */
   pagesPosition: PagesPosition;
   brandWithPages: boolean;
+  /** «La marca y el botón van con el menú de páginas» is offered (David's condition on planning
+   * sprint 31): only where it does something — the pages menu drawn on this page and standing in a
+   * column, and a brand or a button to send there. In the bar the renderer ignores it, and a box that
+   * changes nothing when ticked is the panel promising what the page does not do. */
+  brandWithPagesOffered: boolean;
+  /** The columns this page draws, and whether the bar has nothing left on a wide screen — the
+   * renderer's own answer (`headerPlaces`). */
+  rails: ("left" | "right")[];
+  barEmpty: boolean;
+  /** The window width under which each menu's column folds into the bar: the pages' from 1024, the
+   * sections' from 1248 when the pages stand in the other column (ADR 0060 §3). */
+  pagesFoldWidth: number;
+  sectionsFoldWidth: number;
   /** The look as the renderer reads it, every gap filled by its default (día 6). */
   look: HeaderLook;
   /** The parts this page draws, in `HEADER_PARTS` order — the ones the exact controls are offered
@@ -265,6 +280,8 @@ export function headerStateFor(doc: RetorikaDocument, pageId: string | undefined
     }
   }
 
+  const places = headerPlaces(doc, page);
+
   const actionLeavesMenu =
     chosen?.kind === "page"
       ? settings.pagesShown && pageEntries.some((entry) => entry.pageId === chosen.pageId)
@@ -304,6 +321,14 @@ export function headerStateFor(doc: RetorikaDocument, pageId: string | undefined
     sectionsPosition: settings.sectionsPosition,
     pagesPosition: settings.pagesPosition,
     brandWithPages: settings.brandWithPages,
+    brandWithPagesOffered:
+      pagesDrawn &&
+      settings.pagesPosition !== "bar" &&
+      (settings.brandName || settings.logo !== undefined || action !== undefined),
+    rails: places.rails,
+    barEmpty: places.barEmpty,
+    pagesFoldWidth: RAIL_FOLD_WIDTH,
+    sectionsFoldWidth: places.rails.length === 2 ? TWO_RAILS_FOLD_WIDTH : RAIL_FOLD_WIDTH,
     look: {
       background: settings.background,
       align: settings.align,
@@ -377,10 +402,11 @@ export function brandNamePatch(doc: RetorikaDocument, name: boolean): Partial<He
   return { brand: Object.keys(next).length === 0 ? undefined : next };
 }
 
-/** The header with the sections' phone row chosen, keeping the rest of `sections`. */
+/** The header with the sections' place on a phone chosen — the row, nothing, or «Ir a…» beside
+ * «Menú» — keeping the rest of `sections`. */
 export function sectionsMobilePatch(
   doc: RetorikaDocument,
-  mobile: "row" | "hidden",
+  mobile: SectionsOnMobile,
 ): Partial<Header> {
   return { sections: { ...(doc.header?.sections ?? {}), mobile } };
 }
@@ -421,6 +447,39 @@ export function pagesPositionPatch(
 /** «La marca y el botón van con el menú de páginas» on or off; off drops the key. */
 export function brandWithPagesPatch(on: boolean): Partial<Header> {
   return { brandWithPages: on ? true : undefined };
+}
+
+/**
+ * **What the canvas shows of a column, said from the width it lays the page out at** (David's
+ * adjustment 1 on approving sprint 31). «En el lienzo se ve siempre» is true at 1280 and a lie in the
+ * zone under the legibility floor, where the canvas lays out narrower (ADR 0061) and a column folds
+ * there as it does in a visitor's window. So the sentence reads the same `layoutWidth` the canvas's
+ * «Vista a N px» reads, and the same widths the stylesheet's `@media` are written with:
+ *
+ * - at 1280, the column is seen in every window from its width, and always in the canvas;
+ * - under 1280 and still at or over its width, the canvas says how wide, and that it is seen;
+ * - under its width, that it folds, and what brings it back — a wider window, or the panel closed;
+ * - in the phone view, that there is no column there.
+ */
+export function columnNote(
+  foldWidth: number,
+  layoutWidth: number,
+  device: "desktop" | "mobile",
+): string {
+  const width = String(foldWidth);
+  if (device === "mobile")
+    return es["editor.menuPanel.notes.columnPhone"].replace("{width}", width);
+  if (layoutWidth >= DESKTOP_LAYOUT_WIDTH) {
+    return es["editor.menuPanel.notes.column"]
+      .replace("{width}", width)
+      .replace("{canvas}", String(DESKTOP_LAYOUT_WIDTH));
+  }
+  const n = String(Math.round(layoutWidth));
+  return (
+    layoutWidth >= foldWidth
+      ? es["editor.menuPanel.notes.columnHere"]
+      : es["editor.menuPanel.notes.columnFolded"]
+  ).replace("{n}", n);
 }
 
 /**

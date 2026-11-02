@@ -295,6 +295,39 @@ describe("the header's parts", () => {
     ]);
   });
 
+  /**
+   * **And against the panels that hang from the bar** (sprint 31 día 5). The phone's «Menú» and
+   * «Ir a…» are drawn in the bar's *scheme* — not in an exact colour painted on the bar — so white
+   * links on a bar painted near-black read on the bar and vanish in the panel, white on the scheme's
+   * surface. The pages are in «Menú» on every phone; the sections are in a panel only behind
+   * «Ir a…».
+   */
+  it("judges links against the panel they hang in as well, where its colour is not the bar's", () => {
+    const dark = { bar: { color: exact("#111111") } };
+    const pages = reviewStyle(
+      headerDoc({ style: { ...dark, pagesLinks: { color: exact("#FFFFFF") } } }),
+    );
+    expect(pages.blocking.map((f) => f.exception.elementId)).toEqual(["pagesLinks"]);
+    // Measured against the panel's surface: the ratio of white on white.
+    expect(pages.blocking[0]?.ratio).toBeCloseTo(1, 2);
+    // The sections in the bar or a row have no panel: the dark bar is all they sit on.
+    const sectionsInBar = headerDoc({
+      style: { ...dark, sectionsLinks: { color: exact("#FFFFFF") } },
+    });
+    expect(reviewStyle(sectionsInBar)).toEqual({ blocking: [], warning: [] });
+    // Behind «Ir a…», on a wide screen or a phone, they do.
+    for (const sections of [{ position: "fold" as const }, { mobile: "fold" as const }]) {
+      const folded = headerDoc({
+        sections,
+        style: { ...dark, sectionsLinks: { color: exact("#FFFFFF") } },
+      });
+      expect(
+        reviewStyle(folded).blocking.map((f) => f.exception.elementId),
+        JSON.stringify(sections),
+      ).toEqual(["sectionsLinks"]);
+    }
+  });
+
   it("says nothing about a header dressed in references, or in sizes", () => {
     const refs = headerDoc({
       look: { background: "secondary" },

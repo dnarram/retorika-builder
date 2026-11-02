@@ -5789,3 +5789,76 @@ sección. Es como funcionaba con la barra; la caminata elige la portada antes, c
 **Medidas.** `pnpm test` 3605 (171 ficheros); `typecheck` y `lint` (0 errores) en verde. La salida del
 renderer no cambia: ni goldens ni `test:a11y`. e2e completa **270 verdes y 1 omitida, 1134 s, a la
 primera**, con las dos caminatas nuevas. **Caminatas reescritas: ninguna.**
+
+### Día 5 — el panel «Menú»: dónde va cada menú (PR de `feat/el-panel-donde-va-cada-menu`, ADR 0060 §10)
+
+**«Dónde va», por menú.** El menú de páginas ofrece tres sitios y el navegador de secciones cinco, cada
+uno en una tarjeta dibujada como la página que deja: la barra arriba, una fila debajo, una columna a
+cada lado o una caja que cuelga de la barra. Los sitios de un menú se ofrecen mientras se dibuja, como
+sus filas. La casilla «Secciones en su propia fila» se retira: «En su fila» es una de las cinco
+tarjetas. En el móvil, las secciones ganan «Desplegable «Ir a…»», y la frase de la barra fija lo nombra
+como forma de que se quede arriba también allí, que quedó pendiente del día 3.
+
+**La casilla de la marca solo aparece donde cambia algo.** «La marca y el botón van con el menú de
+páginas» se ofrece con el menú de páginas dibujado, en una columna, y con una marca o un botón que
+mandar. La condición de David decía «solo si el menú de páginas se muestra»; en la barra el renderer
+ignora la clave, y una casilla que no cambia nada al marcarla sería el panel prometiendo lo que la
+página no hace. Si las páginas vuelven a la barra, la clave se queda, como `position` bajo `shown:
+false`: vuelve a valer cuando puede.
+
+**La nota del lateral sale del ancho al que maqueta el lienzo**, el ajuste 1 de David. El shell le pasa
+al editor el mismo ancho que lee su «Vista a N px», y la frase usa los anchos del renderer que escriben
+los `@media`:
+
+| Lo que ve el lienzo | La nota |
+|---|---|
+| 1280 | se ve en pantallas de 1024 px o más, y en el lienzo siempre |
+| menos de 1280 y desde el ancho de la columna | a cuántos píxeles enseña la web, y que se ve |
+| menos del ancho de la columna | que se pliega, y qué la devuelve: más ventana o el panel cerrado |
+| vista de móvil | que allí no hay columna |
+
+Con los dos menús en columnas opuestas, además, el ancho que necesitan dos columnas, 1248. Ninguna
+frase lleva un número propio: un test lo exige. Lo que el panel sabe de las columnas y de la barra
+vacía se lo dice el renderer, leído de la cabecera que dibuja.
+
+**La revisión previa a la descarga mira también los paneles.** Los paneles de «Menú» e «Ir a…» se
+dibujan con el esquema de la barra, nunca con un color exacto pintado en ella. Unos enlaces blancos
+sobre una barra casi negra se leían en la barra y desaparecían en el panel, blanco sobre blanco. Ahora
+un enlace se juzga contra el peor de los dos fondos: las páginas siempre, porque van en «Menú» en todo
+móvil, y las secciones solo detrás de «Ir a…». El hueco existía para «Menú» desde el sprint 30 día 6;
+el desplegable del día 3 lo agrandó.
+
+**Visto en el editor real antes de la caminata**, con «Qué ponemos» convertida: a 1440 con el panel
+abierto, la columna izquierda en el lienzo y la nota de «siempre»; a 1024 con el panel, «887 px» y «se
+pliega»; a 390, la hoja con las tarjetas de dos en dos.
+
+**La caminata «sprint 31 día 5»**, a 1440 con el panel abierto:
+
+- la casilla de la marca no está mientras las páginas van en la barra;
+- «Columna izquierda» pone la columna en el lienzo, y la nota dice que se ve siempre;
+- a 1024 la nota dice «887 px» y que se pliega, y la columna desaparece del lienzo; a 1440 vuelve;
+- la casilla se lleva el logo subido a la columna;
+- «Columna derecha» para las secciones: tres columnas, y la nota de 1248;
+- el ZIP, abierto desde el disco sin red a 1280: las dos columnas, el logo en la izquierda, `<main>` en
+  240 con 800 de ancho, y la columna derecha marcando la sección que se lee al bajar, sin una sola
+  petición fallida;
+- «Ir a…» para las secciones: el desplegable en el lienzo y su nota;
+- a 390, la hoja con las tarjetas de dos en dos.
+
+**Saboteos**, deshechos copiando el fichero guardado:
+
+| Saboteo | Lo que se puso en rojo |
+|---|---|
+| la nota con `>` en vez de `>=` en el ancho de la columna | la prueba de las notas |
+| la casilla ofrecida también con las páginas en la barra | la prueba de la casilla |
+| la columna de secciones sin el ancho de dos columnas | la prueba de las columnas |
+| sin el cable del ancho del shell al panel | la caminata, en el paso de 1024 |
+| la hoja sin las dos columnas del móvil | la caminata, en el paso de 390 |
+
+La revisión de los paneles se escribió primero y salió roja.
+
+**Medidas.** `pnpm test` 3612 (171 ficheros); `typecheck`, `lint` (0 errores), invariantes, golden
+(ningún byte distinto: el renderer solo gana una función de lectura) y `renderer:deps` en verde. e2e
+completa **271 verdes y 1 omitida, 1139 s, a la primera**. **Caminatas reescritas: ninguna.** El día
+entero corrió en Opus 5.5: el plan repartía la mecánica a Sonnet, pero los constructores de parche
+existían desde el día 2 y lo demás era el copy y qué se ofrece cuándo.
