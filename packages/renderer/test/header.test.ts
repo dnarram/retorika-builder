@@ -510,7 +510,9 @@ describe("the look, as attributes and rules", () => {
     expect(sheet).toContain(
       "  max-width: 100%; color: var(--color-ink); font-family: var(--font-heading);",
     );
-    expect(sheet).toContain(".rb-nav-narrow > summary { color: var(--color-ink);");
+    expect(sheet).toContain(
+      "  color: var(--color-ink); font-family: var(--font-heading);\n  font-size: var(--size-body); cursor: pointer; list-style: none; }",
+    );
     expect(sheet).toContain(
       ".rb-nav a[aria-current] { text-decoration-color: var(--color-primary); }",
     );
@@ -983,5 +985,65 @@ describe("«Ir a…», the sections' disclosure", () => {
     const without = render(site(3, PAGES, { pages: { position: "left" } }), "html").css;
     expect(without).not.toContain("rb-nav-fold");
     expect(without).not.toContain("rb-fold-in");
+  });
+});
+
+describe("the phone's menu is a sheet (sprint 32 día 4)", () => {
+  const css = (doc: RetorikaDocument) => render(doc, "html").css;
+  const withFold = () =>
+    site(3, [{ id: "p2", slug: "carta", title: "La carta" }], {
+      sections: { position: "fold", mobile: "fold" },
+    });
+
+  it("fills the screen under the bar, scrolls down inside itself, and marks its entry by the edge", () => {
+    const sheet = css(withFold());
+    for (const disclosure of [".rb-nav-narrow", ".rb-nav-fold[data-mobile=fold]"]) {
+      expect(sheet).toContain(
+        `  ${disclosure} > .rb-nav { box-sizing: border-box; height: calc(100dvh - var(--rb-header-h));\n    overflow: hidden auto;`,
+      );
+      expect(sheet).toContain(
+        `  ${disclosure} > .rb-nav a[aria-current] { text-decoration-color: transparent;`,
+      );
+    }
+  });
+
+  it("hides what it covers while open, on a phone only (adjustment 4)", () => {
+    const sheet = css(withFold());
+    expect(sheet).toContain("  body:has(.rb-nav-narrow[open]) main { visibility: hidden; }");
+    expect(sheet).toContain(
+      "  body:has(.rb-nav-fold[data-mobile=fold][open]) main { visibility: hidden; }",
+    );
+    // Never outside a phone's block: on a wide screen «Ir a…» floats over a page that stays.
+    for (const at of [...sheet.matchAll(/body:has\(/g)].map((m) => m.index ?? 0)) {
+      const before = sheet.slice(0, at);
+      expect(before.lastIndexOf("@media (max-width: 720px) {")).toBeGreaterThan(
+        before.lastIndexOf("\n}\n"),
+      );
+    }
+  });
+
+  it("draws «Menú» with its two bars and its two words, and «Ir a…» with a chevron", () => {
+    const page = draw(withFold());
+    const summary = page.querySelector(".rb-nav-narrow > summary");
+    expect([...(summary?.children ?? [])].map((c) => c.className)).toEqual([
+      "rb-burger",
+      "rb-when-closed",
+      "rb-when-open",
+    ]);
+    expect(
+      page.querySelector(".rb-nav-fold > summary > .rb-chevron")?.getAttribute("aria-hidden"),
+    ).toBe("true");
+    expect(page.querySelector(".rb-nav-fold > summary")?.textContent?.trim()).toBe("Ir a…");
+  });
+
+  it("brings the entries in one after another, 40 ms apart and capped at the seventh, under the motion query", () => {
+    const sheet = css(withFold());
+    expect(sheet).toContain(
+      "    .rb-nav-narrow[open] > .rb-nav > a { animation: rb-rise var(--rb-base) var(--rb-ease) backwards;\n      animation-delay: calc(var(--rb-i, 0) * 40ms); }",
+    );
+    expect(sheet).toContain("    .rb-nav-narrow[open] > .rb-nav > a:nth-child(6) { --rb-i: 5; }");
+    expect(sheet).toContain(
+      "    .rb-nav-narrow[open] > .rb-nav > a:nth-child(n + 7) { --rb-i: 6; }",
+    );
   });
 });

@@ -441,7 +441,12 @@ export function headerNodes(doc: RetorikaDocument, current: Page): RenderNode[] 
   if (sections.length > 0 && (foldWide || settings.sectionsMobile === "fold")) {
     children.push(
       element("details", { class: "rb-nav-fold", "data-mobile": settings.sectionsMobile }, [
-        element("summary", {}, [es["nav.goTo"]]),
+        // The word, and a chevron that turns when the panel opens — drawn, not a character, so no
+        // letter of the site decides its shape; hidden from the tree, because the word says it all.
+        element("summary", {}, [
+          es["nav.goTo"],
+          element("span", { class: "rb-chevron", "aria-hidden": "true" }, []),
+        ]),
         navNode(es["nav.sections"], "sectionsLinks", sectionsLinks(current, action)),
       ]),
     );
@@ -452,7 +457,15 @@ export function headerNodes(doc: RetorikaDocument, current: Page): RenderNode[] 
   if (pages.length > 0) {
     children.push(
       element("details", { class: "rb-nav-narrow" }, [
-        element("summary", {}, [es["nav.menu"]]),
+        // **The icon and the word, and the word changes** (sprint 32 día 4): two bars that turn into
+        // an X, and «Menú» that becomes «Cerrar» while the sheet is open. The word stays because the
+        // people this product is for do not all read an icon alone; both words are rendered and the
+        // stylesheet shows the one that applies, so the summary's name is the word on screen.
+        element("summary", {}, [
+          element("span", { class: "rb-burger", "aria-hidden": "true" }, []),
+          element("span", { class: "rb-when-closed" }, [es["nav.menu"]]),
+          element("span", { class: "rb-when-open" }, [es["nav.close"]]),
+        ]),
         navNode(es["nav.pages"], "pagesLinks", pagesLinks(doc, current, action)),
       ]),
     );
@@ -630,6 +643,7 @@ export function headerCss(doc: RetorikaDocument, target: "html" | "dom"): string
     "  .rb-nav-action { transition: transform var(--rb-fast) var(--rb-ease), box-shadow var(--rb-fast) var(--rb-ease); }",
     "  .rb-header[data-sticky] { transition: padding var(--rb-fast) var(--rb-ease), margin var(--rb-fast) var(--rb-ease),",
     "    background-color var(--rb-fast) var(--rb-ease), box-shadow var(--rb-fast) var(--rb-ease); }",
+    "  .rb-burger::before, .rb-burger::after { transition: transform var(--rb-fast) var(--rb-ease); }",
     "}",
     // The bar. One flex row that wraps: brand, the wide strip pushed to the far side, the button,
     // and — on its own line when it has one — the sections row. A hairline under it, so it reads
@@ -731,9 +745,22 @@ export function headerCss(doc: RetorikaDocument, target: "html" | "dom"): string
     // «Menú»: a word, not a disclosure triangle — the browser's own marker goes, in both the places
     // browsers draw it.
     ".rb-nav-narrow { padding: 0; }",
-    ".rb-nav-narrow > summary { color: var(--color-ink); font-family: var(--font-heading);",
+    ".rb-nav-narrow > summary { display: inline-flex; align-items: center; gap: var(--space-sm);",
+    "  color: var(--color-ink); font-family: var(--font-heading);",
     "  font-size: var(--size-body); cursor: pointer; list-style: none; }",
     ".rb-nav-narrow > summary::-webkit-details-marker { display: none; }",
+    // «Menú» closed, «Cerrar» open: `display: none` takes the other word out of the summary's name.
+    ".rb-nav-narrow > summary > .rb-when-open, .rb-nav-narrow[open] > summary > .rb-when-closed {",
+    "  display: none; }",
+    ".rb-nav-narrow[open] > summary > .rb-when-open { display: inline; }",
+    // Two bars of the summary's own colour, 18 px wide and 10 apart, that cross into an X when open.
+    ".rb-burger { position: relative; flex: none; width: 18px; height: 12px; }",
+    '.rb-burger::before, .rb-burger::after { content: ""; position: absolute; left: 0; right: 0;',
+    "  height: 2px; border-radius: 1px; background: currentColor; }",
+    ".rb-burger::before { top: 0; }",
+    ".rb-burger::after { bottom: 0; }",
+    ".rb-nav-narrow[open] .rb-burger::before { transform: translateY(5px) rotate(45deg); }",
+    ".rb-nav-narrow[open] .rb-burger::after { transform: translateY(-5px) rotate(-45deg); }",
     // The phone's open menu is a panel under the whole bar, not a list inside the «Menú» word's
     // own box. **Measured before it was written this way**: a `<details>` that is a flex item is as
     // wide as its summary (87px at 320px), Chromium lays its closed contents out all the same, and a
@@ -1015,6 +1042,8 @@ function foldCss(doc: RetorikaDocument): string[] {
     ".rb-nav-fold > summary { color: var(--color-ink); font-family: var(--font-heading);",
     "  font-size: var(--size-body); cursor: pointer; list-style: none; }",
     ".rb-nav-fold > summary::-webkit-details-marker { display: none; }",
+    // The chevron, on a wide screen only: in the phone's bar every pixel is the brand's (below).
+    ".rb-chevron { display: none; }",
     ".rb-nav-fold > .rb-nav { position: absolute; left: 0; right: 0; top: 100%; z-index: 2;",
     "  flex-direction: column; flex-wrap: nowrap; gap: var(--space-sm);",
     "  padding: var(--space-md) var(--space-lg);",
@@ -1031,6 +1060,7 @@ function foldCss(doc: RetorikaDocument): string[] {
     "@keyframes rb-fold-in { from { opacity: 0; transform: translateY(-4px); } }",
     "@media (prefers-reduced-motion: no-preference) {",
     "  .rb-nav-fold[open] > .rb-nav { animation: rb-fold-in var(--rb-base) var(--rb-ease) backwards; }",
+    "  .rb-chevron { transition: transform var(--rb-fast) var(--rb-ease); }",
     "}",
     "@media (min-width: 721px) {",
     `  ${placed} { display: block; position: fixed; z-index: 2;`,
@@ -1038,6 +1068,10 @@ function foldCss(doc: RetorikaDocument): string[] {
     `  ${placed} > summary { padding: var(--space-sm) var(--space-lg); background: var(--color-surface);`,
     `    border: ${HAIRLINE}; border-radius: 999px;`,
     "    box-shadow: 0 8px 24px -16px var(--color-ink); }",
+    `  ${placed} > summary { display: inline-flex; align-items: center; gap: var(--space-sm); }`,
+    "  .rb-chevron { display: inline-block; width: 6px; height: 6px; margin-top: -3px;",
+    "    border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); }",
+    "  .rb-nav-fold[open] .rb-chevron { margin-top: 3px; transform: rotate(-135deg); }",
     // `width: max-content` because an absolute box sizes to its containing block, which here is the
     // `<details>` — as wide as «Ir a…» — and every entry would wrap to that. Bounded by the window,
     // the summary above it and a space below.
@@ -1070,7 +1104,51 @@ function foldCss(doc: RetorikaDocument): string[] {
     // A hidden sibling still matches `+` (sprint 31 día 2), so the rule names the one that is drawn.
     "  .rb-nav-action + .rb-nav-fold[data-mobile=fold],",
     "  .rb-nav-fold[data-mobile=fold] + .rb-nav-narrow { margin-left: 0; }",
+    // With «Ir a…» beside it, «Menú» keeps its word and loses its bars: the 26 px they take are the
+    // brand's logo at 320 (measured on sprint 31 día 3 with 45 px left for a 40 px logo).
+    "  .rb-header:has(> .rb-nav-fold[data-mobile=fold]) .rb-burger { display: none; }",
+    ...phoneSheet(".rb-nav-fold[data-mobile=fold]"),
     "}",
+  ];
+}
+
+/**
+ * **A disclosure on a phone is a sheet** (sprint 32 día 4): its panel fills the screen under the bar,
+ * its entries are set large in the heading letter, the current one is marked by its edge and a tint as
+ * in a rail, and they come in one after another when it opens. And **what the sheet covers stops
+ * existing** while it is open (David's adjustment 4): `visibility: hidden` on `<main>` takes the page
+ * out of the order of Tab and out of the accessibility tree, so the keyboard cannot wander behind the
+ * sheet to a link nobody can see, and the page no longer shows scrolling behind it. `:has` is
+ * Baseline since 2023; where it is missing the page simply stays visible behind, as before. The
+ * footer is a section inside `<main>`, so `<main>` is all of it.
+ *
+ * For «Menú» (`headerMobileCss`) and for «Ir a…» on a phone (`foldCss`): two callers of one shape,
+ * written once so that the two sheets cannot drift apart. Rules to be placed inside the phone's
+ * `@media`; the stagger nests its own motion query inside it.
+ */
+function phoneSheet(disclosure: string): string[] {
+  const panel = `${disclosure} > .rb-nav`;
+  return [
+    `  ${panel} { box-sizing: border-box; height: calc(100dvh - var(--rb-header-h));`,
+    "    overflow: hidden auto; gap: var(--space-md); padding: var(--space-xl) var(--space-lg);",
+    "    border-bottom: 0; }",
+    `  ${panel} a { font-family: var(--font-heading); font-size: var(--size-subheading);`,
+    "    padding: var(--space-xs) var(--space-sm); margin-left: calc(-1 * var(--space-sm));",
+    "    border-radius: 0 var(--radius-sm) var(--radius-sm) 0; box-shadow: inset 3px 0 0 transparent; }",
+    `  ${panel} a[aria-current] { text-decoration-color: transparent;`,
+    "    box-shadow: inset 3px 0 0 currentColor;",
+    "    background: color-mix(in srgb, currentColor 12%, transparent); }",
+    `  body:has(${disclosure}[open]) main { visibility: hidden; }`,
+    // One after another: 40 ms apart, capped at the seventh as the editor's own reveal is, the delay
+    // riding a custom property so the shorthand does not reset it (sprint 32 día 2's lesson).
+    "  @media (prefers-reduced-motion: no-preference) {",
+    `    ${disclosure}[open] > .rb-nav > a { animation: rb-rise var(--rb-base) var(--rb-ease) backwards;`,
+    "      animation-delay: calc(var(--rb-i, 0) * 40ms); }",
+    ...[2, 3, 4, 5, 6].map(
+      (n) => `    ${disclosure}[open] > .rb-nav > a:nth-child(${n}) { --rb-i: ${n - 1}; }`,
+    ),
+    `    ${disclosure}[open] > .rb-nav > a:nth-child(n + 7) { --rb-i: 6; }`,
+    "  }",
   ];
 }
 
@@ -1119,6 +1197,7 @@ export function headerMobileCss(doc: RetorikaDocument): string[] {
     "  .rb-header[data-layout=stacked] .rb-brand { flex-basis: 0; }",
     "  .rb-header[data-sticky][data-phone-row] { position: static; }",
     "  .rb-header[data-sticky][data-phone-row] ~ main [data-section] { scroll-margin-top: 0; }",
+    ...phoneSheet(".rb-nav-narrow"),
     "}",
     "",
   ];

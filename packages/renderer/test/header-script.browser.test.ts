@@ -55,6 +55,13 @@ async function open(
   return page;
 }
 
+/** A press on the bar's own padding, outside every disclosure in it. */
+async function pressOnTheBar(page: Page): Promise<void> {
+  const box = await page.locator("header.rb-header").boundingBox();
+  if (!box) throw new Error("no bar");
+  await page.mouse.click(box.x + 2, box.y + 2);
+}
+
 /** The sections marked as in view — by destination, since the wide bar and the phone's row each
  * carry a copy of the entry and the script marks both. */
 const current = (page: Page) =>
@@ -150,7 +157,9 @@ describe("the phone's menu", () => {
 
       await summary.click();
       expect(await page.evaluate(() => document.querySelector("details")?.open)).toBe(true);
-      await page.mouse.click(195, 600);
+      // On the bar, beside the brand: on a phone the open sheet covers the rest of the screen
+      // (sprint 32 día 4), so the bar is the one place outside it.
+      await pressOnTheBar(page);
       expect(await page.evaluate(() => document.querySelector("details")?.open)).toBe(false);
     } finally {
       await page.context().close();
@@ -228,7 +237,10 @@ describe("«Ir a…»", () => {
         ).toBe("rb-nav-fold");
         await summary.click();
         expect(await isOpen(page)).toBe(true);
-        await page.mouse.click(width / 2, 600);
+        // Outside it: on a phone its sheet covers the screen under the bar (sprint 32 día 4), so the
+        // press goes on the bar; on a wide screen the page is outside it, as before.
+        if (width <= 720) await pressOnTheBar(page);
+        else await page.mouse.click(width / 2, 600);
         expect(await isOpen(page)).toBe(false);
       } finally {
         await page.context().close();

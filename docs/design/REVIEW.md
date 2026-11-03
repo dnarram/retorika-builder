@@ -6275,3 +6275,27 @@ opacidad mínima en `neutral`). La entrada de la portada conserva el suyo: va po
 pantalla desde el primer pintado y acaba en 600 ms. Medido: Lighthouse, accesibilidad **100 en los
 ocho**; el gemelo asevera opacidad 1 y la subida en tres puntos de la franja. Escrito en la nota del
 día 4 de la ADR 0062 y en la 0064 §5, con la cita; no se firma por David.
+
+**La hoja del móvil** (nota del día 4 en la ADR 0063). «Menú», y «Ir a…» en el móvil, ya no son una
+lista colgada de la barra sino **una hoja** que llena la pantalla bajo la barra, con las entradas
+grandes en la letra de titulares, la actual marcada por su borde y un tinte como en el raíl, y
+**entrando una tras otra** al abrir (40 ms, tope en la séptima, relleno `backwards`, el retardo en una
+propiedad propia por la lección del día 2). «Menú» lleva **icono y palabra**: dos barras que se cruzan
+en X y «Menú» que pasa a «Cerrar» (`nav.close`); las dos palabras se dibujan y la hoja enseña la que
+toca, así que el nombre accesible es la palabra en pantalla. Con «Ir a…» al lado en la barra del
+móvil el icono no se dibuja: sus 26 px son el logo a 320. «Ir a…» gana un cheurón que gira, solo en
+escritorio. **Lo que la hoja tapa deja de existir** (ajuste 4): `body:has(…[open]) main { visibility:
+hidden }` en el bloque del móvil.
+
+**Dos correcciones al plan, medidas.** El plan decía que Tab desde la última entrada «vuelve al
+`summary`»: no puede sin script; sale del documento y el siguiente Tab empieza en «Saltar al
+contenido». Lo que se asevera es lo que importa: ningún Tab cae bajo la hoja, y con la hoja cerrada la
+página vuelve al orden. Y la «pulsación fuera» de los tests del script caía en (195, 600), que ahora es
+la propia hoja: en el móvil lo único fuera de ella es la barra, y los tests pulsan ahí.
+
+**Medido** a 320×568 y 390×844: la hoja empieza en el pie de la barra (±1 px) y acaba en el fondo de
+la ventana, de borde a borde; `<main>` oculto con la hoja abierta y visible tras Escape; abrir «Ir a…»
+cierra «Menú»; la barra con logo sigue ≤ 72 px a 320 con el icono. Con ocho entradas, retardos 0, 40, …
+240, 240, la última sin dibujar antes de su retardo, todas en reposo al final; nada bajo `reduce`.
+Saboteos: sin el `visibility: hidden`, el teclado cae bajo la hoja (tres rojos); sin `backwards`, la
+última entrada se dibuja antes de tiempo. Batería completa: ver la PR.

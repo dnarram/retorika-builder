@@ -84,14 +84,21 @@ describe("the published page's motion", () => {
       "animation-delay: var(--rb-delay, 0ms)",
       "animation-duration: var(--rb-fast)",
       "transition: transform var(--rb-fast) var(--rb-ease), box-shadow var(--rb-fast) var(--rb-ease)",
-      // The header's (ADR 0063): the entry's rule, the indicator, the button, the bar, the rail's
-      // mark, «Ir a…»'s panel.
+      // The header's (ADR 0063): the entry's rule, the indicator, the button, the bar; «Menú»'s two
+      // bars crossing into an X (día 4); the rail's mark; «Ir a…»'s panel and its chevron; and the
+      // phone's two sheets, each entry rising in after the one before it (día 4).
       "transition: text-decoration-color var(--rb-fast) var(--rb-ease)",
       "transition: left var(--rb-fast) var(--rb-ease), width var(--rb-fast) var(--rb-ease)",
       "transition: transform var(--rb-fast) var(--rb-ease), box-shadow var(--rb-fast) var(--rb-ease)",
       "transition: padding var(--rb-fast) var(--rb-ease), margin var(--rb-fast) var(--rb-ease), background-color var(--rb-fast) var(--rb-ease), box-shadow var(--rb-fast) var(--rb-ease)",
+      "transition: transform var(--rb-fast) var(--rb-ease)",
       "transition: text-decoration-color var(--rb-fast) var(--rb-ease), box-shadow var(--rb-fast) var(--rb-ease), background-color var(--rb-fast) var(--rb-ease)",
       "animation: rb-fold-in var(--rb-base) var(--rb-ease) backwards",
+      "transition: transform var(--rb-fast) var(--rb-ease)",
+      "animation: rb-rise var(--rb-base) var(--rb-ease) backwards",
+      "animation-delay: calc(var(--rb-i, 0) * 40ms)",
+      "animation: rb-rise var(--rb-base) var(--rb-ease) backwards",
+      "animation-delay: calc(var(--rb-i, 0) * 40ms)",
     ]);
     // The numbers every one of them reads, outside the query: they are not movement. For every site,
     // with or without a header.
@@ -159,7 +166,11 @@ describe("the published page's motion", () => {
       "  ::view-transition-old(root), ::view-transition-new(root) { animation-duration: var(--rb-fast); }",
     );
     const canvas = buildCss(fixture("menu-y-paginas"), "dom");
-    expect(canvas).not.toMatch(/view-transition|rb-rise|animation-timeline|animation-range/);
+    // The phone's sheets name `rb-rise` for their entries in both sheets, but the keyframes travel
+    // with the published page only, so in the canvas the name animates nothing.
+    expect(canvas).not.toMatch(
+      /view-transition|@keyframes rb-rise|animation-timeline|animation-range/,
+    );
   });
 
   it("gives the canvas the numbers and none of the movement: the two sheets differ in two blocks alone", () => {

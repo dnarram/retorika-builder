@@ -66,7 +66,9 @@ async function tab(page: Page): Promise<Stop> {
     }
     return {
       tag: el.tagName.toLowerCase(),
-      text: (el.textContent ?? "").trim(),
+      // What is on screen, not every word in the markup: «Menú»'s summary carries «Cerrar» too,
+      // hidden until the sheet is open (sprint 32 día 4).
+      text: (el.innerText ?? "").trim(),
       href: el.getAttribute("href") ?? "",
       where: el.classList.contains("rb-skip")
         ? ("skip" as const)
@@ -193,6 +195,45 @@ describe("the two menus, with a keyboard and nothing else", () => {
       ]);
       // The pages inside the disclosure; the section in the row under the bar (ADR 0057).
       expect([first.where, second.where, third.where]).toEqual(["narrow", "narrow", "row"]);
+    } finally {
+      await page.context().close();
+    }
+  });
+
+  /**
+   * **What the sheet covers stops existing while it is open** (sprint 32 día 4, David's adjustment
+   * 4): Tab past the last entry never lands on the page under the sheet, where a focused link would
+   * be one nobody can see. It leaves the document instead (the browser's own chrome), and the next
+   * Tab starts again at the skip link. With the sheet closed, the page is in the order again.
+   * Sabotaged: without the `visibility: hidden`, the Tab after the row lands on the cover's link.
+   */
+  it("keeps the keyboard out of the page under the open sheet, and gives it back once closed", async () => {
+    const page = await open(390);
+    try {
+      await tab(page);
+      const summary = await tab(page);
+      expect(summary.tag).toBe("summary");
+      await page.keyboard.press("Enter");
+      const inMain = () => page.evaluate(() => document.activeElement?.closest("main") !== null);
+      for (let i = 0; i < 6; i += 1) {
+        await page.keyboard.press("Tab");
+        expect(await inMain(), `Tab ${i + 1} landed under the sheet`).toBe(false);
+      }
+      // The sheet's word says what pressing it does now, and Escape gives the focus back to it.
+      expect(
+        await page.evaluate(() =>
+          (document.querySelector(".rb-nav-narrow > summary") as HTMLElement).innerText.trim(),
+        ),
+      ).toBe("Cerrar");
+      await page.evaluate(() =>
+        (document.querySelector(".rb-nav-narrow") as HTMLDetailsElement).removeAttribute("open"),
+      );
+      let reached = false;
+      for (let i = 0; i < 8 && !reached; i += 1) {
+        await page.keyboard.press("Tab");
+        reached = await inMain();
+      }
+      expect(reached, "with the sheet closed the page is not in the tab order").toBe(true);
     } finally {
       await page.context().close();
     }

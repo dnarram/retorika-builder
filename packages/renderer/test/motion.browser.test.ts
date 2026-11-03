@@ -302,3 +302,82 @@ describe("the page fades into the next and the bar stays (ADR 0062)", () => {
     }
   });
 });
+
+describe("the phone's sheet brings its entries in one after another (sprint 32 día 4)", () => {
+  /** «Ir a…» on a phone with eight sections: seven entries and more, past the stagger's cap. */
+  function eightOnAPhone(): RetorikaDocument {
+    const doc = fixture("cabecera-con-marca");
+    const home = doc.pages[0];
+    const services = home?.sections.find((s) => s.id === "sec-services-home");
+    if (!home || !services) throw new Error("no home page or no services section");
+    const more = ["Carta", "Vinos", "Raciones", "Postres", "Grupos", "Terraza", "Reservas"].map(
+      (menuLabel, i) => ({ ...services, id: `sec-extra-${i}`, menuLabel }),
+    );
+    return parseDocument({
+      ...doc,
+      header: { ...doc.header, sections: { shown: true, position: "bar", mobile: "fold" } },
+      pages: [{ ...home, sections: [...home.sections, ...more] }, ...doc.pages.slice(1)],
+    });
+  }
+
+  async function openPhone(motion: boolean): Promise<Page> {
+    const context = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      reducedMotion: motion ? "no-preference" : "reduce",
+    });
+    const page = await context.newPage();
+    await page.setContent(render(eightOnAPhone(), "html").html, { waitUntil: "load" });
+    return page;
+  }
+
+  it("delays each entry 40 ms after the one before, caps at the seventh, and ends every one at rest", async () => {
+    const page = await openPhone(true);
+    try {
+      await page.click(".rb-nav-fold > summary");
+      const entries = await page.evaluate(() =>
+        [...document.querySelectorAll<HTMLElement>(".rb-nav-fold > .rb-nav > a")].map((a) => {
+          const anim = a.getAnimations()[0];
+          return {
+            delay: anim?.effect?.getTiming().delay,
+            opacity: Number(getComputedStyle(a).opacity),
+          };
+        }),
+      );
+      expect(entries.length).toBeGreaterThanOrEqual(8);
+      expect(entries.slice(0, 8).map((e) => e.delay)).toEqual([0, 40, 80, 120, 160, 200, 240, 240]);
+      // The last one, still waiting on its delay, is not drawn early (`backwards`).
+      expect(entries.at(-1)?.opacity).toBeLessThan(0.5);
+      await page.evaluate(() =>
+        Promise.all(
+          [...document.querySelectorAll(".rb-nav-fold > .rb-nav > a")]
+            .flatMap((a) => a.getAnimations())
+            .map((a) => a.finished),
+        ),
+      );
+      const rest = await page.evaluate(() =>
+        [...document.querySelectorAll(".rb-nav-fold > .rb-nav > a")].every(
+          (a) => getComputedStyle(a).opacity === "1" && getComputedStyle(a).transform === "none",
+        ),
+      );
+      expect(rest).toBe(true);
+    } finally {
+      await page.context().close();
+    }
+  });
+
+  it("shows every entry at once for a visitor who asked for less", async () => {
+    const page = await openPhone(false);
+    try {
+      await page.click(".rb-nav-fold > summary");
+      expect(
+        await page.evaluate(() =>
+          [...document.querySelectorAll(".rb-nav-fold > .rb-nav > a")].every(
+            (a) => getComputedStyle(a).opacity === "1" && a.getAnimations().length === 0,
+          ),
+        ),
+      ).toBe(true);
+    } finally {
+      await page.context().close();
+    }
+  });
+});
