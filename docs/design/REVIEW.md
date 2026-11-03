@@ -6301,3 +6301,14 @@ Saboteos: sin el `visibility: hidden`, el teclado cae bajo la hoja (tres rojos);
 última entrada se dibuja antes de tiempo. Batería completa: unit 3653, a11y 899, Lighthouse 8/8 con
 accesibilidad 100 en los ocho, e2e completo 272/272; goldens, los cuatro con cabecera;
 `cabecera-con-marca` 17,4 KB propios de 28.
+
+**La caminata de 320 que CI puso en rojo dos veces** (días 1 y 4: la tarjeta del lienzo «304×742
+recortada por un área de 330» en vista de ordenador). No era el editor: era la espera. `settled`
+comprobaba «la tarjeta cabe», y su primer sondeo corría antes de que el clic en «Ver en ordenador»
+hubiera vuelto a pintar, encontraba la tarjeta aún cabiendo en su ancho de móvil y daba por quieta una
+transición que no había empezado. Reproducido en local con la CPU ralentizada 4×: en el instante en que
+la espera vieja contestaba, la tarjeta medía **304×742** con `ui-reflow` puesto —las cifras exactas de
+CI— y llegaba a 304×330 a los 300 ms. La caminata espera ahora a que el ancho de la tarjeta haya
+cambiado, a que su transición haya acabado (la clase sale en `transitionend`) y entonces a que quepa,
+en los dos sentidos del conmutador. El saboteo (la espera vieja) no se puso rojo en local ni
+ralentizado, así que la prueba de la carrera es la muestra y no un rojo; se dice así.

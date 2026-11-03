@@ -15703,11 +15703,41 @@ describe("nada sobresale en un móvil", () => {
         // the geometry mid-transition — canvas-card briefly 769px of a 342px area on the way back
         // to mobile, found measuring this walk on sprint 21 day 4. The toggle itself does not wait
         // for anything, so the walk does.
+        // **The toggle has to have happened before «settled» means anything** (sprint 32 día 4,
+        // found red twice on CI at 320 and reproduced locally with the CPU throttled 4×): the first
+        // poll ran before the click had re-rendered, found the card still fitting at its old width,
+        // and said «settled»; 50 ms later the card was 742 px tall in the middle of its `ui-reflow`
+        // and `look` read it cut. So the walk waits for the card's laid-out width to have changed
+        // and for its transition to have ended (the class comes off on `transitionend`), then for it
+        // to fit.
+        const cardWidthStyle = () =>
+          walker.evaluate(
+            () =>
+              (document.querySelector('[data-testid="canvas-card"]') as HTMLElement).style.width,
+          );
+        const toggledAndSettled = async (from: string) => {
+          await expect.poll(cardWidthStyle, { timeout: 5_000 }).not.toBe(from);
+          await expect
+            .poll(
+              () =>
+                walker.evaluate(
+                  () =>
+                    !document
+                      .querySelector('[data-testid="canvas-card"]')
+                      ?.classList.contains("ui-reflow"),
+                ),
+              { timeout: 5_000 },
+            )
+            .toBe(true);
+          await expect.poll(settled, { timeout: 5_000 }).toBe(true);
+        };
+        const asPhone = await cardWidthStyle();
         await walker.getByRole("button", { name: "Ver en ordenador" }).click();
-        await expect.poll(settled, { timeout: 5_000 }).toBe(true);
+        await toggledAndSettled(asPhone);
         await look("editor en vista de ordenador");
+        const asDesktop = await cardWidthStyle();
         await walker.getByRole("button", { name: "Ver en móvil" }).click();
-        await expect.poll(settled, { timeout: 5_000 }).toBe(true);
+        await toggledAndSettled(asDesktop);
         await look("editor en vista de móvil");
 
         // A click that cannot land is a finding, not a crash: at 320 and 390 the first run died
