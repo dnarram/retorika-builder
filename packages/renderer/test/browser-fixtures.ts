@@ -1068,9 +1068,18 @@ export async function openCombination(
   browser: Browser,
   combination: Combination,
   width: number,
+  motion = false,
 ): Promise<Page> {
   const html = render(combination.document, "html").html;
-  const context = await browser.newContext({ viewport: { width, height: 900 } });
+  // Reduced motion before the first frame (sprint 32 día 0): axe and the overflow walk measure the
+  // page a visitor who asked for no movement sees, which is also the settled state of any entrance
+  // the stylesheet animates. A half-faded line would be measured at partial opacity, and axe reads
+  // that as a contrast it cannot compute. `motion.browser.test.ts` is the twin that opens the same
+  // page under `no-preference` and asserts the movement exists and ends in the same place.
+  const context = await browser.newContext({
+    viewport: { width, height: 900 },
+    reducedMotion: motion ? "no-preference" : "reduce",
+  });
   const page = await context.newPage();
 
   await page.route("**/*", async (route) => {
