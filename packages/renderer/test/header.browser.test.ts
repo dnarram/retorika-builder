@@ -126,14 +126,23 @@ async function tokenPx(page: Page, token: string): Promise<number> {
   }, token);
 }
 
+/**
+ * The page at rest. The context asks for reduced motion (sprint 32 día 0), so a measurement is of
+ * the settled page whatever the stylesheet animates; a test that measures motion itself passes
+ * `motion` and gets the visitor who has not asked for less (the fold's entrance, `openFold`).
+ */
 async function open(
   doc: RetorikaDocument,
   width: number,
   height: number,
   pageId?: string,
+  motion = false,
 ): Promise<Page> {
   const html = render(doc, "html", pageId === undefined ? {} : { pageId }).html;
-  const context = await browser.newContext({ viewport: { width, height } });
+  const context = await browser.newContext({
+    viewport: { width, height },
+    reducedMotion: motion ? "no-preference" : "reduce",
+  });
   const page = await context.newPage();
   await page.route("**/*", async (route) => {
     const url = new URL(route.request().url());
@@ -568,7 +577,7 @@ describe("«Ir a…» under the bar", () => {
   for (const [name, header] of cases) {
     for (const scrolled of [0, 600]) {
       it(`covers neither the bar nor the button nor a rail at 1280, ${name}, scrolled ${scrolled}px`, async () => {
-        const page = await open(placed(header), 1280, 720);
+        const page = await open(placed(header), 1280, 720, undefined, true);
         try {
           await page.evaluate((y) => window.scrollTo({ top: y, behavior: "instant" }), scrolled);
           const md = await tokenPx(page, "--space-md");
@@ -666,7 +675,7 @@ describe("«Ir a…» on the phone", () => {
 
   for (const sticky of [false, true]) {
     it(`hangs its panel under the bar at 390, covering none of it${sticky ? ", fixed" : ""}`, async () => {
-      const page = await open(placed({ ...FOLD, sticky }), 390, 800);
+      const page = await open(placed({ ...FOLD, sticky }), 390, 800, undefined, true);
       try {
         await openFold(page);
         const b = await boxes(page, {
