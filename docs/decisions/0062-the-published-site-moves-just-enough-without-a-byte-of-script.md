@@ -1,0 +1,203 @@
+# 0062 — The published site moves just enough, without a byte of script
+
+**Status:** proposed · **Date:** 2026-11-04 · **Decided by:** David, 3 de noviembre de 2026, al
+planificar el sprint 32 — he asked for sites «extremadamente modernos y actuales resaltando el
+movimiento de las páginas del 2026», chose the three pieces of motion this ADR names from the plan's
+four questions (sections coming in as the visitor scrolls, the transition between pages, the cover's
+entrance), and, asked whether the owner should be able to switch it off, answered **no**: it is
+always on and only the visitor's `prefers-reduced-motion` governs it. At approval, his adjustments 2,
+3 and 6 (§5, §1 and §1 below). · **Recorded by development at his instruction, with the standing note
+that development does not sign.** · **Relates to:** [ADR 0001](0001-static-sites-no-runtime.md) (it
+is CSS), [ADR 0015](0015-interface-tokens-are-not-the-sites.md) (the editor's motion vocabulary does
+not travel; this is the site's own), [ADR 0058](0058-a-published-page-carries-one-script-and-it-is-constant.md)
+(no fifth write; §4's divergence has a second), [ADR 0063](0063-the-bar-is-of-2026-and-it-is-the-same-for-every-site.md)
+(the numbers it reads), [ADR 0051](0051-the-canvas-keeps-its-document-and-an-edit-is-a-patch.md)
+(§3: the canvas is still) · **Touches:** `packages/renderer`, `apps/editor` (the canvas's refusal)
+
+## Context
+
+Until this sprint a published page moved in three places, all of them the header's (ADR 0063 lists
+them). Its sections stood where they were from the first paint; a navigation between two of its
+pages was a white flash; the cover was there. The sprint 22 vocabulary (`ui-reveal`, `ui-lift`) that
+makes the editor feel of its time lives in `globals.css`, under the `--ui-` prefix, and ADR 0015 says
+why it never reaches a client's site: those are Retorika's colours and timings, not the owner's.
+
+A site of 2026 moves as the visitor scrolls, and David asked for that. The constraint is ADR 0001's:
+HTML and CSS, from `file://`, the one constant script of ADR 0058 and no other. Everything below is
+had from the stylesheet and from what browsers ship today, and the day that a piece of it cannot be
+— a browser without scroll-driven animations, a navigation from `file://` — the page is simply still,
+with everything on it.
+
+## Decision
+
+### 1. A section comes in as the visitor scrolls to it
+
+Every child of every section after the first fades in and rises 16 px on its **own view timeline**:
+
+```css
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    main > .rb-section:not(:first-child) > * { animation: rb-reveal linear none;
+      animation-timeline: view(); animation-range: entry 0% entry 160px;
+      overflow-anchor: none; }
+  }
+}
+@keyframes rb-reveal { from { opacity: 0; transform: translateY(16px); } 15% { opacity: 1; } }
+```
+
+- **One timeline per child**, so the stagger is the grid's own order and costs no `nth-child`.
+- **The range is a length** (David's adjustment 3): every child has finished coming in 160 px after it
+  shows, however tall it is. On `entry 0% entry 40%` a gallery taller than the window would have stayed
+  half-faded with its top in view until the visitor had scrolled two fifths of its height. Measured in
+  Chromium with a 1600 px child: 0 with its top 10 px under the fold, between 0.3 and 0.7 half way
+  through the 160 px, 1 at 170 px with 1440 px of it still under the fold.
+- **No fill, and the fade done in the first 15 %** — both measured against axe on día 2. With
+  `backwards`, every child under the fold waited at opacity 0; with the fade over the whole range, a
+  child straddling the bottom edge of the first screen sat half-faded until the visitor scrolled.
+  Lighthouse's accessibility fell from 100 to **96** on six subjects of eight, on `color-contrast`:
+  axe weighs an element's opacity into the colour of its words, and the half-faded intro and card
+  titles of the second section read as failed contrasts on Lighthouse's phone. So: **no fill** — out of
+  its range a child is its ordinary self, under the fold where nobody and nothing sees it faded — and
+  the fade is over by 24 px of the 160 (the rise takes the rest), so a child that shows by more than
+  24 px at load is whole. Back to 100 on all eight. A child that shows by less than 24 px at load is
+  still mid-fade for that instant, and axe would read it; with these fixtures' geometry none does, and
+  that is the honest extent of the claim. `backwards` stays on the cover's entrance (§2), which is
+  on screen from the first paint and done in 600 ms.
+- **The longhands come after the shorthand** (David's adjustment 6): `animation` resets
+  `animation-timeline` and `animation-range` to their initial values when it is written after them.
+  `motion.test.ts` asserts the order in every rule that has them.
+- **Only `opacity` and `translateY`**: the overflow walk sees nothing on X, and nothing lays out.
+- **`overflow-anchor: none`**: see the next item; a rising element must not be the scroll anchor.
+- **The first section is out of it**: it is on screen at the first paint, and its photograph is the
+  LCP element in every composition.
+- **Inside `@supports`**: Firefox (measured on día 6) moves nothing and shows everything.
+- **`overflow-anchor: none` on everything that rises**, here and in §2. An element whose transform is
+  animating must not be the browser's scroll anchor: the browser reads its own animation as the page
+  moving and adjusts the scroll by it. Measured on día 2 with ADR 0063 §3's walk, which had held on
+  día 1 before anything rose: `scrollTo(0, 400)` landed at **399** while the bar condensed above it,
+  with the anchor on a word of the cover still coming in; with the words excluded, 400. The reveal's
+  children were excluded first and it was not enough, which is how the cover's words were found.
+
+### 2. The cover's words come in once
+
+```css
+main > .rb-cover:first-child > :is(h1, p, a[role=button]) {
+  animation: rb-rise var(--rb-base) var(--rb-ease) backwards;
+  animation-delay: var(--rb-delay, 0ms); overflow-anchor: none; }
+main > .rb-cover:first-child > p { --rb-delay: 80ms; }
+main > .rb-cover:first-child > a[role=button] { --rb-delay: 160ms; }
+```
+
+Headline, line, button, 80 ms apart, 400 ms each, and done well inside 600 ms. **The delay rides a
+custom property**: a plain `animation-delay` on `p` lost to the shorthand rule above, which weighs
+more (`:is()` takes its heaviest argument, `a[role=button]`) and resets the delay to 0 — measured as
+`[0]` where 80 was expected, the first time this ran in a browser. A custom property is reset by no
+shorthand and weighs nothing. **Never the
+photograph and never `.rb-panel`** (decision 5 of the plan): an element at opacity 0 is not painted
+for LCP, and the photograph is the LCP element. `motion.test.ts` asserts no selector that animates
+names `img` or the panel; the browser twin asserts the image has no animation.
+
+### 3. The page fades into the next, and the bar stays
+
+```css
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition { navigation: auto; }
+  .rb-header { view-transition-name: rb-header; }
+  ::view-transition-old(root), ::view-transition-new(root) { animation-duration: var(--rb-fast); }
+}
+```
+
+A cross-document view transition (Chromium 126, Safari 18.2; Firefox navigates as it always did),
+200 ms, with the bar named so the browser keeps it still while the rest crosses over. **A named
+element is a stacking context**, and that reached the bar in the flow, which had none: «Ir a…»'s
+`z-index: 2`, fixed inside the header, was ranked inside the header's new context and painted under a
+section's paragraph rising with its own transform — Playwright found the paragraph intercepting the
+click. The bar has `z-index: 1` since (ADR 0063's note of día 2): above the page wherever they meet,
+as a sticky or transparent bar already was with its 2. **Same origin
+only**: a site opened from `file://` navigates without it, and nothing breaks. Both pages opt in,
+because every page of a site carries this sheet. The bar is named only where one is drawn: a one-page
+site under the menu's threshold carries no header rule at all. Measured in Chromium with a routed
+site: the new page's `pagereveal` carries a `viewTransition` for the visitor who did not ask for less
+and `null` for the one who did.
+
+### 4. A button lifts
+
+`[role=button]` takes the bar's button's lift (ADR 0063): a pixel up and a soft shadow under a
+pointer that can hover, transitioned. Its shape, the pill, is día 3's (ADR 0064).
+
+### 5. The canvas is still, twice over (David's adjustment 2)
+
+An animation in flight owns `transform` and `opacity`. The drag of sprint 25 writes `transform`
+inline and would stop moving the element; `measurePlaced`, the handles, the guides and `rowAt` would
+read positions 16 px low; and every walk that measures a box would go intermittent with the scroll.
+So none of §1–§4 runs where the editor measures:
+
+- **The renderer writes none of it for the `"dom"` target.** `buildCss(doc, target)` is explicit
+  (ADR 0063 §2's rule, learned the hard way on día 1: a CSS feature can act on a frame by its presence
+  alone), and the canvas's sheet carries the numbers and not one movement.
+- **The canvas's own sheet refuses it as well** (`apps/editor/src/editor/canvasStillness.ts`): `main >
+  .rb-section > * { animation: none !important }` beside the `scroll-behavior: auto` it already wrote,
+  so a section animation that reaches the frame by any other road is flattened there too. A test holds
+  that every selector the renderer animates inside a section is a child of a section, which that one
+  rule covers.
+
+The renderer learns nothing of the canvas beyond the target it already knew (ADR 0051 §3). The panel
+says, since día 5, that the movement is seen on the published page.
+
+### 6. The numbers, and where they live
+
+`html { --rb-ease: cubic-bezier(0.2, 0, 0, 1); --rb-fast: 200ms; --rb-base: 400ms; }`, for every
+site, with or without a header: the bar's transitions and the page's motion read the same three.
+They are the renderer's constants, like `--rb-header-h`, and not tokens of the document — rule 6 is
+about what the owner chooses, not about what the motor knows (`document-rules.md`, día 7). They sit
+outside the media query because they are numbers, not movement.
+
+### 7. No switch, and nothing for the script
+
+Always on; the visitor's `prefers-reduced-motion` is the one switch, and `motion.test.ts` walks the
+whole sheet, longhands included, to hold every `animation*` and `transition*` inside the query. The
+schema stays at 1.17.0. ADR 0058's four writes are unchanged, and so are its 815 bytes: a view
+timeline is the browser's, a view transition is the browser's, a keyframe is the browser's.
+
+## What is preserved
+
+- **ADR 0001**: CSS; `file://`; nothing of ours called.
+- **ADR 0015**: the editor's `--ui-` vocabulary stays in the editor; this is `--rb-`, the site's.
+- **ADR 0058**: one script, four writes, and the canvas carries none of this.
+- **Lighthouse ≥ 95** (protocol Part 8.5), measured on día 2 with the motion on: see Consequences.
+- **A wait on «every animation of the document» never returns** once a view timeline is on the page:
+  a scroll-driven animation's `finished` settles only when the page can scroll no further. The
+  browser tests wait on the animations of the element they measure, or on those of the document's
+  own timeline (`timed()`, `header.browser.test.ts`) — measured as a 60 s timeout on día 2.
+- **The harness measures the settled page** (día 0): axe and the overflow walk open every page under
+  `reduce`; `motion.browser.test.ts` is the twin that proves the movement exists and ends at rest.
+
+## What is lost, and it is named
+
+- **A page that does not move.** For every site, saved or new, for every visitor who has not asked
+  their system for less. David's decision; the system's switch is the visitor's.
+- **A browser's scroll anchoring under a view timeline**, if Chromium treats the published page's
+  sheet as it treated the canvas's (ADR 0063 §2): not measured on a published page, because nothing
+  re-lays a published page out mid-scroll; named here so día 6 looks.
+
+## What this does not decide
+
+- **The measure, the rhythm, the pill** (día 3, ADR 0064), **the phone's sheet** (día 4).
+- **Any other movement**: parallax, loops, a scale above 1, `filter` on content, anything on the
+  photograph, anything longer than `--rb-base`. Each would be a change to the closed list in
+  `motion.test.ts`, and to this ADR.
+- **Firefox**: if it ships `animation-timeline` (one source said 159, October 2026, unconfirmed),
+  the reveal arrives there with no change here; día 6 writes down what it found.
+
+## Consequences
+
+- `packages/renderer/src/build.ts`: `motionCss(doc, target)`, emitted after the base and before the
+  header, for every site; the numbers moved here from `header.ts`.
+- `packages/renderer/test/motion.test.ts` (new; the walker moved here from `header.test.ts`, over the
+  whole corpus, with the closed list, the order of the longhands, the `@supports`, the cover's
+  exclusions, and the two sheets differing in two blocks alone); `motion.browser.test.ts` (the twin:
+  the reveal on a `ViewTimeline`, the 1600 px child at 0 / ~0.5 / 1, the cover's delays and its still
+  photograph, the `pagereveal` with and without a transition, and nothing under `reduce`).
+- `apps/editor/src/editor/canvasStillness.ts` and its test; `Editor.tsx` reads it.
+- Golden: all twenty-two, every hunk read: the block, and the numbers moving out of the header's.
+- Measured: Lighthouse, mobile preset, with the motion on — in REVIEW, sprint 32 día 2.

@@ -111,8 +111,18 @@ function overlap(a: Box | null | undefined, b: Box | null | undefined): boolean 
  * than where it stays (the animation's start), and read as covering the bar's last pixels. */
 async function openFold(page: Page): Promise<void> {
   await page.click(".rb-nav-fold > summary");
-  await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
+  await page.evaluate(() => Promise.all(timed().map((a) => a.finished)));
 }
+
+/**
+ * The animations that end: a section's view-timeline animation (ADR 0062) runs for as long as the page
+ * can scroll and its `finished` never settles, so a wait on every animation of the document never
+ * returns (measured on día 2: 60 s). Only the ones on the document's own timeline are waited for.
+ * Declared on `window` for the page's own code to call.
+ */
+declare function timed(): Animation[];
+
+const TIMED = `window.timed = () => document.getAnimations().filter((a) => a.timeline === document.timeline);`;
 
 /** What a token resolves to on this page, in pixels. */
 async function tokenPx(page: Page, token: string): Promise<number> {
@@ -157,6 +167,7 @@ async function open(
     }
     return route.fulfill({ status: 404, body: "" });
   });
+  await page.addInitScript(TIMED);
   await page.goto(`${ORIGIN}/`, { waitUntil: "load" });
   await page.evaluate(() => Promise.allSettled([...document.images].map((img) => img.decode())));
   return page;
@@ -805,6 +816,10 @@ describe("a fixed bar once scrolled: condensed, glass, and the page does not mov
     background: string;
     marginBottom: string;
     position: string;
+    scrollY: number;
+    barRect: number;
+    firstOffsetTop: number;
+    docHeight: number;
   }> {
     await page.evaluate(() => window.scrollTo({ top: 400, behavior: "instant" }));
     await expect
@@ -812,7 +827,7 @@ describe("a fixed bar once scrolled: condensed, glass, and the page does not mov
         page.evaluate(() => document.querySelector(".rb-header")?.hasAttribute("data-scrolled")),
       )
       .toBe(true);
-    await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
+    await page.evaluate(() => Promise.all(timed().map((a) => a.finished)));
     return page.evaluate(() => {
       const bar = document.querySelector<HTMLElement>("header.rb-header");
       const first = document.querySelector<HTMLElement>("main > .rb-section");
@@ -828,6 +843,10 @@ describe("a fixed bar once scrolled: condensed, glass, and the page does not mov
         background: style.backgroundColor,
         marginBottom: style.marginBottom,
         position: style.position,
+        scrollY: window.scrollY,
+        barRect: bar.getBoundingClientRect().height,
+        firstOffsetTop: first.offsetTop,
+        docHeight: document.documentElement.scrollHeight,
       };
     });
   }
@@ -869,9 +888,10 @@ describe("a fixed bar once scrolled: condensed, glass, and the page does not mov
       try {
         const rest = await atRest(page);
         const after = await scrolled(page);
-        expect(after.firstTop - rest.firstTop, "the first section moved more than the scroll").toBe(
-          -400,
-        );
+        expect(
+          after.firstTop - rest.firstTop,
+          `the first section moved more than the scroll: ${JSON.stringify({ rest, after })}`,
+        ).toBe(-400);
         // Condensed: the bar is shorter by what the padding gave up, and the measure follows it.
         // `offsetHeight` is an integer and a fixed bar can sit on a half pixel: within one.
         expect(
@@ -971,7 +991,7 @@ describe("the indicator under the current entry", () => {
         for (const a of links) a.removeAttribute("aria-current");
         links.at(-1)?.setAttribute("aria-current", "page");
       });
-      await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
+      await page.evaluate(() => Promise.all(timed().map((a) => a.finished)));
       const after = await indicator(page);
       expect(after.entry?.left).not.toBe(before.entry?.left);
       expect(Math.abs(after.left - (after.entry?.left ?? -1))).toBeLessThanOrEqual(1);

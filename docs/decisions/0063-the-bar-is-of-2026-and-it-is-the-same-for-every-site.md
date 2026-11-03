@@ -194,6 +194,14 @@ measure from `--rb-header-h`. ADR 0058's table of four writes is unchanged, and 
 - **Blocking the body's scroll under an open sheet**: not needed once the sheet hides what is behind
   it (día 4, David's adjustment 4).
 
+## Note — sprint 32 día 2: the bar is above the page, `z-index: 1` (ADR 0062)
+
+Named for the page transition, a bar in the flow became a stacking context, and «Ir a…»'s `z-index:
+2` — fixed, inside the header — was ranked inside it and painted under a rising paragraph of the page.
+`.rb-header` has `z-index: 1` since: its own stacking context, above the page wherever the two meet,
+which a sticky or transparent bar already was with its 2. Measured by the fold's own walk (a bar in
+the flow, scrolled 600 px), red by a click the paragraph took, green after.
+
 ## Consequences
 
 - `packages/renderer/src/header.ts`: `GLASS_MIX`, `GLASS_BACKGROUNDS`, `HAIRLINE`, `STRIP_NAV`; the
