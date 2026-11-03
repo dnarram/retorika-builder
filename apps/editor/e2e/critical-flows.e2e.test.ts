@@ -15731,13 +15731,19 @@ describe("nada sobresale en un móvil", () => {
             .toBe(true);
           await expect.poll(settled, { timeout: 5_000 }).toBe(true);
         };
-        const asPhone = await cardWidthStyle();
-        await walker.getByRole("button", { name: "Ver en ordenador" }).click();
-        await toggledAndSettled(asPhone);
+        /** Presses a device button and, unless it was already the device in force (at 768 the editor
+         * opens in the desktop view), waits for the change to have happened and ended. */
+        const toggleTo = async (name: string) => {
+          const button = walker.getByRole("button", { name });
+          const already = (await button.getAttribute("aria-pressed")) === "true";
+          const from = await cardWidthStyle();
+          await button.click();
+          if (already) await expect.poll(settled, { timeout: 5_000 }).toBe(true);
+          else await toggledAndSettled(from);
+        };
+        await toggleTo("Ver en ordenador");
         await look("editor en vista de ordenador");
-        const asDesktop = await cardWidthStyle();
-        await walker.getByRole("button", { name: "Ver en móvil" }).click();
-        await toggledAndSettled(asDesktop);
+        await toggleTo("Ver en móvil");
         await look("editor en vista de móvil");
 
         // A click that cannot land is a finding, not a crash: at 320 and 390 the first run died

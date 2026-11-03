@@ -6310,5 +6310,9 @@ transición que no había empezado. Reproducido en local con la CPU ralentizada 
 la espera vieja contestaba, la tarjeta medía **304×742** con `ui-reflow` puesto —las cifras exactas de
 CI— y llegaba a 304×330 a los 300 ms. La caminata espera ahora a que el ancho de la tarjeta haya
 cambiado, a que su transición haya acabado (la clase sale en `transitionend`) y entonces a que quepa,
-en los dos sentidos del conmutador. El saboteo (la espera vieja) no se puso rojo en local ni
-ralentizado, así que la prueba de la carrera es la muestra y no un rojo; se dice así.
+en los dos sentidos del conmutador; y si el botón ya era el dispositivo en uso (a 768 el editor abre
+en vista de ordenador) no espera un cambio que no llega. **Ese caso se me escapó en el primer arreglo
+y lo empujé con la caminata de 768 en rojo**: una orden encadenada siguió después del test. Corregido
+en el commit siguiente, con el e2e completo en verde (272/272) antes de empujar. El saboteo (la espera
+vieja) no se puso rojo en local ni ralentizado, así que la prueba de la carrera es la muestra y no un
+rojo; se dice así.
