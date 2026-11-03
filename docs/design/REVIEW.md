@@ -6094,6 +6094,38 @@ cristal: `backdrop-filter` computado `blur(12px)` y fondo `color(srgb … / 0.88
 el deslizamiento; `display: none` sin activo. La barra colapsada (`collapseBar`) pone `margin-bottom:
 0`, porque el margen de la condensación bajaba 16 px un ancla con la barra plegada en el raíl.
 
+**Lo que el e2e completo de CI encontró, y la bisección.** Dos caminatas rojas: «la sección editada
+no se mueve al abrir «Campos» ni al cerrarlo» (a 1280, al cerrar, la sección se movió **−29 px**;
+reproducible en local, verde en `main`) y «nada sobresale en un móvil» a 320 en vista de ordenador
+(la tarjeta del lienzo medida sin escalar, 304×742 sobre un área de 330; en local la caminata
+filtrada no llega, espera 30 s por la muestra de la landing, en `main` igual). La primera, bisecada
+en ocho pasadas de la misma caminata (cada variante restaurada por copia, nunca con `checkout`):
+
+| Variante de la hoja | Resultado |
+|---|---|
+| control | −29 |
+| sin el bloque `@supports (anchor-name)` | 0 |
+| sin `position: relative` en el `nav` | −29 |
+| sin el relleno de las entradas | −29 |
+| sin la transición del `::after` | −29 |
+| el bloque bajo `html[data-rb-js]` (que el lienzo no lleva) | −29 |
+| solo las líneas de `anchor-name` | 0 |
+| solo las reglas del `::after`, con `anchor()` | −29 |
+| las reglas del `::after` **sin** `anchor()`, `anchor-size()` ni `position-anchor` | 0 |
+
+**La mera presencia de una función de ancla en la hoja del marco, en reglas que no casan con nada,
+rompe el anclaje del scroll de Chromium al remaquetar el marco con otro zoom.** Una puerta por
+selector no lo cierra; la puerta es la diana: `buildCss(doc, target)` explícito en cada llamador, y
+`headerCss` escribe el bloque de anclas solo para `"html"`. Y el primer pintado del lienzo, que era el
+html de la diana publicada (`Editor.tsx`, `srcDoc`), pasa por `canvasHtml` (`previewDocument.ts`):
+la hoja publicada se sustituye por la del lienzo, exacta o lanza; los parches siguientes ya la
+llevaban. Con la puerta por diana sola la caminata seguía en −29, porque el primer pintado traía la
+otra hoja: una pasada más de bisección. El lienzo no lleva script, nada marca allí la sección a la
+vista para que la regla se deslice, y la regla de respaldo dibuja los mismos píxeles en reposo. Es la segunda divergencia nombrada entre las dos dianas tras el script (ADR 0058 §4), y se
+asevera: la hoja del lienzo no contiene una palabra de ancla y las dos hojas difieren solo en ese
+bloque. La segunda caminata (320) pasó en el e2e completo en local (271/272, con la primera aún en
+rojo): una carrera de CI, anotada.
+
 **Lo que el arnés encontró.** `row` + `mobile: "fold"` dibujaba **dos copias** de las secciones a
 320 (la fila junto al desplegable): la fila oculta bajo `[data-mobile=fold]` y la combinación
 `header/fold/row-on-wide` en la matriz, que ahora lo asevera a cuatro anchos. El test de «crece

@@ -60,7 +60,10 @@ function liveFrom(doc: RetorikaDocument): Document {
  * measures the edit alone. */
 function settled(doc: RetorikaDocument): Document {
   const live = liveFrom(doc);
-  const first = patchCanvas(live, freshFrom(doc), buildCss(doc), { cause: "edit", focused: null });
+  const first = patchCanvas(live, freshFrom(doc), buildCss(doc, "dom"), {
+    cause: "edit",
+    focused: null,
+  });
   if (!first.ok) throw new Error(`the first patch was refused: ${first.reason}`);
   return live;
 }
@@ -91,7 +94,7 @@ describe("patchCanvas — an edit is a patch", () => {
     expect(before).not.toBeNull();
 
     const next = withHeadline(doc, "Otra cosa");
-    const report = patchCanvas(live, freshFrom(next), buildCss(next), rules);
+    const report = patchCanvas(live, freshFrom(next), buildCss(next, "dom"), rules);
 
     expect(report.ok).toBe(true);
     if (!report.ok) return;
@@ -108,13 +111,13 @@ describe("patchCanvas — an edit is a patch", () => {
     const doc = fixture();
     const live = liveFrom(doc);
     // The first patch normalises: the html target's indentation goes, and that is work.
-    const first = patchCanvas(live, freshFrom(doc), buildCss(doc), rules);
+    const first = patchCanvas(live, freshFrom(doc), buildCss(doc, "dom"), rules);
     expect(first.ok).toBe(true);
     if (!first.ok) return;
     expect(first.textChanges + first.removed).toBeGreaterThan(0);
     const html = live.body.innerHTML;
     // The second finds nothing to do, and says so in every number.
-    const second = patchCanvas(live, freshFrom(doc), buildCss(doc), rules);
+    const second = patchCanvas(live, freshFrom(doc), buildCss(doc, "dom"), rules);
     expect(second).toMatchObject({
       ok: true,
       inserted: 0,
@@ -147,7 +150,7 @@ describe("patchCanvas — an edit is a patch", () => {
     live.body.append(bar);
 
     const next = withHeadline(doc, "Sigue el cromo");
-    const report = patchCanvas(live, freshFrom(next), buildCss(next), rules);
+    const report = patchCanvas(live, freshFrom(next), buildCss(next, "dom"), rules);
     expect(report).toMatchObject({ ok: true, inserted: 0, removed: 0, moved: 0 });
     // Same nodes, same places: first in the section, last in the body.
     expect(section.firstElementChild).toBe(cluster);
@@ -175,7 +178,7 @@ describe("patchCanvas — an edit is a patch", () => {
     const fresh = freshFrom(next);
     const placement = fresh.querySelector('[data-id="el-headline"]')?.getAttribute("style");
     expect(placement, "the fixture's headline carries a placement style").toContain("grid-column");
-    const report = patchCanvas(live, fresh, buildCss(next), rules);
+    const report = patchCanvas(live, fresh, buildCss(next, "dom"), rules);
     expect(report.ok).toBe(true);
     expect(headline.getAttribute("contenteditable")).toBe("true");
     expect(headline.getAttribute("tabindex")).toBe("0");
@@ -196,7 +199,7 @@ describe("patchCanvas — an edit is a patch", () => {
     headline.textContent = "Lo que la persona está escribiendo";
 
     const next = withHeadline(doc, "Lo que llegó de fuera");
-    const report = patchCanvas(live, freshFrom(next), buildCss(next), {
+    const report = patchCanvas(live, freshFrom(next), buildCss(next, "dom"), {
       cause: "edit",
       focused: headline,
     });
@@ -216,7 +219,7 @@ describe("patchCanvas — an edit is a patch", () => {
     headline.classList.add("rb-chosen");
 
     const next = withHeadline(doc, "Llegó de fuera y se ve");
-    const report = patchCanvas(live, freshFrom(next), buildCss(next), {
+    const report = patchCanvas(live, freshFrom(next), buildCss(next, "dom"), {
       cause: "edit",
       focused: headline,
     });
@@ -243,7 +246,7 @@ describe("patchCanvas — an edit is a patch", () => {
     live.getSelection()?.addRange(range);
 
     const next = withHeadline(doc, "Taberna Santo Domingo");
-    const report = patchCanvas(live, freshFrom(next), buildCss(next), {
+    const report = patchCanvas(live, freshFrom(next), buildCss(next, "dom"), {
       cause: "history",
       focused: headline,
     });
@@ -283,7 +286,7 @@ describe("patchCanvas — an edit is a patch", () => {
       "strong",
     );
     // Día 3's rule defers it: the headline has focus and is editable, and this is «an edit».
-    const asEdit = patchCanvas(live, freshFrom(next), buildCss(next), {
+    const asEdit = patchCanvas(live, freshFrom(next), buildCss(next, "dom"), {
       cause: "edit",
       focused: headline,
     });
@@ -292,7 +295,7 @@ describe("patchCanvas — an edit is a patch", () => {
 
     // Named as the text's own mark, it goes through.
     const headline2 = headline;
-    const report = patchCanvas(live, freshFrom(next), buildCss(next), {
+    const report = patchCanvas(live, freshFrom(next), buildCss(next, "dom"), {
       cause: "mark",
       focused: headline2,
     });
@@ -350,7 +353,7 @@ describe("patchCanvas — an edit is a patch", () => {
       { from: 0, to: end },
       "strong",
     );
-    const report = patchCanvas(live, freshFrom(next), buildCss(next), {
+    const report = patchCanvas(live, freshFrom(next), buildCss(next, "dom"), {
       cause: "mark",
       focused: headline,
     });
@@ -375,7 +378,7 @@ describe("patchCanvas — an edit is a patch", () => {
     // The menu fixture's theme names two shippable faces; `cover-and-services` names none.
     const doc = menuFixture();
     const live = liveFrom(doc);
-    const css = buildCss(doc);
+    const css = buildCss(doc, "dom");
     expect(css).toContain("@font-face {");
     expect(live.querySelectorAll("head style").length).toBe(1);
 
@@ -398,17 +401,17 @@ describe("patchCanvas — an edit is a patch", () => {
       ...structuredClone(doc),
       theme: { ...doc.theme, "color.primary": "#123456" },
     });
-    const second = patchCanvas(live, freshFrom(recoloured), buildCss(recoloured), rules);
+    const second = patchCanvas(live, freshFrom(recoloured), buildCss(recoloured, "dom"), rules);
     expect(second).toMatchObject({ ok: true, cssChanged: true, fontsChanged: false });
     expect(fonts.textContent).toBe(facesText);
     expect(page.textContent).toContain("#123456");
     // Split and rebuilt, the two sheets together say exactly what one sheet said.
-    const { fonts: wantFonts, page: wantPage } = splitFontFaces(buildCss(recoloured));
+    const { fonts: wantFonts, page: wantPage } = splitFontFaces(buildCss(recoloured, "dom"));
     expect((fonts.textContent ?? "").trim()).toBe(wantFonts);
     expect((page.textContent ?? "").trim()).toBe(wantPage);
 
     // The same document again: neither sheet moves.
-    const third = patchCanvas(live, freshFrom(recoloured), buildCss(recoloured), rules);
+    const third = patchCanvas(live, freshFrom(recoloured), buildCss(recoloured, "dom"), rules);
     expect(third).toMatchObject({ ok: true, cssChanged: false, fontsChanged: false });
   });
 
@@ -426,7 +429,7 @@ describe("patchCanvas — an edit is a patch", () => {
     expect(keys[0]).toMatch(/^h:header\/m:(wide|narrow)\/nav:[^/]+\/a:/);
 
     const folded = pageToSection(doc, "page-que-ponemos");
-    const report = patchCanvas(live, freshFrom(folded), buildCss(folded), rules);
+    const report = patchCanvas(live, freshFrom(folded), buildCss(folded, "dom"), rules);
     expect(report).toMatchObject({ ok: true, structural: true });
 
     const expected = [
@@ -480,7 +483,7 @@ describe("patchCanvas — an edit is a patch", () => {
       ...base,
       header: { pages: { shown: false }, sections: { shown: false } },
     });
-    const report = patchCanvas(live, freshFrom(bare), buildCss(bare), rules);
+    const report = patchCanvas(live, freshFrom(bare), buildCss(bare, "dom"), rules);
     expect(report).toMatchObject({ ok: true, structural: true });
     expect(live.querySelector("header")).toBeNull();
     expect(live.querySelector(".rb-skip")).toBeNull();
@@ -526,13 +529,13 @@ describe("patchCanvas — an edit is a patch", () => {
       ...placed,
       header: { ...placed.header, pages: { shown: true }, sections: { shown: true } },
     });
-    expect(patchCanvas(live, freshFrom(inBar), buildCss(inBar), rules)).toMatchObject({
+    expect(patchCanvas(live, freshFrom(inBar), buildCss(inBar, "dom"), rules)).toMatchObject({
       ok: true,
       structural: true,
     });
     expect(live.querySelectorAll(".rb-rail, details.rb-nav-fold")).toHaveLength(0);
     expect(live.querySelector("header")?.hasAttribute("data-rails")).toBe(false);
-    expect(patchCanvas(live, freshFrom(placed), buildCss(placed), rules)).toMatchObject({
+    expect(patchCanvas(live, freshFrom(placed), buildCss(placed, "dom"), rules)).toMatchObject({
       ok: true,
       structural: true,
     });
@@ -564,7 +567,7 @@ describe("patchCanvas — an edit is a patch", () => {
     const next = parseDocument(copy);
     expect(skeletonOf(live.body)).not.toBe(skeletonOf(freshFrom(next)));
 
-    const report = patchCanvas(live, freshFrom(next), buildCss(next), rules);
+    const report = patchCanvas(live, freshFrom(next), buildCss(next, "dom"), rules);
     expect(report).toMatchObject({ ok: true, structural: true, inserted: 0 });
     if (!report.ok) return;
     expect(report.removed).toBeGreaterThan(0);
@@ -584,7 +587,7 @@ describe("patchCanvas — an edit is a patch", () => {
     const live = settled(parseDocument(fewer));
     const before = live.querySelectorAll("[data-section]").length;
 
-    const report = patchCanvas(live, freshFrom(doc), buildCss(doc), rules);
+    const report = patchCanvas(live, freshFrom(doc), buildCss(doc, "dom"), rules);
     expect(report).toMatchObject({ ok: true, structural: true });
     if (!report.ok) return;
     expect(report.inserted).toBeGreaterThan(0);
@@ -595,7 +598,7 @@ describe("patchCanvas — an edit is a patch", () => {
     expect(now[0]).toBe(dropped.id);
     expect(skeletonOf(live.body)).toBe(skeletonOf(freshFrom(doc)));
     // A second patch of the same document is a no-op: the structure settled in one.
-    const again = patchCanvas(live, freshFrom(doc), buildCss(doc), rules);
+    const again = patchCanvas(live, freshFrom(doc), buildCss(doc, "dom"), rules);
     expect(again).toMatchObject({ ok: true, structural: false, inserted: 0, removed: 0 });
   });
 
@@ -603,14 +606,14 @@ describe("patchCanvas — an edit is a patch", () => {
     const doc = fixture();
     const live = settled(doc);
     const next = withHeadline(doc, "Otro titular");
-    const report = patchCanvas(live, freshFrom(next), buildCss(next), rules);
+    const report = patchCanvas(live, freshFrom(next), buildCss(next, "dom"), rules);
     expect(report).toMatchObject({ ok: true, structural: false });
   });
 
   it("rewrites the page's stylesheet only when it changed, and marks it the first time", () => {
     const doc = fixture();
     const live = liveFrom(doc);
-    const css = buildCss(doc);
+    const css = buildCss(doc, "dom");
     // The html target wrote `\n{css}\n`; the same css, trimmed, is no change.
     const first = patchCanvas(live, freshFrom(doc), css, rules);
     expect(first).toMatchObject({ ok: true, cssChanged: false });
@@ -628,7 +631,7 @@ describe("patchCanvas — an edit is a patch", () => {
     const doc = fixture();
     const live = settled(doc);
     const next = withHeadline(doc, "Sin nodos vacíos");
-    patchCanvas(live, freshFrom(next), buildCss(next), rules);
+    patchCanvas(live, freshFrom(next), buildCss(next, "dom"), rules);
     const walker = live.createTreeWalker(live.body, 0x4 /* SHOW_TEXT */);
     let node = walker.nextNode();
     while (node) {

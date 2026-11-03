@@ -127,7 +127,7 @@ export function render(
     return treeToFragment(tree, host);
   }
 
-  const css = buildCss(doc);
+  const css = buildCss(doc, "html");
   const page = resolvePage(doc, resolved.pageId);
   // On a page drawn per entry the words are the entry's title field (ADR 0040 §4).
   const title = titleFor({ title: pageTitleFor(doc, page, resolved.entryId) }, doc.siteName);

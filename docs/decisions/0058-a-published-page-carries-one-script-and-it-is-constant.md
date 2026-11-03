@@ -148,3 +148,9 @@ The bar now condenses and turns to glass once scrolled, and a rule slides under 
 stylesheet keeps a second, static height (`--rb-bar-h`) for the cover under a transparent bar, which
 the script never writes: §2's row about the measure is about the anchors and «Ir a…», which should
 follow the bar as it is, and not about the cover, which should not.
+
+§4 named the script as the one divergence between the two targets. There is a second from this day,
+and ADR 0063 §2 names and measures it: the stylesheet's anchor-positioned indicator travels with the
+`html` target only, because the presence of an anchor function in the canvas's sheet broke the
+frame's scroll anchoring. `buildCss` takes the target explicitly so that no caller gets either sheet
+by default.

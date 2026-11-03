@@ -10,7 +10,7 @@ import {
   RAIL_WIDTH,
   TWO_RAILS_FOLD_WIDTH,
 } from "../src/header.ts";
-import { GLASS_BACKGROUNDS, GLASS_MIX, render } from "../src/index.ts";
+import { buildCss, GLASS_BACKGROUNDS, GLASS_MIX, render } from "../src/index.ts";
 
 /**
  * The header is the owner's (ADR 0057): what `header.ts` draws from the document's `header` and the
@@ -535,6 +535,15 @@ describe("the look, as attributes and rules", () => {
     expect(block).toContain(
       ":is(.rb-nav-wide, .rb-header) > .rb-nav[data-part=sectionsLinks] a[aria-current] { anchor-name: --rb-current-sections; }",
     );
+    // **Not a word of it for the canvas** (sprint 32 día 1, bisected over eight runs): the presence
+    // of an anchor function in the frame's sheet, matched or not, broke Chromium's scroll anchoring
+    // in the editor, and the section being edited moved 29 px when a panel closed.
+    const canvas = buildCss(site(3), "dom");
+    expect(canvas).not.toMatch(
+      /anchor-name|position-anchor|anchor\(|anchor-size\(|@supports \(anchor/,
+    );
+    // And the two sheets differ in that block alone.
+    expect(sheet.replace(`${block}\n}\n`, "")).toBe(canvas);
     expect(block).toContain("left: anchor(left); width: anchor-size(width);");
     expect(block).toContain(":not(:has(a[aria-current]))::after { display: none; }");
     // Every anchor word of the sheet is inside that one block.

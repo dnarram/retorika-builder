@@ -597,7 +597,7 @@ function headerStyleCss(doc: RetorikaDocument): string[] {
  * minimums beside them. Entries are not styled as links — they are a strip of navigation — and the
  * current page is marked by a rule under it rather than by hue alone.
  */
-export function headerCss(doc: RetorikaDocument): string[] {
+export function headerCss(doc: RetorikaDocument, target: "html" | "dom"): string[] {
   if (!headerDrawn(doc)) return [];
   return [
     // The skip link: off-screen until it has focus, and then the first thing on the page. `top`
@@ -677,22 +677,35 @@ export function headerCss(doc: RetorikaDocument): string[] {
     // **The indicator**: one rule under the current entry of each strip, that slides to the next
     // when the current one changes — the page you are on, or the section in view once the script
     // marks it. Drawn by the `nav`'s own `::after`, placed by CSS anchor positioning on whichever
-    // entry is current: no element, no key for the canvas, no script. A browser without anchors
-    // (`@supports`) keeps the rule's colour above and never reads this block. Only the strip's navs
-    // anchor: a rail marks its entry by its edge, a sheet by its edge too (día 4), and two anchors
-    // of one name in two visible copies would place the rule under the wrong one. Hidden the moment
-    // no entry is current, so an empty strip draws no stray line.
-    "@supports (anchor-name: --rb-x) {",
-    `  ${STRIP_NAV} a[aria-current] { text-decoration-color: transparent; }`,
-    `  ${STRIP_NAV}[data-part=pagesLinks] a[aria-current] { anchor-name: --rb-current-pages; }`,
-    `  ${STRIP_NAV}[data-part=sectionsLinks] a[aria-current] { anchor-name: --rb-current-sections; }`,
-    `  ${STRIP_NAV}::after { content: ""; position: absolute; bottom: 0; height: 2px; border-radius: 1px;`,
-    "    background: var(--color-primary); left: anchor(left); width: anchor-size(width);",
-    "    pointer-events: none; }",
-    `  ${STRIP_NAV}[data-part=pagesLinks]::after { position-anchor: --rb-current-pages; }`,
-    `  ${STRIP_NAV}[data-part=sectionsLinks]::after { position-anchor: --rb-current-sections; }`,
-    `  ${STRIP_NAV}:not(:has(a[aria-current]))::after { display: none; }`,
-    "}",
+    // entry is current: no element, no key for the canvas, no write for the script. A browser
+    // without anchors (`@supports`) keeps the rule's colour above and never reads this block. Only
+    // the strip's navs anchor: a rail marks its entry by its edge, a sheet by its edge too (día 4),
+    // and two anchors of one name in two visible copies would place the rule under the wrong one.
+    // Hidden the moment no entry is current, so an empty strip draws no stray line.
+    //
+    // **For the published page only, never for the canvas** (`target`): measured and bisected in the
+    // editor on sprint 32 día 1, the mere presence of `anchor()`, `anchor-size()` and
+    // `position-anchor` in the sheet — in rules that matched nothing — broke Chromium's scroll
+    // anchoring across a re-layout of the frame: closing a panel moved the section being edited
+    // 29 px; the same `::after` without the anchor functions, 0. The canvas carries no script, so
+    // nothing there marks the section in view for the rule to slide to, and the rule's own colour
+    // above draws the same pixels at rest: the sliding rule lives where the script that moves it
+    // does. The one other thing the two targets differ in is that script (ADR 0058 §4).
+    ...(target === "html"
+      ? [
+          "@supports (anchor-name: --rb-x) {",
+          `  ${STRIP_NAV} a[aria-current] { text-decoration-color: transparent; }`,
+          `  ${STRIP_NAV}[data-part=pagesLinks] a[aria-current] { anchor-name: --rb-current-pages; }`,
+          `  ${STRIP_NAV}[data-part=sectionsLinks] a[aria-current] { anchor-name: --rb-current-sections; }`,
+          `  ${STRIP_NAV}::after { content: ""; position: absolute; bottom: 0; height: 2px; border-radius: 1px;`,
+          "    background: var(--color-primary); left: anchor(left); width: anchor-size(width);",
+          "    pointer-events: none; }",
+          `  ${STRIP_NAV}[data-part=pagesLinks]::after { position-anchor: --rb-current-pages; }`,
+          `  ${STRIP_NAV}[data-part=sectionsLinks]::after { position-anchor: --rb-current-sections; }`,
+          `  ${STRIP_NAV}:not(:has(a[aria-current]))::after { display: none; }`,
+          "}",
+        ]
+      : []),
     // The button: a pill in the primary, the site's one idea of a button (`[role=button]` takes the
     // same shape on día 3). Lifts a pixel under a pointer that can hover. Pushed to the far side when
     // nothing else is there. `rb-nav-action` and not `rb-action`: the editor's canvas chrome already

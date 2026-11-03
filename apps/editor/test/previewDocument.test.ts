@@ -12,7 +12,7 @@ import {
   setHeader,
 } from "@retorika/schema";
 import { describe, expect, it } from "vitest";
-import { withFontUrls, withPhotoUrls } from "../src/editor/previewDocument.ts";
+import { canvasHtml, withFontUrls, withPhotoUrls } from "../src/editor/previewDocument.ts";
 
 /**
  * The swap every preview makes: a bundle-relative photo name becomes the object URL of its bytes.
@@ -161,7 +161,7 @@ describe("withFontUrls — the owner's faces in the preview (sprint 29 día 5)",
   ]);
 
   it("swaps only the faces it has bytes for, and leaves the gallery's to its route", () => {
-    const css = buildCss(OWN);
+    const css = buildCss(OWN, "dom");
     const swapped = withFontUrls(css, URLS);
     expect(swapped).toContain(
       'src: url("blob:http://localhost:3000/0b1c2d3e-aaaa-bbbb-cccc-0123456789ab") format("woff2");',
@@ -185,11 +185,39 @@ describe("withFontUrls — the owner's faces in the preview (sprint 29 día 5)",
 
   it("refuses to write anything but an object URL into the stylesheet", () => {
     const hostile = new Map([["propia-3f9a7c21-regular.woff2", 'https://evil.example/x") ; }']]);
-    expect(() => withFontUrls(buildCss(OWN), hostile)).toThrow(/not an object URL/);
+    expect(() => withFontUrls(buildCss(OWN, "dom"), hostile)).toThrow(/not an object URL/);
   });
 
   it("is the text itself with no own faces in it", () => {
-    const css = buildCss(generated());
+    const css = buildCss(generated(), "dom");
     expect(withFontUrls(css, URLS)).toBe(css);
+  });
+});
+
+describe("canvasHtml — the first paint carries the canvas's stylesheet (sprint 32 día 1)", () => {
+  const site = () => {
+    const doc = generateVariants(EMPTY_ANSWERS)[0]?.document;
+    if (!doc) throw new Error("no generated site");
+    return doc;
+  };
+
+  it("swaps the published sheet for the dom one, and only that: no anchor word reaches the frame", () => {
+    const doc = site();
+    const published = render(doc, "html");
+    expect(published.html).toContain("anchor-name: --rb-current-pages");
+    const html = canvasHtml(doc, published);
+    expect(html).not.toMatch(/anchor-name|position-anchor|anchor\(|anchor-size\(/);
+    expect(html).toContain(buildCss(doc, "dom"));
+    // Everything around the sheet is the published page, byte for byte.
+    expect(html.replace(buildCss(doc, "dom"), published.css)).toBe(published.html);
+  });
+
+  it("throws rather than leave the published sheet in place when it cannot find it exactly once", () => {
+    const doc = site();
+    const published = render(doc, "html");
+    expect(() => canvasHtml(doc, { ...published, css: "nothing like it" })).toThrow(/exactly once/);
+    expect(() => canvasHtml(doc, { ...published, html: published.html + published.css })).toThrow(
+      /exactly once/,
+    );
   });
 });

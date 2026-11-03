@@ -66,7 +66,22 @@ they were, because everything here lives in `headerCss` and travels only where a
   because the pages' strip and the sections' may each have a current entry at once; only the strip's
   navs anchor (a rail marks its entry by its edge; the sheet of día 4 by its edge too); and the rule
   is hidden the moment no entry is current. A browser without anchors (`@supports`) keeps the rule's
-  colour on the entry itself, which is what sprint 31 drew.
+  colour on the entry itself, which is what sprint 31 drew. **And the block travels with the
+  published page only, never with the canvas**: `buildCss(doc, target)` takes the target explicitly
+  and `headerCss` writes the anchors for `"html"` alone. Measured and bisected in the editor, over
+  one walk (sprint 28's «la sección editada no se mueve al abrir «Campos»»), eight runs: the **mere
+  presence** of `anchor()`, `anchor-size()` and `position-anchor` in the frame's stylesheet — in
+  rules that matched nothing, under `html[data-rb-js]` which the canvas never carries — broke
+  Chromium's scroll anchoring across the frame's re-layout, and the section being edited moved
+  **29 px** on closing the panel; the same `::after` without the three functions, 0; the rules with
+  `anchor-name` alone, 0. A gate by selector cannot close that, so the gate is the target. The canvas
+  carries no script, nothing there marks a section in view for the rule to slide to, and the rule's
+  own colour draws the same pixels at rest: the sliding rule lives where the script that moves it
+  does. This is the second thing the two targets differ in, after the script (ADR 0058 §4), and it
+  is asserted: the canvas's sheet holds no anchor word, and the two sheets differ in that block alone.
+  The canvas's first paint is the published page's html with the canvas's sheet swapped in
+  (`canvasHtml`, `apps/editor/src/editor/previewDocument.ts`, exact or it throws), because the
+  frame's `srcDoc` was the `html` target's and the patches that follow it were already the `dom`'s.
 - **The button** is a pill: `border-radius: 999px`, `space.sm space.lg`, bold, in the heading letter,
   and it lifts one pixel with a soft shadow under a pointer that can hover (`@media (hover: hover)`).
   A section's `[role=button]` takes the same shape on día 3 (ADR 0064), so one site has one idea of a
@@ -182,6 +197,8 @@ measure from `--rb-header-h`. ADR 0058's table of four writes is unchanged, and 
 ## Consequences
 
 - `packages/renderer/src/header.ts`: `GLASS_MIX`, `GLASS_BACKGROUNDS`, `HAIRLINE`, `STRIP_NAV`; the
+  anchor block for the `html` target only (`buildCss(doc, target)`, explicit at every caller:
+  `index.ts`, the editor's canvas, the tests); the
   bar's rules; `--rb-bar-h`; the condensing block; the glass block after the transparent bar's own
   scrolled rule, which it wins at equal weight by coming later; the rail's tint; «Ir a…»'s pill and
   radius; the row hidden on a phone whose choice is «Ir a…» (two copies of the sections were announced
@@ -196,6 +213,7 @@ measure from `--rb-header-h`. ADR 0058's table of four writes is unchanged, and 
   words' colour); `browser-fixtures.ts` (`header/fold/row-on-wide`).
 - `apps/editor`: `SCHEME_TOKENS` says ink for the surface schemes, so the swatches and the colour an
   input starts from are the published ones; `headerState.test.ts` reads it off the sheet.
+  `canvasHtml` for the frame's first paint; `buildCss(doc, "dom")` at every canvas caller.
 - Golden: four files, every hunk read; eighteen untouched.
 - Measured: a11y 883 (868 + the new combination's 15); Lighthouse, mobile preset, **the fixed bar with
   a logo at 100 with the glass** (LCP 1.35 s, CLS 0.008), the compositions 99 / 98 / 98 as at the
