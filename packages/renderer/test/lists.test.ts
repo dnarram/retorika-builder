@@ -17,7 +17,8 @@ const LIST_CSS = [
   ".rb-item { display: flex; flex-direction: column; gap: var(--space-xs);",
   "  padding-top: var(--space-sm); border-top: 1px solid var(--color-muted); }",
 ].join("\n");
-const H2_RULE_END = "  color: var(--color-secondary); margin: 0; }";
+const H2_RULE_END =
+  "  color: var(--color-secondary); margin: 0; line-height: 1.15; letter-spacing: -0.01em;\n  text-wrap: balance; }";
 const PARAGRAPH_RULE_START = ".rb-section p {";
 
 const corpus = loadCorpus();

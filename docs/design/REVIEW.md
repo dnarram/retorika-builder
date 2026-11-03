@@ -6197,3 +6197,67 @@ en todos y los números saliendo de la hoja de la cabecera en los cuatro con ell
 ~0,5 / 1 en −10 / +2 / +12 / +80 px, la portada con retardos 0 / 80 y la foto quieta, el `pagereveal`
 con `viewTransition` para quien no pidió menos y `null` para quien sí, y nada bajo `reduce`. e2e
 completo: ver la PR.
+
+### Día 3 — la página tiene medida y ritmo (PR de `feat/la-pagina-tiene-medida`, ADR 0064)
+
+**La medida.** `--rb-measure: 1200px` y el relleno lateral de cada sección `max(var(--space-xl),
+calc((100% − 1200px) / 2))`: el fondo a sangre, el contenido centrado, **y a 1280 nada se mueve** (48
+con la escala por defecto; el relleno crece desde 1296; `compact` pasa de 32 a 40 a 1280, dicho en la
+ADR). La barra lleva la misma medida para que la marca alinee con el texto de las secciones, con una
+sutileza medida: el `100%` del relleno de la barra es el del `<body>` y no el del `<main>` que el raíl
+estrecha, así que los anchos de los raíles se restan (`--rb-rail-l`, `--rb-rail-r`, escritos junto a
+los márgenes de la ADR 0060). Medido a 1680: contenido 1200 ± 1 y centrado, fondo a 1680; con un raíl
+izquierdo, `<main>` 1440, contenido centrado en él (360) y la marca a 360; a 1280, 48 en todas.
+Saboteos: `max(` → `min(` pone rojos los seis casos nuevos; sin restar el raíl, rojo el caso del raíl.
+El plan esperaba que el primero pusiera rojo también el desborde a 320; no lo hace, y es correcto: el
+bloque del móvil resetea el relleno con su atajo.
+
+**El ritmo.** Las secciones a `calc(1.5 · space-xl)` arriba y abajo (72 px); el texto de lectura a
+`line-height: 1.6` y los titulares a `1.15` con `-0.01em` y `text-wrap: balance`; las fotos a
+`radius-lg`; el botón de las secciones es ya la píldora de la barra (días 1 y 2 hubo dos formas de
+botón); el panel de la portada es una tarjeta, más separada de las palabras y con una sombra suave de
+tinta. El bloque móvil compartido intacto (`mobile.test.ts` verde sin tocar). Cierra dos filas del
+backlog: el ancho máximo y el CLS del texto.
+
+**Lo que mueve, mirado en el navegador** (ajuste 5). Los tres documentos del corpus con sección libre o
+estilo exacto por elemento, abiertos en Chromium a 1280 antes y después: `physio-free-cover` 459 → 507
+px (24 px de relleno y el párrafo de 18 a 26 px de alto desde la misma fila de la rejilla fina: su
+distancia al borde del contenido pasa de 166 a 163 por los tres píxeles del titular); `hidden-and-embed`
+la sección libre 142 → 190 (el relleno); `estilo-por-elemento` 534 → 582 y 220 → 276. Una composición a
+mano con un párrafo encima de otro elemento vería ese elemento empujado por lo que crece el párrafo:
+nombrado en la ADR 0064 §3. Las capturas se miraron en local; GitHub no deja adjuntarlas desde la línea
+de órdenes, así que la PR lleva las medidas.
+
+**`cover-height`, sus cifras** (sus aserciones se mantienen): a 1440 junto al texto, sección 594 → 588 y
+caja 664×498 → 592×444; a sangre, 992 → 944 y 1344×896 → 1200×800; a 400, 611 → 593 y 582 → 563 con las
+cajas iguales (las palabras, más juntas).
+
+**Lighthouse, y lo que pide una decisión de David.** Rendimiento 99 / 98 / 98 / 99 / 100 / 100 / 100,
+CLS 0,003 en las composiciones (0,004 el día 2). **La accesibilidad de la cabecera fija con logo bajó a
+96** (las otras siete, 100; el suelo es 95): el enlace «Ver más» del primer «Avance» de
+`cabecera-con-marca` queda en 825–845 px del teléfono de Lighthouse, a caballo del borde inferior, a
+medio fundir, y axe lo leyó a 2,53:1. Es el residuo que la ADR 0062 §1 nombró el día 2, materializado
+porque el relleno nuevo movió la geometría. **Ningún fundido lo evita por construcción**: la opacidad
+mínima a la que cada pareja probada sobre superficie sigue por encima de 4,5 es 0,98 en `neutral`. Dos
+salidas: mantener el fundido (el suelo se cumple; axe lee un estado transitorio que depende de dónde cae
+el pliegue) o subir sin fundido (100 por construcción, un movimiento más discreto). Queda el fundido
+que se fusionó el día 2 hasta que David elija.
+
+**Lo que el e2e completo encontró en el editor.** Dos caminatas rojas, dos causas:
+
+- **«La sección editada no se mueve al abrir «Campos»», −205 px a 1024.** Bisecada en cinco variantes
+  de la hoja: solo el `line-height: 1.6` de los párrafos lo produce. Medido dentro del marco: al
+  cerrar, el documento mide 3305 con 1152 de ventana, así que el scroll máximo es 2153; el navegador
+  se quedó en 2239 hasta ese recorte y **su anclaje no ajustó nada**. El sprint 28 lo había medido
+  absorbiendo un cambio de ancho a 1280 y 1600 y se fió de él; con más reflujo, a 1024 en el suelo de
+  0,6, no lo hace. El editor cumple ahora la promesa él mismo, como ya hacía tras un parche desde el
+  sprint 31 día 1: toma el punto de lectura en cada scroll mientras el ancho está quieto
+  (`steadyReading`) y lo repone cuando el ancho nuevo lleva dos fotogramas quieto
+  (`keepReadingAcrossWidth`); el paso al móvil de 320 no se toca. Saboteo: sin la llamada, −205.
+- **La muestra de la landing**: la portada acaba ahora en 1003 a 1280 (antes 939) y la ventana de
+  1040 dejaba 37 px de la sección siguiente donde la caminata pide más de 40. `HERO_WINDOW.desktop` pasa
+  a **1104** para conservar los 101 px que el sprint 23 eligió; el móvil (607 de 844) no cambia.
+
+**Medido.** Unit 3649; a11y 894 (888 + 6 casos de la medida); golden 22, el mismo puñado de reglas en
+cada uno y la barra en los cuatro con cabecera, ningún marcado; `size`: `cabecera-con-marca` 16,2 KB
+propios de 28; lint 29 avisos; e2e completo: ver la PR.

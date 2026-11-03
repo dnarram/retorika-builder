@@ -34,16 +34,20 @@
 * { box-sizing: border-box; }
 body { margin: 0; font-family: var(--font-body); color: var(--color-ink);
   background: var(--color-surface); }
+html { --rb-measure: 1200px; }
 .rb-section { display: grid; grid-template-columns: repeat(12, 1fr);
-  gap: var(--space-md); padding: var(--space-xl); align-items: center; }
-.rb-section img { width: 100%; height: auto; border-radius: var(--radius-md); }
+  gap: var(--space-md); align-items: center;
+  padding: calc(1.5 * var(--space-xl)) max(var(--space-xl), calc((100% - var(--rb-measure)) / 2)); }
+.rb-section img { width: 100%; height: auto; border-radius: var(--radius-lg); }
 .rb-section :is(h1, h2, h3, h4, h5, h6, p, a) { overflow-wrap: break-word; }
 .rb-section :is(h1, h2, h3, h4, h5, h6, p.rb-subtitle) { -webkit-hyphens: auto;
   hyphens: auto; }
 .rb-section h1 { font-family: var(--font-heading); font-size: var(--size-heading);
-  color: var(--color-primary); margin: 0; }
+  color: var(--color-primary); margin: 0; line-height: 1.15; letter-spacing: -0.01em;
+  text-wrap: balance; }
 .rb-section h2 { font-family: var(--font-heading); font-size: var(--size-subheading);
-  color: var(--color-secondary); margin: 0; }
+  color: var(--color-secondary); margin: 0; line-height: 1.15; letter-spacing: -0.01em;
+  text-wrap: balance; }
 .rb-section p.rb-subtitle { font-family: var(--font-heading);
   font-size: var(--size-subheading); color: var(--color-secondary); margin: 0; }
 .rb-section h3 { font-family: var(--font-heading); font-size: var(--size-body);
@@ -57,13 +61,15 @@ body { margin: 0; font-family: var(--font-body); color: var(--color-ink);
 .rb-team .rb-item img { aspect-ratio: 1 / 1; object-fit: cover; }
 .rb-cover img { aspect-ratio: 4 / 3; object-fit: cover; object-position: center; }
 .rb-cover.rb-image-background img { aspect-ratio: 3 / 2; }
-.rb-section p { font-size: var(--size-body); color: var(--color-muted); margin: 0; }
+.rb-section p { font-size: var(--size-body); color: var(--color-muted); margin: 0;
+  line-height: 1.6; }
 .rb-section a:not([role=button]) { color: var(--color-primary); text-decoration: underline; }
-.rb-section [role=button] { display: inline-block; padding: var(--space-sm) var(--space-md);
-  background: var(--color-primary); color: var(--color-surface);
-  border-radius: var(--radius-sm); text-decoration: none; }
-.rb-panel { align-self: stretch; margin: calc(-1 * var(--space-md)); z-index: 1;
-  background: var(--color-surface); border-radius: var(--radius-lg); pointer-events: none; }
+.rb-section [role=button] { display: inline-block; padding: var(--space-sm) var(--space-lg);
+  background: var(--color-primary); color: var(--color-surface); font-family: var(--font-heading);
+  font-weight: 700; border-radius: 999px; text-decoration: none; }
+.rb-panel { align-self: stretch; margin: calc(-1.5 * var(--space-md)); z-index: 1;
+  background: var(--color-surface); border-radius: var(--radius-lg); pointer-events: none;
+  box-shadow: 0 24px 48px -24px color-mix(in srgb, var(--color-ink) 40%, transparent); }
 .rb-panel ~ :not(img) { z-index: 2; }
 
 html { --rb-ease: cubic-bezier(0.2, 0, 0, 1); --rb-fast: 200ms; --rb-base: 400ms; }

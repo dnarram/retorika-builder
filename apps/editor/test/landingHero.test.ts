@@ -79,7 +79,7 @@ describe("the landing hero's geometry", () => {
    */
   it("gives the frame exactly the height of what it is showing", () => {
     const scale = heroScale(680);
-    expect(heroFrameHeight(scale, "desktop")).toBeCloseTo((HERO_BAR + 1040) * scale, 6);
+    expect(heroFrameHeight(scale, "desktop")).toBeCloseTo((HERO_BAR + 1104) * scale, 6);
     expect(heroFrameHeight(scale, "phone")).toBeCloseTo((HERO_BAR + 844) * scale, 6);
     // The frame is never taller than the slot that reserves room for it.
     expect(heroFrameHeight(scale, "desktop")).toBeLessThanOrEqual(heroReservedHeight(scale));

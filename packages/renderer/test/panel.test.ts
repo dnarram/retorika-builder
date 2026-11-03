@@ -26,8 +26,9 @@ function fixture(name: string): RetorikaDocument {
 }
 
 const PANEL_CSS = [
-  ".rb-panel { align-self: stretch; margin: calc(-1 * var(--space-md)); z-index: 1;",
-  "  background: var(--color-surface); border-radius: var(--radius-lg); pointer-events: none; }",
+  ".rb-panel { align-self: stretch; margin: calc(-1.5 * var(--space-md)); z-index: 1;",
+  "  background: var(--color-surface); border-radius: var(--radius-lg); pointer-events: none;",
+  "  box-shadow: 0 24px 48px -24px color-mix(in srgb, var(--color-ink) 40%, transparent); }",
   ".rb-panel ~ :not(img) { z-index: 2; }",
 ].join("\n");
 

@@ -149,7 +149,7 @@ import { toolbarFamilyLabel } from "../editor/letterGallery.ts";
 import { logoLuminanceOf } from "../editor/logoImage.ts";
 import { LOOK_AHEAD_DEADLINE_MS, lookAheadStep } from "../editor/lookAhead.ts";
 import { menuStateFor } from "../editor/menuState.ts";
-import { DESKTOP_LAYOUT_WIDTH, measureOverflow } from "../editor/overflowCheck.ts";
+import { DESKTOP_LAYOUT_WIDTH, measureOverflow, NARROWEST_WIDTH } from "../editor/overflowCheck.ts";
 import { type FontFileHandle, ownFontFiles, type StoredFontFile } from "../editor/ownFonts.ts";
 import {
   chrome,
@@ -164,6 +164,7 @@ import { record, serialOf } from "../editor/probe.ts";
 import {
   atOrAboveReading,
   keepReadingPoint as putReadingPointBack,
+  type ReadingPoint,
   readingPointOf,
   readingSectionOf,
 } from "../editor/readingPoint.ts";
@@ -1325,6 +1326,23 @@ export function Editor({
    * view, as direction asked.
    */
   const readingPoint = useRef<{ sectionId: string; top: number } | null>(null);
+  /**
+   * **The reading point across a change of the canvas's width** (sprint 32 día 3): taken at every
+   * scroll of the frame while its width is still, and put back once a new width has stopped moving.
+   *
+   * A panel opened or closed at a window where the canvas is at its 0.6 floor (ADR 0061) changes the
+   * width the page is laid out at — 1253 → 887 at 1024 — and the text re-flows. The browser's scroll
+   * anchoring was trusted to absorb that, measured at 0 px on sprint 28 día 1 at 1280 and 1600. With
+   * the reading text at `line-height: 1.6` (ADR 0064) the re-flow is larger, and measured at 1024 the
+   * anchoring did nothing on closing: the frame stayed at 2239 px of scroll until the shorter page
+   * clamped it to 2153, and the section being edited ended 205 px above the view. So the editor keeps
+   * the promise itself, as it does across a patch (`readingPoint`). Desktop widths only: the switch to
+   * the phone's 320 is a change of device, not of room.
+   */
+  const steadyReading = useRef<ReadingPoint | null>(null);
+  /** The frame's animation-frame request while a new width settles; `null` when it is still. */
+  const widthSettling = useRef<number | null>(null);
+  const lastLayoutWidth = useRef<number>(DESKTOP_LAYOUT_WIDTH);
   /** Registered by `wireSelection`: choose this section as a click would. `wireLinks` lives outside
    * that closure and needs the one `select` there is. */
   const chooseSectionNow = useRef<(section: HTMLElement) => void>(() => {});
@@ -6990,6 +7008,16 @@ export function Editor({
     writeZoom(iframeDoc);
     wireInteractions(iframeDoc);
     focusLineAfterChange(iframeDoc);
+    // The reading point while the width is still (`steadyReading`): every scroll the person makes, and
+    // none of the ones a settling width makes.
+    iframeDoc.defaultView?.addEventListener(
+      "scroll",
+      () => {
+        if (widthSettling.current === null) steadyReading.current = readingPointOf(iframeDoc);
+      },
+      { passive: true },
+    );
+    steadyReading.current = readingPointOf(iframeDoc);
     /*
      * **Nothing puts the scroll back any more, because nothing takes it away.**
      *
@@ -7008,7 +7036,9 @@ export function Editor({
      * frame's viewport growing with a smaller zoom and clamping the scroll. The room the page is
      * given at its end (`overscrollFor`, `.rb-overscroll` in `drawGaps`, written on the root by the
      * shell's zoom notice before anything is laid out) is what keeps the greatest scroll where it
-     * was. Still nothing here runs on a width change, and nothing needs to.
+     * was. ~~Still nothing here runs on a width change, and nothing needs to.~~ **Something does since
+     * sprint 32 día 3** (`steadyReading`, `keepReadingAcrossWidth`): at the 0.6 floor a panel changes the
+     * width itself, and with the reading text at 1.6 the anchoring stopped absorbing the re-flow.
      */
     // A wiring counts as an edit on the page for the e2e's signal; and a change that arrived before
     // this document was wired is applied to it now.
@@ -7017,6 +7047,35 @@ export function Editor({
       pendingPatch.current = false;
       applyPatch(iframeDoc);
     }
+  }
+
+  /**
+   * Waits for a new layout width to stop moving — the frame's own `innerWidth` the same for two
+   * animation frames, since a panel's arrival can change it over several — and then puts back the
+   * reading point it had while still (`steadyReading`).
+   */
+  function keepReadingAcrossWidth(iframeDoc: Document) {
+    const view = iframeDoc.defaultView;
+    if (!view) return;
+    if (widthSettling.current !== null) view.cancelAnimationFrame(widthSettling.current);
+    let lastWidth = -1;
+    let quiet = 0;
+    const tick = () => {
+      const width = view.innerWidth;
+      quiet = width === lastWidth ? quiet + 1 : 0;
+      lastWidth = width;
+      if (quiet < 2) {
+        widthSettling.current = view.requestAnimationFrame(tick);
+        return;
+      }
+      widthSettling.current = null;
+      const keptBy = putReadingPointBack(iframeDoc, steadyReading.current);
+      if (keptBy !== 0) {
+        record("reading", { sectionId: steadyReading.current?.sectionId, keptBy, cause: "width" });
+      }
+      steadyReading.current = readingPointOf(iframeDoc);
+    };
+    widthSettling.current = view.requestAnimationFrame(tick);
   }
 
   function wireInteractions(iframeDoc: Document) {
@@ -8025,7 +8084,17 @@ export function Editor({
        * probe. The edit serial does not move: nothing was edited, and a walk waiting for an edit
        * must not be woken by a panel.
        */
-      onLayoutWidthChange={setLayoutWidth}
+      onLayoutWidthChange={(width) => {
+        setLayoutWidth(width);
+        const was = lastLayoutWidth.current;
+        lastLayoutWidth.current = width;
+        if (width === was || width <= NARROWEST_WIDTH || was <= NARROWEST_WIDTH) return;
+        const live = liveDoc();
+        if (live?.documentElement?.dataset["rbWired"] !== "1") return;
+        // Marked before the browser lays the new width out, so the clamp's scroll is not taken for
+        // the person's (`steadyReading`).
+        keepReadingAcrossWidth(live);
+      }}
       onZoomChange={(zoom, overscroll) => {
         const live = liveDoc();
         // `documentElement` and not only the document: between the frame's mounting and the

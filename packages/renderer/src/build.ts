@@ -1040,9 +1040,24 @@ export function buildCss(doc: RetorikaDocument, target: "html" | "dom"): string 
     "* { box-sizing: border-box; }",
     "body { margin: 0; font-family: var(--font-body); color: var(--color-ink);",
     "  background: var(--color-surface); }",
+    // **The measure and the rhythm** (ADR 0064, sprint 32 día 3). `--rb-measure` is the widest a
+    // section's content gets: a constant of the motor, like `--rb-header-h`, not a token of the
+    // document. It is had by padding, never by `max-width`: the section's background stays edge to
+    // edge and only its content centres, and **at 1280 nothing moves** — `max(48px, (1280 − 1200) / 2)`
+    // is the 48 the scale already gave, so the canvas, the golden geometry and the overflow walk at
+    // 1280 measure what they measured; the padding grows from 1296 up. A percentage of padding is a
+    // percentage of the containing block, `<main>`, which a rail already narrows (ADR 0060): the
+    // measure centres in what is left. The fine grid of a hand-designed section (ADR 0050) is laid
+    // inside the padding and keeps every placement. Vertically, a section breathes: one and a half
+    // times the scale's largest space, 72 px by default, where it was 48. The phone's own block
+    // below resets both with its shorthand and is unchanged.
+    "html { --rb-measure: 1200px; }",
     ".rb-section { display: grid; grid-template-columns: repeat(12, 1fr);",
-    "  gap: var(--space-md); padding: var(--space-xl); align-items: center; }",
-    ".rb-section img { width: 100%; height: auto; border-radius: var(--radius-md); }",
+    "  gap: var(--space-md); align-items: center;",
+    "  padding: calc(1.5 * var(--space-xl)) max(var(--space-xl), calc((100% - var(--rb-measure)) / 2)); }",
+    // Photographs a step rounder than the cards around them (ADR 0064): the scale's large radius,
+    // which the cover's panel has always had.
+    ".rb-section img { width: 100%; height: auto; border-radius: var(--radius-lg); }",
     // No text overflows its own box. A word longer than its column ("Electrodomésticos" in a
     // narrow title column) used to run past it into the next element. overflow-wrap:
     // break-word is the guarantee: it acts only when a word cannot fit, and needs no
@@ -1051,10 +1066,16 @@ export function buildCss(doc: RetorikaDocument, target: "html" | "dom"): string 
     ".rb-section :is(h1, h2, h3, h4, h5, h6, p, a) { overflow-wrap: break-word; }",
     ".rb-section :is(h1, h2, h3, h4, h5, h6, p.rb-subtitle) { -webkit-hyphens: auto;",
     "  hyphens: auto; }",
+    // Headings set close and balanced (ADR 0064): a number for the line, never `normal`, so a
+    // heading has its height before the site's letter arrives (the bar's lesson of sprint 30 día 7,
+    // applied to the page); a hair of negative tracking at display sizes; and lines of even length
+    // where the browser can (`text-wrap: balance` is ignored where it is not known).
     ".rb-section h1 { font-family: var(--font-heading); font-size: var(--size-heading);",
-    "  color: var(--color-primary); margin: 0; }",
+    "  color: var(--color-primary); margin: 0; line-height: 1.15; letter-spacing: -0.01em;",
+    "  text-wrap: balance; }",
     ".rb-section h2 { font-family: var(--font-heading); font-size: var(--size-subheading);",
-    "  color: var(--color-secondary); margin: 0; }",
+    "  color: var(--color-secondary); margin: 0; line-height: 1.15; letter-spacing: -0.01em;",
+    "  text-wrap: balance; }",
     // The cover's tagline, which stopped being an h2 (#19) and must not start looking like body
     // copy for it. Same four declarations the h2 rule gives, and qualified with the tag so it
     // outranks `.rb-section p` below — a bare `.rb-subtitle` would lose to it on specificity and
@@ -1122,22 +1143,36 @@ export function buildCss(doc: RetorikaDocument, target: "html" | "dom"): string 
     // `docs/tasks/backlog.md`.
     ".rb-cover img { aspect-ratio: 4 / 3; object-fit: cover; object-position: center; }",
     ".rb-cover.rb-image-background img { aspect-ratio: 3 / 2; }",
-    ".rb-section p { font-size: var(--size-body); color: var(--color-muted); margin: 0; }",
+    // **Reading text at 1.6** (ADR 0064), a number where it was `normal`: the backlog's open row of
+    // the text's CLS (0.009, sprint 30) asked for a design decision, and this is it. `normal` takes
+    // each letter's own ascent and descent, so a paragraph changed height when the site's letter
+    // arrived; a number is the same height in either. And 1.6 is what a paragraph of a site of 2026
+    // reads at. **It moves a hand-designed section** (David's adjustment 5): a paragraph grows from
+    // about 1.25 to 1.6 a line and pushes what is under it, so a composition placed by hand drifts
+    // down; ADR 0064 names it and the fixtures that have one were looked at in a browser.
+    ".rb-section p { font-size: var(--size-body); color: var(--color-muted); margin: 0;",
+    "  line-height: 1.6; }",
     // Plain links (PR #6, finding 3): color.primary, which every palette guarantees against
     // color.surface, and underlined so they never rely on colour alone. The :not keeps this
     // rule and the button rule from ever matching the same element. No outline, :focus,
     // :hover or :visited: the browser's focus ring stays, and there is one link colour.
     ".rb-section a:not([role=button]) { color: var(--color-primary); text-decoration: underline; }",
-    ".rb-section [role=button] { display: inline-block; padding: var(--space-sm) var(--space-md);",
-    "  background: var(--color-primary); color: var(--color-surface);",
-    "  border-radius: var(--radius-sm); text-decoration: none; }",
+    // The site's one idea of a button (ADR 0063, ADR 0064): the pill the bar's button is, in the
+    // heading letter, bold.
+    ".rb-section [role=button] { display: inline-block; padding: var(--space-sm) var(--space-lg);",
+    "  background: var(--color-primary); color: var(--color-surface); font-family: var(--font-heading);",
+    "  font-weight: 700; border-radius: 999px; text-decoration: none; }",
     // The panel under text that overlaps an image (panelArea): the image keeps z-index auto
     // and paints first, the panel over it, the text over the panel. Grid items honour
     // z-index without position. align-self: stretch because .rb-section centres its items,
     // which would leave an empty panel with no height. pointer-events: none so a click on
     // the photo reaches the image, not a box nobody can select.
-    ".rb-panel { align-self: stretch; margin: calc(-1 * var(--space-md)); z-index: 1;",
-    "  background: var(--color-surface); border-radius: var(--radius-lg); pointer-events: none; }",
+    // The panel is a card on the photograph (ADR 0064): a little further out from the words it holds
+    // and lifted off the picture by a soft shadow of the ink. Still `color.surface`, still the reason
+    // the words over a photograph have a contrast anyone can guarantee.
+    ".rb-panel { align-self: stretch; margin: calc(-1.5 * var(--space-md)); z-index: 1;",
+    "  background: var(--color-surface); border-radius: var(--radius-lg); pointer-events: none;",
+    "  box-shadow: 0 24px 48px -24px color-mix(in srgb, var(--color-ink) 40%, transparent); }",
     ".rb-panel ~ :not(img) { z-index: 2; }",
     "",
     ...motionCss(doc, target),
