@@ -292,6 +292,7 @@ export function MenuPanel({
                 {note}
               </p>
             ))}
+            <p className={noteClass}>{es["editor.menuPanel.notes.sectionsMarked"]}</p>
           </>
         ) : null}
         <p className="m-0 text-[12px] font-semibold text-ui-ink">
@@ -380,6 +381,7 @@ export function MenuPanel({
         {state.barEmpty ? (
           <p className={noteClass}>{es["editor.menuPanel.notes.barEmpty"]}</p>
         ) : null}
+        <p className={noteClass}>{es["editor.menuPanel.notes.motion"]}</p>
         <div className="grid grid-cols-3 gap-1.5">
           {LAYOUTS.map((layout) => (
             <label
@@ -407,6 +409,10 @@ export function MenuPanel({
           checked={state.sticky}
           onChange={(sticky) => onSetHeader({ sticky })}
           notes={[
+            // What it turns into once scrolled, read from the renderer's own list (`scrolledLook`).
+            state.scrolledLook === "glass"
+              ? es["editor.menuPanel.stickyGlass"]
+              : es["editor.menuPanel.stickySolid"],
             state.phoneRow
               ? es["editor.menuPanel.stickyPhoneRow"]
               : es["editor.menuPanel.stickyPhone"],
@@ -417,7 +423,10 @@ export function MenuPanel({
           label={es["editor.menuPanel.hairline"]}
           checked={state.hairline}
           onChange={(hairline) => onSetHeader({ hairline })}
-          notes={state.transparent ? [es["editor.menuPanel.hairlineTransparent"]] : []}
+          notes={[
+            es["editor.menuPanel.hairlineNote"],
+            ...(state.transparent ? [es["editor.menuPanel.hairlineTransparent"]] : []),
+          ]}
         />
       </fieldset>
 

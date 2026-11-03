@@ -633,7 +633,8 @@ describe("rule 6 on the header's parts", () => {
     expect(css).toContain("/* rule 6: the header's own style */");
     // The bar reads `color` as its background.
     expect(css).toContain(
-      ".rb-header[data-layout][data-bg] { background: #123456; padding: var(--space-lg); }",
+      // And once scrolled, over the glass (sprint 32 día 5).
+      ".rb-header[data-layout][data-bg], .rb-header[data-layout][data-bg][data-scrolled] { background: #123456; padding: var(--space-lg); }",
     );
     expect(css).toContain(
       ".rb-header[data-layout] [data-part=brand] { font-family: var(--font-body); }",

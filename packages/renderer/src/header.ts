@@ -579,10 +579,17 @@ function headerStyleCss(doc: RetorikaDocument): string[] {
   if (!style) return [];
   // **The rail is the bar's** (ADR 0060): one colour behind the words, wherever the words stand —
   // and only for a document that has a rail, so a saved site without one keeps its exact bytes.
+  // **And the bar's exact colour holds once scrolled** (sprint 32 día 5, measured): the glass of ADR
+  // 0063 weighs (0,4,0) and replaced an owner's exact bar colour with the surface's glass the moment
+  // the page scrolled — words the owner set in white on their dark red then sat on near-white. The
+  // scrolled selector weighs the same and comes after the glass, so it wins; the colour stays opaque,
+  // because the glass's proof covers the palette's colours and not an owner's.
   const selectorOf = (part: HeaderPart) =>
-    part === "bar" && usesRail(headerSettings(doc))
-      ? `${PART_SELECTOR.bar}, ${PART_SELECTOR.bar} .rb-rail`
-      : PART_SELECTOR[part];
+    part !== "bar"
+      ? PART_SELECTOR[part]
+      : usesRail(headerSettings(doc))
+        ? `${PART_SELECTOR.bar}, ${PART_SELECTOR.bar}[data-scrolled], ${PART_SELECTOR.bar} .rb-rail`
+        : `${PART_SELECTOR.bar}, ${PART_SELECTOR.bar}[data-scrolled]`;
   const rules: string[] = [];
   for (const part of HEADER_PARTS) {
     const own = style[part];

@@ -2,6 +2,7 @@ import { COVER_ID, FOOTER_ID, TEASER_ID } from "@retorika/catalog";
 import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
 import {
   actionEntry,
+  GLASS_BACKGROUNDS,
   headerDrawn,
   headerPhoneRow,
   headerPlaces,
@@ -135,6 +136,15 @@ export interface HeaderState {
   phoneRow: boolean;
   /** The bar lies transparent over the cover (ADR 0057 §look; chosen on día 6). */
   transparent: boolean;
+  /**
+   * **What a fixed bar turns into once the page has scrolled** (ADR 0063, sprint 32 día 5): glass on
+   * the schemes the renderer makes glass of (`GLASS_BACKGROUNDS`, `transparent` being a surface bar
+   * once scrolled) when no exact colour of the owner's paints the bar; otherwise a solid bar with a
+   * shadow — the coloured schemes, and an owner's exact colour, which the renderer keeps opaque.
+   * Read from the renderer's own list so the panel's sentence cannot promise a glass the page does
+   * not draw.
+   */
+  scrolledLook: "glass" | "solid";
   /** Where the sections menu sits (ADR 0060, sprint 31), chosen in the panel's «Dónde va». */
   sectionsPosition: SectionsPosition;
   /** Where the pages menu sits, and whether the brand and the button go with it into a rail. */
@@ -318,6 +328,14 @@ export function headerStateFor(doc: RetorikaDocument, pageId: string | undefined
     sectionsMobile: settings.sectionsMobile,
     phoneRow: headerPhoneRow(doc, settings),
     transparent: settings.background === "transparent",
+    scrolledLook:
+      headerExact(doc, "bar", "color") === undefined &&
+      Object.hasOwn(
+        GLASS_BACKGROUNDS,
+        settings.background === "transparent" ? "surface" : settings.background,
+      )
+        ? "glass"
+        : "solid",
     sectionsPosition: settings.sectionsPosition,
     pagesPosition: settings.pagesPosition,
     brandWithPages: settings.brandWithPages,

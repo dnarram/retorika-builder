@@ -1119,3 +1119,38 @@ describe("the phone's menu is a sheet (sprint 32 día 4)", () => {
     });
   }
 });
+
+describe("an owner's exact bar colour holds once scrolled (sprint 32 día 5)", () => {
+  for (const background of ["surface", "ink", "transparent", "primary"] as const) {
+    it(`keeps #5a1a1a, opaque and without glass, on the ${background} scheme after scrolling`, async () => {
+      const page = await open(
+        placed({
+          sticky: true,
+          look: { background },
+          sections: { shown: true, mobile: "hidden" },
+          style: { bar: { color: { exact: "#5a1a1a", exception: true } } },
+        }),
+        1280,
+        700,
+      );
+      try {
+        const read = () =>
+          page.evaluate(
+            () => getComputedStyle(document.querySelector(".rb-header") as Element).backgroundColor,
+          );
+        expect(await read()).toBe("rgb(90, 26, 26)");
+        await page.evaluate(() => window.scrollTo({ top: 600, behavior: "instant" }));
+        await expect
+          .poll(() =>
+            page.evaluate(() =>
+              document.querySelector(".rb-header")?.hasAttribute("data-scrolled"),
+            ),
+          )
+          .toBe(true);
+        expect(await read()).toBe("rgb(90, 26, 26)");
+      } finally {
+        await page.context().close();
+      }
+    });
+  }
+});
