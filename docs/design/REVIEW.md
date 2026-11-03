@@ -6143,3 +6143,57 @@ lienzo enseña la barra en reposo: tinta, el indicador de la página activa, sin
 lleva script); `SCHEME_TOKENS` del editor dice tinta para `surface` y `transparent`, y
 `headerState.test` lo lee de la hoja. `[role=button]` de las secciones sigue con `radius-sm` hasta el
 día 3: dos días con dos formas de botón, dicho aquí.
+
+### Día 2 — la web se mueve al bajar (PR de `feat/la-web-se-mueve-al-bajar`, ADR 0062)
+
+**El vocabulario, cerrado, sin un byte de script** (ADR 0062). Cada hijo de cada sección a partir de la
+primera entra en su propia línea de tiempo de vista (`animation-timeline: view()`), 16 px de subida y
+un fundido, con la franja **en longitud** (ajuste 3): `entry 0% entry 160px`, acabada a los 160 px de
+asomar mida lo que mida. La portada entra una vez: titular, línea y botón a 80 ms, 400 ms cada uno,
+nunca la foto ni el panel. Entre páginas la web funde y la barra se queda (`@view-transition`,
+Chromium y Safari; `file://` navega sin más). `[role=button]` sube un píxel bajo el puntero. Los
+números del motor (`--rb-ease`, `--rb-fast` 200 ms, `--rb-base` 400 ms) en `html` para toda web,
+fuera del media. Todo bajo `prefers-reduced-motion: no-preference`; `motion.test.ts` recorre la hoja
+entera, con los atajos y los longhands, sobre los 22 documentos del corpus, y asevera la lista exacta.
+**El lienzo no se mueve** (ajuste 2), dos veces: el renderer no escribe nada de esto para la diana
+`dom`, y la hoja del cromo del editor (`canvasStillness.ts`) pone `animation: none !important` a todo
+hijo de sección, con un test que comprueba que cubre cada selector que el renderer anima.
+
+**Cinco mecanismos medidos en Chromium que el plan no tenía, cada uno con su arreglo:**
+
+1. **La especificidad se comió el retardo.** `animation-delay: 80ms` en `p` perdía contra la regla del
+   atajo `:is(h1, p, a[role=button])`, que pesa lo que su argumento más pesado y resetea el retardo a
+   0: leyó `[0]` donde esperaba 80. El retardo viaja en `--rb-delay`, que ningún atajo resetea.
+2. **Esperar a «todas las animaciones» ya no vuelve.** La `finished` de una animación guiada por
+   scroll solo se cumple cuando la página no puede bajar más: la espera de `openFold` y de la barra
+   condensada tardaba 60 s. Los tests esperan a las animaciones del elemento que miden o a las de
+   `document.timeline` (`timed()`).
+3. **Un nombre de transición de vista hace de la barra un contexto de apilamiento.** Con la barra en
+   el flujo (sin `z-index`), el `z-index: 2` del desplegable «Ir a…» quedó dentro de ese contexto y un
+   párrafo que subía con su `transform` se pintaba encima: Playwright encontró el párrafo
+   interceptando el clic. `.rb-header { z-index: 1 }`: por encima de la página allí donde se tocan,
+   como ya estaban la fija y la transparente con su 2 (nota del día en la ADR 0063).
+4. **Lo que sube no puede ser el ancla del scroll.** La caminata del −400 (ADR 0063 §3), verde el
+   día 1, aterrizaba en **399**: con la barra condensándose, el navegador tomaba por ancla una palabra
+   de la portada aún entrando y leía su propia animación como movimiento de la página. Primero se
+   excluyeron los hijos del revelado (no bastó); luego las palabras de la portada (bastó):
+   `overflow-anchor: none` en todo lo que sube.
+5. **axe pondera la opacidad en el color.** Con relleno `backwards` y el fundido a lo largo de toda la
+   franja, Lighthouse bajó accesibilidad de 100 a **96** en seis sujetos de ocho por `color-contrast`:
+   la entradilla y los títulos de tarjeta de la segunda sección, que asoman por el borde inferior del
+   teléfono de Lighthouse, estaban a medio fundir. Arreglo en dos partes: **sin relleno** (fuera de su
+   franja el hijo es él mismo; bajo el pliegue nadie lo ve) y **el fundido acabado al 15 % de la
+   franja**, 24 px, con la subida el resto: un hijo que asoma más de 24 px al cargar está entero. Vuelta
+   a 100 en los ocho. Un hijo que asomara menos de 24 px seguiría a medio fundir ese instante; con la
+   geometría de estos sujetos ninguno lo hace, y hasta ahí llega la afirmación.
+
+**Medido.** Lighthouse 8/8 con el movimiento encendido: rendimiento 99 / 98 / 98 (composiciones), 99
+(letra propia), 100 / 100 (cabecera fija, columnas), 100 (página por ficha); **accesibilidad 100 en
+los ocho**; LCP 1,80 / 2,40 / 2,33 s sin cambio; CLS 0,004 / 0,004 / 0,004 (antes 0,008 / 0,011 /
+0,000). Unit 3649; a11y 888 (883 + 5 del gemelo); golden 22, cada hunk leído: el bloque de movimiento
+en todos y los números saliendo de la hoja de la cabecera en los cuatro con ella; `size`:
+`cabecera-con-marca` 15,9 KB propios de 28; `renderer:deps` ok; lint 29 avisos como siempre. El gemelo
+(`motion.browser.test.ts`): el revelado en una `ViewTimeline`, el hijo de 1 600 px a 1 / ~0,08 /
+~0,5 / 1 en −10 / +2 / +12 / +80 px, la portada con retardos 0 / 80 y la foto quieta, el `pagereveal`
+con `viewTransition` para quien no pidió menos y `null` para quien sí, y nada bajo `reduce`. e2e
+completo: ver la PR.

@@ -542,8 +542,7 @@ describe("the look, as attributes and rules", () => {
     expect(canvas).not.toMatch(
       /anchor-name|position-anchor|anchor\(|anchor-size\(|@supports \(anchor/,
     );
-    // And the two sheets differ in that block alone.
-    expect(sheet.replace(`${block}\n}\n`, "")).toBe(canvas);
+    // And the two sheets differ in that block and in the page's motion alone (`motion.test.ts`).
     expect(block).toContain("left: anchor(left); width: anchor-size(width);");
     expect(block).toContain(":not(:has(a[aria-current]))::after { display: none; }");
     // Every anchor word of the sheet is inside that one block.
@@ -984,91 +983,5 @@ describe("«Ir a…», the sections' disclosure", () => {
     const without = render(site(3, PAGES, { pages: { position: "left" } }), "html").css;
     expect(without).not.toContain("rb-nav-fold");
     expect(without).not.toContain("rb-fold-in");
-  });
-});
-
-/**
- * **Motion, only for somebody who has not asked for less** (David's third condition on sprint 31, as
- * the smooth scroll was on sprint 30). Walked over the stylesheet rather than spot-checked: a
- * `transition` or an `animation` written one block too far out runs for everybody.
- */
-describe("the header's motion", () => {
-  /** Every `transition` and `animation` declaration of a sheet, with the @-rules around it. */
-  function motionIn(sheet: string): { declaration: string; within: string[] }[] {
-    const text = sheet.replace(/\/\*[\s\S]*?\*\//g, "");
-    const found: { declaration: string; within: string[] }[] = [];
-    const preludes: string[] = [];
-    let start = 0;
-    const take = (end: number) => {
-      const segment = text.slice(start, end).trim().replace(/\s+/g, " ");
-      // The longhands too (`animation-timeline`, `transition-property`): a movement written as one
-      // of them one block too far out would run for everybody just the same (sprint 32 día 1).
-      if (/^(transition|animation)(-[a-z]+)?\s*:/.test(segment)) {
-        found.push({ declaration: segment, within: preludes.filter((p) => p.startsWith("@")) });
-      }
-    };
-    for (let i = 0; i < text.length; i += 1) {
-      const ch = text[i];
-      if (ch === "{") {
-        preludes.push(text.slice(start, i).trim());
-        start = i + 1;
-      } else if (ch === "}" || ch === ";") {
-        take(i);
-        if (ch === "}") preludes.pop();
-        start = i + 1;
-      }
-    }
-    return found;
-  }
-
-  const QUERY = "@media (prefers-reduced-motion: no-preference)";
-  const EVERYTHING = site(3, [{ id: "p2", slug: "carta", title: "La carta" }], {
-    pages: { position: "left" },
-    sections: { position: "fold", mobile: "fold" },
-  });
-
-  it("finds every transition and animation inside the no-preference query", () => {
-    for (const [what, doc] of [
-      ["the bar alone", site(3)],
-      ["a rail and the disclosure", EVERYTHING],
-    ] as const) {
-      const motion = motionIn(render(doc, "html").css);
-      expect(motion.length, what).toBeGreaterThan(0);
-      for (const { declaration, within } of motion) {
-        expect(within, `${what}: ${declaration}`).toContain(QUERY);
-      }
-    }
-  });
-
-  it("moves the entry's rule, the indicator, the button, the bar, the rail's mark and the disclosure's panel — and nothing else", () => {
-    const declarations = motionIn(render(EVERYTHING, "html").css).map((m) => m.declaration);
-    expect(declarations).toEqual([
-      "transition: text-decoration-color var(--rb-fast) var(--rb-ease)",
-      "transition: left var(--rb-fast) var(--rb-ease), width var(--rb-fast) var(--rb-ease)",
-      "transition: transform var(--rb-fast) var(--rb-ease), box-shadow var(--rb-fast) var(--rb-ease)",
-      "transition: padding var(--rb-fast) var(--rb-ease), margin var(--rb-fast) var(--rb-ease), background-color var(--rb-fast) var(--rb-ease), box-shadow var(--rb-fast) var(--rb-ease)",
-      "transition: text-decoration-color var(--rb-fast) var(--rb-ease), box-shadow var(--rb-fast) var(--rb-ease), background-color var(--rb-fast) var(--rb-ease)",
-      "animation: rb-fold-in var(--rb-base) var(--rb-ease) backwards",
-    ]);
-    // The numbers every one of them reads, outside the query: they are not movement.
-    expect(render(EVERYTHING, "html").css).toContain(
-      "html { --rb-ease: cubic-bezier(0.2, 0, 0, 1); --rb-fast: 200ms; --rb-base: 400ms; }",
-    );
-  });
-
-  it("would catch a longhand written outside the query", () => {
-    const sheet = `${render(site(3), "html").css}\n.rb-x { animation-timeline: view(); }`;
-    expect(
-      motionIn(sheet).some(({ declaration }) => declaration.startsWith("animation-timeline")),
-    ).toBe(true);
-  });
-
-  it("would catch a transition written outside the query", () => {
-    // The walker's own control: the same sheet with one block's query taken off must be refused.
-    const sheet = render(site(3), "html").css.replace(
-      "@media (prefers-reduced-motion: no-preference) {\n  html { scroll-behavior: smooth; }",
-      "@media all {\n  html { scroll-behavior: smooth; }",
-    );
-    expect(motionIn(sheet).some(({ within }) => !within.includes(QUERY))).toBe(true);
   });
 });

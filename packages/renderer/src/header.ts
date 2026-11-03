@@ -615,10 +615,8 @@ export function headerCss(doc: RetorikaDocument, target: "html" | "dom"): string
     // land under the bar as it is now, and for «Ir a…», which hangs from it.
     "html { --rb-bar-h: calc(2 * var(--space-md) + max(40px, 1.5 * var(--size-body)));",
     "  --rb-header-h: var(--rb-bar-h); }",
-    // **The motor's own numbers**, not the document's (rule 6 reads the owner's choices, not what the
-    // renderer knows): one curve and two durations, read by every transition of the bar. Outside the
-    // media block because they are numbers, not movement; what moves is below.
-    "html { --rb-ease: cubic-bezier(0.2, 0, 0, 1); --rb-fast: 200ms; --rb-base: 400ms; }",
+    // The motor's own numbers (`--rb-ease`, `--rb-fast`, `--rb-base`) are written for every site in
+    // `build.ts` since día 2: the page's own motion reads them too.
     // **Motion, and only for somebody who has not asked their system for less** (David's point 7 on
     // sprint 30, and his third condition on sprint 31): the smooth scroll; the rule under an entry
     // fading; the indicator sliding from the entry that was current to the one that is; the button
@@ -647,7 +645,13 @@ export function headerCss(doc: RetorikaDocument, target: "html" | "dom"): string
     // A unitless factor makes every line `size × 1.3` in whichever letter is drawing it, so the bar
     // has its final height before the letter arrives. 1.3 is EB Garamond's own `normal`, the corpus's
     // heading letter, so the bar keeps the height it had once loaded.
-    ".rb-header { position: relative; display: flex; flex-wrap: wrap; align-items: center;",
+    // **`z-index: 1`**: the header is above the page wherever they meet, as its own stacking context
+    // (sprint 32 día 2). Named for the page transition (ADR 0062 §3), a bar in the flow became a
+    // stacking context anyway, and «Ir a…»'s `z-index: 2` — fixed, inside the header — was then
+    // ranked inside the header's context and painted under a section's paragraph rising with its
+    // own transform: Playwright found the paragraph intercepting the click. A sticky or transparent
+    // bar already had its `z-index: 2`; this gives the flow bar the same standing.
+    ".rb-header { position: relative; z-index: 1; display: flex; flex-wrap: wrap; align-items: center;",
     "  gap: var(--space-md) var(--space-xl); padding: var(--space-md) var(--space-xl);",
     `  background: var(--color-surface); border-bottom: ${HAIRLINE}; line-height: 1.3; }`,
     ".rb-header[data-hairline=none] { border-bottom: 0; }",

@@ -20,7 +20,7 @@ import {
 } from "@retorika/schema";
 import { cssAttributeValue, cssThemeValue, safeUrl } from "./escape.ts";
 import { fontFaceCss } from "./fonts.ts";
-import { headerCss, headerMobileCss, headerNodes } from "./header.ts";
+import { headerCss, headerDrawn, headerMobileCss, headerNodes } from "./header.ts";
 import { h1SectionIds } from "./headings.ts";
 import { commentNode, element, inlineElement, type RenderNode } from "./nodes.ts";
 import type { ResolvedRenderOptions } from "./options.ts";
@@ -927,6 +927,92 @@ function elementStyleCss(doc: RetorikaDocument): string[] {
 }
 
 /**
+ * **The page's own motion** (ADR 0062, sprint 32 día 2): a closed vocabulary, with no byte of script.
+ *
+ * - **The motor's numbers** — one curve, two durations — on `html`, for every site, with or without a
+ *   header: the bar's transitions (`header.ts`) and everything below read them. Outside the media
+ *   block because they are numbers, not movement. They are the renderer's constants, like
+ *   `--rb-header-h`, and not tokens of the document: rule 6 is about what the owner chooses.
+ * - **A section comes in as the visitor scrolls to it**: each child of a section after the first
+ *   fades up 16 px on its own view timeline, so the stagger is the grid's own order and costs no
+ *   `nth-child`. The range is a **length** (David's adjustment 3): every child has finished coming in
+ *   160 px after it shows, however tall it is — a gallery taller than the window would have stayed
+ *   half-faded with its top in view on a percentage. `backwards`, never `both`: the base is visible,
+ *   and past the range the child is its ordinary self, which is what lets a hover transition act on it
+ *   (sprint 22's trap). Only `opacity` and `translateY`: the overflow walk sees nothing on X. The
+ *   longhands come **after** the shorthand (adjustment 6): `animation` resets `animation-timeline` and
+ *   `animation-range` to their initial values when it comes later. Inside `@supports`: a browser
+ *   without scroll-driven animations (Firefox, measured on día 6) moves nothing and shows everything.
+ * - **The cover's entrance**: its headline, line and button rise in once, 80 ms apart. **Never the
+ *   photograph and never `.rb-panel`** (decision 5 of the plan): the photograph is the LCP element in
+ *   every composition, and an element at opacity 0 is not painted for LCP.
+ * - **Between pages**, the document fades and the bar stays (`@view-transition`, Chromium and Safari;
+ *   same origin only, so nothing from `file://`; Firefox navigates as always). Inside the media block,
+ *   which is where Chrome's own guidance puts it. The bar is named so the browser keeps it still while
+ *   the rest crosses over. Measured with a rail on día 2: see the note in ADR 0062 if the name moved.
+ * - **A button lifts** under a pointer that can hover, as the bar's does (ADR 0063).
+ *
+ * Every `animation` and `transition` of it is inside `prefers-reduced-motion: no-preference`;
+ * `motion.test.ts` walks the whole sheet, longhands included, to hold it.
+ *
+ * **For the published page only** (`target`, ADR 0063 §2's rule): the canvas measures and drags what
+ * it draws, and an animation in flight owns `transform` and `opacity` — David's adjustment 2 of
+ * sprint 32. The canvas's own sheet (`Editor.tsx`) refuses any section animation as well, so a rule
+ * that reaches the frame by another road is flattened there too. The two sheets differ in this block
+ * and in the header's anchored indicator, and in nothing else.
+ */
+function motionCss(doc: RetorikaDocument, target: "html" | "dom"): string[] {
+  const numbers =
+    "html { --rb-ease: cubic-bezier(0.2, 0, 0, 1); --rb-fast: 200ms; --rb-base: 400ms; }";
+  if (target === "dom") return [numbers, ""];
+  return [
+    numbers,
+    "@keyframes rb-rise { from { opacity: 0; transform: translateY(16px); } }",
+    // The reveal's own keyframes: the fade is done in the first 15 % of the range — 24 of the 160 px
+    // — and the rise takes the rest. A child that straddles the bottom edge of the first screen at
+    // load is then its full self unless it shows by less than 24 px; axe, which weighs opacity into
+    // a colour, read the half-faded intro of the second section as a failed contrast on Lighthouse's
+    // phone before this (accessibility 96 on six subjects of eight).
+    "@keyframes rb-reveal { from { opacity: 0; transform: translateY(16px); } 15% { opacity: 1; } }",
+    "@media (prefers-reduced-motion: no-preference) {",
+    "  @supports (animation-timeline: view()) {",
+    // `overflow-anchor: none` on what rises: an element whose transform follows the scroll must not
+    // be the browser's scroll anchor, or the browser reads its own animation as the page moving and
+    // adjusts the scroll by it — measured on día 2 as `scrollTo(0, 400)` landing at 399 while the
+    // bar condensed above it (the −400 of ADR 0063 §3, which had held on día 1 before anything rose).
+    // **No fill** (`none`, not `backwards`): outside its range a child is its ordinary self. Before
+    // the range it is under the fold, where nobody sees it — and where axe reads it: Lighthouse's
+    // accessibility fell from 100 to 96 on every subject with `backwards`, because text waiting at
+    // opacity 0 below the fold reads as a 1:1 contrast to axe, which weighs opacity into the colour.
+    // The animation starts at 0 the moment the child shows, so nothing flashes.
+    "    main > .rb-section:not(:first-child) > * { animation: rb-reveal linear none;",
+    "      animation-timeline: view(); animation-range: entry 0% entry 160px;",
+    "      overflow-anchor: none; }",
+    "  }",
+    // The delay rides a custom property: a plain `animation-delay` on `p` lost to the shorthand
+    // above, which weighs more (`:is()` takes its heaviest argument) and resets the delay to 0 —
+    // measured as `[0]` where 80 was expected, the first time this ran in a browser.
+    "  main > .rb-cover:first-child > :is(h1, p, a[role=button]) {",
+    "    animation: rb-rise var(--rb-base) var(--rb-ease) backwards;",
+    "    animation-delay: var(--rb-delay, 0ms); overflow-anchor: none; }",
+    "  main > .rb-cover:first-child > p { --rb-delay: 80ms; }",
+    "  main > .rb-cover:first-child > a[role=button] { --rb-delay: 160ms; }",
+    "  @view-transition { navigation: auto; }",
+    // The bar is named only where one is drawn: a one-page site under the threshold carries no
+    // header rule at all (`header.test.ts`).
+    ...(headerDrawn(doc) ? ["  .rb-header { view-transition-name: rb-header; }"] : []),
+    "  ::view-transition-old(root), ::view-transition-new(root) { animation-duration: var(--rb-fast); }",
+    "  .rb-section [role=button] { transition: transform var(--rb-fast) var(--rb-ease),",
+    "    box-shadow var(--rb-fast) var(--rb-ease); }",
+    "}",
+    "@media (hover: hover) {",
+    "  .rb-section [role=button]:hover { transform: translateY(-1px); box-shadow: 0 8px 24px -16px var(--color-ink); }",
+    "}",
+    "",
+  ];
+}
+
+/**
  * `target` is the one thing the stylesheet differs in between the published page and the canvas:
  * the header's anchor-positioned indicator travels only with `"html"` (`headerCss`, ADR 0063).
  * Explicit, not defaulted: a caller that forgets says which page it is drawing, rather than getting
@@ -1054,6 +1140,7 @@ export function buildCss(doc: RetorikaDocument, target: "html" | "dom"): string 
     "  background: var(--color-surface); border-radius: var(--radius-lg); pointer-events: none; }",
     ".rb-panel ~ :not(img) { z-index: 2; }",
     "",
+    ...motionCss(doc, target),
     // The header (ADR 0057; `header.ts`): the brand, the two menus and the button, with the strip's
     // own rules that used to sit here. Only for a site that draws one — the eighteen corpus sites
     // without a menu stop carrying rules for a strip they never drew.

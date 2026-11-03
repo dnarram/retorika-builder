@@ -95,6 +95,29 @@ body { margin: 0; font-family: var(--font-body); color: var(--color-ink);
   background: var(--color-surface); border-radius: var(--radius-lg); pointer-events: none; }
 .rb-panel ~ :not(img) { z-index: 2; }
 
+html { --rb-ease: cubic-bezier(0.2, 0, 0, 1); --rb-fast: 200ms; --rb-base: 400ms; }
+@keyframes rb-rise { from { opacity: 0; transform: translateY(16px); } }
+@keyframes rb-reveal { from { opacity: 0; transform: translateY(16px); } 15% { opacity: 1; } }
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    main > .rb-section:not(:first-child) > * { animation: rb-reveal linear none;
+      animation-timeline: view(); animation-range: entry 0% entry 160px;
+      overflow-anchor: none; }
+  }
+  main > .rb-cover:first-child > :is(h1, p, a[role=button]) {
+    animation: rb-rise var(--rb-base) var(--rb-ease) backwards;
+    animation-delay: var(--rb-delay, 0ms); overflow-anchor: none; }
+  main > .rb-cover:first-child > p { --rb-delay: 80ms; }
+  main > .rb-cover:first-child > a[role=button] { --rb-delay: 160ms; }
+  @view-transition { navigation: auto; }
+  ::view-transition-old(root), ::view-transition-new(root) { animation-duration: var(--rb-fast); }
+  .rb-section [role=button] { transition: transform var(--rb-fast) var(--rb-ease),
+    box-shadow var(--rb-fast) var(--rb-ease); }
+}
+@media (hover: hover) {
+  .rb-section [role=button]:hover { transform: translateY(-1px); box-shadow: 0 8px 24px -16px var(--color-ink); }
+}
+
 @media (max-width: 720px) {
   .rb-section { grid-template-columns: 1fr; padding: var(--space-lg); }
   .rb-section > * { grid-column: 1 / -1 !important; grid-row: auto !important; }

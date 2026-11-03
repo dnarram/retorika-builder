@@ -16,6 +16,7 @@ import {
   skeletonOf,
   splitFontFaces,
 } from "../src/editor/patchCanvas.ts";
+import { canvasHtml } from "../src/editor/previewDocument.ts";
 
 /**
  * **The rules of ADR 0051 §2, each one asserted on a real page and sabotaged by its opposite.**
@@ -47,7 +48,9 @@ function menuFixture(): RetorikaDocument {
  * document is the one that has both.
  */
 function liveFrom(doc: RetorikaDocument): Document {
-  const { html } = render(doc, "html");
+  // The canvas's first paint, as the editor builds it: the published html with the canvas's own
+  // stylesheet in it (sprint 32 día 1), so the first patch's sheet is the one already there.
+  const html = canvasHtml(doc, render(doc, "html"));
   const parsed = new DOMParser().parseFromString(html, "text/html");
   // Removed first, then appended: happy-dom's `replaceChild` on a document inserts before it
   // removes, and a document may hold one root.
