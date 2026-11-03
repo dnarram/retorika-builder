@@ -926,7 +926,13 @@ function elementStyleCss(doc: RetorikaDocument): string[] {
   return rules.length === 0 ? [] : ["/* rule 6: an element's own style */", ...rules, ""];
 }
 
-export function buildCss(doc: RetorikaDocument): string {
+/**
+ * `target` is the one thing the stylesheet differs in between the published page and the canvas:
+ * the header's anchor-positioned indicator travels only with `"html"` (`headerCss`, ADR 0063).
+ * Explicit, not defaulted: a caller that forgets says which page it is drawing, rather than getting
+ * one of the two silently.
+ */
+export function buildCss(doc: RetorikaDocument, target: "html" | "dom"): string {
   const variables = SORTED_TOKEN_KEYS.map(
     (key) => `  ${tokenToCssVariable(key)}: ${cssThemeValue(key, doc.theme[key])};`,
   ).join("\n");
@@ -1051,7 +1057,7 @@ export function buildCss(doc: RetorikaDocument): string {
     // The header (ADR 0057; `header.ts`): the brand, the two menus and the button, with the strip's
     // own rules that used to sit here. Only for a site that draws one — the eighteen corpus sites
     // without a menu stop carrying rules for a strip they never drew.
-    ...headerCss(doc),
+    ...headerCss(doc, target),
     // Below 320px is where the dossier's pre-publish check looks for overflow, so the
     // grid collapses before it can happen rather than being patched afterwards.
     //

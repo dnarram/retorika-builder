@@ -1,3 +1,4 @@
+import { buildCss, type HtmlOutput } from "@retorika/renderer";
 import { type RetorikaDocument, rewriteImageSources } from "@retorika/schema";
 
 /**
@@ -63,4 +64,26 @@ export function withFontUrls(text: string, fontUrls: ReadonlyMap<string, string>
     if (!OBJECT_URL.test(url)) throw new Error(`withFontUrls: "${url}" is not an object URL`);
     return `url("${url}")`;
   });
+}
+
+/**
+ * The first paint of the canvas: the published page's html with **the canvas's stylesheet** in place
+ * of the published one (sprint 32 día 1, ADR 0063). The two sheets differ in one block — the
+ * header's anchor-positioned indicator, written for the `html` target only — and the frame must not
+ * carry it: bisected over eight runs of one walk, the mere presence of `anchor()`, `anchor-size()`
+ * and `position-anchor` in the frame's sheet, in rules that matched nothing, broke Chromium's scroll
+ * anchoring across the frame's re-layout and moved the section being edited 29 px when a panel
+ * closed. The patches that follow the first paint already carry `buildCss(doc, "dom")`; this makes
+ * the first paint carry the same sheet, so the frame never sees the other one.
+ *
+ * The swap is exact or it throws: a sheet that is not found once, verbatim, would leave the frame
+ * with the published one and nobody the wiser.
+ */
+export function canvasHtml(doc: RetorikaDocument, published: HtmlOutput): string {
+  const { html, css } = published;
+  const at = html.indexOf(css);
+  if (at === -1 || html.indexOf(css, at + 1) !== -1) {
+    throw new Error("the published page's stylesheet was not found exactly once in its html");
+  }
+  return html.slice(0, at) + buildCss(doc, "dom") + html.slice(at + css.length);
 }

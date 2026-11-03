@@ -260,3 +260,13 @@ falls — under 1024 px every rail does — and a bar left with nothing to draw 
 to no height and stays the element that holds the rails. «What this does not decide» loses its silence
 on where the menus sit: ADR 0060 decides it. Nothing else here moves; the phone's header is exactly
 the one this ADR drew.
+
+## Note — sprint 32 día 1: the bar's look is of 2026, for every site (ADR 0063)
+
+§2's look — entries in the heading letter and the primary colour, the full `muted` hairline, the
+ruled line between the menus, the `radius-sm` button — is replaced by [ADR 0063](0063-the-bar-is-of-2026-and-it-is-the-same-for-every-site.md),
+for every site and with no field in the schema: David's decision, with the measured reason the
+surface scheme now writes its words in ink. Every switch of this ADR still switches; what each one
+draws is the 0063 vocabulary. Its first rule as sprint 31 restated it («ninguna web guardada cambia de
+aspecto hasta que el dueño elija») is a rule about placement and is set aside, on purpose and in
+writing, for the look.

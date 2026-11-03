@@ -6019,3 +6019,127 @@ El sujeto en columnas midió 0,000 de CLS el día 6 y 0,009 hoy: el mismo margen
    normal` del texto, las composiciones en 99 / 98 / 98, la caminata contra el proyecto real y el
    `rootMargin` tomado al empezar. Del 29 y el 28, lo que lista el backlog, menos el ancho del panel al
    escalar, que cerró la ADR 0061.
+
+## Sprint 32 — «Una web de 2026» (desde el 4 de noviembre de 2026)
+
+David, con la #333 fusionada: la web que sale del editor, con su menú de páginas y su navegador de
+secciones, tiene «un diseño arcaico»; las funciones para personalizarlos valen, pero «el estilo y
+resultado son arcaicos». Quiere webs y menús «extremadamente modernos y actuales resaltando el
+movimiento de las páginas del 2026». Cuatro decisiones suyas al planificar: la estética nueva
+**sustituye** a la actual en toda web, guardada o nueva; entran las cuatro piezas (el movimiento de
+las secciones al bajar, la transición entre páginas, la portada moderna y la medida de 1200 px); sin
+interruptor del dueño, manda solo el `prefers-reduced-motion` del visitante; y el cristal en la barra
+fija, medido. Siete ajustes al aprobar: la caja exterior de la barra condensada no cambia; el lienzo no
+corre el revelado; la franja de entrada en longitud; la hoja del móvil oculta lo que tapa; el
+`line-height` nombrado en su ADR; `animation-timeline` tras el atajo; y la portada bajo una barra
+transparente lee la estimación, nunca la medida. Tres ADR: 0063 (la barra, día 1), 0062 (el
+movimiento, día 2), 0064 (la medida y el ritmo, día 3). Sin cambio de esquema. El plan está en la
+memoria del proyecto (`project-sprint-32-plan`).
+
+### Día 0 — el arnés mide la página asentada, sola y primero (PR #334, `test/el-arnes-mide-la-pagina-asentada`)
+
+Antes de que una sección se mueva, los arneses de navegador abren cada página con
+`prefers-reduced-motion: reduce` en el contexto, antes del primer fotograma: axe y el recorredor de
+desborde miden lo que ve un visitante que no quiere movimiento, que es también el estado final de todo
+lo demás. Los dos tests de cabecera que abren «Ir a…» conservan `no-preference`, porque miden su
+entrada. `motion.browser.test.ts` es el gemelo: «Ir a…» se anima bajo `no-preference` y acaba con
+opacidad 1 y sin transformación; bajo `reduce` no se anima nada. **Combinaciones cuya medida cambió:
+cero.** Golden sin tocar; 3613 y 868. Saboteo: quitar `reducedMotion` del contexto → el gemelo va a
+rojo; deshecho restaurando una copia.
+
+### Día 1 — la barra de 2026 (PR de `feat/la-barra-de-2026`, ADR 0063)
+
+**Lo que la aritmética cambió antes de escribir una regla.** El plan ponía los enlaces en tinta y la
+marca y el activo en primario. Medidas las mezclas por canal sRGB de cada fondo al 88 % sobre negro y
+sobre blanco, en las cinco paletas (el guion de medida se saltó `neutral` la primera vez, que es
+justo la paleta del primario más justo, 4,71 opaco):
+
+| Palabras sobre | 0,88 sobre negro | sobre blanco | paleta más baja |
+|---|---|---|---|
+| tinta sobre superficie | **7,08** | 9,32 | forest-emerald |
+| superficie sobre tinta | 10,52 | **6,72** | forest-emerald |
+| primario sobre superficie | **3,57** | 5,26 | neutral |
+| superficie sobre primario | 6,46 | **3,88** | neutral |
+
+El primario no aguanta como palabra sobre cristal de superficie en ninguna mezcla razonable (4,32 al
+0,96). Decisión del día, en la ADR 0063 §5: **la barra de superficie no escribe ninguna palabra en
+primario** —entradas, marca y «Menú» en tinta—, el primario queda para el indicador y el botón; y
+`primary` y `secondary` se condensan opacas, porque superficie sobre primario al 88 % da 3,88. La
+prueba es `glass.test.ts`: cada palabra sobre cada fondo de cristal, sobre los dos extremos, en las
+cinco paletas, ≥ 4,5 sin tolerancia; y la ausencia aseverada (el primario falla en `neutral` y
+`forest-emerald`). `GLASS_MIX = 0.88` es una constante del renderer escrita en la hoja y comprobada
+igual en los dos sitios; `mixHex` vive en `packages/tokens`. Saboteo: `GLASS_MIX` a 0,6 → rojo.
+
+**El vocabulario** (ADR 0063 §2): filete de un décimo de tinta por `color-mix` en barra, raíl y
+paneles; entradas en la letra de lectura, en tinta, con la regla bajo la actual en primario; **el
+indicador desliza** por posicionamiento de anclas (`anchor-name` en el `a[aria-current]`, el `::after`
+del `nav` con `anchor(left)` y `anchor-size(width)`), un nombre por franja, solo en las franjas, bajo
+`@supports`, oculto sin activo; sin elemento, sin clave de lienzo, sin escritura del script; botón
+píldora 999 px, negrita, que sube un píxel bajo `(hover: hover)`; «Menú» e «Ir a…» sin triángulo del
+navegador; «Ir a…» píldora y su panel a `radius-lg`; el raíl con un tinte del 12 % tras la entrada
+actual. Los números del motor (`--rb-ease`, `--rb-fast` 200 ms, `--rb-base` 400 ms) en `html`, fuera
+del media: son números, no movimiento.
+
+**La condensación y las dos alturas** (ajustes 1 y 7). Con `data-scrolled`, de 721 px en adelante, la
+barra fija pasa a `space.sm` de relleno vertical **y gana `margin-bottom: calc(2 * (md − sm))`**, los
+dos transicionados juntos: la caja exterior no cambia. La portada bajo una barra transparente lee
+`--rb-bar-h`, la estimación estática (`space.sm` en el móvil), y nunca `--rb-header-h`, que queda para
+`scroll-margin-top` y el `top` de «Ir a…». Medido en Chromium con movimiento encendido, tras
+`scrollTo(0, 400)` y las transiciones acabadas, en `surface`, `transparent` y `primary`: **el primer
+hijo de `main` se ha movido exactamente −400 px**, la barra mide 16 px menos y `--rb-header-h` la
+sigue. Saboteos: quitar el `margin-bottom` → −384; volver la portada a la variable viva → −384. El
+cristal: `backdrop-filter` computado `blur(12px)` y fondo `color(srgb … / 0.88)` en `surface` e
+`ink`; `none` y `rgb(…)` opaco en `primary` y `secondary`. El indicador: `left` y `width` del
+`::after` a ≤ 1 px de la entrada actual, y bajo la siguiente tras cambiar el `aria-current` y acabar
+el deslizamiento; `display: none` sin activo. La barra colapsada (`collapseBar`) pone `margin-bottom:
+0`, porque el margen de la condensación bajaba 16 px un ancla con la barra plegada en el raíl.
+
+**Lo que el e2e completo de CI encontró, y la bisección.** Dos caminatas rojas: «la sección editada
+no se mueve al abrir «Campos» ni al cerrarlo» (a 1280, al cerrar, la sección se movió **−29 px**;
+reproducible en local, verde en `main`) y «nada sobresale en un móvil» a 320 en vista de ordenador
+(la tarjeta del lienzo medida sin escalar, 304×742 sobre un área de 330; en local la caminata
+filtrada no llega, espera 30 s por la muestra de la landing, en `main` igual). La primera, bisecada
+en ocho pasadas de la misma caminata (cada variante restaurada por copia, nunca con `checkout`):
+
+| Variante de la hoja | Resultado |
+|---|---|
+| control | −29 |
+| sin el bloque `@supports (anchor-name)` | 0 |
+| sin `position: relative` en el `nav` | −29 |
+| sin el relleno de las entradas | −29 |
+| sin la transición del `::after` | −29 |
+| el bloque bajo `html[data-rb-js]` (que el lienzo no lleva) | −29 |
+| solo las líneas de `anchor-name` | 0 |
+| solo las reglas del `::after`, con `anchor()` | −29 |
+| las reglas del `::after` **sin** `anchor()`, `anchor-size()` ni `position-anchor` | 0 |
+
+**La mera presencia de una función de ancla en la hoja del marco, en reglas que no casan con nada,
+rompe el anclaje del scroll de Chromium al remaquetar el marco con otro zoom.** Una puerta por
+selector no lo cierra; la puerta es la diana: `buildCss(doc, target)` explícito en cada llamador, y
+`headerCss` escribe el bloque de anclas solo para `"html"`. Y el primer pintado del lienzo, que era el
+html de la diana publicada (`Editor.tsx`, `srcDoc`), pasa por `canvasHtml` (`previewDocument.ts`):
+la hoja publicada se sustituye por la del lienzo, exacta o lanza; los parches siguientes ya la
+llevaban. Con la puerta por diana sola la caminata seguía en −29, porque el primer pintado traía la
+otra hoja: una pasada más de bisección. El lienzo no lleva script, nada marca allí la sección a la
+vista para que la regla se deslice, y la regla de respaldo dibuja los mismos píxeles en reposo. Es la segunda divergencia nombrada entre las dos dianas tras el script (ADR 0058 §4), y se
+asevera: la hoja del lienzo no contiene una palabra de ancla y las dos hojas difieren solo en ese
+bloque. La segunda caminata (320) pasó en el e2e completo en local (271/272, con la primera aún en
+rojo): una carrera de CI, anotada.
+
+**Lo que el arnés encontró.** `row` + `mobile: "fold"` dibujaba **dos copias** de las secciones a
+320 (la fila junto al desplegable): la fila oculta bajo `[data-mobile=fold]` y la combinación
+`header/fold/row-on-wide` en la matriz, que ahora lo asevera a cuatro anchos. El test de «crece
+después del script» de `header-script.browser` leía una barra a medio condensar: su contexto pide
+`reduce`, como el día 0 manda. `links.test`: la regla de `[data-hover]` es `text-decoration-color`,
+no el color de las palabras, y el bloque de `(hover: hover)` del botón es una regla de estado de la
+cabecera que mueve y sombrea sin nombrar un color.
+
+**Medido.** Unit 3641; a11y 883 (868 + 15 de la combinación nueva); golden: cuatro con cabecera
+movidos, cada hunk leído, dieciocho sin un byte; `size`: `cabecera-con-marca` 15,0 KB propios de 28
+(13,5 antes), script 815 B; `renderer:deps` ok; la muestra de la landing dentro de sus 24 KB.
+**Lighthouse 8/8 con el cristal**: cabecera fija con logo **100** (LCP 1,35 s, CLS 0,008), columnas
+100, composiciones 99 / 98 / 98 como al cierre del 31 (la condición 4 de David: no cae un punto). El
+lienzo enseña la barra en reposo: tinta, el indicador de la página activa, sin cristal (el `dom` no
+lleva script); `SCHEME_TOKENS` del editor dice tinta para `surface` y `transparent`, y
+`headerState.test` lo lee de la hoja. `[role=button]` de las secciones sigue con `radius-sm` hasta el
+día 3: dos días con dos formas de botón, dicho aquí.

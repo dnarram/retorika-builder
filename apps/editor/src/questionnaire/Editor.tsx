@@ -158,7 +158,7 @@ import {
   takeHistoryText,
 } from "../editor/patchCanvas.ts";
 import { countPhotos, listPhotos, type PhotoState } from "../editor/photoInventory.ts";
-import { withFontUrls, withPhotoUrls } from "../editor/previewDocument.ts";
+import { canvasHtml, withFontUrls, withPhotoUrls } from "../editor/previewDocument.ts";
 import { record, serialOf } from "../editor/probe.ts";
 import {
   atOrAboveReading,
@@ -1634,7 +1634,11 @@ export function Editor({
     // broken image on all three cards the moment the generator started asking the bank.
     // And the owner's own faces pointed at their bytes (sprint 29 día 5): the renderer writes
     // `url("fonts/propia-…")`, which no route of the editor answers.
-    return withFontUrls(render(withPhotoUrls(doc, photoUrls), "html", options).html, fontUrls);
+    // And the canvas's own stylesheet in place of the published page's (`canvasHtml`): the one
+    // block they differ in, the header's anchored indicator, broke the frame's scroll anchoring by
+    // its presence alone (sprint 32 día 1, ADR 0063).
+    const withPhotos = withPhotoUrls(doc, photoUrls);
+    return withFontUrls(canvasHtml(withPhotos, render(withPhotos, "html", options)), fontUrls);
   });
 
   /**
@@ -1801,7 +1805,7 @@ export function Editor({
     const report = patchCanvas(
       iframeDoc,
       fresh,
-      withFontUrls(buildCss(display), fontUrlsNow.current),
+      withFontUrls(buildCss(display, "dom"), fontUrlsNow.current),
       {
         cause,
         focused: iframeDoc.activeElement,

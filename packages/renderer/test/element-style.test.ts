@@ -16,7 +16,7 @@ if (!styled) throw new Error("the estilo-por-elemento fixture is missing from th
 
 /** The rule 6 block only, so a change to the shared stylesheet cannot make these pass or fail. */
 function styleRules(doc: RetorikaDocument): string[] {
-  const lines = buildCss(doc).split("\n");
+  const lines = buildCss(doc, "html").split("\n");
   const start = lines.indexOf("/* rule 6: an element's own style */");
   if (start === -1) return [];
   const rest = lines.slice(start + 1);
@@ -54,7 +54,7 @@ describe("rule 6 in the stylesheet", () => {
         ),
       ),
     );
-    expect(buildCss(reordered)).toBe(buildCss(styled.document));
+    expect(buildCss(reordered, "html")).toBe(buildCss(styled.document, "html"));
   });
 
   it("reaches an element inside a list item", () => {
@@ -74,7 +74,7 @@ describe("rule 6 in the stylesheet", () => {
     // exactly the bytes it always did, down to the absence of a comment line.
     for (const entry of corpus) {
       if (entry.name === "estilo-por-elemento") continue;
-      expect(buildCss(entry.document), entry.name).not.toContain("rule 6");
+      expect(buildCss(entry.document, "html"), entry.name).not.toContain("rule 6");
     }
   });
 

@@ -61,6 +61,30 @@ export function contrastRatio(foreground: string, background: string): number {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
+/**
+ * `weight` of `color` over `1 − weight` of `under`, mixed per sRGB channel: what a translucent
+ * `color-mix(in srgb, <color> <weight>, transparent)` composites to over a solid `under`. For the
+ * glass bar (sprint 32 día 1, ADR 0063) the two solids that matter are black and white, the
+ * extremes of whatever scrolls under it, and the proof is arithmetic rather than axe, which reads a
+ * blurred translucent background as a contrast it cannot compute.
+ */
+export function mixHex(color: string, under: string, weight: number): string {
+  const channels = (hex: string): number[] => {
+    relativeLuminance(hex);
+    const full = hex.length === 4 ? `#${[...hex.slice(1)].map((c) => c + c).join("")}` : hex;
+    return [1, 3, 5].map((i) => Number.parseInt(full.slice(i, i + 2), 16));
+  };
+  const a = channels(color);
+  const b = channels(under);
+  return `#${a
+    .map((x, i) =>
+      Math.round(x * weight + (b[i] ?? 0) * (1 - weight))
+        .toString(16)
+        .padStart(2, "0"),
+    )
+    .join("")}`;
+}
+
 /** AA for normal text. Not «the number we picked»: the one WCAG 2.1 asks of body copy, and the
  * threshold every palette in this package has been held to since sprint 1. */
 export const AA_NORMAL_TEXT = 4.5;

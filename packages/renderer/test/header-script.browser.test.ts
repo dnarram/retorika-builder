@@ -44,7 +44,12 @@ async function open(
 ): Promise<Page> {
   let html = render(doc, "html").html.replace("</head>", `${TALL}</head>`);
   if (options.script === false) html = html.replace(`<script>${HEADER_SCRIPT}</script>`, "");
-  const context = await browser.newContext({ viewport: { width, height: 700 } });
+  // Reduced motion (sprint 32 día 0): these measure the script, and a bar that condenses over 200 ms
+  // would be read mid-way — the padding test below grew the bar and read it before it had moved.
+  const context = await browser.newContext({
+    viewport: { width, height: 700 },
+    reducedMotion: "reduce",
+  });
   const page = await context.newPage();
   await page.setContent(html, { waitUntil: "load" });
   return page;

@@ -369,7 +369,11 @@ describe("the look (sprint 30 día 6): every option reaches the published page",
 
   it.each([
     ["uppercase", "data-uppercase", "text-transform: uppercase"],
-    ["hoverUnderline", "data-hover", "text-decoration: underline"],
+    [
+      "hoverUnderline",
+      "data-hover",
+      "text-decoration-color: color-mix(in srgb, var(--color-primary) 50%, transparent)",
+    ],
   ] as const)(
     "«%s» writes its attribute, and its rule says what the switch says",
     (key, attribute, declaration) => {
@@ -610,7 +614,8 @@ describe("the exact values behind the switch (sprint 30 día 6)", () => {
 
   it("starts each colour input from the colour in force, never from black", () => {
     expect(headerColorInForce(doc, "bar")).toBe(doc.theme["color.surface"]);
-    expect(headerColorInForce(doc, "brand")).toBe(doc.theme["color.primary"]);
+    // Ink on a surface bar (ADR 0063): the primary is written on no glass.
+    expect(headerColorInForce(doc, "brand")).toBe(doc.theme["color.ink"]);
     expect(headerColorInForce(doc, "action")).toBe(doc.theme["color.surface"]);
     const ink = setHeader(doc, lookPatch(doc, { background: "ink" }));
     expect(headerColorInForce(ink, "bar")).toBe(doc.theme["color.ink"]);

@@ -790,3 +790,200 @@ describe("the rail on a phone", () => {
     }
   }
 });
+
+/**
+ * **The bar of 2026** (ADR 0063, sprint 32 día 1), measured where the stylesheet cannot be trusted to
+ * mean what it says: a fixed bar once scrolled, and the indicator under the current entry.
+ */
+describe("a fixed bar once scrolled: condensed, glass, and the page does not move", () => {
+  /** `scrollTo(0, 400)` on the page, then every transition finished, then the measurements. */
+  async function scrolled(page: Page): Promise<{
+    barHeight: number;
+    headerH: number;
+    firstTop: number;
+    backdrop: string;
+    background: string;
+    marginBottom: string;
+    position: string;
+  }> {
+    await page.evaluate(() => window.scrollTo({ top: 400, behavior: "instant" }));
+    await expect
+      .poll(() =>
+        page.evaluate(() => document.querySelector(".rb-header")?.hasAttribute("data-scrolled")),
+      )
+      .toBe(true);
+    await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
+    return page.evaluate(() => {
+      const bar = document.querySelector<HTMLElement>("header.rb-header");
+      const first = document.querySelector<HTMLElement>("main > .rb-section");
+      if (!bar || !first) throw new Error("no bar or no first section");
+      const style = getComputedStyle(bar);
+      return {
+        barHeight: bar.offsetHeight,
+        headerH: Number.parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue("--rb-header-h"),
+        ),
+        firstTop: first.getBoundingClientRect().top,
+        backdrop: style.backdropFilter,
+        background: style.backgroundColor,
+        marginBottom: style.marginBottom,
+        position: style.position,
+      };
+    });
+  }
+
+  async function atRest(
+    page: Page,
+  ): Promise<{ barHeight: number; firstTop: number; md: number; sm: number }> {
+    return page.evaluate(() => {
+      const bar = document.querySelector<HTMLElement>("header.rb-header");
+      const first = document.querySelector<HTMLElement>("main > .rb-section");
+      if (!bar || !first) throw new Error("no bar or no first section");
+      const px = (token: string) => {
+        const probe = document.createElement("div");
+        probe.style.height = `var(${token})`;
+        document.body.append(probe);
+        const v = probe.getBoundingClientRect().height;
+        probe.remove();
+        return v;
+      };
+      return {
+        barHeight: bar.offsetHeight,
+        firstTop: first.getBoundingClientRect().top,
+        md: px("--space-md"),
+        sm: px("--space-sm"),
+      };
+    });
+  }
+
+  for (const background of ["surface", "transparent", "primary"] as const) {
+    it(`moves the first section exactly −400 px on a 400 px scroll, ${background} (adjustments 1 and 7)`, async () => {
+      // With motion on: the condensing is a transition, and the page must be still once it ends.
+      const page = await open(
+        placed({ sticky: true, look: { background }, sections: { mobile: "hidden" } }),
+        1280,
+        900,
+        undefined,
+        true,
+      );
+      try {
+        const rest = await atRest(page);
+        const after = await scrolled(page);
+        expect(after.firstTop - rest.firstTop, "the first section moved more than the scroll").toBe(
+          -400,
+        );
+        // Condensed: the bar is shorter by what the padding gave up, and the measure follows it.
+        // `offsetHeight` is an integer and a fixed bar can sit on a half pixel: within one.
+        expect(
+          Math.abs(rest.barHeight - after.barHeight - 2 * (rest.md - rest.sm)),
+        ).toBeLessThanOrEqual(1);
+        expect(Math.abs(after.headerH - after.barHeight)).toBeLessThanOrEqual(1);
+        if (background === "transparent") {
+          // Fixed, out of the flow: its margin moves nothing, and the cover made its room by the
+          // estimate (`--rb-bar-h`), which is why the −400 above held with the bar 16 px shorter.
+          expect(after.position).toBe("fixed");
+        } else {
+          expect(Number.parseFloat(after.marginBottom)).toBe(2 * (rest.md - rest.sm));
+        }
+      } finally {
+        await page.context().close();
+      }
+    });
+  }
+
+  it("is glass on surface and on ink once scrolled, and opaque on primary (GLASS_MIX)", async () => {
+    for (const [background, glass] of [
+      ["surface", true],
+      ["ink", true],
+      ["primary", false],
+      ["secondary", false],
+    ] as const) {
+      const page = await open(
+        placed({ sticky: true, look: { background }, sections: { mobile: "hidden" } }),
+        1280,
+        900,
+      );
+      try {
+        const after = await scrolled(page);
+        expect(after.backdrop, background).toBe(glass ? "blur(12px)" : "none");
+        // A glass background computes to a `color(srgb … / 0.88)` — a `color-mix` result — and an
+        // opaque one to a plain `rgb(…)` with no alpha.
+        if (glass) expect(after.background, background).toMatch(/\/ 0\.88\)$/);
+        else expect(after.background, background).toMatch(/^rgb\(/);
+      } finally {
+        await page.context().close();
+      }
+    }
+  });
+});
+
+describe("the indicator under the current entry", () => {
+  /** The strip's pages nav, its `::after`, and the entry that is current, as the browser laid them out. */
+  async function indicator(page: Page): Promise<
+    { left: number; width: number; display: string } & {
+      entry: { left: number; width: number } | null;
+    }
+  > {
+    return page.evaluate(() => {
+      const nav = document.querySelector<HTMLElement>(
+        ".rb-nav-wide > .rb-nav[data-part=pagesLinks]",
+      );
+      if (!nav) throw new Error("no pages nav");
+      const after = getComputedStyle(nav, "::after");
+      const current = nav.querySelector<HTMLElement>("a[aria-current]");
+      const navBox = nav.getBoundingClientRect();
+      const box = current?.getBoundingClientRect();
+      return {
+        left: Number.parseFloat(after.left),
+        width: Number.parseFloat(after.width),
+        display: after.display,
+        entry: box ? { left: box.left - navBox.left, width: box.width } : null,
+      };
+    });
+  }
+
+  it("is anchored under the page you are on, and slides to the next when the current one changes", async () => {
+    // A page other than the home: on the home page no entry is current (there is no «Inicio» there)
+    // and the indicator has nothing to stand under.
+    const page = await open(fixture("cabecera-con-marca"), 1280, 900, "page-que-ponemos", true);
+    try {
+      expect(await page.evaluate(() => CSS.supports("anchor-name: --rb-x"))).toBe(true);
+      const before = await indicator(page);
+      expect(before.entry).not.toBeNull();
+      expect(before.display).toBe("block");
+      expect(Math.abs(before.left - (before.entry?.left ?? -1))).toBeLessThanOrEqual(1);
+      expect(Math.abs(before.width - (before.entry?.width ?? -1))).toBeLessThanOrEqual(1);
+      // The rule's own colour is transparent where the indicator stands in for it.
+      expect(
+        await page.evaluate(
+          () =>
+            getComputedStyle(
+              document.querySelector(
+                ".rb-nav-wide > .rb-nav[data-part=pagesLinks] a[aria-current]",
+              ) as Element,
+            ).textDecorationColor,
+        ),
+      ).toBe("rgba(0, 0, 0, 0)");
+      // Move the current page to another entry and let the slide finish.
+      await page.evaluate(() => {
+        const nav = document.querySelector(".rb-nav-wide > .rb-nav[data-part=pagesLinks]");
+        const links = [...(nav?.querySelectorAll("a") ?? [])];
+        for (const a of links) a.removeAttribute("aria-current");
+        links.at(-1)?.setAttribute("aria-current", "page");
+      });
+      await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
+      const after = await indicator(page);
+      expect(after.entry?.left).not.toBe(before.entry?.left);
+      expect(Math.abs(after.left - (after.entry?.left ?? -1))).toBeLessThanOrEqual(1);
+      expect(Math.abs(after.width - (after.entry?.width ?? -1))).toBeLessThanOrEqual(1);
+      // And gone the moment nothing is current.
+      await page.evaluate(() => {
+        for (const a of document.querySelectorAll(".rb-nav-wide a"))
+          a.removeAttribute("aria-current");
+      });
+      expect((await indicator(page)).display).toBe("none");
+    } finally {
+      await page.context().close();
+    }
+  });
+});
