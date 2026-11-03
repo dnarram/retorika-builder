@@ -626,3 +626,47 @@ describe("the exact values behind the switch (sprint 30 día 6)", () => {
     expect(headerColorInForce(exact, "bar")).toBe("#abcdef");
   });
 });
+
+describe("what a fixed bar turns into once scrolled, as the panel says it (sprint 32 día 5)", () => {
+  it("says glass exactly where the published sheet draws glass, and solid everywhere else", () => {
+    const doc = fixture("cabecera-con-marca");
+    const cases: [string, RetorikaDocument][] = [];
+    for (const background of ["surface", "transparent", "ink", "primary", "secondary"] as const) {
+      cases.push([background, setHeader(doc, { sticky: true, ...lookPatch(doc, { background }) })]);
+    }
+    const painted = setHeader(doc, {
+      sticky: true,
+      ...headerStylePatch(doc, "bar", "color", "#5a1a1a"),
+    });
+    cases.push(["surface with an exact bar", painted]);
+    for (const [name, d] of cases) {
+      const state = headerStateFor(d, undefined);
+      const { css } = published(d);
+      // The glass the renderer writes, for this document's scheme.
+      const scheme = d.header?.look?.background ?? "surface";
+      const glassToken = scheme === "ink" ? "--color-ink" : "--color-surface";
+      const glassInSheet =
+        (scheme === "surface" || scheme === "transparent" || scheme === "ink") &&
+        css.includes(`color-mix(in srgb, var(${glassToken}) 88%, transparent)`);
+      // An exact bar colour is written for the scrolled bar as well, after the glass.
+      const exactWins = css.includes(".rb-header[data-layout][data-bg][data-scrolled]");
+      expect(state.scrolledLook, name).toBe(glassInSheet && !exactWins ? "glass" : "solid");
+    }
+    expect(headerStateFor(painted, undefined).scrolledLook).toBe("solid");
+    expect(headerStateFor(cases[0]?.[1] ?? doc, undefined).scrolledLook).toBe("glass");
+  });
+
+  it("writes the note that matches, and the notes of what only the published page does", () => {
+    expect(es["editor.menuPanel.stickyGlass"]).toMatch(/translúcida/);
+    expect(es["editor.menuPanel.stickySolid"]).not.toMatch(/translúcida/);
+    for (const key of [
+      "editor.menuPanel.stickyGlass",
+      "editor.menuPanel.stickySolid",
+      "editor.menuPanel.notes.sectionsMarked",
+      "editor.menuPanel.notes.motion",
+    ] as const) {
+      // Every one says what the canvas shows, so none promises the canvas what it does not draw.
+      expect(es[key], key).toMatch(/lienzo/);
+    }
+  });
+});

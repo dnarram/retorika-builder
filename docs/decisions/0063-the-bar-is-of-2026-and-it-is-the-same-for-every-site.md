@@ -239,6 +239,30 @@ eight entries the delays are 0, 40, … 240, 240, the last not drawn before its 
 after. Sabotaged: without the `visibility: hidden`, the keyboard lands under the sheet; without
 `backwards`, the last entry is drawn before its delay.
 
+## Note — sprint 32 día 5: an owner's exact bar colour stays opaque, and their exact words are judged over the glass
+
+**Measured, and a defect since día 1.** With an exact colour of the owner's on the bar (rule 6), the
+glass of §5 replaced it the moment the page scrolled: the glass rule weighs (0,4,0) and the bar's
+exact rule (0,3,0), so on the `surface`, `transparent` and `ink` schemes the bar went from
+`rgb(90, 26, 26)` to the surface's glass, and words the owner had set in white on their dark red sat on
+near-white. The bar's exact rule is now written for the scrolled bar as well
+(`.rb-header[data-layout][data-bg][data-scrolled]`, same weight, after the glass), and stays
+**opaque**: the glass's proof covers the palette's colours, not an owner's. Measured on four schemes
+after a 600 px scroll; sabotaged without the selector, the three glass schemes go red.
+
+**And the pre-download review judges an owner's exact words over the glass.** §5's arithmetic proves
+the palette's own words; an exact colour of the owner's on the brand or the links of a fixed bar on a
+glass scheme (and no exact bar colour) is now judged over the bar's colour at `GLASS_MIX` over black
+and over white as well as over the opaque bar, the worst of them being the finding
+(`styleReview.ts`). A grey that clears 4.5 on white falls to about 3.6 on the glass over black and is
+warned about; not fixed, or on a coloured scheme, or with an exact bar colour, only the opaque bar is
+read. Sabotaged without the two extremes, the warning goes.
+
+**The «Menú» panel says what a fixed bar becomes** («se estrecha y se vuelve translúcida» or «se
+estrecha y gana una sombra»), read from the renderer's `GLASS_BACKGROUNDS` and the exact bar colour
+(`scrolledLook`, `headerState.ts`), so it cannot promise a glass the page does not draw; and that the
+canvas shows it at rest.
+
 ## Consequences
 
 - `packages/renderer/src/header.ts`: `GLASS_MIX`, `GLASS_BACKGROUNDS`, `HAIRLINE`, `STRIP_NAV`; the

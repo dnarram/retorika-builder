@@ -346,7 +346,7 @@ describe("the header's parts", () => {
     expect(reviewStyle(railed).blocking.map((f) => f.exception.elementId)).toEqual(["brand"]);
     expect(headerBarBackground(railed)).toBe("#111111");
     expect(render(railed, "html").css).toContain(
-      ".rb-header[data-layout][data-bg], .rb-header[data-layout][data-bg] .rb-rail { background: #111111; }",
+      ".rb-header[data-layout][data-bg], .rb-header[data-layout][data-bg][data-scrolled], .rb-header[data-layout][data-bg] .rb-rail { background: #111111; }",
     );
   });
 
@@ -415,5 +415,52 @@ describe("the logo on its bar (ADR 0059, David's adjustment 4)", () => {
     expect(headerBarBackground(painted)).toBe("#111111");
     expect(reviewLogo(painted, white)).toBeUndefined();
     expect(reviewLogo(painted, black)?.background).toBe("#111111");
+  });
+});
+
+describe("the header's words on a glass bar (ADR 0063, sprint 32 día 5)", () => {
+  /** A bar on `scheme`, fixed or not, with the brand painted `brand` and, if given, the bar `bar`. */
+  const glassDoc = (
+    scheme: "surface" | "ink" | "primary",
+    brand: string,
+    options: { sticky?: boolean; bar?: string } = {},
+  ): RetorikaDocument =>
+    parseDocument({
+      schemaVersion: SCHEMA_VERSION,
+      id: "doc-cristal",
+      siteName: "Barbería El Corte",
+      theme,
+      header: {
+        sticky: options.sticky ?? true,
+        look: { background: scheme },
+        style: {
+          brand: { color: exact(brand) },
+          ...(options.bar ? { bar: { color: exact(options.bar) } } : {}),
+        },
+      },
+      pages: [{ id: "home", slug: "index", title: "Inicio", sections: [section] }],
+      collections: [],
+    });
+  const flagged = (doc: RetorikaDocument) => {
+    const review = reviewStyle(doc);
+    return [...review.blocking, ...review.warning].map((f) => f.exception.elementId);
+  };
+
+  it("judges an exact colour over the glass's two extremes when the bar is fixed on a glass scheme", () => {
+    // Just over 4.5 on white: it clears AA on the opaque surface. On the surface's glass over black
+    // (#e0e0e0) it falls between the two thresholds, so the review warns.
+    const grey = greyAt(4.6);
+    expect(contrastRatio(grey, "#e0e0e0")).toBeLessThan(CONTRAST_WARNS_BELOW);
+    expect(contrastRatio(grey, "#e0e0e0")).toBeGreaterThanOrEqual(CONTRAST_BLOCKS_BELOW);
+    const review = reviewStyle(glassDoc("surface", grey));
+    expect(review.warning.map((f) => f.exception.elementId)).toEqual(["brand"]);
+    // Not fixed, so never glass: the opaque bar alone, where it passes.
+    expect(flagged(glassDoc("surface", grey, { sticky: false }))).toEqual([]);
+  });
+
+  it("judges against the opaque bar where the renderer draws no glass: a coloured scheme, an exact bar", () => {
+    expect(flagged(glassDoc("primary", "#FFFFFF"))).toEqual([]);
+    // The owner's own bar colour stays opaque once scrolled (the renderer's rule of día 5).
+    expect(flagged(glassDoc("surface", "#FFFFFF", { bar: "#5a1a1a" }))).toEqual([]);
   });
 });

@@ -6316,3 +6316,50 @@ y lo empujé con la caminata de 768 en rojo**: una orden encadenada siguió desp
 en el commit siguiente, con el e2e completo en verde (272/272) antes de empujar. El saboteo (la espera
 vieja) no se puso rojo en local ni ralentizado, así que la prueba de la carrera es la muestra y no un
 rojo; se dice así.
+
+### Día 5 — el editor dice lo que se mueve (PR de `feat/el-panel-dice-lo-que-se-mueve`)
+
+**Un defecto del día 1, encontrado al comprobar una premisa del plan.** El plan decía que la revisión
+previa podía seguir juzgando la barra opaca. Medido antes de escribirlo: con un color exacto del dueño
+en la barra, el cristal lo sustituía al bajar (la regla del cristal pesa 0,4,0 y la del color exacto
+0,3,0): de `rgb(90, 26, 26)` a la superficie translúcida en `surface`, `transparent` e `ink`; unas
+palabras en blanco sobre su granate quedaban sobre casi blanco. Ahora el color exacto de la barra se
+escribe también para la barra ya bajada, con el mismo peso y después del cristal, **opaco**. Medido en
+cuatro esquemas tras bajar 600 px; saboteado sin el selector, rojo en los tres de cristal. Nota del
+día 5 en la ADR 0063.
+
+**La revisión previa juzga sobre el cristal** los colores exactos que el dueño ponga a la marca o a los
+enlaces de una barra fija de cristal: sobre la barra opaca y sobre los dos extremos de la mezcla al
+88 %, el peor de ellos. Un gris que pasa 4,5 sobre blanco cae a unos 3,6 sobre el cristal con negro
+detrás y se avisa; sin barra fija, en un esquema de color o con la barra pintada por el dueño, solo
+cuenta la barra opaca. Saboteado sin los extremos, el aviso desaparece.
+
+**El panel «Menú» dice lo que solo se ve al publicar**, sin ganar un control: bajo «Se queda arriba al
+bajar», «se estrecha y se vuelve translúcida, con la página difuminada detrás» o «se estrecha y gana
+una sombra», leído de la misma lista del renderer que dibuja el cristal (`scrolledLook`); bajo «Línea
+bajo la cabecera», «una línea muy fina, en un tono suave del color del texto»; bajo el navegador de
+secciones, que al publicar marca la sección que se ve y en el lienzo no; y bajo «Disposición», que al
+publicar las secciones suben al aparecer y la web funde entre páginas, que en el lienzo nada se mueve
+y que quien pidió menos movimiento lo ve todo quieto. Cada nota dice lo que enseña el lienzo, y un test
+lo exige.
+
+**La caminata «sprint 32 día 5»** a 1440: en el lienzo, los enlaces en tinta, ninguna palabra de ancla
+en la hoja y ninguna animación sobre la página (el cromo del editor sí se mueve: un verbo y su
+etiqueta, que la caminata excluye por nombre); el panel con sus cuatro notas; «Se queda arriba al
+bajar» marcado; el ZIP desde el disco, sin red, a 1280: al bajar a la última sección la barra gana
+`data-scrolled` y `blur(12px)`, la entrada de esa sección lleva `aria-current` y la raya acaba bajo
+ella; en `que-ponemos.html` la página se marca; a 390, «Menú» abre la hoja hasta el fondo, `<main>`
+oculto y la palabra «Cerrar». **Dos saboteos, y lo que enseñaron**: con el primer pintado sin la hoja
+del lienzo (`canvasHtml` devolviendo la publicada) la caminata siguió verde, porque el editor parchea
+al cablear y la hoja del primer pintado no es observable desde una caminata; esa garantía la sostienen
+el test de unidad de `canvasHtml` y la caminata de «Campos» del día 1, y la comprobación se quitó de
+aquí. Con los parches llevando la hoja publicada, rojo con «the canvas carries the anchored
+indicator». **La landing**: el revelado ya solo sube y la muestra no baja dentro de su marco, así que en
+el viaje escritorio → móvil no hay nada que parpadee; su caminata sigue verde.
+
+**Caminatas reescritas: cero.** Batería completa: tipos limpios, lint 29 avisos como en `main`, unit
+3657, goldens 26 (sin cambio: ninguno lleva color exacto en la barra), a11y 903, Lighthouse 8/8 con
+accesibilidad 100 en los ocho, e2e completo **273/273**. Una primera pasada del e2e completo tardó
+3340 s y cuatro caminatas de la landing (la muestra, que carga fotos del banco) agotaron su tiempo con
+localizadores vacíos; solas pasaron en 90 s y la segunda pasada completa, sin nada en paralelo, fue
+verde en los 1150 s de siempre. Ninguna toca nada de este día; se anota como entorno, con las cifras.

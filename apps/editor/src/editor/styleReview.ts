@@ -1,5 +1,5 @@
 import { COVER_ID } from "@retorika/catalog";
-import { headerDrawn, headerSettings } from "@retorika/renderer";
+import { GLASS_BACKGROUNDS, GLASS_MIX, headerDrawn, headerSettings } from "@retorika/renderer";
 import type {
   HeaderBackground,
   HeaderPart,
@@ -7,7 +7,7 @@ import type {
   StyleException,
 } from "@retorika/schema";
 import { listHeaderStyleExceptions, listStyleExceptions } from "@retorika/schema";
-import { AA_NORMAL_TEXT, contrastRatio, relativeLuminance } from "@retorika/tokens";
+import { AA_NORMAL_TEXT, contrastRatio, mixHex, relativeLuminance } from "@retorika/tokens";
 import es from "../locales/es.json" with { type: "json" };
 import { backgroundOf } from "./textToolbar.ts";
 
@@ -115,14 +115,25 @@ export function reviewStyle(doc: RetorikaDocument): StyleReview {
   const settings = headerSettings(doc);
   const sectionsInPanel =
     settings.sectionsPosition === "fold" || settings.sectionsMobile === "fold";
+  // **And the glass, once a fixed bar has scrolled** (ADR 0063, sprint 32 día 5): on the schemes the
+  // renderer makes glass of, and only when no exact colour paints the bar (the renderer keeps that
+  // opaque), the words sit on the bar's colour at `GLASS_MIX` over whatever scrolls under it. The
+  // palette's own words are proved over black and white by `glass.test.ts`; an owner's exact colour
+  // is not, so it is judged here over the same two extremes, the worse of them with the rest.
+  const barExact = headerExceptions.some((e) => e.part === "bar" && e.property === "color");
+  const glassScheme = scheme === "transparent" ? "surface" : scheme;
+  const glass =
+    settings.sticky && !barExact && Object.hasOwn(GLASS_BACKGROUNDS, glassScheme)
+      ? [mixHex(bar, "#000000", GLASS_MIX), mixHex(bar, "#ffffff", GLASS_MIX)]
+      : [];
   for (const exception of headerExceptions) {
     if (exception.property !== "color" || exception.part === "bar") continue;
     const behind =
       exception.part === "action"
         ? [buttonBackground]
         : exception.part === "pagesLinks" || (exception.part === "sectionsLinks" && sectionsInPanel)
-          ? [bar, panel]
-          : [bar];
+          ? [bar, panel, ...glass]
+          : [bar, ...glass];
     const worst = behind.reduce((low, background) =>
       contrastRatio(exception.exact, background) < contrastRatio(exception.exact, low)
         ? background

@@ -24132,6 +24132,190 @@ describe("sprint 31 día 5 — el panel «Dónde va»", () => {
 });
 
 /**
+ * **Sprint 32 día 5 — el editor dice lo que se mueve** (ADR 0062, ADR 0063). La barra de 2026 en el
+ * lienzo, en reposo y sin nada que se mueva; el panel «Menú» dice lo que solo se ve al publicar; y el
+ * ZIP abierto desde el disco hace lo que el panel dice: la barra fija se estrecha y se vuelve de
+ * cristal al bajar, la raya se va a la sección que se ve, en otra página marca esa página, y en un
+ * teléfono «Menú» abre una hoja que oculta lo que tapa.
+ */
+describe("sprint 32 día 5 — el editor dice lo que se mueve", () => {
+  it("enseña la barra en reposo en el lienzo, lo dice en el panel, y el ZIP se mueve como dice", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    const dir = mkdtempSync(join(tmpdir(), "retorika-lo-que-se-mueve-"));
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      // A second page, so the pages menu has an entry to mark.
+      await frame.locator('[data-section="sec-services"]').click();
+      await frame
+        .locator(
+          '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+        )
+        .click();
+      const entry = frame.locator('.rb-nav-wide nav[aria-label="Páginas"] a').first();
+      await expect(entry).toHaveText("Qué ponemos");
+
+      // **The canvas, at rest**: the entries in ink, no anchored indicator in its sheet (ADR 0063
+      // §2), and no section moving (ADR 0062 §5). The sheet read here is a patch's — the editor
+      // patches at wiring, before any walk can look, so the first paint's own sheet is held by
+      // `canvasHtml`'s unit test and the día 1 walk, not here (found by sabotage on día 5).
+      const canvas = await frame.locator("body").evaluate(() => {
+        const root = getComputedStyle(document.documentElement);
+        const a = document.querySelector('.rb-nav-wide nav[aria-label="Páginas"] a') as HTMLElement;
+        const sheets = [...document.querySelectorAll("style")].map((s) => s.textContent ?? "");
+        const child = document.querySelector("main > .rb-section:not(:first-child) > *");
+        return {
+          ink: root.getPropertyValue("--color-ink").trim(),
+          link: getComputedStyle(a).color,
+          anchors: sheets.some((t) => /anchor-name|position-anchor|anchor\(/.test(t)),
+          animation: child ? getComputedStyle(child).animationName : "none",
+          // The page's own elements only: the editor's chrome (a verb's lift, its tip) moves in the
+          // same frame, and is not the site.
+          moving: document.getAnimations().filter((x) => {
+            const t = (x.effect as KeyframeEffect | null)?.target as Element | null;
+            return (
+              !!t?.closest("main > .rb-section, header.rb-header") &&
+              !t.closest(".rb-actions, .rb-tip, .rb-toolbar")
+            );
+          }).length,
+        };
+      });
+      const rgbOf = (hex: string) => {
+        const n = Number.parseInt(hex.slice(1), 16);
+        return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
+      };
+      expect(canvas.link).toBe(rgbOf(canvas.ink));
+      expect(canvas.anchors, "the canvas carries the anchored indicator").toBe(false);
+      expect(canvas.animation).toBe("none");
+      expect(canvas.moving).toBe(0);
+
+      // **The panel says what only the published page does.**
+      await page.getByRole("button", { name: "Menú", exact: true }).click();
+      const panel = page.getByRole("complementary", { name: "La cabecera de tu web" });
+      await expect(panel).toBeVisible();
+      await expect(
+        panel.getByText("En el lienzo no se mueve nada", { exact: false }),
+      ).toBeVisible();
+      await expect(
+        panel.getByText("marca la sección que se está viendo mientras se baja", { exact: false }),
+      ).toBeVisible();
+      await expect(panel.getByText("Una línea muy fina", { exact: false })).toBeVisible();
+      await panel.getByRole("checkbox", { name: "Se queda arriba al bajar" }).check();
+      await expect(
+        panel.getByText("se vuelve translúcida, con la página difuminada detrás", { exact: false }),
+      ).toBeVisible();
+      await expect(frame.locator("header.rb-header")).toHaveAttribute("data-sticky", "");
+
+      await sessionHolds(page, (raw) => raw.includes('"sticky":true'), "guardó la barra fija");
+      await page.getByRole("button", { name: "Descargar" }).click();
+      const anyway = page.getByRole("button", { name: "Descargar igualmente" });
+      await anyway.waitFor();
+      const [download] = await Promise.all([page.waitForEvent("download"), anyway.click()]);
+      const zipPath = join(dir, download.suggestedFilename());
+      await download.saveAs(zipPath);
+      extractAll(new Uint8Array(readFileSync(zipPath)), dir);
+
+      // **The ZIP, from the disk, with no network, at 1280.**
+      const offline = await (
+        await browser.newContext({ viewport: { width: 1280, height: 800 } })
+      ).newPage();
+      const failed: string[] = [];
+      offline.on("requestfailed", (request) => failed.push(request.url()));
+      try {
+        await offline.goto(`file://${join(dir, "index.html")}`, { waitUntil: "load" });
+        const bar = offline.locator("header.rb-header");
+        await expect(bar).not.toHaveAttribute("data-scrolled", "");
+        const sections = await offline.evaluate(() =>
+          [...document.querySelectorAll('.rb-nav-wide nav[aria-label="Secciones"] a')].map(
+            (a) => a.getAttribute("href") ?? "",
+          ),
+        );
+        const last = sections.at(-1);
+        if (!last) throw new Error("the published bar has no sections menu");
+        await offline.evaluate((id) => document.querySelector(id)?.scrollIntoView(), last);
+        await expect(bar).toHaveAttribute("data-scrolled", "");
+        await expect
+          .poll(() =>
+            offline.evaluate(
+              () =>
+                getComputedStyle(document.querySelector(".rb-header") as Element).backdropFilter,
+            ),
+          )
+          .toBe("blur(12px)");
+        // The rule under the section in view: the entry carries `aria-current`, and the strip's
+        // `::after` is under it once it has slid there.
+        await expect
+          .poll(() =>
+            offline.evaluate(
+              () =>
+                document
+                  .querySelector(
+                    '.rb-nav-wide nav[aria-label="Secciones"] a[aria-current="location"]',
+                  )
+                  ?.getAttribute("href") ?? "",
+            ),
+          )
+          .toBe(last);
+        const under = () =>
+          offline.evaluate(() => {
+            const nav = document.querySelector(
+              '.rb-nav-wide nav[aria-label="Secciones"]',
+            ) as HTMLElement;
+            const a = nav.querySelector("a[aria-current]") as HTMLElement;
+            const after = getComputedStyle(nav, "::after");
+            return Math.round(
+              Math.abs(
+                Number.parseFloat(after.left) -
+                  (a.getBoundingClientRect().left - nav.getBoundingClientRect().left),
+              ),
+            );
+          });
+        await expect.poll(under).toBeLessThanOrEqual(1);
+
+        // Another page marks itself.
+        await offline.goto(`file://${join(dir, "que-ponemos.html")}`, { waitUntil: "load" });
+        await expect(
+          offline.locator('.rb-nav-wide nav[aria-label="Páginas"] a[aria-current="page"]'),
+        ).toHaveText("Qué ponemos");
+        expect(failed, "the downloaded site asked for something it does not carry").toEqual([]);
+      } finally {
+        await offline.context().close();
+      }
+
+      // **On a phone, «Menú» is a sheet that hides what it covers.**
+      const phone = await (
+        await browser.newContext({
+          viewport: { width: 390, height: 844 },
+          isMobile: true,
+          hasTouch: true,
+        })
+      ).newPage();
+      try {
+        await phone.goto(`file://${join(dir, "index.html")}`, { waitUntil: "load" });
+        await phone.locator("details.rb-nav-narrow > summary").click();
+        const sheet = await phone.evaluate(() => ({
+          bottom: (
+            document.querySelector(".rb-nav-narrow > .rb-nav") as HTMLElement
+          ).getBoundingClientRect().bottom,
+          innerHeight,
+          main: getComputedStyle(document.querySelector("main") as Element).visibility,
+          word: (
+            document.querySelector(".rb-nav-narrow > summary") as HTMLElement
+          ).innerText.trim(),
+        }));
+        expect(sheet.bottom).toBeGreaterThanOrEqual(sheet.innerHeight - 1);
+        expect([sheet.main, sheet.word]).toEqual(["hidden", "Cerrar"]);
+      } finally {
+        await phone.context().close();
+      }
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+});
+
+/**
  * **Sprint 31 día 6 — el móvil del raíl** (ADR 0060 §3). Una web con las páginas, la marca y el botón
  * en una columna izquierda, las secciones en la derecha y «Ir a…» en el móvil, elegido todo desde el
  * panel. En la vista de móvil del lienzo no hay columna: «Ir a…» está en la barra junto a «Menú», se
