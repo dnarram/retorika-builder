@@ -153,6 +153,33 @@ export const RAIL_WIDTH = 240;
 export const RAIL_FOLD_WIDTH = 1024;
 export const TWO_RAILS_FOLD_WIDTH = 1248;
 
+/**
+ * **The glass** (ADR 0063, sprint 32 día 1): a fixed bar, once the page has scrolled, keeps this much
+ * of its own colour and lets the rest of the page show through, blurred. The number is a claim about
+ * contrast, and `packages/renderer/test/glass.test.ts` is what makes it one: every word the bar writes
+ * on a glass background clears AA over the two extremes of what can lie under it — black and white —
+ * in every palette. Measured before it was written: ink on `surface` at 0.88 is 7.08 at its lowest
+ * (forest-emerald over black), `surface` on `ink` 6.72 (forest-emerald over white). **`color.primary`
+ * is written on no glass**: on `surface` it measured 3.57 at 0.88 and still 4.32 at 0.96 (neutral over
+ * black), so the surface scheme writes its brand and entries in `color.ink` and keeps the primary for
+ * the indicator and the button, which are not words over glass. The two coloured schemes `primary`
+ * and `secondary` condense without glass for the same reason, read the other way round: their words
+ * are `surface`, and `surface` on `primary` at 0.88 over white is 3.88.
+ */
+export const GLASS_MIX = 0.88;
+/** The backgrounds that turn to glass once scrolled, with the one colour each writes its words in.
+ * `transparent` is `surface`'s glass: scrolled, a transparent bar is a surface bar. */
+export const GLASS_BACKGROUNDS: Readonly<Record<"surface" | "ink", "ink" | "surface">> = {
+  surface: "ink",
+  ink: "surface",
+};
+/** The one hairline of the bar, the rail, the panels: a tenth of the ink over whatever is behind it,
+ * so it is a line on every scheme and on glass without a colour of its own to prove. */
+const HAIRLINE = "1px solid color-mix(in srgb, var(--color-ink) 10%, transparent)";
+/** The strip's navs — the wide bar's two and the row — as against a rail's, a disclosure's or a
+ * sheet's copies, which mark their current entry another way. */
+const STRIP_NAV = ":is(.rb-nav-wide, .rb-header) > .rb-nav";
+
 /** The href that reaches `page` from wherever the visitor is: the entry file for the first page. */
 function hrefTo(doc: RetorikaDocument, page: Page): string {
   return page.id === doc.pages[0]?.id ? ENTRY_FILE : hrefForPage(page);
@@ -580,24 +607,38 @@ export function headerCss(doc: RetorikaDocument): string[] {
     "  color: var(--color-primary); font-family: var(--font-heading); font-size: var(--size-body);",
     "  border-radius: var(--radius-sm); text-decoration: underline; }",
     ".rb-skip:focus-visible { top: var(--space-md); }",
-    // The bar's height as the stylesheet can estimate it — its padding and the taller of the logo
-    // and a line of text — for the anchors to land under a fixed bar and for the cover to make
-    // room under a transparent one. The script refines it with `offsetHeight` where it runs.
-    "html { --rb-header-h: calc(2 * var(--space-md) + max(40px, 1.5 * var(--size-body))); }",
+    // **The bar's height, twice** (ADR 0063, David's adjustment 7). `--rb-bar-h` is what the
+    // stylesheet can estimate — the padding and the taller of the logo and a line of text — and it
+    // never changes: the cover under a transparent bar makes its room with it, so a bar that condenses
+    // once scrolled does not pull the headline up 16 px. `--rb-header-h` starts as the same estimate
+    // and the script refines it with `offsetHeight` where it runs: it is for the anchors, which should
+    // land under the bar as it is now, and for «Ir a…», which hangs from it.
+    "html { --rb-bar-h: calc(2 * var(--space-md) + max(40px, 1.5 * var(--size-body)));",
+    "  --rb-header-h: var(--rb-bar-h); }",
+    // **The motor's own numbers**, not the document's (rule 6 reads the owner's choices, not what the
+    // renderer knows): one curve and two durations, read by every transition of the bar. Outside the
+    // media block because they are numbers, not movement; what moves is below.
+    "html { --rb-ease: cubic-bezier(0.2, 0, 0, 1); --rb-fast: 200ms; --rb-base: 400ms; }",
     // **Motion, and only for somebody who has not asked their system for less** (David's point 7 on
-    // sprint 30, and his third condition on sprint 31): the smooth scroll, and the rule under the
-    // current entry fading in and out as the visitor moves through the page. Every `transition` and
-    // `animation` of the header lives in a block like this one — the rail's and the disclosure's in
-    // their own, emitted with them — and `header.test.ts` walks the sheet to hold it.
+    // sprint 30, and his third condition on sprint 31): the smooth scroll; the rule under an entry
+    // fading; the indicator sliding from the entry that was current to the one that is; the button
+    // lifting; the bar condensing. Every `transition` and `animation` of the header lives in a block
+    // like this one — the rail's and the disclosure's in their own, emitted with them — and
+    // `header.test.ts` walks the sheet to hold it.
     "@media (prefers-reduced-motion: no-preference) {",
     "  html { scroll-behavior: smooth; }",
-    "  .rb-nav a { transition: text-decoration-color 200ms ease-out; }",
+    "  .rb-nav a { transition: text-decoration-color var(--rb-fast) var(--rb-ease); }",
+    "  .rb-nav::after { transition: left var(--rb-fast) var(--rb-ease), width var(--rb-fast) var(--rb-ease); }",
+    "  .rb-nav-action { transition: transform var(--rb-fast) var(--rb-ease), box-shadow var(--rb-fast) var(--rb-ease); }",
+    "  .rb-header[data-sticky] { transition: padding var(--rb-fast) var(--rb-ease), margin var(--rb-fast) var(--rb-ease),",
+    "    background-color var(--rb-fast) var(--rb-ease), box-shadow var(--rb-fast) var(--rb-ease); }",
     "}",
     // The bar. One flex row that wraps: brand, the wide strip pushed to the far side, the button,
     // and — on its own line when it has one — the sections row. A hairline under it, so it reads
-    // as a bar rather than as the page's top padding — the same `color.muted` rule `.rb-item`
-    // separates cards with. Decorative, so the text contrast minimum does not apply to it.
-    // `position: relative` is for the phone's open menu, which hangs under the whole bar (below).
+    // as a bar rather than as the page's top padding: a tenth of the ink (ADR 0063), where it used
+    // to be the full `color.muted` of `.rb-item`, which read as a ruled line. Decorative, so the text
+    // contrast minimum does not apply to it. `position: relative` is for the phone's open menu, which
+    // hangs under the whole bar (below).
     //
     // **`line-height` is a number, never `normal`** (sprint 30 día 7, measured). `normal` takes each
     // font's own ascent and descent, so a line of the bar was 18px in the fallback letter and 21px in
@@ -608,43 +649,69 @@ export function headerCss(doc: RetorikaDocument): string[] {
     // heading letter, so the bar keeps the height it had once loaded.
     ".rb-header { position: relative; display: flex; flex-wrap: wrap; align-items: center;",
     "  gap: var(--space-md) var(--space-xl); padding: var(--space-md) var(--space-xl);",
-    "  background: var(--color-surface); border-bottom: 1px solid var(--color-muted); line-height: 1.3; }",
+    `  background: var(--color-surface); border-bottom: ${HAIRLINE}; line-height: 1.3; }`,
     ".rb-header[data-hairline=none] { border-bottom: 0; }",
     // The brand never breaks the bar's height: one line, cut with an ellipsis before it wraps
     // (David's adjustment 3, measured with «Taberna Santo Domingo» and a logo at 320px). `min-width:
     // 0` is what lets a flex item shrink below its text; without it the ellipsis never happens.
+    // **In ink, not in the primary** (ADR 0063): the primary is written on no glass, measured above.
     ".rb-brand { display: flex; align-items: center; gap: var(--space-sm); min-width: 0;",
-    "  max-width: 100%; color: var(--color-primary); font-family: var(--font-heading);",
+    "  max-width: 100%; color: var(--color-ink); font-family: var(--font-heading);",
     "  font-size: var(--size-body); font-weight: 700; text-decoration: none; }",
     ".rb-brand-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }",
     ".rb-logo { height: 40px; width: auto; flex: none; }",
     ".rb-nav-wide { display: flex; flex-wrap: wrap; gap: var(--space-xl); margin-left: auto; }",
-    ".rb-nav { display: flex; flex-wrap: wrap; gap: var(--space-md); }",
-    // What tells the two groups apart for an eye: the accessible name does it for a screen reader,
-    // and this does it without adding a word of copy to every published page.
-    ".rb-nav + .rb-nav { padding-left: var(--space-xl); border-left: 1px solid var(--color-muted); }",
-    // **The rule under every entry is always there, in no colour** (sprint 31 día 3): a colour is what
-    // a transition can move, and `none` → `underline` is not. At rest the page looks as it did; the
-    // current entry's rule below takes the entry's own colour back with the shorthand.
-    ".rb-nav a { color: var(--color-primary); font-family: var(--font-heading);",
-    "  font-size: var(--size-body); text-decoration: underline transparent; text-underline-offset: 6px; }",
-    // Not colour alone: the entry for the page you are on carries a rule under it as well, and so
-    // does the entry of the section in view once the script marks it (`aria-current="location"`).
-    ".rb-nav a[aria-current] { text-decoration: underline; text-underline-offset: 6px;",
+    // `position: relative` is the indicator's containing block (below). The two groups are told
+    // apart by the gap between them and by their accessible names; the ruled line that used to
+    // stand between them went with ADR 0063.
+    ".rb-nav { position: relative; display: flex; flex-wrap: wrap; gap: var(--space-md); }",
+    // **The entries** (ADR 0063): the site's reading letter, in ink, and nothing under them at rest —
+    // the rule under every entry is there in no colour, so a colour is what a transition can move
+    // (sprint 31 día 3). The current entry is marked under it in the primary, twice over: by the
+    // indicator where the browser can anchor one, by the rule's colour where it cannot. `padding`
+    // gives the indicator its room without moving the words.
+    ".rb-nav a { color: var(--color-ink); font-family: var(--font-body); font-size: var(--size-body);",
+    "  padding: var(--space-xs) 0; text-decoration: underline transparent; text-underline-offset: 6px;",
     "  text-decoration-thickness: 2px; }",
-    // The button: the same look as a section's own button (`[role=button]`), so one site has one
-    // idea of a button. Pushed to the far side when nothing else is there. `rb-nav-action` and not
-    // `rb-action`: the editor's canvas chrome already names its verbs `.rb-action`, inside the same
-    // frame this stylesheet lives in, and the first name restyled every verb of the toolbar —
-    // measured by the sprint 20 walk, which found a verb at 36px where the scale says otherwise.
-    ".rb-nav-action { display: inline-block; padding: var(--space-sm) var(--space-md);",
+    ".rb-nav a[aria-current] { text-decoration-color: var(--color-primary); }",
+    // **The indicator**: one rule under the current entry of each strip, that slides to the next
+    // when the current one changes — the page you are on, or the section in view once the script
+    // marks it. Drawn by the `nav`'s own `::after`, placed by CSS anchor positioning on whichever
+    // entry is current: no element, no key for the canvas, no script. A browser without anchors
+    // (`@supports`) keeps the rule's colour above and never reads this block. Only the strip's navs
+    // anchor: a rail marks its entry by its edge, a sheet by its edge too (día 4), and two anchors
+    // of one name in two visible copies would place the rule under the wrong one. Hidden the moment
+    // no entry is current, so an empty strip draws no stray line.
+    "@supports (anchor-name: --rb-x) {",
+    `  ${STRIP_NAV} a[aria-current] { text-decoration-color: transparent; }`,
+    `  ${STRIP_NAV}[data-part=pagesLinks] a[aria-current] { anchor-name: --rb-current-pages; }`,
+    `  ${STRIP_NAV}[data-part=sectionsLinks] a[aria-current] { anchor-name: --rb-current-sections; }`,
+    `  ${STRIP_NAV}::after { content: ""; position: absolute; bottom: 0; height: 2px; border-radius: 1px;`,
+    "    background: var(--color-primary); left: anchor(left); width: anchor-size(width);",
+    "    pointer-events: none; }",
+    `  ${STRIP_NAV}[data-part=pagesLinks]::after { position-anchor: --rb-current-pages; }`,
+    `  ${STRIP_NAV}[data-part=sectionsLinks]::after { position-anchor: --rb-current-sections; }`,
+    `  ${STRIP_NAV}:not(:has(a[aria-current]))::after { display: none; }`,
+    "}",
+    // The button: a pill in the primary, the site's one idea of a button (`[role=button]` takes the
+    // same shape on día 3). Lifts a pixel under a pointer that can hover. Pushed to the far side when
+    // nothing else is there. `rb-nav-action` and not `rb-action`: the editor's canvas chrome already
+    // names its verbs `.rb-action`, inside the same frame this stylesheet lives in, and the first
+    // name restyled every verb of the toolbar — measured by the sprint 20 walk.
+    ".rb-nav-action { display: inline-block; padding: var(--space-sm) var(--space-lg);",
     "  background: var(--color-primary); color: var(--color-surface); font-family: var(--font-heading);",
-    "  font-size: var(--size-body); border-radius: var(--radius-sm); text-decoration: none;",
+    "  font-size: var(--size-body); font-weight: 700; border-radius: 999px; text-decoration: none;",
     "  white-space: nowrap; }",
+    "@media (hover: hover) {",
+    "  .rb-nav-action:hover { transform: translateY(-1px); box-shadow: 0 8px 24px -16px var(--color-ink); }",
+    "}",
     ".rb-brand + .rb-nav-action, .rb-header > .rb-nav-action:first-child { margin-left: auto; }",
+    // «Menú»: a word, not a disclosure triangle — the browser's own marker goes, in both the places
+    // browsers draw it.
     ".rb-nav-narrow { padding: 0; }",
-    ".rb-nav-narrow > summary { color: var(--color-primary); font-family: var(--font-heading);",
-    "  font-size: var(--size-body); cursor: pointer; }",
+    ".rb-nav-narrow > summary { color: var(--color-ink); font-family: var(--font-heading);",
+    "  font-size: var(--size-body); cursor: pointer; list-style: none; }",
+    ".rb-nav-narrow > summary::-webkit-details-marker { display: none; }",
     // The phone's open menu is a panel under the whole bar, not a list inside the «Menú» word's
     // own box. **Measured before it was written this way**: a `<details>` that is a flex item is as
     // wide as its summary (87px at 320px), Chromium lays its closed contents out all the same, and a
@@ -656,7 +723,7 @@ export function headerCss(doc: RetorikaDocument): string[] {
     ".rb-nav-narrow .rb-nav { position: absolute; left: 0; right: 0; top: 100%; z-index: 2;",
     "  flex-direction: column; flex-wrap: nowrap; gap: var(--space-sm);",
     "  padding: var(--space-md) var(--space-lg);",
-    "  background: var(--color-surface); border-bottom: 1px solid var(--color-muted); }",
+    `  background: var(--color-surface); border-bottom: ${HAIRLINE}; }`,
     // The sections row: a full line of its own under the bar. Shown at every width when the owner
     // gave the sections their own row; otherwise it is the phone's copy and hidden here.
     ".rb-nav-row { flex-basis: 100%; }",
@@ -685,22 +752,28 @@ export function headerCss(doc: RetorikaDocument): string[] {
     "  font-size: calc(var(--size-body) * 0.875); }",
     ".rb-header[data-uppercase] :is(.rb-nav a, .rb-nav-action, .rb-nav-narrow > summary) {",
     "  text-transform: uppercase; letter-spacing: 0.06em; }",
-    // Underline on hover is a decoration the owner asks for, never a colour: the entry keeps its
-    // hue, and the keyboard gets the same line the pointer gets.
+    // Underline on hover is a decoration the owner asks for, never a colour change of the words: a
+    // rule under the entry in half the primary, and the keyboard gets the same line the pointer gets.
     ".rb-header[data-hover] .rb-nav a:hover, .rb-header[data-hover] .rb-nav a:focus-visible {",
-    "  text-decoration: underline; text-underline-offset: 6px; }",
+    "  text-decoration-color: color-mix(in srgb, var(--color-primary) 50%, transparent); }",
     // **The schemes.** Four opaque backgrounds and one transparent. On a coloured bar the entries,
     // the brand and the «Menú» word are `color.surface` (proved: surface on primary 4.71, on
     // secondary 5.47, on ink 9.28, the lowest palette each), the hairline goes — the bar already
-    // contrasts with the page — and the button inverts to `surface` with `primary` words, since a
-    // `primary` button on a `primary` bar is no button (and 1.77 against `ink`).
+    // contrasts with the page — the indicator and the rule under the current entry are `surface`
+    // too, and the button inverts to `surface` with `primary` words, since a `primary` button on a
+    // `primary` bar is no button (and 1.77 against `ink`).
     ".rb-header[data-bg=primary] { background: var(--color-primary); border-bottom: 0; }",
     ".rb-header[data-bg=secondary] { background: var(--color-secondary); border-bottom: 0; }",
     ".rb-header[data-bg=ink] { background: var(--color-ink); border-bottom: 0; }",
     ".rb-header:is([data-bg=primary], [data-bg=secondary], [data-bg=ink])",
     "  :is(.rb-brand, .rb-nav a, .rb-nav-narrow > summary) { color: var(--color-surface); }",
-    ".rb-header:is([data-bg=primary], [data-bg=secondary], [data-bg=ink]) .rb-nav + .rb-nav {",
-    "  border-left-color: var(--color-surface); }",
+    ".rb-header:is([data-bg=primary], [data-bg=secondary], [data-bg=ink]) .rb-nav a[aria-current] {",
+    "  text-decoration-color: var(--color-surface); }",
+    ".rb-header:is([data-bg=primary], [data-bg=secondary], [data-bg=ink]) .rb-nav::after {",
+    "  background: var(--color-surface); }",
+    ".rb-header:is([data-bg=primary], [data-bg=secondary], [data-bg=ink])[data-hover] .rb-nav a:hover,",
+    ".rb-header:is([data-bg=primary], [data-bg=secondary], [data-bg=ink])[data-hover] .rb-nav a:focus-visible {",
+    "  text-decoration-color: color-mix(in srgb, var(--color-surface) 50%, transparent); }",
     ".rb-header:is([data-bg=primary], [data-bg=secondary], [data-bg=ink]) .rb-nav-action {",
     "  background: var(--color-surface); color: var(--color-primary); }",
     // The phone's open menu keeps the bar's colours, since it hangs from the bar.
@@ -708,27 +781,51 @@ export function headerCss(doc: RetorikaDocument): string[] {
     ".rb-header[data-bg=secondary] .rb-nav-narrow .rb-nav { background: var(--color-secondary); }",
     ".rb-header[data-bg=ink] .rb-nav-narrow .rb-nav { background: var(--color-ink); }",
     // **Transparent lies over the cover** (David's adjustment 1a): the bar is taken out of the flow
-    // and the first section opens room under it, the bar's estimated height on top of its own
-    // padding, so the headline is never under the links.
+    // and the first section opens room under it — the bar's **estimated** height on top of its own
+    // padding, never the measured one (adjustment 7 of sprint 32): the measure drops when the bar
+    // condenses, and room that followed it would pull the headline up by the difference.
     ".rb-header[data-bg=transparent] { position: absolute; left: 0; right: 0; top: 0; z-index: 2;",
     "  background: transparent; border-bottom: 0; }",
     ".rb-header[data-bg=transparent] + main > .rb-section:first-child {",
-    "  padding-top: calc(var(--space-xl) + var(--rb-header-h)); }",
+    "  padding-top: calc(var(--space-xl) + var(--rb-bar-h)); }",
     // **Fixed** («se queda arriba al bajar», David's point 8): sticky, over the content, and every
-    // section makes room for it when an anchor lands. A shadow once the page has scrolled, which
-    // only the script can know — two layers, both from the palette.
+    // section makes room for it when an anchor lands. Once the page has scrolled, which only the
+    // script can know, the bar **condenses** — its padding to `space.sm` — and grows a shadow.
+    // **Its outer box does not change** (David's adjustment 1 of sprint 32): the bar is sticky, so its
+    // box is still in the flow, and a bar 16 px shorter would have pulled the whole page up 16 px on
+    // the first scroll — visible, and CLS in the field that a lab run never sees because it never
+    // scrolls. The margin under it takes exactly what the padding gave up, the two transitioned
+    // together; `offsetHeight`, which has no margin in it, still drops, so `--rb-header-h` and the
+    // anchors follow the bar as it is.
     ".rb-header[data-sticky] { position: sticky; top: 0; z-index: 2; }",
     ".rb-header[data-sticky] ~ main [data-section] { scroll-margin-top: var(--rb-header-h); }",
-    ".rb-header[data-sticky][data-scrolled] { box-shadow: 0 1px 0 var(--color-muted),",
+    `.rb-header[data-sticky][data-scrolled] { box-shadow: 0 1px 0 color-mix(in srgb, var(--color-ink) 10%, transparent),`,
     "  0 8px 24px -16px var(--color-ink); }",
+    "@media (min-width: 721px) {",
+    "  .rb-header[data-sticky][data-scrolled] { padding-block: var(--space-sm);",
+    "    margin-bottom: calc(2 * (var(--space-md) - var(--space-sm))); }",
+    "}",
     // **Transparent and fixed do not meet without the script** (David's adjustment 1b): a
     // transparent bar fixed over text is unreadable. Without the script's mark the bar stays
     // absolute and scrolls away with the cover; with it, it is fixed, and once the page has scrolled
-    // it takes the `surface` scheme — background, hairline and all.
+    // it takes the `surface` scheme — background (glass, above, where it can be), hairline and all.
     ".rb-header[data-sticky][data-bg=transparent] { position: absolute; }",
     "html[data-rb-js] .rb-header[data-sticky][data-bg=transparent] { position: fixed; }",
     ".rb-header[data-sticky][data-bg=transparent][data-scrolled] { background: var(--color-surface);",
-    "  border-bottom: 1px solid var(--color-muted); }",
+    `  border-bottom: ${HAIRLINE}; }`,
+    // **The glass** (ADR 0063; `GLASS_MIX`, proved in `glass.test.ts`): a scrolled bar on the
+    // `surface` or `ink` scheme keeps 88 % of its colour and blurs what passes under it. Only where
+    // the browser can blur; elsewhere the bar stays the opaque colour above. A transparent bar once
+    // scrolled is a surface bar, so it takes the surface's glass. The two coloured schemes are not
+    // here: `surface` on `primary` at 0.88 does not clear AA, measured in `GLASS_MIX`'s note.
+    "@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {",
+    "  .rb-header[data-sticky][data-scrolled]:is([data-bg=surface], [data-bg=transparent]) {",
+    `    background: color-mix(in srgb, var(--color-surface) ${Math.round(GLASS_MIX * 100)}%, transparent);`,
+    "    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }",
+    "  .rb-header[data-sticky][data-scrolled][data-bg=ink] {",
+    `    background: color-mix(in srgb, var(--color-ink) ${Math.round(GLASS_MIX * 100)}%, transparent);`,
+    "    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }",
+    "}",
     ...railCss(doc),
     ...foldCss(doc),
     ...headerStyleCss(doc),
@@ -761,7 +858,7 @@ function usesFold(settings: HeaderSettings): boolean {
  */
 function collapseBar(header: string): string[] {
   return [
-    `  ${header} { --rb-header-h: 0px; padding: 0; border-bottom: 0; background: transparent; box-shadow: none; }`,
+    `  ${header} { --rb-header-h: 0px; padding: 0; margin-bottom: 0; border-bottom: 0; background: transparent; box-shadow: none; }`,
     `  ${header}[data-sticky] ~ main [data-section] { scroll-margin-top: 0; }`,
     `  ${header}[data-bg=transparent] + main > .rb-section:first-child { padding-top: var(--space-xl); }`,
   ];
@@ -797,12 +894,12 @@ function railCss(doc: RetorikaDocument): string[] {
     `  width: ${RAIL_WIDTH}px; flex-direction: column; align-items: flex-start; gap: var(--space-lg);`,
     "  padding: var(--space-xl) var(--space-lg); overflow: hidden auto;",
     "  background: var(--color-surface); line-height: 1.3; }",
-    ".rb-rail[data-side=left] { left: 0; border-right: 1px solid var(--color-muted); }",
-    ".rb-rail[data-side=right] { right: 0; border-left: 1px solid var(--color-muted); }",
+    `.rb-rail[data-side=left] { left: 0; border-right: ${HAIRLINE}; }`,
+    `.rb-rail[data-side=right] { right: 0; border-left: ${HAIRLINE}; }`,
     ".rb-rail > .rb-nav { flex-direction: column; flex-wrap: nowrap; }",
     // Stacked, the two menus are told apart by a rule above the second, not beside it.
     ".rb-rail > .rb-nav + .rb-nav { align-self: stretch; padding-left: 0; border-left: 0;",
-    "  padding-top: var(--space-lg); border-top: 1px solid var(--color-muted); }",
+    `  padding-top: var(--space-lg); border-top: ${HAIRLINE}; }`,
     ".rb-rail > .rb-nav-action { margin-left: 0; }",
     ".rb-header[data-hairline=none] .rb-rail,",
     ".rb-header:is([data-bg=primary], [data-bg=secondary], [data-bg=ink]) .rb-rail {",
@@ -811,17 +908,21 @@ function railCss(doc: RetorikaDocument): string[] {
     ".rb-header[data-bg=secondary] .rb-rail { background: var(--color-secondary); }",
     ".rb-header[data-bg=ink] .rb-rail { background: var(--color-ink); }",
     ".rb-header:is([data-bg=primary], [data-bg=secondary], [data-bg=ink]) .rb-rail > .rb-nav + .rb-nav {",
-    "  border-top-color: var(--color-surface); }",
+    "  border-top-color: color-mix(in srgb, var(--color-surface) 20%, transparent); }",
     // **In a column the current entry is marked by a bar at its edge**, not by the rule under it: a
     // list read down is scanned along its edge. Every entry keeps the bar's room, in no colour, so
     // nothing moves when the mark arrives — and the negative margin keeps the words in line with the
     // brand and the button above and below them.
-    ".rb-rail .rb-nav a { padding-left: var(--space-sm); margin-left: calc(-1 * var(--space-sm));",
-    "  box-shadow: inset 3px 0 0 transparent; }",
+    // The tint behind the current entry (ADR 0063) is an eighth of the entry's own colour over the
+    // rail — ink's on a surface rail, surface's on a coloured one — so it reads on every scheme.
+    ".rb-rail .rb-nav a { padding: var(--space-xs) var(--space-sm); margin-left: calc(-1 * var(--space-sm));",
+    "  border-radius: 0 var(--radius-sm) var(--radius-sm) 0; box-shadow: inset 3px 0 0 transparent; }",
     ".rb-rail .rb-nav a[aria-current] { text-decoration-color: transparent;",
-    "  box-shadow: inset 3px 0 0 currentColor; }",
+    "  box-shadow: inset 3px 0 0 currentColor;",
+    "  background: color-mix(in srgb, currentColor 12%, transparent); }",
     "@media (prefers-reduced-motion: no-preference) {",
-    "  .rb-rail .rb-nav a { transition: text-decoration-color 200ms ease-out, box-shadow 200ms ease-out; }",
+    "  .rb-rail .rb-nav a { transition: text-decoration-color var(--rb-fast) var(--rb-ease),",
+    "    box-shadow var(--rb-fast) var(--rb-ease), background-color var(--rb-fast) var(--rb-ease); }",
     "}",
     `${wide} {`,
     "  .rb-rail { display: flex; }",
@@ -887,12 +988,13 @@ function foldCss(doc: RetorikaDocument): string[] {
   return [
     "/* «Ir a…» (ADR 0060) */",
     ".rb-nav-fold { display: none; padding: 0; }",
-    ".rb-nav-fold > summary { color: var(--color-primary); font-family: var(--font-heading);",
-    "  font-size: var(--size-body); cursor: pointer; }",
+    ".rb-nav-fold > summary { color: var(--color-ink); font-family: var(--font-heading);",
+    "  font-size: var(--size-body); cursor: pointer; list-style: none; }",
+    ".rb-nav-fold > summary::-webkit-details-marker { display: none; }",
     ".rb-nav-fold > .rb-nav { position: absolute; left: 0; right: 0; top: 100%; z-index: 2;",
     "  flex-direction: column; flex-wrap: nowrap; gap: var(--space-sm);",
     "  padding: var(--space-md) var(--space-lg);",
-    "  background: var(--color-surface); border-bottom: 1px solid var(--color-muted); }",
+    `  background: var(--color-surface); border-bottom: ${HAIRLINE}; }`,
     ".rb-header[data-size=small] .rb-nav-fold > summary { font-size: calc(var(--size-body) * 0.875); }",
     ".rb-header[data-uppercase] .rb-nav-fold > summary { text-transform: uppercase; letter-spacing: 0.06em; }",
     `.rb-header${coloured} .rb-nav-fold > summary { color: var(--color-surface); }`,
@@ -904,13 +1006,13 @@ function foldCss(doc: RetorikaDocument): string[] {
     // its end state for a frame).
     "@keyframes rb-fold-in { from { opacity: 0; transform: translateY(-4px); } }",
     "@media (prefers-reduced-motion: no-preference) {",
-    "  .rb-nav-fold[open] > .rb-nav { animation: rb-fold-in 200ms ease-out backwards; }",
+    "  .rb-nav-fold[open] > .rb-nav { animation: rb-fold-in var(--rb-base) var(--rb-ease) backwards; }",
     "}",
     "@media (min-width: 721px) {",
     `  ${placed} { display: block; position: fixed; z-index: 2;`,
     "    top: calc(var(--rb-header-h) + var(--space-md)); right: var(--space-md); }",
-    `  ${placed} > summary { padding: var(--space-sm) var(--space-md); background: var(--color-surface);`,
-    "    border: 1px solid var(--color-muted); border-radius: var(--radius-sm);",
+    `  ${placed} > summary { padding: var(--space-sm) var(--space-lg); background: var(--color-surface);`,
+    `    border: ${HAIRLINE}; border-radius: 999px;`,
     "    box-shadow: 0 8px 24px -16px var(--color-ink); }",
     // `width: max-content` because an absolute box sizes to its containing block, which here is the
     // `<details>` — as wide as «Ir a…» — and every entry would wrap to that. Bounded by the window,
@@ -919,7 +1021,7 @@ function foldCss(doc: RetorikaDocument): string[] {
     "    box-sizing: border-box; width: max-content; min-width: 100%;",
     "    max-width: min(320px, calc(100vw - 2 * var(--space-md)));",
     "    max-height: calc(100vh - var(--rb-header-h) - 4 * var(--space-md) - 1.5 * var(--size-body));",
-    "    overflow: hidden auto; border: 1px solid var(--color-muted); border-radius: var(--radius-sm);",
+    `    overflow: hidden auto; border: ${HAIRLINE}; border-radius: var(--radius-lg);`,
     "    box-shadow: 0 8px 24px -16px var(--color-ink); }",
     `  .rb-header${coloured} .rb-nav-fold > :is(summary, .rb-nav) { border: 0; }`,
     // Nothing left in the bar but the disclosure, and no rail: the bar is no height from here.
@@ -966,7 +1068,7 @@ export function headerMobileCss(doc: RetorikaDocument): string[] {
   return [
     ".rb-nav-narrow { display: none; }",
     "@media (max-width: 720px) {",
-    "  html { --rb-header-h: calc(2 * var(--space-sm) + max(40px, 1.5 * var(--size-body))); }",
+    "  html { --rb-bar-h: calc(2 * var(--space-sm) + max(40px, 1.5 * var(--size-body))); }",
     "  .rb-header { gap: var(--space-sm) var(--space-md); padding: var(--space-sm) var(--space-lg); }",
     // The brand takes what the button and «Menú» leave and no more: a flex basis of zero means it
     // never asks the line to wrap, and `min-width: 0` (set above) lets the ellipsis do its work.
@@ -986,7 +1088,10 @@ export function headerMobileCss(doc: RetorikaDocument): string[] {
     "  .rb-header[data-sections] .rb-nav-row { display: flex; flex-wrap: nowrap; overflow-x: auto;",
     "    justify-content: flex-start; padding-bottom: var(--space-xs); }",
     "  .rb-header .rb-nav-row a { white-space: nowrap; }",
-    "  .rb-header[data-sections] .rb-nav-row[data-mobile=hidden] { display: none; }",
+    // Hidden when the owner chose nothing for the phone — and when they chose «Ir a…» (sprint 32
+    // día 1): a row that stands at every width still carries the phone's choice, and with both drawn
+    // the sections were announced twice at 320.
+    "  .rb-header[data-sections] .rb-nav-row:is([data-mobile=hidden], [data-mobile=fold]) { display: none; }",
     "  .rb-header[data-layout=stacked] .rb-brand { flex-basis: 0; }",
     "  .rb-header[data-sticky][data-phone-row] { position: static; }",
     "  .rb-header[data-sticky][data-phone-row] ~ main [data-section] { scroll-margin-top: 0; }",

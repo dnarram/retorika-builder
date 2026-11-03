@@ -10,7 +10,7 @@ import {
   RAIL_WIDTH,
   TWO_RAILS_FOLD_WIDTH,
 } from "../src/header.ts";
-import { render } from "../src/index.ts";
+import { GLASS_BACKGROUNDS, GLASS_MIX, render } from "../src/index.ts";
 
 /**
  * The header is the owner's (ADR 0057): what `header.ts` draws from the document's `header` and the
@@ -340,8 +340,10 @@ describe("the three layouts and the sections' row", () => {
   it("marks a row the phone hides, when the row is the owner's at every other width", () => {
     const page = draw(site(3, [], { sections: { position: "row", mobile: "hidden" } }));
     expect(page.querySelector("nav.rb-nav-row")?.getAttribute("data-mobile")).toBe("hidden");
+    // And a row that stands at every width still carries the phone's choice of «Ir a…», where the
+    // row would have been announced beside the disclosure (sprint 32 día 1, found at 320).
     expect(render(site(3), "html").css).toContain(
-      "  .rb-header[data-sections] .rb-nav-row[data-mobile=hidden] { display: none; }",
+      "  .rb-header[data-sections] .rb-nav-row:is([data-mobile=hidden], [data-mobile=fold]) { display: none; }",
     );
   });
 });
@@ -441,11 +443,19 @@ describe("the look, as attributes and rules", () => {
     expect(sheet).toContain(
       ".rb-header[data-bg=transparent] { position: absolute; left: 0; right: 0; top: 0; z-index: 2;",
     );
+    // **The cover reads the estimate, never the measure** (David's adjustment 7 of sprint 32): the
+    // measure drops when a fixed bar condenses, and room that followed it would pull the headline up.
     expect(sheet).toContain(
-      ".rb-header[data-bg=transparent] + main > .rb-section:first-child {\n  padding-top: calc(var(--space-xl) + var(--rb-header-h)); }",
+      ".rb-header[data-bg=transparent] + main > .rb-section:first-child {\n  padding-top: calc(var(--space-xl) + var(--rb-bar-h)); }",
+    );
+    expect(sheet).not.toContain(
+      "first-child {\n  padding-top: calc(var(--space-xl) + var(--rb-header-h))",
     );
     expect(sheet).toContain(
-      "html { --rb-header-h: calc(2 * var(--space-md) + max(40px, 1.5 * var(--size-body))); }",
+      "html { --rb-bar-h: calc(2 * var(--space-md) + max(40px, 1.5 * var(--size-body)));\n  --rb-header-h: var(--rb-bar-h); }",
+    );
+    expect(sheet).toContain(
+      "  html { --rb-bar-h: calc(2 * var(--space-sm) + max(40px, 1.5 * var(--size-body))); }",
     );
   });
 
@@ -456,7 +466,84 @@ describe("the look, as attributes and rules", () => {
       ".rb-header[data-sticky] ~ main [data-section] { scroll-margin-top: var(--rb-header-h); }",
     );
     expect(sheet).toContain(
-      ".rb-header[data-sticky][data-scrolled] { box-shadow: 0 1px 0 var(--color-muted),",
+      ".rb-header[data-sticky][data-scrolled] { box-shadow: 0 1px 0 color-mix(in srgb, var(--color-ink) 10%, transparent),",
+    );
+  });
+
+  it("condenses a fixed bar once scrolled without changing its outer box (sprint 32, adjustment 1)", () => {
+    // The padding it gives up goes to the margin under it, so the page does not move 16 px on the
+    // first scroll; only above the phone, whose bar already has the small padding.
+    const sheet = css(site(3));
+    expect(sheet).toContain(
+      "@media (min-width: 721px) {\n  .rb-header[data-sticky][data-scrolled] { padding-block: var(--space-sm);\n    margin-bottom: calc(2 * (var(--space-md) - var(--space-sm))); }\n}",
+    );
+  });
+
+  it("turns a scrolled fixed bar to glass on surface, transparent and ink, and on no coloured scheme (ADR 0063)", () => {
+    const sheet = css(site(3));
+    const pct = `${Math.round(GLASS_MIX * 100)}%`;
+    expect(pct).toBe("88%");
+    const glass = sheet.slice(sheet.indexOf("@supports (backdrop-filter: blur(1px))"));
+    expect(glass).toContain(
+      `  .rb-header[data-sticky][data-scrolled]:is([data-bg=surface], [data-bg=transparent]) {\n    background: color-mix(in srgb, var(--color-surface) ${pct}, transparent);`,
+    );
+    expect(glass).toContain(
+      `  .rb-header[data-sticky][data-scrolled][data-bg=ink] {\n    background: color-mix(in srgb, var(--color-ink) ${pct}, transparent);`,
+    );
+    for (const bg of ["primary", "secondary"]) {
+      expect(sheet).not.toMatch(new RegExp(`color-mix\\(in srgb, var\\(--color-${bg}\\) ${pct}`));
+    }
+    // Every blur is inside the `@supports`, and the glass comes after the transparent bar's own
+    // scrolled rule, which it has to win over at equal weight.
+    expect(sheet.match(/backdrop-filter: blur\(12px\)/g)).toHaveLength(4);
+    expect(sheet.indexOf("@supports (backdrop-filter")).toBeGreaterThan(
+      sheet.indexOf(".rb-header[data-sticky][data-bg=transparent][data-scrolled] {"),
+    );
+    expect(Object.keys(GLASS_BACKGROUNDS)).toEqual(["surface", "ink"]);
+  });
+
+  it("writes the primary on no word of a surface bar: entries and brand in ink, the primary under them (ADR 0063)", () => {
+    const sheet = css(site(3));
+    expect(sheet).toContain(
+      ".rb-nav a { color: var(--color-ink); font-family: var(--font-body); font-size: var(--size-body);",
+    );
+    expect(sheet).toContain(
+      "  max-width: 100%; color: var(--color-ink); font-family: var(--font-heading);",
+    );
+    expect(sheet).toContain(".rb-nav-narrow > summary { color: var(--color-ink);");
+    expect(sheet).toContain(
+      ".rb-nav a[aria-current] { text-decoration-color: var(--color-primary); }",
+    );
+    expect(sheet).not.toMatch(/\.rb-nav a \{ color: var\(--color-primary\)/);
+    // The ruled line between the two menus went with the look.
+    expect(sheet).not.toContain(".rb-nav + .rb-nav { padding-left");
+    // One hairline everywhere, a tenth of the ink.
+    expect(sheet).toContain(
+      "  background: var(--color-surface); border-bottom: 1px solid color-mix(in srgb, var(--color-ink) 10%, transparent); line-height: 1.3; }",
+    );
+    expect(sheet).not.toContain("border-bottom: 1px solid var(--color-muted)");
+  });
+
+  it("slides one indicator per strip with anchor positioning, inside @supports, and never in a rail or a disclosure", () => {
+    const sheet = css(site(3));
+    const at = sheet.indexOf("@supports (anchor-name: --rb-x) {");
+    expect(at).toBeGreaterThan(0);
+    const block = sheet.slice(at, sheet.indexOf("\n}\n", at));
+    expect(block).toContain(
+      ":is(.rb-nav-wide, .rb-header) > .rb-nav[data-part=pagesLinks] a[aria-current] { anchor-name: --rb-current-pages; }",
+    );
+    expect(block).toContain(
+      ":is(.rb-nav-wide, .rb-header) > .rb-nav[data-part=sectionsLinks] a[aria-current] { anchor-name: --rb-current-sections; }",
+    );
+    expect(block).toContain("left: anchor(left); width: anchor-size(width);");
+    expect(block).toContain(":not(:has(a[aria-current]))::after { display: none; }");
+    // Every anchor word of the sheet is inside that one block.
+    const outside = sheet.slice(0, at) + sheet.slice(at + block.length);
+    expect(outside).not.toMatch(/anchor-name|position-anchor|anchor\(|anchor-size\(/);
+    // The button is a pill, in the heading letter, that lifts only under a pointer that can hover.
+    expect(sheet).toContain("font-size: var(--size-body); font-weight: 700; border-radius: 999px;");
+    expect(sheet).toContain(
+      "@media (hover: hover) {\n  .rb-nav-action:hover { transform: translateY(-1px); box-shadow: 0 8px 24px -16px var(--color-ink); }\n}",
     );
   });
 
@@ -467,7 +554,7 @@ describe("the look, as attributes and rules", () => {
       "html[data-rb-js] .rb-header[data-sticky][data-bg=transparent] { position: fixed; }",
     );
     expect(sheet).toContain(
-      ".rb-header[data-sticky][data-bg=transparent][data-scrolled] { background: var(--color-surface);\n  border-bottom: 1px solid var(--color-muted); }",
+      ".rb-header[data-sticky][data-bg=transparent][data-scrolled] { background: var(--color-surface);\n  border-bottom: 1px solid color-mix(in srgb, var(--color-ink) 10%, transparent); }",
     );
   });
 
@@ -482,12 +569,14 @@ describe("the look, as attributes and rules", () => {
   it("keeps the rule under every entry, in no colour, so the current one can fade in (sprint 31 día 3)", () => {
     const sheet = css(site(3));
     expect(sheet).toContain(
-      "  font-size: var(--size-body); text-decoration: underline transparent; text-underline-offset: 6px; }",
+      "  padding: var(--space-xs) 0; text-decoration: underline transparent; text-underline-offset: 6px;\n  text-decoration-thickness: 2px; }",
     );
-    // The shorthand in the current entry's rule and in the hover rule gives the colour back.
-    expect(sheet).toContain(".rb-nav a[aria-current] { text-decoration: underline;");
+    // The current entry's rule and the hover rule give the colour back — half of it on hover.
     expect(sheet).toContain(
-      ".rb-header[data-hover] .rb-nav a:hover, .rb-header[data-hover] .rb-nav a:focus-visible {\n  text-decoration: underline;",
+      ".rb-nav a[aria-current] { text-decoration-color: var(--color-primary); }",
+    );
+    expect(sheet).toContain(
+      ".rb-header[data-hover] .rb-nav a:hover, .rb-header[data-hover] .rb-nav a:focus-visible {\n  text-decoration-color: color-mix(in srgb, var(--color-primary) 50%, transparent); }",
     );
   });
 
@@ -902,8 +991,10 @@ describe("the header's motion", () => {
     const preludes: string[] = [];
     let start = 0;
     const take = (end: number) => {
-      const segment = text.slice(start, end).trim();
-      if (/^(transition|animation)\s*:/.test(segment)) {
+      const segment = text.slice(start, end).trim().replace(/\s+/g, " ");
+      // The longhands too (`animation-timeline`, `transition-property`): a movement written as one
+      // of them one block too far out would run for everybody just the same (sprint 32 día 1).
+      if (/^(transition|animation)(-[a-z]+)?\s*:/.test(segment)) {
         found.push({ declaration: segment, within: preludes.filter((p) => p.startsWith("@")) });
       }
     };
@@ -940,13 +1031,27 @@ describe("the header's motion", () => {
     }
   });
 
-  it("moves the current entry's rule, the rail's mark and the disclosure's panel", () => {
+  it("moves the entry's rule, the indicator, the button, the bar, the rail's mark and the disclosure's panel — and nothing else", () => {
     const declarations = motionIn(render(EVERYTHING, "html").css).map((m) => m.declaration);
     expect(declarations).toEqual([
-      "transition: text-decoration-color 200ms ease-out",
-      "transition: text-decoration-color 200ms ease-out, box-shadow 200ms ease-out",
-      "animation: rb-fold-in 200ms ease-out backwards",
+      "transition: text-decoration-color var(--rb-fast) var(--rb-ease)",
+      "transition: left var(--rb-fast) var(--rb-ease), width var(--rb-fast) var(--rb-ease)",
+      "transition: transform var(--rb-fast) var(--rb-ease), box-shadow var(--rb-fast) var(--rb-ease)",
+      "transition: padding var(--rb-fast) var(--rb-ease), margin var(--rb-fast) var(--rb-ease), background-color var(--rb-fast) var(--rb-ease), box-shadow var(--rb-fast) var(--rb-ease)",
+      "transition: text-decoration-color var(--rb-fast) var(--rb-ease), box-shadow var(--rb-fast) var(--rb-ease), background-color var(--rb-fast) var(--rb-ease)",
+      "animation: rb-fold-in var(--rb-base) var(--rb-ease) backwards",
     ]);
+    // The numbers every one of them reads, outside the query: they are not movement.
+    expect(render(EVERYTHING, "html").css).toContain(
+      "html { --rb-ease: cubic-bezier(0.2, 0, 0, 1); --rb-fast: 200ms; --rb-base: 400ms; }",
+    );
+  });
+
+  it("would catch a longhand written outside the query", () => {
+    const sheet = `${render(site(3), "html").css}\n.rb-x { animation-timeline: view(); }`;
+    expect(
+      motionIn(sheet).some(({ declaration }) => declaration.startsWith("animation-timeline")),
+    ).toBe(true);
   });
 
   it("would catch a transition written outside the query", () => {

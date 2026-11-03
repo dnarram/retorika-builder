@@ -44,6 +44,8 @@ export { fontFaceCss } from "./fonts.ts";
 export type { ActionEntry, HeaderSettings } from "./header.ts";
 export {
   actionEntry,
+  GLASS_BACKGROUNDS,
+  GLASS_MIX,
   headerDrawn,
   headerPhoneRow,
   headerPlaces,

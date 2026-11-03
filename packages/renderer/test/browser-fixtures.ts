@@ -1013,6 +1013,13 @@ export function headerCombinations(): Combination[] {
       }),
     );
   }
+  // A row at every width whose phone is «Ir a…» (sprint 32 día 1): the one pair that drew two copies
+  // of the sections at 320, the row beside the disclosure, until the row learnt the phone's choice.
+  combinations.push(
+    make("header/fold/row-on-wide", FIXED_PALETTE[0].id, {
+      sections: { position: "row", mobile: "fold" },
+    }),
+  );
   return combinations;
 }
 

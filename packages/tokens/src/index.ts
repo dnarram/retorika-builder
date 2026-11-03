@@ -4,6 +4,7 @@ export {
   AA_NORMAL_TEXT,
   CONTRAST_PAIRS,
   contrastRatio,
+  mixHex,
   provedOn,
   relativeLuminance,
 } from "./contrast.ts";

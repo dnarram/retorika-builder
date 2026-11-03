@@ -138,3 +138,13 @@ view. It still measures the bar, and only the bar, for `--rb-header-h`: a rail i
 height, so a header whose menus all stand in rails measures 0. Its observer keeps clear of the bar only
 when the bar is fixed over the page. Still one constant string with nothing of the document in it;
 **815 bytes gzipped**, from 794.
+
+## Note — sprint 32 día 1: a bar of 2026, and still four writes (ADR 0063)
+
+The bar now condenses and turns to glass once scrolled, and a rule slides under the current entry
+(ADR 0063). None of it asked the script for anything: the condensing and the glass hang from
+`data-scrolled`, the sliding rule from `aria-current` by CSS anchor positioning, the anchors from
+`--rb-header-h` as before. §2's table is unchanged and the constant is the same 815 bytes. The
+stylesheet keeps a second, static height (`--rb-bar-h`) for the cover under a transparent bar, which
+the script never writes: §2's row about the measure is about the anchors and «Ir a…», which should
+follow the bar as it is, and not about the cover, which should not.

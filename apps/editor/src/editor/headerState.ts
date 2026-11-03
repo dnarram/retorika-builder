@@ -512,14 +512,16 @@ export const SCHEME_TOKENS: Record<
   HeaderBackground,
   {
     bar: "color.surface" | "color.primary" | "color.secondary" | "color.ink";
-    text: "color.primary" | "color.surface";
+    text: "color.ink" | "color.surface";
   }
 > = {
-  surface: { bar: "color.surface", text: "color.primary" },
+  // Ink on the surface schemes since ADR 0063 (sprint 32 día 1): the primary is written on no glass,
+  // and a scrolled surface bar is glass.
+  surface: { bar: "color.surface", text: "color.ink" },
   primary: { bar: "color.primary", text: "color.surface" },
   secondary: { bar: "color.secondary", text: "color.surface" },
   ink: { bar: "color.ink", text: "color.surface" },
-  transparent: { bar: "color.surface", text: "color.primary" },
+  transparent: { bar: "color.surface", text: "color.ink" },
 };
 
 export function schemeSwatch(
@@ -553,7 +555,7 @@ export function headerColorInForce(doc: RetorikaDocument, part: HeaderPart): str
   const tokens = SCHEME_TOKENS[background];
   if (part === "bar") return doc.theme[tokens.bar];
   if (part === "action") {
-    return doc.theme[tokens.text === "color.primary" ? "color.surface" : "color.primary"];
+    return doc.theme[tokens.text === "color.surface" ? "color.primary" : "color.surface"];
   }
   return doc.theme[tokens.text];
 }
