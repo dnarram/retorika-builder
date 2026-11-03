@@ -89,7 +89,7 @@ html { --rb-measure: 1200px; }
 
 html { --rb-ease: cubic-bezier(0.2, 0, 0, 1); --rb-fast: 200ms; --rb-base: 400ms; }
 @keyframes rb-rise { from { opacity: 0; transform: translateY(16px); } }
-@keyframes rb-reveal { from { opacity: 0; transform: translateY(16px); } 15% { opacity: 1; } }
+@keyframes rb-reveal { from { transform: translateY(16px); } }
 @media (prefers-reduced-motion: no-preference) {
   @supports (animation-timeline: view()) {
     main > .rb-section:not(:first-child) > * { animation: rb-reveal linear none;
@@ -125,6 +125,7 @@ html { --rb-bar-h: calc(2 * var(--space-md) + max(40px, 1.5 * var(--size-body)))
   .rb-nav-action { transition: transform var(--rb-fast) var(--rb-ease), box-shadow var(--rb-fast) var(--rb-ease); }
   .rb-header[data-sticky] { transition: padding var(--rb-fast) var(--rb-ease), margin var(--rb-fast) var(--rb-ease),
     background-color var(--rb-fast) var(--rb-ease), box-shadow var(--rb-fast) var(--rb-ease); }
+  .rb-burger::before, .rb-burger::after { transition: transform var(--rb-fast) var(--rb-ease); }
 }
 .rb-header { position: relative; z-index: 1; display: flex; flex-wrap: wrap; align-items: center;
   gap: var(--space-md) var(--space-xl); padding: var(--space-md)
@@ -162,9 +163,20 @@ html { --rb-bar-h: calc(2 * var(--space-md) + max(40px, 1.5 * var(--size-body)))
 }
 .rb-brand + .rb-nav-action, .rb-header > .rb-nav-action:first-child { margin-left: auto; }
 .rb-nav-narrow { padding: 0; }
-.rb-nav-narrow > summary { color: var(--color-ink); font-family: var(--font-heading);
+.rb-nav-narrow > summary { display: inline-flex; align-items: center; gap: var(--space-sm);
+  color: var(--color-ink); font-family: var(--font-heading);
   font-size: var(--size-body); cursor: pointer; list-style: none; }
 .rb-nav-narrow > summary::-webkit-details-marker { display: none; }
+.rb-nav-narrow > summary > .rb-when-open, .rb-nav-narrow[open] > summary > .rb-when-closed {
+  display: none; }
+.rb-nav-narrow[open] > summary > .rb-when-open { display: inline; }
+.rb-burger { position: relative; flex: none; width: 18px; height: 12px; }
+.rb-burger::before, .rb-burger::after { content: ""; position: absolute; left: 0; right: 0;
+  height: 2px; border-radius: 1px; background: currentColor; }
+.rb-burger::before { top: 0; }
+.rb-burger::after { bottom: 0; }
+.rb-nav-narrow[open] .rb-burger::before { transform: translateY(5px) rotate(45deg); }
+.rb-nav-narrow[open] .rb-burger::after { transform: translateY(-5px) rotate(-45deg); }
 .rb-nav-narrow .rb-nav { position: absolute; left: 0; right: 0; top: 100%; z-index: 2;
   flex-direction: column; flex-wrap: nowrap; gap: var(--space-sm);
   padding: var(--space-md) var(--space-lg);
@@ -257,6 +269,26 @@ html[data-rb-js] .rb-header[data-sticky][data-bg=transparent] { position: fixed;
   .rb-header[data-layout=stacked] .rb-brand { flex-basis: 0; }
   .rb-header[data-sticky][data-phone-row] { position: static; }
   .rb-header[data-sticky][data-phone-row] ~ main [data-section] { scroll-margin-top: 0; }
+  .rb-nav-narrow > .rb-nav { box-sizing: border-box; height: calc(100dvh - var(--rb-header-h));
+    overflow: hidden auto; gap: var(--space-md); padding: var(--space-xl) var(--space-lg);
+    border-bottom: 0; }
+  .rb-nav-narrow > .rb-nav a { font-family: var(--font-heading); font-size: var(--size-subheading);
+    padding: var(--space-xs) var(--space-sm); margin-left: calc(-1 * var(--space-sm));
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0; box-shadow: inset 3px 0 0 transparent; }
+  .rb-nav-narrow > .rb-nav a[aria-current] { text-decoration-color: transparent;
+    box-shadow: inset 3px 0 0 currentColor;
+    background: color-mix(in srgb, currentColor 12%, transparent); }
+  body:has(.rb-nav-narrow[open]) main { visibility: hidden; }
+  @media (prefers-reduced-motion: no-preference) {
+    .rb-nav-narrow[open] > .rb-nav > a { animation: rb-rise var(--rb-base) var(--rb-ease) backwards;
+      animation-delay: calc(var(--rb-i, 0) * 40ms); }
+    .rb-nav-narrow[open] > .rb-nav > a:nth-child(2) { --rb-i: 1; }
+    .rb-nav-narrow[open] > .rb-nav > a:nth-child(3) { --rb-i: 2; }
+    .rb-nav-narrow[open] > .rb-nav > a:nth-child(4) { --rb-i: 3; }
+    .rb-nav-narrow[open] > .rb-nav > a:nth-child(5) { --rb-i: 4; }
+    .rb-nav-narrow[open] > .rb-nav > a:nth-child(6) { --rb-i: 5; }
+    .rb-nav-narrow[open] > .rb-nav > a:nth-child(n + 7) { --rb-i: 6; }
+  }
 }
 </style>
 </head>
@@ -274,7 +306,13 @@ html[data-rb-js] .rb-header[data-sticky][data-bg=transparent] { position: fixed;
   </div>
   <details class="rb-nav-narrow">
     <summary>
-      Menú
+      <span aria-hidden="true" class="rb-burger"></span>
+      <span class="rb-when-closed">
+        Menú
+      </span>
+      <span class="rb-when-open">
+        Cerrar
+      </span>
     </summary>
     <nav aria-label="Páginas" class="rb-nav" data-part="pagesLinks">
       <a href="./que-ponemos.html">

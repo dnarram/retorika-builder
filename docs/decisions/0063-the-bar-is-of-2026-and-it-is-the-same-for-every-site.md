@@ -202,6 +202,43 @@ Named for the page transition, a bar in the flow became a stacking context, and 
 which a sticky or transparent bar already was with its 2. Measured by the fold's own walk (a bar in
 the flow, scrolled 600 px), red by a click the paragraph took, green after.
 
+## Note — sprint 32 día 4: on a phone, «Menú» and «Ir a…» are sheets
+
+§2 left the phone's «Menú» as sprint 31 drew it, a list hanging from the bar, and named the sheet as
+día 4's. It is now a sheet, and «Ir a…» on a phone with it (`phoneSheet`, `header.ts`):
+
+- **It fills the screen under the bar**: `height: calc(100dvh - var(--rb-header-h))`, scrolling down
+  inside itself and never across (the rail's rule). Its entries are set large, in the heading letter
+  at the subheading size, and the current one is marked by its edge and a tint, as in a rail.
+- **They come in one after another** when it opens: `rb-rise`, 400 ms, each 40 ms after the one
+  before, capped at the seventh, the delay riding a custom property (día 2's lesson), filled
+  `backwards` so an entry waiting on its delay is not drawn early. Under the motion query; the
+  canvas, which has no `rb-rise` keyframes (ADR 0062 §5), animates none of it.
+- **«Menú» has an icon and keeps its word**: two bars that cross into an X when open, and «Menú» that
+  becomes «Cerrar» (`nav.close` in the renderer's locale). Both words are drawn and the stylesheet
+  shows the one that applies, so the summary's accessible name is the word on screen. The word stays
+  because the people this product serves do not all read an icon alone. With «Ir a…» beside it in the
+  phone's bar the bars are not drawn: the 26 px they take are the brand's logo at 320 (sprint 31 día
+  3). «Ir a…» gains a chevron that turns, on a wide screen only, for the same reason.
+- **What the sheet covers stops existing while it is open** (David's adjustment 4):
+  `body:has(<disclosure>[open]) main { visibility: hidden }`, in the phone's block only. The page
+  leaves the order of Tab and the accessibility tree, so the keyboard cannot reach a link nobody can
+  see, and the page no longer shows scrolling behind the sheet. Where `:has` is missing (it has been
+  Baseline since 2023) the page stays visible behind, as before. `<main>` and not also `footer`: the
+  footer is a section inside `<main>`. Tab past the last entry leaves the document — it does not
+  «return to the summary», as the plan put it; nothing but a script could make it — and the next Tab
+  starts again at the skip link. This is also why the body's scroll is not locked: nothing behind can
+  be seen or reached.
+- **A press outside closes it**, as the script always did; on a phone the bar is the one place
+  outside a sheet that covers the rest of the screen, and the script's tests press there now.
+
+Measured at 320×568 and 390×844: the sheet's top on the bar's foot within a pixel, its bottom at the
+window's, edge to edge; `<main>` hidden while open and visible after Escape; opening «Ir a…» closes
+«Menú»; the bar of `cabecera-con-marca` with a logo still ≤ 72 px at 320 with the bars drawn. With
+eight entries the delays are 0, 40, … 240, 240, the last not drawn before its delay, every one at rest
+after. Sabotaged: without the `visibility: hidden`, the keyboard lands under the sheet; without
+`backwards`, the last entry is drawn before its delay.
+
 ## Consequences
 
 - `packages/renderer/src/header.ts`: `GLASS_MIX`, `GLASS_BACKGROUNDS`, `HAIRLINE`, `STRIP_NAV`; the

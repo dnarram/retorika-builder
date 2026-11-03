@@ -968,23 +968,22 @@ function motionCss(doc: RetorikaDocument, target: "html" | "dom"): string[] {
   return [
     numbers,
     "@keyframes rb-rise { from { opacity: 0; transform: translateY(16px); } }",
-    // The reveal's own keyframes: the fade is done in the first 15 % of the range — 24 of the 160 px
-    // — and the rise takes the rest. A child that straddles the bottom edge of the first screen at
-    // load is then its full self unless it shows by less than 24 px; axe, which weighs opacity into
-    // a colour, read the half-faded intro of the second section as a failed contrast on Lighthouse's
-    // phone before this (accessibility 96 on six subjects of eight).
-    "@keyframes rb-reveal { from { opacity: 0; transform: translateY(16px); } 15% { opacity: 1; } }",
+    // **The reveal rises and never fades** (sprint 32 día 4, decided by David's delegation, ADR 0062's
+    // note). A scroll-driven fade leaves whatever straddles the bottom edge of the first screen at
+    // load half-faded *at rest*, until the visitor scrolls: washed-out words at the foot of every
+    // site's first screen, which axe also reads as a failed contrast (Lighthouse 96 on día 3). No
+    // fade can be made safe by construction — the opacity at which every proved pair on the surface
+    // still clears AA is 0.98 in `neutral` — so the words keep their full contrast at every scroll
+    // and only their place moves: 16 px up, over the 160 px of their entry.
+    "@keyframes rb-reveal { from { transform: translateY(16px); } }",
     "@media (prefers-reduced-motion: no-preference) {",
     "  @supports (animation-timeline: view()) {",
     // `overflow-anchor: none` on what rises: an element whose transform follows the scroll must not
     // be the browser's scroll anchor, or the browser reads its own animation as the page moving and
     // adjusts the scroll by it — measured on día 2 as `scrollTo(0, 400)` landing at 399 while the
     // bar condensed above it (the −400 of ADR 0063 §3, which had held on día 1 before anything rose).
-    // **No fill** (`none`, not `backwards`): outside its range a child is its ordinary self. Before
-    // the range it is under the fold, where nobody sees it — and where axe reads it: Lighthouse's
-    // accessibility fell from 100 to 96 on every subject with `backwards`, because text waiting at
-    // opacity 0 below the fold reads as a 1:1 contrast to axe, which weighs opacity into the colour.
-    // The animation starts at 0 the moment the child shows, so nothing flashes.
+    // **No fill** (`none`, not `backwards`): outside its range a child is its ordinary self, and a
+    // child below the fold waits in its own place rather than 16 px lower.
     "    main > .rb-section:not(:first-child) > * { animation: rb-reveal linear none;",
     "      animation-timeline: view(); animation-range: entry 0% entry 160px;",
     "      overflow-anchor: none; }",

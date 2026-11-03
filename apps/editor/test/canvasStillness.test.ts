@@ -36,6 +36,10 @@ describe("the canvas is still", () => {
   });
 
   it("has nothing to flatten in the canvas's own sheet", () => {
-    expect(buildCss(doc(), "dom")).not.toMatch(/rb-rise|animation-timeline|view-transition/);
+    // The phone's sheets name `rb-rise` for their entries (sprint 32 día 4), but its keyframes
+    // travel with the published page only: in the canvas the name animates nothing.
+    expect(buildCss(doc(), "dom")).not.toMatch(
+      /@keyframes rb-rise|@keyframes rb-reveal|animation-timeline|view-transition/,
+    );
   });
 });

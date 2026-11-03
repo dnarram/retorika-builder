@@ -6261,3 +6261,58 @@ que se fusionó el día 2 hasta que David elija.
 **Medido.** Unit 3649; a11y 894 (888 + 6 casos de la medida); golden 22, el mismo puñado de reglas en
 cada uno y la barra en los cuatro con cabecera, ningún marcado; `size`: `cabecera-con-marca` 16,2 KB
 propios de 28; lint 29 avisos; e2e completo: ver la PR.
+
+### Día 4 — el menú del móvil es una hoja (PR de `feat/el-menu-del-movil-es-una-hoja`)
+
+**Primero, la decisión pendiente del día 3, tomada por delegación de David.** Con la #337 fusionada,
+David: «Se el mejor experto de UX y diseño gráfico y decide las respuestas sobre las decisiones
+pendientes para continuar con el dia siguiente del sprint». La pendiente era fundido o subida en el
+revelado al bajar. **Decidido: sube y no se funde.** El motivo es lo que ve un visitante: un fundido
+guiado por el scroll deja a medio fundir *en reposo* lo que queda a caballo del borde inferior de la
+primera pantalla, hasta que el visitante baja; palabras lavadas al pie de la primera pantalla de cada
+web, que es además lo que axe midió (2,53:1). Ningún fundido es seguro por construcción (0,98 de
+opacidad mínima en `neutral`). La entrada de la portada conserva el suyo: va por tiempo, está en
+pantalla desde el primer pintado y acaba en 600 ms. Medido: Lighthouse, accesibilidad **100 en los
+ocho**; el gemelo asevera opacidad 1 y la subida en tres puntos de la franja. Escrito en la nota del
+día 4 de la ADR 0062 y en la 0064 §5, con la cita; no se firma por David.
+
+**La hoja del móvil** (nota del día 4 en la ADR 0063). «Menú», y «Ir a…» en el móvil, ya no son una
+lista colgada de la barra sino **una hoja** que llena la pantalla bajo la barra, con las entradas
+grandes en la letra de titulares, la actual marcada por su borde y un tinte como en el raíl, y
+**entrando una tras otra** al abrir (40 ms, tope en la séptima, relleno `backwards`, el retardo en una
+propiedad propia por la lección del día 2). «Menú» lleva **icono y palabra**: dos barras que se cruzan
+en X y «Menú» que pasa a «Cerrar» (`nav.close`); las dos palabras se dibujan y la hoja enseña la que
+toca, así que el nombre accesible es la palabra en pantalla. Con «Ir a…» al lado en la barra del
+móvil el icono no se dibuja: sus 26 px son el logo a 320. «Ir a…» gana un cheurón que gira, solo en
+escritorio. **Lo que la hoja tapa deja de existir** (ajuste 4): `body:has(…[open]) main { visibility:
+hidden }` en el bloque del móvil.
+
+**Dos correcciones al plan, medidas.** El plan decía que Tab desde la última entrada «vuelve al
+`summary`»: no puede sin script; sale del documento y el siguiente Tab empieza en «Saltar al
+contenido». Lo que se asevera es lo que importa: ningún Tab cae bajo la hoja, y con la hoja cerrada la
+página vuelve al orden. Y la «pulsación fuera» de los tests del script caía en (195, 600), que ahora es
+la propia hoja: en el móvil lo único fuera de ella es la barra, y los tests pulsan ahí.
+
+**Medido** a 320×568 y 390×844: la hoja empieza en el pie de la barra (±1 px) y acaba en el fondo de
+la ventana, de borde a borde; `<main>` oculto con la hoja abierta y visible tras Escape; abrir «Ir a…»
+cierra «Menú»; la barra con logo sigue ≤ 72 px a 320 con el icono. Con ocho entradas, retardos 0, 40, …
+240, 240, la última sin dibujar antes de su retardo, todas en reposo al final; nada bajo `reduce`.
+Saboteos: sin el `visibility: hidden`, el teclado cae bajo la hoja (tres rojos); sin `backwards`, la
+última entrada se dibuja antes de tiempo. Batería completa: unit 3653, a11y 899, Lighthouse 8/8 con
+accesibilidad 100 en los ocho, e2e completo 272/272; goldens, los cuatro con cabecera;
+`cabecera-con-marca` 17,4 KB propios de 28.
+
+**La caminata de 320 que CI puso en rojo dos veces** (días 1 y 4: la tarjeta del lienzo «304×742
+recortada por un área de 330» en vista de ordenador). No era el editor: era la espera. `settled`
+comprobaba «la tarjeta cabe», y su primer sondeo corría antes de que el clic en «Ver en ordenador»
+hubiera vuelto a pintar, encontraba la tarjeta aún cabiendo en su ancho de móvil y daba por quieta una
+transición que no había empezado. Reproducido en local con la CPU ralentizada 4×: en el instante en que
+la espera vieja contestaba, la tarjeta medía **304×742** con `ui-reflow` puesto —las cifras exactas de
+CI— y llegaba a 304×330 a los 300 ms. La caminata espera ahora a que el ancho de la tarjeta haya
+cambiado, a que su transición haya acabado (la clase sale en `transitionend`) y entonces a que quepa,
+en los dos sentidos del conmutador; y si el botón ya era el dispositivo en uso (a 768 el editor abre
+en vista de ordenador) no espera un cambio que no llega. **Ese caso se me escapó en el primer arreglo
+y lo empujé con la caminata de 768 en rojo**: una orden encadenada siguió después del test. Corregido
+en el commit siguiente, con el e2e completo en verde (272/272) antes de empujar. El saboteo (la espera
+vieja) no se puso rojo en local ni ralentizado, así que la prueba de la carrera es la muestra y no un
+rojo; se dice así.

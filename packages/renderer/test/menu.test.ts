@@ -670,7 +670,17 @@ describe("the two versions of the menu", () => {
     // site; the checkbox-toggle trick would put one there by the back door.
     const page = draw(twoMenus());
     expect(page.querySelector(".rb-nav-narrow")?.tagName).toBe("DETAILS");
-    expect(page.querySelector(".rb-nav-narrow > summary")?.textContent?.trim()).toBe("Menú");
+    // «Menú» closed and «Cerrar» open (sprint 32 día 4): both words are drawn, the stylesheet shows
+    // the one that applies, and the bars are hidden from the tree.
+    expect(
+      page.querySelector(".rb-nav-narrow > summary > .rb-when-closed")?.textContent?.trim(),
+    ).toBe("Menú");
+    expect(
+      page.querySelector(".rb-nav-narrow > summary > .rb-when-open")?.textContent?.trim(),
+    ).toBe("Cerrar");
+    expect(page.querySelector(".rb-nav-narrow .rb-burger")?.getAttribute("aria-hidden")).toBe(
+      "true",
+    );
     expect(page.querySelectorAll("details")).toHaveLength(1);
     expect(page.querySelectorAll("input")).toHaveLength(0);
   });

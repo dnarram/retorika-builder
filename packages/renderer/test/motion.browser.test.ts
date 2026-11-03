@@ -139,7 +139,7 @@ describe("«Ir a…» exists for a visitor who did not ask for less, and ends at
 });
 
 describe("a section comes in as the visitor scrolls to it (ADR 0062)", () => {
-  it("is invisible below the fold and at rest once scrolled to, on a view timeline", async () => {
+  it("rises on a view timeline, at full opacity always, and is at rest once scrolled to", async () => {
     const page = await openSite(fixture("menu-y-paginas"), true);
     try {
       expect(await page.evaluate(() => CSS.supports("animation-timeline: view()"))).toBe(true);
@@ -148,9 +148,8 @@ describe("a section comes in as the visitor scrolls to it (ADR 0062)", () => {
         () => document.querySelector('[data-section="sec-contact"]')?.getBoundingClientRect().top,
       );
       expect(below).toBeGreaterThan(720);
-      // Under the fold it is its ordinary self (no fill): what axe reads at load. The fade starts
-      // the moment it shows.
-      expect((await stateOf(page, "sec-contact")).opacity).toBe("1");
+      // Under the fold it is its ordinary self (no fill), in its own place.
+      expect(await stateOf(page, "sec-contact")).toEqual({ opacity: "1", transform: "none" });
       const timeline = await page.evaluate(() => {
         const el = document.querySelector('[data-section="sec-contact"] > *') as HTMLElement;
         return el.getAnimations().map((a) => a.timeline?.constructor.name);
@@ -182,7 +181,7 @@ describe("a section comes in as the visitor scrolls to it (ADR 0062)", () => {
     }
   });
 
-  it("has finished 160 px after a child shows, however tall the child (adjustment 3)", async () => {
+  it("has finished 160 px after a child shows, however tall the child, and never fades (adjustment 3; día 4)", async () => {
     const page = await openSite(fixture("menu-y-paginas"), true);
     try {
       // A 1600 px child, taller than the window: on a percentage range it would stay half-faded
@@ -198,29 +197,26 @@ describe("a section comes in as the visitor scrolls to it (ADR 0062)", () => {
           window.scrollTo({ top, behavior: "instant" });
           await new Promise((r) => requestAnimationFrame(() => r(undefined)));
           await new Promise((r) => requestAnimationFrame(() => r(undefined)));
-          return getComputedStyle(
+          const style = getComputedStyle(
             document.querySelector('[data-section="sec-contact"] > *') as HTMLElement,
-          ).opacity;
+          );
+          // The vertical offset of the transform matrix, in px; 0 for `none`.
+          const m = /matrix\(([^)]+)\)/.exec(style.transform);
+          return { opacity: style.opacity, dy: m ? Number(m[1]?.split(",")[5]) : 0 };
         }, y);
-      // Its top just under the bottom edge: not yet shown, and so its ordinary self (no fill).
-      expect(Number(await at(top - 720 - 10))).toBe(1);
-      // Just shown, 2 px in: at the start of its fade (2 of the 24 px, about 0.08).
-      expect(Number(await at(top - 720 + 2))).toBeLessThan(0.15);
-      // 12 px in, half way through the fade's 24 px: half faded; 80 px in, the fade is done and the
-      // rise is half way (transform, not opacity, is what still moves).
-      const half = Number(await at(top - 720 + 12));
-      expect(half).toBeGreaterThan(0.3);
-      expect(half).toBeLessThan(0.7);
-      expect(Number(await at(top - 720 + 80))).toBe(1);
-      const rising = await page.evaluate(
-        () =>
-          getComputedStyle(
-            document.querySelector('[data-section="sec-contact"] > *') as HTMLElement,
-          ).transform,
-      );
-      expect(rising).not.toBe("none");
+      // Its top just under the bottom edge: not yet shown, its ordinary self (no fill).
+      expect(await at(top - 720 - 10)).toEqual({ opacity: "1", dy: 0 });
+      // Just shown, 2 px in: nearly the whole 16 px below its place, and at full opacity.
+      const start = await at(top - 720 + 2);
+      expect(start.opacity).toBe("1");
+      expect(start.dy).toBeGreaterThan(15);
+      // Half way through its 160 px: half way up, still at full opacity.
+      const half = await at(top - 720 + 80);
+      expect(half.opacity).toBe("1");
+      expect(half.dy).toBeGreaterThan(6);
+      expect(half.dy).toBeLessThan(10);
       // 160 px after it showed — with 1440 px of it still under the fold — at rest.
-      expect(Number(await at(top - 720 + 170))).toBe(1);
+      expect(await at(top - 720 + 170)).toEqual({ opacity: "1", dy: 0 });
     } finally {
       await page.context().close();
     }
@@ -303,6 +299,85 @@ describe("the page fades into the next and the bar stays (ADR 0062)", () => {
       } finally {
         await page.context().close();
       }
+    }
+  });
+});
+
+describe("the phone's sheet brings its entries in one after another (sprint 32 día 4)", () => {
+  /** «Ir a…» on a phone with eight sections: seven entries and more, past the stagger's cap. */
+  function eightOnAPhone(): RetorikaDocument {
+    const doc = fixture("cabecera-con-marca");
+    const home = doc.pages[0];
+    const services = home?.sections.find((s) => s.id === "sec-services-home");
+    if (!home || !services) throw new Error("no home page or no services section");
+    const more = ["Carta", "Vinos", "Raciones", "Postres", "Grupos", "Terraza", "Reservas"].map(
+      (menuLabel, i) => ({ ...services, id: `sec-extra-${i}`, menuLabel }),
+    );
+    return parseDocument({
+      ...doc,
+      header: { ...doc.header, sections: { shown: true, position: "bar", mobile: "fold" } },
+      pages: [{ ...home, sections: [...home.sections, ...more] }, ...doc.pages.slice(1)],
+    });
+  }
+
+  async function openPhone(motion: boolean): Promise<Page> {
+    const context = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      reducedMotion: motion ? "no-preference" : "reduce",
+    });
+    const page = await context.newPage();
+    await page.setContent(render(eightOnAPhone(), "html").html, { waitUntil: "load" });
+    return page;
+  }
+
+  it("delays each entry 40 ms after the one before, caps at the seventh, and ends every one at rest", async () => {
+    const page = await openPhone(true);
+    try {
+      await page.click(".rb-nav-fold > summary");
+      const entries = await page.evaluate(() =>
+        [...document.querySelectorAll<HTMLElement>(".rb-nav-fold > .rb-nav > a")].map((a) => {
+          const anim = a.getAnimations()[0];
+          return {
+            delay: anim?.effect?.getTiming().delay,
+            opacity: Number(getComputedStyle(a).opacity),
+          };
+        }),
+      );
+      expect(entries.length).toBeGreaterThanOrEqual(8);
+      expect(entries.slice(0, 8).map((e) => e.delay)).toEqual([0, 40, 80, 120, 160, 200, 240, 240]);
+      // The last one, still waiting on its delay, is not drawn early (`backwards`).
+      expect(entries.at(-1)?.opacity).toBeLessThan(0.5);
+      await page.evaluate(() =>
+        Promise.all(
+          [...document.querySelectorAll(".rb-nav-fold > .rb-nav > a")]
+            .flatMap((a) => a.getAnimations())
+            .map((a) => a.finished),
+        ),
+      );
+      const rest = await page.evaluate(() =>
+        [...document.querySelectorAll(".rb-nav-fold > .rb-nav > a")].every(
+          (a) => getComputedStyle(a).opacity === "1" && getComputedStyle(a).transform === "none",
+        ),
+      );
+      expect(rest).toBe(true);
+    } finally {
+      await page.context().close();
+    }
+  });
+
+  it("shows every entry at once for a visitor who asked for less", async () => {
+    const page = await openPhone(false);
+    try {
+      await page.click(".rb-nav-fold > summary");
+      expect(
+        await page.evaluate(() =>
+          [...document.querySelectorAll(".rb-nav-fold > .rb-nav > a")].every(
+            (a) => getComputedStyle(a).opacity === "1" && a.getAnimations().length === 0,
+          ),
+        ),
+      ).toBe(true);
+    } finally {
+      await page.context().close();
     }
   });
 });

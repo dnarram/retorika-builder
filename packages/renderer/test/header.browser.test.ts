@@ -1060,3 +1060,62 @@ describe("the bar has the page's measure (ADR 0064)", () => {
     }
   });
 });
+
+describe("the phone's menu is a sheet (sprint 32 día 4)", () => {
+  const FOLD_PHONE = {
+    sections: { shown: true, position: "bar" as const, mobile: "fold" as const },
+  };
+
+  for (const [width, height] of [
+    [320, 568],
+    [390, 844],
+  ] as const) {
+    it(`covers from the bar's foot to the bottom of the screen, and hides the page behind, at ${width}×${height}`, async () => {
+      const page = await open(placed(FOLD_PHONE), width, height);
+      try {
+        await page.click(".rb-nav-narrow > summary");
+        const m = await page.evaluate(() => {
+          const bar = document.querySelector("header.rb-header") as HTMLElement;
+          const sheet = document.querySelector(".rb-nav-narrow > .rb-nav") as HTMLElement;
+          const s = sheet.getBoundingClientRect();
+          return {
+            barBottom: bar.getBoundingClientRect().bottom,
+            sheetTop: s.top,
+            sheetBottom: s.bottom,
+            sheetLeft: s.left,
+            sheetRight: s.right,
+            innerHeight,
+            innerWidth,
+            main: getComputedStyle(document.querySelector("main") as Element).visibility,
+            word: (
+              document.querySelector(".rb-nav-narrow > summary") as HTMLElement
+            ).innerText.trim(),
+          };
+        });
+        expect(Math.abs(m.sheetTop - m.barBottom)).toBeLessThanOrEqual(1);
+        expect(m.sheetBottom).toBeGreaterThanOrEqual(m.innerHeight - 1);
+        expect([m.sheetLeft, m.sheetRight]).toEqual([0, m.innerWidth]);
+        expect(m.main).toBe("hidden");
+        expect(m.word).toBe("Cerrar");
+        // Opening «Ir a…» closes «Menú» (the script's press outside), and its sheet takes over.
+        await page.click(".rb-nav-fold > summary");
+        expect(
+          await page.evaluate(() => ({
+            menu: (document.querySelector(".rb-nav-narrow") as HTMLDetailsElement).open,
+            fold: (document.querySelector(".rb-nav-fold") as HTMLDetailsElement).open,
+            main: getComputedStyle(document.querySelector("main") as Element).visibility,
+          })),
+        ).toEqual({ menu: false, fold: true, main: "hidden" });
+        // Escape closes it and the page is back.
+        await page.keyboard.press("Escape");
+        expect(
+          await page.evaluate(
+            () => getComputedStyle(document.querySelector("main") as Element).visibility,
+          ),
+        ).toBe("visible");
+      } finally {
+        await page.context().close();
+      }
+    });
+  }
+});
