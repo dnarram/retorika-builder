@@ -1007,3 +1007,56 @@ describe("the indicator under the current entry", () => {
     }
   });
 });
+
+describe("the bar has the page's measure (ADR 0064)", () => {
+  /** The left edge of the brand's first box and of the cover's headline, and of the button's right
+   * edge against the cover's content box, at a width. */
+  async function edges(page: Page) {
+    return page.evaluate(() => {
+      const brand = document.querySelector<HTMLElement>(".rb-header > .rb-brand");
+      const h1 = document.querySelector<HTMLElement>("main > .rb-section:first-child h1");
+      const section = document.querySelector<HTMLElement>("main > .rb-section:first-child");
+      if (!brand || !h1 || !section) throw new Error("no brand, headline or first section");
+      const s = getComputedStyle(section);
+      const box = section.getBoundingClientRect();
+      return {
+        brand: brand.getBoundingClientRect().left,
+        h1: h1.getBoundingClientRect().left,
+        contentLeft: box.left + Number.parseFloat(s.paddingLeft),
+        contentRight: box.right - Number.parseFloat(s.paddingRight),
+        barRight: (() => {
+          const bar = document.querySelector<HTMLElement>("header.rb-header") as HTMLElement;
+          const b = bar.getBoundingClientRect();
+          return b.right - Number.parseFloat(getComputedStyle(bar).paddingRight);
+        })(),
+      };
+    });
+  }
+
+  for (const width of [1680, 1280]) {
+    it(`lines the brand up with the content's left edge, and the bar's right with its right, at ${width}`, async () => {
+      const page = await open(fixture("cabecera-con-marca"), width, 900);
+      try {
+        const e = await edges(page);
+        expect(Math.abs(e.brand - e.contentLeft), JSON.stringify(e)).toBeLessThanOrEqual(1);
+        expect(Math.abs(e.barRight - e.contentRight), JSON.stringify(e)).toBeLessThanOrEqual(1);
+        if (width === 1680) expect(e.contentLeft).toBe((1680 - 1200) / 2);
+      } finally {
+        await page.context().close();
+      }
+    });
+  }
+
+  it("takes a rail's width out of the bar's measure, so the brand still lines up beside it, at 1680", async () => {
+    // The pages in a left rail and the brand left in the bar: the bar's padding is a share of the
+    // `<body>`, not of the narrower `<main>`, unless the rail's width is taken out (`--rb-rail-l`).
+    const page = await open(placed({ pages: { shown: true, position: "left" } }), 1680, 900);
+    try {
+      const e = await edges(page);
+      expect(Math.abs(e.brand - e.contentLeft), JSON.stringify(e)).toBeLessThanOrEqual(1);
+      expect(e.contentLeft).toBe(240 + (1680 - 240 - 1200) / 2);
+    } finally {
+      await page.context().close();
+    }
+  });
+});

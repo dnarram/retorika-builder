@@ -651,8 +651,13 @@ export function headerCss(doc: RetorikaDocument, target: "html" | "dom"): string
     // ranked inside the header's context and painted under a section's paragraph rising with its
     // own transform: Playwright found the paragraph intercepting the click. A sticky or transparent
     // bar already had its `z-index: 2`; this gives the flow bar the same standing.
+    // **The bar has the page's measure** (ADR 0064): its brand lines up with the sections' words at
+    // every width. A percentage of padding is a percentage of the containing block, which for the bar
+    // is the `<body>` and not the `<main>` a rail narrows, so the rails' widths are taken out
+    // (`--rb-rail-l`, `--rb-rail-r`, written where the rails' margins are).
     ".rb-header { position: relative; z-index: 1; display: flex; flex-wrap: wrap; align-items: center;",
-    "  gap: var(--space-md) var(--space-xl); padding: var(--space-md) var(--space-xl);",
+    "  gap: var(--space-md) var(--space-xl); padding: var(--space-md)",
+    "    max(var(--space-xl), calc((100% - var(--rb-rail-l, 0px) - var(--rb-rail-r, 0px) - var(--rb-measure)) / 2));",
     `  background: var(--color-surface); border-bottom: ${HAIRLINE}; line-height: 1.3; }`,
     ".rb-header[data-hairline=none] { border-bottom: 0; }",
     // The brand never breaks the bar's height: one line, cut with an ellipsis before it wraps
@@ -955,8 +960,10 @@ function railCss(doc: RetorikaDocument): string[] {
     // nothing (seen in Chromium at 1100 px on sprint 31 día 2, before this line).
     "  .rb-header[data-pages=left] .rb-nav-wide > .rb-nav + .rb-nav,",
     "  .rb-header[data-pages=right] .rb-nav-wide > .rb-nav + .rb-nav { padding-left: 0; border-left: 0; }",
-    `  .rb-header[data-rails~=left], .rb-header[data-rails~=left] ~ main { margin-left: ${RAIL_WIDTH}px; }`,
-    `  .rb-header[data-rails~=right], .rb-header[data-rails~=right] ~ main { margin-right: ${RAIL_WIDTH}px; }`,
+    `  .rb-header[data-rails~=left], .rb-header[data-rails~=left] ~ main { margin-left: ${RAIL_WIDTH}px;`,
+    `    --rb-rail-l: ${RAIL_WIDTH}px; }`,
+    `  .rb-header[data-rails~=right], .rb-header[data-rails~=right] ~ main { margin-right: ${RAIL_WIDTH}px;`,
+    `    --rb-rail-r: ${RAIL_WIDTH}px; }`,
     ...collapseBar('.rb-header[data-layout][data-bar=none]:not([data-rails="left right"])'),
     "}",
     // Two rails, too narrow for both: the sections' rail falls into the bar, and its side's margin
@@ -967,9 +974,9 @@ function railCss(doc: RetorikaDocument): string[] {
     "    display: none; }",
     '  .rb-header[data-rails="left right"] .rb-nav-wide > [data-part=sectionsLinks] { display: flex; }',
     '  .rb-header[data-rails="left right"][data-sections=left],',
-    '  .rb-header[data-rails="left right"][data-sections=left] ~ main { margin-left: 0; }',
+    '  .rb-header[data-rails="left right"][data-sections=left] ~ main { margin-left: 0; --rb-rail-l: 0px; }',
     '  .rb-header[data-rails="left right"][data-sections=right],',
-    '  .rb-header[data-rails="left right"][data-sections=right] ~ main { margin-right: 0; }',
+    '  .rb-header[data-rails="left right"][data-sections=right] ~ main { margin-right: 0; --rb-rail-r: 0px; }',
     "}",
     `${both} {`,
     ...collapseBar('.rb-header[data-layout][data-bar=none][data-rails="left right"]'),

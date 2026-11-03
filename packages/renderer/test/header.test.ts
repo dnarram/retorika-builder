@@ -798,7 +798,7 @@ describe("each menu has its place (ADR 0060)", () => {
       `@media (min-width: ${RAIL_FOLD_WIDTH}px) {\n  .rb-rail { display: flex; }`,
     );
     expect(css).toContain(
-      `  .rb-header[data-rails~=left], .rb-header[data-rails~=left] ~ main { margin-left: ${RAIL_WIDTH}px; }`,
+      `  .rb-header[data-rails~=left], .rb-header[data-rails~=left] ~ main { margin-left: ${RAIL_WIDTH}px;\n    --rb-rail-l: ${RAIL_WIDTH}px; }`,
     );
     expect(css).toContain(
       `@media (min-width: ${RAIL_FOLD_WIDTH}px) and (max-width: ${TWO_RAILS_FOLD_WIDTH - 1}px) {`,

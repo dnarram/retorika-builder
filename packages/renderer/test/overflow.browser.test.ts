@@ -9,6 +9,7 @@ import {
   headerCombinations,
   longTextCombinations,
   openCombination,
+  railCombinations,
   scaleCombinations,
 } from "./browser-fixtures.ts";
 
@@ -334,5 +335,94 @@ describe("overflow — long text (every composition that declares it, every type
       }
     }
     console.log(`Fonts Chromium renders (${process.platform}):\n${report.join("\n")}`);
+  });
+});
+
+/**
+ * **The page has a measure** (ADR 0064, sprint 32 día 3): on a wide screen a section's content is at
+ * most `--rb-measure` (1200 px) and centred, by padding, with the section's background still edge to
+ * edge; with a rail the content centres in what `<main>` keeps, not in the window. At 1280 nothing
+ * moves (the padding is the scale's 48 until 1296), which is why the widths above are untouched.
+ */
+describe("the measure: 1200 px of content, centred, from 1296 up", () => {
+  /** Each section's content box, from its computed padding, against the box it centres in. */
+  async function measured(page: import("@playwright/test").Page) {
+    return page.evaluate(() => {
+      const main = document.querySelector("main") as HTMLElement;
+      const mainBox = main.getBoundingClientRect();
+      return {
+        innerWidth,
+        scrollWidth: document.scrollingElement?.scrollWidth ?? -1,
+        main: { left: mainBox.left, right: mainBox.right },
+        sections: [...document.querySelectorAll<HTMLElement>("main > .rb-section")].map((s) => {
+          const box = s.getBoundingClientRect();
+          const style = getComputedStyle(s);
+          const left = box.left + Number.parseFloat(style.paddingLeft);
+          const right = box.right - Number.parseFloat(style.paddingRight);
+          return { id: s.dataset["section"], left, right, width: right - left, edge: box.width };
+        }),
+      };
+    });
+  }
+
+  it("holds every section of a page to 1200 px of content, centred in the window, at 1680", async () => {
+    const c = geometryCombinations()[0];
+    if (!c) throw new Error("no geometry combination");
+    const page = await openCombination(browser, c, 1680);
+    try {
+      const m = await measured(page);
+      expect(m.scrollWidth).toBe(m.innerWidth);
+      expect(m.sections.length).toBeGreaterThan(0);
+      for (const s of m.sections) {
+        expect(s.width, `${s.id}`).toBeLessThanOrEqual(1200 + 1);
+        expect(s.width, `${s.id}`).toBeGreaterThanOrEqual(1200 - 1);
+        // Centred: as far from the left edge of the window as from the right.
+        expect(Math.abs(s.left - (m.innerWidth - s.right)), `${s.id}`).toBeLessThanOrEqual(1);
+        // And the background is still edge to edge.
+        expect(s.edge, `${s.id}`).toBe(m.innerWidth);
+      }
+    } finally {
+      await closeCombination(page);
+    }
+  });
+
+  it("changes nothing at 1280: the padding is the scale's 48", async () => {
+    const c = geometryCombinations()[0];
+    if (!c) throw new Error("no geometry combination");
+    const page = await openCombination(browser, c, 1280);
+    try {
+      for (const s of (await measured(page)).sections) {
+        expect(s.left, `${s.id}`).toBe(48);
+        expect(s.width, `${s.id}`).toBe(1280 - 96);
+      }
+    } finally {
+      await closeCombination(page);
+    }
+  });
+
+  it("centres the content in what <main> keeps beside a rail, not in the window, at 1680", async () => {
+    const c = railCombinations().find((r) => {
+      const h = r.document.header;
+      const pages = h?.pages?.position ?? "bar";
+      const sections = h?.sections?.position ?? "bar";
+      // One rail only: two would leave <main> 1200 wide, where no padding grows.
+      return (pages === "left") !== (sections === "left" || sections === "right");
+    });
+    if (!c) throw new Error("no one-rail combination");
+    const page = await openCombination(browser, c, 1680);
+    try {
+      const m = await measured(page);
+      expect(m.main.right - m.main.left).toBe(1680 - 240);
+      expect(m.scrollWidth).toBe(m.innerWidth);
+      for (const s of m.sections) {
+        expect(s.width, `${c.id} ${s.id}`).toBeLessThanOrEqual(1200 + 1);
+        expect(
+          Math.abs(s.left - m.main.left - (m.main.right - s.right)),
+          `${c.id} ${s.id}: centred in <main>`,
+        ).toBeLessThanOrEqual(1);
+      }
+    } finally {
+      await closeCombination(page);
+    }
   });
 });

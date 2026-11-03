@@ -48,11 +48,18 @@ export type HeroDevice = keyof typeof HERO_VIEWPORT;
  * 1040 leaves 101 pixels of «Qué ponemos»; phone 844 leaves 204 — and 844 is also exactly an
  * iPhone 13's viewport height, so the phone state is a real phone screen rather than a crop.
  *
- * `test/heroWindow.browser.test.ts` re-measures both against the sample and fails if the cover or
- * its button ever falls outside, which is what keeps these from going stale the next time the
- * renderer or the photo bank moves.
+ * The e2e walk «enseña la portada entera, con su botón, en los dos estados» (sprint 23 día 1)
+ * re-measures both against the sample and fails if the cover or its button falls outside, or if less
+ * than 40 px of the next section shows — which is what keeps these from going stale the next time
+ * the renderer or the photo bank moves. (This note used to name `test/heroWindow.browser.test.ts`,
+ * which does not exist; the walk is the measurement.)
+ *
+ * **Measured again on sprint 32 día 3**, when the page gained its rhythm (ADR 0064: a section has
+ * 72 px above and below where it had 48, and its words are set tighter): the cover now ends at
+ * **1003** at 1280 and its button at 931; on the phone at 607 and 583. Desktop goes to **1104**, to
+ * keep the 101 px of «Qué ponemos» the window was chosen to show; the phone's 844 shows 237 and stays.
  */
-export const HERO_WINDOW = { desktop: 1040, phone: 844 } as const;
+export const HERO_WINDOW = { desktop: 1104, phone: 844 } as const;
 
 /**
  * **How wide the hero's column is allowed to be, and the floor is the decision** (sprint 24 día 2).

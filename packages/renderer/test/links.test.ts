@@ -12,13 +12,13 @@ import { loadCorpus } from "./corpus.ts";
  */
 
 const PARAGRAPH_RULE =
-  ".rb-section p { font-size: var(--size-body); color: var(--color-muted); margin: 0; }";
+  ".rb-section p { font-size: var(--size-body); color: var(--color-muted); margin: 0;\n  line-height: 1.6; }";
 const LINK_RULE =
   ".rb-section a:not([role=button]) { color: var(--color-primary); text-decoration: underline; }";
 const BUTTON_RULE = [
-  ".rb-section [role=button] { display: inline-block; padding: var(--space-sm) var(--space-md);",
-  "  background: var(--color-primary); color: var(--color-surface);",
-  "  border-radius: var(--radius-sm); text-decoration: none; }",
+  ".rb-section [role=button] { display: inline-block; padding: var(--space-sm) var(--space-lg);",
+  "  background: var(--color-primary); color: var(--color-surface); font-family: var(--font-heading);",
+  "  font-weight: 700; border-radius: 999px; text-decoration: none; }",
 ].join("\n");
 
 const corpus = loadCorpus();

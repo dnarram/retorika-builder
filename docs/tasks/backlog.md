@@ -99,8 +99,10 @@ sprint 30:
    cap by height, or leave it on the owner's line of the budget.
 4. **Logos saved between día 5 and día 7 carry no size** until uploaded again; writing it on open would
    change a document nobody asked to change.
-5. **What is left of the CLS is the reading text's `line-height: normal`** (0.009–0.011 on the
+5. ~~**What is left of the CLS is the reading text's `line-height: normal`**~~ (0.009–0.011 on the
    compositions): giving all text a number changes every published paragraph — a design decision.
+   **Closed 4 November 2026 by [ADR 0064](../decisions/0064-the-page-has-a-measure-and-a-rhythm.md)**
+   (sprint 32 día 3): paragraphs at 1.6, headings at 1.15; CLS 0.003 on the three compositions.
 6. **The compositions score 99 / 98 / 98 since día 5** (100 / 99 / 99 at sprint 29's close), LCP up
    about 0.15 s: the generated site's header and script. Above the floor.
 7. **The gated walk against the real project** is now also the only proof of the logo «en otro
@@ -2475,7 +2477,10 @@ is twelve columns with `padding: var(--space-xl)` — so the full-width cover sp
 96px without bound: 1344 at a 1440 window, 1824 at 1920, 2464 at 2560. A floor is a choice of
 reference width, not a bound, and 1440 is the reference every measurement of 8-9 October used.
 **Whether the page should have a maximum width at all** is a new open question, about every section
-rather than about photographs, and it has no home but this row.
+rather than about photographs, and it has no home but this row. **Closed 4 November 2026 by
+[ADR 0064](../decisions/0064-the-page-has-a-measure-and-a-rhythm.md)** (sprint 32 día 3): 1200 px of
+content by padding from 1296 up, the background still edge to edge; the full-width cover is 1200 wide
+at 1440 and at 2560.
 
 **3. The owner cannot choose how their own photograph is cropped — 9 October 2026.**
 

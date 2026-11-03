@@ -15,7 +15,7 @@ import { loadCorpus } from "./corpus.ts";
  * measured in a real browser by the overflow suite's long-text case.
  */
 
-const IMG_RULE = ".rb-section img { width: 100%; height: auto; border-radius: var(--radius-md); }";
+const IMG_RULE = ".rb-section img { width: 100%; height: auto; border-radius: var(--radius-lg); }";
 // The hyphens rule names `p.rb-subtitle` since #19: the cover's tagline stopped being an h2 and
 // would otherwise have lost hyphenation along with the tag, which is a visual change that issue
 // explicitly did not want. `overflow-wrap` already covered it, since it lists `p`.
