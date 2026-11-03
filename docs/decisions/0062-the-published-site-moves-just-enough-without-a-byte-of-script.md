@@ -201,3 +201,25 @@ timeline is the browser's, a view transition is the browser's, a keyframe is the
 - `apps/editor/src/editor/canvasStillness.ts` and its test; `Editor.tsx` reads it.
 - Golden: all twenty-two, every hunk read: the block, and the numbers moving out of the header's.
 - Measured: Lighthouse, mobile preset, with the motion on — in REVIEW, sprint 32 día 2.
+
+## Note — sprint 32 día 4: the reveal rises and never fades (decided by David's delegation)
+
+**Decided on 4 November 2026 by development, on David's explicit delegation** — his words, with PR
+#337 merged: «Se el mejor experto de UX y diseño gráfico y decide las respuestas sobre las decisiones
+pendientes para continuar con el dia siguiente del sprint». The decision pending was ADR 0064 §5's:
+keep the scroll-driven fade, or rise without one. Development chose the rise, and records why rather
+than signing for him.
+
+The reason is what a visitor sees, more than what axe reads. A scroll-driven fade leaves whatever
+straddles the bottom edge of the first screen at load **half-faded at rest** — not for an instant, but
+until the visitor scrolls — so the foot of every site's first screen showed washed-out words, which is
+also what axe measured on día 3 (2.53:1, Lighthouse 96). No fade can be made safe by construction:
+the lowest opacity at which every proved pair on `color.surface` still clears 4.5 is **0.98** in
+`neutral`, whose primary is 4.71 opaque. A rise moves the words and never their contrast.
+
+So `rb-reveal` is `from { transform: translateY(16px) }` and nothing else: a child rises 16 px over
+the 160 px of its entry, at full opacity at every scroll, with no fill. The cover's entrance (§2) keeps
+its fade: it is time-based, on screen from the first paint, and done in 600 ms, so nothing waits
+half-faded. Measured: Lighthouse accessibility **100 on all eight subjects** again, the other scores
+unchanged; the twin asserts opacity 1 and a translate of more than 15 px 2 px into the entry, between 6
+and 10 half way, and 0 at 170. Golden: the one keyframes line in each of the twenty-two.

@@ -140,7 +140,8 @@ construction: the lowest opacity at which every proved pair on `color.surface` s
 **0.98** in `neutral` (its primary is 4.71 opaque), 0.76 to 0.93 in the others. The choice between
 keeping the fade (and an axe reading that depends on where a fold falls) and a rise without a fade
 is David's, and it is in REVIEW's sprint 32 día 3 as such; the look he merged on día 2 stands until
-he makes it.
+he makes it. **Made on 4 November 2026, by his delegation: the reveal rises and never fades** (ADR
+0062's note of día 4), and the subject is back at 100.
 
 ## What is preserved
 

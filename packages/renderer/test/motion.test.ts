@@ -120,15 +120,16 @@ describe("the published page's motion", () => {
       expect(block.indexOf("animation-timeline"), block).toBeGreaterThan(shorthand);
       expect(block.indexOf("animation-range"), block).toBeGreaterThan(shorthand);
     }
-    // No fill on the reveal (axe reads a child waiting at opacity 0 as a 1:1 contrast), `backwards`
-    // on the cover's entrance, never `both`; and nothing but opacity and a vertical translate.
+    // No fill on the reveal and **no opacity in it** (sprint 32 día 4: a scroll-driven fade left
+    // what straddles the first screen's fold washed out at rest); `backwards` on the cover's
+    // time-based entrance, never `both`; nothing but opacity and a vertical translate anywhere.
     expect(sheet).toContain(
       "@keyframes rb-rise { from { opacity: 0; transform: translateY(16px); } }",
     );
-    expect(sheet).toContain(
-      "@keyframes rb-reveal { from { opacity: 0; transform: translateY(16px); } 15% { opacity: 1; } }",
-    );
+    expect(sheet).toContain("@keyframes rb-reveal { from { transform: translateY(16px); } }");
     expect(sheet).not.toMatch(/rb-(rise|reveal)[^;]* both/);
+    const reveal = sheet.slice(sheet.indexOf("@keyframes rb-reveal"));
+    expect(reveal.slice(0, reveal.indexOf("\n"))).not.toContain("opacity");
   });
 
   it("brings the cover's words in once, 80 ms apart, and never its photograph or its panel", () => {

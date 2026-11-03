@@ -71,7 +71,7 @@ html { --rb-measure: 1200px; }
 
 html { --rb-ease: cubic-bezier(0.2, 0, 0, 1); --rb-fast: 200ms; --rb-base: 400ms; }
 @keyframes rb-rise { from { opacity: 0; transform: translateY(16px); } }
-@keyframes rb-reveal { from { opacity: 0; transform: translateY(16px); } 15% { opacity: 1; } }
+@keyframes rb-reveal { from { transform: translateY(16px); } }
 @media (prefers-reduced-motion: no-preference) {
   @supports (animation-timeline: view()) {
     main > .rb-section:not(:first-child) > * { animation: rb-reveal linear none;

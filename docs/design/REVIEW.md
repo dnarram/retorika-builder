@@ -6261,3 +6261,17 @@ que se fusionó el día 2 hasta que David elija.
 **Medido.** Unit 3649; a11y 894 (888 + 6 casos de la medida); golden 22, el mismo puñado de reglas en
 cada uno y la barra en los cuatro con cabecera, ningún marcado; `size`: `cabecera-con-marca` 16,2 KB
 propios de 28; lint 29 avisos; e2e completo: ver la PR.
+
+### Día 4 — el menú del móvil es una hoja (PR de `feat/el-menu-del-movil-es-una-hoja`)
+
+**Primero, la decisión pendiente del día 3, tomada por delegación de David.** Con la #337 fusionada,
+David: «Se el mejor experto de UX y diseño gráfico y decide las respuestas sobre las decisiones
+pendientes para continuar con el dia siguiente del sprint». La pendiente era fundido o subida en el
+revelado al bajar. **Decidido: sube y no se funde.** El motivo es lo que ve un visitante: un fundido
+guiado por el scroll deja a medio fundir *en reposo* lo que queda a caballo del borde inferior de la
+primera pantalla, hasta que el visitante baja; palabras lavadas al pie de la primera pantalla de cada
+web, que es además lo que axe midió (2,53:1). Ningún fundido es seguro por construcción (0,98 de
+opacidad mínima en `neutral`). La entrada de la portada conserva el suyo: va por tiempo, está en
+pantalla desde el primer pintado y acaba en 600 ms. Medido: Lighthouse, accesibilidad **100 en los
+ocho**; el gemelo asevera opacidad 1 y la subida en tres puntos de la franja. Escrito en la nota del
+día 4 de la ADR 0062 y en la 0064 §5, con la cita; no se firma por David.
