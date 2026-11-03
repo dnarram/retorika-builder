@@ -6298,4 +6298,6 @@ la ventana, de borde a borde; `<main>` oculto con la hoja abierta y visible tras
 cierra «Menú»; la barra con logo sigue ≤ 72 px a 320 con el icono. Con ocho entradas, retardos 0, 40, …
 240, 240, la última sin dibujar antes de su retardo, todas en reposo al final; nada bajo `reduce`.
 Saboteos: sin el `visibility: hidden`, el teclado cae bajo la hoja (tres rojos); sin `backwards`, la
-última entrada se dibuja antes de tiempo. Batería completa: ver la PR.
+última entrada se dibuja antes de tiempo. Batería completa: unit 3653, a11y 899, Lighthouse 8/8 con
+accesibilidad 100 en los ocho, e2e completo 272/272; goldens, los cuatro con cabecera;
+`cabecera-con-marca` 17,4 KB propios de 28.
