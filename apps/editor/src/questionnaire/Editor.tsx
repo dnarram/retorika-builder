@@ -143,13 +143,31 @@ import {
 } from "../editor/EditorShell.tsx";
 import { GUIDE_ZONE, type Guide, guidesFor, type Rect } from "../editor/guides.ts";
 import { HANDLE_TOUCH, handlesFor } from "../editor/handles.ts";
-import { headerStylePatch } from "../editor/headerState.ts";
+import { headerStateFor, headerStylePatch } from "../editor/headerState.ts";
 import { ACCEPTED_IMAGE_ACCEPT } from "../editor/imageBytes.ts";
 import { toolbarFamilyLabel } from "../editor/letterGallery.ts";
 import { logoLuminanceOf } from "../editor/logoImage.ts";
 import { LOOK_AHEAD_DEADLINE_MS, lookAheadStep } from "../editor/lookAhead.ts";
+import {
+  dropOutcome,
+  dropText,
+  type Menu,
+  menuName,
+  menuOf,
+  stackedText,
+  type Zone,
+  type ZoneRect,
+  zoneAt,
+  zoneRects,
+  zonesFor,
+} from "../editor/menuDrag.ts";
 import { menuStateFor } from "../editor/menuState.ts";
-import { DESKTOP_LAYOUT_WIDTH, measureOverflow, NARROWEST_WIDTH } from "../editor/overflowCheck.ts";
+import {
+  DESKTOP_LAYOUT_WIDTH,
+  measureOverflow,
+  NARROWEST_DESKTOP,
+  NARROWEST_WIDTH,
+} from "../editor/overflowCheck.ts";
 import { type FontFileHandle, ownFontFiles, type StoredFontFile } from "../editor/ownFonts.ts";
 import {
   chrome,
@@ -1053,6 +1071,7 @@ export function Editor({
     onSelectPage,
     onSetElementStyle,
     onSetEntryField,
+    onSetHeader,
     onSetMark,
     onSetPlacement,
     onSetVariant,
@@ -1073,6 +1092,7 @@ export function Editor({
     onSelectPage,
     onSetElementStyle,
     onSetEntryField,
+    onSetHeader,
     onSetMark,
     onSetPlacement,
     onSetVariant,
@@ -6237,6 +6257,248 @@ export function Editor({
    * turn «drag this» into «stretch this» a few pixels from every border on the page.
    */
   /**
+   * **A menu is dragged to its zone** (ADR 0066, sprint 33 día 4).
+   *
+   * ADR 0060 made each menu's place a word from a closed vocabulary and promised that every word
+   * would be a zone a drag drops the menu on. This is the drag. David's four conditions, in order:
+   *
+   * 1. **It starts on the menu's own ground and never on an entry**: a press held on a `nav`'s
+   *    padding and the gaps between its entries, a rail's background, the sections' row or «Ir a…»'s
+   *    summary. An entry keeps navigating the canvas (`wireLinks`); a press on the bar's brand or
+   *    button is the header's choice, as before. The same threshold as an element's drag, three
+   *    pixels of the hand divided by the zoom (ADR 0050 §6), and the same two states: under it a
+   *    press is a click — choosing the header, opening «Ir a…» — and past it the click that ends
+   *    the gesture is swallowed (`justDragged`, ADR 0048 §2). With a finger, only once the header
+   *    is chosen (ADR 0049): otherwise one finger scrolls.
+   * 2. **The zones are drawn the moment the gesture begins** — every place this menu may go, the
+   *    one it is in marked, the one under the hand lit — and **letting go off every zone, or
+   *    Escape, writes nothing**. A drop on a zone is one `setHeader`, one step of history: the very
+   *    patch the panel's card for that place writes (`dropOutcome`), so the gesture chooses between
+   *    the places and makes none.
+   * 3. **A side the other menu holds stacks the two** (ADR 0060 §2), and the ghost says so before
+   *    the hand lets go.
+   * 4. **The live region names the zone** («Menú de páginas: columna izquierda»), and the panel's
+   *    cards stay the keyboard's way: a zone is not a cell an arrow could walk to.
+   *
+   * **The ghost moves, never the menu** (the plan's decision 5): a menu is a flex child of the bar,
+   * a fixed column or a sheet, and moving its real box would break the bar's layout under the hand.
+   * **The zones' geometry comes from the renderer's constants** through `zoneRects` (decision 6):
+   * a rail that is not drawn yet has no box to measure, and the zone has to show where it would
+   * stand. Zones and ghost are chrome in `<body>` (`chrome()`, so a patch neither morphs nor
+   * duplicates them), fixed in the frame's own pixels. **None of this exists in the phone view**:
+   * `zonesFor` is empty under the phone's width, so a press there arms nothing, and the grab cursor
+   * is under the same media query.
+   */
+  function wireMenuDrag(iframeDoc: Document) {
+    const GRIPS =
+      "nav.rb-nav[data-part], .rb-rail[data-side], .rb-nav-row, details.rb-nav-fold > summary";
+    interface MenuDrag {
+      menu: Menu;
+      grip: HTMLElement;
+      pointerId: number;
+      from: Point;
+      dragging: boolean;
+      rects: ZoneRect[];
+      zones: ReturnType<typeof zonesFor>;
+      hot: Zone | null;
+    }
+    let drag: MenuDrag | null = null;
+    // A click right after a drag is the drag's own release, not a choice (ADR 0048 §2).
+    let justDragged = false;
+    iframeDoc.addEventListener("pointerdown", () => {
+      justDragged = false;
+    });
+    iframeDoc.addEventListener(
+      "click",
+      (event) => {
+        if (!justDragged) return;
+        justDragged = false;
+        event.stopPropagation();
+        event.preventDefault();
+      },
+      true,
+    );
+
+    /** The menu a grip belongs to: a `nav` by its part; the row and «Ir a…» are the sections'; a
+     * rail with two navs, the one nearest the press. */
+    const menuOfGrip = (grip: HTMLElement, at: Point): Menu | null => {
+      if (grip.classList.contains("rb-nav")) return menuOf(grip.dataset["part"]);
+      if (grip.classList.contains("rb-nav-row") || grip.tagName === "SUMMARY") return "sections";
+      let nearest: { menu: Menu; distance: number } | null = null;
+      for (const nav of grip.querySelectorAll<HTMLElement>("nav.rb-nav[data-part]")) {
+        const menu = menuOf(nav.dataset["part"]);
+        if (!menu) continue;
+        const box = nav.getBoundingClientRect();
+        const distance =
+          at.y < box.top ? box.top - at.y : at.y > box.bottom ? at.y - box.bottom : 0;
+        if (!nearest || distance < nearest.distance) nearest = { menu, distance };
+      }
+      return nearest?.menu ?? null;
+    };
+
+    /** What a token or a constant of the sheet resolves to, in the frame's pixels, measured where
+     * `on` is — `--rb-header-h` is zero on a collapsed header and the bar's height on the root. */
+    const resolved = (on: HTMLElement, name: string): number => {
+      const probe = chrome(iframeDoc, "div");
+      probe.style.cssText = `position:absolute;visibility:hidden;height:var(${name})`;
+      on.appendChild(probe);
+      const px = probe.getBoundingClientRect().height;
+      probe.remove();
+      return px;
+    };
+
+    const clear = () => {
+      if (!drag) return;
+      const { grip, pointerId, dragging } = drag;
+      drag = null;
+      if (dragging && grip.hasPointerCapture(pointerId)) grip.releasePointerCapture(pointerId);
+      for (const el of iframeDoc.querySelectorAll(".rb-zone, .rb-menu-ghost")) el.remove();
+      iframeDoc.documentElement.classList.remove("rb-dragging");
+      flushQueuedPatch.current();
+    };
+
+    const begin = (state: MenuDrag) => {
+      const view = iframeDoc.defaultView;
+      const header = iframeDoc.querySelector<HTMLElement>("header.rb-header");
+      if (!view || !header) return;
+      const places = headerStateFor(docNow.current, pageIdNow.current);
+      state.zones = zonesFor(state.menu, places, view.innerWidth);
+      if (state.zones.length === 0) return;
+      state.dragging = true;
+      state.grip.setPointerCapture(state.pointerId);
+      iframeDoc.documentElement.classList.add("rb-dragging");
+      iframeDoc.getSelection()?.removeAllRanges();
+      justDragged = true;
+      const bar = header.getBoundingClientRect();
+      state.rects = zoneRects(state.zones, {
+        width: view.innerWidth,
+        height: view.innerHeight,
+        bar: {
+          left: bar.left,
+          top: bar.top,
+          width: bar.width,
+          // A collapsed bar is no height: the strip is the stylesheet's estimate of one.
+          height: bar.height > 0.5 ? bar.height : resolved(iframeDoc.body, "--rb-bar-h"),
+        },
+        headerH: resolved(header, "--rb-header-h"),
+        spaceMd: resolved(iframeDoc.body, "--space-md"),
+        pagesPosition: places.pagesPosition,
+      });
+      for (const rect of state.rects) {
+        const zone = state.zones.find((z) => z.zone === rect.zone);
+        const el = chrome(iframeDoc, "div");
+        el.className = "rb-zone";
+        el.setAttribute("aria-hidden", "true");
+        el.dataset["zone"] = rect.zone;
+        if (zone?.current) el.dataset["current"] = "";
+        el.style.left = `${rect.left}px`;
+        el.style.top = `${rect.top}px`;
+        el.style.width = `${rect.width}px`;
+        el.style.height = `${rect.height}px`;
+        el.textContent = zone?.label ?? "";
+        iframeDoc.body.appendChild(el);
+      }
+      const ghost = chrome(iframeDoc, "div");
+      ghost.className = "rb-ghost rb-menu-ghost";
+      ghost.setAttribute("aria-hidden", "true");
+      const name = chrome(iframeDoc, "span");
+      name.textContent = menuName(state.menu);
+      const note = chrome(iframeDoc, "span");
+      note.className = "rb-menu-ghost-note";
+      ghost.append(name, note);
+      iframeDoc.body.appendChild(ghost);
+    };
+
+    const follow = (state: MenuDrag, at: Point) => {
+      const hot = zoneAt(at, state.rects);
+      if (hot !== state.hot) {
+        state.hot = hot;
+        for (const el of iframeDoc.querySelectorAll<HTMLElement>(".rb-zone")) {
+          if (el.dataset["zone"] === hot) el.dataset["hot"] = "";
+          else delete el.dataset["hot"];
+        }
+        const note = iframeDoc.querySelector<HTMLElement>(".rb-menu-ghost-note");
+        const over = state.zones.find((z) => z.zone === hot);
+        if (note) note.textContent = over?.stacked ? stackedText(over.stacked) : "";
+      }
+      const ghost = iframeDoc.querySelector<HTMLElement>(".rb-menu-ghost");
+      if (ghost) {
+        ghost.style.left = `${at.x}px`;
+        ghost.style.top = `${at.y}px`;
+      }
+    };
+
+    iframeDoc.addEventListener("pointerdown", (event) => {
+      const target = event.target as Node | null;
+      const from =
+        target?.nodeType === target?.ELEMENT_NODE ? (target as Element) : target?.parentElement;
+      if (!from || !from.closest(".rb-header")) return;
+      // An entry, the brand, the button: theirs, never a grip (condition 1).
+      if (from.closest("a, button, [data-id]")) return;
+      const grip = from.closest<HTMLElement>(GRIPS);
+      if (!grip) return;
+      // A finger drags the header's menus only once the header is chosen (ADR 0049).
+      if (event.pointerType === "touch" && !headerChosen.current) return;
+      const at = { x: event.clientX, y: event.clientY };
+      const menu = menuOfGrip(grip, at);
+      if (!menu) return;
+      drag = {
+        menu,
+        grip,
+        pointerId: event.pointerId,
+        from: at,
+        dragging: false,
+        rects: [],
+        zones: [],
+        hot: null,
+      };
+    });
+
+    iframeDoc.addEventListener("pointermove", (event) => {
+      if (!drag) return;
+      const now = { x: event.clientX, y: event.clientY };
+      if (!drag.dragging) {
+        if (!isDragBeyond(drag.from, now, DRAG_THRESHOLD / zoomOf(iframeDoc))) return;
+        begin(drag);
+        if (!drag.dragging) {
+          drag = null;
+          return;
+        }
+      }
+      follow(drag, now);
+    });
+
+    const release = () => {
+      if (!drag) return;
+      const { dragging, menu, hot } = drag;
+      clear();
+      if (!dragging) return;
+      justDragged = true;
+      const outcome = dropOutcome(menu, hot, docNow.current);
+      if (outcome.kind !== "write") return;
+      propsNow.current.onSetHeader(outcome.patch);
+      announce(dropText(menu, outcome.zone));
+    };
+    iframeDoc.addEventListener("pointerup", release);
+    iframeDoc.addEventListener("pointercancel", release);
+    iframeDoc.addEventListener("lostpointercapture", () => {
+      // Capture is given up by `clear` itself on Escape; only a capture lost to the browser —
+      // the window losing the pointer — ends the gesture here, and it ends it without a write.
+      if (drag?.dragging) clear();
+    });
+    iframeDoc.addEventListener(
+      "keydown",
+      (event) => {
+        if (event.key !== "Escape" || !drag?.dragging) return;
+        event.preventDefault();
+        event.stopPropagation();
+        clear();
+      },
+      true,
+    );
+  }
+
+  /**
    * **The edges of the chosen element's box stretch it** (ADR 0050 día 4) — and since sprint 26
    * día 3 the listeners are the document's, dispatched to the section the pointer is in (ADR 0051
    * §5, David's adjustment 5). One resize happens at a time, so its state is the document's too:
@@ -7643,6 +7905,35 @@ export function Editor({
       `  font: 600 ${screenPx(12)}/1.3 ${UI_FONT}; }`,
       `.rb-ghost-no { border-color: ${CHROME_SCALE.danger}; border-style: solid;`,
       "  background: rgba(220,38,38,0.12); color: #7F1D1D; }",
+      /*
+       * **The zones a menu may be dropped on** (ADR 0066, sprint 33 día 4), drawn the moment the
+       * gesture begins: every place of this menu's vocabulary as a dashed box in the brand blue with
+       * the panel's word in it; the place it is in now, solid and quiet; the one under the hand,
+       * filled. Fixed in the frame's pixels, since a rail's zone is the window's height; in screen
+       * pixels for its border and its word (ADR 0053). Under the verbs (10) and over the page. And
+       * **the ghost that follows the hand** carries the menu's name — and, over a side the other
+       * menu holds, the line that says the two will stack.
+       */
+      ".rb-zone { position: fixed; z-index: 9; pointer-events: none; box-sizing: border-box;",
+      "  display: flex; align-items: center; justify-content: center; text-align: center;",
+      `  border: ${screenPx(2)} dashed ${CHROME_SCALE.brand}; border-radius: ${screenPx(6)};`,
+      `  background: rgba(21,111,231,0.08); color: ${CHROME_SCALE.brand};`,
+      `  font: 600 ${screenPx(12)}/1.3 ${UI_FONT}; }`,
+      ".rb-zone[data-current] { border-style: solid; opacity: 0.55; }",
+      ".rb-zone[data-hot] { border-style: solid; background: rgba(21,111,231,0.22); opacity: 1; }",
+      `.rb-menu-ghost { position: fixed; z-index: 11; flex-direction: column; gap: ${screenPx(2)};`,
+      `  padding: ${screenPx(6)} ${screenPx(10)}; border-style: solid; background: ${CHROME_SCALE.brand};`,
+      `  color: #FFFFFF; transform: translate(${screenPx(12)}, ${screenPx(12)}); white-space: nowrap; }`,
+      ".rb-menu-ghost-note:empty { display: none; }",
+      `.rb-menu-ghost-note { font-weight: 500; opacity: 0.9; }`,
+      // **The hand is told before it pulls** (David's adjustment 2 of sprint 33): the open hand over
+      // every grip of the gesture, the entries keeping the pointer a link has, and only where the
+      // gesture exists — the desktop view; the phone's bar is not dragged. `rb-dragging` above makes
+      // every cursor the closed hand while it lasts.
+      `@media (min-width: ${NARROWEST_DESKTOP}px) {`,
+      "  .rb-header .rb-nav[data-part], .rb-header .rb-rail, .rb-header .rb-nav-row,",
+      "  .rb-header .rb-nav-fold > summary { cursor: grab; }",
+      "  .rb-header .rb-nav[data-part] a { cursor: pointer; } }",
       // The element being moved, while it is being moved: dimmed, so the ghost is what the eye
       // follows. It keeps its place in the grid — see `wireDragging` on why it does not follow the
       // pointer — so this is the only sign that it is the subject.
@@ -7876,6 +8167,9 @@ export function Editor({
     // After both: the drag asks `wireEditing`'s state whether a text is chosen, and it must not be
     // armed on an element the editing layer has not finished wiring.
     wireDragging(iframeDoc);
+    // The menus' own drag (ADR 0066), beside the elements': it listens on the document and only
+    // arms on the header's grips, so the two never see one press.
+    wireMenuDrag(iframeDoc);
     // After the drag, so a press in an edge zone is the resize's: its own listener is in the
     // capture phase and stops the press there, which is what keeps the two gestures apart.
     wireResizing(iframeDoc);

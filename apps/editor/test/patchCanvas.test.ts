@@ -3,7 +3,13 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildCss, render } from "@retorika/renderer";
-import { applyMark, pageToSection, parseDocument, type RetorikaDocument } from "@retorika/schema";
+import {
+  applyMark,
+  pageToSection,
+  parseDocument,
+  type RetorikaDocument,
+  setHeader,
+} from "@retorika/schema";
 import { describe, expect, it } from "vitest";
 import {
   CHROME_ATTRIBUTE,
@@ -161,6 +167,36 @@ describe("patchCanvas — an edit is a patch", () => {
     expect(live.querySelector('[data-id="el-headline"]')?.textContent?.trim()).toBe(
       "Sigue el cromo",
     );
+  });
+
+  it("leaves a menu drag's zones and ghost in the body while the header it drops on is patched (ADR 0066)", () => {
+    const doc = menuFixture();
+    const live = settled(doc);
+    // What `wireMenuDrag` draws the moment the gesture begins: fixed boxes in the body, chrome.
+    const zones = ["bar", "left", "right"].map((zone) => {
+      const el = live.createElement("div");
+      el.setAttribute(CHROME_ATTRIBUTE, "1");
+      el.className = "rb-zone";
+      el.dataset["zone"] = zone;
+      live.body.append(el);
+      return el;
+    });
+    const ghost = live.createElement("div");
+    ghost.setAttribute(CHROME_ATTRIBUTE, "1");
+    ghost.className = "rb-ghost rb-menu-ghost";
+    live.body.append(ghost);
+
+    // The drop's own write: the pages to the left column, which gives the header a rail.
+    const next = setHeader(doc, { pages: { shown: true, position: "left" } });
+    const report = patchCanvas(live, freshFrom(next), buildCss(next, "dom"), rules);
+    expect(report).toMatchObject({ ok: true });
+    expect(live.querySelector('.rb-rail[data-side="left"]')).not.toBeNull();
+    // The same four nodes, once each, still the body's: neither morphed nor duplicated. Their
+    // order among themselves is not claimed — a structural patch parks the body's trailing chrome
+    // again (the test above measures that walk) — and every one of them is `position: fixed`.
+    expect(live.querySelectorAll(".rb-zone")).toHaveLength(3);
+    expect(live.querySelectorAll(".rb-menu-ghost")).toHaveLength(1);
+    for (const el of [...zones, ghost]) expect(el.parentElement).toBe(live.body);
   });
 
   it("keeps what the chrome owns on a renderer node, and the renderer's own style wins over the chrome's", () => {
