@@ -48,6 +48,9 @@ sprint 31:
    unminified CSS at 0.5 each, with every score at 100.
 7. **The drag gesture**: another sprint, on the zones ADR 0060 fixes.
 8. **The header in columns has not been seen in Safari or on an iPhone**: the PR #250 list grows by it.
+   Sprint 32 día 6 adds two more: the bar's glass over a photograph while scrolling, and the phone's
+   sheet against Safari's own toolbar (`100dvh`). WebKit 26.6 in Playwright draws the glass; neither
+   has been seen on a device (REVIEW, sprint 32 día 6).
 9. **From sprint 30, untouched**: the logo's edge, logos saved without a size, the reading text's
    `line-height: normal`, the compositions at 99 / 98 / 98, the gated walk, the `rootMargin` taken at
    start; and sprint 29's and 28's items as listed below, less the panel's width when escalating,

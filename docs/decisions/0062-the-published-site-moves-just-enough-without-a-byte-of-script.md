@@ -114,7 +114,9 @@ element is a stacking context**, and that reached the bar in the flow, which had
 section's paragraph rising with its own transform — Playwright found the paragraph intercepting the
 click. The bar has `z-index: 1` since (ADR 0063's note of día 2): above the page wherever they meet,
 as a sticky or transparent bar already was with its 2. **Same origin
-only**: a site opened from `file://` navigates without it, and nothing breaks. Both pages opt in,
+only**: a site opened from `file://` navigates without it, and nothing breaks. *(Not so in Chromium,
+measured on día 6 — see the note at the end: Chromium 153 and Chrome 156 transition between two pages
+of the extracted ZIP; WebKit 26.6 does not. Nothing breaks in either.)* Both pages opt in,
 because every page of a site carries this sheet. The bar is named only where one is drawn: a one-page
 site under the menu's threshold carries no header rule at all. Measured in Chromium with a routed
 site: the new page's `pagereveal` carries a `viewTransition` for the visitor who did not ask for less
@@ -178,7 +180,7 @@ timeline is the browser's, a view transition is the browser's, a keyframe is the
   their system for less. David's decision; the system's switch is the visitor's.
 - **A browser's scroll anchoring under a view timeline**, if Chromium treats the published page's
   sheet as it treated the canvas's (ADR 0063 §2): not measured on a published page, because nothing
-  re-lays a published page out mid-scroll; named here so día 6 looks.
+  re-lays a published page out mid-scroll; named here so día 6 looks. *(Día 6 looked: see the note.)*
 
 ## What this does not decide
 
@@ -187,7 +189,8 @@ timeline is the browser's, a view transition is the browser's, a keyframe is the
   photograph, anything longer than `--rb-base`. Each would be a change to the closed list in
   `motion.test.ts`, and to this ADR.
 - **Firefox**: if it ships `animation-timeline` (one source said 159, October 2026, unconfirmed),
-  the reveal arrives there with no change here; día 6 writes down what it found.
+  the reveal arrives there with no change here; día 6 writes down what it found. *(Firefox 155 does
+  not: the note at the end.)*
 
 ## Consequences
 
@@ -223,3 +226,51 @@ its fade: it is time-based, on screen from the first paint, and done in 600 ms, 
 half-faded. Measured: Lighthouse accessibility **100 on all eight subjects** again, the other scores
 unchanged; the twin asserts opacity 1 and a translate of more than 15 px 2 px into the entry, between 6
 and 10 half way, and 0 at 170. Golden: the one keyframes line in each of the twenty-two.
+
+## Note — sprint 32 día 6: the three engines
+
+Measured on 4 November 2026 with the engines Playwright 1.63 installs — **Chromium 153, Firefox 155,
+WebKit 26.6** — by `packages/renderer/test/engines.browser.test.ts` and
+`packages/publisher/test/engines.browser.test.ts`, both new. CI installs Chromium alone, so there the
+other two are skipped, and the run says so.
+
+| | `animation-timeline: view()` | `anchor-name` | `backdrop-filter` | cross-document, from `file://` |
+|---|---|---|---|---|
+| Chromium 153 | yes | yes | yes | **transitions** |
+| Firefox 155 | **no** | yes | yes | no (`pagereveal` absent) |
+| WebKit 26.6 | yes | yes | yes (and `-webkit-`) | does not transition |
+
+What this means for each piece of §1–§3:
+
+- **The reveal (§1)** runs in Chromium and WebKit; **Firefox 155 has no `view()`**, so the
+  `@supports` keeps it out and the page is still there — the source that said Firefox 159 had it is
+  neither confirmed nor contradicted by this build. In all three, under `no-preference`, every word
+  the page draws is at opacity 1 after loading and at every third of a window down to the bottom, on
+  `menu-y-paginas` and `cabecera-con-marca` at 1280 and 390. Sabotaged with the fade put back into
+  `rb-reveal`: red in Chromium and WebKit, green in Firefox, which is the `@supports` doing its work.
+- **The indicator (ADR 0063)**: all three anchor, so all three draw the sliding rule and none the
+  entry's own; the test asserts exactly one of the two and that it is the one the engine supports.
+  **The fallback — the rule's colour — is exercised by no installed engine**; `header.test.ts` holds
+  its CSS.
+- **The glass (ADR 0063)**: all three blur; a scrolled bar reads `blur(12px)` over a background at
+  alpha 0.88 on `surface`, `ink` and `transparent`, and is opaque on `primary`. The opaque branch
+  for an engine without `backdrop-filter` is, like the indicator's, exercised by none.
+- **Between pages (§3)**: §3 said a site opened from `file://` navigates without a transition. **That
+  is true of WebKit and not of Chromium**: between two pages of the extracted ZIP, Chromium 153 —
+  and the installed Google Chrome 156, on a two-page probe from disk the same day — reveal the
+  second page with a `viewTransition`. It is the same 200 ms fade with the bar still that the served site has, so a
+  downloaded site in Chrome is now identical to the published one, transition included. **Under
+  `reduce` no engine transitions**, from disk as from a server — asserted, and sabotaged by moving
+  `@view-transition` out of the media block: red in Chromium.
+- **Scroll anchoring under a view timeline** (*What is lost*): the one re-layout a published page
+  makes mid-scroll is the bar condensing. All three anchor — content grown above the window keeps
+  `scrollY` in step in each — and with the bar's `margin-bottom` taken away, the in-flow bar moves the
+  page in all three: none saves the condensing on its own, and none undoes it with the margin there.
+  The first section moves exactly −400 px on a 400 px scroll with the motion on, `surface` and
+  `transparent`, in the three (Firefox reads −400.000015 on `surface`, under its 1/60 px unit).
+- **From disk** (the ZIP built by `buildSite`, written by `bundleToZip`, extracted with `unzip`): the
+  entry page and a second page load in the three with no console error, no exception, no failed
+  request, every image decoded and no face in error. A missing `fonts/` is caught by
+  `document.fonts` in Chromium and Firefox and **only by the console in WebKit** («Not allowed to
+  load local resource»), which is why the test listens to both.
+
