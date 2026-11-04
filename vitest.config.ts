@@ -164,9 +164,32 @@ export default defineConfig({
           // project excludes its own browser suites: the default include glob for "*.test.ts"
           // would otherwise also pick up "*.e2e.test.ts" and try to launch a browser and a real
           // `next dev` server on every plain `pnpm test`.
-          exclude: [...configDefaults.exclude, "e2e/**/*.e2e.test.ts"],
+          // And the menu audit's browser suite (sprint 33 día 2): the "audit" project below.
+          exclude: [...configDefaults.exclude, "e2e/**/*.e2e.test.ts", "audit/**"],
         },
       },
+      // The menu audit (sprint 33 día 2): the full matrix of places × schemes × fixed, at seven
+      // widths, in Chromium, Firefox and WebKit, against the published page and the canvas's own
+      // document. Declared only when RETORIKA_AUDIT=1, which `pnpm audit:menus` sets: some twelve
+      // thousand page states in three engines are a run of an hour, not a CI job. It lives in the
+      // editor because the canvas's document is the editor's (`canvasHtml`, `CANVAS_STILLNESS`) and
+      // the renderer may import nothing of the editor's.
+      ...(process.env["RETORIKA_AUDIT"] === "1"
+        ? [
+            {
+              test: {
+                name: "audit",
+                root: "./apps/editor",
+                include: ["audit/**/*.browser.test.ts"],
+                environment: "node",
+                // One combination per test: a page served at seven widths with its states, and
+                // the canvas's document at two more.
+                testTimeout: 300_000,
+                hookTimeout: 120_000,
+              },
+            },
+          ]
+        : []),
       // The critical flows against a real, running app (docs/protocolo.md Part 9.2). Declared
       // only when RETORIKA_E2E=1, which `pnpm e2e` sets — the same reason the "a11y" project
       // above is conditional: an unconditional one would make every plain `pnpm test` spawn a

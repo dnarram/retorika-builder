@@ -11,6 +11,7 @@ import {
   openCombination,
   railCombinations,
 } from "./browser-fixtures.ts";
+import { checkCopies, checkCovers, expectHeader, setDisclosures } from "./menu-checks.ts";
 
 /**
  * axe over two of the three sets issue #25 split this harness into, because axe checks two
@@ -127,6 +128,38 @@ describe("axe — the header (every scheme over every palette; the layouts, the 
  */
 describe("axe — the rails at 1024, where a rail stands or falls", () => {
   checkAxe(railCombinations(), [1024]);
+});
+
+/**
+ * **Two of the menu audit's checks, promoted** (sprint 33 día 2): cheap, permanent, and about every
+ * header combination rather than the audit's own matrix, so CI holds them from this day on. One
+ * visible copy of each menu — exactly the number the width and the state call for — with the
+ * disclosures closed and with «Menú» open; and nothing lying over the brand or the first heading at
+ * rest. The audit (`apps/editor/audit`) runs the other eight over its matrix, in three engines,
+ * under `RETORIKA_AUDIT=1`; its phone-sheet check joins this file the day its findings are fixed.
+ */
+describe("one copy of each menu, and nothing over the brand (the audit's checks 1 and 8)", () => {
+  for (const c of headerCombinations()) {
+    for (const width of WIDTHS) {
+      it(`${c.id} @ ${width}px`, async () => {
+        const page = await openCombination(browser, c, width);
+        try {
+          const h = expectHeader(c.document);
+          const findings = [
+            ...(await checkCopies(page, h, width, "rest")),
+            ...(await checkCovers(page)),
+          ];
+          if (width <= 720) {
+            await setDisclosures(page, "details.rb-nav-narrow", true);
+            findings.push(...(await checkCopies(page, h, width, "menu")));
+          }
+          expect(findings, `${c.id} @ ${width}px\n  ${findings.join("\n  ")}`).toEqual([]);
+        } finally {
+          await closeCombination(page);
+        }
+      });
+    }
+  }
 });
 
 /**

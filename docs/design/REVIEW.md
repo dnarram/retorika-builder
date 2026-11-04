@@ -6684,3 +6684,89 @@ la página acaba en el carril, como en todo escritorio con barra clásica en cua
 La prueba compara ahora con el borde de la página, que es lo que afirmaba; reproducido aquí con la
 barra clásica del envoltorio y las barras ocultas, como en CI: 305 y 375, la hoja con la página. El
 resto de CI, e2e incluida, pasó tal cual. La ADR 0065 lo dice en lo que se pierde.
+
+### Día 2 — la auditoría de los menús: el arnés y la pasada en Chromium (PR de `test/la-auditoria-de-los-menus`)
+
+**Qué se construyó.** `apps/editor/audit/menus-audit.browser.test.ts`, bajo el proyecto `audit` de
+Vitest, que solo existe con `RETORIKA_AUDIT=1` (`pnpm audit:menus`, bajo `caffeinate -i`, nunca en
+CI). Vive en el editor y no en el renderer porque el documento del lienzo es del editor
+(`canvasHtml`, `CANVAS_STILLNESS`) y el renderer no puede importar nada suyo (`rootDir`); importa el
+arnés del renderer por ruta relativa. **La matriz** (`audit-fixtures.ts`): los 15 pares de posición ×
+5 fondos × fija/no = 150 documentos, con el sitio del móvil y la disposición rotados y no
+multiplicados (la pasada imprime el reparto: row 50 / hidden 50 / fold 50; brand-left 51 / centered
+51 / stacked 48), más tres especiales (marca y botón en la columna de páginas; fila en ancho oculta
+en el móvil; fila en ancho con «Ir a…» en el móvil). **Las diez comprobaciones**, en
+`packages/renderer/test/menu-checks.ts` para que las lean la auditoría y la matriz de `a11y`: una copia
+visible por parte; nada pasa del borde (el recorredor de `overflow.browser.test.ts`, exportado sin
+cambiarlo); la barra del móvil ≤ 72 y la hoja de borde a borde, hasta el fondo, con `main` oculto y la
+página quieta bajo una rueda; los raíles que están de pie y el hueco que dejan; «Ir a…» bajo la barra
+por la altura que la hoja resuelve, en el lado libre; la página actual marcada bajo cada copia (en la
+segunda página: la de inicio no tiene entrada propia); la barra fija a 600 px condensada y de cristal
+u opaca y la página movida exactamente 600; nada tapa la marca ni el primer titular; el contraste no
+se vuelve a medir; y **el lienzo contra lo publicado**, elemento a elemento de la cabecera, en el
+mismo motor y ancho, salvo las divergencias nombradas (la barra transparente fija solo con script; la
+tinta y el borde de la entrada de la sección a la vista; lo que cuelga de `--rb-header-h`, que se anota
+con su número). Por motor, por combinación: la página publicada servida desde memoria a 1680 y
+reducida a 1280, 1247, 1024, 768, 390 y 320 (en reposo; bajada; «Menú» abierto; «Ir a…» abierto), la
+segunda página a 1280 y a 390 con la hoja, y el documento del lienzo a 1280 y 320 (David, decisión 2),
+que lleva `CANVAS_STILLNESS` importado del módulo que `Editor.tsx` extiende (ajuste 4; lo fija
+`canvasStillness.test.ts` leyendo las dos fuentes). **Al fallar un estado**, captura en
+`.scratch/audit-menus/<motor>/<combinación>/<ancho>-<estado>.png` y una fila en `findings.tsv`; la
+combinación sigue, la pasada entera produce la lista. **Y se reanuda** (ajuste 3): una fila `done` por
+combinación y motor; `RETORIKA_AUDIT_RESUME=1` las salta diciendo cuántas; `RETORIKA_ENGINE`,
+`RETORIKA_AUDIT_ONLY` y `RETORIKA_AUDIT_OUT` acotan una pasada. Saboteos: el raíl a 200 en la
+aserción 4 → rojo con captura en cuatro anchos; borrar la fila `done` → la combinación vuelve a correr.
+
+**Lo que el instrumento tuvo que aprender antes de medir bien**, escrito para que no se repita: la
+página de inicio no lleva `aria-current="page"` (la marca es el enlace a inicio, ADR 0043), así que la
+marca de la página actual se mide en la segunda página; «Ir a…» solo pasa a la izquierda cuando el
+raíl de páginas está de pie (desde 1024), no por el `data-rails` a cualquier ancho; y en el lienzo
+«Ir a…» cuelga de la estimación de la barra, así que se mide contra la variable resuelta (una sonda con
+`height: var(--rb-header-h)`) y la distancia al pie real de la barra se anota como permitida.
+
+**La pasada en Chromium: 153 combinaciones, 825 s, 719 estados en rojo, seis hallazgos.** Por
+gravedad, con su medida y su causa leída en `header.ts`:
+
+1. **«Menú» se abre debajo de la pantalla con barra fija y fila de secciones en el móvil** (25
+   combinaciones: todas las fijas con `mobile: row`; a 320 y 390; publicado y lienzo). La hoja llega
+   con `top` a 844 en una ventana de 844 y la página queda en blanco, porque `main` está oculto y la
+   hoja no se ve. Causa: la barra fija suelta sobre la fila con `.rb-header[data-sticky][data-phone-row]
+   { position: static }` (sprint 31 día 6), y `static` le quita a la hoja, `position: absolute; top:
+   100%`, su bloque contenedor: se coloca contra la ventana. **Tapa contenido**: es el primero del día 3.
+2. **A 320, con un botón de trece letras, «Menú» salta a una segunda línea y la barra mide 82 px**
+   (153 de 153, en reposo, publicado y lienzo). «Barberí…» + «Dónde estamos» + «Menú» no caben en
+   320; el botón es el título de la página destino. El sprint 30 midió el tope de 72 con «Reservar» y
+   un logo. Causa: la barra es `flex-wrap: wrap` y nada acota el botón; la marca se recorta a «Barberí…»
+   aunque la segunda línea tenga sitio. **Desborda** (en vertical) y el tope escrito no se cumple.
+3. **En el lienzo, la hoja se sale por abajo 26–67 px cuando la barra es más alta que la estimación**
+   (153 de 153 en `canvas-menu` a 320). El lienzo no mide la barra: `--rb-header-h` es la estimación
+   de una línea (56 px) y la barra real, con «Menú» en segunda línea, mide 82 (o 122 con la fila); la
+   hoja, `calc(100dvh - var(--rb-header-h))`, es 26 o 67 px más alta que la pantalla y sus últimas
+   entradas quedan fuera de alcance. Es el coste de la divergencia que el backlog nombra desde el
+   sprint 31 (`:110`) y el panel no dice; cae con el hallazgo 2 en casi todos los casos y queda con la
+   fila. **Se ve distinto en el lienzo**: o el panel lo dice o la estimación aprende.
+4. **La barra transparente fija no suelta sobre la fila del móvil, y la fila se dibuja sobre la
+   portada** (5 combinaciones, a 320 y 390). `html[data-rb-js] .rb-header[data-sticky]
+   [data-bg=transparent] { position: fixed }` gana a `[data-sticky][data-phone-row] { position: static }`,
+   y la portada se hace sitio con la estimación de una línea (`--rb-bar-h`): la fila «Contacto» queda
+   encima de la foto. **Tapa contenido**.
+5. **La hoja se queda 1,2–1,4 px corta por abajo, solo con fondo `surface`** (28 combinaciones, «Menú»
+   e «Ir a…», a 320 y 390). Causa: la hoja arranca en `top: 100%` del `padding-box` de la barra, por
+   encima del filete de 1 px que solo las barras `surface` tienen, y mide `100dvh − offsetHeight`, que sí
+   incluye el filete; a eso se suma el redondeo de `offsetHeight`. Una línea del color del fondo en el
+   borde inferior. **Estético**.
+6. **Nada más**: cero hallazgos de desborde horizontal, de raíles, de «Ir a…», de la marca de la
+   página actual, de la barra a 600 px, de lo que tapa la marca o el titular, y **cero diferencias no
+   nombradas entre el lienzo y lo publicado** en 306 comparaciones (153 × 2 anchos); las permitidas
+   son 385 notas, todas de lo que cuelga de `--rb-header-h`: 3,2 px en «Ir a…» a 1280, 26–68 px en
+   la altura de la hoja cerrada a 320.
+
+**Promoción a la matriz de `a11y`** (decisión 3 del plan): las comprobaciones 1 y 8 entran en
+`a11y.browser.test.ts` sobre las 56 `headerCombinations` a 320 y 1280, con los desplegables cerrados
+y con «Menú» abierto (112 pruebas, verdes). La 3, la hoja, **no se promueve hoy**: con los hallazgos
+1, 2 y 5 abiertos pondría CI en rojo; entra el día 3 con su arreglo, y el fichero lo dice.
+
+**Suites.** `test` 3662 (la primera vuelta de `pnpm test` arrastró la auditoría entera, porque el
+proyecto `editor` incluye `**/*.test.ts`: `audit/**` queda excluido, como el e2e); `a11y` local
+1057 (945 + 112) en 72 s; `typecheck`, `lint`, invariantes, golden (cero cambios), `renderer:deps` y
+`size` en verde. e2e no se corre: ni el editor ni el paquete cambian.
