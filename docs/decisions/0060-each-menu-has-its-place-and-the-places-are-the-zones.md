@@ -273,3 +273,11 @@ over the sections' row.
 - **Dots and a floating pill** are in the backlog's «Recorded against the thing it challenges», with
   David's words.
 
+## Note — sprint 33 día 4: the gesture arrived (ADR 0066)
+
+«What this does not decide» left the drag gesture to another sprint, on these zones. It is
+[ADR 0066](0066-a-menu-is-dragged-to-its-zone.md): a menu held by its own ground — a `nav`'s gaps,
+a rail's background, the row, «Ir a…»'s summary — and let go on one of the zones §1 named, which
+writes that zone's word through the same patch the «Dónde va» card writes. The vocabulary is
+unchanged: the gesture chooses between the five words and makes none, as the condition of 30 October
+asked. §2's stacking is what a drop on the other menu's side produces, and the ghost says so first.

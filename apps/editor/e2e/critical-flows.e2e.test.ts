@@ -24895,3 +24895,196 @@ describe("sprint 33 día 3 — el editor real dibuja la cabecera como su documen
     }
   }, 300_000);
 });
+
+/**
+ * **Sprint 33 día 4 — un menú se arrastra a su zona** (ADR 0066). A 1440 sin panel, donde el lienzo
+ * maqueta a 1280 y se dibuja a 0,9125: el menú de páginas se coge por el hueco entre sus entradas,
+ * a los 4 px aparecen sus tres zonas, la columna izquierda se ilumina al pasar y soltar ahí escribe
+ * `pages.position = "left"` —el raíl de pie, el anuncio en la región `status`, la tarjeta del panel
+ * marcada— en un solo paso que «Deshacer» devuelve. Escape a mitad no escribe; soltar fuera de toda
+ * zona tampoco; pulsar sin mover sigue haciendo lo de siempre: un enlace navega, el hueco elige la
+ * cabecera. Y el cursor avisa antes: la mano abierta sobre el hueco, el puntero sobre el enlace. Cada
+ * pulsación con `page.mouse` en la caja dibujada (memoria: nunca `locator.click()`), y el umbral medido
+ * en píxeles de pantalla con el panel abierto, lejos del borde: a medio camino entre 3·zoom y 3 no
+ * arma, a cuatro sí — que es la división por el zoom (ADR 0050 §6).
+ */
+describe("sprint 33 día 4 — un menú se arrastra a su zona", () => {
+  it("coge el menú de páginas por su hueco, lo suelta en la columna izquierda y ahí está; Escape, fuera y un clic no escriben", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 950 } });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      // Two pages besides the home, so the pages' strip has a gap between two entries to hold.
+      for (const id of ["sec-services", "sec-gallery"]) {
+        await frame.locator(`[data-section="${id}"]`).click();
+        await frame
+          .locator(
+            `[data-section="${id}"] .rb-action[aria-label="Convertir esta sección en página"]`,
+          )
+          .click();
+      }
+      const entries = frame.locator('.rb-nav-wide nav[data-part="pagesLinks"] a');
+      await expect(entries).toHaveCount(2);
+      await deviceArrived(page, DESKTOP_LAYOUT_WIDTH);
+      // Converting a section scrolled the canvas to it; the bar is at the top.
+      await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
+      const nav = frame.locator('.rb-nav-wide nav[data-part="pagesLinks"]');
+      const header = frame.locator("header.rb-header");
+      const zones = frame.locator(".rb-zone");
+      const said = page.locator('p[role="status"]');
+      const panel = page.getByRole("complementary", { name: "La cabecera de tu web" });
+      const positionNow = () =>
+        page.evaluate(() => {
+          const raw = localStorage.getItem("retorika.session.v1") ?? "";
+          // Before the first autosave there is nothing to read: polled, never parsed as empty.
+          if (raw === "") return "unsaved";
+          const session = JSON.parse(raw) as {
+            openIndex: number;
+            documents: { header?: { pages?: { position?: string } } }[];
+          };
+          return session.documents[session.openIndex]?.header?.pages?.position ?? "bar";
+        });
+      /** The gap between the two entries, on screen: the nav's own ground. */
+      const gap = async () => {
+        const [a, b] = await Promise.all([
+          entries.nth(0).boundingBox(),
+          entries.nth(1).boundingBox(),
+        ]);
+        if (!a || !b) throw new Error("the entries are not drawn");
+        expect(b.x - (a.x + a.width), "no gap between the entries to hold").toBeGreaterThan(6);
+        return { x: (a.x + a.width + b.x) / 2, y: a.y + a.height / 2 };
+      };
+
+      // 0. The cursor says it before anything moves: the open hand on the nav's ground, the pointer
+      //    on an entry (David's adjustment 2).
+      expect(await nav.evaluate((el) => getComputedStyle(el).cursor)).toBe("grab");
+      expect(await entries.first().evaluate((el) => getComputedStyle(el).cursor)).toBe("pointer");
+
+      // 1. The threshold is three pixels of the hand divided by the zoom (ADR 0050 §6): three on
+      //    screen at every zoom, so a walk at exactly three sits on the edge and reads the browser's
+      //    rounding. Measured with the panel open instead, where the canvas is at about 0.74: a
+      //    travel half-way between what the sabotaged threshold — three of the frame, 3·zoom on
+      //    screen — would arm and the real one does not arms nothing; four arms, and Escape lets go.
+      await page.getByRole("button", { name: "Menú", exact: true }).click();
+      await expect(panel).toBeVisible();
+      await expect.poll(() => canvasZoom(page)).toBeLessThan(0.8);
+      const small = await canvasZoom(page);
+      let at = await gap();
+      await page.mouse.move(at.x, at.y);
+      await page.mouse.down();
+      await page.mouse.move(at.x + (3 * small + 3) / 2, at.y, { steps: 3 });
+      await expect(zones).toHaveCount(0);
+      await page.mouse.move(at.x + 4, at.y);
+      await expect(zones).toHaveCount(3);
+      await page.keyboard.press("Escape");
+      await expect(zones).toHaveCount(0);
+      await page.mouse.up();
+      await expect.poll(positionNow).not.toBe("left");
+      await panel.getByRole("button", { name: "Cerrar la cabecera" }).click();
+      await expect(panel).toHaveCount(0);
+      await deviceArrived(page, DESKTOP_LAYOUT_WIDTH);
+      const zoom = await canvasZoom(page);
+      expect(zoom).toBeCloseTo(0.9125, 3);
+      const card = await page.locator('[data-testid="canvas-card"] iframe').boundingBox();
+      if (!card) throw new Error("no canvas");
+      /** A point of the frame, on screen. */
+      const onScreen = (x: number, y: number) => ({ x: card.x + x * zoom, y: card.y + y * zoom });
+
+      // 2. The gesture itself, at 0.9125: the three zones with the bar marked as the current one.
+      at = await gap();
+      await page.mouse.move(at.x, at.y);
+      await page.mouse.down();
+      await page.mouse.move(at.x + 4, at.y, { steps: 2 });
+      await expect(zones).toHaveCount(3);
+      expect(
+        await zones.evaluateAll((els) =>
+          els.map((el) => [el.getAttribute("data-zone"), el.hasAttribute("data-current")]),
+        ),
+      ).toEqual([
+        ["bar", true],
+        ["left", false],
+        ["right", false],
+      ]);
+      // Over the left column: lit, and the ghost names the menu.
+      const inLeft = onScreen(120, 400);
+      await page.mouse.move(inLeft.x, inLeft.y, { steps: 8 });
+      await expect(frame.locator('.rb-zone[data-zone="left"][data-hot]')).toHaveCount(1);
+      await expect(frame.locator(".rb-menu-ghost")).toHaveText("Menú de páginas");
+      // The hand is closed while it lasts.
+      expect(await header.evaluate((el) => getComputedStyle(el).cursor)).toBe("grabbing");
+      await page.mouse.up();
+      await expect(zones).toHaveCount(0);
+      const rail = frame.locator('.rb-rail[data-side="left"]');
+      await expect(rail).toBeVisible();
+      await expect.poll(positionNow).toBe("left");
+      await expect(said).toHaveText("Menú de páginas: columna izquierda");
+      // The release's own click chose nothing: the panel is closed, the header unchosen.
+      await expect(header).not.toHaveClass(/rb-selected/);
+      await expect(page.getByRole("complementary", { name: "La cabecera de tu web" })).toHaveCount(
+        0,
+      );
+      // The card says where it is.
+      await page.getByRole("button", { name: "Menú", exact: true }).click();
+      await expect(
+        panel
+          .getByRole("radiogroup", { name: "Dónde va el menú de páginas" })
+          .getByRole("radio", { name: "Columna izquierda" }),
+      ).toBeChecked();
+      await panel.getByRole("button", { name: "Cerrar la cabecera" }).click();
+      await expect(panel).toHaveCount(0);
+      await deviceArrived(page, DESKTOP_LAYOUT_WIDTH);
+
+      // 3. From the column's own ground towards the right one, and Escape half-way: nothing written,
+      //    the zones gone, the menu where it was.
+      const railBox = await rail.boundingBox();
+      if (!railBox) throw new Error("the column is not drawn");
+      const ground = { x: railBox.x + railBox.width / 2, y: railBox.y + railBox.height * 0.9 };
+      await page.mouse.move(ground.x, ground.y);
+      await page.mouse.down();
+      const inRight = onScreen(1200, 400);
+      await page.mouse.move(inRight.x, inRight.y, { steps: 10 });
+      await expect(frame.locator('.rb-zone[data-zone="right"][data-hot]')).toHaveCount(1);
+      await page.keyboard.press("Escape");
+      await expect(zones).toHaveCount(0);
+      await page.mouse.up();
+      await expect(rail).toBeVisible();
+      expect(await positionNow()).toBe("left");
+
+      // 4. Let go on the grey outside every zone: nothing written either.
+      await page.mouse.move(ground.x, ground.y);
+      await page.mouse.down();
+      const nowhere = onScreen(640, 500);
+      await page.mouse.move(nowhere.x, nowhere.y, { steps: 10 });
+      await expect(zones).toHaveCount(3);
+      await expect(frame.locator(".rb-zone[data-hot]")).toHaveCount(0);
+      await page.mouse.up();
+      await expect(zones).toHaveCount(0);
+      await expect(rail).toBeVisible();
+      expect(await positionNow()).toBe("left");
+
+      // 5. «Deshacer» once: the one step the drop wrote, and the pages are back in the bar.
+      await page.getByRole("button", { name: "Deshacer", exact: true }).click();
+      await expect(rail).toHaveCount(0);
+      await expect.poll(positionNow).toBe("bar");
+      await expect(entries).toHaveCount(2);
+
+      // 6. A press that does not move keeps its old meaning: an entry navigates, the nav's ground
+      //    chooses the header and opens «Menú».
+      const second = await entries.nth(1).boundingBox();
+      const secondTitle = ((await entries.nth(1).textContent()) ?? "").trim();
+      if (!second) throw new Error("no second entry");
+      await page.mouse.click(second.x + second.width / 2, second.y + second.height / 2);
+      await expect(
+        frame.locator('.rb-nav-wide nav[data-part="pagesLinks"] a[aria-current="page"]'),
+      ).toHaveText(secondTitle);
+      await expect(zones).toHaveCount(0);
+      at = await gap();
+      await page.mouse.click(at.x, at.y);
+      await expect(header).toHaveClass(/rb-selected/);
+      await expect(panel).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+});

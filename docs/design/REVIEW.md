@@ -6872,3 +6872,67 @@ plan (el ZIP no cambia de ficheros). **Lighthouse** (cambió la hoja de la
 barra fija): 99 / 98 / 98 las composiciones, 99 con letra propia, 100 la barra fija con logo, 100 en
 columnas, 100 por ficha — lo del cierre del 32; LCP 1,80 / 2,40 / 2,33. Los tres motores del ZIP
 (`engines.browser.test.ts`) en verde.
+
+### Día 4 — un menú se arrastra a su zona (PR de `feat/un-menu-se-arrastra-a-su-zona`, ADR 0066)
+
+**La ADR 0066** recoge la decisión 3 de David con sus cuatro condiciones y el ajuste 2, y lo que el
+gesto no hace: no mueve el menú (se mueve un fantasma), no crea sitios (soltar escribe una de las
+palabras de la ADR 0060), no existe en la vista de móvil, no sustituye a las tarjetas del panel, y con
+un dedo solo con la cabecera ya elegida. Una nota en la 0060 dice que el gesto llegó. **Nada del
+renderer cambia**: golden a cero, el publicado byte a byte el de `main`.
+
+**`menuDrag.ts`**, puro y sin DOM como `dragGrid.ts`: `menuOf` (la parte → el menú), `zonesFor` (las
+tres zonas de las páginas, las cinco de las secciones, cada una con la palabra del panel, la actual
+marcada y el lado que ocupa el otro menú marcado como apilado; **vacío a 720 o menos**), `zoneRects`
+(la geometría de cada zona a partir de las constantes del renderer: un lado es `RAIL_WIDTH` por el alto
+de la ventana; la barra, su caja, o una tira de `--rb-bar-h` si está plegada; la fila, una banda bajo
+la barra; «Ir a…», una píldora a `--rb-header-h + space.md` en el lado que el raíl de páginas deja
+libre, donde `foldCss` pone la real), `zoneAt` (la zona bajo un punto; donde dos se solapan gana la
+más pequeña: la píldora dentro de la columna derecha, la barra sobre lo alto de una columna),
+`dropOutcome` (nada sobre ninguna zona o sobre la actual; si no, **el mismo parche que escribe la
+tarjeta «Dónde va»**) y los textos. Trece pruebas en `menuDrag.test.ts` sobre `menu-y-paginas`.
+
+**El gesto, `wireMenuDrag` en `Editor.tsx`**, junto a `wireDragging` y sin verlo nunca: arranca con
+una pulsación sobre el fondo de un `nav` (su relleno y los huecos entre entradas), el fondo de un raíl
+(con dos menús, el `nav` más cercano al punto), la fila o el `summary` de «Ir a…», y nunca sobre `a`,
+`button` o `[data-id]`; con un dedo, solo con la cabecera elegida. Mismo umbral que los elementos
+(`DRAG_THRESHOLD / zoomOf`) y mismas dos estados: bajo él la pulsación es un clic; pasado, el clic que
+cierra el gesto se traga (`justDragged`). Al pasarlo: captura del puntero, `rb-dragging` en la raíz
+(encola los parches, `user-select: none`, la mano cerrada), las zonas dibujadas como cromo fijo en el
+`body` (`chrome()`, borde y palabra en píxeles de pantalla, `data-current` en la actual, `data-hot` en
+la que está bajo el puntero) y el fantasma con el nombre del menú siguiendo al puntero, con la segunda
+línea «Se apila bajo el …» sobre un lado ocupado. Soltar: `dropOutcome` → `onSetHeader(patch)` (un
+`setHeader`, un paso de historial) y el anuncio en la región `status` («Menú de páginas: columna
+izquierda»); Escape durante el gesto, o soltar fuera, no escribe nada. **El cursor avisa antes**
+(ajuste 2): `grab` sobre los cuatro agarres y `pointer` sobre las entradas, solo desde 721 px de
+ventana del marco; `grabbing` mientras dura. `patchCanvas.test.ts`: las zonas y el fantasma, cromo en
+el `body`, siguen una vez cada uno tras el parche que escribe la suelta.
+
+**La caminata «sprint 33 día 4»** a 1440 (1280 a 0,9125), con dos páginas convertidas para que el
+menú tenga un hueco entre entradas, todo con `page.mouse` en la caja dibujada: el cursor `grab` sobre el
+hueco y `pointer` sobre la entrada; **el umbral medido lejos del borde**: con la división por el zoom
+el umbral es exactamente 3 px de pantalla a cualquier zoom, así que una caminata a 3 lee el redondeo
+del navegador (parpadeó una vez en la suite filtrada); se mide con el panel abierto (lienzo a ~0,74),
+donde un recorrido a medio camino entre 3·zoom y 3 no arma nada y cuatro dibujan las tres zonas; luego
+el gesto entero a 0,9125 (`bar` marcada como actual); sobre la columna izquierda, `data-hot` y el fantasma «Menú de
+páginas», la cabecera con `grabbing`; soltar: el raíl de pie, `pages.position = "left"` en la sesión,
+el anuncio exacto, la cabecera sin elegir y el panel cerrado (el clic de la suelta no eligió nada), la
+tarjeta «Columna izquierda» marcada al abrir el panel; desde el fondo del raíl hacia la derecha y
+Escape a mitad → nada; soltar en el gris del centro → nada; **un «Deshacer»** devuelve la barra; un
+clic en una entrada navega (la entrada marcada `aria-current="page"` es la pulsada), un clic en el
+hueco elige la cabecera y abre «Menú». **Saboteos**, deshechos restaurando el fichero: sin `justDragged`
+en la suelta, el clic elige la cabecera → rojo; sin la división por el zoom, las zonas aparecen en el
+recorrido intermedio → rojo.
+
+**Lo que costó encontrar**: la caminata arrancaba con la cabecera a −755 px (convertir una sección
+desplaza el lienzo hasta ella), así que la primera pulsación caía en la página y no en el `nav`; el
+lienzo vuelve arriba antes del gesto. `grip.matches("summary")` es un predicado de tipo en `lib.dom`
+y dejaba la variable en `never`: `tagName`. La región de la sesión está vacía antes del primer
+autoguardado: se sondea, no se parsea. El botón «Menú» del raíl del editor no cierra el panel: lo
+cierra «Cerrar la cabecera». Y tras un parche estructural el orden de los nodos de cromo al final del
+`body` cambia (ya lo medía la prueba vecina): se asevera que siguen, no dónde. Y una aserción en el
+borde exacto del umbral pasa sola y falla en la suite (memoria: suelo y tolerancia antes de medir).
+
+**Suites.** `typecheck`, `lint`, `test` (3676: 13 de `menuDrag`, 1 de `patchCanvas`), invariantes y
+golden (cero cambios) en verde; e2e filtrado de cabecera (sprints 30–33, 18 caminatas) en verde. Nada
+del renderer: ni `a11y`, ni Lighthouse, ni `size`.
