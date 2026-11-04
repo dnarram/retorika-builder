@@ -138,6 +138,34 @@ does not have to derive it.
   `breakpoints`: the document keeps its one breakpoint, and an owner's patch never moves a menu.
   Under 1024 a page in columns is the phone header ADR 0057 drew, measured on sprint 31 día 6.
 
+**What sprint 32 added (closing it, 4 November 2026): every site changed its look, and no document
+changed.**
+
+- **Rule 6 is about what the owner chooses, not about what the engine knows.** The published page now
+  carries numbers no document holds: the motion's curve and durations (`--rb-ease`, `--rb-fast`
+  200 ms, `--rb-base` 400 ms, [ADR 0062](decisions/0062-the-published-site-moves-just-enough-without-a-byte-of-script.md)),
+  the glass's mix (`GLASS_MIX = 0.88`, [ADR 0063](decisions/0063-the-bar-is-of-2026-and-it-is-the-same-for-every-site.md)),
+  the measure of 1200 px and the reading lines at 1.6 and 1.15
+  ([ADR 0064](decisions/0064-the-page-has-a-measure-and-a-rhythm.md)). **An engine constant is not an
+  exact value of the document**: nobody chose it for one site, it is the same for every site, it lives
+  in the renderer like `--rb-header-h`, and nothing in the document refers to it or can override it.
+  An exact value is still what it was — a value an owner put on one element or one part, stored and
+  marked. **And a `color-mix` of references is a reference**: the hairline is `ink` at a tenth, the
+  glass is `surface` or `ink` at 88 %; a palette change carries through both, which is what the rule
+  exists to protect. The ten glass mixes clear AA over black and over white in all five palettes
+  (lowest 6.72, `forest-emerald`), proved in `glass.test.ts`.
+- **Which is why David's first decision cost no migration.** He chose that the new look replaces the
+  old in every site, saved or new. A document is references to the system, so changing the system
+  changed every site and not one byte of any document: the schema stayed at 1.17.0, `schema:guard`
+  over the sprint says the shape is unchanged, and all twenty-two goldens moved.
+- **Rule 7 still does not reach the header.** The phone's sheet — «Menú» and «Ir a…» as a full-height
+  panel with what is behind it hidden — is the header's own phone derivation, inside its 720 px
+  `@media`, like the fold before it; never `breakpoints`, and an owner's patch never moves it.
+- **And motion is not a second tree.** The reveal, the cover's entrance and the transition between
+  pages are the stylesheet's, over the same markup, under `prefers-reduced-motion: no-preference`; the
+  canvas runs none of it (ADR 0062 §5), so what the owner edits is the page at rest that a visitor who
+  asked for less movement sees.
+
 ## The role vocabulary, v1
 
 Nine roles and one container:
