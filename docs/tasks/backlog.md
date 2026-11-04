@@ -12,7 +12,75 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 3 November 2026, **closing sprint 31 — «cada menú tiene su sitio».** David asked for the
+Last reviewed: 4 November 2026, **closing sprint 32 — «una web de 2026».** David found the published
+site and its two menus «arcaicos» and asked for them «extremadamente modernos y actuales resaltando el
+movimiento de las páginas del 2026». Eight days, four decisions of his before planning and seven
+adjustments while approving; no schema change. What changed for somebody visiting a site: the bar is of
+2026 — the words in ink, a rule that slides under the current entry, a pill button, and once scrolled
+a bar that condenses and turns to glass where its colour allows it
+([ADR 0063](../decisions/0063-the-bar-is-of-2026-and-it-is-the-same-for-every-site.md), día 1); the
+sections rise as the visitor scrolls to them, the cover's words come in once, and the page fades into
+the next with the bar still, all of it CSS and all of it off for a visitor who asked for less
+([ADR 0062](../decisions/0062-the-published-site-moves-just-enough-without-a-byte-of-script.md), día 2,
+the fade taken out on día 4); the content has a measure of 1200 px and a rhythm
+([ADR 0064](../decisions/0064-the-page-has-a-measure-and-a-rhythm.md), día 3); the phone's menus are a
+full-height sheet (día 4). For the owner: the «Menú» panel says what only the published page does, and
+the review before a download judges an exact colour over the glass (día 5). The site measured in
+Firefox and WebKit for the first time (día 6). **It replaced the look of every site, saved or new** —
+David's first decision. The record is `docs/design/REVIEW.md`, sprint 32.
+
+**What sprint 32 leaves open** — the full text, with every number, is the last section of REVIEW's
+sprint 32:
+
+1. **Twenty-two signatures**: 0042, 0043, 0045–0064, all `proposed`. 0062, 0063 and 0064 are new;
+   0062 carries the día 4 note (the reveal rises and never fades, decided by development on David's
+   explicit delegation and not signed for him) and the día 6 note (the three engines).
+2. **The nine photographs**, unchanged: the exemption fails on **1 December 2026**.
+3. **Design calls of the sprint, to confirm or reverse**: the reveal rises without a fade (by his
+   delegation, above); a surface bar writes no word in the primary — entries, brand and «Menú» in
+   ink, the primary kept for the indicator and the button — because the primary does not clear AA
+   over a surface glass; `primary` and `secondary` bars condense opaque, without glass, for the same
+   arithmetic; the burger is not drawn when «Ir a…» shares the phone's bar (its 26 px are the logo at
+   320); the cover's entrance keeps its fade. Sprint 31's four, unchanged.
+4. **Two fallbacks no installed engine takes**: the current entry's own rule where an engine cannot
+   anchor, and the opaque bar where it cannot blur. Chromium 153, Firefox 155 and WebKit 26.6 all
+   anchor and all blur; the stylesheet's tests hold both branches, no browser has drawn them. Firefox
+   155 has no `view()`: there the sections do not rise and are whole.
+5. **The iPhone list of PR #250** grows by two: the bar's glass over a photograph while scrolling, and
+   the phone's sheet against Safari's own toolbar (`100dvh`). WebKit 26.6 in Playwright draws the
+   glass; neither has been seen on a device.
+6. **Opened, with their reasons** (ADR 0063 and the plan's «lo que deja fuera»):
+   - **Backgrounds per section** (tinted bands alternating down the page): it would be a choice per
+     section under rule 6, with its contrast proof — another sprint, not a constant of the engine.
+   - **Locking the body's scroll under the phone's sheet**: it would cost the script a fifth write
+     (`overflow: hidden` on `html`, against ADR 0058). Not needed today: what the sheet covers is
+     `visibility: hidden`, out of sight and out of the Tab order, and that the page behind can still
+     scroll is not seen.
+7. **Closed by this sprint**: the page's maximum width and the reading text's CLS, both by ADR 0064
+   on día 3 (rows below, struck through).
+8. **Noted, still not fixed**: the observer's `rootMargin` is the bar's height at start, and a
+   condensed bar is 16 px shorter (2 × (md − sm), measured on día 1), so the margin is 16 px more
+   than the bar it stands for — the plan said 8. Whether that changes which section is marked has not
+   been measured with the bar condensed; fixing it would mean re-creating the observer. Sprint 31's and 30's items as listed
+   below.
+
+**What this sprint found that nobody was looking for:**
+
+1. **An anchor function in the frame's stylesheet, in rules that match nothing, breaks Chromium's
+   scroll anchoring** when the frame re-lays out — bisected over eight runs (día 1). Anchors are
+   written for the published page only, and the canvas's first paint swaps the sheet.
+2. **axe weighs opacity into a text's colour**: a scroll fade over the fold read as 2.53:1 (días 2–3),
+   which is how the reveal lost its fade.
+3. **`line-height: 1.6` moved the edited section −205 px at 1024** where the browser's anchoring did
+   nothing; the editor now keeps the reading point across a width change itself (día 3).
+4. **A walk red twice in CI was its wait, not the editor**: `settled` answered before the device
+   toggle had repainted, reproduced under a 4× CPU throttle (día 4).
+5. **An owner's exact bar colour was replaced by the glass once scrolled** since día 1 (día 5).
+6. **Chromium transitions between two pages opened from `file://`**, which ADR 0062 said it did not;
+   **WebKit reports a missing font only on the console**; and **this repository's Vitest is silent by
+   default**, so a skip's reason written with `console` would never have been read (día 6).
+
+The review before that: 3 November 2026, **closing sprint 31 — «cada menú tiene su sitio».** David asked for the
 pages menu and the section navigator to become two independent elements, each with its own place on the
 page and not tied to one bar above it, and for the navigator to gain dispositions of its own with their
 transitions. Seven days, four decisions of his before planning and four adjustments while approving.
@@ -48,9 +116,6 @@ sprint 31:
    unminified CSS at 0.5 each, with every score at 100.
 7. **The drag gesture**: another sprint, on the zones ADR 0060 fixes.
 8. **The header in columns has not been seen in Safari or on an iPhone**: the PR #250 list grows by it.
-   Sprint 32 día 6 adds two more: the bar's glass over a photograph while scrolling, and the phone's
-   sheet against Safari's own toolbar (`100dvh`). WebKit 26.6 in Playwright draws the glass; neither
-   has been seen on a device (REVIEW, sprint 32 día 6).
 9. **From sprint 30, untouched**: the logo's edge, logos saved without a size, the reading text's
    `line-height: normal`, the compositions at 99 / 98 / 98, the gated walk, the `rootMargin` taken at
    start; and sprint 29's and 28's items as listed below, less the panel's width when escalating,

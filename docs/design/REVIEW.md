@@ -6445,3 +6445,111 @@ cambio de bytes. Todo dentro.
 **La lista del iPhone** (PR #250) crece con dos: el cristal de la barra sobre una foto al bajar, y la
 hoja del móvil contra la barra del propio Safari (`100dvh`). WebKit 26.6 en Playwright dibuja el
 cristal; ninguno de los dos se ha visto en un dispositivo. Anotado en el backlog, punto 8.
+
+### Día 7 — colchón y cierre (PR de `test/el-cierre-del-sprint-32`)
+
+**Nada de los días 5 y 6 quedó corto**: el colchón no se usó. El cierre mide, compara y escribe.
+
+**El ZIP contra el inicio del sprint** (`8d320fc`, el cierre del 31), construyendo los 22 documentos
+del corpus con el publicador de cada árbol:
+
+- cambian **40 de 123 ficheros: todas las páginas de las 22 webs**, y ningún otro (letras, fotos,
+  favicon, `robots.txt` y `sitemap.xml` idénticos byte a byte). Es la decisión 1 de David: la estética
+  nueva sustituye a la vieja en toda web, guardada o nueva;
+- **las 30 páginas de las 18 webs sin cabecera cambian en las mismas 49 líneas** y en nada más:
+  1. la medida y el ritmo (ADR 0064): `--rb-measure`, el relleno de la sección, el `line-height` de
+     párrafos y titulares, la foto a `radius-lg`, el botón píldora, la tarjeta de la portada;
+  2. el movimiento (ADR 0062): las tres constantes del motor, `rb-rise` y `rb-reveal`, el revelado
+     bajo `@supports`, la entrada de la portada, la transición entre páginas y el hover del botón,
+     todo dentro de `prefers-reduced-motion: no-preference`;
+- **las diez páginas de las cuatro webs con cabecera** llevan esas 49 líneas y, además, la barra de
+  2026 (días 1 y 4), leída entera:
+  1. la barra: `z-index: 1`, la medida en su relleno restando los raíles, el filete de un décimo de
+     tinta, marca, entradas y «Menú» en tinta, entradas en la letra de lectura, sin la raya entre los
+     dos menús;
+  2. el indicador por anclas bajo `@supports`, y su color en los esquemas de color;
+  3. el botón píldora en negrita, que sube un píxel;
+  4. las dos alturas: `--rb-bar-h` estática para la portada transparente, `--rb-header-h` viva;
+  5. la condensación desde 721 px con su `margin-bottom`, y el cristal bajo `@supports`;
+  6. el móvil: la hoja de 100dvh, `<main>` oculto tras ella, las entradas escalonadas, la fila oculta
+     con `fold`;
+  7. el `view-transition-name` de la barra y sus transiciones con los números del motor;
+  8. **el único cambio de marcado del sprint**: en las nueve páginas de las tres webs que dibujan
+     «Menú», el `summary` gana el icono y las palabras «Menú» y «Cerrar» (`menu-explicito`, de una
+     página, no dibuja «Menú» y su marcado no cambia);
+- **el script, sin un byte de diferencia** en ninguna página: 829 B, los del cierre del 31.
+
+**Lo que se pidió medir al cierre**, recogido de los días:
+
+| Medida | Resultado |
+|---|---|
+| Las diez mezclas del cristal (5 paletas × 2 fondos, sobre negro y sobre blanco) | todas ≥ 4,5; la más baja **6,72**, superficie sobre tinta con blanco detrás, `forest-emerald` |
+| El primario como palabra sobre cristal de superficie | **no** pasa (3,57 en `neutral`): ninguna barra de superficie lo escribe |
+| La barra condensada | 16 px menos (`2 × (md − sm)`), la primera sección se mueve exactamente −400 px en un scroll de 400, en los tres motores |
+| La barra a 320 con logo, botón, «Ir a…» y «Menú» | ≤ 72 px; la hoja empieza en su pie y acaba en el fondo de la ventana |
+| El contenido a 1680 | 1200 ± 1 px y centrado; la marca alinea con el titular |
+| Los tres motores | Chromium 153, Firefox 155 (sin `view()`), WebKit 26.6; todo texto a opacidad 1 en los tres |
+| El peso | páginas con cabecera 6,0–6,4 KB, `cabecera-con-marca` 17,4 KB propios de 28, el script 0,8 KB de 2 |
+
+**Lighthouse**, los ocho sujetos en el perfil móvil, contra el cierre del 31:
+
+| Sujeto | Rendimiento | Accesibilidad | Buenas prácticas | SEO | LCP | CLS |
+|---|---|---|---|---|---|---|
+| v1 image-right | 99 | 100 | 100 | 100 | 1,80 s (1,80) | 0,003 (0,009) |
+| v2 image-background | 98 | 100 | 100 | 100 | 2,33 s (2,40) | 0,003 (0,000) |
+| v3 image-left | 98 | 100 | 100 | 100 | 2,33 s (2,33) | 0,003 (0,009) |
+| letra propia `.ttf` | 99 | 100 | 100 | 100 | 1,80 s (1,80) | 0,000 (0,002) |
+| cabecera fija con logo | 100 | 100 | 100 | 100 | 1,35 s (1,35) | 0,002 (0,008) |
+| cabecera en columnas | 100 | 100 | 100 | 100 | 1,35 s (1,35) | 0,004 (0,009) |
+| página por ficha | 100 | 100 | 100 | 100 | 0,90 s (0,90) | 0,000 (0,000) |
+
+Ninguna nota baja respecto al cierre del 31, con el movimiento encendido; el CLS de las composiciones
+baja de 0,009 a 0,003 por el `line-height` de la ADR 0064. Ninguna composición por debajo de 98.
+Lighthouse no baja la página, así que no ve el cristal: su suelo es aritmético y está medido en los
+tres motores (día 6).
+
+**Suites del cierre**, una tras otra y nada en paralelo:
+
+| Suite | Resultado |
+|---|---|
+| `pnpm test` | 3657 en verde, 174 ficheros (3613 al cierre del 31) |
+| `typecheck`, `lint` | en verde, 0 errores; 29 avisos, los de siempre |
+| invariantes, golden, `renderer:deps` | en verde |
+| `schema:guard 8d320fc..HEAD` | la forma del documento no cambió: sin migración, el esquema sigue en 1.17.0 |
+| `secrets:scope` | 125 módulos, 30 de cliente, ninguno cruza |
+| `size` | 27 de 27 dentro, el script en 0,8 KB |
+| `test:a11y` local | 936 en verde (866 al cierre del 31; 33 de los tres motores) |
+| `pnpm lighthouse` | 8 de 8, y los 12 del ZIP desde `file://` en los tres motores |
+| e2e completa | **273 verdes y 1 omitida, 1156 s, a la primera**, con `caffeinate -i` |
+
+### Lo que el sprint 32 deja abierto
+
+1. **Veintidós firmas**: 0042, 0043 y de la 0045 a la 0064, todas `proposed`. La 0062, la 0063 y la
+   0064 son de este sprint; la 0062 lleva la nota del día 4 (el revelado sube y no se funde, decidido
+   por desarrollo por delegación expresa de David, y no firmado por él) y la del día 6 (los tres
+   motores).
+2. **Las nueve fotografías a 1600 × 1072**, sin cambios: la exención caduca el **1 de diciembre de
+   2026**, dentro de 27 días.
+3. **Decisiones de diseño del sprint, para confirmar o deshacer**:
+   - el revelado al bajar sube sin fundirse (por la delegación de arriba);
+   - una barra de superficie no escribe ninguna palabra en primario: entradas, marca y «Menú» en
+     tinta, y el primario solo para el indicador y el botón, porque sobre cristal no pasa AA;
+   - las barras `primary` y `secondary` se condensan opacas, sin cristal, por la misma aritmética;
+   - el icono de «Menú» no se dibuja cuando «Ir a…» comparte la barra del móvil (sus 26 px son el logo
+     a 320);
+   - la entrada de la portada conserva su fundido (va por tiempo y acaba en 600 ms).
+   Las cuatro del sprint 31, sin cambios.
+4. **Dos caídas que ningún motor instalado toma**: el subrayado de la entrada actual donde no hay
+   anclas, y la barra opaca donde no hay `backdrop-filter`. Los tres motores anclan y desenfocan; las
+   sostiene la hoja (`header.test.ts`), ningún navegador las ha dibujado.
+5. **La lista del iPhone (PR #250)** crece con dos: el cristal de la barra sobre una foto al bajar, y
+   la hoja del móvil contra la barra del propio Safari (`100dvh`).
+6. **Abiertas en el backlog, con su motivo**: fondos por sección (sería una elección por sección bajo
+   la regla 6, con su prueba de contraste: otro sprint) y bloquear el scroll del cuerpo bajo la hoja
+   (costaría una quinta escritura del script; hoy lo de detrás está oculto y fuera del orden de Tab).
+7. **Cerradas por el sprint**: el ancho máximo de la página y el CLS del texto, las dos por la ADR 0064
+   el día 3.
+8. **Anotado, sin arreglar**: el `rootMargin` del observador es la altura de la barra al empezar, y la
+   condensada mide 16 px menos (el plan decía 8); no se ha medido si eso cambia la sección marcada.
+9. **Del sprint 31 y anteriores, sin tocar**: lo que lista el backlog.
+10. **El sprint 33, sin planificar.**
