@@ -288,3 +288,14 @@ canvas shows it at rest.
   a logo at 100 with the glass** (LCP 1.35 s, CLS 0.008), the compositions 99 / 98 / 98 as at the
   close of sprint 31; our bytes of `cabecera-con-marca` 15.0 KB of 28; the script 815 B.
 - Day by day in `docs/design/REVIEW.md`, sprint 32 día 1.
+
+## Note — sprint 33 día 1: the body's scroll is locked after all (ADR 0065)
+
+The note of sprint 32 día 4 ends: «This is also why the body's scroll is not locked: nothing behind can
+be seen or reached.» **Measured, that reason does not hold.** The page behind is not seen, but it still
+scrolls, and with a bar in the flow it carries the sheet away with it: a wheel of 2000 px over the open
+sheet took `scrollY` to 2000 in Chromium and in WebKit, at 390 × 844 and 320 × 568, leaving a blank
+page as long as the content under the visitor's eye — the defect David reported opening sprint 33. ADR
+0065 locks it by the stylesheet, with no write of the script: `html:has(<sheet>[open]) { overflow:
+hidden }` in the phone's block, and `scrollbar-gutter: stable` there so the content keeps its width
+where a classic scrollbar is drawn. Everything else in that note stands.

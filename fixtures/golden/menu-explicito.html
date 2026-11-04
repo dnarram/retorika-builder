@@ -257,6 +257,7 @@ html[data-rb-js] .rb-header[data-sticky][data-bg=transparent] { position: fixed;
 .rb-nav-narrow { display: none; }
 @media (max-width: 720px) {
   html { --rb-bar-h: calc(2 * var(--space-sm) + max(40px, 1.5 * var(--size-body))); }
+  html { scrollbar-gutter: stable; }
   .rb-header { gap: var(--space-sm) var(--space-md); padding: var(--space-sm) var(--space-lg); }
   .rb-brand { flex: 1 1 0; }
   .rb-nav-wide { display: none; }
@@ -279,6 +280,7 @@ html[data-rb-js] .rb-header[data-sticky][data-bg=transparent] { position: fixed;
     box-shadow: inset 3px 0 0 currentColor;
     background: color-mix(in srgb, currentColor 12%, transparent); }
   body:has(.rb-nav-narrow[open]) main { visibility: hidden; }
+  html:has(.rb-nav-narrow[open]) { overflow: hidden; }
   @media (prefers-reduced-motion: no-preference) {
     .rb-nav-narrow[open] > .rb-nav > a { animation: rb-rise var(--rb-base) var(--rb-ease) backwards;
       animation-delay: calc(var(--rb-i, 0) * 40ms); }

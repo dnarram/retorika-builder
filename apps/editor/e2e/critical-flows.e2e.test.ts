@@ -24577,3 +24577,57 @@ describe("sprint 33 día 1 — el lienzo no ejecuta el script", () => {
     }
   }, 300_000);
 });
+
+describe("sprint 33 día 1 — la hoja del móvil bloquea la página", () => {
+  it("en la vista móvil, una rueda sobre «Menú» abierto no mueve la página, y cerrada vuelve a moverla", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 950 } });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      // A second page, so the phone has «Menú».
+      await frame.locator('[data-section="sec-services"]').click();
+      await frame
+        .locator(
+          '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+        )
+        .click();
+      await expect(frame.locator('.rb-nav-wide nav[aria-label="Páginas"] a')).toHaveCount(1);
+      await page.getByRole("button", { name: "Ver en móvil" }).click();
+      await deviceArrived(page, NARROWEST_WIDTH);
+      await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
+      const menu = frame.locator("details.rb-nav-narrow");
+      const summary = await menu.locator("summary").boundingBox();
+      if (!summary) throw new Error("«Menú» is not drawn");
+      await page.mouse.click(summary.x + summary.width / 2, summary.y + summary.height / 2);
+      await expect.poll(() => menu.evaluate((d) => (d as HTMLDetailsElement).open)).toBe(true);
+      // Its entries are at rest the moment it opens: the canvas has no `rb-rise` (ADR 0062 §5).
+      expect(
+        await menu
+          .locator(".rb-nav a")
+          .last()
+          .evaluate((a) => getComputedStyle(a).opacity),
+      ).toBe("1");
+
+      // The wheel, over the frame where a person turns it, and never `scrollTo` (ADR 0065): it
+      // carried the frame 2000 px under the open sheet before this day, into a blank page.
+      const card = await page.locator('[data-testid="canvas-card"] iframe').boundingBox();
+      if (!card) throw new Error("no canvas");
+      const turn = async (dy: number) => {
+        await page.mouse.move(card.x + card.width / 2, card.y + card.height / 2);
+        await page.mouse.wheel(0, dy);
+        await page.waitForTimeout(400);
+        return frame.locator("body").evaluate(() => Math.round(window.scrollY));
+      };
+      expect(await turn(2000)).toBe(0);
+      expect(await menu.evaluate((d) => (d as HTMLDetailsElement).open)).toBe(true);
+
+      // Closed by Escape (the editor's own, since the canvas runs no script), the page scrolls.
+      await page.keyboard.press("Escape");
+      await expect.poll(() => menu.evaluate((d) => (d as HTMLDetailsElement).open)).toBe(false);
+      expect(await turn(300)).toBeGreaterThan(0);
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+});

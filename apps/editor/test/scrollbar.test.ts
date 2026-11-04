@@ -52,10 +52,24 @@ describe("the editor's scrollbar", () => {
   it("leaves the published site alone, which is the one thing this must never touch", () => {
     // ADR 0001: nothing of the editor's styling may reach a client's page. The preview is an
     // iframe with its own document from `packages/renderer`, and the proof that this cannot cross
-    // is that the renderer emits no scrollbar rule of its own to be overridden.
+    // is that the renderer styles no scrollbar of its own to be overridden.
+    //
+    // **Styles**, since sprint 33 día 1: the renderer now writes one rule about the scrollbar, and
+    // it draws nothing — `scrollbar-gutter: stable` keeps the room of a classic scrollbar while the
+    // phone's sheet locks the page (ADR 0065), so the content does not widen when it opens. That
+    // rule is the only one, in the header's phone block; any rule that dresses a scrollbar is still
+    // refused. And it is a second reason for this file's rule to stay where it is: a scrollbar with
+    // an author's style gets no root gutter in Chromium (measured on that day, 705 → 720 px), so the
+    // editor's `::-webkit-scrollbar` must never reach the frame either.
     const rendererSrc = join(import.meta.dirname, "..", "..", "..", "packages", "renderer", "src");
+    const mentions: string[] = [];
     for (const file of readdirSync(rendererSrc).filter((f) => f.endsWith(".ts"))) {
-      expect(readFileSync(join(rendererSrc, file), "utf8"), file).not.toContain("scrollbar");
+      const code = readFileSync(join(rendererSrc, file), "utf8").replace(/^\s*(\/\/|\*).*$/gm, "");
+      expect(code, file).not.toMatch(/::-webkit-scrollbar|scrollbar-(width|color)\s*:/);
+      for (const line of code.split("\n").filter((l) => l.includes("scrollbar"))) {
+        mentions.push(`${file}: ${line.trim()}`);
+      }
     }
+    expect(mentions).toEqual(['header.ts: "  html { scrollbar-gutter: stable; }",']);
   });
 });
