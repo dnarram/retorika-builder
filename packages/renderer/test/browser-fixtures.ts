@@ -914,7 +914,17 @@ export function scaleCombinations(): Combination[] {
  * Rough size: 5 schemes × 5 palettes + 3 layouts × 2 places × 2 fixed + 8 places + 2 × 5 schemes
  * ≈ 55 documents. `railCombinations()` is the subset that draws a rail.
  */
-export function headerCombinations(): Combination[] {
+/**
+ * One header case on the teaser document: a brand and a button on every page, the given header over
+ * it, on the given palette. The constructor of every combination below — and of the menu audit's
+ * matrix (`apps/editor/audit`, sprint 33 día 2), which is why it is exported rather than kept as the
+ * closure it was.
+ */
+export function headerCase(
+  id: string,
+  paletteId: string,
+  header: RetorikaDocument["header"],
+): Combination {
   const base = baseDocument();
   const [page] = base.pages;
   const [section] = page?.sections ?? [];
@@ -930,37 +940,37 @@ export function headerCombinations(): Combination[] {
   // destination leaves «Contacto» to the sections and two pages to the pages menu.
   const lastPage = teaser.extraPages?.("standard").at(-1);
   if (!lastPage) throw new Error("the teaser case has no page for the button to go to");
-
-  const make = (id: string, paletteId: string, header: RetorikaDocument["header"]): Combination => {
-    const document = parseDocument({
-      ...base,
-      theme: buildTheme({
-        paletteId,
-        typePairId: FIXED_TYPE_PAIR[0].id,
-        scaleId: DEFAULT_SCALE_ID,
-      }),
-      header: {
-        brand: { name: true },
-        action: { kind: "page", pageId: lastPage.id },
-        ...header,
-      },
-      pages: [
-        { ...page, sections: teaser.sections(section, variantId, "standard") },
-        ...(teaser.extraPages?.("standard") ?? []),
-      ],
-    });
-    return {
-      id,
-      catalogId: TEASER_ID,
-      variantId,
+  const document = parseDocument({
+    ...base,
+    theme: buildTheme({
       paletteId,
       typePairId: FIXED_TYPE_PAIR[0].id,
       scaleId: DEFAULT_SCALE_ID,
-      text: "standard",
-      document,
-    };
+    }),
+    header: {
+      brand: { name: true },
+      action: { kind: "page", pageId: lastPage.id },
+      ...header,
+    },
+    pages: [
+      { ...page, sections: teaser.sections(section, variantId, "standard") },
+      ...(teaser.extraPages?.("standard") ?? []),
+    ],
+  });
+  return {
+    id,
+    catalogId: TEASER_ID,
+    variantId,
+    paletteId,
+    typePairId: FIXED_TYPE_PAIR[0].id,
+    scaleId: DEFAULT_SCALE_ID,
+    text: "standard",
+    document,
   };
+}
 
+export function headerCombinations(): Combination[] {
+  const make = headerCase;
   const combinations: Combination[] = [];
   for (const background of HEADER_BACKGROUNDS) {
     for (const palette of PALETTES) {
@@ -1077,7 +1087,27 @@ export async function openCombination(
   width: number,
   motion = false,
 ): Promise<Page> {
-  const html = render(combination.document, "html").html;
+  return openHtml(
+    browser,
+    render(combination.document, "html").html,
+    width,
+    combination.id,
+    motion,
+  );
+}
+
+/**
+ * What `openCombination` does once it has the html: the page of any document — the published one,
+ * or the canvas's with its own stylesheet (the menu audit, sprint 33 día 2) — served at `ORIGIN`
+ * with the corpus's assets, at a width, with its lazy images decoded, or it throws.
+ */
+export async function openHtml(
+  browser: Browser,
+  html: string,
+  width: number,
+  id: string,
+  motion = false,
+): Promise<Page> {
   // Reduced motion before the first frame (sprint 32 día 0): axe and the overflow walk measure the
   // page a visitor who asked for no movement sees, which is also the settled state of any entrance
   // the stylesheet animates. A half-faded line would be measured at partial opacity, and axe reads
@@ -1105,7 +1135,7 @@ export async function openCombination(
   });
 
   const response = await page.goto(`${ORIGIN}/`, { waitUntil: "load" });
-  if (response?.status() !== 200) throw new Error(`${combination.id}: page did not load`);
+  if (response?.status() !== 200) throw new Error(`${id}: page did not load`);
   // Photographs below the first section carry `loading="lazy"` since sprint 18 day 4, and a
   // lazy image below the fold has not even been requested when `load` fires — so the check
   // below read «did not load» for every gallery and team page whose cards sat under the fold,
@@ -1123,9 +1153,60 @@ export async function openCombination(
       .filter((img) => !img.complete || img.naturalWidth === 0)
       .map((img) => img.src),
   );
-  if (broken.length > 0)
-    throw new Error(`${combination.id}: images did not load: ${broken.join(", ")}`);
+  if (broken.length > 0) throw new Error(`${id}: images did not load: ${broken.join(", ")}`);
   return page;
+}
+
+/**
+ * Horizontal overflow, as `overflow.browser.test.ts` has measured it since sprint 2: the first
+ * element past the viewport's right edge, half a pixel of tolerance, what is inside a box that
+ * scrolls sideways on purpose exempted. Here since sprint 33 día 2 so the menu audit measures the
+ * same thing with the same code, unchanged.
+ */
+export interface Overflow {
+  scrollWidth: number;
+  innerWidth: number;
+  /** The first element whose box passes the right edge, or null. */
+  offender: { selector: string; right: number } | null;
+}
+
+export async function measureOverflow(page: Page): Promise<Overflow> {
+  return page.evaluate(() => {
+    const describe = (el: Element): string => {
+      const tag = el.tagName.toLowerCase();
+      for (const name of ["data-slot", "data-section", "data-page"]) {
+        const value = el.getAttribute(name);
+        if (value !== null) return `${tag}[${name}="${value}"]`;
+      }
+      const cls = el.getAttribute("class");
+      if (cls) return `${tag}.${cls.split(/\s+/).join(".")}`;
+      // A bare tag names nothing: a menu link has no class and no data attribute, so its words are
+      // the only way to tell which one ran past the edge.
+      const words = (el.textContent ?? "").trim().replace(/\s+/g, " ").slice(0, 40);
+      return words ? `${tag} «${words}»` : tag;
+    };
+    // Inside a strip that scrolls sideways on purpose — the header's row of sections on a phone
+    // (ADR 0057) — an entry past the edge is dragged in by the visitor and clipped by the row; the
+    // row itself is still judged, and `scrollWidth` below still says whether the page scrolls.
+    const insideScroller = (el: Element): boolean => {
+      for (let node = el.parentElement; node && node !== document.body; node = node.parentElement) {
+        const overflowX = getComputedStyle(node).overflowX;
+        if (overflowX === "auto" || overflowX === "scroll") return true;
+      }
+      return false;
+    };
+    const innerWidth = window.innerWidth;
+    let offender: { selector: string; right: number } | null = null;
+    for (const el of document.querySelectorAll("body *")) {
+      const right = el.getBoundingClientRect().right;
+      // Half a pixel of tolerance for sub-pixel rounding, never more.
+      if (right > innerWidth + 0.5 && !insideScroller(el)) {
+        offender = { selector: describe(el), right: Math.round(right * 10) / 10 };
+        break;
+      }
+    }
+    return { scrollWidth: document.documentElement.scrollWidth, innerWidth, offender };
+  });
 }
 
 /** Closes the page's own context, which is what openCombination created. */
