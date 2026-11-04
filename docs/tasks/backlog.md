@@ -90,6 +90,36 @@ sprint 32:
    **WebKit reports a missing font only on the console**; and **this repository's Vitest is silent by
    default**, so a skip's reason written with `console` would never have been read (día 6).
 
+**Sprint 33 día 3 — what the menu audit leaves open, with its captures.** The audit's three engines
+gave the same findings; día 3 fixed the four it could without a decision (REVIEW, sprint 33 día 3),
+and the second pass over the fixed code left only the first row below. The other two were found that
+day by a probe the audit had no check for. Captures in
+[`docs/design/review/2026-11-los-menus/`](../design/review/2026-11-los-menus/), all Chromium 153:
+
+| Gravity | Engine | Combination | Width | State | Measure | Cause | Capture |
+|---|---|---|---|---|---|---|---|
+| Covers content, published | all (Chromium probed) | `audit/left-row/transparent/fixed/row/stacked` | 768, 1024, 1280 | at rest | the header ends at 150.4 px, the cover's first words at 120: 30 px of the cover under the bar and its row | a transparent bar makes its room by `--rb-bar-h`, the estimate of **one** line (72); stacked it has two lines and the row under them (105.6 + 44.8) | `transparente-apilada-con-fila-1280-publicado.png` |
+| Covers content, canvas only | all three (the audit's note) | the nine `stacked` with the sections behind «Ir a…» | 1280 | at rest | «Ir a…» at 88–124.8 under a bar whose foot is 105.6: over the stacked bar's second line and half its button | in the canvas «Ir a…» hangs from the estimate of one line; published, from the script's measure. The panel says so since día 3 | `ir-a-sobre-barra-apilada-1280-lienzo.png` |
+| Overflows (vertical) | all three | all 153 (the teaser's button, «Dónde estamos», 13 letters) | 320 | at rest, published and canvas | the bar 81.6–83.6 px, over the 72 bound; «Menú» on a second line, at the left | brand + button + «Menú» need 276 px of the 272 a 320 phone leaves; and where they fit, a long button leaves the brand nothing (20 letters at 375: 5 px of it) | `boton-largo-320.png` |
+
+1. **The first two have one cause, the estimate of a bar of one line, and two ways out.** (a) The
+   stylesheet's estimate learns the structure the renderer already knows — two lines when stacked,
+   the row's line when the sections have one, the logo or not —, which fixes both and moves the
+   cover's room on saved sites with a transparent bar that is stacked or has a row; half a day with
+   the goldens and the matrices. (b) The editor measures the bar and writes `--rb-header-h` into the
+   frame, as it writes `--rb-zoom` — fixes the canvas only, and amends ADR 0058 §4's table (the canvas
+   would do one of the script's four writes); two hours. The audit should also gain the check that
+   found the first: a transparent bar's foot against the cover's first words, not only the heading's
+   centre (check 8 looked there and missed it).
+2. **The third is a design call, David's.** Measured with four buttons at 320, 360, 375 and 390
+   (REVIEW): tightening the phone's bar — gaps to `space.sm`, the button's padding to `space.md` —
+   fits thirteen letters at 320 with 30 px of brand and moves the threshold by about 32 px; twenty
+   letters still wrap. (a) That tightening, on every phone bar with a button: changes the look of
+   every saved site with one, half a day. (b) The button goes into «Menú» on a phone, its first entry
+   and a pill: the bar keeps the brand and the word, the call to action one press away; a day. (c)
+   «Menú» keeps only its bars below some width: against ADR 0063's «the word stays». (d) Leave it.
+   The bound's half of the audit's check 3 stays out of `a11y` until it is decided.
+
 The review before that: 3 November 2026, **closing sprint 31 — «cada menú tiene su sitio».** David asked for the
 pages menu and the section navigator to become two independent elements, each with its own place on the
 page and not tied to one bar above it, and for the navigator to gain dispositions of its own with their
@@ -123,7 +153,10 @@ sprint 31:
    until that day.* The canvas's first paint carried the published script since sprint 30 día 2 and
    ran it: measured, `--rb-header-h` was the script's 70 px in the canvas, not the estimate. It does
    not run there now (ADR 0058's note of sprint 33), so what the row says is true from that day, and
-   the bar on two lines is still unmeasured.
+   the bar on two lines is still unmeasured. *Measured on sprint 33 día 3, by the menu audit in three
+   engines: 2.2–3.2 px on a bar of one line, and 33.6 px on a stacked bar at 1280, where «Ir a…» lies
+   over the bar's second line and half its button (the sprint 33 día 3 rows above). The phone's sheet
+   no longer hangs from the estimate (ADR 0063's note of that day); the panel names the rest.*
 5. **Opening the font chooser restarts «Estilo»'s entrance**, a fade from nothing behind the dialog's
    veil (found día 3, on `main` as on the branch). The walk now waits for it; the panel is unchanged.
 6. **A phone carries the columns' stylesheet and never applies it**: Lighthouse marks unused and

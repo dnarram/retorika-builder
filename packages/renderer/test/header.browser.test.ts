@@ -3,8 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type Browser, type BrowserContextOptions, chromium, type Page } from "@playwright/test";
 import { type Header, parseDocument, type RetorikaDocument } from "@retorika/schema";
+import { PALETTES } from "@retorika/tokens";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { render } from "../src/index.ts";
+import { headerCase, openHtml } from "./browser-fixtures.ts";
 import { ASSETS_DIR, DOCUMENTS_DIR } from "./corpus.ts";
 
 /**
@@ -795,8 +797,10 @@ describe("the rail on a phone", () => {
             }
             expect(b.menu?.right ?? 999, where).toBeLessThanOrEqual(width);
             expect(facts.scrollWidth, where).toBeLessThanOrEqual(width);
-            // Fixed stays fixed, except over the row, where bar and row would pass the bound.
-            expect(facts.position, where).toBe(mobile === "row" ? "static" : "sticky");
+            // Fixed stays fixed, except over the row, where bar and row would pass the bound: there
+            // it lets go into the flow, `relative` and not `static`, which took the sheet's box with
+            // it (sprint 33 día 3, the menu audit's finding 1).
+            expect(facts.position, where).toBe(mobile === "row" ? "relative" : "sticky");
           } finally {
             await page.context().close();
           }
@@ -1309,6 +1313,101 @@ describe("the phone's sheet holds the page still (sprint 33 día 1, ADR 0065)", 
       await page.context().close();
     }
   });
+});
+
+/**
+ * **The sheet hangs from the bar it has, not from an estimate of it** (sprint 33 día 3, the menu
+ * audit's findings 1, 3, 4 and 5). On the teaser's header — no logo, so the bar is as tall as its
+ * letter and its height has a fraction — measured before this day in Chromium:
+ *
+ * - **A fixed bar over the phone's row** let go by `position: static`, which took from the sheet the
+ *   box its `top: 100%` is a share of: «Menú» opened at 844 of 844, below the screen, on a blank page.
+ * - **A transparent fixed bar over the row** did not let go at all: the script's `fixed` weighed more.
+ * - **The sheet's height was the screen less `--rb-header-h`**, and that is never quite the bar: the
+ *   script's measure is rounded and counts the hairline the sheet starts above (842.6 of 844), and
+ *   where no script runs — the canvas, a visitor without one — it is the one-line estimate, short of
+ *   a bar with the row under it (67 px below the screen at 320, the last entries out of reach).
+ *
+ * Every case here is the sheet against the screen: top at the bar's foot, bottom at the screen's
+ * foot to half a pixel, the bar in the place its scheme gives it.
+ */
+describe("the phone's sheet hangs from the bar it has (sprint 33 día 3)", () => {
+  const palette = PALETTES[0]?.id ?? "";
+  const teaser = (header: Partial<Header>) =>
+    headerCase("día 3", palette, header as RetorikaDocument["header"]).document;
+  const ROW = { shown: true, position: "bar" as const, mobile: "row" as const };
+  /** The page without its script: what the canvas hangs the sheet from (the estimate). */
+  const withoutScript = (html: string) => html.replace(/<script>[\s\S]*?<\/script>/g, "");
+
+  async function sheetAgainstScreen(page: Page) {
+    await page.click(".rb-nav-narrow > summary");
+    return page.evaluate(() => {
+      const bar = document.querySelector("header.rb-header") as HTMLElement;
+      const sheet = (
+        document.querySelector(".rb-nav-narrow > .rb-nav") as HTMLElement
+      ).getBoundingClientRect();
+      return {
+        foot: bar.getBoundingClientRect().bottom,
+        top: sheet.top,
+        bottom: sheet.bottom,
+        innerHeight,
+        position: getComputedStyle(bar).position,
+      };
+    });
+  }
+
+  const cases: [string, Partial<Header>, string, boolean][] = [
+    [
+      "a fixed bar over the row lets go and keeps the sheet's box",
+      { sticky: true, sections: ROW },
+      "relative",
+      true,
+    ],
+    [
+      "a transparent fixed bar over the row lets go as a transparent one",
+      { sticky: true, sections: ROW, look: { background: "transparent" } },
+      "absolute",
+      true,
+    ],
+    [
+      "a fixed surface bar, whose measure is rounded and has a hairline",
+      { sticky: true, sections: { ...ROW, mobile: "hidden" } },
+      "sticky",
+      true,
+    ],
+    [
+      "a bar with the row, where no script measures it (the canvas)",
+      { sections: ROW },
+      "relative",
+      false,
+    ],
+    [
+      "a fixed bar with the row, where no script measures it (the canvas)",
+      { sticky: true, sections: ROW },
+      "relative",
+      false,
+    ],
+  ];
+  for (const [what, header, position, script] of cases) {
+    for (const [width, height] of [
+      [320, 568],
+      [390, 844],
+    ] as const) {
+      it(`${what}, at ${width}×${height}`, async () => {
+        const html = render(teaser(header), "html").html;
+        const page = await openHtml(browser, script ? html : withoutScript(html), width, what);
+        try {
+          await page.setViewportSize({ width, height });
+          const m = await sheetAgainstScreen(page);
+          expect(m.position).toBe(position);
+          expect(Math.abs(m.top - m.foot), `top ${m.top}, foot ${m.foot}`).toBeLessThanOrEqual(1);
+          expect(Math.abs(m.bottom - m.innerHeight), `bottom ${m.bottom}`).toBeLessThanOrEqual(0.5);
+        } finally {
+          await page.context().close();
+        }
+      });
+    }
+  }
 });
 
 describe("an owner's exact bar colour holds once scrolled (sprint 32 día 5)", () => {

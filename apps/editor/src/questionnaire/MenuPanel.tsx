@@ -237,7 +237,11 @@ export function MenuPanel({
               value={state.pagesPosition}
               onSelect={(position) => onSetHeader(pagesPositionPatch(doc, position))}
             />
-            {state.pagesPosition === "bar" ? null : (
+            {/* The sliding rule is the published page's alone (ADR 0063): in the canvas the
+                current page's entry keeps the rule's colour, still. A rail marks it by its edge. */}
+            {state.pagesPosition === "bar" ? (
+              <p className={noteClass}>{es["editor.menuPanel.notes.indicator"]}</p>
+            ) : (
               <p className={noteClass}>{columnNote(state.pagesFoldWidth, layoutWidth, device)}</p>
             )}
             {state.brandWithPagesOffered ? (
@@ -571,7 +575,20 @@ function sectionsPlaceNotes(
   device: "desktop" | "mobile",
 ): string[] {
   const position = state.sectionsPosition;
-  if (position === "fold") return [es["editor.menuPanel.notes.fold"]];
+  // «Ir a…» hangs from `--rb-header-h`: the script's measure of the bar once published, the
+  // stylesheet's estimate of one line in the canvas. Measured by the menu audit (sprint 33 día 3):
+  // 2.2–3.2 px apart on a bar of one line, and 33.6 on a stacked one, whose second line it then lies
+  // over — the button under it in the audit's capture.
+  if (position === "fold") {
+    return [
+      es["editor.menuPanel.notes.fold"],
+      es[
+        state.layout === "stacked"
+          ? "editor.menuPanel.notes.foldEstimateStacked"
+          : "editor.menuPanel.notes.foldEstimate"
+      ],
+    ];
+  }
   if (position !== "left" && position !== "right") return [];
   const width = state.sectionsFoldWidth;
   return [

@@ -6770,3 +6770,105 @@ y con «Menú» abierto (112 pruebas, verdes). La 3, la hoja, **no se promueve h
 proyecto `editor` incluye `**/*.test.ts`: `audit/**` queda excluido, como el e2e); `a11y` local
 1057 (945 + 112) en 72 s; `typecheck`, `lint`, invariantes, golden (cero cambios), `renderer:deps` y
 `size` en verde. e2e no se corre: ni el editor ni el paquete cambian.
+
+### Día 3 — lo que la auditoría midió (PR de `fix/lo-que-la-auditoria-midio`)
+
+**Primero las dos pasadas que faltaban.** Firefox 155 y WebKit 26.6 enteros, sobre el código sin
+arreglar, en una carpeta nueva (las filas de esos motores que había en `.scratch` eran de antes del
+commit del día 2): 153 combinaciones cada uno, 1811 s los dos, **690 estados en rojo cada uno y los
+mismos seis hallazgos que Chromium**, comprobación por comprobación. Lo único que cambia con el motor es
+el redondeo del hallazgo 5 a 320: Chromium lo pasa del píxel en 27 estados y Firefox y WebKit no. Ningún
+defecto es de un solo motor. Las notas permitidas, iguales en los tres: «Ir a…» a 2,2–3,2 px del pie
+real de la barra en el lienzo a 1280… y a **33,6 px en nueve combinaciones**, todas con la disposición
+apilada (abajo).
+
+**Los arreglos, por gravedad, cada uno rojo antes y verde después** (`header.browser.test.ts`, «the
+phone's sheet hangs from the bar it has», cinco casos a 320 × 568 y 390 × 844 sobre la cabecera del
+teaser, sin logo para que la barra tenga decimales):
+
+| Hallazgo | Medido antes | Causa | Arreglo |
+|---|---|---|---|
+| 1. «Menú» se abre debajo de la pantalla (barra fija + fila en el móvil) | `position: static`; hoja con `top` 844 de 844 | `static` le quitaba a la hoja su bloque contenedor | La barra suelta con `position: relative` |
+| 4. La transparente fija no suelta sobre la fila | `fixed` | el `fixed` del script pesa (0,4,1) | `absolute`, como una transparente en el flujo, con peso (0,5,1) |
+| 5. La hoja 1,0–1,4 px corta por abajo | 842,8 de 844; 566,98 de 568 | `offsetHeight` redondeado y con el filete que la hoja no tiene encima | `height: calc(100dvh - 100%)` |
+| 3. En el lienzo la hoja se sale 26–67 px | 881,6 de 844 sin script y con la fila | la estimación de una línea | el mismo: ya no lee `--rb-header-h` |
+
+**Por qué `100dvh - 100%`**: en una caja absoluta, el `100%` de `top` y el de `height` son del mismo
+bloque contenedor, el `padding-box` de la cabecera; la hoja acaba en el borde superior de la cabecera
+más la pantalla, que es el pie de la pantalla cuando la barra está arriba — y solo entonces se puede
+pulsar «Menú» —, mida la barra lo que mida, con script o sin él, una línea o dos, con fila o sin ella.
+Lo dice una nota nueva en la ADR 0063. **Saboteos**, deshechos por copia: la altura de vuelta a
+`--rb-header-h` pone en rojo las pruebas nuevas, la hoja en las combinaciones de `a11y` a 320 y la
+caminata del móvil en el editor real (3,2 px corta); `static` de vuelta, seis combinaciones fijas con fila de
+`a11y` y las pruebas nuevas; sin la regla de la transparente, sus dos casos (`fixed`).
+
+**Seis pruebas del sprint 31 aseveraban el valor del defecto** («the rail on a phone»: `static` con la
+fila); ahora `relative`, y lo dicen. `header.test.ts` cambia sus dos literales. **Golden**: los cuatro
+con cabecera, exactamente esas tres líneas cada uno; diff leído entero.
+
+**La comprobación de la hoja entra en `a11y`** (la 3b: del pie de la barra al de la pantalla, de borde
+a borde, `main` oculto, la página quieta bajo una rueda) sobre las 56 combinaciones con «Menú» abierto a
+320. **El tope de 72 px de la barra (la 3a) no entra**: lo rompe el hallazgo 2 en todas.
+
+**El hallazgo 2 no se arregla hoy: es una decisión de diseño, y es de David.** Medido a 320, 360, 375 y
+390 con cuatro botones («Reservar», «Dónde estamos», «Pide tu cita online», «Reserva tu mesa hoy!»):
+con el botón largo, aunque la barra quepa en una línea, **la marca se queda sin sitio** — con veinte
+letras a 375 le quedan 5 px —; y apretar la barra (huecos a `space.sm` y el relleno del botón a
+`space.md`) solo mueve el umbral unos 32 px: «Dónde estamos» cabe a 320 con 30 px de marca, veinte
+letras siguen saltando. Lo que se pone a elegir, con su coste, va al backlog.
+
+**Las tres caminatas del editor real** («sprint 33 día 3 — el editor real dibuja la cabecera como su
+documento»), en Chromium, sobre una web con las páginas a la izquierda, las secciones a la derecha
+(«Ir a…» en el móvil) y la barra fija: la vista móvil a 320; 1440 sin panel (1280 a 0,9125); y 1280 con
+«Menú» abierto (1280 bajo 1, sobre el suelo de 0,6). Cada una lee la cabecera como la aserción 10 — cada elemento con su caja,
+su posición, su `display` y sus colores — y la compara con el documento del lienzo abierto solo al tamaño
+del marco, servido en la dirección del editor para que las letras sean las mismas: **cero diferencias en
+las tres**. Además: a 320, «Menú» e «Ir a…» del pie de la barra al de la pantalla (±0,5), `main` oculto,
+Escape cierra y devuelve el foco al `summary`; a 1440, las dos columnas, ninguna «Ir a…», nada sobre la
+marca, y la cabecera elegida por su columna con el contorno alrededor de las dos; a 1280 con panel, las
+dos columnas y las notas del panel. **Saboteos**: una regla del cromo que le da 19 px de relleno a la cabecera pone
+rojas las tres comparaciones; la altura de la hoja de vuelta, la del móvil.
+
+**Lo que las caminatas enseñaron del instrumento**: el panel de «Ir a…» entra con `rb-fold-in` también
+en el lienzo, y medido sin esperar está 4 px más arriba; y el ancho del contorno en pantalla no se
+asevera, porque Chromium redondea un `outline` a píxeles enteros del marco (a 0,74, 2,7 px son 2 y
+1,48 en pantalla), lo que ya midió «sprint 27 día 7 — el cromo mide lo que mide».
+
+**El panel nombra las divergencias que faltaban** (`es.json`, `MenuPanel.tsx`): bajo el menú de páginas
+en la barra, «En el lienzo, la raya bajo la página en la que se está no se desliza de una entrada a
+otra; en la web publicada, sí»; y bajo «Ir a…», «En el lienzo, «Ir a…» se coloca según la altura que suele tener la barra; al
+publicar, según la que tiene de verdad, y puede quedar unos píxeles más arriba o más abajo» — o, con
+«Marca arriba», que en el lienzo queda encima de la segunda línea de la barra y al publicar bajo la
+barra entera (abajo). La caminata de 1280 con panel las lee en el panel real.
+
+**Lo que la lectura de las notas permitidas encontró, y no se arregla hoy.** La auditoría anota como
+permitido lo que cuelga de `--rb-header-h`, y el día 2 lo resumió en 3,2 px; leídas una a una, **nueve
+combinaciones dicen 33,6**: con «Marca arriba» la barra ancha tiene dos líneas y la estimación es de una,
+y en el lienzo «Ir a…» queda encima de la segunda línea, tapando medio botón. Una sonda con esa misma
+vara sobre las barras transparentes encontró además, **en la web publicada**, la barra transparente
+apilada con fila de secciones tapando 30 px de la portada a 768, 1024 y 1280 (la cabecera acaba en
+150,4 y la portada empieza en 120), donde la comprobación 8, que mira el centro del titular, no llega;
+315 medidas más, limpias. **Los dos tienen una causa**, la estimación de una línea (`--rb-bar-h`), y dos
+salidas con coste: que la estimación aprenda la estructura que el renderer ya conoce, lo que mueve el
+hueco de la portada en webs guardadas, o que el editor mida la barra y escriba `--rb-header-h` en el
+marco como escribe `--rb-zoom`, lo que enmienda la tabla de la ADR 0058. Van al backlog con su captura
+como las primeras filas del día 6, por gravedad, y el panel dice la del lienzo.
+
+**La auditoría otra vez, entera, sobre el código arreglado**, en los tres motores: las 153
+combinaciones de cada uno medidas, y **lo único en rojo es el hallazgo 2** — el tope de 72 px a 320,
+publicado y lienzo, 306 estados por motor —; los otros cinco, a cero. De las notas permitidas
+desaparece la altura de la hoja (26–68 px a 320 antes) y queda solo la `y` de «Ir a…» a 1280 en 30
+combinaciones, la divergencia que el panel nombra desde hoy. (La pasada se cortó tras Chromium para
+correr la sonda y se reanudó con `RETORIKA_AUDIT_RESUME=1`; la parada no la paró — el proceso se llama
+`vitest.mjs`, no `vitest run` — y Firefox y WebKit corrieron casi dos veces, a la vez, sobre el mismo
+`findings.tsv`. Las 720 filas `done` de los tres motores cuentan dos fallos cada una, los dos de 320, y
+ningún estado de más salió en rojo con la carga doble; queda escrito para que la próxima parada se haga
+por el PID.)
+
+**Suites.** `typecheck`, `lint`, `test` (3662), invariantes, golden (cuatro, leídos), `renderer:deps` y
+`size` (el script sigue en 0,8 KB) en verde. **`a11y` local: 1067** (1057 + 10). **e2e filtrado de
+cabecera**: 17 caminatas de los sprints 30–33, verdes, 112 s; la completa espera al día 7, como dice el
+plan (el ZIP no cambia de ficheros). **Lighthouse** (cambió la hoja de la
+barra fija): 99 / 98 / 98 las composiciones, 99 con letra propia, 100 la barra fija con logo, 100 en
+columnas, 100 por ficha — lo del cierre del 32; LCP 1,80 / 2,40 / 2,33. Los tres motores del ZIP
+(`engines.browser.test.ts`) en verde.

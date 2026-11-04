@@ -268,9 +268,10 @@ html[data-rb-js] .rb-header[data-sticky][data-bg=transparent] { position: fixed;
   .rb-header .rb-nav-row a { white-space: nowrap; }
   .rb-header[data-sections] .rb-nav-row:is([data-mobile=hidden], [data-mobile=fold]) { display: none; }
   .rb-header[data-layout=stacked] .rb-brand { flex-basis: 0; }
-  .rb-header[data-sticky][data-phone-row] { position: static; }
+  .rb-header[data-sticky][data-phone-row] { position: relative; }
+  html .rb-header[data-layout][data-sticky][data-phone-row][data-bg=transparent] { position: absolute; }
   .rb-header[data-sticky][data-phone-row] ~ main [data-section] { scroll-margin-top: 0; }
-  .rb-nav-narrow > .rb-nav { box-sizing: border-box; height: calc(100dvh - var(--rb-header-h));
+  .rb-nav-narrow > .rb-nav { box-sizing: border-box; height: calc(100dvh - 100%);
     overflow: hidden auto; gap: var(--space-md); padding: var(--space-xl) var(--space-lg);
     border-bottom: 0; }
   .rb-nav-narrow > .rb-nav a { font-family: var(--font-heading); font-size: var(--size-subheading);
