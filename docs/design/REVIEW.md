@@ -6553,3 +6553,73 @@ tres motores (día 6).
    condensada mide 16 px menos (el plan decía 8); no se ha medido si eso cambia la sección marcada.
 9. **Del sprint 31 y anteriores, sin tocar**: lo que lista el backlog.
 10. **El sprint 33, sin planificar.**
+
+## Sprint 33 — «Los menús se ven bien y se arrastran» (desde el 5 de noviembre de 2026)
+
+David, con la #341 fusionada, pide tres cosas por orden: un defecto, primero y solo (en el lienzo, con
+la vista móvil, «Menú» abre una hoja oscura larguísima y el contenido queda muy abajo); una auditoría
+sistemática de cómo se ven los menús, por matriz, en el lienzo y en el ZIP y en los tres motores, con
+captura de cada estado que falle; y arrastrar los dos menús hasta su sitio. Cuatro decisiones suyas al
+planificar: si el ZIP reproduce el defecto, la página se bloquea sin script bajo la hoja, con
+`scrollbar-gutter: stable` y el iPhone como lo primero de su lista; la auditoría abre el documento del
+lienzo en los tres motores y el editor real en tres caminatas; el arrastre es a zona, con sus cuatro
+condiciones; y el día 6 es colchón de la auditoría. Cuatro ajustes al aprobar: el bloqueo se mide con
+la rueda y nunca con `scrollTo`; el cursor anuncia el arrastre; la auditoría se reanuda; y el
+documento del lienzo de la auditoría lleva la hoja real del cromo. El plan está en la memoria del
+proyecto (`project-sprint-33-plan`).
+
+### Día 1, primero y solo — el lienzo no ejecuta el script (PR de `fix/el-lienzo-no-ejecuta-el-script`)
+
+**Reproducido en los tres sitios antes de tocar nada**, con una web de tres páginas y una portada
+larga, barra «Oscuro» y «Como la página», fija y no fija. Lo que pidió David, sitio por sitio:
+
+| | Lienzo del editor, 320 | ZIP, 390 × 844 y 320 × 568, Chromium (móvil y táctil) | El mismo, WebKit de escritorio |
+|---|---|---|---|
+| Alto de la hoja contra ventana − barra | 670 / 670 y 671 / 671 | 788 / 788 y 512 / 512 | igual |
+| `--rb-header-h` en `html` | **95 px, medido por el script** | 56–57 px | igual |
+| Rueda de 2000 px sobre la hoja abierta | `scrollY` 2000 | 2000 (gesto táctil de 1500: 1501–1507) | 2000 |
+| Lo que queda en el centro tras la rueda, barra no fija | el cuerpo, en blanco | el cuerpo, en blanco | igual |
+| Escape y un toque en la marca | **no la cierran** si «Menú» nació en la sesión | la cierran (390 × 844) | la cierran (390 × 844) |
+| Fondo de la hoja | `#0F172A` con «Oscuro», blanco con «Como la página» | igual con su paleta | igual |
+
+- **La sospecha del `calc` cae**: `calc(100dvh - var(--rb-header-h))` es válido en los tres sitios y
+  la hoja mide exactamente la ventana menos la barra; dentro del marco, `100dvh` es el alto del marco.
+- **La del `<details>` abierto con `<main>` invisible ocupando su alto se confirma, y por dos caminos**.
+  En los tres sitios la página sigue desplazándose detrás de la hoja: con la barra no fija, la hoja se
+  va con ella y queda una página en blanco tan larga como el contenido. Y en el lienzo, además, nada
+  cerraba un «Menú» nacido en la sesión. El primero es de la página publicada y lo arregla la PR
+  siguiente; el segundo es de este.
+- **El oscuro no es una herencia por error**: la hoja toma el esquema de la barra a propósito desde el
+  sprint 30 (el panel del móvil cuelga de la barra). Con «Oscuro», la hoja es tinta.
+
+**Y lo que la reproducción encontró sin buscarlo: el script corre en el lienzo.** El primer pintado
+del marco es el html publicado, y desde el día 2 del sprint 30 ese html acaba en el script de la
+ADR 0058. Medido en el editor: `data-rb-js` en `<html>` al cargar; `--rb-header-h` escrito (70 px, y
+54 px al condensarse); con la barra fija desde la carga, bajar el lienzo la condensaba
+(`data-scrolled`) y marcaba dos entradas con `aria-current="location"`. Lo que el panel «Menú» le dice
+al dueño — «En el lienzo se ve en reposo», «En el lienzo no se marca» — era falso cada vez que la
+cabecera estaba ahí al cargar. Y el script solo cableaba Escape y el toque fuera para los desplegables
+que el marco tenía al cargar: un «Menú» nacido al añadir la segunda página no lo cerraba nada.
+
+**Lo que hace la PR** (sin decisión nueva: es el código volviendo a la ADR 0058 §4, y lo dice su nota):
+`canvasHtml` quita el script del primer pintado como ya cambiaba la hoja, exacto o lanza; el editor
+hace él mismo lo que el lienzo necesitaba del script, `wireDisclosures`, delegado desde el documento
+del marco para que cubra un desplegable dibujado por cualquier parche: Escape cierra el abierto y
+devuelve el foco a su `summary`, y un toque fuera lo cierra. Nada de la página publicada cambia: ni el
+script, ni sus bytes, ni un golden.
+
+**Pruebas.** `previewDocument.test.ts`: el primer pintado no lleva `<script`; sin cabecera, es la
+página publicada con la hoja del lienzo; un script que no sea la constante, o dos, lanzan (rojas antes,
+verdes después). La caminata «sprint 33 día 1 — el lienzo no ejecuta el script»: al cargar no hay
+`<script` en el `srcdoc` ni rastro de él en el marco; un «Menú» nacido en la sesión se cierra en la
+vista móvil con Escape, con el foco en su `summary`, y con un toque en la marca; y tras recargar con la
+barra fija, bajar el lienzo 1400 px no condensa, no mide y no marca. **Saboteos**: con el script de
+vuelta, rojo en el `srcdoc`; con ese paso apagado, rojo al bajar (`data-rb-js`, `54px`,
+`data-scrolled`, dos marcadas); sin `wireDisclosures`, rojo en la Escape; sin su `pointerdown`, rojo
+en el toque. Deshechos restaurando copias.
+
+**Suites.** `typecheck`, `lint` y `test` en verde (3660, tres más que al cierre del 32);
+`test:invariants` en verde; el renderer no se toca, así que ni golden ni `a11y` ni Lighthouse cambian.
+**e2e completa, a la primera: 274 verdes y 1 omitida, 1163 s. Caminatas reescritas: cero** — las tres
+que leen lo que escribe el script (`data-scrolled`, `aria-current="location"`) lo leen en el ZIP, donde
+sigue corriendo.

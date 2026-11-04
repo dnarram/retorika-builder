@@ -109,7 +109,11 @@ sprint 31:
    only with the pages in a column, a narrower reading of his condition.
 4. **The canvas carries no script**, so `--rb-header-h` there is the stylesheet's estimate and «Ir a…»
    stands under the bar by it; with a bar of one line the two agree, and a bar on two lines has not
-   been measured in the canvas.
+   been measured in the canvas. *Sprint 33 día 1: this row was written as a fact and was not one
+   until that day.* The canvas's first paint carried the published script since sprint 30 día 2 and
+   ran it: measured, `--rb-header-h` was the script's 70 px in the canvas, not the estimate. It does
+   not run there now (ADR 0058's note of sprint 33), so what the row says is true from that day, and
+   the bar on two lines is still unmeasured.
 5. **Opening the font chooser restarts «Estilo»'s entrance**, a fade from nothing behind the dialog's
    veil (found día 3, on `main` as on the branch). The walk now waits for it; the panel is unchanged.
 6. **A phone carries the columns' stylesheet and never applies it**: Lighthouse marks unused and

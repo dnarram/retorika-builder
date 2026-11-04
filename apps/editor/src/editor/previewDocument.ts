@@ -1,4 +1,4 @@
-import { buildCss, type HtmlOutput } from "@retorika/renderer";
+import { buildCss, HEADER_SCRIPT, type HtmlOutput } from "@retorika/renderer";
 import { type RetorikaDocument, rewriteImageSources } from "@retorika/schema";
 
 /**
@@ -66,18 +66,34 @@ export function withFontUrls(text: string, fontUrls: ReadonlyMap<string, string>
   });
 }
 
+/** The published page's one script as `html.ts` writes it, on a line of its own before `</body>`. */
+const PUBLISHED_SCRIPT = `<script>${HEADER_SCRIPT}</script>\n`;
+
 /**
  * The first paint of the canvas: the published page's html with **the canvas's stylesheet** in place
- * of the published one (sprint 32 día 1, ADR 0063). The two sheets differ in one block — the
- * header's anchor-positioned indicator, written for the `html` target only — and the frame must not
- * carry it: bisected over eight runs of one walk, the mere presence of `anchor()`, `anchor-size()`
- * and `position-anchor` in the frame's sheet, in rules that matched nothing, broke Chromium's scroll
- * anchoring across the frame's re-layout and moved the section being edited 29 px when a panel
- * closed. The patches that follow the first paint already carry `buildCss(doc, "dom")`; this makes
- * the first paint carry the same sheet, so the frame never sees the other one.
+ * of the published one (sprint 32 día 1, ADR 0063), **and without its script** (sprint 33 día 1).
  *
- * The swap is exact or it throws: a sheet that is not found once, verbatim, would leave the frame
- * with the published one and nobody the wiser.
+ * **The stylesheet.** The two sheets differ in one block — the header's anchor-positioned indicator,
+ * written for the `html` target only — and the frame must not carry it: bisected over eight runs of
+ * one walk, the mere presence of `anchor()`, `anchor-size()` and `position-anchor` in the frame's
+ * sheet, in rules that matched nothing, broke Chromium's scroll anchoring across the frame's
+ * re-layout and moved the section being edited 29 px when a panel closed. The patches that follow
+ * the first paint already carry `buildCss(doc, "dom")`; this makes the first paint carry the same
+ * sheet, so the frame never sees the other one.
+ *
+ * **The script, because the canvas runs nothing of the published page's** (ADR 0058 §4). It was in
+ * the first paint from the day it was written (sprint 30 día 2) until sprint 33 día 1, because this
+ * html is the published one, and measured in the editor it did what a visitor's browser does: it
+ * marked `<html>` with `data-rb-js`, wrote `--rb-header-h` from the bar, condensed a fixed bar once
+ * the canvas scrolled and marked the section in view — the last two being what the «Menú» panel
+ * tells the owner the canvas does not do — and it wired Escape and a press outside for the
+ * disclosures the frame held when it loaded, and for no other. A «Menú» born in the session, when
+ * the owner adds a second page, was a sheet nothing closed. What the canvas needs of that behaviour
+ * the editor does itself, for every disclosure at any time (`wireDisclosures` in `Editor.tsx`).
+ *
+ * Both swaps are exact or they throw: a sheet that is not found once, verbatim, would leave the frame
+ * with the published one and nobody the wiser, and a script that is not the header's one constant is
+ * nothing this function knows how to keep out of the frame.
  */
 export function canvasHtml(doc: RetorikaDocument, published: HtmlOutput): string {
   const { html, css } = published;
@@ -85,5 +101,12 @@ export function canvasHtml(doc: RetorikaDocument, published: HtmlOutput): string
   if (at === -1 || html.indexOf(css, at + 1) !== -1) {
     throw new Error("the published page's stylesheet was not found exactly once in its html");
   }
-  return html.slice(0, at) + buildCss(doc, "dom") + html.slice(at + css.length);
+  const swapped = html.slice(0, at) + buildCss(doc, "dom") + html.slice(at + css.length);
+  const scripts = swapped.split("<script").length - 1;
+  if (scripts === 0) return swapped;
+  const script = swapped.indexOf(PUBLISHED_SCRIPT);
+  if (scripts !== 1 || script === -1) {
+    throw new Error("the published page carries a script that is not the header's one constant");
+  }
+  return swapped.slice(0, script) + swapped.slice(script + PUBLISHED_SCRIPT.length);
 }

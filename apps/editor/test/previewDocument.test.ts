@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { blankSection, GALLERY_ID } from "@retorika/catalog";
 import { EMPTY_ANSWERS, generateVariants } from "@retorika/generator";
-import { buildCss, render } from "@retorika/renderer";
+import { buildCss, HEADER_SCRIPT, render } from "@retorika/renderer";
 import {
   flattenElements,
   insertSection,
@@ -208,8 +208,47 @@ describe("canvasHtml — the first paint carries the canvas's stylesheet (sprint
     const html = canvasHtml(doc, published);
     expect(html).not.toMatch(/anchor-name|position-anchor|anchor\(|anchor-size\(/);
     expect(html).toContain(buildCss(doc, "dom"));
-    // Everything around the sheet is the published page, byte for byte.
-    expect(html.replace(buildCss(doc, "dom"), published.css)).toBe(published.html);
+    // Everything around the sheet is the published page, byte for byte, but for its script (below).
+    expect(html.replace(buildCss(doc, "dom"), published.css)).toBe(
+      published.html.replace(`<script>${HEADER_SCRIPT}</script>\n`, ""),
+    );
+  });
+
+  // **The canvas runs nothing of the published page's** (sprint 33 día 1, ADR 0058 §4). The first
+  // paint was the published html since sprint 30 día 2, and that html carries the header's script:
+  // measured in the editor, it marked `<html>` with `data-rb-js`, wrote `--rb-header-h` from the
+  // bar, condensed a fixed bar once the canvas scrolled and marked the section in view — all of
+  // which the «Menú» panel tells the owner the canvas does not do — and wired Escape and a press
+  // outside only for a «Menú» that existed when the frame loaded, so a second page added in the
+  // session gave a sheet nothing closed.
+  it("drops the published page's one script, so the frame runs none of it", () => {
+    const doc = site();
+    const published = render(doc, "html");
+    expect(published.html).toContain(`<script>${HEADER_SCRIPT}</script>`);
+    const html = canvasHtml(doc, published);
+    expect(html).not.toContain("<script");
+    expect(html).toMatch(/<\/main>[\s\S]*<\/body>/);
+  });
+
+  it("is the published page with the canvas's sheet when there is no script to drop", () => {
+    const doc = parseDocument({
+      ...site(),
+      header: { pages: { shown: false }, sections: { shown: false } },
+    });
+    const published = render(doc, "html");
+    expect(published.html).not.toContain("<script");
+    expect(canvasHtml(doc, published).replace(buildCss(doc, "dom"), published.css)).toBe(
+      published.html,
+    );
+  });
+
+  it("throws rather than carry a script it does not know into the frame", () => {
+    const doc = site();
+    const published = render(doc, "html");
+    const foreign = published.html.replace("</body>", "<script>alert(1)</script>\n</body>");
+    expect(() => canvasHtml(doc, { ...published, html: foreign })).toThrow(/script/);
+    const twice = published.html.replace("</body>", `<script>${HEADER_SCRIPT}</script>\n</body>`);
+    expect(() => canvasHtml(doc, { ...published, html: twice })).toThrow(/script/);
   });
 
   it("throws rather than leave the published sheet in place when it cannot find it exactly once", () => {

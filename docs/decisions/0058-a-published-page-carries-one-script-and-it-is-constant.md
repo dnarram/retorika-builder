@@ -154,3 +154,45 @@ and ADR 0063 §2 names and measures it: the stylesheet's anchor-positioned indic
 `html` target only, because the presence of an anchor function in the canvas's sheet broke the
 frame's scroll anchoring. `buildCss` takes the target explicitly so that no caller gets either sheet
 by default.
+
+## Note — sprint 33 día 1: the canvas ran the script at its first paint, and no longer does
+
+§4 said the canvas does not carry the script, and the `dom` target never did. **But the canvas's
+first paint was never the `dom` target's**: since ADR 0051 the frame is given the published page's
+html once, as `srcDoc`, and patched from then on with `dom` nodes and the `dom` stylesheet. From this
+ADR's own day (29 October 2026, the commit that put the script in `html.ts`) that html ended in the
+script, and the frame ran it. Nobody had measured it; the comments and the «Menú» panel repeated §4.
+
+Measured on 4 November 2026, in the editor, on a generated site:
+
+| What the script did in the canvas | Read in the frame |
+|---|---|
+| marked `<html>` | `data-rb-js` present at load |
+| measured the bar | `--rb-header-h: 70px` inline, and `54px` once a fixed bar condensed |
+| condensed a fixed bar once the canvas scrolled | `data-scrolled` after `scrollTo(0, 1400)`, with the bar fixed at load |
+| marked the section in view | two entries with `aria-current="location"` |
+| wired Escape and a press outside | for the disclosures the frame held at load, and **for no other** |
+
+The last row is how it was found. David reported, opening sprint 33, that the phone's «Menú» in the
+canvas opened onto an endless dark sheet. A «Menú» is born in the session the moment an owner adds a
+second page, and that one was wired by nothing: Escape and a press on the brand left it open, with
+`<main>` hidden behind it (ADR 0063's note of sprint 32 día 4), and the canvas scrolled on into a blank
+page. Rows two to four were the panel saying one thing — «En el lienzo se ve en reposo», «En el
+lienzo no se marca» — and the canvas doing another, whenever the header had been there at load.
+
+**What changes, and it is the code coming back to §4 rather than a new decision.** `canvasHtml`
+(`apps/editor/src/editor/previewDocument.ts`) drops the script from the first paint as it already
+swapped the stylesheet: exactly the constant, once, or it throws. What the canvas needs of the
+script's behaviour the editor does itself, delegated from the frame's document so a disclosure drawn
+by any later patch is covered as much as one drawn at load (`wireDisclosures` in `Editor.tsx`):
+Escape closes the open «Menú» or «Ir a…» and gives the focus back to its summary, and a press outside
+it closes it. Nothing of the published page changes: the script, its bytes and its four writes are
+the same, and so is every golden.
+
+The divergence §4 names is therefore what it said it was, now in fact: the canvas shows the header
+at rest, the measure is the stylesheet's estimate (`--rb-bar-h`), a transparent fixed bar is not
+fixed there, and no section is marked. The walk «sprint 33 día 1 — el lienzo no ejecuta el script»
+reads all four in the frame after a reload with a fixed bar — the case the script acted on — and was
+sabotaged both ways: with the script put back it reads `data-rb-js`, `54px`, `data-scrolled` and two
+marked entries; without the editor's wiring, «Menú» stays open through Escape, and without its press
+listener, through the press.

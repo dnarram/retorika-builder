@@ -2347,6 +2347,52 @@ export function Editor({
     );
   }
 
+  /**
+   * **«Menú» and «Ir a…» close in the canvas as they do on the published page** (sprint 33 día 1):
+   * Escape closes the one that is open and gives the focus back to its summary, and a press anywhere
+   * outside it closes it. A `<details>` does neither by itself; on the published page the header's
+   * script does both (ADR 0058), and the canvas runs no script (`canvasHtml`).
+   *
+   * **It ran one until this day, and that is why this exists.** The first paint carried the
+   * published page's script from sprint 30 día 2, and it wired these two gestures for the
+   * disclosures the frame held when it loaded, and for no other: the frame is patched from then on,
+   * and a «Menú» is born in the session the moment the owner adds a second page. Measured on
+   * 4 November 2026 at 320: that sheet stayed open through Escape and through a press on the brand,
+   * with `<main>` hidden behind it (ADR 0063's note of sprint 32 día 4) — the page under it blank for
+   * as long as the canvas scrolled. Delegated from the document, so a disclosure drawn by any later
+   * patch is covered as much as one drawn at load.
+   *
+   * **In the capture phase, and the Escape that closes stops there**: one press, one meaning. The
+   * next Escape is whatever it was before a disclosure opened. A press is `pointerdown` and not
+   * `click`, because a click is what the editor's other layers swallow (`justDragged`) or cancel.
+   */
+  function wireDisclosures(iframeDoc: Document) {
+    const OPEN = "details.rb-nav-narrow[open], details.rb-nav-fold[open]";
+    iframeDoc.addEventListener(
+      "keydown",
+      (event) => {
+        if (event.key !== "Escape") return;
+        const open = iframeDoc.querySelector(OPEN);
+        if (!open) return;
+        event.preventDefault();
+        event.stopPropagation();
+        open.removeAttribute("open");
+        (open.querySelector("summary") as HTMLElement | null)?.focus();
+      },
+      true,
+    );
+    iframeDoc.addEventListener(
+      "pointerdown",
+      (event) => {
+        const target = event.target as Node | null;
+        for (const open of iframeDoc.querySelectorAll(OPEN)) {
+          if (target === null || !open.contains(target)) open.removeAttribute("open");
+        }
+      },
+      true,
+    );
+  }
+
   function wireSelection(iframeDoc: Document) {
     // Read every time, never captured (ADR 0051 §5): a section can arrive or leave between two
     // uses of this, and a captured array would be the page from before.
@@ -7817,6 +7863,7 @@ export function Editor({
     iframeDoc.head.appendChild(style);
 
     wireLinks(iframeDoc);
+    wireDisclosures(iframeDoc);
     wireSelection(iframeDoc);
     attachDocument(iframeDoc);
     attachPhotos(iframeDoc);

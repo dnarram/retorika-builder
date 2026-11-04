@@ -24493,3 +24493,87 @@ describe("sprint 31 día 6 — el móvil del raíl", () => {
     }
   }, 300_000);
 });
+
+describe("sprint 33 día 1 — el lienzo no ejecuta el script", () => {
+  it("no marca nada al cargar, cierra «Menú» con Escape y con un toque fuera, y no condensa la barra al bajar", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 950 } });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      const card = page.locator('[data-testid="canvas-card"] iframe');
+      /** What the published page's script writes, read in the canvas. */
+      const scriptTraces = () =>
+        frame.locator("body").evaluate(() => ({
+          rbJs: document.documentElement.hasAttribute("data-rb-js"),
+          measured: document.documentElement.style.getPropertyValue("--rb-header-h"),
+          scripts: document.querySelectorAll("script").length,
+          scrolled: document.querySelector(".rb-header")?.hasAttribute("data-scrolled") ?? false,
+          marked: document.querySelectorAll('.rb-nav a[aria-current="location"]').length,
+        }));
+      const none = { rbJs: false, measured: "", scripts: 0, scrolled: false, marked: 0 };
+
+      // 1. The first paint carries no script: nothing of it is in the frame or was ever run there.
+      //    Measured before this day: `data-rb-js` set and `--rb-header-h: 70px` written at load.
+      expect(await card.getAttribute("srcdoc")).not.toContain("<script");
+      expect(await scriptTraces()).toEqual(none);
+
+      // 2. «Menú» born in the session — a second page, as an owner adds one — closes in the phone
+      //    view by Escape, giving the focus back to its summary, and by a press outside it. Measured
+      //    before this day: open through both, the script having wired only what existed at load.
+      await frame.locator('[data-section="sec-services"]').click();
+      await frame
+        .locator(
+          '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+        )
+        .click();
+      await expect(frame.locator('.rb-nav-wide nav[aria-label="Páginas"] a')).toHaveCount(1);
+      await page.getByRole("button", { name: "Ver en móvil" }).click();
+      await deviceArrived(page, NARROWEST_WIDTH);
+      await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
+      const menu = frame.locator("details.rb-nav-narrow");
+      const isOpen = () => menu.evaluate((d) => (d as HTMLDetailsElement).open);
+      const pressAt = async (locator: Locator, dx?: number) => {
+        const box = await locator.boundingBox();
+        if (!box) throw new Error("not drawn, so it cannot be pressed");
+        await page.mouse.click(box.x + (dx ?? box.width / 2), box.y + box.height / 2);
+      };
+      await pressAt(menu.locator("summary"));
+      await expect.poll(isOpen).toBe(true);
+      await page.keyboard.press("Escape");
+      await expect.poll(isOpen).toBe(false);
+      expect(
+        await frame
+          .locator("body")
+          .evaluate(() => document.activeElement?.closest("summary")?.parentElement?.className),
+      ).toBe("rb-nav-narrow");
+      await pressAt(menu.locator("summary"));
+      await expect.poll(isOpen).toBe(true);
+      await pressAt(frame.locator(".rb-header .rb-brand"), 8);
+      await expect.poll(isOpen).toBe(false);
+
+      // 3. A fixed bar the frame holds at load — the case the script acted on — stays at rest while
+      //    the canvas scrolls, as the «Menú» panel says: no `data-scrolled`, no measured height, no
+      //    section marked. Measured before this day: condensed (70 → 54 px) and two entries marked.
+      await page.getByRole("button", { name: "Ver en ordenador" }).click();
+      await deviceArrived(page, DESKTOP_LAYOUT_WIDTH);
+      await page.getByRole("button", { name: "Menú", exact: true }).click();
+      const panel = page.getByRole("complementary", { name: "La cabecera de tu web" });
+      await panel.getByRole("checkbox", { name: "Se queda arriba al bajar" }).check();
+      await expect(frame.locator("header.rb-header")).toHaveAttribute("data-sticky", "");
+      await sessionHolds(page, (raw) => raw.includes('"sticky":true'), "recibió la barra fija");
+      await page.reload({ waitUntil: "networkidle" });
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+      await expect(frame.locator("header.rb-header")).toHaveAttribute("data-sticky", "");
+      await frame.locator("body").evaluate(() => window.scrollTo(0, 1400));
+      await expect
+        .poll(() => frame.locator("body").evaluate(() => window.scrollY > 600))
+        .toBe(true);
+      // Long enough for the script's observer and its scroll listener to have written, had it run.
+      await page.waitForTimeout(600);
+      expect(await scriptTraces()).toEqual(none);
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+});
