@@ -6480,7 +6480,13 @@ export function Editor({
       announce(dropText(menu, outcome.zone));
     };
     iframeDoc.addEventListener("pointerup", release);
-    iframeDoc.addEventListener("pointercancel", release);
+    // **A cancel is not a release** (sprint 33 día 5): the browser took the pointer — a finger that
+    // turned into a scroll, a window that lost it — and a zone the hand was merely passing over is
+    // not a place it chose. The gesture ends as Escape ends it, writing nothing.
+    iframeDoc.addEventListener("pointercancel", () => {
+      if (drag?.dragging) justDragged = true;
+      clear();
+    });
     iframeDoc.addEventListener("lostpointercapture", () => {
       // Capture is given up by `clear` itself on Escape; only a capture lost to the browser —
       // the window losing the pointer — ends the gesture here, and it ends it without a write.
@@ -7952,6 +7958,11 @@ export function Editor({
        * walk measures rather than assumes.
        */
       ".rb-chosen { touch-action: none; }",
+      // **And on the chosen header's grips** (ADR 0066, sprint 33 día 5): a finger drags a menu only
+      // once the header is chosen, the same rule, so its grips take the finger only then. Unchosen,
+      // a finger on the bar scrolls the canvas as it always did.
+      ".rb-header.rb-selected :is(nav.rb-nav[data-part], .rb-rail, .rb-nav-row, .rb-nav-fold > summary) {",
+      "  touch-action: none; }",
       // The element the panel is stepping, outlined the way mockup 16 draws it, so the numbers in
       // the panel and the thing on the page are visibly the same subject.
       `.rb-designing .rb-placing { outline: ${screenPx(2)} solid #156FE7; outline-offset: ${screenPx(2)};`,

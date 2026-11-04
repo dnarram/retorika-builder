@@ -141,3 +141,36 @@ untouched.
 - Day by day in `docs/design/REVIEW.md`, sprint 33 día 4. The cases a day's gesture leaves — the
   stack, the collapsed bar, «Ir a…» and the row, a zoom under 1 with a panel open, a finger, the
   phone view, the panel's sentence — are sprint 33 día 5's.
+
+## Note — sprint 33 día 5: the whole gesture, case by case
+
+Each case of the plan's día 5 has its walk («sprint 33 día 5 — el arrastre completo»), and three
+things of the gesture changed on measuring them:
+
+- **A cancel is not a release.** `pointercancel` — a finger the browser turned into a scroll, a
+  window that lost the pointer — ends the gesture as Escape does, writing nothing. It used to be
+  read as a release, which would have written the zone the hand was merely passing over. Measured by
+  a cancel dispatched over the right column: nothing written; sabotaged back, `right` written.
+- **A chosen header's grips take the finger** (`touch-action: none` on `.rb-header.rb-selected`'s
+  `nav[data-part]`, rails, row and «Ir a…»'s summary): §1's rule that a finger drags only a chosen
+  header needs it, since a finger's gesture is decided at `touchstart` (ADR 0049). Unchosen, a finger
+  on a column scrolls the canvas; chosen, it carries the menu. Sabotaged with `auto`, the finger never
+  lights a zone. While the header is chosen, a column that outgrows the window no longer scrolls under
+  a finger: the trade ADR 0049 made for the chosen element.
+- **The panel says it**, once, under the first «Dónde va» drawn, in the desktop view only: «También
+  puedes arrastrar el menú en el lienzo hasta su sitio: cógelo por el hueco entre sus entradas.»
+
+Measured, and as §2 and §3 said: a side the other menu holds stacks the two in one column, pages
+first, the ghost saying so before the drop; a collapsed bar's zone is a strip of 1040 × 72 between
+the column and the edge, and a drop there gives the bar its height back; «Ir a…» lands where its zone
+was drawn, to a pixel at its top and its right — the proof that the zones are the renderer's
+constants; a drag from «Ir a…»'s summary never opens it; at 1280 with the panel (a zoom under 0.7) a zone's word
+is 12 px of the screen and its 240 px are the column's; in the phone view nothing is drawn, written
+or offered; under the legibility floor (887) a drop on a side writes the word and the panel says the
+column folds there. «Deshacer» undoes each drop in one press.
+
+**What it cannot reach, measured**: a menu with **one entry** in the bar has no ground to hold — its
+`nav` is as big as its one link (0 px² beside it, against the 461 px² of the gap between two entries,
+Chromium at 1280). Condition 1 keeps a link a link, so such a menu is moved from the panel's cards, as
+before. A grip that started on the entry and became a drag past the threshold would reach it; it is
+the one way to, and it is David's to choose (the PR of día 5 asks).

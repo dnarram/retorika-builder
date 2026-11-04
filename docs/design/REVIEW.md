@@ -6936,3 +6936,47 @@ borde exacto del umbral pasa sola y falla en la suite (memoria: suelo y toleranc
 **Suites.** `typecheck`, `lint`, `test` (3676: 13 de `menuDrag`, 1 de `patchCanvas`), invariantes y
 golden (cero cambios) en verde; e2e filtrado de cabecera (sprints 30–33, 18 caminatas) en verde. Nada
 del renderer: ni `a11y`, ni Lighthouse, ni `size`.
+
+### Día 5 — el arrastre completo (PR de `feat/el-arrastre-completo`)
+
+Los casos que el día 4 dejó, cada uno con su caminata en «sprint 33 día 5 — el arrastre completo»,
+todas sobre una web con dos páginas convertidas y los menús colocados por la sesión:
+
+| Caso | Lo medido |
+|---|---|
+| **Apilado** (páginas ya a la izquierda, las secciones desde su fila) | sobre la columna, el fantasma «Navegador de secciones» con «Se apila bajo el menú de páginas»; al soltar, `sections.position = "left"`, el anuncio, una columna con `pagesLinks` y luego `sectionsLinks`, la fila fuera; «Deshacer» devuelve la fila |
+| **La barra sin nada** (todo en la columna con la marca) | la zona de la barra es una tira de 1040 × 72 entre la columna y el borde; soltar ahí escribe `bar`, la barra deja `data-bar="none"` y vuelve a tener alto; «Deshacer» la pliega otra vez |
+| **«Ir a…» y la fila** | de la fila a la píldora: la «Ir a…» real aparece donde estaba su zona, a un píxel en su borde superior y en el derecho; desde el `summary` de «Ir a…» a la banda bajo la barra: `row`, y el `<details>` no se abrió nunca (un oyente de `toggle` puesto antes); de la fila a la barra: `bar` |
+| **Zoom bajo 1** (1280 con «Menú», bajo 0,7) | la palabra de la zona y la del fantasma miden 12 px de pantalla; la zona son los 240 px de la columna; el borde, al menos 1,5 px de pantalla (Chromium lo redondea a píxeles enteros del marco, como el contorno que midió «sprint 27 día 7»); la suelta escribe `right` y la tarjeta queda marcada |
+| **El dedo** (`hasTouch`) | sin la cabecera elegida, un gesto táctil sobre la columna desplaza el lienzo y no dibuja nada; tras un toque que la elige, los agarres llevan `touch-action: none` y el dedo lleva el menú a la columna derecha |
+| **Vista de móvil** (320) | pulsar y mover sobre la fila del móvil no dibuja ni escribe nada; el cursor no es la mano; el panel, abierto en esa vista, no dice que se arrastra |
+| **Bajo el suelo de legibilidad** (1024 con panel: el lienzo a 887) | soltar las secciones en el segundo lado escribe `right`; ninguna columna se ve a 887, y las dos notas «columnFolded» del panel lo dicen |
+
+**Lo que cambió en el gesto al medirlo**:
+- **Cancelar no es soltar.** `pointercancel` (un dedo que el navegador convierte en desplazamiento,
+  una ventana que pierde el puntero) termina el gesto como Escape, sin escribir: antes contaba como
+  soltar y habría escrito la zona por la que la mano solo pasaba. Medido con un `pointercancel` sobre
+  la columna derecha.
+- **Los agarres de la cabecera elegida se quedan con el dedo** (`touch-action: none`, la regla de la
+  ADR 0049 para el elemento elegido): sin ella el navegador decide desplazar en el `touchstart` y el
+  dedo no arrastra nunca.
+- **La frase del panel**, una vez, bajo el primer «Dónde va», solo en la vista de escritorio: «También
+  puedes arrastrar el menú en el lienzo hasta su sitio: cógelo por el hueco entre sus entradas.»
+
+**Saboteos**, deshechos restaurando el fichero: cancelar como soltar → escribe `right` → rojo; sin el
+`touch-action` (y sin la aserción directa sobre él) → el dedo nunca enciende una zona → rojo; la zona
+de «Ir a…» un `space.md` más abajo → la píldora real queda 16 px por encima de su zona → rojo.
+
+**Lo que no alcanza, medido**: un menú con **una sola entrada** en la barra no tiene suelo que coger —
+su `nav` mide lo que su enlace: 0 px² libres, contra los 461 del hueco entre dos entradas (Chromium a
+1280, la cabecera del teaser). La condición 1 de David deja el enlace como enlace, así que ese menú se
+mueve desde las tarjetas del panel. Es la pregunta de la PR: arrancar también sobre la entrada pasado el
+umbral lo alcanzaría. La nota del día 5 en la ADR 0066 lo dice.
+
+**Lo que costó**: la fila de la web generada alinea sus entradas al final, así que su suelo está a la
+izquierda (se toma el lado libre más ancho); y tras soltar en la fila, `<details>` ya no está en la
+página, así que «no se abrió» se oye con un `toggle` y no se lee después.
+
+**Suites.** `typecheck`, `lint`, `test` (3676), invariantes y golden (cero cambios) en verde; e2e
+filtrado de cabecera, sprints 30–33: 25 caminatas en verde, 165 s. Nada del renderer los días 4 y 5:
+el HTML y el CSS publicados son byte a byte los de `main`; la e2e completa es del día 7.
