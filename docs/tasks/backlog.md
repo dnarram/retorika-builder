@@ -48,14 +48,24 @@ sprint 32:
    155 has no `view()`: there the sections do not rise and are whole.
 5. **The iPhone list of PR #250** grows by two: the bar's glass over a photograph while scrolling, and
    the phone's sheet against Safari's own toolbar (`100dvh`). WebKit 26.6 in Playwright draws the
-   glass; neither has been seen on a device.
+   glass; neither has been seen on a device. *Sprint 33 día 1 puts a third item **first** on the
+   list (ADR 0065, David's condition): open «Menú» on the phone, drag the sheet, and see whether the
+   page moved under it. The lock is `overflow: hidden` on the root, which Safari on an iPhone did not
+   hold under a finger once its toolbar had collapsed — WebKit bug 240859, reproduced on iOS 18.7.8 and
+   not on iOS 26.4.2. Playwright's WebKit is the desktop engine, measured with the wheel only.*
 6. **Opened, with their reasons** (ADR 0063 and the plan's «lo que deja fuera»):
    - **Backgrounds per section** (tinted bands alternating down the page): it would be a choice per
      section under rule 6, with its contrast proof — another sprint, not a constant of the engine.
-   - **Locking the body's scroll under the phone's sheet**: it would cost the script a fifth write
+   - ~~**Locking the body's scroll under the phone's sheet**: it would cost the script a fifth write
      (`overflow: hidden` on `html`, against ADR 0058). Not needed today: what the sheet covers is
      `visibility: hidden`, out of sight and out of the Tab order, and that the page behind can still
-     scroll is not seen.
+     scroll is not seen.~~ **Closed on sprint 33 día 1, by ADR 0065, with no write at all.** It was
+     seen: David found it in the editor's phone view opening sprint 33, and measured in Chromium and
+     WebKit a wheel of 2000 px over the open sheet carried the page 2000 px — with a bar in the flow,
+     the sheet with it, onto a blank page as long as the content. `html:has(<sheet>[open]) { overflow:
+     hidden }` in the phone's block holds it, and `scrollbar-gutter: stable` keeps the content's width
+     where a classic scrollbar is drawn (705 px open and closed at 720, measured). The script is the
+     same 829 bytes.
 7. **Closed by this sprint**: the page's maximum width and the reading text's CLS, both by ADR 0064
    on día 3 (rows below, struck through).
 8. **Noted, still not fixed**: the observer's `rootMargin` is the bar's height at start, and a

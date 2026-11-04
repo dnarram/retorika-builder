@@ -1129,6 +1129,13 @@ function foldCss(doc: RetorikaDocument): string[] {
  * Baseline since 2023; where it is missing the page simply stays visible behind, as before. The
  * footer is a section inside `<main>`, so `<main>` is all of it.
  *
+ * **And the page holds still under it** (sprint 33 día 1, ADR 0065): `overflow: hidden` on the root
+ * while it is open, which is the viewport's. Measured before, in Chromium and WebKit at 390 × 844: a
+ * sheet whose entries fit does not scroll, so a wheel of 2000 px over it carried the page 2000 px —
+ * and with a bar in the flow the sheet with it, leaving a blank page as long as the content, `<main>`
+ * hidden. Only the visitor's scroll is held: a script's, and «Ir a…»'s anchors, still move the page.
+ * The sheet itself still scrolls inside when its entries outgrow it. No script, no fifth write.
+ *
  * For «Menú» (`headerMobileCss`) and for «Ir a…» on a phone (`foldCss`): two callers of one shape,
  * written once so that the two sheets cannot drift apart. Rules to be placed inside the phone's
  * `@media`; the stagger nests its own motion query inside it.
@@ -1146,6 +1153,7 @@ function phoneSheet(disclosure: string): string[] {
     "    box-shadow: inset 3px 0 0 currentColor;",
     "    background: color-mix(in srgb, currentColor 12%, transparent); }",
     `  body:has(${disclosure}[open]) main { visibility: hidden; }`,
+    `  html:has(${disclosure}[open]) { overflow: hidden; }`,
     // One after another: 40 ms apart, capped at the seventh as the editor's own reveal is, the delay
     // riding a custom property so the shorthand does not reset it (sprint 32 día 2's lesson).
     "  @media (prefers-reduced-motion: no-preference) {",
@@ -1178,6 +1186,11 @@ export function headerMobileCss(doc: RetorikaDocument): string[] {
     ".rb-nav-narrow { display: none; }",
     "@media (max-width: 720px) {",
     "  html { --rb-bar-h: calc(2 * var(--space-sm) + max(40px, 1.5 * var(--size-body))); }",
+    // **The page keeps its width when a sheet locks it** (ADR 0065, David's condition): in a narrow
+    // window with a scrollbar drawn, `overflow: hidden` takes the scrollbar away and the content
+    // widened by its 15 px the moment a sheet opened. On a phone the scrollbar overlays and this is
+    // nothing. Once, here, for both sheets: «Ir a…»'s block only exists where a header is drawn.
+    "  html { scrollbar-gutter: stable; }",
     "  .rb-header { gap: var(--space-sm) var(--space-md); padding: var(--space-sm) var(--space-lg); }",
     // The brand takes what the button and «Menú» leave and no more: a flex basis of zero means it
     // never asks the line to wrap, and `min-width: 0` (set above) lets the ellipsis do its work.

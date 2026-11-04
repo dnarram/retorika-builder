@@ -1,6 +1,7 @@
-import { readFileSync } from "node:fs";
+import { chmodSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type Browser, chromium, type Page } from "@playwright/test";
+import { type Browser, type BrowserContextOptions, chromium, type Page } from "@playwright/test";
 import { type Header, parseDocument, type RetorikaDocument } from "@retorika/schema";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { render } from "../src/index.ts";
@@ -147,11 +148,14 @@ async function open(
   height: number,
   pageId?: string,
   motion = false,
+  extra: BrowserContextOptions & { on?: Browser } = {},
 ): Promise<Page> {
   const html = render(doc, "html", pageId === undefined ? {} : { pageId }).html;
-  const context = await browser.newContext({
+  const { on, ...options } = extra;
+  const context = await (on ?? browser).newContext({
     viewport: { width, height },
     reducedMotion: motion ? "no-preference" : "reduce",
+    ...options,
   });
   const page = await context.newPage();
   await page.route("**/*", async (route) => {
@@ -1118,6 +1122,189 @@ describe("the phone's menu is a sheet (sprint 32 día 4)", () => {
       }
     });
   }
+});
+
+/**
+ * `withLogo` with ten pages, so «Menú» holds more entries than a 320 × 568 sheet shows and has to
+ * scroll inside itself.
+ */
+function tenPages(header: Partial<Header>): RetorikaDocument {
+  const doc = placed(header);
+  const model = doc.pages[1];
+  if (!model) throw new Error("no second page to copy");
+  const more = Array.from({ length: 8 }, (_, i) => ({
+    ...model,
+    id: `page-extra-${i}`,
+    slug: `extra-${i}`,
+    title: `Página de más ${i + 1}`,
+    sections: model.sections.map((section) => ({ ...section, id: `${section.id}-extra-${i}` })),
+  }));
+  return parseDocument({ ...doc, pages: [...doc.pages, ...more] });
+}
+
+/**
+ * A wheel where a person turns it, over the middle of the window, and the page's scroll once the
+ * browser has acted on it. **Never `scrollTo`** (David's adjustment 1 of sprint 33): `overflow:
+ * hidden` holds the visitor's scroll and leaves a script's free, so a `scrollTo` would move the page
+ * under a correct lock. 400 ms is what a 2000 px wheel took to land in full without the lock
+ * (measured on día 1); the sabotage below is what says it is long enough.
+ */
+async function wheel(page: Page, dy: number): Promise<number> {
+  const { width, height } = page.viewportSize() ?? { width: 0, height: 0 };
+  await page.mouse.move(width / 2, height / 2);
+  await page.mouse.wheel(0, dy);
+  await page.waitForTimeout(400);
+  return page.evaluate(() => Math.round(window.scrollY));
+}
+
+describe("the phone's sheet holds the page still (sprint 33 día 1, ADR 0065)", () => {
+  const LONG = (header: Partial<Header>) =>
+    eightSections(placed({ sections: { shown: true, mobile: "hidden" }, ...header }));
+
+  for (const sticky of [true, false]) {
+    it(`does not let a wheel move the page under the open sheet, ${sticky ? "fixed bar, opened at 600" : "bar in the flow, opened at the top"}`, async () => {
+      const page = await open(LONG({ sticky }), 390, 844);
+      try {
+        // Placed by script, before the sheet opens: the one thing `scrollTo` is for here.
+        const from = sticky ? 600 : 0;
+        await page.evaluate((y) => window.scrollTo({ top: y, behavior: "instant" }), from);
+        await page.click(".rb-nav-narrow > summary");
+        expect(await wheel(page, 2000)).toBe(from);
+        // The sheet is still where it opened, edge to edge under the bar.
+        const sheet = await boxes(page, { sheet: ".rb-nav-narrow > .rb-nav" });
+        expect(Math.round(sheet["sheet"]?.bottom ?? 0)).toBeGreaterThanOrEqual(843);
+        // Closed, the page is where it was and scrolls again.
+        await page.keyboard.press("Escape");
+        expect(await page.evaluate(() => Math.round(window.scrollY))).toBe(from);
+        expect(await wheel(page, 300)).toBeGreaterThan(from);
+      } finally {
+        await page.context().close();
+      }
+    });
+  }
+
+  it("does not let a finger move it either (a touch gesture, Chromium)", async () => {
+    const page = await open(LONG({ sticky: true }), 390, 844, undefined, false, {
+      hasTouch: true,
+      isMobile: true,
+    });
+    try {
+      await page.click(".rb-nav-narrow > summary");
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send("Input.synthesizeScrollGesture", {
+        x: 195,
+        y: 500,
+        yDistance: -1500,
+        gestureSourceType: "touch",
+        speed: 3000,
+      });
+      await page.waitForTimeout(300);
+      expect(await page.evaluate(() => Math.round(window.scrollY))).toBe(0);
+    } finally {
+      await page.context().close();
+    }
+  });
+
+  it("still scrolls inside itself when its entries outgrow the screen, at 320 × 568", async () => {
+    const page = await open(tenPages({ sections: { shown: true, mobile: "hidden" } }), 320, 568);
+    try {
+      await page.click(".rb-nav-narrow > summary");
+      const outgrows = await page.evaluate(() => {
+        const sheet = document.querySelector(".rb-nav-narrow > .rb-nav") as HTMLElement;
+        return sheet.scrollHeight - sheet.clientHeight;
+      });
+      expect(outgrows, "ten pages should not fit a 320 × 568 sheet").toBeGreaterThan(0);
+      expect(await wheel(page, 400)).toBe(0);
+      expect(
+        await page.evaluate(
+          () => (document.querySelector(".rb-nav-narrow > .rb-nav") as HTMLElement).scrollTop,
+        ),
+      ).toBeGreaterThan(0);
+    } finally {
+      await page.context().close();
+    }
+  });
+
+  // David's condition 1a: a narrow desktop window with a scrollbar drawn — a classic one, that takes
+  // its width from the page, as on Windows and Linux. Two instruments were wrong before this one, and
+  // both are written down so nobody picks them up again (measured on día 1):
+  // - **A scrollbar styled with `::-webkit-scrollbar`** takes 15 px, but Chromium (153) keeps no
+  //   gutter for it on the root: the content widened 705 → 720 with `scrollbar-gutter: stable` too.
+  // - **`documentElement.clientWidth`** reads the full 720 under `overflow: hidden` even while the
+  //   gutter is kept, since the root has no scrollbar then. What holds still is the content, so the
+  //   content is what is measured.
+  // A real classic scrollbar, then: Playwright launches Chromium with `--hide-scrollbars`, so this
+  // launch leaves it out, which on Linux (CI) is enough; on macOS the system overlays scrollbars, and
+  // Chromium takes `-AppleShowScrollBars Always` from its own command line as a preference of that
+  // one process — through a wrapper, because Playwright refuses a bare `Always` among the arguments.
+  // The test first proves that a scrollbar is drawn.
+  it("keeps the page's width when it opens, at 720 with a scrollbar drawn", async () => {
+    let executablePath: string | undefined;
+    if (process.platform === "darwin") {
+      executablePath = join(tmpdir(), "retorika-chromium-classic-scrollbars.sh");
+      writeFileSync(
+        executablePath,
+        `#!/bin/sh\nexec "${chromium.executablePath()}" "$@" -AppleShowScrollBars Always\n`,
+      );
+      chmodSync(executablePath, 0o755);
+    }
+    const drawn = await chromium.launch({
+      ignoreDefaultArgs: ["--hide-scrollbars"],
+      ...(executablePath === undefined ? {} : { executablePath }),
+    });
+    const page = await open(LONG({}), 720, 900, undefined, false, { on: drawn });
+    try {
+      const width = () =>
+        page.evaluate(() => ({
+          main: Math.round(document.querySelector("main")?.getBoundingClientRect().width ?? 0),
+          section: Math.round(
+            document.querySelector("main > .rb-section")?.getBoundingClientRect().width ?? 0,
+          ),
+        }));
+      const scrollbar = await page.evaluate(
+        () => window.innerWidth - document.documentElement.clientWidth,
+      );
+      expect(scrollbar, "no scrollbar drawn, so this measures nothing").toBeGreaterThan(0);
+      const closed = await width();
+      await page.click(".rb-nav-narrow > summary");
+      expect(await width()).toEqual(closed);
+    } finally {
+      await drawn.close();
+    }
+  });
+
+  it("lets «Ir a…» still take the visitor to the section chosen", async () => {
+    const page = await open(
+      eightSections(
+        placed({ sticky: true, sections: { shown: true, position: "bar", mobile: "fold" } }),
+      ),
+      390,
+      844,
+    );
+    try {
+      await page.click(".rb-nav-fold > summary");
+      // The first entry, far enough from the end for the page to bring it all the way up: the last
+      // one sits where the page cannot scroll it to the bar (measured: `scrollY` at its maximum).
+      const entry = page.locator(".rb-nav-fold > .rb-nav a").first();
+      const href = (await entry.getAttribute("href")) ?? "";
+      await entry.click();
+      await expect
+        .poll(() =>
+          page.evaluate((id) => {
+            const section = document.querySelector(id) as HTMLElement;
+            const bar = document.querySelector("header.rb-header") as HTMLElement;
+            return {
+              open: (document.querySelector(".rb-nav-fold") as HTMLDetailsElement).open,
+              scrolled: window.scrollY > 0,
+              underTheBar: Math.abs(section.getBoundingClientRect().top - bar.offsetHeight) <= 1,
+            };
+          }, href),
+        )
+        .toEqual({ open: false, scrolled: true, underTheBar: true });
+    } finally {
+      await page.context().close();
+    }
+  });
 });
 
 describe("an owner's exact bar colour holds once scrolled (sprint 32 día 5)", () => {

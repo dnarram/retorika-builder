@@ -327,6 +327,36 @@ for (const [name, type] of ENGINES) {
       });
     }
 
+    // ADR 0065 (sprint 33 día 1): with the phone's sheet open, the page does not move under a wheel,
+    // and moves again once it is closed. The wheel and never `scrollTo`, which `overflow: hidden`
+    // leaves free (David's adjustment 1). A desktop engine each: WebKit here is not Safari on an
+    // iPhone, which is first on its own list (the ADR says why).
+    it("holds the page still under the open sheet at 390 × 844, and lets it go when closed", async () => {
+      // Sections hidden on the phone: with their row under it a fixed bar lets go there
+      // (`data-phone-row`), and pressing «Menú» would scroll the page back up to reach it.
+      const page = await openSite(
+        browser,
+        withHeader({ sticky: true, sections: { shown: true, mobile: "hidden" } }),
+        390,
+        false,
+      );
+      try {
+        const wheel = async (dy: number) => {
+          await page.mouse.move(195, 422);
+          await page.mouse.wheel(0, dy);
+          await page.waitForTimeout(400);
+          return page.evaluate(() => Math.round(window.scrollY));
+        };
+        await page.evaluate(() => window.scrollTo({ top: 300, behavior: "instant" }));
+        await page.click(".rb-nav-narrow > summary");
+        expect(await wheel(2000)).toBe(300);
+        await page.keyboard.press("Escape");
+        expect(await wheel(200)).toBeGreaterThan(300);
+      } finally {
+        await page.context().close();
+      }
+    });
+
     // ADR 0062 named the question for this day: whether an engine's scroll anchoring moves the page
     // under a view timeline. The bar's condensing is the one re-layout a published page makes
     // mid-scroll, and its `margin-bottom` gives back what its padding takes so that the page does not

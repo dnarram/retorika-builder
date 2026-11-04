@@ -6623,3 +6623,55 @@ en el toque. Deshechos restaurando copias.
 **e2e completa, a la primera: 274 verdes y 1 omitida, 1163 s. Caminatas reescritas: cero** — las tres
 que leen lo que escribe el script (`data-scrolled`, `aria-current="location"`) lo leen en el ZIP, donde
 sigue corriendo.
+
+### Día 1 — la hoja del móvil bloquea la página (PR de `fix/la-hoja-del-movil-bloquea-la-pagina`, ADR 0065)
+
+La otra mitad del defecto, la que también tiene la web publicada: la reproducción de arriba midió en
+Chromium y en WebKit que una rueda de 2000 px sobre la hoja abierta llevaba la página 2000 px detrás de
+ella, y con la barra no fija, la hoja con ella, hasta una página en blanco tan larga como el contenido.
+**La ADR 0065** lo bloquea con la hoja de estilo y sin una escritura del script, como decidió David: en
+el bloque del móvil, `html:has(<hoja>[open]) { overflow: hidden }` para «Menú» y para «Ir a…», y una
+vez `html { scrollbar-gutter: stable }`. Solo se bloquea el desplazamiento del visitante: el de un
+script y las anclas de «Ir a…» siguen moviendo la página, y la hoja sigue desplazándose por dentro
+cuando sus entradas no caben. La nota del día 4 del sprint 32 en la ADR 0063, que no bloqueaba porque
+«no se ve nada detrás», queda corregida con la medida.
+
+**Las dos condiciones de David, medidas.**
+- **El ancho, a 720 con una barra de scroll clásica**: el contenido mide 705 px cerrada y 705 abierta;
+  sin el `scrollbar-gutter`, 705 → 720. Hicieron falta tres intentos para medirlo bien, y los dos
+  primeros quedan escritos en la prueba y en la ADR para que nadie los recoja: una barra con estilo
+  `::-webkit-scrollbar` ocupa 15 px pero Chromium 153 no le guarda hueco en la raíz (705 → 720 también
+  con el `gutter`), y `clientWidth` de la raíz lee 720 bajo `overflow: hidden` aunque el hueco esté
+  guardado. La barra clásica de verdad sale de lanzar Chromium sin `--hide-scrollbars` y, en macOS, con
+  la preferencia `AppleShowScrollBars Always` del propio sistema para ese proceso.
+- **El iPhone, lo primero de su lista**: el WebKit de Playwright es el de escritorio. Safari en un
+  iPhone no respetaba `overflow: hidden` en la raíz bajo un dedo una vez plegada su barra: el bug 240859
+  de WebKit, reproducido en iOS 18.7.8 y no en iOS 26.4.2, cerrado el 8 de junio de 2026 como trasladado
+  a Safari. En un iPhone anterior a iOS 26 la página puede seguir moviéndose detrás, como antes. La ADR
+  lo dice y la lista de la PR #250 lo pone primero.
+
+**Pruebas, todas con la rueda y ninguna con `scrollTo`** (el ajuste 1 de David): `header.test.ts`, las
+dos reglas, solo en el bloque del móvil, y el script con su único `<script>`; `header.browser.test.ts`,
+la rueda a 390 × 844 con barra fija abierta a 600 y en el flujo abierta arriba, cerrada vuelve a
+moverse; un dedo en Chromium por CDP; la hoja de diez páginas a 320 × 568 se desplaza por dentro; el
+ancho a 720 con barra clásica; y «Ir a…» sigue llevando a su sección; `engines.browser.test.ts`, la
+rueda en los tres motores; y la caminata «sprint 33 día 1 — la hoja del móvil bloquea la página» en la
+vista móvil del lienzo, que además asevera las entradas de la hoja en reposo al abrir (el lienzo no
+tiene `rb-rise`). **Saboteos**: sin el `overflow: hidden`, rojo por la rueda en todas (2570 en vez de
+600, 2000 en vez de 0, el dedo 1506, los motores 667 y 677 en vez de 300, el lienzo 2000); sin el
+`scrollbar-gutter`, rojo el ancho (705 → 720). Deshechos restaurando copias.
+
+**Una prueba del editor ajustada a su intención, y se dice**: `scrollbar.test.ts` exigía que el
+renderer no contuviera la palabra «scrollbar», para que el estilo de la barra del editor no llegara a
+la web publicada. Ahora exige que el renderer no **estilice** ninguna barra (`::-webkit-scrollbar`,
+`scrollbar-width`, `scrollbar-color`) y que su única mención sea el hueco de la ADR 0065; saboteada con
+una regla `::-webkit-scrollbar` en el renderer, va a rojo.
+
+**Golden**: los cuatro con cabecera ganan las dos líneas y nada más; los dieciocho sin cabecera, sin
+tocar; diff leído entero. Ningún documento del corpus pone «Ir a…» en el móvil, así que su bloqueo lo
+sostiene `header.test.ts`.
+
+**Suites.** `typecheck`, `lint`, `test` (3661), invariantes, golden, `renderer:deps` y `size` (el script
+sigue en 0,8 KB, las páginas con cabecera en 6,1 KB) en verde. **`a11y` local: 945**, las 936 del
+cierre del 32 y las nueve nuevas. **e2e completa, a la primera: 275 verdes y 1 omitida, 1171 s.**
+Lighthouse no se mide: nada cambia en reposo; el cierre del sprint lo confirma.

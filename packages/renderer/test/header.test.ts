@@ -1023,6 +1023,29 @@ describe("the phone's menu is a sheet (sprint 32 día 4)", () => {
     }
   });
 
+  // ADR 0065 (sprint 33 día 1): measured in Chromium and WebKit, a wheel over an open sheet carried
+  // the page 2000 px behind it — with a bar in the flow, the sheet with it, onto a blank page.
+  it("holds the page still while open, by the stylesheet, and keeps the scrollbar's room (ADR 0065)", () => {
+    const sheet = css(withFold());
+    expect(sheet).toContain("  html:has(.rb-nav-narrow[open]) { overflow: hidden; }");
+    expect(sheet).toContain(
+      "  html:has(.rb-nav-fold[data-mobile=fold][open]) { overflow: hidden; }",
+    );
+    expect(sheet.match(/scrollbar-gutter/g)).toEqual(["scrollbar-gutter"]);
+    expect(sheet).toContain("  html { scrollbar-gutter: stable; }");
+    // On a phone only: on a wide screen nothing covers the page, and the page scrolls.
+    for (const pattern of [/html:has\(/g, /scrollbar-gutter/g]) {
+      for (const at of [...sheet.matchAll(pattern)].map((m) => m.index ?? 0)) {
+        const before = sheet.slice(0, at);
+        expect(before.lastIndexOf("@media (max-width: 720px) {")).toBeGreaterThan(
+          before.lastIndexOf("\n}\n"),
+        );
+      }
+    }
+    // And nothing of it is the script's: the same constant, four writes (ADR 0058).
+    expect(render(withFold(), "html").html.match(/<script\b/g)).toHaveLength(1);
+  });
+
   it("draws «Menú» with its two bars and its two words, and «Ir a…» with a chevron", () => {
     const page = draw(withFold());
     const summary = page.querySelector(".rb-nav-narrow > summary");
