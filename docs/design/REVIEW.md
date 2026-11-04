@@ -6363,3 +6363,85 @@ accesibilidad 100 en los ocho, e2e completo **273/273**. Una primera pasada del 
 3340 s y cuatro caminatas de la landing (la muestra, que carga fotos del banco) agotaron su tiempo con
 localizadores vacíos; solas pasaron en 90 s y la segunda pasada completa, sin nada en paralelo, fue
 verde en los 1150 s de siempre. Ninguna toca nada de este día; se anota como entorno, con las cifras.
+
+### Día 6 — los tres motores (PR de `test/los-tres-motores`)
+
+**Firefox y WebKit de verdad, por primera vez.** Hasta hoy toda prueba de navegador lanzaba Chromium,
+que es el motor que tiene todo lo que este sprint usa; una caída por `@supports` que nadie abre en el
+motor que la toma es una caída que nunca ha corrido. Dos ficheros nuevos, porque el renderer no puede
+importar el publisher: `packages/renderer/test/engines.browser.test.ts` (en `test:a11y`) abre
+`menu-y-paginas` y `cabecera-con-marca` a 1280 y 390 en Chromium, Firefox y WebKit;
+`packages/publisher/test/engines.browser.test.ts` (en `pnpm lighthouse`, el proyecto de navegador del
+publisher) construye el ZIP de verdad, lo extrae con `unzip` y lo abre por `file://` en los tres. CI
+solo instala Chromium: allí los otros dos se saltan y la salida lo dice — directo a `stderr`, porque la
+ejecución es silenciosa por defecto y un `console.warn` no se habría visto (comprobado con los tres
+motores ausentes: 33 y 12 saltados, tres líneas de motivo en cada uno).
+
+**Lo que trae cada motor** (los de Playwright 1.63):
+
+| | `view()` | anclas | `backdrop-filter` | entre páginas desde `file://` |
+|---|---|---|---|---|
+| Chromium 153 | sí | sí | sí | **funde** |
+| Firefox 155 | **no** | sí | sí | no (sin `pagereveal`) |
+| WebKit 26.6 | sí | sí | sí (y `-webkit-`) | no funde |
+
+**Lo que se asevera en los tres:** (1) con el movimiento encendido, toda palabra dibujada está a
+opacidad 1 al cargar y a cada tercio de ventana hasta el fondo; en Firefox el revelado no corre y la
+página está entera; (2) la página actual se marca bajo su entrada con **una sola** marca, la raya que
+se desliza donde el motor ancla y el subrayado donde no; (3) la barra fija ya bajada es de cristal
+(`blur(12px)`, alfa 0,88) en `surface`, `ink` y `transparent` donde el motor desenfoca, opaca donde no
+y en `primary`, y nunca transparente; (4) **la primera sección baja exactamente −400 px en un scroll de
+400 mientras la barra se condensa**, en `surface` y `transparent` (Firefox lee −400,000015 en
+`surface`, por debajo de su unidad de 1/60 px; la tolerancia es 1/64); (5) desde el disco, la portada y
+una segunda página cargan sin error de consola, sin excepción, sin petición fallida, con toda imagen
+decodificada y ninguna letra en error; y con `reduce`, ningún motor funde entre páginas.
+
+**Lo que no se puede aseverar con estos motores:** los tres anclan y los tres desenfocan, así que **el
+subrayado de reserva y la barra opaca por falta de `backdrop-filter` no los toma ninguno**; los
+sostiene la hoja (`header.test.ts`). Se dice en la nota de la ADR 0062.
+
+**Dos cosas que el registro decía y no eran.** (a) La ADR 0062 §3 y el comentario de `build.ts`
+decían que desde `file://` no hay transición entre páginas. **Chromium 153 sí funde** entre dos
+páginas del ZIP extraído, y el Google Chrome 156 instalado también, en una sonda de dos páginas desde
+el disco; WebKit 26.6 no. No rompe nada: es el mismo fundido de 200 ms con la barra quieta que tiene la
+web servida, así que en Chrome la web descargada queda idéntica a la publicada. Corregido el
+comentario, nota del día 6 en la ADR. (b) Iba a escribir en el test que WebKit no implementa anclaje de
+scroll; medido antes: **los tres anclan** (un crecimiento por encima de la ventana mantiene `scrollY` a
+la par en los tres). Lo que sí es cierto, y se asevera saboteando: sin el `margin-bottom` de la barra
+condensada, la barra en flujo mueve la página en los tres, ninguno lo salva por su cuenta.
+
+**La letra perdida se ve por caminos distintos en cada motor.** Con la carpeta `fonts/` borrada tras
+extraer: Chromium y Firefox la delatan en `document.fonts` (estado «error»); **WebKit solo en la
+consola** («Not allowed to load local resource»). Por eso el test escucha las dos cosas.
+
+**Saboteos, todos deshechos por script:** el fundido devuelto a `rb-reveal` → rojo en Chromium y
+WebKit (8), verde en Firefox, que es el `@supports` haciendo su trabajo; el `::after` sin `content` →
+rojo en los tres; `left: 0` en vez de `anchor(left)` → rojo en los tres; el cristal al 0 % → rojo en
+`surface` y `transparent` en los tres; `primary` en el selector del cristal → rojo en los tres;
+`margin-bottom: 0` en la barra condensada → rojo en `surface` en los tres; el `@view-transition` fuera
+del media → rojo bajo `reduce` en Chromium; `fonts/` borrada → rojo en los doce; `assets/` borrada →
+rojo en los seis de `cabecera-con-marca` (el logo; `menu-y-paginas` no lleva fichero de imagen).
+
+**Lighthouse 8/8** (perfil móvil), contra el cierre del 31:
+
+| Sujeto | Rendimiento | Accesibilidad | Buenas prácticas | SEO | LCP | CLS |
+|---|---|---|---|---|---|---|
+| v1 image-right | 99 | 100 | 100 | 100 | 1,80 s (1,80) | 0,003 (0,009) |
+| v2 image-background | 98 | 100 | 100 | 100 | 2,33 s (2,40) | 0,003 (0,000) |
+| v3 image-left | 98 | 100 | 100 | 100 | 2,33 s (2,33) | 0,003 (0,009) |
+| letra propia `.ttf` | 99 | 100 | 100 | 100 | 1,80 s (1,80) | 0,000 (0,002) |
+| cabecera fija con logo | 100 | 100 | 100 | 100 | 1,35 s (1,35) | 0,002 (0,008) |
+| cabecera en columnas | 100 | 100 | 100 | 100 | 1,35 s (1,35) | 0,004 (0,009) |
+| página por ficha | 100 | 100 | 100 | 100 | 0,90 s (0,90) | 0,000 (0,000) |
+
+Ninguna composición por debajo de 98. **El cristal no lo ve Lighthouse**: no baja la página, y el
+cristal solo se dibuja con `data-scrolled` (decisión 1 del plan: arriba la barra es opaca, que es lo que
+se mide); el suelo del cristal es aritmético (`glass.test.ts`) y, desde hoy, medido en los tres motores.
+
+**El peso** (`pnpm size`): una página sin cabecera pesa 2,0–2,7 KB y una con ella 6,0–6,4 KB (5,3–5,4
+al planificar); `cabecera-con-marca` 17,4 KB propios de 28 (15,9 el día 2); el script 0,8 KB de 2, sin
+cambio de bytes. Todo dentro.
+
+**La lista del iPhone** (PR #250) crece con dos: el cristal de la barra sobre una foto al bajar, y la
+hoja del móvil contra la barra del propio Safari (`100dvh`). WebKit 26.6 en Playwright dibuja el
+cristal; ninguno de los dos se ha visto en un dispositivo. Anotado en el backlog, punto 8.

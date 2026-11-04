@@ -947,7 +947,8 @@ function elementStyleCss(doc: RetorikaDocument): string[] {
  *   photograph and never `.rb-panel`** (decision 5 of the plan): the photograph is the LCP element in
  *   every composition, and an element at opacity 0 is not painted for LCP.
  * - **Between pages**, the document fades and the bar stays (`@view-transition`, Chromium and Safari;
- *   same origin only, so nothing from `file://`; Firefox navigates as always). Inside the media block,
+ *   Firefox navigates as always). From `file://`, measured on día 6 with the extracted ZIP: Chromium
+ *   153 and Chrome 156 transition, WebKit 26.6 does not. Inside the media block,
  *   which is where Chrome's own guidance puts it. The bar is named so the browser keeps it still while
  *   the rest crosses over. Measured with a rail on día 2: see the note in ADR 0062 if the name moved.
  * - **A button lifts** under a pointer that can hover, as the bar's does (ADR 0063).

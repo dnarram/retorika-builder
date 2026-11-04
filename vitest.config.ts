@@ -115,6 +115,9 @@ export default defineConfig({
       // Protocol Part 8.5's Lighthouse floor, measured over a real bundle served from memory in a
       // real Chrome. Declared only when RETORIKA_LIGHTHOUSE=1, which `pnpm lighthouse` sets — the
       // same reason as "a11y", "e2e" and "db-pg": a plain `pnpm test` must not need a browser.
+      // Since sprint 32 día 6 it also holds `engines.browser.test.ts`: the real ZIP, extracted and
+      // opened from `file://` in Chromium, Firefox and WebKit — the publisher's browser suites live
+      // here because a site is what `buildSite` makes, and the renderer cannot import it.
       ...(process.env["RETORIKA_LIGHTHOUSE"] === "1"
         ? [
             {
