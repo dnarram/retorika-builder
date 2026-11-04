@@ -1143,7 +1143,15 @@ function foldCss(doc: RetorikaDocument): string[] {
 function phoneSheet(disclosure: string): string[] {
   const panel = `${disclosure} > .rb-nav`;
   return [
-    `  ${panel} { box-sizing: border-box; height: calc(100dvh - var(--rb-header-h));`,
+    // **Its height is a share of the bar it hangs from** (sprint 33 día 3, the menu audit's findings 3
+    // and 5): an absolute box's `top: 100%` and its `height`'s `100%` are both of its containing
+    // block, the header's padding box, so the sheet ends at the header's top plus the screen — the
+    // screen's foot, where the bar stands when anyone can press «Menú» — whatever the bar measures.
+    // It was `100dvh - var(--rb-header-h)`, and that variable is never quite the bar: the script's
+    // measure is rounded and counts the hairline the sheet starts above (1.2–1.4 px short), and where
+    // no script runs — the canvas — it is the estimate of one line, 26–67 px short of a bar on two
+    // lines or with the row under it, the last entries below the screen and out of reach.
+    `  ${panel} { box-sizing: border-box; height: calc(100dvh - 100%);`,
     "    overflow: hidden auto; gap: var(--space-md); padding: var(--space-xl) var(--space-lg);",
     "    border-bottom: 0; }",
     `  ${panel} a { font-family: var(--font-heading); font-size: var(--size-subheading);`,
@@ -1215,7 +1223,14 @@ export function headerMobileCss(doc: RetorikaDocument): string[] {
     // the sections were announced twice at 320.
     "  .rb-header[data-sections] .rb-nav-row:is([data-mobile=hidden], [data-mobile=fold]) { display: none; }",
     "  .rb-header[data-layout=stacked] .rb-brand { flex-basis: 0; }",
-    "  .rb-header[data-sticky][data-phone-row] { position: static; }",
+    // **It lets go into the flow, not out of every box** (sprint 33 día 3, the menu audit's findings 1
+    // and 4): `relative`, a bar in the flow's own position. It was `static`, which took from the
+    // sheet the box its `top: 100%` and its height are shares of: «Menú» opened at the screen's foot,
+    // below it, over a page `<main>` hid. A transparent bar lets go as a transparent one does, over
+    // the cover and away with it; `html` and `[data-layout]` weigh it over the script's `fixed`
+    // (0,4,1), which kept it fixed over the row.
+    "  .rb-header[data-sticky][data-phone-row] { position: relative; }",
+    "  html .rb-header[data-layout][data-sticky][data-phone-row][data-bg=transparent] { position: absolute; }",
     "  .rb-header[data-sticky][data-phone-row] ~ main [data-section] { scroll-margin-top: 0; }",
     ...phoneSheet(".rb-nav-narrow"),
     "}",

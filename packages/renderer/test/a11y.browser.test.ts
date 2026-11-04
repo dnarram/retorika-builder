@@ -11,7 +11,13 @@ import {
   openCombination,
   railCombinations,
 } from "./browser-fixtures.ts";
-import { checkCopies, checkCovers, expectHeader, setDisclosures } from "./menu-checks.ts";
+import {
+  checkCopies,
+  checkCovers,
+  checkSheet,
+  expectHeader,
+  setDisclosures,
+} from "./menu-checks.ts";
 
 /**
  * axe over two of the three sets issue #25 split this harness into, because axe checks two
@@ -131,14 +137,17 @@ describe("axe — the rails at 1024, where a rail stands or falls", () => {
 });
 
 /**
- * **Two of the menu audit's checks, promoted** (sprint 33 día 2): cheap, permanent, and about every
- * header combination rather than the audit's own matrix, so CI holds them from this day on. One
- * visible copy of each menu — exactly the number the width and the state call for — with the
- * disclosures closed and with «Menú» open; and nothing lying over the brand or the first heading at
- * rest. The audit (`apps/editor/audit`) runs the other eight over its matrix, in three engines,
- * under `RETORIKA_AUDIT=1`; its phone-sheet check joins this file the day its findings are fixed.
+ * **Three of the menu audit's checks, promoted** (sprint 33 días 2 and 3): cheap, permanent, and about
+ * every header combination rather than the audit's own matrix, so CI holds them. One visible copy of
+ * each menu — exactly the number the width and the state call for — with the disclosures closed and
+ * with «Menú» open; nothing lying over the brand or the first heading at rest; and **the open sheet**
+ * (día 3, with its findings fixed): from the bar's foot to the screen's, edge to edge, `<main>` hidden
+ * and the page still under a wheel. The phone bar's bound of 72 px, the other half of check 3, is not
+ * here: a button of thirteen letters breaks it at 320 on every combination (the audit's finding 2,
+ * a design call left to David). The audit (`apps/editor/audit`) runs all ten over its matrix, in three
+ * engines, under `RETORIKA_AUDIT=1`.
  */
-describe("one copy of each menu, and nothing over the brand (the audit's checks 1 and 8)", () => {
+describe("one copy of each menu, nothing over the brand, and the sheet (the audit's checks 1, 3 and 8)", () => {
   for (const c of headerCombinations()) {
     for (const width of WIDTHS) {
       it(`${c.id} @ ${width}px`, async () => {
@@ -151,7 +160,10 @@ describe("one copy of each menu, and nothing over the brand (the audit's checks 
           ];
           if (width <= 720) {
             await setDisclosures(page, "details.rb-nav-narrow", true);
-            findings.push(...(await checkCopies(page, h, width, "menu")));
+            findings.push(
+              ...(await checkCopies(page, h, width, "menu")),
+              ...(await checkSheet(page, "details.rb-nav-narrow")),
+            );
           }
           expect(findings, `${c.id} @ ${width}px\n  ${findings.join("\n  ")}`).toEqual([]);
         } finally {

@@ -299,3 +299,26 @@ page as long as the content under the visitor's eye — the defect David reporte
 0065 locks it by the stylesheet, with no write of the script: `html:has(<sheet>[open]) { overflow:
 hidden }` in the phone's block, and `scrollbar-gutter: stable` there so the content keeps its width
 where a classic scrollbar is drawn. Everything else in that note stands.
+
+## Note — sprint 33 día 3: the sheet hangs from the bar it has, and a fixed bar lets go into the flow
+
+The note of sprint 32 día 4 gives the sheet `height: calc(100dvh - var(--rb-header-h))`. **Measured by
+the menu audit in three engines, that variable is never quite the bar**: the script's measure is
+`offsetHeight`, rounded, and counts the hairline the sheet starts above (`top: 100%` is of the
+header's padding box), so on a `surface` bar the sheet stopped 1.0–1.4 px short of the screen; and
+where no script runs — the canvas, a visitor without one — it is the estimate of one line, so under a
+bar on two lines or with the sections' row the sheet ran 26–67 px below the screen, its last entries
+out of reach. The height is now **`calc(100dvh - 100%)`**: an absolute box's `top: 100%` and its
+height's `100%` are both of its containing block, so the sheet ends at the header's top plus the
+screen — the screen's foot, where the bar is whenever «Menú» can be pressed — whatever the bar
+measures, in both targets. Nothing else of that note changes, and `--rb-header-h` still places the
+anchors and «Ir a…» on a wide screen, where the canvas's estimate is a named divergence (the «Menú»
+panel says so since this day: 3.2 px at 1280 in the audit).
+
+**And a fixed bar over the phone's row lets go by `position: relative`, no longer `static`** (sprint
+31 día 6). `static` took from the sheet the box both of its percentages are of: «Menú» opened at the
+screen's foot, below it, over a page `<main>` hid — on every fixed bar with the row on the phone, 25
+of the audit's 153 combinations, in the three engines. A transparent bar lets go as a transparent one
+does, `absolute` over the cover, weighed (`html … [data-layout]`, 0,5,1) over the script's `fixed`,
+which had kept it fixed over the row. Measured red before at 320 × 568 and 390 × 844, green after;
+sabotaged back to each old value, red again. Four goldens move by those three lines and nothing else.

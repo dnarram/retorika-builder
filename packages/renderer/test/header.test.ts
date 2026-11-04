@@ -595,8 +595,11 @@ describe("the look, as attributes and rules", () => {
     expect(withRow?.hasAttribute("data-phone-row")).toBe(true);
     const hidden = header(site(3, [], { sticky: true, sections: { mobile: "hidden" } }));
     expect(hidden?.hasAttribute("data-phone-row")).toBe(false);
+    // Into the flow, never `static`, which took the phone's sheet's box with it; a transparent bar
+    // over the cover, weighed over the script's `fixed` (sprint 33 día 3).
     expect(css(site(3))).toContain(
-      "  .rb-header[data-sticky][data-phone-row] { position: static; }",
+      "  .rb-header[data-sticky][data-phone-row] { position: relative; }\n" +
+        "  html .rb-header[data-layout][data-sticky][data-phone-row][data-bg=transparent] { position: absolute; }",
     );
   });
 
@@ -1000,7 +1003,7 @@ describe("the phone's menu is a sheet (sprint 32 día 4)", () => {
     const sheet = css(withFold());
     for (const disclosure of [".rb-nav-narrow", ".rb-nav-fold[data-mobile=fold]"]) {
       expect(sheet).toContain(
-        `  ${disclosure} > .rb-nav { box-sizing: border-box; height: calc(100dvh - var(--rb-header-h));\n    overflow: hidden auto;`,
+        `  ${disclosure} > .rb-nav { box-sizing: border-box; height: calc(100dvh - 100%);\n    overflow: hidden auto;`,
       );
       expect(sheet).toContain(
         `  ${disclosure} > .rb-nav a[aria-current] { text-decoration-color: transparent;`,

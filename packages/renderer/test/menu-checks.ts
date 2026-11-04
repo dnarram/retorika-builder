@@ -142,7 +142,10 @@ export async function checkPhoneBar(page: Page, h: HeaderExpectation): Promise<s
   if (!m) return ["3 phone: no header drawn"];
   const out: string[] = [];
   if (m.bar > 72) out.push(`3 phone: the bar is ${m.bar.toFixed(1)} px tall, over 72`);
-  if (h.sticky && m.phoneRow && m.position !== "static") {
+  // A bar lets go into the flow, and a transparent one over the cover: never `static`, which takes
+  // the sheet's box with it (sprint 33 día 3).
+  const letGo = h.background === "transparent" ? "absolute" : "relative";
+  if (h.sticky && m.phoneRow && m.position !== letGo) {
     out.push(`3 phone: a fixed bar over the sections' row should let go, is ${m.position}`);
   }
   if (h.sticky && !m.phoneRow && m.position !== "sticky" && h.background !== "transparent") {
@@ -470,7 +473,8 @@ export interface Snapshot {
   [path: string]: Record<string, string>;
 }
 
-export async function headerSnapshot(page: Page): Promise<Snapshot> {
+/** A page or a frame: the real editor's canvas is a frame of its page (sprint 33 día 3). */
+export async function headerSnapshot(page: Pick<Page, "evaluate">): Promise<Snapshot> {
   return page.evaluate(() => {
     const out: Record<string, Record<string, string>> = {};
     const header = document.querySelector<HTMLElement>("header.rb-header");

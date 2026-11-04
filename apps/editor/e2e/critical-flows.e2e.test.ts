@@ -21,10 +21,13 @@ import {
   fineColumnOf,
   fineSpanOf,
   overlaps,
+  parseDocument,
   ROW_STEP_PX,
 } from "@retorika/schema";
 import type { NodeResult } from "axe-core";
 import { afterAll, beforeAll, describe, it } from "vitest";
+import { headerSnapshot } from "../../../packages/renderer/test/menu-checks.ts";
+import { canvasDocument } from "../audit/canvas-document.ts";
 import {
   HERO_COLUMN_MAX,
   HERO_DEMO,
@@ -23765,6 +23768,27 @@ describe("sprint 31 día 1 — el lienzo maqueta a 1280 y se escala", () => {
   }, 180_000);
 });
 
+/** The open document's header, rewritten in this browser's session, and the editor reloaded on it:
+ * what the «Dónde va» cards write, written by another door so a walk can start from a placed menu.
+ * Here since sprint 33 día 3, which places the menus too; sprint 31 día 4 wrote it for its own. */
+async function placeMenus(page: Page, header: Record<string, unknown>): Promise<void> {
+  await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+  await page.evaluate((patch) => {
+    const raw = localStorage.getItem("retorika.session.v1");
+    if (!raw) throw new Error("no session to place the menus in");
+    const session = JSON.parse(raw) as {
+      openIndex: number;
+      documents: { header?: Record<string, unknown> }[];
+    };
+    const doc = session.documents[session.openIndex];
+    if (!doc) throw new Error("no open document");
+    doc.header = { ...(doc.header ?? {}), ...patch };
+    localStorage.setItem("retorika.session.v1", JSON.stringify(session));
+  }, header);
+  await page.reload({ waitUntil: "networkidle" });
+  await page.frameLocator(PREVIEW).first().locator('[data-section="sec-cover"]').waitFor();
+}
+
 /**
  * **Sprint 31 día 4 — el raíl y «Ir a…» se eligen en el lienzo** (ADR 0060). Solo el modelo: el
  * panel que escribe un sitio es del día 5, así que cada caminata escribe en la sesión de su propio
@@ -23785,26 +23809,6 @@ describe("sprint 31 día 4 — el raíl se elige en el lienzo", () => {
     if (!box) throw new Error("not drawn, so it cannot be pressed");
     await page.mouse.click(box.x + box.width * fx, box.y + box.height * fy);
   };
-
-  /** The open document's header, rewritten in this browser's session, and the editor reloaded on
-   * it: what the «Dónde va» of día 5 will write, written here so the canvas can be walked first. */
-  async function placeMenus(page: Page, header: Record<string, unknown>): Promise<void> {
-    await expect(page.getByText("Guardado en este navegador")).toBeVisible();
-    await page.evaluate((patch) => {
-      const raw = localStorage.getItem("retorika.session.v1");
-      if (!raw) throw new Error("no session to place the menus in");
-      const session = JSON.parse(raw) as {
-        openIndex: number;
-        documents: { header?: Record<string, unknown> }[];
-      };
-      const doc = session.documents[session.openIndex];
-      if (!doc) throw new Error("no open document");
-      doc.header = { ...(doc.header ?? {}), ...patch };
-      localStorage.setItem("retorika.session.v1", JSON.stringify(session));
-    }, header);
-    await page.reload({ waitUntil: "networkidle" });
-    await page.frameLocator(PREVIEW).first().locator('[data-section="sec-cover"]').waitFor();
-  }
 
   /** A box inside the frame, in the frame's own pixels: the page's, before the canvas scales it. */
   const inFrame = (locator: Locator) =>
@@ -24626,6 +24630,266 @@ describe("sprint 33 día 1 — la hoja del móvil bloquea la página", () => {
       await page.keyboard.press("Escape");
       await expect.poll(() => menu.evaluate((d) => (d as HTMLDetailsElement).open)).toBe(false);
       expect(await turn(300)).toBeGreaterThan(0);
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+});
+
+/**
+ * **Sprint 33 día 3 — el editor real contra el documento de su lienzo** (David's decision 2 on
+ * planning). The menu audit opens the canvas's own document — `canvasHtml` with the editor's
+ * stillness rules — in three engines and without the editor, which only Chromium can run; these
+ * three walks are the other half: the real editor, in Chromium, on a site with the pages in the left
+ * column, the sections in the right one and a fixed bar, in the three canvases an owner sees — the
+ * phone view (320), a wide window without a panel (1280 at 0.9125) and a window of 1280 with «Menú»
+ * open (1280 at 0.6156). Each reads the header as the audit's tenth check does, every element of it
+ * with its box, place, display and colours, and compares it with the canvas's document opened alone
+ * at the frame's own size: the editor adds nothing to the header but its outline, which is no box.
+ */
+describe("sprint 33 día 3 — el editor real dibuja la cabecera como su documento", () => {
+  const HEADER = {
+    sticky: true,
+    pages: { shown: true, position: "left" },
+    sections: { shown: true, position: "right", mobile: "fold" },
+  };
+
+  /** Into the canvas, a second page made of «Qué ponemos», and the menus placed. */
+  async function placedSite(page: Page): Promise<FrameLocator> {
+    await intoTheCanvas(page);
+    const frame = page.frameLocator(PREVIEW).first();
+    await frame.locator('[data-section="sec-services"]').click();
+    await frame
+      .locator(
+        '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+      )
+      .click();
+    await expect(frame.locator('.rb-nav-wide nav[aria-label="Páginas"] a')).toHaveText([
+      "Qué ponemos",
+    ]);
+    await sessionHolds(page, (raw) => raw.includes('"slug":"que-ponemos"'), "guardó la página");
+    await placeMenus(page, HEADER);
+    await expect(frame.locator("header.rb-header")).toHaveAttribute("data-sticky", "");
+    return frame;
+  }
+
+  /**
+   * Every difference between the header the editor's frame draws and the one the canvas's document
+   * draws alone, from the same document, at the frame's own width and height (a rail is as tall as
+   * the window), both at the top. The document is served at the editor's own address, so its faces
+   * resolve as the frame's do (`fonts/…` against the parent's URL) and the words are as wide. The
+   * class is not compared: `rb-selected` is the editor's.
+   */
+  async function againstItsDocument(page: Page): Promise<string[]> {
+    const session = JSON.parse(await storedSession(page)) as {
+      openIndex: number;
+      documents: unknown[];
+    };
+    const doc = parseDocument(session.documents[session.openIndex]);
+    const handle = await page.locator(`[data-testid="canvas-card"] ${CANVAS}`).elementHandle();
+    const frame = await handle?.contentFrame();
+    if (!frame) throw new Error("no canvas frame");
+    await frame.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+    await frame.evaluate(() => document.fonts.ready.then(() => undefined));
+    const size = await frame.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+    const editor = await headerSnapshot(frame);
+    const alone = await (await browser.newContext({ viewport: size })).newPage();
+    try {
+      const url = page.url();
+      await alone.route(
+        (u) => u.href === url,
+        (route) =>
+          route.fulfill({
+            contentType: "text/html; charset=utf-8",
+            body: canvasDocument(doc),
+          }),
+      );
+      await alone.goto(url, { waitUntil: "load" });
+      await alone.evaluate(() => document.fonts.ready.then(() => undefined));
+      const theirs = await headerSnapshot(alone);
+      const out: string[] = [];
+      for (const path of [...new Set([...Object.keys(editor), ...Object.keys(theirs)])].sort()) {
+        const a = editor[path];
+        const b = theirs[path];
+        if (!a || !b) {
+          out.push(`${path} is only in ${a ? "the editor" : "the document"}`);
+          continue;
+        }
+        for (const key of Object.keys(a)) {
+          if (key !== "class" && a[key] !== b[key]) {
+            out.push(`${path} ${key}: editor ${a[key]}, document ${b[key]}`);
+          }
+        }
+      }
+      return out;
+    } finally {
+      await alone.context().close();
+    }
+  }
+
+  it("en la vista móvil, la misma cabecera, y «Menú» e «Ir a…» del alto de la pantalla, que Escape cierra", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 950 } });
+    const page = await context.newPage();
+    try {
+      const frame = await placedSite(page);
+      await page.getByRole("button", { name: "Ver en móvil" }).click();
+      await deviceArrived(page, NARROWEST_WIDTH);
+      expect(await againstItsDocument(page)).toEqual([]);
+
+      // Each sheet from the bar's foot to the screen's, the page hidden behind it: the canvas hangs
+      // it from the bar it has (día 3), where it hung from the stylesheet's estimate of one.
+      for (const disclosure of ["details.rb-nav-narrow", "details.rb-nav-fold"]) {
+        const details = frame.locator(disclosure);
+        const isOpen = () => details.evaluate((d) => (d as HTMLDetailsElement).open);
+        const summary = await details.locator("summary").boundingBox();
+        if (!summary) throw new Error(`${disclosure} is not drawn`);
+        await page.mouse.click(summary.x + summary.width / 2, summary.y + summary.height / 2);
+        await expect.poll(isOpen).toBe(true);
+        // «Ir a…»'s panel comes in from 4 px above (`rb-fold-in`, in both targets): measured once
+        // it has arrived, as a visitor's eye does.
+        await details.evaluate((d) =>
+          Promise.all(
+            (d.querySelector(":scope > .rb-nav") as HTMLElement)
+              .getAnimations()
+              .map((a) => a.finished),
+          ),
+        );
+        const m = await details.evaluate((d) => {
+          const bar = (
+            document.querySelector("header.rb-header") as HTMLElement
+          ).getBoundingClientRect();
+          const sheet = (
+            d.querySelector(":scope > .rb-nav") as HTMLElement
+          ).getBoundingClientRect();
+          return {
+            top: sheet.top,
+            foot: bar.bottom,
+            bottom: sheet.bottom,
+            innerHeight,
+            main: getComputedStyle(document.querySelector("main") as Element).visibility,
+          };
+        });
+        expect(Math.abs(m.top - m.foot), `${disclosure} ${JSON.stringify(m)}`).toBeLessThanOrEqual(
+          1,
+        );
+        expect(
+          Math.abs(m.bottom - m.innerHeight),
+          `${disclosure} ${JSON.stringify(m)}`,
+        ).toBeLessThanOrEqual(0.5);
+        expect(m.main).toBe("hidden");
+        await page.keyboard.press("Escape");
+        await expect.poll(isOpen).toBe(false);
+        expect(
+          await details.evaluate(
+            (d) => d.ownerDocument.activeElement === d.querySelector("summary"),
+          ),
+        ).toBe(true);
+      }
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+
+  it("a 1440 sin panel, la misma cabecera, las dos columnas, ninguna «Ir a…», la marca a la vista y el contorno alrededor de las columnas", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 950 } });
+    const page = await context.newPage();
+    try {
+      const frame = await placedSite(page);
+      await deviceArrived(page, DESKTOP_LAYOUT_WIDTH);
+      expect(await canvasZoom(page)).toBeCloseTo(0.9125, 3);
+      expect(await againstItsDocument(page)).toEqual([]);
+      expect(
+        await frame.locator("body").evaluate(() => {
+          const brand = document.querySelector(".rb-header .rb-brand") as HTMLElement;
+          const b = brand.getBoundingClientRect();
+          const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+          return {
+            rails: [...document.querySelectorAll<HTMLElement>(".rb-rail")]
+              .filter((rail) => rail.checkVisibility())
+              .map((rail) => rail.getAttribute("data-side")),
+            fold: document.querySelector<HTMLElement>(".rb-nav-fold")?.checkVisibility() ?? false,
+            onBrand: hit !== null && brand.contains(hit),
+          };
+        }),
+      ).toEqual({ rails: ["left", "right"], fold: false, onBrand: true });
+
+      // Chosen by its right column, away from the entries: the outline goes round both columns (ADR
+      // 0060), drawn `calc(2px / var(--rb-zoom))` of the frame. Its width on screen is not asserted:
+      // Chromium snaps an outline to whole pixels of the frame, so at the 0.74 the panel leaves the
+      // canvas at, 2.7 px become 2 and 1.48 on screen — measured and written for the section's
+      // outline by «sprint 27 día 7 — el cromo mide lo que mide», and ADR 0053's one unmet condition.
+      const right = frame.locator('.rb-rail[data-side="right"]');
+      const box = await right.boundingBox();
+      if (!box) throw new Error("the right column is not drawn");
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height * 0.92);
+      await expect(frame.locator("header.rb-header")).toHaveClass(/rb-selected/);
+      await expect(
+        page.getByRole("complementary", { name: "La cabecera de tu web" }),
+      ).toBeVisible();
+      expect(
+        await frame
+          .locator(".rb-rail")
+          .evaluateAll((rails) => rails.map((rail) => getComputedStyle(rail).outlineStyle)),
+      ).toEqual(["solid", "solid"]);
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+
+  it("a 1280 con «Menú» abierto, la misma cabecera bajo 1, las dos columnas y las notas de lo que el lienzo enseña", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const page = await context.newPage();
+    try {
+      const frame = await placedSite(page);
+      await page.getByRole("button", { name: "Menú", exact: true }).click();
+      const panel = page.getByRole("complementary", { name: "La cabecera de tu web" });
+      await expect(panel).toBeVisible();
+      await expect
+        .poll(() => frame.locator("body").evaluate(() => innerWidth))
+        .toBe(DESKTOP_LAYOUT_WIDTH);
+      const zoom = await canvasZoom(page);
+      expect(zoom).toBeLessThan(1);
+      expect(zoom).toBeGreaterThanOrEqual(CANVAS_ZOOM_FLOOR);
+      expect(await againstItsDocument(page)).toEqual([]);
+      // Both columns stand in a canvas laid out at 1280, and the notes under both places say so.
+      expect(
+        await frame
+          .locator(".rb-rail")
+          .evaluateAll((rails) =>
+            rails.filter((rail) => rail.checkVisibility()).map((r) => r.getAttribute("data-side")),
+          ),
+      ).toEqual(["left", "right"]);
+      await expect(
+        panel.getByText("En el lienzo se ve siempre, porque el lienzo enseña tu web a 1280 px."),
+      ).toHaveCount(2);
+      await expect(
+        panel.getByText("el navegador necesita 1248 px", { exact: false }),
+      ).toBeVisible();
+
+      // The two divergences the panel had not named (día 3). The pages in the bar: the rule under
+      // the current page does not slide in the canvas. The sections behind «Ir a…»: the canvas places
+      // it by a bar of one line — a few pixels off — and over the second line of a stacked bar, which
+      // the audit measured 33.6 px off with the button under it.
+      await panel
+        .getByRole("radiogroup", { name: "Dónde va el menú de páginas" })
+        .getByText("En la barra", { exact: true })
+        .click();
+      await expect(
+        panel.getByText("la raya bajo la página en la que se está no se desliza", { exact: false }),
+      ).toBeVisible();
+      await panel
+        .getByRole("radiogroup", { name: "Dónde va el navegador de secciones" })
+        .getByText("Desplegable «Ir a…»", { exact: true })
+        .click();
+      const fewPixels = panel.getByText("puede quedar unos píxeles más arriba o más abajo", {
+        exact: false,
+      });
+      await expect(fewPixels).toBeVisible();
+      await panel.getByText("Marca arriba", { exact: true }).click();
+      await expect(
+        panel.getByText("queda encima de la segunda línea", { exact: false }),
+      ).toBeVisible();
+      await expect(fewPixels).toHaveCount(0);
     } finally {
       await context.close();
     }
