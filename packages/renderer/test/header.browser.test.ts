@@ -1089,7 +1089,7 @@ describe("the phone's menu is a sheet (sprint 32 día 4)", () => {
             sheetLeft: s.left,
             sheetRight: s.right,
             innerHeight,
-            innerWidth,
+            pageRight: document.body.getBoundingClientRect().right,
             main: getComputedStyle(document.querySelector("main") as Element).visibility,
             word: (
               document.querySelector(".rb-nav-narrow > summary") as HTMLElement
@@ -1098,7 +1098,11 @@ describe("the phone's menu is a sheet (sprint 32 día 4)", () => {
         });
         expect(Math.abs(m.sheetTop - m.barBottom)).toBeLessThanOrEqual(1);
         expect(m.sheetBottom).toBeGreaterThanOrEqual(m.innerHeight - 1);
-        expect([m.sheetLeft, m.sheetRight]).toEqual([0, m.innerWidth]);
+        // Edge to edge of the page, which is the window less a scrollbar's lane where the engine
+        // keeps one: since ADR 0065's `scrollbar-gutter: stable`, Chromium on Linux keeps 15 px even
+        // with its scrollbars hidden (CI read 305 at 320 and 375 at 390), as every desktop with a
+        // classic scrollbar does whenever the page scrolls. A phone overlays: 0, and 320 here.
+        expect([m.sheetLeft, m.sheetRight]).toEqual([0, m.pageRight]);
         expect(m.main).toBe("hidden");
         expect(m.word).toBe("Cerrar");
         // Opening «Ir a…» closes «Menú» (the script's press outside), and its sheet takes over.

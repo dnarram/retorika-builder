@@ -101,7 +101,13 @@ before this ADR — no worse — and that is why the lock is **the first thing o
 ## What is lost, and it is named
 
 - **A gutter in a narrow desktop window with a scrollbar drawn**, at or under 720 px: the page keeps
-  room for a scrollbar that a short page does not need. On a phone, nothing.
+  room for a scrollbar that a short page does not need. On a phone, nothing. **And in CI**: Chromium
+  on Linux keeps the 15 px lane even with its scrollbars hidden, so from this ADR the browser suites
+  there lay a page with a header out 15 px narrower at or under 720 — 305 at 320, 375 at 390, found by
+  the sprint 32 sheet test, which compared the sheet's edge with the window's. It now compares it with
+  the page's, which is the claim it meant; on this ADR's Mac the lane is 0, and with the classic
+  scrollbar of §2 and the scrollbars hidden it reproduces CI's 305 and 375. Every other suite passed in
+  CI as it was, the full e2e included.
 - **An iPhone before iOS 26**: the lock may not hold under a finger once Safari's toolbar has
   collapsed (§3). Not measured on a device; first on the list.
 

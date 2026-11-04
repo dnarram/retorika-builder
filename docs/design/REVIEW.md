@@ -6675,3 +6675,12 @@ sostiene `header.test.ts`.
 sigue en 0,8 KB, las páginas con cabecera en 6,1 KB) en verde. **`a11y` local: 945**, las 936 del
 cierre del 32 y las nueve nuevas. **e2e completa, a la primera: 275 verdes y 1 omitida, 1171 s.**
 Lighthouse no se mide: nada cambia en reposo; el cierre del sprint lo confirma.
+
+**Lo que encontró CI y el Mac no podía ver.** En CI fallaron dos pruebas del sprint 32, no las nuevas:
+la hoja llegaba a 305 a 320 y a 375 a 390, donde la prueba esperaba el borde de la ventana. El Chromium
+de Linux guarda el carril de 15 px del `scrollbar-gutter` aunque oculte sus barras, y el de este Mac,
+que las superpone, guarda 0. La hoja sigue cubriendo la página de borde a borde; lo que cambió es que
+la página acaba en el carril, como en todo escritorio con barra clásica en cuanto la página desplaza.
+La prueba compara ahora con el borde de la página, que es lo que afirmaba; reproducido aquí con la
+barra clásica del envoltorio y las barras ocultas, como en CI: 305 y 375, la hoja con la página. El
+resto de CI, e2e incluida, pasó tal cual. La ADR 0065 lo dice en lo que se pierde.
