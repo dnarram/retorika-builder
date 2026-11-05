@@ -12,7 +12,51 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 4 November 2026, **closing sprint 32 — «una web de 2026».** David found the published
+Last reviewed: 5 November 2026, **closing sprint 33 — «los menús se ven bien y se arrastran».** David
+asked for three things, by priority: a defect alone and first (in the canvas's phone view «Menú» opened
+an endless dark sheet); a systematic audit of how the two menus look, by matrix, in the canvas and in the
+ZIP, in three engines; and dragging the two menus to their place. Seven days in eight PRs (#342–#348,
+día 1 split in two), four decisions of his before planning, four adjustments approving, three decisions
+on día 6; no schema change. What changed for somebody visiting a site: the phone's sheet holds the page
+still ([ADR 0065](../decisions/0065-the-phones-sheet-holds-the-page-still-without-a-byte-of-script.md),
+día 1); the sheet hangs from the bar it has, and a fixed bar over the phone's row lets go into the flow
+(día 3); a transparent cover makes room for the bar it really has — stacked, with the row — and the
+phone's bar is close-set (día 6). For the owner: the canvas no longer runs the header's script and
+closes its sheets with Escape and a press outside (#342); the «Menú» panel names what the canvas still
+shows differently (día 3); a menu is dragged to its zone, also by an entry
+([ADR 0066](../decisions/0066-a-menu-is-dragged-to-its-zone.md), días 4–6); a button too long for the
+phone is said in the panel and in the download review (día 6). The audit is `pnpm audit:menus`. The
+record is `docs/design/REVIEW.md`, sprint 33.
+
+**What sprint 33 leaves open** — the full text, with every number, is the last section of REVIEW's
+sprint 33:
+
+1. **Twenty-four signatures**: 0042, 0043, 0045–0066, all `proposed`. 0065 and 0066 are new; 0063
+   carries notes of días 1, 3 and 6, and 0066 of días 5 and 6 (condition 1 amended by David).
+2. **The nine photographs**, unchanged: the exemption fails on **1 December 2026**.
+3. **Two decisions for David, measured** (rows «Sprint 33 día 6» below): a bar line that wraps by its
+   words covers a transparent cover at 768 (4.8 px with a logo, 50.1 at the generous scale; three ways
+   out); and the button inside «Menú» on a phone (a day; it changes every saved site with a button).
+4. **The iPhone list of PR #250**, with the sheet's lock **first** (item 5 of sprint 32's list below).
+5. **Opened, with their cost** (the plan's «lo que este sprint deja fuera», David's decision 4):
+   - **A zone «bajo la portada»** for a menu: a word more in `SECTIONS_POSITIONS` and its zone (ADR
+     0060 §1: a word is a zone or it is nothing) — schema 1.18.0 and its migration, the renderer, its
+     phone derivation and the matrices: **1–1.5 days**.
+   - **A reading-progress line in the fixed bar** (`animation-timeline: scroll(root)`, CSS only, under
+     `prefers-reduced-motion: no-preference` and `@supports`): **half a day**, with the engines that
+     lack scroll timelines drawing no line.
+   - **The real editor in Firefox and WebKit** (the audit opens the canvas's document there, not the
+     editor): a harness of its own, **a day**.
+6. **Closed by this sprint**: locking the body's scroll under the sheet (día 1, struck below); the
+   audit's three rows of día 3 and día 5's CI-blind finger test (día 6).
+7. **The audit at the close**, the three engines over the code of día 6: 153 combinations each, **no
+   failing state** (2 640 s). The only notes left are the allowed one: «Ir a…»'s `y` in the canvas at
+   1280 against the published measure, now 0.5–1 px in every combination (2.2–3.2 px on día 3, and
+   33.6 on a stacked bar).
+8. **Still noted**: the observer's `rootMargin` (sprint 32, item 8 below).
+9. **Sprint 34 unplanned.**
+
+The review before that: 4 November 2026, **closing sprint 32 — «una web de 2026».** David found the published
 site and its two menus «arcaicos» and asked for them «extremadamente modernos y actuales resaltando el
 movimiento de las páginas del 2026». Eight days, four decisions of his before planning and seven
 adjustments while approving; no schema change. What changed for somebody visiting a site: the bar is of

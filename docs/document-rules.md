@@ -166,6 +166,31 @@ changed.**
   canvas runs none of it (ADR 0062 §5), so what the owner edits is the page at rest that a visitor who
   asked for less movement sees.
 
+**What sprint 33 added (closing it, 5 November 2026): a menu is carried to its place, and the phone's
+sheet holds the page still.**
+
+- **Rule 4: the gesture chooses among the places and makes none**
+  ([ADR 0066](decisions/0066-a-menu-is-dragged-to-its-zone.md)). A menu is now dragged in the canvas,
+  and what a drop writes is one of the words of ADR 0060 — the very patch the panel's card for that
+  place writes —, never a coordinate: the zones are drawn from the renderer's constants, the ghost
+  moves and the menu does not, and a drop off every zone writes nothing. It is the fifth time rule 4
+  has been asked for a position — a menu's, by the gesture an element has had since sprint 25 —, and
+  the answer is the same closed set of places. **The rule
+  is not amended.** Since día 6 the gesture also starts on an entry, past the threshold — a menu of one
+  entry had no ground to hold — and under it the entry is still a link.
+- **Rule 5 keeps its reading.** The zones and the ghost are the editor's chrome in the frame's
+  `<body>`, never in the document and never published; a menu is still references inside the header.
+- **Rule 6: the bar's height is derived from the document, never stored.** The estimate a transparent
+  cover makes room with is now a sum per form (ADR 0063's note of día 6) — a logo, a button, a stacked
+  brand, the sections' row —, all read off choices the document already holds. No field was added,
+  and a palette or scale change carries through it like every other token.
+- **Rule 7 still does not reach the header, and the phone's sheet now holds the page still**
+  ([ADR 0065](decisions/0065-the-phones-sheet-holds-the-page-still-without-a-byte-of-script.md)): the
+  lock is `overflow: hidden` on the root while a sheet is open, inside the header's own 720 px
+  `@media` — part of the header's phone derivation, like the sheet itself, with no patch, no
+  `breakpoints` and no byte of script. The phone's bar is close-set there too (día 6). The schema
+  stayed at 1.17.0 the whole sprint.
+
 ## The role vocabulary, v1
 
 Nine roles and one container:

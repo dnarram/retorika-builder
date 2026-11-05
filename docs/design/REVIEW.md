@@ -7130,3 +7130,100 @@ lo no preparado durante sus comprobaciones, con el e2e corriendo contra ese árb
 salió entera en verde, y la regla queda escrita: nada de commits mientras corre. Y el filtro `-t` de
 Vitest es una expresión regular sobre el nombre completo: los paréntesis de un `describe` no casan
 literalmente.
+
+### Día 7 — colchón y cierre (PR de `test/el-cierre-del-sprint-33`)
+
+**Nada de los días 5 y 6 quedó corto**: el día 6 usó el colchón entero en lo que el día 3 dejó y en
+las tres decisiones de David de ese día, y no dejó nada a medias. El cierre mide, compara y escribe.
+
+**El ZIP contra el inicio del sprint** (`46a97ec`, el cierre del 32), construyendo los 22 documentos del
+corpus con el publicador de cada árbol (la receta del cierre del 32, `build-corpus.mts`):
+
+- cambian **10 de 123 ficheros: todas las páginas de las cuatro webs con cabecera**, y ninguno más.
+  **Las 18 webs sin cabecera salen byte a byte iguales**, y letras, fotos, favicon, `robots.txt` y
+  `sitemap.xml` también;
+- **ningún cambio de marcado**: solo líneas de la hoja de estilo, y cada una de un día:
+  1. día 1 (ADR 0065): `html:has(.rb-nav-narrow[open]) { overflow: hidden }` y `html {
+     scrollbar-gutter: stable }` en el bloque del móvil;
+  2. día 3: la hoja `height: calc(100dvh - 100%)`, y la barra fija sobre la fila del móvil suelta con
+     `relative` (y la transparente con `absolute`);
+  3. día 6: la estimación por forma de la barra (`--rb-bar-h`, en ancho y en móvil, con la fila bajo
+     `:has` donde la web la dibuja: `cabecera-con-marca` en ancho; `menu-y-paginas` y `menu-explicito`
+     en el móvil) y la barra del móvil apretada;
+- **el script, sin un byte de diferencia** en ninguna página: el mismo hash, 829 B gzip.
+
+Los días 2, 4 y 5 no tocan la página publicada (la auditoría y el arrastre son del editor y de las
+pruebas), y el lienzo dejó de ejecutar el script el día 1 sin cambiar un byte de lo publicado.
+
+**Lo que se pidió medir al cierre**, recogido de los días:
+
+| Medida | Resultado |
+|---|---|
+| Las tres reproducciones del día 1 (lienzo a 320; ZIP en Chromium a 390 y 320; WebKit) | la rueda de 2000 px sobre la hoja abierta movía la página 2000 en los tres; el `calc` era válido; el oscuro era el esquema de la barra; el lienzo, además, ejecutaba el script. Hoy: la rueda deja la página donde estaba, en los tres motores y en el lienzo |
+| La auditoría, al empezar (día 2, Chromium) | seis hallazgos, y los mismos en Firefox y WebKit (día 3) |
+| La auditoría, al cerrar (los tres motores sobre el código del día 6) | **153 combinaciones por motor, ningún estado en rojo**, 2640 s |
+| Lienzo contra publicado | cero diferencias sin nombre; la única permitida, la `y` de «Ir a…» a 1280, **0,5–1 px** en toda combinación (2,2–3,2 el día 3, y 33,6 con la barra apilada) |
+| La estimación de la barra | ocho formas a 768, 1024 y 1280 en los tres motores, entre −1 y +16 de la barra medida; exacta en las 24 transparentes a 1280 |
+| El arrastre a zoom 0,9125 (1440 sin panel) | las tres zonas a los 4 px, la columna iluminada al pasar, la suelta escribe la palabra de la tarjeta y «Deshacer» la devuelve en un paso (día 4) |
+| El umbral con el panel abierto (zoom ≈ 0,74) | a medio camino entre 3·zoom y 3 px de pantalla no arma; a 4, sí: la división por el zoom (día 4) |
+| El arrastre a zoom < 0,7 (1280 con panel) | palabras de zonas y fantasma a 12 px de pantalla; la zona son los 240 px de la columna |
+| La barra del móvil a 320 | ≤ 72 px en las 56 combinaciones; doce letras de botón dejan entero un logo de 40 px |
+| El peso | páginas con cabecera 6,1–6,4 KB (6,0–6,4 al cierre del 32), `cabecera-con-marca` 17,8 KB propios de 28, el script 0,8 KB de 2 |
+
+**Lighthouse**, los sujetos en el perfil móvil, contra el cierre del 32:
+
+| Sujeto | Rendimiento | Accesibilidad | Buenas prácticas | SEO | LCP | CLS |
+|---|---|---|---|---|---|---|
+| v1 image-right | 99 | 100 | 100 | 100 | 1,80 s (1,80) | 0,003 (0,003) |
+| v2 image-background | 98 | 100 | 100 | 100 | 2,33 s (2,33) | 0,003 (0,003) |
+| v3 image-left | 98 | 100 | 100 | 100 | 2,33 s (2,33) | 0,003 (0,003) |
+| letra propia `.ttf` | 99 | 100 | 100 | 100 | 1,80 s (1,80) | 0,000 (0,000) |
+| cabecera fija con logo | 100 | 100 | 100 | 100 | 1,35 s (1,35) | 0,002 (0,002) |
+| cabecera en columnas | 100 | 100 | 100 | 100 | 1,35 s (1,35) | 0,004 (0,004) |
+| página por ficha | 100 | 100 | 100 | 100 | 0,90 s (0,90) | 0,000 (0,000) |
+
+**Las mismas cifras que al cierre del 32, una por una.** Lo que el sprint cambia en una página en
+reposo — la sala de la portada bajo una barra transparente, que ningún sujeto lleva, y los huecos de la
+barra del móvil — no mueve ninguna; ninguna composición por debajo de 98.
+
+**Suites del cierre**, una tras otra y nada en paralelo:
+
+| Suite | Resultado |
+|---|---|
+| `pnpm audit:menus` | 153 × 3 motores, 0 en rojo, 2640 s |
+| `pnpm test` | 3685 en verde, 175 ficheros (3657 al cierre del 32) |
+| `typecheck`, `lint` | en verde; 31 avisos, los de siempre |
+| invariantes, golden, `renderer:deps` | en verde |
+| `schema:guard 46a97ec..HEAD` | la forma del documento no cambió: sin migración, el esquema sigue en 1.17.0 |
+| `secrets:scope` | 126 módulos, 30 de cliente, ninguno cruza |
+| `size` | 27 de 27 dentro, el script en 0,8 KB |
+| `test:a11y` local | 1147 en verde (936 al cierre del 32; las de Firefox y WebKit incluidas) |
+| `pnpm lighthouse` | 8 de 8, y los 12 del ZIP desde `file://` en los tres motores |
+| e2e completa | **288 verdes y 1 omitida, 1253 s, a la primera**, con `caffeinate -i` (273 al cierre del 32) |
+
+### Lo que el sprint 33 deja abierto
+
+1. **Veinticuatro firmas**: 0042, 0043 y de la 0045 a la 0066, todas `proposed`. La 0065 y la 0066 son
+   de este sprint; la 0063 lleva notas de los días 1, 3 y 6, y la 0066 de los días 5 y 6 (la
+   condición 1 enmendada por David el día 6).
+2. **Las nueve fotografías a 1600 × 1072**, sin cambios: la exención caduca el **1 de diciembre de
+   2026**, dentro de 26 días.
+3. **Dos decisiones de David, medidas** (backlog, «Sprint 33 día 6»):
+   - una línea de la barra que se parte porque sus palabras no caben tapa la portada transparente a
+     768 (4,8 px con logo, 50,1 en la escala amplia, con capturas); tres salidas con su coste;
+   - el botón dentro de «Menú» en el móvil: un día, y cambia toda web guardada con botón.
+4. **La lista del iPhone (PR #250)**, con el bloqueo de la hoja **lo primero**: abrir «Menú» en el
+   móvil, arrastrar la hoja con el dedo y ver si la página se movió debajo (bug 240859 de WebKit, que
+   en iOS anterior al 26 no respetaba `overflow: hidden` en la raíz con la barra plegada). Después, lo
+   que ya llevaba: el cristal de la barra sobre una foto al bajar, la hoja contra la barra del propio
+   Safari (`100dvh`), la cabecera en columnas, la barra fija y el `<details>` con Escape, el favicon.
+5. **Abiertas en el backlog, con su coste** (la decisión 4 de David al planificar): la zona «bajo la
+   portada» (esquema 1.18.0, migración, renderer, móvil y matrices: 1–1,5 días); la línea de progreso
+   de lectura en la barra fija (`animation-timeline: scroll(root)`, medio día); y el editor real en
+   Firefox y WebKit (un arnés propio, un día).
+6. **Cerradas por el sprint**: bloquear el scroll bajo la hoja (día 1, ADR 0065); las tres filas de la
+   auditoría del día 3 y la prueba del dedo que no podía fallar en CI (día 6).
+7. **Anotado, sin arreglar**: el `rootMargin` del observador, como al cierre del 32.
+8. **Del sprint 32 y anteriores, sin tocar**: lo que lista el backlog, incluidas las decisiones de
+   diseño que esperan su confirmación.
+9. **El sprint 34, sin planificar.**
