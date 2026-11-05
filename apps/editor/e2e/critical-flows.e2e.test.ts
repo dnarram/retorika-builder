@@ -23772,7 +23772,23 @@ describe("sprint 31 día 1 — el lienzo maqueta a 1280 y se escala", () => {
  * what the «Dónde va» cards write, written by another door so a walk can start from a placed menu.
  * Here since sprint 33 día 3, which places the menus too; sprint 31 día 4 wrote it for its own. */
 async function placeMenus(page: Page, header: Record<string, unknown>): Promise<void> {
-  await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+  // **A session with a document open**, and not the «Guardado» label: the label is up from the
+  // cards' own save, whose session has `openIndex: null` (the trap `storedSession` describes). CI
+  // read that session twice on sprint 33 día 5 and found no open document to place the menus in.
+  await sessionHolds(
+    page,
+    (raw) => {
+      const session = JSON.parse(raw || "{}") as {
+        openIndex?: number | null;
+        documents?: unknown[];
+      };
+      return (
+        typeof session.openIndex === "number" &&
+        session.documents?.[session.openIndex] !== undefined
+      );
+    },
+    "guardó un documento abierto",
+  );
   await page.evaluate((patch) => {
     const raw = localStorage.getItem("retorika.session.v1");
     if (!raw) throw new Error("no session to place the menus in");
@@ -25083,6 +25099,475 @@ describe("sprint 33 día 4 — un menú se arrastra a su zona", () => {
       await page.mouse.click(at.x, at.y);
       await expect(header).toHaveClass(/rb-selected/);
       await expect(panel).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+});
+
+/**
+ * **Sprint 33 día 5 — el arrastre completo** (ADR 0066). Los casos que el día 4 dejó para medir uno a
+ * uno, cada uno en su caminata y todas con `page.mouse` (o el dedo por CDP) en la caja dibujada: el
+ * apilado, la barra sin nada, «Ir a…» y la fila, el zoom bajo 1 con el panel, el dedo, la vista de
+ * móvil y la ventana bajo el suelo de legibilidad. Cada una sobre una web con dos páginas convertidas
+ * — «Qué ponemos» y la galería — para que el menú de páginas tenga un hueco entre entradas, y con los
+ * menús colocados por la sesión (`placeMenus`), la otra puerta de lo que escriben las tarjetas.
+ */
+describe("sprint 33 día 5 — el arrastre completo", () => {
+  /** The canvas with two pages made of sections, the menus placed, the page at its top. */
+  async function placedSite(page: Page, header: Record<string, unknown>): Promise<FrameLocator> {
+    await intoTheCanvas(page);
+    const frame = page.frameLocator(PREVIEW).first();
+    for (const id of ["sec-services", "sec-gallery"]) {
+      await frame.locator(`[data-section="${id}"]`).click();
+      await frame
+        .locator(`[data-section="${id}"] .rb-action[aria-label="Convertir esta sección en página"]`)
+        .click();
+    }
+    await expect(frame.locator('.rb-nav-wide nav[data-part="pagesLinks"] a')).toHaveCount(2);
+    // The open document with its three pages, and not merely three slugs: the session the cards
+    // saved holds three proposals and no open one (`openIndex: null`), and CI read it once before
+    // the conversions had been written — `placeMenus` then found no open document.
+    await sessionHolds(
+      page,
+      (raw) => {
+        const session = JSON.parse(raw || "{}") as {
+          openIndex?: number | null;
+          documents?: { pages?: unknown[] }[];
+        };
+        const open =
+          typeof session.openIndex === "number"
+            ? session.documents?.[session.openIndex]
+            : undefined;
+        return open?.pages?.length === 3;
+      },
+      "guardó las dos páginas en el documento abierto",
+    );
+    if (Object.keys(header).length > 0) await placeMenus(page, header);
+    // The reload settles the card before anything is measured on it.
+    await deviceArrived(page, DESKTOP_LAYOUT_WIDTH);
+    await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
+    return frame;
+  }
+
+  /** Where the session says a menu is, once the autosave has written. */
+  const positionOf = (page: Page, menu: "pages" | "sections") =>
+    page.evaluate((menu) => {
+      const raw = localStorage.getItem("retorika.session.v1") ?? "";
+      if (raw === "") return "unsaved";
+      const session = JSON.parse(raw) as {
+        openIndex: number;
+        documents: { header?: Record<string, { position?: string } | undefined> }[];
+      };
+      return session.documents[session.openIndex]?.header?.[menu]?.position ?? "bar";
+    }, menu);
+
+  /** The frame on the screen: its box and its zoom, read now (a panel changes both). */
+  async function frameOnScreen(page: Page) {
+    const card = await page.locator('[data-testid="canvas-card"] iframe').boundingBox();
+    if (!card) throw new Error("no canvas");
+    const zoom = await canvasZoom(page);
+    return {
+      zoom,
+      at: (x: number, y: number) => ({ x: card.x + x * zoom, y: card.y + y * zoom }),
+    };
+  }
+
+  /** A point on the screen of an element's box, at fractions of it. */
+  async function pointIn(locator: Locator, fx = 0.5, fy = 0.5) {
+    const box = await locator.boundingBox();
+    if (!box) throw new Error("not drawn, so it cannot be held");
+    return { x: box.x + box.width * fx, y: box.y + box.height * fy };
+  }
+
+  /** The row's own ground: the wider of the two free ends of its line — the owner's alignment
+   * (here the generated site's, at the end) decides which side its entries leave free. */
+  async function rowGround(frame: FrameLocator) {
+    const row = frame.locator("header nav.rb-nav-row");
+    const first = await row.locator("a").first().boundingBox();
+    const last = await row.locator("a").last().boundingBox();
+    const box = await row.boundingBox();
+    if (!first || !last || !box) throw new Error("the row is not drawn");
+    const left = first.x - box.x;
+    const right = box.x + box.width - (last.x + last.width);
+    expect(Math.max(left, right), "the row has no ground").toBeGreaterThan(40);
+    return left > right
+      ? { x: box.x + left / 2, y: first.y + first.height / 2 }
+      : { x: (last.x + last.width + box.x + box.width) / 2, y: last.y + last.height / 2 };
+  }
+
+  /** Press, cross the threshold, travel to `to` and, unless told otherwise, let go. */
+  async function carry(page: Page, from: Point, to: Point, release = true): Promise<void> {
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(from.x + 6, from.y, { steps: 2 });
+    await page.mouse.move(to.x, to.y, { steps: 12 });
+    if (release) await page.mouse.up();
+  }
+
+  it("apila las secciones bajo las páginas en la columna, el fantasma lo dice antes, y «Deshacer» las devuelve", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 950 } });
+    const page = await context.newPage();
+    try {
+      const frame = await placedSite(page, {
+        pages: { shown: true, position: "left" },
+        sections: { shown: true, position: "row" },
+      });
+      const rail = frame.locator('.rb-rail[data-side="left"]');
+      await expect(rail).toBeVisible();
+      await expect(rail.locator("nav[data-part]")).toHaveCount(1);
+      const { at } = await frameOnScreen(page);
+      // Held by the row's ground and carried over the pages' column: the ghost says it stacks.
+      await carry(page, await rowGround(frame), at(120, 500), false);
+      await expect(frame.locator('.rb-zone[data-zone="left"][data-hot]')).toHaveCount(1);
+      await expect(frame.locator(".rb-menu-ghost")).toContainText("Navegador de secciones");
+      await expect(frame.locator(".rb-menu-ghost-note")).toHaveText(
+        "Se apila bajo el menú de páginas",
+      );
+      await page.mouse.up();
+      await expect.poll(() => positionOf(page, "sections")).toBe("left");
+      await expect(page.locator('p[role="status"]')).toHaveText(
+        "Navegador de secciones: columna izquierda",
+      );
+      // One column, the pages first and the sections under them (ADR 0060 §2).
+      expect(
+        await rail
+          .locator("nav[data-part]")
+          .evaluateAll((navs) => navs.map((nav) => nav.getAttribute("data-part"))),
+      ).toEqual(["pagesLinks", "sectionsLinks"]);
+      await expect(frame.locator("header nav.rb-nav-row")).toBeHidden();
+      // Undo: the row again, the column with the pages alone.
+      await page.getByRole("button", { name: "Deshacer", exact: true }).click();
+      await expect.poll(() => positionOf(page, "sections")).toBe("row");
+      await expect(rail.locator("nav[data-part]")).toHaveCount(1);
+      await expect(frame.locator("header nav.rb-nav-row")).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+
+  it("con la barra sin nada, la zona de la barra es una tira arriba, y soltar ahí le devuelve el alto", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 950 } });
+    const page = await context.newPage();
+    try {
+      const frame = await placedSite(page, {
+        pages: { shown: true, position: "left" },
+        sections: { shown: true, position: "left" },
+        brandWithPages: true,
+      });
+      const header = frame.locator("header.rb-header");
+      await expect(header).toHaveAttribute("data-bar", "none");
+      const pagesNav = frame.locator('.rb-rail[data-side="left"] nav[data-part="pagesLinks"]');
+      const rail = frame.locator('.rb-rail[data-side="left"]');
+      // The column's own ground beside the pages' entries: nearest to the pages, not the sections.
+      const railBox = await rail.boundingBox();
+      const navBox = await pagesNav.boundingBox();
+      if (!railBox || !navBox) throw new Error("the column is not drawn");
+      const ground = { x: railBox.x + railBox.width - 12, y: navBox.y + navBox.height / 2 };
+      const { at } = await frameOnScreen(page);
+      await carry(page, ground, at(760, 20), false);
+      const strip = frame.locator('.rb-zone[data-zone="bar"]');
+      // A strip of the stylesheet's estimate of one bar, across what the column leaves.
+      expect(
+        await strip.evaluate((el) => {
+          const r = el.getBoundingClientRect();
+          return [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)];
+        }),
+      ).toEqual([240, 0, 1040, 72]);
+      await expect(frame.locator('.rb-zone[data-zone="bar"][data-hot]')).toHaveCount(1);
+      await page.mouse.up();
+      await expect.poll(() => positionOf(page, "pages")).toBe("bar");
+      await expect(header).not.toHaveAttribute("data-bar", "none");
+      expect(await header.evaluate((el) => el.getBoundingClientRect().height)).toBeGreaterThan(40);
+      await page.getByRole("button", { name: "Deshacer", exact: true }).click();
+      await expect.poll(() => positionOf(page, "pages")).toBe("left");
+      await expect(header).toHaveAttribute("data-bar", "none");
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+
+  it("lleva las secciones de la fila a «Ir a…», donde estaba su zona, de «Ir a…» a la fila sin abrirlo, y de la fila a la barra", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 950 } });
+    const page = await context.newPage();
+    try {
+      const frame = await placedSite(page, { sections: { shown: true, position: "row" } });
+      const { at } = await frameOnScreen(page);
+      // 1. To the pill: the real one appears where its zone was drawn (decision 6 of the plan: the
+      //    zone is the renderer's constants, not a guess), to a pixel at its top and its right.
+      await carry(page, await rowGround(frame), at(1280 - 16 - 40, 72 + 16 + 18), false);
+      const zone = frame.locator('.rb-zone[data-zone="fold"]');
+      await expect(frame.locator('.rb-zone[data-zone="fold"][data-hot]')).toHaveCount(1);
+      const drawn = await zone.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        return { top: r.top, right: r.right };
+      });
+      await page.mouse.up();
+      await expect.poll(() => positionOf(page, "sections")).toBe("fold");
+      const fold = frame.locator("details.rb-nav-fold");
+      const summary = fold.locator("summary");
+      await expect(summary).toBeVisible();
+      const real = await fold.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        return { top: r.top, right: r.right };
+      });
+      nearInFrame(real.top, drawn.top, "the pill's top against its zone's");
+      nearInFrame(real.right, drawn.right, "the pill's right against its zone's");
+
+      // 2. From the pill's summary back to the row band: written, and the disclosure never opened —
+      //    the release's click is the gesture's (`justDragged`), not the summary's.
+      // The disclosure leaves the page with the drop (no «Ir a…» at any width), so whether it ever
+      // opened is heard by a `toggle` listener set before the hand comes down.
+      await fold.evaluate((d) => {
+        const w = window as unknown as { rbToggled: boolean };
+        w.rbToggled = false;
+        d.addEventListener("toggle", () => {
+          w.rbToggled = true;
+        });
+      });
+      const toggled = () =>
+        frame
+          .locator("body")
+          .evaluate(() => (window as unknown as { rbToggled: boolean }).rbToggled);
+      const bar = await frame.locator("header.rb-header").boundingBox();
+      if (!bar) throw new Error("no bar");
+      await carry(
+        page,
+        await pointIn(summary),
+        { x: bar.x + bar.width / 2, y: bar.y + bar.height + 8 },
+        false,
+      );
+      await expect(frame.locator('.rb-zone[data-zone="row"][data-hot]')).toHaveCount(1);
+      await page.mouse.up();
+      await expect.poll(() => positionOf(page, "sections")).toBe("row");
+      expect(await toggled()).toBe(false);
+      await expect(frame.locator("header nav.rb-nav-row")).toBeVisible();
+
+      // 3. From the row to the bar: the sections back where they started.
+      const barNow = await frame.locator("header.rb-header").boundingBox();
+      if (!barNow) throw new Error("no bar");
+      await carry(page, await rowGround(frame), { x: barNow.x + 200, y: barNow.y + 20 });
+      await expect.poll(() => positionOf(page, "sections")).toBe("bar");
+      await expect(frame.locator('.rb-nav-wide nav[data-part="sectionsLinks"]')).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+
+  it("a 1280 con «Menú» abierto, bajo 1, las zonas y el fantasma en píxeles de pantalla y la suelta en su sitio", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const page = await context.newPage();
+    try {
+      const frame = await placedSite(page, {});
+      await page.getByRole("button", { name: "Menú", exact: true }).click();
+      await expect(
+        page.getByRole("complementary", { name: "La cabecera de tu web" }),
+      ).toBeVisible();
+      await expect.poll(() => canvasZoom(page)).toBeLessThan(0.7);
+      const { zoom, at } = await frameOnScreen(page);
+      expect(zoom).toBeGreaterThanOrEqual(CANVAS_ZOOM_FLOOR);
+      const entries = frame.locator('.rb-nav-wide nav[data-part="pagesLinks"] a');
+      const [a, b] = await Promise.all([
+        entries.nth(0).boundingBox(),
+        entries.nth(1).boundingBox(),
+      ]);
+      if (!a || !b) throw new Error("no entries");
+      const gap = { x: (a.x + a.width + b.x) / 2, y: a.y + a.height / 2 };
+      // A cancel over a zone is not a drop (día 5): the browser took the pointer, and the zone the
+      // hand was passing over is not a place it chose. Nothing written, the zones gone.
+      await carry(page, gap, at(1280 - 120, 500), false);
+      await expect(frame.locator('.rb-zone[data-zone="right"][data-hot]')).toHaveCount(1);
+      await frame
+        .locator("body")
+        .evaluate(() =>
+          document.dispatchEvent(new PointerEvent("pointercancel", { bubbles: true })),
+        );
+      await expect(frame.locator(".rb-zone")).toHaveCount(0);
+      await page.mouse.up();
+      await page.waitForTimeout(600);
+      expect(await positionOf(page, "pages")).toBe("bar");
+      await carry(page, gap, at(1280 - 120, 500), false);
+      // The word in a zone and in the ghost is 12 px of the screen at this zoom (ADR 0053); the
+      // border is drawn 2 px of the screen and snapped by Chromium to whole frame pixels, like the
+      // outline «sprint 27 día 7» measured — so its floor, not its exact value, is asserted.
+      const looks = await frame.locator("body").evaluate(() => {
+        const zone = document.querySelector('.rb-zone[data-zone="right"]') as HTMLElement;
+        const ghost = document.querySelector(".rb-menu-ghost") as HTMLElement;
+        return {
+          zoneFont: Number.parseFloat(getComputedStyle(zone).fontSize),
+          ghostFont: Number.parseFloat(getComputedStyle(ghost).fontSize),
+          border: Number.parseFloat(getComputedStyle(zone).borderTopWidth),
+          width: zone.getBoundingClientRect().width,
+        };
+      });
+      expect(looks.zoneFont * zoom).toBeCloseTo(12, 1);
+      expect(looks.ghostFont * zoom).toBeCloseTo(12, 1);
+      expect(looks.border * zoom).toBeGreaterThanOrEqual(1.5);
+      // The zone is the column's 240 px of the page, whatever the screen makes of them.
+      expect(looks.width).toBe(240);
+      await expect(frame.locator('.rb-zone[data-zone="right"][data-hot]')).toHaveCount(1);
+      await page.mouse.up();
+      await expect.poll(() => positionOf(page, "pages")).toBe("right");
+      await expect(frame.locator('.rb-rail[data-side="right"]')).toBeVisible();
+      await expect(
+        page
+          .getByRole("radiogroup", { name: "Dónde va el menú de páginas" })
+          .getByRole("radio", { name: "Columna derecha" }),
+      ).toBeChecked();
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+
+  it("con un dedo: sin la cabecera elegida desplaza el lienzo; elegida, arrastra el menú", async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1440, height: 950 },
+      hasTouch: true,
+    });
+    const page = await context.newPage();
+    try {
+      const frame = await placedSite(page, { pages: { shown: true, position: "left" } });
+      const rail = frame.locator('.rb-rail[data-side="left"]');
+      const cdp = await page.context().newCDPSession(page);
+      const scrollY = () => frame.locator("body").evaluate(() => Math.round(window.scrollY));
+
+      // A finger as Playwright's own touchscreen makes one (`Input.dispatchTouchEvent`), the same
+      // instrument for both halves. `synthesizeScrollGesture` scrolled the canvas on this Mac and not
+      // on CI's Linux (scrollY 0 after 5 s, PR #347's first run): it is not used here.
+      const touch = (type: "touchStart" | "touchMove" | "touchEnd", p: Point) =>
+        cdp.send("Input.dispatchTouchEvent", {
+          type,
+          touchPoints: type === "touchEnd" ? [] : [{ x: Math.round(p.x), y: Math.round(p.y) }],
+        });
+      const trace = async (from: Point, to: Point) => {
+        await touch("touchStart", from);
+        for (let step = 1; step <= 12; step += 1) {
+          await touch("touchMove", {
+            x: from.x + ((to.x - from.x) * step) / 12,
+            y: from.y + ((to.y - from.y) * step) / 12,
+          });
+        }
+        // The finger holds still before it lifts, so the lift starts no fling.
+        for (let hold = 0; hold < 3; hold += 1) {
+          await page.waitForTimeout(60);
+          await touch("touchMove", to);
+        }
+      };
+      /** The canvas's scroll, once it has stopped moving: a tap during a fling stops the fling and
+       * is no click (measured: CI's tap after the finger's scroll chose nothing). */
+      const still = async () => {
+        let last = -1;
+        await expect
+          .poll(
+            async () => {
+              const now = await scrollY();
+              const same = now === last;
+              last = now;
+              return same;
+            },
+            { intervals: [150] },
+          )
+          .toBe(true);
+        return last;
+      };
+
+      // 1. Unchosen: the column keeps the browser's own touch action, and one finger drawn up the
+      //    column's ground scrolls the canvas and draws nothing.
+      expect(await rail.evaluate((el) => getComputedStyle(el).touchAction)).toBe("auto");
+      const ground = await pointIn(rail, 0.5, 0.85);
+      await trace(ground, { x: ground.x, y: ground.y - 400 });
+      await expect(frame.locator(".rb-zone")).toHaveCount(0);
+      await touch("touchEnd", ground);
+      expect(await still()).toBeGreaterThan(100);
+      expect(await positionOf(page, "pages")).toBe("left");
+      await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
+      expect(await still()).toBe(0);
+
+      // 2. Chosen by a tap on the same ground, then carried by a finger to the right column.
+      const tapAt = await pointIn(rail, 0.5, 0.85);
+      await page.touchscreen.tap(tapAt.x, tapAt.y);
+      await expect(frame.locator("header.rb-header")).toHaveClass(/rb-selected/);
+      expect(await rail.evaluate((el) => getComputedStyle(el).touchAction)).toBe("none");
+      await expect.poll(() => canvasZoom(page)).toBeLessThan(0.9);
+      const { at } = await frameOnScreen(page);
+      const from = await pointIn(rail, 0.5, 0.85);
+      const to = at(1280 - 120, 500);
+      await trace(from, to);
+      await expect(frame.locator('.rb-zone[data-zone="right"][data-hot]')).toHaveCount(1);
+      await touch("touchEnd", to);
+      await expect.poll(() => positionOf(page, "pages")).toBe("right");
+      await expect(frame.locator('.rb-rail[data-side="right"]')).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+
+  it("en la vista de móvil no se dibuja ni se escribe nada, la mano no aparece, y el panel no lo ofrece", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 950 } });
+    const page = await context.newPage();
+    try {
+      const frame = await placedSite(page, {});
+      // In the desktop view the panel says the menus can be dragged.
+      await page.getByRole("button", { name: "Menú", exact: true }).click();
+      const panel = page.getByRole("complementary", { name: "La cabecera de tu web" });
+      const sentence = panel.getByText("También puedes arrastrar el menú en el lienzo", {
+        exact: false,
+      });
+      await expect(sentence).toHaveCount(1);
+      await panel.getByRole("button", { name: "Cerrar la cabecera" }).click();
+      await page.getByRole("button", { name: "Ver en móvil" }).click();
+      await deviceArrived(page, NARROWEST_WIDTH);
+      await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
+      // The phone's row of sections is the one grip a phone draws: pressed and moved, nothing.
+      const row = frame.locator("header nav.rb-nav-row");
+      await expect(row).toBeVisible();
+      expect(await row.evaluate((el) => getComputedStyle(el).cursor)).not.toBe("grab");
+      const box = await row.boundingBox();
+      if (!box) throw new Error("no row");
+      const before = await positionOf(page, "sections");
+      await page.mouse.move(box.x + box.width - 6, box.y + box.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(box.x + 20, box.y + 200, { steps: 10 });
+      await expect(frame.locator(".rb-zone, .rb-menu-ghost")).toHaveCount(0);
+      await page.mouse.up();
+      expect(await positionOf(page, "sections")).toBe(before);
+      // And the panel, opened in the phone view, does not offer what the phone cannot do.
+      await page.getByRole("button", { name: "Menú", exact: true }).click();
+      await expect(panel).toBeVisible();
+      await expect(sentence).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+
+  it("bajo el suelo de legibilidad (1024 con panel), soltar en el segundo lado escribe la palabra y la nota dice que se pliega", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 950 } });
+    const page = await context.newPage();
+    try {
+      const frame = await placedSite(page, {
+        pages: { shown: true, position: "left" },
+        sections: { shown: true, position: "row" },
+      });
+      await page.setViewportSize({ width: 1024, height: 900 });
+      await page.getByRole("button", { name: "Menú", exact: true }).click();
+      const panel = page.getByRole("complementary", { name: "La cabecera de tu web" });
+      await expect(panel).toBeVisible();
+      await expect.poll(() => frame.locator("body").evaluate(() => innerWidth)).toBe(887);
+      await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
+      // At 887 no column stands: the pages' has folded into the bar, and the row is there.
+      await expect(frame.locator('.rb-rail[data-side="left"]')).toBeHidden();
+      const { at } = await frameOnScreen(page);
+      await carry(page, await rowGround(frame), at(887 - 120, 500), false);
+      await expect(frame.locator('.rb-zone[data-zone="right"][data-hot]')).toHaveCount(1);
+      await page.mouse.up();
+      await expect.poll(() => positionOf(page, "sections")).toBe("right");
+      await expect(frame.locator('.rb-rail[data-side="right"]')).toBeHidden();
+      await expect(
+        panel.getByText(
+          "En esta ventana el lienzo enseña tu web a 887 px, y la columna se pliega en la barra.",
+          { exact: false },
+        ),
+      ).toHaveCount(2);
     } finally {
       await context.close();
     }

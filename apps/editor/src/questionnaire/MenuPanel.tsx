@@ -135,6 +135,10 @@ export function MenuPanel({
   const groupId = useId();
   const state = headerStateFor(doc, pageId);
   const chosenAction = state.actionChoices.find((choice) => choice.key === state.actionKey);
+  // The cards' twin on the canvas (ADR 0066): said once, under the first «Dónde va» drawn, and only
+  // in the desktop view — the phone's canvas has no zones and its place is «En el móvil».
+  const dragNote =
+    device === "desktop" ? <p className={noteClass}>{es["editor.menuPanel.whereDrag"]}</p> : null;
 
   return (
     <aside aria-labelledby={headingId} className={`${PANEL_WIDTH} gap-4 p-5 ${panelCard}`}>
@@ -237,6 +241,7 @@ export function MenuPanel({
               value={state.pagesPosition}
               onSelect={(position) => onSetHeader(pagesPositionPatch(doc, position))}
             />
+            {dragNote}
             {/* The sliding rule is the published page's alone (ADR 0063): in the canvas the
                 current page's entry keeps the rule's colour, still. A rail marks it by its edge. */}
             {state.pagesPosition === "bar" ? (
@@ -291,6 +296,7 @@ export function MenuPanel({
               value={state.sectionsPosition}
               onSelect={(position) => onSetHeader(sectionsPositionPatch(doc, position))}
             />
+            {state.pagesMenu.drawn ? null : dragNote}
             {sectionsPlaceNotes(state, layoutWidth, device).map((note) => (
               <p key={note} className={noteClass}>
                 {note}

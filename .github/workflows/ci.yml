@@ -203,6 +203,12 @@ jobs:
     # a limit on the step measures the suite. The job's 40 is only a ceiling for a runner that never
     # comes back. **Accepted as they stand by David on 23 October 2026**, planning sprint 27.
     #
+    # **The step gets 30 since 5 November 2026 (sprint 33 día 5), decided by David on that day's
+    # measurement.** The suite's own duration on the three runs before: 1311 s (PR #345), 1323 s
+    # (#346) and 1509 s (#347's second run, cut by the 25 at 1500 s with every walk run) — the
+    # sprint 33 día 5 walks are 59 s of that, and the other ~130 s is the runner. Grazed, the limit
+    # measured the runner again. The job's 40 stands.
+    #
     # **One job again since sprint 27 día 1.** There were two from sprint 26 día 3: this one and
     # `e2e (swap)`, the same walks with the canvas on the route it had since sprint 15, chosen by
     # `localStorage["rb.canvas"]`. Both blocked, both took 17–20 minutes, and every defect had to be
@@ -239,7 +245,7 @@ jobs:
       # default reporter prints nothing at all before a kill, which cost a diagnosis on 22 October.
       # It was the retired `e2e (swap)` job that carried this flag; the lesson outlived the job.
       - run: pnpm e2e --reporter=verbose
-        timeout-minutes: 25
+        timeout-minutes: 30
 
   security:
     name: security

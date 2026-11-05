@@ -165,6 +165,7 @@
   "editor.menuPanel.where": "Dónde va",
   "editor.menuPanel.wherePages": "Dónde va el menú de páginas",
   "editor.menuPanel.whereSections": "Dónde va el navegador de secciones",
+  "editor.menuPanel.whereDrag": "También puedes arrastrar el menú en el lienzo hasta su sitio: cógelo por el hueco entre sus entradas.",
   "editor.menuPanel.position.bar": "En la barra",
   "editor.menuPanel.position.row": "En su fila",
   "editor.menuPanel.position.left": "Columna izquierda",
