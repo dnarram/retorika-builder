@@ -120,6 +120,16 @@ day by a probe the audit had no check for. Captures in
    «Menú» keeps only its bars below some width: against ADR 0063's «the word stays». (d) Leave it.
    The bound's half of the audit's check 3 stays out of `a11y` until it is decided.
 
+**Sprint 33 día 5 — a test that cannot fail in CI.** `header.browser.test.ts`, «does not let a finger
+move it either (a touch gesture, Chromium)» (ADR 0065), synthesizes a touch scroll with
+`Input.synthesizeScrollGesture` and asserts the page did **not** move. On this Mac the gesture moves a
+page (1506 px before ADR 0065's fix, measured on día 1); on CI's Linux the same gesture over the
+editor's canvas moved nothing in 5 s (PR #347's first e2e run), so there the lock's test would pass
+with or without the lock. Cheap to close: the test first moves the page with the sheet closed, proving
+its instrument, and only then opens the sheet — or uses `Input.dispatchTouchEvent`, which the día 5
+walk measured scrolling the canvas. Not fixed on día 5: it is the renderer's suite, and día 5 touched
+the editor only.
+
 The review before that: 3 November 2026, **closing sprint 31 — «cada menú tiene su sitio».** David asked for the
 pages menu and the section navigator to become two independent elements, each with its own place on the
 page and not tied to one bar above it, and for the navigator to gain dispositions of its own with their

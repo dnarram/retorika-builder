@@ -25109,12 +25109,27 @@ describe("sprint 33 día 5 — el arrastre completo", () => {
         .click();
     }
     await expect(frame.locator('.rb-nav-wide nav[data-part="pagesLinks"] a')).toHaveCount(2);
+    // The open document with its three pages, and not merely three slugs: the session the cards
+    // saved holds three proposals and no open one (`openIndex: null`), and CI read it once before
+    // the conversions had been written — `placeMenus` then found no open document.
     await sessionHolds(
       page,
-      (raw) => (raw.match(/"slug":"/g) ?? []).length >= 3,
-      "guardó las dos páginas",
+      (raw) => {
+        const session = JSON.parse(raw || "{}") as {
+          openIndex?: number | null;
+          documents?: { pages?: unknown[] }[];
+        };
+        const open =
+          typeof session.openIndex === "number"
+            ? session.documents?.[session.openIndex]
+            : undefined;
+        return open?.pages?.length === 3;
+      },
+      "guardó las dos páginas en el documento abierto",
     );
     if (Object.keys(header).length > 0) await placeMenus(page, header);
+    // The reload settles the card before anything is measured on it.
+    await deviceArrived(page, DESKTOP_LAYOUT_WIDTH);
     await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
     return frame;
   }
@@ -25400,17 +25415,32 @@ describe("sprint 33 día 5 — el arrastre completo", () => {
       const cdp = await page.context().newCDPSession(page);
       const scrollY = () => frame.locator("body").evaluate(() => Math.round(window.scrollY));
 
-      // 1. Unchosen: one finger on the column's ground scrolls the canvas, and draws nothing.
+      // A finger as Playwright's own touchscreen makes one (`Input.dispatchTouchEvent`), the same
+      // instrument for both halves. `synthesizeScrollGesture` scrolled the canvas on this Mac and not
+      // on CI's Linux (scrollY 0 after 5 s, PR #347's first run): it is not used here.
+      const touch = (type: "touchStart" | "touchMove" | "touchEnd", p: Point) =>
+        cdp.send("Input.dispatchTouchEvent", {
+          type,
+          touchPoints: type === "touchEnd" ? [] : [{ x: Math.round(p.x), y: Math.round(p.y) }],
+        });
+      const trace = async (from: Point, to: Point) => {
+        await touch("touchStart", from);
+        for (let step = 1; step <= 12; step += 1) {
+          await touch("touchMove", {
+            x: from.x + ((to.x - from.x) * step) / 12,
+            y: from.y + ((to.y - from.y) * step) / 12,
+          });
+        }
+      };
+
+      // 1. Unchosen: the column keeps the browser's own touch action, and one finger drawn up the
+      //    column's ground scrolls the canvas and draws nothing.
+      expect(await rail.evaluate((el) => getComputedStyle(el).touchAction)).toBe("auto");
       const ground = await pointIn(rail, 0.5, 0.85);
-      await cdp.send("Input.synthesizeScrollGesture", {
-        x: Math.round(ground.x),
-        y: Math.round(ground.y),
-        yDistance: -400,
-        gestureSourceType: "touch",
-        speed: 1200,
-      });
-      await expect.poll(scrollY).toBeGreaterThan(100);
+      await trace(ground, { x: ground.x, y: ground.y - 400 });
       await expect(frame.locator(".rb-zone")).toHaveCount(0);
+      await touch("touchEnd", ground);
+      await expect.poll(scrollY).toBeGreaterThan(100);
       expect(await positionOf(page, "pages")).toBe("left");
       await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
 
@@ -25423,18 +25453,7 @@ describe("sprint 33 día 5 — el arrastre completo", () => {
       const { at } = await frameOnScreen(page);
       const from = await pointIn(rail, 0.5, 0.85);
       const to = at(1280 - 120, 500);
-      const touch = (type: "touchStart" | "touchMove" | "touchEnd", p: Point) =>
-        cdp.send("Input.dispatchTouchEvent", {
-          type,
-          touchPoints: type === "touchEnd" ? [] : [{ x: Math.round(p.x), y: Math.round(p.y) }],
-        });
-      await touch("touchStart", from);
-      for (let step = 1; step <= 12; step += 1) {
-        await touch("touchMove", {
-          x: from.x + ((to.x - from.x) * step) / 12,
-          y: from.y + ((to.y - from.y) * step) / 12,
-        });
-      }
+      await trace(from, to);
       await expect(frame.locator('.rb-zone[data-zone="right"][data-hot]')).toHaveCount(1);
       await touch("touchEnd", to);
       await expect.poll(() => positionOf(page, "pages")).toBe("right");
