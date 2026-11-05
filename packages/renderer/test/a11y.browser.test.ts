@@ -2,6 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { type Browser, chromium } from "@playwright/test";
 import type { NodeResult, Result } from "axe-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { headerWidths } from "../src/index.ts";
 import {
   type Combination,
   closeCombination,
@@ -160,7 +161,7 @@ describe("one copy of each menu, nothing over the brand, and the sheet (the audi
             ...(await checkCopies(page, h, width, "rest")),
             ...(await checkCovers(page)),
           ];
-          if (width <= 720) {
+          if (width <= h.phoneWidth) {
             // The bar's bound (3a), since its finding 2 was decided and the bar close-set (día 6).
             findings.push(...(await checkPhoneBar(page, h)));
             await setDisclosures(page, "details.rb-nav-narrow", true);
@@ -221,11 +222,12 @@ describe("each menu is announced once, from wherever it stands", () => {
     const mobile = header?.sections?.mobile ?? "row";
     const twoRails =
       pages !== "bar" && (sections === "left" || sections === "right") && pages !== sections;
+    const { phone, rails } = headerWidths(c.document);
     const sectionsRail =
-      (sections === "left" || sections === "right") && width >= (twoRails ? 1248 : 1024);
-    if (width <= 720) return { Páginas: "menu", Secciones: mobile === "fold" ? "fold" : "row" };
+      (sections === "left" || sections === "right") && width >= (twoRails ? 1248 : rails);
+    if (width <= phone) return { Páginas: "menu", Secciones: mobile === "fold" ? "fold" : "row" };
     return {
-      Páginas: pages !== "bar" && width >= 1024 ? "rail" : "bar",
+      Páginas: pages !== "bar" && width >= rails ? "rail" : "bar",
       Secciones: sectionsRail
         ? "rail"
         : sections === "row"
@@ -346,7 +348,11 @@ describe("the menu is announced the same way, whatever the width", () => {
               el.checkVisibility(),
             ).length,
           }));
-          expect(visible).toEqual(width <= 720 ? { wide: 0, narrow: 1 } : { wide: 1, narrow: 0 });
+          expect(visible).toEqual(
+            width <= headerWidths(c.document).phone
+              ? { wide: 0, narrow: 1 }
+              : { wide: 1, narrow: 0 },
+          );
         } finally {
           await closeCombination(page);
         }

@@ -41,7 +41,7 @@ export { fontFaceCss } from "./fonts.ts";
  * either would drift the first time one changed, and the copy in the editor is the one that would
  * be telling somebody a number while they decide.
  */
-export type { ActionEntry, HeaderSettings } from "./header.ts";
+export type { ActionEntry, HeaderSettings, HeaderWidths } from "./header.ts";
 export {
   actionEntry,
   GLASS_BACKGROUNDS,
@@ -50,6 +50,7 @@ export {
   headerPhoneRow,
   headerPlaces,
   headerSettings,
+  headerWidths,
   homeMenuLabel,
   RAIL_FOLD_WIDTH,
   RAIL_WIDTH,

@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 import type { RetorikaDocument } from "@retorika/schema";
+import { headerWidths } from "../src/index.ts";
 import { measureOverflow } from "./browser-fixtures.ts";
 
 /**
@@ -30,6 +31,10 @@ export interface HeaderExpectation {
   brandWithPages: boolean;
   /** Two rails on opposite sides, which need 1248 px before the second stands (ADR 0060 §3). */
   twoRails: boolean;
+  /** The header's own widths (sprint 34 día 1): the phone layout's widest screen, and the narrowest
+   * a rail stands on. Read from the renderer, as the stylesheet reads them. */
+  phoneWidth: number;
+  railsWidth: number;
 }
 
 export function expectHeader(doc: RetorikaDocument): HeaderExpectation {
@@ -45,17 +50,19 @@ export function expectHeader(doc: RetorikaDocument): HeaderExpectation {
     brandWithPages: header?.brandWithPages === true,
     twoRails:
       pages !== "bar" && (sections === "left" || sections === "right") && pages !== sections,
+    phoneWidth: headerWidths(doc).phone,
+    railsWidth: headerWidths(doc).rails,
   };
 }
 
-/** The rails that stand at `width`: the pages' from 1024, the sections' from 1024 or, when two stand
- * on opposite sides, from 1248 (ADR 0060 §3). */
+/** The rails that stand at `width`: the pages' from the header's rail width (1024), the sections'
+ * from it too or, when two stand on opposite sides, from 1248 (ADR 0060 §3). */
 export function railsStanding(h: HeaderExpectation, width: number): ("left" | "right")[] {
   const out: ("left" | "right")[] = [];
-  if (h.pages !== "bar" && width >= 1024) out.push(h.pages);
+  if (h.pages !== "bar" && width >= h.railsWidth) out.push(h.pages);
   if (
     (h.sections === "left" || h.sections === "right") &&
-    width >= (h.twoRails ? 1248 : 1024) &&
+    width >= (h.twoRails ? 1248 : h.railsWidth) &&
     !out.includes(h.sections)
   ) {
     out.push(h.sections);
@@ -70,7 +77,7 @@ export function expectedCopies(
   width: number,
   state: State,
 ): Record<Part, number> {
-  if (width <= 720) {
+  if (width <= h.phoneWidth) {
     return {
       pages: state === "menu" ? 1 : 0,
       sections: h.mobile === "row" ? 1 : h.mobile === "fold" && state === "fold" ? 1 : 0,

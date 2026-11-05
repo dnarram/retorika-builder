@@ -10,7 +10,8 @@ import {
   RAIL_WIDTH,
   TWO_RAILS_FOLD_WIDTH,
 } from "../src/header.ts";
-import { buildCss, GLASS_BACKGROUNDS, GLASS_MIX, render } from "../src/index.ts";
+import { buildCss, GLASS_BACKGROUNDS, GLASS_MIX, headerWidths, render } from "../src/index.ts";
+import { loadCorpus } from "./corpus.ts";
 
 /**
  * The header is the owner's (ADR 0057): what `header.ts` draws from the document's `header` and the
@@ -1145,5 +1146,19 @@ describe("the phone's menu is a sheet (sprint 32 día 4)", () => {
     expect(sheet).toContain(
       "    .rb-nav-narrow[open] > .rb-nav > a:nth-child(n + 7) { --rb-i: 6; }",
     );
+  });
+});
+
+/**
+ * **The header's widths are a function of the document** (sprint 34 día 1): the phone layout's widest
+ * screen and the narrowest a rail stands on, read by every `@media` of the header and by every check
+ * and editor sentence that used to assume 720 and 1024. A model change with no change of behaviour:
+ * every document answers what the literals said, and the goldens are byte for byte what they were.
+ */
+describe("the header's widths", () => {
+  it("are 720 and 1024 for every document of the corpus, as the literals were", () => {
+    for (const entry of loadCorpus()) {
+      expect(headerWidths(entry.document), entry.name).toEqual({ phone: 720, rails: 1024 });
+    }
   });
 });

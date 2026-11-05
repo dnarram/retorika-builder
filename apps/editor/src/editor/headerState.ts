@@ -7,11 +7,11 @@ import {
   headerPhoneRow,
   headerPlaces,
   headerSettings,
+  headerWidths,
   homeMenuLabel,
   MENU_MIN_ENTRIES,
   pageLabel,
   pageMenuEntries,
-  RAIL_FOLD_WIDTH,
   sectionLabel,
   sectionMenuEntries,
   TWO_RAILS_FOLD_WIDTH,
@@ -163,6 +163,9 @@ export interface HeaderState {
    * sections' from 1248 when the pages stand in the other column (ADR 0060 §3). */
   pagesFoldWidth: number;
   sectionsFoldWidth: number;
+  /** The widest canvas the header's phone layout reaches (sprint 34 día 1): the renderer's
+   * `headerWidths`, which writes the `@media` it is read from. */
+  phoneWidth: number;
   /** The look as the renderer reads it, every gap filled by its default (día 6). */
   look: HeaderLook;
   /** The parts this page draws, in `HEADER_PARTS` order — the ones the exact controls are offered
@@ -291,6 +294,7 @@ export function headerStateFor(doc: RetorikaDocument, pageId: string | undefined
   }
 
   const places = headerPlaces(doc, page);
+  const widths = headerWidths(doc);
 
   const actionLeavesMenu =
     chosen?.kind === "page"
@@ -345,8 +349,9 @@ export function headerStateFor(doc: RetorikaDocument, pageId: string | undefined
       (settings.brandName || settings.logo !== undefined || action !== undefined),
     rails: places.rails,
     barEmpty: places.barEmpty,
-    pagesFoldWidth: RAIL_FOLD_WIDTH,
-    sectionsFoldWidth: places.rails.length === 2 ? TWO_RAILS_FOLD_WIDTH : RAIL_FOLD_WIDTH,
+    pagesFoldWidth: widths.rails,
+    sectionsFoldWidth: places.rails.length === 2 ? TWO_RAILS_FOLD_WIDTH : widths.rails,
+    phoneWidth: widths.phone,
     look: {
       background: settings.background,
       align: settings.align,
