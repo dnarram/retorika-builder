@@ -6989,6 +6989,20 @@ umbral lo alcanzaría. La nota del día 5 en la ADR 0066 lo dice.
   igual. Aquí se midió en rojo antes del arreglo (1506 px); en CI no se ha probado nunca que su
   instrumento mueva algo. Al backlog: que primero mueva la página con la hoja cerrada.
 
+**Y en la segunda vuelta de CI, tres cosas más**:
+- **`placeMenus` esperaba la etiqueta «Guardado en este navegador»**, que está a la vista desde el
+  guardado de las tarjetas (`openIndex: null`): la trampa que el comentario de `storedSession` ya
+  describe. Cayó en una caminata del sprint 31 («abre «Ir a…» sin elegir nada»), que nunca había
+  fallado por ello. Ahora espera a que la sesión tenga un documento abierto, para todas las que la usan.
+- **El toque que elige la cabecera no hizo clic**: llegaba con la inercia del deslizamiento anterior
+  aún en marcha, y un toque durante una inercia la para en vez de hacer clic. El dedo se queda quieto
+  antes de levantarse, y la caminata espera a que el desplazamiento se detenga antes y después de
+  volver arriba.
+- **El paso e2e se cortó en su tope de 25 min** con la suite entera corrida: 1509 s, contra 1311 s y
+  1323 s en las PR de los días 3 y 4. Las siete caminatas del día suman 59 s en CI; el resto es el
+  runner. **David decidió el 5 de noviembre subir el paso a 30**; el comentario de `ci.yml` lo dice
+  con las tres medidas, y el techo de 40 del trabajo sigue.
+
 **Lo que costó**: la fila de la web generada alinea sus entradas al final, así que su suelo está a la
 izquierda (se toma el lado libre más ancho); y tras soltar en la fila, `<details>` ya no está en la
 página, así que «no se abrió» se oye con un `toggle` y no se lee después.

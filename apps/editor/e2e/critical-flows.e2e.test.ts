@@ -23772,7 +23772,23 @@ describe("sprint 31 día 1 — el lienzo maqueta a 1280 y se escala", () => {
  * what the «Dónde va» cards write, written by another door so a walk can start from a placed menu.
  * Here since sprint 33 día 3, which places the menus too; sprint 31 día 4 wrote it for its own. */
 async function placeMenus(page: Page, header: Record<string, unknown>): Promise<void> {
-  await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+  // **A session with a document open**, and not the «Guardado» label: the label is up from the
+  // cards' own save, whose session has `openIndex: null` (the trap `storedSession` describes). CI
+  // read that session twice on sprint 33 día 5 and found no open document to place the menus in.
+  await sessionHolds(
+    page,
+    (raw) => {
+      const session = JSON.parse(raw || "{}") as {
+        openIndex?: number | null;
+        documents?: unknown[];
+      };
+      return (
+        typeof session.openIndex === "number" &&
+        session.documents?.[session.openIndex] !== undefined
+      );
+    },
+    "guardó un documento abierto",
+  );
   await page.evaluate((patch) => {
     const raw = localStorage.getItem("retorika.session.v1");
     if (!raw) throw new Error("no session to place the menus in");
@@ -25431,6 +25447,28 @@ describe("sprint 33 día 5 — el arrastre completo", () => {
             y: from.y + ((to.y - from.y) * step) / 12,
           });
         }
+        // The finger holds still before it lifts, so the lift starts no fling.
+        for (let hold = 0; hold < 3; hold += 1) {
+          await page.waitForTimeout(60);
+          await touch("touchMove", to);
+        }
+      };
+      /** The canvas's scroll, once it has stopped moving: a tap during a fling stops the fling and
+       * is no click (measured: CI's tap after the finger's scroll chose nothing). */
+      const still = async () => {
+        let last = -1;
+        await expect
+          .poll(
+            async () => {
+              const now = await scrollY();
+              const same = now === last;
+              last = now;
+              return same;
+            },
+            { intervals: [150] },
+          )
+          .toBe(true);
+        return last;
       };
 
       // 1. Unchosen: the column keeps the browser's own touch action, and one finger drawn up the
@@ -25440,9 +25478,10 @@ describe("sprint 33 día 5 — el arrastre completo", () => {
       await trace(ground, { x: ground.x, y: ground.y - 400 });
       await expect(frame.locator(".rb-zone")).toHaveCount(0);
       await touch("touchEnd", ground);
-      await expect.poll(scrollY).toBeGreaterThan(100);
+      expect(await still()).toBeGreaterThan(100);
       expect(await positionOf(page, "pages")).toBe("left");
       await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
+      expect(await still()).toBe(0);
 
       // 2. Chosen by a tap on the same ground, then carried by a finger to the right column.
       const tapAt = await pointIn(rail, 0.5, 0.85);
