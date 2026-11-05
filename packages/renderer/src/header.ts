@@ -212,15 +212,31 @@ export const SCROLLBAR_LANE = 15;
 /** The page's measure, `--rb-measure` in `build.ts`: the widest the bar's content box gets. */
 const MEASURE = 1200;
 
-/** A label's width in em in the first family of a stack — the table's, or the fallback for a
- * family the product does not ship — at a weight, as the bar draws it (capitals, if so). */
-function labelEm(label: string, stack: string, weight: 400 | 700, upper: boolean): number {
+/**
+ * A label's width in px at `size` in the first family of a stack — the table's, or the fallback for
+ * a family the product does not ship — at a weight, as the bar draws it (capitals, if so). **A
+ * fallback glyph is rounded up to the pixel**: the system letters it stands for are hinted, and a
+ * hinted glyph's advance is a whole pixel at 16 px on Linux, where the table's em was measured at
+ * 100 px without. CI found it on the first run of the day's PR: a `system-ui` bar drawn 1–2 px past
+ * the whole margin, which on a bar of fifty glyphs the rounding alone explains.
+ */
+function labelPx(
+  label: string,
+  stack: string,
+  weight: 400 | 700,
+  upper: boolean,
+  size: number,
+): number {
   const family = (stack.split(",")[0] ?? "").trim().replace(/^['"]|['"]$/g, "");
-  const advances = (GLYPH_ADVANCES[family] ?? FALLBACK_ADVANCES)[weight];
+  const shipped = GLYPH_ADVANCES[family];
+  const advances = (shipped ?? FALLBACK_ADVANCES)[weight];
   const widest = Math.max(...Object.values(advances));
   const glyphs = [...(upper ? label.toUpperCase() : label)];
-  const sum = glyphs.reduce((total, glyph) => total + (advances[glyph] ?? widest), 0);
-  return sum * KERNING_MARGIN + (upper ? 0.06 * glyphs.length : 0);
+  const sum = glyphs.reduce((total, glyph) => {
+    const em = advances[glyph] ?? widest;
+    return total + (shipped ? em * size : Math.ceil(em * size));
+  }, 0);
+  return sum * KERNING_MARGIN + (upper ? 0.06 * size * glyphs.length : 0);
 }
 
 /** The text of a node, its own and its children's. */
@@ -264,7 +280,7 @@ function barLines(doc: RetorikaDocument, settings: HeaderSettings, page: Page): 
   const heading = doc.theme["font.heading"];
   const body = doc.theme["font.body"];
   const text = (label: string, stack: string, weight: 400 | 700, upper: boolean) =>
-    labelEm(label, stack, weight, upper) * size;
+    labelPx(label, stack, weight, upper, size);
   const xl = px("space.xl");
   const navGap = px(`space.${settings.gap}`);
 

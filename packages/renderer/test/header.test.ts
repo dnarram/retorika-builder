@@ -25,6 +25,9 @@ import { loadCorpus } from "./corpus.ts";
 const theme = {
   ...(Object.fromEntries(TOKEN_KEYS.map((key) => [key, `value-${key}`])) as Theme),
   "size.body": "1rem",
+  // A shipped family, so the fold's numbers below are the table's and not a platform's fallback.
+  "font.heading": "Inter, sans-serif",
+  "font.body": "Inter, sans-serif",
   "space.xs": "4px",
   "space.sm": "8px",
   "space.md": "16px",
@@ -1170,10 +1173,12 @@ describe("the header's widths", () => {
     for (const entry of loadCorpus()) {
       const widths = headerWidths(entry.document);
       if (entry.name === "cabecera-con-marca") {
-        // «Taberna Santo Domingo» in bold with its logo, two pages and «Contacto», and the button:
-        // 40 px over 720 by the glyphs' sum, where the bar itself breaks at 720 (the browser's
-        // bisection in `header.browser.test.ts`). The one golden the fold moved.
-        expect(widths, entry.name).toEqual({ phone: 760, rails: 1024, over: 0 });
+        // «Taberna Santo Domingo» in bold with its logo, two pages in Charter — a family the
+        // product does not ship, counted at the fallback: the widest of macOS's and Linux's
+        // letters, to the pixel — and the button: 77 px over 720 by the glyphs' sum, where the bar
+        // itself breaks at 720 on this Mac (the bisection in `header.browser.test.ts`). The one
+        // golden the fold moved.
+        expect(widths, entry.name).toEqual({ phone: 797, rails: 1024, over: 0 });
       } else {
         expect(widths, entry.name).toEqual({ phone: 720, rails: 1024, over: 0 });
       }

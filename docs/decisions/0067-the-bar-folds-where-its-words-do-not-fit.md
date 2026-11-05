@@ -65,8 +65,11 @@ family at 700; the button its words at 700 and `space.lg` each side; the line th
 `space.xl` between them, the brand on its own line when stacked; and the sections' row, where the page
 draws one at every width, a line that has to fit too. **A family the product does not ship** — a
 system stack, an owner's own font — is counted at the 95th percentile, glyph by glyph, of the three
-type pairs' six system stacks as the machine that generated the table drew them. A glyph the table did
-not measure counts as the family's widest.
+type pairs' six system stacks as the machine that generated the table drew them **and of DejaVu Sans
+and Serif, the letter a Linux machine draws `system-ui` and `serif` with** — the first run of the
+day's PR in CI found a `system-ui` bar breaking 42–50 px past a fold measured on macOS alone, which
+is exactly the loss the first draft of this ADR named and did not cover. A glyph the table did not
+measure counts as the family's widest.
 
 The line fits at a viewport `w` when it is no wider than `min(1200, w − 15 − rails − 2 × space.xl)`:
 the page's measure, the lane of a classic scroll bar (which a `@media` width counts and the bar's
@@ -130,9 +133,10 @@ byte for byte — twenty-one of the twenty-two corpus sites, and the one that mo
   asked, and this is what the `em` would buy.
 - **A viewport width that is not a whole number** — Windows scaling, a zoomed window — falls between
   N and N + 1, where no query applies, exactly as 720 and 721 always did.
-- **Fonts this machine did not draw**: the fallback for an unshipped family is the p95 of six system
-  stacks as macOS drew them; Linux CI falls to a wider letter (DejaVu), and an owner's own font has no
-  bound at all. The conservative test runs where the fonts are.
+- **Fonts no measured machine draws**: the fallback for an unshipped family is the widest, glyph by
+  glyph, of macOS's six system stacks and DejaVu's two; a platform with a wider letter than both, or
+  an owner's own font, has no bound. The conservative test runs where the fonts are — on this Mac and
+  on CI's Linux, which is how DejaVu got in.
 
 ## What this does not decide
 

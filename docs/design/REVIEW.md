@@ -7308,16 +7308,26 @@ webs (las del corpus con cabecera y el teaser en las tres parejas × tres escala
 logo con su tamaño guardado) abiertas con el pliegue reescrito a 720 en el html, y el ancho real al que
 se parte cada barra buscado por bisección entre 721 y 1700:
 
-| Familias servidas (EB Garamond, Inter) | Holgura de la estimación sobre la verdad |
+| En este Mac (la verdad con la letra del sistema de macOS) | Holgura de la estimación sobre la verdad |
 |---|---|
-| teaser, escala compacta | 0–12 px |
-| teaser, escala por defecto | 7–24 px |
-| teaser, escala amplia | 6–31 px |
-| `cabecera-con-marca` (cuerpo en Charter, no servida: la caída) | 40 px, 48 de ellos de la caída y el margen |
-| un logo sin tamaño guardado (4 : 1 contra el 1 : 1 de la ficha) | 110–140 px, a propósito |
+| teaser, pareja `classic-display` (cuerpo en Charter, no servida) | 47–76 px |
+| teaser, pareja `modern-sans` (cuerpo en `system-ui`) | 81–98 px |
+| teaser, pareja `editorial-serif` (las dos pilas de sistema) | 131–142 px |
+| `cabecera-con-marca` (cuerpo en Charter) | 77 px |
+| un logo sin tamaño guardado (4 : 1 contra el 1 : 1 de la ficha) | 110–140 px más, a propósito |
 
-**Nunca por debajo**, y **bajo los 40 px que esperaba David** en toda familia servida; la prueba lo
-asevera y la holgura se imprime en cada pasada. **El saboteo de David** vive dentro de la prueba: tres
+**Nunca por debajo**; la prueba lo asevera y la holgura se imprime en cada pasada. **Y lo que CI
+enseñó en la primera vuelta de la PR**: con la caída medida solo en este Mac (las seis pilas de sistema
+de las tres parejas), la barra de `modern-sans` se partía en el Linux de CI 42–50 px más allá del
+pliegue — `system-ui` cae allí a DejaVu Sans, más ancha que la SF de aquí, y además con *hinting*: cada
+glifo avanza un píxel entero a 16 px. La caída es ahora el máximo glifo a glifo de las seis pilas de
+macOS **y de DejaVu Sans y Serif** (el generador las trae de su versión 2.37 a `.scratch/` si faltan), y
+un glifo de la caída se redondea al píxel por arriba. Es por eso que las holguras de arriba son las que
+son: en este Mac la verdad es la letra estrecha, y la estimación cuenta la ancha. **La cota de 40 px que
+esperaba David es para las familias servidas, y hoy no la ejercita ningún sitio**: las veinte webs de la
+verdad llevan una pila de sistema en el cuerpo, y `openHtml` no sirve los bytes de las fuentes, así que
+una web con las dos familias servidas se mediría con la letra del sistema de todos modos. **Día 3**: la
+verdad con las fuentes servidas, y la cota de 40 medida sobre ellas. **El saboteo de David** vive dentro de la prueba: tres
 etiquetas de veinte letras pliegan la barra a 768 y «Menú» se ve; el html reescrito para que no se
 pliegue, la comprobación 11 pone en rojo la línea partida. **La comprobación 11** (`checkHoldsItsLines`,
 `menu-checks.ts`) no lee N: con la tira dibujada, la barra no mide más que su `--rb-bar-h` + 1; entra en
@@ -7326,8 +7336,8 @@ pliegue, la comprobación 11 pone en rojo la línea partida. **La comprobación 
 móvil donde la cabecera es la del móvil.
 
 **Lo que cambia en una web guardada**: ninguna de las 21 del corpus cuyas palabras caben desde 721; y
-`cabecera-con-marca` («Taberna Santo Domingo» en negrita con su logo) se pliega hasta 760, por tres
-líneas de `@media` en su golden, leídas. Nada del script.
+`cabecera-con-marca` («Taberna Santo Domingo» en negrita con su logo, el cuerpo en Charter) se pliega
+hasta 797, por tres líneas de `@media` en su golden, leídas. Nada del script.
 
 **Lo que enseñó `a11y`**: dos pruebas de la columna (diez entradas en un raíl a 1280) se pusieron en
 rojo porque la primera versión dejaba sin tope la banda sin columnas: diez entradas que nunca caben en
