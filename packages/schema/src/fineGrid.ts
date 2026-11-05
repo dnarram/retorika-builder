@@ -134,6 +134,22 @@ export function gapRowsFor(spaceMd: unknown): number {
 }
 
 /**
+ * A theme length in pixels (sprint 34 día 2): `Npx` as it is, `Nrem` at the root's 16 px — the one
+ * size no document changes — and anything else refused, because a guess here becomes a bar that
+ * folds where it should not. The theme has stored `space.*` in pixels since 1.6.0 and `size.*` in rem
+ * since the scales were written; the header's own estimate of its strip (`headerWidths` in the
+ * renderer) is the first reader that needs both in one unit.
+ */
+export function tokenPx(value: unknown): number {
+  const match = typeof value === "string" ? /^(\d+(?:\.\d+)?)(px|rem)$/.exec(value.trim()) : null;
+  if (!match) {
+    throw new Error(`tokenPx: a theme length must be px or rem, not ${JSON.stringify(value)}`);
+  }
+  const n = Number.parseFloat(match[1] ?? "0");
+  return match[2] === "rem" ? n * 16 : n;
+}
+
+/**
  * A catalog placement — twelve columns, content rows — written in the fine grid's units.
  *
  * **Horizontally exact**: column `c` becomes unit `(c − 1) · 8 + 1` and a span of `s` becomes

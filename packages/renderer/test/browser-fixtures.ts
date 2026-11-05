@@ -1062,6 +1062,26 @@ export function transparentCoverCombinations(): Combination[] {
   );
 }
 
+/**
+ * **The same combination with short words** (sprint 34 día 2): «Carta», «Fotos» and «Reservar» for
+ * the teaser's pages, and a short business name. The teaser's own labels fold the bar into the
+ * phone's up to the tablet's widths (ADR 0067), so without this twin the wide form between 721 and
+ * 1023 would be measured on no real content at all.
+ */
+export function shortLabelled(combination: Combination): Combination {
+  const labels = ["Carta", "Fotos", "Reservar"];
+  const doc = combination.document;
+  return {
+    ...combination,
+    id: `${combination.id}/short`,
+    document: parseDocument({
+      ...doc,
+      siteName: "El Corte",
+      pages: doc.pages.map((p, i) => (i === 0 ? p : { ...p, menuLabel: labels[i - 1] })),
+    }),
+  };
+}
+
 /** The header combinations that draw a rail: the ones a width between 1024 and 1247 says something
  * new about, since that is where a rail stands alone or falls. */
 export function railCombinations(): Combination[] {

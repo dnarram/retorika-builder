@@ -11,11 +11,13 @@ import {
   webkit,
 } from "@playwright/test";
 import { type Header, parseDocument, type RetorikaDocument } from "@retorika/schema";
-import { PALETTES } from "@retorika/tokens";
+import { buildTheme, PALETTES, SCALES, TYPE_PAIRS } from "@retorika/tokens";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { render } from "../src/index.ts";
+import { GLYPH_ADVANCES } from "../src/glyphAdvances.ts";
+import { headerWidths, render } from "../src/index.ts";
 import { headerCase, openHtml } from "./browser-fixtures.ts";
-import { ASSETS_DIR, DOCUMENTS_DIR } from "./corpus.ts";
+import { ASSETS_DIR, DOCUMENTS_DIR, loadCorpus } from "./corpus.ts";
+import { checkHoldsItsLines } from "./menu-checks.ts";
 
 /**
  * **The header, in the browser that has to hold it** (ADR 0057).
@@ -1507,7 +1509,10 @@ describe("the bar's estimate against the bar it measures (sprint 33 día 6)", ()
       return false;
     }
   };
-  const LOGO = { name: true, logo: { src: "assets/portada.png" } };
+  // With its stored size (the fixture is 2 × 2): a logo with none is counted four times as wide as
+  // tall by the fold's estimate (ADR 0067), which folded this form at 768 and measured the phone's
+  // bar instead of the one this test is about.
+  const LOGO = { name: true, logo: { src: "assets/portada.png", width: 2, height: 2 } };
   /** The form, and the lines it is drawn on: the brand's own and the rest's, then the row. */
   const FORMS: readonly { name: string; header: Partial<Header>; lines: number }[] = [
     { name: "one line", header: {}, lines: 1 },
@@ -1610,4 +1615,160 @@ describe("the bar's estimate against the bar it measures (sprint 33 día 6)", ()
       }
     });
   }
+});
+
+/**
+ * **The fold's estimate against the width the bar really breaks at** (sprint 34 día 2, ADR 0067;
+ * David's condition: the estimate is conservative on purpose, and it is measured, not supposed).
+ *
+ * `headerWidths` sums the advances of every glyph of what the bar holds and says up to which width
+ * the bar is the phone's. Here each site is opened **with its fold written back to 720** — the
+ * `@media` lines rewritten in the html — and the widest viewport at which its one line wraps is found
+ * by bisection: the truth. The estimate must never be under it, and David's expected slack is under
+ * 40 px: a bar folded that much earlier than it had to is the price of never wrapping. The logo is
+ * given its stored size here (2 × 2, the fixture's), so the number is the words'; a logo with no stored
+ * size is counted four times as wide as tall, by design, and the one case of that below only has to
+ * come out long. **David's sabotage**: three labels of twenty letters, and the html rewritten so the bar
+ * never folds — the audit's check 11 must go red at 768.
+ */
+describe("the fold's estimate is never under the width the bar breaks at (sprint 34 día 2)", () => {
+  /** The html with its fold undone: `@media` lines of the header written back to 720 and 1024. */
+  const unfolded = (doc: RetorikaDocument): string => {
+    const w = headerWidths(doc);
+    if (w.phone === "always") throw new Error("a bar that never fits has no fold to undo");
+    let html = render(doc, "html").html;
+    html = html
+      .replaceAll(`(max-width: ${w.phone}px)`, "(max-width: 720px)")
+      .replaceAll(`(min-width: ${w.phone + 1}px)`, "(min-width: 721px)");
+    if (w.rails !== 1024)
+      html = html.replaceAll(`(min-width: ${w.rails}px)`, "(min-width: 1024px)");
+    return html;
+  };
+  /** Whether the bar has wrapped at this width: taller than its own estimate of its lines. */
+  const wraps = (page: Page) =>
+    page.evaluate(() => {
+      const header = document.querySelector<HTMLElement>(".rb-header");
+      const probe = document.createElement("div");
+      probe.style.cssText = "position:absolute;visibility:hidden;height:var(--rb-bar-h)";
+      document.querySelector("main")?.append(probe);
+      const estimate = probe.getBoundingClientRect().height;
+      probe.remove();
+      return (header?.getBoundingClientRect().height ?? 0) > estimate + 1;
+    });
+  /** The widest viewport in [721, 1700] at which the bar wraps, or 720 when none. */
+  async function truthOf(doc: RetorikaDocument): Promise<number> {
+    const page = await openHtml(browser, unfolded(doc), 1700, "truth");
+    try {
+      let lo = 720;
+      let hi = 1700;
+      if (await wraps(page)) return 1700;
+      while (hi - lo > 1) {
+        const mid = Math.floor((lo + hi) / 2);
+        await page.setViewportSize({ width: mid, height: 900 });
+        if (await wraps(page)) lo = mid;
+        else hi = mid;
+      }
+      return lo;
+    } finally {
+      await page.context().close();
+    }
+  }
+  const sizedLogo = { name: true, logo: { src: "assets/portada.png", width: 2, height: 2 } };
+  const sites: [string, RetorikaDocument][] = [
+    ...loadCorpus()
+      .filter((entry) => entry.document.header !== undefined)
+      .map((entry): [string, RetorikaDocument] => [entry.name, entry.document]),
+    ...TYPE_PAIRS.flatMap((pair) =>
+      SCALES.flatMap((scale) =>
+        [false, true].map((logo): [string, RetorikaDocument] => {
+          const base = headerCase(
+            "truth",
+            PALETTES[0]?.id ?? "",
+            logo ? { brand: sizedLogo } : {},
+          ).document;
+          return [
+            `teaser ${pair.id} ${scale.id}${logo ? " with a logo" : ""}`,
+            parseDocument({
+              ...base,
+              theme: buildTheme({
+                paletteId: PALETTES[0]?.id ?? "",
+                typePairId: pair.id,
+                scaleId: scale.id,
+              }),
+            }),
+          ];
+        }),
+      ),
+    ),
+  ];
+
+  /** Whether both of the bar's families are in the glyph table: the 40 px expectation is for them.
+   * A family the product does not ship is counted at the fallback — the widest of six system stacks,
+   * glyph by glyph — and may run longer, by design; it only has to come out at or over the truth
+   * (`cabecera-con-marca`'s body is Charter: 40 over, 48 of them on the fallback and the margin). */
+  const shipped = (doc: RetorikaDocument) =>
+    (["font.heading", "font.body"] as const).every((key) => {
+      const family = (doc.theme[key].split(",")[0] ?? "").trim().replace(/^['"]|['"]$/g, "");
+      return family in GLYPH_ADVANCES;
+    });
+
+  for (const [name, doc] of sites) {
+    const bound = shipped(doc) ? ", by under 40 px" : " (a family the product does not ship)";
+    it(`${name}: the estimate is at or over the truth${bound}`, async () => {
+      const truth = await truthOf(doc);
+      const estimate = headerWidths(doc);
+      expect(estimate.phone, name).not.toBe("always");
+      const phone = estimate.phone as number;
+      process.stdout.write(
+        `fold ${name}: truth ${truth}, estimate ${phone}, slack ${phone - truth}\n`,
+      );
+      expect(phone, `${name}: truth ${truth}`).toBeGreaterThanOrEqual(truth);
+      if (shipped(doc)) expect(phone - truth, `${name}: slack`).toBeLessThan(40);
+    });
+  }
+
+  it("counts a logo with no stored size as four times as wide as tall, and comes out long", async () => {
+    const doc = headerCase("unsized", PALETTES[0]?.id ?? "", {
+      brand: { name: true, logo: { src: "assets/portada.png" } },
+    }).document;
+    const truth = await truthOf(doc);
+    const estimate = headerWidths(doc);
+    expect(estimate.phone).not.toBe("always");
+    expect(estimate.phone as number).toBeGreaterThanOrEqual(truth);
+    expect((estimate.phone as number) - truth).toBeGreaterThan(40);
+  });
+
+  it("three labels of twenty letters: folded, the bar holds; unfolded by sabotage, check 11 is red at 768", async () => {
+    const base = headerCase("twenty", PALETTES[0]?.id ?? "", {}).document;
+    const doc = parseDocument({
+      ...base,
+      pages: base.pages.map((p, i) => (i === 0 ? p : { ...p, menuLabel: "Reservas para grupos" })),
+    });
+    const w = headerWidths(doc);
+    expect(w.phone === "always" || w.phone >= 768, JSON.stringify(w)).toBe(true);
+    // Folded: at 768 the strip is not drawn and the bar is the phone's.
+    const folded = await openHtml(browser, render(doc, "html").html, 768, "twenty");
+    try {
+      expect(await checkHoldsItsLines(folded)).toEqual([]);
+      expect(await folded.locator(".rb-nav-wide").evaluate((el) => el.checkVisibility())).toBe(
+        false,
+      );
+      expect(
+        await folded
+          .locator("details.rb-nav-narrow > summary")
+          .evaluate((el) => el.checkVisibility()),
+      ).toBe(true);
+    } finally {
+      await folded.context().close();
+    }
+    // Sabotaged: the fold written back to 720, the strip drawn at 768 and wrapped — red.
+    const sabotaged = await openHtml(browser, unfolded(doc), 768, "twenty/sabotaged");
+    try {
+      const findings = await checkHoldsItsLines(sabotaged);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]).toMatch(/^11 lines: .* a line wrapped$/);
+    } finally {
+      await sabotaged.context().close();
+    }
+  });
 });

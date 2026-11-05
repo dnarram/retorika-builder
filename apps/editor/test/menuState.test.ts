@@ -20,7 +20,16 @@ import es from "../src/locales/es.json" with { type: "json" };
  * in the editor until it drifted.
  */
 
-const theme = Object.fromEntries(TOKEN_KEYS.map((key) => [key, `value-${key}`])) as Theme;
+// Placeholders, except the lengths the header's own estimate reads (`headerWidths`, sprint 34 día 2).
+const theme = {
+  ...(Object.fromEntries(TOKEN_KEYS.map((key) => [key, `value-${key}`])) as Theme),
+  "size.body": "1rem",
+  "space.xs": "4px",
+  "space.sm": "8px",
+  "space.md": "16px",
+  "space.lg": "24px",
+  "space.xl": "48px",
+} as Theme;
 
 function heading(id: string, text: string): Section["content"][number] {
   return { id, role: "heading", hidden: false, slot: "headline", value: { kind: "text", text } };

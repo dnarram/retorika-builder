@@ -165,7 +165,7 @@ export interface HeaderState {
   sectionsFoldWidth: number;
   /** The widest canvas the header's phone layout reaches (sprint 34 día 1): the renderer's
    * `headerWidths`, which writes the `@media` it is read from. */
-  phoneWidth: number;
+  phoneWidth: number | "always";
   /** The look as the renderer reads it, every gap filled by its default (día 6). */
   look: HeaderLook;
   /** The parts this page draws, in `HEADER_PARTS` order — the ones the exact controls are offered
@@ -349,8 +349,13 @@ export function headerStateFor(doc: RetorikaDocument, pageId: string | undefined
       (settings.brandName || settings.logo !== undefined || action !== undefined),
     rails: places.rails,
     barEmpty: places.barEmpty,
-    pagesFoldWidth: widths.rails,
-    sectionsFoldWidth: places.rails.length === 2 ? TWO_RAILS_FOLD_WIDTH : widths.rails,
+    pagesFoldWidth: widths.rails === "none" ? Number.POSITIVE_INFINITY : widths.rails,
+    sectionsFoldWidth:
+      widths.rails === "none"
+        ? Number.POSITIVE_INFINITY
+        : places.rails.length === 2
+          ? Math.max(TWO_RAILS_FOLD_WIDTH, widths.rails)
+          : widths.rails,
     phoneWidth: widths.phone,
     look: {
       background: settings.background,

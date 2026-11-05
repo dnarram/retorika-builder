@@ -10,7 +10,16 @@ import { render } from "../src/index.ts";
  * it travels only where a header does — never to the editor's canvas.
  */
 
-const theme = Object.fromEntries(TOKEN_KEYS.map((key) => [key, `value-${key}`])) as Theme;
+// Placeholders, except the lengths the header's own estimate reads (`headerWidths`, sprint 34 día 2).
+const theme = {
+  ...(Object.fromEntries(TOKEN_KEYS.map((key) => [key, `value-${key}`])) as Theme),
+  "size.body": "1rem",
+  "space.xs": "4px",
+  "space.sm": "8px",
+  "space.md": "16px",
+  "space.lg": "24px",
+  "space.xl": "48px",
+} as Theme;
 
 function section(id: string, catalogId: string, title: string): Section {
   return {

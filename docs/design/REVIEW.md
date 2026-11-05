@@ -7267,3 +7267,89 @@ cambian, y se quedan como estaban.
 **Suites.** `typecheck`, `lint`, `test` (3686, una más), invariantes, golden (cero cambios),
 `renderer:deps` y `size` (el script sigue en 0,8 KB) en verde. **`a11y` local: 1147**, las del cierre del
 33. **e2e completa, a la primera: 288 verdes y 1 omitida, 1247 s. Caminatas reescritas: cero.**
+
+### Día 2 — la barra se pliega donde sus palabras no caben (PR de `feat/la-barra-se-pliega-donde-no-cabe`, ADR 0067)
+
+**Primero se midió el factor, y el 0,55 cayó.** Una sonda sobre 29 etiquetas reales (las palabras del
+catálogo para el menú, los nombres de negocio del corpus, «Inicio», «Menú», «Ir a…», los botones, dos
+de veinte letras) en las 40 familias que el producto sirve, con los bytes del propio publicador, a los
+dos pesos y en mayúsculas con el `letter-spacing` de la barra, en los tres motores — que coinciden a
+tres decimales:
+
+| | Media por familia | La etiqueta más ancha |
+|---|---|---|
+| Regular | 0,31 (Big Shoulders Display) – 0,65 (Unbounded) | hasta 0,84 («Menú») |
+| Negrita | 0,31 (Yanone Kaffeesatz) – 0,69 (Unbounded) | hasta 0,88 |
+| Mayúsculas, regular | 0,38 – 0,82 | hasta 1,00 |
+| Mayúsculas, negrita | 0,40 – 0,86 | hasta 1,03 |
+
+Un único k seguro para toda familia (0,84) hace que el teaser sea «siempre Menú» a cualquier ancho; un
+k por familia a su percentil 95 pliega 90–130 px antes de lo necesario (medido contra la verdad, abajo).
+**David eligió la medida que no es un factor**: una tabla del avance de cada glifo, por familia y peso,
+generada y commiteada (`glyphAdvances.ts`, `pnpm fonts:advances`: 40 familias × 2 pesos × 120 glifos —
+el ASCII imprimible y lo que añade el español, más «…», las comillas, los guiones y el euro — medidos
+con diez copias de cada glifo a 100 px y sin kerning), con un 3 % de margen por el kerning que la tabla
+no lleva y 0,06 em más por carácter en mayúsculas; y para una familia que el producto no sirve — una
+pila de sistema, una letra propia — el percentil 95 glifo a glifo de las seis pilas de sistema de las
+tres parejas (por rango más cercano, que con seis es la más ancha: el primer intento usaba la fórmula de
+la sonda, que daba la segunda, y dejó tres estimaciones 6–8 px por debajo de la verdad).
+
+**La estimación** (`headerWidths`, ADR 0067): lee los nodos que `headerNodes` dibuja para cada página y
+suma con los huecos de la hoja — entradas, menús, tira, marca (el logo a 40 px por su proporción
+guardada, o **4 : 1 si no la guarda**), botón, la fila — tres líneas por página según qué columnas
+estén de pie; cabe a un ancho `w` si la línea ≤ `min(1200, w − 15 − columnas − 2 × space.xl)`; **N**
+es el mayor ancho al que no cabe, en forma cerrada por banda, **sin tope**: pasa de 1247 si hace falta,
+y si la línea no cabe ni en la medida, `{ phone: "always", rails: "none" }`, con el bloque del móvil
+sin `@media`, sin columnas y sin reglas de ancho. `tokenPx` en el esquema lee px y rem y rechaza lo
+demás. Las seis fichas de prueba con tema de relleno ganan longitudes reales: la estimación no adivina.
+
+**La verdad, por bisección** («the fold's estimate is never under the width the bar breaks at»): veinte
+webs (las del corpus con cabecera y el teaser en las tres parejas × tres escalas × con y sin logo, el
+logo con su tamaño guardado) abiertas con el pliegue reescrito a 720 en el html, y el ancho real al que
+se parte cada barra buscado por bisección entre 721 y 1700:
+
+| Familias servidas (EB Garamond, Inter) | Holgura de la estimación sobre la verdad |
+|---|---|
+| teaser, escala compacta | 0–12 px |
+| teaser, escala por defecto | 7–24 px |
+| teaser, escala amplia | 6–31 px |
+| `cabecera-con-marca` (cuerpo en Charter, no servida: la caída) | 40 px, 48 de ellos de la caída y el margen |
+| un logo sin tamaño guardado (4 : 1 contra el 1 : 1 de la ficha) | 110–140 px, a propósito |
+
+**Nunca por debajo**, y **bajo los 40 px que esperaba David** en toda familia servida; la prueba lo
+asevera y la holgura se imprime en cada pasada. **El saboteo de David** vive dentro de la prueba: tres
+etiquetas de veinte letras pliegan la barra a 768 y «Menú» se ve; el html reescrito para que no se
+pliegue, la comprobación 11 pone en rojo la línea partida. **La comprobación 11** (`checkHoldsItsLines`,
+`menu-checks.ts`) no lee N: con la tira dibujada, la barra no mide más que su `--rb-bar-h` + 1; entra en
+`a11y` sobre las 56 combinaciones y su gemelo de etiquetas cortas (`shortLabelled`: «Carta», «Fotos»,
+«Reservar», «El Corte») a 768, 1024, 1247 y 1280, con una copia por menú y el tope de la barra del
+móvil donde la cabecera es la del móvil.
+
+**Lo que cambia en una web guardada**: ninguna de las 21 del corpus cuyas palabras caben desde 721; y
+`cabecera-con-marca` («Taberna Santo Domingo» en negrita con su logo) se pliega hasta 760, por tres
+líneas de `@media` en su golden, leídas. Nada del script.
+
+**Lo que enseñó `a11y`**: dos pruebas de la columna (diez entradas en un raíl a 1280) se pusieron en
+rojo porque la primera versión dejaba sin tope la banda sin columnas: diez entradas que nunca caben en
+la barra empujaban N a 1800 y la columna a 1801, y a 1280 la web era la del móvil. La banda sin
+columnas **acaba en 1023 en una página que dibuja una columna**: desde 1024 la columna se lleva su menú
+de la tira, quepa o no la copia de la barra por debajo (la copia es donde cae la columna, ADR 0060 §3).
+Diez entradas en una columna pliegan la barra hasta 1023 y no para siempre; la prueba lo fija y la ADR
+lo dice.
+
+**Una caminata del día 5 del 33 cambia de sentido, y lo dice**: «bajo el suelo de legibilidad (1024
+con panel)» arrastraba las secciones de la fila al segundo lado con el lienzo a 887; la web generada
+(«Taberna Santo Domingo» en negrita, dos páginas y el botón) se pliega más allá de 887, así que ahí la
+cabecera es la del móvil y el gesto no tiene zona, como en la vista de móvil. Hoy la caminata asevera
+eso — la tira oculta, «Menú» dibujado, una pulsación con movimiento sobre la fila no dibuja nada ni
+escribe nada, y la nota de la columna plegada — y el día 5, con «Menú» como agarre, recupera la suelta.
+
+**Suites.** `typecheck`, `lint`, `test` (3693), invariantes, golden (uno, leído), `renderer:deps`,
+`size` (el script, 0,8 KB) y `schema:guard` (sin cambio de forma) en verde. **`a11y` local: 1617**
+(1147 + 448 de la comprobación 11 + 22 de la verdad). **e2e filtrado de cabecera** (sprints 30–34): 28
+caminatas en verde.
+
+**Lo que costó**: el `/** … */` de una línea no lo quita la limpieza de comentarios de `scrollbar.test`
+(solo `//` y `*` al inicio), y la palabra en el nombre de una constante no cuenta por ir en mayúsculas;
+la prueba de la estimación del sprint 33 («one line, a logo») se plegaba a 768 por el logo sin tamaño
+(160 px) y medía la barra del móvil con su fila: ahora el logo lleva su 2 × 2.

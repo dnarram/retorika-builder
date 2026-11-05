@@ -81,6 +81,7 @@ export {
   fineTrackSpan,
   gapRowsFor,
   measuredToFine,
+  tokenPx,
 } from "./fineGrid.ts";
 export type { FontGalleryRow, FontKind } from "./fontGallery.ts";
 export {

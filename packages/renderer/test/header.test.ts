@@ -20,7 +20,17 @@ import { loadCorpus } from "./corpus.ts";
  * changing face: **a document with no `header` draws what it drew before the object existed.**
  */
 
-const theme = Object.fromEntries(TOKEN_KEYS.map((key) => [key, `value-${key}`])) as Theme;
+// Placeholders, except the lengths the header's own estimate reads (`headerWidths`, sprint 34 día 2):
+// a theme stores `size.*` in rem and `space.*` in px, and the estimate refuses anything else.
+const theme = {
+  ...(Object.fromEntries(TOKEN_KEYS.map((key) => [key, `value-${key}`])) as Theme),
+  "size.body": "1rem",
+  "space.xs": "4px",
+  "space.sm": "8px",
+  "space.md": "16px",
+  "space.lg": "24px",
+  "space.xl": "48px",
+} as Theme;
 
 function section(id: string, catalogId: string, title: string): Section {
   return {
@@ -1156,9 +1166,103 @@ describe("the phone's menu is a sheet (sprint 32 día 4)", () => {
  * every document answers what the literals said, and the goldens are byte for byte what they were.
  */
 describe("the header's widths", () => {
-  it("are 720 and 1024 for every document of the corpus, as the literals were", () => {
+  it("are 720 and 1024 for every corpus document whose bar's line holds its words, and the fold's for the one whose does not", () => {
     for (const entry of loadCorpus()) {
-      expect(headerWidths(entry.document), entry.name).toEqual({ phone: 720, rails: 1024 });
+      const widths = headerWidths(entry.document);
+      if (entry.name === "cabecera-con-marca") {
+        // «Taberna Santo Domingo» in bold with its logo, two pages and «Contacto», and the button:
+        // 40 px over 720 by the glyphs' sum, where the bar itself breaks at 720 (the browser's
+        // bisection in `header.browser.test.ts`). The one golden the fold moved.
+        expect(widths, entry.name).toEqual({ phone: 760, rails: 1024, over: 0 });
+      } else {
+        expect(widths, entry.name).toEqual({ phone: 720, rails: 1024, over: 0 });
+      }
     }
+  });
+
+  const PAGES = [
+    { id: "p2", slug: "carta", title: "La carta" },
+    { id: "p3", slug: "fotos", title: "Fotos" },
+  ];
+  const withLabels = (labels: string[], header: RetorikaDocument["header"] = {}) =>
+    site(
+      3,
+      labels.map((title, i) => ({ id: `p${i + 2}`, slug: `p${i + 2}`, title })),
+      { brand: { name: true }, ...header },
+    );
+
+  it("folds later the longer the words, in capitals, and at a larger size; earlier at the small one", () => {
+    const phone = (doc: RetorikaDocument) => {
+      const w = headerWidths(doc);
+      return w.phone === "always" ? Number.POSITIVE_INFINITY : w.phone;
+    };
+    const short = withLabels(["Carta", "Fotos"]);
+    const long = withLabels(["Nuestra carta de temporada", "Fotos de la casa"]);
+    expect(phone(long)).toBeGreaterThan(phone(short));
+    expect(
+      phone(withLabels(["Carta", "Fotos"], { look: { uppercase: true } })),
+    ).toBeGreaterThanOrEqual(phone(short));
+    expect(
+      phone(withLabels(["Nuestra carta", "Fotos de la casa"], { look: { size: "small" } })),
+    ).toBeLessThanOrEqual(phone(withLabels(["Nuestra carta", "Fotos de la casa"])));
+    // A stacked bar keeps the brand on its own line: the strip has the line to itself.
+    expect(
+      phone(withLabels(["Nuestra carta", "Fotos de la casa"], { layout: "stacked" })),
+    ).toBeLessThanOrEqual(phone(withLabels(["Nuestra carta", "Fotos de la casa"])));
+  });
+
+  it("counts a logo by its stored size, and one with none as four times as wide as tall", () => {
+    const sized = withLabels(["Carta", "Fotos"], {
+      brand: { name: true, logo: { src: "assets/logo.png", width: 40, height: 40 } },
+    });
+    const unsized = withLabels(["Carta", "Fotos"], {
+      brand: { name: true, logo: { src: "assets/logo.png" } },
+    });
+    const a = headerWidths(sized);
+    const b = headerWidths(unsized);
+    if (a.phone === "always" || b.phone === "always") throw new Error("these fit");
+    expect(b.phone - a.phone).toBe(120);
+  });
+
+  it("is the phone's at every width when the line is wider than the page's measure, and says so by name", () => {
+    const never = withLabels(
+      Array.from({ length: 8 }, (_, i) => `Reservas para grupos ${i + 1}`),
+      {
+        look: { uppercase: true },
+      },
+    );
+    const widths = headerWidths(never);
+    expect(widths).toMatchObject({ phone: "always", rails: "none" });
+    expect(widths.over).toBeGreaterThan(0);
+    const sheet = render(never, "html").css;
+    // No `@media` of the header's: the phone block is written bare, the rails and the wide rules not
+    // at all. The one `max-width` left is the sections' shared block, which is not the header's.
+    expect(sheet.match(/@media \(max-width: \d+px\)/g)).toEqual(["@media (max-width: 720px)"]);
+    expect(sheet).not.toMatch(/@media \(min-width: \d+px\)/);
+    expect(sheet).toContain("\n  .rb-nav-wide { display: none; }\n");
+    expect(sheet).not.toContain(".rb-rail { display: flex; }");
+  });
+
+  it("folds up to 1023 and not for ever when ten long entries have a column to go to", () => {
+    const ten = Array.from({ length: 10 }, (_, i) => `Reservas para grupos ${i}`);
+    const inBar = headerWidths(withLabels(ten));
+    const inRail = headerWidths(withLabels(ten, { pages: { position: "left" } }));
+    expect(inBar.phone).toBe("always");
+    // Below 1024 the bar's copy would never fit; from 1024 the rail holds the entries.
+    expect(inRail).toEqual({ phone: 1023, rails: 1024, over: 0 });
+  });
+
+  it("says how many characters the widest bar is over the line at 1247, for the download review", () => {
+    // Labels grown a letter at a time until the bar folds past 1247 but still fits the measure:
+    // the band is about 60 px wide, a letter about 9, so some length lands in it.
+    let found: ReturnType<typeof headerWidths> | undefined;
+    for (let n = 10; n <= 40 && found === undefined; n += 1) {
+      const label = "Reservas para grupos de empresa y familia".slice(0, n);
+      const widths = headerWidths(withLabels([label, label, label]));
+      if (widths.phone !== "always" && widths.phone > 1247) found = widths;
+    }
+    if (found === undefined) throw new Error("no label length folds past 1247 and still fits");
+    expect(found.over).toBeGreaterThan(0);
+    expect(headerWidths(withLabels(["Carta", "Fotos"])).over).toBe(0);
   });
 });

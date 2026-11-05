@@ -25544,7 +25544,14 @@ describe("sprint 33 día 5 — el arrastre completo", () => {
     }
   }, 300_000);
 
-  it("bajo el suelo de legibilidad (1024 con panel), soltar en el segundo lado escribe la palabra y la nota dice que se pliega", async () => {
+  /**
+   * **Since sprint 34 día 2 the bar folds where its words do not fit** (ADR 0067), and this site's —
+   * «Taberna Santo Domingo» in bold, two pages and the button — fold it past 887: under the
+   * legibility floor the canvas shows the phone's header, with «Menú» and the row, and the drag of
+   * ADR 0066 has no zone there, as in the phone view. Day 5 makes «Menú»'s summary the grip, and this
+   * walk gets its drop under the floor back; today it holds what the fold made true.
+   */
+  it("bajo el suelo de legibilidad (1024 con panel) la barra es la del móvil: nada se arrastra, y la nota dice que la columna se pliega", async () => {
     const context = await browser.newContext({ viewport: { width: 1440, height: 950 } });
     const page = await context.newPage();
     try {
@@ -25558,20 +25565,23 @@ describe("sprint 33 día 5 — el arrastre completo", () => {
       await expect(panel).toBeVisible();
       await expect.poll(() => frame.locator("body").evaluate(() => innerWidth)).toBe(887);
       await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
-      // At 887 no column stands: the pages' has folded into the bar, and the row is there.
+      // At 887 no column stands, the strip is folded away and «Menú» is drawn: the phone's header.
       await expect(frame.locator('.rb-rail[data-side="left"]')).toBeHidden();
+      await expect(frame.locator(".rb-nav-wide")).toBeHidden();
+      await expect(frame.locator("details.rb-nav-narrow > summary")).toBeVisible();
+      const before = await positionOf(page, "sections");
       const { at } = await frameOnScreen(page);
       await carry(page, await rowGround(frame), at(887 - 120, 500), false);
-      await expect(frame.locator('.rb-zone[data-zone="right"][data-hot]')).toHaveCount(1);
+      await expect(frame.locator(".rb-zone, .rb-menu-ghost")).toHaveCount(0);
       await page.mouse.up();
-      await expect.poll(() => positionOf(page, "sections")).toBe("right");
-      await expect(frame.locator('.rb-rail[data-side="right"]')).toBeHidden();
+      expect(await positionOf(page, "sections")).toBe(before);
+      // One column folds here, the pages': the sections are in their row.
       await expect(
         panel.getByText(
           "En esta ventana el lienzo enseña tu web a 887 px, y la columna se pliega en la barra.",
           { exact: false },
         ),
-      ).toHaveCount(2);
+      ).toHaveCount(1);
     } finally {
       await context.close();
     }

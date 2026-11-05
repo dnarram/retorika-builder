@@ -86,6 +86,11 @@ drew: the pages fold into «Menú» however they sit on a wide screen. The thres
 header's own `@media` blocks: rule 7 does not reach the header (ADR 0057), and the document keeps its
 one breakpoint.
 
+> *Amended by [ADR 0067](0067-the-bar-folds-where-its-words-do-not-fit.md), 5 November 2026.* «The
+> phone, exactly: rails do not exist under 1024» stands as a floor and not as the line: a bar whose
+> words would not hold one line is the phone's up to the width they would, and a rail stands from just
+> above that width — never under 1024, and never at all for a bar that is the phone's at every width.
+
 ### 4. The brand and the button may go with the pages
 
 `header.brandWithPages` — «La marca y el botón van con el menú de páginas» — takes the brand and the

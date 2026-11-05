@@ -8,7 +8,7 @@ import {
   type Page,
   webkit,
 } from "@playwright/test";
-import { render } from "@retorika/renderer";
+import { phoneAt, render } from "@retorika/renderer";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type Combination, openHtml } from "../../../packages/renderer/test/browser-fixtures.ts";
 import {
@@ -160,7 +160,7 @@ for (const [engine, type] of ENGINES) {
             await setDisclosures(page, "details", false);
             await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
             await page.waitForTimeout(150);
-            const phone = width <= h.phoneWidth;
+            const phone = phoneAt({ phone: h.phoneWidth }, width);
 
             const rest = [
               ...(await checkCopies(page, h, width, "rest")),
@@ -218,7 +218,7 @@ for (const [engine, type] of ENGINES) {
           try {
             await cpage.setViewportSize({ width, height: heightFor(width) });
             await cpage.waitForTimeout(100);
-            const phone = width <= h.phoneWidth;
+            const phone = phoneAt({ phone: h.phoneWidth }, width);
             const published = snapshots[width];
             if (!published) throw new Error(`no published snapshot at ${width}`);
             await fail(cpage, width, "canvas", [

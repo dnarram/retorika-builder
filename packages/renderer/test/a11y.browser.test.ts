@@ -2,7 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { type Browser, chromium } from "@playwright/test";
 import type { NodeResult, Result } from "axe-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { headerWidths } from "../src/index.ts";
+import { headerWidths, phoneAt, railsAt } from "../src/index.ts";
 import {
   type Combination,
   closeCombination,
@@ -11,11 +11,13 @@ import {
   headerCombinations,
   openCombination,
   railCombinations,
+  shortLabelled,
   transparentCoverCombinations,
 } from "./browser-fixtures.ts";
 import {
   checkCopies,
   checkCovers,
+  checkHoldsItsLines,
   checkPhoneBar,
   checkSheet,
   expectHeader,
@@ -161,7 +163,7 @@ describe("one copy of each menu, nothing over the brand, and the sheet (the audi
             ...(await checkCopies(page, h, width, "rest")),
             ...(await checkCovers(page)),
           ];
-          if (width <= h.phoneWidth) {
+          if (phoneAt({ phone: h.phoneWidth }, width)) {
             // The bar's bound (3a), since its finding 2 was decided and the bar close-set (día 6).
             findings.push(...(await checkPhoneBar(page, h)));
             await setDisclosures(page, "details.rb-nav-narrow", true);
@@ -204,6 +206,35 @@ describe("nothing over the cover under a transparent bar taller than a line (the
 });
 
 /**
+ * **The bar holds its lines or folds** (ADR 0067, sprint 34 día 2; the audit's check 11, promoted):
+ * at the tablet's widths and the two the rails stand from, every header combination — with the
+ * teaser's long words, which fold the bar, and with short ones, which keep its strip — is either a
+ * bar no taller than its form's lines or the phone's, with one copy of each menu and the phone bar's
+ * bound. The check reads no estimate: it judges what is drawn.
+ */
+describe("the bar holds its lines or folds (the audit's check 11)", () => {
+  const combinations = headerCombinations().flatMap((c) => [c, shortLabelled(c)]);
+  for (const c of combinations) {
+    for (const width of [768, 1024, 1247, 1280]) {
+      it(`${c.id} @ ${width}px`, async () => {
+        const page = await openCombination(browser, c, width);
+        try {
+          const h = expectHeader(c.document);
+          const findings = [
+            ...(await checkHoldsItsLines(page)),
+            ...(await checkCopies(page, h, width, "rest")),
+            ...(phoneAt({ phone: h.phoneWidth }, width) ? await checkPhoneBar(page, h) : []),
+          ];
+          expect(findings, `${c.id} @ ${width}px\n  ${findings.join("\n  ")}`).toEqual([]);
+        } finally {
+          await closeCombination(page);
+        }
+      });
+    }
+  }
+});
+
+/**
  * **Each menu is announced once, from wherever it stands** (ADR 0060, sprint 31 día 3): the twin of
  * the test below for a page whose menus have places of their own. The bar keeps a copy of every menu
  * a rail holds, because the bar is where a rail falls, and the claim is that at every width exactly
@@ -222,12 +253,16 @@ describe("each menu is announced once, from wherever it stands", () => {
     const mobile = header?.sections?.mobile ?? "row";
     const twoRails =
       pages !== "bar" && (sections === "left" || sections === "right") && pages !== sections;
-    const { phone, rails } = headerWidths(c.document);
+    const widths = headerWidths(c.document);
+    const stands = railsAt(widths, width);
     const sectionsRail =
-      (sections === "left" || sections === "right") && width >= (twoRails ? 1248 : rails);
-    if (width <= phone) return { Páginas: "menu", Secciones: mobile === "fold" ? "fold" : "row" };
+      (sections === "left" || sections === "right") &&
+      (twoRails ? stands && width >= 1248 : stands);
+    if (phoneAt(widths, width)) {
+      return { Páginas: "menu", Secciones: mobile === "fold" ? "fold" : "row" };
+    }
     return {
-      Páginas: pages !== "bar" && width >= rails ? "rail" : "bar",
+      Páginas: pages !== "bar" && stands ? "rail" : "bar",
       Secciones: sectionsRail
         ? "rail"
         : sections === "row"
@@ -349,7 +384,7 @@ describe("the menu is announced the same way, whatever the width", () => {
             ).length,
           }));
           expect(visible).toEqual(
-            width <= headerWidths(c.document).phone
+            phoneAt(headerWidths(c.document), width)
               ? { wide: 0, narrow: 1 }
               : { wide: 1, narrow: 0 },
           );

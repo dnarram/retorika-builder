@@ -52,8 +52,10 @@ export {
   headerSettings,
   headerWidths,
   homeMenuLabel,
+  phoneAt,
   RAIL_FOLD_WIDTH,
   RAIL_WIDTH,
+  railsAt,
   TWO_RAILS_FOLD_WIDTH,
 } from "./header.ts";
 export { HEADER_SCRIPT } from "./headerScript.ts";
