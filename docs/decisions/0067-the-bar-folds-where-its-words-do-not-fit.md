@@ -99,9 +99,12 @@ characters to cut (`over`; día 4).
 The claim is «a bar never wraps». `header.browser.test.ts` opens twenty sites with their fold written
 back to 720 in the html, finds by bisection the widest viewport at which each one's line breaks, and
 asserts the estimate is at or over it — **and under 40 px over it** (David's expectation for the glyph
-table; the family factors were 90–130 over). Measured on día 2: 0–31 px over for every form without a
-logo, exact where the logo carries its size, 110–140 over with the fixture's unsized 2 × 2 logo, by
-design. **A form that falls outside is corrected in the formula, never in the tolerance** (the rule of
+table; the family factors were 90–130 over). Measured on día 2, on this Mac, every site of the suite
+carrying a system stack for its body: 47–142 px over the width the bar breaks at with macOS's letter —
+because the fallback counts Linux's wider, hinted letter (§2), which is where the bar would break first
+— and 110–140 more with the fixture's unsized 2 × 2 logo, by design. **The 40 px bound is for a site
+whose two families the product ships, and no site of the suite is one yet**: the harness serves no font
+bytes, so día 3 serves them and measures it. **A form that falls outside is corrected in the formula, never in the tolerance** (the rule of
 ADR 0063's note). And **the check that judges the fold reads no N**: the audit's check 11, promoted
 to `a11y` over every header combination at 768, 1024, 1247 and 1280 — with the teaser's long words,
 which fold, and with short ones, which keep the strip — asks only whether a bar with its strip drawn is
@@ -121,7 +124,8 @@ For a site whose words fold the bar past 720 — the teaser's own, at 768 and at
 
 Nothing changes for a site whose words fit from 721 up: N is 720 and the stylesheet is what it was,
 byte for byte — twenty-one of the twenty-two corpus sites, and the one that moves (`cabecera-con-marca`,
-«Taberna Santo Domingo» in bold with its logo) moves by three `@media` lines, to 760.
+«Taberna Santo Domingo» in bold with its logo, Charter for its body) moves by three `@media` lines,
+to 797.
 
 ## What is lost, and it is named
 
