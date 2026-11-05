@@ -35,6 +35,7 @@ import {
   menuModePatch,
   menuStatusText,
   type PageRow,
+  PHONE_BUTTON_MAX,
   pagesPositionPatch,
   type SectionRow,
   schemeSwatch,
@@ -582,18 +583,12 @@ function sectionsPlaceNotes(
 ): string[] {
   const position = state.sectionsPosition;
   // «Ir a…» hangs from `--rb-header-h`: the script's measure of the bar once published, the
-  // stylesheet's estimate of one line in the canvas. Measured by the menu audit (sprint 33 día 3):
-  // 2.2–3.2 px apart on a bar of one line, and 33.6 on a stacked one, whose second line it then lies
-  // over — the button under it in the audit's capture.
+  // stylesheet's estimate in the canvas. The menu audit measured them 33.6 px apart on a stacked
+  // bar (sprint 33 día 3), which had a note of its own until the estimate learnt the bar's form
+  // (día 6): within a pixel of the bar for every form, it differs only where the bar's words do
+  // not fit on their line — and that is what the note says.
   if (position === "fold") {
-    return [
-      es["editor.menuPanel.notes.fold"],
-      es[
-        state.layout === "stacked"
-          ? "editor.menuPanel.notes.foldEstimateStacked"
-          : "editor.menuPanel.notes.foldEstimate"
-      ],
-    ];
+    return [es["editor.menuPanel.notes.fold"], es["editor.menuPanel.notes.foldEstimate"]];
   }
   if (position !== "left" && position !== "right") return [];
   const width = state.sectionsFoldWidth;
@@ -1105,6 +1100,13 @@ function EntryRow({
       {label === undefined ? null : (
         <LabelField name={name} derived={label.derived} own={label.own} onCommit={label.onCommit} />
       )}
+      {/* The button's words are this entry's: past what the phone's bar holds, said where they are
+          written (sprint 33 día 6). The download review says it again, as a warning. */}
+      {inButton && label !== undefined && (label.own ?? label.derived).length > PHONE_BUTTON_MAX ? (
+        <p className={noteClass}>
+          {es["editor.menuPanel.notes.longButton"].replace("{max}", String(PHONE_BUTTON_MAX))}
+        </p>
+      ) : null}
     </li>
   );
 }

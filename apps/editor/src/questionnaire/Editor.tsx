@@ -6262,10 +6262,11 @@ export function Editor({
    * ADR 0060 made each menu's place a word from a closed vocabulary and promised that every word
    * would be a zone a drag drops the menu on. This is the drag. David's four conditions, in order:
    *
-   * 1. **It starts on the menu's own ground and never on an entry**: a press held on a `nav`'s
-   *    padding and the gaps between its entries, a rail's background, the sections' row or «Ir a…»'s
-   *    summary. An entry keeps navigating the canvas (`wireLinks`); a press on the bar's brand or
-   *    button is the header's choice, as before. The same threshold as an element's drag, three
+   * 1. **It starts on the menu's own ground** — a press held on a `nav`'s padding and the gaps
+   *    between its entries, a rail's background, the sections' row or «Ir a…»'s summary — **and,
+   *    since sprint 33 día 6, on an entry** (David's decision: a one-entry menu in the bar has no
+   *    ground at all). A click on an entry still navigates the canvas (`wireLinks`); a press on the
+   *    bar's brand or button is the header's choice, as before. The same threshold as an element's drag, three
    *    pixels of the hand divided by the zoom (ADR 0050 §6), and the same two states: under it a
    *    press is a click — choosing the header, opening «Ir a…» — and past it the click that ends
    *    the gesture is swallowed (`justDragged`, ADR 0048 §2). With a finger, only once the header
@@ -6370,6 +6371,15 @@ export function Editor({
       iframeDoc.getSelection()?.removeAllRanges();
       justDragged = true;
       const bar = header.getBoundingClientRect();
+      const spaceMd = resolved(iframeDoc.body, "--space-md");
+      // **The sections leave their row when they go anywhere else** (sprint 33 día 6): the bar's
+      // estimate counts the row on a page that draws one, and «Ir a…» will hang from the bar
+      // without it — so the pill's zone does too, the row and its gap taken out.
+      const row = header.querySelector<HTMLElement>(":scope > .rb-nav-row");
+      const rowShare =
+        state.menu === "sections" && row && row.getClientRects().length > 0
+          ? row.getBoundingClientRect().height + spaceMd
+          : 0;
       state.rects = zoneRects(state.zones, {
         width: view.innerWidth,
         height: view.innerHeight,
@@ -6380,8 +6390,8 @@ export function Editor({
           // A collapsed bar is no height: the strip is the stylesheet's estimate of one.
           height: bar.height > 0.5 ? bar.height : resolved(iframeDoc.body, "--rb-bar-h"),
         },
-        headerH: resolved(header, "--rb-header-h"),
-        spaceMd: resolved(iframeDoc.body, "--space-md"),
+        headerH: resolved(header, "--rb-header-h") - rowShare,
+        spaceMd,
         pagesPosition: places.pagesPosition,
       });
       for (const rect of state.rects) {
@@ -6433,8 +6443,13 @@ export function Editor({
       const from =
         target?.nodeType === target?.ELEMENT_NODE ? (target as Element) : target?.parentElement;
       if (!from || !from.closest(".rb-header")) return;
-      // An entry, the brand, the button: theirs, never a grip (condition 1).
-      if (from.closest("a, button, [data-id]")) return;
+      // The brand and the button are the header's, never a grip (condition 1). **An entry is its
+      // menu's** since sprint 33 día 6 (David's decision): a menu of one entry in the bar has no
+      // ground of its own — its `nav` is its link —, and the two states keep the link a link: under
+      // the threshold the press is the click `wireLinks` follows, past it the click is swallowed.
+      if (from.closest("button, [data-id]")) return;
+      const link = from.closest("a");
+      if (link && !link.parentElement?.matches("nav.rb-nav[data-part]")) return;
       const grip = from.closest<HTMLElement>(GRIPS);
       if (!grip) return;
       // A finger drags the header's menus only once the header is chosen (ADR 0049).
@@ -8542,6 +8557,7 @@ export function Editor({
           {downloadDialog?.kind === "overflows" ? (
             <OverflowDialog
               findings={downloadDialog.findings}
+              longButton={downloadDialog.longButton}
               onDownloadAnyway={() => acceptAndContinue("overflow")}
               onCancel={() => setDownloadDialog(null)}
             />

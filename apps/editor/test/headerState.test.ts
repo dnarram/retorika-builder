@@ -666,7 +666,6 @@ describe("what a fixed bar turns into once scrolled, as the panel says it (sprin
       "editor.menuPanel.notes.motion",
       "editor.menuPanel.notes.indicator",
       "editor.menuPanel.notes.foldEstimate",
-      "editor.menuPanel.notes.foldEstimateStacked",
     ] as const) {
       // Every one says what the canvas shows, so none promises the canvas what it does not draw.
       expect(es[key], key).toMatch(/lienzo/);

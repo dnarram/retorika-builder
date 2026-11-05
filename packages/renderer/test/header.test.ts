@@ -451,11 +451,9 @@ describe("the look, as attributes and rules", () => {
     expect(sheet).not.toContain(
       "first-child {\n  padding-top: calc(var(--space-xl) + var(--rb-header-h))",
     );
-    expect(sheet).toContain(
-      "html { --rb-bar-h: calc(2 * var(--space-md) + max(40px, 1.5 * var(--size-body)));\n  --rb-header-h: var(--rb-bar-h); }",
-    );
-    expect(sheet).toContain(
-      "  html { --rb-bar-h: calc(2 * var(--space-sm) + max(40px, 1.5 * var(--size-body))); }",
+    // The estimate itself, by the bar's form: «the bar's estimate» below.
+    expect(sheet).toMatch(
+      /html \{ --rb-bar-h: calc\([^\n]*\);\n {2}--rb-header-h: var\(--rb-bar-h\); \}/,
     );
   });
 
@@ -976,11 +974,12 @@ describe("«Ir a…», the sections' disclosure", () => {
     );
   });
 
-  it("closes up the phone's bar only where it joins it", () => {
+  it("is close-set on the phone like every bar since sprint 33 día 6, with no rule of its own", () => {
     const { css } = render(site(3, [], { sections: { mobile: "fold" } }), "html");
     expect(css).toContain(
-      "  .rb-header:has(> .rb-nav-fold[data-mobile=fold]) { column-gap: var(--space-sm); }",
+      "  .rb-header { gap: var(--space-sm); padding: var(--space-sm) var(--space-lg); }",
     );
+    expect(css).not.toContain("column-gap");
     // The rule for the gap after a drawn disclosure names the drawn one: `+` matches a hidden one.
     expect(css).toContain("  .rb-nav-fold[data-mobile=fold] + .rb-nav-narrow { margin-left: 0; }");
   });
@@ -989,6 +988,80 @@ describe("«Ir a…», the sections' disclosure", () => {
     const without = render(site(3, PAGES, { pages: { position: "left" } }), "html").css;
     expect(without).not.toContain("rb-nav-fold");
     expect(without).not.toContain("rb-fold-in");
+  });
+});
+
+/**
+ * **The bar's estimate, by its form** (sprint 33 día 6, David's decision on the menu audit): the sum
+ * of the bar's lines, written from what the renderer knows the bar holds. What the browser makes of
+ * it — never a pixel short of the bar it measures, never 16 over — is `header.browser.test.ts`'s, in
+ * the three engines; this holds the shapes, so a form that loses its line shows here first.
+ */
+describe("the bar's estimate", () => {
+  const PAGES = [{ id: "p2", slug: "carta", title: "La carta" }];
+  const wide = (header: RetorikaDocument["header"]) => {
+    const css = render(site(3, PAGES, header), "html").css;
+    const found = css.match(/^html \{ --rb-bar-h: (calc\([^\n]*\));$/m);
+    if (!found?.[1]) throw new Error("no estimate in the sheet");
+    return { css, bar: found[1] };
+  };
+  const LOGO = { name: true, logo: { src: "assets/logo.png" } };
+  const BUTTON = { kind: "page", pageId: "p2" } as const;
+
+  it("is one line of the tallest thing on it: the logo against the button, with the hairline", () => {
+    expect(wide({ brand: LOGO, action: BUTTON }).bar).toBe(
+      "calc(2 * var(--space-md) + max(40px, 2 * var(--space-sm) + 1.3 * var(--size-body)) + 1px)",
+    );
+    // No logo and no button: the entries' line, which is shorter than a button's.
+    expect(wide({ brand: { name: true } }).bar).toBe(
+      "calc(2 * var(--space-md) + 2 * var(--space-xs) + 1.3 * var(--size-body) + 1px)",
+    );
+  });
+
+  it("is two lines and their gap when the brand has a line of its own", () => {
+    expect(wide({ layout: "stacked", brand: LOGO, action: BUTTON }).bar).toBe(
+      "calc(2 * var(--space-md) + max(40px, 1.3 * var(--size-body)) + var(--space-md) + 2 * var(--space-sm) + 1.3 * var(--size-body) + 1px)",
+    );
+  });
+
+  it("adds the row under :has, from 721 px, only for the sections in a row", () => {
+    const row = wide({ brand: { name: true }, sections: { position: "row" } }).css;
+    expect(row).toContain(
+      "@media (min-width: 721px) {\n  html:has(.rb-header[data-sections=row] > .rb-nav-row) { --rb-bar-h: calc(2 * var(--space-md) + 2 * var(--space-xs) + 1.3 * var(--size-body) + var(--space-md) + 2 * var(--space-xs) + 1.3 * var(--size-body) + 1px); }\n}",
+    );
+    expect(wide({ brand: { name: true } }).css).not.toContain(
+      "html:has(.rb-header[data-sections=row]",
+    );
+  });
+
+  it("counts the small size, and no hairline on a transparent bar", () => {
+    expect(
+      wide({ brand: { name: true }, look: { size: "small", background: "transparent" } }).bar,
+    ).toBe("calc(2 * var(--space-md) + 2 * var(--space-xs) + 1.3 * 0.875 * var(--size-body))");
+  });
+
+  it("takes out what goes with the pages to a rail, from 1024 px", () => {
+    const { css, bar } = wide({
+      brand: LOGO,
+      action: BUTTON,
+      pages: { position: "left" },
+      brandWithPages: true,
+    });
+    // Under 1024 every rail is in the bar: the logo and the button with it.
+    expect(bar).toBe(
+      "calc(2 * var(--space-md) + max(40px, 2 * var(--space-sm) + 1.3 * var(--size-body)) + 1px)",
+    );
+    // From 1024 the bar keeps the sections' entries alone.
+    expect(css).toContain(
+      "@media (min-width: 1024px) {\n  html { --rb-bar-h: calc(2 * var(--space-md) + 2 * var(--space-xs) + 1.3 * var(--size-body) + 1px); }\n}",
+    );
+  });
+
+  it("reads «Menú»'s line on a phone off the page's own letter, which no size makes smaller", () => {
+    const { css } = wide({ look: { size: "small" } });
+    expect(css).toContain(
+      "  html { --rb-bar-h: calc(2 * var(--space-sm) + 1.3 * max(1rem, 0.875 * var(--size-body)) + 1px); }",
+    );
   });
 });
 

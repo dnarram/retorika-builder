@@ -7010,3 +7010,123 @@ página, así que «no se abrió» se oye con un `toggle` y no se lee después.
 **Suites.** `typecheck`, `lint`, `test` (3676), invariantes y golden (cero cambios) en verde; e2e
 filtrado de cabecera, sprints 30–33: 25 caminatas en verde, 165 s. Nada del renderer los días 4 y 5:
 el HTML y el CSS publicados son byte a byte los de `main`; la e2e completa es del día 7.
+
+### Día 6 — el colchón de la auditoría (PR de `fix/el-colchon-de-la-auditoria`)
+
+El día 3 dejó en el backlog tres filas con captura, las tres decisiones de David, y el día 5 una
+pregunta en su PR. **David las decidió el 5 de noviembre al abrir el día**: (1) las dos primeras —una
+causa, la estimación de una línea— salen por **la estimación aprende la forma**, con dos condiciones:
+una fórmula por forma contrastada con la barra medida a 768, 1024 y 1280 en los tres motores, entre
+−1 y +16, y si una forma se sale se corrige la fórmula y no la tolerancia; y la comprobación 8 de la
+auditoría se promueve a `a11y` para las transparentes apiladas y con fila. (2) La tercera, el botón
+largo a 320: **apretar la barra del móvil**, y un aviso en el panel y en la revisión de descarga pasadas
+las 12 letras; el botón dentro de «Menú» va al backlog con su día y su motivo. (3) El día 5: **sí, el
+arrastre arranca también sobre una entrada** pasado el umbral.
+
+**La estimación, por forma** (`barEstimate`, nota del día 6 en la ADR 0063): cada línea tan alta como
+lo más alto que lleva —el logo, 40; el botón, una línea y `space.sm` arriba y abajo; una entrada, una
+línea y `space.xs`; el nombre, una línea—; dos líneas y `space.md` entre ellas con «Marca arriba»; la
+fila debajo donde la página la dibuja (`html:has(…)`, porque la hoja es del sitio y una página sin
+secciones no tiene fila); el filete donde lo hay; y una banda por `@media` donde una columna se lleva
+algo de la barra. **Se midió antes de escribirla**, con una sonda de un uso sobre 4 320 estados en
+Chromium (tres disposiciones, seis sitios de los menús, logo, botón, tamaño, tres escalas, dos fondos,
+cinco anchos). La primera fórmula se salió en dos formas, y **se corrigió la fórmula**: con «Marca
+arriba» y las copias de los menús de pie en columnas, la tira vacía sigue ocupando una línea y su hueco
+(16 px); y en el móvil «Menú» es una caja en línea dentro de su `<details>`, cuya línea es la letra de
+la página (`1.3 × max(1rem, tamaño)`), que el tamaño pequeño no encoge (2,6 px). Después, **toda barra
+que tiene las líneas de su forma queda dentro de la cota**, y las 24 formas transparentes a 1280 son
+exactas al píxel:
+
+| Barra transparente (escala por defecto, 1280) | Antes | Ahora = la barra | La portada se mueve |
+|---|---|---|---|
+| Una línea, botón, sin logo | 72 | 68,8 | 3,2 px arriba |
+| Una línea, sin botón ni logo | 72 | 60,8 | 11,2 px arriba |
+| Una línea con logo | 72 | 72 | nada |
+| Con la fila | 72 | 105,6–116,8 | 33,6–44,8 px abajo |
+| Marca arriba | 72 | 97,6–124,8 | 25,6–52,8 px abajo |
+| Marca arriba y fila | 72 | 142,4–169,6 | 70,4–97,6 px abajo |
+
+En el móvil la portada baja lo que mide la fila, donde la hay. Las demás barras solo empiezan su
+`--rb-header-h` desde un número más cercano antes de que el script lo mida.
+
+**La prueba de David** («the bar's estimate against the bar it measures», `header.browser.test.ts`):
+ocho formas, transparente y `surface`, a 768, 1024 y 1280, en Chromium, Firefox y WebKit: 48 en verde.
+**Saboteada** con la estimación de una línea de antes: 36 en rojo, todas las apiladas y con fila en los
+tres motores (las de una línea caben en la cota también con la vieja, como debe ser). Cada caso
+comprueba antes que la barra tiene las líneas de su forma: con las etiquetas largas del teaser, cuatro
+casos de una línea caen **por nombre** a 768 («the bar's lines: expected 2 to be 1»), no por la cota.
+
+**Lo que ninguna fórmula puede saber, medido y al backlog**: una línea que se parte porque sus palabras
+no caben. Con las etiquetas del teaser y un logo, la barra de una línea se parte a 768 en toda
+disposición menos la apilada, y bajo una barra transparente las primeras palabras de la portada quedan
+4,8 px debajo (6,6 en la escala compacta, **50,1 en la amplia**, que se parte también a 1024); 548 de los
+4 320 estados se parten, 30 de ellos sobre una portada transparente. Sin logo, a la escala por defecto,
+el `space.xl` de la portada lo absorbe (6,4 px libres). Tres salidas con coste, para David.
+
+**La comprobación 8 ve el pie de la cabecera** (`menu-checks.ts`): además del centro del titular,
+ninguna palabra de la primera sección empieza por encima del pie de la cabecera. Promovida a `a11y`
+sobre ocho combinaciones nuevas (`transparentCoverCombinations`: apilada, fila, las dos, y la de la
+auditoría con las páginas en columna; fija y no) a 320, 768, 1024 y 1280: 32 en verde. **Saboteada** con
+la estimación vieja: 12 en rojo, las apiladas con fila a 768, 1024 y 1280, con la misma cifra que la
+fila del backlog: «the header's foot at 150.4 lies over «Tu corte de siempre, sin» at 120.0».
+
+**La barra del móvil, apretada**: `space.sm` entre sus palabras y `space.md` a los lados del botón.
+Medido a 320 con el teaser y cuatro longitudes:
+
+| Botón (letras) | Antes: «Menú» | Antes: marca | Ahora: «Menú» | Ahora: marca |
+|---|---|---|---|---|
+| «Reservar» (8) | en línea | 50 px | en línea | 82 px |
+| «Reserva mesa» (12) | en línea | 11 px | en línea | 43 px |
+| «Dónde estamos» (13) | **segunda línea**, 82 px de barra | — | en línea | 30 px |
+| «Reserva tu mesa hoy!» (20) | segunda línea | — | segunda línea | — |
+
+Doce letras dejan entero un logo de 40 px; trece, no: es el umbral de David, y coincide con lo medido.
+**El tope de 72 px entra en `a11y`** sobre las 56 combinaciones a 320; saboteado sin el apretado, las 56
+en rojo a 82–83,6 px, el hallazgo 2. La regla que apretaba solo junto a «Ir a…» (sprint 31) se va: ya
+es la de todas.
+
+**El aviso del botón largo**: bajo «Se lee como…» de la entrada que es el destino del botón —donde se
+escriben sus palabras—, «En el móvil, un botón de más de 12 letras no cabe en la barra; prueba un verbo
+corto como «Reservar».»; y en la revisión de descarga, en el diálogo de «Algo se sale en el móvil» con
+la misma aceptación, una fila «El botón «…»» con sus letras, y título propio cuando es lo único que
+decir. **Aviso, nunca bloqueo**: «Menú» en dos líneas es una barra peor, no una web rota. Los botones
+con los que nace una web generada («Reservar», «Pedir cita», «Contacto») no pasan de doce. Caminata «un
+botón largo avisa y no bloquea»: doce letras no dicen nada; quince, la nota bajo el campo y el diálogo,
+y la descarga sale. Saboteada con el umbral a 20, roja.
+
+**El arrastre desde una entrada** (nota del día 6 en la ADR 0066): por debajo del umbral la pulsación es
+el clic que navega; pasado, el arrastre, y el clic que lo cierra se traga. El cursor sobre la entrada
+sigue siendo la mano del enlace. La frase del panel dice ahora «cógelo por una de sus entradas o por el
+hueco entre ellas». Caminata «un menú se coge también por su entrada», sobre una web con una sola página
+además del inicio (su `nav` mide lo que su enlace): cogido por el enlace, las tres zonas; soltado en la
+columna izquierda, escrito, anunciado y sin navegar; «Deshacer» lo devuelve; sin mover, navega.
+Saboteada con «nunca sobre una entrada», ninguna zona: roja.
+
+**La prueba del dedo que no podía fallar en CI** (backlog del día 5): el dedo es ahora el de
+`Input.dispatchTouchEvent` y primero mueve la página con la hoja cerrada. Saboteada sin el bloqueo de
+la ADR 0065, el dedo mueve la página 508 px bajo la hoja: roja.
+
+**Lo que cambió en el lienzo y en el panel por la estimación nueva**: la píldora de «Ir a…» se dibuja
+desde la barra **sin** la fila cuando se arrastran las secciones (la estimación cuenta la fila y la fila
+se va al soltar); la tira de una barra plegada mide la barra a la que vuelve el menú (69,8 en la web
+generada, donde era 72) y la caminata del día 5 asevera ahora que la barra devuelta mide la tira al
+píxel; la nota del panel de «Marca arriba» («queda encima de la segunda línea») **se retira, porque ya
+no es verdad**, y la de «Ir a…» dice cuándo sigue difiriendo el lienzo: «si sus palabras no caben en
+una línea y la barra crece».
+
+**Golden**: los cuatro con cabecera, en exactamente esas líneas (la estimación, las reglas `:has` de la
+fila en ancho y en móvil, y el apretado); diff leído entero. El script sigue en 0,8 KB.
+
+**Suites.** `typecheck`, `lint`, `test` (3685), invariantes, golden (los cuatro, leídos), `renderer:deps`,
+`size` (el script, 0,8 KB), `secrets:scope` y `schema:guard` en verde. **`a11y` local: 1147** (1067 + 32
+de la portada + 48 de la estimación en tres motores). **Lighthouse**: 99 / 98 / 98 las composiciones, 99
+con letra propia, 100 la barra fija con logo, 100 en columnas, 100 por ficha; LCP 1,80 / 2,40 / 2,33 —
+lo del día 3. **e2e completo** (la puerta de descarga cambió para toda caminata que descarga): 288 en
+verde y 1 omitida, 1244 s. Capturas del hallazgo nuevo en `docs/design/review/2026-11-los-menus/`
+(`barra-partida-768-*`).
+
+**Lo que costó**: un commit con parte del árbol preparada hace que el hook de pre-commit guarde en stash
+lo no preparado durante sus comprobaciones, con el e2e corriendo contra ese árbol; esta vez la suite
+salió entera en verde, y la regla queda escrita: nada de commits mientras corre. Y el filtro `-t` de
+Vitest es una expresión regular sobre el nombre completo: los paréntesis de un `describe` no casan
+literalmente.

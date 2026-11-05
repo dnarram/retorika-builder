@@ -366,6 +366,26 @@ export function headerStateFor(doc: RetorikaDocument, pageId: string | undefined
 }
 
 /**
+ * **The longest button the phone's bar holds**, in characters (sprint 33 día 6, David's decision on
+ * the menu audit's finding 2). At 320 px the bar has the brand, the button and «Menú» on one line,
+ * and a button of thirteen letters left the brand nothing or sent «Menú» to a second line; the bar
+ * was tightened that day, and the line past which the owner is told is this one.
+ */
+export const PHONE_BUTTON_MAX = 12;
+
+/**
+ * The button's words when they are more than the phone's bar holds, or `undefined`. Read by the
+ * «Menú» panel, under the destination's «Se lee como…», and by the download review, as a warning
+ * and never a block (the site is not broken: «Menú» is on a second line). Counted in characters as
+ * the owner types them, the way `menuLabelIssue` counts.
+ */
+export function phoneButtonTooLong(doc: RetorikaDocument): string | undefined {
+  const first = doc.pages[0];
+  const label = first === undefined ? undefined : actionEntry(doc, first)?.label;
+  return label !== undefined && label.length > PHONE_BUTTON_MAX ? label : undefined;
+}
+
+/**
  * The sentence under a menu's switch: what that switch is doing to this page right now.
  *
  * **«Automático» says the number it is drawn with, or that it is not drawn yet and why** — the

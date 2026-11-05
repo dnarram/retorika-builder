@@ -24884,8 +24884,9 @@ describe("sprint 33 día 3 — el editor real dibuja la cabecera como su documen
 
       // The two divergences the panel had not named (día 3). The pages in the bar: the rule under
       // the current page does not slide in the canvas. The sections behind «Ir a…»: the canvas places
-      // it by a bar of one line — a few pixels off — and over the second line of a stacked bar, which
-      // the audit measured 33.6 px off with the button under it.
+      // it by the bar's estimate. Día 3 had a second note for a stacked bar, whose second line it lay
+      // over (33.6 px, the audit's capture); since día 6 the estimate has the stacked bar's two lines,
+      // and the one note says when the canvas still differs: a bar whose words wrap.
       await panel
         .getByRole("radiogroup", { name: "Dónde va el menú de páginas" })
         .getByText("En la barra", { exact: true })
@@ -24897,15 +24898,13 @@ describe("sprint 33 día 3 — el editor real dibuja la cabecera como su documen
         .getByRole("radiogroup", { name: "Dónde va el navegador de secciones" })
         .getByText("Desplegable «Ir a…»", { exact: true })
         .click();
-      const fewPixels = panel.getByText("puede quedar unos píxeles más arriba o más abajo", {
+      const byForm = panel.getByText("según la altura que la barra tiene por su forma", {
         exact: false,
       });
-      await expect(fewPixels).toBeVisible();
+      await expect(byForm).toBeVisible();
       await panel.getByText("Marca arriba", { exact: true }).click();
-      await expect(
-        panel.getByText("queda encima de la segunda línea", { exact: false }),
-      ).toBeVisible();
-      await expect(fewPixels).toHaveCount(0);
+      await expect(byForm).toBeVisible();
+      await expect(panel.getByText("encima de la segunda línea", { exact: false })).toHaveCount(0);
     } finally {
       await context.close();
     }
@@ -25267,18 +25266,23 @@ describe("sprint 33 día 5 — el arrastre completo", () => {
       const { at } = await frameOnScreen(page);
       await carry(page, ground, at(760, 20), false);
       const strip = frame.locator('.rb-zone[data-zone="bar"]');
-      // A strip of the stylesheet's estimate of one bar, across what the column leaves.
-      expect(
-        await strip.evaluate((el) => {
-          const r = el.getBoundingClientRect();
-          return [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)];
-        }),
-      ).toEqual([240, 0, 1040, 72]);
+      // A strip of the stylesheet's estimate across what the column leaves: since sprint 33 día 6
+      // the estimate of the bar the menu comes back to — the brand, the entries and the button on
+      // one line, 69.8 px — where it was the 72 of a line of anything.
+      const drawn = await strip.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        return [r.left, r.top, r.width, r.height].map((n) => Math.round(n * 10) / 10);
+      });
+      expect(drawn.slice(0, 3).map(Math.round)).toEqual([240, 0, 1040]);
       await expect(frame.locator('.rb-zone[data-zone="bar"][data-hot]')).toHaveCount(1);
       await page.mouse.up();
       await expect.poll(() => positionOf(page, "pages")).toBe("bar");
       await expect(header).not.toHaveAttribute("data-bar", "none");
-      expect(await header.evaluate((el) => el.getBoundingClientRect().height)).toBeGreaterThan(40);
+      // And the bar it gave back is the strip that was drawn, to a pixel.
+      const bar = await header.evaluate((el) => el.getBoundingClientRect().height);
+      expect(Math.abs(bar - (drawn[3] ?? 0)), `bar ${bar}, strip ${drawn[3]}`).toBeLessThanOrEqual(
+        1,
+      );
       await page.getByRole("button", { name: "Deshacer", exact: true }).click();
       await expect.poll(() => positionOf(page, "pages")).toBe("left");
       await expect(header).toHaveAttribute("data-bar", "none");
@@ -25568,6 +25572,175 @@ describe("sprint 33 día 5 — el arrastre completo", () => {
           { exact: false },
         ),
       ).toHaveCount(2);
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+});
+
+/**
+ * **Sprint 33 día 6 — un menú se coge también por su entrada** (ADR 0066, condición 1 enmendada por
+ * David el 5 de noviembre). El día 5 midió el límite: un menú de páginas de una sola entrada en la
+ * barra no tiene suelo propio — su `nav` mide lo que su enlace —, así que solo el panel lo movía.
+ * Ahora la pulsación sobre la entrada arranca el arrastre pasado el umbral, y sin moverse sigue siendo
+ * el clic que navega el lienzo: la regla de los dos estados es la que mantiene el enlace un enlace.
+ * El cursor no cambia sobre la entrada (sigue la mano del enlace): lo que hace un clic ahí es navegar.
+ */
+describe("sprint 33 día 6 — un menú se coge también por su entrada", () => {
+  it("lleva a la columna un menú de una sola entrada cogido por su enlace, y el enlace sin mover sigue navegando", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 950 } });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      await frame.locator('[data-section="sec-services"]').click();
+      await frame
+        .locator(
+          '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+        )
+        .click();
+      await sessionHolds(
+        page,
+        (raw) => {
+          const session = JSON.parse(raw || "{}") as {
+            openIndex?: number | null;
+            documents?: { pages?: unknown[] }[];
+          };
+          const open =
+            typeof session.openIndex === "number"
+              ? session.documents?.[session.openIndex]
+              : undefined;
+          return open?.pages?.length === 2;
+        },
+        "guardó la página en el documento abierto",
+      );
+      // One page besides the home: under the menu's threshold, so drawn by «Siempre».
+      await placeMenus(page, { pages: { shown: true } });
+      await deviceArrived(page, DESKTOP_LAYOUT_WIDTH);
+      await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
+
+      const nav = frame.locator('.rb-nav-wide nav[data-part="pagesLinks"]');
+      const entry = nav.locator("a");
+      await expect(entry).toHaveCount(1);
+      const navBox = await nav.boundingBox();
+      const entryBox = await entry.boundingBox();
+      if (!navBox || !entryBox) throw new Error("the pages' menu is not drawn");
+      // No ground of its own: the nav is its link (the limit día 5 measured).
+      expect(navBox.width - entryBox.width).toBeLessThan(1);
+      expect(navBox.height - entryBox.height).toBeLessThan(1);
+      // The entry keeps the link's hand: what a click on it does is navigate.
+      expect(await entry.evaluate((el) => getComputedStyle(el).cursor)).toBe("pointer");
+
+      const card = await page.locator('[data-testid="canvas-card"] iframe').boundingBox();
+      if (!card) throw new Error("no canvas");
+      const zoom = await canvasZoom(page);
+      const onScreen = (x: number, y: number) => ({ x: card.x + x * zoom, y: card.y + y * zoom });
+      const zones = frame.locator(".rb-zone");
+      // Every copy of the pages' menu — the bar's, «Menú»'s, a column's — and the bar's alone.
+      const current = frame.locator('nav[data-part="pagesLinks"] a[aria-current="page"]');
+      const currentInBar = frame.locator(
+        '.rb-nav-wide nav[data-part="pagesLinks"] a[aria-current="page"]',
+      );
+
+      // 1. Held on the entry and carried past the threshold: the three zones; over the left column,
+      //    lit; let go, written — and the release's click navigated nowhere.
+      const from = { x: entryBox.x + entryBox.width / 2, y: entryBox.y + entryBox.height / 2 };
+      await page.mouse.move(from.x, from.y);
+      await page.mouse.down();
+      await page.mouse.move(from.x + 6, from.y, { steps: 2 });
+      await expect(zones).toHaveCount(3);
+      const inLeft = onScreen(120, 500);
+      await page.mouse.move(inLeft.x, inLeft.y, { steps: 10 });
+      await expect(frame.locator('.rb-zone[data-zone="left"][data-hot]')).toHaveCount(1);
+      await page.mouse.up();
+      await expect(zones).toHaveCount(0);
+      await expect(frame.locator('.rb-rail[data-side="left"]')).toBeVisible();
+      await expect(page.locator('p[role="status"]')).toHaveText(
+        "Menú de páginas: columna izquierda",
+      );
+      await expect(current).toHaveCount(0);
+
+      // 2. «Deshacer» puts it back in the bar, one step.
+      await page.getByRole("button", { name: "Deshacer", exact: true }).click();
+      await expect(entry).toBeVisible();
+      await expect(frame.locator('.rb-rail[data-side="left"]')).toHaveCount(0);
+
+      // 3. Pressed on the entry without moving: the canvas goes to that page, as it always did.
+      const title = ((await entry.textContent()) ?? "").trim();
+      const still = await entry.boundingBox();
+      if (!still) throw new Error("the entry is not drawn");
+      await page.mouse.click(still.x + still.width / 2, still.y + still.height / 2);
+      await expect(currentInBar).toHaveText(title);
+      await expect(zones).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+});
+
+/**
+ * **Sprint 33 día 6 — un botón más largo de lo que cabe en la barra del móvil** (decisión de David
+ * sobre el hallazgo 2 de la auditoría). La barra del móvil se apretó ese día y caben doce letras con
+ * el logo entero; pasado eso, el panel lo dice bajo «Se lee como…» del destino del botón — que es
+ * donde se escriben sus palabras — y la revisión antes de descargar lo lista como aviso, que se salta
+ * con «Descargar igualmente» y nunca bloquea.
+ */
+describe("sprint 33 día 6 — un botón largo avisa y no bloquea", () => {
+  it("lo dice bajo «Se lee como…» del destino y en la revisión de descarga, y descarga igual", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 950 } });
+    const studio = await context.newPage();
+    try {
+      await intoTheCanvas(studio);
+      const frame = studio.frameLocator(PREVIEW).first();
+      const button = frame.locator(".rb-header > .rb-nav-action");
+      await expect(button).toHaveCount(1);
+
+      await studio.getByRole("button", { name: "Menú", exact: true }).click();
+      const panel = studio.getByRole("complementary", { name: "La cabecera de tu web" });
+      await expect(panel).toBeVisible();
+      // The button's destination is the entry that says it is in the button.
+      const destination = panel.locator("li", {
+        hasText: "Está en el botón, así que no se repite en el menú.",
+      });
+      await expect(destination).toHaveCount(1);
+      const field = destination.getByRole("textbox");
+      const note = panel.getByText(
+        "En el móvil, un botón de más de 12 letras no cabe en la barra",
+        {
+          exact: false,
+        },
+      );
+      // Twelve letters say nothing.
+      await field.fill("Reserva mesa");
+      await expect(button).toHaveText("Reserva mesa");
+      await expect(note).toHaveCount(0);
+      // Thirteen do, under the field where they are written.
+      await field.fill("Reserva tu mesa");
+      await expect(button).toHaveText("Reserva tu mesa");
+      await expect(destination.getByText("no cabe en la barra", { exact: false })).toBeVisible();
+      await field.blur();
+      await panel.getByRole("button", { name: "Cerrar la cabecera" }).click();
+
+      // The review: past the photos' warning, the button's own, a warning with a way past it.
+      await studio.getByRole("button", { name: "Descargar" }).click();
+      const anyway = studio.getByRole("button", { name: "Descargar igualmente" });
+      const longButton = studio.getByRole("alertdialog", {
+        name: "El botón no cabe en la barra del móvil",
+      });
+      for (let i = 0; i < 4 && (await longButton.count()) === 0; i += 1) {
+        await anyway.waitFor();
+        if ((await longButton.count()) > 0) break;
+        await anyway.click();
+        await studio.waitForTimeout(200);
+      }
+      await expect(longButton).toBeVisible();
+      await expect(longButton.getByText("El botón «Reserva tu mesa»")).toBeVisible();
+      await expect(longButton.getByText("15 letras; en la barra del móvil caben 12")).toBeVisible();
+      const [download] = await Promise.all([
+        studio.waitForEvent("download"),
+        longButton.getByRole("button", { name: "Descargar igualmente" }).click(),
+      ]);
+      expect(download.suggestedFilename()).toMatch(/\.zip$/);
     } finally {
       await context.close();
     }

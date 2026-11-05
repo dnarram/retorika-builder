@@ -10,10 +10,12 @@ import {
   headerCombinations,
   openCombination,
   railCombinations,
+  transparentCoverCombinations,
 } from "./browser-fixtures.ts";
 import {
   checkCopies,
   checkCovers,
+  checkPhoneBar,
   checkSheet,
   expectHeader,
   setDisclosures,
@@ -159,12 +161,38 @@ describe("one copy of each menu, nothing over the brand, and the sheet (the audi
             ...(await checkCovers(page)),
           ];
           if (width <= 720) {
+            // The bar's bound (3a), since its finding 2 was decided and the bar close-set (día 6).
+            findings.push(...(await checkPhoneBar(page, h)));
             await setDisclosures(page, "details.rb-nav-narrow", true);
             findings.push(
               ...(await checkCopies(page, h, width, "menu")),
               ...(await checkSheet(page, "details.rb-nav-narrow")),
             );
           }
+          expect(findings, `${c.id} @ ${width}px\n  ${findings.join("\n  ")}`).toEqual([]);
+        } finally {
+          await closeCombination(page);
+        }
+      });
+    }
+  }
+});
+
+/**
+ * **Nothing over the cover's first words under a transparent bar taller than a line** (the audit's
+ * check 8, promoted for these forms on sprint 33 día 6, David's decision): the stacked bar, the row,
+ * both, and the audit's own combination, fixed and not, at the phone and the three widths the bar
+ * takes a new shape at. These are the forms the estimate of one line made too little room for; the
+ * check looks at the header's foot against every word of the first section, where its first version
+ * looked at the heading's centre and missed 30 px.
+ */
+describe("nothing over the cover under a transparent bar taller than a line (the audit's check 8)", () => {
+  for (const c of transparentCoverCombinations()) {
+    for (const width of [320, 768, 1024, 1280]) {
+      it(`${c.id} @ ${width}px`, async () => {
+        const page = await openCombination(browser, c, width);
+        try {
+          const findings = await checkCovers(page);
           expect(findings, `${c.id} @ ${width}px\n  ${findings.join("\n  ")}`).toEqual([]);
         } finally {
           await closeCombination(page);

@@ -102,33 +102,42 @@ day by a probe the audit had no check for. Captures in
 | Covers content, canvas only | all three (the audit's note) | the nine `stacked` with the sections behind «Ir a…» | 1280 | at rest | «Ir a…» at 88–124.8 under a bar whose foot is 105.6: over the stacked bar's second line and half its button | in the canvas «Ir a…» hangs from the estimate of one line; published, from the script's measure. The panel says so since día 3 | `ir-a-sobre-barra-apilada-1280-lienzo.png` |
 | Overflows (vertical) | all three | all 153 (the teaser's button, «Dónde estamos», 13 letters) | 320 | at rest, published and canvas | the bar 81.6–83.6 px, over the 72 bound; «Menú» on a second line, at the left | brand + button + «Menú» need 276 px of the 272 a 320 phone leaves; and where they fit, a long button leaves the brand nothing (20 letters at 375: 5 px of it) | `boton-largo-320.png` |
 
-1. **The first two have one cause, the estimate of a bar of one line, and two ways out.** (a) The
-   stylesheet's estimate learns the structure the renderer already knows — two lines when stacked,
-   the row's line when the sections have one, the logo or not —, which fixes both and moves the
-   cover's room on saved sites with a transparent bar that is stacked or has a row; half a day with
-   the goldens and the matrices. (b) The editor measures the bar and writes `--rb-header-h` into the
-   frame, as it writes `--rb-zoom` — fixes the canvas only, and amends ADR 0058 §4's table (the canvas
-   would do one of the script's four writes); two hours. The audit should also gain the check that
-   found the first: a transparent bar's foot against the cover's first words, not only the heading's
-   centre (check 8 looked there and missed it).
-2. **The third is a design call, David's.** Measured with four buttons at 320, 360, 375 and 390
-   (REVIEW): tightening the phone's bar — gaps to `space.sm`, the button's padding to `space.md` —
-   fits thirteen letters at 320 with 30 px of brand and moves the threshold by about 32 px; twenty
-   letters still wrap. (a) That tightening, on every phone bar with a button: changes the look of
-   every saved site with one, half a day. (b) The button goes into «Menú» on a phone, its first entry
-   and a pill: the bar keeps the brand and the word, the call to action one press away; a day. (c)
-   «Menú» keeps only its bars below some width: against ADR 0063's «the word stays». (d) Leave it.
-   The bound's half of the audit's check 3 stays out of `a11y` until it is decided.
+**All three closed on sprint 33 día 6, by David's decisions of 5 November** (REVIEW, sprint 33 día 6;
+ADR 0063's note of that day). The first two: **the estimate learnt the bar's form** — a sum per form,
+held to the measured bar in three engines within −1 and +16 —, and the audit's check 8 now looks at the
+header's foot against every word of the cover and is in `a11y` for the transparent stacked and row
+forms. The third: **the phone's bar is close-set** (`space.sm` between its words, the button's sides
+at `space.md`), its 72 px bound is in `a11y`, and a button past twelve letters is said in the «Menú»
+panel and in the download review, as a warning. **And día 5's «a test that cannot fail in CI»** (the
+finger over ADR 0065's sheet, synthesized by `Input.synthesizeScrollGesture`, which moved nothing on
+CI's Linux): the finger is now the touchscreen's own, `Input.dispatchTouchEvent`, and it first moves the
+page with the sheet closed — an instrument that moves nothing fails by name. Without the lock it moves
+the page 508 px under the sheet; with it, 0.
 
-**Sprint 33 día 5 — a test that cannot fail in CI.** `header.browser.test.ts`, «does not let a finger
-move it either (a touch gesture, Chromium)» (ADR 0065), synthesizes a touch scroll with
-`Input.synthesizeScrollGesture` and asserts the page did **not** move. On this Mac the gesture moves a
-page (1506 px before ADR 0065's fix, measured on día 1); on CI's Linux the same gesture over the
-editor's canvas moved nothing in 5 s (PR #347's first e2e run), so there the lock's test would pass
-with or without the lock. Cheap to close: the test first moves the page with the sheet closed, proving
-its instrument, and only then opens the sheet — or uses `Input.dispatchTouchEvent`, which the día 5
-walk measured scrolling the canvas. Not fixed on día 5: it is the renderer's suite, and día 5 touched
-the editor only.
+**Sprint 33 día 6 — what that day measured and leaves open.**
+
+1. **A bar whose words do not fit its line covers a transparent cover's first words, and no estimate
+   can know it.** Measured in Chromium over the teaser's own labels (a logo, «Nuestra carta», «Fotos de
+   la casa», «Contacto», «Dónde estamos»): a one-line bar wraps at 768 in every layout but the stacked
+   one, and with a transparent bar and a logo the cover's first words lie 4.8 px under it (6.6 compact,
+   **50.1 at the generous scale**, where the bar wraps at 1024 too); 548 of 4 320 measured states wrap,
+   30 of them over a transparent cover. Not covering without a logo at the default scale (6.4 px clear),
+   because the cover's `space.xl` absorbs a wrapped line of entries. Three ways out, each David's: (a) the
+   cover's room is `max(--rb-bar-h, --rb-header-h)` — the script's measure where it runs, so a published
+   page is right and the canvas keeps the estimate; costs a layout shift on load on exactly the pages
+   that wrap, and amends adjustment 7 of sprint 32 (the measure drops 16 px when a fixed bar condenses);
+   half a day with Lighthouse. (b) From 721 to 1023 the bar draws «Menú» instead of its strip when the
+   site has more than some number of entries — a count the renderer knows, not a width it measures; a
+   day, and the tablet loses the open strip on sites with many pages. (c) Leave it, with the panel
+   saying so under a transparent bar with a logo. Captures, Chromium 153 at 768, the bar's foot against
+   the headline's top: `barra-partida-768-por-defecto-publicado.png` (124.8 over 120) and
+   `barra-partida-768-amplia-publicado.png` (216.2 over 166.1: «Dónde estamos» on the headline).
+2. **The button inside «Menú» on a phone** (the audit's finding 2, option b, which David named the
+   cleanest pattern and kept for later): the bar keeps the brand and the word, and the button is the
+   sheet's first entry, a pill. **A day**: the renderer (the button's phone copy, the sheet's first
+   place, the bar's rule), `a11y`'s copies check (one visible button per width), the goldens of every
+   site with a button, and the e2e walks that press the button on a phone. **It changes every saved site
+   with a button**, which is why it did not fit día 6 and needs David's written decision.
 
 The review before that: 3 November 2026, **closing sprint 31 — «cada menú tiene su sitio».** David asked for the
 pages menu and the section navigator to become two independent elements, each with its own place on the

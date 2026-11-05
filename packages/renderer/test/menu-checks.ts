@@ -442,10 +442,32 @@ async function readScrolled(page: Page) {
 }
 
 /** 8. Nothing covers the brand or the first heading at rest: what is under each one's centre is
- * itself. */
+ * itself — **and no word of the first section starts above the header's foot** (sprint 33 día 6).
+ * The centre alone missed a transparent bar, stacked with its row, lying 30 px over the cover's first
+ * words: the heading's centre was clear and its top was not. A header in the flow ends where `<main>`
+ * begins, so the second half can only ever find a header laid over the page. */
 export async function checkCovers(page: Page): Promise<string[]> {
   return page.evaluate(() => {
     const out: string[] = [];
+    const header = document.querySelector<HTMLElement>("header.rb-header");
+    const foot = header?.getBoundingClientRect();
+    const first = document.querySelector("main > .rb-section");
+    if (header && foot && foot.height > 0 && first) {
+      for (const el of first.querySelectorAll<HTMLElement>("*")) {
+        const words = [...el.childNodes].some(
+          (node) => node.nodeType === Node.TEXT_NODE && (node.textContent ?? "").trim() !== "",
+        );
+        if (!words || !el.checkVisibility()) continue;
+        const box = el.getBoundingClientRect();
+        const across = box.left < foot.right && box.right > foot.left;
+        if (across && box.top < foot.bottom - 0.5) {
+          out.push(
+            `8 covers: the header's foot at ${foot.bottom.toFixed(1)} lies over «${(el.textContent ?? "").trim().slice(0, 24)}» at ${box.top.toFixed(1)}`,
+          );
+          break;
+        }
+      }
+    }
     const probe = (selector: string, name: string) => {
       const el = [...document.querySelectorAll<HTMLElement>(selector)].find((e) =>
         e.checkVisibility(),
