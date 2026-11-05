@@ -154,6 +154,35 @@ export const RAIL_FOLD_WIDTH = 1024;
 export const TWO_RAILS_FOLD_WIDTH = 1248;
 
 /**
+ * **The header's own widths, per document** (sprint 34 día 1): the widest screen its phone layout
+ * reaches, and the narrowest one a rail stands on. They were two literals — 720 in five `@media`
+ * blocks, 1024 in the rails' — that every check and every sentence of the editor assumed. They are a
+ * function of the document from now on, so that the day the bar folds where its words would not fit
+ * (sprint 34 día 2) moves one number and not twenty. **Today every document answers 720 and 1024**,
+ * and nothing published changes. Two rails on opposite sides still stand from `TWO_RAILS_FOLD_WIDTH`,
+ * and the sections' phone breakpoint — the shared block of `build.ts` — is not the header's and does
+ * not move.
+ */
+export interface HeaderWidths {
+  /** The widest screen the header's phone layout reaches. */
+  phone: number;
+  /** The narrowest screen a rail stands on. */
+  rails: number;
+}
+
+export function headerWidths(_doc: RetorikaDocument): HeaderWidths {
+  return { phone: 720, rails: RAIL_FOLD_WIDTH };
+}
+
+/** The `@media` line up to the header's phone width, and the one from just above it. */
+function upTo(widths: HeaderWidths): string {
+  return `@media (max-width: ${widths.phone}px)`;
+}
+function above(widths: HeaderWidths): string {
+  return `@media (min-width: ${widths.phone + 1}px)`;
+}
+
+/**
  * **The glass** (ADR 0063, sprint 32 día 1): a fixed bar, once the page has scrolled, keeps this much
  * of its own colour and lets the rest of the page show through, blurred. The number is a claim about
  * contrast, and `packages/renderer/test/glass.test.ts` is what makes it one: every word the bar writes
@@ -619,6 +648,7 @@ function headerStyleCss(doc: RetorikaDocument): string[] {
  */
 export function headerCss(doc: RetorikaDocument, target: "html" | "dom"): string[] {
   if (!headerDrawn(doc)) return [];
+  const widths = headerWidths(doc);
   return [
     // The skip link: off-screen until it has focus, and then the first thing on the page. `top`
     // rather than a clip, so the one transition it makes is the one a sighted keyboard user sees.
@@ -634,7 +664,7 @@ export function headerCss(doc: RetorikaDocument, target: "html" | "dom"): string
     // `--rb-header-h` starts as the same estimate and the script refines it with `offsetHeight` where
     // it runs: it is for the anchors, which should land under the bar as it is now, and for «Ir a…»,
     // which hangs from it.
-    ...barHeightCss(doc),
+    ...barHeightCss(doc, widths),
     // The motor's own numbers (`--rb-ease`, `--rb-fast`, `--rb-base`) are written for every site in
     // `build.ts` since día 2: the page's own motion reads them too.
     // **Motion, and only for somebody who has not asked their system for less** (David's point 7 on
@@ -857,7 +887,7 @@ export function headerCss(doc: RetorikaDocument, target: "html" | "dom"): string
     ".rb-header[data-sticky] ~ main [data-section] { scroll-margin-top: var(--rb-header-h); }",
     `.rb-header[data-sticky][data-scrolled] { box-shadow: 0 1px 0 color-mix(in srgb, var(--color-ink) 10%, transparent),`,
     "  0 8px 24px -16px var(--color-ink); }",
-    "@media (min-width: 721px) {",
+    `${above(widths)} {`,
     "  .rb-header[data-sticky][data-scrolled] { padding-block: var(--space-sm);",
     "    margin-bottom: calc(2 * (var(--space-md) - var(--space-sm))); }",
     "}",
@@ -882,8 +912,8 @@ export function headerCss(doc: RetorikaDocument, target: "html" | "dom"): string
     `    background: color-mix(in srgb, var(--color-ink) ${Math.round(GLASS_MIX * 100)}%, transparent);`,
     "    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }",
     "}",
-    ...railCss(doc),
-    ...foldCss(doc),
+    ...railCss(doc, widths),
+    ...foldCss(doc, widths),
     ...headerStyleCss(doc),
     "",
   ];
@@ -1008,15 +1038,18 @@ function barEstimate(
  * stylesheet is the site's, and a page whose sections lend no entry draws no row. The phone's own
  * pair is `headerMobileCss`'s.
  */
-function barHeightCss(doc: RetorikaDocument): string[] {
+function barHeightCss(doc: RetorikaDocument, widths: HeaderWidths): string[] {
   const settings = headerSettings(doc);
   const rowSelector = "html:has(.rb-header[data-sections=row] > .rb-nav-row)";
   const hasRow = settings.sectionsPosition === "row";
-  const bands = [
-    { band: "tablet", min: 721, max: RAIL_FOLD_WIDTH - 1 },
-    { band: "between", min: RAIL_FOLD_WIDTH, max: TWO_RAILS_FOLD_WIDTH - 1 },
-    { band: "wide", min: TWO_RAILS_FOLD_WIDTH, max: undefined },
-  ] as const;
+  // A band the header's widths leave empty is no band.
+  const bands = (
+    [
+      { band: "tablet", min: widths.phone + 1, max: widths.rails - 1 },
+      { band: "between", min: widths.rails, max: TWO_RAILS_FOLD_WIDTH - 1 },
+      { band: "wide", min: TWO_RAILS_FOLD_WIDTH, max: undefined },
+    ] as const
+  ).filter(({ min, max }) => max === undefined || min <= max);
   // Neighbouring bands that hold the same bar are one range.
   const ranges: { min: number; max: number | undefined; bar: string; row: string }[] = [];
   for (const { band, min, max } of bands) {
@@ -1032,7 +1065,7 @@ function barHeightCss(doc: RetorikaDocument): string[] {
       return [
         `html { --rb-bar-h: ${bar};`,
         "  --rb-header-h: var(--rb-bar-h); }",
-        ...(hasRow ? ["@media (min-width: 721px) {", `  ${rowRule[0]}`, "}"] : []),
+        ...(hasRow ? [`${above(widths)} {`, `  ${rowRule[0]}`, "}"] : []),
       ];
     }
     const media =
@@ -1090,11 +1123,11 @@ function collapseBar(header: string): string[] {
  *   them.
  * - **z-index 2**, under the skip link's 3: the first Tab stop is drawn over a rail on the left.
  */
-function railCss(doc: RetorikaDocument): string[] {
+function railCss(doc: RetorikaDocument, widths: HeaderWidths): string[] {
   const settings = headerSettings(doc);
   if (!usesRail(settings)) return [];
-  const wide = `@media (min-width: ${RAIL_FOLD_WIDTH}px)`;
-  const between = `@media (min-width: ${RAIL_FOLD_WIDTH}px) and (max-width: ${TWO_RAILS_FOLD_WIDTH - 1}px)`;
+  const wide = `@media (min-width: ${widths.rails}px)`;
+  const between = `@media (min-width: ${widths.rails}px) and (max-width: ${TWO_RAILS_FOLD_WIDTH - 1}px)`;
   const both = `@media (min-width: ${TWO_RAILS_FOLD_WIDTH}px)`;
   // The bar collapses where every rail it relies on stands: from 1024 with one rail, from 1248 with
   // two (`collapseBar`).
@@ -1192,7 +1225,7 @@ function railCss(doc: RetorikaDocument): string[] {
  * - **The bar's scheme**, as the phone's «Menú» panel takes it — background and words, and `surface`
  *   for a transparent bar, since what floats over the page has nothing under it to show through.
  */
-function foldCss(doc: RetorikaDocument): string[] {
+function foldCss(doc: RetorikaDocument, widths: HeaderWidths): string[] {
   const settings = headerSettings(doc);
   if (!usesFold(settings)) return [];
   const coloured = ":is([data-bg=primary], [data-bg=secondary], [data-bg=ink])";
@@ -1223,7 +1256,7 @@ function foldCss(doc: RetorikaDocument): string[] {
     "  .rb-nav-fold[open] > .rb-nav { animation: rb-fold-in var(--rb-base) var(--rb-ease) backwards; }",
     "  .rb-chevron { transition: transform var(--rb-fast) var(--rb-ease); }",
     "}",
-    "@media (min-width: 721px) {",
+    `${above(widths)} {`,
     `  ${placed} { display: block; position: fixed; z-index: 2;`,
     "    top: calc(var(--rb-header-h) + var(--space-md)); right: var(--space-md); }",
     `  ${placed} > summary { padding: var(--space-sm) var(--space-lg); background: var(--color-surface);`,
@@ -1248,13 +1281,13 @@ function foldCss(doc: RetorikaDocument): string[] {
     "}",
     ...(usesRail(settings)
       ? [
-          `@media (min-width: ${RAIL_FOLD_WIDTH}px) {`,
+          `@media (min-width: ${widths.rails}px) {`,
           `  .rb-header[data-sections=fold][data-rails=right] .rb-nav-fold { right: auto; left: var(--space-md); }`,
           `  .rb-header[data-sections=fold][data-rails=right] .rb-nav-fold > .rb-nav { right: auto; left: 0; }`,
           "}",
         ]
       : []),
-    "@media (max-width: 720px) {",
+    `${upTo(widths)} {`,
     // The bar's words are close-set on every phone since sprint 33 día 6 (`headerMobileCss`); they
     // closed up first here, when «Ir a…» joined them — measured at 320 px with «Taberna Santo
     // Domingo», its logo, «Contacto», «Ir a…» and «Menú»: at 16 px between them the brand had 21 px
@@ -1346,7 +1379,7 @@ export function headerMobileCss(doc: RetorikaDocument): string[] {
   const settings = headerSettings(doc);
   return [
     ".rb-nav-narrow { display: none; }",
-    "@media (max-width: 720px) {",
+    `${upTo(headerWidths(doc))} {`,
     // The phone's estimate (`barEstimate`): one line, and the row under it on a page that draws one.
     `  html { --rb-bar-h: ${barEstimate(doc, settings, "phone", false)}; }`,
     ...(headerPhoneRow(doc, settings)

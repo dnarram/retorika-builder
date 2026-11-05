@@ -10,7 +10,6 @@ import {
 import es from "../locales/es.json" with { type: "json" };
 import type { Point } from "./barPosition.ts";
 import { type HeaderState, pagesPositionPatch, sectionsPositionPatch } from "./headerState.ts";
-import { PHONE_BREAKPOINT } from "./overflowCheck.ts";
 
 /**
  * **A menu is dragged to its zone** (ADR 0066, sprint 33 día 4), decided without a DOM.
@@ -53,17 +52,18 @@ export interface MenuZone {
 /** What `zonesFor` reads of the panel's state: each menu's place and whether it is drawn. */
 export type Places = Pick<
   HeaderState,
-  "pagesPosition" | "sectionsPosition" | "pagesMenu" | "sectionsMenu"
+  "pagesPosition" | "sectionsPosition" | "pagesMenu" | "sectionsMenu" | "phoneWidth"
 >;
 
 const OTHER: Record<Menu, Menu> = { pages: "sections", sections: "pages" };
 
 /**
- * The zones of `menu` at a layout width — **none in the phone view** (ADR 0066): no rail stands
- * under 1024, and where the sections go on a phone is `sections.mobile`, a choice of the panel.
+ * The zones of `menu` at a layout width — **none where the header is the phone's** (ADR 0066): no
+ * rail stands there, and where the sections go on a phone is `sections.mobile`, a choice of the
+ * panel. The header's phone width is the document's (`phoneWidth`, sprint 34 día 1).
  */
 export function zonesFor(menu: Menu, places: Places, layoutWidth: number): MenuZone[] {
-  if (layoutWidth <= PHONE_BREAKPOINT) return [];
+  if (layoutWidth <= places.phoneWidth) return [];
   const words: readonly Zone[] = menu === "pages" ? PAGES_POSITIONS : SECTIONS_POSITIONS;
   const current = menu === "pages" ? places.pagesPosition : places.sectionsPosition;
   const other = OTHER[menu];

@@ -160,7 +160,7 @@ for (const [engine, type] of ENGINES) {
             await setDisclosures(page, "details", false);
             await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
             await page.waitForTimeout(150);
-            const phone = width <= 720;
+            const phone = width <= h.phoneWidth;
 
             const rest = [
               ...(await checkCopies(page, h, width, "rest")),
@@ -218,7 +218,7 @@ for (const [engine, type] of ENGINES) {
           try {
             await cpage.setViewportSize({ width, height: heightFor(width) });
             await cpage.waitForTimeout(100);
-            const phone = width <= 720;
+            const phone = width <= h.phoneWidth;
             const published = snapshots[width];
             if (!published) throw new Error(`no published snapshot at ${width}`);
             await fail(cpage, width, "canvas", [
