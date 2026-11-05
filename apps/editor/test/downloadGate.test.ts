@@ -514,6 +514,45 @@ describe("overflow at 320 pixels", () => {
   });
 });
 
+/**
+ * **A button longer than the phone's bar holds** (sprint 33 día 6, David's decision on the menu
+ * audit's finding 2): a warning beside the overflow, never a block — «Menú» on a second line is a
+ * bar that looks worse, not a site that does not work.
+ */
+describe("a button longer than the phone's bar holds", () => {
+  const withButton = (title: string) =>
+    parseDocument({
+      ...plain,
+      header: { action: { kind: "page", pageId: "p2" } },
+      pages: [...plain.pages, { id: "p2", slug: "donde", title, sections: [] }],
+    });
+
+  it("warns past twelve letters, with the button's words, and lets the download go past it", () => {
+    const doc = withButton("Dónde estamos");
+    expect(downloadGateFor(counts({}), doc)).toEqual({
+      kind: "overflows",
+      findings: [],
+      longButton: "Dónde estamos",
+    });
+    expect(downloadGateFor(counts({}), doc, new Set(["overflow"]))).toEqual({ kind: "ready" });
+  });
+
+  it("says nothing at twelve, the longest the bar holds with a logo", () => {
+    expect(downloadGateFor(counts({}), withButton("Reserva mesa"))).toEqual({ kind: "ready" });
+  });
+
+  it("is said with what overflows when both are there, in one dialog", () => {
+    const overflowing = [{ pageId: "home", sectionId: "sec-cover", label: "Solomillo", over: 3 }];
+    expect(
+      downloadGateFor(counts({}), withButton("Pide tu cita online"), new Set(), overflowing),
+    ).toEqual({
+      kind: "overflows",
+      findings: overflowing,
+      longButton: "Pide tu cita online",
+    });
+  });
+});
+
 describe("a bank photograph that did not load", () => {
   /**
    * The sprint-14 sweep's fourth finding, which was the only one of the four that was a dead end

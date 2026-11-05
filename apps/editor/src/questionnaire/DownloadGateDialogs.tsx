@@ -9,6 +9,7 @@ import type {
 import { useId } from "react";
 import type { DownloadGate } from "../editor/downloadGate.ts";
 import { HEAVY_FONT_BYTES } from "../editor/fontBytes.ts";
+import { PHONE_BUTTON_MAX } from "../editor/headerState.ts";
 import type { OverflowFinding } from "../editor/overflowCheck.ts";
 import { listPhotos } from "../editor/photoInventory.ts";
 import { type ContrastFinding, formatRatio, type LogoFinding } from "../editor/styleReview.ts";
@@ -498,20 +499,28 @@ export function ContrastDialog({
  * overflow has no such default: it might be a long word, a wide photograph, an exact size, or the
  * composition itself, and a button promising to fix it would be picking one of those at random.
  * What this does instead is **name the section**, so the owner knows where to look.
+ *
+ * **A button longer than the phone's bar holds is said here too** (sprint 33 día 6, David's
+ * decision): the same narrowest phone, a row of its own with the button's words, and its own title
+ * and foot when it is the only thing to say.
  */
 export function OverflowDialog({
   findings,
+  longButton,
   onDownloadAnyway,
   onCancel,
 }: {
   findings: readonly OverflowFinding[];
+  longButton?: string | undefined;
   onDownloadAnyway: () => void;
   onCancel: () => void;
 }) {
   const titleId = useId();
   const container = useFocusTrap(true, onCancel);
-  const body =
-    findings.length === 1
+  const alone = findings.length === 0 && longButton !== undefined;
+  const body = alone
+    ? es["editor.download.longButton.body"].replace("{max}", String(PHONE_BUTTON_MAX))
+    : findings.length === 1
       ? es["editor.download.overflow.body.one"]
       : es["editor.download.overflow.body.many"].replace("{n}", String(findings.length));
 
@@ -526,7 +535,7 @@ export function OverflowDialog({
         className="flex max-h-full w-full max-w-[520px] flex-col rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.28)]"
       >
         <h2 id={titleId} className="m-0 text-[17px] font-bold text-ui-ink">
-          {es["editor.download.overflow.title"]}
+          {es[alone ? "editor.download.longButton.title" : "editor.download.overflow.title"]}
         </h2>
         <p className="mt-2 mb-0 text-[14px] leading-snug text-ui-muted">{body}</p>
 
@@ -544,10 +553,22 @@ export function OverflowDialog({
               </span>
             </div>
           ))}
+          {longButton === undefined ? null : (
+            <div className="flex flex-col gap-0.5 rounded-[9px] border border-ui-border px-3 py-2.5">
+              <span className="truncate text-[13px] text-ui-ink">
+                {es["editor.download.longButton.row"].replace("{label}", longButton)}
+              </span>
+              <span className="text-[12px] text-ui-muted">
+                {es["editor.download.longButton.why"]
+                  .replace("{n}", String(longButton.length))
+                  .replace("{max}", String(PHONE_BUTTON_MAX))}
+              </span>
+            </div>
+          )}
         </div>
 
         <p className="mt-4 mb-0 text-[12px] leading-snug text-ui-muted">
-          {es["editor.download.overflow.foot"]}
+          {es[alone ? "editor.download.longButton.foot" : "editor.download.overflow.foot"]}
         </p>
 
         <div className="mt-5 flex justify-end gap-2.5">

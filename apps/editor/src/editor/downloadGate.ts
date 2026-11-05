@@ -7,6 +7,7 @@ import {
   type RetorikaDocument,
 } from "@retorika/schema";
 import { HEAVY_FONT_BYTES } from "./fontBytes.ts";
+import { phoneButtonTooLong } from "./headerState.ts";
 import type { OverflowFinding } from "./overflowCheck.ts";
 import { ownFontFiles } from "./ownFonts.ts";
 import type { PhotoCounts } from "./photoInventory.ts";
@@ -167,7 +168,13 @@ export type DownloadGate =
    * than in a thirteenth, for the same reason the logo joined it.
    */
   | { kind: "lowContrast"; findings: ContrastFinding[]; logo?: LogoFinding; overPhoto?: string[] }
-  | { kind: "overflows"; findings: OverflowFinding[] }
+  /**
+   * Something past the right edge at 320 px — **and since sprint 33 día 6 a button longer than the
+   * phone's bar holds** (`longButton`, its words; David's decision): the same narrow phone, the same
+   * «Descargar igualmente» and the same `overflow` acceptance. A warning and never a block: «Menú»
+   * on a second line is a bar that looks worse, not a site that does not work.
+   */
+  | { kind: "overflows"; findings: OverflowFinding[]; longButton?: string }
   | { kind: "textOverText"; findings: OverlappingTexts[] }
   /**
    * A face of the owner's own font above 300 KB (David's condition 2): a slower page, not a broken
@@ -254,8 +261,15 @@ export function downloadGateFor(
       };
     }
   }
-  if (!accepted.has("overflow") && overflow.length > 0) {
-    return { kind: "overflows", findings: [...overflow] };
+  if (!accepted.has("overflow")) {
+    const longButton = phoneButtonTooLong(doc);
+    if (overflow.length > 0 || longButton !== undefined) {
+      return {
+        kind: "overflows",
+        findings: [...overflow],
+        ...(longButton === undefined ? {} : { longButton }),
+      };
+    }
   }
   if (!accepted.has("layout")) {
     // Asked of the document, like the contrast review and unlike the overflow measurement: two

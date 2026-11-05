@@ -174,3 +174,35 @@ column folds there. «Deshacer» undoes each drop in one press.
 Chromium at 1280). Condition 1 keeps a link a link, so such a menu is moved from the panel's cards, as
 before. A grip that started on the entry and became a drag past the threshold would reach it; it is
 the one way to, and it is David's to choose (the PR of día 5 asks).
+
+## Note — sprint 33 día 6: the gesture also starts on an entry (condition 1, amended)
+
+**David's decision of 5 November 2026**, answering the question the día 5 note above left him: **yes,
+a press on any entry past the threshold starts the drag.** Recorded by development, which does not
+sign.
+
+§1 said the gesture starts on the menu's own ground and never on an entry, and día 5 measured what
+that left out: a menu of one entry in the bar has no ground at all. The amendment keeps what §1 was
+protecting — the link stays a link — by the rule §1 already had: **the two states**. Under the
+threshold a press on an entry is the click `wireLinks` follows, and the canvas goes to that page or
+section as before; past it, the press is the drag, and the click that ends it is swallowed
+(`justDragged`). The brand and the button are still never grips. With a finger, still only once the
+header is chosen.
+
+**The cursor over an entry stays the link's hand**, not the open one (§5): what a click there does is
+navigate, and the open hand is for the ground, where a press does nothing else. The panel's sentence
+says both ways: «cógelo por una de sus entradas o por el hueco entre ellas».
+
+Measured by the walk «sprint 33 día 6 — un menú se coge también por su entrada», at 1440 (1280 at
+0.9125): a site with one page besides the home, its pages' menu drawn by «Siempre» — a `nav` exactly as
+large as its link —; held on the link and carried 6 px, the three zones; over the left column, lit;
+let go, `pages.position = "left"`, the column standing, «Menú de páginas: columna izquierda» in the
+status region, and no page navigated to; «Deshacer» puts it back; a press on the link without moving
+takes the canvas to that page. Sabotaged back to «never on an entry», no zone is drawn and the walk
+is red.
+
+**Two zones follow the estimate that learnt its form the same day** (ADR 0063's note of sprint 33 día
+6). A collapsed bar's strip, 1040 × 72 on día 5, is now the bar the menu comes back to — 69.8 px on the
+generated site — and the walk asserts that the bar given back measures the strip to a pixel. And
+«Ir a…»'s pill is drawn from the bar **without** the sections' row when the sections are the menu
+carried: the estimate counts the row on a page that draws one, and the row leaves with the drop.
