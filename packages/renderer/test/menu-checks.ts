@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import type { RetorikaDocument } from "@retorika/schema";
-import { headerWidths } from "../src/index.ts";
+import { headerWidths, phoneAt, railsAt } from "../src/index.ts";
 import { measureOverflow } from "./browser-fixtures.ts";
 
 /**
@@ -33,8 +33,8 @@ export interface HeaderExpectation {
   twoRails: boolean;
   /** The header's own widths (sprint 34 día 1): the phone layout's widest screen, and the narrowest
    * a rail stands on. Read from the renderer, as the stylesheet reads them. */
-  phoneWidth: number;
-  railsWidth: number;
+  phoneWidth: number | "always";
+  railsWidth: number | "none";
 }
 
 export function expectHeader(doc: RetorikaDocument): HeaderExpectation {
@@ -59,10 +59,11 @@ export function expectHeader(doc: RetorikaDocument): HeaderExpectation {
  * from it too or, when two stand on opposite sides, from 1248 (ADR 0060 §3). */
 export function railsStanding(h: HeaderExpectation, width: number): ("left" | "right")[] {
   const out: ("left" | "right")[] = [];
-  if (h.pages !== "bar" && width >= h.railsWidth) out.push(h.pages);
+  const stands = railsAt({ rails: h.railsWidth }, width);
+  if (h.pages !== "bar" && stands) out.push(h.pages);
   if (
     (h.sections === "left" || h.sections === "right") &&
-    width >= (h.twoRails ? 1248 : h.railsWidth) &&
+    (h.twoRails ? stands && width >= 1248 : stands) &&
     !out.includes(h.sections)
   ) {
     out.push(h.sections);
@@ -77,7 +78,7 @@ export function expectedCopies(
   width: number,
   state: State,
 ): Record<Part, number> {
-  if (width <= h.phoneWidth) {
+  if (phoneAt({ phone: h.phoneWidth }, width)) {
     return {
       pages: state === "menu" ? 1 : 0,
       sections: h.mobile === "row" ? 1 : h.mobile === "fold" && state === "fold" ? 1 : 0,
@@ -446,6 +447,38 @@ async function readScrolled(page: Page) {
       top: document.querySelector("main > .rb-section")?.getBoundingClientRect().top ?? Number.NaN,
     };
   });
+}
+
+/**
+ * 11. **The bar holds the lines of its form, or it is the phone's** (sprint 34 día 2, ADR 0067): with
+ * the wide strip drawn, the header is no taller than the stylesheet's own estimate of its lines
+ * (`--rb-bar-h`, which counts the form: one line, two when stacked, the row) plus a pixel — a line
+ * that wrapped is taller. Reads no width and no estimate of the fold: it judges what is drawn, so the
+ * estimate that decides where the bar folds is never the judge of whether it folded in time.
+ */
+export async function checkHoldsItsLines(page: Page): Promise<string[]> {
+  const m = await page.evaluate(() => {
+    const header = document.querySelector<HTMLElement>("header.rb-header");
+    const strip = document.querySelector<HTMLElement>(".rb-nav-wide");
+    if (!header) return null;
+    const probe = document.createElement("div");
+    probe.style.cssText = "position:absolute;visibility:hidden;height:var(--rb-bar-h)";
+    (document.querySelector("main") ?? document.body).append(probe);
+    const estimate = probe.getBoundingClientRect().height;
+    probe.remove();
+    return {
+      stripDrawn: strip !== null && strip.checkVisibility(),
+      height: header.getBoundingClientRect().height,
+      estimate,
+    };
+  });
+  if (!m) return ["11 lines: no header drawn"];
+  if (!m.stripDrawn) return [];
+  return m.height > m.estimate + 1
+    ? [
+        `11 lines: the bar is ${m.height.toFixed(1)} px tall with its strip drawn, over its ${m.estimate.toFixed(1)}: a line wrapped`,
+      ]
+    : [];
 }
 
 /** 8. Nothing covers the brand or the first heading at rest: what is under each one's centre is

@@ -10,6 +10,7 @@ import {
   fineTrackSpan,
   gapRowsFor,
   measuredToFine,
+  tokenPx,
 } from "../src/fineGrid.ts";
 
 /**
@@ -239,5 +240,19 @@ describe("coarseToFine", () => {
     expect(coarseToFine(place(2, 3, 1, 1), 2).elementId).toBe("el");
     expect(() => coarseToFine(place(1, 1, 1, 1), -1)).toThrow(/gapRows/);
     expect(() => coarseToFine(place(1, 1, 1, 1), 1.5)).toThrow(/gapRows/);
+  });
+});
+
+describe("tokenPx", () => {
+  it("reads px as they are and rem at the root's 16 px", () => {
+    expect(tokenPx("16px")).toBe(16);
+    expect(tokenPx("0.9375rem")).toBe(15);
+    expect(tokenPx(" 1.0625rem ")).toBe(17);
+  });
+
+  it("refuses any other unit, and anything that is not a string", () => {
+    for (const bad of ["1em", "12", "16 px", "", 16, undefined, null, "auto"]) {
+      expect(() => tokenPx(bad)).toThrow(/px or rem/);
+    }
   });
 });

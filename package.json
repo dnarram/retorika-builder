@@ -35,6 +35,7 @@
     "security:audit": "node scripts/security-audit.ts",
     "security:secrets": "pre-commit run gitleaks --all-files",
     "fonts:generate": "node scripts/generate-font-data.ts",
+    "fonts:advances": "node scripts/generate-glyph-advances.ts",
     "fonts:licences": "node scripts/fetch-font-licences.ts",
     "fonts:survey": "node scripts/survey-fonts.ts",
     "brand:assets": "node scripts/brand-assets.ts",

@@ -12,8 +12,10 @@ import {
   type RetorikaDocument,
   type SectionsOnMobile,
   type SectionsPosition,
+  tokenPx,
 } from "@retorika/schema";
 import { safeUrl } from "./escape.ts";
+import { FALLBACK_ADVANCES, GLYPH_ADVANCES } from "./glyphAdvances.ts";
 import es from "./locales/es.json" with { type: "json" };
 import {
   hasMenu,
@@ -154,32 +156,299 @@ export const RAIL_FOLD_WIDTH = 1024;
 export const TWO_RAILS_FOLD_WIDTH = 1248;
 
 /**
- * **The header's own widths, per document** (sprint 34 día 1): the widest screen its phone layout
- * reaches, and the narrowest one a rail stands on. They were two literals — 720 in five `@media`
- * blocks, 1024 in the rails' — that every check and every sentence of the editor assumed. They are a
- * function of the document from now on, so that the day the bar folds where its words would not fit
- * (sprint 34 día 2) moves one number and not twenty. **Today every document answers 720 and 1024**,
- * and nothing published changes. Two rails on opposite sides still stand from `TWO_RAILS_FOLD_WIDTH`,
- * and the sections' phone breakpoint — the shared block of `build.ts` — is not the header's and does
- * not move.
+ * **The header's own widths, per document** (sprint 34 días 1 and 2): the widest screen its phone
+ * layout reaches, and the narrowest one a rail stands on. They were two literals — 720 in five
+ * `@media` blocks, 1024 in the rails' — that every check and every sentence of the editor assumed.
+ * Since día 2 (ADR 0067) **the phone width is the document's**: the widest screen at which the bar's
+ * one line would not hold its words, estimated from what the bar holds (`stripEstimate`), and 720
+ * where every line fits from 721 up. A rail stands from just above it, never under 1024. **A bar
+ * whose words do not fit even the page's measure (1200 px) is the phone's at every width**: `phone`
+ * is then the named value `"always"` — the phone block is emitted with no `@media` at all, no rail is
+ * emitted — and `rails` is `"none"`, so that whoever reads this (the checks, `zonesFor`, the panel)
+ * tells it apart with no arithmetic (David's first adjustment approving sprint 34).
+ *
+ * Two rails on opposite sides still stand from `TWO_RAILS_FOLD_WIDTH` or from the rails' width,
+ * whichever is later; the sections' phone breakpoint — the shared block of `build.ts` — is not the
+ * header's and does not move.
  */
-export interface HeaderWidths {
-  /** The widest screen the header's phone layout reaches. */
-  phone: number;
-  /** The narrowest screen a rail stands on. */
-  rails: number;
+export type HeaderWidths =
+  | {
+      /** The widest screen the header's phone layout reaches. */
+      phone: number;
+      /** The narrowest screen a rail stands on. */
+      rails: number;
+      /** How many characters over the line the widest bar is at 1247 px (0 when it fits there):
+       * what the download review says to cut (sprint 34 día 4). */
+      over: number;
+    }
+  | { phone: "always"; rails: "none"; over: number };
+
+/** Whether `width` is a phone width for this header, and whether a rail stands at it. */
+export function phoneAt(widths: Pick<HeaderWidths, "phone">, width: number): boolean {
+  return widths.phone === "always" || width <= widths.phone;
+}
+export function railsAt(widths: Pick<HeaderWidths, "rails">, width: number): boolean {
+  return widths.rails !== "none" && width >= widths.rails;
+}
+/** The width two rails on opposite sides stand from: 1248, or the rails' own if later. */
+function twoRailsFrom(widths: HeaderWidths): number {
+  return widths.rails === "none"
+    ? Number.POSITIVE_INFINITY
+    : Math.max(TWO_RAILS_FOLD_WIDTH, widths.rails);
 }
 
-export function headerWidths(_doc: RetorikaDocument): HeaderWidths {
-  return { phone: 720, rails: RAIL_FOLD_WIDTH };
+/**
+ * **A label's width is the sum of its glyphs' advances** (`glyphAdvances.ts`, David's decision of
+ * sprint 34 día 2) in the first family of the stack, at the weight, plus the bar's letter-spacing in
+ * capitals (0.06 em a character) and a margin for kerning, which the advances leave out. A glyph the
+ * table did not measure counts as the widest the family has: an estimate may run long, never short.
+ */
+export const KERNING_MARGIN = 1.03;
+/** A logo stored without its size (before 1.16.0) is counted this many times as wide as its 40 px. */
+export const UNSIZED_LOGO_ASPECT = 4;
+/** The lane a classic scroll bar takes, which a `@media` width counts and the bar's padding does
+ * not: 15 px on Windows, on Linux and in CI. */
+export const SCROLLBAR_LANE = 15;
+/** The page's measure, `--rb-measure` in `build.ts`: the widest the bar's content box gets. */
+const MEASURE = 1200;
+
+/**
+ * A label's width in px at `size` in the first family of a stack — the table's, or the fallback for
+ * a family the product does not ship — at a weight, as the bar draws it (capitals, if so). **A
+ * fallback glyph is rounded up to the pixel**: the system letters it stands for are hinted, and a
+ * hinted glyph's advance is a whole pixel at 16 px on Linux, where the table's em was measured at
+ * 100 px without. CI found it on the first run of the day's PR: a `system-ui` bar drawn 1–2 px past
+ * the whole margin, which on a bar of fifty glyphs the rounding alone explains.
+ */
+function labelPx(
+  label: string,
+  stack: string,
+  weight: 400 | 700,
+  upper: boolean,
+  size: number,
+): number {
+  const family = (stack.split(",")[0] ?? "").trim().replace(/^['"]|['"]$/g, "");
+  const shipped = GLYPH_ADVANCES[family];
+  const advances = (shipped ?? FALLBACK_ADVANCES)[weight];
+  const widest = Math.max(...Object.values(advances));
+  const glyphs = [...(upper ? label.toUpperCase() : label)];
+  const sum = glyphs.reduce((total, glyph) => {
+    const em = advances[glyph] ?? widest;
+    return total + (shipped ? em * size : Math.ceil(em * size));
+  }, 0);
+  return sum * KERNING_MARGIN + (upper ? 0.06 * size * glyphs.length : 0);
 }
 
-/** The `@media` line up to the header's phone width, and the one from just above it. */
-function upTo(widths: HeaderWidths): string {
-  return `@media (max-width: ${widths.phone}px)`;
+/** The text of a node, its own and its children's. */
+function textOf(node: RenderNode | string): string {
+  return typeof node === "string" ? node : node.children.map(textOf).join("");
 }
-function above(widths: HeaderWidths): string {
-  return `@media (min-width: ${widths.phone + 1}px)`;
+function hasClass(node: RenderNode | string, name: string): node is RenderNode {
+  return typeof node !== "string" && (node.attributes["class"] ?? "").split(" ").includes(name);
+}
+
+/**
+ * **The widths the bar's line needs, per page** (sprint 34 día 2, ADR 0067): read off the very
+ * nodes `headerNodes` draws for that page — so «Inicio» away from home, the button's destination
+ * left out of the menus, and each page's own sections count exactly as they are drawn — and summed
+ * with the stylesheet's own gaps: an entry is its characters by the family's measured advance at the
+ * bar's size, a nav its entries and `space.md` between them (or the owner's gap), the strip its navs
+ * and `space.xl`, the brand its logo (40 px by its aspect) and `space.sm` and its name in the heading
+ * face at 700, the button its words at 700 and `space.lg` each side, and the line the items that are
+ * present with `space.xl` between them. Three lines per page, one per band of the rails: with none
+ * standing, with the pages' alone (two opposite rails under 1248), with every one — because a rail
+ * takes its menu out of the strip, and the brand and the button with it when they go with the pages.
+ * A collapsed bar (`data-bar=none`) needs nothing in the bands where it collapses. The sections' row,
+ * where this page draws one at every width, is a line of its own that has to fit too.
+ */
+interface BarLines {
+  /** With no rail standing, with the pages' rail alone, with every rail. */
+  none: number;
+  pagesRail: number;
+  all: number;
+  /** Whether the page draws two rails on opposite sides (the second from 1248). */
+  twoRails: boolean;
+  /** Whether a rail stands on this page at all. */
+  anyRail: boolean;
+}
+
+function barLines(doc: RetorikaDocument, settings: HeaderSettings, page: Page): BarLines | null {
+  const header = headerNodes(doc, page).find((node) => node.tag === "header");
+  if (!header) return null;
+  const px = (key: keyof RetorikaDocument["theme"]) => tokenPx(doc.theme[key]);
+  const size = px("size.body") * (settings.size === "small" ? 0.875 : 1);
+  const heading = doc.theme["font.heading"];
+  const body = doc.theme["font.body"];
+  const text = (label: string, stack: string, weight: 400 | 700, upper: boolean) =>
+    labelPx(label, stack, weight, upper, size);
+  const xl = px("space.xl");
+  const navGap = px(`space.${settings.gap}`);
+
+  const rails = (header.attributes["data-rails"] ?? "").split(" ").filter((s) => s !== "");
+  const twoRails = rails.length === 2;
+  const collapsed = header.attributes["data-bar"] === "none";
+  const brandGoes = header.attributes["data-brand"] === "pages";
+  const pagesSide = settings.pagesPosition;
+  const sectionsSide = settings.sectionsPosition;
+
+  const brandNode = header.children.find((c) => hasClass(c, "rb-brand"));
+  let brand = 0;
+  if (brandNode && typeof brandNode !== "string") {
+    const logo = brandNode.children.find((c) => hasClass(c, "rb-logo"));
+    const name = brandNode.children.find((c) => hasClass(c, "rb-brand-name"));
+    if (logo && typeof logo !== "string") {
+      const w = Number(logo.attributes["width"]);
+      const h = Number(logo.attributes["height"]);
+      brand += w > 0 && h > 0 && logo.attributes["width"] ? (40 * w) / h : 40 * UNSIZED_LOGO_ASPECT;
+    }
+    if (name) brand += (logo ? px("space.sm") : 0) + text(textOf(name), heading, 700, false);
+  }
+  const action = header.children.find((c) => hasClass(c, "rb-nav-action"));
+  const button =
+    action === undefined
+      ? 0
+      : text(textOf(action), heading, 700, settings.uppercase) + 2 * px("space.lg");
+  const navWidth = (nav: RenderNode): number => {
+    const links = nav.children.filter(
+      (c): c is RenderNode => typeof c !== "string" && c.tag === "a",
+    );
+    return (
+      links.reduce((sum, a) => sum + text(textOf(a), body, 400, settings.uppercase), 0) +
+      Math.max(0, links.length - 1) * navGap
+    );
+  };
+  const wide = header.children.find((c) => hasClass(c, "rb-nav-wide"));
+  const navs =
+    wide && typeof wide !== "string"
+      ? wide.children.filter((c): c is RenderNode => typeof c !== "string" && c.tag === "nav")
+      : [];
+  const row = header.children.find((c) => hasClass(c, "rb-nav-row"));
+  const rowWidth =
+    row && typeof row !== "string" && settings.sectionsPosition === "row" ? navWidth(row) : 0;
+
+  const line = (standing: readonly string[]): number => {
+    const pagesStand = pagesSide !== "bar" && standing.includes(pagesSide);
+    const sectionsStand =
+      (sectionsSide === "left" || sectionsSide === "right") && standing.includes(sectionsSide);
+    if (collapsed && (twoRails ? standing.length === 2 : standing.length > 0)) return 0;
+    const shown = navs.filter((nav) => {
+      const part = nav.attributes["data-part"];
+      return part === "pagesLinks" ? !pagesStand : part === "sectionsLinks" ? !sectionsStand : true;
+    });
+    const strip =
+      wide === undefined
+        ? null
+        : shown.reduce((sum, nav) => sum + navWidth(nav), 0) + Math.max(0, shown.length - 1) * xl;
+    const gone = brandGoes && pagesStand;
+    const items = [
+      ...(settings.layout === "stacked" || gone || brand === 0 ? [] : [brand]),
+      ...(strip === null ? [] : [strip]),
+      ...(gone || button === 0 ? [] : [button]),
+    ];
+    const bar = items.reduce((a, b) => a + b, 0) + Math.max(0, items.length - 1) * xl;
+    return Math.max(bar, rowWidth);
+  };
+  const pagesRailOnly = twoRails ? rails.filter((side) => side === pagesSide) : rails;
+  return {
+    none: line([]),
+    pagesRail: line(pagesRailOnly),
+    all: line(rails),
+    twoRails,
+    anyRail: rails.length > 0,
+  };
+}
+
+/**
+ * The widest viewport at which a line of `need` px does not fit, with `railsPx` of rails standing:
+ * the content box is `min(1200, viewport − scrollbar − rails − 2 × space.xl)`. `Infinity` when the
+ * line is wider than the measure, which no viewport can hold.
+ */
+function lastFailing(need: number, railsPx: number, xl: number): number {
+  if (need > MEASURE) return Number.POSITIVE_INFINITY;
+  return Math.ceil(need + SCROLLBAR_LANE + railsPx + 2 * xl) - 1;
+}
+
+export function headerWidths(doc: RetorikaDocument): HeaderWidths {
+  if (!headerDrawn(doc)) return { phone: 720, rails: RAIL_FOLD_WIDTH, over: 0 };
+  const settings = headerSettings(doc);
+  const xl = tokenPx(doc.theme["space.xl"]);
+  const lines = doc.pages
+    .map((page) => barLines(doc, settings, page))
+    .filter((l): l is BarLines => l !== null);
+  // 1. With no rail standing: from 721 up to where a rail stands — never past 1023 on a page that
+  //    draws a rail, since from 1024 the rail takes its menu out of the strip whatever the strip's
+  //    copy would have needed below it (the bar's copy is where a rail falls, ADR 0060 §3). On a
+  //    page with no rail this band has no end, and a line wider than the measure never fits.
+  let phone = 720;
+  let always = false;
+  for (const l of lines) {
+    const fail = lastFailing(l.none, 0, xl);
+    if (!l.anyRail) {
+      if (fail === Number.POSITIVE_INFINITY) always = true;
+      else phone = Math.max(phone, fail);
+    } else {
+      phone = Math.max(phone, Math.min(fail, RAIL_FOLD_WIDTH - 1));
+    }
+  }
+  // 2. With the pages' rail alone, between the rails' width and 1247 (only two opposite rails have
+  //    a band of their own there); with every rail, from 1248 or the rails' width. A band that
+  //    fails pushes the fold up, and the rails with it: the header is the phone's up to the fold
+  //    and the wide one from just above, never the other way round.
+  for (const l of lines) {
+    if (!l.anyRail || always) continue;
+    if (l.twoRails) {
+      const from = Math.max(RAIL_FOLD_WIDTH, phone + 1);
+      if (from <= TWO_RAILS_FOLD_WIDTH - 1) {
+        const fail = Math.min(lastFailing(l.pagesRail, RAIL_WIDTH, xl), TWO_RAILS_FOLD_WIDTH - 1);
+        if (fail >= from) phone = Math.max(phone, fail);
+      }
+    }
+    const from = Math.max(l.twoRails ? TWO_RAILS_FOLD_WIDTH : RAIL_FOLD_WIDTH, phone + 1);
+    const fail = lastFailing(l.all, RAIL_WIDTH * (l.twoRails ? 2 : 1), xl);
+    if (fail === Number.POSITIVE_INFINITY) always = true;
+    else if (fail >= from) phone = Math.max(phone, fail);
+  }
+  if (always) return { phone: "always", rails: "none", over: over(lines, xl) };
+  return { phone, rails: Math.max(RAIL_FOLD_WIDTH, phone + 1), over: over(lines, xl, phone) };
+}
+
+/** Characters over the line at 1247 — the widest bar of the site against what 1247 px hold with
+ * its rails standing — at the entries' advance; 0 when it fits there. */
+function over(lines: BarLines[], xl: number, phone = Number.POSITIVE_INFINITY): number {
+  if (phone <= 1247) return 0;
+  let worst = 0;
+  for (const l of lines) {
+    const railsPx = RAIL_WIDTH * (l.anyRail ? (l.twoRails ? 2 : 1) : 0);
+    const have = Math.min(MEASURE, 1248 - SCROLLBAR_LANE - railsPx - 2 * xl);
+    worst = Math.max(worst, l.all - have);
+  }
+  return worst <= 0 ? 0 : Math.ceil(worst / OVER_CHARACTER_PX);
+}
+/** A character of the download review's count: a lowercase letter's mean advance in the fallback
+ * face at 16 px. */
+const OVER_CHARACTER_PX =
+  (16 *
+    [..."abcdefghijklmnopqrstuvwxyz"].reduce((t, g) => t + (FALLBACK_ADVANCES[400][g] ?? 0), 0)) /
+  26;
+
+/** The `@media` line up to the header's phone width, and the one from just above it — `null`
+ * where there is no such width: a phone block with no line is written bare, an above block not at
+ * all. */
+function upTo(widths: HeaderWidths): string | null {
+  return widths.phone === "always" ? null : `@media (max-width: ${widths.phone}px)`;
+}
+function above(widths: HeaderWidths): string | null {
+  return widths.phone === "always" ? null : `@media (min-width: ${widths.phone + 1}px)`;
+}
+/** The phone's rules: inside their `@media`, or bare where the header is the phone's at every
+ * width. The wide rules: inside theirs, or not at all. */
+function toPhone(widths: HeaderWidths, rules: string[]): string[] {
+  const media = upTo(widths);
+  return media === null ? rules : [`${media} {`, ...rules, "}"];
+}
+function fromAbove(widths: HeaderWidths, rules: string[]): string[] {
+  const media = above(widths);
+  return media === null ? [] : [`${media} {`, ...rules, "}"];
 }
 
 /**
@@ -887,10 +1156,10 @@ export function headerCss(doc: RetorikaDocument, target: "html" | "dom"): string
     ".rb-header[data-sticky] ~ main [data-section] { scroll-margin-top: var(--rb-header-h); }",
     `.rb-header[data-sticky][data-scrolled] { box-shadow: 0 1px 0 color-mix(in srgb, var(--color-ink) 10%, transparent),`,
     "  0 8px 24px -16px var(--color-ink); }",
-    `${above(widths)} {`,
-    "  .rb-header[data-sticky][data-scrolled] { padding-block: var(--space-sm);",
-    "    margin-bottom: calc(2 * (var(--space-md) - var(--space-sm))); }",
-    "}",
+    ...fromAbove(widths, [
+      "  .rb-header[data-sticky][data-scrolled] { padding-block: var(--space-sm);",
+      "    margin-bottom: calc(2 * (var(--space-md) - var(--space-sm))); }",
+    ]),
     // **Transparent and fixed do not meet without the script** (David's adjustment 1b): a
     // transparent bar fixed over text is unreadable. Without the script's mark the bar stays
     // absolute and scrolls away with the cover; with it, it is fixed, and once the page has scrolled
@@ -1040,14 +1309,22 @@ function barEstimate(
  */
 function barHeightCss(doc: RetorikaDocument, widths: HeaderWidths): string[] {
   const settings = headerSettings(doc);
+  // The phone's at every width: its own estimate is the root's, and there is no band.
+  if (widths.phone === "always") {
+    return [
+      `html { --rb-bar-h: ${barEstimate(doc, settings, "phone", false)};`,
+      "  --rb-header-h: var(--rb-bar-h); }",
+    ];
+  }
   const rowSelector = "html:has(.rb-header[data-sections=row] > .rb-nav-row)";
   const hasRow = settings.sectionsPosition === "row";
+  const both = twoRailsFrom(widths);
   // A band the header's widths leave empty is no band.
   const bands = (
     [
       { band: "tablet", min: widths.phone + 1, max: widths.rails - 1 },
-      { band: "between", min: widths.rails, max: TWO_RAILS_FOLD_WIDTH - 1 },
-      { band: "wide", min: TWO_RAILS_FOLD_WIDTH, max: undefined },
+      { band: "between", min: widths.rails, max: both - 1 },
+      { band: "wide", min: both, max: undefined },
     ] as const
   ).filter(({ min, max }) => max === undefined || min <= max);
   // Neighbouring bands that hold the same bar are one range.
@@ -1065,7 +1342,7 @@ function barHeightCss(doc: RetorikaDocument, widths: HeaderWidths): string[] {
       return [
         `html { --rb-bar-h: ${bar};`,
         "  --rb-header-h: var(--rb-bar-h); }",
-        ...(hasRow ? [`${above(widths)} {`, `  ${rowRule[0]}`, "}"] : []),
+        ...(hasRow ? fromAbove(widths, [`  ${rowRule[0]}`]) : []),
       ];
     }
     const media =
@@ -1125,10 +1402,13 @@ function collapseBar(header: string): string[] {
  */
 function railCss(doc: RetorikaDocument, widths: HeaderWidths): string[] {
   const settings = headerSettings(doc);
-  if (!usesRail(settings)) return [];
+  // No rail travels where none ever stands (ADR 0067): a bar that is the phone's at every width.
+  if (!usesRail(settings) || widths.rails === "none") return [];
+  const twoFrom = twoRailsFrom(widths);
   const wide = `@media (min-width: ${widths.rails}px)`;
-  const between = `@media (min-width: ${widths.rails}px) and (max-width: ${TWO_RAILS_FOLD_WIDTH - 1}px)`;
-  const both = `@media (min-width: ${TWO_RAILS_FOLD_WIDTH}px)`;
+  const betweenBand = widths.rails <= twoFrom - 1;
+  const between = `@media (min-width: ${widths.rails}px) and (max-width: ${twoFrom - 1}px)`;
+  const both = `@media (min-width: ${twoFrom}px)`;
   // The bar collapses where every rail it relies on stands: from 1024 with one rail, from 1248 with
   // two (`collapseBar`).
   return [
@@ -1189,16 +1469,20 @@ function railCss(doc: RetorikaDocument, widths: HeaderWidths): string[] {
     "}",
     // Two rails, too narrow for both: the sections' rail falls into the bar, and its side's margin
     // with it.
-    `${between} {`,
-    '  .rb-header[data-rails="left right"][data-sections=left] > .rb-rail[data-side=left],',
-    '  .rb-header[data-rails="left right"][data-sections=right] > .rb-rail[data-side=right] {',
-    "    display: none; }",
-    '  .rb-header[data-rails="left right"] .rb-nav-wide > [data-part=sectionsLinks] { display: flex; }',
-    '  .rb-header[data-rails="left right"][data-sections=left],',
-    '  .rb-header[data-rails="left right"][data-sections=left] ~ main { margin-left: 0; --rb-rail-l: 0px; }',
-    '  .rb-header[data-rails="left right"][data-sections=right],',
-    '  .rb-header[data-rails="left right"][data-sections=right] ~ main { margin-right: 0; --rb-rail-r: 0px; }',
-    "}",
+    ...(betweenBand ? [`${between} {`] : []),
+    ...(betweenBand
+      ? [
+          '  .rb-header[data-rails="left right"][data-sections=left] > .rb-rail[data-side=left],',
+          '  .rb-header[data-rails="left right"][data-sections=right] > .rb-rail[data-side=right] {',
+          "    display: none; }",
+          '  .rb-header[data-rails="left right"] .rb-nav-wide > [data-part=sectionsLinks] { display: flex; }',
+          '  .rb-header[data-rails="left right"][data-sections=left],',
+          '  .rb-header[data-rails="left right"][data-sections=left] ~ main { margin-left: 0; --rb-rail-l: 0px; }',
+          '  .rb-header[data-rails="left right"][data-sections=right],',
+          '  .rb-header[data-rails="left right"][data-sections=right] ~ main { margin-right: 0; --rb-rail-r: 0px; }',
+          "}",
+        ]
+      : []),
     `${both} {`,
     ...collapseBar('.rb-header[data-layout][data-bar=none][data-rails="left right"]'),
     "}",
@@ -1256,30 +1540,30 @@ function foldCss(doc: RetorikaDocument, widths: HeaderWidths): string[] {
     "  .rb-nav-fold[open] > .rb-nav { animation: rb-fold-in var(--rb-base) var(--rb-ease) backwards; }",
     "  .rb-chevron { transition: transform var(--rb-fast) var(--rb-ease); }",
     "}",
-    `${above(widths)} {`,
-    `  ${placed} { display: block; position: fixed; z-index: 2;`,
-    "    top: calc(var(--rb-header-h) + var(--space-md)); right: var(--space-md); }",
-    `  ${placed} > summary { padding: var(--space-sm) var(--space-lg); background: var(--color-surface);`,
-    `    border: ${HAIRLINE}; border-radius: 999px;`,
-    "    box-shadow: 0 8px 24px -16px var(--color-ink); }",
-    `  ${placed} > summary { display: inline-flex; align-items: center; gap: var(--space-sm); }`,
-    "  .rb-chevron { display: inline-block; width: 6px; height: 6px; margin-top: -3px;",
-    "    border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); }",
-    "  .rb-nav-fold[open] .rb-chevron { margin-top: 3px; transform: rotate(-135deg); }",
-    // `width: max-content` because an absolute box sizes to its containing block, which here is the
-    // `<details>` — as wide as «Ir a…» — and every entry would wrap to that. Bounded by the window,
-    // the summary above it and a space below.
-    `  ${placed} > .rb-nav { left: auto; right: 0; top: calc(100% + var(--space-xs));`,
-    "    box-sizing: border-box; width: max-content; min-width: 100%;",
-    "    max-width: min(320px, calc(100vw - 2 * var(--space-md)));",
-    "    max-height: calc(100vh - var(--rb-header-h) - 4 * var(--space-md) - 1.5 * var(--size-body));",
-    `    overflow: hidden auto; border: ${HAIRLINE}; border-radius: var(--radius-lg);`,
-    "    box-shadow: 0 8px 24px -16px var(--color-ink); }",
-    `  .rb-header${coloured} .rb-nav-fold > :is(summary, .rb-nav) { border: 0; }`,
-    // Nothing left in the bar but the disclosure, and no rail: the bar is no height from here.
-    ...collapseBar(".rb-header[data-layout][data-bar=none]:not([data-rails])"),
-    "}",
-    ...(usesRail(settings)
+    ...fromAbove(widths, [
+      `  ${placed} { display: block; position: fixed; z-index: 2;`,
+      "    top: calc(var(--rb-header-h) + var(--space-md)); right: var(--space-md); }",
+      `  ${placed} > summary { padding: var(--space-sm) var(--space-lg); background: var(--color-surface);`,
+      `    border: ${HAIRLINE}; border-radius: 999px;`,
+      "    box-shadow: 0 8px 24px -16px var(--color-ink); }",
+      `  ${placed} > summary { display: inline-flex; align-items: center; gap: var(--space-sm); }`,
+      "  .rb-chevron { display: inline-block; width: 6px; height: 6px; margin-top: -3px;",
+      "    border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); }",
+      "  .rb-nav-fold[open] .rb-chevron { margin-top: 3px; transform: rotate(-135deg); }",
+      // `width: max-content` because an absolute box sizes to its containing block, which here is the
+      // `<details>` — as wide as «Ir a…» — and every entry would wrap to that. Bounded by the window,
+      // the summary above it and a space below.
+      `  ${placed} > .rb-nav { left: auto; right: 0; top: calc(100% + var(--space-xs));`,
+      "    box-sizing: border-box; width: max-content; min-width: 100%;",
+      "    max-width: min(320px, calc(100vw - 2 * var(--space-md)));",
+      "    max-height: calc(100vh - var(--rb-header-h) - 4 * var(--space-md) - 1.5 * var(--size-body));",
+      `    overflow: hidden auto; border: ${HAIRLINE}; border-radius: var(--radius-lg);`,
+      "    box-shadow: 0 8px 24px -16px var(--color-ink); }",
+      `  .rb-header${coloured} .rb-nav-fold > :is(summary, .rb-nav) { border: 0; }`,
+      // Nothing left in the bar but the disclosure, and no rail: the bar is no height from here.
+      ...collapseBar(".rb-header[data-layout][data-bar=none]:not([data-rails])"),
+    ]),
+    ...(usesRail(settings) && widths.rails !== "none"
       ? [
           `@media (min-width: ${widths.rails}px) {`,
           `  .rb-header[data-sections=fold][data-rails=right] .rb-nav-fold { right: auto; left: var(--space-md); }`,
@@ -1287,21 +1571,21 @@ function foldCss(doc: RetorikaDocument, widths: HeaderWidths): string[] {
           "}",
         ]
       : []),
-    `${upTo(widths)} {`,
-    // The bar's words are close-set on every phone since sprint 33 día 6 (`headerMobileCss`); they
-    // closed up first here, when «Ir a…» joined them — measured at 320 px with «Taberna Santo
-    // Domingo», its logo, «Contacto», «Ir a…» and «Menú»: at 16 px between them the brand had 21 px
-    // left and its 40 px logo ran 3 px over the button; at 8 px it has 45.
-    "  .rb-header[data-sections] .rb-nav-fold[data-mobile=fold] { display: block; }",
-    "  .rb-nav-fold[data-mobile=fold] { margin-left: auto; }",
-    // A hidden sibling still matches `+` (sprint 31 día 2), so the rule names the one that is drawn.
-    "  .rb-nav-action + .rb-nav-fold[data-mobile=fold],",
-    "  .rb-nav-fold[data-mobile=fold] + .rb-nav-narrow { margin-left: 0; }",
-    // With «Ir a…» beside it, «Menú» keeps its word and loses its bars: the 26 px they take are the
-    // brand's logo at 320 (measured on sprint 31 día 3 with 45 px left for a 40 px logo).
-    "  .rb-header:has(> .rb-nav-fold[data-mobile=fold]) .rb-burger { display: none; }",
-    ...phoneSheet(".rb-nav-fold[data-mobile=fold]"),
-    "}",
+    ...toPhone(widths, [
+      // The bar's words are close-set on every phone since sprint 33 día 6 (`headerMobileCss`); they
+      // closed up first here, when «Ir a…» joined them — measured at 320 px with «Taberna Santo
+      // Domingo», its logo, «Contacto», «Ir a…» and «Menú»: at 16 px between them the brand had 21 px
+      // left and its 40 px logo ran 3 px over the button; at 8 px it has 45.
+      "  .rb-header[data-sections] .rb-nav-fold[data-mobile=fold] { display: block; }",
+      "  .rb-nav-fold[data-mobile=fold] { margin-left: auto; }",
+      // A hidden sibling still matches `+` (sprint 31 día 2), so the rule names the one that is drawn.
+      "  .rb-nav-action + .rb-nav-fold[data-mobile=fold],",
+      "  .rb-nav-fold[data-mobile=fold] + .rb-nav-narrow { margin-left: 0; }",
+      // With «Ir a…» beside it, «Menú» keeps its word and loses its bars: the 26 px they take are the
+      // brand's logo at 320 (measured on sprint 31 día 3 with 45 px left for a 40 px logo).
+      "  .rb-header:has(> .rb-nav-fold[data-mobile=fold]) .rb-burger { display: none; }",
+      ...phoneSheet(".rb-nav-fold[data-mobile=fold]"),
+    ]),
   ];
 }
 
@@ -1379,61 +1663,61 @@ export function headerMobileCss(doc: RetorikaDocument): string[] {
   const settings = headerSettings(doc);
   return [
     ".rb-nav-narrow { display: none; }",
-    `${upTo(headerWidths(doc))} {`,
-    // The phone's estimate (`barEstimate`): one line, and the row under it on a page that draws one.
-    `  html { --rb-bar-h: ${barEstimate(doc, settings, "phone", false)}; }`,
-    ...(headerPhoneRow(doc, settings)
-      ? [
-          "  html:has(.rb-header > .rb-nav-row[data-mobile=row]) {",
-          `    --rb-bar-h: ${barEstimate(doc, settings, "phone", true)}; }`,
-        ]
-      : []),
-    // **The page keeps its width when a sheet locks it** (ADR 0065, David's condition): in a narrow
-    // window with a scrollbar drawn, `overflow: hidden` takes the scrollbar away and the content
-    // widened by its 15 px the moment a sheet opened. On a phone the scrollbar overlays and this is
-    // nothing. Once, here, for both sheets: «Ir a…»'s block only exists where a header is drawn.
-    "  html { scrollbar-gutter: stable; }",
-    // **The phone's bar is close-set** (sprint 33 día 6, David's decision on the audit's finding 2):
-    // `space.sm` between its words, where it was `space.md`, and the button's sides at `space.md`,
-    // where they were `space.lg`. Measured at 320 with the teaser: «Dónde estamos» sent «Menú» to a
-    // second line (the bar 82 px, over its 72); close-set, it holds the line. A longer button is said
-    // in the editor's «Menú» panel and in the download review, past `PHONE_BUTTON_MAX` letters.
-    "  .rb-header { gap: var(--space-sm); padding: var(--space-sm) var(--space-lg); }",
-    "  .rb-nav-action { padding-inline: var(--space-md); }",
-    // The brand takes what the button and «Menú» leave and no more: a flex basis of zero means it
-    // never asks the line to wrap, and `min-width: 0` (set above) lets the ellipsis do its work.
-    // Measured at 320px with «Taberna Santo Domingo» and a logo: one line, 56px, where a brand at
-    // its natural width wrapped the bar onto two lines and 107px.
-    "  .rb-brand { flex: 1 1 0; }",
-    "  .rb-nav-wide { display: none; }",
-    "  .rb-nav-narrow { display: block; margin-left: auto; }",
-    "  .rb-nav-action + .rb-nav-narrow { margin-left: 0; }",
-    // `[data-sections]` is here for weight and not for its value: the rule above that hides the
-    // row on a wide screen names `:not([data-sections=row])` and weighs (0,3,0), and a plain
-    // `.rb-header .rb-nav-row` (0,2,0) lost to it at every width — found in the browser, where the
-    // phone's row was simply not there. The hidden case below weighs the same and comes later.
-    // `justify-content: flex-start` whatever the owner's alignment: in a box that scrolls sideways,
-    // entries packed to the end overflow at the *start*, where no scroll can reach them — measured
-    // by `header.browser.test.ts`, whose row stopped scrolling the day alignment arrived.
-    "  .rb-header[data-sections] .rb-nav-row { display: flex; flex-wrap: nowrap; overflow-x: auto;",
-    "    justify-content: flex-start; padding-bottom: var(--space-xs); }",
-    "  .rb-header .rb-nav-row a { white-space: nowrap; }",
-    // Hidden when the owner chose nothing for the phone — and when they chose «Ir a…» (sprint 32
-    // día 1): a row that stands at every width still carries the phone's choice, and with both drawn
-    // the sections were announced twice at 320.
-    "  .rb-header[data-sections] .rb-nav-row:is([data-mobile=hidden], [data-mobile=fold]) { display: none; }",
-    "  .rb-header[data-layout=stacked] .rb-brand { flex-basis: 0; }",
-    // **It lets go into the flow, not out of every box** (sprint 33 día 3, the menu audit's findings 1
-    // and 4): `relative`, a bar in the flow's own position. It was `static`, which took from the
-    // sheet the box its `top: 100%` and its height are shares of: «Menú» opened at the screen's foot,
-    // below it, over a page `<main>` hid. A transparent bar lets go as a transparent one does, over
-    // the cover and away with it; `html` and `[data-layout]` weigh it over the script's `fixed`
-    // (0,4,1), which kept it fixed over the row.
-    "  .rb-header[data-sticky][data-phone-row] { position: relative; }",
-    "  html .rb-header[data-layout][data-sticky][data-phone-row][data-bg=transparent] { position: absolute; }",
-    "  .rb-header[data-sticky][data-phone-row] ~ main [data-section] { scroll-margin-top: 0; }",
-    ...phoneSheet(".rb-nav-narrow"),
-    "}",
+    ...toPhone(headerWidths(doc), [
+      // The phone's estimate (`barEstimate`): one line, and the row under it on a page that draws one.
+      `  html { --rb-bar-h: ${barEstimate(doc, settings, "phone", false)}; }`,
+      ...(headerPhoneRow(doc, settings)
+        ? [
+            "  html:has(.rb-header > .rb-nav-row[data-mobile=row]) {",
+            `    --rb-bar-h: ${barEstimate(doc, settings, "phone", true)}; }`,
+          ]
+        : []),
+      // **The page keeps its width when a sheet locks it** (ADR 0065, David's condition): in a narrow
+      // window with a scrollbar drawn, `overflow: hidden` takes the scrollbar away and the content
+      // widened by its 15 px the moment a sheet opened. On a phone the scrollbar overlays and this is
+      // nothing. Once, here, for both sheets: «Ir a…»'s block only exists where a header is drawn.
+      "  html { scrollbar-gutter: stable; }",
+      // **The phone's bar is close-set** (sprint 33 día 6, David's decision on the audit's finding 2):
+      // `space.sm` between its words, where it was `space.md`, and the button's sides at `space.md`,
+      // where they were `space.lg`. Measured at 320 with the teaser: «Dónde estamos» sent «Menú» to a
+      // second line (the bar 82 px, over its 72); close-set, it holds the line. A longer button is said
+      // in the editor's «Menú» panel and in the download review, past `PHONE_BUTTON_MAX` letters.
+      "  .rb-header { gap: var(--space-sm); padding: var(--space-sm) var(--space-lg); }",
+      "  .rb-nav-action { padding-inline: var(--space-md); }",
+      // The brand takes what the button and «Menú» leave and no more: a flex basis of zero means it
+      // never asks the line to wrap, and `min-width: 0` (set above) lets the ellipsis do its work.
+      // Measured at 320px with «Taberna Santo Domingo» and a logo: one line, 56px, where a brand at
+      // its natural width wrapped the bar onto two lines and 107px.
+      "  .rb-brand { flex: 1 1 0; }",
+      "  .rb-nav-wide { display: none; }",
+      "  .rb-nav-narrow { display: block; margin-left: auto; }",
+      "  .rb-nav-action + .rb-nav-narrow { margin-left: 0; }",
+      // `[data-sections]` is here for weight and not for its value: the rule above that hides the
+      // row on a wide screen names `:not([data-sections=row])` and weighs (0,3,0), and a plain
+      // `.rb-header .rb-nav-row` (0,2,0) lost to it at every width — found in the browser, where the
+      // phone's row was simply not there. The hidden case below weighs the same and comes later.
+      // `justify-content: flex-start` whatever the owner's alignment: in a box that scrolls sideways,
+      // entries packed to the end overflow at the *start*, where no scroll can reach them — measured
+      // by `header.browser.test.ts`, whose row stopped scrolling the day alignment arrived.
+      "  .rb-header[data-sections] .rb-nav-row { display: flex; flex-wrap: nowrap; overflow-x: auto;",
+      "    justify-content: flex-start; padding-bottom: var(--space-xs); }",
+      "  .rb-header .rb-nav-row a { white-space: nowrap; }",
+      // Hidden when the owner chose nothing for the phone — and when they chose «Ir a…» (sprint 32
+      // día 1): a row that stands at every width still carries the phone's choice, and with both drawn
+      // the sections were announced twice at 320.
+      "  .rb-header[data-sections] .rb-nav-row:is([data-mobile=hidden], [data-mobile=fold]) { display: none; }",
+      "  .rb-header[data-layout=stacked] .rb-brand { flex-basis: 0; }",
+      // **It lets go into the flow, not out of every box** (sprint 33 día 3, the menu audit's findings 1
+      // and 4): `relative`, a bar in the flow's own position. It was `static`, which took from the
+      // sheet the box its `top: 100%` and its height are shares of: «Menú» opened at the screen's foot,
+      // below it, over a page `<main>` hid. A transparent bar lets go as a transparent one does, over
+      // the cover and away with it; `html` and `[data-layout]` weigh it over the script's `fixed`
+      // (0,4,1), which kept it fixed over the row.
+      "  .rb-header[data-sticky][data-phone-row] { position: relative; }",
+      "  html .rb-header[data-layout][data-sticky][data-phone-row][data-bg=transparent] { position: absolute; }",
+      "  .rb-header[data-sticky][data-phone-row] ~ main [data-section] { scroll-margin-top: 0; }",
+      ...phoneSheet(".rb-nav-narrow"),
+    ]),
     "",
   ];
 }

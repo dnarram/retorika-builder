@@ -63,7 +63,7 @@ const OTHER: Record<Menu, Menu> = { pages: "sections", sections: "pages" };
  * panel. The header's phone width is the document's (`phoneWidth`, sprint 34 día 1).
  */
 export function zonesFor(menu: Menu, places: Places, layoutWidth: number): MenuZone[] {
-  if (layoutWidth <= places.phoneWidth) return [];
+  if (places.phoneWidth === "always" || layoutWidth <= places.phoneWidth) return [];
   const words: readonly Zone[] = menu === "pages" ? PAGES_POSITIONS : SECTIONS_POSITIONS;
   const current = menu === "pages" ? places.pagesPosition : places.sectionsPosition;
   const other = OTHER[menu];

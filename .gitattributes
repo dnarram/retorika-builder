@@ -4,3 +4,4 @@ packages/publisher/licences/*.txt -text
 
 # Generated from `@fontsource` and the licences above by `pnpm fonts:generate` (ADR 0055).
 packages/publisher/src/fontData/** linguist-generated
+packages/renderer/src/glyphAdvances.ts linguist-generated
