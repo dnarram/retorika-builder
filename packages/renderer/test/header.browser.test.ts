@@ -1,7 +1,15 @@
-import { chmodSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type Browser, type BrowserContextOptions, chromium, type Page } from "@playwright/test";
+import {
+  type Browser,
+  type BrowserContextOptions,
+  type BrowserType,
+  chromium,
+  firefox,
+  type Page,
+  webkit,
+} from "@playwright/test";
 import { type Header, parseDocument, type RetorikaDocument } from "@retorika/schema";
 import { PALETTES } from "@retorika/tokens";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -1191,23 +1199,47 @@ describe("the phone's sheet holds the page still (sprint 33 día 1, ADR 0065)", 
     });
   }
 
+  /**
+   * **The finger proves it moves a page before it is asked not to** (sprint 33 día 6, the backlog's
+   * «a test that cannot fail in CI»). This used `Input.synthesizeScrollGesture`, which scrolled a
+   * page 1506 px on this Mac and nothing at all on CI's Linux — so there it asserted «not moved»
+   * with or without the lock. A finger is now the touchscreen's own (`Input.dispatchTouchEvent`, as
+   * the día 5 walk measured it scrolling the canvas in CI), and the same finger first moves the
+   * page with the sheet closed: an instrument that moves nothing fails here, by name.
+   */
   it("does not let a finger move it either (a touch gesture, Chromium)", async () => {
     const page = await open(LONG({ sticky: true }), 390, 844, undefined, false, {
       hasTouch: true,
       isMobile: true,
     });
     try {
-      await page.click(".rb-nav-narrow > summary");
       const cdp = await page.context().newCDPSession(page);
-      await cdp.send("Input.synthesizeScrollGesture", {
-        x: 195,
-        y: 500,
-        yDistance: -1500,
-        gestureSourceType: "touch",
-        speed: 3000,
-      });
-      await page.waitForTimeout(300);
-      expect(await page.evaluate(() => Math.round(window.scrollY))).toBe(0);
+      const swipe = async () => {
+        const send = (type: "touchStart" | "touchMove" | "touchEnd", y?: number) =>
+          cdp.send("Input.dispatchTouchEvent", {
+            type,
+            touchPoints: y === undefined ? [] : [{ x: 195, y }],
+          });
+        await send("touchStart", 700);
+        for (let step = 1; step <= 10; step += 1) await send("touchMove", 700 - step * 50);
+        // Still before lifting, so the swipe ends as a drag and not as a fling still running.
+        await page.waitForTimeout(100);
+        await send("touchEnd");
+        // Until the page has stopped: two reads 100 ms apart that agree.
+        let last = -1;
+        for (;;) {
+          const now = await page.evaluate(() => Math.round(window.scrollY));
+          if (now === last) return now;
+          last = now;
+          await page.waitForTimeout(100);
+        }
+      };
+      expect(await swipe(), "the finger should move a page with the sheet closed").toBeGreaterThan(
+        0,
+      );
+      await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+      await page.click(".rb-nav-narrow > summary");
+      expect(await swipe()).toBe(0);
     } finally {
       await page.context().close();
     }
@@ -1440,6 +1472,141 @@ describe("an owner's exact bar colour holds once scrolled (sprint 32 día 5)", (
         expect(await read()).toBe("rgb(90, 26, 26)");
       } finally {
         await page.context().close();
+      }
+    });
+  }
+});
+
+/**
+ * **The bar's estimate against the bar, form by form, in the three engines** (sprint 33 día 6,
+ * David's decision on the menu audit's first two rows).
+ *
+ * `--rb-bar-h` is all a transparent bar's cover has to make room with, and all «Ir a…» hangs from
+ * where no script measures — the canvas. It was one line for every bar, and a stacked bar with its
+ * row measured 150.4 over a cover that made room for 72. Now it is a sum per form (`barEstimate`),
+ * and David's condition is the bound: **never more than a pixel short of the bar the engine measures,
+ * never more than 16 over — and a form that falls outside is corrected in the formula, never here.**
+ *
+ * **What the formula cannot know is a line its words do not fit on**: the teaser's own labels — a
+ * logo, the pages, «Contacto» and «Dónde estamos» — wrap the bar at 768, and no stylesheet measures
+ * a line's words (the backlog's row, sprint 33 día 6). So the labels here are short enough for one
+ * line at 768, and **each case first proves the bar holds the lines its form has**: an engine that
+ * wraps it with its own letter fails that precondition by name, rather than passing or failing the
+ * bound for a reason the bound is not about.
+ */
+describe("the bar's estimate against the bar it measures (sprint 33 día 6)", () => {
+  const ENGINES: readonly [string, BrowserType][] = [
+    ["chromium", chromium],
+    ["firefox", firefox],
+    ["webkit", webkit],
+  ];
+  const installed = (type: BrowserType): boolean => {
+    try {
+      return existsSync(type.executablePath());
+    } catch {
+      return false;
+    }
+  };
+  const LOGO = { name: true, logo: { src: "assets/portada.png" } };
+  /** The form, and the lines it is drawn on: the brand's own and the rest's, then the row. */
+  const FORMS: readonly { name: string; header: Partial<Header>; lines: number }[] = [
+    { name: "one line", header: {}, lines: 1 },
+    { name: "one line, a logo", header: { brand: LOGO }, lines: 1 },
+    { name: "stacked", header: { layout: "stacked" }, lines: 2 },
+    { name: "stacked, a logo", header: { layout: "stacked", brand: LOGO }, lines: 2 },
+    { name: "the row", header: { sections: { position: "row" } }, lines: 2 },
+    { name: "the row, a logo", header: { brand: LOGO, sections: { position: "row" } }, lines: 2 },
+    {
+      name: "stacked, the row",
+      header: { layout: "stacked", sections: { position: "row" } },
+      lines: 3,
+    },
+    {
+      name: "stacked, the row, a logo, small",
+      header: {
+        layout: "stacked",
+        brand: LOGO,
+        sections: { position: "row" },
+        look: { size: "small" },
+      },
+      lines: 3,
+    },
+  ];
+  /** The teaser with labels short enough for one line at 768: the brand, the pages, the button. */
+  const formDocument = (header: Partial<Header>, background: "transparent" | "surface") => {
+    const doc = headerCase("estimate", PALETTES[0]?.id ?? "", {
+      ...header,
+      look: { ...header.look, background },
+    }).document;
+    const labels = ["Carta", "Fotos", "Reservar"];
+    return parseDocument({
+      ...doc,
+      siteName: "El Corte",
+      pages: doc.pages.map((p, i) => (i === 0 ? p : { ...p, menuLabel: labels[i - 1] })),
+    });
+  };
+
+  for (const [engine, type] of ENGINES) {
+    describe(engine, () => {
+      let browser: Browser | undefined;
+      beforeAll(async () => {
+        if (installed(type)) browser = await type.launch();
+      });
+      afterAll(async () => {
+        await browser?.close();
+      });
+
+      for (const form of FORMS) {
+        for (const background of ["transparent", "surface"] as const) {
+          it(`${form.name}, ${background}: within −1 and +16 of the bar at 768, 1024 and 1280`, async (context) => {
+            if (!browser) {
+              context.skip(`${engine} is not installed here (CI installs Chromium alone)`);
+              return;
+            }
+            const html = render(formDocument(form.header, background), "html").html;
+            for (const width of [768, 1024, 1280]) {
+              const page = await openHtml(browser, html, width, `${engine}/${form.name}`);
+              try {
+                const m = await page.evaluate(() => {
+                  const header = document.querySelector<HTMLElement>(".rb-header");
+                  const main = document.querySelector("main");
+                  if (!header || !main) throw new Error("no header");
+                  const probe = document.createElement("div");
+                  probe.style.cssText =
+                    "position:absolute;visibility:hidden;height:var(--rb-bar-h)";
+                  main.append(probe);
+                  const estimate = probe.getBoundingClientRect().height;
+                  probe.remove();
+                  // The lines the bar is drawn on, by where its visible words sit.
+                  const words = [
+                    ...header.querySelectorAll(
+                      ":scope > .rb-brand, :scope > .rb-nav-action, :scope > .rb-nav-wide a, :scope > .rb-nav-row a",
+                    ),
+                  ].filter((el) => el.getClientRects().length > 0);
+                  const middles = words
+                    .map((el) => {
+                      const r = el.getBoundingClientRect();
+                      return r.top + r.height / 2;
+                    })
+                    .sort((a, b) => a - b);
+                  let lines = 0;
+                  let last = Number.NEGATIVE_INFINITY;
+                  for (const y of middles) {
+                    if (y - last > 6) lines += 1;
+                    last = y;
+                  }
+                  return { bar: header.getBoundingClientRect().height, estimate, lines };
+                });
+                const said = `${engine}, ${form.name}, ${background}, at ${width}: ${JSON.stringify(m)}`;
+                expect(m.lines, `the bar's lines — ${said}`).toBe(form.lines);
+                expect(m.estimate, said).toBeGreaterThanOrEqual(m.bar - 1);
+                expect(m.estimate, said).toBeLessThanOrEqual(m.bar + 16);
+              } finally {
+                await page.context().close();
+              }
+            }
+          });
+        }
       }
     });
   }

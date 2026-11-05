@@ -1033,6 +1033,35 @@ export function headerCombinations(): Combination[] {
   return combinations;
 }
 
+/**
+ * **A transparent bar taller than one line, over the cover** (sprint 33 día 6): stacked, with the
+ * sections' row, both, and the menu audit's own combination — the pages in a left column, the row,
+ * stacked — each fixed and in the flow. The forms whose room the stylesheet's estimate of one line
+ * got wrong, by 33.6 and 44.8 px, and the one the audit found covering 30 px of the cover at every
+ * wide width. `headerCombinations` draws the schemes on the default layout and the layouts on the
+ * default scheme, so none of these is in it.
+ */
+export function transparentCoverCombinations(): Combination[] {
+  const forms: readonly [string, NonNullable<RetorikaDocument["header"]>][] = [
+    ["stacked", { layout: "stacked" }],
+    ["row", { sections: { position: "row" } }],
+    ["stacked-row", { layout: "stacked", sections: { position: "row" } }],
+    [
+      "left-row-stacked",
+      { layout: "stacked", pages: { position: "left" }, sections: { position: "row" } },
+    ],
+  ];
+  return forms.flatMap(([name, header]) =>
+    [false, true].map((sticky) =>
+      headerCase(`header/transparent/${name}${sticky ? "/fixed" : ""}`, FIXED_PALETTE[0].id, {
+        ...header,
+        sticky,
+        look: { background: "transparent" },
+      }),
+    ),
+  );
+}
+
 /** The header combinations that draw a rail: the ones a width between 1024 and 1247 says something
  * new about, since that is where a rail stands alone or falls. */
 export function railCombinations(): Combination[] {

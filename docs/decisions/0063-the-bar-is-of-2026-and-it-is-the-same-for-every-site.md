@@ -322,3 +322,56 @@ of the audit's 153 combinations, in the three engines. A transparent bar lets go
 does, `absolute` over the cover, weighed (`html … [data-layout]`, 0,5,1) over the script's `fixed`,
 which had kept it fixed over the row. Measured red before at 320 × 568 and 390 × 844, green after;
 sabotaged back to each old value, red again. Four goldens move by those three lines and nothing else.
+
+## Note — sprint 33 día 6: the bar's estimate is a sum per form, and the phone's bar is close-set
+
+Both by David's decisions of 5 November 2026 on what the menu audit left open (backlog, «Sprint 33 día
+3»). Recorded by development, which does not sign.
+
+**`--rb-bar-h` was one line for every bar** — the padding and `max(40px, 1.5 × size.body)`, David's
+adjustment 7 of sprint 32 —, and the audit measured what that cost: a transparent bar stacked with the
+sections' row is 150.4 px over a cover that made room for 72, the row across the cover's first words
+at 768, 1024 and 1280; and in the canvas, where nothing measures, «Ir a…» hung over a stacked bar's
+second line (33.6 px). **It is now a sum per form** (`barEstimate`, `header.ts`): each line as tall as
+the tallest thing on it — the logo's 40 px against the button (a line of text and `space.sm` above
+and below), an entry (a line and `space.xs`), the brand's name (a line) —; two lines and `space.md`
+between them when the brand has a line of its own (`stacked`) and something is left for the second;
+the sections' row under them, where this page draws one; the hairline where one is drawn. The row
+is a second declaration under `html:has(.rb-header[data-sections=row] > .rb-nav-row)`, because the
+stylesheet is the site's and a page whose sections lend no entry draws no row; where a rail takes
+the brand, the button or a menu out of the bar (from 1024, from 1248), the band says so in its own
+`@media`; a bar that collapses (`data-bar=none`) makes no room of its own, and the estimate there is
+the bar the menus would come back to — the editor's strip for a drop into the bar reads it. On a
+phone, «Menú» is an inline box in its `<details>`, so its line is the page's own letter's
+(`1.3 × max(1rem, size)`), which the small size does not shrink. **Adjustment 7 stands**: the cover
+still reads the estimate and never the measure, and the estimate still does not move with the scroll.
+
+**David's condition is the bound**, held in `header.browser.test.ts` in Chromium, Firefox and WebKit at
+768, 1024 and 1280, eight forms on a transparent and a surface bar: never more than a pixel short of
+the bar the engine measures, never more than 16 over, and **a form that falls outside is corrected in
+the formula, never in the tolerance** — which happened twice before it was green: an empty strip whose
+copies stand in rails still takes a line and its gap under a stacked brand (16 px), and «Menú»'s line
+is the `<details>`' letter (2.6 px at the small size). Measured in Chromium over 4 320 states (three
+layouts, six places, logo, button, size, three scales, two backgrounds, five widths): every bar that
+holds the lines its form has is within the bound, and the transparent forms at 1280 are exact. The
+audit's check 8 now compares the header's foot with every word of the cover, and it is in `a11y` for
+the transparent stacked and row forms at 320, 768, 1024 and 1280.
+
+**What moves on a saved site**: the room a transparent bar's cover makes, by what its bar measures —
+up 3.2 px on one line without a logo and with a button, up 11.2 with neither, unchanged with a logo;
+down 25.6–52.8 stacked, 33.6–44.8 with the row, 70.4–97.6 with both (the default scale, at 1280); on a
+phone, down by the row where the phone shows one. Every other bar only starts its `--rb-header-h` from
+a nearer number before the script measures it.
+
+**What it cannot know is a line whose words do not fit.** The teaser's own labels — a logo, the pages,
+«Contacto» and «Dónde estamos» — wrap a one-line bar at 768, and with a transparent bar and a logo the
+cover's first words are 4.8 px under it (50 px at the generous scale): no stylesheet measures a line's
+words. That is in the backlog with its numbers, for David.
+
+**And the phone's bar is close-set** (the audit's finding 2): `space.sm` between its words, where it was
+`space.md`, and the button's sides at `space.md`, where they were `space.lg`. Measured at 320 with the
+teaser: «Dónde estamos» sent «Menú» to a second line, the bar 82 px over its 72; close-set it holds the
+line, and the bound (the audit's check 3a) is in `a11y` on the 56 header combinations. A button past
+twelve letters — the longest that leaves a 40 px logo whole at 320 — is said in the «Menú» panel under
+the destination's «Se lee como…», and in the download review as a warning, never a block. The rule that
+closed the gaps only beside «Ir a…» (sprint 31 día 3) is gone: every phone bar is close-set now.

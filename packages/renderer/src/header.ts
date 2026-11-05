@@ -628,13 +628,13 @@ export function headerCss(doc: RetorikaDocument, target: "html" | "dom"): string
     "  border-radius: var(--radius-sm); text-decoration: underline; }",
     ".rb-skip:focus-visible { top: var(--space-md); }",
     // **The bar's height, twice** (ADR 0063, David's adjustment 7). `--rb-bar-h` is what the
-    // stylesheet can estimate — the padding and the taller of the logo and a line of text — and it
-    // never changes: the cover under a transparent bar makes its room with it, so a bar that condenses
-    // once scrolled does not pull the headline up 16 px. `--rb-header-h` starts as the same estimate
-    // and the script refines it with `offsetHeight` where it runs: it is for the anchors, which should
-    // land under the bar as it is now, and for «Ir a…», which hangs from it.
-    "html { --rb-bar-h: calc(2 * var(--space-md) + max(40px, 1.5 * var(--size-body)));",
-    "  --rb-header-h: var(--rb-bar-h); }",
+    // stylesheet can estimate — its lines, summed by `barEstimate` from what the renderer knows the
+    // bar holds — and it never changes with the scroll: the cover under a transparent bar makes its
+    // room with it, so a bar that condenses once scrolled does not pull the headline up 16 px.
+    // `--rb-header-h` starts as the same estimate and the script refines it with `offsetHeight` where
+    // it runs: it is for the anchors, which should land under the bar as it is now, and for «Ir a…»,
+    // which hangs from it.
+    ...barHeightCss(doc),
     // The motor's own numbers (`--rb-ease`, `--rb-fast`, `--rb-base`) are written for every site in
     // `build.ts` since día 2: the page's own motion reads them too.
     // **Motion, and only for somebody who has not asked their system for less** (David's point 7 on
@@ -889,6 +889,160 @@ export function headerCss(doc: RetorikaDocument, target: "html" | "dom"): string
   ];
 }
 
+/**
+ * The widths at which the bar holds different things (ADR 0060): a phone; a tablet, where every rail
+ * has fallen into the bar; 1024 to 1247, where the sections' rail falls when the two menus stand on
+ * opposite sides; and from 1248, where every rail stands.
+ */
+type Band = "phone" | "tablet" | "between" | "wide";
+
+/**
+ * **The bar's height as the stylesheet can know it** (sprint 33 día 6, David's decision on the menu
+ * audit): the sum of the bar's lines, each as tall as the tallest thing on it — a logo is 40 px, a
+ * button a line of text and its padding, an entry a line and less padding, the brand's name a line —
+ * with the gap between lines, the padding, and the hairline where one is drawn. **One line**, or
+ * **two when the brand has a line of its own** (`stacked`) and something is left for the second, and
+ * **the sections' row under them** where this page draws one (`row`, read by `:has` in
+ * `barHeightCss`: a page with no section to list has no row).
+ *
+ * It used to be the padding and `max(40px, 1.5 × size.body)` for every bar: a line. The audit found a
+ * transparent bar, stacked with its row, 150.4 px tall over a cover that made room for 72 — the row
+ * across the cover's first words at every wide width —, and «Ir a…» hung in the canvas over a
+ * stacked bar's second line. `header.browser.test.ts` holds every form to the bar the browser
+ * measures, in the three engines: never more than a pixel short, never more than 16 over.
+ *
+ * **What it cannot know is a line that wraps because its words do not fit** — four menus and a long
+ * button at 768: no stylesheet measures a line's words. That is the script's measure, published,
+ * and the estimate where none runs.
+ */
+function barEstimate(
+  doc: RetorikaDocument,
+  settings: HeaderSettings,
+  band: Band,
+  row: boolean,
+  everything = false,
+): string {
+  const phone = band === "phone";
+  const space = phone ? "var(--space-sm)" : "var(--space-md)";
+  const size = settings.size === "small" ? "0.875 * var(--size-body)" : "var(--size-body)";
+  const text = `1.3 * ${size}`;
+  const entry = `2 * var(--space-xs) + ${text}`;
+  const button = `2 * var(--space-sm) + ${text}`;
+
+  const pagesShown = settings.pagesShown && pageMenuEntries(doc).length > 0;
+  const sectionsShown =
+    settings.sectionsShown && doc.pages.some((page) => sectionMenuEntries(page).length > 0);
+  const first = doc.pages[0];
+  const action = first !== undefined && actionEntry(doc, first) !== undefined;
+  const railsStand = !everything && (band === "between" || band === "wide");
+  const pagesInRail = pagesShown && settings.pagesPosition !== "bar" && railsStand;
+  const sectionsSide =
+    settings.sectionsPosition === "left" || settings.sectionsPosition === "right";
+  const opposite = pagesInRail && settings.pagesPosition !== settings.sectionsPosition;
+  const sectionsInRail =
+    railsStand && sectionsSide && (band === "wide" || (band === "between" && !opposite));
+  const brandGoes = settings.brandWithPages && pagesInRail;
+
+  const logo = settings.logo !== undefined && !brandGoes;
+  const name = settings.brandName && !brandGoes;
+  const buttonHere = action && !brandGoes;
+  // The wide strip is drawn whenever a menu has a copy in it, **even where every copy is hidden**
+  // because its rail stands: an empty flex item still takes a line of its own, and its gap, when the
+  // brand has the first line to itself (measured: 16 px a stacked bar did not account for).
+  const stripHere =
+    !phone &&
+    (pagesShown || (sectionsShown && (settings.sectionsPosition === "bar" || sectionsSide)));
+  const entriesHere = phone
+    ? false
+    : (pagesShown && !pagesInRail) ||
+      (sectionsShown &&
+        (settings.sectionsPosition === "bar" ||
+          (sectionsSide && !sectionsInRail) ||
+          (everything && settings.sectionsPosition === "fold")));
+  // **A bar left with nothing to draw collapses** (`collapseBar`) and makes no room of its own; what
+  // still reads the estimate there — the editor's strip for a menu dropped back into the bar — reads
+  // the bar that menu would come back to: everything the owner placed elsewhere, in it.
+  const brandless = brandGoes || (!settings.logo && !settings.brandName && !action);
+  if (!phone && !everything && !entriesHere && brandless) {
+    return barEstimate(doc, settings, "tablet", row, true);
+  }
+  // On a phone the menus are «Menú» and «Ir a…», a word each and no padding. «Menú» is an inline
+  // box inside its `<details>`, so its line is never shorter than the line of the `<details>`' own
+  // letter — the page's, 1rem, which no size of the bar's makes smaller (measured: 2.6 px short at
+  // the small size before this).
+  const menuWord = phone && pagesShown ? `1.3 * max(1rem, ${size})` : null;
+  const foldWord = phone && sectionsShown && settings.sectionsMobile === "fold" ? text : null;
+  // The tallest words of the line that is not the brand's: a button is taller than an entry, an
+  // entry than a word with no padding.
+  const words = buttonHere ? button : entriesHere ? entry : (menuWord ?? foldWord);
+  const restHere = buttonHere || stripHere || menuWord !== null || foldWord !== null;
+
+  // Each line is a logo, if it holds one, against the tallest of its words — `0px` for a line that
+  // is there and holds nothing visible.
+  const lines: string[][] = [];
+  if (settings.layout === "stacked" && !phone && (logo || name) && restHere) {
+    lines.push([...(logo ? ["40px"] : []), ...(name ? [text] : [])]);
+    lines.push([words ?? "0px"]);
+  } else if (logo || name || restHere) {
+    const tallest = words ?? (name ? text : null);
+    lines.push([
+      ...(logo ? ["40px"] : []),
+      ...(tallest !== null ? [tallest] : logo ? [] : ["0px"]),
+    ]);
+  }
+  // A phone's row keeps a little room under its entries for the scrollbar it may draw (below).
+  if (row) lines.push([phone ? `3 * var(--space-xs) + ${text}` : entry]);
+
+  const heights = lines.map((items) =>
+    items.length === 1 ? items[0] : `max(${items.join(", ")})`,
+  );
+  const hairline = settings.hairline && settings.background !== "transparent" ? " + 1px" : "";
+  const sum = heights.length === 0 ? "" : ` + ${heights.join(` + ${space} + `)}`;
+  return `calc(2 * ${space}${sum}${hairline})`;
+}
+
+/**
+ * `--rb-bar-h` for every width a wide screen can be, and `--rb-header-h` from it: one declaration on
+ * the root where the bar is the same from 721 px up, one more per band where a rail takes something
+ * out of it. **The row is a second declaration under `:has`**, read off the page itself: the
+ * stylesheet is the site's, and a page whose sections lend no entry draws no row. The phone's own
+ * pair is `headerMobileCss`'s.
+ */
+function barHeightCss(doc: RetorikaDocument): string[] {
+  const settings = headerSettings(doc);
+  const rowSelector = "html:has(.rb-header[data-sections=row] > .rb-nav-row)";
+  const hasRow = settings.sectionsPosition === "row";
+  const bands = [
+    { band: "tablet", min: 721, max: RAIL_FOLD_WIDTH - 1 },
+    { band: "between", min: RAIL_FOLD_WIDTH, max: TWO_RAILS_FOLD_WIDTH - 1 },
+    { band: "wide", min: TWO_RAILS_FOLD_WIDTH, max: undefined },
+  ] as const;
+  // Neighbouring bands that hold the same bar are one range.
+  const ranges: { min: number; max: number | undefined; bar: string; row: string }[] = [];
+  for (const { band, min, max } of bands) {
+    const bar = barEstimate(doc, settings, band, false);
+    const row = barEstimate(doc, settings, band, true);
+    const last = ranges.at(-1);
+    if (last && last.bar === bar && last.row === row) last.max = max;
+    else ranges.push({ min, max, bar, row });
+  }
+  return ranges.flatMap(({ min, max, bar, row }, i) => {
+    const rowRule = hasRow ? [`${i === 0 ? "" : "  "}${rowSelector} { --rb-bar-h: ${row}; }`] : [];
+    if (i === 0) {
+      return [
+        `html { --rb-bar-h: ${bar};`,
+        "  --rb-header-h: var(--rb-bar-h); }",
+        ...(hasRow ? ["@media (min-width: 721px) {", `  ${rowRule[0]}`, "}"] : []),
+      ];
+    }
+    const media =
+      max === undefined
+        ? `@media (min-width: ${min}px)`
+        : `@media (min-width: ${min}px) and (max-width: ${max}px)`;
+    return [`${media} {`, `  html { --rb-bar-h: ${bar}; }`, ...rowRule, "}"];
+  });
+}
+
 /** Whether this document places a menu in a rail at all — the stylesheet's rail block travels only
  * then, so no site that does not use a column carries a byte of it. */
 function usesRail(settings: HeaderSettings): boolean {
@@ -1101,11 +1255,10 @@ function foldCss(doc: RetorikaDocument): string[] {
         ]
       : []),
     "@media (max-width: 720px) {",
-    // **The bar's words close up when «Ir a…» joins them.** Measured at 320 px with «Taberna Santo
-    // Domingo», its logo, «Contacto», «Ir a…» and «Menú»: at the phone's usual 16 px between them the
-    // brand had 21 px left and its 40 px logo ran 3 px over the button. At 8 px it has 45: the logo
-    // whole and the name cut to nothing, which is what the ellipsis is for.
-    "  .rb-header:has(> .rb-nav-fold[data-mobile=fold]) { column-gap: var(--space-sm); }",
+    // The bar's words are close-set on every phone since sprint 33 día 6 (`headerMobileCss`); they
+    // closed up first here, when «Ir a…» joined them — measured at 320 px with «Taberna Santo
+    // Domingo», its logo, «Contacto», «Ir a…» and «Menú»: at 16 px between them the brand had 21 px
+    // left and its 40 px logo ran 3 px over the button; at 8 px it has 45.
     "  .rb-header[data-sections] .rb-nav-fold[data-mobile=fold] { display: block; }",
     "  .rb-nav-fold[data-mobile=fold] { margin-left: auto; }",
     // A hidden sibling still matches `+` (sprint 31 día 2), so the rule names the one that is drawn.
@@ -1190,16 +1343,30 @@ function phoneSheet(disclosure: string): string[] {
  */
 export function headerMobileCss(doc: RetorikaDocument): string[] {
   if (!headerDrawn(doc)) return [];
+  const settings = headerSettings(doc);
   return [
     ".rb-nav-narrow { display: none; }",
     "@media (max-width: 720px) {",
-    "  html { --rb-bar-h: calc(2 * var(--space-sm) + max(40px, 1.5 * var(--size-body))); }",
+    // The phone's estimate (`barEstimate`): one line, and the row under it on a page that draws one.
+    `  html { --rb-bar-h: ${barEstimate(doc, settings, "phone", false)}; }`,
+    ...(headerPhoneRow(doc, settings)
+      ? [
+          "  html:has(.rb-header > .rb-nav-row[data-mobile=row]) {",
+          `    --rb-bar-h: ${barEstimate(doc, settings, "phone", true)}; }`,
+        ]
+      : []),
     // **The page keeps its width when a sheet locks it** (ADR 0065, David's condition): in a narrow
     // window with a scrollbar drawn, `overflow: hidden` takes the scrollbar away and the content
     // widened by its 15 px the moment a sheet opened. On a phone the scrollbar overlays and this is
     // nothing. Once, here, for both sheets: «Ir a…»'s block only exists where a header is drawn.
     "  html { scrollbar-gutter: stable; }",
-    "  .rb-header { gap: var(--space-sm) var(--space-md); padding: var(--space-sm) var(--space-lg); }",
+    // **The phone's bar is close-set** (sprint 33 día 6, David's decision on the audit's finding 2):
+    // `space.sm` between its words, where it was `space.md`, and the button's sides at `space.md`,
+    // where they were `space.lg`. Measured at 320 with the teaser: «Dónde estamos» sent «Menú» to a
+    // second line (the bar 82 px, over its 72); close-set, it holds the line. A longer button is said
+    // in the editor's «Menú» panel and in the download review, past `PHONE_BUTTON_MAX` letters.
+    "  .rb-header { gap: var(--space-sm); padding: var(--space-sm) var(--space-lg); }",
+    "  .rb-nav-action { padding-inline: var(--space-md); }",
     // The brand takes what the button and «Menú» leave and no more: a flex basis of zero means it
     // never asks the line to wrap, and `min-width: 0` (set above) lets the ellipsis do its work.
     // Measured at 320px with «Taberna Santo Domingo» and a logo: one line, 56px, where a brand at
