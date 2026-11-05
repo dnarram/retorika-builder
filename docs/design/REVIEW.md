@@ -7227,3 +7227,43 @@ barra del móvil — no mueve ninguna; ninguna composición por debajo de 98.
 8. **Del sprint 32 y anteriores, sin tocar**: lo que lista el backlog, incluidas las decisiones de
    diseño que esperan su confirmación.
 9. **El sprint 34, sin planificar.**
+
+## Sprint 34 — «La barra nunca se parte» (desde el 5 de noviembre de 2026)
+
+David, con la #349 fusionada, decide lo que el sprint 33 dejó medido. **La barra cuyas palabras no caben
+en una línea se pliega en «Menú»** bajo un punto de corte propio de cada documento, calculado por el
+ancho estimado de la tira (etiquetas × 0,55 em, huecos, marca, logo y botón): «plegar antes es seguro,
+partirse es el defecto». **Sin tope**: si la tira no cabe ni a 1248, el corte sube, y si no cabe nunca,
+la barra es siempre «Menú»; la revisión de descarga avisa con la cuenta de caracteres que sobran. **En
+el lienzo lo dice el panel**, y el `summary` de «Menú» pasa a ser agarre del menú de páginas. **El botón
+dentro de «Menú»**, al backlog. Entran además **la línea de progreso de lectura** de la barra fija, como
+opción del dueño apagada (solo con la fija, decorativa, dentro de la barra), y **un día de soporte para
+firmas y fotos**. Tres ajustes al aprobar: «siempre» es un valor con nombre y no un número (el bloque del
+móvil sin `@media`, sin columnas); desde 1024 el aviso dice que la web de escritorio lleva el menú del
+móvil y va antes que el del botón largo; la línea lee `scroll(root)` explícito. El plan está en la
+memoria del proyecto (`project-sprint-34-plan`).
+
+### Día 1, primero y solo — la cabecera tiene sus anchos (PR de `refactor/la-cabecera-tiene-sus-anchos`)
+
+Un cambio de modelo va primero y solo. **El ancho del móvil de la cabecera y el ancho desde el que se
+pone de pie una columna eran dos literales**: 720 en cinco bloques `@media` de `header.ts` (el móvil de
+la cabecera, «Ir a…» en el móvil y en ancho, la condensación de la fija, la regla `:has` de la fila) y
+1024 en el de las columnas, y los daban por supuestos las comprobaciones de la auditoría
+(`expectedCopies`, `railsStanding`), la matriz de `a11y` («cada menú se anuncia una vez»), la auditoría,
+`zonesFor` y los anchos de pliegue del panel. Ahora salen de **`headerWidths(doc)`**, que el día 2 hará
+propia de cada documento; las líneas `@media` las escriben dos ayudantes (`upTo`, `above`) y ninguna
+lista de reglas se duplica. **No pasan por ella** el 720 de las secciones (el bloque compartido de
+`build.ts`, `PHONE_BREAKPOINT`) ni el de la interfaz del editor: no son de la cabecera.
+
+**Hoy todo documento responde `{ phone: 720, rails: 1024 }`, y nada cambia**: las goldens salen byte a
+byte iguales sin regenerarlas, y una prueba lo asevera sobre todo el corpus. **Saboteo**: con el ancho del
+móvil a 721, las cuatro goldens con cabecera y las literales de `header.test.ts` en rojo.
+
+**Lo que espera al día 5, y por qué**: el cursor de agarre y la leyenda de teclas (`.rb-keys`) son CSS
+del cromo que el editor escribe una vez por marco; seguir los anchos del documento les exige reescribirse
+cuando esos anchos cambien, que es justo lo que diseña el día 5 («Menú» como agarre). Hoy los anchos no
+cambian, y se quedan como estaban.
+
+**Suites.** `typecheck`, `lint`, `test` (3686, una más), invariantes, golden (cero cambios),
+`renderer:deps` y `size` (el script sigue en 0,8 KB) en verde. **`a11y` local: 1147**, las del cierre del
+33. **e2e completa, a la primera: 288 verdes y 1 omitida, 1247 s. Caminatas reescritas: cero.**
