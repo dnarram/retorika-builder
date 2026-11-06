@@ -1,5 +1,6 @@
 "use client";
 
+import { TWO_RAILS_FOLD_WIDTH } from "@retorika/renderer";
 import {
   HEADER_ALIGNMENTS,
   HEADER_BACKGROUNDS,
@@ -24,7 +25,10 @@ import { useEffect, useId, useRef, useState } from "react";
 import {
   brandNamePatch,
   brandWithPagesPatch,
+  columnCardNote,
   columnNote,
+  foldedCanvasNote,
+  foldNoteText,
   headerColorInForce,
   headerExact,
   headerStateFor,
@@ -37,6 +41,7 @@ import {
   type PageRow,
   PHONE_BUTTON_MAX,
   pagesPositionPatch,
+  phoneSpan,
   type SectionRow,
   schemeSwatch,
   sectionsMobilePatch,
@@ -140,6 +145,34 @@ export function MenuPanel({
   // in the desktop view — the phone's canvas has no zones and its place is «En el móvil».
   const dragNote =
     device === "desktop" ? <p className={noteClass}>{es["editor.menuPanel.whereDrag"]}</p> : null;
+  // **Why the bar folds, under «Dónde va»** (sprint 34 día 4, ADR 0067): by its weight — tablets, or
+  // the desktop site carrying the phone's menu — and, where the canvas lays the page out at or under
+  // the fold, that the canvas shows «Menú» too and from which width it is seen whole.
+  const foldNotes = [
+    state.fold === undefined ? null : foldNoteText(state.fold),
+    foldedCanvasNote(state.fold, layoutWidth, device),
+  ].flatMap((note) =>
+    note === null
+      ? []
+      : [
+          <p key={note} className={noteClass}>
+            {note}
+          </p>,
+        ],
+  );
+  // A column card says when the fold keeps its column away: the pages' column from the rails'
+  // width; the sections', from 1248 too when the pages stand in the column opposite.
+  const pagesCardNote = (position: PagesPosition) =>
+    position === "bar" ? null : columnCardNote(state.fold, state.pagesFoldWidth);
+  const sectionsCardNote = (position: SectionsPosition) =>
+    position !== "left" && position !== "right"
+      ? null
+      : columnCardNote(
+          state.fold,
+          state.pagesPosition !== "bar" && state.pagesPosition !== position
+            ? Math.max(TWO_RAILS_FOLD_WIDTH, state.pagesFoldWidth)
+            : state.pagesFoldWidth,
+        );
 
   return (
     <aside aria-labelledby={headingId} className={`${PANEL_WIDTH} gap-4 p-5 ${panelCard}`}>
@@ -241,8 +274,10 @@ export function MenuPanel({
               options={PAGES_POSITIONS}
               value={state.pagesPosition}
               onSelect={(position) => onSetHeader(pagesPositionPatch(doc, position))}
+              cardNote={pagesCardNote}
             />
             {dragNote}
+            {foldNotes}
             {/* The sliding rule is the published page's alone (ADR 0063): in the canvas the
                 current page's entry keeps the rule's colour, still. A rail marks it by its edge. */}
             {state.pagesPosition === "bar" ? (
@@ -296,8 +331,10 @@ export function MenuPanel({
               options={SECTIONS_POSITIONS}
               value={state.sectionsPosition}
               onSelect={(position) => onSetHeader(sectionsPositionPatch(doc, position))}
+              cardNote={sectionsCardNote}
             />
             {state.pagesMenu.drawn ? null : dragNote}
+            {state.pagesMenu.drawn ? null : foldNotes}
             {sectionsPlaceNotes(state, layoutWidth, device).map((note) => (
               <p key={note} className={noteClass}>
                 {note}
@@ -319,9 +356,9 @@ export function MenuPanel({
             />
           ))}
         </ul>
-        <div role="radiogroup" aria-label={es["editor.menuPanel.sectionsMobile"]}>
+        <div role="radiogroup" aria-label={phoneSpan("sectionsMobile", state.phoneWidth)}>
           <p className="m-0 mb-1 text-[12px] font-semibold text-ui-ink" aria-hidden="true">
-            {es["editor.menuPanel.sectionsMobile"]}
+            {phoneSpan("sectionsMobile", state.phoneWidth)}
           </p>
           <div className="grid grid-cols-3 gap-1.5">
             {SECTIONS_ON_MOBILE.map((mobile) => (
@@ -424,9 +461,7 @@ export function MenuPanel({
             state.scrolledLook === "glass"
               ? es["editor.menuPanel.stickyGlass"]
               : es["editor.menuPanel.stickySolid"],
-            state.phoneRow
-              ? es["editor.menuPanel.stickyPhoneRow"]
-              : es["editor.menuPanel.stickyPhone"],
+            phoneSpan(state.phoneRow ? "stickyPhoneRow" : "stickyPhone", state.phoneWidth),
             ...(state.transparent ? [es["editor.menuPanel.stickyTransparent"]] : []),
           ]}
         />
@@ -611,12 +646,15 @@ function Places<T extends PagesPosition | SectionsPosition>({
   options,
   value,
   onSelect,
+  cardNote,
 }: {
   name: string;
   label: string;
   options: readonly T[];
   value: T;
   onSelect: (position: T) => void;
+  /** A line under a card's name, where its place will not be seen as drawn (sprint 34 día 4). */
+  cardNote: (position: T) => string | null;
 }) {
   return (
     <div role="radiogroup" aria-label={label}>
@@ -642,6 +680,11 @@ function Places<T extends PagesPosition | SectionsPosition>({
             <span className="text-center text-[12px] leading-tight font-medium text-ui-ink">
               {es[`editor.menuPanel.position.${position}`]}
             </span>
+            {cardNote(position) === null ? null : (
+              <span className="text-center text-[11px] leading-tight text-ui-muted">
+                {cardNote(position)}
+              </span>
+            )}
           </label>
         ))}
       </div>

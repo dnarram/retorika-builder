@@ -234,3 +234,31 @@ cliff stays for a line truly that close to the measure. **Día 4's warning says 
 passes the measure by under 5 %, «por muy poco: quitando N caracteres cabe en pantallas anchas», and
 not «a ningún ancho» alone — «es la diferencia entre un dueño que acorta una etiqueta y uno que no
 entiende por qué su web de escritorio lleva el menú del móvil».
+
+## Note — sprint 34 día 4: who is told, and from which width
+
+**The download review says the fold from 1024, and the panel says it from 721** (David, día 4). The
+plan had the review warn from 721, with a tablet's weight under 1024. Measured that day, 588 of 1 800
+freshly generated sites fold at tablet widths — N from 725 to 905, the e2e walks' own site at 805 —
+because of the entries they are born with, so a third of new owners would have been warned at every
+download about a site they had not touched, where «Menú» on a tablet held upright is what any site
+does. His decision: the review warns only where **the desktop site carries the phone's menu** — a fold
+from 1024, or a bar that never fits — first in the dialog of what goes wrong on a phone, before the long
+button, with the same «Descargar igualmente»; a tablet's fold is the panel's alone; and the figure goes
+to the backlog with the question whether the catalog's entries should be shorter at source.
+
+**«Always» says how far, and what it takes** (his condition of día 3). `headerWidths` answers «always»
+with `beyond`, the px the widest line's estimate passes the measure by, and an `over` that counts the
+characters over the measure — what it takes to fit on a wide screen at all — where a fold past 1247
+counts them over 1248. Under 5 % of the measure (`NEARLY_PAST_THE_MEASURE`) the review says «por muy
+poco: quitando N caracteres cabe en pantallas anchas»; past it, «a ningún ancho», with the count. A test
+cuts the count's characters from a label four letters past the measure and finds the bar fitting again.
+
+**The panel says it where it applies**: under «Dónde va», the fold by weight (tablets, or the desktop
+site with the phone's menu, or never, or «por muy poco»); «En el móvil y hasta N px» and the fixed bar's
+two notes, which cover that width now; in a canvas laid out at or under the fold (a 1024 window with the
+panel, 887), that the canvas draws the phone's bar and from which width it is whole; on a column's card
+from 1024, «No se verá hasta N px», or never. And a column's note no longer says «en el lienzo se ve
+siempre» or «amplía la ventana» of a column that stands past 1280, which the canvas never lays out at.
+**The sentences say «se dibuja como en el móvil» and «el menú del móvil», never «Menú» alone**: a site
+whose bar holds only sections has no «Menú», and the phone's bar is its row, or «Ir a…», or nothing.

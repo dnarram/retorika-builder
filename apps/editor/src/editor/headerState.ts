@@ -2,6 +2,7 @@ import { COVER_ID, FOOTER_ID, TEASER_ID } from "@retorika/catalog";
 import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
 import {
   actionEntry,
+  BAR_MEASURE,
   GLASS_BACKGROUNDS,
   headerDrawn,
   headerPhoneRow,
@@ -12,6 +13,7 @@ import {
   MENU_MIN_ENTRIES,
   pageLabel,
   pageMenuEntries,
+  RAIL_FOLD_WIDTH,
   sectionLabel,
   sectionMenuEntries,
   TWO_RAILS_FOLD_WIDTH,
@@ -30,7 +32,7 @@ import type {
   StyleProperty,
 } from "@retorika/schema";
 import es from "../locales/es.json" with { type: "json" };
-import { DESKTOP_LAYOUT_WIDTH } from "./overflowCheck.ts";
+import { DESKTOP_LAYOUT_WIDTH, PHONE_BREAKPOINT } from "./overflowCheck.ts";
 import { headerBarBackground } from "./styleReview.ts";
 
 /**
@@ -166,6 +168,8 @@ export interface HeaderState {
   /** The widest canvas the header's phone layout reaches (sprint 34 día 1): the renderer's
    * `headerWidths`, which writes the `@media` it is read from. */
   phoneWidth: number | "always";
+  /** What the panel says when the bar folds past the phone (sprint 34 día 4), or `undefined`. */
+  fold: FoldWarning | undefined;
   /** The look as the renderer reads it, every gap filled by its default (día 6). */
   look: HeaderLook;
   /** The parts this page draws, in `HEADER_PARTS` order — the ones the exact controls are offered
@@ -357,6 +361,7 @@ export function headerStateFor(doc: RetorikaDocument, pageId: string | undefined
           ? Math.max(TWO_RAILS_FOLD_WIDTH, widths.rails)
           : widths.rails,
     phoneWidth: widths.phone,
+    fold: foldWarning(doc),
     look: {
       background: settings.background,
       align: settings.align,
@@ -508,15 +513,26 @@ export function brandWithPagesPatch(on: boolean): Partial<Header> {
  * - under 1280 and still at or over its width, the canvas says how wide, and that it is seen;
  * - under its width, that it folds, and what brings it back — a wider window, or the panel closed;
  * - in the phone view, that there is no column there.
+ *
+ * **And since sprint 34 día 4, past the canvas and never** (ADR 0067): a bar whose words fold it past
+ * 1279 stands its column from wider than the canvas ever lays out, so neither «se ve siempre» nor «amplía
+ * la ventana» is true — the note says the column is seen from that width and not in the canvas; and a
+ * bar that never fits has no column at any width (`foldWidth` infinite), which is said as such.
  */
 export function columnNote(
   foldWidth: number,
   layoutWidth: number,
   device: "desktop" | "mobile",
 ): string {
+  if (!Number.isFinite(foldWidth)) return es["editor.menuPanel.notes.columnNever"];
   const width = String(foldWidth);
   if (device === "mobile")
     return es["editor.menuPanel.notes.columnPhone"].replace("{width}", width);
+  if (foldWidth > DESKTOP_LAYOUT_WIDTH) {
+    return es["editor.menuPanel.notes.columnBeyondCanvas"]
+      .replace("{width}", width)
+      .replace("{canvas}", String(DESKTOP_LAYOUT_WIDTH));
+  }
   if (layoutWidth >= DESKTOP_LAYOUT_WIDTH) {
     return es["editor.menuPanel.notes.column"]
       .replace("{width}", width)
@@ -528,6 +544,132 @@ export function columnNote(
       ? es["editor.menuPanel.notes.columnHere"]
       : es["editor.menuPanel.notes.columnFolded"]
   ).replace("{n}", n);
+}
+
+/**
+ * **What a bar whose words do not fit one line is, by weight** (sprint 34 día 4; ADR 0067; David's
+ * decision 2 of sprint 34 and his adjustment 2 approving it). Under 1024 the fold is a tablet's
+ * («Menú» on tablets and narrow windows), and **only the panel says it** (David, día 4: a third of
+ * freshly generated sites fold there, at 805, by the labels the generator writes — «el aviso se calla;
+ * el dato se escribe», in the backlog); from 1024 **the desktop site carries the phone's menu** —
+ * «Menú» and its full-height sheet, no column — and the download review says it, before the long
+ * button (`LoudFold`). `over` is the characters to cut so the line fits at 1248 (0 when it does
+ * up to there) or, for a bar that never fits, the page's measure; and **«por muy poco»** is David's
+ * condition of día 3 — under 5 % past the measure the line is a label away from fitting on a wide
+ * screen, and «a ningún ancho» alone would leave the owner not knowing why the desktop site has the
+ * phone's menu. `undefined` where the bar is the phone's only on a phone.
+ */
+export type FoldWarning =
+  | { weight: "tablet"; width: number }
+  | { weight: "desktop"; width: number; over: number }
+  | { weight: "always"; over: number; nearly: boolean };
+/** The fold the download review says: from 1024, or never fitting. */
+export type LoudFold = Exclude<FoldWarning, { weight: "tablet" }>;
+
+/** How far past the measure a line that never fits may be and still be «por muy poco». */
+export const NEARLY_PAST_THE_MEASURE = 0.05;
+
+export function foldWarning(doc: RetorikaDocument): FoldWarning | undefined {
+  const widths = headerWidths(doc);
+  if (widths.phone === "always") {
+    return {
+      weight: "always",
+      over: widths.over,
+      nearly: widths.beyond < NEARLY_PAST_THE_MEASURE * BAR_MEASURE,
+    };
+  }
+  if (widths.phone <= PHONE_BREAKPOINT) return undefined;
+  if (widths.phone < RAIL_FOLD_WIDTH) return { weight: "tablet", width: widths.phone };
+  return { weight: "desktop", width: widths.phone, over: widths.over };
+}
+
+/** `es` with `{n}` filled, from its singular key when there is one character. */
+function counted(one: keyof typeof es, many: keyof typeof es, n: number): string {
+  return n === 1 ? es[one] : es[many].replace("{n}", String(n));
+}
+
+/** The fold said in the «Menú» panel, under «Dónde va»: by its weight, with the count when there
+ * is one. */
+export function foldNoteText(fold: FoldWarning): string {
+  if (fold.weight === "tablet") {
+    return es["editor.menuPanel.notes.foldsTablet"].replace("{width}", String(fold.width));
+  }
+  if (fold.weight === "desktop") {
+    return es["editor.menuPanel.notes.foldsDesktop"].replace("{width}", String(fold.width));
+  }
+  return fold.nearly
+    ? counted(
+        "editor.menuPanel.notes.foldsNearlyOne",
+        "editor.menuPanel.notes.foldsNearly",
+        fold.over,
+      )
+    : counted(
+        "editor.menuPanel.notes.foldsAlwaysOne",
+        "editor.menuPanel.notes.foldsAlways",
+        fold.over,
+      );
+}
+
+/** The fold said in the download review: the row (what the visitor sees) and the reason (why, how
+ * much, and what to do). */
+export function foldReviewText(fold: LoudFold): { row: string; why: string } {
+  if (fold.weight === "always") {
+    return {
+      row: es["editor.download.fold.row.always"],
+      why: fold.nearly
+        ? counted("editor.download.fold.whyNearlyOne", "editor.download.fold.whyNearly", fold.over)
+        : counted("editor.download.fold.whyAlwaysOne", "editor.download.fold.whyAlways", fold.over),
+    };
+  }
+  const width = String(fold.width);
+  const row = es["editor.download.fold.row.desktop"].replace("{width}", width);
+  const why =
+    fold.over === 0
+      ? es["editor.download.fold.why"]
+      : counted("editor.download.fold.whyOverOne", "editor.download.fold.whyOver", fold.over);
+  return {
+    row,
+    why: why.replace("{width}", width).replace("{from}", String(TWO_RAILS_FOLD_WIDTH)),
+  };
+}
+
+/**
+ * **What the canvas shows of a folded bar** (sprint 34 día 4): where the canvas lays the page out at
+ * or under the fold — a 1024 window with the panel open lays it out at 887 (ADR 0061), many sites'
+ * bar folds past that — the owner edits «Menú» where the published site at 1280 shows the strip, and
+ * the panel says so, with the width from which it is seen whole. `null` where the canvas shows the
+ * strip, in the phone view (where «Menú» is the point), and for a bar that never fits (its own note
+ * says so).
+ */
+export function foldedCanvasNote(
+  fold: FoldWarning | undefined,
+  layoutWidth: number,
+  device: "desktop" | "mobile",
+): string | null {
+  if (fold === undefined || fold.weight === "always" || device === "mobile") return null;
+  if (layoutWidth > fold.width) return null;
+  return es["editor.menuPanel.notes.foldedCanvas"].replace("{width}", String(fold.width + 1));
+}
+
+/** «En el móvil», and the fixed bar's notes on the phone, with the widths they really cover: up to
+ * the fold when it is past the phone, at every width when the bar never fits. */
+export function phoneSpan<K extends "sectionsMobile" | "stickyPhone" | "stickyPhoneRow">(
+  key: K,
+  phoneWidth: number | "always",
+): string {
+  if (phoneWidth === "always") return es[`editor.menuPanel.${key}Always`];
+  if (phoneWidth <= PHONE_BREAKPOINT) return es[`editor.menuPanel.${key}`];
+  return es[`editor.menuPanel.${key}UpTo`].replace("{width}", String(phoneWidth));
+}
+
+/** Under a column card in «Dónde va», where the fold keeps that column away (sprint 34 día 4; David's
+ * adjustment 2): from 1024 up the column stands from just above the fold — `columnWidth`, that
+ * column's own, which two opposite columns may push to 1248 — and a bar that never fits has no
+ * column at all. `null` under 1024, where the column stands where it always did. */
+export function columnCardNote(fold: FoldWarning | undefined, columnWidth: number): string | null {
+  if (fold === undefined || fold.weight === "tablet") return null;
+  if (fold.weight === "always") return es["editor.menuPanel.position.columnNever"];
+  return es["editor.menuPanel.position.columnFrom"].replace("{width}", String(columnWidth));
 }
 
 /**

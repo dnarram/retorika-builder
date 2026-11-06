@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { RAIL_FOLD_WIDTH, render, TWO_RAILS_FOLD_WIDTH } from "@retorika/renderer";
+import { headerWidths, RAIL_FOLD_WIDTH, render, TWO_RAILS_FOLD_WIDTH } from "@retorika/renderer";
 import {
   HEADER_ALIGNMENTS,
   HEADER_BACKGROUNDS,
@@ -20,16 +20,24 @@ import { describe, expect, it } from "vitest";
 import {
   brandNamePatch,
   brandWithPagesPatch,
+  columnCardNote,
   columnNote,
+  type FoldWarning,
+  foldedCanvasNote,
+  foldNoteText,
+  foldReviewText,
+  foldWarning,
   headerColorInForce,
   headerExact,
   headerStateFor,
   headerStylePatch,
+  type LoudFold,
   lookPatch,
   type MenuMode,
   menuModePatch,
   menuStatusText,
   pagesPositionPatch,
+  phoneSpan,
   SCHEME_TOKENS,
   schemeSwatch,
   sectionsMobilePatch,
@@ -666,9 +674,162 @@ describe("what a fixed bar turns into once scrolled, as the panel says it (sprin
       "editor.menuPanel.notes.motion",
       "editor.menuPanel.notes.indicator",
       "editor.menuPanel.notes.foldEstimate",
+      // Sprint 34 día 4: the canvas folded under the fold, and a column past the canvas's width.
+      "editor.menuPanel.notes.foldedCanvas",
+      "editor.menuPanel.notes.columnBeyondCanvas",
     ] as const) {
       // Every one says what the canvas shows, so none promises the canvas what it does not draw.
       expect(es[key], key).toMatch(/lienzo/);
+    }
+  });
+});
+
+/**
+ * **What the panel and the download review say of a bar that folds past the phone** (sprint 34 día 4,
+ * ADR 0067; David's decision 2 of the sprint, his adjustment 2 approving it, and his condition of
+ * día 3): by weight — tablets under 1024, the desktop site carrying the phone's menu from 1024, «a
+ * ningún ancho» or «por muy poco» for a bar that never fits — with the width the renderer folds at and
+ * the characters it counts; «En el móvil» and the fixed bar's notes up to that width; the canvas told
+ * where it lays the page out at or under the fold; and a column's card where the fold keeps it away.
+ */
+describe("what the owner is told of a bar that folds (sprint 34 día 4)", () => {
+  const fill = (text: string, values: Record<string, number>) =>
+    Object.entries(values).reduce(
+      (t, [name, value]) => t.replace(`{${name}}`, String(value)),
+      text,
+    );
+  const tablet: FoldWarning = { weight: "tablet", width: 987 };
+  const desktop: LoudFold = { weight: "desktop", width: 1100, over: 0 };
+  const past: LoudFold = { weight: "desktop", width: 1300, over: 6 };
+  const nearly: LoudFold = { weight: "always", over: 3, nearly: true };
+  const never: LoudFold = { weight: "always", over: 41, nearly: false };
+
+  it("says the fold under «Dónde va» by its weight", () => {
+    expect(foldNoteText(tablet)).toBe(
+      fill(es["editor.menuPanel.notes.foldsTablet"], { width: 987 }),
+    );
+    expect(foldNoteText(desktop)).toBe(
+      fill(es["editor.menuPanel.notes.foldsDesktop"], { width: 1100 }),
+    );
+    expect(foldNoteText(nearly)).toBe(fill(es["editor.menuPanel.notes.foldsNearly"], { n: 3 }));
+    expect(foldNoteText(never)).toBe(fill(es["editor.menuPanel.notes.foldsAlways"], { n: 41 }));
+    expect(foldNoteText({ weight: "always", over: 1, nearly: true })).toBe(
+      es["editor.menuPanel.notes.foldsNearlyOne"],
+    );
+    // The tablet's says tablets; from 1024 it is the desktop site with the phone's menu.
+    expect(foldNoteText(tablet)).toMatch(/tabletas/);
+    expect(foldNoteText(desktop)).toMatch(/escritorio lleva el menú del móvil/);
+  });
+
+  it("says the desktop's fold in the download review, with the count where there is one", () => {
+    // A tablet's fold is the panel's alone (David, día 4): `LoudFold` has no tablet to say.
+    expect(foldReviewText(desktop)).toEqual({
+      row: fill(es["editor.download.fold.row.desktop"], { width: 1100 }),
+      why: fill(es["editor.download.fold.why"], { width: 1100 }),
+    });
+    expect(foldReviewText(past)).toEqual({
+      row: fill(es["editor.download.fold.row.desktop"], { width: 1300 }),
+      why: fill(es["editor.download.fold.whyOver"], {
+        width: 1300,
+        n: 6,
+        from: TWO_RAILS_FOLD_WIDTH,
+      }),
+    });
+    expect(foldReviewText({ ...past, over: 1 }).why).toBe(
+      fill(es["editor.download.fold.whyOverOne"], { width: 1300, from: TWO_RAILS_FOLD_WIDTH }),
+    );
+    expect(foldReviewText(nearly)).toEqual({
+      row: es["editor.download.fold.row.always"],
+      why: fill(es["editor.download.fold.whyNearly"], { n: 3 }),
+    });
+    expect(foldReviewText(never).why).toBe(fill(es["editor.download.fold.whyAlways"], { n: 41 }));
+    // «Por muy poco» is David's wording for under 5 % past the measure; «a ningún ancho», past it.
+    expect(foldReviewText(nearly).why).toMatch(/^Por muy poco: quitando 3 caracteres cabe/);
+    expect(foldReviewText(never).why).toMatch(/a ningún ancho/);
+    for (const fold of [desktop, past, nearly, never]) {
+      expect(foldReviewText(fold).why).not.toMatch(/\{/);
+    }
+  });
+
+  it("tells the canvas where it lays the page out at or under the fold, from the pixel above it", () => {
+    expect(foldedCanvasNote(tablet, 887, "desktop")).toBe(
+      fill(es["editor.menuPanel.notes.foldedCanvas"], { width: 988 }),
+    );
+    expect(foldedCanvasNote(tablet, 987, "desktop")).not.toBeNull();
+    expect(foldedCanvasNote(tablet, 988, "desktop")).toBeNull();
+    expect(foldedCanvasNote(tablet, 1280, "desktop")).toBeNull();
+    // The phone view shows «Menú» on purpose, and a bar that never fits has its own note.
+    expect(foldedCanvasNote(tablet, 320, "mobile")).toBeNull();
+    expect(foldedCanvasNote(never, 887, "desktop")).toBeNull();
+    expect(foldedCanvasNote(undefined, 887, "desktop")).toBeNull();
+  });
+
+  it("says «En el móvil» and the fixed bar's notes up to the fold, or at every width", () => {
+    for (const key of ["sectionsMobile", "stickyPhone", "stickyPhoneRow"] as const) {
+      expect(phoneSpan(key, 720)).toBe(es[`editor.menuPanel.${key}`]);
+      expect(phoneSpan(key, 987)).toBe(fill(es[`editor.menuPanel.${key}UpTo`], { width: 987 }));
+      expect(phoneSpan(key, "always")).toBe(es[`editor.menuPanel.${key}Always`]);
+    }
+  });
+
+  it("says on a column's card that the fold keeps it away, from 1024 up", () => {
+    expect(columnCardNote(undefined, RAIL_FOLD_WIDTH)).toBeNull();
+    expect(columnCardNote(tablet, RAIL_FOLD_WIDTH)).toBeNull();
+    expect(columnCardNote(desktop, 1101)).toBe(
+      fill(es["editor.menuPanel.position.columnFrom"], { width: 1101 }),
+    );
+    expect(columnCardNote(never, Number.POSITIVE_INFINITY)).toBe(
+      es["editor.menuPanel.position.columnNever"],
+    );
+  });
+
+  it("says a column that stands past the canvas, and one that never stands", () => {
+    expect(columnNote(1301, DESKTOP_LAYOUT_WIDTH, "desktop")).toBe(
+      fill(es["editor.menuPanel.notes.columnBeyondCanvas"], {
+        width: 1301,
+        canvas: DESKTOP_LAYOUT_WIDTH,
+      }),
+    );
+    expect(columnNote(1301, 887, "desktop")).toBe(
+      columnNote(1301, DESKTOP_LAYOUT_WIDTH, "desktop"),
+    );
+    expect(columnNote(Number.POSITIVE_INFINITY, DESKTOP_LAYOUT_WIDTH, "desktop")).toBe(
+      es["editor.menuPanel.notes.columnNever"],
+    );
+    expect(columnNote(Number.POSITIVE_INFINITY, 320, "mobile")).toBe(
+      es["editor.menuPanel.notes.columnNever"],
+    );
+  });
+
+  it("reads the weight off the renderer's widths, and carries it in the panel's state", () => {
+    const doc = fixture("cabecera-con-marca");
+    const widths = headerWidths(doc);
+    if (widths.phone === "always") throw new Error("cabecera-con-marca fits");
+    expect(foldWarning(doc)).toEqual({ weight: "tablet", width: widths.phone });
+    expect(headerStateFor(doc, undefined).fold).toEqual(foldWarning(doc));
+    expect(foldWarning(fixture("menu-y-paginas"))).toBeUndefined();
+  });
+
+  it("writes no number of its own in any of its sentences", () => {
+    for (const key of [
+      "editor.menuPanel.notes.foldsTablet",
+      "editor.menuPanel.notes.foldsDesktop",
+      "editor.menuPanel.notes.foldsAlways",
+      "editor.menuPanel.notes.foldsNearly",
+      "editor.menuPanel.notes.foldedCanvas",
+      "editor.menuPanel.notes.columnNever",
+      "editor.menuPanel.notes.columnBeyondCanvas",
+      "editor.menuPanel.position.columnFrom",
+      "editor.menuPanel.sectionsMobileUpTo",
+      "editor.menuPanel.stickyPhoneUpTo",
+      "editor.menuPanel.stickyPhoneRowUpTo",
+      "editor.download.fold.row.desktop",
+      "editor.download.fold.why",
+      "editor.download.fold.whyOver",
+      "editor.download.fold.whyAlways",
+      "editor.download.fold.whyNearly",
+    ] as const) {
+      expect(es[key], key).not.toMatch(/\d/);
     }
   });
 });

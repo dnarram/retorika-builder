@@ -7483,3 +7483,56 @@ de scroll con estilo ocupa su ancho en todas las plataformas y el `@media` la si
 exactamente la de Windows. Una tabla «medida» puede estar mal por el método: diez copias de un glifo no
 son una etiqueta. Y una letra medida en una sola máquina es la letra de esa máquina: lo que CI dibuja
 solo se sabe midiéndolo en CI, y el artefacto de una ejecución es la forma de traerlo.
+
+### Día 4 — el dueño sabe por qué se pliega (PR de `feat/el-dueno-sabe-por-que-se-pliega`)
+
+**Primero se midió a quién se avisaría, y la medida cambió el plan.** El plan avisaba en la descarga
+desde 721, con peso de tableta por debajo de 1024. Sobre 1 800 webs recién generadas (diez sectores ×
+cuatro nombres × cinco acciones × tres listas de servicios, con dirección, horario y todos los
+contactos), **588 pliegan la barra en tableta, de 725 a 905 px: media 803, mediana 805** — la de las
+caminatas, «Taberna Santo Domingo», a 805. Pesa sobre todo el largo del nombre («Taberna Santo
+Domingo» pliega en 240 de 450, «Talleres Hermanos García López» en 252, «Barbería El Corte» en 96,
+«Fisio Ana» en ninguna), y todas llevan «Dónde estamos» y casi todas «Servicios», las entradas neutras
+del catálogo. Un tercio de los dueños nuevos habría visto el aviso en cada descarga de una web que no
+había tocado. **David decidió**: la descarga avisa solo **desde 1024** (la web de escritorio lleva el
+menú del móvil) **o cuando no cabe nunca**; el pliegue en tableta lo dice solo el panel; y «el aviso se
+calla; el dato se escribe»: la cifra y la pregunta de si acortar las entradas en origen van al backlog
+(«Sprint 34 día 4»).
+
+**La revisión de descarga**: el aviso entra en el diálogo de lo que va mal en el móvil, con la misma
+aceptación, **primero y antes que el botón largo**, y le da título («Tu menú no cabe en una línea»):
+«Hasta N px, la web de escritorio lleva el menú del móvil, sin columnas», con la causa y lo que se
+hace — «acorta alguna etiqueta con «Se lee como…» o quita entradas del menú» —, la cuenta de
+caracteres que sobran para caber desde 1248 cuando pliega pasado 1247, y para una barra que no cabe
+nunca, **la condición de David del día 3**: a menos de un 5 % de la medida, «por muy poco: quitando N
+caracteres cabe en pantallas anchas»; más allá, «a ningún ancho», con la cuenta. Para eso el renderer
+dice cuánto pasa la línea de la medida (`beyond`) y el `over` de «siempre» cuenta contra la medida;
+una prueba quita a una etiqueta cuatro letras más allá del umbral los caracteres que dice la cuenta, y
+la barra vuelve a caber.
+
+**El panel**: bajo «Dónde va», el pliegue por su peso (tabletas; escritorio con el menú del móvil;
+nunca; por muy poco); «En el móvil y hasta N px» y las dos notas de la barra fija con ese ancho; con el
+lienzo maquetando por debajo de N (una ventana de 1024 con el panel, 887), «En el lienzo, a este ancho,
+la barra se dibuja como en el móvil… Desde N + 1 px se ve entera»; en las tarjetas de columna desde
+1024, «No se verá hasta N px» (o a ningún ancho). **Y una nota que mentía, corregida**: la de una
+columna que se pone de pie pasado 1280 decía «en el lienzo se ve siempre» o «amplía la ventana», y el
+lienzo nunca maqueta a más de 1280. **Las frases dicen «se dibuja como en el móvil» y «el menú del
+móvil», nunca «Menú» a secas**: lo encontró la caminata — la web de las caminatas solo lleva secciones
+en la barra, y sin menú de páginas no hay «Menú» (la ADR 0067 ya lo decía).
+
+**Pruebas**: `downloadGate.test.ts` (nada en tableta; escritorio con y sin cuenta, y la descarga
+igualmente; «por muy poco» y «a ningún ancho»; con el botón largo en el mismo diálogo), `headerState.test.ts`
+(cada frase por peso, el lienzo plegado desde el píxel de encima, «En el móvil» y la fija, las tarjetas,
+las columnas pasado el lienzo y nunca, ninguna cifra propia en ninguna frase; las dos notas del lienzo en
+la prueba de «lo que solo hace la web publicada»), `header.test.ts` («por muy poco» y su cuenta) y una
+caminata nueva: la web de las caminatas, en tableta (el panel lo dice, la descarga no) y con tres
+etiquetas largas a 1062 (el panel, el lienzo a 887 plegado y la revisión primero, que descarga igual).
+**Saboteos**: el umbral de 1024 movido a 1224 → rojo; la cuenta de «siempre» tres caracteres corta →
+rojo; la puerta sin el pliegue → la caminata, roja esperando el diálogo.
+
+**Suites.** `typecheck`, `lint`, `test` (3708, quince más), invariantes, golden (cero cambios: la salida
+del renderer no se mueve, solo lo que `headerWidths` cuenta, así que `a11y` no aplica), `renderer:deps`,
+`size` (el script, 0,8 KB), `secrets:scope` y `schema:guard` (sin cambio de forma) en verde. **e2e
+filtrado de cabecera** (sprints 30–34): 28 caminatas; la del sprint 31 día 6 esperaba «En el móvil solo
+la barra.» y su web pliega pasado 720, así que ahora dice «En el móvil, y hasta N px, solo la barra.»: la
+caminata espera esa forma. **e2e completa: 289 verdes y 1 omitida, 1262 s.**

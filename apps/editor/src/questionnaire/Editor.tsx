@@ -8558,6 +8558,7 @@ export function Editor({
             <OverflowDialog
               findings={downloadDialog.findings}
               longButton={downloadDialog.longButton}
+              fold={downloadDialog.fold}
               onDownloadAnyway={() => acceptAndContinue("overflow")}
               onCancel={() => setDownloadDialog(null)}
             />

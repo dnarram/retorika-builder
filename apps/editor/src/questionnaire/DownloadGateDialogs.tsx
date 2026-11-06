@@ -9,7 +9,7 @@ import type {
 import { useId } from "react";
 import type { DownloadGate } from "../editor/downloadGate.ts";
 import { HEAVY_FONT_BYTES } from "../editor/fontBytes.ts";
-import { PHONE_BUTTON_MAX } from "../editor/headerState.ts";
+import { foldReviewText, type LoudFold, PHONE_BUTTON_MAX } from "../editor/headerState.ts";
 import type { OverflowFinding } from "../editor/overflowCheck.ts";
 import { listPhotos } from "../editor/photoInventory.ts";
 import { type ContrastFinding, formatRatio, type LogoFinding } from "../editor/styleReview.ts";
@@ -503,26 +503,66 @@ export function ContrastDialog({
  * **A button longer than the phone's bar holds is said here too** (sprint 33 día 6, David's
  * decision): the same narrowest phone, a row of its own with the button's words, and its own title
  * and foot when it is the only thing to say.
+ *
+ * **And a desktop site carrying the phone's menu** (sprint 34 día 4, ADR 0067): a row saying what the
+ * visitor sees, up to which width, and the characters to cut — **first, and naming the dialog**,
+ * before the long button (David's adjustment 2). The foot is the findings' when there are any, else
+ * the fold's, else the button's.
  */
 export function OverflowDialog({
   findings,
   longButton,
+  fold,
   onDownloadAnyway,
   onCancel,
 }: {
   findings: readonly OverflowFinding[];
   longButton?: string | undefined;
+  fold?: LoudFold | undefined;
   onDownloadAnyway: () => void;
   onCancel: () => void;
 }) {
   const titleId = useId();
   const container = useFocusTrap(true, onCancel);
-  const alone = findings.length === 0 && longButton !== undefined;
-  const body = alone
-    ? es["editor.download.longButton.body"].replace("{max}", String(PHONE_BUTTON_MAX))
-    : findings.length === 1
-      ? es["editor.download.overflow.body.one"]
-      : es["editor.download.overflow.body.many"].replace("{n}", String(findings.length));
+  const first =
+    fold !== undefined
+      ? "fold"
+      : findings.length > 0
+        ? "overflow"
+        : longButton !== undefined
+          ? "button"
+          : "fold";
+  const title =
+    first === "fold"
+      ? es["editor.download.fold.title"]
+      : first === "button"
+        ? es["editor.download.longButton.title"]
+        : es["editor.download.overflow.title"];
+  const body =
+    first === "fold"
+      ? es["editor.download.fold.body"]
+      : first === "button"
+        ? es["editor.download.longButton.body"].replace("{max}", String(PHONE_BUTTON_MAX))
+        : findings.length === 1
+          ? es["editor.download.overflow.body.one"]
+          : es["editor.download.overflow.body.many"].replace("{n}", String(findings.length));
+  const foot =
+    findings.length > 0
+      ? es["editor.download.overflow.foot"]
+      : fold !== undefined
+        ? es["editor.download.fold.foot"]
+        : es["editor.download.longButton.foot"];
+  const said = fold === undefined ? undefined : foldReviewText(fold);
+  const foldRow =
+    said === undefined ? null : (
+      <div
+        data-testid="fold-row"
+        className="flex flex-col gap-0.5 rounded-[9px] border border-ui-border px-3 py-2.5"
+      >
+        <span className="text-[13px] text-ui-ink">{said.row}</span>
+        <span className="text-[12px] text-ui-muted">{said.why}</span>
+      </div>
+    );
 
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-[#0F172A]/45 p-5">
@@ -535,11 +575,12 @@ export function OverflowDialog({
         className="flex max-h-full w-full max-w-[520px] flex-col rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.28)]"
       >
         <h2 id={titleId} className="m-0 text-[17px] font-bold text-ui-ink">
-          {es[alone ? "editor.download.longButton.title" : "editor.download.overflow.title"]}
+          {title}
         </h2>
         <p className="mt-2 mb-0 text-[14px] leading-snug text-ui-muted">{body}</p>
 
         <div className="mt-4 flex min-h-0 flex-col gap-2 overflow-y-auto">
+          {foldRow}
           {findings.map((finding) => (
             <div
               key={`${finding.pageId}/${finding.sectionId ?? ""}/${finding.over}`}
@@ -567,9 +608,7 @@ export function OverflowDialog({
           )}
         </div>
 
-        <p className="mt-4 mb-0 text-[12px] leading-snug text-ui-muted">
-          {es[alone ? "editor.download.longButton.foot" : "editor.download.overflow.foot"]}
-        </p>
+        <p className="mt-4 mb-0 text-[12px] leading-snug text-ui-muted">{foot}</p>
 
         <div className="mt-5 flex justify-end gap-2.5">
           <button
