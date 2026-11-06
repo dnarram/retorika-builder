@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { GALLERY_PHOTOS } from "@retorika/catalog";
 import { EMPTY_ANSWERS, GALLERY_SAMPLE_COUNT, generate } from "@retorika/generator";
+import { BAR_MEASURE, type HeaderWidths, headerWidths } from "@retorika/renderer";
 import {
   FINE_COLUMNS,
   MAX_PAGES,
@@ -26,6 +27,7 @@ import {
   EVERY_KIND_HAS_A_DIALOG,
   MAX_PHOTOS,
 } from "../src/editor/downloadGate.ts";
+import { NEARLY_PAST_THE_MEASURE } from "../src/editor/headerState.ts";
 import { countPhotos, type PhotoCounts } from "../src/editor/photoInventory.ts";
 
 /**
@@ -806,5 +808,115 @@ describe("the gate with the owner's own fonts in it (sprint 29 día 5)", () => {
     expect(
       downloadGateFor(counts({}), named, new Set(["fonts"]), [], [], files(400 * 1024)).kind,
     ).toBe("ready");
+  });
+});
+
+/**
+ * **A bar whose words fold it past the phone** (sprint 34 día 4, ADR 0067; David's decision 2 of the
+ * sprint and his adjustment 2): said in the dialog of what is wrong on a phone, with the same
+ * acceptance — a warning and never a block — by its weight: under 1024 a tablet's, from 1024 the
+ * desktop site carrying the phone's menu, with the characters over 1247 when it folds past it, and
+ * for a bar that never fits, «por muy poco» under 5 % past the measure (David's condition of día 3).
+ * The documents are the generated taberna with three more pages, their titles grown a letter at a
+ * time until the bar folds where each case needs it.
+ */
+describe("a bar whose words fold it past the phone", () => {
+  const base = generate({
+    ...EMPTY_ANSWERS,
+    businessName: "Taberna Santo Domingo",
+    sector: "restaurante-bar",
+  }).document;
+  const withPages = (title: string) =>
+    parseDocument({
+      ...base,
+      pages: [
+        ...base.pages,
+        ...[1, 2, 3].map((i) => ({
+          id: `p${i}`,
+          slug: `p${i}`,
+          title: `${title} ${i}`,
+          sections: [],
+        })),
+      ],
+    });
+  const text = "Reservas para grupos de empresa y familias ".repeat(6);
+  /** The first document, title grown a letter at a time, whose widths `wanted` accepts. */
+  const first = (wanted: (w: HeaderWidths) => boolean): RetorikaDocument => {
+    for (let n = 1; n <= text.length; n += 1) {
+      const doc = withPages(text.slice(0, n).trim());
+      if (wanted(headerWidths(doc))) return doc;
+    }
+    throw new Error("no title length gives the widths wanted");
+  };
+  const gate = (doc: RetorikaDocument) => downloadGateFor(counts({}), doc);
+
+  it("says nothing where the bar folds only on a phone", () => {
+    expect(headerWidths(base).phone).toBe(720);
+    expect(gate(base)).toEqual({ kind: "ready" });
+  });
+
+  it("says nothing of a tablet's fold, which the panel says (David, día 4)", () => {
+    const doc = first((w) => w.phone !== "always" && w.phone > 720);
+    const width = headerWidths(doc).phone;
+    if (width === "always" || width >= 1024) throw new Error(`${width} is not a tablet's fold`);
+    expect(gate(doc)).toEqual({ kind: "ready" });
+  });
+
+  it("speaks of the desktop site from 1024, with no count while the line fits at 1248", () => {
+    const doc = first((w) => w.phone !== "always" && w.phone >= 1024);
+    const width = headerWidths(doc).phone;
+    if (width === "always" || width > 1247) throw new Error(`${width} is past 1247`);
+    expect(gate(doc)).toEqual({
+      kind: "overflows",
+      findings: [],
+      fold: { weight: "desktop", width, over: 0 },
+    });
+    expect(downloadGateFor(counts({}), doc, new Set(["overflow"]))).toEqual({ kind: "ready" });
+  });
+
+  it("counts the characters over 1248 when it folds past 1247", () => {
+    const doc = first((w) => w.phone !== "always" && w.phone > 1247);
+    const result = gate(doc);
+    if (result.kind !== "overflows" || result.fold?.weight !== "desktop") {
+      throw new Error(JSON.stringify(result));
+    }
+    expect(result.fold.over).toBeGreaterThan(0);
+    expect(result.fold.over).toBe(headerWidths(doc).over);
+  });
+
+  it("says «por muy poco» just past the measure, and «a ningún ancho» far past it", () => {
+    const near = first((w) => w.phone === "always");
+    const nearly = gate(near);
+    if (nearly.kind !== "overflows" || nearly.fold?.weight !== "always") {
+      throw new Error(JSON.stringify(nearly));
+    }
+    expect(nearly.fold.nearly).toBe(true);
+    const far = first(
+      (w) => w.phone === "always" && w.beyond >= NEARLY_PAST_THE_MEASURE * BAR_MEASURE,
+    );
+    const never = gate(far);
+    if (never.kind !== "overflows" || never.fold?.weight !== "always") {
+      throw new Error(JSON.stringify(never));
+    }
+    expect(never.fold.nearly).toBe(false);
+    expect(never.fold.over).toBeGreaterThan(nearly.fold.over);
+  });
+
+  it("is said with the long button in one dialog", () => {
+    // The button's page leaves the menu (its destination is not repeated), so the titles grow
+    // further before the bar folds past 1024 with the button in place.
+    const withButton = (title: string) =>
+      parseDocument({ ...withPages(title), header: { action: { kind: "page", pageId: "p1" } } });
+    let doc: RetorikaDocument | undefined;
+    for (let n = 1; n <= text.length && doc === undefined; n += 1) {
+      const candidate = withButton(text.slice(0, n).trim());
+      const w = headerWidths(candidate);
+      if (w.phone !== "always" && w.phone >= 1024) doc = candidate;
+    }
+    if (doc === undefined) throw new Error("no title length folds past 1024 with the button");
+    const result = gate(doc);
+    if (result.kind !== "overflows") throw new Error(JSON.stringify(result));
+    expect(result.longButton).toBeDefined();
+    expect(result.fold?.weight).toBe("desktop");
   });
 });

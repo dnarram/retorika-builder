@@ -158,6 +158,26 @@ CI's Linux): the finger is now the touchscreen's own, `Input.dispatchTouchEvent`
 page with the sheet closed — an instrument that moves nothing fails by name. Without the lock it moves
 the page 508 px under the sheet; with it, 0.
 
+**Sprint 34 día 4 — what that day measured and leaves open.**
+
+1. **The labels a fresh site is born with fold a third of them at tablet widths** (David's condition
+   of 6 November 2026, deciding that the download review warns of the fold only from 1024: «el aviso
+   se calla; el dato se escribe»). Over 1 800 freshly generated sites — ten sectors × four business
+   names × five main actions × three lists of services, with an address, hours and every contact
+   filled — **588 fold the bar past 720, at N from 725 to 905: mean 803, median 805**; the e2e walks'
+   «Taberna Santo Domingo» is one of them, at 805. By name, the brand's length weighs most: «Taberna
+   Santo Domingo» folds in 240 of its 450, «Talleres Hermanos García López» in 252, «Barbería El
+   Corte» in 96, «Fisio Ana» in none. Every one of the 588 carries «Dónde estamos» and 576 «Servicios»
+   — **the catalog's neutral entries** (`section.*.menuLabel` in `packages/catalog/src/locales/es.json`),
+   not the generator's sector words (`packages/generator/src/menuLabels.ts`) — beside the button
+   («Contacto» 336, «Pedir cita» 168, «Reservar» 84). The panel says a tablet's fold under «Dónde va»
+   and in «En el móvil y hasta N px»; the download review does not. **The open question, David's**:
+   whether those entries should be shorter at source (his examples: «Dónde estamos», «Contacto y
+   reservas»), which would leave more new sites with their strip from 721 — and would change the menu
+   of every saved site that keeps the catalog's word, which is why it needs his written decision.
+   Reproduced by generating the sites and reading `headerWidths`; the script of the day is in the
+   REVIEW entry.
+
 **Sprint 33 día 6 — what that day measured and leaves open.**
 
 1. **A bar whose words do not fit its line covers a transparent cover's first words, and no estimate

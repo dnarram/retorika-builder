@@ -44,6 +44,7 @@ export { fontFaceCss } from "./fonts.ts";
 export type { ActionEntry, HeaderSettings, HeaderWidths } from "./header.ts";
 export {
   actionEntry,
+  BAR_MEASURE,
   GLASS_BACKGROUNDS,
   GLASS_MIX,
   headerDrawn,

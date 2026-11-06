@@ -7,7 +7,7 @@ import {
   type RetorikaDocument,
 } from "@retorika/schema";
 import { HEAVY_FONT_BYTES } from "./fontBytes.ts";
-import { phoneButtonTooLong } from "./headerState.ts";
+import { foldWarning, type LoudFold, phoneButtonTooLong } from "./headerState.ts";
 import type { OverflowFinding } from "./overflowCheck.ts";
 import { ownFontFiles } from "./ownFonts.ts";
 import type { PhotoCounts } from "./photoInventory.ts";
@@ -173,8 +173,15 @@ export type DownloadGate =
    * phone's bar holds** (`longButton`, its words; David's decision): the same narrow phone, the same
    * «Descargar igualmente» and the same `overflow` acceptance. A warning and never a block: «Menú»
    * on a second line is a bar that looks worse, not a site that does not work.
+   *
+   * **And since sprint 34 día 4 a desktop site carrying the phone's menu** (`fold`, ADR 0067; David's
+   * decision 2 of the sprint and his adjustment 2): a bar whose words fold it from 1024 up, or at
+   * every width, with the characters to cut, said in this dialog with the same acceptance and never a
+   * block (a folded bar works; a wrapped one was the defect), first and before the long button. A
+   * tablet's fold is not said here: a third of freshly generated sites fold at 805 by the generator's
+   * own labels, and David's decision of día 4 leaves it to the panel.
    */
-  | { kind: "overflows"; findings: OverflowFinding[]; longButton?: string }
+  | { kind: "overflows"; findings: OverflowFinding[]; longButton?: string; fold?: LoudFold }
   | { kind: "textOverText"; findings: OverlappingTexts[] }
   /**
    * A face of the owner's own font above 300 KB (David's condition 2): a slower page, not a broken
@@ -263,11 +270,14 @@ export function downloadGateFor(
   }
   if (!accepted.has("overflow")) {
     const longButton = phoneButtonTooLong(doc);
-    if (overflow.length > 0 || longButton !== undefined) {
+    const folded = foldWarning(doc);
+    const fold = folded?.weight === "tablet" ? undefined : folded;
+    if (overflow.length > 0 || longButton !== undefined || fold !== undefined) {
       return {
         kind: "overflows",
         findings: [...overflow],
         ...(longButton === undefined ? {} : { longButton }),
+        ...(fold === undefined ? {} : { fold }),
       };
     }
   }

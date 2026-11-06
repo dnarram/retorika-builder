@@ -24386,7 +24386,9 @@ describe("sprint 31 día 6 — el móvil del raíl", () => {
         .click();
       // Fixed, so the phone can show it stays fixed with «Ir a…» — one line, not the row's two.
       await panel.getByRole("checkbox", { name: "Se queda arriba al bajar" }).check();
-      await expect(panel.getByText("En el móvil solo la barra.")).toBeVisible();
+      // This site's words fold the bar past the phone (ADR 0067), so the note covers that width
+      // too since sprint 34 día 4: «En el móvil, y hasta N px, solo la barra.»
+      await expect(panel.getByText(/^En el móvil, y hasta \d+ px, solo la barra\.$/)).toBeVisible();
       await expect(frame.locator(".rb-rail")).toHaveCount(2);
       await panel.getByRole("button", { name: "Cerrar la cabecera" }).click();
 
@@ -25749,6 +25751,103 @@ describe("sprint 33 día 6 — un botón largo avisa y no bloquea", () => {
       const [download] = await Promise.all([
         studio.waitForEvent("download"),
         longButton.getByRole("button", { name: "Descargar igualmente" }).click(),
+      ]);
+      expect(download.suggestedFilename()).toMatch(/\.zip$/);
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+});
+
+/**
+ * **Sprint 34 día 4 — el dueño sabe por qué se pliega** (ADR 0067; decisión 2 de David del sprint, su
+ * ajuste 2 y su decisión del día 4). La web de las caminatas — «Taberna Santo Domingo», sus tres
+ * secciones en la barra y «Reservar» — se pliega en tableta, a 805: lo dice el panel, bajo «Dónde va»
+ * y en «En el móvil y hasta 805 px», y la descarga no avisa (un tercio de las webs recién generadas se
+ * pliega ahí por las etiquetas del propio generador). Con las tres etiquetas largas se pliega a 1062:
+ * la web de escritorio lleva el menú del móvil, el panel lo dice con ese peso, el lienzo a 887 lo
+ * enseña plegado y dice desde cuándo se ve entera, y la revisión de descarga lo pone primero, con
+ * «Descargar igualmente».
+ */
+describe("sprint 34 día 4 — el dueño sabe por qué se pliega", () => {
+  it("lo dice el panel en tableta, y desde 1024 también la descarga, que descarga igual", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 950 } });
+    const studio = await context.newPage();
+    try {
+      await intoTheCanvas(studio);
+      const frame = studio.frameLocator(PREVIEW).first();
+      await studio.getByRole("button", { name: "Menú", exact: true }).click();
+      const panel = studio.getByRole("complementary", { name: "La cabecera de tu web" });
+      await expect(panel).toBeVisible();
+
+      // 1. In a tablet's fold the panel says it — tablets, up to 805 — and «En el móvil» covers it.
+      await expect(
+        panel.getByText("no caben en una línea hasta 805 px: hasta ese ancho —tabletas", {
+          exact: false,
+        }),
+      ).toBeVisible();
+      await expect(
+        panel.getByRole("radiogroup", { name: "En el móvil y hasta 805 px" }),
+      ).toBeVisible();
+
+      // 2. Three long labels fold it past 1024: the desktop site carries the phone's menu.
+      for (const [derived, label] of [
+        ["Servicios", "Nuestros servicios"],
+        ["Galería", "Fotos de la taberna"],
+        ["Dónde estamos", "Dónde nos encuentras"],
+      ] as const) {
+        const field = panel.getByPlaceholder(derived, { exact: true });
+        await field.fill(label);
+        await expect(frame.locator(".rb-nav-row a", { hasText: label })).toHaveCount(1);
+        await field.blur();
+      }
+      await expect(
+        panel.getByText(
+          "no caben en una línea hasta 1062 px: hasta ese ancho la web de escritorio lleva el menú del móvil",
+          { exact: false },
+        ),
+      ).toBeVisible();
+      await expect(
+        panel.getByRole("radiogroup", { name: "En el móvil y hasta 1062 px" }),
+      ).toBeVisible();
+
+      // 3. A 1024 window with the panel open lays the canvas out at 887, under the fold: the canvas
+      //    draws the phone's bar, and the panel says so and from which width it is whole.
+      await studio.setViewportSize({ width: 1024, height: 900 });
+      await expect(
+        panel.getByText(
+          "En el lienzo, a este ancho, la barra se dibuja como en el móvil: sus palabras no caben en una línea. Desde 1063 px se ve entera.",
+        ),
+      ).toBeVisible();
+      await expect
+        .poll(() =>
+          frame.locator(".rb-nav-wide").evaluate((el) => (el as HTMLElement).checkVisibility()),
+        )
+        .toBe(false);
+      await studio.setViewportSize({ width: 1440, height: 950 });
+      await panel.getByRole("button", { name: "Cerrar la cabecera" }).click();
+
+      // 4. The review: past the photos' warning, the fold first, with a way past it.
+      await studio.getByRole("button", { name: "Descargar" }).click();
+      const anyway = studio.getByRole("button", { name: "Descargar igualmente" });
+      const folds = studio.getByRole("alertdialog", { name: "Tu menú no cabe en una línea" });
+      for (let i = 0; i < 4 && (await folds.count()) === 0; i += 1) {
+        await anyway.waitFor();
+        if ((await folds.count()) > 0) break;
+        await anyway.click();
+        await studio.waitForTimeout(200);
+      }
+      await expect(folds).toBeVisible();
+      const row = folds.getByTestId("fold-row");
+      await expect(row).toContainText(
+        "Hasta 1062 px, la web de escritorio lleva el menú del móvil, sin columnas",
+      );
+      await expect(row).toContainText(
+        "Tu menú no cabe en una línea hasta 1062 px: acorta alguna etiqueta con «Se lee como…» o quita entradas del menú.",
+      );
+      const [download] = await Promise.all([
+        studio.waitForEvent("download"),
+        folds.getByRole("button", { name: "Descargar igualmente" }).click(),
       ]);
       expect(download.suggestedFilename()).toMatch(/\.zip$/);
     } finally {

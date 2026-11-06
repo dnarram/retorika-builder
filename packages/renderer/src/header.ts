@@ -188,7 +188,17 @@ export type HeaderWidths =
        * what the download review says to cut (sprint 34 día 4). */
       over: number;
     }
-  | { phone: "always"; rails: "none"; over: number };
+  | {
+      phone: "always";
+      rails: "none";
+      /** How many characters over the page's measure the widest bar is: what it takes for the line
+       * to fit on a wide screen at all. */
+      over: number;
+      /** How many px the widest bar's estimate passes the measure by — what tells «por muy poco»
+       * from «a ningún ancho» in the download review (David's condition of sprint 34 día 3: under
+       * 5 % of the measure, the line might well fit, and the owner is told how little it takes). */
+      beyond: number;
+    };
 
 /** Whether `width` is a phone width for this header, and whether a rail stands at it. */
 export function phoneAt(widths: Pick<HeaderWidths, "phone">, width: number): boolean {
@@ -210,7 +220,8 @@ export const UNSIZED_LOGO_ASPECT = 4;
  * not: 15 px on Windows, on Linux and in CI. */
 export const SCROLLBAR_LANE = 15;
 /** The page's measure, `--rb-measure` in `build.ts`: the widest the bar's content box gets. */
-const MEASURE = 1200;
+export const BAR_MEASURE = 1200;
+const MEASURE = BAR_MEASURE;
 
 /** Where each glyph's digit sits in a row of `BAR_EXCESS`. */
 const GLYPH_INDEX = new Map(GLYPHS.map((glyph, i) => [glyph, i]));
@@ -434,13 +445,24 @@ export function headerWidths(doc: RetorikaDocument): HeaderWidths {
     if (fail === Number.POSITIVE_INFINITY) always = true;
     else if (fail >= from) phone = Math.max(phone, fail);
   }
-  if (always) return { phone: "always", rails: "none", over: over(lines, xl) };
+  if (always) {
+    // The line that never fits: a page with no rail at its one line, a page with rails at its line
+    // with every rail standing — the band that has no end.
+    const beyond = Math.max(...lines.map((l) => (l.anyRail ? l.all : l.none) - MEASURE));
+    return {
+      phone: "always",
+      rails: "none",
+      over: Math.ceil(beyond / OVER_CHARACTER_PX),
+      beyond,
+    };
+  }
   return { phone, rails: Math.max(RAIL_FOLD_WIDTH, phone + 1), over: over(lines, xl, phone) };
 }
 
 /** Characters over the line at 1247 — the widest bar of the site against what 1247 px hold with
- * its rails standing — at the entries' advance; 0 when it fits there. */
-function over(lines: BarLines[], xl: number, phone = Number.POSITIVE_INFINITY): number {
+ * its rails standing — at the entries' advance; 0 when it fits there. A bar that never fits counts
+ * against the measure instead (`headerWidths`). */
+function over(lines: BarLines[], xl: number, phone: number): number {
   if (phone <= 1247) return 0;
   let worst = 0;
   for (const l of lines) {

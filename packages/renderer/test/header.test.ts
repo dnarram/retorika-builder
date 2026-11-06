@@ -10,7 +10,15 @@ import {
   RAIL_WIDTH,
   TWO_RAILS_FOLD_WIDTH,
 } from "../src/header.ts";
-import { buildCss, GLASS_BACKGROUNDS, GLASS_MIX, headerWidths, render } from "../src/index.ts";
+import {
+  BAR_MEASURE,
+  buildCss,
+  GLASS_BACKGROUNDS,
+  GLASS_MIX,
+  type HeaderWidths,
+  headerWidths,
+  render,
+} from "../src/index.ts";
 import { loadCorpus } from "./corpus.ts";
 
 /**
@@ -1247,6 +1255,31 @@ describe("the header's widths", () => {
     expect(sheet).not.toMatch(/@media \(min-width: \d+px\)/);
     expect(sheet).toContain("\n  .rb-nav-wide { display: none; }\n");
     expect(sheet).not.toContain(".rb-rail { display: flex; }");
+  });
+
+  it("says how far past the measure a bar that never fits is, and that cutting what it says makes it fit", () => {
+    // A label grown a letter at a time until the line first passes the measure, and then four letters
+    // more (sprint 34 día 4, David's condition of día 3): the case the download review calls «por muy
+    // poco», with a count that has to be right — cut what it says and the bar fits on a wide screen.
+    const text = "Reservas para grupos de empresa y familia ".repeat(5);
+    const labelled = (label: string) => headerWidths(withLabels([label, "Carta", "Fotos"]));
+    let n = 20;
+    while (labelled(text.slice(0, n)).phone !== "always") {
+      n += 1;
+      if (n > 200) throw new Error("no label length passes the measure");
+    }
+    const label = text.slice(0, n + 4);
+    const near = labelled(label);
+    if (near.phone !== "always") throw new Error("four letters past the threshold should not fit");
+    expect(near.beyond).toBeGreaterThan(0);
+    expect(near.beyond).toBeLessThan(0.05 * BAR_MEASURE);
+    expect(near.over).toBeGreaterThanOrEqual(4);
+    // «Quitando N caracteres cabe en pantallas anchas»: the label with that many fewer fits.
+    expect(labelled(label.slice(0, label.length - near.over)).phone).not.toBe("always");
+    // And far past the measure, far past 5 %.
+    const far = labelled(text.slice(0, 3 * 42));
+    if (far.phone !== "always") throw new Error("three times the label should never fit");
+    expect(far.beyond).toBeGreaterThan(0.05 * BAR_MEASURE);
   });
 
   it("folds up to 1023 and not for ever when ten long entries have a column to go to", () => {
