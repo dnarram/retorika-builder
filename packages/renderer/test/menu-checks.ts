@@ -394,8 +394,14 @@ export async function checkCurrentPage(page: Page, copies: number): Promise<stri
 
 /**
  * 7. A fixed bar, 600 px down: condensed (`data-scrolled`), glass or opaque by its scheme and never
- * transparent over the text, and the page moved by exactly 600 (ADR 0063 §3, §5). The published
- * page only: `data-scrolled` is the script's. Skipped where the bar is collapsed.
+ * transparent over the text, and the page moved by exactly what it scrolled (ADR 0063 §3, §5). The
+ * published page only: `data-scrolled` is the script's. Skipped where the bar is collapsed.
+ *
+ * **What it scrolled, read, and not the 600 asked for** (sprint 34 día 3): at 1101 × 900, the first
+ * width a column stands on for the teaser's words, the page has 599 px to scroll (575 under a
+ * transparent bar, out of the flow), and the check read the end of the page as a section that moved
+ * 1 and 25 px short — in all three engines, with no shift at all. A section that moves by anything
+ * but the scroll is the shift this guards; the scroll is measured, the 600 is only asked.
  */
 export async function checkScrolled(page: Page, h: HeaderExpectation): Promise<string[]> {
   const rest = await page.evaluate(() => ({
@@ -405,6 +411,7 @@ export async function checkScrolled(page: Page, h: HeaderExpectation): Promise<s
   // A bar with nothing left (`data-bar="none"`) is no height here: nothing to condense.
   if (rest.bar < 0.5) return [];
   const before = rest.top;
+  const from = await page.evaluate(() => window.scrollY);
   await page.evaluate(() => window.scrollTo({ top: 600, behavior: "instant" }));
   const deadline = Date.now() + 1500;
   let m = await readScrolled(page);
@@ -422,8 +429,12 @@ export async function checkScrolled(page: Page, h: HeaderExpectation): Promise<s
   } else if (m.alpha < 1) {
     out.push(`7 scrolled: ${h.background} should be opaque, is ${m.background} (blur ${m.blur})`);
   }
-  if (Math.abs(m.top - before + 600) > 1 / 64) {
-    out.push(`7 scrolled: the first section moved ${(m.top - before).toFixed(3)}, expected -600`);
+  const scrolled = m.scrollY - from;
+  if (scrolled < 300) out.push(`7 scrolled: the page scrolled ${scrolled} px of the 600 asked`);
+  if (Math.abs(m.top - before + scrolled) > 1 / 64) {
+    out.push(
+      `7 scrolled: the first section moved ${(m.top - before).toFixed(3)}, the page scrolled ${scrolled}`,
+    );
   }
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
   await page.waitForTimeout(100);
@@ -445,6 +456,7 @@ async function readScrolled(page: Page) {
       alpha,
       blur: filter !== "none" && filter !== "",
       top: document.querySelector("main > .rb-section")?.getBoundingClientRect().top ?? Number.NaN,
+      scrollY: window.scrollY,
     };
   });
 }
