@@ -606,13 +606,12 @@ describe("the rail (ADR 0060)", () => {
     expect(w.phone, "this case needs words that fold the bar past 1024").toBeGreaterThan(1024);
     expect(w.rails).toBe(w.phone + 1);
     for (const width of [1024, w.phone]) {
-      expect(await columns(doc, width), `${width}px`).toEqual({
-        main: width,
-        menu: true,
-        rails: [],
-        inBar: [],
-        scroll: 0,
-      });
+      const folded = await columns(doc, width);
+      expect(folded, `${width}px`).toMatchObject({ menu: true, rails: [], inBar: [] });
+      // `<main>` takes the whole page but for the scroll bar's gutter the phone's header keeps
+      // (`scrollbar-gutter: stable`, ADR 0065): none under macOS's overlay bars, 15 px on CI's Linux,
+      // where `scroll` — the page's width against the window's — is that gutter, negative.
+      expect(folded.main - Math.min(0, folded.scroll), `${width}px`).toBe(width);
     }
     expect(await columns(doc, w.rails)).toEqual({
       main: w.rails - 240,

@@ -1,35 +1,47 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { chromium } from "@playwright/test";
+import { type BrowserType, chromium, firefox, webkit } from "@playwright/test";
 import { fontDataFor } from "../packages/publisher/src/fontData/index.ts";
-import { FONT_GALLERY, fontFamilySlug } from "../packages/schema/src/index.ts";
-import { TYPE_PAIRS } from "../packages/tokens/src/index.ts";
+import { FONT_GALLERY, fontFamilySlug, tokenPx } from "../packages/schema/src/index.ts";
+import { SCALES, TYPE_PAIRS } from "../packages/tokens/src/index.ts";
 
 /**
  * **The advance of every glyph a menu label may carry, per shipped family and weight** (sprint 34
  * día 2, David's decision on the fold's estimate): what `headerWidths` in the renderer sums to know
  * how wide a bar's line is before any browser draws it. Written into
  * `packages/renderer/src/glyphAdvances.ts` as a generated module, in the style of the publisher's
- * `fontData` — in source, committed, never read from disk at run time — with
- * `pnpm fonts:advances`.
+ * `fontData` — in source, committed, never read from disk at run time.
  *
- * Measured in Chromium with every shipped face loaded from the publisher's own bytes (the three
- * engines agreed to three decimals on 5 November 2026): **one copy of the glyph** at 100 px, kerning
- * off, so the number is the glyph's own advance in em, to the thousandth. Until sprint 34
- * día 3 it was ten copies, and a run of one letter is not a label: it calls up the forms a font keeps
- * for repeats — «ff» and «tt» ligatures in thirty-odd families, Cormorant Garamond's repeated
- * capitals, Manrope's «--» — and 63 of the 9 600 advances came out short, up to 0.15 em. The bar's
- * estimate ran under the line it was meant to hold: Cormorant Garamond's «TERRAZA» 5 % narrower than
- * drawn, which no kerning margin of 3 % covers (the truth test with the faces served found it). The glyphs are printable ASCII and what
- * Spanish adds to it, plus the few marks a label has carried («Ir a…», a dash, the euro). **A family
- * the product does not ship** — the three type pairs' system stacks, an owner's own font — reads
- * `FALLBACK_ADVANCES`: the 95th percentile, glyph by glyph, over those six stacks measured on the
- * machine that generated this file **and DejaVu Sans and Serif**, the letter a Linux machine — CI's
- * among them — draws `system-ui` and `serif` with, and the widest of the common ones: without it the
- * fold of a `system-ui` site was 42–50 px short of where its bar broke on CI (sprint 34 día 2, the
- * first run of PR #351). DejaVu 2.37 is fetched into `.scratch/fallback-fonts/` when absent.
+ * **Two steps since sprint 34 día 3**, because the letter is not the same on every machine (David's
+ * decision of that day: «que Linux dibuje más ancho deja de ser una fórmula y pasa a ser un dato»):
+ *
+ * - `pnpm fonts:measure` draws every glyph, alone and with kerning off, in every engine installed on
+ *   the machine it runs on — at 100 px, and at each of the six sizes the bar takes (`size.body` of the
+ *   three scales, and 0.875 of each for the small bar) — and writes the widest per glyph into
+ *   `scripts/glyph-measurements/<platform>.json`. CI runs it on Linux and keeps the file as an
+ *   artifact; this Mac runs it in Chromium, Firefox and WebKit. Both files are committed.
+ * - `pnpm fonts:advances` folds them into the table, with no browser: the advance in em of every
+ *   glyph as macOS's Chromium draws it at 100 px — the measure of día 2, for a size the bar never
+ *   takes — and, **at every size it does take, the widest any machine drew**. At 13.125 px Linux draws
+ *   Poppins at least 3.5 % wider than macOS (hinting: a whole pixel where macOS draws a fraction), and
+ *   a fold estimated from macOS alone let that bar break 2 px past it on CI.
+ *
+ * **One glyph at a time**: until día 3 it was ten copies, and a run of one letter is not a label — it
+ * calls up the forms a font keeps for repeats («ff», «tt», Cormorant Garamond's «R» and «T»,
+ * Manrope's «--»), and 63 of the 9 600 advances came out short, up to 0.15 em. The glyphs are
+ * printable ASCII and what Spanish adds to it, plus the few marks a label has carried («Ir a…», a
+ * dash, the euro).
+ *
+ * **A family the product does not ship** — the three type pairs' system stacks, an owner's own font —
+ * reads `FALLBACK_ADVANCES`: the 95th percentile, glyph by glyph, over those six stacks as macOS's
+ * Chromium draws them **and DejaVu Sans and Serif**, the letter a Linux machine — CI's among them —
+ * draws `system-ui` and `serif` with: without it the fold of a `system-ui` site was 42–50 px short of
+ * where its bar broke on CI (sprint 34 día 2, the first run of PR #351). DejaVu 2.37 is fetched into
+ * `.scratch/fallback-fonts/` when absent; the renderer rounds every fallback glyph up to the pixel.
  */
+
+const MEASUREMENTS = join(import.meta.dirname, "glyph-measurements");
 const DEJAVU_URL =
   "https://github.com/dejavu-fonts/dejavu-fonts/releases/download/version_2_37/dejavu-fonts-ttf-2.37.tar.bz2";
 const DEJAVU_DIR = join(import.meta.dirname, "../.scratch/fallback-fonts");
@@ -39,165 +51,336 @@ const DEJAVU_FACES = [
   { family: "DejaVu Serif", weight: 400, file: "DejaVuSerif.ttf" },
   { family: "DejaVu Serif", weight: 700, file: "DejaVuSerif-Bold.ttf" },
 ];
-if (!DEJAVU_FACES.every((f) => existsSync(join(DEJAVU_DIR, f.file)))) {
-  mkdirSync(DEJAVU_DIR, { recursive: true });
-  const archive = join(DEJAVU_DIR, "dejavu.tar.bz2");
-  execFileSync("curl", ["-sL", "-o", archive, DEJAVU_URL]);
-  execFileSync("tar", [
-    "xjf",
-    archive,
-    "-C",
-    DEJAVU_DIR,
-    "--strip-components=2",
-    ...DEJAVU_FACES.map((f) => `dejavu-fonts-ttf-2.37/ttf/${f.file}`),
-  ]);
-}
 
 const ascii = Array.from({ length: 0x7f - 0x20 }, (_, i) => String.fromCharCode(0x20 + i));
 const GLYPHS = [...ascii, ..."áéíóúüñÁÉÍÓÚÜÑ¿¡…«»—–€ºª·"];
+const WEIGHTS = [400, 700] as const;
+/** The digits of `BAR_EXCESS`: 0 to 63 32nds of a pixel. */
+const ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_-";
 
-const faces = FONT_GALLERY.flatMap(({ family }) =>
-  [400, 700].map((weight) => ({
-    family,
-    weight,
-    file: `${fontFamilySlug(family)}-latin-${weight}-normal.woff2`,
-  })),
-);
-const css = [
-  ...faces.map(
-    (f) =>
-      `@font-face{font-family:"${f.family}";font-weight:${f.weight};font-style:normal;src:url("/fonts/${f.file}") format("woff2")}`,
+/** The sizes the bar draws its words at: `size.body` of every scale, and 0.875 of it when small —
+ * the stylesheet's `calc(var(--size-body) * 0.875)`. */
+const BAR_SIZES = [
+  ...new Set(
+    SCALES.flatMap((scale) => {
+      const px = tokenPx(scale.sizes["size.body"]);
+      return [px, px * 0.875];
+    }),
   ),
-  ...DEJAVU_FACES.map(
-    (f) =>
-      `@font-face{font-family:"${f.family}";font-weight:${f.weight};font-style:normal;src:url("/dejavu/${f.file}") format("truetype")}`,
-  ),
-].join("\n");
-const families = FONT_GALLERY.map(({ family }) => ({ name: family, stack: `"${family}"` }));
-const systems = [
-  ...TYPE_PAIRS.flatMap((p) => [
-    { name: `${p.id}/heading`, stack: p.fonts["font.heading"].replace(/^[^,]+,\s*/, "") },
-    { name: `${p.id}/body`, stack: p.fonts["font.body"] },
-  ]),
-  { name: "linux/sans", stack: '"DejaVu Sans"' },
-  { name: "linux/serif", stack: '"DejaVu Serif"' },
-];
-const html = `<!doctype html><html><head><meta charset="utf-8"><style>${css}
-body{margin:0;font-size:100px;line-height:1} span{white-space:pre;display:inline-block}</style></head><body></body></html>`;
+].sort((a, b) => a - b);
+const sizeKey = (size: number) => String(Math.round(size * 1000) / 1000);
 
-const browser = await chromium.launch();
-const page = await browser.newPage();
-await page.route("**/*", (route) => {
-  const url = new URL(route.request().url());
-  if (url.pathname === "/") return route.fulfill({ contentType: "text/html", body: html });
-  if (url.pathname.startsWith("/fonts/")) {
-    const data = fontDataFor(url.pathname.slice(7));
-    return data
-      ? route.fulfill({ contentType: "font/woff2", body: Buffer.from(data) })
-      : route.fulfill({ status: 404, body: "" });
+/**
+ * One machine's measure: per family, weight and size, each glyph's width in 64ths of a pixel — the
+ * unit Chromium lays text out in; Firefox's 60ths are rounded up to it — the widest of the engines
+ * measured, as one comma-separated row in `GLYPHS`'s order.
+ */
+interface Measurement {
+  platform: string;
+  engines: string[];
+  glyphs: string;
+  /** Family → weight → size (`sizeKey`) → row. */
+  faces: Record<string, Record<string, Record<string, string>>>;
+  /** macOS only: the system stacks the fallback is the widest of, at 100 px in Chromium. */
+  system?: Record<string, Record<string, string>>;
+  /** macOS only: the shipped faces at 100 px in Chromium alone, which the em table is. */
+  chromium100?: Record<string, Record<string, string>>;
+}
+
+const row = (widths: number[]) => widths.join(",");
+const parse = (text: string | undefined, what: string): number[] => {
+  if (text === undefined) throw new Error(`glyph measurements: no row for ${what}`);
+  const out = text.split(",").map(Number);
+  if (out.length !== GLYPHS.length || out.some((n) => !Number.isFinite(n))) {
+    throw new Error(`glyph measurements: the row for ${what} is not ${GLYPHS.length} numbers`);
   }
-  if (url.pathname.startsWith("/dejavu/")) {
-    return route.fulfill({
-      contentType: "font/ttf",
-      body: readFileSync(join(DEJAVU_DIR, url.pathname.slice(8))),
-    });
-  }
-  return route.fulfill({ status: 404, body: "" });
-});
-await page.goto("http://glyphs.test/");
-await page.evaluate(
-  async (names: string[]) => {
-    await Promise.all(
-      names.flatMap((f) => [
-        document.fonts.load(`400 16px "${f}"`),
-        document.fonts.load(`700 16px "${f}"`),
-      ]),
-    );
-  },
-  [...FONT_GALLERY.map((f) => f.family), "DejaVu Sans", "DejaVu Serif"],
-);
-const loaded = await page.evaluate(
-  () => [...document.fonts].filter((f) => f.status === "loaded").length,
-);
-const wanted = faces.length + DEJAVU_FACES.length;
-if (loaded < wanted) throw new Error(`only ${loaded} of ${wanted} faces loaded`);
-
-type Advances = Record<string, number>;
-async function measure(stack: string, weight: number): Promise<Advances> {
-  return page.evaluate(
-    ({ stack, weight, glyphs }: { stack: string; weight: number; glyphs: string[] }) => {
-      const host = document.createElement("div");
-      host.style.cssText = `font-family:${stack};font-weight:${weight};font-kerning:none;`;
-      document.body.append(host);
-      const out: Record<string, number> = {};
-      for (const g of glyphs) {
-        const span = document.createElement("span");
-        span.textContent = g;
-        host.append(span);
-        out[g] = Math.round(span.getBoundingClientRect().width * 10) / 1000;
-        span.remove();
-      }
-      host.remove();
-      return out;
-    },
-    { stack, weight, glyphs: GLYPHS },
-  );
-}
-
-const table: Record<string, { 400: Advances; 700: Advances }> = {};
-for (const { name, stack } of families) {
-  table[name] = { 400: await measure(stack, 400), 700: await measure(stack, 700) };
-}
-const system: { 400: Advances; 700: Advances }[] = [];
-for (const { stack } of systems) {
-  system.push({ 400: await measure(stack, 400), 700: await measure(stack, 700) });
-}
-await browser.close();
-
-/** The 95th percentile of the system stacks' advance of one glyph, by nearest rank: the value at
- * `ceil(0.95 × n)` of the sorted eight, which for eight is the widest — a visitor whose machine draws the
- * widest of them is drawn exactly, never short. */
-function p95(values: number[]): number {
-  const sorted = [...values].sort((a, b) => a - b);
-  return sorted[Math.max(0, Math.ceil(sorted.length * 0.95) - 1)] ?? 0;
-}
-const fallback = {
-  400: Object.fromEntries(GLYPHS.map((g) => [g, p95(system.map((s) => s[400][g] ?? 0))])),
-  700: Object.fromEntries(GLYPHS.map((g) => [g, p95(system.map((s) => s[700][g] ?? 0))])),
+  return out;
 };
 
-const literal = (advances: Advances) =>
-  `{ ${GLYPHS.map((g) => `${JSON.stringify(g)}: ${(advances[g] ?? 0).toFixed(3)}`).join(", ")} }`;
-const lines = [
-  "// GENERATED by scripts/generate-glyph-advances.ts — do not edit by hand. Regenerate with",
-  "// `pnpm fonts:advances`.",
-  "//",
-  "// The advance of every glyph a menu label may carry, in em, per shipped family and weight — what",
-  "// `headerWidths` sums to know how wide a bar's line is before any browser draws it (ADR 0067).",
-  "// Measured in Chromium with the publisher's own bytes, one copy of each glyph at 100 px with",
-  "// kerning off, to the thousandth (ten copies called up the forms a font keeps for repeats:",
-  "// sprint 34 día 3). The three engines agreed to three decimals on 5 November 2026.",
-  "// `FALLBACK_ADVANCES` is the 95th percentile, glyph by glyph, over the three type pairs' six",
-  "// system stacks as this machine drew them and over DejaVu Sans and Serif, Linux's letter for",
-  "// them: what a family the product does not ship — a system stack, an owner's own font — is",
-  "// counted at.",
-  "",
-  "export type GlyphAdvances = Readonly<Record<string, number>>;",
-  "export interface FamilyAdvances {",
-  "  400: GlyphAdvances;",
-  "  700: GlyphAdvances;",
-  "}",
-  "",
-  "export const GLYPH_ADVANCES: Readonly<Record<string, FamilyAdvances>> = {",
-  ...Object.entries(table).map(
-    ([family, w]) =>
-      `  ${JSON.stringify(family)}: { 400: ${literal(w[400])}, 700: ${literal(w[700])} },`,
-  ),
-  "};",
-  "",
-  `export const FALLBACK_ADVANCES: FamilyAdvances = { 400: ${literal(fallback[400])}, 700: ${literal(fallback[700])} };`,
-  "",
-];
-const target = join(import.meta.dirname, "../packages/renderer/src/glyphAdvances.ts");
-writeFileSync(target, lines.join("\n"));
-console.log(`glyph advances: ${families.length} families, ${GLYPHS.length} glyphs → ${target}`);
+if (process.argv.includes("--measure")) await measure();
+else write();
+
+/** `pnpm fonts:measure`: this machine's letter, in every engine it has. */
+async function measure(): Promise<void> {
+  const mac = process.platform === "darwin";
+  if (mac && !DEJAVU_FACES.every((f) => existsSync(join(DEJAVU_DIR, f.file)))) {
+    mkdirSync(DEJAVU_DIR, { recursive: true });
+    const archive = join(DEJAVU_DIR, "dejavu.tar.bz2");
+    execFileSync("curl", ["-sL", "-o", archive, DEJAVU_URL]);
+    execFileSync("tar", [
+      "xjf",
+      archive,
+      "-C",
+      DEJAVU_DIR,
+      "--strip-components=2",
+      ...DEJAVU_FACES.map((f) => `dejavu-fonts-ttf-2.37/ttf/${f.file}`),
+    ]);
+  }
+  const faces = FONT_GALLERY.flatMap(({ family }) =>
+    WEIGHTS.map((weight) => ({
+      family,
+      weight,
+      file: `${fontFamilySlug(family)}-latin-${weight}-normal.woff2`,
+    })),
+  );
+  const dejavu = mac ? DEJAVU_FACES : [];
+  const css = [
+    ...faces.map(
+      (f) =>
+        `@font-face{font-family:"${f.family}";font-weight:${f.weight};font-style:normal;src:url("/fonts/${f.file}") format("woff2")}`,
+    ),
+    ...dejavu.map(
+      (f) =>
+        `@font-face{font-family:"${f.family}";font-weight:${f.weight};font-style:normal;src:url("/dejavu/${f.file}") format("truetype")}`,
+    ),
+  ].join("\n");
+  const html = `<!doctype html><html><head><meta charset="utf-8"><style>${css}
+body{margin:0;line-height:1} span{white-space:pre;display:inline-block}</style></head><body></body></html>`;
+  const systems = [
+    ...TYPE_PAIRS.flatMap((p) => [
+      { name: `${p.id}/heading`, stack: p.fonts["font.heading"].replace(/^[^,]+,\s*/, "") },
+      { name: `${p.id}/body`, stack: p.fonts["font.body"] },
+    ]),
+    { name: "linux/sans", stack: '"DejaVu Sans"' },
+    { name: "linux/serif", stack: '"DejaVu Serif"' },
+  ];
+
+  const engines: [string, BrowserType][] = [
+    ["chromium", chromium],
+    ["firefox", firefox],
+    ["webkit", webkit],
+  ];
+  const out: Measurement = {
+    platform: process.platform,
+    engines: [],
+    glyphs: GLYPHS.join(""),
+    faces: {},
+  };
+  const widest: Record<string, number[]> = {};
+  for (const [name, type] of engines) {
+    let installed = false;
+    try {
+      installed = existsSync(type.executablePath());
+    } catch {
+      installed = false;
+    }
+    if (!installed) {
+      process.stderr.write(`fonts:measure: ${name} is not installed here; skipped.\n`);
+      continue;
+    }
+    const browser = await type.launch();
+    out.engines.push(`${name} ${browser.version()}`);
+    const page = await browser.newPage();
+    await page.route("**/*", (route) => {
+      const url = new URL(route.request().url());
+      if (url.pathname === "/") return route.fulfill({ contentType: "text/html", body: html });
+      if (url.pathname.startsWith("/fonts/")) {
+        const data = fontDataFor(url.pathname.slice(7));
+        return data
+          ? route.fulfill({ contentType: "font/woff2", body: Buffer.from(data) })
+          : route.fulfill({ status: 404, body: "" });
+      }
+      if (url.pathname.startsWith("/dejavu/")) {
+        return route.fulfill({
+          contentType: "font/ttf",
+          body: readFileSync(join(DEJAVU_DIR, url.pathname.slice(8))),
+        });
+      }
+      return route.fulfill({ status: 404, body: "" });
+    });
+    await page.goto("http://glyphs.test/");
+    const loaded = await page.evaluate(async () => {
+      await Promise.allSettled([...document.fonts].map((face) => face.load()));
+      return [...document.fonts].filter((face) => face.status === "loaded").length;
+    });
+    const wanted = faces.length + dejavu.length;
+    if (loaded < wanted) throw new Error(`${name}: only ${loaded} of ${wanted} faces loaded`);
+
+    /** Every glyph alone, kerning off, at a size: 64ths of a pixel, rounded up. All the spans are
+     * laid out at once and read after, so a face costs one layout and not 120. */
+    const draw = (stack: string, weight: number, size: number) =>
+      page.evaluate(
+        ({ stack, weight, size, glyphs }) => {
+          const host = document.createElement("div");
+          host.style.cssText = `font-family:${stack};font-weight:${weight};font-size:${size}px;font-kerning:none;`;
+          const spans = glyphs.map((g) => {
+            const span = document.createElement("span");
+            span.textContent = g;
+            host.append(span);
+            return span;
+          });
+          document.body.append(host);
+          const widths = spans.map((span) =>
+            Math.ceil(span.getBoundingClientRect().width * 64 - 1e-6),
+          );
+          host.remove();
+          return widths;
+        },
+        { stack, weight, size, glyphs: GLYPHS },
+      );
+
+    for (const { family } of FONT_GALLERY) {
+      for (const weight of WEIGHTS) {
+        for (const size of [100, ...BAR_SIZES]) {
+          const widths = await draw(`"${family}"`, weight, size);
+          const at = `${family}\t${weight}\t${sizeKey(size)}`;
+          widest[at] = widths.map((w, i) => Math.max(w, widest[at]?.[i] ?? 0));
+          if (mac && name === "chromium" && size === 100) {
+            out.chromium100 ??= {};
+            out.chromium100[family] ??= {};
+            out.chromium100[family][weight] = row(widths);
+          }
+        }
+      }
+    }
+    if (mac && name === "chromium") {
+      out.system = {};
+      for (const { name: stackName, stack } of systems) {
+        out.system[stackName] = {};
+        for (const weight of WEIGHTS) {
+          out.system[stackName][weight] = row(await draw(stack, weight, 100));
+        }
+      }
+    }
+    await browser.close();
+  }
+  if (out.engines.length === 0) throw new Error("fonts:measure: no engine is installed here");
+  for (const [at, widths] of Object.entries(widest)) {
+    const [family = "", weight = "", size = ""] = at.split("\t");
+    out.faces[family] ??= {};
+    out.faces[family][weight] ??= {};
+    out.faces[family][weight][size] = row(widths);
+  }
+  mkdirSync(MEASUREMENTS, { recursive: true });
+  const target = join(MEASUREMENTS, `${process.platform}.json`);
+  writeFileSync(target, `${JSON.stringify(out, null, 2)}\n`);
+  console.log(`glyph measurements: ${out.engines.join(", ")} on ${process.platform} → ${target}`);
+}
+
+/** `pnpm fonts:advances`: the measurements of every machine, folded into the renderer's table. */
+function write(): void {
+  const read = (platform: string, how: string): Measurement => {
+    const file = join(MEASUREMENTS, `${platform}.json`);
+    if (!existsSync(file)) throw new Error(`fonts:advances: no ${file}. ${how}`);
+    const m = JSON.parse(readFileSync(file, "utf8")) as Measurement;
+    if (m.glyphs !== GLYPHS.join("")) {
+      throw new Error(`fonts:advances: ${file} measured other glyphs; measure again`);
+    }
+    return m;
+  };
+  const mac = read("darwin", "`pnpm fonts:measure` on macOS writes it.");
+  const linux = read(
+    "linux",
+    "CI's a11y-size job writes it: download the `glyph-measurements-linux` artifact of a run.",
+  );
+  const { chromium100, system } = mac;
+  if (!chromium100 || !system) throw new Error("fonts:advances: darwin.json has no 100 px rows");
+
+  // The em table, as día 2 measured it: macOS's Chromium at 100 px, to the thousandth.
+  const em = (u: number) => Math.round((u / 64) * 10) / 1000;
+  const table: Record<string, Record<number, number[]>> = {};
+  for (const { family } of FONT_GALLERY) {
+    table[family] = {};
+    for (const weight of WEIGHTS) {
+      table[family][weight] = parse(chromium100[family]?.[weight], `${family} ${weight}`).map(em);
+    }
+  }
+
+  /** The 95th percentile of the system stacks' advance of one glyph, by nearest rank: the value at
+   * `ceil(0.95 × n)` of the sorted eight, which for eight is the widest — a visitor whose machine
+   * draws the widest of them is drawn exactly, never short. */
+  const p95 = (values: number[]): number => {
+    const sorted = [...values].sort((a, b) => a - b);
+    return sorted[Math.max(0, Math.ceil(sorted.length * 0.95) - 1)] ?? 0;
+  };
+  const fallback: Record<number, number[]> = {};
+  for (const weight of WEIGHTS) {
+    const rows = Object.entries(system).map(([name, weights]) =>
+      parse(weights[weight], `${name} ${weight}`).map(em),
+    );
+    fallback[weight] = GLYPHS.map((_, i) => p95(rows.map((r) => r[i] ?? 0)));
+  }
+
+  // **At the bar's sizes, the widest any machine drew**, written as what it adds to `em × size`, in
+  // 32nds of a pixel rounded up, one character a glyph: the table stays a table of em, and a size
+  // the bar takes reads its excess. Never under the em, since the em is what macOS draws.
+  const excess: Record<string, Record<number, Record<string, string>>> = {};
+  let most = 0;
+  for (const { family } of FONT_GALLERY) {
+    excess[family] = {};
+    for (const weight of WEIGHTS) {
+      excess[family][weight] = {};
+      for (const size of BAR_SIZES) {
+        const key = sizeKey(size);
+        const what = `${family} ${weight} at ${key} px`;
+        const a = parse(mac.faces[family]?.[weight]?.[key], `darwin ${what}`);
+        const b = parse(linux.faces[family]?.[weight]?.[key], `linux ${what}`);
+        const ems = table[family]?.[weight] ?? [];
+        excess[family][weight][key] = GLYPHS.map((g, i) => {
+          const drawn = Math.max(a[i] ?? 0, b[i] ?? 0) / 64;
+          const over = Math.max(0, Math.ceil((drawn - (ems[i] ?? 0) * size) * 32 - 1e-6));
+          if (over >= ALPHABET.length) {
+            throw new Error(`fonts:advances: ${what} «${g}» is ${over / 32} px over its em`);
+          }
+          most = Math.max(most, over);
+          return ALPHABET[over];
+        }).join("");
+      }
+    }
+  }
+
+  const literal = (advances: number[]) =>
+    `{ ${GLYPHS.map((g, i) => `${JSON.stringify(g)}: ${(advances[i] ?? 0).toFixed(3)}`).join(", ")} }`;
+  const lines = [
+    "// GENERATED by scripts/generate-glyph-advances.ts — do not edit by hand. Measure with",
+    "// `pnpm fonts:measure` (on macOS; CI measures Linux), then regenerate with `pnpm fonts:advances`.",
+    "//",
+    "// The advance of every glyph a menu label may carry, per shipped family and weight — what",
+    "// `headerWidths` sums to know how wide a bar's line is before any browser draws it (ADR 0067).",
+    "// `GLYPH_ADVANCES` is in em, as macOS's Chromium draws one copy of each glyph at 100 px with",
+    "// kerning off, to the thousandth. `BAR_EXCESS` is what each glyph adds to that at the sizes the",
+    "// bar takes, from the widest any measured machine drew — Linux's hinted letter, at 13.125 px,",
+    "// draws Poppins 3.5 % wider than macOS (sprint 34 día 3) — in 32nds of a pixel, one character of",
+    "// `BAR_EXCESS_DIGITS` a glyph, in `GLYPHS`'s order. `FALLBACK_ADVANCES` is the 95th percentile,",
+    "// glyph by glyph, over the three type pairs' six system stacks and DejaVu Sans and Serif, Linux's",
+    "// letter for them: what a family the product does not ship — a system stack, an owner's own",
+    "// font — is counted at.",
+    `// Measured: macOS (${mac.engines.join(", ")}); Linux (${linux.engines.join(", ")}).`,
+    "",
+    "export type GlyphAdvances = Readonly<Record<string, number>>;",
+    "export interface FamilyAdvances {",
+    "  400: GlyphAdvances;",
+    "  700: GlyphAdvances;",
+    "}",
+    "",
+    `export const GLYPHS: readonly string[] = ${JSON.stringify(GLYPHS)};`,
+    `export const BAR_SIZES: readonly number[] = ${JSON.stringify(BAR_SIZES)};`,
+    `export const BAR_EXCESS_DIGITS = ${JSON.stringify(ALPHABET)};`,
+    "",
+    "export const GLYPH_ADVANCES: Readonly<Record<string, FamilyAdvances>> = {",
+    ...Object.entries(table).map(
+      ([family, w]) =>
+        `  ${JSON.stringify(family)}: { 400: ${literal(w[400] ?? [])}, 700: ${literal(w[700] ?? [])} },`,
+    ),
+    "};",
+    "",
+    "/** Family → weight → bar size → one digit of `BAR_EXCESS_DIGITS` a glyph, in `GLYPHS`'s order. */",
+    "export const BAR_EXCESS: Readonly<",
+    "  Record<string, Readonly<Record<400 | 700, Readonly<Record<string, string>>>>>",
+    "> = {",
+    ...Object.entries(excess).map(
+      ([family, w]) =>
+        `  ${JSON.stringify(family)}: { 400: ${JSON.stringify(w[400])}, 700: ${JSON.stringify(w[700])} },`,
+    ),
+    "};",
+    "",
+    `export const FALLBACK_ADVANCES: FamilyAdvances = { 400: ${literal(fallback[400] ?? [])}, 700: ${literal(fallback[700] ?? [])} };`,
+    "",
+  ];
+  const target = join(import.meta.dirname, "../packages/renderer/src/glyphAdvances.ts");
+  writeFileSync(target, lines.join("\n"));
+  console.log(
+    `glyph advances: ${FONT_GALLERY.length} families, ${GLYPHS.length} glyphs, ` +
+      `${BAR_SIZES.length} bar sizes, at most ${most / 32} px over the em → ${target}`,
+  );
+}
