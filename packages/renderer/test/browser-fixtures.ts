@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { basename, join } from "node:path";
 import type { Browser, Page } from "@playwright/test";
 import {
@@ -28,6 +29,7 @@ import {
 import {
   type ContentElement,
   type Page as DocumentPage,
+  fontFamilySlug,
   HEADER_BACKGROUNDS,
   HEADER_LAYOUTS,
   parseDocument,
@@ -43,8 +45,8 @@ import {
   type Scale,
   TYPE_PAIRS,
 } from "@retorika/tokens";
-import { render } from "../src/index.ts";
-import { ASSETS_DIR, DOCUMENTS_DIR } from "./corpus.ts";
+import { render, SHIPPABLE_FAMILIES } from "../src/index.ts";
+import { ASSETS_DIR, DOCUMENTS_DIR, REPO_ROOT } from "./corpus.ts";
 
 /**
  * The matrix the browser suites run over, and the page they run it in.
@@ -1120,13 +1122,42 @@ const ASSET_TYPES: Readonly<Record<string, string>> = {
   webp: "image/webp",
 };
 
+const FONT_TYPES: Readonly<Record<string, string>> = { woff2: "font/woff2", woff: "font/woff" };
+
+/** Resolves from the root package, whose own dependencies are every gallery family's `@fontsource`
+ * package (`publisher/test/fonts.test.ts` holds the root's pins level with the publisher's). */
+const fromRoot = createRequire(join(REPO_ROOT, "package.json"));
+
+/**
+ * **The bytes of a face the page names in `fonts/`, as the published ZIP carries it** (sprint 34 día
+ * 3): a gallery face from its `@fontsource` package — the files the publisher's `fontData/` is
+ * generated from, and held to them byte for byte by `publisher/test/fonts.test.ts`, which this package
+ * cannot import — and an owner's own from `fixtures/fonts/`, which stands in for the browser and the
+ * account as `fixtures/assets/` does for the photographs. `undefined` for a name neither knows.
+ */
+function fontBytes(name: string): Buffer | undefined {
+  const shipped = SHIPPABLE_FAMILIES.find(({ faces }) => faces.some((f) => f.file === name));
+  if (shipped) {
+    return readFileSync(
+      fromRoot.resolve(`@fontsource/${fontFamilySlug(shipped.family)}/files/${name}`),
+    );
+  }
+  try {
+    return readFileSync(join(ASSETS_DIR, "..", "fonts", name));
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * The published page at a given width, with its images.
  *
  * Served through routes rather than page.setContent: setContent has no base URL, so the
  * page's relative "assets/..." images would not load, and axe would then measure the text of
  * image-background against the plain surface and pass it without having compared anything.
- * Every request outside ORIGIN is aborted, so the run needs no network.
+ * Every request outside ORIGIN is aborted, so the run needs no network. **And its "fonts/..."
+ * faces** since sprint 34 día 3 (`fontBytes`): until then every gallery family was drawn in its
+ * fallback, so no suite had measured a page in the letter it is published in.
  *
  * The HTML is exactly render(doc, "html"), the same bytes the golden corpus stores.
  */
@@ -1180,6 +1211,14 @@ export async function openHtml(
       if (!contentType) throw new Error(`no content type for asset ${name}`);
       return route.fulfill({ contentType, body: readFileSync(join(ASSETS_DIR, name)) });
     }
+    if (url.pathname.startsWith("/fonts/")) {
+      const name = basename(url.pathname);
+      const body = fontBytes(name);
+      const contentType = FONT_TYPES[name.slice(name.lastIndexOf(".") + 1)];
+      // Not served is not thrown here — a route handler's error is the browser's, not the test's —
+      // but it cannot pass unseen: the face is in `error` below, and that throws.
+      if (body && contentType) return route.fulfill({ contentType, body });
+    }
     return route.fulfill({ status: 404, body: "" });
   });
 
@@ -1203,6 +1242,17 @@ export async function openHtml(
       .map((img) => img.src),
   );
   if (broken.length > 0) throw new Error(`${id}: images did not load: ${broken.join(", ")}`);
+  // Every face the stylesheet declares, loaded before anything is measured: `font-display: swap`
+  // draws the fallback until a face arrives, and a face is only fetched once some text asks for
+  // it — so a measure right after `load` could be of either letter. Loading each one says which,
+  // and a face that does not load fails the page, as a broken image does.
+  const faces = await page.evaluate(async () => {
+    const all = [...document.fonts];
+    await Promise.allSettled(all.map((face) => face.load()));
+    return all.map((face) => ({ face: `${face.family} ${face.weight}`, status: face.status }));
+  });
+  const unloaded = faces.filter((f) => f.status !== "loaded").map((f) => f.face);
+  if (unloaded.length > 0) throw new Error(`${id}: faces did not load: ${unloaded.join(", ")}`);
   return page;
 }
 

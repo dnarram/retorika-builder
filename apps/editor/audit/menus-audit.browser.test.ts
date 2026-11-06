@@ -10,12 +10,13 @@ import {
 } from "@playwright/test";
 import { phoneAt, render } from "@retorika/renderer";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { type Combination, openHtml } from "../../../packages/renderer/test/browser-fixtures.ts";
+import { openHtml } from "../../../packages/renderer/test/browser-fixtures.ts";
 import {
   checkCopies,
   checkCovers,
   checkCurrentPage,
   checkFold,
+  checkHoldsItsLines,
   checkOverflow,
   checkPhoneBar,
   checkRails,
@@ -23,6 +24,7 @@ import {
   checkSheet,
   compareSnapshots,
   expectHeader,
+  type HeaderExpectation,
   headerSnapshot,
   type Snapshot,
   setDisclosures,
@@ -39,7 +41,9 @@ import { canvasDocument } from "./canvas-document.ts";
  * seven widths that mean something — 320 and 390 phones, 768, the rail's 1024, the two-rail floor's
  * 1247, the reference 1280, 1680 — in Chromium, Firefox and WebKit, in every state a visitor reaches
  * (at rest; 600 px down with a fixed bar; «Menú» open; «Ir a…» open), and runs the ten checks of
- * `menu-checks.ts` on each. **And the canvas's own document** (`canvasDocument`: the html the editor's
+ * `menu-checks.ts` on each — eleven since sprint 34 día 3: the bar holds the lines of its form or is
+ * the phone's (ADR 0067), over the 153 documents and their twins with short words, and at each
+ * document's own fold and the pixel above it as well as the seven. **And the canvas's own document** (`canvasDocument`: the html the editor's
  * frame first paints, with the editor's stillness rules) at the two widths the canvas lays out at,
  * compared element by element with the published page in the same engine: what the owner sees while
  * editing must be what is published, but for the divergences the record names.
@@ -60,6 +64,17 @@ const OUT = process.env["RETORIKA_AUDIT_OUT"] ?? join(ROOT, ".scratch", "audit-m
 const FINDINGS = join(OUT, "findings.tsv");
 
 const ZIP_WIDTHS = [1680, 1280, 1247, 1024, 768, 390, 320] as const;
+/**
+ * The seven, and **the document's own fold** (sprint 34 día 3, ADR 0067): where the bar folds past
+ * 720, N — the widest the phone's header is drawn at, its sheet across a tablet — and N + 1, the
+ * narrowest the strip is drawn at, where a line that was going to wrap wraps first. Widest first: the
+ * page is served at 1680 and resized down.
+ */
+function zipWidths(h: HeaderExpectation): number[] {
+  const fold =
+    typeof h.phoneWidth === "number" && h.phoneWidth > 720 ? [h.phoneWidth, h.phoneWidth + 1] : [];
+  return [...new Set([...ZIP_WIDTHS, ...fold])].sort((a, b) => b - a);
+}
 const CANVAS_WIDTHS = [1280, 320] as const;
 const heightFor = (width: number) => (width <= 320 ? 568 : width <= 720 ? 844 : 900);
 
@@ -155,7 +170,7 @@ for (const [engine, type] of ENGINES) {
         const snapshots: Partial<Record<number, Snapshot>> = {};
         const page = await openHtml(browser, render(c.document, "html").html, 1680, c.id);
         try {
-          for (const width of ZIP_WIDTHS) {
+          for (const width of zipWidths(h)) {
             await page.setViewportSize({ width, height: heightFor(width) });
             await setDisclosures(page, "details", false);
             await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
@@ -166,6 +181,7 @@ for (const [engine, type] of ENGINES) {
               ...(await checkCopies(page, h, width, "rest")),
               ...(await checkOverflow(page)),
               ...(await checkCovers(page)),
+              ...(await checkHoldsItsLines(page)),
               // The home page has no entry of its own, so no mark here: the second page, below.
               ...(await checkCurrentPage(page, 0)),
               ...(phone ? await checkPhoneBar(page, h) : await checkRails(page, h, width)),
@@ -225,6 +241,7 @@ for (const [engine, type] of ENGINES) {
               ...(await checkCopies(cpage, h, width, "rest")),
               ...(await checkOverflow(cpage)),
               ...(await checkCovers(cpage)),
+              ...(await checkHoldsItsLines(cpage)),
               ...(await checkCurrentPage(cpage, 0)),
               ...(phone ? await checkPhoneBar(cpage, h) : await checkRails(cpage, h, width)),
               ...(!phone && h.sections === "fold" ? await checkFold(cpage, h, width, false) : []),

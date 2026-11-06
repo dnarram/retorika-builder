@@ -11,10 +11,11 @@ import {
   webkit,
 } from "@playwright/test";
 import { type Header, parseDocument, type RetorikaDocument } from "@retorika/schema";
-import { buildTheme, PALETTES, SCALES, TYPE_PAIRS } from "@retorika/tokens";
+import { buildTheme, GALLERY_FAMILIES, PALETTES, SCALES, TYPE_PAIRS } from "@retorika/tokens";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { GLYPH_ADVANCES } from "../src/glyphAdvances.ts";
-import { headerWidths, render } from "../src/index.ts";
+import { SCROLLBAR_LANE } from "../src/header.ts";
+import { headerWidths, render, SHIPPABLE_FAMILIES } from "../src/index.ts";
 import { headerCase, openHtml } from "./browser-fixtures.ts";
 import { ASSETS_DIR, DOCUMENTS_DIR, loadCorpus } from "./corpus.ts";
 import { checkHoldsItsLines } from "./menu-checks.ts";
@@ -522,12 +523,17 @@ describe("the rail (ADR 0060)", () => {
     }
   });
 
-  /** `<main>`'s width and which menus stand in a rail, at one width. */
+  /** `<main>`'s width, which menus stand in a rail and which in the bar, and whether the bar is the
+   * phone's — «Menú» drawn — at one width. The last since sprint 34 día 3: the bar folds where its
+   * words do not fit (ADR 0067), and a width that says «the bar» has to say which bar it measured. */
   async function columns(doc: RetorikaDocument, width: number) {
     const page = await open(doc, width, 900);
     try {
       return await page.evaluate(() => ({
         main: Math.round(document.querySelector("main")?.getBoundingClientRect().width ?? 0),
+        menu: [...document.querySelectorAll<HTMLElement>("details.rb-nav-narrow > summary")].some(
+          (summary) => summary.checkVisibility(),
+        ),
         rails: [...document.querySelectorAll<HTMLElement>(".rb-rail")]
           .filter((rail) => rail.checkVisibility())
           .map((rail) => rail.getAttribute("data-side")),
@@ -548,29 +554,70 @@ describe("the rail (ADR 0060)", () => {
     });
     expect(await columns(doc, 1280)).toEqual({
       main: 800,
+      menu: false,
       rails: ["left", "right"],
       inBar: [],
       scroll: 0,
     });
     expect(await columns(doc, 1247)).toEqual({
       main: 1247 - 240,
+      menu: false,
       rails: ["left"],
       inBar: ["Secciones"],
       scroll: 0,
     });
   });
 
+  /**
+   * **On words that hold their line at 1023** (sprint 34 día 3): `cabecera-con-marca`'s, with its
+   * logo, fold the bar up to 917 (ADR 0067), so the bar this falls into at 1023 is the wide one —
+   * and `menu: false` says so, measured, rather than the number.
+   */
   it("stands at 1024 with 784 for the content, and falls into the bar at 1023", async () => {
     const doc = placed({ pages: { shown: true, position: "right" } });
     expect(await columns(doc, 1024)).toEqual({
       main: 784,
+      menu: false,
       rails: ["right"],
       inBar: [],
       scroll: 0,
     });
     expect(await columns(doc, 1023)).toEqual({
       main: 1023,
+      menu: false,
       rails: [],
+      inBar: ["Páginas"],
+      scroll: 0,
+    });
+  });
+
+  /**
+   * **And on words that do not** (sprint 34 día 3, ADR 0067 §3, which amends ADR 0060 §3): the
+   * teaser's own, with the sections in a right column. With the column standing, the brand, the pages
+   * and the button do not fit the 1024 − 240 left to them, so the header is the phone's up to N and
+   * the column stands from N + 1 — never a column beside «Menú», and never at 1024 for this site.
+   */
+  it("stands from just above the fold when the bar folds past 1024, and not at 1024", async () => {
+    const doc = headerCase("rail-past-the-fold", PALETTES[0]?.id ?? "", {
+      sections: { shown: true, position: "right" },
+    }).document;
+    const w = headerWidths(doc);
+    if (w.phone === "always") throw new Error(JSON.stringify(w));
+    expect(w.phone, "this case needs words that fold the bar past 1024").toBeGreaterThan(1024);
+    expect(w.rails).toBe(w.phone + 1);
+    for (const width of [1024, w.phone]) {
+      expect(await columns(doc, width), `${width}px`).toEqual({
+        main: width,
+        menu: true,
+        rails: [],
+        inBar: [],
+        scroll: 0,
+      });
+    }
+    expect(await columns(doc, w.rails)).toEqual({
+      main: w.rails - 240,
+      menu: false,
+      rails: ["right"],
       inBar: ["Páginas"],
       scroll: 0,
     });
@@ -1600,9 +1647,18 @@ describe("the bar's estimate against the bar it measures (sprint 33 día 6)", ()
                     if (y - last > 6) lines += 1;
                     last = y;
                   }
-                  return { bar: header.getBoundingClientRect().height, estimate, lines };
+                  return {
+                    bar: header.getBoundingClientRect().height,
+                    estimate,
+                    lines,
+                    strip:
+                      header.querySelector<HTMLElement>(".rb-nav-wide")?.checkVisibility() ?? false,
+                  };
                 });
                 const said = `${engine}, ${form.name}, ${background}, at ${width}: ${JSON.stringify(m)}`;
+                // The wide bar, measured (sprint 34 día 3): a form folded at 768 is the phone's bar,
+                // one line like «one line», and its estimate would pass for the wide one's.
+                expect(m.strip, `the strip is drawn — ${said}`).toBe(true);
                 expect(m.lines, `the bar's lines — ${said}`).toBe(form.lines);
                 expect(m.estimate, said).toBeGreaterThanOrEqual(m.bar - 1);
                 expect(m.estimate, said).toBeLessThanOrEqual(m.bar + 16);
@@ -1630,8 +1686,32 @@ describe("the bar's estimate against the bar it measures (sprint 33 día 6)", ()
  * size is counted four times as wide as tall, by design, and the one case of that below only has to
  * come out long. **David's sabotage**: three labels of twenty letters, and the html rewritten so the bar
  * never folds — the audit's check 11 must go red at 768.
+ *
+ * **Sprint 34 día 3: the truth of the visitor the estimate is written for, in the letter the site is
+ * published in.** The estimate keeps a classic scroll bar's 15 px out of the width (`SCROLLBAR_LANE`:
+ * Windows, Linux), and a browser Playwright launches draws none — `--hide-scrollbars`, and macOS's
+ * overlay ones — so the truth of día 2 was a visitor with no lane, and 15 px of every slack were the
+ * Windows visitor's. The bisection now runs in a Chromium that keeps its scroll bars, with one of 15 px
+ * styled in (`withLane`), and the lane is measured before anything else. And the page's faces are
+ * served (`openHtml`, día 3), so the forty families the product ships are drawn in their own letter:
+ * the sites David's 40 px bound is for, which none of the twenty of día 2 was.
  */
 describe("the fold's estimate is never under the width the bar breaks at (sprint 34 día 2)", () => {
+  /** A Chromium that draws scroll bars, for the truth below. */
+  let laned: Browser;
+  beforeAll(async () => {
+    laned = await chromium.launch({ ignoreDefaultArgs: ["--hide-scrollbars"] });
+  });
+  afterAll(async () => {
+    await laned?.close();
+  });
+  /** The page with a classic scroll bar of `SCROLLBAR_LANE` px: a styled one takes its width out of
+   * the layout on every platform, and a `@media` width still counts it — Windows, drawn on any machine. */
+  const withLane = (html: string): string =>
+    html.replace(
+      "</head>",
+      `<style>::-webkit-scrollbar { width: ${SCROLLBAR_LANE}px; } ::-webkit-scrollbar-thumb { background: #999; }</style></head>`,
+    );
   /** The html with its fold undone: `@media` lines of the header written back to 720 and 1024. */
   const unfolded = (doc: RetorikaDocument): string => {
     const w = headerWidths(doc);
@@ -1655,25 +1735,40 @@ describe("the fold's estimate is never under the width the bar breaks at (sprint
       probe.remove();
       return (header?.getBoundingClientRect().height ?? 0) > estimate + 1;
     });
-  /** The widest viewport in [721, 1700] at which the bar wraps, or 720 when none. */
-  async function truthOf(doc: RetorikaDocument): Promise<number> {
-    const page = await openHtml(browser, unfolded(doc), 1700, "truth");
+  /** The widest viewport in [721, 1700] at which the bar wraps with a scroll bar's lane, or 720 when
+   * none — and the families the page drew its faces from, every declared face loaded (`openHtml`
+   * fails the page otherwise). */
+  async function truthOf(doc: RetorikaDocument): Promise<{ truth: number; faces: string[] }> {
+    const page = await openHtml(laned, withLane(unfolded(doc)), 1700, "truth");
     try {
+      const lane = await page.evaluate(() => innerWidth - document.documentElement.clientWidth);
+      if (lane !== SCROLLBAR_LANE) throw new Error(`the page drew a lane of ${lane} px`);
+      const faces = await page.evaluate(() =>
+        [
+          ...new Set([...document.fonts].map((face) => face.family.replace(/^["']|["']$/g, ""))),
+        ].sort(),
+      );
       let lo = 720;
       let hi = 1700;
-      if (await wraps(page)) return 1700;
+      if (await wraps(page)) return { truth: 1700, faces };
       while (hi - lo > 1) {
         const mid = Math.floor((lo + hi) / 2);
         await page.setViewportSize({ width: mid, height: 900 });
         if (await wraps(page)) lo = mid;
         else hi = mid;
       }
-      return lo;
+      return { truth: lo, faces };
     } finally {
       await page.context().close();
     }
   }
   const sizedLogo = { name: true, logo: { src: "assets/portada.png", width: 2, height: 2 } };
+  const LOOKS: readonly { name: string; header: Partial<Header> }[] = [
+    { name: "plain", header: {} },
+    { name: "a logo", header: { brand: sizedLogo } },
+    { name: "capitals", header: { look: { uppercase: true } } },
+    { name: "small", header: { look: { size: "small" } } },
+  ];
   const sites: [string, RetorikaDocument][] = [
     ...loadCorpus()
       .filter((entry) => entry.document.header !== undefined)
@@ -1700,22 +1795,54 @@ describe("the fold's estimate is never under the width the bar breaks at (sprint
         }),
       ),
     ),
+    // **The forty families the product ships** (sprint 34 día 3), each as the heading and the body —
+    // the brand and the button at 700, the entries at 400 — over the teaser's own words, with its
+    // faces served: the sites David's 40 px bound is for, which none of the twenty above is. The look
+    // and the scale rotate over them, so every family is drawn and each look meets ten of them.
+    ...GALLERY_FAMILIES.map((row, i): [string, RetorikaDocument] => {
+      const look = LOOKS[i % LOOKS.length];
+      const scale = SCALES[i % SCALES.length];
+      if (!look || !scale) throw new Error("the rotation ran out of values");
+      const base = headerCase("truth", PALETTES[0]?.id ?? "", look.header).document;
+      return [
+        `${row.family}, ${look.name}, ${scale.id}`,
+        parseDocument({
+          ...base,
+          theme: {
+            ...buildTheme({
+              paletteId: PALETTES[0]?.id ?? "",
+              typePairId: TYPE_PAIRS[0]?.id ?? "",
+              scaleId: scale.id,
+            }),
+            "font.heading": row.stack,
+            "font.body": row.stack,
+          },
+        }),
+      ];
+    }),
   ];
 
   /** Whether both of the bar's families are in the glyph table: the 40 px expectation is for them.
    * A family the product does not ship is counted at the fallback — the widest of six system stacks,
    * glyph by glyph — and may run longer, by design; it only has to come out at or over the truth
    * (`cabecera-con-marca`'s body is Charter: 40 over, 48 of them on the fallback and the margin). */
+  const firstFamily = (stack: string) =>
+    (stack.split(",")[0] ?? "").trim().replace(/^['"]|['"]$/g, "");
   const shipped = (doc: RetorikaDocument) =>
-    (["font.heading", "font.body"] as const).every((key) => {
-      const family = (doc.theme[key].split(",")[0] ?? "").trim().replace(/^['"]|['"]$/g, "");
-      return family in GLYPH_ADVANCES;
-    });
+    (["font.heading", "font.body"] as const).every(
+      (key) => firstFamily(doc.theme[key]) in GLYPH_ADVANCES,
+    );
 
   for (const [name, doc] of sites) {
     const bound = shipped(doc) ? ", by under 40 px" : " (a family the product does not ship)";
     it(`${name}: the estimate is at or over the truth${bound}`, async () => {
-      const truth = await truthOf(doc);
+      const { truth, faces } = await truthOf(doc);
+      // Drawn in its own letter, or the bound measured nothing: a shipped family's faces are on the
+      // page and loaded (a second source: the page's own faces against the table's keys).
+      for (const key of ["font.heading", "font.body"] as const) {
+        const family = firstFamily(doc.theme[key]);
+        if (family in GLYPH_ADVANCES) expect(faces, `${name}: ${family}`).toContain(family);
+      }
       const estimate = headerWidths(doc);
       expect(estimate.phone, name).not.toBe("always");
       const phone = estimate.phone as number;
@@ -1731,11 +1858,59 @@ describe("the fold's estimate is never under the width the bar breaks at (sprint
     const doc = headerCase("unsized", PALETTES[0]?.id ?? "", {
       brand: { name: true, logo: { src: "assets/portada.png" } },
     }).document;
-    const truth = await truthOf(doc);
+    const { truth } = await truthOf(doc);
     const estimate = headerWidths(doc);
     expect(estimate.phone).not.toBe("always");
     expect(estimate.phone as number).toBeGreaterThanOrEqual(truth);
     expect((estimate.phone as number) - truth).toBeGreaterThan(40);
+  });
+
+  /**
+   * **The table is what the faces draw** (sprint 34 día 3): every advance in `glyphAdvances.ts` against
+   * the glyph drawn alone, kerning off, by the face it names, from the bytes the site ships — at
+   * 1000 px, where a platform that draws whole pixels is off by half a thousandth. The table is
+   * generated, and its first method, ten copies of a glyph, called up the forms fonts keep for repeats
+   * («ff», «tt», Cormorant Garamond's capitals, Manrope's «--»): 63 advances short, up to 0.15 em,
+   * and Cormorant's «TERRAZA» 5 % narrower in the estimate than drawn.
+   */
+  it("every advance in the glyph table is the glyph as its face draws it alone", async () => {
+    const rules = SHIPPABLE_FAMILIES.flatMap(({ family, faces }) =>
+      faces.map(
+        (face) =>
+          `@font-face { font-family: "${family}"; font-weight: ${face.weight}; src: url("fonts/${face.file}") format("woff2"); }`,
+      ),
+    );
+    const html = `<!doctype html><html><head><meta charset="utf-8"><style>${rules.join("\n")}
+      body { margin: 0; font-size: 1000px; } span { white-space: pre; display: inline-block; }
+      </style></head><body></body></html>`;
+    const page = await openHtml(browser, html, 1280, "glyphs");
+    try {
+      const off = await page.evaluate((table) => {
+        const out: string[] = [];
+        for (const [family, weights] of Object.entries(table)) {
+          for (const [weight, advances] of Object.entries(weights)) {
+            const host = document.createElement("div");
+            host.style.cssText = `font-family: "${family}"; font-weight: ${weight}; font-kerning: none;`;
+            document.body.append(host);
+            for (const [glyph, em] of Object.entries(advances as Record<string, number>)) {
+              const span = document.createElement("span");
+              span.textContent = glyph;
+              host.append(span);
+              const drawn = span.getBoundingClientRect().width / 1000;
+              span.remove();
+              if (Math.abs(drawn - em) > 0.0015) {
+                out.push(`${family} ${weight} «${glyph}»: table ${em}, drawn ${drawn.toFixed(4)}`);
+              }
+            }
+            host.remove();
+          }
+        }
+        return out;
+      }, GLYPH_ADVANCES);
+      expect(off, off.join("\n")).toEqual([]);
+    } finally {
+      await page.context().close();
+    }
   });
 
   it("three labels of twenty letters: folded, the bar holds; unfolded by sabotage, check 11 is red at 768", async () => {

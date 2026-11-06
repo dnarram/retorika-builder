@@ -6,7 +6,11 @@ import {
   SECTIONS_POSITIONS,
 } from "@retorika/schema";
 import { PALETTES } from "@retorika/tokens";
-import { type Combination, headerCase } from "../../../packages/renderer/test/browser-fixtures.ts";
+import {
+  type Combination,
+  headerCase,
+  shortLabelled,
+} from "../../../packages/renderer/test/browser-fixtures.ts";
 
 /**
  * **The menu audit's matrix** (sprint 33 día 2): every pair of places × every scheme × fixed or
@@ -23,6 +27,9 @@ import { type Combination, headerCase } from "../../../packages/renderer/test/br
  * sent to the pages' column; the sections hidden on the phone under a row drawn at every width; a row
  * at every width with «Ir a…» on the phone. On the fixed palette: colour is a property of a scheme and
  * a palette, and `a11y.browser.test.ts` runs the five schemes over the five palettes with axe already.
+ *
+ * **And every one of the 153 twice** (sprint 34 día 3): with the teaser's words, which fold the bar
+ * (ADR 0067), and with short ones, which keep its strip — 306 documents.
  */
 export function auditCombinations(): Combination[] {
   const palette = PALETTES[0];
@@ -71,7 +78,17 @@ export function auditCombinations(): Combination[] {
       sections: { shown: true, position: "row", mobile: "fold" },
     }),
   );
-  return out;
+  return [...out, ...out.map(shortTwin)];
+}
+
+/**
+ * **The same document with short words** (sprint 34 día 3): the teaser's own labels fold the bar into
+ * the phone's up to 766–1100 px (ADR 0067), so with the matrix alone the wide strip at 768 and 1024
+ * would be measured on next to nothing. `shortLabelled`'s «Carta», «Fotos», «Reservar» and «El Corte»
+ * keep the strip from 721 up, and `audit-short/` in place of `audit/` lets a run take either half.
+ */
+function shortTwin(combination: Combination): Combination {
+  return { ...shortLabelled(combination), id: combination.id.replace(/^audit\//, "audit-short/") };
 }
 
 /** How often each rotated value appears, for the run's own report. */

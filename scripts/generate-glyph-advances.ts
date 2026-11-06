@@ -15,8 +15,13 @@ import { TYPE_PAIRS } from "../packages/tokens/src/index.ts";
  * `pnpm fonts:advances`.
  *
  * Measured in Chromium with every shipped face loaded from the publisher's own bytes (the three
- * engines agreed to three decimals on 5 November 2026): ten copies of the glyph at 100 px, kerning
- * off, so the number is the glyph's own advance in em. The glyphs are printable ASCII and what
+ * engines agreed to three decimals on 5 November 2026): **one copy of the glyph** at 100 px, kerning
+ * off, so the number is the glyph's own advance in em, to the thousandth. Until sprint 34
+ * día 3 it was ten copies, and a run of one letter is not a label: it calls up the forms a font keeps
+ * for repeats — «ff» and «tt» ligatures in thirty-odd families, Cormorant Garamond's repeated
+ * capitals, Manrope's «--» — and 63 of the 9 600 advances came out short, up to 0.15 em. The bar's
+ * estimate ran under the line it was meant to hold: Cormorant Garamond's «TERRAZA» 5 % narrower than
+ * drawn, which no kerning margin of 3 % covers (the truth test with the faces served found it). The glyphs are printable ASCII and what
  * Spanish adds to it, plus the few marks a label has carried («Ir a…», a dash, the euro). **A family
  * the product does not ship** — the three type pairs' system stacks, an owner's own font — reads
  * `FALLBACK_ADVANCES`: the 95th percentile, glyph by glyph, over those six stacks measured on the
@@ -127,9 +132,9 @@ async function measure(stack: string, weight: number): Promise<Advances> {
       const out: Record<string, number> = {};
       for (const g of glyphs) {
         const span = document.createElement("span");
-        span.textContent = g.repeat(10);
+        span.textContent = g;
         host.append(span);
-        out[g] = Math.round(span.getBoundingClientRect().width) / 1000;
+        out[g] = Math.round(span.getBoundingClientRect().width * 10) / 1000;
         span.remove();
       }
       host.remove();
@@ -169,11 +174,13 @@ const lines = [
   "//",
   "// The advance of every glyph a menu label may carry, in em, per shipped family and weight — what",
   "// `headerWidths` sums to know how wide a bar's line is before any browser draws it (ADR 0067).",
-  "// Measured in Chromium with the publisher's own bytes, ten copies of each glyph at 100 px with",
-  "// kerning off; the three engines agreed to three decimals on 5 November 2026. `FALLBACK_ADVANCES`",
-  "// is the 95th percentile, glyph by glyph, over the three type pairs' six system stacks as this",
-  "// machine drew them and over DejaVu Sans and Serif, Linux's letter for them: what a family the",
-  "// product does not ship — a system stack, an owner's own font — is counted at.",
+  "// Measured in Chromium with the publisher's own bytes, one copy of each glyph at 100 px with",
+  "// kerning off, to the thousandth (ten copies called up the forms a font keeps for repeats:",
+  "// sprint 34 día 3). The three engines agreed to three decimals on 5 November 2026.",
+  "// `FALLBACK_ADVANCES` is the 95th percentile, glyph by glyph, over the three type pairs' six",
+  "// system stacks as this machine drew them and over DejaVu Sans and Serif, Linux's letter for",
+  "// them: what a family the product does not ship — a system stack, an owner's own font — is",
+  "// counted at.",
   "",
   "export type GlyphAdvances = Readonly<Record<string, number>>;",
   "export interface FamilyAdvances {",
