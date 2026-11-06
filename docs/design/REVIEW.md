@@ -7536,3 +7536,46 @@ del renderer no se mueve, solo lo que `headerWidths` cuenta, así que `a11y` no 
 filtrado de cabecera** (sprints 30–34): 28 caminatas; la del sprint 31 día 6 esperaba «En el móvil solo
 la barra.» y su web pliega pasado 720, así que ahora dice «En el móvil, y hasta N px, solo la barra.»: la
 caminata espera esa forma. **e2e completa: 289 verdes y 1 omitida, 1262 s.**
+
+### Día 5 — «Menú» es agarre (PR de `feat/menu-es-agarre`, ADR 0066 nota del día)
+
+**La condición de David al abrir el sprint**: «el gesto existe a cualquier ancho del lienzo, y lo que
+cambia con el ancho son las zonas, nunca el agarre». Desde el pliegue (ADR 0067) un lienzo de
+escritorio maquetado por debajo de N — una ventana de 1024 con el panel maqueta a 887, bajo el pliegue
+de casi todas las webs — dibuja «Menú» donde estaba la tira; `zonesFor` leía el ancho del móvil **de la
+cabecera** y bajo el pliegue vaciaba las zonas: la fila no arrastraba nada y el menú de páginas, detrás
+de «Menú», no tenía agarre. **Ahora decide la vista, no el pliegue**: `zonesFor` está vacía en la vista
+de móvil (el 720 de las secciones, que no se mueve) y llena a cualquier ancho del lienzo de escritorio;
+lo que escribe una suelta bajo el pliegue son las mismas palabras, y una columna se pone de pie desde su
+ancho, que el panel dice. **Y el `summary` de «Menú» es el agarre del menú de páginas**, como el de
+«Ir a…» lo es del de secciones: cogido y llevado pasado el umbral, las tres zonas; pulsado sin mover, el
+clic que abre la hoja — los dos estados del §1 de la ADR 0066, y `justDragged` se traga solo la suelta
+del arrastre, así que soltar nunca abre la hoja. La mano abierta encima, en la vista de escritorio. Con
+las secciones «No se muestra» en el móvil, la cabecera plegada no tiene agarre de secciones: el panel
+es el camino, como con un menú que no se dibuja. **El panel lo dice**, bajo la nota del lienzo plegado:
+«Así, el menú de páginas se arrastra cogiéndolo por «Menú»; pulsado sin mover, abre la hoja», solo con
+menú de páginas dibujado.
+
+**La leyenda de teclas sigue los anchos del documento** (lo que dejó el día 1): su regla para apartarse
+de una columna se escribía una vez por marco con las constantes del renderer, y desde la ADR 0067 una
+columna se pone de pie desde N + 1, pasado 1024 cuando las palabras lo piden. Ahora es una hoja de cromo
+propia (`placeKeysLegend`, `#rb-keys-place`), escrita desde `headerWidths` tras cada parche y reescrita
+solo si cambian los anchos; una barra que no cabe nunca no tiene columna ni regla. El cursor de agarre
+no cambia de ancho: la mano abierta va bajo el mismo `@media` de 721 que los demás agarres, porque el
+gesto existe en toda la vista de escritorio.
+
+**Caminatas**: la del día 5 del 33 «bajo el suelo de legibilidad» vuelve a su sentido — la fila a 887
+dibuja las cinco zonas, el lado derecho encendido, la suelta escribe `sections.position = "right"` y el
+panel dice que las dos columnas se pliegan ahí — y una nueva, «sprint 34 día 5»: una etiqueta de página
+de veinte letras pliega la web generada pasado 1024 y la regla de la leyenda dice `min-width: N + 1`
+(leído del propio panel, «hasta N px»); a 887 «Menú» se dibuja con la mano abierta, llevado sobre el
+lado izquierdo enciende la zona, la suelta escribe la columna y no abre la hoja; pulsado sin mover la
+hoja se abre y Escape la cierra; a 1280 la tira entera y la columna de pie. Las ayudantes del arrastre
+(`placedSite`, `carry`, `rowGround`…) suben al ámbito del fichero para que las lean las dos. **Saboteos**:
+`zonesFor` vaciándose bajo 1023 → dos unitarias en rojo (la nueva, y «vacía en la vista de móvil», que
+asevera 721); «Menú» fuera de los agarres → la caminata en rojo esperando una zona.
+
+**Suites.** `typecheck`, `lint`, `test` (3709, una más), invariantes, golden (cero cambios: nada del
+renderer se toca), `size` (el script, 0,8 KB), `secrets:scope` y `schema:guard` (sin cambio de forma) en
+verde. **e2e filtrado de cabecera** (sprints 30–34): 29 caminatas en verde, 191 s. e2e completa no se
+corre: el paquete no cambia y la puerta de descarga tampoco.

@@ -25114,98 +25114,101 @@ describe("sprint 33 día 4 — un menú se arrastra a su zona", () => {
  * — «Qué ponemos» y la galería — para que el menú de páginas tenga un hueco entre entradas, y con los
  * menús colocados por la sesión (`placeMenus`), la otra puerta de lo que escriben las tarjetas.
  */
-describe("sprint 33 día 5 — el arrastre completo", () => {
-  /** The canvas with two pages made of sections, the menus placed, the page at its top. */
-  async function placedSite(page: Page, header: Record<string, unknown>): Promise<FrameLocator> {
-    await intoTheCanvas(page);
-    const frame = page.frameLocator(PREVIEW).first();
-    for (const id of ["sec-services", "sec-gallery"]) {
-      await frame.locator(`[data-section="${id}"]`).click();
-      await frame
-        .locator(`[data-section="${id}"] .rb-action[aria-label="Convertir esta sección en página"]`)
-        .click();
-    }
-    await expect(frame.locator('.rb-nav-wide nav[data-part="pagesLinks"] a')).toHaveCount(2);
-    // The open document with its three pages, and not merely three slugs: the session the cards
-    // saved holds three proposals and no open one (`openIndex: null`), and CI read it once before
-    // the conversions had been written — `placeMenus` then found no open document.
-    await sessionHolds(
-      page,
-      (raw) => {
-        const session = JSON.parse(raw || "{}") as {
-          openIndex?: number | null;
-          documents?: { pages?: unknown[] }[];
-        };
-        const open =
-          typeof session.openIndex === "number"
-            ? session.documents?.[session.openIndex]
-            : undefined;
-        return open?.pages?.length === 3;
-      },
-      "guardó las dos páginas en el documento abierto",
-    );
-    if (Object.keys(header).length > 0) await placeMenus(page, header);
-    // The reload settles the card before anything is measured on it.
-    await deviceArrived(page, DESKTOP_LAYOUT_WIDTH);
-    await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
-    return frame;
+/**
+ * The drag walks' helpers, shared by sprint 33 día 5's and sprint 34 día 5's (where «Menú» became a
+ * grip): the site with two pages made of sections and the menus placed; where the session says a menu
+ * is; the frame on the screen; a point in a box; the row's ground; and the carry itself.
+ */
+/** The canvas with two pages made of sections, the menus placed, the page at its top. */
+async function placedSite(page: Page, header: Record<string, unknown>): Promise<FrameLocator> {
+  await intoTheCanvas(page);
+  const frame = page.frameLocator(PREVIEW).first();
+  for (const id of ["sec-services", "sec-gallery"]) {
+    await frame.locator(`[data-section="${id}"]`).click();
+    await frame
+      .locator(`[data-section="${id}"] .rb-action[aria-label="Convertir esta sección en página"]`)
+      .click();
   }
-
-  /** Where the session says a menu is, once the autosave has written. */
-  const positionOf = (page: Page, menu: "pages" | "sections") =>
-    page.evaluate((menu) => {
-      const raw = localStorage.getItem("retorika.session.v1") ?? "";
-      if (raw === "") return "unsaved";
-      const session = JSON.parse(raw) as {
-        openIndex: number;
-        documents: { header?: Record<string, { position?: string } | undefined> }[];
+  await expect(frame.locator('.rb-nav-wide nav[data-part="pagesLinks"] a')).toHaveCount(2);
+  // The open document with its three pages, and not merely three slugs: the session the cards
+  // saved holds three proposals and no open one (`openIndex: null`), and CI read it once before
+  // the conversions had been written — `placeMenus` then found no open document.
+  await sessionHolds(
+    page,
+    (raw) => {
+      const session = JSON.parse(raw || "{}") as {
+        openIndex?: number | null;
+        documents?: { pages?: unknown[] }[];
       };
-      return session.documents[session.openIndex]?.header?.[menu]?.position ?? "bar";
-    }, menu);
+      const open =
+        typeof session.openIndex === "number" ? session.documents?.[session.openIndex] : undefined;
+      return open?.pages?.length === 3;
+    },
+    "guardó las dos páginas en el documento abierto",
+  );
+  if (Object.keys(header).length > 0) await placeMenus(page, header);
+  // The reload settles the card before anything is measured on it.
+  await deviceArrived(page, DESKTOP_LAYOUT_WIDTH);
+  await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
+  return frame;
+}
 
-  /** The frame on the screen: its box and its zoom, read now (a panel changes both). */
-  async function frameOnScreen(page: Page) {
-    const card = await page.locator('[data-testid="canvas-card"] iframe').boundingBox();
-    if (!card) throw new Error("no canvas");
-    const zoom = await canvasZoom(page);
-    return {
-      zoom,
-      at: (x: number, y: number) => ({ x: card.x + x * zoom, y: card.y + y * zoom }),
+/** Where the session says a menu is, once the autosave has written. */
+const positionOf = (page: Page, menu: "pages" | "sections") =>
+  page.evaluate((menu) => {
+    const raw = localStorage.getItem("retorika.session.v1") ?? "";
+    if (raw === "") return "unsaved";
+    const session = JSON.parse(raw) as {
+      openIndex: number;
+      documents: { header?: Record<string, { position?: string } | undefined> }[];
     };
-  }
+    return session.documents[session.openIndex]?.header?.[menu]?.position ?? "bar";
+  }, menu);
 
-  /** A point on the screen of an element's box, at fractions of it. */
-  async function pointIn(locator: Locator, fx = 0.5, fy = 0.5) {
-    const box = await locator.boundingBox();
-    if (!box) throw new Error("not drawn, so it cannot be held");
-    return { x: box.x + box.width * fx, y: box.y + box.height * fy };
-  }
+/** The frame on the screen: its box and its zoom, read now (a panel changes both). */
+async function frameOnScreen(page: Page) {
+  const card = await page.locator('[data-testid="canvas-card"] iframe').boundingBox();
+  if (!card) throw new Error("no canvas");
+  const zoom = await canvasZoom(page);
+  return {
+    zoom,
+    at: (x: number, y: number) => ({ x: card.x + x * zoom, y: card.y + y * zoom }),
+  };
+}
 
-  /** The row's own ground: the wider of the two free ends of its line — the owner's alignment
-   * (here the generated site's, at the end) decides which side its entries leave free. */
-  async function rowGround(frame: FrameLocator) {
-    const row = frame.locator("header nav.rb-nav-row");
-    const first = await row.locator("a").first().boundingBox();
-    const last = await row.locator("a").last().boundingBox();
-    const box = await row.boundingBox();
-    if (!first || !last || !box) throw new Error("the row is not drawn");
-    const left = first.x - box.x;
-    const right = box.x + box.width - (last.x + last.width);
-    expect(Math.max(left, right), "the row has no ground").toBeGreaterThan(40);
-    return left > right
-      ? { x: box.x + left / 2, y: first.y + first.height / 2 }
-      : { x: (last.x + last.width + box.x + box.width) / 2, y: last.y + last.height / 2 };
-  }
+/** A point on the screen of an element's box, at fractions of it. */
+async function pointIn(locator: Locator, fx = 0.5, fy = 0.5) {
+  const box = await locator.boundingBox();
+  if (!box) throw new Error("not drawn, so it cannot be held");
+  return { x: box.x + box.width * fx, y: box.y + box.height * fy };
+}
 
-  /** Press, cross the threshold, travel to `to` and, unless told otherwise, let go. */
-  async function carry(page: Page, from: Point, to: Point, release = true): Promise<void> {
-    await page.mouse.move(from.x, from.y);
-    await page.mouse.down();
-    await page.mouse.move(from.x + 6, from.y, { steps: 2 });
-    await page.mouse.move(to.x, to.y, { steps: 12 });
-    if (release) await page.mouse.up();
-  }
+/** The row's own ground: the wider of the two free ends of its line — the owner's alignment
+ * (here the generated site's, at the end) decides which side its entries leave free. */
+async function rowGround(frame: FrameLocator) {
+  const row = frame.locator("header nav.rb-nav-row");
+  const first = await row.locator("a").first().boundingBox();
+  const last = await row.locator("a").last().boundingBox();
+  const box = await row.boundingBox();
+  if (!first || !last || !box) throw new Error("the row is not drawn");
+  const left = first.x - box.x;
+  const right = box.x + box.width - (last.x + last.width);
+  expect(Math.max(left, right), "the row has no ground").toBeGreaterThan(40);
+  return left > right
+    ? { x: box.x + left / 2, y: first.y + first.height / 2 }
+    : { x: (last.x + last.width + box.x + box.width) / 2, y: last.y + last.height / 2 };
+}
 
+/** Press, cross the threshold, travel to `to` and, unless told otherwise, let go. */
+async function carry(page: Page, from: Point, to: Point, release = true): Promise<void> {
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(from.x + 6, from.y, { steps: 2 });
+  await page.mouse.move(to.x, to.y, { steps: 12 });
+  if (release) await page.mouse.up();
+}
+
+describe("sprint 33 día 5 — el arrastre completo", () => {
   it("apila las secciones bajo las páginas en la columna, el fantasma lo dice antes, y «Deshacer» las devuelve", async () => {
     const context = await browser.newContext({ viewport: { width: 1440, height: 950 } });
     const page = await context.newPage();
@@ -25553,7 +25556,10 @@ describe("sprint 33 día 5 — el arrastre completo", () => {
    * ADR 0066 has no zone there, as in the phone view. Day 5 makes «Menú»'s summary the grip, and this
    * walk gets its drop under the floor back; today it holds what the fold made true.
    */
-  it("bajo el suelo de legibilidad (1024 con panel) la barra es la del móvil: nada se arrastra, y la nota dice que la columna se pliega", async () => {
+  it("bajo el suelo de legibilidad (1024 con panel) la barra es la del móvil y el gesto sigue: la fila va a un lado, y la nota dice que la columna se pliega", async () => {
+    // Sprint 34 día 5: the header's own fold is not the phone view (ADR 0066's note of that day).
+    // Día 2 of sprint 34 had this walk assert the opposite — nothing dragged under the fold — until
+    // «Menú» became a grip and the zones came back to every width of the desktop canvas.
     const context = await browser.newContext({ viewport: { width: 1440, height: 950 } });
     const page = await context.newPage();
     try {
@@ -25571,19 +25577,28 @@ describe("sprint 33 día 5 — el arrastre completo", () => {
       await expect(frame.locator('.rb-rail[data-side="left"]')).toBeHidden();
       await expect(frame.locator(".rb-nav-wide")).toBeHidden();
       await expect(frame.locator("details.rb-nav-narrow > summary")).toBeVisible();
-      const before = await positionOf(page, "sections");
+      // The row is still the sections' grip, and the zones are the width's: the right side lit.
       const { at } = await frameOnScreen(page);
       await carry(page, await rowGround(frame), at(887 - 120, 500), false);
-      await expect(frame.locator(".rb-zone, .rb-menu-ghost")).toHaveCount(0);
+      await expect(frame.locator(".rb-zone")).toHaveCount(5);
+      await expect(frame.locator('.rb-zone[data-zone="right"][data-hot]')).toHaveCount(1);
       await page.mouse.up();
-      expect(await positionOf(page, "sections")).toBe(before);
-      // One column folds here, the pages': the sections are in their row.
+      await expect.poll(() => positionOf(page, "sections")).toBe("right");
+      await expect(page.locator('p[role="status"]')).toHaveText(
+        "Navegador de secciones: columna derecha",
+      );
+      // Two columns on opposite sides: the sections' needs 1248, and here both fold.
+      await expect(
+        panel.getByText("Con las páginas en la otra columna, el navegador necesita 1248 px", {
+          exact: false,
+        }),
+      ).toBeVisible();
       await expect(
         panel.getByText(
           "En esta ventana el lienzo enseña tu web a 887 px, y la columna se pliega en la barra.",
           { exact: false },
         ),
-      ).toHaveCount(1);
+      ).toHaveCount(2);
     } finally {
       await context.close();
     }
@@ -25850,6 +25865,103 @@ describe("sprint 34 día 4 — el dueño sabe por qué se pliega", () => {
         folds.getByRole("button", { name: "Descargar igualmente" }).click(),
       ]);
       expect(download.suggestedFilename()).toMatch(/\.zip$/);
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+});
+
+/**
+ * **Sprint 34 día 5 — «Menú» es agarre** (condición de David al abrir el sprint 34: «el gesto existe
+ * a cualquier ancho del lienzo, y lo que cambia con el ancho son las zonas, nunca el agarre»; ADR
+ * 0066, nota del día). Con la barra plegada en el lienzo (ADR 0067) el menú de páginas está detrás
+ * de «Menú», y su `summary` es su agarre como el de «Ir a…» lo es del de secciones: cogido y llevado
+ * a una zona escribe la palabra; pulsado sin mover, abre la hoja. El panel lo dice. Y la leyenda de
+ * teclas sigue los anchos del documento: la columna se pone de pie desde N + 1, y la leyenda se
+ * aparta desde ahí.
+ */
+describe("sprint 34 día 5 — «Menú» es agarre", () => {
+  it("con la barra plegada en el lienzo, «Menú» se arrastra a una columna y, sin mover, abre la hoja", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 950 } });
+    const page = await context.newPage();
+    try {
+      const frame = await placedSite(page, {});
+      await page.getByRole("button", { name: "Menú", exact: true }).click();
+      const panel = page.getByRole("complementary", { name: "La cabecera de tu web" });
+      await expect(panel).toBeVisible();
+
+      // 1. A page's label grown to twenty letters folds the bar past 1024 (the site folds at 805
+      //    already): the fold note says up to which width, and the key legend's own rule — written
+      //    per document — moves clear of a column from the width this document's rails stand from.
+      const field = panel.getByPlaceholder("Qué ponemos", { exact: true });
+      await field.fill("Reservas para grupos");
+      await expect(
+        frame.locator('.rb-nav-wide nav[data-part="pagesLinks"] a', {
+          hasText: "Reservas para grupos",
+        }),
+      ).toHaveCount(1);
+      await field.blur();
+      const foldNote = panel.getByText(/no caben en una línea hasta \d+ px/);
+      await expect(foldNote).toBeVisible();
+      const fold = Number(/hasta (\d+) px/.exec((await foldNote.textContent()) ?? "")?.[1]);
+      if (!(fold >= 1024 && fold < DESKTOP_LAYOUT_WIDTH)) {
+        throw new Error(`the fold is ${fold}: this walk needs one in [1024, 1280)`);
+      }
+      await expect
+        .poll(() => frame.locator("#rb-keys-place").evaluate((el) => el.textContent ?? ""))
+        .toContain(`(min-width: ${fold + 1}px)`);
+
+      // 2. A 1024 window with the panel lays the canvas out at 887, under the fold: the phone's
+      //    header, «Menú» drawn, and the panel says it is the pages' grip.
+      await page.setViewportSize({ width: 1024, height: 900 });
+      await expect.poll(() => frame.locator("body").evaluate(() => innerWidth)).toBe(887);
+      await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
+      const summary = frame.locator("details.rb-nav-narrow > summary");
+      await expect(frame.locator(".rb-nav-wide")).toBeHidden();
+      await expect(summary).toBeVisible();
+      await expect(
+        panel.getByText(
+          "Así, el menú de páginas se arrastra cogiéndolo por «Menú»; pulsado sin mover, abre la hoja.",
+        ),
+      ).toBeVisible();
+      expect(await summary.evaluate((el) => getComputedStyle(el).cursor)).toBe("grab");
+
+      // 3. Held on «Menú» and carried over the left side: the pages' three zones, the left one lit,
+      //    the ghost named; let go, the word is written and the sheet did not open.
+      const { at } = await frameOnScreen(page);
+      await carry(page, await pointIn(summary), at(120, 500), false);
+      await expect(frame.locator(".rb-zone")).toHaveCount(3);
+      await expect(frame.locator('.rb-zone[data-zone="left"][data-hot]')).toHaveCount(1);
+      await expect(frame.locator(".rb-menu-ghost")).toContainText("Menú de páginas");
+      await page.mouse.up();
+      await expect.poll(() => positionOf(page, "pages")).toBe("left");
+      await expect(page.locator('p[role="status"]')).toHaveText(
+        "Menú de páginas: columna izquierda",
+      );
+      await expect(frame.locator(".rb-zone, .rb-menu-ghost")).toHaveCount(0);
+      await expect(frame.locator("details.rb-nav-narrow[open]")).toHaveCount(0);
+      // Under the fold no column stands, and the panel says the column folds here.
+      await expect(frame.locator('.rb-rail[data-side="left"]')).toBeHidden();
+      await expect(
+        panel.getByText("y la columna se pliega en la barra", { exact: false }),
+      ).toBeVisible();
+
+      // 4. Pressed without moving, «Menú» is the sheet's own button: it opens, Escape closes it.
+      const press = await pointIn(summary);
+      await page.mouse.click(press.x, press.y);
+      await expect(frame.locator("details.rb-nav-narrow[open]")).toHaveCount(1);
+      await frame.locator("details.rb-nav-narrow > summary").press("Escape");
+      await expect(frame.locator("details.rb-nav-narrow[open]")).toHaveCount(0);
+
+      // 5. At 1440 with the panel closed the canvas is the page at 1280, over the fold: the strip
+      //    whole, «Menú» gone, and the column the drop wrote standing.
+      await panel.getByRole("button", { name: "Cerrar la cabecera" }).click();
+      await page.setViewportSize({ width: 1440, height: 950 });
+      await expect
+        .poll(() => frame.locator("body").evaluate(() => innerWidth))
+        .toBe(DESKTOP_LAYOUT_WIDTH);
+      await expect(frame.locator('.rb-rail[data-side="left"]')).toBeVisible();
+      await expect(summary).toBeHidden();
     } finally {
       await context.close();
     }

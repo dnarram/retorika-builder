@@ -262,3 +262,10 @@ from 1024, «No se verá hasta N px», or never. And a column's note no longer s
 siempre» or «amplía la ventana» of a column that stands past 1280, which the canvas never lays out at.
 **The sentences say «se dibuja como en el móvil» and «el menú del móvil», never «Menú» alone**: a site
 whose bar holds only sections has no «Menú», and the phone's bar is its row, or «Ir a…», or nothing.
+
+## Note — sprint 34 día 5: the canvas under the fold has its grip
+
+«What this does not decide» left the canvas under the legibility floor to the panel (día 4) and to
+«Menú» as a grip (día 5). The grip is ADR 0066's note of this day: the header's own fold is not the
+phone view, the zones exist at every width of the desktop canvas, and «Menú»'s summary carries the
+pages' menu where the strip is folded away. The floor does not move.

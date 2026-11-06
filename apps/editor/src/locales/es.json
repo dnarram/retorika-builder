@@ -193,6 +193,7 @@
   "editor.menuPanel.notes.foldsNearly": "Las palabras de tu barra no caben en una línea por muy poco: quitando {n} caracteres caben en pantallas anchas. Mientras tanto, la web de escritorio lleva el menú del móvil, sin columnas.",
   "editor.menuPanel.notes.foldsNearlyOne": "Las palabras de tu barra no caben en una línea por muy poco: quitando 1 carácter caben en pantallas anchas. Mientras tanto, la web de escritorio lleva el menú del móvil, sin columnas.",
   "editor.menuPanel.notes.foldedCanvas": "En el lienzo, a este ancho, la barra se dibuja como en el móvil: sus palabras no caben en una línea. Desde {width} px se ve entera.",
+  "editor.menuPanel.notes.foldedCanvasDrag": "Así, el menú de páginas se arrastra cogiéndolo por «Menú»; pulsado sin mover, abre la hoja.",
   "editor.menuPanel.notes.barEmpty": "En el ordenador la barra no se dibuja: todo está en la columna.",
   "editor.menuPanel.notes.transparentColumn": "La columna va con el fondo de la página.",
   "editor.menuPanel.notes.fold": "«Ir a…» flota debajo de la barra y sigue a mano al bajar por la página.",
